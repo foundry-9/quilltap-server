@@ -24,7 +24,6 @@ const DEFAULT_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
  */
 export function scheduleCleanup(intervalMs: number = DEFAULT_CLEANUP_INTERVAL_MS): void {
   if (cleanupSchedulerRunning) {
-    moduleLogger.debug('Cleanup scheduler already running');
     return;
   }
 
@@ -90,13 +89,6 @@ export async function runScheduledCleanup(): Promise<{ usersProcessed: number; j
             userId: settings.userId,
             retentionDays: settings.llmLoggingSettings.retentionDays,
           });
-
-          moduleLogger.debug('Enqueued cleanup job for user', {
-            userId: settings.userId,
-            jobId,
-            retentionDays: settings.llmLoggingSettings.retentionDays,
-          });
-
           jobsEnqueued++;
           usersProcessed++;
         } catch (error) {

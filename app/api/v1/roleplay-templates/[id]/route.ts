@@ -38,22 +38,9 @@ const updateRoleplayTemplateSchema = z.object({
  */
 export const GET = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
-    try {
-      logger.debug('Fetching roleplay template', {
-        endpoint: '/api/v1/roleplay-templates/[id]',
-        method: 'GET',
-        templateId: id,
-        userId: user.id,
-      });
+    try {const template = await repos.roleplayTemplates.findById(id);
 
-      const template = await repos.roleplayTemplates.findById(id);
-
-      if (!template) {
-        logger.debug('Roleplay template not found', {
-          templateId: id,
-          userId: user.id,
-        });
-        return notFound('Roleplay template');
+      if (!template) {return notFound('Roleplay template');
       }
 
       // Check ownership: user must own it OR it must be built-in
@@ -64,15 +51,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
           templateUserId: template.userId,
         });
         return notFound('Roleplay template');
-      }
-
-      logger.debug('Roleplay template retrieved successfully', {
-        templateId: id,
-        templateName: template.name,
-        userId: user.id,
-      });
-
-      return successResponse(template);
+      }return successResponse(template);
     } catch (error) {
       logger.error(
         'Failed to fetch roleplay template',
@@ -108,22 +87,9 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
  */
 export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
-    try {
-      logger.debug('Updating roleplay template', {
-        endpoint: '/api/v1/roleplay-templates/[id]',
-        method: 'PUT',
-        templateId: id,
-        userId: user.id,
-      });
+    try {const existingTemplate = await repos.roleplayTemplates.findById(id);
 
-      const existingTemplate = await repos.roleplayTemplates.findById(id);
-
-      if (!existingTemplate) {
-        logger.debug('Roleplay template not found for update', {
-          templateId: id,
-          userId: user.id,
-        });
-        return notFound('Roleplay template');
+      if (!existingTemplate) {return notFound('Roleplay template');
       }
 
       // Check ownership
@@ -213,22 +179,9 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
  */
 export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
-    try {
-      logger.debug('Deleting roleplay template', {
-        endpoint: '/api/v1/roleplay-templates/[id]',
-        method: 'DELETE',
-        templateId: id,
-        userId: user.id,
-      });
+    try {const existingTemplate = await repos.roleplayTemplates.findById(id);
 
-      const existingTemplate = await repos.roleplayTemplates.findById(id);
-
-      if (!existingTemplate) {
-        logger.debug('Roleplay template not found for deletion', {
-          templateId: id,
-          userId: user.id,
-        });
-        return notFound('Roleplay template');
+      if (!existingTemplate) {return notFound('Roleplay template');
       }
 
       // Check ownership

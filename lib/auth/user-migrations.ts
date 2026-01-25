@@ -24,8 +24,4 @@ import { logger } from '@/lib/logger';
 export async function runPostLoginMigrations(userId: string): Promise<void> {
   // All migrations now run at startup in instrumentation.ts
   // This function is kept for backwards compatibility but does nothing.
-  logger.debug('Post-login migrations no longer needed - all migrations run at startup', {
-    context: 'user-migrations.runPostLoginMigrations',
-    userId,
-  });
 }

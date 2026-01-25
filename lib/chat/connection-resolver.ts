@@ -28,40 +28,18 @@ export function resolveConnectionProfile(
   character: Character,
   chatDefaultProfileId?: string
 ): string {
-  logger.debug('Resolving connection profile for participant', {
-    participantId: participant.id,
-    participantType: participant.type,
-    characterId: character.id,
-    hasParticipantProfile: !!participant.connectionProfileId,
-    hasCharacterDefault: !!character.defaultConnectionProfileId,
-    hasChatDefault: !!chatDefaultProfileId,
-  });
-
   // 1. Check participant-level override
   if (participant.connectionProfileId) {
-    logger.debug('Using participant connection profile override', {
-      participantId: participant.id,
-      profileId: participant.connectionProfileId,
-    });
     return participant.connectionProfileId;
   }
 
   // 2. Check character's default
   if (character.defaultConnectionProfileId) {
-    logger.debug('Using character default connection profile', {
-      participantId: participant.id,
-      characterId: character.id,
-      profileId: character.defaultConnectionProfileId,
-    });
     return character.defaultConnectionProfileId;
   }
 
   // 3. Check chat-level fallback
   if (chatDefaultProfileId) {
-    logger.debug('Using chat default connection profile', {
-      participantId: participant.id,
-      profileId: chatDefaultProfileId,
-    });
     return chatDefaultProfileId;
   }
 

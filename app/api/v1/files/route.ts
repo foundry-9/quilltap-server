@@ -30,7 +30,6 @@ const writeFileSchema = z.object({
 
 export const GET = createAuthenticatedHandler(async (request, { user, repos }) => {
   try {
-    logger.debug('[Files v1] GET list files', { userId: user.id });
 
     const searchParams = request.nextUrl.searchParams;
     const projectId = searchParams.get('projectId');
@@ -112,24 +111,12 @@ async function handleWriteFile(request: NextRequest, user: any, repos: any): Pro
     const parsed = writeFileSchema.safeParse(body);
 
     if (!parsed.success) {
-      logger.debug('[Files v1] Invalid file write request', { errors: parsed.error.issues });
       return badRequest('Invalid request: ' + parsed.error.issues.map((e: any) => e.message).join(', '));
     }
 
     const { filename, content, mimeType, projectId, folderPath: rawFolderPath } = parsed.data;
     const targetProjectId = projectId ?? null;
-    const folderPath = normalizeFolderPath(rawFolderPath || '/');
-
-    logger.debug('[Files v1] Processing file write request', {
-      filename,
-      contentLength: content.length,
-      mimeType,
-      projectId: targetProjectId,
-      folderPath,
-      userId: user.id,
-    });
-
-    // Validate folder path
+    const folderPath = normalizeFolderPath(rawFolderPath || '/');// Validate folder path
     const folderValidation = validateFolderPath(folderPath);
     if (!folderValidation.isValid) {
       return badRequest(folderValidation.error || 'Invalid folder path');
@@ -156,16 +143,7 @@ async function handleWriteFile(request: NextRequest, user: any, repos: any): Pro
     const fileId = repos.files['generateId']();
 
     // Sanitize filename (prevent path traversal)
-    const sanitizedFilename = filename.replace(/[/\\:*?"<>|]/g, '_');
-
-    logger.debug('[Files v1] Uploading file to storage', {
-      fileId,
-      filename: sanitizedFilename,
-      size: contentBuffer.length,
-      userId: user.id,
-    });
-
-    // Upload to file storage
+    const sanitizedFilename = filename.replace(/[/\\:*?"<>|]/g, '_');// Upload to file storage
     const { storageKey, mountPointId } = await fileStorageManager.uploadFile({
       userId: user.id,
       fileId,
@@ -174,15 +152,7 @@ async function handleWriteFile(request: NextRequest, user: any, repos: any): Pro
       contentType: mimeType,
       projectId: targetProjectId,
       folderPath,
-    });
-
-    logger.debug('[Files v1] File uploaded to storage', {
-      fileId,
-      storageKey,
-      mountPointId,
-    });
-
-    // Create file metadata in repository
+    });// Create file metadata in repository
     const fileEntry = await repos.files.create({
       id: fileId,
       userId: user.id,

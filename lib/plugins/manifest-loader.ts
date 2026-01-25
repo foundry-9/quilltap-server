@@ -339,10 +339,6 @@ export async function scanPlugins(
         // Check if plugin is enabled by site configuration
         const siteEnabled = isSitePluginEnabled(manifest.name);
         if (!siteEnabled) {
-          logger.debug('Plugin disabled by site configuration', {
-            context: 'scanPlugins',
-            pluginName: manifest.name,
-          });
           continue;
         }
 
@@ -366,7 +362,6 @@ export async function scanPlugins(
         });
       }
     } catch (error) {
-      logger.debug('Failed to scan plugins directory:', { dirPath, error });
     }
   };
 

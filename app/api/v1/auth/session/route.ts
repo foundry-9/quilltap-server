@@ -26,14 +26,12 @@ export async function GET(req: NextRequest) {
     const session = await getServerSession();
 
     if (!session) {
-      logger.debug('[Auth v1] Session check - no active session');
       return successResponse<SessionResponse>({
         user: null,
         expires: null,
       });
     }
 
-    logger.debug('[Auth v1] Session retrieved', { userId: session.user.id });
 
     return successResponse<SessionResponse>({
       user: session.user,

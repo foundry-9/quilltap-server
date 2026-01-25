@@ -4,6 +4,12 @@
 
 ### 2.8-dev
 
+- refactor: Remove all debug-level logging calls from codebase (2026-01-25)
+  - Removed ~11,300 lines of `logger.debug()`, `log.debug()`, and `console.debug()` calls
+  - Affected 350+ files across lib/, app/api/, plugins/dist/, migrations/, and components/
+  - Logger interfaces preserved (packages/plugin-types, packages/plugin-utils) for future debug logging
+  - Test files preserved for logger testing
+  - Reduces log noise in production; debug logging can be re-added for new features as needed
 - fix: Sidebar chats list showing too few non-project chats (2026-01-25)
   - API was truncating to top 15 chats before filtering out project chats
   - Now separates non-project and project chats before truncating

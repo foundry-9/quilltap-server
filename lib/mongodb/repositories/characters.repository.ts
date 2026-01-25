@@ -25,7 +25,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
       const result = await collection.findOne({ id });
 
       if (!result) {
-        logger.debug('Character not found', { characterId: id });
         return null;
       }
 
@@ -182,8 +181,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
           return null;
         })
         .filter((char): char is Character => char !== null);
-
-      logger.debug('Found characters by IDs', { requestedCount: ids.length, foundCount: characters.length });
       return characters;
     } catch (error) {
       logger.error('Error finding characters by IDs', {
@@ -394,7 +391,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
    * @returns Promise<Character | null> The updated character if found, null otherwise
    */
   async addTag(characterId: string, tagId: string): Promise<Character | null> {
-    logger.debug('Adding tag to character', { characterId, tagId });
     try {
       const character = await this.findById(characterId);
       if (!character) {
@@ -404,11 +400,8 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
 
       if (!character.tags.includes(tagId)) {
         character.tags.push(tagId);
-        logger.debug('Tag added to character tags array', { characterId, tagId });
         return await this.update(characterId, { tags: character.tags });
       }
-
-      logger.debug('Tag already exists on character', { characterId, tagId });
       return character;
     } catch (error) {
       logger.error('Error adding tag to character', {
@@ -427,7 +420,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
    * @returns Promise<Character | null> The updated character if found, null otherwise
    */
   async removeTag(characterId: string, tagId: string): Promise<Character | null> {
-    logger.debug('Removing tag from character', { characterId, tagId });
     try {
       const character = await this.findById(characterId);
       if (!character) {
@@ -440,11 +432,8 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
       const afterCount = character.tags.length;
 
       if (beforeCount !== afterCount) {
-        logger.debug('Tag removed from character', { characterId, tagId });
         return await this.update(characterId, { tags: character.tags });
       }
-
-      logger.debug('Tag not found on character', { characterId, tagId });
       return character;
     } catch (error) {
       logger.error('Error removing tag from character', {
@@ -468,7 +457,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
    * @returns Promise<Character | null> The updated character if found, null otherwise
    */
   async addPersona(characterId: string, personaId: string, isDefault = false): Promise<Character | null> {
-    logger.debug('Adding persona link to character', { characterId, personaId, isDefault });
     try {
       const character = await this.findById(characterId);
       if (!character) {
@@ -479,11 +467,8 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
       const existing = character.personaLinks.find((link) => link.personaId === personaId);
       if (!existing) {
         character.personaLinks.push({ personaId, isDefault });
-        logger.debug('Persona link added to character', { characterId, personaId, isDefault });
         return await this.update(characterId, { personaLinks: character.personaLinks });
       }
-
-      logger.debug('Persona link already exists on character', { characterId, personaId });
       return character;
     } catch (error) {
       logger.error('Error adding persona link to character', {
@@ -502,7 +487,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
    * @returns Promise<Character | null> The updated character if found, null otherwise
    */
   async removePersona(characterId: string, personaId: string): Promise<Character | null> {
-    logger.debug('Removing persona link from character', { characterId, personaId });
     try {
       const character = await this.findById(characterId);
       if (!character) {
@@ -515,11 +499,8 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
       const afterCount = character.personaLinks.length;
 
       if (beforeCount !== afterCount) {
-        logger.debug('Persona link removed from character', { characterId, personaId });
         return await this.update(characterId, { personaLinks: character.personaLinks });
       }
-
-      logger.debug('Persona link not found on character', { characterId, personaId });
       return character;
     } catch (error) {
       logger.error('Error removing persona link from character', {
@@ -542,12 +523,10 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
    * @returns Promise<Character | null> The updated character if found, null otherwise
    */
   async setFavorite(characterId: string, isFavorite: boolean): Promise<Character | null> {
-    logger.debug('Setting favorite status for character', { characterId, isFavorite });
     try {
       const result = await this.update(characterId, { isFavorite });
 
       if (result) {
-        logger.debug('Favorite status updated', { characterId, isFavorite });
       }
 
       return result;
@@ -568,12 +547,10 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
    * @returns Promise<Character | null> The updated character if found, null otherwise
    */
   async setControlledBy(characterId: string, controlledBy: 'llm' | 'user'): Promise<Character | null> {
-    logger.debug('Setting controlledBy status for character', { characterId, controlledBy });
     try {
       const result = await this.update(characterId, { controlledBy });
 
       if (result) {
-        logger.debug('ControlledBy status updated', { characterId, controlledBy });
       }
 
       return result;
@@ -601,7 +578,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
     characterId: string,
     data: Omit<PhysicalDescription, 'id' | 'createdAt' | 'updatedAt'>
   ): Promise<PhysicalDescription | null> {
-    logger.debug('Adding physical description to character', { characterId, descriptionName: data.name });
     try {
       const character = await this.findById(characterId);
       if (!character) {
@@ -621,11 +597,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
       character.physicalDescriptions.push(description);
 
       await this.update(characterId, { physicalDescriptions: character.physicalDescriptions });
-
-      logger.debug('Physical description added successfully', {
-        characterId,
-        descriptionId: description.id,
-      });
       return description;
     } catch (error) {
       logger.error('Error adding physical description', {
@@ -649,7 +620,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
     descriptionId: string,
     data: Partial<Omit<PhysicalDescription, 'id' | 'createdAt' | 'updatedAt'>>
   ): Promise<PhysicalDescription | null> {
-    logger.debug('Updating physical description', { characterId, descriptionId });
     try {
       const character = await this.findById(characterId);
       if (!character) {
@@ -675,8 +645,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
 
       descriptions[index] = updated;
       await this.update(characterId, { physicalDescriptions: descriptions });
-
-      logger.debug('Physical description updated successfully', { characterId, descriptionId });
       return updated;
     } catch (error) {
       logger.error('Error updating physical description', {
@@ -695,7 +663,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
    * @returns Promise<boolean> True if description was deleted, false if not found
    */
   async removeDescription(characterId: string, descriptionId: string): Promise<boolean> {
-    logger.debug('Removing physical description from character', { characterId, descriptionId });
     try {
       const character = await this.findById(characterId);
       if (!character) {
@@ -712,8 +679,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
       }
 
       await this.update(characterId, { physicalDescriptions: filtered });
-
-      logger.debug('Physical description removed successfully', { characterId, descriptionId });
       return true;
     } catch (error) {
       logger.error('Error removing physical description', {
@@ -732,7 +697,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
    * @returns Promise<PhysicalDescription | null> The description if found, null otherwise
    */
   async getDescription(characterId: string, descriptionId: string): Promise<PhysicalDescription | null> {
-    logger.debug('Getting physical description', { characterId, descriptionId });
     try {
       const character = await this.findById(characterId);
       if (!character) {
@@ -742,12 +706,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
 
       const descriptions = character.physicalDescriptions || [];
       const description = descriptions.find((d) => d.id === descriptionId) || null;
-
-      logger.debug('Physical description retrieval completed', {
-        characterId,
-        descriptionId,
-        found: description !== null,
-      });
       return description;
     } catch (error) {
       logger.error('Error getting physical description', {
@@ -765,7 +723,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
    * @returns Promise<PhysicalDescription[]> Array of all descriptions for the character
    */
   async getDescriptions(characterId: string): Promise<PhysicalDescription[]> {
-    logger.debug('Getting all physical descriptions for character', { characterId });
     try {
       const character = await this.findById(characterId);
       if (!character) {
@@ -774,7 +731,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
       }
 
       const descriptions = character.physicalDescriptions || [];
-      logger.debug('Retrieved physical descriptions', { characterId, count: descriptions.length });
       return descriptions;
     } catch (error) {
       logger.error('Error getting physical descriptions', {
@@ -799,7 +755,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
     characterId: string,
     data: Omit<CharacterSystemPrompt, 'id' | 'createdAt' | 'updatedAt'>
   ): Promise<CharacterSystemPrompt | null> {
-    logger.debug('Adding system prompt to character', { characterId, promptName: data.name });
     try {
       const character = await this.findById(characterId);
       if (!character) {
@@ -826,11 +781,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
       prompts.push(prompt);
 
       await this.update(characterId, { systemPrompts: prompts });
-
-      logger.debug('System prompt added successfully', {
-        characterId,
-        promptId: prompt.id,
-      });
       return prompt;
     } catch (error) {
       logger.error('Error adding system prompt', {
@@ -850,7 +800,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
     promptId: string,
     data: Partial<Omit<CharacterSystemPrompt, 'id' | 'createdAt' | 'updatedAt'>>
   ): Promise<CharacterSystemPrompt | null> {
-    logger.debug('Updating system prompt', { characterId, promptId });
     try {
       const character = await this.findById(characterId);
       if (!character) {
@@ -882,8 +831,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
 
       prompts[index] = updated;
       await this.update(characterId, { systemPrompts: prompts });
-
-      logger.debug('System prompt updated successfully', { characterId, promptId });
       return updated;
     } catch (error) {
       logger.error('Error updating system prompt', {
@@ -899,7 +846,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
    * Delete a system prompt from a character
    */
   async deleteSystemPrompt(characterId: string, promptId: string): Promise<boolean> {
-    logger.debug('Deleting system prompt from character', { characterId, promptId });
     try {
       const character = await this.findById(characterId);
       if (!character) {
@@ -921,8 +867,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
       }
 
       await this.update(characterId, { systemPrompts: filtered });
-
-      logger.debug('System prompt deleted successfully', { characterId, promptId });
       return true;
     } catch (error) {
       logger.error('Error deleting system prompt', {
@@ -938,7 +882,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
    * Set a system prompt as default
    */
   async setDefaultSystemPrompt(characterId: string, promptId: string): Promise<Character | null> {
-    logger.debug('Setting default system prompt', { characterId, promptId });
     try {
       const character = await this.findById(characterId);
       if (!character) {
@@ -962,8 +905,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
       });
 
       const result = await this.update(characterId, { systemPrompts: prompts });
-
-      logger.debug('Default system prompt set successfully', { characterId, promptId });
       return result;
     } catch (error) {
       logger.error('Error setting default system prompt', {
@@ -979,7 +920,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
    * Get a single system prompt by ID
    */
   async getSystemPrompt(characterId: string, promptId: string): Promise<CharacterSystemPrompt | null> {
-    logger.debug('Getting system prompt', { characterId, promptId });
     try {
       const character = await this.findById(characterId);
       if (!character) {
@@ -1003,7 +943,6 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
    * Get all system prompts for a character
    */
   async getSystemPrompts(characterId: string): Promise<CharacterSystemPrompt[]> {
-    logger.debug('Getting all system prompts for character', { characterId });
     try {
       const character = await this.findById(characterId);
       if (!character) {

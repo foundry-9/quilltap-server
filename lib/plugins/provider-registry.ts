@@ -90,10 +90,6 @@ class ProviderRegistry {
     }
 
     this.state.providers.set(providerName, plugin);
-    this.logger.debug('Provider registered', {
-      name: providerName,
-      displayName: plugin.metadata.displayName,
-    });
   }
 
   /**
@@ -153,10 +149,6 @@ class ProviderRegistry {
     }
 
     try {
-      this.logger.debug('Creating LLM provider instance', {
-        provider: name,
-        hasBaseUrl: !!baseUrl,
-      });
       return plugin.createProvider(baseUrl);
     } catch (error) {
       this.logger.error('Failed to create LLM provider', {
@@ -196,10 +188,6 @@ class ProviderRegistry {
     }
 
     try {
-      this.logger.debug('Creating image provider instance', {
-        provider: name,
-        hasBaseUrl: !!baseUrl,
-      });
       return plugin.createImageProvider(baseUrl);
     } catch (error) {
       this.logger.error('Failed to create image provider', {
@@ -491,7 +479,6 @@ class ProviderRegistry {
       errors: new Map(),
       lastInitTime: null,
     };
-    this.logger.debug('Provider registry reset');
   }
 
   /**
@@ -507,10 +494,6 @@ class ProviderRegistry {
   hotLoadProviderPlugin(pluginPath: string, manifest: PluginManifest): boolean {
     // Only handle LLM_PROVIDER plugins
     if (!manifest.capabilities.includes('LLM_PROVIDER')) {
-      this.logger.debug('Plugin is not an LLM_PROVIDER, skipping hot-load', {
-        plugin: manifest.name,
-        capabilities: manifest.capabilities,
-      });
       return false;
     }
 
@@ -525,11 +508,6 @@ class ProviderRegistry {
         });
         return false;
       }
-
-      this.logger.debug('Hot-loading provider plugin module', {
-        plugin: manifest.name,
-        path: modulePath,
-      });
 
       // Clear require cache to ensure fresh load
       // Use dynamicRequire to avoid webpack static analysis issues

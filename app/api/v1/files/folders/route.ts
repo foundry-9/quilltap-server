@@ -111,7 +111,6 @@ async function ensureParentFoldersExist(
       mountPointId: null,
     });
 
-    logger.debug('[Files v1] Created parent folder', { path: parentPath, folderId: parentFolder.id });
 
     try {
       await fileStorageManager.createFolder({
@@ -136,7 +135,6 @@ async function ensureParentFoldersExist(
 
 export const GET = createAuthenticatedHandler(async (request, { user, repos }) => {
   try {
-    logger.debug('[Files v1] GET list folders', { userId: user.id });
 
     const searchParams = request.nextUrl.searchParams;
     const projectId = searchParams.get('projectId');
@@ -214,15 +212,7 @@ async function handleCreateFolder(request: NextRequest, user: any, repos: any): 
       return badRequest(validation.error || 'Invalid folder path');
     }
 
-    const normalizedPath = normalizeFolderPath(path);
-
-    logger.debug('[Files v1] Create folder request', {
-      path: normalizedPath,
-      projectId,
-      userId: user.id,
-    });
-
-    // Check if folder already exists
+    const normalizedPath = normalizeFolderPath(path);// Check if folder already exists
     const existingFolder = await repos.folders.findByPath(
       user.id,
       normalizedPath,
@@ -230,7 +220,6 @@ async function handleCreateFolder(request: NextRequest, user: any, repos: any): 
     );
 
     if (existingFolder) {
-      logger.debug('[Files v1] Folder already exists', { path: normalizedPath, folderId: existingFolder.id });
 
       return successResponse({
         folder: existingFolder,
@@ -258,7 +247,6 @@ async function handleCreateFolder(request: NextRequest, user: any, repos: any): 
       mountPointId: null,
     });
 
-    logger.debug('[Files v1] Created folder entity', { path: normalizedPath, folderId: folder.id });
 
     // Create storage directory for local backends
     try {
@@ -328,17 +316,7 @@ async function handleRenameFolder(request: NextRequest, user: any, repos: any): 
     const newPathValidation = validateFolderPath(newPath);
     if (!newPathValidation.isValid) {
       return badRequest(newPathValidation.error || 'Invalid resulting path');
-    }
-
-    logger.debug('[Files v1] Rename folder request', {
-      oldPath: normalizedPath,
-      newPath,
-      newName: sanitizedName,
-      projectId,
-      userId: user.id,
-    });
-
-    // Find the folder entity
+    }// Find the folder entity
     const folder = await repos.folders.findByPath(
       user.id,
       normalizedPath,
@@ -427,15 +405,7 @@ async function handleDeleteFolder(request: NextRequest, user: any, repos: any): 
 
     if (normalizedPath === '/') {
       return badRequest('Cannot delete root folder');
-    }
-
-    logger.debug('[Files v1] Delete folder request', {
-      path: normalizedPath,
-      projectId,
-      userId: user.id,
-    });
-
-    // Find the folder entity
+    }// Find the folder entity
     const folder = await repos.folders.findByPath(
       user.id,
       normalizedPath,
@@ -456,18 +426,12 @@ async function handleDeleteFolder(request: NextRequest, user: any, repos: any): 
       return filePath === normalizedPath || filePath.startsWith(normalizedPath);
     });
 
-    if (filesInFolder.length > 0) {
-      logger.debug('[Files v1] Cannot delete non-empty folder', {
-        path: normalizedPath,
-        fileCount: filesInFolder.length,
-      });
-      return badRequest(`Folder contains ${filesInFolder.length} file(s) and cannot be deleted`);
+    if (filesInFolder.length > 0) {return badRequest(`Folder contains ${filesInFolder.length} file(s) and cannot be deleted`);
     }
 
     // Check if any child folders exist
     const hasChildren = await repos.folders.hasChildren(folder.id);
     if (hasChildren) {
-      logger.debug('[Files v1] Cannot delete folder with children', { path: normalizedPath });
       return badRequest('Folder contains subfolders and cannot be deleted');
     }
 

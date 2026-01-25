@@ -28,18 +28,10 @@ export class SyncInstancesRepository extends MongoBaseRepository<SyncInstance> {
    */
   async findById(id: string): Promise<SyncInstance | null> {
     const collection = await this.getCollection();
-
-    logger.debug('Finding sync instance by ID', {
-      instanceId: id,
-    });
-
     try {
       const instance = await collection.findOne({ id });
 
       if (!instance) {
-        logger.debug('Sync instance not found', {
-          instanceId: id,
-        });
         return null;
       }
 
@@ -53,11 +45,6 @@ export class SyncInstancesRepository extends MongoBaseRepository<SyncInstance> {
         });
         return null;
       }
-
-      logger.debug('Sync instance found by ID', {
-        instanceId: id,
-      });
-
       return validationResult.data || null;
     } catch (error) {
       logger.error('Error finding sync instance by ID', {
@@ -73,16 +60,8 @@ export class SyncInstancesRepository extends MongoBaseRepository<SyncInstance> {
    */
   async findAll(): Promise<SyncInstance[]> {
     const collection = await this.getCollection();
-
-    logger.debug('Finding all sync instances');
-
     try {
       const instances = await collection.find({}).toArray();
-
-      logger.debug('Retrieved all sync instances', {
-        count: instances.length,
-      });
-
       const validatedInstances: SyncInstance[] = [];
       for (const instance of instances) {
         const { _id, ...instanceData } = instance as any;
@@ -110,19 +89,8 @@ export class SyncInstancesRepository extends MongoBaseRepository<SyncInstance> {
    */
   async findByUserId(userId: string): Promise<SyncInstance[]> {
     const collection = await this.getCollection();
-
-    logger.debug('Finding sync instances by user ID', {
-      userId,
-    });
-
     try {
       const instances = await collection.find({ userId }).toArray();
-
-      logger.debug('Retrieved sync instances by user ID', {
-        userId,
-        count: instances.length,
-      });
-
       const validatedInstances: SyncInstance[] = [];
       for (const instance of instances) {
         const { _id, ...instanceData } = instance as any;
@@ -152,19 +120,8 @@ export class SyncInstancesRepository extends MongoBaseRepository<SyncInstance> {
    */
   async findActiveByUserId(userId: string): Promise<SyncInstance[]> {
     const collection = await this.getCollection();
-
-    logger.debug('Finding active sync instances by user ID', {
-      userId,
-    });
-
     try {
       const instances = await collection.find({ userId, isActive: true }).toArray();
-
-      logger.debug('Retrieved active sync instances by user ID', {
-        userId,
-        count: instances.length,
-      });
-
       const validatedInstances: SyncInstance[] = [];
       for (const instance of instances) {
         const { _id, ...instanceData } = instance as any;
@@ -194,20 +151,10 @@ export class SyncInstancesRepository extends MongoBaseRepository<SyncInstance> {
    */
   async findByUserAndUrl(userId: string, url: string): Promise<SyncInstance | null> {
     const collection = await this.getCollection();
-
-    logger.debug('Finding sync instance by user and URL', {
-      userId,
-      url,
-    });
-
     try {
       const instance = await collection.findOne({ userId, url });
 
       if (!instance) {
-        logger.debug('Sync instance not found by user and URL', {
-          userId,
-          url,
-        });
         return null;
       }
 
@@ -222,12 +169,6 @@ export class SyncInstancesRepository extends MongoBaseRepository<SyncInstance> {
         });
         return null;
       }
-
-      logger.debug('Sync instance found by user and URL', {
-        userId,
-        url,
-      });
-
       return validationResult.data || null;
     } catch (error) {
       logger.error('Error finding sync instance by user and URL', {
@@ -246,13 +187,6 @@ export class SyncInstancesRepository extends MongoBaseRepository<SyncInstance> {
     const collection = await this.getCollection();
     const id = this.generateId();
     const now = this.getCurrentTimestamp();
-
-    logger.debug('Creating new sync instance', {
-      userId: data.userId,
-      name: data.name,
-      url: data.url,
-    });
-
     try {
       const instance: SyncInstance = {
         ...data,
@@ -296,11 +230,6 @@ export class SyncInstancesRepository extends MongoBaseRepository<SyncInstance> {
   async update(id: string, data: Partial<SyncInstance>): Promise<SyncInstance | null> {
     const collection = await this.getCollection();
     const now = this.getCurrentTimestamp();
-
-    logger.debug('Updating sync instance', {
-      instanceId: id,
-    });
-
     try {
       const updateData: any = {
         ...data,
@@ -358,12 +287,6 @@ export class SyncInstancesRepository extends MongoBaseRepository<SyncInstance> {
     remoteVersionInfo?: { schemaVersion?: string; appVersion?: string }
   ): Promise<SyncInstance | null> {
     const now = this.getCurrentTimestamp();
-
-    logger.debug('Updating sync instance status', {
-      instanceId: id,
-      status,
-    });
-
     const updateData: Partial<SyncInstance> = {
       lastSyncAt: now,
       lastSyncStatus: status,
@@ -386,10 +309,6 @@ export class SyncInstancesRepository extends MongoBaseRepository<SyncInstance> {
    * This allows the next sync to pull all data from remote
    */
   async resetSyncState(id: string): Promise<SyncInstance | null> {
-    logger.debug('Resetting sync state for instance', {
-      instanceId: id,
-    });
-
     return this.update(id, {
       lastSyncAt: null,
       lastSyncStatus: null,
@@ -403,11 +322,6 @@ export class SyncInstancesRepository extends MongoBaseRepository<SyncInstance> {
   async resetSyncStateForUser(userId: string): Promise<number> {
     const collection = await this.getCollection();
     const now = this.getCurrentTimestamp();
-
-    logger.debug('Resetting sync state for all user instances', {
-      userId,
-    });
-
     try {
       const result = await collection.updateMany(
         { userId },
@@ -440,11 +354,6 @@ export class SyncInstancesRepository extends MongoBaseRepository<SyncInstance> {
    */
   async delete(id: string): Promise<boolean> {
     const collection = await this.getCollection();
-
-    logger.debug('Deleting sync instance', {
-      instanceId: id,
-    });
-
     try {
       const result = await collection.deleteOne({ id });
 

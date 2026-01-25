@@ -135,11 +135,6 @@ export class OpenAICompatibleProvider implements LLMProvider {
     }
 
     this.logger = createPluginLogger(`${this.providerName}Provider`);
-
-    this.logger.debug(`${this.providerName} provider instantiated`, {
-      context: `${this.providerName}Provider.constructor`,
-      baseUrl: this.baseUrl,
-    });
   }
 
   /**
@@ -192,12 +187,6 @@ export class OpenAICompatibleProvider implements LLMProvider {
    * @returns Complete LLM response with content and usage statistics
    */
   async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
-    this.logger.debug(`${this.providerName} sendMessage called`, {
-      context: `${this.providerName}Provider.sendMessage`,
-      model: params.model,
-      baseUrl: this.baseUrl,
-    });
-
     this.validateApiKeyRequirement(apiKey);
     const attachmentResults = this.collectAttachmentFailures(params);
 
@@ -225,14 +214,6 @@ export class OpenAICompatibleProvider implements LLMProvider {
       });
 
       const choice = response.choices[0];
-
-      this.logger.debug(`Received ${this.providerName} response`, {
-        context: `${this.providerName}Provider.sendMessage`,
-        finishReason: choice.finish_reason,
-        promptTokens: response.usage?.prompt_tokens,
-        completionTokens: response.usage?.completion_tokens,
-      });
-
       return {
         content: choice.message.content ?? '',
         finishReason: choice.finish_reason,
@@ -262,12 +243,6 @@ export class OpenAICompatibleProvider implements LLMProvider {
    * @yields Stream chunks with content and final usage statistics
    */
   async *streamMessage(params: LLMParams, apiKey: string): AsyncGenerator<StreamChunk> {
-    this.logger.debug(`${this.providerName} streamMessage called`, {
-      context: `${this.providerName}Provider.streamMessage`,
-      model: params.model,
-      baseUrl: this.baseUrl,
-    });
-
     this.validateApiKeyRequirement(apiKey);
     const attachmentResults = this.collectAttachmentFailures(params);
 
@@ -319,11 +294,6 @@ export class OpenAICompatibleProvider implements LLMProvider {
             completion_tokens: chunk.usage?.completion_tokens,
             total_tokens: chunk.usage?.total_tokens,
           };
-          this.logger.debug('Received usage data in stream', {
-            context: `${this.providerName}Provider.streamMessage`,
-            promptTokens: chunk.usage?.prompt_tokens,
-            completionTokens: chunk.usage?.completion_tokens,
-          });
         }
 
         // Yield content chunks
@@ -336,15 +306,6 @@ export class OpenAICompatibleProvider implements LLMProvider {
       }
 
       // After stream ends, yield final chunk with accumulated usage
-      this.logger.debug('Stream completed', {
-        context: `${this.providerName}Provider.streamMessage`,
-        finishReason: finalFinishReason,
-        chunks: chunkCount,
-        promptTokens: accumulatedUsage?.prompt_tokens,
-        completionTokens: accumulatedUsage?.completion_tokens,
-        hasUsage: !!accumulatedUsage,
-      });
-
       yield {
         content: '',
         done: true,
@@ -372,11 +333,6 @@ export class OpenAICompatibleProvider implements LLMProvider {
    * @returns true if the API key is valid, false otherwise
    */
   async validateApiKey(apiKey: string): Promise<boolean> {
-    this.logger.debug(`Validating ${this.providerName} API connection`, {
-      context: `${this.providerName}Provider.validateApiKey`,
-      baseUrl: this.baseUrl,
-    });
-
     // For providers that require API key, return false if not provided
     if (this.requireApiKey && !apiKey) {
       return false;
@@ -388,10 +344,6 @@ export class OpenAICompatibleProvider implements LLMProvider {
         baseURL: this.baseUrl,
       });
       await client.models.list();
-
-      this.logger.debug(`${this.providerName} API validation successful`, {
-        context: `${this.providerName}Provider.validateApiKey`,
-      });
       return true;
     } catch (error) {
       this.logger.error(
@@ -410,11 +362,6 @@ export class OpenAICompatibleProvider implements LLMProvider {
    * @returns Sorted array of model IDs, or empty array on failure
    */
   async getAvailableModels(apiKey: string): Promise<string[]> {
-    this.logger.debug(`Fetching ${this.providerName} models`, {
-      context: `${this.providerName}Provider.getAvailableModels`,
-      baseUrl: this.baseUrl,
-    });
-
     // For providers that require API key, return empty if not provided
     if (this.requireApiKey && !apiKey) {
       this.logger.error(`${this.providerName} provider requires an API key to fetch models`, {
@@ -430,12 +377,6 @@ export class OpenAICompatibleProvider implements LLMProvider {
       });
       const models = await client.models.list();
       const modelList = models.data.map((m) => m.id).sort();
-
-      this.logger.debug(`Retrieved ${this.providerName} models`, {
-        context: `${this.providerName}Provider.getAvailableModels`,
-        modelCount: modelList.length,
-      });
-
       return modelList;
     } catch (error) {
       this.logger.error(

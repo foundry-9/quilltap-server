@@ -28,9 +28,6 @@ module.exports = __toCommonJS(index_exports);
 var import_plugin_utils = require("@quilltap/plugin-utils");
 var logger = (0, import_plugin_utils.createPluginLogger)("qtap-plugin-theme-rains");
 function initialize() {
-  logger.debug("Rains theme plugin loaded", {
-    version: "1.1.1"
-  });
 }
 var metadata = {
   name: "qtap-plugin-theme-rains",

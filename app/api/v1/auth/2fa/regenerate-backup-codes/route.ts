@@ -24,7 +24,6 @@ export const POST = createAuthenticatedHandler(async (req, { user }) => {
     const result = await regenerateBackupCodes(user.id);
 
     if (!result.success) {
-      logger.debug('[Auth v1] Backup codes regeneration failed', { userId: user.id });
       return badRequest('2FA is not enabled or backup codes could not be regenerated');
     }
 

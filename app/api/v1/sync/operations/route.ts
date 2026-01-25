@@ -30,11 +30,6 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
     const limitParam = searchParams.get('limit');
     const limit = Math.min(parseInt(limitParam || '50', 10), 100);
 
-    syncOpsLogger.debug('[Sync Operations v1] Getting sync operations', {
-      userId: user.id,
-      instanceId,
-      limit,
-    });
 
     let operations;
 

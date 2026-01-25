@@ -103,12 +103,6 @@ export class FilePermissionsRepository extends UserOwnedBaseRepository<FileWrite
       if (permission) {
         return permission;
       }
-
-      logger.debug('Project-level file write permission not found', {
-        context: 'file-permissions-repository',
-        userId,
-        projectId,
-      });
       return null;
     } catch (error) {
       logger.error('Error finding project file write permission', {
@@ -132,11 +126,6 @@ export class FilePermissionsRepository extends UserOwnedBaseRepository<FileWrite
       } as QueryFilter);
 
       const hasPermission = permission !== null;
-      logger.debug('Checked general file write permission', {
-        context: 'file-permissions-repository',
-        userId,
-        hasPermission,
-      });
       return hasPermission;
     } catch (error) {
       logger.error('Error checking general file write permission', {
@@ -160,12 +149,6 @@ export class FilePermissionsRepository extends UserOwnedBaseRepository<FileWrite
       } as QueryFilter);
 
       const hasPermission = permission !== null;
-      logger.debug('Checked single-file write permission', {
-        context: 'file-permissions-repository',
-        userId,
-        fileId,
-        hasPermission,
-      });
       return hasPermission;
     } catch (error) {
       logger.error('Error checking single-file write permission', {
@@ -229,15 +212,6 @@ export class FilePermissionsRepository extends UserOwnedBaseRepository<FileWrite
       } as QueryFilter);
 
       const canWrite = permission !== null;
-      logger.debug('Checked file write permission', {
-        context: 'file-permissions-repository',
-        userId,
-        projectId,
-        fileId,
-        canWrite,
-        matchedScope: permission ? permission.scope : null,
-      });
-
       return canWrite;
     } catch (error) {
       logger.error('Error checking file write permission', {

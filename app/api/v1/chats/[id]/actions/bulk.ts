@@ -29,16 +29,7 @@ export async function handleBulkReattribute(
 
     if (sourceParticipantId === targetParticipantId) {
       return badRequest('Source and target participants must be different');
-    }
-
-    logger.debug('[Chats v1] Processing bulk message re-attribution', {
-      chatId,
-      sourceParticipantId,
-      targetParticipantId,
-      roleFilter,
-    });
-
-    // Validate participants exist in this chat
+    }// Validate participants exist in this chat
     if (sourceParticipantId !== null) {
       const sourceParticipant = chat.participants.find((p) => p.id === sourceParticipantId);
       if (!sourceParticipant) {
@@ -65,15 +56,7 @@ export async function handleBulkReattribute(
       }
       if (roleFilter === 'both') return true;
       return msg.role === roleFilter;
-    });
-
-    logger.debug('[Chats v1] Found messages to re-attribute', {
-      chatId,
-      affectedCount: affectedMessages.length,
-      roleFilter,
-    });
-
-    if (affectedMessages.length === 0) {
+    });if (affectedMessages.length === 0) {
       return NextResponse.json({
         success: true,
         messagesUpdated: 0,
@@ -86,24 +69,11 @@ export async function handleBulkReattribute(
     const affectedMessageIds = new Set(affectedMessages.map((m) => m.id));
 
     for (const msg of affectedMessages) {
-      const memoriesFromMessage = await repos.memories.findBySourceMessageId(msg.id);
-
-      logger.debug('[Chats v1] Found memories for message', {
-        messageId: msg.id,
-        memoryCount: memoriesFromMessage.length,
-      });
-
-      for (const memory of memoriesFromMessage) {
+      const memoriesFromMessage = await repos.memories.findBySourceMessageId(msg.id);for (const memory of memoriesFromMessage) {
         try {
           const deleted = await deleteMemoryWithVector(memory.characterId, memory.id);
           if (deleted) {
-            memoriesDeleted++;
-            logger.debug('[Chats v1] Deleted memory during bulk re-attribution', {
-              memoryId: memory.id,
-              characterId: memory.characterId,
-              sourceMessageId: msg.id,
-            });
-          }
+            memoriesDeleted++;}
         } catch (error) {
           logger.error(
             '[Chats v1] Failed to delete memory during bulk re-attribution',

@@ -47,7 +47,6 @@ export const POST = createAuthenticatedHandler(async (req, { user }) => {
     );
 
     if (!result.success) {
-      logger.debug('[Auth v1] 2FA enable failed - invalid code', { userId: user.id });
       return badRequest('Invalid verification code');
     }
 

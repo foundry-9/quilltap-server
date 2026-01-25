@@ -122,10 +122,6 @@ export const plugin: LLMProviderPlugin = {
    * Factory method to create an OpenRouter LLM provider instance
    */
   createProvider: (baseUrl?: string) => {
-    logger.debug('Creating OpenRouter provider instance', {
-      context: 'plugin.createProvider',
-      baseUrl,
-    });
     return new OpenRouterProvider();
   },
 
@@ -133,10 +129,6 @@ export const plugin: LLMProviderPlugin = {
    * Factory method to create an OpenRouter embedding provider instance
    */
   createEmbeddingProvider: (baseUrl?: string) => {
-    logger.debug('Creating OpenRouter embedding provider instance', {
-      context: 'plugin.createEmbeddingProvider',
-      baseUrl,
-    });
     return new OpenRouterEmbeddingProvider();
   },
 
@@ -146,16 +138,9 @@ export const plugin: LLMProviderPlugin = {
    * Returns 100+ models from various providers
    */
   getAvailableModels: async (apiKey: string, baseUrl?: string) => {
-    logger.debug('Fetching available OpenRouter models', {
-      context: 'plugin.getAvailableModels',
-    });
     try {
       const provider = new OpenRouterProvider();
       const models = await provider.getAvailableModels(apiKey);
-      logger.debug('Successfully fetched OpenRouter models', {
-        context: 'plugin.getAvailableModels',
-        count: models.length,
-      });
       return models;
     } catch (error) {
       logger.error(
@@ -171,16 +156,9 @@ export const plugin: LLMProviderPlugin = {
    * Validate an OpenRouter API key
    */
   validateApiKey: async (apiKey: string, baseUrl?: string) => {
-    logger.debug('Validating OpenRouter API key', {
-      context: 'plugin.validateApiKey',
-    });
     try {
       const provider = new OpenRouterProvider();
       const isValid = await provider.validateApiKey(apiKey);
-      logger.debug('OpenRouter API key validation result', {
-        context: 'plugin.validateApiKey',
-        isValid,
-      });
       return isValid;
     } catch (error) {
       logger.error(
@@ -341,10 +319,6 @@ export const plugin: LLMProviderPlugin = {
    * Render the OpenRouter icon
    */
   renderIcon: (props) => {
-    logger.debug('Rendering OpenRouter icon', {
-      context: 'plugin.renderIcon',
-      className: props.className,
-    });
     return OpenRouterIcon(props);
   },
 
@@ -358,11 +332,6 @@ export const plugin: LLMProviderPlugin = {
   formatTools: (
     tools: (OpenAIToolDefinition | Record<string, unknown>)[],
   ): OpenAIToolDefinition[] => {
-    logger.debug('Formatting tools for OpenRouter provider', {
-      context: 'plugin.formatTools',
-      toolCount: tools.length,
-    });
-
     try {
       const formattedTools: OpenAIToolDefinition[] = [];
 
@@ -378,12 +347,6 @@ export const plugin: LLMProviderPlugin = {
         // Tools already in OpenAI format, pass through
         formattedTools.push(tool as OpenAIToolDefinition);
       }
-
-      logger.debug('Successfully formatted tools', {
-        context: 'plugin.formatTools',
-        count: formattedTools.length,
-      });
-
       return formattedTools;
     } catch (error) {
       logger.error(
@@ -403,18 +366,8 @@ export const plugin: LLMProviderPlugin = {
    * @returns Array of tool call requests
    */
   parseToolCalls: (response: any): ToolCallRequest[] => {
-    logger.debug('Parsing tool calls from OpenRouter response', {
-      context: 'plugin.parseToolCalls',
-    });
-
     try {
       const toolCalls = parseOpenAIToolCalls(response);
-
-      logger.debug('Successfully parsed tool calls', {
-        context: 'plugin.parseToolCalls',
-        count: toolCalls.length,
-      });
-
       return toolCalls;
     } catch (error) {
       logger.error(

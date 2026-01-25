@@ -25,7 +25,6 @@ export class ProjectsRepository extends MongoBaseRepository<Project> {
       const result = await collection.findOne({ id });
 
       if (!result) {
-        logger.debug('Project not found', { projectId: id });
         return null;
       }
 
@@ -146,8 +145,6 @@ export class ProjectsRepository extends MongoBaseRepository<Project> {
           return null;
         })
         .filter((project): project is Project => project !== null);
-
-      logger.debug('Found projects by IDs', { requestedCount: ids.length, foundCount: projects.length });
       return projects;
     } catch (error) {
       logger.error('Error finding projects by IDs', {
@@ -271,7 +268,6 @@ export class ProjectsRepository extends MongoBaseRepository<Project> {
    * @returns Promise<Project | null> The updated project if found, null otherwise
    */
   async addToRoster(projectId: string, characterId: string): Promise<Project | null> {
-    logger.debug('Adding character to project roster', { projectId, characterId });
     try {
       const project = await this.findById(projectId);
       if (!project) {
@@ -281,11 +277,8 @@ export class ProjectsRepository extends MongoBaseRepository<Project> {
 
       if (!project.characterRoster.includes(characterId)) {
         project.characterRoster.push(characterId);
-        logger.debug('Character added to project roster', { projectId, characterId });
         return await this.update(projectId, { characterRoster: project.characterRoster });
       }
-
-      logger.debug('Character already in project roster', { projectId, characterId });
       return project;
     } catch (error) {
       logger.error('Error adding character to project roster', {
@@ -304,7 +297,6 @@ export class ProjectsRepository extends MongoBaseRepository<Project> {
    * @returns Promise<Project | null> The updated project if found, null otherwise
    */
   async addManyToRoster(projectId: string, characterIds: string[]): Promise<Project | null> {
-    logger.debug('Adding characters to project roster', { projectId, count: characterIds.length });
     try {
       const project = await this.findById(projectId);
       if (!project) {
@@ -315,11 +307,8 @@ export class ProjectsRepository extends MongoBaseRepository<Project> {
       const newIds = characterIds.filter(id => !project.characterRoster.includes(id));
       if (newIds.length > 0) {
         project.characterRoster.push(...newIds);
-        logger.debug('Characters added to project roster', { projectId, addedCount: newIds.length });
         return await this.update(projectId, { characterRoster: project.characterRoster });
       }
-
-      logger.debug('All characters already in project roster', { projectId });
       return project;
     } catch (error) {
       logger.error('Error adding characters to project roster', {
@@ -337,7 +326,6 @@ export class ProjectsRepository extends MongoBaseRepository<Project> {
    * @returns Promise<Project | null> The updated project if found, null otherwise
    */
   async removeFromRoster(projectId: string, characterId: string): Promise<Project | null> {
-    logger.debug('Removing character from project roster', { projectId, characterId });
     try {
       const project = await this.findById(projectId);
       if (!project) {
@@ -350,11 +338,8 @@ export class ProjectsRepository extends MongoBaseRepository<Project> {
       const afterCount = project.characterRoster.length;
 
       if (beforeCount !== afterCount) {
-        logger.debug('Character removed from project roster', { projectId, characterId });
         return await this.update(projectId, { characterRoster: project.characterRoster });
       }
-
-      logger.debug('Character not found in project roster', { projectId, characterId });
       return project;
     } catch (error) {
       logger.error('Error removing character from project roster', {
@@ -403,7 +388,6 @@ export class ProjectsRepository extends MongoBaseRepository<Project> {
    * @returns Promise<Project | null> The updated project if found, null otherwise
    */
   async setAllowAnyCharacter(projectId: string, allowAnyCharacter: boolean): Promise<Project | null> {
-    logger.debug('Setting allowAnyCharacter for project', { projectId, allowAnyCharacter });
     try {
       return await this.update(projectId, { allowAnyCharacter });
     } catch (error) {
@@ -427,7 +411,6 @@ export class ProjectsRepository extends MongoBaseRepository<Project> {
    * @returns Promise<Project | null> The updated project if found, null otherwise
    */
   async setMountPoint(projectId: string, mountPointId: string | null): Promise<Project | null> {
-    logger.debug('Setting mount point for project', { projectId, mountPointId });
     try {
       return await this.update(projectId, { mountPointId });
     } catch (error) {
@@ -459,8 +442,6 @@ export class ProjectsRepository extends MongoBaseRepository<Project> {
           return null;
         })
         .filter((project): project is Project => project !== null);
-
-      logger.debug('Found projects by mount point', { mountPointId, count: projects.length });
       return projects;
     } catch (error) {
       logger.error('Error finding projects by mount point', {

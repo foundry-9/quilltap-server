@@ -8002,18 +8002,10 @@ var GoogleProvider = class {
       }
       const firstPart = parts[0];
       if (firstPart?.thoughtSignature) {
-        logger.debug("Extracted thought signature from response", {
-          context: "GoogleProvider.extractThoughtSignature",
-          signatureLength: firstPart.thoughtSignature.length
-        });
         return firstPart.thoughtSignature;
       }
       for (const part of parts) {
         if (part?.functionCall?.thoughtSignature) {
-          logger.debug("Extracted thought signature from function call", {
-            context: "GoogleProvider.extractThoughtSignature",
-            functionName: part.functionCall.name
-          });
           return part.functionCall.thoughtSignature;
         }
       }
@@ -8027,7 +8019,6 @@ var GoogleProvider = class {
     }
   }
   async formatMessagesWithAttachments(messages, modelName, hasTools) {
-    logger.debug("Formatting messages with attachments", { context: "GoogleProvider.formatMessagesWithAttachments", messageCount: messages.length });
     const sent = [];
     const failed = [];
     const isThinking = this.isThinkingModel(modelName);
@@ -8037,11 +8028,6 @@ var GoogleProvider = class {
     if (systemMessages.length > 0) {
       systemInstruction = systemMessages.map((m) => m.content).join("\n\n");
       nonSystemMessages = messages.filter((m) => m.role !== "system");
-      logger.debug("Extracted system instruction", {
-        context: "GoogleProvider.formatMessagesWithAttachments",
-        systemMessageCount: systemMessages.length,
-        instructionLength: systemInstruction.length
-      });
     }
     let filteredMessages = nonSystemMessages;
     let shouldDisableTools = false;
@@ -8073,22 +8059,10 @@ var GoogleProvider = class {
         if (msg.attachments) {
           lastMsg.attachments = [...lastMsg.attachments || [], ...msg.attachments];
         }
-        logger.debug("Merged consecutive user messages", {
-          context: "GoogleProvider.formatMessagesWithAttachments"
-        });
       } else {
         mergedMessages.push({ ...msg });
       }
     }
-    logger.debug("Messages after processing", {
-      context: "GoogleProvider.formatMessagesWithAttachments",
-      originalCount: messages.length,
-      afterSystemExtraction: nonSystemMessages.length,
-      afterMerging: mergedMessages.length,
-      finalRoles: mergedMessages.map((m) => m.role),
-      hasSystemInstruction: !!systemInstruction,
-      shouldDisableTools
-    });
     const formattedMessages = [];
     for (const msg of mergedMessages) {
       const formattedMessage = {
@@ -8102,10 +8076,6 @@ var GoogleProvider = class {
         if (formattedMessage.parts.length > 0 && formattedMessage.parts[0].text !== void 0) {
           formattedMessage.parts[0].thoughtSignature = msg.thoughtSignature;
         }
-        logger.debug("Added thought signature to message", {
-          context: "GoogleProvider.formatMessagesWithAttachments",
-          hasSignature: true
-        });
       }
       if (msg.attachments && msg.attachments.length > 0) {
         for (const attachment of msg.attachments) {
@@ -8142,20 +8112,12 @@ var GoogleProvider = class {
       }
       formattedMessages.push(formattedMessage);
     }
-    logger.debug("Messages formatted with attachments", {
-      context: "GoogleProvider.formatMessagesWithAttachments",
-      sentCount: sent.length,
-      failedCount: failed.length,
-      messageCount: formattedMessages.length
-    });
     return { messages: formattedMessages, systemInstruction, shouldDisableTools, attachmentResults: { sent, failed } };
   }
   async sendMessage(params, apiKey) {
-    logger.debug("Google sendMessage called", { context: "GoogleProvider.sendMessage", model: params.model });
     const client = new GoogleGenerativeAI(apiKey);
     const tools = [];
     if (params.tools && params.tools.length > 0) {
-      logger.debug("Adding tools to request", { context: "GoogleProvider.sendMessage", toolCount: params.tools.length });
       tools.push({
         functionDeclarations: params.tools.map((tool) => ({
           name: tool.name,
@@ -8169,7 +8131,6 @@ var GoogleProvider = class {
       });
     }
     if (params.webSearchEnabled) {
-      logger.debug("Web search enabled", { context: "GoogleProvider.sendMessage" });
       tools.push({ googleSearch: {} });
     }
     const hasTools = tools.length > 0;
@@ -8197,7 +8158,6 @@ var GoogleProvider = class {
     };
     if (systemInstruction) {
       modelConfig.systemInstruction = systemInstruction;
-      logger.debug("Using systemInstruction", { context: "GoogleProvider.sendMessage", instructionLength: systemInstruction.length });
     }
     if (hasTools && !shouldDisableTools) {
       modelConfig.tools = tools;
@@ -8222,13 +8182,6 @@ var GoogleProvider = class {
     const finishReason = response.candidates?.[0]?.finishReason ?? "STOP";
     const usage = response.usageMetadata;
     const thoughtSignature = this.extractThoughtSignature(response.response ?? response);
-    logger.debug("Received Google response", {
-      context: "GoogleProvider.sendMessage",
-      finishReason,
-      promptTokens: usage?.promptTokenCount,
-      completionTokens: usage?.candidatesTokenCount,
-      hasThoughtSignature: !!thoughtSignature
-    });
     return {
       content: text,
       finishReason,
@@ -8243,11 +8196,9 @@ var GoogleProvider = class {
     };
   }
   async *streamMessage(params, apiKey) {
-    logger.debug("Google streamMessage called", { context: "GoogleProvider.streamMessage", model: params.model });
     const client = new GoogleGenerativeAI(apiKey);
     const tools = [];
     if (params.tools && params.tools.length > 0) {
-      logger.debug("Adding tools to stream request", { context: "GoogleProvider.streamMessage", toolCount: params.tools.length });
       tools.push({
         functionDeclarations: params.tools.map((tool) => ({
           name: tool.name,
@@ -8261,7 +8212,6 @@ var GoogleProvider = class {
       });
     }
     if (params.webSearchEnabled) {
-      logger.debug("Web search enabled for stream", { context: "GoogleProvider.streamMessage" });
       tools.push({ googleSearch: {} });
     }
     const hasTools = tools.length > 0;
@@ -8289,7 +8239,6 @@ var GoogleProvider = class {
     };
     if (systemInstruction) {
       modelConfig.systemInstruction = systemInstruction;
-      logger.debug("Using systemInstruction for stream", { context: "GoogleProvider.streamMessage", instructionLength: systemInstruction.length });
     }
     if (hasTools && !shouldDisableTools) {
       modelConfig.tools = tools;
@@ -8315,7 +8264,6 @@ var GoogleProvider = class {
       chunkCount++;
       const text = chunk.text?.() ?? "";
       if (text) {
-        logger.debug("Received stream chunk", { context: "GoogleProvider.streamMessage", chunkNumber: chunkCount, contentLength: text.length });
         yield {
           content: text,
           done: false
@@ -8330,17 +8278,6 @@ var GoogleProvider = class {
     const parts = firstCandidate?.content?.parts || [];
     const hasFunctionCall = parts.some((p) => p.functionCall);
     const finishReason = firstCandidate?.finishReason;
-    logger.debug("Stream completed", {
-      context: "GoogleProvider.streamMessage",
-      totalChunks: chunkCount,
-      promptTokens: usage?.promptTokenCount,
-      completionTokens: usage?.candidatesTokenCount,
-      hasThoughtSignature: !!thoughtSignature,
-      hasFunctionCall,
-      finishReason,
-      partsCount: parts.length,
-      partTypes: parts.map((p) => Object.keys(p))
-    });
     yield {
       content: "",
       done: true,
@@ -8356,11 +8293,9 @@ var GoogleProvider = class {
   }
   async validateApiKey(apiKey) {
     try {
-      logger.debug("Validating Google API key", { context: "GoogleProvider.validateApiKey" });
       const client = new GoogleGenerativeAI(apiKey);
       const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
       await model.generateContent("test");
-      logger.debug("Google API key validation successful", { context: "GoogleProvider.validateApiKey" });
       return true;
     } catch (error) {
       logger.error("Google API key validation failed", { context: "GoogleProvider.validateApiKey" }, error instanceof Error ? error : void 0);
@@ -8369,7 +8304,6 @@ var GoogleProvider = class {
   }
   async getAvailableModels(apiKey) {
     try {
-      logger.debug("Fetching Google models", { context: "GoogleProvider.getAvailableModels" });
       const models = [
         "gemini-2.5-flash-image",
         "gemini-3-pro-image-preview",
@@ -8378,7 +8312,6 @@ var GoogleProvider = class {
         "gemini-2.5-flash",
         "gemini-pro-vision"
       ];
-      logger.debug("Retrieved Google models", { context: "GoogleProvider.getAvailableModels", modelCount: models.length });
       return models;
     } catch (error) {
       logger.error("Failed to fetch Google models", { context: "GoogleProvider.getAvailableModels" }, error instanceof Error ? error : void 0);
@@ -8386,11 +8319,6 @@ var GoogleProvider = class {
     }
   }
   async generateImage(params, apiKey) {
-    logger.debug("Generating image with Google", {
-      context: "GoogleProvider.generateImage",
-      model: params.model,
-      promptLength: params.prompt.length
-    });
     const client = new GoogleGenerativeAI(apiKey);
     const modelName = params.model ?? "gemini-2.5-flash-image";
     const model = client.getGenerativeModel({
@@ -8446,7 +8374,6 @@ var GoogleProvider = class {
       logger.error("No images generated in response", { context: "GoogleProvider.generateImage" });
       throw new Error("No images generated in response");
     }
-    logger.debug("Image generation completed", { context: "GoogleProvider.generateImage", imageCount: images.length });
     return {
       images,
       raw: response
@@ -8539,12 +8466,6 @@ var GoogleImagenProvider = class {
   }
   async generateImage(params, apiKey) {
     const model = params.model ?? "imagen-4";
-    logger2.debug("Google image generation started", {
-      context: "GoogleImagenProvider.generateImage",
-      model,
-      promptLength: params.prompt.length,
-      isGeminiModel: this.isGeminiImageModel(model)
-    });
     if (this.isGeminiImageModel(model)) {
       return this.generateWithGemini(params, apiKey, model);
     } else {
@@ -8579,12 +8500,6 @@ var GoogleImagenProvider = class {
     if (Object.keys(imageConfig).length > 0) {
       requestBody.generationConfig.imageConfig = imageConfig;
     }
-    logger2.debug("Sending request to Gemini generateContent API", {
-      context: "GoogleImagenProvider.generateWithGemini",
-      endpoint,
-      model,
-      hasImageConfig: Object.keys(imageConfig).length > 0
-    });
     const response = await fetch(endpoint, {
       method: "POST",
       headers: {
@@ -8620,11 +8535,6 @@ var GoogleImagenProvider = class {
         }
       }
     }
-    logger2.debug("Gemini image generation completed", {
-      context: "GoogleImagenProvider.generateWithGemini",
-      imageCount: images.length,
-      hasTextResponse: !!textResponse
-    });
     if (images.length === 0) {
       throw new Error(
         textResponse || "No images returned from Gemini API"
@@ -8659,11 +8569,6 @@ var GoogleImagenProvider = class {
     if (extendedParams.seed !== void 0) {
       requestBody.parameters.seed = extendedParams.seed;
     }
-    logger2.debug("Sending request to Google Imagen API", {
-      context: "GoogleImagenProvider.generateWithImagen",
-      endpoint,
-      sampleCount: requestBody.parameters.sampleCount
-    });
     const response = await fetch(endpoint, {
       method: "POST",
       headers: {
@@ -8684,10 +8589,6 @@ var GoogleImagenProvider = class {
       );
     }
     const data = await response.json();
-    logger2.debug("Imagen generation completed", {
-      context: "GoogleImagenProvider.generateWithImagen",
-      imageCount: data.predictions?.length ?? 0
-    });
     return {
       images: (data.predictions ?? []).map((pred) => ({
         data: pred.bytesBase64Encoded,
@@ -8698,7 +8599,6 @@ var GoogleImagenProvider = class {
   }
   async validateApiKey(apiKey) {
     try {
-      logger2.debug("Validating Google API key for image generation", { context: "GoogleImagenProvider.validateApiKey" });
       const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models", {
         method: "GET",
         headers: {
@@ -8706,7 +8606,6 @@ var GoogleImagenProvider = class {
         }
       });
       const isValid = response.ok;
-      logger2.debug("Google API key validation result", { context: "GoogleImagenProvider.validateApiKey", isValid });
       return isValid;
     } catch (error) {
       logger2.error("Google API key validation failed for image generation", {
@@ -8716,7 +8615,6 @@ var GoogleImagenProvider = class {
     }
   }
   async getAvailableModels() {
-    logger2.debug("Getting available Google image models", { context: "GoogleImagenProvider.getAvailableModels" });
     return this.supportedModels;
   }
 };
@@ -8817,14 +8715,12 @@ var plugin = {
    * Factory method to create a Google LLM provider instance
    */
   createProvider: (baseUrl) => {
-    logger3.debug("Creating Google provider instance", { context: "plugin.createProvider", baseUrl });
     return new GoogleProvider();
   },
   /**
    * Factory method to create a Google Imagen image generation provider instance
    */
   createImageProvider: (baseUrl) => {
-    logger3.debug("Creating Google Imagen provider instance", { context: "plugin.createImageProvider", baseUrl });
     return new GoogleImagenProvider();
   },
   /**
@@ -8832,11 +8728,9 @@ var plugin = {
    * Requires a valid API key
    */
   getAvailableModels: async (apiKey, baseUrl) => {
-    logger3.debug("Fetching available Google models", { context: "plugin.getAvailableModels" });
     try {
       const provider = new GoogleProvider();
       const models = await provider.getAvailableModels(apiKey);
-      logger3.debug("Successfully fetched Google models", { context: "plugin.getAvailableModels", count: models.length });
       return models;
     } catch (error) {
       logger3.error("Failed to fetch Google models", { context: "plugin.getAvailableModels" }, error instanceof Error ? error : void 0);
@@ -8847,11 +8741,9 @@ var plugin = {
    * Validate a Google API key
    */
   validateApiKey: async (apiKey, baseUrl) => {
-    logger3.debug("Validating Google API key", { context: "plugin.validateApiKey" });
     try {
       const provider = new GoogleProvider();
       const isValid = await provider.validateApiKey(apiKey);
-      logger3.debug("Google API key validation result", { context: "plugin.validateApiKey", isValid });
       return isValid;
     } catch (error) {
       logger3.error("Error validating Google API key", { context: "plugin.validateApiKey" }, error instanceof Error ? error : void 0);
@@ -8863,9 +8755,6 @@ var plugin = {
    * Returns cached information about Google models without needing API calls
    */
   getModelInfo: () => {
-    logger3.debug("Getting Google model information", {
-      context: "plugin.getModelInfo"
-    });
     return [
       // Chat models
       {
@@ -9029,7 +8918,6 @@ var plugin = {
    * Render the Google icon
    */
   renderIcon: (props) => {
-    logger3.debug("Rendering Google icon", { context: "plugin.renderIcon", className: props.className });
     return GoogleIcon(props);
   },
   /**
@@ -9040,10 +8928,6 @@ var plugin = {
    * @returns Array of tools in Google format
    */
   formatTools: (tools) => {
-    logger3.debug("Formatting tools for Google provider", {
-      context: "plugin.formatTools",
-      toolCount: tools.length
-    });
     try {
       const formattedTools = [];
       for (const tool of tools) {
@@ -9057,10 +8941,6 @@ var plugin = {
         const googleTool = convertToGoogleFormat(openaiTool);
         formattedTools.push(googleTool);
       }
-      logger3.debug("Successfully formatted tools", {
-        context: "plugin.formatTools",
-        count: formattedTools.length
-      });
       return formattedTools;
     } catch (error) {
       logger3.error(
@@ -9079,15 +8959,8 @@ var plugin = {
    * @returns Array of tool call requests
    */
   parseToolCalls: (response) => {
-    logger3.debug("Parsing tool calls from Google response", {
-      context: "plugin.parseToolCalls"
-    });
     try {
       const toolCalls = parseGoogleToolCalls(response);
-      logger3.debug("Successfully parsed tool calls", {
-        context: "plugin.parseToolCalls",
-        count: toolCalls.length
-      });
       return toolCalls;
     } catch (error) {
       logger3.error(

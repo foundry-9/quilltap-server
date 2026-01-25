@@ -26,9 +26,6 @@ export async function getInheritedTags(
   userId: string
 ): Promise<string[]> {
   if (!linkedEntityIds || linkedEntityIds.length === 0) {
-    logger.debug('No linked entities for tag inheritance', {
-      context: 'tag-inheritance',
-    });
     return [];
   }
 
@@ -43,11 +40,6 @@ export async function getInheritedTags(
       if (character && character.userId === userId) {
         character.tags?.forEach(tag => allTags.add(tag));
         checkedEntities.push(`character:${entityId}`);
-        logger.debug('Inherited tags from character', {
-          context: 'tag-inheritance',
-          characterId: entityId,
-          tagCount: character.tags?.length ?? 0,
-        });
         continue;
       }
 
@@ -56,11 +48,6 @@ export async function getInheritedTags(
       if (chat && chat.userId === userId) {
         chat.tags?.forEach(tag => allTags.add(tag));
         checkedEntities.push(`chat:${entityId}`);
-        logger.debug('Inherited tags from chat', {
-          context: 'tag-inheritance',
-          chatId: entityId,
-          tagCount: chat.tags?.length ?? 0,
-        });
         continue;
       }
 
@@ -69,11 +56,6 @@ export async function getInheritedTags(
       if (connectionProfile && connectionProfile.userId === userId) {
         connectionProfile.tags?.forEach((tag: string) => allTags.add(tag));
         checkedEntities.push(`connectionProfile:${entityId}`);
-        logger.debug('Inherited tags from connection profile', {
-          context: 'tag-inheritance',
-          connectionProfileId: entityId,
-          tagCount: connectionProfile.tags?.length ?? 0,
-        });
         continue;
       }
 
@@ -82,11 +64,6 @@ export async function getInheritedTags(
       if (imageProfile && imageProfile.userId === userId) {
         imageProfile.tags?.forEach(tag => allTags.add(tag));
         checkedEntities.push(`imageProfile:${entityId}`);
-        logger.debug('Inherited tags from image profile', {
-          context: 'tag-inheritance',
-          imageProfileId: entityId,
-          tagCount: imageProfile.tags?.length ?? 0,
-        });
         continue;
       }
 
@@ -95,37 +72,15 @@ export async function getInheritedTags(
       if (embeddingProfile && embeddingProfile.userId === userId) {
         embeddingProfile.tags?.forEach(tag => allTags.add(tag));
         checkedEntities.push(`embeddingProfile:${entityId}`);
-        logger.debug('Inherited tags from embedding profile', {
-          context: 'tag-inheritance',
-          embeddingProfileId: entityId,
-          tagCount: embeddingProfile.tags?.length ?? 0,
-        });
         continue;
       }
 
       // Entity not found in any repository - might be a message ID or other non-taggable entity
-      logger.debug('Entity not found for tag inheritance (may be a message or other non-taggable entity)', {
-        context: 'tag-inheritance',
-        entityId,
-      });
     } catch (error) {
-      logger.debug('Error looking up entity for tag inheritance', {
-        context: 'tag-inheritance',
-        entityId,
-        error: error instanceof Error ? error.message : String(error),
-      });
     }
   }
 
   const inheritedTags = Array.from(allTags);
-
-  logger.debug('Tag inheritance complete', {
-    context: 'tag-inheritance',
-    linkedEntityCount: linkedEntityIds.length,
-    checkedEntities,
-    inheritedTagCount: inheritedTags.length,
-  });
-
   return inheritedTags;
 }
 

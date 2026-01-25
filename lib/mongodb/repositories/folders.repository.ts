@@ -31,7 +31,6 @@ export class FoldersRepository extends MongoBaseRepository<Folder> {
       const result = await collection.findOne({ id });
 
       if (!result) {
-        logger.debug('Folder not found', { folderId: id });
         return null;
       }
 
@@ -208,7 +207,6 @@ export class FoldersRepository extends MongoBaseRepository<Folder> {
       const result = await collection.findOne(query);
 
       if (!result) {
-        logger.debug('Folder not found by path', { userId, path, projectId });
         return null;
       }
 

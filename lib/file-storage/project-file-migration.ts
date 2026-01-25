@@ -184,13 +184,6 @@ export async function migrateProjectFiles(
   // Process files in batches
   for (let i = 0; i < filesToMigrate.length; i += batchSize) {
     const batch = filesToMigrate.slice(i, i + batchSize);
-
-    logger.debug('Processing batch', {
-      batchNumber: Math.floor(i / batchSize) + 1,
-      batchSize: batch.length,
-      progress: `${i}/${filesToMigrate.length}`,
-    });
-
     for (const file of batch) {
       try {
         await migrateFile(file, toMountPointId, repos);
@@ -254,13 +247,6 @@ async function migrateFile(
   toMountPointId: string,
   repos: ReturnType<typeof getRepositories>
 ): Promise<void> {
-  logger.debug('Migrating file', {
-    fileId: file.id,
-    filename: file.originalFilename,
-    fromMountPointId: file.mountPointId,
-    toMountPointId,
-  });
-
   if (!file.storageKey) {
     throw new Error('File has no storage key');
   }
@@ -292,10 +278,6 @@ async function migrateFile(
   // Delete from source (only after successful upload and DB update)
   try {
     await sourceBackend.delete(file.storageKey);
-    logger.debug('Deleted file from source mount point', {
-      fileId: file.id,
-      fromMountPointId: file.mountPointId,
-    });
   } catch (deleteError) {
     // Log but don't fail - file is safely on target
     logger.warn('Failed to delete file from source mount point', {
@@ -304,12 +286,6 @@ async function migrateFile(
       error: deleteError instanceof Error ? deleteError.message : String(deleteError),
     });
   }
-
-  logger.debug('File migrated successfully', {
-    fileId: file.id,
-    filename: file.originalFilename,
-    toMountPointId,
-  });
 }
 
 /**

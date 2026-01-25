@@ -94,7 +94,6 @@ async function updateChatSettings(
       throw new Error('Invalid sidebar width (must be 256-512)')
     }
     updateData.sidebarWidth = sidebarWidth
-    logger.debug('[Settings v1] Updating sidebar width', { userId, sidebarWidth })
   }
   if (typeof tokenDisplaySettings !== 'undefined') {
     const validatedTokenDisplaySettings = TokenDisplaySettingsSchema.parse(tokenDisplaySettings)
@@ -129,13 +128,11 @@ async function updateChatSettings(
  */
 export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }: AuthenticatedContext) => {
   try {
-    logger.debug('[Settings v1] GET chat settings', { userId: user.id })
 
     let chatSettings = await repos.chatSettings.findByUserId(user.id)
 
     // If no settings exist, create default settings via update
     if (!chatSettings) {
-      logger.debug('[Settings v1] No settings found, creating defaults', { userId: user.id })
       chatSettings = await repos.chatSettings.updateForUser(user.id, {
         avatarDisplayMode: 'ALWAYS',
         avatarDisplayStyle: 'CIRCULAR',
@@ -175,11 +172,6 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, r
       memoryCascadePreferences,
       llmLoggingSettings
     } = body
-
-    logger.debug('[Settings v1] PUT chat settings', { 
-      userId: user.id,
-      fields: Object.keys(body)
-    })
 
     const chatSettings = await updateChatSettings(
       user.id,

@@ -24,11 +24,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
     const action = getActionParam(req);
 
     try {
-      syncOpsLogger.debug('[Sync Operations v1] Getting sync operation', {
-        userId: user.id,
-        operationId,
-        action,
-      });
+
 
       const operation = await repos.syncOperations.findById(operationId);
 
@@ -54,13 +50,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 
       // Handle action=progress
       if (action === 'progress') {
-        syncOpsLogger.debug('[Sync Operations v1] Progress retrieved', {
-          userId: user.id,
-          operationId,
-          status: operation.status,
-          phase: operation.progress?.phase,
-          durationMs: duration,
-        });
+
 
         return successResponse({
           operationId: operation.id,

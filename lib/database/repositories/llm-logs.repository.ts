@@ -19,14 +19,12 @@ import { QueryFilter, QueryOptions } from '../interfaces';
 export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
   constructor() {
     super('llm_logs', LLMLogSchema);
-    logger.debug('LLMLogsRepository initialized');
   }
 
   /**
    * Find a log by ID
    */
   async findById(id: string): Promise<LLMLog | null> {
-    logger.debug('Finding LLM log by ID', { logId: id });
     return this._findById(id);
   }
 
@@ -34,7 +32,6 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
    * Find all logs (without pagination)
    */
   async findAll(): Promise<LLMLog[]> {
-    logger.debug('Finding all LLM logs');
     return this._findAll();
   }
 
@@ -50,7 +47,6 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
     limit: number = 50,
     offset: number = 0
   ): Promise<LLMLog[]> {
-    logger.debug('Finding LLM logs by user ID', { userId, limit, offset });
     try {
       const options: QueryOptions = {
         sort: { createdAt: -1 },
@@ -59,7 +55,6 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
       };
 
       const logs = await this.findByFilter({ userId } as QueryFilter, options);
-      logger.debug('Found LLM logs for user', { userId, count: logs.length });
       return logs;
     } catch (error) {
       logger.error('Error finding LLM logs by user ID', {
@@ -78,14 +73,12 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
    * @returns Promise<LLMLog[]> Array of logs associated with the message
    */
   async findByMessageId(messageId: string): Promise<LLMLog[]> {
-    logger.debug('Finding LLM logs by message ID', { messageId });
     try {
       const options: QueryOptions = {
         sort: { createdAt: -1 },
       };
 
       const logs = await this.findByFilter({ messageId } as QueryFilter, options);
-      logger.debug('Found LLM logs for message', { messageId, count: logs.length });
       return logs;
     } catch (error) {
       logger.error('Error finding LLM logs by message ID', {
@@ -102,14 +95,12 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
    * @returns Promise<LLMLog[]> Array of logs associated with the chat
    */
   async findByChatId(chatId: string): Promise<LLMLog[]> {
-    logger.debug('Finding LLM logs by chat ID', { chatId });
     try {
       const options: QueryOptions = {
         sort: { createdAt: -1 },
       };
 
       const logs = await this.findByFilter({ chatId } as QueryFilter, options);
-      logger.debug('Found LLM logs for chat', { chatId, count: logs.length });
       return logs;
     } catch (error) {
       logger.error('Error finding LLM logs by chat ID', {
@@ -126,14 +117,12 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
    * @returns Promise<LLMLog[]> Array of logs associated with the character
    */
   async findByCharacterId(characterId: string): Promise<LLMLog[]> {
-    logger.debug('Finding LLM logs by character ID', { characterId });
     try {
       const options: QueryOptions = {
         sort: { createdAt: -1 },
       };
 
       const logs = await this.findByFilter({ characterId } as QueryFilter, options);
-      logger.debug('Found LLM logs for character', { characterId, count: logs.length });
       return logs;
     } catch (error) {
       logger.error('Error finding LLM logs by character ID', {
@@ -151,7 +140,6 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
    * @returns Promise<LLMLog[]> Array of standalone logs
    */
   async findStandalone(userId: string, limit: number = 50): Promise<LLMLog[]> {
-    logger.debug('Finding standalone LLM logs', { userId, limit });
     try {
       const filter: QueryFilter = {
         userId,
@@ -166,7 +154,6 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
       };
 
       const logs = await this.findByFilter(filter, options);
-      logger.debug('Found standalone LLM logs', { userId, count: logs.length });
       return logs;
     } catch (error) {
       logger.error('Error finding standalone LLM logs', {
@@ -186,7 +173,6 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
    * @returns Promise<LLMLog[]> Array of logs of the specified type
    */
   async findByType(userId: string, type: LLMLogType, limit: number = 50): Promise<LLMLog[]> {
-    logger.debug('Finding LLM logs by type', { userId, type, limit });
     try {
       const filter: QueryFilter = { userId, type };
       const options: QueryOptions = {
@@ -195,7 +181,6 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
       };
 
       const logs = await this.findByFilter(filter, options);
-      logger.debug('Found LLM logs by type', { userId, type, count: logs.length });
       return logs;
     } catch (error) {
       logger.error('Error finding LLM logs by type', {
@@ -215,7 +200,6 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
    * @returns Promise<LLMLog[]> Array of recent logs, sorted by creation date (newest first)
    */
   async findRecent(userId: string, limit: number = 20): Promise<LLMLog[]> {
-    logger.debug('Finding recent LLM logs', { userId, limit });
     try {
       const options: QueryOptions = {
         sort: { createdAt: -1 },
@@ -223,7 +207,6 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
       };
 
       const logs = await this.findByFilter({ userId } as QueryFilter, options);
-      logger.debug('Found recent LLM logs', { userId, count: logs.length, limit });
       return logs;
     } catch (error) {
       logger.error('Error finding recent LLM logs', {
@@ -245,14 +228,8 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
     data: Omit<LLMLog, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions
   ): Promise<LLMLog> {
-    logger.debug('Creating new LLM log', { userId: data.userId, type: data.type });
     try {
       const log = await this._create(data, options);
-      logger.debug('LLM log created successfully', {
-        logId: log.id,
-        userId: data.userId,
-        type: data.type,
-      });
       return log;
     } catch (error) {
       logger.error('Error creating LLM log', {
@@ -272,12 +249,10 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
    * @returns Promise<LLMLog | null> The updated log if found, null otherwise
    */
   async update(id: string, data: Partial<LLMLog>): Promise<LLMLog | null> {
-    logger.debug('Updating LLM log', { logId: id });
     try {
       const log = await this._update(id, data);
 
       if (log) {
-        logger.debug('LLM log updated successfully', { logId: id });
       } else {
         logger.warn('LLM log not found for update', { logId: id });
       }
@@ -298,12 +273,10 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
    * @returns Promise<boolean> True if log was deleted, false if not found
    */
   async delete(id: string): Promise<boolean> {
-    logger.debug('Deleting LLM log', { logId: id });
     try {
       const result = await this._delete(id);
 
       if (result) {
-        logger.debug('LLM log deleted successfully', { logId: id });
       } else {
         logger.warn('LLM log not found for deletion', { logId: id });
       }
@@ -324,10 +297,8 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
    * @returns Promise<number> Number of logs deleted
    */
   async deleteByUserId(userId: string): Promise<number> {
-    logger.debug('Deleting LLM logs by user ID', { userId });
     try {
       const count = await this.deleteMany({ userId } as QueryFilter);
-      logger.debug('Deleted LLM logs for user', { userId, deletedCount: count });
       return count;
     } catch (error) {
       logger.error('Error deleting LLM logs by user ID', {
@@ -345,7 +316,6 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
    * @returns Promise<number> Number of logs deleted
    */
   async cleanupOldLogs(userId: string, retentionDays: number): Promise<number> {
-    logger.debug('Cleaning up old LLM logs', { userId, retentionDays });
     try {
       if (retentionDays < 0) {
         logger.warn('Invalid retention days', { retentionDays });
@@ -385,10 +355,8 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
    * @returns Promise<number> Number of logs for the user
    */
   async countByUserId(userId: string): Promise<number> {
-    logger.debug('Counting LLM logs for user', { userId });
     try {
       const count = await this.count({ userId } as QueryFilter);
-      logger.debug('LLM log count retrieved', { userId, count });
       return count;
     } catch (error) {
       logger.error('Error counting LLM logs for user', {
@@ -406,10 +374,8 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
    * @returns Promise<number> Number of logs of the specified type
    */
   async countByType(userId: string, type: LLMLogType): Promise<number> {
-    logger.debug('Counting LLM logs by type', { userId, type });
     try {
       const count = await this.count({ userId, type } as QueryFilter);
-      logger.debug('LLM log count by type retrieved', { userId, type, count });
       return count;
     } catch (error) {
       logger.error('Error counting LLM logs by type', {
@@ -430,7 +396,6 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
   async getTotalTokenUsage(
     userId: string
   ): Promise<{ promptTokens: number; completionTokens: number; totalTokens: number }> {
-    logger.debug('Getting total token usage for user', { userId });
     try {
       const filter: QueryFilter = {
         userId,
@@ -450,13 +415,6 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
           totalTokens += log.usage.totalTokens || 0;
         }
       }
-
-      logger.debug('Retrieved total token usage', {
-        userId,
-        totalPromptTokens,
-        totalCompletionTokens,
-        totalTokens,
-      });
       return { promptTokens: totalPromptTokens, completionTokens: totalCompletionTokens, totalTokens };
     } catch (error) {
       logger.error('Error getting total token usage', {
@@ -473,10 +431,8 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
    * @returns Promise<number> Number of logs for the message
    */
   async countByMessageId(messageId: string): Promise<number> {
-    logger.debug('Counting LLM logs for message', { messageId });
     try {
       const count = await this.count({ messageId } as QueryFilter);
-      logger.debug('LLM log count for message', { messageId, count });
       return count;
     } catch (error) {
       logger.error('Error counting LLM logs for message', {
@@ -493,10 +449,8 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
    * @returns Promise<number> Number of logs deleted
    */
   async deleteByMessageId(messageId: string): Promise<number> {
-    logger.debug('Deleting LLM logs by message ID', { messageId });
     try {
       const count = await this.deleteMany({ messageId } as QueryFilter);
-      logger.debug('Deleted LLM logs for message', { messageId, deletedCount: count });
       return count;
     } catch (error) {
       logger.error('Error deleting LLM logs by message ID', {
@@ -513,10 +467,8 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
    * @returns Promise<number> Number of logs deleted
    */
   async deleteByChatId(chatId: string): Promise<number> {
-    logger.debug('Deleting LLM logs by chat ID', { chatId });
     try {
       const count = await this.deleteMany({ chatId } as QueryFilter);
-      logger.debug('Deleted LLM logs for chat', { chatId, deletedCount: count });
       return count;
     } catch (error) {
       logger.error('Error deleting LLM logs by chat ID', {
@@ -533,10 +485,8 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
    * @returns Promise<number> Number of logs deleted
    */
   async deleteByCharacterId(characterId: string): Promise<number> {
-    logger.debug('Deleting LLM logs by character ID', { characterId });
     try {
       const count = await this.deleteMany({ characterId } as QueryFilter);
-      logger.debug('Deleted LLM logs for character', { characterId, deletedCount: count });
       return count;
     } catch (error) {
       logger.error('Error deleting LLM logs by character ID', {

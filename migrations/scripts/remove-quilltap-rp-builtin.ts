@@ -74,28 +74,16 @@ export const removeQuilltapRPBuiltinMigration: Migration = {
   async shouldRun(): Promise<boolean> {
     // Only run if MongoDB is enabled
     if (!isMongoDBBackend()) {
-      logger.debug('MongoDB not enabled, skipping Quilltap RP removal migration', {
-        context: 'migration.remove-quilltap-rp-builtin',
-      });
       return false;
     }
 
     // Check if MongoDB is accessible
     if (!(await isMongoDBAccessible())) {
-      logger.debug('MongoDB not accessible, deferring Quilltap RP removal migration', {
-        context: 'migration.remove-quilltap-rp-builtin',
-      });
       return false;
     }
 
     // Check if the old template exists
     const oldTemplate = await getOldQuilltapRPTemplate();
-
-    logger.debug('Checked for old Quilltap RP built-in template', {
-      context: 'migration.remove-quilltap-rp-builtin',
-      found: oldTemplate !== null,
-    });
-
     return oldTemplate !== null;
   },
 

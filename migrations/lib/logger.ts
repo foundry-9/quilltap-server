@@ -18,8 +18,6 @@ export const logger = appLogger;
  */
 export function createMigrationLogger(migrationId: string) {
   return {
-    debug: (message: string, meta?: Record<string, unknown>) =>
-      appLogger.debug(message, { ...meta, context: `migration.${migrationId}` }),
     info: (message: string, meta?: Record<string, unknown>) =>
       appLogger.info(message, { ...meta, context: `migration.${migrationId}` }),
     warn: (message: string, meta?: Record<string, unknown>) =>

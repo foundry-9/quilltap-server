@@ -84,16 +84,6 @@ async function executeListFiles(
   const folderPath = normalizeFolderPath(input.folderPath || '/');
   const recursive = input.recursive !== false; // Default to true
   const limit = Math.min(input.limit || 20, 100);
-
-  logger.debug('Executing list_files', {
-    context: 'file-management-handler',
-    scope,
-    folderPath,
-    recursive,
-    limit,
-    projectId: context.projectId,
-  });
-
   let files: FileEntry[] = [];
 
   switch (scope) {
@@ -181,13 +171,6 @@ async function executeListFolders(
 ): Promise<FolderListResult | null> {
   const repos = getRepositories();
   const scope = (input.scope === 'project' || input.scope === 'general') ? input.scope : 'project';
-
-  logger.debug('Executing list_folders', {
-    context: 'file-management-handler',
-    scope,
-    projectId: context.projectId,
-  });
-
   let projectId: string | null;
   if (scope === 'project') {
     projectId = context.projectId;
@@ -232,13 +215,6 @@ async function executeReadFile(
   fileId: string
 ): Promise<FileReadResult | null> {
   const repos = getRepositories();
-
-  logger.debug('Executing read_file', {
-    context: 'file-management-handler',
-    fileId,
-    projectId: context.projectId,
-  });
-
   // Get file
   const file = await repos.files.findById(fileId);
   if (!file || file.userId !== context.userId) {
@@ -293,16 +269,6 @@ async function executeWriteFile(
   const content = input.content!;
   const mimeType = input.mimeType || 'text/plain';
   const targetFolderPath = normalizeFolderPath(input.targetFolderPath || '/');
-
-  logger.debug('Executing write_file', {
-    context: 'file-management-handler',
-    filename,
-    contentLength: content.length,
-    mimeType,
-    targetFolderPath,
-    projectId: context.projectId,
-  });
-
   // Validate folder path
   const folderValidation = validateFolderPath(targetFolderPath);
   if (!folderValidation.isValid) {
@@ -396,11 +362,6 @@ async function executeCreateFolder(
   context: FileManagementToolContext,
   newFolderPath: string
 ): Promise<FolderCreateResult> {
-  logger.debug('Executing create_folder', {
-    context: 'file-management-handler',
-    newFolderPath,
-  });
-
   // Normalize and validate path
   const normalizedPath = normalizeFolderPath(newFolderPath);
   const validation = validateFolderPath(normalizedPath);
@@ -438,14 +399,6 @@ async function executePromoteAttachment(
   const attachmentId = input.attachmentId!;
   const targetProjectId = input.targetProjectId ?? context.projectId;
   const targetFolderPath = normalizeFolderPath(input.targetFolderPath || '/');
-
-  logger.debug('Executing promote_attachment', {
-    context: 'file-management-handler',
-    attachmentId,
-    targetProjectId,
-    targetFolderPath,
-  });
-
   // Get the attachment (file)
   const file = await repos.files.findById(attachmentId);
   if (!file || file.userId !== context.userId) {
@@ -531,7 +484,6 @@ export async function executeFileManagementTool(
   try {
     // Validate input
     if (!validateFileManagementInput(input)) {
-      log.debug('Invalid input received', { input });
       return {
         success: false,
         action: 'list_files',
@@ -540,9 +492,6 @@ export async function executeFileManagementTool(
     }
 
     const { action } = input;
-
-    log.debug('Executing file management tool', { action });
-
     switch (action) {
       case 'list_files': {
         const result = await executeListFiles(context, input);

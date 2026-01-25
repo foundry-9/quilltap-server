@@ -36,12 +36,6 @@ export async function getFileAssociations(
   repos: UserScopedRepositoryContainer
 ): Promise<FileAssociation> {
   // Log the start of the operation
-  logger.debug('Starting file association lookup', {
-    context: 'getFileAssociations',
-    fileId,
-    linkedToCount: linkedTo.length,
-  });
-
   const result: FileAssociation = {
     characters: [],
     messages: [],
@@ -55,23 +49,11 @@ export async function getFileAssociations(
   // Filter to user's characters only
   const defaultImageCharacters = allDefaultImageCharacters.filter(char => char.userId === repos.userId);
   const defaultCharacterCount = defaultImageCharacters.length;
-  logger.debug('Found characters with default image', {
-    context: 'getFileAssociations',
-    fileId,
-    count: defaultCharacterCount,
-  });
-
   // Query characters using this file in avatar overrides
   const allOverrideImageCharacters = await baseRepos.characters.findByAvatarOverrideImageId(fileId);
   // Filter to user's characters only
   const overrideImageCharacters = allOverrideImageCharacters.filter(char => char.userId === repos.userId);
   const overrideCharacterCount = overrideImageCharacters.length;
-  logger.debug('Found characters with avatar override image', {
-    context: 'getFileAssociations',
-    fileId,
-    count: overrideCharacterCount,
-  });
-
   // Build a map to deduplicate characters by ID
   const characterMap = new Map<string, { id: string; name: string; usage: 'default' | 'override' }>();
 
@@ -104,27 +86,9 @@ export async function getFileAssociations(
   }
 
   result.characters = Array.from(characterMap.values());
-  logger.debug('Deduplicated character associations', {
-    context: 'getFileAssociations',
-    fileId,
-    uniqueCount: result.characters.length,
-  });
-
   // For each ID in linkedTo, check if it's a message in any chat
-  logger.debug('Starting message association lookup', {
-    context: 'getFileAssociations',
-    fileId,
-    linkedToCount: linkedTo.length,
-  });
-
   // Get all user's chats
   const chats = await repos.chats.findAll();
-  logger.debug('Retrieved user chats', {
-    context: 'getFileAssociations',
-    fileId,
-    chatCount: chats.length,
-  });
-
   // For each chat, get messages and check for matching attachments
   // linkedTo can contain either chatId or messageId, so we check both:
   // 1. If chatId is in linkedTo, check all messages in that chat for this file
@@ -133,14 +97,6 @@ export async function getFileAssociations(
     try {
       const chatInLinkedTo = linkedTo.includes(chat.id);
       const messages = await repos.chats.getMessages(chat.id);
-      logger.debug('Retrieved chat messages', {
-        context: 'getFileAssociations',
-        fileId,
-        chatId: chat.id,
-        messageCount: messages.length,
-        chatInLinkedTo,
-      });
-
       // Check each message for file attachment
       for (const message of messages) {
         // Only process actual messages (not system events)
@@ -157,13 +113,6 @@ export async function getFileAssociations(
               chatName: chat.title,
               messageId: message.id,
             });
-            logger.debug('Found message with file attachment', {
-              context: 'getFileAssociations',
-              fileId,
-              messageId: message.id,
-              chatId: chat.id,
-              matchedBy: chatInLinkedTo ? 'chatId' : 'messageId',
-            });
           }
         }
       }
@@ -176,13 +125,5 @@ export async function getFileAssociations(
       });
     }
   }
-
-  logger.debug('Completed file association lookup', {
-    context: 'getFileAssociations',
-    fileId,
-    characterCount: result.characters.length,
-    messageCount: result.messages.length,
-  });
-
   return result;
 }

@@ -33,8 +33,6 @@ export class MountPointsRepository extends MongoBaseRepository<MountPoint> {
       if (mountPoint) {
         return this.validate(mountPoint);
       }
-
-      logger.debug('Mount point not found', { mountPointId: id });
       return null;
     } catch (error) {
       logger.error('Error finding mount point by ID', {
@@ -188,11 +186,8 @@ export class MountPointsRepository extends MongoBaseRepository<MountPoint> {
       const mountPoint = await collection.findOne({ isDefault: true });
 
       if (mountPoint) {
-        logger.debug('Found default mount point', { mountPointId: mountPoint.id });
         return this.validate(mountPoint);
       }
-
-      logger.debug('No default mount point found');
       return null;
     } catch (error) {
       logger.error('Error finding default mount point', {
@@ -218,13 +213,6 @@ export class MountPointsRepository extends MongoBaseRepository<MountPoint> {
       }
 
       const mountPoints = await collection.find(query).toArray();
-
-      logger.debug('Found mount points by scope', {
-        scope,
-        userId,
-        count: mountPoints.length,
-      });
-
       return mountPoints.map((mp: unknown) => this.validate(mp));
     } catch (error) {
       logger.error('Error finding mount points by scope', {
@@ -244,9 +232,6 @@ export class MountPointsRepository extends MongoBaseRepository<MountPoint> {
     try {
       const collection = await this.getCollection();
       const mountPoints = await collection.find({ enabled: true }).toArray();
-
-      logger.debug('Found enabled mount points', { count: mountPoints.length });
-
       return mountPoints.map((mp: unknown) => this.validate(mp));
     } catch (error) {
       logger.error('Error finding enabled mount points', {
@@ -265,12 +250,6 @@ export class MountPointsRepository extends MongoBaseRepository<MountPoint> {
     try {
       const collection = await this.getCollection();
       const mountPoints = await collection.find({ backendType }).toArray();
-
-      logger.debug('Found mount points by backend type', {
-        backendType,
-        count: mountPoints.length,
-      });
-
       return mountPoints.map((mp: unknown) => this.validate(mp));
     } catch (error) {
       logger.error('Error finding mount points by backend type', {
@@ -340,12 +319,6 @@ export class MountPointsRepository extends MongoBaseRepository<MountPoint> {
         logger.warn('Mount point not found for health update', { mountPointId: id });
         return;
       }
-
-      logger.debug('Mount point health updated', {
-        mountPointId: id,
-        status,
-        lastHealthCheck: now,
-      });
     } catch (error) {
       logger.error('Error updating mount point health', {
         mountPointId: id,
@@ -364,8 +337,6 @@ export class MountPointsRepository extends MongoBaseRepository<MountPoint> {
       // Update any mount point with isDefault that no longer exists
       // This is handled by clearing defaults from specific non-existent IDs if needed
       // For now, this is a no-op maintenance method that could be expanded
-
-      logger.debug('Cleared orphaned default flags');
     } catch (error) {
       logger.error('Error clearing orphaned defaults', {
         error: error instanceof Error ? error.message : String(error),

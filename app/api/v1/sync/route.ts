@@ -124,7 +124,6 @@ async function handleHandshake(
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      logger.debug('[Sync v1] Handshake validation error', { errors: error.issues });
       return validationError(error);
     }
 
@@ -144,12 +143,6 @@ async function handleDelta(
   try {
     const body = await req.json();
     const request = SyncDeltaRequestSchema.parse(body);
-
-    logger.debug('[Sync v1] Delta request', {
-      entityTypes: request.entityTypes,
-      sinceTimestamp: request.sinceTimestamp,
-      limit: request.limit,
-    });
 
     const { user } = context;
 
@@ -175,7 +168,6 @@ async function handleDelta(
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      logger.debug('[Sync v1] Delta validation error', { errors: error.issues });
       return validationError(error);
     }
 
@@ -315,16 +307,10 @@ async function handleMappings(
         return badRequest('instanceId query parameter required');
       }
 
-      logger.debug('[Sync v1] Fetching mappings (deprecated with ID preservation)', { instanceId });
-
       const { repos, user } = context;
 
       // Retrieve mappings for the instance
       const mappings = await repos.syncMappings?.findAllForInstance(user.id, instanceId) || [];
-
-      logger.debug('[Sync v1] Mappings retrieved', {
-        count: mappings.length,
-      });
 
       return successResponse({ mappings });
     } catch (error) {
@@ -336,11 +322,6 @@ async function handleMappings(
     try {
       const body = await req.json();
       const request = mappingsExchangeSchema.parse(body);
-
-      logger.debug('[Sync v1] Exchanging mappings (deprecated with ID preservation)', {
-        instanceId: request.instanceId,
-        count: Object.keys(request.localMappings).length,
-      });
 
       // With ID preservation, we don't actually need to store mappings
       // since entity IDs are the same on both instances.

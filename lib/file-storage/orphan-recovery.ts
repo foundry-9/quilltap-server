@@ -128,7 +128,6 @@ export function parseStorageKey(key: string): ParsedStorageKey | null {
   // Match: users/{userId}/{projectOrGeneral}/...rest
   const match = key.match(/^users\/([^\/]+)\/([^\/]+)\/(.+)$/);
   if (!match) {
-    logger.debug('Storage key does not match expected pattern', { key });
     return null;
   }
 
@@ -231,17 +230,12 @@ export async function scanForOrphans(mountPointId: string): Promise<ScanOrphansR
     if (!backend.list) {
       throw new Error('Backend does not support file listing');
     }
-    logger.debug('Listing files in storage', { mountPointId, prefix: 'users/' });
     const storageKeys = await backend.list('users/');
     totalFilesInStorage = storageKeys.length;
-    logger.debug('Found files in storage', { mountPointId, count: totalFilesInStorage });
-
     // Get count of files in database for this mount point
     const repos = getRepositories();
     const dbFiles = await repos.files.findByMountPointId(mountPointId);
     totalFilesInDatabase = dbFiles.length;
-    logger.debug('Found files in database', { mountPointId, count: totalFilesInDatabase });
-
     // Create a Set of known storage keys for fast lookup
     const knownStorageKeys = new Set(
       dbFiles
@@ -367,7 +361,6 @@ export async function adoptOrphans(
       // Check if already in database (might have been adopted since scan)
       const existing = await repos.files.findByStorageKey(storageKey);
       if (existing) {
-        logger.debug('File already in database, skipping', { storageKey });
         result.failed.push({ storageKey, error: 'File already exists in database' });
         continue;
       }
@@ -439,13 +432,6 @@ export async function adoptOrphans(
       const created = await repos.files.create(fileEntry);
       result.files.push(created);
       result.adopted++;
-
-      logger.debug('Adopted orphan file', {
-        storageKey,
-        fileId: created.id,
-        userId: created.userId,
-        projectId: created.projectId,
-      });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       logger.error('Failed to adopt orphan file', { storageKey, error: errorMsg });

@@ -77,9 +77,6 @@ export function ensureMetaTable(db?: DatabaseType): boolean {
         updated_at TEXT DEFAULT (datetime('now'))
       )
     `);
-
-    logger.debug('Meta table ensured', { context: 'database.meta' });
-
     if (!db) {
       connection.close();
     }
@@ -167,9 +164,6 @@ export function setMetaValue(key: string, value: string | null): boolean {
       `);
       stmt.run(key, value);
     }
-
-    logger.debug('Meta value set', { context: 'database.meta', key, hasValue: value !== null });
-
     connection.close();
 
     return true;
@@ -209,10 +203,6 @@ export function getPreferredBackend(): DatabaseBackendType | null {
   const value = getMetaValue(META_KEYS.PREFERRED_BACKEND);
 
   if (value === 'mongodb' || value === 'sqlite') {
-    logger.debug('Found preferred backend in meta table', {
-      context: 'database.meta',
-      backend: value,
-    });
     return value;
   }
 

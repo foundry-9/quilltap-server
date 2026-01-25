@@ -53,17 +53,8 @@ async function loadMigrationStateFromMongo(): Promise<MigrationState | null> {
     const doc = await collection.findOne({ _id: MIGRATIONS_DOCUMENT_ID as any });
 
     if (!doc) {
-      logger.debug('No migration state found in MongoDB', {
-        context: 'migrations.state.loadMigrationStateFromMongo',
-      });
       return null;
     }
-
-    logger.debug('Migration state loaded from MongoDB', {
-      context: 'migrations.state.loadMigrationStateFromMongo',
-      completedCount: doc.completedMigrations?.length || 0,
-    });
-
     return {
       completedMigrations: doc.completedMigrations || [],
       lastChecked: doc.lastChecked || new Date().toISOString(),
@@ -97,11 +88,6 @@ async function saveMigrationStateToMongo(state: MigrationState): Promise<void> {
       },
       { upsert: true }
     );
-
-    logger.debug('Migration state saved to MongoDB', {
-      context: 'migrations.state.saveMigrationStateToMongo',
-      completedCount: state.completedMigrations.length,
-    });
   } catch (error) {
     logger.error('Error saving migration state to MongoDB', {
       context: 'migrations.state.saveMigrationStateToMongo',
@@ -119,9 +105,6 @@ const SQLITE_MIGRATIONS_TABLE = 'migrations_state';
  */
 function ensureSQLiteMigrationsTable(): void {
   if (!sqliteTableExists(SQLITE_MIGRATIONS_TABLE)) {
-    logger.debug('Creating SQLite migrations table', {
-      context: 'migrations.state.ensureSQLiteMigrationsTable',
-    });
     executeSQLite(`
       CREATE TABLE IF NOT EXISTS "${SQLITE_MIGRATIONS_TABLE}" (
         "id" TEXT PRIMARY KEY,
@@ -160,12 +143,6 @@ function loadMigrationStateFromSQLite(): MigrationState {
       SELECT key, value FROM migrations_metadata
     `);
     const metadata = Object.fromEntries(metadataRows.map(r => [r.key, r.value]));
-
-    logger.debug('Migration state loaded from SQLite', {
-      context: 'migrations.state.loadMigrationStateFromSQLite',
-      completedCount: records.length,
-    });
-
     return {
       completedMigrations: records,
       lastChecked: metadata.lastChecked || new Date().toISOString(),
@@ -220,11 +197,6 @@ function saveMigrationStateToSQLite(state: MigrationState): void {
     });
 
     saveState();
-
-    logger.debug('Migration state saved to SQLite', {
-      context: 'migrations.state.saveMigrationStateToSQLite',
-      completedCount: state.completedMigrations.length,
-    });
   } catch (error) {
     logger.error('Error saving migration state to SQLite', {
       context: 'migrations.state.saveMigrationStateToSQLite',

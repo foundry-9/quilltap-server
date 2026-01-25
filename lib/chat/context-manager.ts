@@ -306,13 +306,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     messagesWithParticipants
   )
 
-  logger.debug('[ContextManager] Building context', {
-    isMultiCharacter,
-    characterName: character.name,
-    participantCount: allParticipants?.length ?? 1,
-    messageCount: existingMessages.length,
-  })
-
   // 1. Build system prompt (with multi-character info if applicable)
   let otherParticipantsInfo: OtherParticipantInfo[] | undefined
   if (isMultiCharacter && respondingParticipant && allParticipants && participantCharacters) {
@@ -472,11 +465,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     const windowStartIndex = existingMessages.length - windowMessages.length
     effectiveMessages = existingMessages.slice(windowStartIndex)
 
-    logger.debug('[ContextManager] Using compressed context', {
-      originalMessageCount: existingMessages.length,
-      effectiveMessageCount: effectiveMessages.length,
-      compressedSystemPromptLength: effectiveSystemPrompt.length,
-    })
   }
 
   // Update system prompt token count for compressed version
@@ -569,12 +557,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
           interCharacterMemoryTokens = formatted.tokenCount
           interCharacterMemoriesIncluded = formatted.memoriesUsed
 
-          logger.debug('[ContextManager] Retrieved inter-character memories', {
-            characterId: character.id,
-            otherCharacterCount: otherCharacterIds.length,
-            memoriesFound: interCharacterMemories.length,
-            memoriesIncluded: interCharacterMemoriesIncluded,
-          })
         }
       }
     } catch (error) {
@@ -614,10 +596,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     let joinScenarioContent = ''
     if (!respondingParticipant.hasHistoryAccess && respondingParticipant.joinScenario) {
       joinScenarioContent = respondingParticipant.joinScenario
-      logger.debug('[ContextManager] Including join scenario for participant', {
-        participantId: respondingParticipant.id,
-        joinScenario: joinScenarioContent.substring(0, 100),
-      })
+
     }
 
     // 5c. Attribute messages for the responding character's perspective
@@ -627,18 +606,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       participantCharacters,
       allParticipants
     )
-
-    // Debug: Log attributed messages to help diagnose identity confusion
-    logger.debug('[ContextManager] Attributed messages for multi-character', {
-      respondingParticipantId: respondingParticipant.id,
-      messageCount: attributedMessages.length,
-      messages: attributedMessages.map(m => ({
-        role: m.role,
-        name: m.name,
-        participantId: m.participantId,
-        contentPreview: m.content.substring(0, 50),
-      })),
-    })
 
     // Convert to SelectableMessage format
     messagesToProcess = attributedMessages.map(msg => ({
@@ -741,17 +708,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   const totalMemoryTokens = memoryTokens + interCharacterMemoryTokens
   const totalUsed = effectiveSystemPromptTokens + totalMemoryTokens + summaryTokens + messagesTokens + newUserMessageTokens
   const totalMemoriesIncluded = memoriesIncluded + interCharacterMemoriesIncluded
-
-  logger.debug('[ContextManager] Context built successfully', {
-    isMultiCharacter,
-    totalMessages: contextMessages.length,
-    tokenUsage: totalUsed,
-    messagesTruncated: truncated,
-    memoriesIncluded,
-    interCharacterMemoriesIncluded,
-    compressionApplied: useCompressedContext,
-    compressionDetails: compressionResult?.compressionDetails,
-  })
 
   return {
     messages: contextMessages,

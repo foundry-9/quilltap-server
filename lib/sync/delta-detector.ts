@@ -41,15 +41,6 @@ async function getEntityDeltas(
 ): Promise<SyncEntityDelta[]> {
   const repos = getRepositories();
   const deltas: SyncEntityDelta[] = [];
-
-  logger.debug('Detecting deltas for entity type', {
-    context: 'sync:delta-detector',
-    userId,
-    entityType,
-    sinceTimestamp,
-    limit,
-  });
-
   try {
     switch (entityType) {
       case 'CHARACTER': {
@@ -89,11 +80,6 @@ async function getEntityDeltas(
                   ...fullChat,
                   messages, // Include messages in the delta
                 } as unknown as Record<string, unknown>,
-              });
-              logger.debug('Added chat delta with messages', {
-                context: 'sync:delta-detector',
-                chatId: chat.id,
-                messageCount: messages.length,
               });
             }
           }
@@ -165,11 +151,6 @@ async function getEntityDeltas(
                 const content = await fileStorageManager.downloadFile(file);
                 fileData.content = content.toString('base64');
                 fileData.requiresContentFetch = false;
-                logger.debug('Added file delta with inline content', {
-                  context: 'sync:delta-detector',
-                  fileId: file.id,
-                  size: file.size,
-                });
               } catch (error) {
                 // If we can't read the content, mark for separate fetch
                 logger.warn('Failed to read file content for sync, marking for fetch', {
@@ -182,12 +163,6 @@ async function getEntityDeltas(
             } else {
               // Large file - requires separate content fetch
               fileData.requiresContentFetch = true;
-              logger.debug('Added file delta requiring content fetch', {
-                context: 'sync:delta-detector',
-                fileId: file.id,
-                size: file.size,
-                threshold: FILE_CONTENT_SIZE_THRESHOLD,
-              });
             }
 
             deltas.push({
@@ -245,12 +220,6 @@ async function getEntityDeltas(
                 _apiKeyLabel: apiKeyLabel,
               } as unknown as Record<string, unknown>,
             });
-            logger.debug('Added connection profile delta', {
-              context: 'sync:delta-detector',
-              profileId: profile.id,
-              profileName: profile.name,
-              hasApiKeyLabel: !!apiKeyLabel,
-            });
           }
           if (deltas.length >= limit) break;
         }
@@ -307,13 +276,6 @@ async function getEntityDeltas(
     });
     throw error;
   }
-
-  logger.debug('Detected deltas for entity type', {
-    context: 'sync:delta-detector',
-    entityType,
-    count: deltas.length,
-  });
-
   return deltas;
 }
 
@@ -351,13 +313,6 @@ export async function detectDeltas(options: DeltaDetectionOptions): Promise<Delt
   for (const entityType of entityTypes) {
     const typeDeltas = await getEntityDeltas(userId, entityType, sinceTimestamp, perTypeLimit);
     allDeltas.push(...typeDeltas);
-
-    logger.debug('Collected deltas for entity type', {
-      context: 'sync:delta-detector',
-      entityType,
-      count: typeDeltas.length,
-      totalSoFar: allDeltas.length,
-    });
   }
 
   // Sort by updatedAt ascending (oldest first)
@@ -405,14 +360,6 @@ export async function countDeltas(options: DeltaDetectionOptions): Promise<Recor
     entityTypes = ['TAG', 'FILE', 'PROJECT', 'CONNECTION_PROFILE', 'CHARACTER', 'ROLEPLAY_TEMPLATE', 'PROMPT_TEMPLATE', 'CHAT', 'MEMORY'],
     sinceTimestamp = null,
   } = options;
-
-  logger.debug('Counting deltas', {
-    context: 'sync:delta-detector',
-    userId,
-    entityTypes,
-    sinceTimestamp,
-  });
-
   const counts: Record<string, number> = {};
 
   for (const entityType of entityTypes) {
@@ -420,13 +367,6 @@ export async function countDeltas(options: DeltaDetectionOptions): Promise<Recor
     const deltas = await getEntityDeltas(userId, entityType, sinceTimestamp, 10000);
     counts[entityType] = deltas.length;
   }
-
-  logger.debug('Delta count complete', {
-    context: 'sync:delta-detector',
-    userId,
-    counts,
-  });
-
   return counts as Record<SyncableEntityType, number>;
 }
 
@@ -437,12 +377,6 @@ export async function countDeltas(options: DeltaDetectionOptions): Promise<Recor
 export async function getMostRecentUpdate(userId: string): Promise<string | null> {
   const repos = getRepositories();
   let mostRecent: string | null = null;
-
-  logger.debug('Getting most recent update', {
-    context: 'sync:delta-detector',
-    userId,
-  });
-
   try {
     // Check each entity type for the most recent update
     const checkTimestamp = (timestamp: string | undefined) => {
@@ -488,12 +422,5 @@ export async function getMostRecentUpdate(userId: string): Promise<string | null
     });
     throw error;
   }
-
-  logger.debug('Most recent update found', {
-    context: 'sync:delta-detector',
-    userId,
-    mostRecent,
-  });
-
   return mostRecent;
 }

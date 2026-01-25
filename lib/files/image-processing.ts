@@ -137,22 +137,9 @@ export async function resizeImageForProvider(
   const originalSize = buffer.length
   const maxBase64Size = getProviderMaxBase64Size(provider)
 
-  logger.debug('Starting image resize check', {
-    module: 'image-processing',
-    filename,
-    mimeType,
-    originalSize,
-    maxBase64Size,
-    provider,
-  })
-
   // Check if resizing is supported for this format
   if (!canResizeImage(mimeType)) {
-    logger.debug('Image format not supported for resizing', {
-      module: 'image-processing',
-      filename,
-      mimeType,
-    })
+
     return {
       buffer,
       mimeType,
@@ -165,13 +152,7 @@ export async function resizeImageForProvider(
   // Check if image already fits within limits
   const base64Size = calculateBase64Size(buffer)
   if (base64Size <= maxBase64Size) {
-    logger.debug('Image already within size limits', {
-      module: 'image-processing',
-      filename,
-      originalSize,
-      base64Size,
-      maxBase64Size,
-    })
+
     return {
       buffer,
       mimeType,
@@ -213,13 +194,6 @@ export async function resizeImageForProvider(
     const targetWidth = Math.round(originalWidth * scaleFactor)
     const targetHeight = Math.round(originalHeight * scaleFactor)
 
-    logger.debug('Attempting resize iteration', {
-      module: 'image-processing',
-      iteration: iterations,
-      scaleFactor: scaleFactor.toFixed(2),
-      targetDimensions: `${targetWidth}x${targetHeight}`,
-    })
-
     // Build Sharp pipeline
     let pipeline = sharp(buffer)
       .resize({
@@ -248,14 +222,6 @@ export async function resizeImageForProvider(
     resultMetadata = await sharp(resultBuffer).metadata()
 
     const newBase64Size = calculateBase64Size(resultBuffer)
-
-    logger.debug('Resize iteration complete', {
-      module: 'image-processing',
-      iteration: iterations,
-      newSize: resultBuffer.length,
-      newBase64Size,
-      newDimensions: `${resultMetadata.width}x${resultMetadata.height}`,
-    })
 
     // Check if we're now within limits
     if (newBase64Size <= maxBase64Size) {

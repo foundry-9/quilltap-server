@@ -97,30 +97,17 @@ export const fixOrphanPersonaParticipantsMigration: Migration = {
   async shouldRun(): Promise<boolean> {
     // Only run if MongoDB is enabled
     if (!isMongoDBBackend()) {
-      logger.debug('MongoDB not enabled, skipping fix-orphan-persona-participants migration', {
-        context: 'migration.fix-orphan-persona-participants',
-      });
       return false;
     }
 
     // Check if MongoDB is accessible
     if (!(await isMongoDBAccessible())) {
-      logger.debug('MongoDB not accessible, deferring fix-orphan-persona-participants migration', {
-        context: 'migration.fix-orphan-persona-participants',
-      });
       return false;
     }
 
     // Check if there are issues to fix
     const chatsCount = await getChatsWithInvalidPersonaParticipants();
     const syncOpsCount = await getSyncOpsWithPersonaEntityType();
-
-    logger.debug('Checked for orphan persona participant issues', {
-      context: 'migration.fix-orphan-persona-participants',
-      chatsWithIssues: chatsCount,
-      syncOpsWithIssues: syncOpsCount,
-    });
-
     return chatsCount > 0 || syncOpsCount > 0;
   },
 
@@ -195,13 +182,6 @@ export const fixOrphanPersonaParticipantsMigration: Migration = {
                 });
                 stats.participantsConverted++;
                 modified = true;
-
-                logger.debug('Converted PERSONA participant to CHARACTER', {
-                  context: 'migration.fix-orphan-persona-participants',
-                  chatId: chat.id,
-                  participantId: participant.id,
-                  characterId,
-                });
               } else {
                 // No valid ID - remove this participant
                 stats.participantsRemoved++;
@@ -252,13 +232,6 @@ export const fixOrphanPersonaParticipantsMigration: Migration = {
                 }
               );
               stats.chatsUpdated++;
-
-              logger.debug('Updated chat participants', {
-                context: 'migration.fix-orphan-persona-participants',
-                chatId: chat.id,
-                originalCount: participants.length,
-                newCount: validParticipants.length,
-              });
             }
           }
         } catch (error) {
@@ -304,12 +277,6 @@ export const fixOrphanPersonaParticipantsMigration: Migration = {
               }
             );
             stats.syncOpsUpdated++;
-
-            logger.debug('Cleaned up sync operation conflicts', {
-              context: 'migration.fix-orphan-persona-participants',
-              syncOpId: syncOp.id,
-              removedConflicts: conflicts.length - cleanedConflicts.length,
-            });
           } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             errors.push({

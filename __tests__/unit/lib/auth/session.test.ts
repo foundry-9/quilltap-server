@@ -186,10 +186,6 @@ describe('Session utilities', () => {
       const session = await getServerSession();
 
       expect(session).toBeNull();
-      expect(loggerMock.logger.debug).toHaveBeenCalledWith(
-        'No session cookie found',
-        expect.objectContaining({ context: 'getServerSession' })
-      );
     });
 
     it('returns null when token verification fails', async () => {
@@ -199,10 +195,6 @@ describe('Session utilities', () => {
       const session = await getServerSession();
 
       expect(session).toBeNull();
-      expect(loggerMock.logger.debug).toHaveBeenCalledWith(
-        'Session token invalid or expired',
-        expect.objectContaining({ context: 'getServerSession' })
-      );
     });
 
     it('returns valid session from JWT', async () => {

@@ -140,9 +140,6 @@ export const enableProviderPluginsMigration: Migration = {
     // Check if plugin registry is initialized
     const pluginRegistry = await getPluginRegistry();
     if (!pluginRegistry.isInitialized()) {
-      logger.debug('Plugin registry not initialized yet, deferring migration', {
-        context: 'migration.enable-provider-plugins',
-      });
       return false;
     }
 

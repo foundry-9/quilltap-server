@@ -109,7 +109,6 @@ function getEntityDisplayName(
 export const GET = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     try {
-      logger.debug('[Sync Instance v1] GET', { instanceId: id, userId: user.id });
 
       const instance = await repos.syncInstances?.findById(id);
 
@@ -150,7 +149,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     try {
-      logger.debug('[Sync Instance v1] PUT', { instanceId: id, userId: user.id });
 
       const existingInstance = await repos.syncInstances?.findById(id);
 
@@ -229,13 +227,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
 
 export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
-    try {
-      logger.debug('[Sync Instance v1] DELETE', {
-        instanceId: id,
-        userId: user.id,
-      });
-
-      const instance = await repos.syncInstances?.findById(id);
+    try {const instance = await repos.syncInstances?.findById(id);
 
       if (!instance || instance.userId !== user.id) {
         return notFound('Sync instance');
@@ -581,13 +573,7 @@ async function handleSync(
                 mountPointId: uploadResult.mountPointId,
               });
 
-              filesFetched++;
-              logger.debug('[Sync Instance v1] Fetched and stored file content', {
-                operationId: operation.id,
-                fileId: fileInfo.fileId,
-                size: content.length,
-              });
-            }
+              filesFetched++;}
           } catch (error) {
             const errorMessage = `Failed to fetch file content ${fileInfo.fileId}: ${error instanceof Error ? error.message : String(error)}`;
             allErrors.push(errorMessage);
@@ -650,16 +636,7 @@ async function handleSync(
               pushed: totalPushed,
               filesFetched,
               estimatedTotal: localDeltas.deltas.length,
-            });
-
-            logger.debug('[Sync Instance v1] Pushing batch to remote', {
-              operationId: operation.id,
-              batchIndex: Math.floor(i / PUSH_BATCH_SIZE) + 1,
-              batchSize: batchDeltas.length,
-              totalDeltas: localDeltas.deltas.length,
-            });
-
-            // With ID preservation, no mappings needed - push deltas directly
+            });// With ID preservation, no mappings needed - push deltas directly
             const pushResponse = await pushToRemote(instance, batchDeltas);
 
             totalPushed += batchDeltas.length;

@@ -30,14 +30,7 @@ const DEVICE_TRUST_DAYS = 30;
 
 export const GET = createAuthenticatedHandler(async (req, { user }) => {
   try {
-    const devices = await listTrustedDevices(user.id);
-
-    logger.debug('[Auth v1] Listed trusted devices', {
-      userId: user.id,
-      deviceCount: devices.length,
-    });
-
-    return successResponse({ devices });
+    const devices = await listTrustedDevices(user.id);return successResponse({ devices });
   } catch (error) {
     logger.error('[Auth v1] Failed to list trusted devices', { userId: user.id }, error instanceof Error ? error : undefined);
     return serverError('Failed to list trusted devices');

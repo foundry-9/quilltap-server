@@ -11651,7 +11651,6 @@ var AnthropicProvider = class {
     return { messages: formattedMessages, attachmentResults: { sent, failed } };
   }
   async sendMessage(params, apiKey) {
-    logger.debug("Anthropic sendMessage called", { context: "AnthropicProvider.sendMessage", model: params.model });
     const client = new Anthropic({ apiKey });
     const systemMessage = params.messages.find((m) => m.role === "system");
     const profileParams = params.profileParameters;
@@ -11669,11 +11668,6 @@ var AnthropicProvider = class {
     };
     if (systemMessage?.content) {
       if (cachingEnabled) {
-        logger.debug("Enabling cache control for system message", {
-          context: "AnthropicProvider.sendMessage",
-          cacheStrategy,
-          cacheTTL: cacheTTL || "5m"
-        });
         requestParams.system = [{
           type: "text",
           text: systemMessage.content,
@@ -11692,24 +11686,16 @@ var AnthropicProvider = class {
     }
     const tools = params.tools ? [...params.tools] : [];
     if (tools.length > 0) {
-      logger.debug("Adding tools to request", { context: "AnthropicProvider.sendMessage", toolCount: tools.length });
       if (cachingEnabled) {
         const lastTool = tools[tools.length - 1];
         tools[tools.length - 1] = {
           ...lastTool,
           cache_control: this.buildCacheControl(cacheTTL)
         };
-        logger.debug("Added cache control to last tool", { context: "AnthropicProvider.sendMessage" });
       }
       requestParams.tools = tools;
     }
     const response = await client.messages.create(requestParams);
-    logger.debug("Received Anthropic response", {
-      context: "AnthropicProvider.sendMessage",
-      finishReason: response.stop_reason,
-      promptTokens: response.usage.input_tokens,
-      completionTokens: response.usage.output_tokens
-    });
     const content = response.content[0];
     const rawUsage = response.usage;
     const cacheUsage = rawUsage.cache_creation_input_tokens !== void 0 || rawUsage.cache_read_input_tokens !== void 0 ? {
@@ -11717,11 +11703,6 @@ var AnthropicProvider = class {
       cacheReadInputTokens: rawUsage.cache_read_input_tokens
     } : void 0;
     if (cacheUsage) {
-      logger.debug("Anthropic cache usage", {
-        context: "AnthropicProvider.sendMessage",
-        cacheCreationInputTokens: cacheUsage.cacheCreationInputTokens,
-        cacheReadInputTokens: cacheUsage.cacheReadInputTokens
-      });
     }
     return {
       content: content.type === "text" ? content.text : "",
@@ -11737,7 +11718,6 @@ var AnthropicProvider = class {
     };
   }
   async *streamMessage(params, apiKey) {
-    logger.debug("Anthropic streamMessage called", { context: "AnthropicProvider.streamMessage", model: params.model });
     const client = new Anthropic({ apiKey });
     const systemMessage = params.messages.find((m) => m.role === "system");
     const profileParams = params.profileParameters;
@@ -11756,11 +11736,6 @@ var AnthropicProvider = class {
     };
     if (systemMessage?.content) {
       if (cachingEnabled) {
-        logger.debug("Enabling cache control for streaming system message", {
-          context: "AnthropicProvider.streamMessage",
-          cacheStrategy,
-          cacheTTL: cacheTTL || "5m"
-        });
         requestParams.system = [{
           type: "text",
           text: systemMessage.content,
@@ -11779,14 +11754,12 @@ var AnthropicProvider = class {
     }
     const tools = params.tools ? [...params.tools] : [];
     if (tools.length > 0) {
-      logger.debug("Adding tools to stream request", { context: "AnthropicProvider.streamMessage", toolCount: tools.length });
       if (cachingEnabled) {
         const lastTool = tools[tools.length - 1];
         tools[tools.length - 1] = {
           ...lastTool,
           cache_control: this.buildCacheControl(cacheTTL)
         };
-        logger.debug("Added cache control to last tool for streaming", { context: "AnthropicProvider.streamMessage" });
       }
       requestParams.tools = tools;
     }
@@ -11806,12 +11779,6 @@ var AnthropicProvider = class {
         if (block.type === "text") {
           contentBlocks[event.index] = { type: "text", text: block.text || "" };
         } else if (block.type === "tool_use") {
-          logger.debug("Tool use block started", {
-            context: "AnthropicProvider.streamMessage",
-            index: event.index,
-            toolName: block.name,
-            toolId: block.id
-          });
           contentBlocks[event.index] = {
             type: "tool_use",
             id: block.id,
@@ -11825,7 +11792,6 @@ var AnthropicProvider = class {
         const delta = event.delta;
         const blockIndex = event.index;
         if (delta?.type === "text_delta" && delta?.text) {
-          logger.debug("Stream text delta", { context: "AnthropicProvider.streamMessage", textLength: delta.text.length });
           fullContent += delta.text;
           if (contentBlocks[blockIndex]) {
             contentBlocks[blockIndex].text = (contentBlocks[blockIndex].text || "") + delta.text;
@@ -11837,11 +11803,6 @@ var AnthropicProvider = class {
         } else if (delta?.type === "input_json_delta" && delta?.partial_json) {
           if (contentBlocks[blockIndex] && contentBlocks[blockIndex].type === "tool_use") {
             contentBlocks[blockIndex].partialJson = (contentBlocks[blockIndex].partialJson || "") + delta.partial_json;
-            logger.debug("Tool use input delta", {
-              context: "AnthropicProvider.streamMessage",
-              index: blockIndex,
-              chunkLength: delta.partial_json.length
-            });
           }
         }
       }
@@ -11851,12 +11812,6 @@ var AnthropicProvider = class {
         if (block && block.type === "tool_use" && block.partialJson) {
           try {
             block.input = JSON.parse(block.partialJson);
-            logger.debug("Tool use input parsed", {
-              context: "AnthropicProvider.streamMessage",
-              index: blockIndex,
-              toolName: block.name,
-              inputKeys: Object.keys(block.input || {})
-            });
           } catch (e) {
             logger.error("Failed to parse tool use input JSON", {
               context: "AnthropicProvider.streamMessage",
@@ -11887,15 +11842,6 @@ var AnthropicProvider = class {
           cacheReadInputTokens
         } : void 0;
         const toolUseCount = contentBlocks.filter((b) => b.type === "tool_use").length;
-        logger.debug("Stream completed", {
-          context: "AnthropicProvider.streamMessage",
-          promptTokens: totalInputTokens,
-          completionTokens: totalOutputTokens,
-          cacheCreationInputTokens,
-          cacheReadInputTokens,
-          contentBlockCount: contentBlocks.length,
-          toolUseCount
-        });
         const fullMessage = {
           id: messageId,
           type: "message",
@@ -11925,14 +11871,12 @@ var AnthropicProvider = class {
   }
   async validateApiKey(apiKey) {
     try {
-      logger.debug("Validating Anthropic API key", { context: "AnthropicProvider.validateApiKey" });
       const client = new Anthropic({ apiKey });
       await client.messages.create({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 1,
         messages: [{ role: "user", content: "test" }]
       });
-      logger.debug("Anthropic API key validation successful", { context: "AnthropicProvider.validateApiKey" });
       return true;
     } catch (error) {
       logger.error("Anthropic API key validation failed", { context: "AnthropicProvider.validateApiKey" }, error instanceof Error ? error : void 0);
@@ -11940,7 +11884,6 @@ var AnthropicProvider = class {
     }
   }
   async getAvailableModels(apiKey) {
-    logger.debug("Fetching Anthropic models from API", { context: "AnthropicProvider.getAvailableModels" });
     try {
       const client = new Anthropic({ apiKey });
       const response = await client.models.list();
@@ -11948,11 +11891,6 @@ var AnthropicProvider = class {
       for await (const model of response) {
         models.push(model.id);
       }
-      logger.debug("Retrieved Anthropic models from API", {
-        context: "AnthropicProvider.getAvailableModels",
-        modelCount: models.length,
-        models
-      });
       return models;
     } catch (error) {
       logger.error(
@@ -11971,10 +11909,6 @@ var AnthropicProvider = class {
         "claude-3-5-haiku-20241022",
         "claude-3-haiku-20240307"
       ];
-      logger.debug("Using fallback Anthropic models", {
-        context: "AnthropicProvider.getAvailableModels",
-        modelCount: fallbackModels.length
-      });
       return fallbackModels;
     }
   }
@@ -12079,7 +12013,6 @@ var plugin = {
    * Factory method to create an Anthropic LLM provider instance
    */
   createProvider: (baseUrl) => {
-    logger2.debug("Creating Anthropic provider instance", { context: "plugin.createProvider", baseUrl });
     return new AnthropicProvider();
   },
   /**
@@ -12087,11 +12020,9 @@ var plugin = {
    * Anthropic doesn't provide a models endpoint, so we return known models
    */
   getAvailableModels: async (apiKey, baseUrl) => {
-    logger2.debug("Fetching available Anthropic models", { context: "plugin.getAvailableModels" });
     try {
       const provider = new AnthropicProvider();
       const models = await provider.getAvailableModels(apiKey);
-      logger2.debug("Successfully fetched Anthropic models", { context: "plugin.getAvailableModels", count: models.length });
       return models;
     } catch (error) {
       logger2.error("Failed to fetch Anthropic models", { context: "plugin.getAvailableModels" }, error instanceof Error ? error : void 0);
@@ -12102,11 +12033,9 @@ var plugin = {
    * Validate an Anthropic API key
    */
   validateApiKey: async (apiKey, baseUrl) => {
-    logger2.debug("Validating Anthropic API key", { context: "plugin.validateApiKey" });
     try {
       const provider = new AnthropicProvider();
       const isValid = await provider.validateApiKey(apiKey);
-      logger2.debug("Anthropic API key validation result", { context: "plugin.validateApiKey", isValid });
       return isValid;
     } catch (error) {
       logger2.error("Error validating Anthropic API key", { context: "plugin.validateApiKey" }, error instanceof Error ? error : void 0);
@@ -12118,7 +12047,6 @@ var plugin = {
    * Returns cached information about Claude models without needing API calls
    */
   getModelInfo: () => {
-    logger2.debug("Getting Claude model info", { context: "plugin.getModelInfo" });
     return [
       {
         id: "claude-sonnet-4-5-20250929",
@@ -12182,7 +12110,6 @@ var plugin = {
    * Render the Anthropic icon
    */
   renderIcon: (props) => {
-    logger2.debug("Rendering Anthropic icon", { context: "plugin.renderIcon", className: props.className });
     return AnthropicIcon(props);
   },
   /**
@@ -12193,10 +12120,6 @@ var plugin = {
    * @returns Array of tools in Anthropic format
    */
   formatTools: (tools) => {
-    logger2.debug("Formatting tools for Anthropic provider", {
-      context: "plugin.formatTools",
-      toolCount: tools.length
-    });
     try {
       const formattedTools = [];
       for (const tool of tools) {
@@ -12222,10 +12145,6 @@ var plugin = {
         const anthropicTool = convertToAnthropicFormat(universalTool);
         formattedTools.push(anthropicTool);
       }
-      logger2.debug("Successfully formatted tools", {
-        context: "plugin.formatTools",
-        count: formattedTools.length
-      });
       return formattedTools;
     } catch (error) {
       logger2.error(
@@ -12244,15 +12163,8 @@ var plugin = {
    * @returns Array of tool call requests
    */
   parseToolCalls: (response) => {
-    logger2.debug("Parsing tool calls from Anthropic response", {
-      context: "plugin.parseToolCalls"
-    });
     try {
       const toolCalls = parseAnthropicToolCalls(response);
-      logger2.debug("Successfully parsed tool calls", {
-        context: "plugin.parseToolCalls",
-        count: toolCalls.length
-      });
       return toolCalls;
     } catch (error) {
       logger2.error(

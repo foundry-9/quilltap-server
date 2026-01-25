@@ -31,16 +31,8 @@ type CreateTemplateInput = z.infer<typeof createTemplateSchema>;
 
 export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
   try {
-    logger.debug('[Prompt Templates v1] GET list', { userId: user.id });
 
-    const templates = await repos.promptTemplates.findAllForUser(user.id);
-
-    logger.debug('[Prompt Templates v1] Retrieved templates', {
-      userId: user.id,
-      count: templates.length,
-    });
-
-    return NextResponse.json({
+    const templates = await repos.promptTemplates.findAllForUser(user.id);return NextResponse.json({
       templates,
       count: templates.length,
     });
@@ -61,14 +53,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
 export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
   try {
     const body = await req.json();
-    const validatedData = createTemplateSchema.parse(body);
-
-    logger.debug('[Prompt Templates v1] POST create', {
-      userId: user.id,
-      name: validatedData.name,
-    });
-
-    const template = await repos.promptTemplates.create({
+    const validatedData = createTemplateSchema.parse(body);const template = await repos.promptTemplates.create({
       userId: user.id,
       name: validatedData.name,
       content: validatedData.content,
@@ -88,7 +73,6 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, 
     return NextResponse.json({ template }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      logger.debug('[Prompt Templates v1] Validation error', { errors: error.issues });
       return validationError(error);
     }
 

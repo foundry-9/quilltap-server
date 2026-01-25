@@ -40,7 +40,6 @@ export interface CreateJobOptions {
 export class BackgroundJobsRepository extends UserOwnedBaseRepository<BackgroundJob> {
   constructor() {
     super('background_jobs', BackgroundJobSchema);
-    logger.debug('BackgroundJobsRepository initialized');
   }
 
   /**
@@ -54,7 +53,6 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
    * Find all jobs (use with caution - primarily for admin/debugging)
    */
   async findAll(): Promise<BackgroundJob[]> {
-    logger.debug('Finding all background jobs');
     try {
       const collection = await this.getCollection();
       const results = await collection.find({}, { limit: 1000 });
@@ -68,8 +66,6 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
           return null;
         })
         .filter((job): job is BackgroundJob => job !== null);
-
-      logger.debug('Retrieved background jobs', { count: jobs.length });
       return jobs;
     } catch (error) {
       logger.error('Error finding all background jobs', {
@@ -83,7 +79,6 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
    * Find jobs by user ID with optional status filter
    */
   async findByUserId(userId: string, status?: BackgroundJobStatus): Promise<BackgroundJob[]> {
-    logger.debug('Finding background jobs by user ID', { userId, status });
     try {
       const query: QueryFilter = { userId };
       if (status) {
@@ -94,8 +89,6 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
         sort: { createdAt: -1 as any },
         limit: 100,
       });
-
-      logger.debug('Found background jobs for user', { userId, count: results.length });
       return results;
     } catch (error) {
       logger.error('Error finding background jobs by user ID', {
@@ -110,7 +103,6 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
    * Find pending jobs for a specific chat
    */
   async findPendingForChat(chatId: string): Promise<BackgroundJob[]> {
-    logger.debug('Finding pending jobs for chat', { chatId });
     try {
       const results = await this.findByFilter(
         {
@@ -121,8 +113,6 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
           sort: { priority: -1 as any, createdAt: 1 as any },
         }
       );
-
-      logger.debug('Found pending jobs for chat', { chatId, count: results.length });
       return results;
     } catch (error) {
       logger.error('Error finding pending jobs for chat', {
@@ -138,7 +128,6 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
    * Uses findOneAndUpdate for concurrent-safe job claiming
    */
   async claimNextJob(): Promise<BackgroundJob | null> {
-    logger.debug('Attempting to claim next job');
     try {
       const collection = await this.getCollection();
       const now = this.getCurrentTimestamp();
@@ -163,7 +152,6 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
       );
 
       if (!result) {
-        logger.debug('No jobs available to claim');
         return null;
       }
 
@@ -185,7 +173,6 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
     data: Omit<BackgroundJob, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions
   ): Promise<BackgroundJob> {
-    logger.debug('Creating background job', { type: data.type, userId: data.userId });
     try {
       const job = await this._create(data, options);
       logger.info('Background job created', { jobId: job.id, type: data.type, userId: data.userId });
@@ -206,7 +193,6 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
   async createBatch(
     jobs: Array<Omit<BackgroundJob, 'id' | 'createdAt' | 'updatedAt'>>
   ): Promise<string[]> {
-    logger.debug('Creating batch of background jobs', { count: jobs.length });
     try {
       if (jobs.length === 0) {
         return [];
@@ -248,12 +234,10 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
    * Update a job
    */
   async update(id: string, data: Partial<BackgroundJob>): Promise<BackgroundJob | null> {
-    logger.debug('Updating background job', { jobId: id });
     try {
       const result = await this._update(id, data);
 
       if (result) {
-        logger.debug('Background job updated', { jobId: id });
       }
 
       return result;
@@ -270,7 +254,6 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
    * Mark a job as completed
    */
   async markCompleted(id: string, result?: Record<string, unknown>): Promise<BackgroundJob | null> {
-    logger.debug('Marking job as completed', { jobId: id });
     try {
       const collection = await this.getCollection();
       const now = this.getCurrentTimestamp();
@@ -312,7 +295,6 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
    * Mark a job as failed with retry scheduling
    */
   async markFailed(id: string, errorMessage: string): Promise<BackgroundJob | null> {
-    logger.debug('Marking job as failed', { jobId: id, error: errorMessage });
     try {
       const collection = await this.getCollection();
       const now = this.getCurrentTimestamp();
@@ -382,12 +364,10 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
    * Delete a job
    */
   async delete(id: string): Promise<boolean> {
-    logger.debug('Deleting background job', { jobId: id });
     try {
       const result = await this._delete(id);
 
       if (result) {
-        logger.debug('Background job deleted', { jobId: id });
       }
 
       return result;
@@ -404,7 +384,6 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
    * Get queue statistics
    */
   async getStats(userId?: string): Promise<QueueStats> {
-    logger.debug('Getting queue statistics', { userId });
     try {
       const collection = await this.getCollection();
 
@@ -445,8 +424,6 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
             break;
         }
       }
-
-      logger.debug('Queue statistics retrieved', { userId, stats });
       return stats;
     } catch (error) {
       logger.error('Error getting queue statistics', {
@@ -461,7 +438,6 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
    * Cleanup old completed jobs
    */
   async cleanupOldJobs(olderThan: Date): Promise<number> {
-    logger.debug('Cleaning up old completed jobs', { olderThan: olderThan.toISOString() });
     try {
       const deletedCount = await this.deleteMany({
         status: { $in: ['COMPLETED', 'DEAD'] },
@@ -482,7 +458,6 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
    * Cancel a pending job
    */
   async cancel(id: string): Promise<boolean> {
-    logger.debug('Cancelling background job', { jobId: id });
     try {
       const collection = await this.getCollection();
       const result = await collection.updateOne(
@@ -516,7 +491,6 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
    * Pause a pending or failed job
    */
   async pause(id: string): Promise<BackgroundJob | null> {
-    logger.debug('Pausing background job', { jobId: id });
     try {
       const collection = await this.getCollection();
       const now = this.getCurrentTimestamp();
@@ -553,7 +527,6 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
    * Resume a paused job
    */
   async resume(id: string): Promise<BackgroundJob | null> {
-    logger.debug('Resuming background job', { jobId: id });
     try {
       const collection = await this.getCollection();
       const now = this.getCurrentTimestamp();
@@ -592,7 +565,6 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
    * Jobs that have been processing for longer than timeout are reset to FAILED
    */
   async resetStuckJobs(timeoutMinutes: number = 10): Promise<number> {
-    logger.debug('Resetting stuck jobs', { timeoutMinutes });
     try {
       const collection = await this.getCollection();
       const cutoff = new Date(Date.now() - timeoutMinutes * 60 * 1000).toISOString();

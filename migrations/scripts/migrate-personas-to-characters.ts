@@ -194,17 +194,11 @@ export const migratePersonasToCharactersMigration: Migration = {
   async shouldRun(): Promise<boolean> {
     // Only run if MongoDB is enabled
     if (!isMongoDBBackend()) {
-      logger.debug('MongoDB not enabled, skipping personas-to-characters migration', {
-        context: 'migration.migrate-personas-to-characters',
-      });
       return false;
     }
 
     // Check if MongoDB is accessible
     if (!(await isMongoDBAccessible())) {
-      logger.debug('MongoDB not accessible, deferring personas-to-characters migration', {
-        context: 'migration.migrate-personas-to-characters',
-      });
       return false;
     }
 
@@ -212,14 +206,6 @@ export const migratePersonasToCharactersMigration: Migration = {
     const personasCount = (await getPersonasNeedingMigration()).length;
     const participantsCount = await getChatParticipantsNeedingMigration();
     const memoriesCount = await getMemoriesNeedingMigration();
-
-    logger.debug('Checked for personas-to-characters migration needs', {
-      context: 'migration.migrate-personas-to-characters',
-      personasCount,
-      participantsCount,
-      memoriesCount,
-    });
-
     return personasCount > 0 || participantsCount > 0 || memoriesCount > 0;
   },
 
@@ -351,11 +337,6 @@ export const migratePersonasToCharactersMigration: Migration = {
                   },
                 }
               );
-
-              logger.debug('Updated chat participants', {
-                context: 'migration.migrate-personas-to-characters',
-                chatId: chat.id,
-              });
             }
           } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);

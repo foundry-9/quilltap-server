@@ -45,10 +45,6 @@ export class TagsRepository extends UserOwnedBaseRepository<Tag> {
 
     try {
       const tags = await this.findByFilter({ id: { $in: ids } } as QueryFilter);
-      logger.debug('Found tags by IDs', {
-        requestedCount: ids.length,
-        foundCount: tags.length,
-      });
       return tags;
     } catch (error) {
       logger.error('Error finding tags by IDs', {

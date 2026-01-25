@@ -74,11 +74,6 @@ export class OpenRouterProvider implements LLMProvider {
   }
 
   async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
-    logger.debug('OpenRouter sendMessage called', {
-      context: 'OpenRouterProvider.sendMessage',
-      model: params.model,
-    });
-
     const attachmentResults = this.collectAttachmentFailures(params);
 
     const client = new OpenRouter({
@@ -108,10 +103,6 @@ export class OpenRouterProvider implements LLMProvider {
 
     // Add tools if provided
     if (params.tools && params.tools.length > 0) {
-      logger.debug('Adding tools to request', {
-        context: 'OpenRouterProvider.sendMessage',
-        toolCount: params.tools.length,
-      });
       requestParams.tools = params.tools;
       // Explicitly enable tool use with "auto" - let the model decide when to use tools
       requestParams.toolChoice = 'auto';
@@ -119,19 +110,12 @@ export class OpenRouterProvider implements LLMProvider {
 
     // Add web search plugin if enabled
     if (params.webSearchEnabled) {
-      logger.debug('Enabling web search plugin', {
-        context: 'OpenRouterProvider.sendMessage',
-      });
       requestParams.plugins = [{ id: 'web', maxResults: 5 }];
     }
 
     // Add structured output format if specified
     if (params.responseFormat) {
       if (params.responseFormat.type === 'json_schema' && params.responseFormat.jsonSchema) {
-        logger.debug('Adding JSON schema response format', {
-          context: 'OpenRouterProvider.sendMessage',
-          schemaName: params.responseFormat.jsonSchema.name,
-        });
         requestParams.responseFormat = {
           type: 'json_schema',
           jsonSchema: {
@@ -150,10 +134,6 @@ export class OpenRouterProvider implements LLMProvider {
 
     // Add model fallbacks if configured
     if (profileParams?.fallbackModels?.length) {
-      logger.debug('Adding fallback models', {
-        context: 'OpenRouterProvider.sendMessage',
-        fallbackCount: profileParams.fallbackModels.length,
-      });
       requestParams.models = [params.model, ...profileParams.fallbackModels];
       requestParams.route = 'fallback';
       delete requestParams.model; // Can't have both model and models
@@ -162,11 +142,6 @@ export class OpenRouterProvider implements LLMProvider {
     // Add provider preferences if configured
     const providerPrefs = profileParams?.providerPreferences;
     if (providerPrefs) {
-      logger.debug('Adding provider preferences', {
-        context: 'OpenRouterProvider.sendMessage',
-        hasOrder: !!providerPrefs.order,
-        dataCollection: providerPrefs.dataCollection,
-      });
       requestParams.provider = {};
       if (providerPrefs.order) requestParams.provider.order = providerPrefs.order;
       if (providerPrefs.allowFallbacks !== undefined) requestParams.provider.allowFallbacks = providerPrefs.allowFallbacks;
@@ -192,15 +167,6 @@ export class OpenRouterProvider implements LLMProvider {
           cacheReadInputTokens: usageAny.cacheReadInputTokens,
         }
       : undefined;
-
-    logger.debug('Received OpenRouter response', {
-      context: 'OpenRouterProvider.sendMessage',
-      finishReason: choice.finishReason,
-      promptTokens: response.usage?.promptTokens,
-      completionTokens: response.usage?.completionTokens,
-      cachedTokens: cacheUsage?.cachedTokens,
-    });
-
     return {
       content: contentStr,
       finishReason: choice.finishReason || 'stop',
@@ -219,11 +185,6 @@ export class OpenRouterProvider implements LLMProvider {
     params: LLMParams,
     apiKey: string
   ): AsyncGenerator<StreamChunk> {
-    logger.debug('OpenRouter streamMessage called (SDK v0.4.0 callModel API)', {
-      context: 'OpenRouterProvider.streamMessage',
-      model: params.model,
-    });
-
     const attachmentResults = this.collectAttachmentFailures(params);
 
     const client = new OpenRouter({
@@ -257,10 +218,6 @@ export class OpenRouterProvider implements LLMProvider {
     const hasTools = params.tools && params.tools.length > 0;
 
     if (hasTools) {
-      logger.debug('Tools present - using direct API call to bypass SDK tool conversion', {
-        context: 'OpenRouterProvider.streamMessage',
-        toolCount: params.tools!.length,
-      });
       // Use direct fetch for tool-enabled requests
       yield* this.streamWithTools(params, apiKey, attachmentResults);
       return;
@@ -268,9 +225,6 @@ export class OpenRouterProvider implements LLMProvider {
 
     // Add web search tool if enabled
     if (params.webSearchEnabled) {
-      logger.debug('Enabling web search tool for streaming', {
-        context: 'OpenRouterProvider.streamMessage',
-      });
       requestParams.tools = requestParams.tools || [];
       requestParams.tools.push({ type: 'web_search_preview' });
     }
@@ -278,10 +232,6 @@ export class OpenRouterProvider implements LLMProvider {
     // Add structured output format if specified
     if (params.responseFormat) {
       if (params.responseFormat.type === 'json_schema' && params.responseFormat.jsonSchema) {
-        logger.debug('Adding JSON schema response format for streaming', {
-          context: 'OpenRouterProvider.streamMessage',
-          schemaName: params.responseFormat.jsonSchema.name,
-        });
         requestParams.text = {
           format: {
             type: 'json_schema',
@@ -302,10 +252,6 @@ export class OpenRouterProvider implements LLMProvider {
 
     // Add model fallbacks if configured
     if (profileParams?.fallbackModels?.length) {
-      logger.debug('Adding fallback models for streaming', {
-        context: 'OpenRouterProvider.streamMessage',
-        fallbackCount: profileParams.fallbackModels.length,
-      });
       requestParams.models = [params.model, ...profileParams.fallbackModels];
       delete requestParams.model; // Can't have both model and models
     }
@@ -313,11 +259,6 @@ export class OpenRouterProvider implements LLMProvider {
     // Add provider preferences if configured
     const providerPrefs = profileParams?.providerPreferences;
     if (providerPrefs) {
-      logger.debug('Adding provider preferences for streaming', {
-        context: 'OpenRouterProvider.streamMessage',
-        hasOrder: !!providerPrefs.order,
-        dataCollection: providerPrefs.dataCollection,
-      });
       requestParams.provider = {};
       if (providerPrefs.order) requestParams.provider.order = providerPrefs.order;
       if (providerPrefs.allowFallbacks !== undefined) requestParams.provider.allowFallbacks = providerPrefs.allowFallbacks;
@@ -377,15 +318,6 @@ export class OpenRouterProvider implements LLMProvider {
           cacheReadInputTokens: responseUsage.cacheReadInputTokens,
         }
       : undefined;
-
-    logger.debug('Stream completed (callModel API)', {
-      context: 'OpenRouterProvider.streamMessage',
-      status: response.status,
-      inputTokens: response.usage?.inputTokens,
-      outputTokens: response.usage?.outputTokens,
-      cachedTokens: cacheUsage?.cachedTokens,
-    });
-
     // Build raw response in a format compatible with our existing code
     // Include tool calls if present in the response output
     const toolCalls = response.output
@@ -592,18 +524,12 @@ export class OpenRouterProvider implements LLMProvider {
 
   async validateApiKey(apiKey: string): Promise<boolean> {
     try {
-      logger.debug('Validating OpenRouter API key', {
-        context: 'OpenRouterProvider.validateApiKey',
-      });
       const client = new OpenRouter({
         apiKey,
         httpReferer: process.env.BASE_URL || 'http://localhost:3000',
         xTitle: 'Quilltap',
       });
       await client.models.list();
-      logger.debug('OpenRouter API key validation successful', {
-        context: 'OpenRouterProvider.validateApiKey',
-      });
       return true;
     } catch (error) {
       logger.error(
@@ -617,9 +543,6 @@ export class OpenRouterProvider implements LLMProvider {
 
   async getAvailableModels(apiKey: string): Promise<string[]> {
     try {
-      logger.debug('Fetching OpenRouter models', {
-        context: 'OpenRouterProvider.getAvailableModels',
-      });
       const client = new OpenRouter({
         apiKey,
         httpReferer: process.env.BASE_URL || 'http://localhost:3000',
@@ -628,10 +551,6 @@ export class OpenRouterProvider implements LLMProvider {
 
       const response = await client.models.list();
       const models = response.data?.map((m: any) => m.id) ?? [];
-      logger.debug('Retrieved OpenRouter models', {
-        context: 'OpenRouterProvider.getAvailableModels',
-        modelCount: models.length,
-      });
       return models;
     } catch (error) {
       logger.error(
@@ -647,12 +566,6 @@ export class OpenRouterProvider implements LLMProvider {
     params: ImageGenParams,
     apiKey: string
   ): Promise<ImageGenResponse> {
-    logger.debug('Generating image with OpenRouter', {
-      context: 'OpenRouterProvider.generateImage',
-      model: params.model,
-      prompt: params.prompt.substring(0, 100),
-    });
-
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || 'http://localhost:3000',
@@ -705,12 +618,6 @@ export class OpenRouterProvider implements LLMProvider {
     if (images.length === 0) {
       throw new Error('No images returned from OpenRouter');
     }
-
-    logger.debug('Image generation completed', {
-      context: 'OpenRouterProvider.generateImage',
-      imageCount: images.length,
-    });
-
     return {
       images,
       raw: response,

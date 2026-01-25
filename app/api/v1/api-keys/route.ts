@@ -62,7 +62,6 @@ type DuplicateHandling = 'skip' | 'replace' | 'rename';
  */
 export const GET = createAuthenticatedHandler(async (req, { user }) => {
   try {
-    logger.debug('[API Keys v1] GET list', { userId: user.id });
 
     const repos = getUserRepositories(user.id);
     const apiKeys = await repos.connections.getAllApiKeys();
@@ -141,11 +140,6 @@ async function handleCreate(req: NextRequest, user: { id: string }) {
     });
 
     // Auto-associate the new key with profiles that need it
-    logger.debug('[API Keys v1] Running auto-association for new key', {
-      keyId: newKey.id,
-      provider: newKey.provider,
-    });
-
     const associationResult = await autoAssociateApiKeys(user.id, [newKey.id]);
 
     logger.info('[API Keys v1] Key created', {
@@ -178,7 +172,6 @@ async function handleCreate(req: NextRequest, user: { id: string }) {
  */
 async function handleAutoAssociate(req: NextRequest, user: { id: string }) {
   try {
-    logger.debug('[API Keys v1] Auto-association triggered', { userId: user.id });
 
     const result = await autoAssociateAllKeys(user.id);
 
@@ -217,7 +210,6 @@ async function handleExport(req: NextRequest, user: { id: string }) {
       return badRequest(`Passphrase must be at least ${MIN_PASSPHRASE_LENGTH} characters`);
     }
 
-    logger.debug('[API Keys v1] Starting export', { userId: user.id });
 
     const repos = getUserRepositories(user.id);
     const apiKeys = await repos.connections.getAllApiKeys();
@@ -327,14 +319,7 @@ async function handleImport(req: NextRequest, user: { id: string }) {
 
     if (!SUPPORTED_VERSIONS.includes(importFile.version)) {
       return badRequest(`Unsupported file version: ${importFile.version}`);
-    }
-
-    logger.debug('[API Keys v1] Starting import', {
-      userId: user.id,
-      duplicateHandling: handling,
-    });
-
-    // Decrypt the payload
+    }// Decrypt the payload
     let payload: ExportPayload;
     try {
       payload = decryptWithPassphrase<ExportPayload>(
@@ -346,11 +331,7 @@ async function handleImport(req: NextRequest, user: { id: string }) {
         },
         passphrase
       );
-    } catch (error) {
-      logger.debug('[API Keys v1] Failed to decrypt import file', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-      return badRequest('Invalid passphrase or corrupted file');
+    } catch (error) {return badRequest('Invalid passphrase or corrupted file');
     }
 
     // Validate payload
@@ -446,12 +427,7 @@ async function handleImport(req: NextRequest, user: { id: string }) {
     }
 
     // Auto-associate new keys with profiles that need them
-    if (newKeyIds.length > 0) {
-      logger.debug('[API Keys v1] Running auto-association for imported keys', {
-        keyCount: newKeyIds.length,
-      });
-
-      const associationResult = await autoAssociateApiKeys(user.id, newKeyIds);
+    if (newKeyIds.length > 0) {const associationResult = await autoAssociateApiKeys(user.id, newKeyIds);
       result.associations = associationResult.associations;
 
       if (associationResult.errors.length > 0) {
@@ -515,14 +491,7 @@ async function handleImportPreview(req: NextRequest, user: { id: string }) {
       !importFile.payload?.authTag
     ) {
       return NextResponse.json({ valid: false, error: 'Invalid file structure' }, { status: 400 });
-    }
-
-    logger.debug('[API Keys v1] Starting import preview', {
-      userId: user.id,
-      fileKeyCount: importFile.keyCount,
-    });
-
-    // Verify signature (warn but don't block if invalid)
+    }// Verify signature (warn but don't block if invalid)
     const payloadJson = JSON.stringify({
       ciphertext: importFile.payload.ciphertext,
       iv: importFile.payload.iv,
@@ -546,11 +515,7 @@ async function handleImportPreview(req: NextRequest, user: { id: string }) {
         },
         passphrase
       );
-    } catch (error) {
-      logger.debug('[API Keys v1] Failed to decrypt import file', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-      return NextResponse.json(
+    } catch (error) {return NextResponse.json(
         { valid: false, error: 'Invalid passphrase or corrupted file' },
         { status: 400 }
       );

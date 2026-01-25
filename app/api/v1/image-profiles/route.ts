@@ -39,7 +39,6 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
     const { searchParams } = new URL(req.url);
     const sortByCharacter = searchParams.get('sortByCharacter');
 
-    logger.debug('[Image Profiles v1] GET list', { userId: user.id, sortByCharacter });
 
     // Get all image profiles for user
     const profiles = await repos.imageProfiles.findByUserId(user.id);
@@ -137,7 +136,6 @@ async function handleListModels(req: NextRequest, context: AuthenticatedContext)
     const provider = searchParams.get('provider');
     const apiKeyId = searchParams.get('apiKeyId');
 
-    logger.debug('[Image Profiles v1] list-models', { provider, apiKeyId });
 
     if (!provider) {
       return badRequest('Provider is required');
@@ -212,7 +210,6 @@ async function handleListModels(req: NextRequest, context: AuthenticatedContext)
  */
 async function handleListProviders(req: NextRequest, context: AuthenticatedContext) {
   try {
-    logger.debug('[Image Profiles v1] list-providers');
 
     // Get all providers with image generation capability
     const allProviders = providerRegistry.getAllProviders();
@@ -230,12 +227,7 @@ async function handleListProviders(req: NextRequest, context: AuthenticatedConte
             if (imageProvider.supportedModels && Array.isArray(imageProvider.supportedModels)) {
               defaultModels = imageProvider.supportedModels;
             }
-          } catch (err) {
-            logger.debug('[Image Profiles v1] Could not get default models from image provider', {
-              provider: p.metadata.providerName,
-              error: err instanceof Error ? err.message : String(err),
-            });
-          }
+          } catch (err) {}
         }
 
         return {
@@ -245,14 +237,7 @@ async function handleListProviders(req: NextRequest, context: AuthenticatedConte
           // Use the provider name as the API key provider (API keys are registered under provider names)
           apiKeyProvider: p.metadata.providerName,
         };
-      });
-
-    logger.debug('[Image Profiles v1] Returning image providers', {
-      count: imageProviders.length,
-      providers: imageProviders.map(p => p.value),
-    });
-
-    return successResponse({
+      });return successResponse({
       providers: imageProviders,
       count: imageProviders.length,
     });
@@ -271,7 +256,6 @@ async function handleValidateKey(req: NextRequest, context: AuthenticatedContext
     const body = await req.json();
     const { provider, apiKeyId } = body;
 
-    logger.debug('[Image Profiles v1] validate-key', { provider, apiKeyId });
 
     if (!provider) {
       return badRequest('Provider is required');
@@ -358,7 +342,6 @@ export const POST = createAuthenticatedHandler(async (req, context) => {
       isDefault = false,
     } = body;
 
-    logger.debug('[Image Profiles v1] POST create', { userId: user.id, name, provider });
 
     // Validation
     if (!name || typeof name !== 'string' || name.trim().length === 0) {

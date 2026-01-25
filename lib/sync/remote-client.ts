@@ -78,14 +78,6 @@ async function makeRemoteRequest<T>(
 ): Promise<T> {
   const url = new URL(endpoint, instance.url);
   const apiKey = await getDecryptedApiKey(instance);
-
-  logger.debug('Making remote sync request', {
-    context: 'sync:remote-client',
-    instanceId: instance.id,
-    url: url.toString(),
-    method,
-  });
-
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
 
@@ -126,13 +118,6 @@ async function makeRemoteRequest<T>(
     }
 
     const data = await response.json();
-
-    logger.debug('Remote sync request successful', {
-      context: 'sync:remote-client',
-      instanceId: instance.id,
-      url: url.toString(),
-    });
-
     return data as T;
   } catch (error) {
     clearTimeout(timeoutId);

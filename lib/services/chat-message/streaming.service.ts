@@ -98,23 +98,9 @@ export async function buildTools(
   const useNativeWebSearch = connectionProfile.useNativeWebSearch && provider.supportsWebSearch
 
   if (usePseudoTools) {
-    logger.debug('Skipping native tools (using pseudo-tools)', {
-      provider: connectionProfile.provider,
-      model: connectionProfile.modelName,
-    })
+
     return { tools: [], modelSupportsNativeTools, useNativeWebSearch }
   }
-
-  logger.debug('Building native tools for provider', {
-    provider: connectionProfile.provider,
-    imageProfileId: !!imageProfileId,
-    imageProviderType: imageProfile?.provider,
-    memorySearchEnabled: true,
-    webSearchToolEnabled: connectionProfile.allowWebSearch,
-    projectInfoEnabled: !!projectId,
-    requestFullContextEnabled: !!requestFullContext,
-    useNativeWebSearch,
-  })
 
   // Fetch user's plugin tool configurations from database
   let toolConfigs = new Map<string, Record<string, unknown>>()
@@ -126,11 +112,7 @@ export async function buildTools(
       const toolName = config.pluginName.replace(/^qtap-plugin-/, '')
       toolConfigs.set(toolName, config.config)
     }
-    logger.debug('Loaded plugin tool configs', {
-      userId,
-      configCount: toolConfigs.size,
-      tools: Array.from(toolConfigs.keys()),
-    })
+
   } catch (configError) {
     logger.warn('Failed to load plugin tool configs, using defaults', {
       userId,
@@ -147,11 +129,6 @@ export async function buildTools(
     projectInfo: !!projectId,
     requestFullContext: !!requestFullContext,
     toolConfigs,
-  })
-
-  logger.debug('Native tools built successfully', {
-    toolCount: tools.length,
-    tools: tools.map((t: unknown) => (t as { name?: string; function?: { name?: string } }).name || (t as { function?: { name?: string } }).function?.name || 'unknown'),
   })
 
   return { tools, modelSupportsNativeTools, useNativeWebSearch }
@@ -204,23 +181,6 @@ export async function* streamMessage(
     toolCount: tools.length,
     webSearchEnabled: useNativeWebSearch,
   }
-  logger.debug('[LLM Request] streaming.service.ts:streamMessage - Sending to provider', {
-    context: 'llm-api',
-    provider: connectionProfile.provider,
-    model: connectionProfile.modelName,
-    request: JSON.stringify(requestPayload),
-  })
-  logger.debug('[LLM Request] Full message contents', {
-    context: 'llm-api-verbose',
-    provider: connectionProfile.provider,
-    model: connectionProfile.modelName,
-    messages: JSON.stringify(llmMessages.map(m => ({
-      role: m.role,
-      content: m.content,
-      name: m.name,
-    }))),
-    tools: tools.length > 0 ? JSON.stringify(tools) : undefined,
-  })
 
   // Track timing and accumulated content
   const startTime = Date.now()
@@ -255,29 +215,10 @@ export async function* streamMessage(
       lastCacheUsage = chunk.cacheUsage
     }
     if (chunk.done) {
-      logger.debug('[LLM Response] streaming.service.ts:streamMessage - Stream complete', {
-        context: 'llm-api',
-        provider: connectionProfile.provider,
-        model: connectionProfile.modelName,
-        chunkCount,
-        totalContentLength,
-        usage: lastUsage ? JSON.stringify(lastUsage) : undefined,
-        cacheUsage: lastCacheUsage ? JSON.stringify(lastCacheUsage) : undefined,
-        hasThoughtSignature: !!chunk.thoughtSignature,
-      })
 
       // Log the LLM call if userId is provided
       if (userId) {
         const durationMs = Date.now() - startTime
-        logger.debug('Logging LLM call from streaming service', {
-          userId,
-          messageId,
-          chatId,
-          provider: connectionProfile.provider,
-          model: connectionProfile.modelName,
-          durationMs,
-          contentLength: accumulatedContent.length,
-        })
 
         logLLMCall({
           userId,
@@ -439,9 +380,7 @@ export function safeEnqueue(
     return true
   } catch (error) {
     // Controller is already closed (client disconnected, timeout, etc.)
-    logger.debug('Stream controller closed, enqueue skipped', {
-      error: error instanceof Error ? error.message : String(error),
-    })
+
     return false
   }
 }

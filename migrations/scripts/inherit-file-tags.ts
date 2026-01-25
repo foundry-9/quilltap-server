@@ -119,11 +119,6 @@ async function getEntityTags(entityId: string, userId: string): Promise<string[]
     // Entity not found (might be a message ID or other non-taggable entity)
     return [];
   } catch (error) {
-    logger.debug('Error looking up entity tags', {
-      context: 'migration.inherit-file-tags',
-      entityId,
-      error: error instanceof Error ? error.message : String(error),
-    });
     return [];
   }
 }
@@ -162,28 +157,16 @@ export const inheritFileTagsMigration: Migration = {
   async shouldRun(): Promise<boolean> {
     // Only run if MongoDB is enabled
     if (!isMongoDBBackend()) {
-      logger.debug('MongoDB not enabled, skipping file tags migration', {
-        context: 'migration.inherit-file-tags',
-      });
       return false;
     }
 
     // Check if MongoDB is accessible
     if (!(await isMongoDBAccessible())) {
-      logger.debug('MongoDB not accessible, deferring file tags migration', {
-        context: 'migration.inherit-file-tags',
-      });
       return false;
     }
 
     // Check if there are files with linkedTo entries
     const filesWithLinks = await getFilesWithLinks();
-
-    logger.debug('Checked for files with linked entities', {
-      context: 'migration.inherit-file-tags',
-      count: filesWithLinks.length,
-    });
-
     // Run if there are files with links
     // (even if they already have tags, we should ensure they have inherited tags)
     return filesWithLinks.length > 0;
@@ -237,13 +220,6 @@ export const inheritFileTagsMigration: Migration = {
 
           if (result.modifiedCount > 0) {
             updatedFiles++;
-            logger.debug('Updated file with inherited tags', {
-              context: 'migration.inherit-file-tags',
-              fileId: file.id,
-              previousTagCount: file.tags.length,
-              newTagCount: inheritedTags.length,
-              addedTags: newTags.length,
-            });
           }
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);

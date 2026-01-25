@@ -44,12 +44,6 @@ export function setSessionCookie(
   const options = getCookieOptions();
 
   response.cookies.set(SESSION_COOKIE_NAME, token, options);
-
-  logger.debug('Session cookie set', {
-    context: 'cookies.setSessionCookie',
-    expires: options.expires?.toISOString(),
-  });
-
   return response;
 }
 
@@ -63,11 +57,6 @@ export async function setSessionCookieFromAction(token: string): Promise<void> {
   const options = getCookieOptions();
 
   cookieStore.set(SESSION_COOKIE_NAME, token, options);
-
-  logger.debug('Session cookie set from action', {
-    context: 'cookies.setSessionCookieFromAction',
-    expires: options.expires?.toISOString(),
-  });
 }
 
 /**
@@ -104,11 +93,6 @@ export function clearSessionCookie(response: NextResponse): NextResponse {
     expires: new Date(0),
     maxAge: 0,
   });
-
-  logger.debug('Session cookie cleared', {
-    context: 'cookies.clearSessionCookie',
-  });
-
   return response;
 }
 
@@ -122,10 +106,6 @@ export async function clearSessionCookieFromAction(): Promise<void> {
     ...getCookieOptions(new Date(0)),
     expires: new Date(0),
     maxAge: 0,
-  });
-
-  logger.debug('Session cookie cleared from action', {
-    context: 'cookies.clearSessionCookieFromAction',
   });
 }
 

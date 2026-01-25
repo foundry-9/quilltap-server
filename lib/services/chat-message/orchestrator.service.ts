@@ -226,11 +226,6 @@ async function processMessage(
         false // Ollama availability - could be checked but keeping simple for now
       )
 
-      logger.debug('Cheap LLM selection for compression', {
-        provider: cheapLLMSelection.provider,
-        model: cheapLLMSelection.modelName,
-        isLocal: cheapLLMSelection.isLocal,
-      })
     } catch (error) {
       logger.warn('Failed to get cheap LLM for compression, compression will be skipped', {
         error: error instanceof Error ? error.message : String(error),
@@ -294,12 +289,6 @@ async function processMessage(
     }
 
     await repos.chats.addMessage(chatId, userMessage)
-
-    logger.debug('User message saved', {
-      messageId: userMessageId,
-      participantId: userParticipantId,
-      isMultiCharacter,
-    })
 
     // Link file attachments
     for (const file of fileProcessing.attachedFiles) {
@@ -371,7 +360,7 @@ async function processMessage(
   // This prevents proxy/load balancer timeouts during long compression operations
   let keepAliveInterval: ReturnType<typeof setInterval> | null = null
   if (compressionEnabled && !cachedCompressionResult) {
-    logger.debug('Starting keep-alive pings during context compression')
+
     keepAliveInterval = setInterval(() => {
       if (!safeEnqueue(controller, encodeKeepAlive(encoder))) {
         // Stream closed, stop the interval
@@ -413,7 +402,7 @@ async function processMessage(
   if (keepAliveInterval) {
     clearInterval(keepAliveInterval)
     keepAliveInterval = null
-    logger.debug('Stopped keep-alive pings after context compression')
+
   }
 
   // Create tool context
@@ -482,9 +471,7 @@ async function processMessage(
         rawResponse = chunk.rawResponse
         if (chunk.thoughtSignature) {
           thoughtSignature = chunk.thoughtSignature
-          logger.debug('Captured thought signature from response', {
-            signatureLength: thoughtSignature.length,
-          })
+
         }
       }
     }
@@ -549,11 +536,6 @@ async function processMessage(
     if (toolCalls.length === 0) break
 
     toolIterations++
-    logger.debug('Processing tool calls, iteration', {
-      iteration: toolIterations,
-      toolCallCount: toolCalls.length,
-      tools: toolCalls.map(tc => tc.name),
-    })
 
     const results = await processToolCalls(toolCalls, toolContext, controller, encoder)
     toolMessages = [...toolMessages, ...results.toolMessages]
@@ -873,12 +855,6 @@ async function processMessage(
             || await repos.characters.findById(activeTypingParticipant.characterId)
 
           if (userControlledCharacter) {
-            logger.debug('Triggering memory for user-controlled character', {
-              userControlledCharacterId: userControlledCharacter.id,
-              userControlledCharacterName: userControlledCharacter.name,
-              respondingCharacterId: character.id,
-              respondingCharacterName: character.name,
-            })
 
             await triggerUserControlledCharacterMemory(repos, {
               userControlledCharacter,
@@ -1024,12 +1000,6 @@ async function saveAssistantMessage(
 
   await repos.chats.addMessage(chatId, assistantMessage)
 
-  logger.debug('Assistant message saved', {
-    messageId: assistantMessageId,
-    participantId: characterParticipant.id,
-    characterName: character.name,
-  })
-
   // Save tool messages
   if (toolMessages.length > 0) {
     await saveToolMessages(
@@ -1105,13 +1075,6 @@ async function calculateNextSpeaker(
     userParticipantId
   )
 
-  logger.debug('Next speaker calculated', {
-    nextSpeakerId: nextSpeakerResult.nextSpeakerId,
-    reason: nextSpeakerResult.reason,
-    cycleComplete: nextSpeakerResult.cycleComplete,
-    isMultiCharacter: isMultiCharacterChat(chat.participants),
-  })
-
   return {
     nextSpeakerId: nextSpeakerResult.nextSpeakerId,
     reason: nextSpeakerResult.reason,
@@ -1139,7 +1102,7 @@ function handleStreamError(
       ? `Validation error: ${firstError.message} at ${firstError.path.join('.')}`
       : 'Response validation failed'
     errorType = 'validation'
-    logger.debug('Zod validation error details', { errors: error.issues })
+
   } else if (error instanceof Error) {
     errorMessage = error.message
     errorType = error.name

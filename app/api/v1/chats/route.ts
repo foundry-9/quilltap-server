@@ -216,14 +216,7 @@ async function createInitialMessages(
     attachments: [],
     createdAt: new Date().toISOString(),
   };
-  await repos.chats.addMessage(chatId, firstMessage);
-
-  logger.debug('[Chats v1] Created initial greeting message', {
-    chatId,
-    participantId: firstCharacterParticipant?.id,
-    characterId: context.character.id,
-  });
-}
+  await repos.chats.addMessage(chatId, firstMessage);}
 
 async function autoGenerateFirstMessage(
   context: ChatContext,
@@ -270,17 +263,7 @@ async function autoGenerateFirstMessage(
 
   try {
     const chatSettings = await repos.chatSettings.findByUserId(userId);
-    const embeddingProfileId = chatSettings?.cheapLLMSettings?.embeddingProfileId;
-
-    logger.debug('[Chats v1] Building first message context', {
-      characterId: context.character.id,
-      characterName: context.character.name,
-      participantCount: participants.length,
-      hasProjectId: !!projectId,
-      hasEmbeddingProfile: !!embeddingProfileId,
-    });
-
-    const firstMessageContext = await buildFirstMessageContext(context.character.id, participants, {
+    const embeddingProfileId = chatSettings?.cheapLLMSettings?.embeddingProfileId;const firstMessageContext = await buildFirstMessageContext(context.character.id, participants, {
       userId,
       projectId,
       embeddingProfileId: embeddingProfileId ?? undefined,
@@ -372,24 +355,11 @@ async function handleList(req: NextRequest, context: AuthenticatedContext) {
     const excludeTagIdsParam = searchParams.get('excludeTagIds');
     const limitParam = searchParams.get('limit');
     const excludeTagIds = excludeTagIdsParam ? excludeTagIdsParam.split(',').filter(Boolean) : [];
-    const limit = limitParam ? parseInt(limitParam, 10) : undefined;
-
-    logger.debug('[Chats v1] GET list', {
-      userId: user.id,
-      excludeTagIds: excludeTagIds.length > 0 ? excludeTagIds : undefined,
-      limit,
-    });
-
-    const chatMetadata = await repos.chats.findByUserId(user.id);
+    const limit = limitParam ? parseInt(limitParam, 10) : undefined;const chatMetadata = await repos.chats.findByUserId(user.id);
     const enrichedChats = await enrichChatsForList(chatMetadata, repos);
     let filteredChats = filterChatsByExcludedTags(enrichedChats, excludeTagIds);
 
-    if (excludeTagIds.length > 0) {
-      logger.debug('[Chats v1] Filtered by excluded tags', {
-        originalCount: enrichedChats.length,
-        filteredCount: filteredChats.length,
-      });
-    }
+    if (excludeTagIds.length > 0) {}
 
     if (limit && limit > 0) {
       filteredChats = filteredChats.slice(0, limit);
@@ -426,13 +396,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     );
 
     const chatSettings = await repos.chatSettings.findByUserId(user.id);
-    const defaultRoleplayTemplateId = chatSettings?.defaultRoleplayTemplateId || null;
-
-    logger.debug('[Chats v1] Creating chat with roleplay template', {
-      roleplayTemplateId: defaultRoleplayTemplateId,
-    });
-
-    const now = new Date().toISOString();
+    const defaultRoleplayTemplateId = chatSettings?.defaultRoleplayTemplateId || null;const now = new Date().toISOString();
     const participantsWithTimestamps: ChatParticipantBaseInput[] = buildResult.participants.map((p) => ({
       ...p,
       id: crypto.randomUUID(),
@@ -452,12 +416,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
           .map((p) => p.characterId as string);
 
         const newCharacterIds = characterIds.filter((id) => !project.characterRoster.includes(id));
-        if (newCharacterIds.length > 0) {
-          logger.debug('[Chats v1] Auto-adding characters to project roster', {
-            projectId: validatedData.projectId,
-            newCharacterIds,
-          });
-          await repos.projects.update(validatedData.projectId, {
+        if (newCharacterIds.length > 0) {await repos.projects.update(validatedData.projectId, {
             characterRoster: [...project.characterRoster, ...newCharacterIds],
           });
         }

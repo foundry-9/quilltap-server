@@ -28,7 +28,6 @@ const RATE_LIMIT_DELAY = 500;
  */
 export function startProcessor(intervalMs: number = DEFAULT_POLL_INTERVAL): void {
   if (processorRunning) {
-    logger.debug('[JobQueue] Processor already running');
     return;
   }
 
@@ -77,7 +76,6 @@ export function isProcessorRunning(): boolean {
 export async function processNextJob(): Promise<boolean> {
   // Prevent concurrent processing
   if (isProcessing) {
-    logger.debug('[JobQueue] Already processing a job, skipping');
     return false;
   }
 
@@ -88,7 +86,6 @@ export async function processNextJob(): Promise<boolean> {
     const job = await repos.backgroundJobs.claimNextJob();
 
     if (!job) {
-      logger.debug('[JobQueue] No jobs available');
       // Auto-stop when queue is empty
       if (processorRunning) {
         stopProcessor();

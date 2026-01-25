@@ -38,27 +38,13 @@ export class ImageProfilesRepository extends TaggableBaseRepository<ImageProfile
    */
   async findByName(userId: string, name: string): Promise<ImageProfile | null> {
     try {
-      logger.debug('Finding image profile by name', {
-        userId,
-        name,
-      });
-
       const profile = await this.findOneByFilter({
         userId,
         name,
       } as QueryFilter);
 
       if (profile) {
-        logger.debug('Image profile found by name', {
-          userId,
-          name,
-          profileId: profile.id,
-        });
       } else {
-        logger.debug('Image profile not found by name', {
-          userId,
-          name,
-        });
       }
 
       return profile;
@@ -77,24 +63,13 @@ export class ImageProfilesRepository extends TaggableBaseRepository<ImageProfile
    */
   async findDefault(userId: string): Promise<ImageProfile | null> {
     try {
-      logger.debug('Finding default image profile for user', {
-        userId,
-      });
-
       const profile = await this.findOneByFilter({
         userId,
         isDefault: true,
       } as QueryFilter);
 
       if (profile) {
-        logger.debug('Default image profile found', {
-          userId,
-          profileId: profile.id,
-        });
       } else {
-        logger.debug('Default image profile not found for user', {
-          userId,
-        });
       }
 
       return profile;
@@ -117,12 +92,6 @@ export class ImageProfilesRepository extends TaggableBaseRepository<ImageProfile
     options?: CreateOptions
   ): Promise<ImageProfile> {
     try {
-      logger.debug('Creating new image profile', {
-        userId: data.userId,
-        name: data.name,
-        provider: data.provider,
-      });
-
       const profile = await this._create(data, options);
 
       logger.info('Image profile created successfully', {
@@ -149,10 +118,6 @@ export class ImageProfilesRepository extends TaggableBaseRepository<ImageProfile
    */
   async update(id: string, data: Partial<ImageProfile>): Promise<ImageProfile | null> {
     try {
-      logger.debug('Updating image profile', {
-        profileId: id,
-      });
-
       // Remove id and createdAt to prevent accidental overwrites
       const updateData = { ...data };
       delete updateData.id;
@@ -181,10 +146,6 @@ export class ImageProfilesRepository extends TaggableBaseRepository<ImageProfile
    */
   async delete(id: string): Promise<boolean> {
     try {
-      logger.debug('Deleting image profile', {
-        profileId: id,
-      });
-
       const result = await this._delete(id);
 
       if (result) {
@@ -209,10 +170,6 @@ export class ImageProfilesRepository extends TaggableBaseRepository<ImageProfile
    */
   async unsetAllDefaults(userId: string): Promise<number> {
     try {
-      logger.debug('Unsetting all default image profiles for user', {
-        userId,
-      });
-
       const count = await this.updateMany(
         { userId, isDefault: true } as QueryFilter,
         { isDefault: false } as Partial<ImageProfile>

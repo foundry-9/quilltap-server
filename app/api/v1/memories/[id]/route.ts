@@ -29,13 +29,7 @@ const updateMemorySchema = z.object({
  */
 export const GET = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id: memoryId }) => {
-    try {
-      logger.debug('[Memories API v1] GET memory', {
-        memoryId,
-        userId: user.id,
-      });
-
-      // Find the memory - need to check ownership via character
+    try {// Find the memory - need to check ownership via character
       const memory = await repos.memories.findById(memoryId);
       if (!memory) {
         return notFound('Memory');
@@ -79,13 +73,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
  */
 export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id: memoryId }) => {
-    try {
-      logger.debug('[Memories API v1] PUT memory', {
-        memoryId,
-        userId: user.id,
-      });
-
-      // Find the memory
+    try {// Find the memory
       const existingMemory = await repos.memories.findById(memoryId);
       if (!existingMemory) {
         return notFound('Memory');
@@ -108,14 +96,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
 
       if (!memory) {
         return notFound('Memory');
-      }
-
-      logger.debug('[Memories API v1] Memory updated', {
-        memoryId,
-        characterId: existingMemory.characterId,
-      });
-
-      return NextResponse.json({ memory });
+      }return NextResponse.json({ memory });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return validationError(error);
@@ -132,13 +113,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
  */
 export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id: memoryId }) => {
-    try {
-      logger.debug('[Memories API v1] DELETE memory', {
-        memoryId,
-        userId: user.id,
-      });
-
-      // Find the memory
+    try {// Find the memory
       const existingMemory = await repos.memories.findById(memoryId);
       if (!existingMemory) {
         return notFound('Memory');

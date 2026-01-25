@@ -150,20 +150,6 @@ async function executeCheapLLMTask<T>(
       selection.baseUrl
     )
 
-    // Debug log: Cheap LLM request
-    logger.debug('[Cheap LLM Request] cheap-llm-tasks.ts:executeCheapLLMTask', {
-      context: 'llm-api',
-      taskType: taskType || 'unknown',
-      provider: selection.provider,
-      model: selection.modelName,
-      messageCount: messages.length,
-      messages: JSON.stringify(messages.map(m => ({
-        role: m.role,
-        contentLength: m.content?.length || 0,
-        content: m.content,
-      }))),
-    })
-
     // Create a key for this profile to cache temperature support
     const profileKey = `${selection.provider}:${selection.modelName}`
 
@@ -179,15 +165,6 @@ async function executeCheapLLMTask<T>(
       )
 
       // Debug log: Cheap LLM response
-      logger.debug('[Cheap LLM Response] cheap-llm-tasks.ts:executeCheapLLMTask', {
-        context: 'llm-api',
-        taskType: taskType || 'unknown',
-        provider: selection.provider,
-        model: selection.modelName,
-        responseLength: response.content?.length || 0,
-        response: response.content,
-        usage: response.usage ? JSON.stringify(response.usage) : undefined,
-      })
 
       const result = parseResponse(response.content)
 
@@ -233,15 +210,6 @@ async function executeCheapLLMTask<T>(
       )
 
       // Debug log: Cheap LLM response
-      logger.debug('[Cheap LLM Response] cheap-llm-tasks.ts:executeCheapLLMTask', {
-        context: 'llm-api',
-        taskType: taskType || 'unknown',
-        provider: selection.provider,
-        model: selection.modelName,
-        responseLength: response.content?.length || 0,
-        response: response.content,
-        usage: response.usage ? JSON.stringify(response.usage) : undefined,
-      })
 
       const result = parseResponse(response.content)
 
@@ -279,13 +247,6 @@ async function executeCheapLLMTask<T>(
       if (errorMessage.includes('temperature') || errorMessage.includes('does not support')) {
         profilesWithoutCustomTemp.add(profileKey)
 
-        logger.debug('[Cheap LLM] Retrying without custom temperature', {
-          context: 'llm-api',
-          taskType: taskType || 'unknown',
-          provider: selection.provider,
-          model: selection.modelName,
-        })
-
         const response: LLMResponse = await provider.sendMessage(
           {
             messages,
@@ -296,15 +257,6 @@ async function executeCheapLLMTask<T>(
         )
 
         // Debug log: Cheap LLM response (retry)
-        logger.debug('[Cheap LLM Response] cheap-llm-tasks.ts:executeCheapLLMTask (retry)', {
-          context: 'llm-api',
-          taskType: taskType || 'unknown',
-          provider: selection.provider,
-          model: selection.modelName,
-          responseLength: response.content?.length || 0,
-          response: response.content,
-          usage: response.usage ? JSON.stringify(response.usage) : undefined,
-        })
 
         const result = parseResponse(response.content)
 
@@ -339,13 +291,7 @@ async function executeCheapLLMTask<T>(
       throw error
     }
   } catch (error) {
-    logger.debug('[Cheap LLM Error] cheap-llm-tasks.ts:executeCheapLLMTask', {
-      context: 'llm-api',
-      taskType: taskType || 'unknown',
-      provider: selection.provider,
-      model: selection.modelName,
-      error: getErrorMessage(error),
-    })
+
     return {
       success: false,
       error: getErrorMessage(error),
@@ -1420,15 +1366,6 @@ export async function compressConversationHistory(
     },
   ]
 
-  logger.debug('[Context Compression] Compressing conversation history', {
-    context: 'context-compression',
-    messageCount: messages.length,
-    originalTokens,
-    targetTokens,
-    characterName,
-    userName,
-  })
-
   return executeCheapLLMTask(
     selection,
     llmMessages,
@@ -1436,13 +1373,6 @@ export async function compressConversationHistory(
     (content: string): CompressionResult => {
       const compressedText = content.trim()
       const compressedTokens = Math.ceil(compressedText.length / 4)
-
-      logger.debug('[Context Compression] Conversation history compressed', {
-        context: 'context-compression',
-        originalTokens,
-        compressedTokens,
-        compressionRatio: (compressedTokens / originalTokens * 100).toFixed(1) + '%',
-      })
 
       return {
         compressedText,
@@ -1487,12 +1417,6 @@ export async function compressSystemPrompt(
     },
   ]
 
-  logger.debug('[Context Compression] Compressing system prompt', {
-    context: 'context-compression',
-    originalTokens,
-    targetTokens,
-  })
-
   return executeCheapLLMTask(
     selection,
     llmMessages,
@@ -1500,13 +1424,6 @@ export async function compressSystemPrompt(
     (content: string): CompressionResult => {
       const compressedText = content.trim()
       const compressedTokens = Math.ceil(compressedText.length / 4)
-
-      logger.debug('[Context Compression] System prompt compressed', {
-        context: 'context-compression',
-        originalTokens,
-        compressedTokens,
-        compressionRatio: (compressedTokens / originalTokens * 100).toFixed(1) + '%',
-      })
 
       return {
         compressedText,

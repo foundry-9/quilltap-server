@@ -62,11 +62,6 @@ export async function resolveRespondingParticipant(
   requestedRespondingParticipantId?: string,
   isContinueMode: boolean = false
 ): Promise<ParticipantResolutionResult> {
-  logger.debug('Resolving responding participant', {
-    chatId: chat.id,
-    requestedParticipantId: requestedRespondingParticipantId,
-    isContinueMode,
-  })
 
   // Get user participant (persona) for turn management
   const userParticipant = findUserParticipant(chat.participants)
@@ -135,13 +130,6 @@ export async function resolveRespondingParticipant(
     throw new Error('Connection profile not found')
   }
 
-  logger.debug('Using connection profile', {
-    profileId: resolvedConnectionProfileId,
-    provider: connectionProfile.provider,
-    model: connectionProfile.modelName,
-    resolvedFrom: characterParticipant.connectionProfileId ? 'participant' : 'character_default',
-  })
-
   // Get API key if needed
   let apiKey = ''
   if (connectionProfile.apiKeyId) {
@@ -184,9 +172,6 @@ export async function loadAllParticipantData(
   chat: ChatMetadataBase,
   primaryCharacter: Character
 ): Promise<AllParticipantsData> {
-  logger.debug('Loading all participant data for multi-character chat', {
-    participantCount: chat.participants.length,
-  })
 
   const participantCharacters = new Map<string, Character>()
 
@@ -204,10 +189,6 @@ export async function loadAllParticipantData(
       }
     }
   }
-
-  logger.debug('Loaded participant data', {
-    characterCount: participantCharacters.size,
-  })
 
   return { participantCharacters }
 }
@@ -227,11 +208,7 @@ export async function getRoleplayTemplate(
   if (roleplayTemplateId === undefined || roleplayTemplateId === null) {
     const userDefaultTemplateId = chatSettings?.defaultRoleplayTemplateId
     if (userDefaultTemplateId) {
-      logger.debug('Auto-setting roleplay template for chat without one', {
-        chatId: chat.id,
-        templateId: userDefaultTemplateId,
-        source: 'user_default',
-      })
+
       await repos.chats.update(chat.id, { roleplayTemplateId: userDefaultTemplateId })
       roleplayTemplateId = userDefaultTemplateId
     }
@@ -245,13 +222,6 @@ export async function getRoleplayTemplate(
   if (!roleplayTemplate) {
     return null
   }
-
-  logger.debug('Using roleplay template', {
-    templateId: roleplayTemplate.id,
-    templateName: roleplayTemplate.name,
-    isBuiltIn: roleplayTemplate.isBuiltIn,
-    source: 'chat_setting',
-  })
 
   return { systemPrompt: roleplayTemplate.systemPrompt }
 }

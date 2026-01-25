@@ -108,9 +108,6 @@ export function getSQLiteDatabase(): DatabaseType {
 
   ensureSQLiteDataDir();
   const dbPath = getSQLitePath();
-
-  logger.debug('Opening SQLite database for migrations', { path: dbPath });
-
   sqliteDb = new Database(dbPath);
 
   // Configure pragmas
@@ -128,7 +125,6 @@ export function closeSQLite(): void {
   if (sqliteDb) {
     try {
       sqliteDb.close();
-      logger.debug('Closed SQLite connection', { context: 'migrations.database-utils' });
     } catch (error) {
       logger.warn('Error closing SQLite connection', {
         context: 'migrations.database-utils',
@@ -206,20 +202,8 @@ export async function waitForDatabaseReady(
         const db = getSQLiteDatabase();
         db.prepare('SELECT 1').get();
       }
-
-      logger.debug(`${backend} is ready for migrations`, {
-        context: 'migrations.database-utils',
-        attempt,
-      });
       return true;
     } catch (error) {
-      logger.debug(`${backend} not ready yet, retrying`, {
-        context: 'migrations.database-utils',
-        attempt,
-        maxRetries,
-        error: error instanceof Error ? error.message : String(error),
-      });
-
       if (attempt < maxRetries) {
         await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
       }

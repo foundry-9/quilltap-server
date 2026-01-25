@@ -64,12 +64,6 @@ function getMongoDBConfigFromEnv(): Partial<MongoDBConfig> {
  * Returns configuration object with isConfigured flag and any validation errors
  */
 export function validateMongoDBConfig(): MongoDBConfig {
-  logger.debug('Validating MongoDB configuration', {
-    context: 'migrations.mongodb-utils',
-    databaseBackend: process.env.DATABASE_BACKEND,
-    mode: process.env.MONGODB_MODE,
-  });
-
   const config = getMongoDBConfigFromEnv();
   const errors: string[] = [];
   let isConfigured = false;
@@ -107,14 +101,6 @@ export function validateMongoDBConfig(): MongoDBConfig {
 
   if (errors.length === 0) {
     isConfigured = true;
-    logger.debug('MongoDB configuration validated successfully', {
-      context: 'migrations.mongodb-utils',
-      database: config.database,
-      mode: config.mode,
-      uri: sanitizeURI(config.uri!),
-      connectionTimeoutMs: config.connectionTimeoutMs,
-      maxPoolSize: config.maxPoolSize,
-    });
   } else {
     logger.warn('MongoDB configuration validation failed', {
       context: 'migrations.mongodb-utils',
@@ -145,9 +131,6 @@ export async function testMongoDBConnection(): Promise<{
 }> {
   // Return early if using SQLite backend
   if (process.env.DATABASE_BACKEND === 'sqlite') {
-    logger.debug('Database backend is SQLite, skipping MongoDB connection test', {
-      context: 'migrations.mongodb-utils',
-    });
     return {
       success: true,
       message: 'SQLite backend is configured, MongoDB not required',
@@ -172,12 +155,6 @@ export async function testMongoDBConnection(): Promise<{
   const startTime = Date.now();
 
   try {
-    logger.debug('Attempting MongoDB connection', {
-      context: 'migrations.mongodb-utils',
-      uri: sanitizeURI(config.uri),
-      timeout: config.connectionTimeoutMs,
-    });
-
     client = new MongoClient(config.uri, {
       serverSelectionTimeoutMS: config.connectionTimeoutMs,
       connectTimeoutMS: config.connectionTimeoutMs,
@@ -223,9 +200,6 @@ export async function testMongoDBConnection(): Promise<{
     if (client) {
       try {
         await client.close();
-        logger.debug('MongoDB client connection closed', {
-          context: 'migrations.mongodb-utils',
-        });
       } catch (error) {
         const closeError = error instanceof Error ? error.message : String(error);
         logger.warn('Error closing MongoDB connection', {
@@ -274,12 +248,6 @@ export async function getMongoDatabase(): Promise<Db> {
 
   await cachedClient.connect();
   cachedDb = cachedClient.db(config.database);
-
-  logger.debug('Created new MongoDB connection for migrations', {
-    context: 'migrations.mongodb-utils',
-    database: config.database,
-  });
-
   return cachedDb;
 }
 
@@ -290,9 +258,6 @@ export async function closeMongoDB(): Promise<void> {
   if (cachedClient) {
     try {
       await cachedClient.close();
-      logger.debug('Closed cached MongoDB connection', {
-        context: 'migrations.mongodb-utils',
-      });
     } catch (error) {
       logger.warn('Error closing cached MongoDB connection', {
         context: 'migrations.mongodb-utils',

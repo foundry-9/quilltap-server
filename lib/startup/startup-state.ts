@@ -109,14 +109,6 @@ export const startupState = {
     const state = getGlobalState();
     const previousPhase = state.phase;
     state.phase = phase;
-
-    logger.debug('Startup phase changed', {
-      context: 'startup-state.setPhase',
-      previousPhase,
-      newPhase: phase,
-      elapsedMs: Date.now() - state.startTime,
-    });
-
     if (phase === 'failed') {
       // If startup failed, resolve the ready promise anyway
       // so waiting code doesn't hang forever
@@ -133,10 +125,6 @@ export const startupState = {
   markMigrationsComplete(): void {
     const state = getGlobalState();
     state.migrationsComplete = true;
-    logger.debug('Migrations marked complete', {
-      context: 'startup-state.markMigrationsComplete',
-      elapsedMs: Date.now() - state.startTime,
-    });
   },
 
   /**

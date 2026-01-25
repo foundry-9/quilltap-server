@@ -51,10 +51,6 @@ async function needsMigration(): Promise<boolean> {
     // Need to run if there are files with folders but no folder entities yet
     return filesWithFolders > 0 && existingFolders === 0;
   } catch (error) {
-    logger.debug('Error checking for folder entities migration', {
-      context: 'migration.create-folder-entities',
-      error: error instanceof Error ? error.message : String(error),
-    });
     return false;
   }
 }
@@ -119,17 +115,11 @@ export const createFolderEntitiesMigration: Migration = {
   async shouldRun(): Promise<boolean> {
     // Only run if MongoDB is enabled
     if (!isMongoDBBackend()) {
-      logger.debug('MongoDB not enabled, skipping folder entities migration', {
-        context: 'migration.create-folder-entities',
-      });
       return false;
     }
 
     // Check if MongoDB is accessible
     if (!(await isMongoDBAccessible())) {
-      logger.debug('MongoDB not accessible, deferring folder entities migration', {
-        context: 'migration.create-folder-entities',
-      });
       return false;
     }
 
@@ -152,10 +142,6 @@ export const createFolderEntitiesMigration: Migration = {
       const foldersCollection = db.collection('folders');
 
       // Create indexes on folders collection
-      logger.debug('Creating indexes on folders collection', {
-        context: 'migration.create-folder-entities',
-      });
-
       await foldersCollection.createIndex(
         { userId: 1, path: 1, projectId: 1 },
         { unique: true, background: true }
@@ -171,11 +157,6 @@ export const createFolderEntitiesMigration: Migration = {
 
       // Get all unique user IDs with files
       const userIds = await filesCollection.distinct('userId');
-      logger.debug('Found users with files', {
-        context: 'migration.create-folder-entities',
-        userCount: userIds.length,
-      });
-
       for (const userId of userIds) {
         try {
           // Get all files for this user
@@ -242,13 +223,6 @@ export const createFolderEntitiesMigration: Migration = {
                 await foldersCollection.insertOne(folder);
                 folderIdMap.set(path, folderId);
                 foldersCreated++;
-
-                logger.debug('Created folder entity', {
-                  context: 'migration.create-folder-entities',
-                  userId,
-                  path,
-                  projectId,
-                });
               } else {
                 folderIdMap.set(path, existingFolder.id);
               }

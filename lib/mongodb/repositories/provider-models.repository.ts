@@ -23,21 +23,14 @@ export class ProviderModelsRepository extends MongoBaseRepository<ProviderModel>
    */
   async findById(id: string): Promise<ProviderModel | null> {
     try {
-      logger.debug('Finding provider model by ID', {
-        modelId: id,
-        collection: this.collectionName,
-      });
-
       const collection = await this.getCollection();
       const doc = await collection.findOne({ id });
 
       if (!doc) {
-        logger.debug('Provider model not found', { modelId: id });
         return null;
       }
 
       const validated = this.validate(doc);
-      logger.debug('Provider model found and validated', { modelId: id });
       return validated;
     } catch (error) {
       logger.error('Error finding provider model by ID', {
@@ -53,22 +46,12 @@ export class ProviderModelsRepository extends MongoBaseRepository<ProviderModel>
    */
   async findAll(): Promise<ProviderModel[]> {
     try {
-      logger.debug('Finding all provider models', { collection: this.collectionName });
-
       const collection = await this.getCollection();
       const docs = await collection.find({}).toArray();
-
-      logger.debug('Retrieved provider models from database', { count: docs.length });
-
       const validated = docs
         .map((doc) => this.validateSafe(doc))
         .filter((result) => result.success)
         .map((result) => result.data!);
-
-      logger.debug('All provider models validated', {
-        total: docs.length,
-        validated: validated.length,
-      });
       return validated;
     } catch (error) {
       logger.error('Error finding all provider models', {
@@ -85,12 +68,6 @@ export class ProviderModelsRepository extends MongoBaseRepository<ProviderModel>
     data: Omit<ProviderModel, 'id' | 'createdAt' | 'updatedAt'>
   ): Promise<ProviderModel> {
     try {
-      logger.debug('Creating new provider model', {
-        provider: data.provider,
-        modelId: data.modelId,
-        collection: this.collectionName,
-      });
-
       const id = this.generateId();
       const now = this.getCurrentTimestamp();
 
@@ -129,11 +106,6 @@ export class ProviderModelsRepository extends MongoBaseRepository<ProviderModel>
    */
   async update(id: string, data: Partial<ProviderModel>): Promise<ProviderModel | null> {
     try {
-      logger.debug('Updating provider model', {
-        modelId: id,
-        collection: this.collectionName,
-      });
-
       const existing = await this.findById(id);
       if (!existing) {
         logger.warn('Provider model not found for update', { modelId: id });
@@ -178,11 +150,6 @@ export class ProviderModelsRepository extends MongoBaseRepository<ProviderModel>
    */
   async delete(id: string): Promise<boolean> {
     try {
-      logger.debug('Deleting provider model', {
-        modelId: id,
-        collection: this.collectionName,
-      });
-
       const collection = await this.getCollection();
       const result = await collection.deleteOne({ id });
 
@@ -215,36 +182,16 @@ export class ProviderModelsRepository extends MongoBaseRepository<ProviderModel>
    */
   async findByProvider(provider: string, modelType?: ModelType): Promise<ProviderModel[]> {
     try {
-      logger.debug('Finding provider models by provider', {
-        provider,
-        modelType,
-        collection: this.collectionName,
-      });
-
       const collection = await this.getCollection();
       const query: Record<string, unknown> = { provider };
       if (modelType) {
         query.modelType = modelType;
       }
       const docs = await collection.find(query).toArray();
-
-      logger.debug('Retrieved provider models for provider', {
-        provider,
-        modelType,
-        count: docs.length,
-      });
-
       const validated = docs
         .map((doc) => this.validateSafe(doc))
         .filter((result) => result.success)
         .map((result) => result.data!);
-
-      logger.debug('Provider models validated', {
-        provider,
-        modelType,
-        total: docs.length,
-        validated: validated.length,
-      });
       return validated;
     } catch (error) {
       logger.error('Error finding provider models by provider', {
@@ -261,29 +208,12 @@ export class ProviderModelsRepository extends MongoBaseRepository<ProviderModel>
    */
   async findByModelType(modelType: ModelType): Promise<ProviderModel[]> {
     try {
-      logger.debug('Finding provider models by model type', {
-        modelType,
-        collection: this.collectionName,
-      });
-
       const collection = await this.getCollection();
       const docs = await collection.find({ modelType }).toArray();
-
-      logger.debug('Retrieved provider models for model type', {
-        modelType,
-        count: docs.length,
-      });
-
       const validated = docs
         .map((doc) => this.validateSafe(doc))
         .filter((result) => result.success)
         .map((result) => result.data!);
-
-      logger.debug('Provider models validated', {
-        modelType,
-        total: docs.length,
-        validated: validated.length,
-      });
       return validated;
     } catch (error) {
       logger.error('Error finding provider models by model type', {
@@ -304,14 +234,6 @@ export class ProviderModelsRepository extends MongoBaseRepository<ProviderModel>
     baseUrl?: string
   ): Promise<ProviderModel | null> {
     try {
-      logger.debug('Finding provider model by provider and modelId', {
-        provider,
-        modelId,
-        modelType,
-        baseUrl,
-        collection: this.collectionName,
-      });
-
       const collection = await this.getCollection();
       const query: Record<string, unknown> = { provider, modelId, modelType };
       if (baseUrl) {
@@ -321,12 +243,10 @@ export class ProviderModelsRepository extends MongoBaseRepository<ProviderModel>
       const doc = await collection.findOne(query);
 
       if (!doc) {
-        logger.debug('Provider model not found', { provider, modelId, modelType, baseUrl });
         return null;
       }
 
       const validated = this.validate(doc);
-      logger.debug('Provider model found and validated', { provider, modelId, modelType, baseUrl });
       return validated;
     } catch (error) {
       logger.error('Error finding provider model by provider and modelId', {
@@ -347,14 +267,6 @@ export class ProviderModelsRepository extends MongoBaseRepository<ProviderModel>
     data: Omit<ProviderModel, 'id' | 'createdAt' | 'updatedAt'>
   ): Promise<ProviderModel> {
     try {
-      logger.debug('Upserting provider model', {
-        provider: data.provider,
-        modelId: data.modelId,
-        modelType: data.modelType,
-        baseUrl: data.baseUrl,
-        collection: this.collectionName,
-      });
-
       // Check if model exists
       // Convert null to undefined for the baseUrl parameter
       const existing = await this.findByProviderAndModelId(
@@ -365,12 +277,6 @@ export class ProviderModelsRepository extends MongoBaseRepository<ProviderModel>
       );
 
       if (existing) {
-        logger.debug('Provider model already exists, updating', {
-          id: existing.id,
-          provider: data.provider,
-          modelId: data.modelId,
-          modelType: data.modelType,
-        });
         const updated = await this.update(existing.id, data);
         if (!updated) {
           throw new Error('Failed to update existing provider model');
@@ -379,11 +285,6 @@ export class ProviderModelsRepository extends MongoBaseRepository<ProviderModel>
       }
 
       // Create new model
-      logger.debug('Provider model does not exist, creating new', {
-        provider: data.provider,
-        modelId: data.modelId,
-        modelType: data.modelType,
-      });
       return await this.create(data);
     } catch (error) {
       logger.error('Error upserting provider model', {
@@ -414,14 +315,6 @@ export class ProviderModelsRepository extends MongoBaseRepository<ProviderModel>
     baseUrl?: string
   ): Promise<{ created: number; updated: number }> {
     try {
-      logger.debug('Bulk upserting models for provider', {
-        provider,
-        modelType,
-        baseUrl,
-        modelCount: models.length,
-        collection: this.collectionName,
-      });
-
       let created = 0;
       let updated = 0;
 
@@ -488,13 +381,6 @@ export class ProviderModelsRepository extends MongoBaseRepository<ProviderModel>
    */
   async deleteByProvider(provider: string, modelType?: ModelType, baseUrl?: string): Promise<number> {
     try {
-      logger.debug('Deleting all provider models for provider', {
-        provider,
-        modelType,
-        baseUrl,
-        collection: this.collectionName,
-      });
-
       const collection = await this.getCollection();
       const query: Record<string, unknown> = { provider };
       if (modelType) {

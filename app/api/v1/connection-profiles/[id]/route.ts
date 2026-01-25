@@ -66,13 +66,7 @@ async function enrichProfile(profile: Record<string, unknown>, repos: Authentica
  */
 export const GET = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
-    try {
-      logger.debug('[Connection Profiles v1] GET profile', {
-        profileId: id,
-        userId: user.id,
-      });
-
-      const profile = await repos.connections.findById(id);
+    try {const profile = await repos.connections.findById(id);
 
       if (!profile || profile.userId !== user.id) {
         return notFound('Connection profile');
@@ -93,13 +87,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
  */
 export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
-    try {
-      logger.debug('[Connection Profiles v1] PUT profile', {
-        profileId: id,
-        userId: user.id,
-      });
-
-      // Verify ownership
+    try {// Verify ownership
       const existingProfile = await repos.connections.findById(id);
 
       if (!existingProfile || existingProfile.userId !== user.id) {
@@ -237,13 +225,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
  */
 export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
-    try {
-      logger.debug('[Connection Profiles v1] DELETE profile', {
-        profileId: id,
-        userId: user.id,
-      });
-
-      // Verify ownership
+    try {// Verify ownership
       const existingProfile = await repos.connections.findById(id);
 
       if (!existingProfile || existingProfile.userId !== user.id) {

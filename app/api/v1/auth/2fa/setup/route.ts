@@ -22,7 +22,6 @@ export const POST = createAuthenticatedHandler(async (req, { user }) => {
     logger.info('[Auth v1] 2FA setup attempt', { userId: user.id });
 
     if (user.totp?.enabled) {
-      logger.debug('[Auth v1] 2FA already enabled', { userId: user.id });
       return badRequest('2FA is already enabled');
     }
 

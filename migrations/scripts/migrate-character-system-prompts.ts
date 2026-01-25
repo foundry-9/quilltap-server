@@ -98,28 +98,16 @@ export const migrateCharacterSystemPromptsMigration: Migration = {
   async shouldRun(): Promise<boolean> {
     // Only run if MongoDB is enabled
     if (!isMongoDBBackend()) {
-      logger.debug('MongoDB not enabled, skipping character system prompts migration', {
-        context: 'migration.migrate-character-system-prompts',
-      });
       return false;
     }
 
     // Check if MongoDB is accessible
     if (!(await isMongoDBAccessible())) {
-      logger.debug('MongoDB not accessible, deferring character system prompts migration', {
-        context: 'migration.migrate-character-system-prompts',
-      });
       return false;
     }
 
     // Check if there are characters needing migration
     const charactersNeedingMigration = await getCharactersNeedingMigration();
-
-    logger.debug('Checked for characters needing system prompt migration', {
-      context: 'migration.migrate-character-system-prompts',
-      count: charactersNeedingMigration.length,
-    });
-
     return charactersNeedingMigration.length > 0;
   },
 

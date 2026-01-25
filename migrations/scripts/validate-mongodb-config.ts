@@ -24,24 +24,11 @@ export const validateMongoDBConfigMigration: Migration = {
     const databaseBackend = legacyBackend === 'mongodb'
       ? 'mongodb'
       : (process.env.DATABASE_BACKEND?.toLowerCase() || 'sqlite');
-
-    logger.debug('Checking if MongoDB config validation should run', {
-      context: 'migration.validate-mongodb-config',
-      databaseBackend,
-    });
-
     // Only run if database backend is set to MongoDB
     const shouldRun = databaseBackend === 'mongodb';
 
     if (shouldRun) {
-      logger.debug('MongoDB config validation migration will run', {
-        context: 'migration.validate-mongodb-config',
-      });
     } else {
-      logger.debug('MongoDB config validation migration skipped - not using MongoDB backend', {
-        context: 'migration.validate-mongodb-config',
-        databaseBackend,
-      });
     }
 
     return shouldRun;
@@ -49,18 +36,8 @@ export const validateMongoDBConfigMigration: Migration = {
 
   async run(): Promise<MigrationResult> {
     const startTime = Date.now();
-
-    logger.debug('Starting MongoDB configuration validation migration', {
-      context: 'migration.validate-mongodb-config',
-      timestamp: new Date().toISOString(),
-    });
-
     try {
       // Step 1: Validate configuration
-      logger.debug('Validating MongoDB configuration', {
-        context: 'migration.validate-mongodb-config',
-      });
-
       const config = validateMongoDBConfig();
 
       if (!config.isConfigured) {
@@ -82,19 +59,7 @@ export const validateMongoDBConfigMigration: Migration = {
           timestamp: new Date().toISOString(),
         };
       }
-
-      logger.debug('MongoDB configuration is valid', {
-        context: 'migration.validate-mongodb-config',
-        database: config.database,
-        mode: config.mode,
-      });
-
       // Step 2: Test MongoDB connection
-      logger.debug('Testing MongoDB connection', {
-        context: 'migration.validate-mongodb-config',
-        database: config.database,
-      });
-
       const connectionTest = await testMongoDBConnection();
 
       if (!connectionTest.success) {

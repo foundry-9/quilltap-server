@@ -90,10 +90,6 @@ export class CharacterVectorStore implements ICharacterVectorStore {
    */
   async load(): Promise<void> {
     try {
-      logger.debug('Loading vector index from MongoDB', {
-        context: 'CharacterVectorStore.load',
-        characterId: this.characterId,
-      })
 
       const repo = getVectorIndicesRepository()
       const index = await repo.findByCharacterId(this.characterId)
@@ -110,11 +106,6 @@ export class CharacterVectorStore implements ICharacterVectorStore {
       }
       this.dirty = false
 
-      logger.debug('Vector index loaded from MongoDB', {
-        context: 'CharacterVectorStore.load',
-        characterId: this.characterId,
-        entryCount: this.entries.size,
-      })
     } catch (error) {
       logger.error('Error loading vector index from MongoDB', {
         context: 'CharacterVectorStore.load',
@@ -137,11 +128,6 @@ export class CharacterVectorStore implements ICharacterVectorStore {
     }
 
     try {
-      logger.debug('Saving vector index to MongoDB', {
-        context: 'CharacterVectorStore.save',
-        characterId: this.characterId,
-        entryCount: this.entries.size,
-      })
 
       const repo = getVectorIndicesRepository()
       const now = new Date().toISOString()
@@ -157,10 +143,6 @@ export class CharacterVectorStore implements ICharacterVectorStore {
 
       this.dirty = false
 
-      logger.debug('Vector index saved to MongoDB', {
-        context: 'CharacterVectorStore.save',
-        characterId: this.characterId,
-      })
     } catch (error) {
       logger.error('Error saving vector index to MongoDB', {
         context: 'CharacterVectorStore.save',
@@ -320,10 +302,7 @@ export class VectorStoreManager {
   private stores: Map<string, ICharacterVectorStore> = new Map()
 
   constructor() {
-    logger.debug('VectorStoreManager initialized', {
-      context: 'VectorStoreManager',
-      backend: 'mongodb',
-    })
+
   }
 
   /**

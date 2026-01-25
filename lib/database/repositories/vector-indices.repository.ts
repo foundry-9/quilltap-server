@@ -41,23 +41,11 @@ export class VectorIndicesRepository extends AbstractBaseRepository<VectorIndex>
    */
   async findByCharacterId(characterId: string): Promise<VectorIndex | null> {
     try {
-      logger.debug('Finding vector index by character ID', {
-        context: 'VectorIndicesRepository.findByCharacterId',
-        characterId,
-      });
-
       const index = await this.findOneByFilter({ characterId } as QueryFilter);
 
       if (!index) {
-        logger.debug('Vector index not found', { characterId });
         return null;
       }
-
-      logger.debug('Vector index found', {
-        characterId,
-        entryCount: index.entries.length,
-      });
-
       return index;
     } catch (error) {
       logger.error('Error finding vector index by character ID', {
@@ -77,12 +65,6 @@ export class VectorIndicesRepository extends AbstractBaseRepository<VectorIndex>
     options?: CreateOptions
   ): Promise<VectorIndex> {
     try {
-      logger.debug('Creating vector index', {
-        context: 'VectorIndicesRepository.create',
-        characterId: data.characterId,
-        entryCount: data.entries.length,
-      });
-
       const index = await this._create(data, options);
 
       logger.info('Vector index created', {
@@ -109,7 +91,6 @@ export class VectorIndicesRepository extends AbstractBaseRepository<VectorIndex>
       const result = await this._update(id, data);
 
       if (result) {
-        logger.debug('Vector index updated', { id });
       }
 
       return result;
@@ -128,12 +109,6 @@ export class VectorIndicesRepository extends AbstractBaseRepository<VectorIndex>
    */
   async save(characterId: string, index: Omit<VectorIndex, 'id'>): Promise<VectorIndex> {
     try {
-      logger.debug('Saving vector index', {
-        context: 'VectorIndicesRepository.save',
-        characterId,
-        entryCount: index.entries.length,
-      });
-
       const now = this.getCurrentTimestamp();
 
       // Try to find existing index by character ID
@@ -149,8 +124,6 @@ export class VectorIndicesRepository extends AbstractBaseRepository<VectorIndex>
         if (!updated) {
           throw new Error(`Failed to update vector index for character ${characterId}`);
         }
-
-        logger.debug('Vector index saved (updated)', { characterId });
         return updated;
       } else {
         // Create new
@@ -161,7 +134,6 @@ export class VectorIndicesRepository extends AbstractBaseRepository<VectorIndex>
         };
 
         const created = await this.create(doc);
-        logger.debug('Vector index saved (created)', { characterId });
         return created;
       }
     } catch (error) {
@@ -179,14 +151,7 @@ export class VectorIndicesRepository extends AbstractBaseRepository<VectorIndex>
    */
   async delete(id: string): Promise<boolean> {
     try {
-      logger.debug('Deleting vector index', {
-        context: 'VectorIndicesRepository.delete',
-        id,
-      });
-
       const result = await this._delete(id);
-
-      logger.debug('Vector index deletion result', { id, deleted: result });
       return result;
     } catch (error) {
       logger.error('Error deleting vector index', {
@@ -203,14 +168,8 @@ export class VectorIndicesRepository extends AbstractBaseRepository<VectorIndex>
    */
   async deleteByCharacterId(characterId: string): Promise<boolean> {
     try {
-      logger.debug('Deleting vector index by character ID', {
-        context: 'VectorIndicesRepository.deleteByCharacterId',
-        characterId,
-      });
-
       const index = await this.findByCharacterId(characterId);
       if (!index) {
-        logger.debug('Vector index not found for deletion', { characterId });
         return false;
       }
 
@@ -247,10 +206,6 @@ export class VectorIndicesRepository extends AbstractBaseRepository<VectorIndex>
    */
   async getAllCharacterIds(): Promise<string[]> {
     try {
-      logger.debug('Getting all character IDs with vector indices', {
-        context: 'VectorIndicesRepository.getAllCharacterIds',
-      });
-
       const indices = await this.findAll();
       return indices.map((index) => index.characterId);
     } catch (error) {

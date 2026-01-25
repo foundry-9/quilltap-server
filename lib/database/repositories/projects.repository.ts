@@ -134,12 +134,6 @@ export class ProjectsRepository extends UserOwnedBaseRepository<Project> {
       const projects = await this.findByFilter({
         characterRoster: { $in: [characterId] },
       } as QueryFilter);
-
-      logger.debug('Found projects by character ID', {
-        characterId,
-        count: projects.length,
-      });
-
       return projects;
     } catch (error) {
       logger.error('Error finding projects by character ID', {
@@ -161,7 +155,6 @@ export class ProjectsRepository extends UserOwnedBaseRepository<Project> {
    * @returns Promise<Project | null> The updated project if found, null otherwise
    */
   async addToRoster(projectId: string, characterId: string): Promise<Project | null> {
-    logger.debug('Adding character to project roster', { projectId, characterId });
     try {
       const project = await this.findById(projectId);
       if (!project) {
@@ -171,11 +164,8 @@ export class ProjectsRepository extends UserOwnedBaseRepository<Project> {
 
       if (!project.characterRoster.includes(characterId)) {
         project.characterRoster.push(characterId);
-        logger.debug('Character added to project roster', { projectId, characterId });
         return await this.update(projectId, { characterRoster: project.characterRoster });
       }
-
-      logger.debug('Character already in project roster', { projectId, characterId });
       return project;
     } catch (error) {
       logger.error('Error adding character to project roster', {
@@ -194,7 +184,6 @@ export class ProjectsRepository extends UserOwnedBaseRepository<Project> {
    * @returns Promise<Project | null> The updated project if found, null otherwise
    */
   async addManyToRoster(projectId: string, characterIds: string[]): Promise<Project | null> {
-    logger.debug('Adding characters to project roster', { projectId, count: characterIds.length });
     try {
       const project = await this.findById(projectId);
       if (!project) {
@@ -205,11 +194,8 @@ export class ProjectsRepository extends UserOwnedBaseRepository<Project> {
       const newIds = characterIds.filter((id) => !project.characterRoster.includes(id));
       if (newIds.length > 0) {
         project.characterRoster.push(...newIds);
-        logger.debug('Characters added to project roster', { projectId, addedCount: newIds.length });
         return await this.update(projectId, { characterRoster: project.characterRoster });
       }
-
-      logger.debug('All characters already in project roster', { projectId });
       return project;
     } catch (error) {
       logger.error('Error adding characters to project roster', {
@@ -227,7 +213,6 @@ export class ProjectsRepository extends UserOwnedBaseRepository<Project> {
    * @returns Promise<Project | null> The updated project if found, null otherwise
    */
   async removeFromRoster(projectId: string, characterId: string): Promise<Project | null> {
-    logger.debug('Removing character from project roster', { projectId, characterId });
     try {
       const project = await this.findById(projectId);
       if (!project) {
@@ -240,11 +225,8 @@ export class ProjectsRepository extends UserOwnedBaseRepository<Project> {
       const afterCount = project.characterRoster.length;
 
       if (beforeCount !== afterCount) {
-        logger.debug('Character removed from project roster', { projectId, characterId });
         return await this.update(projectId, { characterRoster: project.characterRoster });
       }
-
-      logger.debug('Character not found in project roster', { projectId, characterId });
       return project;
     } catch (error) {
       logger.error('Error removing character from project roster', {
@@ -296,7 +278,6 @@ export class ProjectsRepository extends UserOwnedBaseRepository<Project> {
     projectId: string,
     allowAnyCharacter: boolean
   ): Promise<Project | null> {
-    logger.debug('Setting allowAnyCharacter for project', { projectId, allowAnyCharacter });
     try {
       return await this.update(projectId, { allowAnyCharacter });
     } catch (error) {
@@ -320,7 +301,6 @@ export class ProjectsRepository extends UserOwnedBaseRepository<Project> {
    * @returns Promise<Project | null> The updated project if found, null otherwise
    */
   async setMountPoint(projectId: string, mountPointId: string | null): Promise<Project | null> {
-    logger.debug('Setting mount point for project', { projectId, mountPointId });
     try {
       return await this.update(projectId, { mountPointId });
     } catch (error) {
@@ -341,9 +321,6 @@ export class ProjectsRepository extends UserOwnedBaseRepository<Project> {
   async findByMountPointId(mountPointId: string): Promise<Project[]> {
     try {
       const projects = await this.findByFilter({ mountPointId } as QueryFilter);
-
-      logger.debug('Found projects by mount point', { mountPointId, count: projects.length });
-
       return projects;
     } catch (error) {
       logger.error('Error finding projects by mount point', {

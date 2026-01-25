@@ -56,9 +56,7 @@ export function getProviderNameSupport(provider: Provider): ProviderNameSupport 
   const support = PROVIDER_NAME_SUPPORT[normalized]
 
   if (!support) {
-    logger.debug('[MessageFormatter] Unknown provider, using conservative default (no name field)', {
-      provider,
-    })
+
     return {
       supportsNameField: false,
       supportedRoles: [],
@@ -137,13 +135,6 @@ export function formatMessagesForProvider(
 }> {
   const nameSupport = getProviderNameSupport(provider)
 
-  logger.debug('[MessageFormatter] Formatting messages for provider', {
-    provider,
-    messageCount: messages.length,
-    supportsNameField: nameSupport.supportsNameField,
-    respondingCharacterName,
-  })
-
   return messages.map((msg) => {
     // System messages don't get name attribution
     if (msg.role === 'system') {
@@ -189,10 +180,7 @@ export function formatMessagesForProvider(
     const prefixedContent = alreadyPrefixed ? msg.content : `[${displayName}] ${msg.content}`
 
     if (alreadyPrefixed) {
-      logger.debug('[MessageFormatter] Skipping duplicate name prefix', {
-        name: displayName,
-        contentPreview: msg.content.slice(0, 50),
-      })
+
     }
 
     return {
@@ -298,12 +286,7 @@ export function stripCharacterNamePrefix(content: string, characterName?: string
   }
 
   if (iterations > 1) {
-    logger.debug('[MessageFormatter] Stripped character name prefixes from response', {
-      characterName,
-      prefixesStripped: iterations - 1,
-      originalLength: content.length,
-      resultLength: result.length,
-    })
+
   }
 
   return result

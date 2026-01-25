@@ -72,12 +72,6 @@ async function cacheOAuthProfileImage(
 
   try {
     const result = await importImageFromUrl(imageUrl, userId, [`user:${userId}`]);
-    logger.debug('Cached OAuth profile image', {
-      context: 'arctic.user-service.cacheOAuthProfileImage',
-      userId,
-      filepath: result.filepath,
-      hash: result.sha256,
-    });
     return { filepath: result.filepath, hash: result.sha256 };
   } catch (error) {
     logger.warn('Failed to cache OAuth profile image, will use external URL', {
@@ -119,10 +113,6 @@ async function cleanupOldProfileImage(imagePath: string | null | undefined): Pro
   const fileId = imagePath.replace('/api/v1/files/', '');
   try {
     await deleteImageById(fileId);
-    logger.debug('Cleaned up old cached profile image', {
-      context: 'arctic.user-service.cleanupOldProfileImage',
-      fileId,
-    });
   } catch (error) {
     logger.warn('Failed to clean up old cached profile image', {
       context: 'arctic.user-service.cleanupOldProfileImage',
@@ -201,10 +191,6 @@ export async function findUserByOAuthAccount(
     });
 
     if (!account) {
-      logger.debug('OAuth account not found', {
-        context: 'arctic.user-service.findUserByOAuthAccount',
-        provider,
-      });
       return null;
     }
 
@@ -218,13 +204,6 @@ export async function findUserByOAuthAccount(
       });
       return null;
     }
-
-    logger.debug('Found user by OAuth account', {
-      context: 'arctic.user-service.findUserByOAuthAccount',
-      provider,
-      userId: user.id,
-    });
-
     return user;
   } catch (error) {
     logger.error(
@@ -409,11 +388,6 @@ export async function updateOAuthTokens(
       },
     }
   );
-
-  logger.debug('Updated OAuth tokens', {
-    context: 'arctic.user-service.updateOAuthTokens',
-    provider,
-  });
 }
 
 /**
@@ -463,13 +437,6 @@ export async function updateUserProfileFromOAuth(
 
     if (oauthUrlChanged || !existingHash) {
       // URL changed or no existing hash - need to cache the new image
-      logger.debug('OAuth image URL changed or no existing hash, caching new image', {
-        context: 'arctic.user-service.updateUserProfileFromOAuth',
-        userId,
-        oauthUrlChanged,
-        hasExistingHash: !!existingHash,
-      });
-
       const cached = await cacheOAuthProfileImage(userInfo.image, userId);
 
       if (cached) {
@@ -483,38 +450,16 @@ export async function updateUserProfileFromOAuth(
           updateFields.image = cached.filepath;
           accountUpdateFields.oauthImageUrl = userInfo.image;
           accountUpdateFields.oauthImageHash = cached.hash;
-
-          logger.debug('OAuth profile image updated (content changed)', {
-            context: 'arctic.user-service.updateUserProfileFromOAuth',
-            userId,
-            newHash: cached.hash,
-            oldHash: existingHash,
-          });
         } else {
           // Content is the same even though URL changed - just update the URL reference
           accountUpdateFields.oauthImageUrl = userInfo.image;
-
-          logger.debug('OAuth image URL changed but content is same, skipping re-cache', {
-            context: 'arctic.user-service.updateUserProfileFromOAuth',
-            userId,
-            hash: cached.hash,
-          });
         }
       } else {
         // Caching failed - fall back to external URL
         updateFields.image = userInfo.image;
-        logger.debug('OAuth image caching failed, using external URL', {
-          context: 'arctic.user-service.updateUserProfileFromOAuth',
-          userId,
-        });
       }
     } else {
       // URL unchanged and we have a hash - no need to re-download
-      logger.debug('OAuth image unchanged, skipping re-cache', {
-        context: 'arctic.user-service.updateUserProfileFromOAuth',
-        userId,
-        existingHash,
-      });
     }
   }
 
@@ -535,12 +480,6 @@ export async function updateUserProfileFromOAuth(
   }
 
   if (result) {
-    logger.debug('Updated user profile from OAuth', {
-      context: 'arctic.user-service.updateUserProfileFromOAuth',
-      userId,
-      updatedUserFields: Object.keys(updateFields),
-      updatedAccountFields: Object.keys(accountUpdateFields),
-    });
   }
 
   return result || null;
@@ -574,13 +513,6 @@ export async function createOrFindOAuthUser(
       userInfo.id,
       userInfo
     );
-
-    logger.debug('OAuth login - returning existing user', {
-      context: 'arctic.user-service.createOrFindOAuthUser',
-      provider,
-      userId: existingUser.id,
-    });
-
     return updatedUser || existingUser;
   }
 

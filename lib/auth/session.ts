@@ -47,10 +47,6 @@ export interface ExtendedSession {
 export async function getServerSession(): Promise<ExtendedSession | null> {
   // If auth is disabled, return unauthenticated user session
   if (isAuthDisabled()) {
-    logger.debug('Auth disabled - returning unauthenticated user session', {
-      context: 'getServerSession',
-    });
-
     try {
       const unauthenticatedUser = await getOrCreateUnauthenticatedUser();
 
@@ -78,24 +74,17 @@ export async function getServerSession(): Promise<ExtendedSession | null> {
     const token = await getSessionCookie();
 
     if (!token) {
-      logger.debug('No session cookie found', { context: 'getServerSession' });
       return null;
     }
 
     const decoded = await verifySessionToken(token);
 
     if (!decoded) {
-      logger.debug('Session token invalid or expired', { context: 'getServerSession' });
       return null;
     }
 
     // Check if token needs refreshing
     if (shouldRefreshToken(decoded)) {
-      logger.debug('Refreshing session token', {
-        context: 'getServerSession',
-        userId: decoded.userId,
-      });
-
       try {
         const newToken = await refreshSessionToken(decoded);
         await setSessionCookieFromAction(newToken);

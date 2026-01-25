@@ -113,13 +113,6 @@ describe('Session API Route - GET /api/v1/auth/session', () => {
       });
     });
 
-    it('should log debug when no session exists', async () => {
-      mockGetServerSession.mockResolvedValue(null);
-
-      await GET();
-
-      expect(mockLogger.debug).toHaveBeenCalledWith('[Auth v1] Session check - no active session');
-    });
   });
 
   // ============================================================================
@@ -144,14 +137,6 @@ describe('Session API Route - GET /api/v1/auth/session', () => {
 
       expect(response.status).toBe(200);
       expect(body.expires).toBe(mockSession.expires);
-    });
-
-    it('should log debug when session exists', async () => {
-      mockGetServerSession.mockResolvedValue(mockSession);
-
-      await GET();
-
-      expect(mockLogger.debug).toHaveBeenCalledWith('[Auth v1] Session retrieved', { userId: 'user-123' });
     });
 
     it('should return correct SessionResponse shape', async () => {

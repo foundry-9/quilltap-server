@@ -33,7 +33,6 @@ import { logger } from '@/lib/logger';
  */
 export async function GET() {
   try {
-    logger.debug('Fetching available themes', { context: 'GET /api/v1/themes' });
 
     // Ensure plugin/theme system is initialized
     if (!isPluginSystemInitialized()) {
@@ -45,14 +44,7 @@ export async function GET() {
 
     // Get theme list (without full tokens for efficiency)
     const themes = themeRegistry.getThemeList();
-    const stats = themeRegistry.getStats();
-
-    logger.debug('Themes retrieved successfully', {
-      context: 'GET /api/v1/themes',
-      themeCount: themes.length,
-    });
-
-    return NextResponse.json({
+    const stats = themeRegistry.getStats();return NextResponse.json({
       themes,
       stats: {
         total: stats.total,

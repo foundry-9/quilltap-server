@@ -57,9 +57,6 @@ export class MongoMigrationsRepository {
    */
   private async getCollection(): Promise<Collection<MigrationStateDocument>> {
     const db = await getMongoDatabase();
-    logger.debug('Retrieved MongoDB migrations_state collection', {
-      context: 'MongoMigrationsRepository',
-    });
     return db.collection<MigrationStateDocument>(this.collectionName);
   }
 
@@ -68,17 +65,10 @@ export class MongoMigrationsRepository {
    */
   async loadState(): Promise<MigrationState> {
     try {
-      logger.debug('Loading migration state from MongoDB', {
-        context: 'MongoMigrationsRepository.loadState',
-      });
-
       const collection = await this.getCollection();
       const doc = await collection.findOne({ _id: this.documentId });
 
       if (!doc) {
-        logger.debug('No migration state found in MongoDB, returning empty state', {
-          context: 'MongoMigrationsRepository.loadState',
-        });
         // Return empty state - will be populated when first migration runs
         const packageJson = await import('@/package.json');
         return {
@@ -91,12 +81,6 @@ export class MongoMigrationsRepository {
       // Validate and return (strip _id for the return value)
       const { _id, ...state } = doc;
       const validated = MigrationStateSchema.omit({ _id: true }).parse(state);
-
-      logger.debug('Migration state loaded from MongoDB', {
-        context: 'MongoMigrationsRepository.loadState',
-        completedCount: validated.completedMigrations.length,
-      });
-
       return validated;
     } catch (error) {
       logger.error('Error loading migration state from MongoDB', {
@@ -118,11 +102,6 @@ export class MongoMigrationsRepository {
    */
   async saveState(state: MigrationState): Promise<void> {
     try {
-      logger.debug('Saving migration state to MongoDB', {
-        context: 'MongoMigrationsRepository.saveState',
-        completedCount: state.completedMigrations.length,
-      });
-
       const collection = await this.getCollection();
 
       await collection.updateOne(
@@ -136,10 +115,6 @@ export class MongoMigrationsRepository {
         },
         { upsert: true }
       );
-
-      logger.debug('Migration state saved to MongoDB', {
-        context: 'MongoMigrationsRepository.saveState',
-      });
     } catch (error) {
       logger.error('Error saving migration state to MongoDB', {
         context: 'MongoMigrationsRepository.saveState',

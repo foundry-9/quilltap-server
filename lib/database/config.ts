@@ -150,10 +150,6 @@ export function detectBackend(): DatabaseBackendType {
     }
   } catch (error) {
     // Meta module might not be available during testing or if SQLite isn't installed
-    logger.debug('Could not check meta table for preferred backend', {
-      context: 'database.config',
-      error: error instanceof Error ? error.message : String(error),
-    });
   }
 
   // Check for legacy DATA_BACKEND env var (backward compatibility)

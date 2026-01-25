@@ -327,7 +327,6 @@ const plugin = {
   initialize() {
     // Theme loaded successfully
     if (typeof console !== 'undefined') {
-      console.debug('[${pluginName}] Theme plugin loaded v${version}');
     }
   },
 };

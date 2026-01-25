@@ -240,22 +240,6 @@ describe('Arctic OAuth Registry', () => {
       expect(instance).toBeNull();
     });
 
-    it('logs missing config vars when not configured', () => {
-      const provider = createMockProvider('google', false);
-      registerArcticProvider(provider);
-      const { logger } = require('@/lib/logger');
-      
-      getArcticProvider('google');
-      
-      expect(logger.debug).toHaveBeenCalledWith(
-        'Arctic provider not configured',
-        expect.objectContaining({
-          providerId: 'google',
-          missingVars: ['GOOGLE_CLIENT_ID'],
-        })
-      );
-    });
-
     it('returns null when createArcticProvider returns null', () => {
       const provider = createMockProvider('google');
       (provider.createArcticProvider as jest.Mock).mockReturnValue(null);
@@ -432,21 +416,5 @@ describe('Arctic OAuth Registry', () => {
       expect(github.getConfigStatus).toHaveBeenCalled();
     });
 
-    it('logs updated status for each provider', () => {
-      const provider = createMockProvider('google');
-      registerArcticProvider(provider);
-      const { logger } = require('@/lib/logger');
-      
-      refreshArcticProviderStatus();
-      
-      expect(logger.debug).toHaveBeenCalledWith(
-        'Arctic provider status refreshed',
-        expect.objectContaining({
-          providerId: 'google',
-          isConfigured: true,
-          missingVars: [],
-        })
-      );
-    });
   });
 });

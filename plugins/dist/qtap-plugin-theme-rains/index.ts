@@ -17,9 +17,6 @@ const logger = createPluginLogger('qtap-plugin-theme-rains');
  * statically by the theme registry from tokens.json and styles.css.
  */
 export function initialize(): void {
-  logger.debug('Rains theme plugin loaded', {
-    version: '1.1.1',
-  });
 }
 
 /**

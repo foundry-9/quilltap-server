@@ -47,10 +47,6 @@ async function hasMemoriesNeedingMigration(): Promise<boolean> {
     });
     return count > 0;
   } catch (error) {
-    logger.debug('Error checking memories for populate-about-character-ids migration', {
-      context: MIGRATION_CONTEXT,
-      error: error instanceof Error ? error.message : String(error),
-    });
     return false;
   }
 }
@@ -67,28 +63,16 @@ export const populateMemoryAboutCharacterIdsMigration: Migration = {
   async shouldRun(): Promise<boolean> {
     // Only run if MongoDB is enabled
     if (!isMongoDBBackend()) {
-      logger.debug('MongoDB not enabled, skipping populate-memory-about-character-ids migration', {
-        context: MIGRATION_CONTEXT,
-      });
       return false;
     }
 
     // Check if MongoDB is accessible
     if (!(await isMongoDBAccessible())) {
-      logger.debug('MongoDB not accessible, deferring populate-memory-about-character-ids migration', {
-        context: MIGRATION_CONTEXT,
-      });
       return false;
     }
 
     // Check if there are memories needing migration
     const needsRun = await hasMemoriesNeedingMigration();
-
-    logger.debug('Checked for populate-memory-about-character-ids migration need', {
-      context: MIGRATION_CONTEXT,
-      needsRun,
-    });
-
     return needsRun;
   },
 
@@ -122,12 +106,6 @@ export const populateMemoryAboutCharacterIdsMigration: Migration = {
 
       // Get unique chat IDs
       const chatIds = [...new Set(memoriesNeedingMigration.map(m => m.chatId).filter(Boolean))];
-
-      logger.debug('Found unique chat IDs to process', {
-        context: MIGRATION_CONTEXT,
-        chatCount: chatIds.length,
-      });
-
       // Build chatId -> userCharacterId map
       const chatToUserCharacterMap = new Map<string, string>();
 
@@ -154,14 +132,6 @@ export const populateMemoryAboutCharacterIdsMigration: Migration = {
           noUserCharacter++;
         }
       }
-
-      logger.debug('Built chat to user-character map', {
-        context: MIGRATION_CONTEXT,
-        mappedChats: chatToUserCharacterMap.size,
-        chatsNotFound,
-        noUserCharacter,
-      });
-
       // Now update memories in batches
       for (const memory of memoriesNeedingMigration) {
         const chatId = memory.chatId;

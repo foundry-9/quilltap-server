@@ -30,25 +30,16 @@ function extractBearerToken(request: NextRequest): string | null {
   const authHeader = request.headers.get('Authorization');
 
   if (!authHeader) {
-    logger.debug('No Authorization header found', {
-      context: 'sync:api-key-auth',
-    });
     return null;
   }
 
   if (!authHeader.startsWith('Bearer ')) {
-    logger.debug('Authorization header is not Bearer type', {
-      context: 'sync:api-key-auth',
-    });
     return null;
   }
 
   const token = authHeader.substring(7).trim();
 
   if (!token) {
-    logger.debug('Bearer token is empty', {
-      context: 'sync:api-key-auth',
-    });
     return null;
   }
 
@@ -65,17 +56,8 @@ function extractBearerToken(request: NextRequest): string | null {
  */
 export async function validateApiKey(plaintextKey: string): Promise<ApiKeyAuthResult> {
   const startTime = Date.now();
-
-  logger.debug('Validating API key', {
-    context: 'sync:api-key-auth',
-    keyPrefix: plaintextKey.substring(0, 16), // Show prefix for debugging
-  });
-
   // Check format
   if (!plaintextKey.startsWith(API_KEY_PREFIX)) {
-    logger.debug('API key has invalid format', {
-      context: 'sync:api-key-auth',
-    });
     return {
       authenticated: false,
       error: 'Invalid API key format',
@@ -88,12 +70,6 @@ export async function validateApiKey(plaintextKey: string): Promise<ApiKeyAuthRe
     // Get all active API keys
     // Note: This could be optimized with a prefix-based lookup in the future
     const activeKeys = await repos.userSyncApiKeys.findAllActive();
-
-    logger.debug('Checking against active API keys', {
-      context: 'sync:api-key-auth',
-      activeKeyCount: activeKeys.length,
-    });
-
     // Try to match the key
     for (const key of activeKeys) {
       const isMatch = await repos.userSyncApiKeys.verifyApiKey(plaintextKey, key.keyHash);
@@ -185,10 +161,6 @@ export async function getAuthenticatedUserForSync(
 ): Promise<{ userId: string | null; authMethod: 'session' | 'api_key' | null; keyId?: string }> {
   // First try session auth
   if (sessionUserId) {
-    logger.debug('Using session authentication for sync', {
-      context: 'sync:api-key-auth',
-      userId: sessionUserId,
-    });
     return {
       userId: sessionUserId,
       authMethod: 'session',
@@ -199,22 +171,12 @@ export async function getAuthenticatedUserForSync(
   const apiKeyResult = await authenticateSyncRequest(request);
 
   if (apiKeyResult.authenticated && apiKeyResult.userId) {
-    logger.debug('Using API key authentication for sync', {
-      context: 'sync:api-key-auth',
-      userId: apiKeyResult.userId,
-      keyId: apiKeyResult.keyId,
-    });
     return {
       userId: apiKeyResult.userId,
       authMethod: 'api_key',
       keyId: apiKeyResult.keyId,
     };
   }
-
-  logger.debug('No valid authentication for sync request', {
-    context: 'sync:api-key-auth',
-  });
-
   return {
     userId: null,
     authMethod: null,
@@ -271,10 +233,6 @@ export function createSyncAuthenticatedHandler(
       const user = await repos.users.findById(session.user.id);
 
       if (user) {
-        logger.debug('Sync request authenticated via session', {
-          context: 'sync:api-key-auth',
-          userId: user.id,
-        });
         return handler(request, { user, repos, session, authMethod: 'session' });
       }
     }
@@ -286,11 +244,6 @@ export function createSyncAuthenticatedHandler(
       const user = await repos.users.findById(apiKeyResult.userId);
 
       if (user) {
-        logger.debug('Sync request authenticated via API key', {
-          context: 'sync:api-key-auth',
-          userId: user.id,
-          keyId: apiKeyResult.keyId,
-        });
         return handler(request, {
           user,
           repos,
@@ -308,9 +261,6 @@ export function createSyncAuthenticatedHandler(
     }
 
     // No valid authentication
-    logger.debug('Sync request unauthorized - no valid session or API key', {
-      context: 'sync:api-key-auth',
-    });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   };
 }

@@ -225,12 +225,6 @@ export async function generateField(
   characterId?: string,
   profileProvider?: string
 ): Promise<string> {
-  logger.debug('[CharacterWizard] Generating field', {
-    modelName,
-    maxTokens,
-    promptLength: fieldPrompt.length,
-  });
-
   const messages = [
     { role: 'system' as const, content: contextPrompt },
     { role: 'user' as const, content: fieldPrompt },
@@ -301,13 +295,6 @@ export async function generateImageDescription(
   if (!imageFile.storageKey) {
     throw new Error('Image file has no storage key');
   }
-
-  logger.debug('[CharacterWizard] Generating image description', {
-    imageId: imageFile.id,
-    provider: visionProfile.provider,
-    model: visionProfile.modelName,
-  });
-
   const imageBuffer = await fileStorageManager.downloadFile(imageFile);
 
   if (imageBuffer.length > MAX_VISION_IMAGE_SIZE) {
@@ -357,11 +344,6 @@ export async function generateImageDescription(
   if (!response?.content) {
     throw new Error('No response from vision model');
   }
-
-  logger.debug('[CharacterWizard] Image description generated', {
-    descriptionLength: response.content.length,
-  });
-
   // Log the vision LLM call if userId is available (fire and forget)
   if (userId) {
     logLLMCall({
@@ -410,8 +392,6 @@ export async function generatePhysicalDescriptions(
   characterId?: string,
   profileProvider?: string
 ): Promise<GeneratedPhysicalDescription> {
-  logger.debug('[CharacterWizard] Generating physical descriptions', { modelName });
-
   const results: Partial<GeneratedPhysicalDescription> = {
     name: 'AI Generated',
   };
@@ -576,8 +556,6 @@ export async function runCharacterWizard(
           primaryProfile.provider
         );
       }
-
-      logger.debug(`[CharacterWizard] Generated field: ${field}`);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Generation failed';
       errors[field] = errorMessage;

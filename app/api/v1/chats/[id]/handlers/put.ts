@@ -24,7 +24,6 @@ export async function handlePut(
   const { user, repos } = ctx;
 
   try {
-    logger.debug('[Chats v1] PUT chat', { chatId, userId: user.id });
 
     const existingChat = await repos.chats.findById(chatId);
     if (!existingChat || existingChat.userId !== user.id) {

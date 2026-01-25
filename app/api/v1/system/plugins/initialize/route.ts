@@ -78,7 +78,6 @@ export async function GET() {
     const { getPluginSystemState } = await import('@/lib/startup/plugin-initialization');
     const state = getPluginSystemState();
 
-    logger.debug('[System Plugins v1] Plugin system state requested', { state });
 
     return NextResponse.json({
       success: true,

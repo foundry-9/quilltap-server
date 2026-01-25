@@ -51,9 +51,6 @@ export class MongoVectorIndicesRepository {
    */
   private async getCollection(): Promise<Collection<VectorIndex>> {
     const db = await getMongoDatabase();
-    logger.debug('Retrieved MongoDB vector_indices collection', {
-      context: 'MongoVectorIndicesRepository',
-    });
     return db.collection<VectorIndex>(this.collectionName);
   }
 
@@ -62,25 +59,15 @@ export class MongoVectorIndicesRepository {
    */
   async findByCharacterId(characterId: string): Promise<VectorIndex | null> {
     try {
-      logger.debug('Finding vector index by character ID', {
-        context: 'MongoVectorIndicesRepository.findByCharacterId',
-        characterId,
-      });
-
       const collection = await this.getCollection();
       const doc = await collection.findOne({ characterId });
 
       if (!doc) {
-        logger.debug('Vector index not found', { characterId });
         return null;
       }
 
       // Validate and return
       const validated = VectorIndexSchema.parse(doc);
-      logger.debug('Vector index found', {
-        characterId,
-        entryCount: validated.entries.length,
-      });
       return validated;
     } catch (error) {
       logger.error('Error finding vector index', {
@@ -98,12 +85,6 @@ export class MongoVectorIndicesRepository {
    */
   async save(characterId: string, index: Omit<VectorIndex, 'id'>): Promise<VectorIndex> {
     try {
-      logger.debug('Saving vector index', {
-        context: 'MongoVectorIndicesRepository.save',
-        characterId,
-        entryCount: index.entries.length,
-      });
-
       const collection = await this.getCollection();
       const now = new Date().toISOString();
 
@@ -119,8 +100,6 @@ export class MongoVectorIndicesRepository {
         { $set: doc },
         { upsert: true }
       );
-
-      logger.debug('Vector index saved', { characterId });
       return doc;
     } catch (error) {
       logger.error('Error saving vector index', {
@@ -137,16 +116,10 @@ export class MongoVectorIndicesRepository {
    */
   async delete(characterId: string): Promise<boolean> {
     try {
-      logger.debug('Deleting vector index', {
-        context: 'MongoVectorIndicesRepository.delete',
-        characterId,
-      });
-
       const collection = await this.getCollection();
       const result = await collection.deleteOne({ characterId });
 
       const deleted = result.deletedCount > 0;
-      logger.debug('Vector index deletion result', { characterId, deleted });
       return deleted;
     } catch (error) {
       logger.error('Error deleting vector index', {

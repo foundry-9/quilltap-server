@@ -154,7 +154,7 @@ export async function getCharacterSummary(
 ): Promise<EnrichedCharacterSummary | null> {
   const character = await repos.characters.findById(characterId)
   if (!character) {
-    logger.debug('Character not found for enrichment', { characterId })
+
     return null
   }
 
@@ -186,7 +186,7 @@ export async function getCharacterDetail(
 ): Promise<EnrichedCharacterDetail | null> {
   const character = await repos.characters.findById(characterId)
   if (!character) {
-    logger.debug('Character not found for enrichment', { characterId })
+
     return null
   }
 
@@ -222,7 +222,7 @@ export async function getConnectionProfile(
 ): Promise<EnrichedConnectionProfile | null> {
   const profile = await repos.connections.findById(profileId)
   if (!profile) {
-    logger.debug('Connection profile not found for enrichment', { profileId })
+
     return null
   }
 
@@ -252,7 +252,7 @@ export async function getImageProfile(
 ): Promise<EnrichedImageProfile | null> {
   const imgProfile = await repos.imageProfiles.findById(profileId)
   if (!imgProfile) {
-    logger.debug('Image profile not found for enrichment', { profileId })
+
     return null
   }
 

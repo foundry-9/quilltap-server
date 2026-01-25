@@ -107,12 +107,6 @@ class PluginRegistry {
       }
       this.state.capabilities.get(capability)!.push(pluginName);
     }
-
-    logger.debug('Plugin registered', {
-      name: pluginName,
-      version: plugin.manifest.version,
-      capabilities: plugin.capabilities,
-    });
   }
 
   /**
@@ -244,7 +238,6 @@ class PluginRegistry {
       capabilities: new Map(),
       lastScanTime: null,
     };
-    logger.debug('Plugin registry reset');
   }
 
   /**

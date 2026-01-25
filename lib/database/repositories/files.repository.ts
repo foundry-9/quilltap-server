@@ -45,7 +45,6 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
 
     try {
       const files = await this.findByFilter({ id: { $in: ids } } as QueryFilter);
-      logger.debug('Found files by IDs', { requestedCount: ids.length, foundCount: files.length });
       return files;
     } catch (error) {
       logger.error('Error finding files by IDs', {
@@ -62,7 +61,6 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
   async findBySha256(sha256: string): Promise<FileEntry[]> {
     try {
       const files = await this.findByFilter({ sha256 } as QueryFilter);
-      logger.debug('Found files by SHA256', { sha256, count: files.length });
       return files;
     } catch (error) {
       logger.error('Error finding files by SHA256', {
@@ -79,7 +77,6 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
   async findByCategory(category: FileCategory): Promise<FileEntry[]> {
     try {
       const files = await this.findByFilter({ category } as QueryFilter);
-      logger.debug('Found files by category', { category, count: files.length });
       return files;
     } catch (error) {
       logger.error('Error finding files by category', {
@@ -96,7 +93,6 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
   async findBySource(source: FileSource): Promise<FileEntry[]> {
     try {
       const files = await this.findByFilter({ source } as QueryFilter);
-      logger.debug('Found files by source', { source, count: files.length });
       return files;
     } catch (error) {
       logger.error('Error finding files by source', {
@@ -113,7 +109,6 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
   async findByLinkedTo(entityId: string): Promise<FileEntry[]> {
     try {
       const files = await this.findByFilter({ linkedTo: { $in: [entityId] } } as QueryFilter);
-      logger.debug('Found files linked to entity', { entityId, count: files.length });
       return files;
     } catch (error) {
       logger.error('Error finding files linked to entity', {
@@ -130,7 +125,6 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
   async findByUserId(userId: string): Promise<FileEntry[]> {
     try {
       const files = await this.findByFilter({ userId } as QueryFilter);
-      logger.debug('Found files by user ID', { userId, count: files.length });
       return files;
     } catch (error) {
       logger.error('Error finding files by user ID', {
@@ -221,8 +215,6 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
    * Add entity to linkedTo array
    */
   async addLink(fileId: string, entityId: string): Promise<FileEntry | null> {
-    logger.debug('Adding link to file', { fileId, entityId });
-
     try {
       const file = await this.findById(fileId);
       if (!file) {
@@ -234,8 +226,6 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
         file.linkedTo.push(entityId);
         return await this.update(fileId, { linkedTo: file.linkedTo });
       }
-
-      logger.debug('Link already exists on file', { fileId, entityId });
       return file;
     } catch (error) {
       logger.error('Error adding link to file', {
@@ -251,8 +241,6 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
    * Remove entity from linkedTo array
    */
   async removeLink(fileId: string, entityId: string): Promise<FileEntry | null> {
-    logger.debug('Removing link from file', { fileId, entityId });
-
     try {
       const file = await this.findById(fileId);
       if (!file) {
@@ -267,8 +255,6 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
       if (beforeCount !== afterCount) {
         return await this.update(fileId, { linkedTo: file.linkedTo });
       }
-
-      logger.debug('Link not found on file', { fileId, entityId });
       return file;
     } catch (error) {
       logger.error('Error removing link from file', {
@@ -284,8 +270,6 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
    * Update S3 storage reference
    */
   async updateS3Reference(fileId: string, s3Key: string, s3Bucket: string): Promise<FileEntry | null> {
-    logger.debug('Updating S3 reference for file', { fileId, s3Key, s3Bucket });
-
     try {
       const result = await this.update(fileId, {
         s3Key,
@@ -339,15 +323,6 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
       }
 
       const files = await this.findByFilter(query as QueryFilter);
-
-      logger.debug('Found files in folder', {
-        context: 'files-repository',
-        userId,
-        projectId,
-        folderPath,
-        count: files.length,
-      });
-
       return files;
     } catch (error) {
       logger.error('Error finding files in folder', {
@@ -391,15 +366,6 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
       }
 
       const files = await this.findByFilter(query as QueryFilter);
-
-      logger.debug('Found files in folder (recursive)', {
-        context: 'files-repository',
-        userId,
-        projectId,
-        folderPath,
-        count: files.length,
-      });
-
       return files;
     } catch (error) {
       logger.error('Error finding files in folder (recursive)', {
@@ -449,14 +415,6 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
       if (!folders.includes('/')) {
         folders.unshift('/');
       }
-
-      logger.debug('Listed folders', {
-        context: 'files-repository',
-        userId,
-        projectId,
-        count: folders.length,
-      });
-
       return folders;
     } catch (error) {
       logger.error('Error listing folders', {
@@ -477,14 +435,6 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
   async findByProjectId(userId: string, projectId: string): Promise<FileEntry[]> {
     try {
       const files = await this.findByFilter({ userId, projectId } as QueryFilter);
-
-      logger.debug('Found files by project ID', {
-        context: 'files-repository',
-        userId,
-        projectId,
-        count: files.length,
-      });
-
       return files;
     } catch (error) {
       logger.error('Error finding files by project ID', {
@@ -515,15 +465,6 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
         projectId,
         originalFilename: filename,
       } as QueryFilter);
-
-      logger.debug('Found files by filename in project', {
-        context: 'files-repository',
-        userId,
-        projectId,
-        filename,
-        count: files.length,
-      });
-
       return files;
     } catch (error) {
       logger.error('Error finding files by filename in project', {
@@ -547,15 +488,7 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
       const file = await this.findOneByFilter({ storageKey } as QueryFilter);
 
       if (file) {
-        logger.debug('Found file by storage key', {
-          context: 'files-repository',
-          storageKey,
-        });
       } else {
-        logger.debug('File not found by storage key', {
-          context: 'files-repository',
-          storageKey,
-        });
       }
 
       return file;
@@ -577,13 +510,6 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
   async findByMountPointId(mountPointId: string): Promise<FileEntry[]> {
     try {
       const files = await this.findByFilter({ mountPointId } as QueryFilter);
-
-      logger.debug('Found files by mount point', {
-        context: 'files-repository',
-        mountPointId,
-        count: files.length,
-      });
-
       return files;
     } catch (error) {
       logger.error('Error finding files by mount point', {
@@ -605,13 +531,6 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
         userId,
         $or: [{ projectId: null }, { projectId: { $exists: false } }],
       } as QueryFilter);
-
-      logger.debug('Found general files', {
-        context: 'files-repository',
-        userId,
-        count: files.length,
-      });
-
       return files;
     } catch (error) {
       logger.error('Error finding general files', {

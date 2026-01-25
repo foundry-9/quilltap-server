@@ -96,17 +96,7 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
 
     if (query.length < 2) {
       return badRequest('Search query must be at least 2 characters');
-    }
-
-    logger.debug('[UI Search v1] Search', {
-      query,
-      userId: context.user.id,
-      limit,
-      offset,
-      types: requestedTypes,
-    });
-
-    const { repos, user } = context;
+    }const { repos, user } = context;
     const allResults: SearchResult[] = [];
     const typesFound = new Set<SearchType>();
     const lowerQuery = query.toLowerCase();

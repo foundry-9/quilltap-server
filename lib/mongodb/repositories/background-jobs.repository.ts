@@ -33,25 +33,21 @@ export interface CreateJobOptions {
 export class BackgroundJobsRepository extends MongoBaseRepository<BackgroundJob> {
   constructor() {
     super('background_jobs', BackgroundJobSchema);
-    logger.debug('BackgroundJobsRepository initialized');
   }
 
   /**
    * Find a job by ID
    */
   async findById(id: string): Promise<BackgroundJob | null> {
-    logger.debug('Finding background job by ID', { jobId: id });
     try {
       const collection = await this.getCollection();
       const result = await collection.findOne({ id });
 
       if (!result) {
-        logger.debug('Background job not found', { jobId: id });
         return null;
       }
 
       const validated = this.validate(result);
-      logger.debug('Background job found and validated', { jobId: id });
       return validated;
     } catch (error) {
       logger.error('Error finding background job by ID', {
@@ -66,7 +62,6 @@ export class BackgroundJobsRepository extends MongoBaseRepository<BackgroundJob>
    * Find all jobs (use with caution - primarily for admin/debugging)
    */
   async findAll(): Promise<BackgroundJob[]> {
-    logger.debug('Finding all background jobs');
     try {
       const collection = await this.getCollection();
       const results = await collection.find({}).limit(1000).toArray();
@@ -80,8 +75,6 @@ export class BackgroundJobsRepository extends MongoBaseRepository<BackgroundJob>
           return null;
         })
         .filter((job): job is BackgroundJob => job !== null);
-
-      logger.debug('Retrieved background jobs', { count: jobs.length });
       return jobs;
     } catch (error) {
       logger.error('Error finding all background jobs', {
@@ -95,7 +88,6 @@ export class BackgroundJobsRepository extends MongoBaseRepository<BackgroundJob>
    * Find jobs by user ID with optional status filter
    */
   async findByUserId(userId: string, status?: BackgroundJobStatus): Promise<BackgroundJob[]> {
-    logger.debug('Finding background jobs by user ID', { userId, status });
     try {
       const collection = await this.getCollection();
       const query: Record<string, unknown> = { userId };
@@ -114,8 +106,6 @@ export class BackgroundJobsRepository extends MongoBaseRepository<BackgroundJob>
           return null;
         })
         .filter((job): job is BackgroundJob => job !== null);
-
-      logger.debug('Found background jobs for user', { userId, count: jobs.length });
       return jobs;
     } catch (error) {
       logger.error('Error finding background jobs by user ID', {
@@ -130,7 +120,6 @@ export class BackgroundJobsRepository extends MongoBaseRepository<BackgroundJob>
    * Find pending jobs for a specific chat
    */
   async findPendingForChat(chatId: string): Promise<BackgroundJob[]> {
-    logger.debug('Finding pending jobs for chat', { chatId });
     try {
       const collection = await this.getCollection();
       const results = await collection
@@ -150,8 +139,6 @@ export class BackgroundJobsRepository extends MongoBaseRepository<BackgroundJob>
           return null;
         })
         .filter((job): job is BackgroundJob => job !== null);
-
-      logger.debug('Found pending jobs for chat', { chatId, count: jobs.length });
       return jobs;
     } catch (error) {
       logger.error('Error finding pending jobs for chat', {
@@ -167,7 +154,6 @@ export class BackgroundJobsRepository extends MongoBaseRepository<BackgroundJob>
    * Uses findOneAndUpdate for concurrent-safe job claiming
    */
   async claimNextJob(): Promise<BackgroundJob | null> {
-    logger.debug('Attempting to claim next job');
     try {
       const collection = await this.getCollection();
       const now = this.getCurrentTimestamp();
@@ -193,7 +179,6 @@ export class BackgroundJobsRepository extends MongoBaseRepository<BackgroundJob>
       );
 
       if (!result) {
-        logger.debug('No jobs available to claim');
         return null;
       }
 
@@ -214,7 +199,6 @@ export class BackgroundJobsRepository extends MongoBaseRepository<BackgroundJob>
   async create(
     data: Omit<BackgroundJob, 'id' | 'createdAt' | 'updatedAt'>
   ): Promise<BackgroundJob> {
-    logger.debug('Creating background job', { type: data.type, userId: data.userId });
     try {
       const id = this.generateId();
       const now = this.getCurrentTimestamp();
@@ -248,7 +232,6 @@ export class BackgroundJobsRepository extends MongoBaseRepository<BackgroundJob>
   async createBatch(
     jobs: Array<Omit<BackgroundJob, 'id' | 'createdAt' | 'updatedAt'>>
   ): Promise<string[]> {
-    logger.debug('Creating batch of background jobs', { count: jobs.length });
     try {
       if (jobs.length === 0) {
         return [];
@@ -290,7 +273,6 @@ export class BackgroundJobsRepository extends MongoBaseRepository<BackgroundJob>
    * Update a job
    */
   async update(id: string, data: Partial<BackgroundJob>): Promise<BackgroundJob | null> {
-    logger.debug('Updating background job', { jobId: id });
     try {
       const existing = await this.findById(id);
       if (!existing) {
@@ -310,8 +292,6 @@ export class BackgroundJobsRepository extends MongoBaseRepository<BackgroundJob>
       const validated = this.validate(updated);
       const collection = await this.getCollection();
       await collection.updateOne({ id }, { $set: validated as any });
-
-      logger.debug('Background job updated', { jobId: id });
       return validated;
     } catch (error) {
       logger.error('Error updating background job', {
@@ -326,7 +306,6 @@ export class BackgroundJobsRepository extends MongoBaseRepository<BackgroundJob>
    * Mark a job as completed
    */
   async markCompleted(id: string, result?: Record<string, unknown>): Promise<BackgroundJob | null> {
-    logger.debug('Marking job as completed', { jobId: id });
     try {
       const collection = await this.getCollection();
       const now = this.getCurrentTimestamp();
@@ -368,7 +347,6 @@ export class BackgroundJobsRepository extends MongoBaseRepository<BackgroundJob>
    * Mark a job as failed with retry scheduling
    */
   async markFailed(id: string, errorMessage: string): Promise<BackgroundJob | null> {
-    logger.debug('Marking job as failed', { jobId: id, error: errorMessage });
     try {
       const collection = await this.getCollection();
       const now = this.getCurrentTimestamp();
@@ -438,7 +416,6 @@ export class BackgroundJobsRepository extends MongoBaseRepository<BackgroundJob>
    * Delete a job
    */
   async delete(id: string): Promise<boolean> {
-    logger.debug('Deleting background job', { jobId: id });
     try {
       const collection = await this.getCollection();
       const result = await collection.deleteOne({ id });
@@ -447,8 +424,6 @@ export class BackgroundJobsRepository extends MongoBaseRepository<BackgroundJob>
         logger.warn('Background job not found for deletion', { jobId: id });
         return false;
       }
-
-      logger.debug('Background job deleted', { jobId: id });
       return true;
     } catch (error) {
       logger.error('Error deleting background job', {
@@ -463,7 +438,6 @@ export class BackgroundJobsRepository extends MongoBaseRepository<BackgroundJob>
    * Get queue statistics
    */
   async getStats(userId?: string): Promise<QueueStats> {
-    logger.debug('Getting queue statistics', { userId });
     try {
       const collection = await this.getCollection();
       const matchStage = userId ? { $match: { userId } } : { $match: {} };
@@ -513,8 +487,6 @@ export class BackgroundJobsRepository extends MongoBaseRepository<BackgroundJob>
             break;
         }
       }
-
-      logger.debug('Queue statistics retrieved', { userId, stats });
       return stats;
     } catch (error) {
       logger.error('Error getting queue statistics', {
@@ -529,7 +501,6 @@ export class BackgroundJobsRepository extends MongoBaseRepository<BackgroundJob>
    * Cleanup old completed jobs
    */
   async cleanupOldJobs(olderThan: Date): Promise<number> {
-    logger.debug('Cleaning up old completed jobs', { olderThan: olderThan.toISOString() });
     try {
       const collection = await this.getCollection();
       const result = await collection.deleteMany({
@@ -551,7 +522,6 @@ export class BackgroundJobsRepository extends MongoBaseRepository<BackgroundJob>
    * Cancel a pending job
    */
   async cancel(id: string): Promise<boolean> {
-    logger.debug('Cancelling background job', { jobId: id });
     try {
       const collection = await this.getCollection();
       const result = await collection.updateOne(
@@ -585,7 +555,6 @@ export class BackgroundJobsRepository extends MongoBaseRepository<BackgroundJob>
    * Pause a pending or failed job
    */
   async pause(id: string): Promise<BackgroundJob | null> {
-    logger.debug('Pausing background job', { jobId: id });
     try {
       const collection = await this.getCollection();
       const now = this.getCurrentTimestamp();
@@ -622,7 +591,6 @@ export class BackgroundJobsRepository extends MongoBaseRepository<BackgroundJob>
    * Resume a paused job
    */
   async resume(id: string): Promise<BackgroundJob | null> {
-    logger.debug('Resuming background job', { jobId: id });
     try {
       const collection = await this.getCollection();
       const now = this.getCurrentTimestamp();
@@ -661,7 +629,6 @@ export class BackgroundJobsRepository extends MongoBaseRepository<BackgroundJob>
    * Jobs that have been processing for longer than timeout are reset to FAILED
    */
   async resetStuckJobs(timeoutMinutes: number = 10): Promise<number> {
-    logger.debug('Resetting stuck jobs', { timeoutMinutes });
     try {
       const collection = await this.getCollection();
       const cutoff = new Date(Date.now() - timeoutMinutes * 60 * 1000).toISOString();

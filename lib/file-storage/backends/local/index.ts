@@ -84,10 +84,6 @@ export class LocalFileStorageBackend implements FileStorageBackend {
     }
 
     this.basePath = normalize(resolvedPath);
-    logger.debug('Initialized local file storage backend', {
-      basePath: this.basePath,
-      originalBasePath: config.basePath,
-    });
   }
 
   // ========================================================================
@@ -150,12 +146,6 @@ export class LocalFileStorageBackend implements FileStorageBackend {
         `Invalid file path: would escape base directory. Key: ${key}`
       );
     }
-
-    logger.debug('Built safe path', {
-      key,
-      fullPath,
-    });
-
     return fullPath;
   }
 
@@ -191,30 +181,13 @@ export class LocalFileStorageBackend implements FileStorageBackend {
     try {
       // First, ensure the directory exists
       await mkdir(this.basePath, { recursive: true });
-      logger.debug('Base directory exists or was created', {
-        basePath: this.basePath,
-      });
-
       // Try to create and delete a test file
       const testFilePath = join(this.basePath, '.connection-test-' + Date.now());
       const testContent = 'connection test';
 
       await writeFile(testFilePath, testContent);
-      logger.debug('Successfully wrote test file', {
-        testFilePath,
-      });
-
       await unlink(testFilePath);
-      logger.debug('Successfully deleted test file', {
-        testFilePath,
-      });
-
       const latencyMs = Date.now() - startTime;
-
-      logger.debug('Connection test passed', {
-        latencyMs,
-      });
-
       return {
         success: true,
         message: `Local filesystem backend is accessible at ${this.basePath}`,
@@ -265,9 +238,6 @@ export class LocalFileStorageBackend implements FileStorageBackend {
       const directory = filePath.substring(0, filePath.lastIndexOf('/'));
       if (directory) {
         await mkdir(directory, { recursive: true });
-        logger.debug('Created or verified parent directory', {
-          directory,
-        });
       }
 
       // Convert Readable to Buffer if necessary
@@ -285,11 +255,6 @@ export class LocalFileStorageBackend implements FileStorageBackend {
 
       // Write file
       await writeFile(filePath, fileContent as any);
-      logger.debug('Uploaded file', {
-        key,
-        size: fileContent.length,
-      });
-
       // Write sidecar metadata file
       const metadataPath = this.getMetadataPath(filePath);
       const sidecarMetadata: SidecarMetadata = {
@@ -299,10 +264,6 @@ export class LocalFileStorageBackend implements FileStorageBackend {
       };
 
       await writeFile(metadataPath, JSON.stringify(sidecarMetadata, null, 2));
-      logger.debug('Wrote sidecar metadata', {
-        key,
-        metadataPath,
-      });
     } catch (error) {
       const errorMsg =
         error instanceof Error ? error.message : 'Unknown upload error';
@@ -330,10 +291,6 @@ export class LocalFileStorageBackend implements FileStorageBackend {
 
     try {
       const content = await readFile(filePath);
-      logger.debug('Downloaded file', {
-        key,
-        size: content.length,
-      });
       return content;
     } catch (error) {
       const errorMsg =
@@ -365,18 +322,12 @@ export class LocalFileStorageBackend implements FileStorageBackend {
       // Delete the file
       try {
         await unlink(filePath);
-        logger.debug('Deleted file', {
-          key,
-        });
       } catch (error) {
         // File doesn't exist, which is fine for idempotent delete
         if (
           error instanceof Error &&
           (error as NodeJS.ErrnoException).code === 'ENOENT'
         ) {
-          logger.debug('File does not exist (idempotent delete)', {
-            key,
-          });
         } else {
           throw error;
         }
@@ -385,18 +336,12 @@ export class LocalFileStorageBackend implements FileStorageBackend {
       // Delete the sidecar metadata file
       try {
         await unlink(metadataPath);
-        logger.debug('Deleted sidecar metadata', {
-          key,
-        });
       } catch (error) {
         // Metadata doesn't exist, which is fine
         if (
           error instanceof Error &&
           (error as NodeJS.ErrnoException).code === 'ENOENT'
         ) {
-          logger.debug('Sidecar metadata does not exist', {
-            key,
-          });
         } else {
           throw error;
         }
@@ -426,15 +371,9 @@ export class LocalFileStorageBackend implements FileStorageBackend {
 
     try {
       await access(filePath);
-      logger.debug('File exists', {
-        key,
-      });
       return true;
     } catch (error) {
       if (error instanceof Error && (error as NodeJS.ErrnoException).code === 'ENOENT') {
-        logger.debug('File does not exist', {
-          key,
-        });
         return false;
       }
 
@@ -463,10 +402,6 @@ export class LocalFileStorageBackend implements FileStorageBackend {
   getProxyUrl(key: string): string {
     const encodedKey = encodeURIComponent(key);
     const proxyUrl = `/api/v1/files/proxy/${encodedKey}`;
-    logger.debug('Generated proxy URL', {
-      key,
-      proxyUrl,
-    });
     return proxyUrl;
   }
 
@@ -494,25 +429,13 @@ export class LocalFileStorageBackend implements FileStorageBackend {
       const directory = destinationPath.substring(0, destinationPath.lastIndexOf('/'));
       if (directory) {
         await mkdir(directory, { recursive: true });
-        logger.debug('Created or verified destination directory', {
-          directory,
-        });
       }
 
       // Copy the file
       await copyFile(sourcePath, destinationPath);
-      logger.debug('Copied file', {
-        sourceKey,
-        destinationKey,
-      });
-
       // Copy the sidecar metadata file
       try {
         await copyFile(sourceMetadataPath, destinationMetadataPath);
-        logger.debug('Copied sidecar metadata', {
-          sourceKey,
-          destinationKey,
-        });
       } catch (error) {
         // Metadata doesn't exist, which is fine
         if (
@@ -521,9 +444,6 @@ export class LocalFileStorageBackend implements FileStorageBackend {
         ) {
           throw error;
         }
-        logger.debug('Source sidecar metadata does not exist', {
-          sourceKey,
-        });
       }
     } catch (error) {
       const errorMsg =
@@ -566,9 +486,6 @@ export class LocalFileStorageBackend implements FileStorageBackend {
         contentType = sidecarData.contentType;
       } catch (error) {
         // Sidecar doesn't exist, use default content type
-        logger.debug('Sidecar metadata not found, using defaults', {
-          key,
-        });
       }
 
       const metadata: FileMetadata = {
@@ -576,18 +493,9 @@ export class LocalFileStorageBackend implements FileStorageBackend {
         contentType,
         lastModified: stats.mtime,
       };
-
-      logger.debug('Retrieved file metadata', {
-        key,
-        ...metadata,
-      });
-
       return metadata;
     } catch (error) {
       if (error instanceof Error && (error as NodeJS.ErrnoException).code === 'ENOENT') {
-        logger.debug('File not found when retrieving metadata', {
-          key,
-        });
         return null;
       }
 
@@ -657,10 +565,6 @@ export class LocalFileStorageBackend implements FileStorageBackend {
             error instanceof Error &&
             (error as NodeJS.ErrnoException).code === 'ENOENT'
           ) {
-            logger.debug('Prefix directory does not exist', {
-              prefix,
-              dirPath,
-            });
             return;
           }
           throw error;
@@ -668,13 +572,6 @@ export class LocalFileStorageBackend implements FileStorageBackend {
       };
 
       await listDir(prefixPath, prefix.replace(/\/$/, ''));
-
-      logger.debug('Listed files with prefix', {
-        prefix,
-        count: results.length,
-        maxKeys,
-      });
-
       return results;
     } catch (error) {
       const errorMsg =
@@ -707,10 +604,6 @@ export class LocalFileStorageBackend implements FileStorageBackend {
 
     try {
       await mkdir(fullPath, { recursive: true });
-      logger.debug('Created folder', {
-        folderPath,
-        fullPath,
-      });
     } catch (error) {
       const errorMsg =
         error instanceof Error ? error.message : 'Unknown folder creation error';
@@ -738,19 +631,12 @@ export class LocalFileStorageBackend implements FileStorageBackend {
 
     try {
       await rmdir(fullPath);
-      logger.debug('Deleted folder', {
-        folderPath,
-        fullPath,
-      });
     } catch (error) {
       // Directory doesn't exist, which is fine for idempotent delete
       if (
         error instanceof Error &&
         (error as NodeJS.ErrnoException).code === 'ENOENT'
       ) {
-        logger.debug('Folder does not exist (idempotent delete)', {
-          folderPath,
-        });
         return;
       }
 
@@ -790,16 +676,9 @@ export class LocalFileStorageBackend implements FileStorageBackend {
     try {
       const stats = await stat(fullPath);
       const exists = stats.isDirectory();
-      logger.debug('Folder exists check', {
-        folderPath,
-        exists,
-      });
       return exists;
     } catch (error) {
       if (error instanceof Error && (error as NodeJS.ErrnoException).code === 'ENOENT') {
-        logger.debug('Folder does not exist', {
-          folderPath,
-        });
         return false;
       }
 

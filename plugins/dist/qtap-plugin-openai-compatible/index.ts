@@ -125,10 +125,6 @@ export const plugin: LLMProviderPlugin = {
     }
 
     const url = baseUrl || 'http://localhost:8080/v1';
-    logger.debug('Creating OpenAI-compatible provider instance', {
-      context: 'plugin.createProvider',
-      baseUrl: url,
-    });
     return new OpenAICompatibleProvider(url);
   },
 
@@ -137,18 +133,10 @@ export const plugin: LLMProviderPlugin = {
    * Requires a valid base URL and optional API key
    */
   getAvailableModels: async (apiKey: string, baseUrl?: string) => {
-    logger.debug('Fetching available OpenAI-compatible models', {
-      context: 'plugin.getAvailableModels',
-      baseUrl,
-    });
     try {
       const url = baseUrl || 'http://localhost:8080/v1';
       const provider = new OpenAICompatibleProvider(url);
       const models = await provider.getAvailableModels(apiKey);
-      logger.debug('Successfully fetched OpenAI-compatible models', {
-        context: 'plugin.getAvailableModels',
-        count: models.length,
-      });
       return models;
     } catch (error) {
       logger.error(
@@ -164,18 +152,10 @@ export const plugin: LLMProviderPlugin = {
    * Validate an OpenAI-compatible API connection
    */
   validateApiKey: async (apiKey: string, baseUrl?: string) => {
-    logger.debug('Validating OpenAI-compatible API connection', {
-      context: 'plugin.validateApiKey',
-      baseUrl,
-    });
     try {
       const url = baseUrl || 'http://localhost:8080/v1';
       const provider = new OpenAICompatibleProvider(url);
       const isValid = await provider.validateApiKey(apiKey);
-      logger.debug('OpenAI-compatible API validation result', {
-        context: 'plugin.validateApiKey',
-        isValid,
-      });
       return isValid;
     } catch (error) {
       logger.error(
@@ -208,10 +188,6 @@ export const plugin: LLMProviderPlugin = {
    * Render the OpenAI-compatible icon
    */
   renderIcon: (props) => {
-    logger.debug('Rendering OpenAI-compatible icon', {
-      context: 'plugin.renderIcon',
-      className: props.className,
-    });
     return OpenAICompatibleIcon(props);
   },
 
@@ -225,11 +201,6 @@ export const plugin: LLMProviderPlugin = {
   formatTools: (
     tools: (OpenAIToolDefinition | Record<string, unknown>)[],
   ): OpenAIToolDefinition[] => {
-    logger.debug('Formatting tools for OpenAI-compatible provider', {
-      context: 'plugin.formatTools',
-      toolCount: tools.length,
-    });
-
     try {
       const formattedTools: OpenAIToolDefinition[] = [];
 
@@ -245,12 +216,6 @@ export const plugin: LLMProviderPlugin = {
         // Tools already in OpenAI format, pass through
         formattedTools.push(tool as OpenAIToolDefinition);
       }
-
-      logger.debug('Successfully formatted tools', {
-        context: 'plugin.formatTools',
-        count: formattedTools.length,
-      });
-
       return formattedTools;
     } catch (error) {
       logger.error(
@@ -270,18 +235,8 @@ export const plugin: LLMProviderPlugin = {
    * @returns Array of tool call requests
    */
   parseToolCalls: (response: any): ToolCallRequest[] => {
-    logger.debug('Parsing tool calls from OpenAI-compatible response', {
-      context: 'plugin.parseToolCalls',
-    });
-
     try {
       const toolCalls = parseOpenAIToolCalls(response);
-
-      logger.debug('Successfully parsed tool calls', {
-        context: 'plugin.parseToolCalls',
-        count: toolCalls.length,
-      });
-
       return toolCalls;
     } catch (error) {
       logger.error(

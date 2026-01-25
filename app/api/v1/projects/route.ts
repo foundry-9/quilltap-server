@@ -31,7 +31,6 @@ const createProjectSchema = z.object({
 
 export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
   try {
-    logger.debug('[Projects v1] GET list', { userId: user.id });
 
     let projects = await repos.projects.findAll();
 
@@ -60,7 +59,6 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
       })
     );
 
-    logger.debug('[Projects v1] Projects fetched', { count: enrichedProjects.length });
 
     return NextResponse.json({ projects: enrichedProjects });
   } catch (error) {
@@ -78,7 +76,6 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, 
     const body = await req.json();
     const validatedData = createProjectSchema.parse(body);
 
-    logger.debug('[Projects v1] Creating project', { userId: user.id, name: validatedData.name });
 
     const project = await repos.projects.create({
       userId: user.id,

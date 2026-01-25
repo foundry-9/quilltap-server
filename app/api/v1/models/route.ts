@@ -30,16 +30,7 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
     const { searchParams } = new URL(req.url);
     const providerFilter = searchParams.get('provider');
     const hasVisionFilter = searchParams.get('hasVision');
-    const hasStreamingFilter = searchParams.get('hasStreaming');
-
-    logger.debug('[Models v1] GET list', {
-      userId: context.user.id,
-      provider: providerFilter,
-      hasVision: hasVisionFilter,
-      hasStreaming: hasStreamingFilter,
-    });
-
-    const { repos } = context;
+    const hasStreamingFilter = searchParams.get('hasStreaming');const { repos } = context;
 
     // Get cached models from the database
     let allModels = providerFilter
@@ -50,13 +41,11 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
     if (hasVisionFilter === 'true') {
       // Filter to models that support vision (if we have that metadata)
       // For now, this is a placeholder as vision support isn't tracked in the cache
-      logger.debug('[Models v1] Vision filter requested but not yet tracked in cache');
     }
 
     if (hasStreamingFilter === 'true') {
       // Filter to models that support streaming (if we have that metadata)
       // For now, this is a placeholder as streaming support isn't tracked in the cache
-      logger.debug('[Models v1] Streaming filter requested but not yet tracked in cache');
     }
 
     logger.info('[Models v1] Listed cached models', {
@@ -102,16 +91,7 @@ const getModelsSchema = z.object({
 export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
   try {
     const body = await req.json();
-    const { provider, apiKeyId, baseUrl } = getModelsSchema.parse(body);
-
-    logger.debug('[Models v1] POST fetch models', {
-      userId: user.id,
-      provider,
-      hasApiKeyId: !!apiKeyId,
-      hasBaseUrl: !!baseUrl,
-    });
-
-    // Get API key if provided (security: verify ownership)
+    const { provider, apiKeyId, baseUrl } = getModelsSchema.parse(body);// Get API key if provided (security: verify ownership)
     let decryptedKey = '';
     if (apiKeyId) {
       const apiKey = await repos.connections.findApiKeyByIdAndUserId(apiKeyId, user.id);
@@ -139,22 +119,8 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
     }
 
     // Create LLM provider instance
-    const llmProvider = await createLLMProvider(provider, baseUrl);
-
-    logger.debug('[Models v1] Fetching models from provider', {
-      provider,
-      hasBaseUrl: !!baseUrl,
-    });
-
-    // Get available models
-    const models = await llmProvider.getAvailableModels(decryptedKey);
-
-    logger.debug('[Models v1] Models fetched successfully', {
-      provider,
-      modelCount: models.length,
-    });
-
-    // Get model metadata if supported
+    const llmProvider = await createLLMProvider(provider, baseUrl);// Get available models
+    const models = await llmProvider.getAvailableModels(decryptedKey);// Get model metadata if supported
     const modelMetadata = llmProvider.getModelsWithMetadata
       ? await llmProvider.getModelsWithMetadata(decryptedKey)
       : [];
@@ -194,12 +160,7 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
         })),
         'chat',
         baseUrl
-      );
-      logger.debug('[Models v1] Cached models in database', {
-        provider,
-        count: models.length,
-      });
-    } catch (cacheError) {
+      );} catch (cacheError) {
       logger.warn('[Models v1] Failed to cache models', {
         provider,
         error: cacheError instanceof Error ? cacheError.message : String(cacheError),

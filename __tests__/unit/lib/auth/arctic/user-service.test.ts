@@ -581,25 +581,6 @@ describe('Arctic OAuth User Service', () => {
       expect(mockAccountsCollection.insertOne).toHaveBeenCalled();
     });
 
-    it('logs existing user login', async () => {
-      const existingUser = createMockUser();
-      const userInfo = createMockUserInfo();
-      const tokens = createMockTokens();
-      const { logger } = require('@/lib/logger');
-
-      (mockAccountsCollection.findOne as jest.Mock).mockResolvedValue(createMockAccount());
-      (mockUsersCollection.findOne as jest.Mock).mockResolvedValue(existingUser);
-      (mockUsersCollection.findOneAndUpdate as jest.Mock).mockResolvedValue(existingUser);
-      (mockAccountsCollection.updateOne as jest.Mock).mockResolvedValue({ modifiedCount: 1 });
-
-      await createOrFindOAuthUser('google', userInfo, tokens);
-
-      expect(logger.debug).toHaveBeenCalledWith(
-        'OAuth login - returning existing user',
-        expect.objectContaining({ provider: 'google' })
-      );
-    });
-
     it('logs new user creation', async () => {
       const userInfo = createMockUserInfo();
       const tokens = createMockTokens();

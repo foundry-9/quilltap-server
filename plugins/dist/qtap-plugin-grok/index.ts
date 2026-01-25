@@ -120,7 +120,6 @@ export const plugin: LLMProviderPlugin = {
    * Factory method to create a Grok LLM provider instance
    */
   createProvider: (baseUrl?: string) => {
-    logger.debug('Creating Grok provider instance', { context: 'plugin.createProvider', baseUrl });
     return new GrokProvider();
   },
 
@@ -128,7 +127,6 @@ export const plugin: LLMProviderPlugin = {
    * Factory method to create a Grok image generation provider instance
    */
   createImageProvider: (baseUrl?: string) => {
-    logger.debug('Creating Grok image provider instance', { context: 'plugin.createImageProvider', baseUrl });
     return new GrokImageProvider();
   },
 
@@ -137,11 +135,9 @@ export const plugin: LLMProviderPlugin = {
    * Requires a valid API key
    */
   getAvailableModels: async (apiKey: string, baseUrl?: string) => {
-    logger.debug('Fetching available Grok models', { context: 'plugin.getAvailableModels' });
     try {
       const provider = new GrokProvider();
       const models = await provider.getAvailableModels(apiKey);
-      logger.debug('Successfully fetched Grok models', { context: 'plugin.getAvailableModels', count: models.length });
       return models;
     } catch (error) {
       logger.error('Failed to fetch Grok models', { context: 'plugin.getAvailableModels' }, error instanceof Error ? error : undefined);
@@ -153,11 +149,9 @@ export const plugin: LLMProviderPlugin = {
    * Validate a Grok API key
    */
   validateApiKey: async (apiKey: string, baseUrl?: string) => {
-    logger.debug('Validating Grok API key', { context: 'plugin.validateApiKey' });
     try {
       const provider = new GrokProvider();
       const isValid = await provider.validateApiKey(apiKey);
-      logger.debug('Grok API key validation result', { context: 'plugin.validateApiKey', isValid });
       return isValid;
     } catch (error) {
       logger.error('Error validating Grok API key', { context: 'plugin.validateApiKey' }, error instanceof Error ? error : undefined);
@@ -202,7 +196,6 @@ export const plugin: LLMProviderPlugin = {
    * Render the Grok icon
    */
   renderIcon: (props) => {
-    logger.debug('Rendering Grok icon', { context: 'plugin.renderIcon', className: props.className });
     return GrokIcon(props);
   },
 
@@ -216,11 +209,6 @@ export const plugin: LLMProviderPlugin = {
   formatTools: (
     tools: (OpenAIToolDefinition | Record<string, unknown>)[],
   ): OpenAIToolDefinition[] => {
-    logger.debug('Formatting tools for Grok provider', {
-      context: 'plugin.formatTools',
-      toolCount: tools.length,
-    });
-
     try {
       const formattedTools: OpenAIToolDefinition[] = [];
 
@@ -236,12 +224,6 @@ export const plugin: LLMProviderPlugin = {
         // Tools already in OpenAI format, pass through
         formattedTools.push(tool as OpenAIToolDefinition);
       }
-
-      logger.debug('Successfully formatted tools', {
-        context: 'plugin.formatTools',
-        count: formattedTools.length,
-      });
-
       return formattedTools;
     } catch (error) {
       logger.error(
@@ -261,18 +243,8 @@ export const plugin: LLMProviderPlugin = {
    * @returns Array of tool call requests
    */
   parseToolCalls: (response: any): ToolCallRequest[] => {
-    logger.debug('Parsing tool calls from Grok response', {
-      context: 'plugin.parseToolCalls',
-    });
-
     try {
       const toolCalls = parseOpenAIToolCalls(response);
-
-      logger.debug('Successfully parsed tool calls', {
-        context: 'plugin.parseToolCalls',
-        count: toolCalls.length,
-      });
-
       return toolCalls;
     } catch (error) {
       logger.error(
@@ -291,9 +263,6 @@ export const plugin: LLMProviderPlugin = {
    * @returns Image provider constraints including prompt byte limit
    */
   getImageProviderConstraints: (): ImageProviderConstraints => {
-    logger.debug('Getting Grok image provider constraints', {
-      context: 'plugin.getImageProviderConstraints',
-    });
     return GROK_IMAGE_CONSTRAINTS;
   },
 };

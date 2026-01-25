@@ -73,28 +73,16 @@ export const fixMissingStorageKeysMigration: Migration = {
   async shouldRun(): Promise<boolean> {
     // Only run if MongoDB is enabled
     if (!isMongoDBBackend()) {
-      logger.debug('MongoDB not enabled, skipping fix-missing-storage-keys migration', {
-        context: 'migration.fix-missing-storage-keys',
-      });
       return false;
     }
 
     // Check if MongoDB is accessible
     if (!(await isMongoDBAccessible())) {
-      logger.debug('MongoDB not accessible, deferring fix-missing-storage-keys migration', {
-        context: 'migration.fix-missing-storage-keys',
-      });
       return false;
     }
 
     // Check if there are files to fix
     const count = await countFilesNeedingMigration();
-
-    logger.debug('Checked for files needing storage key fix', {
-      context: 'migration.fix-missing-storage-keys',
-      count,
-    });
-
     return count > 0;
   },
 
@@ -136,12 +124,6 @@ export const fixMissingStorageKeysMigration: Migration = {
           );
 
           filesUpdated++;
-
-          logger.debug('Fixed storage key for file', {
-            context: 'migration.fix-missing-storage-keys',
-            fileId: file.id,
-            s3Key: file.s3Key,
-          });
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);
           errors.push({

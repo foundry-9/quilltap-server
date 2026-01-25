@@ -28,16 +28,11 @@ export class UsersRepository extends AbstractBaseRepository<User> {
    * Returns the first user found, or null if no users exist
    */
   async getCurrentUser(): Promise<User | null> {
-    logger.debug('Getting current user');
-
     try {
       const users = await this.findAll();
       if (users.length === 0) {
-        logger.debug('No users found');
         return null;
       }
-
-      logger.debug('Current user retrieved', { userId: users[0].id });
       return users[0];
     } catch (error) {
       logger.error('Error getting current user', {
@@ -51,10 +46,6 @@ export class UsersRepository extends AbstractBaseRepository<User> {
    * Find a user by ID
    */
   async findById(id: string): Promise<User | null> {
-    logger.debug('Finding user by ID', {
-      userId: id,
-    });
-
     try {
       return await this._findById(id);
     } catch (error) {
@@ -70,24 +61,12 @@ export class UsersRepository extends AbstractBaseRepository<User> {
    * Find a user by email
    */
   async findByEmail(email: string): Promise<User | null> {
-    logger.debug('Finding user by email', {
-      email,
-    });
-
     try {
       const user = await this.findOneByFilter({ email } as QueryFilter);
 
       if (!user) {
-        logger.debug('User not found by email', {
-          email,
-        });
         return null;
       }
-
-      logger.debug('User found by email', {
-        email,
-      });
-
       return user;
     } catch (error) {
       logger.error('Error finding user by email', {
@@ -102,24 +81,12 @@ export class UsersRepository extends AbstractBaseRepository<User> {
    * Find a user by username
    */
   async findByUsername(username: string): Promise<User | null> {
-    logger.debug('Finding user by username', {
-      username,
-    });
-
     try {
       const user = await this.findOneByFilter({ username } as QueryFilter);
 
       if (!user) {
-        logger.debug('User not found by username', {
-          username,
-        });
         return null;
       }
-
-      logger.debug('User found by username', {
-        username,
-      });
-
       return user;
     } catch (error) {
       logger.error('Error finding user by username', {
@@ -134,15 +101,8 @@ export class UsersRepository extends AbstractBaseRepository<User> {
    * Find all users
    */
   async findAll(): Promise<User[]> {
-    logger.debug('Finding all users');
-
     try {
       const users = await this._findAll();
-
-      logger.debug('Retrieved all users', {
-        count: users.length,
-      });
-
       return users;
     } catch (error) {
       logger.error('Error finding all users', {
@@ -159,10 +119,6 @@ export class UsersRepository extends AbstractBaseRepository<User> {
     data: Omit<User, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions
   ): Promise<User> {
-    logger.debug('Creating new user', {
-      username: data.username,
-    });
-
     try {
       const user = await this._create(data, options);
 
@@ -185,10 +141,6 @@ export class UsersRepository extends AbstractBaseRepository<User> {
    * Update a user
    */
   async update(id: string, data: Partial<User>): Promise<User | null> {
-    logger.debug('Updating user', {
-      userId: id,
-    });
-
     try {
       // Remove id and createdAt to prevent accidental overwrites
       const updateData = { ...data };
@@ -221,10 +173,6 @@ export class UsersRepository extends AbstractBaseRepository<User> {
    * Delete a user
    */
   async delete(id: string): Promise<boolean> {
-    logger.debug('Deleting user', {
-      userId: id,
-    });
-
     try {
       const result = await this._delete(id);
 
@@ -257,10 +205,6 @@ export class UsersRepository extends AbstractBaseRepository<User> {
    * Returns a compound object with version, user, chatSettings, and timestamps
    */
   async getGeneralSettings(userId: string): Promise<GeneralSettings | null> {
-    logger.debug('Getting general settings for user', {
-      userId,
-    });
-
     try {
       // Get the chat settings repository from the database manager
       const db = await (await import('../manager')).getDatabaseAsync();
@@ -306,11 +250,6 @@ export class UsersRepository extends AbstractBaseRepository<User> {
         });
         return null;
       }
-
-      logger.debug('General settings retrieved for user', {
-        userId,
-      });
-
       return validationResult.data || null;
     } catch (error) {
       logger.error('Error getting general settings', {
@@ -329,10 +268,6 @@ export class UsersRepository extends AbstractBaseRepository<User> {
     userId: string,
     data: Partial<GeneralSettings>
   ): Promise<GeneralSettings | null> {
-    logger.debug('Updating general settings for user', {
-      userId,
-    });
-
     try {
       // Get the chat settings repository from the database manager
       const db = await (await import('../manager')).getDatabaseAsync();
@@ -340,9 +275,6 @@ export class UsersRepository extends AbstractBaseRepository<User> {
 
       // Update user if provided
       if (data.user) {
-        logger.debug('Updating user from general settings', {
-          userId,
-        });
         const updatedUser = await this.update(userId, data.user);
         if (!updatedUser) {
           logger.error('Failed to update user during general settings update', {
@@ -354,9 +286,6 @@ export class UsersRepository extends AbstractBaseRepository<User> {
 
       // Update chat settings if provided
       if (data.chatSettings) {
-        logger.debug('Updating chat settings from general settings', {
-          userId,
-        });
         const result = await chatSettingsCollection.updateMany(
           { userId } as QueryFilter,
           {

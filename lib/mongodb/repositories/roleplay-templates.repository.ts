@@ -101,9 +101,6 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
 
   constructor() {
     super('roleplay_templates', RoleplayTemplateSchema);
-    logger.debug('RoleplayTemplatesRepository initialized', {
-      collection: this.collectionName,
-    });
   }
 
   // ============================================================================
@@ -115,7 +112,6 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
    */
   private getPluginTemplates(): RoleplayTemplate[] {
     if (!roleplayTemplateRegistry.isInitialized()) {
-      logger.debug('Roleplay template registry not yet initialized, skipping plugin templates');
       return [];
     }
 
@@ -166,10 +162,6 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
 
   private async _doSeedBuiltInTemplates(): Promise<void> {
     try {
-      logger.debug('Checking for built-in roleplay templates to seed', {
-        collection: this.collectionName,
-      });
-
       const collection = await this.getCollection();
 
       for (const template of BUILT_IN_TEMPLATES) {
@@ -214,11 +206,6 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
             { _id: existing._id },
             { $set: updateData }
           );
-
-          logger.debug('Built-in roleplay template updated', {
-            templateId: existing.id,
-            name: template.name,
-          });
         }
       }
     } catch (error) {
@@ -239,18 +226,9 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
    */
   async findById(id: string): Promise<RoleplayTemplate | null> {
     try {
-      logger.debug('Finding roleplay template by ID', {
-        templateId: id,
-        collection: this.collectionName,
-      });
-
       // Check if this is a plugin template
       const pluginTemplate = this.getPluginTemplateById(id);
       if (pluginTemplate) {
-        logger.debug('Roleplay template found in plugin registry', {
-          templateId: id,
-          name: pluginTemplate.name,
-        });
         return pluginTemplate;
       }
 
@@ -261,12 +239,10 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
       const doc = await collection.findOne({ id });
 
       if (!doc) {
-        logger.debug('Roleplay template not found', { templateId: id });
         return null;
       }
 
       const validated = this.validate(doc);
-      logger.debug('Roleplay template found and validated', { templateId: id });
       return validated;
     } catch (error) {
       logger.error('Error finding roleplay template by ID', {
@@ -282,16 +258,11 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
    */
   async findAll(): Promise<RoleplayTemplate[]> {
     try {
-      logger.debug('Finding all roleplay templates', { collection: this.collectionName });
-
       // Ensure built-in templates are seeded
       await this.seedBuiltInTemplates();
 
       const collection = await this.getCollection();
       const docs = await collection.find({}).toArray();
-
-      logger.debug('Retrieved roleplay templates from database', { count: docs.length });
-
       const dbTemplates = docs
         .map((doc) => this.validateSafe(doc))
         .filter((result) => result.success)
@@ -301,12 +272,6 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
       const pluginTemplates = this.getPluginTemplates();
 
       const allTemplates = [...dbTemplates, ...pluginTemplates];
-
-      logger.debug('All roleplay templates combined', {
-        database: dbTemplates.length,
-        plugin: pluginTemplates.length,
-        total: allTemplates.length,
-      });
       return allTemplates;
     } catch (error) {
       logger.error('Error finding all roleplay templates', {
@@ -321,29 +286,12 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
    */
   async findByUserId(userId: string): Promise<RoleplayTemplate[]> {
     try {
-      logger.debug('Finding roleplay templates by user ID', {
-        userId,
-        collection: this.collectionName,
-      });
-
       const collection = await this.getCollection();
       const docs = await collection.find({ userId }).toArray();
-
-      logger.debug('Retrieved roleplay templates for user', {
-        userId,
-        count: docs.length,
-      });
-
       const validated = docs
         .map((doc) => this.validateSafe(doc))
         .filter((result) => result.success)
         .map((result) => result.data!);
-
-      logger.debug('User roleplay templates validated', {
-        userId,
-        total: docs.length,
-        validated: validated.length,
-      });
       return validated;
     } catch (error) {
       logger.error('Error finding roleplay templates by user ID', {
@@ -359,18 +307,11 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
    */
   async findBuiltIn(): Promise<RoleplayTemplate[]> {
     try {
-      logger.debug('Finding built-in roleplay templates', {
-        collection: this.collectionName,
-      });
-
       // Ensure built-in templates are seeded
       await this.seedBuiltInTemplates();
 
       const collection = await this.getCollection();
       const docs = await collection.find({ isBuiltIn: true }).toArray();
-
-      logger.debug('Retrieved built-in roleplay templates from database', { count: docs.length });
-
       const dbTemplates = docs
         .map((doc) => this.validateSafe(doc))
         .filter((result) => result.success)
@@ -380,13 +321,6 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
       const pluginTemplates = this.getPluginTemplates();
 
       const allBuiltIn = [...dbTemplates, ...pluginTemplates];
-
-      logger.debug('Built-in roleplay templates combined', {
-        database: dbTemplates.length,
-        plugin: pluginTemplates.length,
-        total: allBuiltIn.length,
-      });
-
       return allBuiltIn;
     } catch (error) {
       logger.error('Error finding built-in roleplay templates', {
@@ -401,11 +335,6 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
    */
   async findAllForUser(userId: string): Promise<RoleplayTemplate[]> {
     try {
-      logger.debug('Finding all roleplay templates for user', {
-        userId,
-        collection: this.collectionName,
-      });
-
       // Ensure built-in templates are seeded
       await this.seedBuiltInTemplates();
 
@@ -416,12 +345,6 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
           { userId },
         ],
       }).toArray();
-
-      logger.debug('Retrieved roleplay templates for user from database', {
-        userId,
-        count: docs.length,
-      });
-
       const dbTemplates = docs
         .map((doc) => this.validateSafe(doc))
         .filter((result) => result.success)
@@ -431,14 +354,6 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
       const pluginTemplates = this.getPluginTemplates();
 
       const allTemplates = [...dbTemplates, ...pluginTemplates];
-
-      logger.debug('User available roleplay templates combined', {
-        userId,
-        database: dbTemplates.length,
-        plugin: pluginTemplates.length,
-        total: allTemplates.length,
-      });
-
       return allTemplates;
     } catch (error) {
       logger.error('Error finding all roleplay templates for user', {
@@ -454,28 +369,14 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
    */
   async findByName(userId: string, name: string): Promise<RoleplayTemplate | null> {
     try {
-      logger.debug('Finding roleplay template by name for user', {
-        userId,
-        name,
-        collection: this.collectionName,
-      });
-
       const collection = await this.getCollection();
       const doc = await collection.findOne({ userId, name });
 
       if (!doc) {
-        logger.debug('Roleplay template not found by name for user', {
-          userId,
-          name,
-        });
         return null;
       }
 
       const validated = this.validate(doc);
-      logger.debug('Roleplay template found by name for user', {
-        userId,
-        name,
-      });
       return validated;
     } catch (error) {
       logger.error('Error finding roleplay template by name', {
@@ -497,13 +398,6 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
     options?: CreateOptions
   ): Promise<RoleplayTemplate> {
     try {
-      logger.debug('Creating new roleplay template', {
-        userId: data.userId,
-        name: data.name,
-        isBuiltIn: data.isBuiltIn,
-        collection: this.collectionName,
-      });
-
       const id = options?.id || this.generateId();
       const now = this.getCurrentTimestamp();
       const createdAt = options?.createdAt || now;
@@ -545,11 +439,6 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
    */
   async update(id: string, data: Partial<RoleplayTemplate>): Promise<RoleplayTemplate | null> {
     try {
-      logger.debug('Updating roleplay template', {
-        templateId: id,
-        collection: this.collectionName,
-      });
-
       const existing = await this.findById(id);
       if (!existing) {
         logger.warn('Roleplay template not found for update', { templateId: id });
@@ -603,11 +492,6 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
    */
   async delete(id: string): Promise<boolean> {
     try {
-      logger.debug('Deleting roleplay template', {
-        templateId: id,
-        collection: this.collectionName,
-      });
-
       const existing = await this.findById(id);
       if (!existing) {
         logger.warn('Roleplay template not found for deletion', { templateId: id });
@@ -648,12 +532,6 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
    */
   async addTag(templateId: string, tagId: string): Promise<RoleplayTemplate | null> {
     try {
-      logger.debug('Adding tag to roleplay template', {
-        templateId,
-        tagId,
-        collection: this.collectionName,
-      });
-
       const template = await this.findById(templateId);
       if (!template) {
         logger.warn('Roleplay template not found for tag addition', { templateId });
@@ -668,15 +546,8 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
 
       if (!template.tags.includes(tagId)) {
         template.tags.push(tagId);
-        logger.debug('Tag added to roleplay template tags array', {
-          templateId,
-          tagId,
-          totalTags: template.tags.length,
-        });
         return await this.update(templateId, { tags: template.tags });
       }
-
-      logger.debug('Tag already exists for roleplay template', { templateId, tagId });
       return template;
     } catch (error) {
       logger.error('Error adding tag to roleplay template', {
@@ -693,12 +564,6 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
    */
   async removeTag(templateId: string, tagId: string): Promise<RoleplayTemplate | null> {
     try {
-      logger.debug('Removing tag from roleplay template', {
-        templateId,
-        tagId,
-        collection: this.collectionName,
-      });
-
       const template = await this.findById(templateId);
       if (!template) {
         logger.warn('Roleplay template not found for tag removal', { templateId });
@@ -715,15 +580,8 @@ export class RoleplayTemplatesRepository extends MongoBaseRepository<RoleplayTem
       template.tags = template.tags.filter((id) => id !== tagId);
 
       if (template.tags.length < initialLength) {
-        logger.debug('Tag removed from roleplay template tags array', {
-          templateId,
-          tagId,
-          totalTags: template.tags.length,
-        });
         return await this.update(templateId, { tags: template.tags });
       }
-
-      logger.debug('Tag not found in roleplay template tags', { templateId, tagId });
       return template;
     } catch (error) {
       logger.error('Error removing tag from roleplay template', {

@@ -56,7 +56,6 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
   // Handle theme-preference action
   if (action === 'theme-preference') {
     try {
-      logger.debug('[User Profile v1] GET theme-preference', { userId: user.id });
 
       // Get user's chat settings
       let chatSettings = await repos.chatSettings.findByUserId(user.id);
@@ -80,15 +79,7 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
         activeThemeId: null,
         colorMode: 'system',
         showNavThemeSelector: false,
-      };
-
-      logger.debug('[User Profile v1] Theme preference retrieved', {
-        userId: user.id,
-        activeThemeId: themePreference.activeThemeId,
-        colorMode: themePreference.colorMode,
-      });
-
-      return successResponse({ data: themePreference });
+      };return successResponse({ data: themePreference });
     } catch (error) {
       logger.error('[User Profile v1] Error getting theme preference', {}, error instanceof Error ? error : undefined);
       return serverError('Failed to retrieve theme preference');
@@ -97,7 +88,6 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
 
   // Default: get profile
   try {
-    logger.debug('[User Profile v1] GET', { userId: user.id });
 
     // Get full user record from database
     const userRecord = await repos.users.findById(user.id);
@@ -107,13 +97,7 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
     }
 
     // Get 2FA status
-    const totpEnabled = userRecord.totp?.enabled ?? false;
-
-    logger.debug('[User Profile v1] Profile retrieved', {
-      userId: user.id,
-    });
-
-    return successResponse({
+    const totpEnabled = userRecord.totp?.enabled ?? false;return successResponse({
       profile: {
         id: userRecord.id,
         email: userRecord.email,
@@ -149,7 +133,6 @@ export const PUT = createAuthenticatedHandler(async (req, context) => {
     try {
       const body = await req.json();
 
-      logger.debug('[User Profile v1] PUT theme-preference', { userId: user.id, body });
 
       // Validate the incoming data
       const validated = themePreferenceUpdateSchema.parse(body);
@@ -224,7 +207,6 @@ export const PUT = createAuthenticatedHandler(async (req, context) => {
 
   // Default: update profile
   try {
-    logger.debug('[User Profile v1] PUT', { userId: user.id });
 
     const body = await req.json();
     const validatedData = updateProfileSchema.parse(body);
@@ -301,19 +283,12 @@ export const PATCH = createAuthenticatedHandler(async (req, context) => {
   }
 
   try {
-    logger.debug('[User Profile v1] PATCH set-avatar', { userId: user.id });
 
     const body = await req.json();
     const { imageId } = avatarSchema.parse(body);
 
     // If imageId is provided, verify it from repository
-    if (imageId) {
-      logger.debug('[User Profile v1] Validating file for avatar', {
-        fileId: imageId,
-        userId: user.id,
-      });
-
-      const fileEntry = await repos.files.findById(imageId);
+    if (imageId) {const fileEntry = await repos.files.findById(imageId);
 
       // Verify file exists
       if (!fileEntry) {
@@ -342,15 +317,7 @@ export const PATCH = createAuthenticatedHandler(async (req, context) => {
           category: fileEntry.category,
         });
         return badRequest(`Invalid file category. Expected IMAGE or AVATAR, got ${fileEntry.category}`);
-      }
-
-      logger.debug('[User Profile v1] File validation passed', {
-        fileId: imageId,
-        filename: fileEntry.originalFilename,
-        category: fileEntry.category,
-      });
-    } else {
-      logger.debug('[User Profile v1] Clearing avatar', { userId: user.id });
+      }} else {
     }
 
     // Update user with the image URL (file API path) or null

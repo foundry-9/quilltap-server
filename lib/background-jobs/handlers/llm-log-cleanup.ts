@@ -23,12 +23,6 @@ export interface LLMLogCleanupPayload {
  */
 export async function handleLLMLogCleanup(job: BackgroundJob): Promise<void> {
   const payload = job.payload as unknown as LLMLogCleanupPayload;
-
-  logger.debug('[LLMLogCleanup] Starting job', {
-    jobId: job.id,
-    userId: job.userId,
-  });
-
   const repos = getRepositories();
 
   try {
@@ -50,21 +44,12 @@ export async function handleLLMLogCleanup(job: BackgroundJob): Promise<void> {
 
     // Skip if retention is 0 (keep forever) or if cleanup is disabled
     if (retentionDays <= 0) {
-      logger.debug('[LLMLogCleanup] Skipping cleanup - retention is unlimited', {
-        jobId: job.id,
-        userId: job.userId,
-        retentionDays,
-      });
       return;
     }
 
     // Get chat settings to check if logging is enabled
     const chatSettings = await repos.chatSettings.findByUserId(job.userId);
     if (chatSettings && !chatSettings.llmLoggingSettings?.enabled) {
-      logger.debug('[LLMLogCleanup] Skipping cleanup - logging is disabled', {
-        jobId: job.id,
-        userId: job.userId,
-      });
       return;
     }
 

@@ -35,7 +35,6 @@ const createInstanceSchema = z.object({
 
 export const GET = createAuthenticatedHandler(async (req, context) => {
   try {
-    logger.debug('[Sync Instances v1] GET list', { userId: context.user.id });
 
     const { repos } = context;
     const instances = await repos.syncInstances?.findByUserId(

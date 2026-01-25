@@ -122,19 +122,9 @@ export class MigrationRunner {
 
     // Sort migrations by dependency
     const sortedMigrations = sortMigrationsByDependency(this.migrations);
-
-    logger.debug('Migrations sorted by dependency', {
-      context: 'migrations.runMigrations',
-      order: sortedMigrations.map(m => m.id),
-    });
-
     for (const migration of sortedMigrations) {
       // Check if already completed
       if (isMigrationCompleted(state, migration.id)) {
-        logger.debug('Migration already completed, skipping', {
-          context: 'migrations.runMigrations',
-          migrationId: migration.id,
-        });
         migrationsSkipped++;
         continue;
       }
@@ -143,10 +133,6 @@ export class MigrationRunner {
       try {
         const shouldRun = await migration.shouldRun();
         if (!shouldRun) {
-          logger.debug('Migration conditions not met, skipping', {
-            context: 'migrations.runMigrations',
-            migrationId: migration.id,
-          });
           migrationsSkipped++;
           continue;
         }

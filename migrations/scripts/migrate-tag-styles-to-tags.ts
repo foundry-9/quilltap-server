@@ -116,28 +116,16 @@ export const migrateTagStylesToTagsMigration: Migration = {
   async shouldRun(): Promise<boolean> {
     // Only run if MongoDB is enabled
     if (!isMongoDBBackend()) {
-      logger.debug('MongoDB not enabled, skipping tag styles migration', {
-        context: 'migration.migrate-tag-styles-to-tags',
-      });
       return false;
     }
 
     // Check if MongoDB is accessible
     if (!(await isMongoDBAccessible())) {
-      logger.debug('MongoDB not accessible, deferring tag styles migration', {
-        context: 'migration.migrate-tag-styles-to-tags',
-      });
       return false;
     }
 
     // Check if there are ChatSettings with tagStyles to migrate
     const settingsWithStyles = await getChatSettingsWithTagStyles();
-
-    logger.debug('Checked for chat settings with tag styles', {
-      context: 'migration.migrate-tag-styles-to-tags',
-      count: settingsWithStyles.length,
-    });
-
     // Run if there are styles to migrate
     return settingsWithStyles.length > 0;
   },
@@ -173,20 +161,11 @@ export const migrateTagStylesToTagsMigration: Migration = {
             const tag = await tagsCollection.findOne({ id: tagId, userId });
 
             if (!tag) {
-              logger.debug('Tag not found, skipping style migration', {
-                context: 'migration.migrate-tag-styles-to-tags',
-                tagId,
-                userId,
-              });
               continue;
             }
 
             // Only update if tag doesn't already have a visual style
             if (tag.visualStyle) {
-              logger.debug('Tag already has visual style, skipping', {
-                context: 'migration.migrate-tag-styles-to-tags',
-                tagId,
-              });
               continue;
             }
 
@@ -203,11 +182,6 @@ export const migrateTagStylesToTagsMigration: Migration = {
 
             if (result.modifiedCount > 0) {
               updatedTags++;
-              logger.debug('Updated tag with visual style', {
-                context: 'migration.migrate-tag-styles-to-tags',
-                tagId,
-                visualStyle,
-              });
             }
           } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
@@ -236,11 +210,6 @@ export const migrateTagStylesToTagsMigration: Migration = {
             }
           );
           processedSettings++;
-          logger.debug('Cleared tagStyles from ChatSettings', {
-            context: 'migration.migrate-tag-styles-to-tags',
-            chatSettingsId: settings.id,
-            userId,
-          });
         } catch (error) {
           logger.warn('Failed to clear tagStyles from ChatSettings', {
             context: 'migration.migrate-tag-styles-to-tags',

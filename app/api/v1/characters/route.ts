@@ -104,7 +104,6 @@ const wizardRequestSchema = z.object({
 
 export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
   try {
-    logger.debug('[Characters v1] GET list', { userId: user.id });
 
     let characters = await repos.characters.findByUserId(user.id);
 
@@ -122,13 +121,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
     const controlledByFilter = searchParams.get('controlledBy');
     if (controlledByFilter === 'user') {
       const beforeCount = characters.length;
-      characters = characters.filter((c) => c.controlledBy === 'user');
-      logger.debug('[Characters v1] Filtered by controlledBy=user', {
-        beforeCount,
-        afterCount: characters.length,
-        userId: user.id,
-      });
-    } else if (controlledByFilter === 'llm') {
+      characters = characters.filter((c) => c.controlledBy === 'user');} else if (controlledByFilter === 'llm') {
       characters = characters.filter((c) => c.controlledBy === 'llm' || c.controlledBy === undefined);
     }
 

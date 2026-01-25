@@ -82,15 +82,7 @@ async function searchNpm(searchText: string): Promise<any[]> {
 async function handleSearch(req: NextRequest, context: any) {
   try {
     const body = await req.json();
-    const validatedData = searchPluginsSchema.parse(body);
-
-    logger.debug('[Plugins v1] POST search', {
-      userId: context.user.id,
-      query: validatedData.query,
-      type: validatedData.type,
-    });
-
-    // Perform multiple searches to find both scoped and unscoped plugins
+    const validatedData = searchPluginsSchema.parse(body);// Perform multiple searches to find both scoped and unscoped plugins
     const query = validatedData.query.trim();
     const searchQueries = query
       ? [
@@ -130,20 +122,12 @@ async function handleSearch(req: NextRequest, context: any) {
         updated: obj.package.date || '',
         score: obj.score?.final || 0,
         links: obj.package.links,
-      }));
-
-    logger.debug('[Plugins v1] Search results returned', {
-      userId: context.user.id,
-      resultCount: plugins.length,
-    });
-
-    return NextResponse.json({
+      }));return NextResponse.json({
       results: plugins,
       count: plugins.length,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      logger.debug('[Plugins v1] Validation error on search', { errors: error.issues });
       return validationError(error);
     }
 
@@ -207,7 +191,6 @@ async function handleInstall(req: NextRequest, context: any) {
     );
   } catch (error) {
     if (error instanceof z.ZodError) {
-      logger.debug('[Plugins v1] Validation error on install', { errors: error.issues });
       return validationError(error);
     }
 
@@ -262,7 +245,6 @@ async function handleUninstall(req: NextRequest, context: any) {
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      logger.debug('[Plugins v1] Validation error on uninstall', { errors: error.issues });
       return validationError(error);
     }
 
@@ -281,13 +263,11 @@ async function handleUninstall(req: NextRequest, context: any) {
 
 export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
   try {
-    logger.debug('[Plugins v1] GET list', { userId: user.id });
 
     // Ensure plugin system is initialized before accessing registry
     // This handles cases where the API is called before startup initialization completes
     // or when hot-reloading resets module state in development
     if (!pluginRegistry.isInitialized()) {
-      logger.debug('[Plugins v1] Plugin registry not initialized, initializing now');
       await initializePlugins();
     }
 
@@ -323,12 +303,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
     // Apply filter
     let filteredPlugins = allPlugins;
     if (filter === 'installed') {
-      filteredPlugins = allPlugins.filter((p: any) => p.enabled);
-      logger.debug('[Plugins v1] Filtered to installed plugins', {
-        userId: user.id,
-        count: filteredPlugins.length,
-      });
-    }
+      filteredPlugins = allPlugins.filter((p: any) => p.enabled);}
 
     // Calculate stats including user plugins
     const totalPlugins = allPlugins.length;
@@ -364,7 +339,6 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, context)
   const { searchParams } = new URL(req.url);
   const action = searchParams.get('action');
 
-  logger.debug('[Plugins v1] POST request', { action, userId: context.user.id });
 
   switch (action) {
     case 'search':

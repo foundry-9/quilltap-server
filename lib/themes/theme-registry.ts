@@ -168,12 +168,6 @@ class ThemeRegistry {
 
     // Get enabled theme plugins
     const themePlugins = getEnabledPluginsByCapability('THEME');
-
-    logger.debug('Found theme plugins', {
-      count: themePlugins.length,
-      plugins: themePlugins.map(p => p.manifest.name),
-    });
-
     // Load each theme plugin
     for (const plugin of themePlugins) {
       try {
@@ -222,7 +216,6 @@ class ThemeRegistry {
     };
 
     this.state.themes.set('default', defaultTheme);
-    logger.debug('Registered default theme');
   }
 
   /**
@@ -247,9 +240,6 @@ class ThemeRegistry {
 
     // Check if this theme was already registered via module loading
     if (this.state.themes.has(themeId)) {
-      logger.debug('Theme already registered (via module), skipping file-based load', {
-        themeId,
-      });
       return;
     }
 
@@ -266,18 +256,8 @@ class ThemeRegistry {
     themePlugin: ThemePlugin
   ): boolean {
     const themeId = this.extractThemeId(plugin.manifest.name);
-
-    logger.debug('Registering theme from pre-loaded module', {
-      themeId,
-      plugin: plugin.manifest.name,
-    });
-
     // Check if module exports a theme plugin
     if (!themePlugin?.tokens) {
-      logger.debug('Module does not export valid theme tokens', {
-        themeId,
-        hasTokens: !!themePlugin?.tokens,
-      });
       return false;
     }
 
@@ -394,13 +374,6 @@ class ThemeRegistry {
     if (!themeConfig) {
       throw new Error('Plugin does not have themeConfig');
     }
-
-    logger.debug('Loading theme from files', {
-      themeId,
-      plugin: plugin.manifest.name,
-      tokensPath: themeConfig.tokensPath,
-    });
-
     // Load tokens file
     const tokensPath = path.join(plugin.pluginPath, themeConfig.tokensPath || 'tokens.json');
 
@@ -433,10 +406,6 @@ class ThemeRegistry {
       );
       if (baseTheme) {
         tokens = mergeThemeTokens(baseTheme.tokens, tokens);
-        logger.debug('Theme extended base theme', {
-          themeId,
-          baseTheme: themeConfig.extendsTheme,
-        });
       } else {
         logger.warn('Base theme not found for inheritance', {
           themeId,
@@ -453,11 +422,6 @@ class ThemeRegistry {
       const stylesPath = path.join(plugin.pluginPath, themeConfig.stylesPath);
       try {
         cssOverrides = await fs.readFile(stylesPath, 'utf-8');
-        logger.debug('Loaded theme CSS overrides', {
-          themeId,
-          path: stylesPath,
-          size: cssOverrides.length,
-        });
       } catch (error) {
         logger.warn('Failed to load theme CSS overrides', {
           themeId,
@@ -498,12 +462,6 @@ class ThemeRegistry {
             display: fontDef.display || 'swap',
             pluginName: plugin.manifest.name,
             src: fontDef.src,
-          });
-          logger.debug('Loaded theme font', {
-            themeId,
-            family: fontDef.family,
-            weight: fontDef.weight,
-            path: fontPath,
           });
         } catch {
           logger.warn('Theme font file not found', {
@@ -681,7 +639,6 @@ class ThemeRegistry {
       errors: [],
       lastInitTime: null,
     };
-    logger.debug('Theme registry reset');
   }
 
   /**

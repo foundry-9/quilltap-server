@@ -67,7 +67,6 @@ let initialized = false;
 export async function initializePlugins(): Promise<PluginInitializationResult> {
   // If already initialized, return existing result
   if (initialized) {
-    logger.debug('Plugin system already initialized');
     return {
       success: true,
       stats: pluginRegistry.getStats(),
@@ -78,7 +77,6 @@ export async function initializePlugins(): Promise<PluginInitializationResult> {
 
   // If initialization is in progress, return the existing promise
   if (initializationPromise) {
-    logger.debug('Plugin initialization already in progress');
     return initializationPromise;
   }
 
@@ -174,10 +172,6 @@ async function performInitialization(): Promise<PluginInitializationResult> {
       .filter(p => p.manifest.typescript === true);
 
     if (typescriptPlugins.length > 0) {
-      logger.debug('Checking TypeScript plugins are pre-built', {
-        count: typescriptPlugins.length,
-      });
-
       for (const plugin of typescriptPlugins) {
         const mainFile = plugin.manifest.main || 'index.js';
         const jsPath = resolve(process.cwd(), plugin.pluginPath, mainFile);
@@ -227,7 +221,6 @@ async function performInitialization(): Promise<PluginInitializationResult> {
     }
 
     // Register API routes from enabled plugins with API_ROUTES capability
-    logger.debug('Registering plugin API routes');
     registerPluginRoutes();
 
     const routeRegistry = getPluginRouteRegistry();
@@ -239,7 +232,6 @@ async function performInitialization(): Promise<PluginInitializationResult> {
     }
 
     // Initialize provider registry from enabled plugins with LLM_PROVIDER capability
-    logger.debug('Initializing provider registry');
     const providerPlugins = pluginRegistry.getEnabledByCapability('LLM_PROVIDER');
     if (providerPlugins.length > 0) {
       // Load provider plugins using require() - plugins are transpiled to JS first
@@ -248,27 +240,13 @@ async function performInitialization(): Promise<PluginInitializationResult> {
         try {
           const mainFile = loadedPlugin.manifest.main || 'index.js';
           const modulePath = resolve(process.cwd(), loadedPlugin.pluginPath, mainFile);
-
-          logger.debug('Loading provider plugin module', {
-            plugin: loadedPlugin.manifest.name,
-            path: modulePath,
-          });
-
           // Use require() to load the compiled JavaScript module
           const pluginModule = dynamicRequire(modulePath);
 
           if (pluginModule?.plugin) {
             providers.push(pluginModule.plugin);
-            logger.debug('Provider plugin loaded', {
-              plugin: loadedPlugin.manifest.name,
-              provider: pluginModule.plugin?.metadata?.providerName,
-            });
           } else if (pluginModule?.default?.plugin) {
             providers.push(pluginModule.default.plugin);
-            logger.debug('Provider plugin loaded (default export)', {
-              plugin: loadedPlugin.manifest.name,
-              provider: pluginModule.default.plugin?.metadata?.providerName,
-            });
           } else {
             logger.warn('Provider plugin module does not export a plugin object', {
               plugin: loadedPlugin.manifest.name,
@@ -289,7 +267,6 @@ async function performInitialization(): Promise<PluginInitializationResult> {
     }
 
     // Initialize Arctic auth provider registry from enabled plugins with AUTH_METHODS capability
-    logger.debug('Initializing Arctic auth provider registry');
     clearArcticProviders(); // Clear any previous registrations
     const authPlugins = pluginRegistry.getEnabledByCapability('AUTH_METHODS');
     if (authPlugins.length > 0) {
@@ -297,12 +274,6 @@ async function performInitialization(): Promise<PluginInitializationResult> {
         try {
           const mainFile = loadedPlugin.manifest.main || 'index.js';
           const modulePath = resolve(process.cwd(), loadedPlugin.pluginPath, mainFile);
-
-          logger.debug('Loading Arctic auth provider plugin module', {
-            plugin: loadedPlugin.manifest.name,
-            path: modulePath,
-          });
-
           // Use require() to load the compiled JavaScript module
           const pluginModule = dynamicRequire(modulePath);
 
@@ -319,11 +290,6 @@ async function performInitialization(): Promise<PluginInitializationResult> {
             typeof authPlugin.getScopes === 'function'
           ) {
             registerArcticProvider(authPlugin);
-            logger.debug('Arctic auth provider plugin registered', {
-              plugin: loadedPlugin.manifest.name,
-              providerId: authPlugin.config.providerId,
-              isConfigured: authPlugin.isConfigured(),
-            });
           } else {
             logger.warn('Arctic auth provider plugin missing required exports', {
               plugin: loadedPlugin.manifest.name,
@@ -351,7 +317,6 @@ async function performInitialization(): Promise<PluginInitializationResult> {
 
     // Initialize theme registry from enabled plugins with THEME capability
     // First, load module-based themes (self-contained) via dynamic require
-    logger.debug('Loading module-based theme plugins');
     const themePlugins = pluginRegistry.getEnabledByCapability('THEME');
     for (const loadedPlugin of themePlugins) {
       // Check if plugin uses module-based loading
@@ -367,32 +332,18 @@ async function performInitialization(): Promise<PluginInitializationResult> {
         if (!existsSync(modulePath)) {
           continue; // No module file, will fall back to file-based
         }
-
-        logger.debug('Loading theme plugin module', {
-          plugin: loadedPlugin.manifest.name,
-          path: modulePath,
-        });
-
         // Use require() to load the compiled JavaScript module
         const pluginModule = dynamicRequire(modulePath);
         const themePlugin = pluginModule?.plugin || pluginModule?.default?.plugin;
 
         if (themePlugin?.tokens) {
           themeRegistry.registerThemeModule(loadedPlugin, themePlugin);
-          logger.debug('Theme module registered', {
-            plugin: loadedPlugin.manifest.name,
-          });
         }
       } catch (error) {
-        logger.debug('Failed to load theme as module, will try file-based', {
-          plugin: loadedPlugin.manifest.name,
-          error: error instanceof Error ? error.message : String(error),
-        });
       }
     }
 
     // Then initialize the registry (handles file-based themes and default theme)
-    logger.debug('Initializing theme registry');
     await initializeThemeRegistry();
     const themeStats = themeRegistry.getStats();
     if (themeStats.total > 1) { // More than just the default theme
@@ -404,7 +355,6 @@ async function performInitialization(): Promise<PluginInitializationResult> {
     }
 
     // Initialize roleplay template registry from enabled plugins with ROLEPLAY_TEMPLATE capability
-    logger.debug('Initializing roleplay template registry');
     await initializeRoleplayTemplateRegistry();
     const templateStats = roleplayTemplateRegistry.getStats();
     if (templateStats.total > 0) {
@@ -415,7 +365,6 @@ async function performInitialization(): Promise<PluginInitializationResult> {
     }
 
     // Initialize tool registry from enabled plugins with TOOL_PROVIDER capability
-    logger.debug('Initializing tool registry');
     const toolPlugins = pluginRegistry.getEnabledByCapability('TOOL_PROVIDER');
     if (toolPlugins.length > 0) {
       const tools: ToolPlugin[] = [];
@@ -423,27 +372,13 @@ async function performInitialization(): Promise<PluginInitializationResult> {
         try {
           const mainFile = loadedPlugin.manifest.main || 'index.js';
           const modulePath = resolve(process.cwd(), loadedPlugin.pluginPath, mainFile);
-
-          logger.debug('Loading tool plugin module', {
-            plugin: loadedPlugin.manifest.name,
-            path: modulePath,
-          });
-
           // Use require() to load the compiled JavaScript module
           const pluginModule = dynamicRequire(modulePath);
 
           if (pluginModule?.plugin) {
             tools.push(pluginModule.plugin as ToolPlugin);
-            logger.debug('Tool plugin loaded', {
-              plugin: loadedPlugin.manifest.name,
-              tool: (pluginModule.plugin as ToolPlugin)?.metadata?.toolName,
-            });
           } else if (pluginModule?.default?.plugin) {
             tools.push(pluginModule.default.plugin as ToolPlugin);
-            logger.debug('Tool plugin loaded (default export)', {
-              plugin: loadedPlugin.manifest.name,
-              tool: (pluginModule.default.plugin as ToolPlugin)?.metadata?.toolName,
-            });
           } else {
             logger.warn('Tool plugin module does not export a plugin object', {
               plugin: loadedPlugin.manifest.name,
@@ -469,34 +404,19 @@ async function performInitialization(): Promise<PluginInitializationResult> {
     }
 
     // Initialize file storage registry from enabled plugins with FILE_BACKEND capability
-    logger.debug('Initializing file storage backend plugins');
     const fileBackendPlugins = pluginRegistry.getEnabledByCapability('FILE_BACKEND');
     if (fileBackendPlugins.length > 0) {
       for (const loadedPlugin of fileBackendPlugins) {
         try {
           const mainFile = loadedPlugin.manifest.main || 'index.js';
           const modulePath = resolve(process.cwd(), loadedPlugin.pluginPath, mainFile);
-
-          logger.debug('Loading file backend plugin module', {
-            plugin: loadedPlugin.manifest.name,
-            path: modulePath,
-          });
-
           // Use require() to load the compiled JavaScript module
           const pluginModule = dynamicRequire(modulePath);
 
           if (pluginModule?.plugin) {
             fileStorageManager.registerProviderPlugin(pluginModule.plugin as FileStorageProviderPlugin);
-            logger.debug('File backend plugin loaded', {
-              plugin: loadedPlugin.manifest.name,
-              backendId: (pluginModule.plugin as FileStorageProviderPlugin)?.metadata?.backendId,
-            });
           } else if (pluginModule?.default?.plugin) {
             fileStorageManager.registerProviderPlugin(pluginModule.default.plugin as FileStorageProviderPlugin);
-            logger.debug('File backend plugin loaded (default export)', {
-              plugin: loadedPlugin.manifest.name,
-              backendId: (pluginModule.default.plugin as FileStorageProviderPlugin)?.metadata?.backendId,
-            });
           } else {
             logger.warn('File backend plugin module does not export a plugin object', {
               plugin: loadedPlugin.manifest.name,
@@ -519,7 +439,6 @@ async function performInitialization(): Promise<PluginInitializationResult> {
     // Initialize the file storage manager after backend plugins are registered
     // This loads mount points from the database and sets up the default backend
     try {
-      logger.debug('Initializing file storage manager');
       await fileStorageManager.initialize();
       logger.info('File storage manager initialized successfully');
     } catch (error) {
@@ -569,7 +488,6 @@ export function resetPluginSystem(): void {
   toolRegistry.reset();
   // Clear the plugin logger factory
   clearPluginLoggerFactory();
-  logger.debug('Plugin system reset');
 }
 
 /**

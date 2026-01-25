@@ -301,15 +301,6 @@ export async function attemptRequestLimitRecovery(
     { role: 'user' as const, content: userMessage },
   ]
 
-  logger.debug('Recovery message constructed', {
-    chatId,
-    errorType,
-    systemPrompt,
-    systemPromptLength: systemPrompt.length,
-    userMessage,
-    userMessageLength: userMessage.length,
-  })
-
   // Determine recovery type for message metadata
   const recoveryType = isTokenLimit ? 'token_limit' : 'content_limit'
 
@@ -407,12 +398,6 @@ async function streamStaticFallback(
 
   const errorType = getErrorType(error)
   const fallbackMessage = buildStaticFallbackMessage(attachedFiles, error)
-
-  logger.debug('Streaming static fallback message', {
-    chatId,
-    errorType,
-    messageLength: fallbackMessage.length,
-  })
 
   // Stream the message in chunks to simulate typing
   const chunkSize = 50

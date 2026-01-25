@@ -44,10 +44,6 @@ async function hasMemoriesNeedingMigration(): Promise<boolean> {
     });
     return count > 0;
   } catch (error) {
-    logger.debug('Error checking memories for aboutCharacterId field', {
-      context: 'migration.add-inter-character-memory-fields',
-      error: error instanceof Error ? error.message : String(error),
-    });
     return false;
   }
 }
@@ -64,28 +60,16 @@ export const addInterCharacterMemoryFieldsMigration: Migration = {
   async shouldRun(): Promise<boolean> {
     // Only run if MongoDB is enabled
     if (!isMongoDBBackend()) {
-      logger.debug('MongoDB not enabled, skipping inter-character memory fields migration', {
-        context: 'migration.add-inter-character-memory-fields',
-      });
       return false;
     }
 
     // Check if MongoDB is accessible
     if (!(await isMongoDBAccessible())) {
-      logger.debug('MongoDB not accessible, deferring inter-character memory fields migration', {
-        context: 'migration.add-inter-character-memory-fields',
-      });
       return false;
     }
 
     // Check if there are memories needing migration
     const needsRun = await hasMemoriesNeedingMigration();
-
-    logger.debug('Checked for inter-character memory fields migration need', {
-      context: 'migration.add-inter-character-memory-fields',
-      needsRun,
-    });
-
     return needsRun;
   },
 
@@ -101,20 +85,12 @@ export const addInterCharacterMemoryFieldsMigration: Migration = {
       const db = await getMongoDatabase();
 
       // Add aboutCharacterId: null to all existing memories that don't have it
-      logger.debug('Adding aboutCharacterId field to existing memories', {
-        context: 'migration.add-inter-character-memory-fields',
-      });
       const memoriesCollection = db.collection('memories');
       const updateResult = await memoriesCollection.updateMany(
         { aboutCharacterId: { $exists: false } },
         { $set: { aboutCharacterId: null } }
       );
       memoriesUpdated = updateResult.modifiedCount;
-
-      logger.debug('Memories updated with aboutCharacterId', {
-        context: 'migration.add-inter-character-memory-fields',
-        count: memoriesUpdated,
-      });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       logger.error('Inter-character memory fields migration failed', {

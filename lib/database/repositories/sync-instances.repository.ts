@@ -37,18 +37,8 @@ export class SyncInstancesRepository extends UserOwnedBaseRepository<SyncInstanc
    * Find sync instances by user ID
    */
   async findByUserId(userId: string): Promise<SyncInstance[]> {
-    logger.debug('Finding sync instances by user ID', {
-      userId,
-    });
-
     try {
       const instances = await this.findByFilter({ userId } as QueryFilter);
-
-      logger.debug('Retrieved sync instances by user ID', {
-        userId,
-        count: instances.length,
-      });
-
       return instances;
     } catch (error) {
       logger.error('Error finding sync instances by user ID', {
@@ -63,21 +53,11 @@ export class SyncInstancesRepository extends UserOwnedBaseRepository<SyncInstanc
    * Find active sync instances by user ID
    */
   async findActiveByUserId(userId: string): Promise<SyncInstance[]> {
-    logger.debug('Finding active sync instances by user ID', {
-      userId,
-    });
-
     try {
       const instances = await this.findByFilter({
         userId,
         isActive: true,
       } as QueryFilter);
-
-      logger.debug('Retrieved active sync instances by user ID', {
-        userId,
-        count: instances.length,
-      });
-
       return instances;
     } catch (error) {
       logger.error('Error finding active sync instances by user ID', {
@@ -92,11 +72,6 @@ export class SyncInstancesRepository extends UserOwnedBaseRepository<SyncInstanc
    * Find sync instance by user ID and URL (for uniqueness check)
    */
   async findByUserAndUrl(userId: string, url: string): Promise<SyncInstance | null> {
-    logger.debug('Finding sync instance by user and URL', {
-      userId,
-      url,
-    });
-
     try {
       const instance = await this.findOneByFilter({
         userId,
@@ -104,18 +79,8 @@ export class SyncInstancesRepository extends UserOwnedBaseRepository<SyncInstanc
       } as QueryFilter);
 
       if (!instance) {
-        logger.debug('Sync instance not found by user and URL', {
-          userId,
-          url,
-        });
         return null;
       }
-
-      logger.debug('Sync instance found by user and URL', {
-        userId,
-        url,
-      });
-
       return instance;
     } catch (error) {
       logger.error('Error finding sync instance by user and URL', {
@@ -134,12 +99,6 @@ export class SyncInstancesRepository extends UserOwnedBaseRepository<SyncInstanc
     data: CreateSyncInstance,
     options?: CreateOptions
   ): Promise<SyncInstance> {
-    logger.debug('Creating new sync instance', {
-      userId: data.userId,
-      name: data.name,
-      url: data.url,
-    });
-
     try {
       const syncInstanceData = {
         ...data,
@@ -175,10 +134,6 @@ export class SyncInstancesRepository extends UserOwnedBaseRepository<SyncInstanc
    * Update a sync instance
    */
   async update(id: string, data: Partial<SyncInstance>): Promise<SyncInstance | null> {
-    logger.debug('Updating sync instance', {
-      instanceId: id,
-    });
-
     try {
       const updateData = { ...data };
 
@@ -213,12 +168,6 @@ export class SyncInstancesRepository extends UserOwnedBaseRepository<SyncInstanc
     remoteVersionInfo?: { schemaVersion?: string; appVersion?: string }
   ): Promise<SyncInstance | null> {
     const now = this.getCurrentTimestamp();
-
-    logger.debug('Updating sync instance status', {
-      instanceId: id,
-      status,
-    });
-
     const updateData: Partial<SyncInstance> = {
       lastSyncAt: now,
       lastSyncStatus: status,
@@ -241,10 +190,6 @@ export class SyncInstancesRepository extends UserOwnedBaseRepository<SyncInstanc
    * This allows the next sync to pull all data from remote
    */
   async resetSyncState(id: string): Promise<SyncInstance | null> {
-    logger.debug('Resetting sync state for instance', {
-      instanceId: id,
-    });
-
     return this.update(id, {
       lastSyncAt: null,
       lastSyncStatus: null,
@@ -256,10 +201,6 @@ export class SyncInstancesRepository extends UserOwnedBaseRepository<SyncInstanc
    * Used when user deletes all data but wants to keep sync configuration
    */
   async resetSyncStateForUser(userId: string): Promise<number> {
-    logger.debug('Resetting sync state for all user instances', {
-      userId,
-    });
-
     try {
       const modifiedCount = await this.updateMany(
         { userId } as QueryFilter,
@@ -288,10 +229,6 @@ export class SyncInstancesRepository extends UserOwnedBaseRepository<SyncInstanc
    * Delete a sync instance
    */
   async delete(id: string): Promise<boolean> {
-    logger.debug('Deleting sync instance', {
-      instanceId: id,
-    });
-
     try {
       const result = await this._delete(id);
 

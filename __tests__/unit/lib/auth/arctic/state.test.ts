@@ -183,16 +183,6 @@ describe('Arctic OAuth State Management', () => {
       );
     });
 
-    it('logs debug message', () => {
-      const { logger } = require('@/lib/logger');
-
-      generateOAuthState(mockResponse, '/settings');
-
-      expect(logger.debug).toHaveBeenCalledWith(
-        'OAuth state generated',
-        expect.objectContaining({ callbackUrl: '/settings' })
-      );
-    });
   });
 
   describe('retrieveOAuthState', () => {
@@ -288,18 +278,6 @@ describe('Arctic OAuth State Management', () => {
       expect(result).toBeNull();
     });
 
-    it('logs debug message on successful validation', () => {
-      const { logger } = require('@/lib/logger');
-      jest.clearAllMocks();
-
-      retrieveOAuthState(mockRequest, 'test-state-token');
-
-      expect(logger.debug).toHaveBeenCalledWith(
-        'OAuth state verified',
-        expect.objectContaining({ callbackUrl: '/dashboard' })
-      );
-    });
-
     it('handles empty callback value', () => {
       jest.clearAllMocks();
       mockCookies.clear();
@@ -347,16 +325,6 @@ describe('Arctic OAuth State Management', () => {
       );
     });
 
-    it('logs debug message', () => {
-      const { logger } = require('@/lib/logger');
-
-      clearOAuthState(mockResponse);
-
-      expect(logger.debug).toHaveBeenCalledWith(
-        'OAuth state cleared',
-        expect.any(Object)
-      );
-    });
   });
 
   describe('clearOAuthStateFromAction', () => {
@@ -380,16 +348,6 @@ describe('Arctic OAuth State Management', () => {
       );
     });
 
-    it('logs debug message', async () => {
-      const { logger } = require('@/lib/logger');
-
-      await clearOAuthStateFromAction();
-
-      expect(logger.debug).toHaveBeenCalledWith(
-        'OAuth state cleared from action',
-        expect.any(Object)
-      );
-    });
   });
 
   describe('encryption', () => {

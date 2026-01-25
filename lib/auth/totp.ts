@@ -77,11 +77,7 @@ export async function checkTOTPLockout(userId: string): Promise<{ locked: boolea
 
   if (now < lockedUntil) {
     const secondsRemaining = Math.ceil((lockedUntil.getTime() - now.getTime()) / 1000)
-    logger.debug('TOTP lockout active', {
-      context: 'checkTOTPLockout',
-      userId,
-      secondsRemaining,
-    })
+
     return { locked: true, secondsRemaining }
   }
 
@@ -125,11 +121,7 @@ async function recordFailedTOTPAttempt(userId: string): Promise<void> {
       lockedUntil,
     })
   } else {
-    logger.debug('Failed TOTP attempt recorded', {
-      context: 'recordFailedTOTPAttempt',
-      userId,
-      attemptCount: currentCount,
-    })
+
   }
 }
 
@@ -142,10 +134,6 @@ async function resetTOTPAttempts(userId: string): Promise<void> {
     totpAttempts: undefined,
   })
 
-  logger.debug('TOTP attempts reset after successful verification', {
-    context: 'resetTOTPAttempts',
-    userId,
-  })
 }
 
 // ============================================================================
@@ -171,11 +159,7 @@ export async function verifyTOTP(
   // Check for lockout first
   const lockoutStatus = await checkTOTPLockout(userId)
   if (lockoutStatus.locked) {
-    logger.debug('TOTP verification blocked - account locked', {
-      context: 'verifyTOTP',
-      userId,
-      secondsRemaining: lockoutStatus.secondsRemaining,
-    })
+
     return false
   }
 
@@ -529,10 +513,7 @@ export async function verifyTrustedDevice(
   )
 
   if (deviceIndex === -1) {
-    logger.debug('Trusted device token not found', {
-      context: 'verifyTrustedDevice',
-      userId,
-    })
+
     return false
   }
 
@@ -540,12 +521,7 @@ export async function verifyTrustedDevice(
 
   // Check expiration
   if (new Date(device.expiresAt) < now) {
-    logger.debug('Trusted device expired', {
-      context: 'verifyTrustedDevice',
-      userId,
-      deviceId: device.id,
-      expiredAt: device.expiresAt,
-    })
+
     // Remove expired device
     const updatedDevices = user.trustedDevices.filter((_, i) => i !== deviceIndex)
     await repos.users.update(userId, { trustedDevices: updatedDevices })
@@ -560,13 +536,6 @@ export async function verifyTrustedDevice(
   }
 
   await repos.users.update(userId, { trustedDevices: updatedDevices })
-
-  logger.debug('Trusted device verified', {
-    context: 'verifyTrustedDevice',
-    userId,
-    deviceId: device.id,
-    deviceName: device.name,
-  })
 
   return true
 }
@@ -607,11 +576,7 @@ export async function revokeTrustedDevice(
   const updatedDevices = user.trustedDevices.filter((d) => d.id !== deviceId)
 
   if (updatedDevices.length === initialLength) {
-    logger.debug('Device not found for revocation', {
-      context: 'revokeTrustedDevice',
-      userId,
-      deviceId,
-    })
+
     return false
   }
 

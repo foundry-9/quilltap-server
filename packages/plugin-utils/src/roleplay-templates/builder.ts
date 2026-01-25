@@ -161,13 +161,6 @@ export function createRoleplayTemplatePlugin(
     plugin.initialize = async () => {
       if (enableLogging) {
         const logger = createPluginLogger(metadata.templateId);
-        logger.debug('Roleplay template plugin loaded', {
-          context: 'init',
-          templateId: metadata.templateId,
-          displayName: metadata.displayName,
-          templateCount: templateArray.length,
-          templateNames: templateArray.map(t => t.name),
-        });
       }
 
       if (initialize) {

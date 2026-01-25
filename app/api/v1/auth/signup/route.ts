@@ -41,7 +41,6 @@ export async function POST(req: NextRequest) {
     // Validate password strength
     const validation = validatePasswordStrength(password);
     if (!validation.valid) {
-      logger.debug('[Auth v1] Password validation failed', { errors: validation.errors });
       return badRequest('Password does not meet requirements', { details: validation.errors });
     }
 
@@ -50,7 +49,6 @@ export async function POST(req: NextRequest) {
     // Check if user already exists
     const existing = await repos.users.findByEmail(email);
     if (existing) {
-      logger.debug('[Auth v1] Email already exists', { email });
       return conflict('User with this email already exists');
     }
 

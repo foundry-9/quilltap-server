@@ -30,14 +30,7 @@ export async function GET(
 
   try {
     // Get callback URL from query params (default to /)
-    const callbackUrl = request.nextUrl.searchParams.get('callbackUrl') || '/';
-
-    logger.debug('[Auth v1] OAuth authorize request', {
-      provider: providerId,
-      callbackUrl,
-    });
-
-    // Check if provider exists and is configured
+    const callbackUrl = request.nextUrl.searchParams.get('callbackUrl') || '/';// Check if provider exists and is configured
     const plugin = getArcticProviderPlugin(providerId);
     if (!plugin) {
       logger.warn('[Auth v1] OAuth provider not found', { provider: providerId });

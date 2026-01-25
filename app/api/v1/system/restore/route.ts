@@ -56,15 +56,7 @@ async function getBackupBuffer(
 
     mode = modeParam as 'replace' | 'new-account';
     isPreview = previewParam === 'true';
-    zipBuffer = Buffer.from(await file.arrayBuffer());
-
-    logger.debug('[System Restore v1] File uploaded', {
-      userId,
-      fileSize: zipBuffer.length,
-      mode,
-      isPreview,
-    });
-  } else if (contentType?.includes('application/json')) {
+    zipBuffer = Buffer.from(await file.arrayBuffer());} else if (contentType?.includes('application/json')) {
     // Handle S3 download
     const body = await req.json();
     const { s3Key, mode: bodyMode } = RestoreRequestSchema.parse(body);
@@ -73,22 +65,7 @@ async function getBackupBuffer(
       return badRequest('s3Key is required for S3 restore');
     }
 
-    mode = bodyMode;
-
-    logger.debug('[System Restore v1] Downloading from S3', {
-      userId,
-      s3Key,
-      mode,
-    });
-
-    zipBuffer = await downloadBackupFromS3(userId, s3Key);
-
-    logger.debug('[System Restore v1] Downloaded from S3', {
-      userId,
-      s3Key,
-      fileSize: zipBuffer.length,
-    });
-  } else {
+    mode = bodyMode;zipBuffer = await downloadBackupFromS3(userId, s3Key);} else {
     return badRequest('Unsupported content type. Use multipart/form-data or application/json');
   }
 
@@ -108,7 +85,6 @@ export const POST = createAuthenticatedHandler(async (req, { user }) => {
   // Handle preview action
   if (action === 'preview') {
     try {
-      logger.debug('[System Restore v1] Preview request', { userId: user.id });
 
       const formData = await req.formData();
       const file = formData.get('file') as File | null;
@@ -116,19 +92,8 @@ export const POST = createAuthenticatedHandler(async (req, { user }) => {
 
       let zipBuffer: Buffer | null = null;
 
-      if (file) {
-        logger.debug('[System Restore v1] Preview from uploaded file', {
-          userId: user.id,
-          fileName: file.name,
-          fileSize: file.size,
-        });
-        zipBuffer = Buffer.from(await file.arrayBuffer());
-      } else if (s3Key) {
-        logger.debug('[System Restore v1] Preview from S3', {
-          userId: user.id,
-          s3Key,
-        });
-        zipBuffer = await downloadBackupFromS3(user.id, s3Key);
+      if (file) {zipBuffer = Buffer.from(await file.arrayBuffer());
+      } else if (s3Key) {zipBuffer = await downloadBackupFromS3(user.id, s3Key);
       }
 
       if (!zipBuffer) {
@@ -154,7 +119,6 @@ export const POST = createAuthenticatedHandler(async (req, { user }) => {
 
   // Handle restore
   try {
-    logger.debug('[System Restore v1] Restore request', { userId: user.id });
 
     const result = await getBackupBuffer(req, user.id);
 

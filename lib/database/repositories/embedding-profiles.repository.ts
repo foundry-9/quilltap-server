@@ -42,29 +42,14 @@ export class EmbeddingProfilesRepository extends TaggableBaseRepository<Embeddin
    */
   async findByName(userId: string, name: string): Promise<EmbeddingProfile | null> {
     try {
-      logger.debug('Finding embedding profile by name for user', {
-        userId,
-        name,
-        collection: this.collectionName,
-      });
-
       const profile = await this.findOneByFilter({
         userId,
         name,
       } as QueryFilter);
 
       if (!profile) {
-        logger.debug('Embedding profile not found by name for user', {
-          userId,
-          name,
-        });
         return null;
       }
-
-      logger.debug('Embedding profile found by name for user', {
-        userId,
-        name,
-      });
       return profile;
     } catch (error) {
       logger.error('Error finding embedding profile by name', {
@@ -81,22 +66,14 @@ export class EmbeddingProfilesRepository extends TaggableBaseRepository<Embeddin
    */
   async findDefault(userId: string): Promise<EmbeddingProfile | null> {
     try {
-      logger.debug('Finding default embedding profile for user', {
-        userId,
-        collection: this.collectionName,
-      });
-
       const profile = await this.findOneByFilter({
         userId,
         isDefault: true,
       } as QueryFilter);
 
       if (!profile) {
-        logger.debug('No default embedding profile found for user', { userId });
         return null;
       }
-
-      logger.debug('Default embedding profile found for user', { userId });
       return profile;
     } catch (error) {
       logger.error('Error finding default embedding profile', {
@@ -115,13 +92,6 @@ export class EmbeddingProfilesRepository extends TaggableBaseRepository<Embeddin
     options?: CreateOptions
   ): Promise<EmbeddingProfile> {
     try {
-      logger.debug('Creating new embedding profile', {
-        userId: data.userId,
-        name: data.name,
-        provider: data.provider,
-        collection: this.collectionName,
-      });
-
       const profile = await this._create(data, options);
 
       logger.info('Embedding profile created successfully', {
@@ -148,11 +118,6 @@ export class EmbeddingProfilesRepository extends TaggableBaseRepository<Embeddin
    */
   async update(id: string, data: Partial<EmbeddingProfile>): Promise<EmbeddingProfile | null> {
     try {
-      logger.debug('Updating embedding profile', {
-        profileId: id,
-        collection: this.collectionName,
-      });
-
       // Remove id and createdAt to prevent accidental overwrites
       const updateData = { ...data };
       delete updateData.id;
@@ -181,11 +146,6 @@ export class EmbeddingProfilesRepository extends TaggableBaseRepository<Embeddin
    */
   async delete(id: string): Promise<boolean> {
     try {
-      logger.debug('Deleting embedding profile', {
-        profileId: id,
-        collection: this.collectionName,
-      });
-
       const result = await this._delete(id);
 
       if (result) {
@@ -210,11 +170,6 @@ export class EmbeddingProfilesRepository extends TaggableBaseRepository<Embeddin
    */
   async unsetAllDefaults(userId: string): Promise<boolean> {
     try {
-      logger.debug('Unsetting all default embedding profiles for user', {
-        userId,
-        collection: this.collectionName,
-      });
-
       const count = await this.updateMany(
         { userId, isDefault: true } as QueryFilter,
         { isDefault: false } as Partial<EmbeddingProfile>

@@ -164,13 +164,6 @@ export async function executeToolCallWithContext(
     const isMultiToolPluginTool = !isBuiltInTool && !isStaticTool && toolRegistry.hasMultiToolPlugins();
 
     if (isStaticTool || isMultiToolPluginTool) {
-      logger.debug('Executing plugin tool', {
-        context: 'tool-executor',
-        toolName: toolCall.name,
-        isStaticTool,
-        isMultiToolPluginTool,
-      });
-
       // Fetch user's tool configuration from database
       let toolConfig: Record<string, unknown> = {};
       try {
@@ -182,19 +175,8 @@ export async function executeToolCallWithContext(
           const userConfig = await repos.pluginConfigs.findByUserAndPlugin(userId, pluginName);
           if (userConfig) {
             toolConfig = userConfig.config;
-            logger.debug('Loaded static tool config from database', {
-              context: 'tool-executor',
-              toolName: toolCall.name,
-              pluginName,
-              configKeys: Object.keys(toolConfig),
-            });
           } else {
             toolConfig = toolRegistry.getDefaultConfig(toolCall.name);
-            logger.debug('Using default static tool config', {
-              context: 'tool-executor',
-              toolName: toolCall.name,
-              configKeys: Object.keys(toolConfig),
-            });
           }
         } else {
           // For multi-tool plugins (like MCP), we need to load configs for all multi-tool plugins
@@ -206,11 +188,6 @@ export async function executeToolCallWithContext(
             if (userConfig) {
               // Pass the config under the plugin name key so executeTool can find it
               toolConfig[pluginName] = userConfig.config;
-              logger.debug('Loaded multi-tool plugin config', {
-                context: 'tool-executor',
-                toolName: toolCall.name,
-                pluginName: fullPluginName,
-              });
             }
           }
         }
@@ -413,16 +390,6 @@ export async function executeToolCallWithContext(
       const result = await executeFileManagementTool(toolCall.arguments, fileContext);
 
       // Debug: Log the file management result structure
-      logger.debug('File management tool result', {
-        success: result.success,
-        action: result.action,
-        requiresPermission: result.requiresPermission,
-        hasError: !!result.error,
-        error: result.error,
-        hasData: !!result.data,
-        dataKeys: result.data ? Object.keys(result.data) : [],
-      });
-
       // Format results for LLM consumption
       const formattedResult = formatFileManagementResults(result);
 
@@ -508,20 +475,18 @@ export function detectToolCalls(
   response: unknown,
   provider: string
 ): ToolCallRequest[] {
-  logger.debug('Detecting tool calls', { context: 'tool-executor', provider })
 
   try {
     // Try to use plugin's parseToolCalls method
     const plugin = providerRegistry.getProvider(provider)
     if (plugin?.parseToolCalls) {
-      logger.debug('Using plugin parseToolCalls', { context: 'tool-executor', provider })
+
       const toolCalls = plugin.parseToolCalls(response)
-      logger.debug('Detected tool calls via plugin', { context: 'tool-executor', count: toolCalls.length, provider })
+
       return toolCalls
     }
 
     // Fallback to legacy detection for backwards compatibility
-    logger.debug('Plugin parseToolCalls not available, using fallback', { context: 'tool-executor', provider })
 
     const toolCalls: ToolCallRequest[] = [];
 
@@ -592,7 +557,6 @@ export function detectToolCalls(
       }
     }
 
-    logger.debug('Detected tool calls via fallback', { context: 'tool-executor', count: toolCalls.length, provider })
     return toolCalls;
   } catch (error) {
     logger.error('Error detecting tool calls', { context: 'tool-executor', provider }, error instanceof Error ? error : undefined);

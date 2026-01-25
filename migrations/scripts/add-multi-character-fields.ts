@@ -48,10 +48,6 @@ async function hasCharactersNeedingMigration(): Promise<boolean> {
     });
     return count > 0;
   } catch (error) {
-    logger.debug('Error checking characters for talkativeness field', {
-      context: 'migration.add-multi-character-fields',
-      error: error instanceof Error ? error.message : String(error),
-    });
     return false;
   }
 }
@@ -69,10 +65,6 @@ async function hasChatsNeedingMigration(): Promise<boolean> {
     });
     return count > 0;
   } catch (error) {
-    logger.debug('Error checking chats for participant fields', {
-      context: 'migration.add-multi-character-fields',
-      error: error instanceof Error ? error.message : String(error),
-    });
     return false;
   }
 }
@@ -89,17 +81,11 @@ export const addMultiCharacterFieldsMigration: Migration = {
   async shouldRun(): Promise<boolean> {
     // Only run if MongoDB is enabled
     if (!isMongoDBBackend()) {
-      logger.debug('MongoDB not enabled, skipping multi-character fields migration', {
-        context: 'migration.add-multi-character-fields',
-      });
       return false;
     }
 
     // Check if MongoDB is accessible
     if (!(await isMongoDBAccessible())) {
-      logger.debug('MongoDB not accessible, deferring multi-character fields migration', {
-        context: 'migration.add-multi-character-fields',
-      });
       return false;
     }
 
@@ -110,14 +96,6 @@ export const addMultiCharacterFieldsMigration: Migration = {
     ]);
 
     const needsRun = hasCharacters || hasChats;
-
-    logger.debug('Checked for multi-character fields migration need', {
-      context: 'migration.add-multi-character-fields',
-      hasCharactersNeedingMigration: hasCharacters,
-      hasChatsNeedingMigration: hasChats,
-      needsRun,
-    });
-
     return needsRun;
   },
 
@@ -137,24 +115,13 @@ export const addMultiCharacterFieldsMigration: Migration = {
       const db = await getMongoDatabase();
 
       // Step 1: Add talkativeness to characters
-      logger.debug('Step 1: Adding talkativeness to characters without it', {
-        context: 'migration.add-multi-character-fields',
-      });
       const charactersCollection = db.collection('characters');
       const characterUpdateResult = await charactersCollection.updateMany(
         { talkativeness: { $exists: false } },
         { $set: { talkativeness: 0.5 } }
       );
       charactersUpdated = characterUpdateResult.modifiedCount;
-      logger.debug('Characters updated with talkativeness', {
-        context: 'migration.add-multi-character-fields',
-        count: charactersUpdated,
-      });
-
       // Step 2: Process chats and their messages
-      logger.debug('Step 2: Processing chats for participant field updates', {
-        context: 'migration.add-multi-character-fields',
-      });
       const chatsCollection = db.collection('chats');
       const chatsCursor = chatsCollection.find({});
 

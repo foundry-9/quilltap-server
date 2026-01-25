@@ -22,9 +22,6 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
 
   constructor() {
     super('prompt_templates', PromptTemplateSchema);
-    logger.debug('PromptTemplatesRepository initialized', {
-      collection: this.collectionName,
-    });
   }
 
   // ============================================================================
@@ -50,13 +47,8 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
 
   private async _doSeedSamplePrompts(): Promise<void> {
     try {
-      logger.debug('Checking for sample prompts to seed', {
-        collection: this.collectionName,
-      });
-
       const samplePrompts = await loadSamplePrompts();
       if (samplePrompts.length === 0) {
-        logger.debug('No sample prompts found to seed');
         return;
       }
 
@@ -97,9 +89,6 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
             category: sample.category,
           });
         } else {
-          logger.debug('Sample prompt template already exists', {
-            name: sample.name,
-          });
         }
       }
     } catch (error) {
@@ -119,11 +108,6 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
    */
   async findById(id: string): Promise<PromptTemplate | null> {
     try {
-      logger.debug('Finding prompt template by ID', {
-        templateId: id,
-        collection: this.collectionName,
-      });
-
       // Ensure built-in templates are seeded
       await this.seedSamplePrompts();
 
@@ -142,16 +126,10 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
    */
   async findAll(): Promise<PromptTemplate[]> {
     try {
-      logger.debug('Finding all prompt templates', { collection: this.collectionName });
-
       // Ensure built-in templates are seeded
       await this.seedSamplePrompts();
 
       const templates = await this._findAll();
-
-      logger.debug('All prompt templates retrieved and validated', {
-        total: templates.length,
-      });
       return templates;
     } catch (error) {
       logger.error('Error finding all prompt templates', {
@@ -166,17 +144,7 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
    */
   async findByUserId(userId: string): Promise<PromptTemplate[]> {
     try {
-      logger.debug('Finding prompt templates by user ID', {
-        userId,
-        collection: this.collectionName,
-      });
-
       const templates = await this.findByFilter({ userId } as QueryFilter);
-
-      logger.debug('User prompt templates retrieved', {
-        userId,
-        count: templates.length,
-      });
       return templates;
     } catch (error) {
       logger.error('Error finding prompt templates by user ID', {
@@ -192,18 +160,10 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
    */
   async findBuiltIn(): Promise<PromptTemplate[]> {
     try {
-      logger.debug('Finding built-in prompt templates', {
-        collection: this.collectionName,
-      });
-
       // Ensure built-in templates are seeded
       await this.seedSamplePrompts();
 
       const templates = await this.findByFilter({ isBuiltIn: true } as QueryFilter);
-
-      logger.debug('Built-in prompt templates retrieved', {
-        count: templates.length,
-      });
       return templates;
     } catch (error) {
       logger.error('Error finding built-in prompt templates', {
@@ -218,11 +178,6 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
    */
   async findAllForUser(userId: string): Promise<PromptTemplate[]> {
     try {
-      logger.debug('Finding all prompt templates for user', {
-        userId,
-        collection: this.collectionName,
-      });
-
       // Ensure built-in templates are seeded
       await this.seedSamplePrompts();
 
@@ -232,11 +187,6 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
           { userId },
         ],
       } as QueryFilter);
-
-      logger.debug('User available prompt templates retrieved', {
-        userId,
-        count: templates.length,
-      });
       return templates;
     } catch (error) {
       logger.error('Error finding all prompt templates for user', {
@@ -252,24 +202,10 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
    */
   async findByName(userId: string, name: string): Promise<PromptTemplate | null> {
     try {
-      logger.debug('Finding prompt template by name for user', {
-        userId,
-        name,
-        collection: this.collectionName,
-      });
-
       const template = await this.findOneByFilter({ userId, name } as QueryFilter);
 
       if (template) {
-        logger.debug('Prompt template found by name for user', {
-          userId,
-          name,
-        });
       } else {
-        logger.debug('Prompt template not found by name for user', {
-          userId,
-          name,
-        });
       }
 
       return template;
@@ -293,13 +229,6 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
     options?: CreateOptions
   ): Promise<PromptTemplate> {
     try {
-      logger.debug('Creating new prompt template', {
-        userId: data.userId,
-        name: data.name,
-        isBuiltIn: data.isBuiltIn,
-        collection: this.collectionName,
-      });
-
       const template = await this._create(data, options);
 
       logger.info('Prompt template created successfully', {
@@ -326,11 +255,6 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
    */
   async update(id: string, data: Partial<PromptTemplate>): Promise<PromptTemplate | null> {
     try {
-      logger.debug('Updating prompt template', {
-        templateId: id,
-        collection: this.collectionName,
-      });
-
       const existing = await this.findById(id);
       if (!existing) {
         logger.warn('Prompt template not found for update', { templateId: id });
@@ -367,11 +291,6 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
    */
   async delete(id: string): Promise<boolean> {
     try {
-      logger.debug('Deleting prompt template', {
-        templateId: id,
-        collection: this.collectionName,
-      });
-
       const existing = await this.findById(id);
       if (!existing) {
         logger.warn('Prompt template not found for deletion', { templateId: id });
@@ -408,12 +327,6 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
    */
   async addTag(templateId: string, tagId: string): Promise<PromptTemplate | null> {
     try {
-      logger.debug('Adding tag to prompt template', {
-        templateId,
-        tagId,
-        collection: this.collectionName,
-      });
-
       const template = await this.findById(templateId);
       if (!template) {
         logger.warn('Prompt template not found for tag addition', { templateId });
@@ -431,8 +344,6 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
         const updatedTags = [...template.tags, tagId];
         return this.update(templateId, { tags: updatedTags } as Partial<PromptTemplate>);
       }
-
-      logger.debug('Tag already exists on prompt template', { templateId, tagId });
       return template;
     } catch (error) {
       logger.error('Error adding tag to prompt template', {
@@ -450,12 +361,6 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
    */
   async removeTag(templateId: string, tagId: string): Promise<PromptTemplate | null> {
     try {
-      logger.debug('Removing tag from prompt template', {
-        templateId,
-        tagId,
-        collection: this.collectionName,
-      });
-
       const template = await this.findById(templateId);
       if (!template) {
         logger.warn('Prompt template not found for tag removal', { templateId });
@@ -473,8 +378,6 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
       if (updatedTags.length !== template.tags.length) {
         return this.update(templateId, { tags: updatedTags } as Partial<PromptTemplate>);
       }
-
-      logger.debug('Tag not found on prompt template', { templateId, tagId });
       return template;
     } catch (error) {
       logger.error('Error removing tag from prompt template', {

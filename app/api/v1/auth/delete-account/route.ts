@@ -27,7 +27,6 @@ export const DELETE = createAuthenticatedHandler(async (req, { user, repos }) =>
     const chatSettingsCollection = await repos.chatSettings.findByUserId(user.id);
     if (chatSettingsCollection) {
       await repos.chatSettings.delete(chatSettingsCollection.id);
-      logger.debug('[Auth v1] Deleted user chat settings', { userId: user.id });
     }
 
     // Delete the user

@@ -188,8 +188,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
             projectMap.set(projectId, { id: project.id, name: project.name });
           }
         }
-        logger.debug('[Characters v1] Fetched projects for chats', { projectCount: projectMap.size });
-
         // Enrich chats with related data
         const enrichedChats = await Promise.all(
           paginatedChats.map(async ({ chat, messages, lastMessageAt }) => {
@@ -200,7 +198,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
                 return tag ? { tag: { id: tag.id, name: tag.name } } : null;
               })
             );
-            logger.debug('[Characters v1] Fetched tags for chat', { chatId: chat.id, tagCount: tagData.filter(Boolean).length });
 
             // Get all messages and count them for badge
             const messageCount = messages.filter((msg) => msg.type === 'message').length;
@@ -240,7 +237,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
           })
         );
 
-        logger.debug('[Characters v1] Fetched character chats', { characterId: id, count: enrichedChats.length });
         return NextResponse.json({ chats: enrichedChats, total: filteredChats.length });
       } catch (error) {
         logger.error('[Characters v1] Error fetching character chats', { characterId: id }, error instanceof Error ? error : undefined);
@@ -257,7 +253,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
           return serverError('Failed to generate preview');
         }
 
-        logger.debug('[Characters v1] Generated cascade preview', { characterId: id });
         return NextResponse.json({
           characterId: preview.characterId,
           characterName: preview.characterName,
@@ -282,7 +277,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
     // Get default partner
     case 'default-partner': {
       try {
-        logger.debug('[Characters v1] Fetched default partner', { characterId: id, partnerId: character.defaultPartnerId });
         return NextResponse.json({
           partnerId: character.defaultPartnerId || null,
         });
@@ -306,7 +300,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
         // Filter out null values (tags that no longer exist)
         const validTags = tagDetails.filter(Boolean);
 
-        logger.debug('[Characters v1] Fetched character tags', { characterId: id, count: validTags.length });
         return NextResponse.json({ tags: validTags });
       } catch (error) {
         logger.error('[Characters v1] Error fetching character tags', { characterId: id }, error instanceof Error ? error : undefined);
@@ -317,8 +310,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
     // Default: get character
     default: {
       try {
-        logger.debug('[Characters v1] GET character', { characterId: id, userId: user.id });
-
         // Get default image
         let defaultImage = null;
         if (character.defaultImageId) {
@@ -358,8 +349,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
 
 export const PUT = createAuthenticatedParamsHandler<{ id: string }>(async (req, { user, repos }, { id }) => {
   try {
-    logger.debug('[Characters v1] PUT character', { characterId: id, userId: user.id });
-
     const existingCharacter = await repos.characters.findById(id);
 
     if (!checkOwnership(existingCharacter, user.id)) {
@@ -392,8 +381,6 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
 
 export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (req, { user, repos }, { id }) => {
   try {
-    logger.debug('[Characters v1] DELETE character', { characterId: id, userId: user.id });
-
     const existingCharacter = await repos.characters.findById(id);
 
     if (!checkOwnership(existingCharacter, user.id)) {

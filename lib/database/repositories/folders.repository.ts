@@ -152,7 +152,6 @@ export class FoldersRepository extends UserOwnedBaseRepository<Folder> {
       const result = await this.findOneByFilter(query);
 
       if (!result) {
-        logger.debug('Folder not found by path', { userId, path, projectId });
         return null;
       }
 

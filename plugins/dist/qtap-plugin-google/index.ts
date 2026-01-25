@@ -111,7 +111,6 @@ export const plugin: LLMProviderPlugin = {
    * Factory method to create a Google LLM provider instance
    */
   createProvider: (baseUrl?: string) => {
-    logger.debug('Creating Google provider instance', { context: 'plugin.createProvider', baseUrl });
     return new GoogleProvider();
   },
 
@@ -119,7 +118,6 @@ export const plugin: LLMProviderPlugin = {
    * Factory method to create a Google Imagen image generation provider instance
    */
   createImageProvider: (baseUrl?: string) => {
-    logger.debug('Creating Google Imagen provider instance', { context: 'plugin.createImageProvider', baseUrl });
     return new GoogleImagenProvider();
   },
 
@@ -128,11 +126,9 @@ export const plugin: LLMProviderPlugin = {
    * Requires a valid API key
    */
   getAvailableModels: async (apiKey: string, baseUrl?: string) => {
-    logger.debug('Fetching available Google models', { context: 'plugin.getAvailableModels' });
     try {
       const provider = new GoogleProvider();
       const models = await provider.getAvailableModels(apiKey);
-      logger.debug('Successfully fetched Google models', { context: 'plugin.getAvailableModels', count: models.length });
       return models;
     } catch (error) {
       logger.error('Failed to fetch Google models', { context: 'plugin.getAvailableModels' }, error instanceof Error ? error : undefined);
@@ -144,11 +140,9 @@ export const plugin: LLMProviderPlugin = {
    * Validate a Google API key
    */
   validateApiKey: async (apiKey: string, baseUrl?: string) => {
-    logger.debug('Validating Google API key', { context: 'plugin.validateApiKey' });
     try {
       const provider = new GoogleProvider();
       const isValid = await provider.validateApiKey(apiKey);
-      logger.debug('Google API key validation result', { context: 'plugin.validateApiKey', isValid });
       return isValid;
     } catch (error) {
       logger.error('Error validating Google API key', { context: 'plugin.validateApiKey' }, error instanceof Error ? error : undefined);
@@ -161,9 +155,6 @@ export const plugin: LLMProviderPlugin = {
    * Returns cached information about Google models without needing API calls
    */
   getModelInfo: () => {
-    logger.debug('Getting Google model information', {
-      context: 'plugin.getModelInfo',
-    });
     return [
       // Chat models
       {
@@ -331,7 +322,6 @@ export const plugin: LLMProviderPlugin = {
    * Render the Google icon
    */
   renderIcon: (props) => {
-    logger.debug('Rendering Google icon', { context: 'plugin.renderIcon', className: props.className });
     return GoogleIcon(props);
   },
 
@@ -345,11 +335,6 @@ export const plugin: LLMProviderPlugin = {
   formatTools: (
     tools: (OpenAIToolDefinition | Record<string, unknown>)[],
   ): GoogleToolDefinition[] => {
-    logger.debug('Formatting tools for Google provider', {
-      context: 'plugin.formatTools',
-      toolCount: tools.length,
-    });
-
     try {
       const formattedTools: GoogleToolDefinition[] = [];
 
@@ -368,12 +353,6 @@ export const plugin: LLMProviderPlugin = {
         const googleTool = convertToGoogleFormat(openaiTool);
         formattedTools.push(googleTool);
       }
-
-      logger.debug('Successfully formatted tools', {
-        context: 'plugin.formatTools',
-        count: formattedTools.length,
-      });
-
       return formattedTools;
     } catch (error) {
       logger.error(
@@ -393,18 +372,8 @@ export const plugin: LLMProviderPlugin = {
    * @returns Array of tool call requests
    */
   parseToolCalls: (response: any): ToolCallRequest[] => {
-    logger.debug('Parsing tool calls from Google response', {
-      context: 'plugin.parseToolCalls',
-    });
-
     try {
       const toolCalls = parseGoogleToolCalls(response);
-
-      logger.debug('Successfully parsed tool calls', {
-        context: 'plugin.parseToolCalls',
-        count: toolCalls.length,
-      });
-
       return toolCalls;
     } catch (error) {
       logger.error(

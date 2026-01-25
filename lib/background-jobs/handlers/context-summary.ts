@@ -18,13 +18,6 @@ import type { ContextSummaryPayload } from '../queue-service';
  */
 export async function handleContextSummary(job: BackgroundJob): Promise<void> {
   const payload = job.payload as unknown as ContextSummaryPayload;
-
-  logger.debug('[ContextSummary] Starting job', {
-    jobId: job.id,
-    chatId: payload.chatId,
-    forceRegenerate: payload.forceRegenerate,
-  });
-
   const repos = getRepositories();
 
   // Get the chat metadata
@@ -62,13 +55,6 @@ export async function handleContextSummary(job: BackgroundJob): Promise<void> {
     cheapLLMConfig,
     availableProfiles
   );
-
-  logger.debug('[ContextSummary] Using cheap LLM', {
-    jobId: job.id,
-    provider: cheapLLMSelection.provider,
-    model: cheapLLMSelection.modelName,
-  });
-
   // Get all chat messages
   const allMessages = await repos.chats.getMessages(payload.chatId);
 
@@ -93,10 +79,6 @@ export async function handleContextSummary(job: BackgroundJob): Promise<void> {
     : chatMessages.slice(lastSummaryMessageIndex);
 
   if (newMessages.length === 0) {
-    logger.debug('[ContextSummary] No new messages to summarize', {
-      jobId: job.id,
-      chatId: payload.chatId,
-    });
     return;
   }
 

@@ -47,12 +47,6 @@ export class UserSyncApiKeysRepository extends MongoBaseRepository<UserSyncApiKe
 
     // Hash the full key with bcrypt
     const keyHash = await bcrypt.hash(plaintextKey, BCRYPT_ROUNDS);
-
-    logger.debug('Generated new API key', {
-      context: 'user-sync-api-keys-repo',
-      keyPrefix,
-    });
-
     return { plaintextKey, keyPrefix, keyHash };
   }
 
@@ -62,12 +56,6 @@ export class UserSyncApiKeysRepository extends MongoBaseRepository<UserSyncApiKe
   async verifyApiKey(plaintextKey: string, keyHash: string): Promise<boolean> {
     try {
       const isValid = await bcrypt.compare(plaintextKey, keyHash);
-
-      logger.debug('API key verification result', {
-        context: 'user-sync-api-keys-repo',
-        isValid,
-      });
-
       return isValid;
     } catch (error) {
       logger.error('Error verifying API key', {
@@ -83,20 +71,10 @@ export class UserSyncApiKeysRepository extends MongoBaseRepository<UserSyncApiKe
    */
   async findById(id: string): Promise<UserSyncApiKey | null> {
     const collection = await this.getCollection();
-
-    logger.debug('Finding user sync API key by ID', {
-      context: 'user-sync-api-keys-repo',
-      keyId: id,
-    });
-
     try {
       const key = await collection.findOne({ id });
 
       if (!key) {
-        logger.debug('User sync API key not found', {
-          context: 'user-sync-api-keys-repo',
-          keyId: id,
-        });
         return null;
       }
 
@@ -111,12 +89,6 @@ export class UserSyncApiKeysRepository extends MongoBaseRepository<UserSyncApiKe
         });
         return null;
       }
-
-      logger.debug('User sync API key found by ID', {
-        context: 'user-sync-api-keys-repo',
-        keyId: id,
-      });
-
       return validationResult.data || null;
     } catch (error) {
       logger.error('Error finding user sync API key by ID', {
@@ -133,21 +105,8 @@ export class UserSyncApiKeysRepository extends MongoBaseRepository<UserSyncApiKe
    */
   async findByUserId(userId: string): Promise<UserSyncApiKey[]> {
     const collection = await this.getCollection();
-
-    logger.debug('Finding user sync API keys by user ID', {
-      context: 'user-sync-api-keys-repo',
-      userId,
-    });
-
     try {
       const keys = await collection.find({ userId }).sort({ createdAt: -1 }).toArray();
-
-      logger.debug('Retrieved user sync API keys by user ID', {
-        context: 'user-sync-api-keys-repo',
-        userId,
-        count: keys.length,
-      });
-
       const validatedKeys: UserSyncApiKey[] = [];
       for (const key of keys) {
         const { _id, ...keyData } = key as any;
@@ -179,21 +138,8 @@ export class UserSyncApiKeysRepository extends MongoBaseRepository<UserSyncApiKe
    */
   async findActiveByUserId(userId: string): Promise<UserSyncApiKey[]> {
     const collection = await this.getCollection();
-
-    logger.debug('Finding active user sync API keys by user ID', {
-      context: 'user-sync-api-keys-repo',
-      userId,
-    });
-
     try {
       const keys = await collection.find({ userId, isActive: true }).sort({ createdAt: -1 }).toArray();
-
-      logger.debug('Retrieved active user sync API keys by user ID', {
-        context: 'user-sync-api-keys-repo',
-        userId,
-        count: keys.length,
-      });
-
       const validatedKeys: UserSyncApiKey[] = [];
       for (const key of keys) {
         const { _id, ...keyData } = key as any;
@@ -225,19 +171,8 @@ export class UserSyncApiKeysRepository extends MongoBaseRepository<UserSyncApiKe
    */
   async findAll(): Promise<UserSyncApiKey[]> {
     const collection = await this.getCollection();
-
-    logger.debug('Finding all user sync API keys', {
-      context: 'user-sync-api-keys-repo',
-    });
-
     try {
       const keys = await collection.find({}).sort({ createdAt: -1 }).toArray();
-
-      logger.debug('Retrieved all user sync API keys', {
-        context: 'user-sync-api-keys-repo',
-        count: keys.length,
-      });
-
       const validatedKeys: UserSyncApiKey[] = [];
       for (const key of keys) {
         const { _id, ...keyData } = key as any;
@@ -268,19 +203,8 @@ export class UserSyncApiKeysRepository extends MongoBaseRepository<UserSyncApiKe
    */
   async findAllActive(): Promise<UserSyncApiKey[]> {
     const collection = await this.getCollection();
-
-    logger.debug('Finding all active user sync API keys', {
-      context: 'user-sync-api-keys-repo',
-    });
-
     try {
       const keys = await collection.find({ isActive: true }).toArray();
-
-      logger.debug('Retrieved all active user sync API keys', {
-        context: 'user-sync-api-keys-repo',
-        count: keys.length,
-      });
-
       const validatedKeys: UserSyncApiKey[] = [];
       for (const key of keys) {
         const { _id, ...keyData } = key as any;
@@ -312,13 +236,6 @@ export class UserSyncApiKeysRepository extends MongoBaseRepository<UserSyncApiKe
     const id = options?.id || this.generateId();
     const now = this.getCurrentTimestamp();
     const createdAt = options?.createdAt || now;
-
-    logger.debug('Creating user sync API key via standard create', {
-      context: 'user-sync-api-keys-repo',
-      userId: data.userId,
-      name: data.name,
-    });
-
     try {
       const key: UserSyncApiKey = {
         ...data,
@@ -359,13 +276,6 @@ export class UserSyncApiKeysRepository extends MongoBaseRepository<UserSyncApiKe
     const collection = await this.getCollection();
     const id = this.generateId();
     const now = this.getCurrentTimestamp();
-
-    logger.debug('Creating new user sync API key', {
-      context: 'user-sync-api-keys-repo',
-      userId,
-      name,
-    });
-
     try {
       // Generate the key
       const { plaintextKey, keyPrefix, keyHash } = await this.generateApiKey();
@@ -415,12 +325,6 @@ export class UserSyncApiKeysRepository extends MongoBaseRepository<UserSyncApiKe
   async update(id: string, data: { name?: string; isActive?: boolean }): Promise<UserSyncApiKey | null> {
     const collection = await this.getCollection();
     const now = this.getCurrentTimestamp();
-
-    logger.debug('Updating user sync API key', {
-      context: 'user-sync-api-keys-repo',
-      keyId: id,
-    });
-
     try {
       const updateData: any = {
         ...data,
@@ -475,22 +379,11 @@ export class UserSyncApiKeysRepository extends MongoBaseRepository<UserSyncApiKe
   async updateLastUsed(id: string): Promise<void> {
     const collection = await this.getCollection();
     const now = this.getCurrentTimestamp();
-
-    logger.debug('Updating last used timestamp for API key', {
-      context: 'user-sync-api-keys-repo',
-      keyId: id,
-    });
-
     try {
       await collection.updateOne(
         { id },
         { $set: { lastUsedAt: now, updatedAt: now } }
       );
-
-      logger.debug('Updated last used timestamp for API key', {
-        context: 'user-sync-api-keys-repo',
-        keyId: id,
-      });
     } catch (error) {
       logger.error('Error updating last used timestamp for API key', {
         context: 'user-sync-api-keys-repo',
@@ -506,12 +399,6 @@ export class UserSyncApiKeysRepository extends MongoBaseRepository<UserSyncApiKe
    */
   async delete(id: string): Promise<boolean> {
     const collection = await this.getCollection();
-
-    logger.debug('Deleting user sync API key', {
-      context: 'user-sync-api-keys-repo',
-      keyId: id,
-    });
-
     try {
       const result = await collection.deleteOne({ id });
 
@@ -544,12 +431,6 @@ export class UserSyncApiKeysRepository extends MongoBaseRepository<UserSyncApiKe
    */
   async deleteByUserId(userId: string): Promise<number> {
     const collection = await this.getCollection();
-
-    logger.debug('Deleting all user sync API keys for user', {
-      context: 'user-sync-api-keys-repo',
-      userId,
-    });
-
     try {
       const result = await collection.deleteMany({ userId });
 

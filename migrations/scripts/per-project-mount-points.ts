@@ -44,10 +44,6 @@ async function needsMigration(): Promise<boolean> {
 
     return hasIsProjectDefault !== null;
   } catch (error) {
-    logger.debug('Error checking for per-project mount points migration', {
-      context: 'migration.per-project-mount-points',
-      error: error instanceof Error ? error.message : String(error),
-    });
     return false;
   }
 }
@@ -64,17 +60,11 @@ export const perProjectMountPointsMigration: Migration = {
   async shouldRun(): Promise<boolean> {
     // Only run if MongoDB is enabled
     if (!isMongoDBBackend()) {
-      logger.debug('MongoDB not enabled, skipping per-project mount points migration', {
-        context: 'migration.per-project-mount-points',
-      });
       return false;
     }
 
     // Check if MongoDB is accessible
     if (!(await isMongoDBAccessible())) {
-      logger.debug('MongoDB not accessible, deferring per-project mount points migration', {
-        context: 'migration.per-project-mount-points',
-      });
       return false;
     }
 
@@ -97,60 +87,27 @@ export const perProjectMountPointsMigration: Migration = {
       const projectsCollection = db.collection('projects');
 
       // Step 1: Remove isProjectDefault from all mount points
-      logger.debug('Step 1: Removing isProjectDefault field from mount points', {
-        context: 'migration.per-project-mount-points',
-      });
-
       const updateResult = await mountPointsCollection.updateMany(
         { isProjectDefault: { $exists: true } },
         { $unset: { isProjectDefault: '' } }
       );
       mountPointsUpdated = updateResult.modifiedCount;
-
-      logger.debug('Removed isProjectDefault from mount points', {
-        context: 'migration.per-project-mount-points',
-        mountPointsUpdated,
-      });
-
       // Step 2: Drop the isProjectDefault index if it exists
-      logger.debug('Step 2: Dropping isProjectDefault index if it exists', {
-        context: 'migration.per-project-mount-points',
-      });
-
       try {
         await mountPointsCollection.dropIndex('isProjectDefault_1');
-        logger.debug('Dropped isProjectDefault index', {
-          context: 'migration.per-project-mount-points',
-        });
       } catch (indexError) {
         // Index might not exist, which is fine
-        logger.debug('isProjectDefault index did not exist or could not be dropped', {
-          context: 'migration.per-project-mount-points',
-          error: indexError instanceof Error ? indexError.message : String(indexError),
-        });
       }
 
       // Step 3: Add index on projects.mountPointId
-      logger.debug('Step 3: Creating index on projects.mountPointId', {
-        context: 'migration.per-project-mount-points',
-      });
-
       try {
         await projectsCollection.createIndex(
           { mountPointId: 1 },
           { sparse: true, background: true }
         );
         indexCreated = true;
-
-        logger.debug('Created projects.mountPointId index', {
-          context: 'migration.per-project-mount-points',
-        });
       } catch (indexError) {
         // Index might already exist
-        logger.debug('Could not create projects.mountPointId index (may already exist)', {
-          context: 'migration.per-project-mount-points',
-          error: indexError instanceof Error ? indexError.message : String(indexError),
-        });
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);

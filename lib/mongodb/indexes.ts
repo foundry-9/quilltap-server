@@ -250,16 +250,9 @@ async function createCollectionIndexes(
   const collection = db.collection(collectionName);
   const errors: string[] = [];
   let indexCount = 0;
-
-  logger.debug(`[MongoDB] Creating indexes for collection: ${collectionName}`);
-
   for (const indexDef of indexes) {
     try {
       const indexName = await collection.createIndex(indexDef.key, indexDef.options);
-      logger.debug(
-        `[MongoDB] Index created for ${collectionName}: ${indexName}`,
-        { key: indexDef.key, options: indexDef.options }
-      );
       indexCount++;
     } catch (error) {
       const errorMessage = getErrorMessage(error);
@@ -281,8 +274,6 @@ async function createCollectionIndexes(
  * @throws Logs errors but continues with other indexes
  */
 export async function ensureIndexes(db: Db): Promise<void> {
-  logger.debug('[MongoDB] Starting index creation');
-
   const collections = Object.keys(INDEX_DEFINITIONS);
   const results: { collection: string; indexCount: number; errors: string[] }[] = [];
 
@@ -323,9 +314,6 @@ async function dropCollectionIndexes(
   const collection = db.collection(collectionName);
   const errors: string[] = [];
   let indexCount = 0;
-
-  logger.debug(`[MongoDB] Dropping indexes for collection: ${collectionName}`);
-
   try {
     // Get existing indexes
     const indexes = await collection.indexes();
@@ -335,10 +323,6 @@ async function dropCollectionIndexes(
       if (index.name && index.name !== '_id_') {
         try {
           await collection.dropIndex(index.name);
-          logger.debug(
-            `[MongoDB] Index dropped for ${collectionName}: ${index.name}`,
-            { indexSpec: index.key }
-          );
           indexCount++;
         } catch (error) {
           const errorMessage = getErrorMessage(error);
@@ -370,8 +354,6 @@ async function dropCollectionIndexes(
  * @throws Logs errors but continues with other indexes
  */
 export async function dropIndexes(db: Db): Promise<void> {
-  logger.debug('[MongoDB] Starting index deletion');
-
   const collections = Object.keys(INDEX_DEFINITIONS);
   const results: { collection: string; indexCount: number; errors: string[] }[] = [];
 

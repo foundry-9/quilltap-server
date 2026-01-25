@@ -36,7 +36,6 @@ export async function handleTurnAction(
     const body = await req.json();
     const { action: turnAction, participantId } = turnActionSchema.parse(body);
 
-    logger.debug('[Chats v1] Processing turn action', { chatId, action: turnAction, participantId });
 
     const participant = chat.participants.find((p) => p.id === participantId);
     if (!participant) {
@@ -85,16 +84,7 @@ export async function handleTurnAction(
 
     const nextSpeakerResult = selectNextSpeaker(chat.participants, charactersMap, turnState, userParticipantId);
 
-    const affectedCharacter = participant.characterId ? charactersMap.get(participant.characterId) : null;
-
-    logger.debug('[Chats v1] Turn action completed', {
-      chatId,
-      action: turnAction,
-      participantId,
-      nextSpeakerId: nextSpeakerResult.nextSpeakerId,
-    });
-
-    return NextResponse.json({
+    const affectedCharacter = participant.characterId ? charactersMap.get(participant.characterId) : null;return NextResponse.json({
       success: true,
       action: turnAction,
       participant: {

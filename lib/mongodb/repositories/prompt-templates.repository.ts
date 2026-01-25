@@ -23,9 +23,6 @@ export class PromptTemplatesRepository extends MongoBaseRepository<PromptTemplat
 
   constructor() {
     super('prompt_templates', PromptTemplateSchema);
-    logger.debug('PromptTemplatesRepository initialized', {
-      collection: this.collectionName,
-    });
   }
 
   // ============================================================================
@@ -51,13 +48,8 @@ export class PromptTemplatesRepository extends MongoBaseRepository<PromptTemplat
 
   private async _doSeedSamplePrompts(): Promise<void> {
     try {
-      logger.debug('Checking for sample prompts to seed', {
-        collection: this.collectionName,
-      });
-
       const samplePrompts = await loadSamplePrompts();
       if (samplePrompts.length === 0) {
-        logger.debug('No sample prompts found to seed');
         return;
       }
 
@@ -98,9 +90,6 @@ export class PromptTemplatesRepository extends MongoBaseRepository<PromptTemplat
             category: sample.category,
           });
         } else {
-          logger.debug('Sample prompt template already exists', {
-            name: sample.name,
-          });
         }
       }
     } catch (error) {
@@ -120,11 +109,6 @@ export class PromptTemplatesRepository extends MongoBaseRepository<PromptTemplat
    */
   async findById(id: string): Promise<PromptTemplate | null> {
     try {
-      logger.debug('Finding prompt template by ID', {
-        templateId: id,
-        collection: this.collectionName,
-      });
-
       // Ensure built-in templates are seeded
       await this.seedSamplePrompts();
 
@@ -132,12 +116,10 @@ export class PromptTemplatesRepository extends MongoBaseRepository<PromptTemplat
       const doc = await collection.findOne({ id });
 
       if (!doc) {
-        logger.debug('Prompt template not found', { templateId: id });
         return null;
       }
 
       const validated = this.validate(doc);
-      logger.debug('Prompt template found and validated', { templateId: id });
       return validated;
     } catch (error) {
       logger.error('Error finding prompt template by ID', {
@@ -153,25 +135,15 @@ export class PromptTemplatesRepository extends MongoBaseRepository<PromptTemplat
    */
   async findAll(): Promise<PromptTemplate[]> {
     try {
-      logger.debug('Finding all prompt templates', { collection: this.collectionName });
-
       // Ensure built-in templates are seeded
       await this.seedSamplePrompts();
 
       const collection = await this.getCollection();
       const docs = await collection.find({}).toArray();
-
-      logger.debug('Retrieved prompt templates from database', { count: docs.length });
-
       const validated = docs
         .map((doc) => this.validateSafe(doc))
         .filter((result) => result.success)
         .map((result) => result.data!);
-
-      logger.debug('All prompt templates validated', {
-        total: docs.length,
-        validated: validated.length,
-      });
       return validated;
     } catch (error) {
       logger.error('Error finding all prompt templates', {
@@ -186,29 +158,12 @@ export class PromptTemplatesRepository extends MongoBaseRepository<PromptTemplat
    */
   async findByUserId(userId: string): Promise<PromptTemplate[]> {
     try {
-      logger.debug('Finding prompt templates by user ID', {
-        userId,
-        collection: this.collectionName,
-      });
-
       const collection = await this.getCollection();
       const docs = await collection.find({ userId }).toArray();
-
-      logger.debug('Retrieved prompt templates for user', {
-        userId,
-        count: docs.length,
-      });
-
       const validated = docs
         .map((doc) => this.validateSafe(doc))
         .filter((result) => result.success)
         .map((result) => result.data!);
-
-      logger.debug('User prompt templates validated', {
-        userId,
-        total: docs.length,
-        validated: validated.length,
-      });
       return validated;
     } catch (error) {
       logger.error('Error finding prompt templates by user ID', {
@@ -224,27 +179,15 @@ export class PromptTemplatesRepository extends MongoBaseRepository<PromptTemplat
    */
   async findBuiltIn(): Promise<PromptTemplate[]> {
     try {
-      logger.debug('Finding built-in prompt templates', {
-        collection: this.collectionName,
-      });
-
       // Ensure built-in templates are seeded
       await this.seedSamplePrompts();
 
       const collection = await this.getCollection();
       const docs = await collection.find({ isBuiltIn: true }).toArray();
-
-      logger.debug('Retrieved built-in prompt templates', { count: docs.length });
-
       const validated = docs
         .map((doc) => this.validateSafe(doc))
         .filter((result) => result.success)
         .map((result) => result.data!);
-
-      logger.debug('Built-in prompt templates validated', {
-        total: docs.length,
-        validated: validated.length,
-      });
       return validated;
     } catch (error) {
       logger.error('Error finding built-in prompt templates', {
@@ -259,11 +202,6 @@ export class PromptTemplatesRepository extends MongoBaseRepository<PromptTemplat
    */
   async findAllForUser(userId: string): Promise<PromptTemplate[]> {
     try {
-      logger.debug('Finding all prompt templates for user', {
-        userId,
-        collection: this.collectionName,
-      });
-
       // Ensure built-in templates are seeded
       await this.seedSamplePrompts();
 
@@ -274,22 +212,10 @@ export class PromptTemplatesRepository extends MongoBaseRepository<PromptTemplat
           { userId },
         ],
       }).toArray();
-
-      logger.debug('Retrieved prompt templates for user', {
-        userId,
-        count: docs.length,
-      });
-
       const validated = docs
         .map((doc) => this.validateSafe(doc))
         .filter((result) => result.success)
         .map((result) => result.data!);
-
-      logger.debug('User available prompt templates validated', {
-        userId,
-        total: docs.length,
-        validated: validated.length,
-      });
       return validated;
     } catch (error) {
       logger.error('Error finding all prompt templates for user', {
@@ -305,28 +231,14 @@ export class PromptTemplatesRepository extends MongoBaseRepository<PromptTemplat
    */
   async findByName(userId: string, name: string): Promise<PromptTemplate | null> {
     try {
-      logger.debug('Finding prompt template by name for user', {
-        userId,
-        name,
-        collection: this.collectionName,
-      });
-
       const collection = await this.getCollection();
       const doc = await collection.findOne({ userId, name });
 
       if (!doc) {
-        logger.debug('Prompt template not found by name for user', {
-          userId,
-          name,
-        });
         return null;
       }
 
       const validated = this.validate(doc);
-      logger.debug('Prompt template found by name for user', {
-        userId,
-        name,
-      });
       return validated;
     } catch (error) {
       logger.error('Error finding prompt template by name', {
@@ -348,13 +260,6 @@ export class PromptTemplatesRepository extends MongoBaseRepository<PromptTemplat
     options?: CreateOptions
   ): Promise<PromptTemplate> {
     try {
-      logger.debug('Creating new prompt template', {
-        userId: data.userId,
-        name: data.name,
-        isBuiltIn: data.isBuiltIn,
-        collection: this.collectionName,
-      });
-
       const id = options?.id || this.generateId();
       const now = this.getCurrentTimestamp();
       const createdAt = options?.createdAt || now;
@@ -396,11 +301,6 @@ export class PromptTemplatesRepository extends MongoBaseRepository<PromptTemplat
    */
   async update(id: string, data: Partial<PromptTemplate>): Promise<PromptTemplate | null> {
     try {
-      logger.debug('Updating prompt template', {
-        templateId: id,
-        collection: this.collectionName,
-      });
-
       const existing = await this.findById(id);
       if (!existing) {
         logger.warn('Prompt template not found for update', { templateId: id });
@@ -454,11 +354,6 @@ export class PromptTemplatesRepository extends MongoBaseRepository<PromptTemplat
    */
   async delete(id: string): Promise<boolean> {
     try {
-      logger.debug('Deleting prompt template', {
-        templateId: id,
-        collection: this.collectionName,
-      });
-
       const existing = await this.findById(id);
       if (!existing) {
         logger.warn('Prompt template not found for deletion', { templateId: id });
@@ -499,12 +394,6 @@ export class PromptTemplatesRepository extends MongoBaseRepository<PromptTemplat
    */
   async addTag(templateId: string, tagId: string): Promise<PromptTemplate | null> {
     try {
-      logger.debug('Adding tag to prompt template', {
-        templateId,
-        tagId,
-        collection: this.collectionName,
-      });
-
       const template = await this.findById(templateId);
       if (!template) {
         logger.warn('Prompt template not found for tag addition', { templateId });
@@ -519,15 +408,8 @@ export class PromptTemplatesRepository extends MongoBaseRepository<PromptTemplat
 
       if (!template.tags.includes(tagId)) {
         template.tags.push(tagId);
-        logger.debug('Tag added to prompt template tags array', {
-          templateId,
-          tagId,
-          totalTags: template.tags.length,
-        });
         return await this.update(templateId, { tags: template.tags });
       }
-
-      logger.debug('Tag already exists for prompt template', { templateId, tagId });
       return template;
     } catch (error) {
       logger.error('Error adding tag to prompt template', {
@@ -544,12 +426,6 @@ export class PromptTemplatesRepository extends MongoBaseRepository<PromptTemplat
    */
   async removeTag(templateId: string, tagId: string): Promise<PromptTemplate | null> {
     try {
-      logger.debug('Removing tag from prompt template', {
-        templateId,
-        tagId,
-        collection: this.collectionName,
-      });
-
       const template = await this.findById(templateId);
       if (!template) {
         logger.warn('Prompt template not found for tag removal', { templateId });
@@ -566,15 +442,8 @@ export class PromptTemplatesRepository extends MongoBaseRepository<PromptTemplat
       template.tags = template.tags.filter((id) => id !== tagId);
 
       if (template.tags.length < initialLength) {
-        logger.debug('Tag removed from prompt template tags array', {
-          templateId,
-          tagId,
-          totalTags: template.tags.length,
-        });
         return await this.update(templateId, { tags: template.tags });
       }
-
-      logger.debug('Tag not found in prompt template tags', { templateId, tagId });
       return template;
     } catch (error) {
       logger.error('Error removing tag from prompt template', {

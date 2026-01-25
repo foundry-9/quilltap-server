@@ -41,10 +41,6 @@ async function hasProfilesNeedingMigration(): Promise<boolean> {
     });
     return count > 0;
   } catch (error) {
-    logger.debug('Error checking profiles for token tracking fields', {
-      context: 'migration.add-token-tracking-fields',
-      error: error instanceof Error ? error.message : String(error),
-    });
     return false;
   }
 }
@@ -61,10 +57,6 @@ async function hasChatsNeedingMigration(): Promise<boolean> {
     });
     return count > 0;
   } catch (error) {
-    logger.debug('Error checking chats for token tracking fields', {
-      context: 'migration.add-token-tracking-fields',
-      error: error instanceof Error ? error.message : String(error),
-    });
     return false;
   }
 }
@@ -81,17 +73,11 @@ export const addTokenTrackingFieldsMigration: Migration = {
   async shouldRun(): Promise<boolean> {
     // Only run if MongoDB is enabled
     if (!isMongoDBBackend()) {
-      logger.debug('MongoDB not enabled, skipping token tracking fields migration', {
-        context: 'migration.add-token-tracking-fields',
-      });
       return false;
     }
 
     // Check if MongoDB is accessible
     if (!(await isMongoDBAccessible())) {
-      logger.debug('MongoDB not accessible, deferring token tracking fields migration', {
-        context: 'migration.add-token-tracking-fields',
-      });
       return false;
     }
 
@@ -99,14 +85,6 @@ export const addTokenTrackingFieldsMigration: Migration = {
     const profilesNeedMigration = await hasProfilesNeedingMigration();
     const chatsNeedMigration = await hasChatsNeedingMigration();
     const needsRun = profilesNeedMigration || chatsNeedMigration;
-
-    logger.debug('Checked for token tracking fields migration need', {
-      context: 'migration.add-token-tracking-fields',
-      profilesNeedMigration,
-      chatsNeedMigration,
-      needsRun,
-    });
-
     return needsRun;
   },
 
@@ -123,9 +101,6 @@ export const addTokenTrackingFieldsMigration: Migration = {
       const db = await getMongoDatabase();
 
       // Add token tracking fields to connection_profiles
-      logger.debug('Adding token tracking fields to connection_profiles', {
-        context: 'migration.add-token-tracking-fields',
-      });
       const profilesCollection = db.collection('connection_profiles');
       const profilesResult = await profilesCollection.updateMany(
         { totalTokens: { $exists: false } },
@@ -139,16 +114,7 @@ export const addTokenTrackingFieldsMigration: Migration = {
         }
       );
       profilesUpdated = profilesResult.modifiedCount;
-
-      logger.debug('Connection profiles updated with token tracking fields', {
-        context: 'migration.add-token-tracking-fields',
-        count: profilesUpdated,
-      });
-
       // Add token tracking fields to chats
-      logger.debug('Adding token tracking fields to chats', {
-        context: 'migration.add-token-tracking-fields',
-      });
       const chatsCollection = db.collection('chats');
       const chatsResult = await chatsCollection.updateMany(
         { totalPromptTokens: { $exists: false } },
@@ -162,11 +128,6 @@ export const addTokenTrackingFieldsMigration: Migration = {
         }
       );
       chatsUpdated = chatsResult.modifiedCount;
-
-      logger.debug('Chats updated with token tracking fields', {
-        context: 'migration.add-token-tracking-fields',
-        count: chatsUpdated,
-      });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       logger.error('Token tracking fields migration failed', {

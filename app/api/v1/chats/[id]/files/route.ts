@@ -37,17 +37,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
 
       // Get optional resolution parameters for duplicate handling
       const resolution = formData.get('resolution') as ConflictResolution | null;
-      const conflictingFileId = formData.get('conflictingFileId') as string | null;
-
-      logger.debug('[Chats v1 Files] Uploading chat file', {
-        chatId,
-        projectId: chat.projectId,
-        filename: file.name,
-        resolution,
-        conflictingFileId,
-      });
-
-      // Upload the file (creates file entry automatically)
+      const conflictingFileId = formData.get('conflictingFileId') as string | null;// Upload the file (creates file entry automatically)
       // Pass projectId so files in project chats become project files
       const uploadResult = await uploadChatFile(file, chatId, user.id, {
         projectId: chat.projectId,
@@ -56,13 +46,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       });
 
       // Check if this is a duplicate detection result
-      if ('duplicate' in uploadResult && uploadResult.duplicate) {
-        logger.debug('[Chats v1 Files] Duplicate file detected', {
-          conflictType: uploadResult.conflictType,
-          existingFileId: uploadResult.existingFile.id,
-        });
-
-        return NextResponse.json({
+      if ('duplicate' in uploadResult && uploadResult.duplicate) {return NextResponse.json({
           duplicate: true,
           conflictType: uploadResult.conflictType,
           existingFile: uploadResult.existingFile,
@@ -140,14 +124,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       }));
 
       // Sort by creation time, newest first
-      allFiles.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-      logger.debug('[Chats v1 Files] Listed chat files', {
-        chatId,
-        fileCount: allFiles.length,
-      });
-
-      return NextResponse.json({
+      allFiles.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());return NextResponse.json({
         files: allFiles,
       });
     } catch (error) {

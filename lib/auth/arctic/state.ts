@@ -119,12 +119,6 @@ export function generateOAuthState(
   response.cookies.set(OAUTH_STATE_COOKIE, encryptValue(state), options);
   response.cookies.set(OAUTH_VERIFIER_COOKIE, encryptValue(codeVerifier), options);
   response.cookies.set(OAUTH_CALLBACK_COOKIE, encryptValue(callbackUrl), options);
-
-  logger.debug('OAuth state generated', {
-    context: 'state.generateOAuthState',
-    callbackUrl,
-  });
-
   return { state, codeVerifier, callbackUrl };
 }
 
@@ -144,9 +138,6 @@ export function retrieveOAuthState(
   const callbackCookie = request.cookies.get(OAUTH_CALLBACK_COOKIE);
 
   if (!stateCookie?.value || !verifierCookie?.value) {
-    logger.debug('OAuth state cookies not found', {
-      context: 'state.retrieveOAuthState',
-    });
     return null;
   }
 
@@ -155,9 +146,6 @@ export function retrieveOAuthState(
   const callbackUrl = callbackCookie?.value ? decryptValue(callbackCookie.value) : '/';
 
   if (!storedState || !codeVerifier) {
-    logger.debug('Failed to decrypt OAuth state', {
-      context: 'state.retrieveOAuthState',
-    });
     return null;
   }
 
@@ -168,12 +156,6 @@ export function retrieveOAuthState(
     });
     return null;
   }
-
-  logger.debug('OAuth state verified', {
-    context: 'state.retrieveOAuthState',
-    callbackUrl,
-  });
-
   return { codeVerifier, callbackUrl: callbackUrl || '/' };
 }
 
@@ -191,10 +173,6 @@ export function clearOAuthState(response: NextResponse): void {
   response.cookies.set(OAUTH_STATE_COOKIE, '', clearOptions);
   response.cookies.set(OAUTH_VERIFIER_COOKIE, '', clearOptions);
   response.cookies.set(OAUTH_CALLBACK_COOKIE, '', clearOptions);
-
-  logger.debug('OAuth state cleared', {
-    context: 'state.clearOAuthState',
-  });
 }
 
 /**
@@ -210,8 +188,4 @@ export async function clearOAuthStateFromAction(): Promise<void> {
   cookieStore.set(OAUTH_STATE_COOKIE, '', clearOptions);
   cookieStore.set(OAUTH_VERIFIER_COOKIE, '', clearOptions);
   cookieStore.set(OAUTH_CALLBACK_COOKIE, '', clearOptions);
-
-  logger.debug('OAuth state cleared from action', {
-    context: 'state.clearOAuthStateFromAction',
-  });
 }

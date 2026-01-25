@@ -16,21 +16,17 @@ import { logger } from '@/lib/logger';
 export const GET = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id: logId }) => {
     try {
-      logger.debug('[LLM Logs API] GET log by ID', { userId: user.id, logId });
 
       const log = await repos.llmLogs.findById(logId);
       if (!log) {
-        logger.debug('[LLM Logs API] Log not found', { userId: user.id, logId });
         return notFound('LLM Log');
       }
 
       // Verify ownership
       if (log.userId !== user.id) {
-        logger.debug('[LLM Logs API] Unauthorized access to log', { userId: user.id, logId, logUserId: log.userId });
         return forbidden();
       }
 
-      logger.debug('[LLM Logs API] Log retrieved successfully', { userId: user.id, logId });
 
       return successResponse(log);
     } catch (error) {
@@ -50,17 +46,14 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id: logId }) => {
     try {
-      logger.debug('[LLM Logs API] DELETE log', { userId: user.id, logId });
 
       const log = await repos.llmLogs.findById(logId);
       if (!log) {
-        logger.debug('[LLM Logs API] Log not found for deletion', { userId: user.id, logId });
         return notFound('LLM Log');
       }
 
       // Verify ownership
       if (log.userId !== user.id) {
-        logger.debug('[LLM Logs API] Unauthorized deletion attempt', { userId: user.id, logId, logUserId: log.userId });
         return forbidden();
       }
 

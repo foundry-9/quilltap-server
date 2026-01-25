@@ -24,15 +24,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
   try {
     const { searchParams } = new URL(req.url);
     const includeJobs = searchParams.get('includeJobs') === 'true';
-    const chatId = searchParams.get('chatId');
-
-    logger.debug('[System Jobs v1] GET request', {
-      userId: user.id,
-      includeJobs,
-      chatId,
-    });
-
-    // Ensure processor is running
+    const chatId = searchParams.get('chatId');// Ensure processor is running
     ensureProcessorRunning();
 
     // Get stats

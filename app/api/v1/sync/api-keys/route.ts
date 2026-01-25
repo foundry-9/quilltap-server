@@ -30,7 +30,6 @@ const createApiKeySchema = z.object({
 
 export const GET = createAuthenticatedHandler(async (req, context) => {
   try {
-    logger.debug('[Sync API Keys v1] GET list', { userId: context.user.id });
 
     const repos = await getRepositories();
     const apiKeys = await repos.userSyncApiKeys.findByUserId(context.user.id);

@@ -125,36 +125,14 @@ export abstract class MongoBaseRepository<T> {
     data: Omit<T, 'id' | 'createdAt' | 'updatedAt'>,
     options?: { createdAt?: string }
   ): Promise<T> {
-    logger.debug('createOrUpdate: starting lookup', {
-      collection: this.collectionName,
-      id,
-    });
-
     const existing = await this.findById(id);
-
-    logger.debug('createOrUpdate: findById result', {
-      collection: this.collectionName,
-      id,
-      found: !!existing,
-      existingId: (existing as any)?.id,
-    });
-
     if (existing) {
-      logger.debug('Entity exists, updating via createOrUpdate', {
-        collection: this.collectionName,
-        id,
-      });
       const updated = await this.update(id, data as Partial<T>);
       if (!updated) {
         throw new Error(`Failed to update entity ${id}`);
       }
       return updated;
     }
-
-    logger.debug('Entity does not exist, creating via createOrUpdate', {
-      collection: this.collectionName,
-      id,
-    });
     return this.create(data, { id, createdAt: options?.createdAt });
   }
 }

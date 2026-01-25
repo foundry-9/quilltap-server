@@ -159,10 +159,6 @@ class FileStorageManager {
     }
     // Fallback to s3Key for files created before mount points migration
     if (file.s3Key) {
-      logger.debug('Using s3Key fallback for storageKey', {
-        fileId: file.id,
-        s3Key: file.s3Key,
-      });
       return file.s3Key;
     }
     return null;
@@ -177,8 +173,6 @@ class FileStorageManager {
    * @throws {Error} If initialization fails
    */
   async initialize(): Promise<void> {
-    logger.debug('Initializing file storage manager');
-
     try {
       // Load mount points from database
       await this.refreshMountPoints();
@@ -228,11 +222,6 @@ class FileStorageManager {
     const backendId = plugin.metadata.backendId;
 
     this.providerPlugins.set(backendId, plugin);
-
-    logger.debug('Registered provider plugin', {
-      backendId,
-      displayName: plugin.metadata.displayName,
-    });
   }
 
   /**
@@ -253,7 +242,6 @@ class FileStorageManager {
    */
   private async ensureInitialized(): Promise<void> {
     if (!this.initialized) {
-      logger.debug('Lazy initializing file storage manager');
       await this.initialize();
     }
   }
@@ -290,12 +278,6 @@ class FileStorageManager {
     try {
       const backend = await this.createBackendForMountPoint(mountPoint);
       this.backends.set(mountPointId, backend);
-
-      logger.debug('Created and cached backend', {
-        mountPointId,
-        backendType: mountPoint.backendType,
-      });
-
       return backend;
     } catch (error) {
       const errorMsg =
@@ -326,22 +308,12 @@ class FileStorageManager {
     if (file.mountPointId) {
       const backend = await this.getBackend(file.mountPointId);
       if (backend) {
-        logger.debug('Got backend for file from explicit mount point', {
-          fileId: file.id,
-          mountPointId: file.mountPointId,
-        });
         return backend;
       }
     }
 
     // Fall back to project or system default
     const backend = await this.getBackendForProject(file.projectId || null);
-
-    logger.debug('Got backend for file from project/system default', {
-      fileId: file.id,
-      projectId: file.projectId,
-    });
-
     return backend;
   }
 
@@ -356,8 +328,6 @@ class FileStorageManager {
    * @throws {Error} If no suitable backend is found
    */
   async getBackendForProject(projectId: string | null): Promise<FileStorageBackend> {
-    logger.debug('Getting backend for project', { projectId });
-
     // Check if the project has a specific mount point configured
     if (projectId) {
       try {
@@ -365,10 +335,6 @@ class FileStorageManager {
         if (project?.mountPointId) {
           const backend = await this.getBackend(project.mountPointId);
           if (backend) {
-            logger.debug('Using project-specific mount point', {
-              projectId,
-              mountPointId: project.mountPointId,
-            });
             return backend;
           }
           logger.warn('Project mount point not found, falling back to default', {
@@ -421,11 +387,6 @@ class FileStorageManager {
       logger.error(errorMsg);
       throw new Error(errorMsg);
     }
-
-    logger.debug('Got default backend', {
-      mountPointId: this.defaultMountPointId,
-    });
-
     return backend;
   }
 
@@ -492,8 +453,6 @@ class FileStorageManager {
    * @returns Array of available backend information
    */
   getAvailableBackends(): AvailableBackendInfo[] {
-    logger.debug('Getting available backends');
-
     const backends: AvailableBackendInfo[] = [];
 
     // Add built-in local backend
@@ -522,18 +481,7 @@ class FileStorageManager {
         description: plugin.metadata.description,
         configFields: plugin.configSchema,
       });
-
-      logger.debug('Added provider plugin to available backends', {
-        backendId,
-        displayName: plugin.metadata.displayName,
-      });
     }
-
-    logger.debug('Retrieved available backends', {
-      count: backends.length,
-      backendIds: backends.map((b) => b.providerId),
-    });
-
     return backends;
   }
 
@@ -546,8 +494,6 @@ class FileStorageManager {
    * @throws {Error} If database query fails
    */
   async refreshMountPoints(): Promise<void> {
-    logger.debug('Refreshing mount points from database');
-
     try {
       // Load mount points from MongoDB
       const mountPoints = await mountPointsRepository.findAll();
@@ -560,12 +506,6 @@ class FileStorageManager {
       // Populate mount points map
       for (const mp of mountPoints) {
         this.mountPoints.set(mp.id, mp);
-        logger.debug('Loaded mount point', {
-          mountPointId: mp.id,
-          name: mp.name,
-          backendType: mp.backendType,
-          isDefault: mp.isDefault,
-        });
       }
 
       logger.info('Mount points refreshed', {
@@ -609,17 +549,6 @@ class FileStorageManager {
       mountPointId: overrideMountPointId,
       metadata,
     } = params;
-
-    logger.debug('Uploading file', {
-      userId,
-      fileId,
-      filename,
-      size: content.length,
-      contentType,
-      projectId,
-      overrideMountPointId,
-    });
-
     try {
       // Select mount point (override > project > default)
       let targetMountPointId = overrideMountPointId;
@@ -700,14 +629,6 @@ class FileStorageManager {
    */
   async downloadFile(file: FileEntry): Promise<Buffer> {
     const effectiveStorageKey = this.getEffectiveStorageKey(file);
-
-    logger.debug('Downloading file', {
-      fileId: file.id,
-      userId: file.userId,
-      storageKey: effectiveStorageKey,
-      mountPointId: file.mountPointId,
-    });
-
     try {
       if (!effectiveStorageKey) {
         throw new Error('File has no storage key. Cannot download.');
@@ -750,14 +671,6 @@ class FileStorageManager {
    */
   async deleteFile(file: FileEntry): Promise<void> {
     const effectiveStorageKey = this.getEffectiveStorageKey(file);
-
-    logger.debug('Deleting file', {
-      fileId: file.id,
-      userId: file.userId,
-      storageKey: effectiveStorageKey,
-      mountPointId: file.mountPointId,
-    });
-
     try {
       if (!effectiveStorageKey) {
         logger.warn('File has no storage key. Skipping deletion.', {
@@ -805,15 +718,6 @@ class FileStorageManager {
     options?: { presigned?: boolean; expiresIn?: number }
   ): Promise<string> {
     const effectiveStorageKey = this.getEffectiveStorageKey(file);
-
-    logger.debug('Getting file URL', {
-      fileId: file.id,
-      userId: file.userId,
-      storageKey: effectiveStorageKey,
-      presigned: options?.presigned,
-      expiresIn: options?.expiresIn,
-    });
-
     try {
       if (!effectiveStorageKey) {
         throw new Error('File has no storage key. Cannot generate URL.');
@@ -832,22 +736,11 @@ class FileStorageManager {
           effectiveStorageKey,
           options.expiresIn || 3600
         );
-
-        logger.debug('Generated presigned URL', {
-          fileId: file.id,
-          expiresIn: options.expiresIn,
-        });
-
         return url;
       }
 
       // Fall back to proxy URL
       const proxyUrl = backend.getProxyUrl(effectiveStorageKey);
-
-      logger.debug('Generated proxy URL', {
-        fileId: file.id,
-      });
-
       return proxyUrl;
     } catch (error) {
       const errorMsg =
@@ -872,13 +765,6 @@ class FileStorageManager {
    */
   async fileExists(file: FileEntry): Promise<boolean> {
     const effectiveStorageKey = this.getEffectiveStorageKey(file);
-
-    logger.debug('Checking if file exists', {
-      fileId: file.id,
-      userId: file.userId,
-      storageKey: effectiveStorageKey,
-    });
-
     try {
       if (!effectiveStorageKey) {
         logger.warn('File has no storage key. Assuming does not exist.', {
@@ -889,12 +775,6 @@ class FileStorageManager {
 
       const backend = await this.getBackendForFile(file);
       const exists = await backend.exists(effectiveStorageKey);
-
-      logger.debug('File existence check complete', {
-        fileId: file.id,
-        exists,
-      });
-
       return exists;
     } catch (error) {
       const errorMsg =
@@ -930,14 +810,6 @@ class FileStorageManager {
     mountPointId?: string;
   }): Promise<void> {
     const { userId, projectId, folderPath, mountPointId } = params;
-
-    logger.debug('Creating folder in storage', {
-      userId,
-      projectId,
-      folderPath,
-      mountPointId,
-    });
-
     try {
       // Get the appropriate backend
       let backend: FileStorageBackend;
@@ -955,10 +827,6 @@ class FileStorageManager {
 
       // Check if backend supports folder operations
       if (!metadata.capabilities.folders || !backend.createFolder) {
-        logger.debug('Backend does not support folder operations, skipping', {
-          providerId: metadata.providerId,
-          folderPath,
-        });
         return;
       }
 
@@ -1009,14 +877,6 @@ class FileStorageManager {
     mountPointId?: string;
   }): Promise<void> {
     const { userId, projectId, folderPath, mountPointId } = params;
-
-    logger.debug('Deleting folder from storage', {
-      userId,
-      projectId,
-      folderPath,
-      mountPointId,
-    });
-
     try {
       // Get the appropriate backend
       let backend: FileStorageBackend;
@@ -1034,10 +894,6 @@ class FileStorageManager {
 
       // Check if backend supports folder operations
       if (!metadata.capabilities.folders || !backend.deleteFolder) {
-        logger.debug('Backend does not support folder operations, skipping', {
-          providerId: metadata.providerId,
-          folderPath,
-        });
         return;
       }
 
@@ -1101,14 +957,6 @@ class FileStorageManager {
     }
 
     const storagePath = pathParts.join('/');
-
-    logger.debug('Built folder storage path', {
-      userId,
-      projectId,
-      folderPath,
-      storagePath,
-    });
-
     return storagePath;
   }
 
@@ -1157,16 +1005,6 @@ class FileStorageManager {
 
     // Combine with file ID and sanitized filename
     const key = `${pathParts.join('/')}/${fileId}_${sanitizedFilename}`;
-
-    logger.debug('Generated storage key', {
-      userId,
-      fileId,
-      filename,
-      projectId,
-      folderPath,
-      key,
-    });
-
     return key;
   }
 
@@ -1186,11 +1024,6 @@ class FileStorageManager {
    * @throws {Error} If backend creation fails
    */
   private async createBackendForMountPoint(mountPoint: MountPoint): Promise<FileStorageBackend> {
-    logger.debug('Creating backend for mount point', {
-      mountPointId: mountPoint.id,
-      backendType: mountPoint.backendType,
-    });
-
     try {
       // Handle built-in local backend
       if (mountPoint.backendType === 'local') {
@@ -1213,10 +1046,6 @@ class FileStorageManager {
             message: testResult.message,
           });
         } else {
-          logger.debug('Local backend connection test passed', {
-            mountPointId: mountPoint.id,
-            latencyMs: testResult.latencyMs,
-          });
         }
 
         logger.info('Created local file storage backend', {
@@ -1242,10 +1071,6 @@ class FileStorageManager {
         try {
           const secrets = decryptSecrets(mountPoint.encryptedSecrets);
           config = { ...config, ...secrets };
-
-          logger.debug('Decrypted and merged secrets into backend config', {
-            mountPointId: mountPoint.id,
-          });
         } catch (error) {
           const errorMsg =
             error instanceof Error ? error.message : 'Unknown decryption error';

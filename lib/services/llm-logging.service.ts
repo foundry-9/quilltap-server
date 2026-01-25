@@ -66,32 +66,22 @@ export interface LogLLMCallParams {
  */
 export async function isLoggingEnabled(userId: string): Promise<LLMLoggingSettings | null> {
   try {
-    logger.debug('Checking LLM logging settings', { userId });
-
     const repos = getRepositories();
     const settings = await repos.chatSettings.findByUserId(userId);
 
     // Return the settings if logging is enabled, null otherwise
     if (settings?.llmLoggingSettings?.enabled) {
-      logger.debug('LLM logging enabled for user', {
-        userId,
-        verboseMode: settings.llmLoggingSettings.verboseMode,
-        retentionDays: settings.llmLoggingSettings.retentionDays,
-      });
       return settings.llmLoggingSettings;
     }
 
     // Default to enabled if settings don't exist yet
     if (!settings || !settings.llmLoggingSettings) {
-      logger.debug('No settings found for user, using defaults', { userId });
       return {
         enabled: true,
         verboseMode: false,
         retentionDays: 30,
       };
     }
-
-    logger.debug('LLM logging disabled for user', { userId });
     return null;
   } catch (error) {
     logger.warn('Failed to check LLM logging settings', {
@@ -161,17 +151,8 @@ export async function logLLMCall(params: LogLLMCallParams): Promise<LLMLog | nul
     // Check if logging is enabled for this user
     const loggingSettings = await isLoggingEnabled(params.userId);
     if (!loggingSettings) {
-      logger.debug('LLM logging disabled for user', { userId: params.userId });
       return null;
     }
-
-    logger.debug('Logging LLM call', {
-      userId: params.userId,
-      type: params.type,
-      provider: params.provider,
-      model: params.modelName,
-    });
-
     const verboseMode = loggingSettings.verboseMode;
 
     // Summarize request and response
@@ -190,7 +171,6 @@ export async function logLLMCall(params: LogLLMCallParams): Promise<LLMLog | nul
         completionTokens: params.usage.completionTokens ?? 0,
         totalTokens: params.usage.totalTokens ?? 0,
       };
-      logger.debug('Token usage captured', { userId: params.userId, usage });
     }
 
     let cacheUsage: LLMLogCacheUsage | null = null;
@@ -202,7 +182,6 @@ export async function logLLMCall(params: LogLLMCallParams): Promise<LLMLog | nul
         cacheCreationInputTokens: params.cacheUsage.cacheCreationInputTokens,
         cacheReadInputTokens: params.cacheUsage.cacheReadInputTokens,
       };
-      logger.debug('Cache usage captured', { userId: params.userId, cacheUsage });
     }
 
     // Create the log entry
@@ -221,16 +200,6 @@ export async function logLLMCall(params: LogLLMCallParams): Promise<LLMLog | nul
       cacheUsage,
       durationMs: params.durationMs ?? null,
     });
-
-    logger.debug('LLM call logged successfully', {
-      logId: logEntry.id,
-      userId: params.userId,
-      type: params.type,
-      provider: params.provider,
-      model: params.modelName,
-      durationMs: params.durationMs,
-    });
-
     return logEntry;
   } catch (error) {
     logger.error('Failed to log LLM call', {
@@ -250,12 +219,8 @@ export async function logLLMCall(params: LogLLMCallParams): Promise<LLMLog | nul
  */
 export async function getLogsForMessage(messageId: string): Promise<LLMLog[]> {
   try {
-    logger.debug('Retrieving logs for message', { messageId });
-
     const repos = getRepositories();
     const logs = await repos.llmLogs.findByMessageId(messageId);
-
-    logger.debug('Retrieved logs for message', { messageId, count: logs.length });
     return logs;
   } catch (error) {
     logger.error('Failed to get logs for message', {
@@ -271,12 +236,8 @@ export async function getLogsForMessage(messageId: string): Promise<LLMLog[]> {
  */
 export async function getLogsForChat(chatId: string): Promise<LLMLog[]> {
   try {
-    logger.debug('Retrieving logs for chat', { chatId });
-
     const repos = getRepositories();
     const logs = await repos.llmLogs.findByChatId(chatId);
-
-    logger.debug('Retrieved logs for chat', { chatId, count: logs.length });
     return logs;
   } catch (error) {
     logger.error('Failed to get logs for chat', {
@@ -292,12 +253,8 @@ export async function getLogsForChat(chatId: string): Promise<LLMLog[]> {
  */
 export async function getLogsForCharacter(characterId: string): Promise<LLMLog[]> {
   try {
-    logger.debug('Retrieving logs for character', { characterId });
-
     const repos = getRepositories();
     const logs = await repos.llmLogs.findByCharacterId(characterId);
-
-    logger.debug('Retrieved logs for character', { characterId, count: logs.length });
     return logs;
   } catch (error) {
     logger.error('Failed to get logs for character', {
@@ -313,13 +270,10 @@ export async function getLogsForCharacter(characterId: string): Promise<LLMLog[]
  */
 export async function messageHasLogs(messageId: string): Promise<boolean> {
   try {
-    logger.debug('Checking if message has logs', { messageId });
-
     const repos = getRepositories();
     const count = await repos.llmLogs.countByMessageId(messageId);
 
     const hasLogs = count > 0;
-    logger.debug('Message log check complete', { messageId, hasLogs, count });
     return hasLogs;
   } catch (error) {
     logger.error('Failed to check if message has logs', {
@@ -339,12 +293,8 @@ export async function getLogsForUser(
   offset: number = 0
 ): Promise<LLMLog[]> {
   try {
-    logger.debug('Retrieving logs for user', { userId, limit, offset });
-
     const repos = getRepositories();
     const logs = await repos.llmLogs.findByUserId(userId, limit, offset);
-
-    logger.debug('Retrieved logs for user', { userId, count: logs.length, limit, offset });
     return logs;
   } catch (error) {
     logger.error('Failed to get logs for user', {
@@ -362,12 +312,8 @@ export async function getLogsForUser(
  */
 export async function getRecentLogs(userId: string, limit: number = 20): Promise<LLMLog[]> {
   try {
-    logger.debug('Retrieving recent logs for user', { userId, limit });
-
     const repos = getRepositories();
     const logs = await repos.llmLogs.findRecent(userId, limit);
-
-    logger.debug('Retrieved recent logs for user', { userId, count: logs.length, limit });
     return logs;
   } catch (error) {
     logger.error('Failed to get recent logs for user', {
@@ -384,12 +330,8 @@ export async function getRecentLogs(userId: string, limit: number = 20): Promise
  */
 export async function countLogsForUser(userId: string): Promise<number> {
   try {
-    logger.debug('Counting logs for user', { userId });
-
     const repos = getRepositories();
     const count = await repos.llmLogs.countByUserId(userId);
-
-    logger.debug('Retrieved log count for user', { userId, count });
     return count;
   } catch (error) {
     logger.error('Failed to count logs for user', {
@@ -407,17 +349,8 @@ export async function getTotalTokenUsage(
   userId: string
 ): Promise<{ promptTokens: number; completionTokens: number; totalTokens: number }> {
   try {
-    logger.debug('Retrieving total token usage for user', { userId });
-
     const repos = getRepositories();
     const usage = await repos.llmLogs.getTotalTokenUsage(userId);
-
-    logger.debug('Retrieved total token usage for user', {
-      userId,
-      promptTokens: usage.promptTokens,
-      completionTokens: usage.completionTokens,
-      totalTokens: usage.totalTokens,
-    });
     return usage;
   } catch (error) {
     logger.error('Failed to get total token usage for user', {
@@ -437,12 +370,8 @@ export async function getLogsByType(
   limit: number = 50
 ): Promise<LLMLog[]> {
   try {
-    logger.debug('Retrieving logs by type for user', { userId, type, limit });
-
     const repos = getRepositories();
     const logs = await repos.llmLogs.findByType(userId, type, limit);
-
-    logger.debug('Retrieved logs by type for user', { userId, type, count: logs.length, limit });
     return logs;
   } catch (error) {
     logger.error('Failed to get logs by type for user', {
@@ -460,8 +389,6 @@ export async function getLogsByType(
  */
 export async function cleanupOldLogs(userId: string, retentionDays: number): Promise<number> {
   try {
-    logger.debug('Cleaning up old logs for user', { userId, retentionDays });
-
     const repos = getRepositories();
     const deletedCount = await repos.llmLogs.cleanupOldLogs(userId, retentionDays);
 
@@ -482,8 +409,6 @@ export async function cleanupOldLogs(userId: string, retentionDays: number): Pro
  */
 export async function deleteAllLogsForUser(userId: string): Promise<number> {
   try {
-    logger.debug('Deleting all logs for user', { userId });
-
     const repos = getRepositories();
     const deletedCount = await repos.llmLogs.deleteByUserId(userId);
 
@@ -503,12 +428,8 @@ export async function deleteAllLogsForUser(userId: string): Promise<number> {
  */
 export async function getStandaloneLogs(userId: string, limit: number = 50): Promise<LLMLog[]> {
   try {
-    logger.debug('Retrieving standalone logs for user', { userId, limit });
-
     const repos = getRepositories();
     const logs = await repos.llmLogs.findStandalone(userId, limit);
-
-    logger.debug('Retrieved standalone logs for user', { userId, count: logs.length, limit });
     return logs;
   } catch (error) {
     logger.error('Failed to get standalone logs for user', {

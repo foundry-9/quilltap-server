@@ -95,7 +95,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
       // Only need to ensure collection for SQLite - MongoDB doesn't need schema registration
       if (this.isSQLiteBackend()) {
         await ensureCollection(this.messagesCollectionName, ChatMessageRowSchema);
-        logger.debug('Ensured chat_messages collection initialized with schema');
       }
       this.messagesCollectionInitialized = true;
     } catch (error) {
@@ -154,12 +153,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
       const chats = await this.findByFilter({
         'participants.characterId': characterId,
       } as QueryFilter);
-
-      logger.debug('Found chats by character ID', {
-        characterId,
-        count: chats.length,
-      });
-
       return chats;
     } catch (error) {
       logger.error('Failed to find chats by character ID', {
@@ -204,8 +197,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
           };
 
           await messagesCollection.insertOne(messagesDoc as any);
-
-          logger.debug('Chat messages collection created', { chatId: chat.id });
         } catch (error) {
           logger.warn('Failed to create chat messages collection', {
             chatId: chat.id,
@@ -247,7 +238,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
       const result = await this._delete(id);
 
       if (!result) {
-        logger.debug('Chat not found for deletion', { chatId: id });
         return false;
       }
 
@@ -261,7 +251,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
           // MongoDB: Delete the single messages document
           await messagesCollection.deleteOne({ chatId: id } as QueryFilter);
         }
-        logger.debug('Chat messages deleted', { chatId: id });
       } catch (error) {
         logger.warn('Failed to delete chat messages', {
           chatId: id,
@@ -296,14 +285,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
     priceSource?: string
   ): Promise<void> {
     try {
-      logger.debug('Incrementing token aggregates for chat', {
-        chatId,
-        promptTokens,
-        completionTokens,
-        estimatedCost,
-        priceSource,
-      });
-
       const collection = await this.getCollection();
       const now = this.getCurrentTimestamp();
 
@@ -340,14 +321,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
         logger.warn('Chat not found for token aggregates increment', { chatId });
         return;
       }
-
-      logger.debug('Token aggregates incremented successfully', {
-        chatId,
-        promptTokens,
-        completionTokens,
-        estimatedCost,
-        priceSource,
-      });
     } catch (error) {
       logger.error('Error incrementing token aggregates', {
         chatId,
@@ -364,8 +337,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
    */
   async resetTokenAggregates(chatId: string): Promise<ChatMetadata | null> {
     try {
-      logger.debug('Resetting token aggregates for chat', { chatId });
-
       return await this.update(chatId, {
         totalPromptTokens: 0,
         totalCompletionTokens: 0,
@@ -394,15 +365,8 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
     participant: Omit<ChatParticipantBaseInput, 'id' | 'createdAt' | 'updatedAt'>
   ): Promise<ChatMetadata | null> {
     try {
-      logger.debug('Adding participant to chat', {
-        chatId,
-        type: participant.type,
-        characterId: participant.characterId,
-      });
-
       const chat = await this.findById(chatId);
       if (!chat) {
-        logger.debug('Chat not found for participant operation', { chatId });
         return null;
       }
 
@@ -432,12 +396,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
         if (!chat.activeTypingParticipantId) {
           updateData.activeTypingParticipantId = newParticipant.id;
         }
-
-        logger.debug('Auto-adding user-controlled participant to impersonation', {
-          chatId,
-          participantId: newParticipant.id,
-          impersonatingCount: impersonatingIds.length,
-        });
       }
 
       return await this.update(chatId, updateData);
@@ -459,17 +417,13 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
     data: Partial<Omit<ChatParticipantBase, 'id' | 'createdAt'>>
   ): Promise<ChatMetadata | null> {
     try {
-      logger.debug('Updating participant in chat', { chatId, participantId });
-
       const chat = await this.findById(chatId);
       if (!chat) {
-        logger.debug('Chat not found for participant operation', { chatId });
         return null;
       }
 
       const participantIndex = chat.participants.findIndex(p => p.id === participantId);
       if (participantIndex === -1) {
-        logger.debug('Participant not found', { chatId, participantId });
         return null;
       }
 
@@ -505,11 +459,8 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
    */
   async removeParticipant(chatId: string, participantId: string): Promise<ChatMetadata | null> {
     try {
-      logger.debug('Removing participant from chat', { chatId, participantId });
-
       const chat = await this.findById(chatId);
       if (!chat) {
-        logger.debug('Chat not found for participant operation', { chatId });
         return null;
       }
 
@@ -537,10 +488,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
    * Get all character participants from a chat
    */
   getCharacterParticipants(chat: ChatMetadata): ChatParticipantBase[] {
-    logger.debug('Getting character participants', {
-      chatId: chat.id,
-      count: chat.participants.filter(p => p.type === 'CHARACTER').length,
-    });
     return chat.participants.filter(p => p.type === 'CHARACTER');
   }
 
@@ -548,10 +495,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
    * Get active participants only
    */
   getActiveParticipants(chat: ChatMetadata): ChatParticipantBase[] {
-    logger.debug('Getting active participants', {
-      chatId: chat.id,
-      count: chat.participants.filter(p => p.isActive).length,
-    });
     return chat.participants.filter(p => p.isActive);
   }
 
@@ -560,10 +503,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
    */
   getLLMControlledParticipants(chat: ChatMetadata): ChatParticipantBase[] {
     const participants = chat.participants.filter(p => p.controlledBy === 'llm');
-    logger.debug('Getting LLM-controlled participants', {
-      chatId: chat.id,
-      count: participants.length,
-    });
     return participants;
   }
 
@@ -572,10 +511,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
    */
   getUserControlledParticipants(chat: ChatMetadata): ChatParticipantBase[] {
     const participants = chat.participants.filter(p => p.controlledBy === 'user');
-    logger.debug('Getting user-controlled participants', {
-      chatId: chat.id,
-      count: participants.length,
-    });
     return participants;
   }
 
@@ -591,18 +526,14 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
    */
   async addImpersonation(chatId: string, participantId: string): Promise<ChatMetadata | null> {
     try {
-      logger.debug('Adding impersonation', { chatId, participantId });
-
       const chat = await this.findById(chatId);
       if (!chat) {
-        logger.debug('Chat not found for impersonation', { chatId });
         return null;
       }
 
       // Verify participant exists
       const participant = chat.participants.find(p => p.id === participantId);
       if (!participant) {
-        logger.debug('Participant not found for impersonation', { chatId, participantId });
         return null;
       }
 
@@ -637,11 +568,8 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
    */
   async removeImpersonation(chatId: string, participantId: string): Promise<ChatMetadata | null> {
     try {
-      logger.debug('Removing impersonation', { chatId, participantId });
-
       const chat = await this.findById(chatId);
       if (!chat) {
-        logger.debug('Chat not found for impersonation removal', { chatId });
         return null;
       }
 
@@ -675,11 +603,8 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
    */
   async getImpersonatedParticipantIds(chatId: string): Promise<string[]> {
     try {
-      logger.debug('Getting impersonated participant IDs', { chatId });
-
       const chat = await this.findById(chatId);
       if (!chat) {
-        logger.debug('Chat not found', { chatId });
         return [];
       }
 
@@ -701,11 +626,8 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
    */
   async setActiveTypingParticipant(chatId: string, participantId: string | null): Promise<ChatMetadata | null> {
     try {
-      logger.debug('Setting active typing participant', { chatId, participantId });
-
       const chat = await this.findById(chatId);
       if (!chat) {
-        logger.debug('Chat not found', { chatId });
         return null;
       }
 
@@ -739,8 +661,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
    */
   async updateAllLLMPauseTurnCount(chatId: string, count: number): Promise<ChatMetadata | null> {
     try {
-      logger.debug('Updating all-LLM pause turn count', { chatId, count });
-
       return await this.update(chatId, {
         allLLMPauseTurnCount: count,
       });
@@ -777,7 +697,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
         const messagesDoc = await messagesCollection.findOne({ chatId } as QueryFilter);
 
         if (!messagesDoc) {
-          logger.debug('No messages document found for chat', { chatId });
           return [];
         }
 
@@ -798,12 +717,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
    */
   async addMessage(chatId: string, message: ChatEvent): Promise<ChatEvent> {
     try {
-      logger.debug('Adding message to chat', {
-        chatId,
-        messageId: message.id,
-        type: message.type,
-      });
-
       const validated = ChatEventSchema.parse(message);
       const messagesCollection = await this.getMessagesCollection();
       const now = this.getCurrentTimestamp();
@@ -832,8 +745,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
           updatedAt: now,
         });
       }
-
-      logger.debug('Message added to chat', { chatId, messageId: message.id });
       return validated;
     } catch (error) {
       logger.error('Failed to add message to chat', {
@@ -849,11 +760,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
    */
   async addMessages(chatId: string, messages: ChatEvent[]): Promise<ChatEvent[]> {
     try {
-      logger.debug('Adding messages to chat', {
-        chatId,
-        count: messages.length,
-      });
-
       const validated = messages.map(msg => ChatEventSchema.parse(msg));
       const messagesCollection = await this.getMessagesCollection();
       const now = this.getCurrentTimestamp();
@@ -884,8 +790,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
           updatedAt: now,
         });
       }
-
-      logger.debug('Messages added to chat', { chatId, count: validated.length });
       return validated;
     } catch (error) {
       logger.error('Failed to add messages to chat', {
@@ -901,8 +805,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
    */
   async updateMessage(chatId: string, messageId: string, updates: Partial<ChatEvent>): Promise<ChatEvent | null> {
     try {
-      logger.debug('Updating message in chat', { chatId, messageId });
-
       const messagesCollection = await this.getMessagesCollection();
       const now = this.getCurrentTimestamp();
 
@@ -910,7 +812,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
         // SQLite: Find and update the specific message row
         const existingMessage = await messagesCollection.findOne({ id: messageId, chatId } as QueryFilter);
         if (!existingMessage) {
-          logger.debug('Message not found', { chatId, messageId });
           return null;
         }
 
@@ -921,8 +822,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
           { id: messageId } as QueryFilter,
           { $set: validated } as any
         );
-
-        logger.debug('Message updated in chat', { chatId, messageId });
         return validated;
       } else {
         // MongoDB: Update in embedded array
@@ -930,7 +829,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
         const messageIndex = messages.findIndex(m => m.id === messageId);
 
         if (messageIndex === -1) {
-          logger.debug('Message not found', { chatId, messageId });
           return null;
         }
 
@@ -951,8 +849,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
             },
           } as any
         );
-
-        logger.debug('Message updated in chat', { chatId, messageId });
         return validated;
       }
     } catch (error) {
@@ -993,8 +889,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
    */
   async countMessagesWithText(chatId: string, searchText: string): Promise<number> {
     try {
-      logger.debug('Counting messages with text', { chatId, searchTextLength: searchText.length });
-
       const messages = await this.getMessages(chatId);
       let count = 0;
 
@@ -1003,8 +897,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
           count++;
         }
       }
-
-      logger.debug('Counted messages with text', { chatId, count });
       return count;
     } catch (error) {
       logger.error('Failed to count messages with text', {
@@ -1026,8 +918,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
     searchText: string
   ): Promise<Array<{ messageId: string; content: string; chatId: string }>> {
     try {
-      logger.debug('Finding messages with text', { chatId, searchTextLength: searchText.length });
-
       const messages = await this.getMessages(chatId);
       const matches: Array<{ messageId: string; content: string; chatId: string }> = [];
 
@@ -1040,8 +930,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
           });
         }
       }
-
-      logger.debug('Found messages with text', { chatId, matchCount: matches.length });
       return matches;
     } catch (error) {
       logger.error('Failed to find messages with text', {
@@ -1065,12 +953,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
     replaceText: string
   ): Promise<number> {
     try {
-      logger.debug('Replacing text in messages', {
-        chatId,
-        searchTextLength: searchText.length,
-        replaceTextLength: replaceText.length,
-      });
-
       const messages = await this.getMessages(chatId);
       let updatedCount = 0;
       const messagesCollection = await this.getMessagesCollection();
@@ -1122,7 +1004,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
       }
 
       if (updatedCount === 0) {
-        logger.debug('No messages needed updating', { chatId });
         return 0;
       }
 
@@ -1145,8 +1026,6 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
    */
   async clearMessages(chatId: string): Promise<boolean> {
     try {
-      logger.debug('Clearing messages for chat', { chatId });
-
       const messagesCollection = await this.getMessagesCollection();
       const now = this.getCurrentTimestamp();
 

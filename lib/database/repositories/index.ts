@@ -111,8 +111,6 @@ let repositoryInstance: RepositoryContainer | null = null;
  * @returns {RepositoryContainer} Container with all repository instances
  */
 export function createRepositories(): RepositoryContainer {
-  logger.debug('Creating new database repository container');
-
   try {
     const filesRepo = new FilesRepository();
 
@@ -144,11 +142,6 @@ export function createRepositories(): RepositoryContainer {
       userSyncApiKeys: new UserSyncApiKeysRepository(),
       vectorIndices: new VectorIndicesRepository(),
     };
-
-    logger.debug('Database repository container created successfully', {
-      repositories: Object.keys(repositories),
-    });
-
     return repositories;
   } catch (error) {
     logger.error('Failed to create database repository container', {
@@ -166,7 +159,6 @@ export function createRepositories(): RepositoryContainer {
  */
 export function getRepositories(): RepositoryContainer {
   if (!repositoryInstance) {
-    logger.debug('Initializing singleton database repository instance');
     repositoryInstance = createRepositories();
   }
 
@@ -180,6 +172,5 @@ export function getRepositories(): RepositoryContainer {
  * @returns {void}
  */
 export function resetRepositories(): void {
-  logger.debug('Resetting database repository instance');
   repositoryInstance = null;
 }

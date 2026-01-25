@@ -84,7 +84,6 @@ async function handleGetDefault(req: NextRequest, context: AuthenticatedContext,
   const { user, repos } = context;
 
   try {
-    logger.debug('[Projects v1] GET project', { projectId: id, userId: user.id });
 
     const project = await repos.projects.findById(id);
 
@@ -157,7 +156,6 @@ async function handleListCharacters(req: NextRequest, context: AuthenticatedCont
   const { user, repos } = context;
 
   try {
-    logger.debug('[Projects v1] LIST characters in project', { projectId: id });
 
     const project = await repos.projects.findById(id);
     if (!checkOwnership(project, user.id)) {
@@ -193,7 +191,6 @@ async function handleListChats(req: NextRequest, context: AuthenticatedContext, 
   const { user, repos } = context;
 
   try {
-    logger.debug('[Projects v1] LIST chats in project', { projectId: id });
 
     const project = await repos.projects.findById(id);
     if (!checkOwnership(project, user.id)) {
@@ -273,17 +270,7 @@ async function handleListChats(req: NextRequest, context: AuthenticatedContext, 
           createdAt: chat.createdAt,
         };
       })
-    );
-
-    logger.debug('[Projects v1] Fetched project chats', {
-      projectId: id,
-      total,
-      offset,
-      limit,
-      returned: enrichedChats.length,
-    });
-
-    return successResponse({
+    );return successResponse({
       chats: enrichedChats,
       pagination: {
         total,
@@ -302,7 +289,6 @@ async function handleListFiles(req: NextRequest, context: AuthenticatedContext, 
   const { user, repos } = context;
 
   try {
-    logger.debug('[Projects v1] LIST files in project', { projectId: id });
 
     const project = await repos.projects.findById(id);
     if (!checkOwnership(project, user.id)) {
@@ -334,7 +320,6 @@ async function handleGetMountPoint(req: NextRequest, context: AuthenticatedConte
   const { user, repos } = context;
 
   try {
-    logger.debug('[Projects v1] GET mount point for project', { projectId: id });
 
     const project = await repos.projects.findById(id);
     if (!checkOwnership(project, user.id)) {
@@ -413,7 +398,6 @@ async function handlePutDefault(req: NextRequest, context: AuthenticatedContext,
   const { user, repos } = context;
 
   try {
-    logger.debug('[Projects v1] PUT project', { projectId: id });
 
     const existingProject = await repos.projects.findById(id);
 
@@ -451,7 +435,6 @@ async function handleSetMountPoint(req: NextRequest, context: AuthenticatedConte
     const body = await req.json();
     const { mountPointId, migrateFiles } = setMountPointSchema.parse(body);
 
-    logger.debug('[Projects v1] SET mount point for project', { projectId: id, mountPointId, migrateFiles });
 
     // Verify mount point exists
     const mountPoint = await mountPointsRepository.findById(mountPointId);
@@ -566,7 +549,6 @@ async function handleRemoveCharacter(req: NextRequest, context: AuthenticatedCon
     const body = await req.json();
     const { characterId } = removeCharacterSchema.parse(body);
 
-    logger.debug('[Projects v1] REMOVE character from project', { projectId: id, characterId });
 
     // Remove from roster
     const updatedRoster = project.characterRoster.filter((cid: string) => cid !== characterId);
@@ -597,7 +579,6 @@ async function handleRemoveChat(req: NextRequest, context: AuthenticatedContext,
     const body = await req.json();
     const { chatId } = removeChatSchema.parse(body);
 
-    logger.debug('[Projects v1] REMOVE chat from project', { projectId: id, chatId });
 
     // Remove projectId from chat
     await repos.chats.update(chatId, { projectId: null });
@@ -627,7 +608,6 @@ async function handleRemoveFile(req: NextRequest, context: AuthenticatedContext,
     const body = await req.json();
     const { fileId } = removeFileSchema.parse(body);
 
-    logger.debug('[Projects v1] REMOVE file from project', { projectId: id, fileId });
 
     // Remove projectId from file
     await repos.files.update(fileId, { projectId: null });
@@ -655,7 +635,6 @@ async function handleDeleteProject(req: NextRequest, context: AuthenticatedConte
       return notFound('Project');
     }
 
-    logger.debug('[Projects v1] DELETE project', { projectId: id });
 
     // Remove projectId from associated chats
     const allChats = await repos.chats.findAll();
@@ -692,7 +671,6 @@ async function handleClearMountPoint(req: NextRequest, context: AuthenticatedCon
       return notFound('Project');
     }
 
-    logger.debug('[Projects v1] CLEAR mount point for project', { projectId: id });
 
     // Clear mount point (will use system default)
     await repos.projects.setMountPoint(id, null);
@@ -739,7 +717,6 @@ async function handleAddCharacter(req: NextRequest, context: AuthenticatedContex
     const body = await req.json();
     const { characterId } = addCharacterSchema.parse(body);
 
-    logger.debug('[Projects v1] ADD character to project', { projectId: id, characterId });
 
     // Check character exists and is owned by user
     const character = await repos.characters.findById(characterId);
@@ -778,7 +755,6 @@ async function handleAddChat(req: NextRequest, context: AuthenticatedContext, { 
     const body = await req.json();
     const { chatId } = addChatSchema.parse(body);
 
-    logger.debug('[Projects v1] ADD chat to project', { projectId: id, chatId });
 
     // Check chat exists and is owned by user
     const chat = await repos.chats.findById(chatId);
@@ -814,7 +790,6 @@ async function handleAddFile(req: NextRequest, context: AuthenticatedContext, { 
     const body = await req.json();
     const { fileId } = addFileSchema.parse(body);
 
-    logger.debug('[Projects v1] ADD file to project', { projectId: id, fileId });
 
     // Check file exists and is owned by user
     const file = await repos.files.findById(fileId);

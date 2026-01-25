@@ -128,8 +128,6 @@ export class GrokProvider implements LLMProvider {
   }
 
   async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
-    logger.debug('Grok sendMessage called', { context: 'GrokProvider.sendMessage', model: params.model });
-
     if (!apiKey) {
       throw new Error('Grok provider requires an API key');
     }
@@ -152,7 +150,6 @@ export class GrokProvider implements LLMProvider {
 
     // Add tools if provided
     if (params.tools && params.tools.length > 0) {
-      logger.debug('Adding tools to request', { context: 'GrokProvider.sendMessage', toolCount: params.tools.length });
       requestParams.tools = params.tools;
       // Explicitly enable tool use with "auto" - let the model decide when to use tools
       requestParams.tool_choice = 'auto';
@@ -162,7 +159,6 @@ export class GrokProvider implements LLMProvider {
     // Uses Grok's Live Search API (searches web, X/Twitter, news)
     // Note: Live Search API will be deprecated December 15, 2025 in favor of Agent Tools API
     if (params.webSearchEnabled) {
-      logger.debug('Web search enabled', { context: 'GrokProvider.sendMessage' });
       requestParams.search_parameters = {
         mode: 'auto', // Model decides when to search
         return_citations: true,
@@ -179,14 +175,6 @@ export class GrokProvider implements LLMProvider {
     const response = await client.chat.completions.create(requestParams);
 
     const choice = response.choices[0];
-
-    logger.debug('Received Grok response', {
-      context: 'GrokProvider.sendMessage',
-      finishReason: choice.finish_reason,
-      promptTokens: response.usage?.prompt_tokens,
-      completionTokens: response.usage?.completion_tokens,
-    });
-
     return {
       content: choice.message.content ?? '',
       finishReason: choice.finish_reason,
@@ -201,8 +189,6 @@ export class GrokProvider implements LLMProvider {
   }
 
   async *streamMessage(params: LLMParams, apiKey: string): AsyncGenerator<StreamChunk> {
-    logger.debug('Grok streamMessage called', { context: 'GrokProvider.streamMessage', model: params.model });
-
     if (!apiKey) {
       throw new Error('Grok provider requires an API key');
     }
@@ -226,7 +212,6 @@ export class GrokProvider implements LLMProvider {
 
     // Add tools if provided
     if (params.tools && params.tools.length > 0) {
-      logger.debug('Adding tools to stream request', { context: 'GrokProvider.streamMessage', toolCount: params.tools.length });
       requestParams.tools = params.tools;
       // Explicitly enable tool use with "auto" - let the model decide when to use tools
       requestParams.tool_choice = 'auto';
@@ -235,7 +220,6 @@ export class GrokProvider implements LLMProvider {
     // Add native live search if enabled
     // Note: Live Search API will be deprecated December 15, 2025 in favor of Agent Tools API
     if (params.webSearchEnabled) {
-      logger.debug('Web search enabled for stream', { context: 'GrokProvider.streamMessage' });
       requestParams.search_parameters = {
         mode: 'auto',
         return_citations: true,
@@ -328,7 +312,6 @@ export class GrokProvider implements LLMProvider {
       // For tool calls: Grok sends finish_reason='tool_calls' in one chunk, usage in the next
       // We yield immediately when we see tool_calls finish reason
       if (finishReasonSeen && finishReason === 'tool_calls' && !usageSeen) {
-        logger.debug('Tool calls detected in stream', { context: 'GrokProvider.streamMessage', toolCallCount: fullMessage.choices[0].message.tool_calls.length });
         yield {
           content: '',
           done: true,
@@ -343,13 +326,6 @@ export class GrokProvider implements LLMProvider {
         // Continue reading to drain the stream
       } else if (finishReasonSeen && usageSeen) {
         // For regular text responses, we get both finish_reason and usage
-        logger.debug('Stream completed', {
-          context: 'GrokProvider.streamMessage',
-          finishReason,
-          chunks: chunkCount,
-          promptTokens: fullMessage.usage?.prompt_tokens,
-          completionTokens: fullMessage.usage?.completion_tokens,
-        });
         yield {
           content: '',
           done: true,
@@ -367,13 +343,11 @@ export class GrokProvider implements LLMProvider {
 
   async validateApiKey(apiKey: string): Promise<boolean> {
     try {
-      logger.debug('Validating Grok API key', { context: 'GrokProvider.validateApiKey' });
       const client = new OpenAI({
         apiKey,
         baseURL: this.baseUrl,
       });
       await client.models.list();
-      logger.debug('Grok API key validation successful', { context: 'GrokProvider.validateApiKey' });
       return true;
     } catch (error) {
       logger.error('Grok API key validation failed', { context: 'GrokProvider.validateApiKey' }, error instanceof Error ? error : undefined);
@@ -383,7 +357,6 @@ export class GrokProvider implements LLMProvider {
 
   async getAvailableModels(apiKey: string): Promise<string[]> {
     try {
-      logger.debug('Fetching Grok models', { context: 'GrokProvider.getAvailableModels' });
       const client = new OpenAI({
         apiKey,
         baseURL: this.baseUrl,
@@ -392,7 +365,6 @@ export class GrokProvider implements LLMProvider {
       const grokModels = models.data
         .map((m) => m.id)
         .sort();
-      logger.debug('Retrieved Grok models', { context: 'GrokProvider.getAvailableModels', modelCount: grokModels.length });
       return grokModels;
     } catch (error) {
       logger.error('Failed to fetch Grok models', { context: 'GrokProvider.getAvailableModels' }, error instanceof Error ? error : undefined);
@@ -401,8 +373,6 @@ export class GrokProvider implements LLMProvider {
   }
 
   async generateImage(params: ImageGenParams, apiKey: string): Promise<ImageGenResponse> {
-    logger.debug('Generating image with Grok', { context: 'GrokProvider.generateImage', model: params.model, prompt: params.prompt.substring(0, 100) });
-
     if (!apiKey) {
       throw new Error('Grok provider requires an API key');
     }
@@ -432,9 +402,6 @@ export class GrokProvider implements LLMProvider {
         };
       })
     );
-
-    logger.debug('Image generation completed', { context: 'GrokProvider.generateImage', imageCount: images.length });
-
     return {
       images,
       raw: response,

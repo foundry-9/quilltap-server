@@ -84,20 +84,12 @@ export class GoogleProvider implements LLMProvider {
       // The thoughtSignature is typically on the first part
       const firstPart = parts[0];
       if (firstPart?.thoughtSignature) {
-        logger.debug('Extracted thought signature from response', {
-          context: 'GoogleProvider.extractThoughtSignature',
-          signatureLength: firstPart.thoughtSignature.length,
-        });
         return firstPart.thoughtSignature;
       }
 
       // Also check for functionCall parts which may have signatures
       for (const part of parts) {
         if (part?.functionCall?.thoughtSignature) {
-          logger.debug('Extracted thought signature from function call', {
-            context: 'GoogleProvider.extractThoughtSignature',
-            functionName: part.functionCall.name,
-          });
           return part.functionCall.thoughtSignature;
         }
       }
@@ -117,8 +109,6 @@ export class GoogleProvider implements LLMProvider {
     modelName: string,
     hasTools: boolean
   ): Promise<{ messages: any[]; systemInstruction?: string; shouldDisableTools: boolean; attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } }> {
-    logger.debug('Formatting messages with attachments', { context: 'GoogleProvider.formatMessagesWithAttachments', messageCount: messages.length });
-
     const sent: string[] = [];
     const failed: { id: string; error: string }[] = [];
 
@@ -132,11 +122,6 @@ export class GoogleProvider implements LLMProvider {
     if (systemMessages.length > 0) {
       systemInstruction = systemMessages.map(m => m.content).join('\n\n');
       nonSystemMessages = messages.filter(m => m.role !== 'system');
-      logger.debug('Extracted system instruction', {
-        context: 'GoogleProvider.formatMessagesWithAttachments',
-        systemMessageCount: systemMessages.length,
-        instructionLength: systemInstruction.length,
-      });
     }
 
     // Check if this model supports function calling at all
@@ -187,25 +172,12 @@ export class GoogleProvider implements LLMProvider {
         if (msg.attachments) {
           lastMsg.attachments = [...(lastMsg.attachments || []), ...msg.attachments];
         }
-        logger.debug('Merged consecutive user messages', {
-          context: 'GoogleProvider.formatMessagesWithAttachments',
-        });
       } else {
         mergedMessages.push({ ...msg });
       }
     }
 
     // Debug: log what messages we're actually sending
-    logger.debug('Messages after processing', {
-      context: 'GoogleProvider.formatMessagesWithAttachments',
-      originalCount: messages.length,
-      afterSystemExtraction: nonSystemMessages.length,
-      afterMerging: mergedMessages.length,
-      finalRoles: mergedMessages.map(m => m.role),
-      hasSystemInstruction: !!systemInstruction,
-      shouldDisableTools,
-    });
-
     const formattedMessages: any[] = [];
     for (const msg of mergedMessages) {
       const formattedMessage: any = {
@@ -225,10 +197,6 @@ export class GoogleProvider implements LLMProvider {
         if (formattedMessage.parts.length > 0 && formattedMessage.parts[0].text !== undefined) {
           formattedMessage.parts[0].thoughtSignature = msg.thoughtSignature;
         }
-        logger.debug('Added thought signature to message', {
-          context: 'GoogleProvider.formatMessagesWithAttachments',
-          hasSignature: true,
-        });
       }
 
       // Add image attachments
@@ -270,20 +238,10 @@ export class GoogleProvider implements LLMProvider {
 
       formattedMessages.push(formattedMessage);
     }
-
-    logger.debug('Messages formatted with attachments', {
-      context: 'GoogleProvider.formatMessagesWithAttachments',
-      sentCount: sent.length,
-      failedCount: failed.length,
-      messageCount: formattedMessages.length,
-    });
-
     return { messages: formattedMessages, systemInstruction, shouldDisableTools, attachmentResults: { sent, failed } };
   }
 
   async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
-    logger.debug('Google sendMessage called', { context: 'GoogleProvider.sendMessage', model: params.model });
-
     const client = new GoogleGenerativeAI(apiKey);
 
     // Build tools array first so we can pass hasTools to formatMessagesWithAttachments
@@ -291,7 +249,6 @@ export class GoogleProvider implements LLMProvider {
 
     // Add function declarations if provided
     if (params.tools && params.tools.length > 0) {
-      logger.debug('Adding tools to request', { context: 'GoogleProvider.sendMessage', toolCount: params.tools.length });
       tools.push({
         functionDeclarations: params.tools.map((tool: any) => ({
           name: tool.name,
@@ -308,7 +265,6 @@ export class GoogleProvider implements LLMProvider {
     // Add Google Search grounding if web search is enabled
     // Uses googleSearch for Gemini 2.0+ models
     if (params.webSearchEnabled) {
-      logger.debug('Web search enabled', { context: 'GoogleProvider.sendMessage' });
       tools.push({ googleSearch: {} });
     }
 
@@ -340,7 +296,6 @@ export class GoogleProvider implements LLMProvider {
     // Add systemInstruction if we extracted one from system messages
     if (systemInstruction) {
       modelConfig.systemInstruction = systemInstruction;
-      logger.debug('Using systemInstruction', { context: 'GoogleProvider.sendMessage', instructionLength: systemInstruction.length });
     }
 
     // Only add tools if we have them AND we shouldn't disable them
@@ -377,15 +332,6 @@ export class GoogleProvider implements LLMProvider {
 
     // Extract thought signature for Gemini 3 thinking models
     const thoughtSignature = this.extractThoughtSignature(response.response ?? response);
-
-    logger.debug('Received Google response', {
-      context: 'GoogleProvider.sendMessage',
-      finishReason,
-      promptTokens: usage?.promptTokenCount,
-      completionTokens: usage?.candidatesTokenCount,
-      hasThoughtSignature: !!thoughtSignature,
-    });
-
     return {
       content: text,
       finishReason,
@@ -401,8 +347,6 @@ export class GoogleProvider implements LLMProvider {
   }
 
   async *streamMessage(params: LLMParams, apiKey: string): AsyncGenerator<StreamChunk> {
-    logger.debug('Google streamMessage called', { context: 'GoogleProvider.streamMessage', model: params.model });
-
     const client = new GoogleGenerativeAI(apiKey);
 
     // Build tools array first so we can pass hasTools to formatMessagesWithAttachments
@@ -410,7 +354,6 @@ export class GoogleProvider implements LLMProvider {
 
     // Add function declarations if provided
     if (params.tools && params.tools.length > 0) {
-      logger.debug('Adding tools to stream request', { context: 'GoogleProvider.streamMessage', toolCount: params.tools.length });
       tools.push({
         functionDeclarations: params.tools.map((tool: any) => ({
           name: tool.name,
@@ -426,7 +369,6 @@ export class GoogleProvider implements LLMProvider {
 
     // Add Google Search grounding if web search is enabled
     if (params.webSearchEnabled) {
-      logger.debug('Web search enabled for stream', { context: 'GoogleProvider.streamMessage' });
       tools.push({ googleSearch: {} });
     }
 
@@ -458,7 +400,6 @@ export class GoogleProvider implements LLMProvider {
     // Add systemInstruction if we extracted one from system messages
     if (systemInstruction) {
       modelConfig.systemInstruction = systemInstruction;
-      logger.debug('Using systemInstruction for stream', { context: 'GoogleProvider.streamMessage', instructionLength: systemInstruction.length });
     }
 
     // Only add tools if we have them AND we shouldn't disable them
@@ -494,7 +435,6 @@ export class GoogleProvider implements LLMProvider {
       chunkCount++;
       const text = (chunk as any).text?.() ?? '';
       if (text) {
-        logger.debug('Received stream chunk', { context: 'GoogleProvider.streamMessage', chunkNumber: chunkCount, contentLength: text.length });
         yield {
           content: text,
           done: false,
@@ -515,19 +455,6 @@ export class GoogleProvider implements LLMProvider {
     const parts = firstCandidate?.content?.parts || [];
     const hasFunctionCall = parts.some((p: any) => p.functionCall);
     const finishReason = firstCandidate?.finishReason;
-
-    logger.debug('Stream completed', {
-      context: 'GoogleProvider.streamMessage',
-      totalChunks: chunkCount,
-      promptTokens: usage?.promptTokenCount,
-      completionTokens: usage?.candidatesTokenCount,
-      hasThoughtSignature: !!thoughtSignature,
-      hasFunctionCall,
-      finishReason,
-      partsCount: parts.length,
-      partTypes: parts.map((p: any) => Object.keys(p)),
-    });
-
     yield {
       content: '',
       done: true,
@@ -544,12 +471,10 @@ export class GoogleProvider implements LLMProvider {
 
   async validateApiKey(apiKey: string): Promise<boolean> {
     try {
-      logger.debug('Validating Google API key', { context: 'GoogleProvider.validateApiKey' });
       const client = new GoogleGenerativeAI(apiKey);
       // Try to get a simple model to validate the API key
       const model = client.getGenerativeModel({ model: 'gemini-2.5-flash' });
       await model.generateContent('test');
-      logger.debug('Google API key validation successful', { context: 'GoogleProvider.validateApiKey' });
       return true;
     } catch (error) {
       logger.error('Google API key validation failed', { context: 'GoogleProvider.validateApiKey' }, error instanceof Error ? error : undefined);
@@ -559,7 +484,6 @@ export class GoogleProvider implements LLMProvider {
 
   async getAvailableModels(apiKey: string): Promise<string[]> {
     try {
-      logger.debug('Fetching Google models', { context: 'GoogleProvider.getAvailableModels' });
       // Return known Google models that support chat
       const models = [
         'gemini-2.5-flash-image',
@@ -569,7 +493,6 @@ export class GoogleProvider implements LLMProvider {
         'gemini-2.5-flash',
         'gemini-pro-vision',
       ];
-      logger.debug('Retrieved Google models', { context: 'GoogleProvider.getAvailableModels', modelCount: models.length });
       return models;
     } catch (error) {
       logger.error('Failed to fetch Google models', { context: 'GoogleProvider.getAvailableModels' }, error instanceof Error ? error : undefined);
@@ -578,12 +501,6 @@ export class GoogleProvider implements LLMProvider {
   }
 
   async generateImage(params: ImageGenParams, apiKey: string): Promise<ImageGenResponse> {
-    logger.debug('Generating image with Google', {
-      context: 'GoogleProvider.generateImage',
-      model: params.model,
-      promptLength: params.prompt.length,
-    });
-
     const client = new GoogleGenerativeAI(apiKey);
 
     // Use the specified model or default to gemini-2.5-flash-image
@@ -648,9 +565,6 @@ export class GoogleProvider implements LLMProvider {
       logger.error('No images generated in response', { context: 'GoogleProvider.generateImage' });
       throw new Error('No images generated in response');
     }
-
-    logger.debug('Image generation completed', { context: 'GoogleProvider.generateImage', imageCount: images.length });
-
     return {
       images,
       raw: response,

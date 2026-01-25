@@ -32,11 +32,6 @@ export class UsersRepository {
   private async getUsersCollection(): Promise<Collection> {
     const db = await getMongoDatabase();
     const collection = db.collection(this.usersCollectionName);
-
-    logger.debug('Retrieved MongoDB users collection', {
-      collectionName: this.usersCollectionName,
-    });
-
     return collection;
   }
 
@@ -88,7 +83,6 @@ export class UsersRepository {
    * Generate UUID v4
    */
   private generateId(): string {
-    logger.debug('Generating UUID v4');
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
       const r = (Math.random() * 16) | 0;
       const v = c === 'x' ? r : (r & 0x3) | 0x8;
@@ -101,7 +95,6 @@ export class UsersRepository {
    */
   private getCurrentTimestamp(): string {
     const timestamp = new Date().toISOString();
-    logger.debug('Generated timestamp', { timestamp });
     return timestamp;
   }
 
@@ -114,16 +107,11 @@ export class UsersRepository {
    * Returns the first user found, or null if no users exist
    */
   async getCurrentUser(): Promise<User | null> {
-    logger.debug('Getting current user');
-
     try {
       const users = await this.findAll();
       if (users.length === 0) {
-        logger.debug('No users found');
         return null;
       }
-
-      logger.debug('Current user retrieved', { userId: users[0].id });
       return users[0];
     } catch (error) {
       logger.error('Error getting current user', {
@@ -138,18 +126,10 @@ export class UsersRepository {
    */
   async findById(id: string): Promise<User | null> {
     const collection = await this.getUsersCollection();
-
-    logger.debug('Finding user by ID', {
-      userId: id,
-    });
-
     try {
       const user = await collection.findOne({ id });
 
       if (!user) {
-        logger.debug('User not found', {
-          userId: id,
-        });
         return null;
       }
 
@@ -164,11 +144,6 @@ export class UsersRepository {
         });
         return null;
       }
-
-      logger.debug('User found by ID', {
-        userId: id,
-      });
-
       return validationResult.data || null;
     } catch (error) {
       logger.error('Error finding user by ID', {
@@ -184,18 +159,10 @@ export class UsersRepository {
    */
   async findByEmail(email: string): Promise<User | null> {
     const collection = await this.getUsersCollection();
-
-    logger.debug('Finding user by email', {
-      email,
-    });
-
     try {
       const user = await collection.findOne({ email });
 
       if (!user) {
-        logger.debug('User not found by email', {
-          email,
-        });
         return null;
       }
 
@@ -210,11 +177,6 @@ export class UsersRepository {
         });
         return null;
       }
-
-      logger.debug('User found by email', {
-        email,
-      });
-
       return validationResult.data || null;
     } catch (error) {
       logger.error('Error finding user by email', {
@@ -230,18 +192,10 @@ export class UsersRepository {
    */
   async findByUsername(username: string): Promise<User | null> {
     const collection = await this.getUsersCollection();
-
-    logger.debug('Finding user by username', {
-      username,
-    });
-
     try {
       const user = await collection.findOne({ username });
 
       if (!user) {
-        logger.debug('User not found by username', {
-          username,
-        });
         return null;
       }
 
@@ -256,11 +210,6 @@ export class UsersRepository {
         });
         return null;
       }
-
-      logger.debug('User found by username', {
-        username,
-      });
-
       return validationResult.data || null;
     } catch (error) {
       logger.error('Error finding user by username', {
@@ -276,16 +225,8 @@ export class UsersRepository {
    */
   async findAll(): Promise<User[]> {
     const collection = await this.getUsersCollection();
-
-    logger.debug('Finding all users');
-
     try {
       const users = await collection.find({}).toArray();
-
-      logger.debug('Retrieved all users', {
-        count: users.length,
-      });
-
       // Map MongoDB documents to User objects, removing _id field
       const validatedUsers: User[] = [];
       for (const user of users) {
@@ -316,11 +257,6 @@ export class UsersRepository {
     const collection = await this.getUsersCollection();
     const id = this.generateId();
     const now = this.getCurrentTimestamp();
-
-    logger.debug('Creating new user', {
-      username: data.username,
-    });
-
     try {
       const user: User = {
         ...data,
@@ -356,11 +292,6 @@ export class UsersRepository {
   async update(id: string, data: Partial<User>): Promise<User | null> {
     const collection = await this.getUsersCollection();
     const now = this.getCurrentTimestamp();
-
-    logger.debug('Updating user', {
-      userId: id,
-    });
-
     try {
       // Prepare update data
       const updateData: any = {
@@ -416,11 +347,6 @@ export class UsersRepository {
    */
   async delete(id: string): Promise<boolean> {
     const collection = await this.getUsersCollection();
-
-    logger.debug('Deleting user', {
-      userId: id,
-    });
-
     try {
       const result = await collection.deleteOne({ id });
 
@@ -455,10 +381,6 @@ export class UsersRepository {
    * Returns a compound object with version, user, chatSettings, and timestamps
    */
   async getGeneralSettings(userId: string): Promise<GeneralSettings | null> {
-    logger.debug('Getting general settings for user', {
-      userId,
-    });
-
     try {
       const chatSettingsRepo = getRepositories().chatSettings;
 
@@ -500,11 +422,6 @@ export class UsersRepository {
         });
         return null;
       }
-
-      logger.debug('General settings retrieved for user', {
-        userId,
-      });
-
       return validationResult.data || null;
     } catch (error) {
       logger.error('Error getting general settings', {
@@ -520,18 +437,11 @@ export class UsersRepository {
    * Updates both collections atomically
    */
   async updateGeneralSettings(userId: string, data: Partial<GeneralSettings>): Promise<GeneralSettings | null> {
-    logger.debug('Updating general settings for user', {
-      userId,
-    });
-
     try {
       const chatSettingsRepo = getRepositories().chatSettings;
 
       // Update user if provided
       if (data.user) {
-        logger.debug('Updating user from general settings', {
-          userId,
-        });
         const updatedUser = await this.update(userId, data.user);
         if (!updatedUser) {
           logger.error('Failed to update user during general settings update', {
@@ -543,9 +453,6 @@ export class UsersRepository {
 
       // Update chat settings if provided
       if (data.chatSettings) {
-        logger.debug('Updating chat settings from general settings', {
-          userId,
-        });
         const updatedChatSettings = await chatSettingsRepo.updateForUser(userId, data.chatSettings);
         if (!updatedChatSettings) {
           logger.error('Failed to update chat settings during general settings update', {

@@ -62,14 +62,8 @@ export async function loadParticipantMemories(
   const repos = getRepositories()
   const memoriesPerParticipant = options.memoriesPerParticipant ?? 5
 
-  logger.debug('[FirstMessageContext] Loading participant memories', {
-    speakingCharacterId,
-    participantCount: otherParticipants.length,
-    memoriesPerParticipant,
-  })
-
   if (otherParticipants.length === 0) {
-    logger.debug('[FirstMessageContext] No other participants to load memories for')
+
     return []
   }
 
@@ -96,11 +90,6 @@ export async function loadParticipantMemories(
       // Continue with other participants
     }
   }
-
-  logger.debug('[FirstMessageContext] Loaded participant memories', {
-    speakingCharacterId,
-    totalMemories: allMemories.length,
-  })
 
   return allMemories
 }
@@ -176,11 +165,6 @@ async function loadMemoriesForParticipant(
 
     semanticSearchWorked = semanticResults.length > 0
 
-    logger.debug('[FirstMessageContext] Semantic search results for participant', {
-      participantName: participant.name,
-      resultsCount: semanticResults.length,
-      addedToMap: memoryMap.size - recentCount,
-    })
   } catch (error) {
     logger.warn('[FirstMessageContext] Semantic search failed for participant', {
       participantName: participant.name,
@@ -212,11 +196,6 @@ async function loadMemoriesForParticipant(
         if (memoryMap.size >= limit) break
       }
 
-      logger.debug('[FirstMessageContext] Text search fallback for participant', {
-        participantName: participant.name,
-        textResultsCount: textSearchResults.length,
-        totalMemories: memoryMap.size,
-      })
     } catch (error) {
       logger.warn('[FirstMessageContext] Text search fallback failed', {
         participantName: participant.name,
@@ -229,12 +208,6 @@ async function loadMemoriesForParticipant(
   const memories = Array.from(memoryMap.values())
     .sort((a, b) => b.importance - a.importance)
     .slice(0, limit)
-
-  logger.debug('[FirstMessageContext] Loaded memories for participant', {
-    participantName: participant.name,
-    fromRecent: recentCount,
-    total: memories.length,
-  })
 
   return memories
 }
@@ -250,7 +223,6 @@ export async function loadProjectContext(
   projectId: string,
   repos: RepositoryContainer
 ): Promise<ProjectContext | null> {
-  logger.debug('[FirstMessageContext] Loading project context', { projectId })
 
   try {
     const project = await repos.projects.findById(projectId)
@@ -259,13 +231,6 @@ export async function loadProjectContext(
       logger.warn('[FirstMessageContext] Project not found', { projectId })
       return null
     }
-
-    logger.debug('[FirstMessageContext] Loaded project context', {
-      projectId,
-      projectName: project.name,
-      hasDescription: !!project.description,
-      hasInstructions: !!project.instructions,
-    })
 
     return {
       name: project.name,
@@ -298,12 +263,6 @@ export async function buildFirstMessageContext(
     embeddingProfileId?: string
   }
 ): Promise<FirstMessageContextResult> {
-  logger.debug('[FirstMessageContext] Building first message context', {
-    speakingCharacterId,
-    participantCount: participants.length,
-    hasProjectId: !!options.projectId,
-    hasEmbeddingProfile: !!options.embeddingProfileId,
-  })
 
   const repos = getRepositories()
 
@@ -345,12 +304,6 @@ export async function buildFirstMessageContext(
       memoriesPerParticipant: 5,
     }
   )
-
-  logger.debug('[FirstMessageContext] Built first message context', {
-    speakingCharacterId,
-    hasProjectContext: !!projectContext,
-    memoryCount: participantMemories.length,
-  })
 
   return {
     projectContext,

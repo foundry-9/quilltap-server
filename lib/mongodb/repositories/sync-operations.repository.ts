@@ -30,18 +30,10 @@ export class SyncOperationsRepository extends MongoBaseRepository<SyncOperation>
    */
   async findById(id: string): Promise<SyncOperation | null> {
     const collection = await this.getCollection();
-
-    logger.debug('Finding sync operation by ID', {
-      operationId: id,
-    });
-
     try {
       const operation = await collection.findOne({ id });
 
       if (!operation) {
-        logger.debug('Sync operation not found', {
-          operationId: id,
-        });
         return null;
       }
 
@@ -55,11 +47,6 @@ export class SyncOperationsRepository extends MongoBaseRepository<SyncOperation>
         });
         return null;
       }
-
-      logger.debug('Sync operation found by ID', {
-        operationId: id,
-      });
-
       return validationResult.data || null;
     } catch (error) {
       logger.error('Error finding sync operation by ID', {
@@ -75,16 +62,8 @@ export class SyncOperationsRepository extends MongoBaseRepository<SyncOperation>
    */
   async findAll(): Promise<SyncOperation[]> {
     const collection = await this.getCollection();
-
-    logger.debug('Finding all sync operations');
-
     try {
       const operations = await collection.find({}).sort({ createdAt: -1 }).toArray();
-
-      logger.debug('Retrieved all sync operations', {
-        count: operations.length,
-      });
-
       const validatedOperations: SyncOperation[] = [];
       for (const operation of operations) {
         const { _id, ...operationData } = operation as any;
@@ -116,26 +95,12 @@ export class SyncOperationsRepository extends MongoBaseRepository<SyncOperation>
     limit: number = 50
   ): Promise<SyncOperation[]> {
     const collection = await this.getCollection();
-
-    logger.debug('Finding sync operations by instance ID', {
-      userId,
-      instanceId,
-      limit,
-    });
-
     try {
       const operations = await collection
         .find({ userId, instanceId })
         .sort({ createdAt: -1 })
         .limit(limit)
         .toArray();
-
-      logger.debug('Retrieved sync operations by instance ID', {
-        userId,
-        instanceId,
-        count: operations.length,
-      });
-
       const validatedOperations: SyncOperation[] = [];
       for (const operation of operations) {
         const { _id, ...operationData } = operation as any;
@@ -165,11 +130,6 @@ export class SyncOperationsRepository extends MongoBaseRepository<SyncOperation>
    */
   async findInProgress(userId: string): Promise<SyncOperation[]> {
     const collection = await this.getCollection();
-
-    logger.debug('Finding in-progress sync operations', {
-      userId,
-    });
-
     try {
       const operations = await collection
         .find({
@@ -177,12 +137,6 @@ export class SyncOperationsRepository extends MongoBaseRepository<SyncOperation>
           status: { $in: ['PENDING', 'IN_PROGRESS'] },
         })
         .toArray();
-
-      logger.debug('Retrieved in-progress sync operations', {
-        userId,
-        count: operations.length,
-      });
-
       const validatedOperations: SyncOperation[] = [];
       for (const operation of operations) {
         const { _id, ...operationData } = operation as any;
@@ -211,24 +165,12 @@ export class SyncOperationsRepository extends MongoBaseRepository<SyncOperation>
    */
   async findByUserId(userId: string, limit: number = 50): Promise<SyncOperation[]> {
     const collection = await this.getCollection();
-
-    logger.debug('Finding sync operations by user ID', {
-      userId,
-      limit,
-    });
-
     try {
       const operations = await collection
         .find({ userId })
         .sort({ createdAt: -1 })
         .limit(limit)
         .toArray();
-
-      logger.debug('Retrieved sync operations by user ID', {
-        userId,
-        count: operations.length,
-      });
-
       const validatedOperations: SyncOperation[] = [];
       for (const operation of operations) {
         const { _id, ...operationData } = operation as any;
@@ -259,13 +201,6 @@ export class SyncOperationsRepository extends MongoBaseRepository<SyncOperation>
     const collection = await this.getCollection();
     const id = this.generateId();
     const now = this.getCurrentTimestamp();
-
-    logger.debug('Creating new sync operation', {
-      userId: data.userId,
-      instanceId: data.instanceId,
-      direction: data.direction,
-    });
-
     try {
       const operation: SyncOperation = {
         ...data,
@@ -305,11 +240,6 @@ export class SyncOperationsRepository extends MongoBaseRepository<SyncOperation>
   async update(id: string, data: Partial<SyncOperation>): Promise<SyncOperation | null> {
     const collection = await this.getCollection();
     const now = this.getCurrentTimestamp();
-
-    logger.debug('Updating sync operation', {
-      operationId: id,
-    });
-
     try {
       const updateData: any = {
         ...data,
@@ -368,12 +298,6 @@ export class SyncOperationsRepository extends MongoBaseRepository<SyncOperation>
     errors?: string[]
   ): Promise<SyncOperation | null> {
     const now = this.getCurrentTimestamp();
-
-    logger.debug('Completing sync operation', {
-      operationId: id,
-      status,
-    });
-
     const updateData: Partial<SyncOperation> = {
       status,
       completedAt: now,
@@ -400,12 +324,6 @@ export class SyncOperationsRepository extends MongoBaseRepository<SyncOperation>
   async addError(id: string, error: string): Promise<SyncOperation | null> {
     const collection = await this.getCollection();
     const now = this.getCurrentTimestamp();
-
-    logger.debug('Adding error to sync operation', {
-      operationId: id,
-      error,
-    });
-
     try {
       const result = await collection.findOneAndUpdate(
         { id },
@@ -433,11 +351,6 @@ export class SyncOperationsRepository extends MongoBaseRepository<SyncOperation>
         });
         return null;
       }
-
-      logger.debug('Error added to sync operation', {
-        operationId: id,
-      });
-
       return validationResult.data || null;
     } catch (err) {
       logger.error('Error adding error to sync operation', {
@@ -454,12 +367,6 @@ export class SyncOperationsRepository extends MongoBaseRepository<SyncOperation>
   async addConflict(id: string, conflict: SyncConflict): Promise<SyncOperation | null> {
     const collection = await this.getCollection();
     const now = this.getCurrentTimestamp();
-
-    logger.debug('Adding conflict to sync operation', {
-      operationId: id,
-      conflict,
-    });
-
     try {
       const result = await collection.findOneAndUpdate(
         { id },
@@ -487,11 +394,6 @@ export class SyncOperationsRepository extends MongoBaseRepository<SyncOperation>
         });
         return null;
       }
-
-      logger.debug('Conflict added to sync operation', {
-        operationId: id,
-      });
-
       return validationResult.data || null;
     } catch (err) {
       logger.error('Error adding conflict to sync operation', {
@@ -509,11 +411,6 @@ export class SyncOperationsRepository extends MongoBaseRepository<SyncOperation>
     id: string,
     entityCounts: Record<string, number>
   ): Promise<SyncOperation | null> {
-    logger.debug('Updating entity counts for sync operation', {
-      operationId: id,
-      entityCounts,
-    });
-
     return this.update(id, { entityCounts });
   }
 
@@ -523,13 +420,6 @@ export class SyncOperationsRepository extends MongoBaseRepository<SyncOperation>
   async updateProgress(id: string, progress: SyncProgress): Promise<SyncOperation | null> {
     const collection = await this.getCollection();
     const now = this.getCurrentTimestamp();
-
-    logger.debug('Updating progress for sync operation', {
-      operationId: id,
-      phase: progress.phase,
-      currentItemName: progress.currentItemName,
-    });
-
     try {
       const result = await collection.findOneAndUpdate(
         { id },
@@ -575,11 +465,6 @@ export class SyncOperationsRepository extends MongoBaseRepository<SyncOperation>
    */
   async delete(id: string): Promise<boolean> {
     const collection = await this.getCollection();
-
-    logger.debug('Deleting sync operation', {
-      operationId: id,
-    });
-
     try {
       const result = await collection.deleteOne({ id });
 
@@ -610,11 +495,6 @@ export class SyncOperationsRepository extends MongoBaseRepository<SyncOperation>
    */
   async deleteByUserId(userId: string): Promise<number> {
     const collection = await this.getCollection();
-
-    logger.debug('Deleting all sync operations for user', {
-      userId,
-    });
-
     try {
       const result = await collection.deleteMany({ userId });
 
@@ -639,11 +519,6 @@ export class SyncOperationsRepository extends MongoBaseRepository<SyncOperation>
   async deleteOlderThan(olderThan: Date): Promise<number> {
     const collection = await this.getCollection();
     const olderThanIso = olderThan.toISOString();
-
-    logger.debug('Deleting sync operations older than', {
-      olderThan: olderThanIso,
-    });
-
     try {
       const result = await collection.deleteMany({
         createdAt: { $lt: olderThanIso },

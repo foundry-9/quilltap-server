@@ -115,8 +115,6 @@ export async function executeWebSearchTool(
       }
     }
 
-    logger.debug('Web search initiated', { userId: context.userId, query, maxResults })
-
     // Call Serper API
     const response = await fetch(SERPER_API_URL, {
       method: 'POST',
@@ -166,14 +164,6 @@ export async function executeWebSearchTool(
     }
 
     const data: SerperResponse = await response.json()
-
-    logger.debug('Serper API response received', {
-      userId: context.userId,
-      query,
-      resultsCount: data.organic?.length ?? 0,
-      hasKnowledgeGraph: !!data.knowledgeGraph,
-      creditsRemaining: data.credits,
-    })
 
     // Map Serper results to our format
     const results: WebSearchResult[] = (data.organic ?? []).map((result) => ({

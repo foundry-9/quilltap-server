@@ -724,26 +724,15 @@ export const sqliteInitialSchemaMigration: Migration = {
   async shouldRun(): Promise<boolean> {
     // Only run for SQLite backend
     if (!isSQLiteBackend()) {
-      logger.debug('Not running SQLite schema migration - not using SQLite backend', {
-        context: 'migrations.sqlite-initial-schema.shouldRun',
-      });
       return false;
     }
 
     // Check if any tables are missing
     for (const table of SQLITE_TABLES) {
       if (!sqliteTableExists(table.name)) {
-        logger.debug('Table missing, migration needed', {
-          context: 'migrations.sqlite-initial-schema.shouldRun',
-          table: table.name,
-        });
         return true;
       }
     }
-
-    logger.debug('All SQLite tables exist, migration not needed', {
-      context: 'migrations.sqlite-initial-schema.shouldRun',
-    });
     return false;
   },
 
@@ -759,10 +748,6 @@ export const sqliteInitialSchemaMigration: Migration = {
       const createSchema = db.transaction(() => {
         for (const table of SQLITE_TABLES) {
           if (!sqliteTableExists(table.name)) {
-            logger.debug('Creating table', {
-              context: 'migrations.sqlite-initial-schema.run',
-              table: table.name,
-            });
             db.exec(table.sql);
             tablesCreated++;
 
@@ -844,10 +829,6 @@ export function ensureSQLiteTablesExist(db: import('better-sqlite3').Database): 
       const tableInfo = db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`).get(table.name);
 
       if (!tableInfo) {
-        logger.debug('Creating table for migration', {
-          context: 'database.migration.ensureSQLiteTablesExist',
-          table: table.name,
-        });
         db.exec(table.sql);
         tablesCreated++;
 

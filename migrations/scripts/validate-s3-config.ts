@@ -28,19 +28,10 @@ export const validateS3ConfigMigration: Migration = {
 
   async shouldRun(): Promise<boolean> {
     const logger_inst = logger.child({ context: 'migration.validate-s3-config' });
-
-    logger_inst.debug('Checking if S3 config validation migration should run', {});
-
     // Validate S3 configuration
     const config = validateS3Config();
 
     // S3 is always required now, always run validation
-    logger_inst.debug('S3 config validation migration shouldRun check', {
-      mode: config.mode,
-      shouldRun: true,
-      isConfigured: config.isConfigured,
-    });
-
     return true;
   },
 
@@ -52,7 +43,6 @@ export const validateS3ConfigMigration: Migration = {
 
     try {
       // Validate S3 configuration
-      logger_inst.debug('Validating S3 configuration', {});
       const config = validateS3Config();
 
       if (!config.isConfigured) {
@@ -72,21 +62,8 @@ export const validateS3ConfigMigration: Migration = {
           timestamp: new Date().toISOString(),
         };
       }
-
-      logger_inst.debug('S3 configuration is valid, testing connection', {
-        mode: config.mode,
-        bucket: config.bucket,
-      });
-
       // Test S3 connection
       const connectionTest = await testS3Connection();
-
-      logger_inst.debug('S3 connection test completed', {
-        success: connectionTest.success,
-        message: connectionTest.message,
-        latencyMs: connectionTest.latencyMs,
-      });
-
       if (!connectionTest.success) {
         logger_inst.error('S3 connection test failed', {
           message: connectionTest.message,

@@ -48,16 +48,6 @@ export function resolveConflict(
 
   // Remote wins if it has a more recent timestamp
   const resolution: ConflictResolution = remoteTime > localTime ? 'REMOTE_WINS' : 'LOCAL_WINS';
-
-  logger.debug('Resolved sync conflict', {
-    context: 'sync:conflict-resolver',
-    localId: localEntity.id,
-    localUpdatedAt: localEntity.updatedAt,
-    remoteUpdatedAt: remoteEntity.updatedAt,
-    resolution,
-    timeDifferenceMs,
-  });
-
   return {
     resolution,
     localTimestamp,
@@ -116,10 +106,6 @@ export function resolveConflictWithRecord(
 export function needsSync(sourceUpdatedAt: string, lastSyncedAt: string | null): boolean {
   if (!lastSyncedAt) {
     // Never synced, always needs sync
-    logger.debug('Entity needs sync: never synced before', {
-      context: 'sync:conflict-resolver',
-      sourceUpdatedAt,
-    });
     return true;
   }
 
@@ -127,14 +113,6 @@ export function needsSync(sourceUpdatedAt: string, lastSyncedAt: string | null):
   const lastSyncTime = new Date(lastSyncedAt).getTime();
 
   const needsUpdate = sourceTime > lastSyncTime;
-
-  logger.debug('Checked if entity needs sync', {
-    context: 'sync:conflict-resolver',
-    sourceUpdatedAt,
-    lastSyncedAt,
-    needsUpdate,
-  });
-
   return needsUpdate;
 }
 
@@ -177,14 +155,6 @@ export function batchResolveConflicts<T extends EntityWithTimestamp>(
   const keepLocal: string[] = [];
   const fetchRemote: string[] = [];
   const conflicts: SyncConflict[] = [];
-
-  logger.debug('Starting batch conflict resolution', {
-    context: 'sync:conflict-resolver',
-    entityType,
-    localCount: localEntities.size,
-    remoteCount: remoteEntities.size,
-  });
-
   // Check entities that exist in both
   for (const [localId, localEntity] of localEntities) {
     const remoteEntity = remoteEntities.get(localId);

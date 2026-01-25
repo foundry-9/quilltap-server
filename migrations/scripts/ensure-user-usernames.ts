@@ -140,28 +140,16 @@ export const ensureUserUsernamesMigration: Migration = {
   async shouldRun(): Promise<boolean> {
     // Only run if MongoDB is enabled
     if (!isMongoDBBackend()) {
-      logger.debug('MongoDB not enabled, skipping username migration', {
-        context: 'migration.ensure-user-usernames',
-      });
       return false;
     }
 
     // Check if MongoDB is accessible
     if (!(await isMongoDBAccessible())) {
-      logger.debug('MongoDB not accessible, deferring username migration', {
-        context: 'migration.ensure-user-usernames',
-      });
       return false;
     }
 
     // Check if there are users without usernames
     const usersWithoutUsernames = await getUsersWithoutUsernames();
-
-    logger.debug('Checked for users without usernames', {
-      context: 'migration.ensure-user-usernames',
-      count: usersWithoutUsernames.length,
-    });
-
     return usersWithoutUsernames.length > 0;
   },
 

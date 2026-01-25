@@ -42,7 +42,7 @@ async function checkJsonStoreHealth(
   services: HealthResponse['services'],
   serviceStatuses: HealthStatus[]
 ): Promise<void> {
-  healthLogger.debug('Checking JSON store health');
+
   try {
     const repos = getRepositories();
     await repos.users.getCurrentUser();
@@ -52,7 +52,7 @@ async function checkJsonStoreHealth(
       message: 'JSON store is operational',
     };
     serviceStatuses.push('healthy');
-    healthLogger.debug('JSON store health check passed');
+
   } catch (error) {
     const errorMessage = getErrorMessage(error);
     services.json = {
@@ -72,7 +72,7 @@ async function checkMongoDBHealth(
   services: HealthResponse['services'],
   serviceStatuses: HealthStatus[]
 ): Promise<void> {
-  healthLogger.debug('Checking MongoDB health', { databaseBackend: process.env.DATABASE_BACKEND });
+
 
   const mongoConfig = validateMongoDBConfig();
 
@@ -87,9 +87,7 @@ async function checkMongoDBHealth(
           latencyMs: mongoResult.latencyMs,
         };
         serviceStatuses.push('healthy');
-        healthLogger.debug('MongoDB health check passed', {
-          latencyMs: mongoResult.latencyMs,
-        });
+
       } else {
         services.mongodb = {
           status: 'unhealthy',
@@ -129,7 +127,7 @@ async function checkFileStorageHealth(
   services: HealthResponse['services'],
   serviceStatuses: HealthStatus[]
 ): Promise<void> {
-  healthLogger.debug('Checking file storage health');
+
 
   try {
     if (!fileStorageManager.isInitialized()) {
@@ -158,10 +156,7 @@ async function checkFileStorageHealth(
       mode: metadata.displayName,
     };
     serviceStatuses.push('healthy');
-    healthLogger.debug('File storage health check passed', {
-      backendCount: mountPoints.length,
-      defaultBackend: metadata.displayName,
-    });
+
   } catch (error) {
     const errorMessage = getErrorMessage(error);
     services.s3 = {
@@ -198,7 +193,7 @@ export async function GET() {
   const startTime = Date.now();
 
   try {
-    healthLogger.debug('Starting health check');
+
 
     const timestamp = new Date().toISOString();
     const uptime = process.uptime();

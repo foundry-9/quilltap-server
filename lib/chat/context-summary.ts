@@ -427,7 +427,7 @@ async function considerTitleUpdateAsync(
 
     // Skip title update if user has manually renamed the chat
     if (chat.isManuallyRenamed) {
-      logger.debug(`[Title Update] Skipping - chat ${chatId} was manually renamed`)
+
       return
     }
 
@@ -447,8 +447,6 @@ async function considerTitleUpdateAsync(
       return
     }
 
-    logger.debug(`[Title Update] Using cheap LLM for chat ${chatId}: provider=${cheapLLM.provider}, model=${cheapLLM.modelName}`)
-    
     // Get messages for context
     const allMessages = await repos.chats.getMessages(chatId)
     const conversationMessages: ChatMessage[] = allMessages
@@ -550,7 +548,7 @@ export async function checkAndGenerateSummaryIfNeeded(
   const chat = await repos.chats.findById(chatId)
 
   if (!chat) {
-    logger.debug(`[Title Update] Chat ${chatId} not found in checkAndGenerateSummaryIfNeeded`)
+
     return
   }
 
@@ -560,8 +558,6 @@ export async function checkAndGenerateSummaryIfNeeded(
 
   // Check if we should consider updating the title
   const lastCheckedInterchange = chat.lastRenameCheckInterchange || 0
-
-  logger.debug(`[Title Update] Chat ${chatId}: currentInterchange=${currentInterchange}, lastChecked=${lastCheckedInterchange}, shouldCheck=${shouldCheckTitleAtInterchange(currentInterchange, lastCheckedInterchange)}`)
 
   if (shouldCheckTitleAtInterchange(currentInterchange, lastCheckedInterchange)) {
     logger.info(`[Title Update] Checking title at interchange ${currentInterchange} for chat ${chatId}`)

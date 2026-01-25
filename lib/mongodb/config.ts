@@ -81,26 +81,12 @@ function getMongoDBConfigFromEnv(): Partial<MongoDBConfig> {
  * @returns MongoDBConfig object with validation results
  */
 export function validateMongoDBConfig(): MongoDBConfig {
-  logger.debug('Validating MongoDB configuration', {
-    databaseBackend: process.env.DATABASE_BACKEND,
-    mode: process.env.MONGODB_MODE,
-  });
-
   const config = getMongoDBConfigFromEnv();
   const errors: string[] = [];
   let isConfigured = false;
 
   try {
     const validated = mongoDBConfigSchema.parse(config);
-
-    logger.debug('MongoDB configuration validated successfully', {
-      database: validated.database,
-      mode: validated.mode,
-      uri: sanitizeURI(validated.uri),
-      connectionTimeoutMs: validated.connectionTimeoutMs,
-      maxPoolSize: validated.maxPoolSize,
-    });
-
     isConfigured = true;
 
     return {
@@ -154,7 +140,6 @@ export async function testMongoDBConnection(): Promise<{
 }> {
   // Return early if using SQLite backend
   if (process.env.DATABASE_BACKEND === 'sqlite') {
-    logger.debug('Database backend is SQLite, skipping MongoDB connection test');
     return {
       success: true,
       message: 'SQLite backend is configured, MongoDB not required',
@@ -178,11 +163,6 @@ export async function testMongoDBConnection(): Promise<{
   const startTime = Date.now();
 
   try {
-    logger.debug('Attempting MongoDB connection', {
-      uri: sanitizeURI(config.uri),
-      timeout: config.connectionTimeoutMs,
-    });
-
     client = new MongoClient(config.uri, {
       serverSelectionTimeoutMS: config.connectionTimeoutMs,
       connectTimeoutMS: config.connectionTimeoutMs,
@@ -226,7 +206,6 @@ export async function testMongoDBConnection(): Promise<{
     if (client) {
       try {
         await client.close();
-        logger.debug('MongoDB client connection closed');
       } catch (error) {
         const closeError = getErrorMessage(error);
         logger.warn('Error closing MongoDB connection', {

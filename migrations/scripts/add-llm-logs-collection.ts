@@ -42,10 +42,6 @@ async function hasIndexes(): Promise<boolean> {
     // Check if we have more than just the default _id index
     return indexes.length > 1;
   } catch (error) {
-    logger.debug('Error checking llm_logs collection indexes', {
-      context: 'migration.add-llm-logs-collection',
-      error: error instanceof Error ? error.message : String(error),
-    });
     return false;
   }
 }
@@ -62,26 +58,17 @@ export const addLLMLogsCollectionMigration: Migration = {
   async shouldRun(): Promise<boolean> {
     // Only run if MongoDB is enabled
     if (!isMongoDBBackend()) {
-      logger.debug('MongoDB not enabled, skipping LLM logs collection migration', {
-        context: 'migration.add-llm-logs-collection',
-      });
       return false;
     }
 
     // Check if MongoDB is accessible
     if (!(await isMongoDBAccessible())) {
-      logger.debug('MongoDB not accessible, deferring LLM logs collection migration', {
-        context: 'migration.add-llm-logs-collection',
-      });
       return false;
     }
 
     // Only run if indexes don't already exist (first time setup)
     const hasExistingIndexes = await hasIndexes();
     if (hasExistingIndexes) {
-      logger.debug('LLM logs collection already has indexes, skipping migration', {
-        context: 'migration.add-llm-logs-collection',
-      });
       return false;
     }
 
@@ -100,11 +87,6 @@ export const addLLMLogsCollectionMigration: Migration = {
     try {
       const db = await getMongoDatabase();
       const llmLogsCollection = db.collection('llm_logs');
-
-      logger.debug('Creating indexes on llm_logs collection', {
-        context: 'migration.add-llm-logs-collection',
-      });
-
       // Compound index on userId and createdAt for listing user logs by date
       try {
         await llmLogsCollection.createIndex(
@@ -112,9 +94,6 @@ export const addLLMLogsCollectionMigration: Migration = {
           { background: true, name: 'userId_createdAt_idx' }
         );
         indexesCreated++;
-        logger.debug('Created index: userId + createdAt (desc)', {
-          context: 'migration.add-llm-logs-collection',
-        });
       } catch (indexError) {
         const errorMessage = indexError instanceof Error ? indexError.message : String(indexError);
         errors.push(`userId + createdAt index: ${errorMessage}`);
@@ -131,9 +110,6 @@ export const addLLMLogsCollectionMigration: Migration = {
           { sparse: true, background: true, name: 'messageId_idx' }
         );
         indexesCreated++;
-        logger.debug('Created index: messageId (sparse)', {
-          context: 'migration.add-llm-logs-collection',
-        });
       } catch (indexError) {
         const errorMessage = indexError instanceof Error ? indexError.message : String(indexError);
         errors.push(`messageId index: ${errorMessage}`);
@@ -150,9 +126,6 @@ export const addLLMLogsCollectionMigration: Migration = {
           { sparse: true, background: true, name: 'chatId_idx' }
         );
         indexesCreated++;
-        logger.debug('Created index: chatId (sparse)', {
-          context: 'migration.add-llm-logs-collection',
-        });
       } catch (indexError) {
         const errorMessage = indexError instanceof Error ? indexError.message : String(indexError);
         errors.push(`chatId index: ${errorMessage}`);
@@ -169,9 +142,6 @@ export const addLLMLogsCollectionMigration: Migration = {
           { sparse: true, background: true, name: 'characterId_idx' }
         );
         indexesCreated++;
-        logger.debug('Created index: characterId (sparse)', {
-          context: 'migration.add-llm-logs-collection',
-        });
       } catch (indexError) {
         const errorMessage = indexError instanceof Error ? indexError.message : String(indexError);
         errors.push(`characterId index: ${errorMessage}`);
@@ -188,9 +158,6 @@ export const addLLMLogsCollectionMigration: Migration = {
           { background: true, name: 'userId_type_idx' }
         );
         indexesCreated++;
-        logger.debug('Created index: userId + type', {
-          context: 'migration.add-llm-logs-collection',
-        });
       } catch (indexError) {
         const errorMessage = indexError instanceof Error ? indexError.message : String(indexError);
         errors.push(`userId + type index: ${errorMessage}`);

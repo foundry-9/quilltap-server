@@ -20,7 +20,6 @@ import { scanPlugins } from '@/lib/plugins/manifest-loader';
 
 export const GET = createAuthenticatedHandler(async (req, context) => {
   try {
-    logger.debug('[Providers v1] GET list', { userId: context.user.id });
 
     // Lazy-load user's LLM provider plugins (not loaded at startup)
     try {
@@ -28,12 +27,7 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
       for (const plugin of userPlugins.plugins) {
         if (plugin.manifest.capabilities.includes('LLM_PROVIDER')) {
           // Try to hot-load if not already registered
-          if (!providerRegistry.hasProvider(plugin.manifest.providerConfig?.providerName || '')) {
-            logger.debug('[Providers v1] Lazy-loading user LLM provider plugin', {
-              userId: context.user.id,
-              plugin: plugin.manifest.name,
-            });
-            hotLoadProviderPlugin(plugin.pluginPath, plugin.manifest);
+          if (!providerRegistry.hasProvider(plugin.manifest.providerConfig?.providerName || '')) {hotLoadProviderPlugin(plugin.pluginPath, plugin.manifest);
           }
         }
       }

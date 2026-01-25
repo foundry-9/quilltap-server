@@ -19289,10 +19289,6 @@ var OpenRouterProvider = class {
     return { sent: [], failed };
   }
   async sendMessage(params, apiKey) {
-    logger.debug("OpenRouter sendMessage called", {
-      context: "OpenRouterProvider.sendMessage",
-      model: params.model
-    });
     const attachmentResults = this.collectAttachmentFailures(params);
     const client = new OpenRouter({
       apiKey,
@@ -19313,25 +19309,14 @@ var OpenRouterProvider = class {
       stream: false
     };
     if (params.tools && params.tools.length > 0) {
-      logger.debug("Adding tools to request", {
-        context: "OpenRouterProvider.sendMessage",
-        toolCount: params.tools.length
-      });
       requestParams.tools = params.tools;
       requestParams.toolChoice = "auto";
     }
     if (params.webSearchEnabled) {
-      logger.debug("Enabling web search plugin", {
-        context: "OpenRouterProvider.sendMessage"
-      });
       requestParams.plugins = [{ id: "web", maxResults: 5 }];
     }
     if (params.responseFormat) {
       if (params.responseFormat.type === "json_schema" && params.responseFormat.jsonSchema) {
-        logger.debug("Adding JSON schema response format", {
-          context: "OpenRouterProvider.sendMessage",
-          schemaName: params.responseFormat.jsonSchema.name
-        });
         requestParams.responseFormat = {
           type: "json_schema",
           jsonSchema: {
@@ -19346,21 +19331,12 @@ var OpenRouterProvider = class {
     }
     const profileParams = params.profileParameters;
     if (profileParams?.fallbackModels?.length) {
-      logger.debug("Adding fallback models", {
-        context: "OpenRouterProvider.sendMessage",
-        fallbackCount: profileParams.fallbackModels.length
-      });
       requestParams.models = [params.model, ...profileParams.fallbackModels];
       requestParams.route = "fallback";
       delete requestParams.model;
     }
     const providerPrefs = profileParams?.providerPreferences;
     if (providerPrefs) {
-      logger.debug("Adding provider preferences", {
-        context: "OpenRouterProvider.sendMessage",
-        hasOrder: !!providerPrefs.order,
-        dataCollection: providerPrefs.dataCollection
-      });
       requestParams.provider = {};
       if (providerPrefs.order) requestParams.provider.order = providerPrefs.order;
       if (providerPrefs.allowFallbacks !== void 0) requestParams.provider.allowFallbacks = providerPrefs.allowFallbacks;
@@ -19380,13 +19356,6 @@ var OpenRouterProvider = class {
       cacheCreationInputTokens: usageAny.cacheCreationInputTokens,
       cacheReadInputTokens: usageAny.cacheReadInputTokens
     } : void 0;
-    logger.debug("Received OpenRouter response", {
-      context: "OpenRouterProvider.sendMessage",
-      finishReason: choice.finishReason,
-      promptTokens: response.usage?.promptTokens,
-      completionTokens: response.usage?.completionTokens,
-      cachedTokens: cacheUsage?.cachedTokens
-    });
     return {
       content: contentStr,
       finishReason: choice.finishReason || "stop",
@@ -19401,10 +19370,6 @@ var OpenRouterProvider = class {
     };
   }
   async *streamMessage(params, apiKey) {
-    logger.debug("OpenRouter streamMessage called (SDK v0.4.0 callModel API)", {
-      context: "OpenRouterProvider.streamMessage",
-      model: params.model
-    });
     const attachmentResults = this.collectAttachmentFailures(params);
     const client = new OpenRouter({
       apiKey,
@@ -19425,26 +19390,15 @@ var OpenRouterProvider = class {
     };
     const hasTools = params.tools && params.tools.length > 0;
     if (hasTools) {
-      logger.debug("Tools present - using direct API call to bypass SDK tool conversion", {
-        context: "OpenRouterProvider.streamMessage",
-        toolCount: params.tools.length
-      });
       yield* this.streamWithTools(params, apiKey, attachmentResults);
       return;
     }
     if (params.webSearchEnabled) {
-      logger.debug("Enabling web search tool for streaming", {
-        context: "OpenRouterProvider.streamMessage"
-      });
       requestParams.tools = requestParams.tools || [];
       requestParams.tools.push({ type: "web_search_preview" });
     }
     if (params.responseFormat) {
       if (params.responseFormat.type === "json_schema" && params.responseFormat.jsonSchema) {
-        logger.debug("Adding JSON schema response format for streaming", {
-          context: "OpenRouterProvider.streamMessage",
-          schemaName: params.responseFormat.jsonSchema.name
-        });
         requestParams.text = {
           format: {
             type: "json_schema",
@@ -19461,20 +19415,11 @@ var OpenRouterProvider = class {
     }
     const profileParams = params.profileParameters;
     if (profileParams?.fallbackModels?.length) {
-      logger.debug("Adding fallback models for streaming", {
-        context: "OpenRouterProvider.streamMessage",
-        fallbackCount: profileParams.fallbackModels.length
-      });
       requestParams.models = [params.model, ...profileParams.fallbackModels];
       delete requestParams.model;
     }
     const providerPrefs = profileParams?.providerPreferences;
     if (providerPrefs) {
-      logger.debug("Adding provider preferences for streaming", {
-        context: "OpenRouterProvider.streamMessage",
-        hasOrder: !!providerPrefs.order,
-        dataCollection: providerPrefs.dataCollection
-      });
       requestParams.provider = {};
       if (providerPrefs.order) requestParams.provider.order = providerPrefs.order;
       if (providerPrefs.allowFallbacks !== void 0) requestParams.provider.allowFallbacks = providerPrefs.allowFallbacks;
@@ -19518,13 +19463,6 @@ var OpenRouterProvider = class {
       cacheCreationInputTokens: responseUsage.cacheCreationInputTokens,
       cacheReadInputTokens: responseUsage.cacheReadInputTokens
     } : void 0;
-    logger.debug("Stream completed (callModel API)", {
-      context: "OpenRouterProvider.streamMessage",
-      status: response.status,
-      inputTokens: response.usage?.inputTokens,
-      outputTokens: response.usage?.outputTokens,
-      cachedTokens: cacheUsage?.cachedTokens
-    });
     const toolCalls = response.output?.filter((item) => item.type === "function_call").map((item) => ({
       id: item.callId || item.id,
       type: "function",
@@ -19688,18 +19626,12 @@ var OpenRouterProvider = class {
   }
   async validateApiKey(apiKey) {
     try {
-      logger.debug("Validating OpenRouter API key", {
-        context: "OpenRouterProvider.validateApiKey"
-      });
       const client = new OpenRouter({
         apiKey,
         httpReferer: process.env.BASE_URL || "http://localhost:3000",
         xTitle: "Quilltap"
       });
       await client.models.list();
-      logger.debug("OpenRouter API key validation successful", {
-        context: "OpenRouterProvider.validateApiKey"
-      });
       return true;
     } catch (error) {
       logger.error(
@@ -19712,9 +19644,6 @@ var OpenRouterProvider = class {
   }
   async getAvailableModels(apiKey) {
     try {
-      logger.debug("Fetching OpenRouter models", {
-        context: "OpenRouterProvider.getAvailableModels"
-      });
       const client = new OpenRouter({
         apiKey,
         httpReferer: process.env.BASE_URL || "http://localhost:3000",
@@ -19722,10 +19651,6 @@ var OpenRouterProvider = class {
       });
       const response = await client.models.list();
       const models = response.data?.map((m) => m.id) ?? [];
-      logger.debug("Retrieved OpenRouter models", {
-        context: "OpenRouterProvider.getAvailableModels",
-        modelCount: models.length
-      });
       return models;
     } catch (error) {
       logger.error(
@@ -19737,11 +19662,6 @@ var OpenRouterProvider = class {
     }
   }
   async generateImage(params, apiKey) {
-    logger.debug("Generating image with OpenRouter", {
-      context: "OpenRouterProvider.generateImage",
-      model: params.model,
-      prompt: params.prompt.substring(0, 100)
-    });
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || "http://localhost:3000",
@@ -19781,10 +19701,6 @@ var OpenRouterProvider = class {
     if (images.length === 0) {
       throw new Error("No images returned from OpenRouter");
     }
-    logger.debug("Image generation completed", {
-      context: "OpenRouterProvider.generateImage",
-      imageCount: images.length
-    });
     return {
       images,
       raw: response
@@ -19805,11 +19721,6 @@ var OpenRouterEmbeddingProvider = class {
    * @returns The embedding result
    */
   async generateEmbedding(text2, model, apiKey, options) {
-    logger2.debug("OpenRouter generateEmbedding called", {
-      context: "OpenRouterEmbeddingProvider.generateEmbedding",
-      model,
-      textLength: text2.length
-    });
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || "http://localhost:3000",
@@ -19836,12 +19747,6 @@ var OpenRouterEmbeddingProvider = class {
     } else {
       embedding = embeddingData;
     }
-    logger2.debug("OpenRouter embedding generated", {
-      context: "OpenRouterEmbeddingProvider.generateEmbedding",
-      model: response.model,
-      dimensions: embedding.length,
-      usage: response.usage
-    });
     return {
       embedding,
       model: response.model,
@@ -19863,11 +19768,6 @@ var OpenRouterEmbeddingProvider = class {
    * @returns Array of embedding results
    */
   async generateBatchEmbeddings(texts, model, apiKey, options) {
-    logger2.debug("OpenRouter generateBatchEmbeddings called", {
-      context: "OpenRouterEmbeddingProvider.generateBatchEmbeddings",
-      model,
-      count: texts.length
-    });
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || "http://localhost:3000",
@@ -19907,11 +19807,6 @@ var OpenRouterEmbeddingProvider = class {
         } : void 0
       });
     }
-    logger2.debug("OpenRouter batch embeddings generated", {
-      context: "OpenRouterEmbeddingProvider.generateBatchEmbeddings",
-      model: response.model,
-      count: results.length
-    });
     return results;
   }
   /**
@@ -19921,9 +19816,6 @@ var OpenRouterEmbeddingProvider = class {
    * @returns Array of model IDs
    */
   async getAvailableModels(apiKey) {
-    logger2.debug("OpenRouter getAvailableModels called", {
-      context: "OpenRouterEmbeddingProvider.getAvailableModels"
-    });
     try {
       const client = new OpenRouter({
         apiKey,
@@ -19932,10 +19824,6 @@ var OpenRouterEmbeddingProvider = class {
       });
       const response = await client.embeddings.listModels();
       const models = response.data?.map((m) => m.id) ?? [];
-      logger2.debug("OpenRouter embedding models fetched", {
-        context: "OpenRouterEmbeddingProvider.getAvailableModels",
-        count: models.length
-      });
       return models;
     } catch (error) {
       logger2.error(
@@ -20057,20 +19945,12 @@ var plugin = {
    * Factory method to create an OpenRouter LLM provider instance
    */
   createProvider: (baseUrl) => {
-    logger3.debug("Creating OpenRouter provider instance", {
-      context: "plugin.createProvider",
-      baseUrl
-    });
     return new OpenRouterProvider();
   },
   /**
    * Factory method to create an OpenRouter embedding provider instance
    */
   createEmbeddingProvider: (baseUrl) => {
-    logger3.debug("Creating OpenRouter embedding provider instance", {
-      context: "plugin.createEmbeddingProvider",
-      baseUrl
-    });
     return new OpenRouterEmbeddingProvider();
   },
   /**
@@ -20079,16 +19959,9 @@ var plugin = {
    * Returns 100+ models from various providers
    */
   getAvailableModels: async (apiKey, baseUrl) => {
-    logger3.debug("Fetching available OpenRouter models", {
-      context: "plugin.getAvailableModels"
-    });
     try {
       const provider = new OpenRouterProvider();
       const models = await provider.getAvailableModels(apiKey);
-      logger3.debug("Successfully fetched OpenRouter models", {
-        context: "plugin.getAvailableModels",
-        count: models.length
-      });
       return models;
     } catch (error) {
       logger3.error(
@@ -20103,16 +19976,9 @@ var plugin = {
    * Validate an OpenRouter API key
    */
   validateApiKey: async (apiKey, baseUrl) => {
-    logger3.debug("Validating OpenRouter API key", {
-      context: "plugin.validateApiKey"
-    });
     try {
       const provider = new OpenRouterProvider();
       const isValid = await provider.validateApiKey(apiKey);
-      logger3.debug("OpenRouter API key validation result", {
-        context: "plugin.validateApiKey",
-        isValid
-      });
       return isValid;
     } catch (error) {
       logger3.error(
@@ -20265,10 +20131,6 @@ var plugin = {
    * Render the OpenRouter icon
    */
   renderIcon: (props) => {
-    logger3.debug("Rendering OpenRouter icon", {
-      context: "plugin.renderIcon",
-      className: props.className
-    });
     return OpenRouterIcon(props);
   },
   /**
@@ -20279,10 +20141,6 @@ var plugin = {
    * @returns Array of tools in OpenAI format
    */
   formatTools: (tools) => {
-    logger3.debug("Formatting tools for OpenRouter provider", {
-      context: "plugin.formatTools",
-      toolCount: tools.length
-    });
     try {
       const formattedTools = [];
       for (const tool of tools) {
@@ -20294,10 +20152,6 @@ var plugin = {
         }
         formattedTools.push(tool);
       }
-      logger3.debug("Successfully formatted tools", {
-        context: "plugin.formatTools",
-        count: formattedTools.length
-      });
       return formattedTools;
     } catch (error) {
       logger3.error(
@@ -20316,15 +20170,8 @@ var plugin = {
    * @returns Array of tool call requests
    */
   parseToolCalls: (response) => {
-    logger3.debug("Parsing tool calls from OpenRouter response", {
-      context: "plugin.parseToolCalls"
-    });
     try {
       const toolCalls = parseOpenAIToolCalls(response);
-      logger3.debug("Successfully parsed tool calls", {
-        context: "plugin.parseToolCalls",
-        count: toolCalls.length
-      });
       return toolCalls;
     } catch (error) {
       logger3.error(

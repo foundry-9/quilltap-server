@@ -419,13 +419,6 @@ export function generateDDL(name: string, schema: z.ZodType): string[] {
 
     // Create indexes
     statements.push(...generateCreateIndexes(metadata));
-
-    logger.debug('Generated DDL for schema', {
-      table: name,
-      columnCount: metadata.fields.length,
-      indexCount: metadata.indexes?.length || 0,
-    });
-
     return statements;
   } catch (error) {
     logger.error('Failed to generate DDL', {

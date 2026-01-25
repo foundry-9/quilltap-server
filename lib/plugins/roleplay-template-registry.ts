@@ -129,11 +129,6 @@ class RoleplayTemplateRegistry {
     // Get enabled roleplay template plugins
     const templatePlugins = getEnabledPluginsByCapability('ROLEPLAY_TEMPLATE');
 
-    this.logger.debug('Found roleplay template plugins', {
-      count: templatePlugins.length,
-      plugins: templatePlugins.map(p => p.manifest.name),
-    });
-
     // Load each template plugin
     for (const plugin of templatePlugins) {
       try {
@@ -188,12 +183,6 @@ class RoleplayTemplateRegistry {
     }
 
     const templateId = this.extractTemplateId(plugin.manifest.name);
-
-    this.logger.debug('Loading roleplay template from plugin', {
-      templateId,
-      plugin: plugin.manifest.name,
-      name: templateConfig.name,
-    });
 
     // Validate required fields
     if (!templateConfig.name || !templateConfig.systemPrompt) {
@@ -316,7 +305,6 @@ class RoleplayTemplateRegistry {
       errors: [],
       lastInitTime: null,
     };
-    this.logger.debug('Roleplay template registry reset');
   }
 
   /**

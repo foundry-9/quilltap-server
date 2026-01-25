@@ -17,13 +17,7 @@ import { logger } from '@/lib/logger';
 async function handleGetTokens(
   request: NextRequest,
   themeId: string
-): Promise<NextResponse> {
-  logger.debug('Fetching theme tokens', {
-    context: 'GET /api/v1/themes/[themeId]?action=tokens',
-    themeId,
-  });
-
-  // Ensure plugin/theme system is initialized
+): Promise<NextResponse> {// Ensure plugin/theme system is initialized
   if (!isPluginSystemInitialized()) {
     logger.info('Plugin system not initialized, initializing now', {
       context: 'theme-tokens-GET',
@@ -56,15 +50,7 @@ async function handleGetTokens(
     weight: font.weight,
     style: font.style,
     display: font.display,
-  }));
-
-  logger.debug('Theme tokens retrieved successfully', {
-    context: 'GET /api/v1/themes/[themeId]?action=tokens',
-    themeId,
-    fontCount: fonts.length,
-  });
-
-  return NextResponse.json({ tokens, fonts, cssOverrides });
+  }));return NextResponse.json({ tokens, fonts, cssOverrides });
 }
 
 /**
@@ -74,13 +60,7 @@ async function handleGetTokens(
 async function handleDefaultGet(
   request: NextRequest,
   themeId: string
-): Promise<NextResponse> {
-  logger.debug('Fetching theme metadata', {
-    context: 'GET /api/v1/themes/[themeId]',
-    themeId,
-  });
-
-  // Ensure plugin/theme system is initialized
+): Promise<NextResponse> {// Ensure plugin/theme system is initialized
   if (!isPluginSystemInitialized()) {
     logger.info('Plugin system not initialized, initializing now', {
       context: 'theme-GET',
@@ -109,14 +89,7 @@ async function handleDefaultGet(
       { error: 'Theme not found' },
       { status: 404 }
     );
-  }
-
-  logger.debug('Theme metadata retrieved successfully', {
-    context: 'GET /api/v1/themes/[themeId]',
-    themeId,
-  });
-
-  return NextResponse.json({ theme });
+  }return NextResponse.json({ theme });
 }
 
 export async function GET(

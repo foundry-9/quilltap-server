@@ -28,7 +28,6 @@ export class MongoTagsRepository extends MongoBaseRepository<Tag> {
       const tag = await collection.findOne({ id });
 
       if (!tag) {
-        logger.debug('Tag not found', { tagId: id });
         return null;
       }
 
@@ -147,8 +146,6 @@ export class MongoTagsRepository extends MongoBaseRepository<Tag> {
           });
         }
       }
-
-      logger.debug('Found tags by IDs', { requestedCount: ids.length, foundCount: validatedTags.length });
       return validatedTags;
     } catch (error) {
       logger.error('Error finding tags by IDs', {

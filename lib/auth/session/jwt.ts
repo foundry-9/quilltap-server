@@ -87,13 +87,6 @@ export async function createSessionToken(user: SessionPayload): Promise<string> 
     .setExpirationTime(expiresAt)
     .setSubject(user.userId)
     .sign(signingKey);
-
-  logger.debug('Session token created', {
-    context: 'jwt.createSessionToken',
-    userId: user.userId,
-    expiresAt: new Date(expiresAt * 1000).toISOString(),
-  });
-
   return token;
 }
 
@@ -118,12 +111,6 @@ export async function verifySessionToken(
 
     // Validate required fields
     if (!payload.userId || !payload.email || !payload.sub) {
-      logger.debug('Session token missing required fields', {
-        context: 'jwt.verifySessionToken',
-        hasUserId: !!payload.userId,
-        hasEmail: !!payload.email,
-        hasSub: !!payload.sub,
-      });
       return null;
     }
 
@@ -137,12 +124,7 @@ export async function verifySessionToken(
     };
   } catch (error) {
     if (error instanceof joseErrors.JWTExpired) {
-      logger.debug('Session token expired', { context: 'jwt.verifySessionToken' });
     } else if (error instanceof joseErrors.JWTClaimValidationFailed) {
-      logger.debug('Session token claim validation failed', {
-        context: 'jwt.verifySessionToken',
-        error: error.message,
-      });
     } else if (error instanceof joseErrors.JWSSignatureVerificationFailed) {
       logger.warn('Session token signature verification failed', {
         context: 'jwt.verifySessionToken',

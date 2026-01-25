@@ -101,8 +101,6 @@ export async function enqueueJob(
   payload: Record<string, unknown>,
   options?: EnqueueJobOptions
 ): Promise<string> {
-  logger.debug('Enqueueing background job', { userId, type });
-
   const repos = getRepositories();
   const now = new Date().toISOString();
 
@@ -196,15 +194,7 @@ export async function enqueueMemoryExtractionBatch(
   messagePairs: MessagePair[],
   options?: EnqueueJobOptions
 ): Promise<string[]> {
-  logger.debug('Enqueueing memory extraction batch', {
-    userId,
-    chatId,
-    characterId,
-    pairCount: messagePairs.length,
-  });
-
   if (messagePairs.length === 0) {
-    logger.debug('No message pairs to enqueue');
     return [];
   }
 

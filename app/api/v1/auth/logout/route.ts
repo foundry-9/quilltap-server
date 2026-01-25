@@ -20,7 +20,6 @@ export async function POST(req: NextRequest) {
     if (session) {
       logger.info('[Auth v1] Logout', { userId: session.user.id });
     } else {
-      logger.debug('[Auth v1] Logout attempt without session');
     }
 
     const response = NextResponse.json(
@@ -34,7 +33,6 @@ export async function POST(req: NextRequest) {
     // Clear session cookie using the proper cookie utility
     clearSessionCookie(response);
 
-    logger.debug('[Auth v1] Session cookie cleared');
 
     return response;
   } catch (error) {

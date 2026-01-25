@@ -94,11 +94,6 @@ export function withActionDispatch<P extends Record<string, string> = Record<str
       const handler = actions[action];
 
       if (handler) {
-        actionLogger.debug('Dispatching to action handler', {
-          action,
-          method: request.method,
-          path: new URL(request.url).pathname,
-        });
         return handler(request, context, params);
       }
 
@@ -121,10 +116,6 @@ export function withActionDispatch<P extends Record<string, string> = Record<str
 
     // No action param - use default handler or return error
     if (defaultHandler) {
-      actionLogger.debug('No action param, using default handler', {
-        method: request.method,
-        path: new URL(request.url).pathname,
-      });
       return defaultHandler(request, context, params);
     }
 

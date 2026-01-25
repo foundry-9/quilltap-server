@@ -49,12 +49,6 @@ export class UserSyncApiKeysRepository extends UserOwnedBaseRepository<UserSyncA
 
     // Hash the full key with bcrypt
     const keyHash = await bcrypt.hash(plaintextKey, BCRYPT_ROUNDS);
-
-    logger.debug('Generated new API key', {
-      context: 'user-sync-api-keys-repo',
-      keyPrefix,
-    });
-
     return { plaintextKey, keyPrefix, keyHash };
   }
 
@@ -64,12 +58,6 @@ export class UserSyncApiKeysRepository extends UserOwnedBaseRepository<UserSyncA
   async verifyApiKey(plaintextKey: string, keyHash: string): Promise<boolean> {
     try {
       const isValid = await bcrypt.compare(plaintextKey, keyHash);
-
-      logger.debug('API key verification result', {
-        context: 'user-sync-api-keys-repo',
-        isValid,
-      });
-
       return isValid;
     } catch (error) {
       logger.error('Error verifying API key', {
@@ -84,27 +72,12 @@ export class UserSyncApiKeysRepository extends UserOwnedBaseRepository<UserSyncA
    * Find an API key by ID
    */
   async findById(id: string): Promise<UserSyncApiKey | null> {
-    logger.debug('Finding user sync API key by ID', {
-      context: 'user-sync-api-keys-repo',
-      keyId: id,
-    });
-
     try {
       const key = await this._findById(id);
 
       if (!key) {
-        logger.debug('User sync API key not found', {
-          context: 'user-sync-api-keys-repo',
-          keyId: id,
-        });
         return null;
       }
-
-      logger.debug('User sync API key found by ID', {
-        context: 'user-sync-api-keys-repo',
-        keyId: id,
-      });
-
       return key;
     } catch (error) {
       logger.error('Error finding user sync API key by ID', {
@@ -120,20 +93,8 @@ export class UserSyncApiKeysRepository extends UserOwnedBaseRepository<UserSyncA
    * Find all API keys for a user
    */
   async findByUserId(userId: string): Promise<UserSyncApiKey[]> {
-    logger.debug('Finding user sync API keys by user ID', {
-      context: 'user-sync-api-keys-repo',
-      userId,
-    });
-
     try {
       const keys = await this.findByFilter({ userId } as QueryFilter, { sort: { createdAt: -1 } });
-
-      logger.debug('Retrieved user sync API keys by user ID', {
-        context: 'user-sync-api-keys-repo',
-        userId,
-        count: keys.length,
-      });
-
       return keys;
     } catch (error) {
       logger.error('Error finding user sync API keys by user ID', {
@@ -149,23 +110,11 @@ export class UserSyncApiKeysRepository extends UserOwnedBaseRepository<UserSyncA
    * Find all active API keys for a user
    */
   async findActiveByUserId(userId: string): Promise<UserSyncApiKey[]> {
-    logger.debug('Finding active user sync API keys by user ID', {
-      context: 'user-sync-api-keys-repo',
-      userId,
-    });
-
     try {
       const keys = await this.findByFilter(
         { userId, isActive: true } as QueryFilter,
         { sort: { createdAt: -1 } }
       );
-
-      logger.debug('Retrieved active user sync API keys by user ID', {
-        context: 'user-sync-api-keys-repo',
-        userId,
-        count: keys.length,
-      });
-
       return keys;
     } catch (error) {
       logger.error('Error finding active user sync API keys by user ID', {
@@ -181,18 +130,8 @@ export class UserSyncApiKeysRepository extends UserOwnedBaseRepository<UserSyncA
    * Find all API keys
    */
   async findAll(): Promise<UserSyncApiKey[]> {
-    logger.debug('Finding all user sync API keys', {
-      context: 'user-sync-api-keys-repo',
-    });
-
     try {
       const keys = await this._findAll();
-
-      logger.debug('Retrieved all user sync API keys', {
-        context: 'user-sync-api-keys-repo',
-        count: keys.length,
-      });
-
       return keys;
     } catch (error) {
       logger.error('Error finding all user sync API keys', {
@@ -208,18 +147,8 @@ export class UserSyncApiKeysRepository extends UserOwnedBaseRepository<UserSyncA
    * Used when checking if a Bearer token matches any valid key
    */
   async findAllActive(): Promise<UserSyncApiKey[]> {
-    logger.debug('Finding all active user sync API keys', {
-      context: 'user-sync-api-keys-repo',
-    });
-
     try {
       const keys = await this.findByFilter({ isActive: true } as QueryFilter);
-
-      logger.debug('Retrieved all active user sync API keys', {
-        context: 'user-sync-api-keys-repo',
-        count: keys.length,
-      });
-
       return keys;
     } catch (error) {
       logger.error('Error finding all active user sync API keys', {
@@ -238,12 +167,6 @@ export class UserSyncApiKeysRepository extends UserOwnedBaseRepository<UserSyncA
     data: Omit<UserSyncApiKey, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions
   ): Promise<UserSyncApiKey> {
-    logger.debug('Creating user sync API key via standard create', {
-      context: 'user-sync-api-keys-repo',
-      userId: data.userId,
-      name: data.name,
-    });
-
     try {
       const key = await this._create(data, options);
 
@@ -272,12 +195,6 @@ export class UserSyncApiKeysRepository extends UserOwnedBaseRepository<UserSyncA
    * Returns both the stored key data and the plaintext key (only shown once)
    */
   async createApiKey(userId: string, name: string): Promise<CreateApiKeyResponse> {
-    logger.debug('Creating new user sync API key', {
-      context: 'user-sync-api-keys-repo',
-      userId,
-      name,
-    });
-
     try {
       // Generate the key
       const { plaintextKey, keyPrefix, keyHash } = await this.generateApiKey();
@@ -320,11 +237,6 @@ export class UserSyncApiKeysRepository extends UserOwnedBaseRepository<UserSyncA
    * Update an API key's name or active status
    */
   async update(id: string, data: { name?: string; isActive?: boolean }): Promise<UserSyncApiKey | null> {
-    logger.debug('Updating user sync API key', {
-      context: 'user-sync-api-keys-repo',
-      keyId: id,
-    });
-
     try {
       const key = await this._update(id, data as Partial<UserSyncApiKey>);
 
@@ -356,18 +268,8 @@ export class UserSyncApiKeysRepository extends UserOwnedBaseRepository<UserSyncA
    * Update last used timestamp for an API key
    */
   async updateLastUsed(id: string): Promise<void> {
-    logger.debug('Updating last used timestamp for API key', {
-      context: 'user-sync-api-keys-repo',
-      keyId: id,
-    });
-
     try {
       await this._update(id, { lastUsedAt: this.getCurrentTimestamp() } as Partial<UserSyncApiKey>);
-
-      logger.debug('Updated last used timestamp for API key', {
-        context: 'user-sync-api-keys-repo',
-        keyId: id,
-      });
     } catch (error) {
       logger.error('Error updating last used timestamp for API key', {
         context: 'user-sync-api-keys-repo',
@@ -382,11 +284,6 @@ export class UserSyncApiKeysRepository extends UserOwnedBaseRepository<UserSyncA
    * Delete an API key
    */
   async delete(id: string): Promise<boolean> {
-    logger.debug('Deleting user sync API key', {
-      context: 'user-sync-api-keys-repo',
-      keyId: id,
-    });
-
     try {
       const result = await this._delete(id);
 
@@ -418,11 +315,6 @@ export class UserSyncApiKeysRepository extends UserOwnedBaseRepository<UserSyncA
    * Delete all API keys for a user
    */
   async deleteByUserId(userId: string): Promise<number> {
-    logger.debug('Deleting all user sync API keys for user', {
-      context: 'user-sync-api-keys-repo',
-      userId,
-    });
-
     try {
       const deletedCount = await this.deleteMany({ userId } as QueryFilter);
 

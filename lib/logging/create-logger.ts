@@ -43,7 +43,7 @@ export function createLogger(module: string) {
  * @example
  * ```ts
  * const logger = createApiLogger('/api/v1/characters');
- * logger.debug('Processing request', { method: 'GET' });
+ *
  * ```
  */
 export function createApiLogger(endpoint: string) {
@@ -64,7 +64,7 @@ export function createApiLogger(endpoint: string) {
  *   private logger = createServiceLogger('ChatMessageService');
  *
  *   async sendMessage() {
- *     this.logger.debug('Sending message', { chatId });
+ *     this.
  *   }
  * }
  * ```
@@ -87,7 +87,7 @@ export function createServiceLogger(serviceName: string) {
  *   private logger = createRepositoryLogger('CharactersRepository');
  *
  *   async findById(id: string) {
- *     this.logger.debug('Finding character', { id });
+ *     this.
  *   }
  * }
  * ```
@@ -107,7 +107,7 @@ export function createRepositoryLogger(repositoryName: string) {
  * @example
  * ```ts
  * const logger = createPluginLogger('qtap-plugin-openai');
- * logger.debug('Initializing provider');
+ *
  * ```
  */
 export function createPluginLogger(pluginName: string) {

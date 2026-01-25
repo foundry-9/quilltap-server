@@ -43,7 +43,6 @@ export async function GET(req: NextRequest) {
     // If auth is completely disabled, return minimal info
     // This means the app auto-logs in as unauthenticatedLocalUser
     if (authDisabled) {
-      logger.debug('[Auth v1] Auth status - auth completely disabled');
       return successResponse({
         authDisabled: true,
         oauthDisabled: true, // Implied when auth is completely disabled
@@ -56,7 +55,6 @@ export async function GET(req: NextRequest) {
 
     // If only OAuth is disabled, credentials login still works
     if (oauthDisabled) {
-      logger.debug('[Auth v1] Auth status - OAuth disabled, credentials enabled');
       return successResponse({
         authDisabled: false,
         oauthDisabled: true,
@@ -92,17 +90,7 @@ export async function GET(req: NextRequest) {
       } else if (allProviders.size === 0) {
         warning = 'No OAuth authentication plugins are registered. Only credentials-based login is available.';
       }
-    }
-
-    logger.debug('[Auth v1] Auth status requested', {
-      authDisabled,
-      oauthDisabled,
-      pluginsInitialized,
-      configuredProviders: configuredProviders.length,
-      totalProviders: allProviders.size,
-    });
-
-    return successResponse({
+    }return successResponse({
       authDisabled: false,
       oauthDisabled: false,
       hasOAuthProviders: configuredProviders.length > 0,

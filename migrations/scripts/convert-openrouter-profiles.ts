@@ -84,12 +84,6 @@ export const convertOpenRouterProfilesMigration: Migration = {
               updatedAt: new Date().toISOString(),
             });
             converted++;
-
-            logger.debug('Converted profile from OPENAI_COMPATIBLE to OPENROUTER', {
-              context: 'migration.convert-openrouter-profiles',
-              profileId: profile.id,
-              profileName: profile.name,
-            });
           } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             errors.push({

@@ -42,7 +42,6 @@ type UpdateMountPointInput = z.infer<typeof updateMountPointSchema>;
 
 async function handleTest(req: NextRequest, { user, repos }: any, id: string) {
   try {
-    logger.debug('[Mount Points v1] POST test connection', { mountPointId: id, userId: user.id });
 
     // Fetch the mount point
     const mountPoint = await repos.mountPoints.findById(id);
@@ -63,7 +62,6 @@ async function handleTest(req: NextRequest, { user, repos }: any, id: string) {
     }
 
     if (!mountPoint.enabled) {
-      logger.debug('Mount point is disabled, cannot test', { mountPointId: id });
       return NextResponse.json(
         {
           mountPointId: id,
@@ -86,7 +84,6 @@ async function handleTest(req: NextRequest, { user, repos }: any, id: string) {
 
     // Ensure the file storage manager is initialized
     if (!fileStorageManager.isInitialized()) {
-      logger.debug('Initializing file storage manager for mount point test', { mountPointId: id });
       await fileStorageManager.initialize();
     }
 
@@ -143,13 +140,7 @@ async function handleTest(req: NextRequest, { user, repos }: any, id: string) {
 }
 
 async function handleScanOrphans(req: NextRequest, { user, repos }: any, id: string) {
-  try {
-    logger.debug('[Mount Points v1] POST scan-orphans', {
-      mountPointId: id,
-      userId: user.id,
-    });
-
-    // Fetch the mount point
+  try {// Fetch the mount point
     const mountPoint = await repos.mountPoints.findById(id);
 
     if (!mountPoint) {
@@ -168,7 +159,6 @@ async function handleScanOrphans(req: NextRequest, { user, repos }: any, id: str
     }
 
     if (!mountPoint.enabled) {
-      logger.debug('Mount point is disabled, cannot scan', { mountPointId: id });
       return NextResponse.json(
         { error: 'Mount point is disabled' },
         { status: 400 }
@@ -177,7 +167,6 @@ async function handleScanOrphans(req: NextRequest, { user, repos }: any, id: str
 
     // Ensure the file storage manager is initialized
     if (!fileStorageManager.isInitialized()) {
-      logger.debug('Initializing file storage manager for orphan scan', { mountPointId: id });
       await fileStorageManager.initialize();
     }
 
@@ -232,26 +221,13 @@ async function handleAdoptOrphans(req: NextRequest, { user, repos }: any, id: st
     const body = await req.json();
     const parseResult = adoptOrphansSchema.safeParse(body);
 
-    if (!parseResult.success) {
-      logger.debug('[Mount Points v1] Validation error on adopt-orphans', {
-        errors: parseResult.error.issues,
-      });
-      return NextResponse.json(
+    if (!parseResult.success) {return NextResponse.json(
         { error: 'Invalid request', details: parseResult.error.issues },
         { status: 400 }
       );
     }
 
-    const { storageKeys, defaultProjectId, source, computeHashes } = parseResult.data;
-
-    logger.debug('[Mount Points v1] Adopting orphan files', {
-      mountPointId: id,
-      userId: user.id,
-      fileCount: storageKeys.length,
-      computeHashes,
-    });
-
-    // Fetch the mount point
+    const { storageKeys, defaultProjectId, source, computeHashes } = parseResult.data;// Fetch the mount point
     const mountPoint = await repos.mountPoints.findById(id);
 
     if (!mountPoint) {
@@ -270,7 +246,6 @@ async function handleAdoptOrphans(req: NextRequest, { user, repos }: any, id: st
     }
 
     if (!mountPoint.enabled) {
-      logger.debug('Mount point is disabled, cannot adopt', { mountPointId: id });
       return NextResponse.json(
         { error: 'Mount point is disabled' },
         { status: 400 }
@@ -279,7 +254,6 @@ async function handleAdoptOrphans(req: NextRequest, { user, repos }: any, id: st
 
     // Ensure the file storage manager is initialized
     if (!fileStorageManager.isInitialized()) {
-      logger.debug('Initializing file storage manager for orphan adoption', { mountPointId: id });
       await fileStorageManager.initialize();
     }
 
@@ -318,13 +292,7 @@ async function handleAdoptOrphans(req: NextRequest, { user, repos }: any, id: st
 }
 
 async function handleSetDefault(req: NextRequest, { user, repos }: any, id: string) {
-  try {
-    logger.debug('[Mount Points v1] POST set-default', {
-      mountPointId: id,
-      userId: user.id,
-    });
-
-    // Fetch the mount point
+  try {// Fetch the mount point
     const mountPoint = await repos.mountPoints.findById(id);
 
     if (!mountPoint) {
@@ -372,7 +340,6 @@ async function handleSetDefault(req: NextRequest, { user, repos }: any, id: stri
 export const GET = createAuthenticatedParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }, { id }) => {
     try {
-      logger.debug('[Mount Points v1] GET mount point', { mountPointId: id, userId: user.id });
 
       const mountPoint = await repos.mountPoints.findById(id);
 
@@ -389,15 +356,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
           ownerId: mountPoint.userId,
         });
         return notFound('Mount point');
-      }
-
-      logger.debug('[Mount Points v1] Mount point retrieved', {
-        mountPointId: id,
-        scope: mountPoint.scope,
-        backendType: mountPoint.backendType,
-      });
-
-      return NextResponse.json({ mountPoint });
+      }return NextResponse.json({ mountPoint });
     } catch (error) {
       logger.error(
         '[Mount Points v1] Error fetching mount point',
@@ -416,7 +375,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }, { id }) => {
     try {
-      logger.debug('[Mount Points v1] PUT mount point', { mountPointId: id, userId: user.id });
 
       // Verify ownership
       const existingMountPoint = await repos.mountPoints.findById(id);
@@ -479,11 +437,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
           await fileStorageManager.initialize();
         } else {
           await fileStorageManager.refreshMountPoints();
-        }
-        logger.debug('File storage manager refreshed after mount point update', {
-          mountPointId: id,
-        });
-      } catch (refreshError) {
+        }} catch (refreshError) {
         logger.warn('Failed to refresh file storage manager after mount point update', {
           mountPointId: id,
           error: refreshError instanceof Error ? refreshError.message : String(refreshError),
@@ -492,11 +446,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
 
       return NextResponse.json({ mountPoint: updatedMountPoint });
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        logger.debug('[Mount Points v1] Validation error on update', {
-          errors: error.issues,
-        });
-        return validationError(error);
+      if (error instanceof z.ZodError) {return validationError(error);
       }
 
       logger.error(
@@ -515,13 +465,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
 
 export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }, { id }) => {
-    try {
-      logger.debug('[Mount Points v1] DELETE mount point', {
-        mountPointId: id,
-        userId: user.id,
-      });
-
-      // Verify ownership
+    try {// Verify ownership
       const existingMountPoint = await repos.mountPoints.findById(id);
 
       if (!existingMountPoint) {
@@ -558,11 +502,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
           await fileStorageManager.initialize();
         } else {
           await fileStorageManager.refreshMountPoints();
-        }
-        logger.debug('File storage manager refreshed after mount point deletion', {
-          mountPointId: id,
-        });
-      } catch (refreshError) {
+        }} catch (refreshError) {
         logger.warn('Failed to refresh file storage manager after mount point deletion', {
           mountPointId: id,
           error: refreshError instanceof Error ? refreshError.message : String(refreshError),

@@ -530,7 +530,7 @@ export async function deleteMemoriesBySourceMessageWithVectors(
   const memories = await repos.memories.findBySourceMessageId(sourceMessageId)
 
   if (memories.length === 0) {
-    logger.debug('[Memory] No memories found for source message', { sourceMessageId })
+
     return { deleted: 0, vectorsRemoved: 0 }
   }
 

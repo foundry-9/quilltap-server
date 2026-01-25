@@ -45,7 +45,6 @@ let migrationWaitComplete = false;
  */
 export function getDataBackend(): 'mongodb' | 'sqlite' {
   const config = getDatabaseConfig();
-  logger.debug('Retrieved data backend configuration', { backend: config.backend });
   return config.backend;
 }
 
@@ -55,7 +54,6 @@ export function getDataBackend(): 'mongodb' | 'sqlite' {
  */
 export function isMongoDBEnabled(): boolean {
   const backend = getDataBackend();
-  logger.debug('Checked MongoDB enabled status', { enabled: backend === 'mongodb', backend });
   return backend === 'mongodb';
 }
 
@@ -89,20 +87,11 @@ async function ensureMigrationsComplete(): Promise<void> {
 
     // If we have completed migrations recorded in MongoDB, we're good
     if (mongoState.completedMigrations && mongoState.completedMigrations.length > 0) {
-      logger.debug('Migrations verified complete via MongoDB state', {
-        context: 'repository-factory.ensureMigrationsComplete',
-        completedCount: mongoState.completedMigrations.length,
-        lastMigration: mongoState.completedMigrations[mongoState.completedMigrations.length - 1]?.id,
-      });
       migrationWaitComplete = true;
       return;
     }
   } catch (error) {
     // If we can't check MongoDB state, fall back to in-memory check
-    logger.debug('Could not check MongoDB migration state, using in-memory state', {
-      context: 'repository-factory.ensureMigrationsComplete',
-      error: error instanceof Error ? error.message : String(error),
-    });
   }
 
   // Fall back to the in-memory wait for edge cases

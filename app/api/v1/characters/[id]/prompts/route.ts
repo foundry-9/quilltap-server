@@ -21,7 +21,6 @@ const createPromptSchema = z.object({
 export const GET = createAuthenticatedParamsHandler<{ id: string }>(
   async (request, { user, repos }, { id: characterId }) => {
     try {
-      logger.debug('[Characters v1] Fetching character prompts', { characterId, userId: user.id });
 
       const character = await repos.characters.findById(characterId);
 
@@ -29,14 +28,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
         return notFound('Character');
       }
 
-      const prompts = character.systemPrompts || [];
-
-      logger.debug('[Characters v1] Retrieved character prompts', {
-        characterId,
-        count: prompts.length,
-      });
-
-      return NextResponse.json({ prompts });
+      const prompts = character.systemPrompts || [];return NextResponse.json({ prompts });
     } catch (error) {
       logger.error('[Characters v1] Error fetching character prompts', { characterId }, error instanceof Error ? error : undefined);
       return serverError('Failed to fetch character prompts');
@@ -49,16 +41,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
   async (request, { user, repos }, { id: characterId }) => {
     try {
       const body = await request.json();
-      const validated = createPromptSchema.parse(body);
-
-      logger.debug('[Characters v1] Adding system prompt to character', {
-        characterId,
-        userId: user.id,
-        promptName: validated.name,
-        isDefault: validated.isDefault,
-      });
-
-      // First verify the character exists and belongs to the user
+      const validated = createPromptSchema.parse(body);// First verify the character exists and belongs to the user
       const character = await repos.characters.findById(characterId);
 
       if (!checkOwnership(character, user.id)) {

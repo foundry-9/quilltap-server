@@ -46,10 +46,6 @@ async function hasProfilesNeedingMigration(): Promise<boolean> {
     });
     return count > 0;
   } catch (error) {
-    logger.debug('Error checking profiles for useNativeWebSearch field', {
-      context: 'migration.add-use-native-web-search-field',
-      error: error instanceof Error ? error.message : String(error),
-    });
     return false;
   }
 }
@@ -66,28 +62,16 @@ export const addUseNativeWebSearchFieldMigration: Migration = {
   async shouldRun(): Promise<boolean> {
     // Only run if MongoDB is enabled
     if (!isMongoDBBackend()) {
-      logger.debug('MongoDB not enabled, skipping useNativeWebSearch field migration', {
-        context: 'migration.add-use-native-web-search-field',
-      });
       return false;
     }
 
     // Check if MongoDB is accessible
     if (!(await isMongoDBAccessible())) {
-      logger.debug('MongoDB not accessible, deferring useNativeWebSearch field migration', {
-        context: 'migration.add-use-native-web-search-field',
-      });
       return false;
     }
 
     // Check if there are profiles needing migration
     const needsRun = await hasProfilesNeedingMigration();
-
-    logger.debug('Checked for useNativeWebSearch field migration need', {
-      context: 'migration.add-use-native-web-search-field',
-      needsRun,
-    });
-
     return needsRun;
   },
 
@@ -104,9 +88,6 @@ export const addUseNativeWebSearchFieldMigration: Migration = {
 
       // Add useNativeWebSearch field to connection_profiles
       // Default to false so existing profiles get tool-based web search
-      logger.debug('Adding useNativeWebSearch field to connection_profiles', {
-        context: 'migration.add-use-native-web-search-field',
-      });
       const profilesCollection = db.collection('connection_profiles');
       const profilesResult = await profilesCollection.updateMany(
         { useNativeWebSearch: { $exists: false } },
@@ -117,11 +98,6 @@ export const addUseNativeWebSearchFieldMigration: Migration = {
         }
       );
       profilesUpdated = profilesResult.modifiedCount;
-
-      logger.debug('Connection profiles updated with useNativeWebSearch field', {
-        context: 'migration.add-use-native-web-search-field',
-        count: profilesUpdated,
-      });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       logger.error('useNativeWebSearch field migration failed', {

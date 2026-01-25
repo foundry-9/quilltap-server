@@ -99,13 +99,6 @@ class ToolRegistry {
     }
 
     this.state.plugins.set(pluginName, plugin);
-    this.logger.debug('Plugin registered', {
-      name: pluginName,
-      displayName: plugin.metadata.displayName,
-      hasNewPattern,
-      hasLegacyMultiTool,
-      hasLegacySingleTool,
-    });
   }
 
   /**
@@ -248,18 +241,11 @@ class ToolRegistry {
 
       // Check if plugin is configured (if it requires configuration)
       if (plugin.isConfigured && !plugin.isConfigured(config)) {
-        this.logger.debug('Plugin not configured, skipping', { pluginName });
         continue;
       }
 
       try {
         const pluginTools = await this.getPluginToolDefinitions(plugin, config);
-
-        this.logger.debug('Got tool definitions from plugin', {
-          pluginName,
-          toolCount: pluginTools.length,
-          tools: pluginTools.map(t => t.function.name),
-        });
 
         tools.push(...pluginTools);
       } catch (error) {
@@ -355,12 +341,6 @@ class ToolRegistry {
 
     const { plugin, config } = found;
 
-    this.logger.debug('Executing tool', {
-      toolName,
-      pluginName: plugin.metadata.toolName,
-      inputKeys: Object.keys(input),
-    });
-
     // Validate input
     if (!plugin.validateInput(input)) {
       const error = `Invalid input for tool '${toolName}'`;
@@ -378,12 +358,6 @@ class ToolRegistry {
         toolConfig: config,
       };
       const result = await this.executePluginTool(plugin, toolName, input, pluginContext);
-
-      this.logger.debug('Tool execution completed', {
-        toolName,
-        pluginName: plugin.metadata.toolName,
-        success: result.success,
-      });
 
       return result;
     } catch (error) {
@@ -528,7 +502,6 @@ class ToolRegistry {
       errors: new Map(),
       lastInitTime: null,
     };
-    this.logger.debug('Tool registry reset');
   }
 
   /**

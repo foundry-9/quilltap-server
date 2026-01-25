@@ -35,14 +35,6 @@ export async function applyRemoteDelta(
   error?: string;
   isNewEntity?: boolean;
 }> {
-  logger.debug('Applying remote delta', {
-    context: 'sync:sync-service',
-    userId,
-    instanceId,
-    entityType: delta.entityType,
-    entityId: delta.id,
-  });
-
   try {
     if (delta.isDeleted) {
       // Handle deleted entity - use the delta.id directly since IDs are the same
@@ -230,14 +222,6 @@ async function createLocalEntity(
 
           // Update file entry with storage key and mount point ID
           await repos.files.update(fileEntry.id, { storageKey, mountPointId });
-
-          logger.debug('Saved file content from sync', {
-            context: 'sync:sync-service',
-            fileId: fileEntry.id,
-            size: buffer.length,
-            storageKey,
-            mountPointId,
-          });
         } else if (requiresContentFetch) {
           logger.info('File requires separate content fetch', {
             context: 'sync:sync-service',
@@ -260,28 +244,11 @@ async function createLocalEntity(
 
         // Debug: Check if profile exists BEFORE createOrUpdate
         const existingBefore = await repos.connections.findById(entityId);
-        logger.debug('CONNECTION_PROFILE sync: checking existing before createOrUpdate', {
-          context: 'sync:sync-service',
-          entityId,
-          existsLocally: !!existingBefore,
-          existingName: existingBefore?.name,
-          incomingName: (profileData as any)?.name,
-        });
-
         const result = await repos.connections.createOrUpdate(
           entityId,
           { ...profileData, apiKeyId: null } as any,
           { createdAt: entityCreatedAt }
         );
-
-        logger.debug('CONNECTION_PROFILE sync: createOrUpdate result', {
-          context: 'sync:sync-service',
-          entityId,
-          resultId: result?.id,
-          resultName: result?.name,
-          idsMatch: entityId === result?.id,
-        });
-
         return result;
       }
 
@@ -301,11 +268,6 @@ async function createLocalEntity(
         // Add messages if provided
         if (Array.isArray(messagesData) && messagesData.length > 0) {
           await repos.chats.addMessages(chatEntry.id, messagesData as ChatEvent[]);
-          logger.debug('Added chat messages from sync', {
-            context: 'sync:sync-service',
-            chatId: chatEntry.id,
-            messageCount: messagesData.length,
-          });
         }
 
         return chatEntry;
@@ -388,14 +350,6 @@ async function updateLocalEntity(
 
           // Update file entry with new storage key and mount point ID
           await repos.files.update(id, { storageKey, mountPointId });
-
-          logger.debug('Updated file content from sync', {
-            context: 'sync:sync-service',
-            fileId: id,
-            size: buffer.length,
-            storageKey,
-            mountPointId,
-          });
         }
         return true;
       }
@@ -433,11 +387,6 @@ async function updateLocalEntity(
           if (messagesData.length > 0) {
             await repos.chats.addMessages(id, messagesData as ChatEvent[]);
           }
-          logger.debug('Replaced chat messages from sync', {
-            context: 'sync:sync-service',
-            chatId: id,
-            messageCount: messagesData.length,
-          });
         }
         return true;
       }
@@ -587,12 +536,6 @@ export async function processRemoteDeltas(
             fileId: delta.id,
             originalFilename: (delta.data?.originalFilename as string) || localFile?.originalFilename,
           });
-          logger.debug('File needs content fetch', {
-            context: 'sync:sync-service',
-            fileId: delta.id,
-            isNewEntity: result.isNewEntity,
-            hasStorageKey: !!localFile?.storageKey,
-          });
         }
       }
     } else if (result.error) {
@@ -652,17 +595,6 @@ export async function prepareLocalDeltasForPush(
       sinceTimestamp: currentTimestamp,
       limit: BATCH_SIZE,
     });
-
-    logger.debug('Fetched delta batch', {
-      context: 'sync:sync-service',
-      userId,
-      instanceId,
-      iteration,
-      batchSize: detectionResult.deltas.length,
-      hasMore: detectionResult.hasMore,
-      newestTimestamp: detectionResult.newestTimestamp,
-    });
-
     // Deduplicate by ID to handle edge cases at pagination boundaries
     for (const delta of detectionResult.deltas) {
       const key = `${delta.entityType}:${delta.id}`;

@@ -24,7 +24,6 @@ export async function handleAddToolResult(
     const body = await req.json();
     const validated = toolResultSchema.parse(body);
 
-    logger.debug('[Chats v1] Adding tool result', { chatId, tool: validated.tool });
 
     // Create a TOOL message event
     const toolResultMessage = await repos.chats.addMessage(chatId, {

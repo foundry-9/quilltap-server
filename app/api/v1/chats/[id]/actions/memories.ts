@@ -28,19 +28,10 @@ export async function handleQueueMemories(
     const body = await req.json();
     const { characterId, characterName, messagePairs } = queueMemoriesSchema.parse(body);
 
-    logger.debug('[Chats v1] Queueing memory extraction', { chatId, characterId });
 
     // Get cheap LLM settings to determine which connection profile to use
     const chatSettings = await repos.chatSettings.findByUserId(user.id);
-    const cheapLLMSettings = chatSettings?.cheapLLMSettings;
-
-    logger.debug('[Chats v1] Cheap LLM settings', {
-      strategy: cheapLLMSettings?.strategy,
-      defaultCheapProfileId: cheapLLMSettings?.defaultCheapProfileId,
-      userDefinedProfileId: cheapLLMSettings?.userDefinedProfileId,
-    });
-
-    // Determine connection profile based on strategy
+    const cheapLLMSettings = chatSettings?.cheapLLMSettings;// Determine connection profile based on strategy
     let connectionProfileId: string | null | undefined = null;
     let profile = null;
 
@@ -49,7 +40,6 @@ export async function handleQueueMemories(
       profile = await repos.connections.findById(cheapLLMSettings.defaultCheapProfileId);
       if (profile && profile.userId === user.id) {
         connectionProfileId = cheapLLMSettings.defaultCheapProfileId;
-        logger.debug('[Chats v1] Using global default cheap LLM', { profileId: connectionProfileId });
       }
     }
 
@@ -58,7 +48,6 @@ export async function handleQueueMemories(
       profile = await repos.connections.findById(cheapLLMSettings.userDefinedProfileId);
       if (profile && profile.userId === user.id) {
         connectionProfileId = cheapLLMSettings.userDefinedProfileId;
-        logger.debug('[Chats v1] Using user-defined cheap LLM', { profileId: connectionProfileId });
       }
     }
 
@@ -68,15 +57,7 @@ export async function handleQueueMemories(
         strategy: cheapLLMSettings?.strategy,
       });
       return badRequest('No valid cheap LLM configured. Please set a cheap LLM profile in settings.');
-    }
-
-    logger.debug('[Chats v1] Using cheap LLM profile', {
-      profileId: connectionProfileId,
-      profileName: profile.name,
-      provider: profile.provider,
-    });
-
-    // Build a map of participantId -> character info for multi-character support
+    }// Build a map of participantId -> character info for multi-character support
     const participantCharacterMap = new Map<string, { characterId: string; characterName: string }>();
     for (const participant of chat.participants) {
       if (participant.type === 'CHARACTER' && participant.characterId) {

@@ -399,10 +399,6 @@ export class DatabaseMigrationService {
       // Migrate each collection
       for (const collectionInfo of sortedCollections) {
         if (!existingCollections.includes(collectionInfo.name)) {
-          logger.debug('Skipping non-existent collection', {
-            context: 'database.migration',
-            collection: collectionInfo.name,
-          });
           currentProgress.collectionsCompleted++;
           continue;
         }
@@ -514,11 +510,6 @@ export class DatabaseMigrationService {
    * Migrate a single collection from MongoDB to SQLite
    */
   private async migrateCollection(collectionInfo: CollectionInfo): Promise<number> {
-    logger.debug('Migrating collection', {
-      context: 'database.migration',
-      collection: collectionInfo.name,
-    });
-
     // Special handling for chat_messages - MongoDB stores as embedded array,
     // SQLite normalizes to individual rows
     if (collectionInfo.name === 'chat_messages') {
@@ -556,11 +547,6 @@ export class DatabaseMigrationService {
           if (docId) {
             const existing = await sqliteCollection.findOne({ id: docId });
             if (existing) {
-              logger.debug('Document already exists, skipping', {
-                context: 'database.migration',
-                collection: collectionInfo.name,
-                id: docId,
-              });
               migratedCount++;
               continue;
             }

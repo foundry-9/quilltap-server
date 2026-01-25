@@ -43,12 +43,8 @@ export interface ServiceInitializationResult {
 export async function initializeMongoDBIfNeeded(): Promise<ServiceInitializationResult> {
   const startTime = Date.now();
   const databaseBackend = process.env.DATABASE_BACKEND?.toLowerCase() || 'sqlite';
-
-  logger.debug('Checking MongoDB initialization requirement', { databaseBackend });
-
   // Check if MongoDB is enabled
   if (databaseBackend !== 'mongodb') {
-    logger.debug('MongoDB not enabled', { databaseBackend });
     return {
       service: 'mongodb',
       initialized: false,
@@ -61,25 +57,19 @@ export async function initializeMongoDBIfNeeded(): Promise<ServiceInitialization
     logger.info('Initializing MongoDB', { databaseBackend });
 
     // Validate configuration
-    logger.debug('Validating MongoDB configuration');
     validateMongoDBConfig();
 
     // Test connection
-    logger.debug('Testing MongoDB connection');
     await testMongoDBConnection();
 
     // Get database and ensure indexes
-    logger.debug('Getting MongoDB database connection');
     const db = await getMongoDatabase();
-
-    logger.debug('Ensuring MongoDB indexes');
     await ensureIndexes(db);
 
     // Note: Migrations are now handled by the upgrade plugin during plugin initialization
     // See: plugins/dist/qtap-plugin-upgrade/
 
     // Setup shutdown handlers
-    logger.debug('Setting up MongoDB shutdown handlers');
     setupMongoDBShutdownHandlers();
 
     const latency = Date.now() - startTime;
@@ -113,14 +103,10 @@ export async function initializeMongoDBIfNeeded(): Promise<ServiceInitialization
  */
 export async function initializeFileStorageIfNeeded(): Promise<ServiceInitializationResult> {
   const startTime = Date.now();
-
-  logger.debug('Checking file storage initialization requirement');
-
   try {
     logger.info('Initializing file storage manager');
 
     // Initialize the file storage manager
-    logger.debug('Initializing file storage manager instance');
     await fileStorageManager.initialize();
 
     const latency = Date.now() - startTime;
@@ -170,7 +156,6 @@ export async function initializeAllServices(): Promise<{
     const { initializePlugins } = await import('./plugin-initialization');
 
     // Initialize plugins
-    logger.debug('Initializing plugin system');
     const pluginsResult = await initializePlugins();
 
     logger.info('All services initialized', {

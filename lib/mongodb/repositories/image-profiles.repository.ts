@@ -24,11 +24,6 @@ export class MongoImageProfilesRepository {
   private async getCollection(): Promise<Collection> {
     const db = await getMongoDatabase();
     const collection = db.collection(this.collectionName);
-
-    logger.debug('Retrieved MongoDB image profiles collection', {
-      collectionName: this.collectionName,
-    });
-
     return collection;
   }
 
@@ -55,7 +50,6 @@ export class MongoImageProfilesRepository {
    * Generate UUID v4
    */
   private generateId(): string {
-    logger.debug('Generating UUID v4 for image profile');
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
       const r = (Math.random() * 16) | 0;
       const v = c === 'x' ? r : (r & 0x3) | 0x8;
@@ -68,7 +62,6 @@ export class MongoImageProfilesRepository {
    */
   private getCurrentTimestamp(): string {
     const timestamp = new Date().toISOString();
-    logger.debug('Generated timestamp for image profile', { timestamp });
     return timestamp;
   }
 
@@ -77,18 +70,10 @@ export class MongoImageProfilesRepository {
    */
   async findById(id: string): Promise<ImageProfile | null> {
     const collection = await this.getCollection();
-
-    logger.debug('Finding image profile by ID', {
-      profileId: id,
-    });
-
     try {
       const profile = await collection.findOne({ id });
 
       if (!profile) {
-        logger.debug('Image profile not found', {
-          profileId: id,
-        });
         return null;
       }
 
@@ -103,11 +88,6 @@ export class MongoImageProfilesRepository {
         });
         return null;
       }
-
-      logger.debug('Image profile found by ID', {
-        profileId: id,
-      });
-
       return validationResult.data || null;
     } catch (error) {
       logger.error('Error finding image profile by ID', {
@@ -123,16 +103,8 @@ export class MongoImageProfilesRepository {
    */
   async findAll(): Promise<ImageProfile[]> {
     const collection = await this.getCollection();
-
-    logger.debug('Finding all image profiles');
-
     try {
       const profiles = await collection.find({}).toArray();
-
-      logger.debug('Retrieved all image profiles', {
-        count: profiles.length,
-      });
-
       // Map MongoDB documents to ImageProfile objects, removing _id field
       const validatedProfiles: ImageProfile[] = [];
       for (const profile of profiles) {
@@ -161,19 +133,8 @@ export class MongoImageProfilesRepository {
    */
   async findByUserId(userId: string): Promise<ImageProfile[]> {
     const collection = await this.getCollection();
-
-    logger.debug('Finding image profiles by user ID', {
-      userId,
-    });
-
     try {
       const profiles = await collection.find({ userId }).toArray();
-
-      logger.debug('Retrieved image profiles by user ID', {
-        userId,
-        count: profiles.length,
-      });
-
       // Map MongoDB documents to ImageProfile objects, removing _id field
       const validatedProfiles: ImageProfile[] = [];
       for (const profile of profiles) {
@@ -204,19 +165,8 @@ export class MongoImageProfilesRepository {
    */
   async findByTag(tagId: string): Promise<ImageProfile[]> {
     const collection = await this.getCollection();
-
-    logger.debug('Finding image profiles by tag', {
-      tagId,
-    });
-
     try {
       const profiles = await collection.find({ tags: tagId }).toArray();
-
-      logger.debug('Retrieved image profiles by tag', {
-        tagId,
-        count: profiles.length,
-      });
-
       // Map MongoDB documents to ImageProfile objects, removing _id field
       const validatedProfiles: ImageProfile[] = [];
       for (const profile of profiles) {
@@ -247,11 +197,6 @@ export class MongoImageProfilesRepository {
    */
   async findDefault(userId: string): Promise<ImageProfile | null> {
     const collection = await this.getCollection();
-
-    logger.debug('Finding default image profile for user', {
-      userId,
-    });
-
     try {
       const profile = await collection.findOne({
         userId,
@@ -259,9 +204,6 @@ export class MongoImageProfilesRepository {
       });
 
       if (!profile) {
-        logger.debug('Default image profile not found for user', {
-          userId,
-        });
         return null;
       }
 
@@ -276,12 +218,6 @@ export class MongoImageProfilesRepository {
         });
         return null;
       }
-
-      logger.debug('Default image profile found', {
-        userId,
-        profileId: profileData.id,
-      });
-
       return validationResult.data || null;
     } catch (error) {
       logger.error('Error finding default image profile', {
@@ -297,12 +233,6 @@ export class MongoImageProfilesRepository {
    */
   async findByName(userId: string, name: string): Promise<ImageProfile | null> {
     const collection = await this.getCollection();
-
-    logger.debug('Finding image profile by name', {
-      userId,
-      name,
-    });
-
     try {
       const profile = await collection.findOne({
         userId,
@@ -310,10 +240,6 @@ export class MongoImageProfilesRepository {
       });
 
       if (!profile) {
-        logger.debug('Image profile not found by name', {
-          userId,
-          name,
-        });
         return null;
       }
 
@@ -329,13 +255,6 @@ export class MongoImageProfilesRepository {
         });
         return null;
       }
-
-      logger.debug('Image profile found by name', {
-        userId,
-        name,
-        profileId: profileData.id,
-      });
-
       return validationResult.data || null;
     } catch (error) {
       logger.error('Error finding image profile by name', {
@@ -354,13 +273,6 @@ export class MongoImageProfilesRepository {
     const collection = await this.getCollection();
     const id = this.generateId();
     const now = this.getCurrentTimestamp();
-
-    logger.debug('Creating new image profile', {
-      userId: data.userId,
-      name: data.name,
-      provider: data.provider,
-    });
-
     try {
       const profile: ImageProfile = {
         ...data,
@@ -400,11 +312,6 @@ export class MongoImageProfilesRepository {
   async update(id: string, data: Partial<ImageProfile>): Promise<ImageProfile | null> {
     const collection = await this.getCollection();
     const now = this.getCurrentTimestamp();
-
-    logger.debug('Updating image profile', {
-      profileId: id,
-    });
-
     try {
       // Prepare update data
       const updateData: any = {
@@ -460,11 +367,6 @@ export class MongoImageProfilesRepository {
    */
   async delete(id: string): Promise<boolean> {
     const collection = await this.getCollection();
-
-    logger.debug('Deleting image profile', {
-      profileId: id,
-    });
-
     try {
       const result = await collection.deleteOne({ id });
 
@@ -496,12 +398,6 @@ export class MongoImageProfilesRepository {
   async addTag(profileId: string, tagId: string): Promise<ImageProfile | null> {
     const collection = await this.getCollection();
     const now = this.getCurrentTimestamp();
-
-    logger.debug('Adding tag to image profile', {
-      profileId,
-      tagId,
-    });
-
     try {
       const result = await collection.findOneAndUpdate(
         { id: profileId },
@@ -555,12 +451,6 @@ export class MongoImageProfilesRepository {
   async removeTag(profileId: string, tagId: string): Promise<ImageProfile | null> {
     const collection = await this.getCollection();
     const now = this.getCurrentTimestamp();
-
-    logger.debug('Removing tag from image profile', {
-      profileId,
-      tagId,
-    });
-
     try {
       const result = await collection.findOneAndUpdate(
         { id: profileId },
@@ -615,11 +505,6 @@ export class MongoImageProfilesRepository {
   async unsetAllDefaults(userId: string): Promise<number> {
     const collection = await this.getCollection();
     const now = this.getCurrentTimestamp();
-
-    logger.debug('Unsetting all default image profiles for user', {
-      userId,
-    });
-
     try {
       const result = await collection.updateMany(
         { userId, isDefault: true },

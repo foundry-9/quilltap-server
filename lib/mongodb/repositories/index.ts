@@ -116,8 +116,6 @@ let repositoryInstance: RepositoryContainer | null = null;
  * @returns {RepositoryContainer} Container with all repository instances
  */
 export function createRepositories(): RepositoryContainer {
-  logger.debug('Creating new repository container');
-
   try {
     const repositories: RepositoryContainer = {
       characters: new CharactersRepository(),
@@ -154,11 +152,6 @@ export function createRepositories(): RepositoryContainer {
       // LLM logs repository
       llmLogs: new LLMLogsRepository(),
     };
-
-    logger.debug('Repository container created successfully', {
-      repositories: Object.keys(repositories),
-    });
-
     return repositories;
   } catch (error) {
     logger.error('Failed to create repository container', {
@@ -176,11 +169,8 @@ export function createRepositories(): RepositoryContainer {
  */
 export function getRepositories(): RepositoryContainer {
   if (!repositoryInstance) {
-    logger.debug('Initializing singleton repository instance');
     repositoryInstance = createRepositories();
   }
-
-  logger.debug('Returning repository instance');
   return repositoryInstance;
 }
 
@@ -191,6 +181,5 @@ export function getRepositories(): RepositoryContainer {
  * @returns {void}
  */
 export function resetRepositories(): void {
-  logger.debug('Resetting repository instance');
   repositoryInstance = null;
 }

@@ -275,17 +275,6 @@ export function parseXMLToolCalls(response: string): ParsedXMLTool[] {
   // Sort by startIndex for consistent ordering
   deduped.sort((a, b) => a.startIndex - b.startIndex)
 
-  if (deduped.length > 0) {
-    logger.debug('[XMLToolParser] Parsed XML tool calls', {
-      count: deduped.length,
-      tools: deduped.map(r => ({
-        name: r.toolName,
-        format: r.format,
-        argKeys: Object.keys(r.arguments),
-      })),
-    })
-  }
-
   return deduped
 }
 

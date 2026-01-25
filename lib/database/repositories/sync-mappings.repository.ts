@@ -44,13 +44,6 @@ export class SyncMappingsRepository extends UserOwnedBaseRepository<SyncMapping>
     entityType: SyncableEntityType,
     localId: string
   ): Promise<SyncMapping | null> {
-    logger.debug('Finding sync mapping by local ID', {
-      userId,
-      instanceId,
-      entityType,
-      localId,
-    });
-
     try {
       const mapping = await this.findOneByFilter({
         userId,
@@ -60,20 +53,8 @@ export class SyncMappingsRepository extends UserOwnedBaseRepository<SyncMapping>
       } as QueryFilter);
 
       if (!mapping) {
-        logger.debug('Sync mapping not found by local ID', {
-          userId,
-          instanceId,
-          entityType,
-          localId,
-        });
         return null;
       }
-
-      logger.debug('Sync mapping found by local ID', {
-        localId,
-        remoteId: mapping.remoteId,
-      });
-
       return mapping;
     } catch (error) {
       logger.error('Error finding sync mapping by local ID', {
@@ -93,13 +74,6 @@ export class SyncMappingsRepository extends UserOwnedBaseRepository<SyncMapping>
     entityType: SyncableEntityType,
     remoteId: string
   ): Promise<SyncMapping | null> {
-    logger.debug('Finding sync mapping by remote ID', {
-      userId,
-      instanceId,
-      entityType,
-      remoteId,
-    });
-
     try {
       const mapping = await this.findOneByFilter({
         userId,
@@ -109,20 +83,8 @@ export class SyncMappingsRepository extends UserOwnedBaseRepository<SyncMapping>
       } as QueryFilter);
 
       if (!mapping) {
-        logger.debug('Sync mapping not found by remote ID', {
-          userId,
-          instanceId,
-          entityType,
-          remoteId,
-        });
         return null;
       }
-
-      logger.debug('Sync mapping found by remote ID', {
-        remoteId,
-        localId: mapping.localId,
-      });
-
       return mapping;
     } catch (error) {
       logger.error('Error finding sync mapping by remote ID', {
@@ -137,23 +99,11 @@ export class SyncMappingsRepository extends UserOwnedBaseRepository<SyncMapping>
    * Find all sync mappings for a specific instance
    */
   async findAllForInstance(userId: string, instanceId: string): Promise<SyncMapping[]> {
-    logger.debug('Finding all sync mappings for instance', {
-      userId,
-      instanceId,
-    });
-
     try {
       const mappings = await this.findByFilter({
         userId,
         instanceId,
       } as QueryFilter);
-
-      logger.debug('Retrieved sync mappings for instance', {
-        userId,
-        instanceId,
-        count: mappings.length,
-      });
-
       return mappings;
     } catch (error) {
       logger.error('Error finding sync mappings for instance', {
@@ -173,26 +123,12 @@ export class SyncMappingsRepository extends UserOwnedBaseRepository<SyncMapping>
     instanceId: string,
     entityType: SyncableEntityType
   ): Promise<SyncMapping[]> {
-    logger.debug('Finding sync mappings by entity type', {
-      userId,
-      instanceId,
-      entityType,
-    });
-
     try {
       const mappings = await this.findByFilter({
         userId,
         instanceId,
         entityType,
       } as QueryFilter);
-
-      logger.debug('Retrieved sync mappings by entity type', {
-        userId,
-        instanceId,
-        entityType,
-        count: mappings.length,
-      });
-
       return mappings;
     } catch (error) {
       logger.error('Error finding sync mappings by entity type', {
@@ -209,14 +145,6 @@ export class SyncMappingsRepository extends UserOwnedBaseRepository<SyncMapping>
    * Create a new sync mapping
    */
   async create(data: CreateSyncMapping, options?: CreateOptions): Promise<SyncMapping> {
-    logger.debug('Creating new sync mapping', {
-      userId: data.userId,
-      instanceId: data.instanceId,
-      entityType: data.entityType,
-      localId: data.localId,
-      remoteId: data.remoteId,
-    });
-
     try {
       const mapping = await this._create(data, options);
 
@@ -251,12 +179,6 @@ export class SyncMappingsRepository extends UserOwnedBaseRepository<SyncMapping>
     localUpdatedAt: string,
     remoteUpdatedAt: string
   ): Promise<SyncMapping | null> {
-    logger.debug('Updating sync mapping timestamps', {
-      mappingId: id,
-      localUpdatedAt,
-      remoteUpdatedAt,
-    });
-
     try {
       const updated = await this.update(id, {
         lastSyncedAt: this.getCurrentTimestamp(),
@@ -265,9 +187,6 @@ export class SyncMappingsRepository extends UserOwnedBaseRepository<SyncMapping>
       } as Partial<SyncMapping>);
 
       if (updated) {
-        logger.debug('Sync mapping timestamps updated successfully', {
-          mappingId: id,
-        });
       }
 
       return updated;
@@ -284,10 +203,6 @@ export class SyncMappingsRepository extends UserOwnedBaseRepository<SyncMapping>
    * Update a sync mapping
    */
   async update(id: string, data: Partial<SyncMapping>): Promise<SyncMapping | null> {
-    logger.debug('Updating sync mapping', {
-      mappingId: id,
-    });
-
     try {
       const updated = await this._update(id, data);
 
@@ -311,10 +226,6 @@ export class SyncMappingsRepository extends UserOwnedBaseRepository<SyncMapping>
    * Delete a sync mapping
    */
   async delete(id: string): Promise<boolean> {
-    logger.debug('Deleting sync mapping', {
-      mappingId: id,
-    });
-
     try {
       const result = await this._delete(id);
 
@@ -338,10 +249,6 @@ export class SyncMappingsRepository extends UserOwnedBaseRepository<SyncMapping>
    * Delete all mappings for a specific instance
    */
   async deleteByInstanceId(instanceId: string): Promise<number> {
-    logger.debug('Deleting all sync mappings for instance', {
-      instanceId,
-    });
-
     try {
       const count = await this.deleteMany({ instanceId } as QueryFilter);
 
@@ -364,10 +271,6 @@ export class SyncMappingsRepository extends UserOwnedBaseRepository<SyncMapping>
    * Delete all mappings for a specific user
    */
   async deleteByUserId(userId: string): Promise<number> {
-    logger.debug('Deleting all sync mappings for user', {
-      userId,
-    });
-
     try {
       const count = await this.deleteMany({ userId } as QueryFilter);
 
@@ -395,13 +298,6 @@ export class SyncMappingsRepository extends UserOwnedBaseRepository<SyncMapping>
     entityType: SyncableEntityType,
     localId: string
   ): Promise<boolean> {
-    logger.debug('Deleting sync mapping by local ID', {
-      userId,
-      instanceId,
-      entityType,
-      localId,
-    });
-
     try {
       const count = await this.deleteMany({
         userId,

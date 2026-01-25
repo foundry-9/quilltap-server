@@ -133,11 +133,6 @@ export interface GoogleToolDefinition {
  * ```
  */
 export function convertOpenAIToAnthropicFormat(tool: UniversalTool): any {
-  logger.debug('Converting tool to Anthropic format', {
-    context: 'tool-formatting',
-    toolName: tool.function.name,
-  });
-
   return {
     name: tool.function.name,
     description: tool.function.description,
@@ -175,11 +170,6 @@ export function convertOpenAIToAnthropicFormat(tool: UniversalTool): any {
  * ```
  */
 export function convertOpenAIToGoogleFormat(tool: UniversalTool): any {
-  logger.debug('Converting tool to Google format', {
-    context: 'tool-formatting',
-    toolName: tool.function.name,
-  });
-
   return {
     name: tool.function.name,
     description: tool.function.description,
@@ -227,13 +217,6 @@ export function applyPromptLengthLimit(tool: any, maxBytes: number): any {
   const descBytes = Buffer.byteLength(tool.description);
 
   if (descBytes > maxBytes) {
-    logger.debug('Truncating tool description', {
-      context: 'tool-formatting',
-      toolName: tool.name,
-      originalLength: descBytes,
-      maxBytes,
-    });
-
     // Truncate description to fit within the byte limit
     let truncated = tool.description;
     while (Buffer.byteLength(truncated) > maxDescBytes && truncated.length > 0) {
@@ -269,12 +252,6 @@ export function applyPromptLengthLimit(tool: any, maxBytes: number): any {
  * ```
  */
 export function applyGrokPromptConstraints(tool: any, targetFormat: string): any {
-  logger.debug('Applying Grok constraints to tool', {
-    context: 'tool-formatting',
-    toolName: tool.name,
-    targetFormat,
-  });
-
   // Currently, Grok uses similar formats to OpenAI, so we pass through
   // This function exists as a placeholder for any future Grok-specific constraints
   return tool;
@@ -321,11 +298,6 @@ export function parseOpenAIToolCalls(response: any): ToolCallRequest[] {
     if (toolCallsArray && Array.isArray(toolCallsArray) && toolCallsArray.length > 0) {
       for (const toolCall of toolCallsArray) {
         if (toolCall.type === 'function' && toolCall.function) {
-          logger.debug('Parsed OpenAI tool call', {
-            context: 'tool-parsing',
-            toolName: toolCall.function.name,
-          });
-
           toolCalls.push({
             name: toolCall.function.name,
             arguments: JSON.parse(toolCall.function.arguments || '{}'),
@@ -365,11 +337,6 @@ export function parseAnthropicToolCalls(response: any): ToolCallRequest[] {
 
     for (const block of response.content) {
       if (block.type === 'tool_use') {
-        logger.debug('Parsed Anthropic tool call', {
-          context: 'tool-parsing',
-          toolName: block.name,
-        });
-
         toolCalls.push({
           name: block.name,
           arguments: block.input || {},
@@ -410,11 +377,6 @@ export function parseGoogleToolCalls(response: any): ToolCallRequest[] {
 
     for (const part of parts) {
       if (part.functionCall) {
-        logger.debug('Parsed Google tool call', {
-          context: 'tool-parsing',
-          toolName: part.functionCall.name,
-        });
-
         toolCalls.push({
           name: part.functionCall.name,
           arguments: part.functionCall.args || {},

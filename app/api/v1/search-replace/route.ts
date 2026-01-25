@@ -68,7 +68,6 @@ async function handlePreview(
   request: NextRequest,
   ctx: AuthenticatedContext
 ): Promise<NextResponse> {
-  logger.debug('POST /api/v1/search-replace?action=preview - Getting preview');
 
   // Parse and validate request body
   const body = await request.json();
@@ -89,7 +88,6 @@ async function handlePreview(
     ctx.user.id
   );
 
-  logger.debug('Search-replace preview complete', preview);
 
   return NextResponse.json(preview);
 }

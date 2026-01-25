@@ -68,17 +68,9 @@ export async function executeGlobalSearch(
 
   const effectiveLimit = Math.min(Math.max(1, limit), 100)
 
-  searchLogger.debug('Executing global search', {
-    query,
-    types,
-    limit: effectiveLimit,
-  })
-
   const results: SearchResult[] = []
   const lowerQuery = query.toLowerCase()
   const terms = parseQueryTerms(query)
-
-  searchLogger.debug('Parsed search terms', { query, terms, termCount: terms.length })
 
   // Load all tags for tag-based matching
   const allTags = await repos.tags.findAll()

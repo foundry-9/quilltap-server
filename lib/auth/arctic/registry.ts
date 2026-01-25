@@ -59,11 +59,6 @@ export function registerArcticProvider(plugin: ArcticProviderPlugin): void {
 export function unregisterArcticProvider(providerId: string): void {
   arcticProviders.delete(providerId);
   providerInstances.delete(providerId);
-
-  logger.debug('Arctic provider unregistered', {
-    context: 'arctic.registry.unregisterArcticProvider',
-    providerId,
-  });
 }
 
 /**
@@ -102,20 +97,11 @@ export function getArcticProvider(providerId: string): ArcticProviderInstance | 
   // Get plugin
   const plugin = arcticProviders.get(providerId);
   if (!plugin) {
-    logger.debug('Arctic provider not found', {
-      context: 'arctic.registry.getArcticProvider',
-      providerId,
-    });
     return null;
   }
 
   // Check if configured
   if (!plugin.isConfigured()) {
-    logger.debug('Arctic provider not configured', {
-      context: 'arctic.registry.getArcticProvider',
-      providerId,
-      missingVars: plugin.getConfigStatus().missingVars,
-    });
     return null;
   }
 
@@ -131,12 +117,6 @@ export function getArcticProvider(providerId: string): ArcticProviderInstance | 
 
   // Cache instance
   providerInstances.set(providerId, instance);
-
-  logger.debug('Arctic provider instance created', {
-    context: 'arctic.registry.getArcticProvider',
-    providerId,
-  });
-
   return instance;
 }
 
@@ -162,11 +142,6 @@ export async function fetchProviderUserInfo(
 
   try {
     const userInfo = await plugin.fetchUserInfo(accessToken);
-    logger.debug('User info fetched from provider', {
-      context: 'arctic.registry.fetchProviderUserInfo',
-      providerId,
-      userId: userInfo.id,
-    });
     return userInfo;
   } catch (error) {
     logger.error(
@@ -225,10 +200,6 @@ export function getArcticProviderConfigs(): ArcticProviderConfig[] {
 export function clearArcticProviders(): void {
   arcticProviders.clear();
   providerInstances.clear();
-
-  logger.debug('All Arctic providers cleared', {
-    context: 'arctic.registry.clearArcticProviders',
-  });
 }
 
 /**
@@ -241,11 +212,5 @@ export function refreshArcticProviderStatus(): void {
 
   for (const [providerId, plugin] of arcticProviders) {
     const status = plugin.getConfigStatus();
-    logger.debug('Arctic provider status refreshed', {
-      context: 'arctic.registry.refreshArcticProviderStatus',
-      providerId,
-      isConfigured: status.isConfigured,
-      missingVars: status.missingVars,
-    });
   }
 }

@@ -43,11 +43,6 @@ function getCurrentTimestamp(): string {
  * @throws {Error} If unable to create or retrieve the unauthenticated user
  */
 export async function getOrCreateUnauthenticatedUser(): Promise<User> {
-  logger.debug('Getting or creating unauthenticated user', {
-    context: 'getOrCreateUnauthenticatedUser',
-    userId: UNAUTHENTICATED_USER_ID,
-  });
-
   try {
     const repos = getRepositories();
 
@@ -55,21 +50,10 @@ export async function getOrCreateUnauthenticatedUser(): Promise<User> {
     const existingUser = await repos.users.findById(UNAUTHENTICATED_USER_ID);
 
     if (existingUser) {
-      logger.debug('Unauthenticated user already exists', {
-        context: 'getOrCreateUnauthenticatedUser',
-        userId: UNAUTHENTICATED_USER_ID,
-      });
       return existingUser;
     }
 
     // Create new unauthenticated user
-    logger.debug('Creating new unauthenticated user', {
-      context: 'getOrCreateUnauthenticatedUser',
-      userId: UNAUTHENTICATED_USER_ID,
-      name: getUnauthenticatedUserName(),
-      email: getUnauthenticatedUserEmail(),
-    });
-
     const now = getCurrentTimestamp();
 
     // Construct user with fixed ID
@@ -129,14 +113,6 @@ export async function getOrCreateUnauthenticatedUser(): Promise<User> {
         embeddingProvider: 'OPENAI',
       },
     });
-
-    logger.debug('Unauthenticated user created successfully', {
-      context: 'getOrCreateUnauthenticatedUser',
-      userId: unauthenticatedUser.id,
-      userName: unauthenticatedUser.name,
-      userEmail: unauthenticatedUser.email,
-    });
-
     return unauthenticatedUser;
   } catch (error) {
     logger.error(
@@ -159,12 +135,5 @@ export async function getOrCreateUnauthenticatedUser(): Promise<User> {
  */
 export function isUnauthenticatedUser(userId: string): boolean {
   const isUnauthenticated = userId === UNAUTHENTICATED_USER_ID;
-
-  logger.debug('Checking if user is unauthenticated', {
-    context: 'isUnauthenticatedUser',
-    userId,
-    isUnauthenticated,
-  });
-
   return isUnauthenticated;
 }

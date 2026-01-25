@@ -66,9 +66,6 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
   async findOne(filter: QueryFilter, options?: QueryOptions): Promise<T | null> {
     try {
       const query = buildSelectQuery(this.name, filter, { ...options, limit: 1 }, this.jsonColumns, this.arrayColumns);
-
-      logger.debug('SQLite findOne', { table: this.name, sql: query.sql });
-
       const row = this.db.prepare(query.sql).get(...query.params) as Record<string, unknown> | undefined;
 
       if (!row) {
@@ -91,9 +88,6 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
   async find(filter: QueryFilter, options?: QueryOptions): Promise<T[]> {
     try {
       const query = buildSelectQuery(this.name, filter, options, this.jsonColumns, this.arrayColumns);
-
-      logger.debug('SQLite find', { table: this.name, sql: query.sql });
-
       const rows = this.db.prepare(query.sql).all(...query.params) as Record<string, unknown>[];
 
       return rows.map(row => this.hydrateRow(row));
@@ -119,9 +113,6 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
       const values = Object.values(row);
 
       const sql = `INSERT INTO "${this.name}" (${columns.map(c => `"${c}"`).join(', ')}) VALUES (${placeholders})`;
-
-      logger.debug('SQLite insertOne', { table: this.name, sql });
-
       const result = this.db.prepare(sql).run(...values);
 
       return {
@@ -164,9 +155,6 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
       });
 
       insertAll(documents);
-
-      logger.debug('SQLite insertMany', { table: this.name, count: documents.length });
-
       return { insertedIds, acknowledged: true };
     } catch (error) {
       logger.error('SQLite insertMany error', {
@@ -189,9 +177,6 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
       }
 
       const query = buildUpdateQuery(this.name, filter, update as UpdateSpec<unknown>, this.jsonColumns, this.arrayColumns);
-
-      logger.debug('SQLite updateOne', { table: this.name, sql: query.sql });
-
       const result = this.db.prepare(query.sql).run(...query.params);
 
       return {
@@ -214,9 +199,6 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
   async updateMany(filter: QueryFilter, update: UpdateSpec<T>): Promise<UpdateResult> {
     try {
       const query = buildUpdateQuery(this.name, filter, update as UpdateSpec<unknown>, this.jsonColumns, this.arrayColumns);
-
-      logger.debug('SQLite updateMany', { table: this.name, sql: query.sql });
-
       const result = this.db.prepare(query.sql).run(...query.params);
 
       return {
@@ -292,9 +274,6 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
       const doc = existing as Record<string, unknown>;
       const sql = `DELETE FROM "${this.name}" WHERE "id" = ?`;
       const result = this.db.prepare(sql).run(doc.id);
-
-      logger.debug('SQLite deleteOne', { table: this.name, id: doc.id });
-
       return {
         deletedCount: result.changes,
         acknowledged: true,
@@ -314,9 +293,6 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
   async deleteMany(filter: QueryFilter): Promise<DeleteResult> {
     try {
       const query = buildDeleteQuery(this.name, filter, this.jsonColumns, this.arrayColumns);
-
-      logger.debug('SQLite deleteMany', { table: this.name, sql: query.sql });
-
       const result = this.db.prepare(query.sql).run(...query.params);
 
       return {
@@ -527,7 +503,6 @@ export class SQLiteBackend implements DatabaseBackend {
 
       // Execute DDL
       for (const sql of ddlStatements) {
-        logger.debug('Executing DDL', { sql });
         this.db.exec(sql);
       }
 
@@ -621,8 +596,6 @@ export class SQLiteBackend implements DatabaseBackend {
     }
 
     try {
-      logger.debug('Executing raw query', { query });
-
       // Determine if this is a SELECT or modifying statement
       const trimmed = query.trim().toUpperCase();
       if (trimmed.startsWith('SELECT') || trimmed.startsWith('PRAGMA')) {

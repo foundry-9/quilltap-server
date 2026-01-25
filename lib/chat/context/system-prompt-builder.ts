@@ -68,13 +68,6 @@ export function buildSystemPrompt(
   // Handle timestamp injection
   if (timestampConfig && shouldInjectTimestamp(timestampConfig, isInitialMessage ?? false)) {
     const timestamp = calculateCurrentTimestamp(timestampConfig)
-    logger.debug('[SystemPromptBuilder] Injecting timestamp into system prompt', {
-      mode: timestampConfig.mode,
-      format: timestampConfig.format,
-      isFictional: timestamp.isFictional,
-      formatted: timestamp.formatted,
-      autoPrepend: timestampConfig.autoPrepend,
-    })
 
     if (timestampConfig.autoPrepend) {
       // Add timestamp as the first part of the system prompt
@@ -85,21 +78,11 @@ export function buildSystemPrompt(
     }
   }
 
-  logger.debug('[SystemPromptBuilder] Building system prompt with template context', {
-    characterName: templateContext.char,
-    userName: templateContext.user,
-    hasTimestamp: !!templateContext.timestamp,
-  })
-
   // Roleplay template system prompt (formatting instructions) - prepended first
   // Process templates to replace {{char}} and {{user}}
   if (roleplayTemplate?.systemPrompt) {
     const processedRoleplayPrompt = processTemplate(roleplayTemplate.systemPrompt, templateContext)
-    logger.debug('Prepending roleplay template to system prompt', {
-      templatePromptLength: roleplayTemplate.systemPrompt.length,
-      processedLength: processedRoleplayPrompt.length,
-      hasTemplateVars: roleplayTemplate.systemPrompt.includes('{{'),
-    })
+
     parts.push(processedRoleplayPrompt)
   }
 
@@ -108,9 +91,7 @@ export function buildSystemPrompt(
   // Note: These typically don't contain {{char}}/{{user}} but process anyway for consistency
   if (pseudoToolInstructions) {
     const processedToolInstructions = processTemplate(pseudoToolInstructions, templateContext)
-    logger.debug('[SystemPromptBuilder] Adding pseudo-tool instructions', {
-      instructionsLength: pseudoToolInstructions.length,
-    })
+
     parts.push(processedToolInstructions)
   }
 
@@ -128,22 +109,13 @@ export function buildSystemPrompt(
       projectParts.push(`\n### Project Instructions\n${processedInstructions}`)
     }
 
-    logger.debug('[SystemPromptBuilder] Adding project context', {
-      projectName: projectContext.name,
-      hasDescription: !!projectContext.description,
-      hasInstructions: !!projectContext.instructions,
-    })
-
     parts.push(projectParts.join('\n'))
   }
 
   // Base system prompt - priority: override > selected prompt > default systemPrompt
   if (systemPromptOverride) {
     const processedOverride = processTemplate(systemPromptOverride, templateContext)
-    logger.debug('[SystemPromptBuilder] Using system prompt override', {
-      overrideLength: systemPromptOverride.length,
-      processedLength: processedOverride.length,
-    })
+
     parts.push(processedOverride)
   } else {
     // Check for selected system prompt from character's prompts array
@@ -153,18 +125,9 @@ export function buildSystemPrompt(
       const selectedPrompt = character.systemPrompts.find(p => p.id === selectedSystemPromptId)
       if (selectedPrompt) {
         systemPromptContent = selectedPrompt.content
-        logger.debug('[SystemPromptBuilder] Using selected system prompt', {
-          characterId: character.id,
-          promptId: selectedSystemPromptId,
-          promptName: selectedPrompt.name,
-          contentLength: selectedPrompt.content.length,
-        })
+
       } else {
-        logger.debug('[SystemPromptBuilder] Selected system prompt not found in character prompts', {
-          characterId: character.id,
-          selectedPromptId: selectedSystemPromptId,
-          availablePromptCount: character.systemPrompts.length,
-        })
+
       }
     }
 
@@ -173,12 +136,7 @@ export function buildSystemPrompt(
       const defaultPrompt = character.systemPrompts.find(p => p.isDefault)
       if (defaultPrompt) {
         systemPromptContent = defaultPrompt.content
-        logger.debug('[SystemPromptBuilder] Using default system prompt from array', {
-          characterId: character.id,
-          promptId: defaultPrompt.id,
-          promptName: defaultPrompt.name,
-          contentLength: defaultPrompt.content.length,
-        })
+
       }
     }
 
@@ -187,11 +145,7 @@ export function buildSystemPrompt(
       const processedSystemPrompt = processTemplate(systemPromptContent, templateContext)
       parts.push(processedSystemPrompt)
     } else {
-      logger.debug('[SystemPromptBuilder] No system prompt found for character', {
-        characterId: character.id,
-        selectedSystemPromptId,
-        hasSystemPrompts: !!(character.systemPrompts && character.systemPrompts.length > 0),
-      })
+
     }
   }
 

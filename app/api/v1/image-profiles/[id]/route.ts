@@ -33,7 +33,6 @@ const generateImageSchema = z.object({
 export const GET = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     try {
-      logger.debug('[Image Profiles v1] GET profile', { profileId: id, userId: user.id });
 
       const profile = await repos.imageProfiles.findById(id);
 
@@ -81,7 +80,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     try {
-      logger.debug('[Image Profiles v1] PUT update profile', { profileId: id, userId: user.id });
 
       // Verify ownership
       const existingProfile = await repos.imageProfiles.findById(id);
@@ -221,7 +219,6 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
 export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     try {
-      logger.debug('[Image Profiles v1] DELETE profile', { profileId: id, userId: user.id });
 
       // Verify ownership
       const existingProfile = await repos.imageProfiles.findById(id);
@@ -256,7 +253,6 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
     }
 
     try {
-      logger.debug('[Image Profiles v1] Generating image', { profileId: id, userId: user.id });
 
       // Verify profile exists and belongs to user
       const profile = await repos.imageProfiles.findById(id);

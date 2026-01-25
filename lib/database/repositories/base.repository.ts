@@ -169,7 +169,6 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
       const result = await collection.findOne({ id } as QueryFilter);
 
       if (!result) {
-        logger.debug('Entity not found', { collection: this.collectionName, id });
         return null;
       }
 
@@ -326,12 +325,6 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
         { id } as QueryFilter,
         { $set: validated } as UpdateSpec<T>
       );
-
-      logger.debug('Entity updated', {
-        collection: this.collectionName,
-        id,
-      });
-
       return validated;
     } catch (error) {
       logger.error('Error updating entity', {
@@ -384,35 +377,14 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
     data: Omit<T, 'id' | 'createdAt' | 'updatedAt'>,
     options?: { createdAt?: string }
   ): Promise<T> {
-    logger.debug('createOrUpdate: starting lookup', {
-      collection: this.collectionName,
-      id,
-    });
-
     const existing = await this.findById(id);
-
-    logger.debug('createOrUpdate: findById result', {
-      collection: this.collectionName,
-      id,
-      found: !!existing,
-    });
-
     if (existing) {
-      logger.debug('Entity exists, updating via createOrUpdate', {
-        collection: this.collectionName,
-        id,
-      });
       const updated = await this.update(id, data as Partial<T>);
       if (!updated) {
         throw new Error(`Failed to update entity ${id}`);
       }
       return updated;
     }
-
-    logger.debug('Entity does not exist, creating via createOrUpdate', {
-      collection: this.collectionName,
-      id,
-    });
     return this.create(data, { id, createdAt: options?.createdAt });
   }
 
@@ -487,12 +459,6 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
           },
         } as UpdateSpec<T>
       );
-
-      logger.debug('Entities updated', {
-        collection: this.collectionName,
-        count: result.modifiedCount,
-      });
-
       return result.modifiedCount;
     } catch (error) {
       logger.error('Error updating entities', {
@@ -554,12 +520,6 @@ export abstract class TaggableBaseRepository<T extends TaggableEntity> extends U
    * Add a tag to an entity
    */
   async addTag(entityId: string, tagId: string): Promise<T | null> {
-    logger.debug('Adding tag to entity', {
-      collection: this.collectionName,
-      entityId,
-      tagId,
-    });
-
     try {
       const entity = await this.findById(entityId);
       if (!entity) {
@@ -574,12 +534,6 @@ export abstract class TaggableBaseRepository<T extends TaggableEntity> extends U
         entity.tags.push(tagId);
         return await this.update(entityId, { tags: entity.tags } as Partial<T>);
       }
-
-      logger.debug('Tag already exists on entity', {
-        collection: this.collectionName,
-        entityId,
-        tagId,
-      });
       return entity;
     } catch (error) {
       logger.error('Error adding tag to entity', {
@@ -596,12 +550,6 @@ export abstract class TaggableBaseRepository<T extends TaggableEntity> extends U
    * Remove a tag from an entity
    */
   async removeTag(entityId: string, tagId: string): Promise<T | null> {
-    logger.debug('Removing tag from entity', {
-      collection: this.collectionName,
-      entityId,
-      tagId,
-    });
-
     try {
       const entity = await this.findById(entityId);
       if (!entity) {
@@ -619,12 +567,6 @@ export abstract class TaggableBaseRepository<T extends TaggableEntity> extends U
       if (beforeCount !== afterCount) {
         return await this.update(entityId, { tags: entity.tags } as Partial<T>);
       }
-
-      logger.debug('Tag not found on entity', {
-        collection: this.collectionName,
-        entityId,
-        tagId,
-      });
       return entity;
     } catch (error) {
       logger.error('Error removing tag from entity', {

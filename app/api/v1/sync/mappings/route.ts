@@ -40,7 +40,6 @@ const batchCreateSchema = z.array(createMappingSchema);
 
 export const GET = createAuthenticatedHandler(async (req, context) => {
   try {
-    logger.debug('[Sync Mappings v1] GET list', { userId: context.user.id });
 
     const { searchParams } = new URL(req.url);
     const instanceId = searchParams.get('instanceId');
@@ -157,13 +156,7 @@ export const POST = createAuthenticatedHandler(async (req, context) => {
             lastRemoteUpdatedAt: new Date().toISOString(),
           });
           results.created++;
-        }
-
-        logger.debug('[Sync Mappings v1] Mapping processed', {
-          localId: mappingData.localId,
-          remoteId: mappingData.remoteId,
-        });
-      } catch (error) {
+        }} catch (error) {
         const errorMsg = `Failed to process mapping ${mappingData.localId} -> ${mappingData.remoteId}: ${error instanceof Error ? error.message : String(error)}`;
         results.errors.push(errorMsg);
         logger.warn('[Sync Mappings v1] Mapping error', { error: errorMsg });

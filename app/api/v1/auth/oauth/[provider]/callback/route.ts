@@ -71,14 +71,7 @@ export async function GET(
       );
     }
 
-    const { codeVerifier, callbackUrl } = storedState;
-
-    logger.debug('[Auth v1] OAuth callback processing', {
-      provider: providerId,
-      callbackUrl,
-    });
-
-    // Get the Arctic provider instance
+    const { codeVerifier, callbackUrl } = storedState;// Get the Arctic provider instance
     const arcticProvider = getArcticProvider(providerId);
     if (!arcticProvider) {
       logger.error('[Auth v1] Arctic provider not found for callback', {
@@ -115,15 +108,7 @@ export async function GET(
       return NextResponse.redirect(
         new URL('/auth/signin?error=UserInfoFailed', env.BASE_URL)
       );
-    }
-
-    logger.debug('[Auth v1] OAuth user info received', {
-      provider: providerId,
-      providerUserId: userInfo.id,
-      email: userInfo.email,
-    });
-
-    // Create or find user and link account
+    }// Create or find user and link account
     const user = await createOrFindOAuthUser(providerId, userInfo, tokenResult);
 
     // Run post-login migrations

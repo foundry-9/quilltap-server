@@ -13,7 +13,6 @@ import { logger } from '@/lib/logger';
 export class PluginConfigRepository extends MongoBaseRepository<PluginConfig> {
   constructor() {
     super('plugin_configs', PluginConfigSchema);
-    logger.debug('PluginConfigRepository initialized');
   }
 
   /**
@@ -22,18 +21,15 @@ export class PluginConfigRepository extends MongoBaseRepository<PluginConfig> {
    * @returns Promise<PluginConfig | null> The config if found, null otherwise
    */
   async findById(id: string): Promise<PluginConfig | null> {
-    logger.debug('Finding plugin config by ID', { pluginConfigId: id });
     try {
       const collection = await this.getCollection();
       const result = await collection.findOne({ id });
 
       if (!result) {
-        logger.debug('Plugin config not found', { pluginConfigId: id });
         return null;
       }
 
       const validated = this.validate(result);
-      logger.debug('Plugin config found and validated', { pluginConfigId: id });
       return validated;
     } catch (error) {
       logger.error('Error finding plugin config by ID', {
@@ -51,18 +47,15 @@ export class PluginConfigRepository extends MongoBaseRepository<PluginConfig> {
    * @returns Promise<PluginConfig | null> The config if found, null otherwise
    */
   async findByUserAndPlugin(userId: string, pluginName: string): Promise<PluginConfig | null> {
-    logger.debug('Finding plugin config by user and plugin', { userId, pluginName });
     try {
       const collection = await this.getCollection();
       const result = await collection.findOne({ userId, pluginName });
 
       if (!result) {
-        logger.debug('Plugin config not found for user/plugin', { userId, pluginName });
         return null;
       }
 
       const validated = this.validate(result);
-      logger.debug('Plugin config found for user/plugin', { userId, pluginName });
       return validated;
     } catch (error) {
       logger.error('Error finding plugin config by user and plugin', {
@@ -80,7 +73,6 @@ export class PluginConfigRepository extends MongoBaseRepository<PluginConfig> {
    * @returns Promise<PluginConfig[]> Array of plugin configs for the user
    */
   async findByUserId(userId: string): Promise<PluginConfig[]> {
-    logger.debug('Finding all plugin configs for user', { userId });
     try {
       const collection = await this.getCollection();
       const results = await collection.find({ userId }).toArray();
@@ -94,8 +86,6 @@ export class PluginConfigRepository extends MongoBaseRepository<PluginConfig> {
           return null;
         })
         .filter((config): config is PluginConfig => config !== null);
-
-      logger.debug('Retrieved plugin configs for user', { userId, count: configs.length });
       return configs;
     } catch (error) {
       logger.error('Error finding plugin configs for user', {
@@ -111,7 +101,6 @@ export class PluginConfigRepository extends MongoBaseRepository<PluginConfig> {
    * @returns Promise<PluginConfig[]> Array of all plugin configs
    */
   async findAll(): Promise<PluginConfig[]> {
-    logger.debug('Finding all plugin configs');
     try {
       const collection = await this.getCollection();
       const results = await collection.find({}).toArray();
@@ -125,8 +114,6 @@ export class PluginConfigRepository extends MongoBaseRepository<PluginConfig> {
           return null;
         })
         .filter((config): config is PluginConfig => config !== null);
-
-      logger.debug('Retrieved all plugin configs', { count: configs.length });
       return configs;
     } catch (error) {
       logger.error('Error finding all plugin configs', {
@@ -146,7 +133,6 @@ export class PluginConfigRepository extends MongoBaseRepository<PluginConfig> {
     data: Omit<PluginConfig, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions
   ): Promise<PluginConfig> {
-    logger.debug('Creating new plugin config', { userId: data.userId, pluginName: data.pluginName });
     try {
       const id = options?.id || this.generateId();
       const now = this.getCurrentTimestamp();
@@ -186,7 +172,6 @@ export class PluginConfigRepository extends MongoBaseRepository<PluginConfig> {
    * @returns Promise<PluginConfig | null> The updated config if found, null otherwise
    */
   async update(id: string, data: Partial<PluginConfig>): Promise<PluginConfig | null> {
-    logger.debug('Updating plugin config', { pluginConfigId: id });
     try {
       const existing = await this.findById(id);
       if (!existing) {
@@ -207,8 +192,6 @@ export class PluginConfigRepository extends MongoBaseRepository<PluginConfig> {
       const collection = await this.getCollection();
 
       await collection.updateOne({ id }, { $set: validated as any });
-
-      logger.debug('Plugin config updated successfully', { pluginConfigId: id });
       return validated;
     } catch (error) {
       logger.error('Error updating plugin config', {
@@ -225,7 +208,6 @@ export class PluginConfigRepository extends MongoBaseRepository<PluginConfig> {
    * @returns Promise<boolean> True if config was deleted, false if not found
    */
   async delete(id: string): Promise<boolean> {
-    logger.debug('Deleting plugin config', { pluginConfigId: id });
     try {
       const collection = await this.getCollection();
       const result = await collection.deleteOne({ id });
@@ -234,8 +216,6 @@ export class PluginConfigRepository extends MongoBaseRepository<PluginConfig> {
         logger.warn('Plugin config not found for deletion', { pluginConfigId: id });
         return false;
       }
-
-      logger.debug('Plugin config deleted successfully', { pluginConfigId: id });
       return true;
     } catch (error) {
       logger.error('Error deleting plugin config', {
@@ -258,8 +238,6 @@ export class PluginConfigRepository extends MongoBaseRepository<PluginConfig> {
     pluginName: string,
     defaultConfig: Record<string, unknown> = {}
   ): Promise<PluginConfig> {
-    logger.debug('Getting or creating plugin config', { userId, pluginName });
-
     const existing = await this.findByUserAndPlugin(userId, pluginName);
     if (existing) {
       return existing;
@@ -284,8 +262,6 @@ export class PluginConfigRepository extends MongoBaseRepository<PluginConfig> {
     pluginName: string,
     config: Record<string, unknown>
   ): Promise<PluginConfig> {
-    logger.debug('Upserting plugin config for user/plugin', { userId, pluginName });
-
     const existing = await this.findByUserAndPlugin(userId, pluginName);
 
     if (existing) {
@@ -314,12 +290,9 @@ export class PluginConfigRepository extends MongoBaseRepository<PluginConfig> {
    * @returns Promise<number> Number of configs deleted
    */
   async deleteByPlugin(pluginName: string): Promise<number> {
-    logger.debug('Deleting all configs for plugin', { pluginName });
     try {
       const collection = await this.getCollection();
       const result = await collection.deleteMany({ pluginName });
-
-      logger.debug('Deleted plugin configs', { pluginName, count: result.deletedCount });
       return result.deletedCount;
     } catch (error) {
       logger.error('Error deleting plugin configs', {

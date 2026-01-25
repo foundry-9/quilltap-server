@@ -129,11 +129,8 @@ export class MountPointsRepository extends AbstractBaseRepository<MountPoint> {
       const mountPoint = await this.findOneByFilter({ isDefault: true } as QueryFilter);
 
       if (mountPoint) {
-        logger.debug('Found default mount point', { mountPointId: mountPoint.id });
         return mountPoint;
       }
-
-      logger.debug('No default mount point found');
       return null;
     } catch (error) {
       logger.error('Error finding default mount point', {
@@ -158,13 +155,6 @@ export class MountPointsRepository extends AbstractBaseRepository<MountPoint> {
       }
 
       const mountPoints = await this.findByFilter(query as QueryFilter);
-
-      logger.debug('Found mount points by scope', {
-        scope,
-        userId,
-        count: mountPoints.length,
-      });
-
       return mountPoints;
     } catch (error) {
       logger.error('Error finding mount points by scope', {
@@ -183,9 +173,6 @@ export class MountPointsRepository extends AbstractBaseRepository<MountPoint> {
   async findEnabled(): Promise<MountPoint[]> {
     try {
       const mountPoints = await this.findByFilter({ enabled: true } as QueryFilter);
-
-      logger.debug('Found enabled mount points', { count: mountPoints.length });
-
       return mountPoints;
     } catch (error) {
       logger.error('Error finding enabled mount points', {
@@ -203,12 +190,6 @@ export class MountPointsRepository extends AbstractBaseRepository<MountPoint> {
   async findByBackendType(backendType: string): Promise<MountPoint[]> {
     try {
       const mountPoints = await this.findByFilter({ backendType } as QueryFilter);
-
-      logger.debug('Found mount points by backend type', {
-        backendType,
-        count: mountPoints.length,
-      });
-
       return mountPoints;
     } catch (error) {
       logger.error('Error finding mount points by backend type', {
@@ -269,12 +250,6 @@ export class MountPointsRepository extends AbstractBaseRepository<MountPoint> {
         logger.warn('Mount point not found for health update', { mountPointId: id });
         return;
       }
-
-      logger.debug('Mount point health updated', {
-        mountPointId: id,
-        status,
-        lastHealthCheck: now,
-      });
     } catch (error) {
       logger.error('Error updating mount point health', {
         mountPointId: id,
@@ -293,8 +268,6 @@ export class MountPointsRepository extends AbstractBaseRepository<MountPoint> {
       // Update any mount point with isDefault that no longer exists
       // This is handled by clearing defaults from specific non-existent IDs if needed
       // For now, this is a no-op maintenance method that could be expanded
-
-      logger.debug('Cleared orphaned default flags');
     } catch (error) {
       logger.error('Error clearing orphaned defaults', {
         error: error instanceof Error ? error.message : String(error),

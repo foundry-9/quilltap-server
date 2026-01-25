@@ -63,12 +63,6 @@ export function getSQLiteClient(config: SQLiteConfig): DatabaseType {
  * Configure SQLite pragmas for optimal performance
  */
 function configurePragmas(db: DatabaseType, config: SQLiteConfig): void {
-  logger.debug('Configuring SQLite pragmas', {
-    walMode: config.walMode,
-    foreignKeys: config.foreignKeys,
-    synchronous: config.synchronous,
-  });
-
   // Enable foreign key constraints
   if (config.foreignKeys) {
     db.pragma('foreign_keys = ON');
@@ -95,8 +89,6 @@ function configurePragmas(db: DatabaseType, config: SQLiteConfig): void {
 
   // Optimize temp store
   db.pragma('temp_store = MEMORY');
-
-  logger.debug('SQLite pragmas configured successfully');
 }
 
 /**
@@ -150,9 +142,7 @@ export function runCheckpoint(mode: 'PASSIVE' | 'FULL' | 'RESTART' | 'TRUNCATE' 
   }
 
   try {
-    logger.debug('Running WAL checkpoint', { mode });
     sqliteDatabase.pragma(`wal_checkpoint(${mode})`);
-    logger.debug('WAL checkpoint completed');
   } catch (error) {
     logger.error('Error running WAL checkpoint', {
       mode,

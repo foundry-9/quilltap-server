@@ -36,7 +36,6 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
     const startTime = Date.now();
 
     try {
-      logger.debug('[Sync API Keys v1] PATCH', { keyId: id, userId: user.id });
 
       // Parse request body
       let body: unknown;
@@ -130,7 +129,6 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
     const startTime = Date.now();
 
     try {
-      logger.debug('[Sync API Keys v1] DELETE', { keyId: id, userId: user.id });
 
       // Check key exists and belongs to user
       const existingKey = await repos.userSyncApiKeys.findById(id);

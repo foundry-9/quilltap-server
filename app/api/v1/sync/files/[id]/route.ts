@@ -20,7 +20,6 @@ import { notFound, serverError } from '@/lib/api/responses';
 export const GET = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     try {
-      logger.debug('[Sync Files v1] GET', { fileId: id, userId: user.id });
 
       const file = await repos.files?.findById(id);
 

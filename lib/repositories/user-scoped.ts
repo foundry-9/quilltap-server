@@ -548,12 +548,8 @@ export function getUserRepositories(userId: string): UserScopedRepositoryContain
   // Check cache first
   const cached = userRepoCache.get(userId);
   if (cached) {
-    logger.debug('Returning cached user-scoped repositories', { userId });
     return cached;
   }
-
-  logger.debug('Creating new user-scoped repository container', { userId });
-
   // Get the base repositories
   const baseRepos = getRepositories();
 
@@ -586,8 +582,6 @@ export function getUserRepositories(userId: string): UserScopedRepositoryContain
 
   // Cache the container
   userRepoCache.set(userId, container);
-
-  logger.debug('User-scoped repository container created', { userId });
   return container;
 }
 
@@ -598,10 +592,8 @@ export function getUserRepositories(userId: string): UserScopedRepositoryContain
 export function clearUserRepositoryCache(userId?: string): void {
   if (userId) {
     userRepoCache.delete(userId);
-    logger.debug('Cleared user repository cache for user', { userId });
   } else {
     userRepoCache.clear();
-    logger.debug('Cleared all user repository caches');
   }
 }
 

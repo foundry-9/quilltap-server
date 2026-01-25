@@ -41,7 +41,6 @@ export class OpenAIImageProvider implements ImageGenProviderBase {
         return size;
       }
       // Map unsupported sizes to nearest valid size
-      logger.debug('Normalizing size for gpt-image model', { context: 'OpenAIImageProvider.validateAndNormalizeSize', model, originalSize: size, normalizedSize: '1024x1024' });
       return '1024x1024';
     }
 
@@ -52,7 +51,6 @@ export class OpenAIImageProvider implements ImageGenProviderBase {
         return size;
       }
       // Map unsupported sizes to nearest valid size
-      logger.debug('Normalizing size for dall-e-3', { context: 'OpenAIImageProvider.validateAndNormalizeSize', originalSize: size, normalizedSize: '1024x1024' });
       return '1024x1024';
     }
 
@@ -61,18 +59,10 @@ export class OpenAIImageProvider implements ImageGenProviderBase {
     if (dalleTwoSizes.includes(size)) {
       return size;
     }
-    logger.debug('Normalizing size for dall-e-2', { context: 'OpenAIImageProvider.validateAndNormalizeSize', originalSize: size, normalizedSize: '1024x1024' });
     return '1024x1024';
   }
 
   async generateImage(params: ImageGenParams, apiKey: string): Promise<ImageGenResponse> {
-    logger.debug('OpenAI image generation started', {
-      context: 'OpenAIImageProvider.generateImage',
-      model: params.model,
-      promptLength: params.prompt.length,
-      n: params.n ?? 1,
-    });
-
     const client = new OpenAI({ apiKey });
 
     // gpt-image models have different parameter support than DALL-E models
@@ -97,11 +87,6 @@ export class OpenAIImageProvider implements ImageGenProviderBase {
     if (!isGptImage) {
       requestParams.quality = params.quality ?? 'standard';
       requestParams.style = params.style ?? 'vivid';
-      logger.debug('Applied DALL-E specific parameters', {
-        context: 'OpenAIImageProvider.generateImage',
-        quality: requestParams.quality,
-        style: requestParams.style,
-      });
     }
 
     const response = await client.images.generate(requestParams);
@@ -110,12 +95,6 @@ export class OpenAIImageProvider implements ImageGenProviderBase {
       logger.error('Invalid response from OpenAI Images API', { context: 'OpenAIImageProvider.generateImage' });
       throw new Error('Invalid response from OpenAI Images API');
     }
-
-    logger.debug('Image generation completed', {
-      context: 'OpenAIImageProvider.generateImage',
-      imageCount: response.data.length,
-    });
-
     return {
       images: response.data.map((img) => ({
         // gpt-image-1 returns urls, DALL-E models return b64_json
@@ -129,10 +108,8 @@ export class OpenAIImageProvider implements ImageGenProviderBase {
 
   async validateApiKey(apiKey: string): Promise<boolean> {
     try {
-      logger.debug('Validating OpenAI API key for image generation', { context: 'OpenAIImageProvider.validateApiKey' });
       const client = new OpenAI({ apiKey });
       await client.models.list();
-      logger.debug('OpenAI API key validation successful', { context: 'OpenAIImageProvider.validateApiKey' });
       return true;
     } catch (error) {
       logger.error('OpenAI API key validation failed for image generation', { context: 'OpenAIImageProvider.validateApiKey' }, error instanceof Error ? error : undefined);
@@ -141,7 +118,6 @@ export class OpenAIImageProvider implements ImageGenProviderBase {
   }
 
   async getAvailableModels(): Promise<string[]> {
-    logger.debug('Getting available OpenAI image models', { context: 'OpenAIImageProvider.getAvailableModels' });
     return this.supportedModels;
   }
 }

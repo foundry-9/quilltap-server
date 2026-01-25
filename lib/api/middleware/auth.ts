@@ -21,7 +21,6 @@ const authLogger = logger.child({ module: 'api-auth-middleware' });
  */
 async function ensureServerReady(): Promise<void> {
   if (!startupState.isReady()) {
-    authLogger.debug('Waiting for server startup to complete');
     const isReady = await startupState.waitForReady(30000);
     if (!isReady) {
       authLogger.warn('Server startup not complete after 30s, proceeding anyway', {
@@ -103,7 +102,6 @@ export async function withAuth<T>(
   const session = await getServerSession();
 
   if (!session?.user?.id) {
-    authLogger.debug('Unauthorized request - no valid session');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -114,8 +112,6 @@ export async function withAuth<T>(
     authLogger.warn('User not found for session', { userId: session.user.id });
     return NextResponse.json({ error: 'User not found' }, { status: 404 });
   }
-
-  authLogger.debug('Request authenticated', { userId: user.id });
   return handler({} as NextRequest, { user, repos, session });
 }
 
@@ -151,7 +147,6 @@ export async function withAuthParams<P extends Record<string, string>, T>(
   const session = await getServerSession();
 
   if (!session?.user?.id) {
-    authLogger.debug('Unauthorized request - no valid session');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -162,8 +157,6 @@ export async function withAuthParams<P extends Record<string, string>, T>(
     authLogger.warn('User not found for session', { userId: session.user.id });
     return NextResponse.json({ error: 'User not found' }, { status: 404 });
   }
-
-  authLogger.debug('Request authenticated', { userId: user.id });
   return handler(request, { user, repos, session }, params);
 }
 
@@ -194,7 +187,6 @@ export function createAuthenticatedHandler(
     const session = await getServerSession();
 
     if (!session?.user?.id) {
-      authLogger.debug('Unauthorized request - no valid session');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -205,8 +197,6 @@ export function createAuthenticatedHandler(
       authLogger.warn('User not found for session', { userId: session.user.id });
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
-
-    authLogger.debug('Request authenticated', { userId: user.id });
     return handler(request, { user, repos, session });
   };
 }
@@ -248,7 +238,6 @@ export function createAuthenticatedParamsHandler<P extends Record<string, string
     const session = await getServerSession();
 
     if (!session?.user?.id) {
-      authLogger.debug('Unauthorized request - no valid session');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -259,8 +248,6 @@ export function createAuthenticatedParamsHandler<P extends Record<string, string
       authLogger.warn('User not found for session', { userId: session.user.id });
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
-
-    authLogger.debug('Request authenticated', { userId: user.id });
     return handler(request, { user, repos, session }, params);
   };
 }

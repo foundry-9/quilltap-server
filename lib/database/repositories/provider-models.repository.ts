@@ -47,12 +47,6 @@ export class ProviderModelsRepository extends AbstractBaseRepository<ProviderMod
     options?: CreateOptions
   ): Promise<ProviderModel> {
     try {
-      logger.debug('Creating new provider model', {
-        provider: data.provider,
-        modelId: data.modelId,
-        collection: this.collectionName,
-      });
-
       const model = await this._create(data, options);
 
       logger.info('Provider model created successfully', {
@@ -77,11 +71,6 @@ export class ProviderModelsRepository extends AbstractBaseRepository<ProviderMod
    */
   async update(id: string, data: Partial<ProviderModel>): Promise<ProviderModel | null> {
     try {
-      logger.debug('Updating provider model', {
-        modelId: id,
-        collection: this.collectionName,
-      });
-
       const model = await this._update(id, data);
 
       if (model) {
@@ -103,11 +92,6 @@ export class ProviderModelsRepository extends AbstractBaseRepository<ProviderMod
    */
   async delete(id: string): Promise<boolean> {
     try {
-      logger.debug('Deleting provider model', {
-        modelId: id,
-        collection: this.collectionName,
-      });
-
       const result = await this._delete(id);
 
       if (result) {
@@ -133,25 +117,12 @@ export class ProviderModelsRepository extends AbstractBaseRepository<ProviderMod
    */
   async findByProvider(provider: string, modelType?: ModelType): Promise<ProviderModel[]> {
     try {
-      logger.debug('Finding provider models by provider', {
-        provider,
-        modelType,
-        collection: this.collectionName,
-      });
-
       const query: Record<string, unknown> = { provider };
       if (modelType) {
         query.modelType = modelType;
       }
 
       const models = await this.findByFilter(query as QueryFilter);
-
-      logger.debug('Provider models retrieved', {
-        provider,
-        modelType,
-        count: models.length,
-      });
-
       return models;
     } catch (error) {
       logger.error('Error finding provider models by provider', {
@@ -168,18 +139,7 @@ export class ProviderModelsRepository extends AbstractBaseRepository<ProviderMod
    */
   async findByModelType(modelType: ModelType): Promise<ProviderModel[]> {
     try {
-      logger.debug('Finding provider models by model type', {
-        modelType,
-        collection: this.collectionName,
-      });
-
       const models = await this.findByFilter({ modelType } as QueryFilter);
-
-      logger.debug('Provider models retrieved for model type', {
-        modelType,
-        count: models.length,
-      });
-
       return models;
     } catch (error) {
       logger.error('Error finding provider models by model type', {
@@ -200,14 +160,6 @@ export class ProviderModelsRepository extends AbstractBaseRepository<ProviderMod
     baseUrl?: string
   ): Promise<ProviderModel | null> {
     try {
-      logger.debug('Finding provider model by provider and modelId', {
-        provider,
-        modelId,
-        modelType,
-        baseUrl,
-        collection: this.collectionName,
-      });
-
       const query: Record<string, unknown> = { provider, modelId, modelType };
       if (baseUrl) {
         query.baseUrl = baseUrl;
@@ -216,11 +168,8 @@ export class ProviderModelsRepository extends AbstractBaseRepository<ProviderMod
       const model = await this.findOneByFilter(query as QueryFilter);
 
       if (!model) {
-        logger.debug('Provider model not found', { provider, modelId, modelType, baseUrl });
         return null;
       }
-
-      logger.debug('Provider model found', { provider, modelId, modelType, baseUrl });
       return model;
     } catch (error) {
       logger.error('Error finding provider model by provider and modelId', {
@@ -241,14 +190,6 @@ export class ProviderModelsRepository extends AbstractBaseRepository<ProviderMod
     data: Omit<ProviderModel, 'id' | 'createdAt' | 'updatedAt'>
   ): Promise<ProviderModel> {
     try {
-      logger.debug('Upserting provider model', {
-        provider: data.provider,
-        modelId: data.modelId,
-        modelType: data.modelType,
-        baseUrl: data.baseUrl,
-        collection: this.collectionName,
-      });
-
       // Check if model exists
       // Convert null to undefined for the baseUrl parameter
       const existing = await this.findByProviderAndModelId(
@@ -259,12 +200,6 @@ export class ProviderModelsRepository extends AbstractBaseRepository<ProviderMod
       );
 
       if (existing) {
-        logger.debug('Provider model already exists, updating', {
-          id: existing.id,
-          provider: data.provider,
-          modelId: data.modelId,
-          modelType: data.modelType,
-        });
         const updated = await this.update(existing.id, data);
         if (!updated) {
           throw new Error('Failed to update existing provider model');
@@ -273,11 +208,6 @@ export class ProviderModelsRepository extends AbstractBaseRepository<ProviderMod
       }
 
       // Create new model
-      logger.debug('Provider model does not exist, creating new', {
-        provider: data.provider,
-        modelId: data.modelId,
-        modelType: data.modelType,
-      });
       return await this.create(data);
     } catch (error) {
       logger.error('Error upserting provider model', {
@@ -308,14 +238,6 @@ export class ProviderModelsRepository extends AbstractBaseRepository<ProviderMod
     baseUrl?: string
   ): Promise<{ created: number; updated: number }> {
     try {
-      logger.debug('Bulk upserting models for provider', {
-        provider,
-        modelType,
-        baseUrl,
-        modelCount: models.length,
-        collection: this.collectionName,
-      });
-
       let created = 0;
       let updated = 0;
 
@@ -383,13 +305,6 @@ export class ProviderModelsRepository extends AbstractBaseRepository<ProviderMod
    */
   async deleteByProvider(provider: string, modelType?: ModelType, baseUrl?: string): Promise<number> {
     try {
-      logger.debug('Deleting all provider models for provider', {
-        provider,
-        modelType,
-        baseUrl,
-        collection: this.collectionName,
-      });
-
       const query: Record<string, unknown> = { provider };
       if (modelType) {
         query.modelType = modelType;

@@ -35,13 +35,6 @@ export function calculateTurnStateFromHistory(
   options: CalculateTurnStateOptions
 ): TurnState {
   const { messages, participants, userParticipantId } = options;
-
-  logger.debug('[Turn Manager] Calculating turn state from history', {
-    messageCount: messages.length,
-    participantCount: participants.length,
-    userParticipantId,
-  });
-
   const state = createInitialTurnState();
 
   if (messages.length === 0) {
@@ -68,12 +61,6 @@ export function calculateTurnStateFromHistory(
       state.lastSpeakerId = msg.participantId;
     }
   }
-
-  logger.debug('[Turn Manager] Calculated turn state from history', {
-    spokenSinceUserTurn: state.spokenSinceUserTurn.length,
-    lastSpeakerId: state.lastSpeakerId,
-  });
-
   return state;
 }
 
@@ -87,13 +74,6 @@ export function updateTurnStateAfterMessage(
   userParticipantId: string | null
 ): TurnState {
   const newState = { ...currentState };
-
-  logger.debug('[Turn Manager] Updating turn state after message', {
-    role: message.role,
-    participantId: message.participantId,
-    userParticipantId,
-  });
-
   if (message.role === 'USER') {
     // User spoke - reset the cycle
     newState.spokenSinceUserTurn = [];
@@ -104,8 +84,6 @@ export function updateTurnStateAfterMessage(
     if (userParticipantId) {
       newState.queue = newState.queue.filter(id => id !== userParticipantId);
     }
-
-    logger.debug('[Turn Manager] User spoke, reset cycle');
   } else if (message.role === 'ASSISTANT' && message.participantId) {
     // Character spoke
     const participantId = message.participantId;
@@ -123,11 +101,6 @@ export function updateTurnStateAfterMessage(
 
     // Clear current turn (will be recalculated)
     newState.currentTurnParticipantId = null;
-
-    logger.debug('[Turn Manager] Character spoke', {
-      participantId,
-      spokenSinceUserTurn: newState.spokenSinceUserTurn.length,
-    });
   }
 
   return newState;

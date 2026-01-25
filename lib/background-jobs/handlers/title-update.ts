@@ -17,13 +17,6 @@ import type { TitleUpdatePayload } from '../queue-service';
  */
 export async function handleTitleUpdate(job: BackgroundJob): Promise<void> {
   const payload = job.payload as unknown as TitleUpdatePayload;
-
-  logger.debug('[TitleUpdate] Starting job', {
-    jobId: job.id,
-    chatId: payload.chatId,
-    currentInterchange: payload.currentInterchange,
-  });
-
   const repos = getRepositories();
 
   // Get the chat metadata
@@ -61,13 +54,6 @@ export async function handleTitleUpdate(job: BackgroundJob): Promise<void> {
     cheapLLMConfig,
     availableProfiles
   );
-
-  logger.debug('[TitleUpdate] Using cheap LLM', {
-    jobId: job.id,
-    provider: cheapLLMSelection.provider,
-    model: cheapLLMSelection.modelName,
-  });
-
   // Get chat messages
   const allMessages = await repos.chats.getMessages(payload.chatId);
 
@@ -86,10 +72,6 @@ export async function handleTitleUpdate(job: BackgroundJob): Promise<void> {
   const recentMessages = chatMessages.slice(-5);
 
   if (recentMessages.length === 0) {
-    logger.debug('[TitleUpdate] No messages in chat', {
-      jobId: job.id,
-      chatId: payload.chatId,
-    });
     return;
   }
 
@@ -116,11 +98,6 @@ export async function handleTitleUpdate(job: BackgroundJob): Promise<void> {
 
   // If no update needed, we're done
   if (!result.result || !result.result.needsNewTitle || !result.result.suggestedTitle) {
-    logger.debug('[TitleUpdate] No title update needed', {
-      jobId: job.id,
-      chatId: payload.chatId,
-      reason: result.result?.reason || 'No update needed',
-    });
     return;
   }
 

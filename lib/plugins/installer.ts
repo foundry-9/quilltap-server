@@ -156,12 +156,6 @@ export async function installPluginFromNpm(
   // Convert scoped package names to safe directory names (@org/pkg -> @org--pkg)
   const safeDirName = packageNameToDir(packageName);
   const pluginDir = path.join(pluginBaseDir, safeDirName);
-
-  logger.debug('Plugin installation directory', {
-    context: 'PluginInstaller.installPluginFromNpm',
-    pluginDir,
-  });
-
   try {
     // Check if already installed
     const alreadyExists = await fs.access(pluginDir).then(() => true).catch(() => false);
@@ -188,12 +182,6 @@ export async function installPluginFromNpm(
       path.join(pluginDir, 'package.json'),
       JSON.stringify(wrapperPkg, null, 2)
     );
-
-    logger.debug('Running npm install', {
-      context: 'PluginInstaller.installPluginFromNpm',
-      packageName,
-    });
-
     // Install the plugin from npm
     const { stdout, stderr } = await execAsync(
       `npm install ${packageName} --save --legacy-peer-deps`,
@@ -203,13 +191,6 @@ export async function installPluginFromNpm(
         env: { ...process.env, NODE_ENV: 'production' },
       }
     );
-
-    logger.debug('npm install output', {
-      context: 'PluginInstaller.installPluginFromNpm',
-      stdout: stdout.substring(0, 500),
-      stderr: stderr.substring(0, 500),
-    });
-
     // Check for npm errors (warnings are ok)
     if (stderr && stderr.includes('ERR!')) {
       logger.error('npm install failed with error', {
@@ -309,10 +290,6 @@ export async function installPluginFromNpm(
     // Attempt to hot-load LLM provider plugins so they're available immediately
     let hotLoaded = false;
     if (manifest.capabilities.includes('LLM_PROVIDER')) {
-      logger.debug('Attempting to hot-load LLM provider plugin', {
-        context: 'PluginInstaller.installPluginFromNpm',
-        packageName,
-      });
       hotLoaded = hotLoadProviderPlugin(installedPath, manifest);
       if (hotLoaded) {
         logger.info('LLM provider plugin hot-loaded successfully', {
@@ -473,13 +450,6 @@ export async function getInstalledPlugins(
     const user = await scanPluginDirectory(userDir, 'user');
     plugins.push(...user);
   }
-
-  logger.debug('Retrieved installed plugins', {
-    context: 'PluginInstaller.getInstalledPlugins',
-    scope,
-    count: plugins.length,
-  });
-
   return plugins;
 }
 
@@ -621,11 +591,6 @@ async function scanPluginDirectory(
       }
     }
   } catch (error) {
-    logger.debug('Plugin directory scan skipped', {
-      context: 'PluginInstaller.scanPluginDirectory',
-      baseDir,
-      reason: error instanceof Error ? error.message : String(error),
-    });
   }
 
   return plugins;
@@ -654,12 +619,6 @@ async function updateRegistry(
 
   await fs.mkdir(baseDir, { recursive: true });
   await fs.writeFile(registryPath, JSON.stringify(registry, null, 2));
-
-  logger.debug('Updated plugin registry', {
-    context: 'PluginInstaller.updateRegistry',
-    plugin: plugin.name,
-    totalPlugins: registry.plugins.length,
-  });
 }
 
 /**
@@ -684,10 +643,6 @@ async function removeFromRegistry(
 
   if (registry.plugins.length !== previousCount) {
     await fs.writeFile(registryPath, JSON.stringify(registry, null, 2));
-    logger.debug('Removed plugin from registry', {
-      context: 'PluginInstaller.removeFromRegistry',
-      plugin: packageName,
-    });
   }
 }
 

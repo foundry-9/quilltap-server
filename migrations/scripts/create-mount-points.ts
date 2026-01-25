@@ -80,10 +80,6 @@ async function needsSetup(): Promise<boolean> {
     const defaultMountPoint = await collection.findOne({ isDefault: true });
     return !defaultMountPoint;
   } catch (error) {
-    logger.debug('Error checking mount_points collection', {
-      context: 'migration.create-mount-points',
-      error: error instanceof Error ? error.message : String(error),
-    });
     // If collection doesn't exist, we need to run
     return true;
   }
@@ -104,10 +100,6 @@ async function hasFilesNeedingMigration(): Promise<boolean> {
 
     return count > 0;
   } catch (error) {
-    logger.debug('Error checking files for mount point migration', {
-      context: 'migration.create-mount-points',
-      error: error instanceof Error ? error.message : String(error),
-    });
     return false;
   }
 }
@@ -124,17 +116,11 @@ export const createMountPointsMigration: Migration = {
   async shouldRun(): Promise<boolean> {
     // Only run if MongoDB is enabled
     if (!isMongoDBBackendEnabled()) {
-      logger.debug('MongoDB not enabled, skipping mount points migration', {
-        context: 'migration.create-mount-points',
-      });
       return false;
     }
 
     // Check if MongoDB is accessible
     if (!(await isMongoDBAccessible())) {
-      logger.debug('MongoDB not accessible, deferring mount points migration', {
-        context: 'migration.create-mount-points',
-      });
       return false;
     }
 
@@ -145,14 +131,6 @@ export const createMountPointsMigration: Migration = {
     ]);
 
     const needsRun = needsMountPointSetup || needsFileMigration;
-
-    logger.debug('Checked for mount points migration need', {
-      context: 'migration.create-mount-points',
-      needsMountPointSetup,
-      needsFileMigration,
-      needsRun,
-    });
-
     return needsRun;
   },
 
@@ -173,10 +151,6 @@ export const createMountPointsMigration: Migration = {
       const filesCollection = db.collection('files');
 
       // Step 1: Create indexes on mount_points collection
-      logger.debug('Step 1: Creating indexes on mount_points collection', {
-        context: 'migration.create-mount-points',
-      });
-
       await mountPointsCollection.createIndex({ isDefault: 1 });
       await mountPointsCollection.createIndex({ scope: 1, userId: 1 });
       await mountPointsCollection.createIndex({ backendType: 1 });
@@ -186,10 +160,6 @@ export const createMountPointsMigration: Migration = {
       const existingDefault = await mountPointsCollection.findOne({ isDefault: true });
 
       if (!existingDefault) {
-        logger.debug('Step 2: Creating default mount point', {
-          context: 'migration.create-mount-points',
-        });
-
         const now = new Date().toISOString();
         mountPointId = randomUUID();
 
@@ -285,18 +255,10 @@ export const createMountPointsMigration: Migration = {
         }
       } else {
         mountPointId = existingDefault.id;
-        logger.debug('Default mount point already exists', {
-          context: 'migration.create-mount-points',
-          mountPointId,
-        });
       }
 
       // Step 3: Migrate files to use mountPointId and storageKey
       if (mountPointId) {
-        logger.debug('Step 3: Migrating files to use mount point system', {
-          context: 'migration.create-mount-points',
-        });
-
         // Find files without mountPointId
         const filesCursor = filesCollection.find({
           mountPointId: { $exists: false },
@@ -332,11 +294,6 @@ export const createMountPointsMigration: Migration = {
             errors.push(`File ${file.id}: ${errorMessage}`);
           }
         }
-
-        logger.debug('Files migration completed', {
-          context: 'migration.create-mount-points',
-          filesUpdated,
-        });
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);

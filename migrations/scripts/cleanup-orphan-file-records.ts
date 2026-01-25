@@ -83,28 +83,16 @@ export const cleanupOrphanFileRecordsMigration: Migration = {
   async shouldRun(): Promise<boolean> {
     // Only run if MongoDB is enabled
     if (!isMongoDBBackend()) {
-      logger.debug('MongoDB not enabled, skipping cleanup-orphan-file-records migration', {
-        context: 'migration.cleanup-orphan-file-records',
-      });
       return false;
     }
 
     // Check if MongoDB is accessible
     if (!(await isMongoDBAccessible())) {
-      logger.debug('MongoDB not accessible, deferring cleanup-orphan-file-records migration', {
-        context: 'migration.cleanup-orphan-file-records',
-      });
       return false;
     }
 
     // Check if there are orphan files to clean up
     const count = await countOrphanFiles();
-
-    logger.debug('Checked for orphan file records', {
-      context: 'migration.cleanup-orphan-file-records',
-      count,
-    });
-
     return count > 0;
   },
 
@@ -147,14 +135,6 @@ export const cleanupOrphanFileRecordsMigration: Migration = {
       for (const file of orphanFiles) {
         try {
           const fileId = file.id as string;
-
-          logger.debug('Deleting orphan file record', {
-            context: 'migration.cleanup-orphan-file-records',
-            fileId,
-            filename: file.filename,
-            createdAt: file.createdAt,
-          });
-
           await filesCollection.deleteOne({ _id: file._id });
 
           filesDeleted++;

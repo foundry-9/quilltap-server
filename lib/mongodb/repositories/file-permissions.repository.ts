@@ -34,11 +34,6 @@ export class FilePermissionsRepository extends MongoBaseRepository<FileWritePerm
       if (permission) {
         return this.validate(permission);
       }
-
-      logger.debug('File write permission not found', {
-        context: 'file-permissions-repository',
-        permissionId: id,
-      });
       return null;
     } catch (error) {
       logger.error('Error finding file write permission by ID', {
@@ -163,12 +158,6 @@ export class FilePermissionsRepository extends MongoBaseRepository<FileWritePerm
       if (permission) {
         return this.validate(permission);
       }
-
-      logger.debug('Project-level file write permission not found', {
-        context: 'file-permissions-repository',
-        userId,
-        projectId,
-      });
       return null;
     } catch (error) {
       logger.error('Error finding project file write permission', {
@@ -193,11 +182,6 @@ export class FilePermissionsRepository extends MongoBaseRepository<FileWritePerm
       });
 
       const hasPermission = permission !== null;
-      logger.debug('Checked general file write permission', {
-        context: 'file-permissions-repository',
-        userId,
-        hasPermission,
-      });
       return hasPermission;
     } catch (error) {
       logger.error('Error checking general file write permission', {
@@ -222,12 +206,6 @@ export class FilePermissionsRepository extends MongoBaseRepository<FileWritePerm
       });
 
       const hasPermission = permission !== null;
-      logger.debug('Checked single-file write permission', {
-        context: 'file-permissions-repository',
-        userId,
-        fileId,
-        hasPermission,
-      });
       return hasPermission;
     } catch (error) {
       logger.error('Error checking single-file write permission', {
@@ -293,15 +271,6 @@ export class FilePermissionsRepository extends MongoBaseRepository<FileWritePerm
       });
 
       const canWrite = permission !== null;
-      logger.debug('Checked file write permission', {
-        context: 'file-permissions-repository',
-        userId,
-        projectId,
-        fileId,
-        canWrite,
-        matchedScope: permission ? (permission as unknown as FileWritePermission).scope : null,
-      });
-
       return canWrite;
     } catch (error) {
       logger.error('Error checking file write permission', {

@@ -30,8 +30,6 @@ export class FilesRepository extends MongoBaseRepository<FileEntry> {
       if (file) {
         return this.validate(file);
       }
-
-      logger.debug('File not found', { fileId: id });
       return null;
     } catch (error) {
       logger.error('Error finding file by ID', { fileId: id, error: error instanceof Error ? error.message : String(error) });
@@ -68,7 +66,6 @@ export class FilesRepository extends MongoBaseRepository<FileEntry> {
       const files = await collection.find({ id: { $in: ids } }).toArray();
 
       const validatedFiles = files.map((file: unknown) => this.validate(file));
-      logger.debug('Found files by IDs', { requestedCount: ids.length, foundCount: validatedFiles.length });
       return validatedFiles;
     } catch (error) {
       logger.error('Error finding files by IDs', {
@@ -437,15 +434,6 @@ export class FilesRepository extends MongoBaseRepository<FileEntry> {
       }
 
       const files = await collection.find(query).toArray();
-
-      logger.debug('Found files in folder', {
-        context: 'files-repository',
-        userId,
-        projectId,
-        folderPath,
-        count: files.length,
-      });
-
       return files.map((file: unknown) => this.validate(file));
     } catch (error) {
       logger.error('Error finding files in folder', {
@@ -491,15 +479,6 @@ export class FilesRepository extends MongoBaseRepository<FileEntry> {
       }
 
       const files = await collection.find(query).toArray();
-
-      logger.debug('Found files in folder (recursive)', {
-        context: 'files-repository',
-        userId,
-        projectId,
-        folderPath,
-        count: files.length,
-      });
-
       return files.map((file: unknown) => this.validate(file));
     } catch (error) {
       logger.error('Error finding files in folder (recursive)', {
@@ -547,14 +526,6 @@ export class FilesRepository extends MongoBaseRepository<FileEntry> {
       if (!folders.includes('/')) {
         folders.unshift('/');
       }
-
-      logger.debug('Listed folders', {
-        context: 'files-repository',
-        userId,
-        projectId,
-        count: folders.length,
-      });
-
       return folders;
     } catch (error) {
       logger.error('Error listing folders', {
@@ -576,14 +547,6 @@ export class FilesRepository extends MongoBaseRepository<FileEntry> {
     try {
       const collection = await this.getCollection();
       const files = await collection.find({ userId, projectId }).toArray();
-
-      logger.debug('Found files by project ID', {
-        context: 'files-repository',
-        userId,
-        projectId,
-        count: files.length,
-      });
-
       return files.map((file: unknown) => this.validate(file));
     } catch (error) {
       logger.error('Error finding files by project ID', {
@@ -615,15 +578,6 @@ export class FilesRepository extends MongoBaseRepository<FileEntry> {
         projectId,
         originalFilename: filename,
       }).toArray();
-
-      logger.debug('Found files by filename in project', {
-        context: 'files-repository',
-        userId,
-        projectId,
-        filename,
-        count: files.length,
-      });
-
       return files.map((file: unknown) => this.validate(file));
     } catch (error) {
       logger.error('Error finding files by filename in project', {
@@ -648,17 +602,8 @@ export class FilesRepository extends MongoBaseRepository<FileEntry> {
       const file = await collection.findOne({ storageKey });
 
       if (file) {
-        logger.debug('Found file by storage key', {
-          context: 'files-repository',
-          storageKey,
-        });
         return this.validate(file);
       }
-
-      logger.debug('File not found by storage key', {
-        context: 'files-repository',
-        storageKey,
-      });
       return null;
     } catch (error) {
       logger.error('Error finding file by storage key', {
@@ -679,13 +624,6 @@ export class FilesRepository extends MongoBaseRepository<FileEntry> {
     try {
       const collection = await this.getCollection();
       const files = await collection.find({ mountPointId }).toArray();
-
-      logger.debug('Found files by mount point', {
-        context: 'files-repository',
-        mountPointId,
-        count: files.length,
-      });
-
       return files.map((file: unknown) => this.validate(file));
     } catch (error) {
       logger.error('Error finding files by mount point', {
@@ -708,13 +646,6 @@ export class FilesRepository extends MongoBaseRepository<FileEntry> {
         userId,
         $or: [{ projectId: null }, { projectId: { $exists: false } }],
       }).toArray();
-
-      logger.debug('Found general files', {
-        context: 'files-repository',
-        userId,
-        count: files.length,
-      });
-
       return files.map((file: unknown) => this.validate(file));
     } catch (error) {
       logger.error('Error finding general files', {

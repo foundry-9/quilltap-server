@@ -18,15 +18,7 @@ import { createAuthenticatedHandler } from '@/lib/api/middleware';
 export const GET = createAuthenticatedHandler(async (req, { user }) => {
   try {
     const totpEnabled = user.totp?.enabled ?? false;
-    const hasBackupCodes = !!user.backupCodes?.ciphertext;
-
-    logger.debug('[Auth v1] 2FA status checked', {
-      userId: user.id,
-      totpEnabled,
-      hasBackupCodes,
-    });
-
-    return successResponse({
+    const hasBackupCodes = !!user.backupCodes?.ciphertext;return successResponse({
       totpEnabled,
       hasBackupCodes,
       enabledAt: user.totp?.verifiedAt ?? null,

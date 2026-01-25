@@ -183,7 +183,7 @@ export async function importMultiCharacterChat(
   // Process each mapping
   for (const mapping of mappings) {
     if (mapping.mappingType === 'skip') {
-      importLogger.debug('Skipping speaker', { speakerName: mapping.speakerName })
+
       continue
     }
 
@@ -208,11 +208,6 @@ export async function importMultiCharacterChat(
         }
       }
 
-      importLogger.debug('Using existing character', {
-        characterId: character.id,
-        name: character.name,
-        controlledBy,
-      })
     } else if (mapping.mappingType === 'create_character') {
       const character = await repos.characters.create({
         userId,
@@ -259,11 +254,6 @@ export async function importMultiCharacterChat(
         }
       }
 
-      importLogger.debug('Using existing character (legacy persona)', {
-        characterId: character.id,
-        name: character.name,
-        controlledBy: 'user',
-      })
     } else if (mapping.mappingType === 'create_persona') {
       // Legacy: create a user-controlled character instead of persona
       const character = await repos.characters.create({

@@ -18,20 +18,16 @@ import { QueryFilter } from '../interfaces';
 export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings> {
   constructor() {
     super('chat_settings', ChatSettingsSchema);
-    logger.debug('ChatSettingsRepository initialized');
   }
 
   /**
    * Find chat settings by ID
    */
   async findById(id: string): Promise<ChatSettings | null> {
-    logger.debug('Finding chat settings by ID', { chatSettingsId: id });
     try {
       const result = await this._findById(id);
       if (result) {
-        logger.debug('Chat settings found', { chatSettingsId: id });
       } else {
-        logger.debug('Chat settings not found', { chatSettingsId: id });
       }
       return result;
     } catch (error) {
@@ -47,13 +43,10 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
    * Find chat settings by user ID
    */
   async findByUserId(userId: string): Promise<ChatSettings | null> {
-    logger.debug('Finding chat settings by user ID', { userId });
     try {
       const result = await this.findOneByFilter({ userId } as QueryFilter);
       if (result) {
-        logger.debug('Chat settings found for user', { userId });
       } else {
-        logger.debug('Chat settings not found for user', { userId });
       }
       return result;
     } catch (error) {
@@ -69,10 +62,8 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
    * Find all chat settings
    */
   async findAll(): Promise<ChatSettings[]> {
-    logger.debug('Finding all chat settings');
     try {
       const results = await this._findAll();
-      logger.debug('Retrieved all chat settings', { count: results.length });
       return results;
     } catch (error) {
       logger.error('Error finding all chat settings', {
@@ -92,7 +83,6 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
     data: Omit<ChatSettings, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions
   ): Promise<ChatSettings> {
-    logger.debug('Creating new chat settings', { userId: data.userId });
     try {
       const result = await this._create(data, options);
       logger.info('Chat settings created successfully', {
@@ -116,11 +106,9 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
    * @returns Promise<ChatSettings | null> The updated chat settings if found, null otherwise
    */
   async update(id: string, data: Partial<ChatSettings>): Promise<ChatSettings | null> {
-    logger.debug('Updating chat settings', { chatSettingsId: id });
     try {
       const result = await this._update(id, data);
       if (result) {
-        logger.debug('Chat settings updated successfully', { chatSettingsId: id });
       } else {
         logger.warn('Chat settings not found for update', { chatSettingsId: id });
       }
@@ -140,11 +128,9 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
    * @returns Promise<boolean> True if chat settings were deleted, false if not found
    */
   async delete(id: string): Promise<boolean> {
-    logger.debug('Deleting chat settings', { chatSettingsId: id });
     try {
       const result = await this._delete(id);
       if (result) {
-        logger.debug('Chat settings deleted successfully', { chatSettingsId: id });
       } else {
         logger.warn('Chat settings not found for deletion', { chatSettingsId: id });
       }
@@ -168,7 +154,6 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
     userId: string,
     data: Omit<ChatSettings, 'id' | 'userId' | 'createdAt' | 'updatedAt'>
   ): Promise<ChatSettings> {
-    logger.debug('Creating chat settings for user', { userId });
     return this.create({ ...data, userId });
   }
 
@@ -179,15 +164,12 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
    * @returns Promise<ChatSettings | null> The updated/created chat settings
    */
   async updateForUser(userId: string, data: Partial<ChatSettings>): Promise<ChatSettings | null> {
-    logger.debug('Updating chat settings for user', { userId });
     try {
       // Check if settings exist
       const existing = await this.findByUserId(userId);
 
       if (!existing) {
         // Create new settings with defaults
-        logger.debug('Chat settings not found, creating new settings for user', { userId });
-
         // Default roleplay template will be set by the user or by the first access flow
         // We don't query for templates here to avoid circular dependencies
         const defaultRoleplayTemplateId: string | null = null;

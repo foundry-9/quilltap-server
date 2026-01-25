@@ -109,7 +109,6 @@ export const plugin: LLMProviderPlugin = {
    * Factory method to create an OpenAI LLM provider instance
    */
   createProvider: (baseUrl?: string) => {
-    logger.debug('Creating OpenAI provider instance', { context: 'plugin.createProvider', baseUrl });
     return new OpenAIProvider();
   },
 
@@ -117,7 +116,6 @@ export const plugin: LLMProviderPlugin = {
    * Factory method to create an OpenAI image generation provider instance
    */
   createImageProvider: (baseUrl?: string) => {
-    logger.debug('Creating OpenAI image provider instance', { context: 'plugin.createImageProvider', baseUrl });
     return new OpenAIImageProvider();
   },
 
@@ -126,11 +124,9 @@ export const plugin: LLMProviderPlugin = {
    * Requires a valid API key
    */
   getAvailableModels: async (apiKey: string, baseUrl?: string) => {
-    logger.debug('Fetching available OpenAI models', { context: 'plugin.getAvailableModels' });
     try {
       const provider = new OpenAIProvider();
       const models = await provider.getAvailableModels(apiKey);
-      logger.debug('Successfully fetched OpenAI models', { context: 'plugin.getAvailableModels', count: models.length });
       return models;
     } catch (error) {
       logger.error('Failed to fetch OpenAI models', { context: 'plugin.getAvailableModels' }, error instanceof Error ? error : undefined);
@@ -142,11 +138,9 @@ export const plugin: LLMProviderPlugin = {
    * Validate an OpenAI API key
    */
   validateApiKey: async (apiKey: string, baseUrl?: string) => {
-    logger.debug('Validating OpenAI API key', { context: 'plugin.validateApiKey' });
     try {
       const provider = new OpenAIProvider();
       const isValid = await provider.validateApiKey(apiKey);
-      logger.debug('OpenAI API key validation result', { context: 'plugin.validateApiKey', isValid });
       return isValid;
     } catch (error) {
       logger.error('Error validating OpenAI API key', { context: 'plugin.validateApiKey' }, error instanceof Error ? error : undefined);
@@ -200,7 +194,6 @@ export const plugin: LLMProviderPlugin = {
    * Returns cached information about available embedding models
    */
   getEmbeddingModels: (): EmbeddingModelInfo[] => {
-    logger.debug('Getting OpenAI embedding models', { context: 'plugin.getEmbeddingModels' });
     return [
       {
         id: 'text-embedding-3-small',
@@ -227,7 +220,6 @@ export const plugin: LLMProviderPlugin = {
    * Render the OpenAI icon
    */
   renderIcon: (props) => {
-    logger.debug('Rendering OpenAI icon', { context: 'plugin.renderIcon', className: props.className });
     return OpenAIIcon(props);
   },
 
@@ -241,11 +233,6 @@ export const plugin: LLMProviderPlugin = {
   formatTools: (
     tools: (OpenAIToolDefinition | Record<string, unknown>)[],
   ): OpenAIToolDefinition[] => {
-    logger.debug('Formatting tools for OpenAI provider', {
-      context: 'plugin.formatTools',
-      toolCount: tools.length,
-    });
-
     try {
       const formattedTools: OpenAIToolDefinition[] = [];
 
@@ -261,12 +248,6 @@ export const plugin: LLMProviderPlugin = {
         // Tools already in OpenAI format, pass through
         formattedTools.push(tool as OpenAIToolDefinition);
       }
-
-      logger.debug('Successfully formatted tools', {
-        context: 'plugin.formatTools',
-        count: formattedTools.length,
-      });
-
       return formattedTools;
     } catch (error) {
       logger.error(
@@ -286,18 +267,8 @@ export const plugin: LLMProviderPlugin = {
    * @returns Array of tool call requests
    */
   parseToolCalls: (response: any): ToolCallRequest[] => {
-    logger.debug('Parsing tool calls from OpenAI response', {
-      context: 'plugin.parseToolCalls',
-    });
-
     try {
       const toolCalls = parseOpenAIToolCalls(response);
-
-      logger.debug('Successfully parsed tool calls', {
-        context: 'plugin.parseToolCalls',
-        count: toolCalls.length,
-      });
-
       return toolCalls;
     } catch (error) {
       logger.error(

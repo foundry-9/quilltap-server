@@ -56,22 +56,14 @@ export class ConnectionProfilesRepository extends TaggableBaseRepository<Connect
    */
   async findDefault(userId: string): Promise<ConnectionProfile | null> {
     try {
-      logger.debug('Finding default connection profile for user', {
-        userId,
-        collection: this.collectionName,
-      });
-
       const profile = await this.findOneByFilter({
         userId,
         isDefault: true,
       } as QueryFilter);
 
       if (!profile) {
-        logger.debug('No default connection profile found for user', { userId });
         return null;
       }
-
-      logger.debug('Default connection profile found for user', { userId });
       return profile;
     } catch (error) {
       logger.error('Error finding default connection profile', {
@@ -92,14 +84,6 @@ export class ConnectionProfilesRepository extends TaggableBaseRepository<Connect
     options?: CreateOptions
   ): Promise<ConnectionProfile> {
     try {
-      logger.debug('Creating new connection profile', {
-        userId: data.userId,
-        name: data.name,
-        provider: data.provider,
-        collection: this.collectionName,
-        usingProvidedId: !!options?.id,
-      });
-
       const profile = await this._create(data, options);
 
       logger.info('Connection profile created successfully', {
@@ -125,11 +109,6 @@ export class ConnectionProfilesRepository extends TaggableBaseRepository<Connect
    */
   async update(id: string, data: Partial<ConnectionProfile>): Promise<ConnectionProfile | null> {
     try {
-      logger.debug('Updating connection profile', {
-        profileId: id,
-        collection: this.collectionName,
-      });
-
       const profile = await this._update(id, data);
 
       if (profile) {
@@ -151,11 +130,6 @@ export class ConnectionProfilesRepository extends TaggableBaseRepository<Connect
    */
   async delete(id: string): Promise<boolean> {
     try {
-      logger.debug('Deleting connection profile', {
-        profileId: id,
-        collection: this.collectionName,
-      });
-
       const result = await this._delete(id);
 
       if (result) {
@@ -200,13 +174,6 @@ export class ConnectionProfilesRepository extends TaggableBaseRepository<Connect
     completionTokens: number
   ): Promise<void> {
     try {
-      logger.debug('Incrementing token usage for connection profile', {
-        profileId,
-        promptTokens,
-        completionTokens,
-        collection: this.collectionName,
-      });
-
       const collection = await this.getCollection();
       const now = this.getCurrentTimestamp();
 
@@ -227,13 +194,6 @@ export class ConnectionProfilesRepository extends TaggableBaseRepository<Connect
         logger.warn('Connection profile not found for token usage increment', { profileId });
         return;
       }
-
-      logger.debug('Token usage incremented successfully', {
-        profileId,
-        promptTokens,
-        completionTokens,
-        modifiedCount: result.modifiedCount,
-      });
     } catch (error) {
       logger.error('Error incrementing token usage', {
         profileId,
@@ -250,11 +210,6 @@ export class ConnectionProfilesRepository extends TaggableBaseRepository<Connect
    */
   async resetTokenUsage(profileId: string): Promise<ConnectionProfile | null> {
     try {
-      logger.debug('Resetting token usage for connection profile', {
-        profileId,
-        collection: this.collectionName,
-      });
-
       return await this.update(profileId, {
         totalTokens: 0,
         totalPromptTokens: 0,
@@ -279,7 +234,6 @@ export class ConnectionProfilesRepository extends TaggableBaseRepository<Connect
    */
   private async getApiKeysCollection() {
     try {
-      logger.debug('Retrieved API keys collection', { collection: 'api_keys' });
       // Ensure the API keys collection exists
       await ensureCollection('api_keys', ApiKeySchema);
       // Get the API keys collection from the manager
@@ -298,13 +252,8 @@ export class ConnectionProfilesRepository extends TaggableBaseRepository<Connect
    */
   async getApiKeysByUserId(userId: string): Promise<ApiKey[]> {
     try {
-      logger.debug('Finding API keys by user ID', { userId, collection: 'api_keys' });
-
       const collection = await this.getApiKeysCollection();
       const docs = await collection.find({ userId } as QueryFilter);
-
-      logger.debug('Retrieved API keys from database for user', { userId, count: docs.length });
-
       const validated = docs
         .map((doc) => {
           const result = ApiKeySchema.safeParse(doc);
@@ -319,12 +268,6 @@ export class ConnectionProfilesRepository extends TaggableBaseRepository<Connect
           return result.data;
         })
         .filter((key) => key !== null) as ApiKey[];
-
-      logger.debug('User API keys validated', {
-        userId,
-        total: docs.length,
-        validated: validated.length,
-      });
       return validated;
     } catch (error) {
       logger.error('Error finding API keys by user ID', {
@@ -340,21 +283,14 @@ export class ConnectionProfilesRepository extends TaggableBaseRepository<Connect
    */
   async findApiKeyById(id: string): Promise<ApiKey | null> {
     try {
-      logger.debug('Finding API key by ID', {
-        keyId: id,
-        collection: 'api_keys',
-      });
-
       const collection = await this.getApiKeysCollection();
       const doc = await collection.findOne({ id } as QueryFilter);
 
       if (!doc) {
-        logger.debug('API key not found', { keyId: id });
         return null;
       }
 
       const validated = ApiKeySchema.parse(doc);
-      logger.debug('API key found and validated', { keyId: id });
       return validated;
     } catch (error) {
       logger.error('Error finding API key by ID', {
@@ -370,22 +306,14 @@ export class ConnectionProfilesRepository extends TaggableBaseRepository<Connect
    */
   async findApiKeyByIdAndUserId(id: string, userId: string): Promise<ApiKey | null> {
     try {
-      logger.debug('Finding API key by ID and user ID', {
-        keyId: id,
-        userId,
-        collection: 'api_keys',
-      });
-
       const collection = await this.getApiKeysCollection();
       const doc = await collection.findOne({ id, userId } as QueryFilter);
 
       if (!doc) {
-        logger.debug('API key not found for user', { keyId: id, userId });
         return null;
       }
 
       const validated = ApiKeySchema.parse(doc);
-      logger.debug('API key found and validated for user', { keyId: id, userId });
       return validated;
     } catch (error) {
       logger.error('Error finding API key by ID and user ID', {
@@ -402,12 +330,6 @@ export class ConnectionProfilesRepository extends TaggableBaseRepository<Connect
    */
   async createApiKey(data: Omit<ApiKey, 'id' | 'createdAt' | 'updatedAt'>): Promise<ApiKey> {
     try {
-      logger.debug('Creating new API key', {
-        label: data.label,
-        provider: data.provider,
-        collection: 'api_keys',
-      });
-
       const id = this.generateId();
       const now = this.getCurrentTimestamp();
 
@@ -445,11 +367,6 @@ export class ConnectionProfilesRepository extends TaggableBaseRepository<Connect
    */
   async updateApiKey(id: string, data: Partial<ApiKey>): Promise<ApiKey | null> {
     try {
-      logger.debug('Updating API key', {
-        keyId: id,
-        collection: 'api_keys',
-      });
-
       const existing = await this.findApiKeyById(id);
       if (!existing) {
         logger.warn('API key not found for update', { keyId: id });
@@ -494,11 +411,6 @@ export class ConnectionProfilesRepository extends TaggableBaseRepository<Connect
    */
   async deleteApiKey(id: string): Promise<boolean> {
     try {
-      logger.debug('Deleting API key', {
-        keyId: id,
-        collection: 'api_keys',
-      });
-
       const collection = await this.getApiKeysCollection();
       const result = await collection.deleteOne({ id } as QueryFilter);
 
@@ -527,15 +439,9 @@ export class ConnectionProfilesRepository extends TaggableBaseRepository<Connect
    */
   async recordApiKeyUsage(id: string): Promise<ApiKey | null> {
     try {
-      logger.debug('Recording API key usage', {
-        keyId: id,
-        collection: 'api_keys',
-      });
-
       const result = await this.updateApiKey(id, { lastUsed: this.getCurrentTimestamp() });
 
       if (result) {
-        logger.debug('API key usage recorded', { keyId: id });
       }
 
       return result;

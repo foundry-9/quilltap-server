@@ -30,21 +30,11 @@ export class SyncOperationsRepository extends UserOwnedBaseRepository<SyncOperat
    * Find a sync operation by ID
    */
   async findById(id: string): Promise<SyncOperation | null> {
-    logger.debug('Finding sync operation by ID', {
-      operationId: id,
-    });
-
     try {
       const operation = await this._findById(id);
 
       if (operation) {
-        logger.debug('Sync operation found by ID', {
-          operationId: id,
-        });
       } else {
-        logger.debug('Sync operation not found', {
-          operationId: id,
-        });
       }
 
       return operation;
@@ -61,15 +51,8 @@ export class SyncOperationsRepository extends UserOwnedBaseRepository<SyncOperat
    * Find all sync operations
    */
   async findAll(): Promise<SyncOperation[]> {
-    logger.debug('Finding all sync operations');
-
     try {
       const operations = await this._findAll();
-
-      logger.debug('Retrieved all sync operations', {
-        count: operations.length,
-      });
-
       return operations;
     } catch (error) {
       logger.error('Error finding all sync operations', {
@@ -87,12 +70,6 @@ export class SyncOperationsRepository extends UserOwnedBaseRepository<SyncOperat
     instanceId: string,
     limit: number = 50
   ): Promise<SyncOperation[]> {
-    logger.debug('Finding sync operations by instance ID', {
-      userId,
-      instanceId,
-      limit,
-    });
-
     try {
       const options: QueryOptions = {
         limit,
@@ -103,13 +80,6 @@ export class SyncOperationsRepository extends UserOwnedBaseRepository<SyncOperat
         { userId, instanceId } as QueryFilter,
         options
       );
-
-      logger.debug('Retrieved sync operations by instance ID', {
-        userId,
-        instanceId,
-        count: operations.length,
-      });
-
       return operations;
     } catch (error) {
       logger.error('Error finding sync operations by instance ID', {
@@ -125,21 +95,11 @@ export class SyncOperationsRepository extends UserOwnedBaseRepository<SyncOperat
    * Find in-progress sync operations for a user
    */
   async findInProgress(userId: string): Promise<SyncOperation[]> {
-    logger.debug('Finding in-progress sync operations', {
-      userId,
-    });
-
     try {
       const operations = await this.findByFilter({
         userId,
         status: { $in: ['PENDING', 'IN_PROGRESS'] },
       } as QueryFilter);
-
-      logger.debug('Retrieved in-progress sync operations', {
-        userId,
-        count: operations.length,
-      });
-
       return operations;
     } catch (error) {
       logger.error('Error finding in-progress sync operations', {
@@ -154,11 +114,6 @@ export class SyncOperationsRepository extends UserOwnedBaseRepository<SyncOperat
    * Find sync operations by user ID with optional limit
    */
   async findByUserId(userId: string, limit: number = 50): Promise<SyncOperation[]> {
-    logger.debug('Finding sync operations by user ID', {
-      userId,
-      limit,
-    });
-
     try {
       const options: QueryOptions = {
         limit,
@@ -169,12 +124,6 @@ export class SyncOperationsRepository extends UserOwnedBaseRepository<SyncOperat
         { userId } as QueryFilter,
         options
       );
-
-      logger.debug('Retrieved sync operations by user ID', {
-        userId,
-        count: operations.length,
-      });
-
       return operations;
     } catch (error) {
       logger.error('Error finding sync operations by user ID', {
@@ -192,12 +141,6 @@ export class SyncOperationsRepository extends UserOwnedBaseRepository<SyncOperat
     data: CreateSyncOperation,
     options?: CreateOptions
   ): Promise<SyncOperation> {
-    logger.debug('Creating new sync operation', {
-      userId: data.userId,
-      instanceId: data.instanceId,
-      direction: data.direction,
-    });
-
     try {
       const operation = await this._create(data, options);
 
@@ -224,10 +167,6 @@ export class SyncOperationsRepository extends UserOwnedBaseRepository<SyncOperat
    * Update a sync operation
    */
   async update(id: string, data: Partial<SyncOperation>): Promise<SyncOperation | null> {
-    logger.debug('Updating sync operation', {
-      operationId: id,
-    });
-
     try {
       const operation = await this._update(id, data);
 
@@ -262,12 +201,6 @@ export class SyncOperationsRepository extends UserOwnedBaseRepository<SyncOperat
     errors?: string[]
   ): Promise<SyncOperation | null> {
     const now = this.getCurrentTimestamp();
-
-    logger.debug('Completing sync operation', {
-      operationId: id,
-      status,
-    });
-
     const updateData: Partial<SyncOperation> = {
       status,
       completedAt: now,
@@ -293,12 +226,6 @@ export class SyncOperationsRepository extends UserOwnedBaseRepository<SyncOperat
    */
   async addError(id: string, error: string): Promise<SyncOperation | null> {
     const now = this.getCurrentTimestamp();
-
-    logger.debug('Adding error to sync operation', {
-      operationId: id,
-      error,
-    });
-
     try {
       const operation = await this.findById(id);
       if (!operation) {
@@ -315,9 +242,6 @@ export class SyncOperationsRepository extends UserOwnedBaseRepository<SyncOperat
       } as Partial<SyncOperation>);
 
       if (result) {
-        logger.debug('Error added to sync operation', {
-          operationId: id,
-        });
       }
 
       return result;
@@ -335,12 +259,6 @@ export class SyncOperationsRepository extends UserOwnedBaseRepository<SyncOperat
    */
   async addConflict(id: string, conflict: SyncConflict): Promise<SyncOperation | null> {
     const now = this.getCurrentTimestamp();
-
-    logger.debug('Adding conflict to sync operation', {
-      operationId: id,
-      conflict,
-    });
-
     try {
       const operation = await this.findById(id);
       if (!operation) {
@@ -357,9 +275,6 @@ export class SyncOperationsRepository extends UserOwnedBaseRepository<SyncOperat
       } as Partial<SyncOperation>);
 
       if (result) {
-        logger.debug('Conflict added to sync operation', {
-          operationId: id,
-        });
       }
 
       return result;
@@ -379,11 +294,6 @@ export class SyncOperationsRepository extends UserOwnedBaseRepository<SyncOperat
     id: string,
     entityCounts: Record<string, number>
   ): Promise<SyncOperation | null> {
-    logger.debug('Updating entity counts for sync operation', {
-      operationId: id,
-      entityCounts,
-    });
-
     return this.update(id, { entityCounts } as Partial<SyncOperation>);
   }
 
@@ -392,13 +302,6 @@ export class SyncOperationsRepository extends UserOwnedBaseRepository<SyncOperat
    */
   async updateProgress(id: string, progress: SyncProgress): Promise<SyncOperation | null> {
     const now = this.getCurrentTimestamp();
-
-    logger.debug('Updating progress for sync operation', {
-      operationId: id,
-      phase: progress.phase,
-      currentItemName: progress.currentItemName,
-    });
-
     try {
       const result = await this.update(id, {
         progress,
@@ -406,10 +309,6 @@ export class SyncOperationsRepository extends UserOwnedBaseRepository<SyncOperat
       } as Partial<SyncOperation>);
 
       if (result) {
-        logger.debug('Progress updated for sync operation', {
-          operationId: id,
-          phase: progress.phase,
-        });
       } else {
         logger.warn('Sync operation not found during updateProgress', {
           operationId: id,
@@ -430,10 +329,6 @@ export class SyncOperationsRepository extends UserOwnedBaseRepository<SyncOperat
    * Delete a sync operation
    */
   async delete(id: string): Promise<boolean> {
-    logger.debug('Deleting sync operation', {
-      operationId: id,
-    });
-
     try {
       const result = await this._delete(id);
 
@@ -461,10 +356,6 @@ export class SyncOperationsRepository extends UserOwnedBaseRepository<SyncOperat
    * Delete all sync operations for a specific user
    */
   async deleteByUserId(userId: string): Promise<number> {
-    logger.debug('Deleting all sync operations for user', {
-      userId,
-    });
-
     try {
       const count = await this.deleteMany({ userId } as QueryFilter);
 
@@ -488,11 +379,6 @@ export class SyncOperationsRepository extends UserOwnedBaseRepository<SyncOperat
    */
   async deleteOlderThan(olderThan: Date): Promise<number> {
     const olderThanIso = olderThan.toISOString();
-
-    logger.debug('Deleting sync operations older than', {
-      olderThan: olderThanIso,
-    });
-
     try {
       const count = await this.deleteMany({
         createdAt: { $lt: olderThanIso },

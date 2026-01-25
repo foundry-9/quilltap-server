@@ -65,15 +65,7 @@ export async function GET(
 
     // First segment is plugin name, rest is the asset path within the plugin
     const [pluginName, ...assetPathSegments] = pathSegments;
-    const relativeAssetPath = assetPathSegments.join('/');
-
-    logger.debug('Asset file requested', {
-      context: 'GET /api/themes/assets',
-      pluginName,
-      relativeAssetPath,
-    });
-
-    // Ensure plugin/theme system is initialized
+    const relativeAssetPath = assetPathSegments.join('/');// Ensure plugin/theme system is initialized
     if (!isPluginSystemInitialized()) {
       logger.info('Plugin system not initialized, initializing now', {
         context: 'themes-assets-GET',
@@ -145,17 +137,7 @@ export async function GET(
       const assetBuffer = await fs.readFile(absoluteAssetPath);
 
       // Determine MIME type from extension
-      const mimeType = ASSET_MIME_TYPES[ext] || 'application/octet-stream';
-
-      logger.debug('Serving asset file', {
-        context: 'GET /api/themes/assets',
-        themeId: theme.id,
-        filePath: absoluteAssetPath,
-        mimeType,
-        size: assetBuffer.length,
-      });
-
-      // Return the asset with appropriate headers
+      const mimeType = ASSET_MIME_TYPES[ext] || 'application/octet-stream';// Return the asset with appropriate headers
       return new NextResponse(new Uint8Array(assetBuffer), {
         status: 200,
         headers: {

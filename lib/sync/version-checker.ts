@@ -39,12 +39,6 @@ export function getLocalVersionInfo(): SyncVersionInfo {
     syncProtocolVersion: SYNC_PROTOCOL_VERSION,
     supportedEntityTypes: SyncableEntityTypeEnum.options as SyncableEntityType[],
   };
-
-  logger.debug('Generated local version info', {
-    context: 'sync:version-checker',
-    versionInfo,
-  });
-
   return versionInfo;
 }
 
@@ -84,16 +78,6 @@ function areSchemaVersionsCompatible(localVersion: string, remoteVersion: string
 
   // Major version must match
   const compatible = local.major === remote.major;
-
-  logger.debug('Schema version compatibility check', {
-    context: 'sync:version-checker',
-    localVersion,
-    remoteVersion,
-    localMajor: local.major,
-    remoteMajor: remote.major,
-    compatible,
-  });
-
   return compatible;
 }
 
@@ -103,14 +87,6 @@ function areSchemaVersionsCompatible(localVersion: string, remoteVersion: string
  */
 function areProtocolVersionsCompatible(localVersion: string, remoteVersion: string): boolean {
   const compatible = localVersion === remoteVersion;
-
-  logger.debug('Protocol version compatibility check', {
-    context: 'sync:version-checker',
-    localVersion,
-    remoteVersion,
-    compatible,
-  });
-
   return compatible;
 }
 
@@ -125,15 +101,6 @@ function areEntityTypesCompatible(
   const missingTypes = localTypes.filter((type) => !remoteTypeSet.has(type));
 
   const compatible = missingTypes.length === 0;
-
-  logger.debug('Entity type compatibility check', {
-    context: 'sync:version-checker',
-    localTypes,
-    remoteTypes,
-    missingTypes,
-    compatible,
-  });
-
   return { compatible, missingTypes };
 }
 
@@ -246,10 +213,6 @@ export function validateVersionInfo(versionInfo: unknown): versionInfo is SyncVe
     Array.isArray(info.supportedEntityTypes);
 
   if (!hasRequiredFields) {
-    logger.debug('Version info validation failed: missing required fields', {
-      context: 'sync:version-checker',
-      versionInfo,
-    });
     return false;
   }
 

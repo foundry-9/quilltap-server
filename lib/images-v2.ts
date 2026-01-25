@@ -118,7 +118,6 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
     try {
       fileExists = await fileStorageManager.fileExists(existing);
     } catch {
-      logger.debug('File no longer exists in storage, will re-upload', { fileId: existing.id, storageKey: existing.storageKey });
     }
 
     if (fileExists) {
@@ -127,11 +126,9 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
       if (updatedLinkedTo.length > existing.linkedTo.length) {
         const updated = await repos.files.update(existing.id, { linkedTo: updatedLinkedTo });
         if (updated) {
-          logger.debug('Updated existing file with new links', { fileId: existing.id, newLinks: linkedTo });
           return updated;
         }
       }
-      logger.debug('File with same hash already exists', { fileId: existing.id, sha256 });
       return existing;
     } else {
       // File bytes are missing - delete the orphaned metadata and proceed with fresh upload
@@ -156,20 +153,9 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
       sha256,
     },
   });
-  logger.debug('Uploaded file to storage', { fileId, storageKey, mountPointId, size: buffer.length });
-
   // Inherit tags from linked entities and merge with any explicitly provided tags
   const inheritedTags = await getInheritedTags(linkedTo, userId);
   const finalTags = mergeTags(tags, inheritedTags);
-
-  logger.debug('Computed final tags for file', {
-    context: 'images-v2',
-    fileId,
-    explicitTagCount: tags.length,
-    inheritedTagCount: inheritedTags.length,
-    finalTagCount: finalTags.length,
-  });
-
   // Create metadata in repository
   // IMPORTANT: Pass the fileId to ensure metadata matches storage path
   const fileEntry = await repos.files.create({
@@ -191,8 +177,6 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
     storageKey,
     mountPointId,
   }, { id: fileId });
-
-  logger.debug('Created file metadata in repository', { fileId: fileEntry.id, storageKey, mountPointId });
   return fileEntry;
 }
 
@@ -204,7 +188,6 @@ async function deleteFile(fileId: string): Promise<boolean> {
   const entry = await repos.files.findById(fileId);
 
   if (!entry) {
-    logger.debug('File not found for deletion', { fileId });
     return false;
   }
 
@@ -212,7 +195,6 @@ async function deleteFile(fileId: string): Promise<boolean> {
   if (entry.storageKey) {
     try {
       await fileStorageManager.deleteFile(entry);
-      logger.debug('Deleted file from storage', { fileId, storageKey: entry.storageKey });
     } catch (error) {
       logger.error('Failed to delete file from storage', { fileId, storageKey: entry.storageKey }, error instanceof Error ? error : undefined);
     }
@@ -220,7 +202,6 @@ async function deleteFile(fileId: string): Promise<boolean> {
 
   // Delete metadata from repository
   const deleted = await repos.files.delete(fileId);
-  logger.debug('Deleted file metadata from repository', { fileId, success: deleted });
   return deleted;
 }
 
@@ -241,7 +222,6 @@ async function readFile(fileId: string): Promise<Buffer> {
 
   // Download from storage
   const buffer = await fileStorageManager.downloadFile(entry);
-  logger.debug('Downloaded file from storage', { fileId, storageKey: entry.storageKey, size: buffer.length });
   return buffer;
 }
 

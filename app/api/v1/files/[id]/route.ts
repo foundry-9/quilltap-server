@@ -59,18 +59,14 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
 
 async function handleDownloadFile(request: NextRequest, repos: any, fileId: string): Promise<NextResponse> {
   try {
-    logger.debug('[Files v1] Downloading file', { fileId });
-
     // Get file metadata from repository
     const fileEntry = await repos.files.findById(fileId);
     if (!fileEntry) {
-      logger.debug('[Files v1] File not found', { fileId });
       return notFound('File');
     }
 
     // Fallback to s3Key if storageKey is missing (pre-mount-points files)
     if (!fileEntry.storageKey && fileEntry.s3Key) {
-      logger.debug('[Files v1] Using s3Key fallback for storageKey', { fileId, s3Key: fileEntry.s3Key });
       fileEntry.storageKey = fileEntry.s3Key;
     }
 
@@ -78,8 +74,6 @@ async function handleDownloadFile(request: NextRequest, repos: any, fileId: stri
       logger.error('[Files v1] File has no storage key - may need migration', { fileId });
       return serverError('File not available - storage key missing');
     }
-
-    logger.debug('[Files v1] Serving file from storage', { fileId, storageKey: fileEntry.storageKey });
 
     // Check if we should use presigned URL redirect or proxy through API
     // For HTTP endpoints (e.g., local MinIO), we must proxy to avoid mixed content issues
@@ -89,41 +83,17 @@ async function handleDownloadFile(request: NextRequest, repos: any, fileId: stri
 
     // Try to use presigned URL redirect for large files
     if (fileEntry.size > LARGE_FILE_THRESHOLD && !isHttpEndpoint) {
-      logger.debug('[Files v1] File size exceeds threshold, attempting presigned URL redirect', {
-        fileId,
-        fileSize: fileEntry.size,
-        threshold: LARGE_FILE_THRESHOLD,
-      });
-
       try {
         const presignedUrl = await fileStorageManager.getFileUrl(fileEntry, { presigned: true });
-        logger.debug('[Files v1] Presigned URL generated successfully', {
-          fileId,
-          hasUrl: !!presignedUrl,
-        });
 
         return NextResponse.redirect(presignedUrl);
       } catch (error) {
-        logger.debug('[Files v1] Presigned URL generation failed, falling back to proxy download', {
-          fileId,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
         // Fall through to proxy download
       }
     }
 
     // Download file and serve through API
-    logger.debug('[Files v1] Downloading file from storage', {
-      fileId,
-      fileSize: fileEntry.size,
-    });
-
     const buffer = await fileStorageManager.downloadFile(fileEntry);
-
-    logger.debug('[Files v1] File downloaded from storage', {
-      fileId,
-      downloadedSize: buffer.length,
-    });
 
     function buildContentDisposition(filename: string, disposition: 'inline' | 'attachment' = 'inline'): string {
       // Check if filename contains non-ASCII characters
@@ -176,22 +146,14 @@ async function handleGetThumbnail(request: NextRequest, repos: any, fileId: stri
       size = Math.min(parsedSize, MAX_THUMBNAIL_SIZE);
     }
 
-    logger.debug('[Files v1] Thumbnail request', {
-      fileId,
-      requestedSize: sizeParam,
-      effectiveSize: size,
-    });
-
     // Get file metadata
     const fileEntry = await repos.files.findById(fileId);
     if (!fileEntry) {
-      logger.debug('[Files v1] File not found', { fileId });
       return notFound('File');
     }
 
     // Check if file is an image that can be thumbnailed
     if (!fileEntry.mimeType.startsWith('image/') || !canResizeImage(fileEntry.mimeType)) {
-      logger.debug('[Files v1] File is not a resizable image', { fileId, mimeType: fileEntry.mimeType });
       return badRequest('File is not a resizable image');
     }
 
@@ -202,19 +164,12 @@ async function handleGetThumbnail(request: NextRequest, repos: any, fileId: stri
 
     const thumbnailKey = buildThumbnailStorageKey(fileEntry.userId, fileId, size);
 
-    logger.debug('[Files v1] Checking for cached thumbnail', {
-      fileId,
-      thumbnailKey,
-    });
-
     // Try to get cached thumbnail from storage
     try {
       const cachedBuffer = await fileStorageManager.downloadFile({
         ...fileEntry,
         storageKey: thumbnailKey,
       });
-
-      logger.debug('[Files v1] Cached thumbnail found', { fileId, size });
 
       return new NextResponse(new Uint8Array(cachedBuffer), {
         headers: {
@@ -225,16 +180,10 @@ async function handleGetThumbnail(request: NextRequest, repos: any, fileId: stri
       });
     } catch {
       // Cached thumbnail not found, generate it
-      logger.debug('[Files v1] Cached thumbnail not found, generating', { fileId, size });
     }
 
     // Download original image
     const imageBuffer = await fileStorageManager.downloadFile(fileEntry);
-
-    logger.debug('[Files v1] Downloaded original image for thumbnail', {
-      fileId,
-      originalSize: imageBuffer.length,
-    });
 
     // Generate thumbnail using sharp
     const thumbnailBuffer = await sharp(imageBuffer)
@@ -244,12 +193,6 @@ async function handleGetThumbnail(request: NextRequest, repos: any, fileId: stri
       })
       .webp({ quality: THUMBNAIL_QUALITY })
       .toBuffer();
-
-    logger.debug('[Files v1] Generated thumbnail', {
-      fileId,
-      size,
-      generatedSize: thumbnailBuffer.length,
-    });
 
     // Cache thumbnail to storage (async, don't wait)
     fileStorageManager.uploadFile({
@@ -263,7 +206,7 @@ async function handleGetThumbnail(request: NextRequest, repos: any, fileId: stri
         thumbnailSize: String(size),
       },
     }).then(() => {
-      logger.debug('[Files v1] Cached thumbnail to storage', { fileId, thumbnailKey });
+      // Thumbnail cached successfully
     }).catch((cacheError) => {
       logger.warn('[Files v1] Failed to cache thumbnail', {
         fileId,
@@ -290,12 +233,9 @@ async function handleGetThumbnail(request: NextRequest, repos: any, fileId: stri
 
 export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (req, { user, repos }, { id: fileId }) => {
   try {
-    logger.debug('[Files v1] DELETE file', { fileId, userId: user.id });
-
     // Get file metadata from repository
     const fileEntry = await repos.files.findById(fileId);
     if (!fileEntry) {
-      logger.debug('[Files v1] File not found', { fileId });
       return notFound('File');
     }
 
@@ -314,20 +254,8 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
     const force = searchParams.get('force') === 'true';
     const dissociate = searchParams.get('dissociate') === 'true';
 
-    logger.debug('[Files v1] Deleting file', {
-      fileId,
-      hasStorageKey: !!fileEntry.storageKey,
-      force,
-      dissociate,
-    });
-
     // Handle dissociation if requested
     if (dissociate && fileEntry.linkedTo.length > 0) {
-      logger.debug('[Files v1] Dissociating file from all linked entities', {
-        fileId,
-        linkedToCount: fileEntry.linkedTo.length,
-      });
-
       await dissociateFileFromAll(fileId, fileEntry, repos);
 
       // Refresh file entry after dissociation
@@ -339,11 +267,6 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
 
     // Check if file is still linked to any entities (unless force=true or dissociate=true)
     if (!force && !dissociate && fileEntry.linkedTo.length > 0) {
-      logger.debug('[Files v1] Checking file associations before deletion', {
-        fileId,
-        linkedToCount: fileEntry.linkedTo.length,
-      });
-
       // Get enhanced association details for error response
       const userRepos = getUserRepositories(user.id);
       const associations = await getFileAssociations(fileId, fileEntry.linkedTo, userRepos);
@@ -352,12 +275,6 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
       const hasRealAssociations = associations.characters.length > 0 || associations.messages.length > 0;
 
       if (hasRealAssociations) {
-        logger.debug('[Files v1] File has real associations, blocking deletion', {
-          fileId,
-          characterCount: associations.characters.length,
-          messageCount: associations.messages.length,
-        });
-
         return badRequest('File is linked to other items', {
           code: 'FILE_HAS_ASSOCIATIONS',
           associations,
@@ -374,17 +291,8 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
 
     // Delete from storage if file has storageKey
     if (fileEntry.storageKey) {
-      logger.debug('[Files v1] Deleting file from storage', {
-        fileId,
-        storageKey: fileEntry.storageKey,
-      });
-
       try {
         await fileStorageManager.deleteFile(fileEntry);
-        logger.debug('[Files v1] File deleted from storage', {
-          fileId,
-          storageKey: fileEntry.storageKey,
-        });
       } catch (storageError) {
         logger.warn('[Files v1] Failed to delete file from storage', {
           fileId,
@@ -396,8 +304,6 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
     }
 
     // Delete the file metadata from repository
-    logger.debug('[Files v1] Deleting file metadata from repository', { fileId });
-
     const deleted = await repos.files.delete(fileId);
 
     if (!deleted) {
@@ -460,7 +366,6 @@ async function handleMoveFile(
     const parsed = moveFileSchema.safeParse(body);
 
     if (!parsed.success) {
-      logger.debug('[Files v1] Invalid move request', { errors: parsed.error.issues });
       return badRequest('Invalid request: ' + parsed.error.issues.map((e: any) => e.message).join(', '));
     }
 
@@ -474,14 +379,6 @@ async function handleMoveFile(
     const folderPath = rawFolderPath ? normalizeFolderPath(rawFolderPath) : file.folderPath;
     const targetFilename = filename || file.originalFilename;
     const targetProjectId = projectId === undefined ? file.projectId : projectId;
-
-    logger.debug('[Files v1] Move/rename file request', {
-      fileId,
-      folderPath,
-      filename: targetFilename,
-      projectId: targetProjectId,
-      userId: user.id,
-    });
 
     // Validate folder path
     if (rawFolderPath) {
@@ -510,7 +407,6 @@ async function handleMoveFile(
     if (projectId !== undefined && projectId !== null) {
       const project = await repos.projects.findById(projectId);
       if (!project || project.userId !== user.id) {
-        logger.debug('[Files v1] Target project not found or not owned by user', { projectId });
         return notFound('Project');
       }
     }
@@ -569,19 +465,11 @@ async function handlePromoteFile(
     const parsed = promoteFileSchema.safeParse(body);
 
     if (!parsed.success) {
-      logger.debug('[Files v1] Invalid promotion request', { errors: parsed.error.issues });
       return badRequest('Invalid request: ' + parsed.error.issues.map((e: any) => e.message).join(', '));
     }
 
     const { targetProjectId, folderPath: rawFolderPath } = parsed.data;
     const folderPath = normalizeFolderPath(rawFolderPath || '/');
-
-    logger.debug('[Files v1] Processing file promotion request', {
-      fileId,
-      targetProjectId,
-      folderPath,
-      userId: user.id,
-    });
 
     // Validate folder path
     const folderValidation = validateFolderPath(folderPath);
@@ -593,7 +481,6 @@ async function handlePromoteFile(
     if (targetProjectId) {
       const project = await repos.projects.findById(targetProjectId);
       if (!project || project.userId !== user.id) {
-        logger.debug('[Files v1] Target project not found or not owned by user', { targetProjectId });
         return notFound('Project');
       }
     }
@@ -647,12 +534,6 @@ async function dissociateFileFromAll(
   const timestamp = new Date().toISOString();
   const filename = file.originalFilename || 'unknown file';
 
-  logger.debug('[Files v1] Starting file dissociation', {
-    fileId,
-    filename,
-    linkedToCount: file.linkedTo.length,
-  });
-
   // 1. Update messages - add deletion note, remove from attachments
   const chats = await repos.chats.findAll();
   for (const entityId of file.linkedTo) {
@@ -671,11 +552,6 @@ async function dissociateFileFromAll(
             content: message.content + note,
             attachments: message.attachments.filter((a: string) => a !== fileId),
           });
-          logger.debug('[Files v1] Updated message with deletion note', {
-            chatId: chat.id,
-            messageId: message.id,
-            fileId,
-          });
           break;
         }
       } catch (error) {
@@ -693,11 +569,6 @@ async function dissociateFileFromAll(
     const charsWithDefault = await repos.characters.findByDefaultImageId(fileId);
     for (const char of charsWithDefault) {
       await repos.characters.update(char.id, { defaultImageId: null });
-      logger.debug('[Files v1] Cleared character defaultImageId', {
-        characterId: char.id,
-        characterName: char.name,
-        fileId,
-      });
     }
   } catch (error) {
     logger.warn('[Files v1] Error clearing character defaultImageId', {
@@ -711,11 +582,6 @@ async function dissociateFileFromAll(
     for (const char of charsWithOverride) {
       const filtered = char.avatarOverrides.filter((o: any) => o.imageId !== fileId);
       await repos.characters.update(char.id, { avatarOverrides: filtered });
-      logger.debug('[Files v1] Removed from character avatarOverrides', {
-        characterId: char.id,
-        characterName: char.name,
-        fileId,
-      });
     }
   } catch (error) {
     logger.warn('[Files v1] Error clearing character avatarOverrides', {
