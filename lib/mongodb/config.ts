@@ -53,7 +53,6 @@ function sanitizeURI(uri: string): string {
  * @returns Parsed MongoDB configuration
  */
 function getMongoDBConfigFromEnv(): Partial<MongoDBConfig> {
-  const dataBackend = process.env.DATA_BACKEND || 'mongodb';
   const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017';
   const database = process.env.MONGODB_DATABASE || 'quilltap';
   const mode = (process.env.MONGODB_MODE || 'external') as 'external' | 'embedded';
@@ -83,7 +82,7 @@ function getMongoDBConfigFromEnv(): Partial<MongoDBConfig> {
  */
 export function validateMongoDBConfig(): MongoDBConfig {
   logger.debug('Validating MongoDB configuration', {
-    dataBackend: process.env.DATA_BACKEND,
+    databaseBackend: process.env.DATABASE_BACKEND,
     mode: process.env.MONGODB_MODE,
   });
 
@@ -153,12 +152,12 @@ export async function testMongoDBConnection(): Promise<{
   message: string;
   latencyMs?: number;
 }> {
-  // Return early if using JSON backend
-  if (process.env.DATA_BACKEND === 'json') {
-    logger.debug('Data backend is JSON, skipping MongoDB connection test');
+  // Return early if using SQLite backend
+  if (process.env.DATABASE_BACKEND === 'sqlite') {
+    logger.debug('Database backend is SQLite, skipping MongoDB connection test');
     return {
       success: true,
-      message: 'JSON backend is configured, MongoDB not required',
+      message: 'SQLite backend is configured, MongoDB not required',
     };
   }
 

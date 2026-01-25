@@ -22,11 +22,15 @@ The abstraction layer provides a unified interface for database operations, allo
 | `SQLITE_PATH` | Path to SQLite database file | `~/.quilltap/data/quilltap.db` or `/app/data/quilltap.db` |
 | `SQLITE_WAL_MODE` | Enable WAL mode for SQLite | `true` |
 
+> **Note:** The legacy `DATA_BACKEND` environment variable is deprecated but still supported for backward compatibility. If `DATA_BACKEND=mongodb` is set, it will be treated as `DATABASE_BACKEND=mongodb` with a deprecation warning logged. The `json` and `dual` values are no longer supported.
+
 ### Backend Auto-Detection
 
 If `DATABASE_BACKEND` is not set:
-1. If `MONGODB_URI` is configured, MongoDB is used
-2. Otherwise, SQLite is used
+1. Check SQLite meta table for preferred backend (if SQLite file exists)
+2. Check legacy `DATA_BACKEND` for backward compatibility
+3. If `MONGODB_URI` is configured, MongoDB is used
+4. Otherwise, SQLite is used (default for new installations)
 
 ## Docker Deployment
 

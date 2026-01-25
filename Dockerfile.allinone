@@ -27,7 +27,7 @@ RUN mkdir -p /data/mongodb /data/minio /data/quilltap && \
     chown -R 0:0 /data
 
 # Set environment variables for MongoDB and MinIO configuration
-ENV DATA_BACKEND=mongodb \
+ENV DATABASE_BACKEND=mongodb \
     MONGODB_MODE=embedded \
     MONGODB_URI=mongodb://127.0.0.1:27017/quilltap \
     S3_MODE=embedded \

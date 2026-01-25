@@ -7,7 +7,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - DATA_BACKEND=mongodb
+      - DATABASE_BACKEND=mongodb
       - MONGODB_URI=mongodb://mongo:27017/quilltap
       - MONGODB_DATABASE=quilltap
       - S3_MODE=external

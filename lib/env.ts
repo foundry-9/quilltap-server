@@ -51,12 +51,12 @@ const envSchema = z
     SSL_EMAIL: z.email().optional(),
 
     // Data Backend Configuration
-    // NOTE: 'json' option is deprecated and will be removed in a future version.
-    // Use the migration plugin (qtap-plugin-upgrade) to migrate JSON data to MongoDB.
-    DATA_BACKEND: z.enum(['json', 'mongodb']).optional().default('mongodb'),
+    // Valid values: 'sqlite' (default for new installations) or 'mongodb'
+    // NOTE: Legacy DATA_BACKEND env var is deprecated - use DATABASE_BACKEND instead
+    DATABASE_BACKEND: z.enum(['sqlite', 'mongodb']).optional().default('sqlite'),
 
-    // MongoDB Configuration (required - MongoDB is the default data backend)
-    MONGODB_URI: z.string().min(1, 'MONGODB_URI is required for MongoDB backend'),
+    // MongoDB Configuration (required when DATABASE_BACKEND is 'mongodb')
+    MONGODB_URI: z.string().optional(),
     MONGODB_DATABASE: z.string().optional().default('quilltap'),
     MONGODB_MODE: z.enum(['external', 'embedded']).optional().default('external'),
     MONGODB_DATA_DIR: z.string().optional().default('/data/mongodb'),
@@ -83,15 +83,15 @@ const envSchema = z
   })
   .refine(
     (data) => {
-      // MongoDB URI is required when DATA_BACKEND is 'mongodb' (the default)
-      if (data.DATA_BACKEND === 'mongodb' && !data.MONGODB_URI) {
+      // MongoDB URI is required when DATABASE_BACKEND is 'mongodb'
+      if (data.DATABASE_BACKEND === 'mongodb' && !data.MONGODB_URI) {
         return false;
       }
       return true;
     },
     {
       path: ['MONGODB_URI'],
-        error: 'MONGODB_URI is required when DATA_BACKEND is mongodb'
+        error: 'MONGODB_URI is required when DATABASE_BACKEND is mongodb'
     }
   )
   .refine(
@@ -139,11 +139,11 @@ export function validateEnv(): Env {
       NODE_ENV: process.env.NODE_ENV || 'production',
       BASE_URL: process.env.BASE_URL || 'http://localhost:3000',
       ENCRYPTION_MASTER_PEPPER: process.env.ENCRYPTION_MASTER_PEPPER || 'build-time-placeholder-pepper-value',
-      MONGODB_URI: process.env.MONGODB_URI || 'mongodb://localhost:27017',
+      MONGODB_URI: process.env.MONGODB_URI,
       MONGODB_DATABASE: 'quilltap',
       MONGODB_MODE: 'external',
       MONGODB_DATA_DIR: '/data/mongodb',
-      DATA_BACKEND: 'mongodb',
+      DATABASE_BACKEND: 'sqlite',
       QUILLTAP_FILE_STORAGE_PATH: './data/files',
       S3_MODE: 'disabled',
       S3_REGION: 'us-east-1',

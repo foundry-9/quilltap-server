@@ -160,7 +160,7 @@ export const migrateJsonToMongoDBMigration: Migration = {
 
     if (!isMongoDBBackend()) {
       console.log('[migration.migrate-json-to-mongodb] MongoDB backend not enabled, skipping migration', {
-        dataBackend: process.env.DATA_BACKEND,
+        databaseBackend: process.env.DATABASE_BACKEND,
       });
       return false;
     }

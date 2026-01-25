@@ -20,12 +20,18 @@ import { getMongoDatabase } from '../lib/mongodb-utils';
 /**
  * Check if MongoDB backend is enabled
  *
- * MongoDB is the default and only supported backend.
- * If DATA_BACKEND is not set, it defaults to 'mongodb'.
+ * Checks DATABASE_BACKEND (or legacy DATA_BACKEND) to determine if
+ * MongoDB should be used. Defaults to 'sqlite' if not set.
  */
 function isMongoDBBackendEnabled(): boolean {
-  const backend = process.env.DATA_BACKEND || 'mongodb';
-  return backend === 'mongodb' || backend === 'dual';
+  // Check legacy DATA_BACKEND first (backward compatibility)
+  const legacyBackend = process.env.DATA_BACKEND?.toLowerCase();
+  if (legacyBackend === 'mongodb') {
+    return true;
+  }
+
+  const backend = process.env.DATABASE_BACKEND?.toLowerCase() || 'sqlite';
+  return backend === 'mongodb';
 }
 
 

@@ -36,19 +36,19 @@ export interface ServiceInitializationResult {
 /**
  * Initialize MongoDB if enabled in configuration
  *
- * Checks DATA_BACKEND environment variable to determine if MongoDB
+ * Checks DATABASE_BACKEND environment variable to determine if MongoDB
  * should be initialized. If enabled, validates configuration, tests
  * connection, ensures indexes are created, and sets up shutdown handlers.
  */
 export async function initializeMongoDBIfNeeded(): Promise<ServiceInitializationResult> {
   const startTime = Date.now();
-  const dataBackend = process.env.DATA_BACKEND?.toLowerCase() || 'mongodb';
+  const databaseBackend = process.env.DATABASE_BACKEND?.toLowerCase() || 'sqlite';
 
-  logger.debug('Checking MongoDB initialization requirement', { dataBackend });
+  logger.debug('Checking MongoDB initialization requirement', { databaseBackend });
 
   // Check if MongoDB is enabled
-  if (dataBackend !== 'mongodb' && dataBackend !== 'dual') {
-    logger.debug('MongoDB not enabled', { dataBackend });
+  if (databaseBackend !== 'mongodb') {
+    logger.debug('MongoDB not enabled', { databaseBackend });
     return {
       service: 'mongodb',
       initialized: false,
@@ -58,7 +58,7 @@ export async function initializeMongoDBIfNeeded(): Promise<ServiceInitialization
   }
 
   try {
-    logger.info('Initializing MongoDB', { dataBackend });
+    logger.info('Initializing MongoDB', { databaseBackend });
 
     // Validate configuration
     logger.debug('Validating MongoDB configuration');

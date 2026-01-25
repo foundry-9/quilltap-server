@@ -6982,11 +6982,11 @@ var envSchema = import_zod.z.object({
   DOMAIN: import_zod.z.string().optional(),
   SSL_EMAIL: import_zod.z.email().optional(),
   // Data Backend Configuration
-  // NOTE: 'json' option is deprecated and will be removed in a future version.
-  // Use the migration plugin (qtap-plugin-upgrade) to migrate JSON data to MongoDB.
-  DATA_BACKEND: import_zod.z.enum(["json", "mongodb"]).optional().default("mongodb"),
-  // MongoDB Configuration (required - MongoDB is the default data backend)
-  MONGODB_URI: import_zod.z.string().min(1, "MONGODB_URI is required for MongoDB backend"),
+  // Valid values: 'sqlite' (default for new installations) or 'mongodb'
+  // NOTE: Legacy DATA_BACKEND env var is deprecated - use DATABASE_BACKEND instead
+  DATABASE_BACKEND: import_zod.z.enum(["sqlite", "mongodb"]).optional().default("sqlite"),
+  // MongoDB Configuration (required when DATABASE_BACKEND is 'mongodb')
+  MONGODB_URI: import_zod.z.string().optional(),
   MONGODB_DATABASE: import_zod.z.string().optional().default("quilltap"),
   MONGODB_MODE: import_zod.z.enum(["external", "embedded"]).optional().default("external"),
   MONGODB_DATA_DIR: import_zod.z.string().optional().default("/data/mongodb"),
@@ -7010,14 +7010,14 @@ var envSchema = import_zod.z.object({
   S3_FORCE_PATH_STYLE: import_zod.z.enum(["true", "false"]).optional()
 }).refine(
   (data) => {
-    if (data.DATA_BACKEND === "mongodb" && !data.MONGODB_URI) {
+    if (data.DATABASE_BACKEND === "mongodb" && !data.MONGODB_URI) {
       return false;
     }
     return true;
   },
   {
     path: ["MONGODB_URI"],
-    error: "MONGODB_URI is required when DATA_BACKEND is mongodb"
+    error: "MONGODB_URI is required when DATABASE_BACKEND is mongodb"
   }
 ).refine(
   (data) => {
@@ -7040,11 +7040,11 @@ function validateEnv() {
       NODE_ENV: process.env.NODE_ENV || "production",
       BASE_URL: process.env.BASE_URL || "http://localhost:3000",
       ENCRYPTION_MASTER_PEPPER: process.env.ENCRYPTION_MASTER_PEPPER || "build-time-placeholder-pepper-value",
-      MONGODB_URI: process.env.MONGODB_URI || "mongodb://localhost:27017",
+      MONGODB_URI: process.env.MONGODB_URI,
       MONGODB_DATABASE: "quilltap",
       MONGODB_MODE: "external",
       MONGODB_DATA_DIR: "/data/mongodb",
-      DATA_BACKEND: "mongodb",
+      DATABASE_BACKEND: "sqlite",
       QUILLTAP_FILE_STORAGE_PATH: "./data/files",
       S3_MODE: "disabled",
       S3_REGION: "us-east-1",

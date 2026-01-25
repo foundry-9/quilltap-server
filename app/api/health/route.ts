@@ -72,7 +72,7 @@ async function checkMongoDBHealth(
   services: HealthResponse['services'],
   serviceStatuses: HealthStatus[]
 ): Promise<void> {
-  healthLogger.debug('Checking MongoDB health', { dataBackend: process.env.DATA_BACKEND });
+  healthLogger.debug('Checking MongoDB health', { databaseBackend: process.env.DATABASE_BACKEND });
 
   const mongoConfig = validateMongoDBConfig();
 
@@ -203,7 +203,7 @@ export async function GET() {
     const timestamp = new Date().toISOString();
     const uptime = process.uptime();
     const environment = process.env.NODE_ENV;
-    const dataBackend = process.env.DATA_BACKEND || 'mongodb';
+    const databaseBackend = process.env.DATABASE_BACKEND || 'sqlite';
     const s3Mode = process.env.S3_MODE || 'disabled';
 
     const services: HealthResponse['services'] = {};
@@ -213,7 +213,7 @@ export async function GET() {
     await checkJsonStoreHealth(healthLogger, services, serviceStatuses);
 
     // Check MongoDB if configured as data backend
-    if (dataBackend === 'mongodb' || dataBackend === 'dual') {
+    if (databaseBackend === 'mongodb') {
       await checkMongoDBHealth(healthLogger, services, serviceStatuses);
     }
 

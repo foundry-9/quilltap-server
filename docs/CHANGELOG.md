@@ -4,6 +4,13 @@
 
 ### 2.8-dev
 
+- refactor: Consolidate DATA_BACKEND to DATABASE_BACKEND (2026-01-25)
+  - Unified `DATA_BACKEND` and `DATABASE_BACKEND` env vars into single `DATABASE_BACKEND`
+  - Valid values: `sqlite` (default for new installations) or `mongodb`
+  - Legacy `DATA_BACKEND` is deprecated but supported for backward compatibility
+  - `DATA_BACKEND=mongodb` is treated as `DATABASE_BACKEND=mongodb` with deprecation warning
+  - Removed support for legacy `json` and `dual` values
+  - Updated Docker compose files, migration scripts, and documentation
 - fix: Comprehensive SQLite schema update to match Zod schemas (2026-01-25)
   - Updated all SQLite table definitions to match actual Zod schemas for proper migration
   - **characters**: Added title, firstMessage, exampleDialogues, avatarUrl, defaultConnectionProfileId,

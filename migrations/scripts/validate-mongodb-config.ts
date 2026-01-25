@@ -19,15 +19,19 @@ export const validateMongoDBConfigMigration: Migration = {
   introducedInVersion: '2.0.0',
 
   async shouldRun(): Promise<boolean> {
-    const dataBackend = process.env.DATA_BACKEND || 'mongodb';
+    // Check legacy DATA_BACKEND first (backward compatibility)
+    const legacyBackend = process.env.DATA_BACKEND?.toLowerCase();
+    const databaseBackend = legacyBackend === 'mongodb'
+      ? 'mongodb'
+      : (process.env.DATABASE_BACKEND?.toLowerCase() || 'sqlite');
 
     logger.debug('Checking if MongoDB config validation should run', {
       context: 'migration.validate-mongodb-config',
-      dataBackend,
+      databaseBackend,
     });
 
-    // Only run if data backend is set to MongoDB or dual mode
-    const shouldRun = dataBackend === 'mongodb' || dataBackend === 'dual';
+    // Only run if database backend is set to MongoDB
+    const shouldRun = databaseBackend === 'mongodb';
 
     if (shouldRun) {
       logger.debug('MongoDB config validation migration will run', {
@@ -36,7 +40,7 @@ export const validateMongoDBConfigMigration: Migration = {
     } else {
       logger.debug('MongoDB config validation migration skipped - not using MongoDB backend', {
         context: 'migration.validate-mongodb-config',
-        dataBackend,
+        databaseBackend,
       });
     }
 

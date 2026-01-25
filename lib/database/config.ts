@@ -126,9 +126,10 @@ export function ensureDataDirectoryExists(dataDir?: string): void {
  * Detect the appropriate backend based on environment variables
  * Priority:
  * 1. SQLite meta table preferred_backend (if SQLite file exists)
- * 2. Explicit DATABASE_BACKEND setting
- * 3. If MONGODB_URI is set, use MongoDB
- * 4. Default to SQLite
+ * 2. Legacy DATA_BACKEND (backward compatibility, with deprecation warning)
+ * 3. Explicit DATABASE_BACKEND setting
+ * 4. If MONGODB_URI is set, use MongoDB
+ * 5. Default to SQLite
  */
 export function detectBackend(): DatabaseBackendType {
   // Check SQLite meta table first (if SQLite file exists)
@@ -153,6 +154,26 @@ export function detectBackend(): DatabaseBackendType {
       context: 'database.config',
       error: error instanceof Error ? error.message : String(error),
     });
+  }
+
+  // Check for legacy DATA_BACKEND env var (backward compatibility)
+  const legacyBackend = process.env.DATA_BACKEND?.toLowerCase();
+  if (legacyBackend) {
+    logger.warn('DATA_BACKEND environment variable is deprecated. Use DATABASE_BACKEND instead.', {
+      context: 'database.config',
+      legacyValue: legacyBackend,
+    });
+
+    if (legacyBackend === 'mongodb') {
+      return 'mongodb';
+    }
+    if (legacyBackend === 'json') {
+      logger.error('JSON backend is no longer supported. Please migrate to SQLite or MongoDB.', {
+        context: 'database.config',
+      });
+      // Fall through to check DATABASE_BACKEND or default
+    }
+    // Ignore 'dual' value - not supported in new system
   }
 
   const explicit = process.env.DATABASE_BACKEND?.toLowerCase();

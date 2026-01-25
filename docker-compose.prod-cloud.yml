@@ -24,8 +24,8 @@ services:
 
     # Environment variables for external services integration
     environment:
-      # Data backend configuration
-      DATA_BACKEND: mongodb
+      # Database backend configuration
+      DATABASE_BACKEND: mongodb
       MONGODB_URI: ${MONGODB_URI}
       MONGODB_DATABASE: ${MONGODB_DATABASE:-quilltap}
 
