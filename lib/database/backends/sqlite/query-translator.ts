@@ -366,9 +366,16 @@ export function translateUpdate(
     // $set - set fields to values
     if (update.$set) {
       for (const [field, value] of Object.entries(update.$set)) {
-        if (jsonColumns.has(field) || (typeof value === 'object' && value !== null)) {
+        // Handle undefined values - convert to null (SQLite doesn't accept undefined)
+        if (value === undefined) {
+          setClauses.push(`"${field}" = ?`);
+          params.push(null);
+        } else if (jsonColumns.has(field) || (typeof value === 'object' && value !== null)) {
           setClauses.push(`"${field}" = ?`);
           params.push(toJson(value));
+        } else if (typeof value === 'boolean') {
+          setClauses.push(`"${field}" = ?`);
+          params.push(value ? 1 : 0);
         } else {
           setClauses.push(`"${field}" = ?`);
           params.push(value);
@@ -431,7 +438,11 @@ export function translateUpdate(
         continue;
       }
 
-      if (jsonColumns.has(field) || (typeof value === 'object' && value !== null && !Array.isArray(value) && !(value instanceof Date))) {
+      // Handle undefined values - convert to null (SQLite doesn't accept undefined)
+      if (value === undefined) {
+        setClauses.push(`"${field}" = ?`);
+        params.push(null);
+      } else if (jsonColumns.has(field) || (typeof value === 'object' && value !== null && !Array.isArray(value) && !(value instanceof Date))) {
         setClauses.push(`"${field}" = ?`);
         params.push(toJson(value));
       } else if (Array.isArray(value)) {

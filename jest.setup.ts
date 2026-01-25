@@ -283,7 +283,7 @@ jest.mock('@/lib/file-storage/manager', () => {
     copy: jest.fn().mockResolvedValue(undefined),
     getFileMetadata: jest.fn().mockResolvedValue({ size: 1024, contentType: 'image/jpeg', lastModified: new Date() }),
     list: jest.fn().mockResolvedValue([]),
-    getProxyUrl: jest.fn().mockImplementation((key: string) => `/api/files/proxy/${key}`),
+    getProxyUrl: jest.fn().mockImplementation((key: string) => `/api/v1/files/proxy/${key}`),
   }
 
   return {
@@ -298,7 +298,7 @@ jest.mock('@/lib/file-storage/manager', () => {
       uploadFile: jest.fn().mockResolvedValue({ storageKey: 'mock-storage-key', mountPointId: 'mock-mount-point' }),
       downloadFile: jest.fn().mockResolvedValue(Buffer.from('mock file content')),
       deleteFile: jest.fn().mockResolvedValue(undefined),
-      getFileUrl: jest.fn().mockResolvedValue('http://localhost:3000/api/files/proxy/mock-key'),
+      getFileUrl: jest.fn().mockResolvedValue('http://localhost:3000/api/v1/files/proxy/mock-key'),
       fileExists: jest.fn().mockResolvedValue(true),
       buildStorageKey: jest.fn().mockImplementation((params: { userId: string; fileId: string; filename: string; projectId?: string | null; folderPath?: string }) => {
         const { userId, fileId, filename, projectId, folderPath } = params;

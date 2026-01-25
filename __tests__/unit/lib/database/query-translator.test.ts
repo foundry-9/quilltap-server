@@ -833,7 +833,8 @@ describe('SQLite Query Translator', () => {
       );
       expect(result.sql).toContain('UPDATE "users"');
       expect(result.sql).toContain('>=');
-      expect(result.params).toContain(true);
+      // Booleans are converted to 1/0 for SQLite
+      expect(result.params).toContain(1);
       expect(result.params).toContain(18);
     });
 

@@ -4,6 +4,11 @@
 
 ### 2.8-dev
 
+- fix: Multiple bug fixes for SQLite, OpenRouter tools, chat UI, and API endpoints (2026-01-25)
+  - SQLite: Handle undefined values in query-translator by converting to null (fixes "can only bind numbers, strings, bigints, buffers, and null" error)
+  - OpenRouter plugin: Bypass SDK's callModel when tools are present since SDK expects Zod schemas for inputSchema but Quilltap provides JSON Schema in parameters
+  - Chat UI: Fix message row overlap by adding isolation:isolate and proper z-index to message rows and avatar containers
+  - API: Update deprecated /api/files/ endpoints to /api/v1/files/ in AI Wizard gallery, file storage proxy URLs, and test mocks
 - fix: SQLite query for nested fields within JSON arrays (2026-01-25)
   - Fixed queries like `participants.characterId` where participants is an array of objects
   - Added `jsonArrayObjectMatch()` and `jsonArrayObjectMatchAny()` helpers for array-of-objects queries

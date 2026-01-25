@@ -707,11 +707,15 @@
 
   /**
    * Chat message row container
+   * Uses isolation: isolate to create stacking context and prevent
+   * avatars/content from overlapping between adjacent rows
    */
   .qt-chat-message-row {
     @apply flex gap-4;
     width: 90%;
     max-width: var(--qt-chat-message-row-max-width);
+    isolation: isolate;
+    position: relative;
   }
 
   .qt-chat-message-row-user {
@@ -724,10 +728,22 @@
   }
 
   /**
+   * Desktop avatar container
+   * Ensures avatar with name/title doesn't overflow into adjacent rows
+   */
+  .qt-chat-desktop-avatar {
+    @apply flex-shrink-0;
+    align-self: flex-start;
+    position: relative;
+    z-index: 0;
+  }
+
+  /**
    * Chat message body wrapper
    */
   .qt-chat-message-body {
     @apply flex-1 min-w-0 relative;
+    z-index: 1;
   }
 
   /**

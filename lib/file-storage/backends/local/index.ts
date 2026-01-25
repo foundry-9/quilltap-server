@@ -462,7 +462,7 @@ export class LocalFileStorageBackend implements FileStorageBackend {
    */
   getProxyUrl(key: string): string {
     const encodedKey = encodeURIComponent(key);
-    const proxyUrl = `/api/files/proxy/${encodedKey}`;
+    const proxyUrl = `/api/v1/files/proxy/${encodedKey}`;
     logger.debug('Generated proxy URL', {
       key,
       proxyUrl,

@@ -19423,18 +19423,14 @@ var OpenRouterProvider = class {
       maxOutputTokens: params.maxTokens ?? 4096,
       topP: params.topP ?? 1
     };
-    if (params.tools && params.tools.length > 0) {
-      logger.debug("Adding tools to stream request", {
+    const hasTools = params.tools && params.tools.length > 0;
+    if (hasTools) {
+      logger.debug("Tools present - using direct API call to bypass SDK tool conversion", {
         context: "OpenRouterProvider.streamMessage",
         toolCount: params.tools.length
       });
-      requestParams.tools = params.tools.map((tool) => ({
-        type: "function",
-        name: tool.function?.name || tool.name,
-        description: tool.function?.description || tool.description,
-        parameters: tool.function?.parameters || tool.parameters
-      }));
-      requestParams.toolChoice = "auto";
+      yield* this.streamWithTools(params, apiKey, attachmentResults);
+      return;
     }
     if (params.webSearchEnabled) {
       logger.debug("Enabling web search tool for streaming", {
@@ -19556,6 +19552,139 @@ var OpenRouterProvider = class {
       rawResponse,
       cacheUsage
     };
+  }
+  /**
+   * Stream with tools using direct API call
+   *
+   * The OpenRouter SDK's callModel expects Zod schemas for tool inputSchema,
+   * but Quilltap provides tools with JSON Schema in parameters.
+   * This method bypasses the SDK and calls the OpenRouter API directly.
+   */
+  async *streamWithTools(params, apiKey, attachmentResults) {
+    const messages = params.messages.filter((m) => m.role !== "tool").map((m) => ({
+      role: m.role,
+      content: m.content
+    }));
+    const tools = params.tools.map((tool) => ({
+      type: "function",
+      function: {
+        name: tool.function?.name || tool.name,
+        description: tool.function?.description || tool.description,
+        parameters: tool.function?.parameters || tool.parameters
+      }
+    }));
+    const body = {
+      model: params.model,
+      messages,
+      tools,
+      tool_choice: "auto",
+      stream: true,
+      temperature: params.temperature ?? 0.7,
+      max_tokens: params.maxTokens ?? 4096,
+      top_p: params.topP ?? 1
+    };
+    if (params.webSearchEnabled) {
+      body.tools.push({ type: "web_search_preview" });
+    }
+    const profileParams = params.profileParameters;
+    if (profileParams?.fallbackModels?.length) {
+      body.route = "fallback";
+    }
+    try {
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+          "HTTP-Referer": process.env.BASE_URL || "http://localhost:3000",
+          "X-Title": "Quilltap"
+        },
+        body: JSON.stringify(body)
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        logger.error("OpenRouter API error", {
+          context: "OpenRouterProvider.streamWithTools",
+          status: response.status,
+          error: errorText
+        });
+        throw new Error(`OpenRouter API error: ${response.status} - ${errorText}`);
+      }
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error("No response body");
+      }
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let usage;
+      let toolCalls = [];
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const data = line.slice(6);
+          if (data === "[DONE]") continue;
+          try {
+            const chunk = JSON.parse(data);
+            const choice = chunk.choices?.[0];
+            if (choice?.delta?.content) {
+              yield {
+                content: choice.delta.content,
+                done: false
+              };
+            }
+            if (choice?.delta?.tool_calls) {
+              for (const tc of choice.delta.tool_calls) {
+                const idx = tc.index;
+                if (!toolCalls[idx]) {
+                  toolCalls[idx] = {
+                    id: tc.id || "",
+                    type: "function",
+                    function: { name: "", arguments: "" }
+                  };
+                }
+                if (tc.id) toolCalls[idx].id = tc.id;
+                if (tc.function?.name) toolCalls[idx].function.name += tc.function.name;
+                if (tc.function?.arguments) toolCalls[idx].function.arguments += tc.function.arguments;
+              }
+            }
+            if (chunk.usage) {
+              usage = {
+                promptTokens: chunk.usage.prompt_tokens ?? 0,
+                completionTokens: chunk.usage.completion_tokens ?? 0,
+                totalTokens: chunk.usage.total_tokens ?? 0
+              };
+            }
+          } catch (e) {
+          }
+        }
+      }
+      const rawResponse = {
+        choices: [{
+          finishReason: toolCalls.length > 0 ? "tool_calls" : "stop",
+          delta: {
+            toolCalls: toolCalls.length > 0 ? toolCalls : void 0
+          }
+        }],
+        usage
+      };
+      yield {
+        content: "",
+        done: true,
+        usage,
+        attachmentResults,
+        rawResponse
+      };
+    } catch (error) {
+      logger.error("Error in streamWithTools", {
+        context: "OpenRouterProvider.streamWithTools"
+      }, error instanceof Error ? error : void 0);
+      throw error;
+    }
   }
   async validateApiKey(apiKey) {
     try {
