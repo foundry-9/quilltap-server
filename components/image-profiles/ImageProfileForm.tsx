@@ -27,6 +27,7 @@ interface ImageProviderInfo {
   label: string
   defaultModels: string[]
   apiKeyProvider: string
+  legacyNames?: string[]
 }
 
 interface ImageProfileFormProps {
@@ -40,8 +41,27 @@ interface ImageProfileFormProps {
 const FALLBACK_PROVIDERS: ImageProviderInfo[] = [
   { value: 'OPENAI', label: 'OpenAI (DALL-E / GPT Image)', defaultModels: ['gpt-image-1', 'dall-e-3', 'dall-e-2'], apiKeyProvider: 'OPENAI' },
   { value: 'GROK', label: 'Grok (xAI)', defaultModels: ['grok-2-image'], apiKeyProvider: 'GROK' },
-  { value: 'GOOGLE_IMAGEN', label: 'Google Imagen', defaultModels: ['imagen-4.0-generate-001', 'imagen-3.0-generate-002', 'imagen-3.0-fast-generate-001'], apiKeyProvider: 'GOOGLE' },
+  { value: 'GOOGLE', label: 'Google Gemini', defaultModels: ['imagen-4.0-generate-001', 'imagen-3.0-generate-002', 'imagen-3.0-fast-generate-001'], apiKeyProvider: 'GOOGLE', legacyNames: ['GOOGLE_IMAGEN'] },
 ]
+
+// Build a legacy name mapping from provider data
+function buildLegacyNameMap(providers: ImageProviderInfo[]): Record<string, string> {
+  const map: Record<string, string> = {}
+  for (const provider of providers) {
+    if (provider.legacyNames) {
+      for (const legacyName of provider.legacyNames) {
+        map[legacyName] = provider.value
+      }
+    }
+  }
+  return map
+}
+
+// Normalize a provider name using the provider list, converting legacy names to current names
+function normalizeProviderName(provider: string, providers: ImageProviderInfo[]): string {
+  const legacyMap = buildLegacyNameMap(providers)
+  return legacyMap[provider] || provider
+}
 
 export function ImageProfileForm({
   profile,
@@ -51,6 +71,7 @@ export function ImageProfileForm({
 }: ImageProfileFormProps) {
   const [formData, setFormData] = useState({
     name: profile?.name || '',
+    // Provider will be normalized after providers are loaded
     provider: profile?.provider || 'OPENAI',
     apiKeyId: profile?.apiKeyId || '',
     baseUrl: profile?.baseUrl || '',
@@ -92,14 +113,26 @@ export function ImageProfileForm({
     fetchProviders()
   }, [])
 
+  // Normalize legacy provider names after providers are loaded
+  useEffect(() => {
+    if (!isFetchingProviders && formData.provider) {
+      const normalizedProvider = normalizeProviderName(formData.provider, imageProviders)
+      if (normalizedProvider !== formData.provider) {
+        setFormData(prev => ({ ...prev, provider: normalizedProvider }))
+      }
+    }
+  }, [isFetchingProviders, imageProviders]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Fetch available models when provider or API key changes
   useEffect(() => {
     const fetchModels = async () => {
       try {
         setIsFetchingModels(true)
+        // Normalize provider name for API calls (e.g., GOOGLE_IMAGEN -> GOOGLE)
+        const normalizedProvider = normalizeProviderName(formData.provider, imageProviders)
         const url = new URL('/api/v1/image-profiles', window.location.origin)
         url.searchParams.set('action', 'list-models')
-        url.searchParams.set('provider', formData.provider)
+        url.searchParams.set('provider', normalizedProvider)
         if (formData.apiKeyId) {
           url.searchParams.set('apiKeyId', formData.apiKeyId)
         }
@@ -110,12 +143,13 @@ export function ImageProfileForm({
           setAvailableModels(data.models)
         } else {
           // Fall back to default models from provider info
-          const providerInfo = imageProviders.find(p => p.value === formData.provider)
+          const providerInfo = imageProviders.find(p => p.value === normalizedProvider || p.value === formData.provider)
           setAvailableModels(providerInfo?.defaultModels || [])
         }
       } catch (err) {
         // Fall back to default models on error
-        const providerInfo = imageProviders.find(p => p.value === formData.provider)
+        const normalizedProvider = normalizeProviderName(formData.provider, imageProviders)
+        const providerInfo = imageProviders.find(p => p.value === normalizedProvider || p.value === formData.provider)
         setAvailableModels(providerInfo?.defaultModels || [])
       } finally {
         setIsFetchingModels(false)
@@ -240,15 +274,16 @@ export function ImageProfileForm({
   }
 
   const getAvailableApiKeys = () => {
-    const providerInfo = imageProviders.find(p => p.value === formData.provider)
-    const expectedKeyProvider = providerInfo?.apiKeyProvider || formData.provider
+    // Normalize the provider name to handle legacy values like GOOGLE_IMAGEN -> GOOGLE
+    const normalizedProvider = normalizeProviderName(formData.provider, imageProviders)
+    const providerInfo = imageProviders.find(p => p.value === normalizedProvider || p.value === formData.provider)
+    const expectedKeyProvider = providerInfo?.apiKeyProvider || normalizedProvider
 
     return apiKeys.filter(key => {
       // Match API keys by the provider's expected key provider
-      // (e.g., GOOGLE_IMAGEN uses GOOGLE keys)
       if (key.provider === expectedKeyProvider) return true
-      // Also accept keys that exactly match the provider name
-      if (key.provider === formData.provider) return true
+      // Also accept keys that match the normalized provider name
+      if (key.provider === normalizedProvider) return true
       return false
     })
   }

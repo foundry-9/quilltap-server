@@ -52,6 +52,12 @@ const updateCharacterSchema = z.object({
     .or(
       z.literal('').transform(() => undefined)
     ),
+  defaultImageProfileId: z.uuid()
+    .optional()
+    .or(
+      z.literal('').transform(() => undefined)
+    )
+    .nullable(),
   controlledBy: z.enum(['llm', 'user']).optional(),
   npc: z.boolean().optional(),
 });

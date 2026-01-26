@@ -236,6 +236,8 @@ async function handleListProviders(req: NextRequest, context: AuthenticatedConte
           defaultModels,
           // Use the provider name as the API key provider (API keys are registered under provider names)
           apiKeyProvider: p.metadata.providerName,
+          // Include legacy names for backward compatibility
+          legacyNames: p.metadata.legacyNames || [],
         };
       });return successResponse({
       providers: imageProviders,

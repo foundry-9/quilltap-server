@@ -38,6 +38,8 @@ const metadata = {
     icon: 'text-blue-600',
   },
   abbreviation: 'GGL',
+  // Legacy provider names that map to this provider for backward compatibility
+  legacyNames: ['GOOGLE_IMAGEN'] as string[],
 } as const;
 
 /**

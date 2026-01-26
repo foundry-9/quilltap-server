@@ -14,9 +14,10 @@ interface ProfilesTabProps {
   defaultImageProfileId: string
   savingConnectionProfile: boolean
   savingPartner: boolean
+  savingImageProfile?: boolean
   onConnectionProfileChange: (profileId: string) => void
   onPartnerChange: (partnerId: string) => void
-  onImageProfileChange: (profileId: string | null | undefined) => void
+  onImageProfileChange: (profileId: string | null) => void
 }
 
 export function ProfilesTab({
@@ -28,6 +29,7 @@ export function ProfilesTab({
   defaultImageProfileId,
   savingConnectionProfile,
   savingPartner,
+  savingImageProfile,
   onConnectionProfileChange,
   onPartnerChange,
   onImageProfileChange,
@@ -128,11 +130,22 @@ export function ProfilesTab({
         <p className="qt-text-small mb-4">
           The default image generation profile for creating images during chats. Optional.
         </p>
-        <ImageProfilePicker
-          value={defaultImageProfileId || null}
-          onChange={(profileId) => onImageProfileChange(profileId || null)}
-          characterId={characterId}
-        />
+        <div className="flex items-center gap-3">
+          <div className="flex-1">
+            <ImageProfilePicker
+              value={defaultImageProfileId || null}
+              onChange={(profileId) => onImageProfileChange(profileId || null)}
+              characterId={characterId}
+              disabled={savingImageProfile}
+            />
+          </div>
+          {savingImageProfile && (
+            <div className="flex items-center gap-2 qt-text-small">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-r-transparent"></div>
+              Saving...
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

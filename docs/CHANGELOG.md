@@ -4,6 +4,16 @@
 
 ### 2.8-dev
 
+- fix: Google API keys now appear in image profile form when selecting Google Gemini provider (2026-01-26)
+  - Added `legacyNames` field to ProviderMetadata interface for backward compatibility
+  - Plugins can now declare legacy provider names that should be treated as aliases
+  - Google plugin declares `GOOGLE_IMAGEN` as a legacy name for `GOOGLE`
+  - Image profile form dynamically builds legacy name mapping from provider data
+  - Existing image profiles with `GOOGLE_IMAGEN` provider are automatically normalized to `GOOGLE`
+- fix: Character's default Image Generation Profile now saves to database (2026-01-26)
+  - Added `defaultImageProfileId` column to characters table via migration
+  - Updated Character schema and API validation to include the field
+  - Image profile selection on character profiles tab now persists across page loads
 - fix: API key creation modal now properly closes and refreshes list after successful creation (2026-01-26)
   - API response was not wrapped in `{ apiKey: ... }` as the client expected
   - Modal would hang after clicking Create because response parsing failed silently

@@ -8670,7 +8670,9 @@ var metadata = {
     text: "text-blue-800",
     icon: "text-blue-600"
   },
-  abbreviation: "GGL"
+  abbreviation: "GGL",
+  // Legacy provider names that map to this provider for backward compatibility
+  legacyNames: ["GOOGLE_IMAGEN"]
 };
 var config = {
   requiresApiKey: true,

@@ -37,6 +37,8 @@ import { createFolderEntitiesMigration } from './create-folder-entities';
 import { removeAuthTablesMigration } from './remove-auth-tables';
 // Re-encrypt API keys after single-user migration
 import { reencryptApiKeysMigration } from './reencrypt-api-keys';
+// Add defaultImageProfileId to characters
+import { addDefaultImageProfileFieldMigration } from './add-default-image-profile-field';
 
 /**
  * All available migrations.
@@ -69,6 +71,8 @@ export const migrations: Migration[] = [
   removeAuthTablesMigration,
   // Re-encrypt API keys after single-user migration
   reencryptApiKeysMigration,
+  // Add defaultImageProfileId to characters
+  addDefaultImageProfileFieldMigration,
 ];
 
 export {
@@ -96,4 +100,6 @@ export {
   removeAuthTablesMigration,
   // Re-encrypt API keys after single-user migration
   reencryptApiKeysMigration,
+  // Add defaultImageProfileId to characters
+  addDefaultImageProfileFieldMigration,
 };

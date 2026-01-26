@@ -40,9 +40,9 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   const [scenario, setScenario] = useState<string>('')
   const [timestampConfig, setTimestampConfig] = useState<TimestampConfig | null>(null)
   const [openedFromQuery, setOpenedFromQuery] = useState(false)
-  const [defaultImageProfileId, setDefaultImageProfileId] = useState<string>('')
   const [savingConnectionProfile, setSavingConnectionProfile] = useState(false)
   const [savingPartner, setSavingPartner] = useState(false)
+  const [savingImageProfile, setSavingImageProfile] = useState(false)
 
   const {
     loading,
@@ -52,6 +52,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     userControlledCharacters,
     defaultPartnerId,
     defaultPartnerName,
+    defaultImageProfileId,
     avatarRefreshKey,
     templateCounts,
     replacingTemplate,
@@ -64,6 +65,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     handleTemplateReplace,
     handleSaveConnectionProfile,
     handleSaveDefaultPartner,
+    handleSaveImageProfile,
     handleToggleNpc,
     handleToggleFavorite,
     handleToggleControlledBy,
@@ -155,6 +157,15 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     }
   }
 
+  const handleImageProfileSave = async (profileId: string | null) => {
+    setSavingImageProfile(true)
+    try {
+      await handleSaveImageProfile(profileId)
+    } finally {
+      setSavingImageProfile(false)
+    }
+  }
+
   const renderTabContent = (activeTab: string) => {
     switch (activeTab) {
       case 'details':
@@ -203,9 +214,10 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
             defaultImageProfileId={defaultImageProfileId}
             savingConnectionProfile={savingConnectionProfile}
             savingPartner={savingPartner}
+            savingImageProfile={savingImageProfile}
             onConnectionProfileChange={handleConnectionProfileSave}
             onPartnerChange={handlePartnerSave}
-            onImageProfileChange={(profileId) => setDefaultImageProfileId(profileId || '')}
+            onImageProfileChange={handleImageProfileSave}
           />
         )
 

@@ -61,6 +61,7 @@ export const SQLITE_TABLES = [
       "defaultConnectionProfileId" TEXT,
       "defaultPartnerId" TEXT,
       "defaultRoleplayTemplateId" TEXT,
+      "defaultImageProfileId" TEXT,
       "sillyTavernData" TEXT,
       "isFavorite" INTEGER DEFAULT 0,
       "npc" INTEGER DEFAULT 0,
