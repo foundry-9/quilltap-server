@@ -1,9 +1,9 @@
 /**
- * Authentication Middleware
+ * Authentication Middleware (Single-User Mode)
  *
- * Provides a reusable authentication wrapper for API routes.
- * Extracts the common pattern of session verification, user lookup,
- * and repository initialization used across 100+ routes.
+ * Provides a reusable wrapper for API routes in single-user mode.
+ * Since Quilltap operates in single-user mode only, authentication
+ * always succeeds with the single user.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -62,101 +62,59 @@ export type AuthenticatedParamsHandler<P = Record<string, string>, T = NextRespo
 /**
  * Wrap an API route handler with authentication
  *
- * This extracts the common pattern from 100+ routes:
- * 1. Get server session
- * 2. Check for valid session/user ID
- * 3. Get repositories
- * 4. Look up user
- * 5. Verify user exists
- *
- * @example
- * ```ts
- * // Before (repeated in every route):
- * export async function GET(req: NextRequest) {
- *   const session = await getServerSession();
- *   if (!session?.user?.id) {
- *     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
- *   }
- *   const repos = await getRepositoriesSafe();
- *   const user = await repos.users.findById(session.user.id);
- *   if (!user) {
- *     return NextResponse.json({ error: 'User not found' }, { status: 404 });
- *   }
- *   // ... actual handler logic
- * }
- *
- * // After:
- * export async function GET(req: NextRequest) {
- *   return withAuth(async (request, { user, repos, session }) => {
- *     // ... actual handler logic
- *   });
- * }
- * ```
+ * In single-user mode, this always succeeds with the single user.
+ * Handles server readiness and user lookup.
  */
 export async function withAuth<T>(
   handler: AuthenticatedHandler<T>
 ): Promise<T | NextResponse> {
-  // Ensure server is fully ready (plugins loaded, etc.)
   await ensureServerReady();
 
   const session = await getServerSession();
 
   if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    authLogger.error('Failed to get single user session');
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 
   const repos = await getRepositoriesSafe();
   const user = await repos.users.findById(session.user.id);
 
   if (!user) {
-    authLogger.warn('User not found for session', { userId: session.user.id });
-    return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    authLogger.warn('Single user not found, this should not happen', { userId: session.user.id });
+    return NextResponse.json({ error: 'User not found' }, { status: 500 });
   }
+
   return handler({} as NextRequest, { user, repos, session });
 }
 
 /**
- * Create an authenticated handler wrapper for routes with params
+ * Wrap an API route handler with authentication and params
  *
- * This is useful for routes like /api/characters/[id] that need
- * to access route parameters.
- *
- * @example
- * ```ts
- * // For routes with params like /api/characters/[id]
- * export async function GET(
- *   req: NextRequest,
- *   { params }: { params: Promise<{ id: string }> }
- * ) {
- *   const { id } = await params;
- *   return withAuthParams(req, { id }, async (request, { user, repos }, { id }) => {
- *     const character = await repos.characters.findById(id);
- *     // ... handle character
- *   });
- * }
- * ```
+ * In single-user mode, this always succeeds with the single user.
  */
 export async function withAuthParams<P extends Record<string, string>, T>(
   request: NextRequest,
   params: P,
   handler: AuthenticatedParamsHandler<P, T>
 ): Promise<T | NextResponse> {
-  // Ensure server is fully ready (plugins loaded, etc.)
   await ensureServerReady();
 
   const session = await getServerSession();
 
   if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    authLogger.error('Failed to get single user session');
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 
   const repos = await getRepositoriesSafe();
   const user = await repos.users.findById(session.user.id);
 
   if (!user) {
-    authLogger.warn('User not found for session', { userId: session.user.id });
-    return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    authLogger.warn('Single user not found, this should not happen', { userId: session.user.id });
+    return NextResponse.json({ error: 'User not found' }, { status: 500 });
   }
+
   return handler(request, { user, repos, session }, params);
 }
 
@@ -164,15 +122,7 @@ export async function withAuthParams<P extends Record<string, string>, T>(
  * Higher-order function to create an authenticated route handler
  *
  * Creates a complete route handler that can be directly exported.
- * Handles the request object properly.
- *
- * @example
- * ```ts
- * export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
- *   const characters = await repos.characters.findByUserId(user.id);
- *   return NextResponse.json({ characters });
- * });
- * ```
+ * In single-user mode, always returns the single user context.
  */
 export function createAuthenticatedHandler(
   handler: (
@@ -181,22 +131,23 @@ export function createAuthenticatedHandler(
   ) => Promise<NextResponse>
 ): (request: NextRequest) => Promise<NextResponse> {
   return async (request: NextRequest) => {
-    // Ensure server is fully ready (plugins loaded, etc.)
     await ensureServerReady();
 
     const session = await getServerSession();
 
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      authLogger.error('Failed to get single user session');
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 
     const repos = await getRepositoriesSafe();
     const user = await repos.users.findById(session.user.id);
 
     if (!user) {
-      authLogger.warn('User not found for session', { userId: session.user.id });
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      authLogger.warn('Single user not found, this should not happen', { userId: session.user.id });
+      return NextResponse.json({ error: 'User not found' }, { status: 500 });
     }
+
     return handler(request, { user, repos, session });
   };
 }
@@ -206,19 +157,6 @@ export function createAuthenticatedHandler(
  *
  * Creates a complete route handler that can be directly exported for routes
  * with dynamic parameters like [id].
- *
- * @example
- * ```ts
- * export const GET = createAuthenticatedParamsHandler<{ id: string }>(
- *   async (req, { user, repos }, { id }) => {
- *     const character = await repos.characters.findById(id);
- *     if (!character || character.userId !== user.id) {
- *       return NextResponse.json({ error: 'Not found' }, { status: 404 });
- *     }
- *     return NextResponse.json({ character });
- *   }
- * );
- * ```
  */
 export function createAuthenticatedParamsHandler<P extends Record<string, string>>(
   handler: (
@@ -231,23 +169,24 @@ export function createAuthenticatedParamsHandler<P extends Record<string, string
   context: { params: Promise<P> }
 ) => Promise<NextResponse> {
   return async (request: NextRequest, context: { params: Promise<P> }) => {
-    // Ensure server is fully ready (plugins loaded, etc.)
     await ensureServerReady();
 
     const params = await context.params;
     const session = await getServerSession();
 
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      authLogger.error('Failed to get single user session');
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 
     const repos = await getRepositoriesSafe();
     const user = await repos.users.findById(session.user.id);
 
     if (!user) {
-      authLogger.warn('User not found for session', { userId: session.user.id });
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      authLogger.warn('Single user not found, this should not happen', { userId: session.user.id });
+      return NextResponse.json({ error: 'User not found' }, { status: 500 });
     }
+
     return handler(request, { user, repos, session }, params);
   };
 }
@@ -256,14 +195,6 @@ export function createAuthenticatedParamsHandler<P extends Record<string, string
  * Check ownership of a resource
  *
  * Common pattern for verifying a resource belongs to the current user.
- *
- * @example
- * ```ts
- * const character = await repos.characters.findById(id);
- * if (!checkOwnership(character, user.id)) {
- *   return NextResponse.json({ error: 'Not found' }, { status: 404 });
- * }
- * ```
  */
 export function checkOwnership<T extends { userId?: string }>(
   resource: T | null | undefined,

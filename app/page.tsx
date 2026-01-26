@@ -1,7 +1,5 @@
-import Link from "next/link";
 import { getServerSession } from "@/lib/auth/session";
 import { getRepositories } from "@/lib/repositories/factory";
-import { BrandLogo } from "@/components/ui/brand-logo";
 import { getFilePath } from "@/lib/api/middleware/file-path";
 import {
   WelcomeSection,
@@ -24,42 +22,8 @@ export const revalidate = 0;
 export default async function Home() {
   const session = await getServerSession();
 
-  // Show landing page for unauthenticated users
-  if (!session) {
-    return (
-      <main className="qt-auth-page p-24">
-        <div className="text-center">
-          <h1 className="text-white mb-4 flex flex-col items-center">
-            <span className="sr-only">Welcome to Quilltap</span>
-            <span className="text-2xl font-medium mb-2 qt-font-brand">Welcome to</span>
-            <BrandLogo size="xl" />
-          </h1>
-          <p className="text-xl mb-8 qt-font-brand">
-            AI-powered roleplay chat platform with multi-provider support
-          </p>
-          <div className="flex gap-4 justify-center">
-            <Link
-              href="/auth/signin"
-              className="qt-button qt-button-primary qt-button-lg shadow-lg"
-            >
-              Get Started
-            </Link>
-            <a
-              href="https://github.com/foundry-9/quilltap"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="qt-button qt-button-secondary qt-button-lg shadow-lg"
-            >
-              Learn More
-            </a>
-          </div>
-        </div>
-      </main>
-    );
-  }
-
-  // Authenticated user home page
-  const userId = session.user?.id;
+  // In single-user mode, session is always available
+  const userId = session?.user?.id;
   const repos = getRepositories();
 
   // Get the user from the repository
@@ -286,7 +250,7 @@ export default async function Home() {
     })
   );
 
-  const displayName = user?.name || session.user?.name || 'there';
+  const displayName = user?.name || session?.user?.name || 'there';
 
   return (
     <div className="qt-homepage-container">

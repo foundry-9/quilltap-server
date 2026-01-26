@@ -50,31 +50,11 @@ export type {
 } from './common.types';
 
 // ============================================================================
-// AUTHENTICATION TYPES
+// USER TYPES (Single-User Mode)
 // ============================================================================
-export {
-  TOTPSecretSchema,
-  BackupCodesSchema,
-  TOTPAttemptsSchema,
-  TrustedDeviceSchema,
-  UserSchema,
-  AccountSchema,
-  SessionSchema,
-  VerificationTokenSchema,
-  AuthAccountsSchema,
-} from './auth.types';
+export { UserSchema } from './auth.types';
 
-export type {
-  TOTPSecret,
-  BackupCodes,
-  TOTPAttempts,
-  TrustedDevice,
-  User,
-  Account,
-  Session,
-  VerificationToken,
-  AuthAccounts,
-} from './auth.types';
+export type { User } from './auth.types';
 
 // ============================================================================
 // SETTINGS TYPES

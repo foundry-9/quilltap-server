@@ -108,11 +108,6 @@ export const RATE_LIMITS = {
     maxRequests: parseInt(process.env.RATE_LIMIT_API_MAX || '100'),
     windowSeconds: parseInt(process.env.RATE_LIMIT_API_WINDOW || '10'),
   },
-  // Authentication: 5 attempts per minute
-  auth: {
-    maxRequests: parseInt(process.env.RATE_LIMIT_AUTH_MAX || '5'),
-    windowSeconds: parseInt(process.env.RATE_LIMIT_AUTH_WINDOW || '60'),
-  },
   // Chat message streaming: 20 messages per minute
   chat: {
     maxRequests: parseInt(process.env.RATE_LIMIT_CHAT_MAX || '20'),

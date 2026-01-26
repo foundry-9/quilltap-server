@@ -97,7 +97,7 @@ describe('POST /api/v1/images?action=generate', () => {
     consoleErrorSpy.mockRestore()
   })
 
-  it('should return 401 if user is not authenticated', async () => {
+  it('should return 500 when session fails (should not happen in single-user mode)', async () => {
     mockGetServerSession.mockResolvedValueOnce(null)
 
     const request = createMockRequest({
@@ -106,7 +106,7 @@ describe('POST /api/v1/images?action=generate', () => {
     })
 
     const response = await POST(request)
-    expect(response.status).toBe(401)
+    expect(response.status).toBe(500)
   })
 
   it('should return 400 if validation fails', async () => {

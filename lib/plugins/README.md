@@ -105,7 +105,7 @@ Plugins declare their capabilities using the `capabilities` array. Available cap
 - `UI_COMPONENTS` - Provides React components
 - `DATA_STORAGE` - Adds database tables/storage
 - `API_ROUTES` - Adds new API endpoints
-- `AUTH_METHODS` - Provides authentication methods
+- `AUTH_METHODS` - ~~Authentication methods~~ (deprecated, single-user mode only)
 - `WEBHOOKS` - Handles webhooks
 - `BACKGROUND_TASKS` - Runs background jobs
 - `CUSTOM_MODELS` - Adds new data models

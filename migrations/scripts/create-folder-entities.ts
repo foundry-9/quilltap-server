@@ -19,7 +19,7 @@ import { logger } from '../lib/logger';
 export const createFolderEntitiesMigration: Migration = {
   id: 'create-folder-entities-v1',
   description: 'Create folder_entities table for folder management (SQLite only - no-op)',
-  introducedInVersion: '2.9.0',
+  introducedInVersion: '2.8.0',
   dependsOn: [],
 
   async shouldRun(): Promise<boolean> {

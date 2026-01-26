@@ -11,8 +11,6 @@ import { scanPlugins, isPluginCompatible, validatePluginSecurity } from '@/lib/p
 import { pluginRegistry } from '@/lib/plugins/registry';
 import { registerPluginRoutes, getPluginRouteRegistry, pluginRouteRegistry } from '@/lib/plugins/route-loader';
 import { initializeProviderRegistry } from '@/lib/plugins/provider-registry';
-import { registerArcticProvider, clearArcticProviders } from '@/lib/auth/arctic/registry';
-import type { ArcticProviderPlugin } from '@/lib/auth/arctic/types';
 import { initializeThemeRegistry, themeRegistry } from '@/lib/themes/theme-registry';
 import { initializeRoleplayTemplateRegistry, roleplayTemplateRegistry } from '@/lib/plugins/roleplay-template-registry';
 import { initializeToolRegistry, toolRegistry } from '@/lib/plugins/tool-registry';
@@ -266,54 +264,7 @@ async function performInitialization(): Promise<PluginInitializationResult> {
       }
     }
 
-    // Initialize Arctic auth provider registry from enabled plugins with AUTH_METHODS capability
-    clearArcticProviders(); // Clear any previous registrations
-    const authPlugins = pluginRegistry.getEnabledByCapability('AUTH_METHODS');
-    if (authPlugins.length > 0) {
-      for (const loadedPlugin of authPlugins) {
-        try {
-          const mainFile = loadedPlugin.manifest.main || 'index.js';
-          const modulePath = resolve(process.cwd(), loadedPlugin.pluginPath, mainFile);
-          // Use require() to load the compiled JavaScript module
-          const pluginModule = dynamicRequire(modulePath);
-
-          // Auth plugins export config, isConfigured, getConfigStatus, createArcticProvider, fetchUserInfo, getScopes
-          const authPlugin = (pluginModule?.default || pluginModule) as ArcticProviderPlugin | undefined;
-
-          if (
-            authPlugin &&
-            typeof authPlugin.config === 'object' &&
-            typeof authPlugin.isConfigured === 'function' &&
-            typeof authPlugin.getConfigStatus === 'function' &&
-            typeof authPlugin.createArcticProvider === 'function' &&
-            typeof authPlugin.fetchUserInfo === 'function' &&
-            typeof authPlugin.getScopes === 'function'
-          ) {
-            registerArcticProvider(authPlugin);
-          } else {
-            logger.warn('Arctic auth provider plugin missing required exports', {
-              plugin: loadedPlugin.manifest.name,
-              hasConfig: typeof authPlugin?.config === 'object',
-              hasIsConfigured: typeof authPlugin?.isConfigured === 'function',
-              hasGetConfigStatus: typeof authPlugin?.getConfigStatus === 'function',
-              hasCreateArcticProvider: typeof authPlugin?.createArcticProvider === 'function',
-              hasFetchUserInfo: typeof authPlugin?.fetchUserInfo === 'function',
-              hasGetScopes: typeof authPlugin?.getScopes === 'function',
-            });
-          }
-        } catch (error) {
-          logger.error('Failed to load Arctic auth provider plugin module', {
-            plugin: loadedPlugin.manifest.name,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
-      }
-
-      const loadedAuthPlugins = authPlugins.length;
-      logger.info('Arctic auth provider plugins initialized', {
-        total: loadedAuthPlugins,
-      });
-    }
+    // Note: AUTH_METHODS plugins are no longer supported (single-user mode only)
 
     // Initialize theme registry from enabled plugins with THEME capability
     // First, load module-based themes (self-contained) via dynamic require

@@ -7,7 +7,7 @@ A self-hosted AI chat platform that puts you in control. Connect to any LLM prov
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.8.0--dev.30-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.8.0--dev.31-yellow.svg)](package.json)
 
 ## Why Quilltap?
 
@@ -108,10 +108,9 @@ Create images directly within conversations:
 
 ### Security
 
-- **Encrypted API keys**: AES-256-GCM encryption with per-user keys
-- **Flexible auth**: Local accounts, Google OAuth, or no-auth for private installs
-- **TOTP 2FA**: Optional two-factor authentication
-- **Per-user storage**: Files isolated by user in S3
+- **Encrypted API keys**: AES-256-GCM encryption
+- **Single-user mode**: Designed for private/local deployments
+- **Per-user storage**: Files organized in S3-compatible storage
 
 ## Getting Started
 
@@ -154,16 +153,10 @@ Create `.env.local` with these essential settings:
 ```env
 # Required
 BASE_URL="https://localhost:3000"
-JWT_SECRET="your-jwt-secret"
 ENCRYPTION_MASTER_PEPPER="your-encryption-pepper"
 
 # S3 Storage (embedded MinIO is default)
 S3_MODE="embedded"
-
-# Authentication (optional)
-AUTH_DISABLED="false"  # Set to "true" for local single-user mode
-GOOGLE_CLIENT_ID=""    # For Google OAuth
-GOOGLE_CLIENT_SECRET=""
 
 # Plugins
 SITE_PLUGINS_ENABLED="all"  # Or comma-separated plugin IDs
@@ -214,7 +207,6 @@ Quilltap uses plugins for extensibility:
 - **Themes**: Custom visual styles
 - **Templates**: Roleplay formatting templates
 - **Tools**: Custom LLM tools
-- **Auth**: Additional OAuth providers
 - **Storage**: File storage backends
 
 ### Installing Plugins
@@ -251,9 +243,8 @@ NPM packages for plugin development:
 
 - **Framework**: Next.js 16 (App Router) with React 19
 - **Language**: TypeScript 5.6
-- **Database**: MongoDB 7+
+- **Database**: SQLite (zero external dependencies)
 - **File Storage**: S3-compatible (MinIO, AWS S3, Cloudflare R2)
-- **Authentication**: Arctic OAuth + custom JWT sessions
 - **Encryption**: AES-256-GCM
 - **Styling**: Tailwind CSS 4.1
 - **Container**: Docker + Docker Compose
@@ -265,14 +256,8 @@ NPM packages for plugin development:
 
 - Check Docker is running: `docker ps`
 - Check logs: `docker-compose logs -f app`
-- Verify MongoDB is accessible
 - Ensure port 3000 isn't in use
-
-### Authentication issues
-
-- Verify OAuth credentials match redirect URI
 - Check `BASE_URL` matches your actual URL
-- Verify `JWT_SECRET` is set
 
 ### Files not displaying
 
@@ -327,11 +312,9 @@ Built with these excellent open source projects:
 - [OpenRouter SDK](https://github.com/openrouter/sdk) - Multi-provider API
 - [Model Context Protocol SDK](https://github.com/modelcontextprotocol/sdk) - MCP client
 
-### Authentication
+### Security
 
-- [Arctic](https://arcticjs.dev/) - OAuth 2.0 library
-- [jose](https://github.com/panva/jose) - JWT implementation
-- [bcrypt](https://github.com/kelektiv/node.bcrypt.js) - Password hashing
+- [bcrypt](https://github.com/kelektiv/node.bcrypt.js) - Password hashing for sync API keys
 
 ### UI & Rendering
 

@@ -1,18 +1,19 @@
 'use client'
 
 /**
- * User Menu Component
+ * User Menu Component (Single-User Mode)
  *
  * Dropdown menu for user-related actions including:
  * - User info display
  * - Theme selection (submenu)
  * - Quick-hide tag management (submenu)
- * - Sign out
+ *
+ * Note: Sign out is not available in single-user mode.
  *
  * @module components/dashboard/nav-user-menu
  */
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTheme } from '@/components/providers/theme-provider'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
@@ -49,30 +50,8 @@ function ProfileIcon({ className }: { className?: string }) {
   )
 }
 
-/**
- * Sign out icon (door with arrow)
- */
-function SignOutIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-      <polyline points="16 17 21 12 16 7" />
-      <line x1="21" y1="12" x2="9" y2="12" />
-    </svg>
-  )
-}
-
 export function NavUserMenu({ user }: NavUserMenuProps) {
   const [isOpen, setIsOpen] = useState(false)
-  const [authDisabled, setAuthDisabled] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
 
@@ -81,20 +60,6 @@ export function NavUserMenu({ user }: NavUserMenuProps) {
 
   const hasAnyHidden = hiddenTagIds.size > 0
   const hasQuickHideTags = quickHideTags.length > 0
-
-  // Check if auth is disabled (no point showing sign out if auto-logged in)
-  useEffect(() => {
-    fetch('/api/v1/auth/status')
-      .then(res => res.json())
-      .then(data => {
-        if (data.authDisabled) {
-          setAuthDisabled(true)
-        }
-      })
-      .catch(() => {
-        // Ignore errors, default to showing sign out
-      })
-  }, [])
 
   // Close menu when clicking outside or pressing escape
   useClickOutside(menuRef, () => setIsOpen(false), {
@@ -109,20 +74,6 @@ export function NavUserMenu({ user }: NavUserMenuProps) {
   const handleProfileClick = () => {
     setIsOpen(false)
     router.push('/profile')
-  }
-
-  const handleSignOut = async () => {
-    try {
-      await fetch('/api/v1/auth/logout', {
-        method: 'POST',
-        credentials: 'include',
-      })
-      router.push('/')
-    } catch (error) {
-      console.error('Sign out failed', error)
-      // Still redirect even if logout fails - cookie will expire anyway
-      router.push('/')
-    }
   }
 
   const handleThemeSelected = () => {
@@ -143,7 +94,7 @@ export function NavUserMenu({ user }: NavUserMenuProps) {
         {user.image ? (
           // Using img instead of Image because the avatar comes from /api/files
           // which requires auth cookies that Next.js Image optimization can't include
-           
+
           <img
             src={user.image}
             alt={user.name || 'User'}
@@ -210,21 +161,6 @@ export function NavUserMenu({ user }: NavUserMenuProps) {
                 submenuContent={<NavUserMenuQuickHideContent />}
                 isActive={hasAnyHidden}
                 testId="user-menu-quick-hide"
-              />
-            )}
-
-            {/* Show divider before sign out (Profile is always above, so always show when sign out is shown) */}
-            {!authDisabled && (
-              <div className="qt-navbar-dropdown-divider" />
-            )}
-
-            {/* Sign Out - hidden when AUTH_DISABLED since user is auto-logged in */}
-            {!authDisabled && (
-              <NavUserMenuItem
-                icon={<SignOutIcon className="w-4 h-4" />}
-                label="Sign Out"
-                onClick={handleSignOut}
-                testId="user-menu-sign-out"
               />
             )}
           </div>

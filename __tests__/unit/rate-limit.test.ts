@@ -156,8 +156,7 @@ describe('Rate Limiting', () => {
       expect(RATE_LIMITS.api.maxRequests).toBeGreaterThan(0);
       expect(RATE_LIMITS.api.windowSeconds).toBeGreaterThan(0);
 
-      expect(RATE_LIMITS.auth.maxRequests).toBeGreaterThan(0);
-      expect(RATE_LIMITS.auth.windowSeconds).toBeGreaterThan(0);
+      // Note: auth rate limits removed in v2.8 (single-user mode)
 
       expect(RATE_LIMITS.chat.maxRequests).toBeGreaterThan(0);
       expect(RATE_LIMITS.chat.windowSeconds).toBeGreaterThan(0);
@@ -166,15 +165,12 @@ describe('Rate Limiting', () => {
       expect(RATE_LIMITS.general.windowSeconds).toBeGreaterThan(0);
     });
 
-    it('should have stricter limits for auth than general', () => {
-      // Note: This test validates default config values.
-      // If env vars override RATE_LIMIT_AUTH_MAX to equal general,
-      // we check that auth window is at least as long (more restrictive over time).
-      // Either fewer requests OR longer window makes auth stricter.
-      const authIsStricter =
-        RATE_LIMITS.auth.maxRequests < RATE_LIMITS.general.maxRequests ||
-        RATE_LIMITS.auth.windowSeconds >= RATE_LIMITS.general.windowSeconds;
-      expect(authIsStricter).toBe(true);
+    it('should have stricter limits for chat than general', () => {
+      // Chat has stricter limits than general API
+      const chatIsStricter =
+        RATE_LIMITS.chat.maxRequests <= RATE_LIMITS.general.maxRequests ||
+        RATE_LIMITS.chat.windowSeconds >= RATE_LIMITS.general.windowSeconds;
+      expect(chatIsStricter).toBe(true);
     });
   });
 });

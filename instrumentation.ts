@@ -26,6 +26,14 @@ export async function register() {
       nodeVersion: process.version,
     });
 
+    // ================================================================
+    // PHASE -1: Enforce Single User Mode (before anything else)
+    // ================================================================
+    // This check MUST happen before any other initialization to prevent
+    // starting with unsupported authentication configuration.
+    const { enforceSingleUserMode } = await import('./lib/startup/enforce-single-user');
+    enforceSingleUserMode();
+
     try {
       // ================================================================
       // PHASE 0: Migrate Legacy Data Files (before any database access)

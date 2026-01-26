@@ -96,18 +96,15 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
       return serverError('User not found');
     }
 
-    // Get 2FA status
-    const totpEnabled = userRecord.totp?.enabled ?? false;return successResponse({
+    return successResponse({
       profile: {
         id: userRecord.id,
         email: userRecord.email,
         username: userRecord.username,
         name: userRecord.name,
         image: userRecord.image,
-        emailVerified: userRecord.emailVerified,
         createdAt: userRecord.createdAt,
         updatedAt: userRecord.updatedAt,
-        totpEnabled,
       },
     });
   } catch (error) {
@@ -238,9 +235,6 @@ export const PUT = createAuthenticatedHandler(async (req, context) => {
       return serverError('Failed to update profile');
     }
 
-    // Get 2FA status
-    const totpEnabled = updatedUser.totp?.enabled ?? false;
-
     logger.info('[User Profile v1] Profile updated', { userId: user.id });
 
     return successResponse({
@@ -250,10 +244,8 @@ export const PUT = createAuthenticatedHandler(async (req, context) => {
         username: updatedUser.username,
         name: updatedUser.name,
         image: updatedUser.image,
-        emailVerified: updatedUser.emailVerified,
         createdAt: updatedUser.createdAt,
         updatedAt: updatedUser.updatedAt,
-        totpEnabled,
       },
     });
   } catch (error) {
@@ -347,9 +339,6 @@ export const PATCH = createAuthenticatedHandler(async (req, context) => {
       }
     }
 
-    // Get 2FA status
-    const totpEnabled = updatedUser.totp?.enabled ?? false;
-
     return successResponse({
       profile: {
         id: updatedUser.id,
@@ -357,10 +346,8 @@ export const PATCH = createAuthenticatedHandler(async (req, context) => {
         username: updatedUser.username,
         name: updatedUser.name,
         image: updatedUser.image,
-        emailVerified: updatedUser.emailVerified,
         createdAt: updatedUser.createdAt,
         updatedAt: updatedUser.updatedAt,
-        totpEnabled,
       },
     });
   } catch (error) {

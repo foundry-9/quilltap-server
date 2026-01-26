@@ -59,7 +59,8 @@ migrations/
     ├── migrate-to-centralized-data-dir.ts    # v2.8.0
     ├── per-project-mount-points.ts           # v2.8.0
     ├── sqlite-initial-schema.ts              # v2.8.0
-    └── create-folder-entities.ts             # v2.9.0
+    ├── create-folder-entities.ts             # v2.8.0
+    └── remove-auth-tables.ts                 # v2.8.0
 ```
 
 ## Adding a New Migration
@@ -225,7 +226,8 @@ Only v2.7.0+ migrations are included in the codebase. Legacy migrations (v2.0.0�
 | migrate-to-centralized-data-dir-v1 | 2.8.0 | Migrate data to centralized data directory | None |
 | per-project-mount-points-v1 | 2.8.0 | Add per-project mount points | create-mount-points-v1 |
 | sqlite-initial-schema-v1 | 2.8.0 | Create SQLite database schema | None |
-| create-folder-entities-v1 | 2.9.0 | Create folder entities | per-project-mount-points-v1 |
+| create-folder-entities-v1 | 2.8.0 | Create folder entities | per-project-mount-points-v1 |
+| remove-auth-tables-v1 | 2.8.0 | Drop accounts and sessions tables (single-user mode) | None |
 
 **Notes**:
 - Minimum supported version for upgrades is v2.7.0

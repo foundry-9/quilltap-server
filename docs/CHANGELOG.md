@@ -4,6 +4,21 @@
 
 ### 2.8-dev
 
+- **BREAKING**: Remove all authentication code - Quilltap now operates in single-user mode only (2026-01-26)
+  - Removed OAuth/Arctic authentication infrastructure
+  - Removed local email/password login
+  - Removed TOTP 2FA (two-factor authentication)
+  - Removed trusted devices management
+  - Removed all `/api/v1/auth/` endpoints
+  - Removed `/app/auth/` pages (signin, signup, error)
+  - Removed `TwoFactorSection` and `TrustedDevicesSection` from profile page
+  - Removed sign out functionality from user menu
+  - Added `/api/v1/session` endpoint for client session info
+  - Added startup check: if `AUTH_DISABLED=false`, server fails with migration instructions
+  - Added migration `remove-auth-tables-v1` to drop unused `accounts` and `sessions` tables
+  - Removed npm packages: `arctic`, `jose`, `speakeasy`
+  - Updated documentation to reflect single-user mode
+  - Existing multi-user installations must run `npx ts-node scripts/migrate-to-single-user.ts` before upgrading
 - fix: Mount point path migration now correctly handles tilde-prefixed paths (2026-01-26)
   - The centralized data directory migration was not updating mount points with `~/.quilltap/files` paths
   - Migration now correctly detects both expanded paths (`/Users/name/.quilltap/files`) and tilde-prefixed paths (`~/.quilltap/files`)

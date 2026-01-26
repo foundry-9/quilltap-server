@@ -42,45 +42,7 @@ export const SQLITE_TABLES = [
       `CREATE INDEX IF NOT EXISTS "idx_users_username" ON "users" ("username")`,
     ],
   },
-  {
-    name: 'accounts',
-    sql: `CREATE TABLE IF NOT EXISTS "accounts" (
-      "id" TEXT PRIMARY KEY,
-      "userId" TEXT NOT NULL,
-      "type" TEXT NOT NULL,
-      "provider" TEXT NOT NULL,
-      "providerAccountId" TEXT NOT NULL,
-      "refresh_token" TEXT,
-      "access_token" TEXT,
-      "expires_at" INTEGER,
-      "token_type" TEXT,
-      "scope" TEXT,
-      "id_token" TEXT,
-      "session_state" TEXT,
-      "createdAt" TEXT NOT NULL,
-      "updatedAt" TEXT NOT NULL,
-      UNIQUE("provider", "providerAccountId")
-    )`,
-    indexes: [
-      `CREATE INDEX IF NOT EXISTS "idx_accounts_userId" ON "accounts" ("userId")`,
-    ],
-  },
-  {
-    name: 'sessions',
-    sql: `CREATE TABLE IF NOT EXISTS "sessions" (
-      "id" TEXT PRIMARY KEY,
-      "sessionToken" TEXT UNIQUE NOT NULL,
-      "userId" TEXT NOT NULL,
-      "expires" TEXT NOT NULL,
-      "deviceInfo" TEXT,
-      "createdAt" TEXT NOT NULL,
-      "updatedAt" TEXT NOT NULL
-    )`,
-    indexes: [
-      `CREATE INDEX IF NOT EXISTS "idx_sessions_userId" ON "sessions" ("userId")`,
-      `CREATE INDEX IF NOT EXISTS "idx_sessions_sessionToken" ON "sessions" ("sessionToken")`,
-    ],
-  },
+  // Note: accounts and sessions tables removed (single-user mode)
   {
     name: 'characters',
     sql: `CREATE TABLE IF NOT EXISTS "characters" (

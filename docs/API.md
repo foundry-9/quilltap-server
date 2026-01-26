@@ -62,18 +62,30 @@ Legacy routes will be removed after 2026-04-15.
 
 ## Authentication
 
-All API endpoints (except `/api/health`) require authentication via session cookies.
+Quilltap operates in **single-user mode**. All API endpoints automatically use the single local user account - no login is required.
 
-### Session Cookie
+### Session Endpoint
 
-Authentication is handled through custom JWT session cookies, which support:
+#### `GET /api/v1/session`
 
-- **Google OAuth** (if Google plugin is enabled and `OAUTH_DISABLED=false`)
-- **Email/password login** (local accounts)
-- **No-auth mode** (`AUTH_DISABLED=true` for local/offline deployments, auto-logs in as unauthenticatedLocalUser)
-- **Credentials-only mode** (`OAUTH_DISABLED=true` hides OAuth buttons, credentials login still works)
+Returns the current user session.
 
-Include credentials in requests:
+**Response**: `200 OK`
+
+```json
+{
+  "user": {
+    "id": "ffffffff-ffff-ffff-ffff-ffffffffffff",
+    "email": "user@localhost.localdomain",
+    "name": "Local User"
+  },
+  "expires": "2025-02-19T10:00:00.000Z"
+}
+```
+
+### Including Credentials
+
+For consistency, include credentials in requests:
 
 ```javascript
 fetch('/api/characters', {
@@ -84,24 +96,13 @@ fetch('/api/characters', {
 });
 ```
 
-### Unauthorized Response
-
-```json
-{
-  "error": "Unauthorized",
-  "message": "You must be signed in to access this resource"
-}
-```
-
 ## Rate Limiting
 
 Rate limits are enforced on all endpoints:
 
 | Endpoint Type | Limit | Window |
 |--------------|-------|--------|
-| Auth endpoints | 5 requests | 60 seconds |
 | Chat streaming | 20 messages | 60 seconds |
-| Settings endpoints | 30 requests | 60 seconds |
 | API endpoints | 100 requests | 10 seconds |
 | General | 100 requests | 60 seconds |
 
@@ -197,14 +198,12 @@ Get current user's profile information.
 ```json
 {
   "id": "user-uuid",
-  "username": "johndoe",
-  "email": "john@example.com",
-  "name": "John Doe",
+  "username": "localUser",
+  "email": "user@localhost.localdomain",
+  "name": "Local User",
   "image": "/api/files/avatar-uuid",
-  "emailVerified": "2025-01-15T12:00:00.000Z",
   "createdAt": "2025-01-15T12:00:00.000Z",
-  "updatedAt": "2025-01-19T10:00:00.000Z",
-  "totpEnabled": true
+  "updatedAt": "2025-01-19T10:00:00.000Z"
 }
 ```
 
