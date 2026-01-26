@@ -50,7 +50,7 @@ export function ProjectItem({ project }: ProjectItemProps) {
       </div>
       <div className="flex flex-col items-end shrink-0">
         <span className="text-xs text-muted-foreground">
-          {formatMessageTime(project.updatedAt)}
+          {formatMessageTime(project.lastActivity)}
         </span>
         <span className="text-xs text-primary">
           {project.chatCount} {project.chatCount === 1 ? 'chat' : 'chats'}

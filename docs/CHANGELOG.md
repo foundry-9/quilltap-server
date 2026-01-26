@@ -4,6 +4,44 @@
 
 ### 2.8-dev
 
+- fix: User-controlled characters now correctly show "Queue" button instead of "Nudge" (2026-01-25)
+  - User-controlled characters (controlledBy: 'user') were incorrectly treated as LLM characters
+  - Clicking their action button tried to generate an LLM response, causing "no connection profile" errors
+  - Now user-controlled characters show "Queue" and add themselves to the turn queue
+  - Added safety checks in turn management to prevent LLM response generation for user-controlled characters
+- fix: Recent chats on homepage now sorted by last message time, not metadata modification time (2026-01-25)
+  - Chats were sorted by `updatedAt` which changes when metadata (title, tags, participants) is modified
+  - Now sorts by `lastMessageAt` with fallback to `updatedAt` for chats without messages
+  - Homepage now fetches 12 chats instead of 4 to account for quick-hide filtering
+  - Display is limited to 4 chats after filtering, ensuring the card is always full if possible
+- feat: Homepage cards now extend to fill available viewport height (2026-01-25)
+  - Added `qt-homepage-container` CSS class that creates a flex-fill layout
+  - Homepage grid now fills remaining space after welcome section and action buttons
+  - Section cards extend to bottom of visible area (above footer)
+  - Content overflow is hidden - cards display as many items as fit without scrolling
+  - All sections (chats, projects, characters) now fetch 12 items to allow for more display
+  - Mobile view retains stacked cards with auto height for scrolling
+- fix: Active Projects now sorted by most recent activity across files, chats, and metadata (2026-01-25)
+  - Projects now sorted by the maximum of: file updatedAt, chat lastMessageAt, or project updatedAt
+  - Chat activity now uses `lastMessageAt` (actual message time) instead of `updatedAt` (metadata changes)
+  - File activity tracked per project to include file uploads/changes in recency calculation
+- feat: Homepage Characters section now shows all characters sorted like /characters page (2026-01-25)
+  - Changed from favorites-only to all non-NPC characters
+  - Sort order matches /characters page: favorites first, then by chat count, then alphabetically
+  - Added `isFavorite`, `npc`, and `chatCount` to HomepageCharacter type for sorting
+  - Renamed section header from "Your Characters" to "Characters"
+- feat: Homepage grid uses 30/30/40 column widths in full-width mode (2026-01-25)
+  - Added `data-full-width` attribute to document root when full-width mode is active
+  - When in full-width mode on desktop (> 1100px), columns are: Recent Chats 30%, Active Projects 30%, Characters 40%
+  - Standard width still uses equal thirds for balanced layout
+- feat: Characters section only displays cards that fit completely (2026-01-25)
+  - Uses ResizeObserver to calculate how many character cards fit within the visible area
+  - Calculates both columns and rows based on container dimensions
+  - In full-width mode, shows 3-4 characters per row (auto-fill grid)
+  - In standard mode, shows 2 characters per row with fixed card widths
+  - Homepage now fetches 24 characters to fill larger full-width layouts
+  - Prevents partial cards from showing at the bottom of the section
+  - Fixed border clipping on character cards in overflow:hidden container
 - refactor: Remove legacy migrations (pre-v2.7.0) and MongoDB support from migrations (2026-01-25)
   - Deleted 17 pre-2.7.0 migration files: convert-openrouter-profiles, enable-provider-plugins, validate-mongodb-config, validate-s3-config, migrate-json-to-mongodb, migrate-files-to-s3, ensure-user-usernames, inherit-file-tags, migrate-character-system-prompts, migrate-tag-styles-to-tags, remove-quilltap-rp-builtin, add-multi-character-fields, add-inter-character-memory-fields, add-token-tracking-fields, migrate-personas-to-characters, populate-memory-about-character-ids, restructure-s3-keys
   - Removed MongoDB support from v2.7.0+ migrations (add-use-native-web-search-field, cleanup-orphan-file-records, fix-missing-storage-keys, fix-orphan-persona-participants, add-llm-logs-collection, per-project-mount-points, create-folder-entities)

@@ -92,7 +92,7 @@ export function ContentWidthProvider({ children }: { children: React.ReactNode }
     return () => mediaQuery.removeEventListener('change', updateCanApply)
   }, [])
 
-  // Apply CSS variables based on preference and viewport
+  // Apply CSS variables and data attribute based on preference and viewport
   useEffect(() => {
     if (typeof window === 'undefined') return
     const root = document.documentElement
@@ -103,6 +103,13 @@ export function ContentWidthProvider({ children }: { children: React.ReactNode }
 
     root.style.setProperty('--qt-chat-message-row-max-width', chatWidth)
     root.style.setProperty('--qt-page-max-width', pageWidth)
+
+    // Set data attribute for CSS selectors that need to know about full-width mode
+    if (shouldApplyWide) {
+      root.setAttribute('data-full-width', 'true')
+    } else {
+      root.removeAttribute('data-full-width')
+    }
   }, [isWide, canApplyWide])
 
   const toggleWidth = useCallback(() => {

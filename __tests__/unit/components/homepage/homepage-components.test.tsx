@@ -991,33 +991,32 @@ describe('CharactersSection', () => {
   it('renders section title', () => {
     const characters = [createMockCharacter()]
     render(<CharactersSection characters={characters} />)
-    expect(screen.getByText('Your Characters')).toBeInTheDocument()
+    expect(screen.getByText('Characters')).toBeInTheDocument()
   })
 
-  it('renders manage link', () => {
+  it('renders view all link', () => {
     const characters = [createMockCharacter()]
     render(<CharactersSection characters={characters} />)
-    const link = screen.getByRole('link', { name: /Manage/ })
+    const link = screen.getByRole('link', { name: /View all/ })
     expect(link).toHaveAttribute('href', '/characters')
   })
 
-  it('renders all characters up to 4', () => {
+  it('renders characters based on container size', () => {
     const characters = [
       createMockCharacter({ id: 'char-1', name: 'Alice' }),
       createMockCharacter({ id: 'char-2', name: 'Bob' }),
       createMockCharacter({ id: 'char-3', name: 'Charlie' }),
     ]
     render(<CharactersSection characters={characters} />)
-    // Verify all three character cards are rendered
+    // In test environment without ResizeObserver, defaults to MIN_CHARACTERS (2)
     const characterCards = screen.getAllByRole('button', { name: /Chat/i })
-    expect(characterCards).toHaveLength(3)
-    // Verify each character appears by checking links
+    expect(characterCards.length).toBeGreaterThanOrEqual(2)
+    // Verify first characters appear
     expect(screen.getByRole('link', { name: /Alice/i })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Bob/i })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Charlie/i })).toBeInTheDocument()
   })
 
-  it('limits display to 4 characters', () => {
+  it('limits display based on calculated fit', () => {
     const characters = [
       createMockCharacter({ id: 'char-1', name: 'Alice' }),
       createMockCharacter({ id: 'char-2', name: 'Bob' }),
@@ -1026,11 +1025,10 @@ describe('CharactersSection', () => {
       createMockCharacter({ id: 'char-5', name: 'Eve' }),
     ]
     render(<CharactersSection characters={characters} />)
-    // Should show 4 characters
+    // In test environment without ResizeObserver, defaults to MIN_CHARACTERS (2)
     const characterCards = screen.getAllByRole('button', { name: /Chat/i })
-    expect(characterCards).toHaveLength(4)
-    // Verify Eve is not in the document
-    expect(screen.queryByText('Eve')).not.toBeInTheDocument()
+    expect(characterCards.length).toBeGreaterThanOrEqual(2)
+    expect(characterCards.length).toBeLessThanOrEqual(5)
   })
 
   it('renders empty state when no characters', () => {

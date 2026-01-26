@@ -68,7 +68,7 @@ export default async function Home() {
     : null;
 
   // Fetch data in parallel for the homepage sections
-  const [allChatsRaw, allProjects, allCharacters] = await Promise.all([
+  const [allChatsRaw, allProjects, allCharacters, allFiles] = await Promise.all([
     // Recent chats - fetch all, will slice later
     userId
       ? repos.chats.findByUserId(userId)
@@ -81,14 +81,19 @@ export default async function Home() {
     userId
       ? repos.characters.findByUserId(userId)
       : [],
+    // Files - for project activity tracking
+    userId
+      ? repos.files.findAll()
+      : [],
   ]);
 
   // Enrich chats with participant data using the enrichment service
   const enrichedChats = await enrichChatsForList(allChatsRaw, repos);
   const cleanedChats = cleanEnrichedChats(enrichedChats);
 
-  // Get the 4 most recent chats
-  const recentEnrichedChats = cleanedChats.slice(0, 4);
+  // Get more chats than we'll display to account for quick-hide filtering
+  // The component will limit display to 4 after filtering
+  const recentEnrichedChats = cleanedChats.slice(0, 12);
 
   // Get the last chat ID for "Continue Last" button
   const lastChatId = recentEnrichedChats.length > 0 ? recentEnrichedChats[0].id : null;
@@ -98,6 +103,7 @@ export default async function Home() {
     id: chat.id,
     title: chat.title,
     updatedAt: chat.updatedAt,
+    lastMessageAt: chat.lastMessageAt,
     participants: chat.participants.map(p => ({
       id: p.id,
       type: p.type,
@@ -122,102 +128,175 @@ export default async function Home() {
     },
   }));
 
-  // Compute chat counts and most recent chat activity per project
-  const projectChatStats = new Map<string, { count: number; lastActivity: Date }>();
+  // Compute chat counts and most recent chat activity per project (using lastMessageAt)
+  const projectChatStats = new Map<string, { count: number; lastMessageAt: Date | null }>();
   for (const chat of allChatsRaw) {
     if (chat.projectId) {
       const existing = projectChatStats.get(chat.projectId);
-      const chatUpdated = new Date(chat.updatedAt);
+      // Use lastMessageAt for actual message activity, not metadata changes
+      const chatLastMessage = chat.lastMessageAt ? new Date(chat.lastMessageAt) : null;
       if (existing) {
         existing.count++;
-        if (chatUpdated > existing.lastActivity) {
-          existing.lastActivity = chatUpdated;
+        if (chatLastMessage && (!existing.lastMessageAt || chatLastMessage > existing.lastMessageAt)) {
+          existing.lastMessageAt = chatLastMessage;
         }
       } else {
-        projectChatStats.set(chat.projectId, { count: 1, lastActivity: chatUpdated });
+        projectChatStats.set(chat.projectId, { count: 1, lastMessageAt: chatLastMessage });
       }
     }
   }
 
-  // Transform projects to the homepage format, sorted by most recent chat activity
+  // Compute most recent file activity per project
+  const projectFileStats = new Map<string, { lastFileActivity: Date }>();
+  for (const file of allFiles) {
+    if (file.projectId) {
+      const existing = projectFileStats.get(file.projectId);
+      const fileUpdated = new Date(file.updatedAt);
+      if (existing) {
+        if (fileUpdated > existing.lastFileActivity) {
+          existing.lastFileActivity = fileUpdated;
+        }
+      } else {
+        projectFileStats.set(file.projectId, { lastFileActivity: fileUpdated });
+      }
+    }
+  }
+
+  // Transform projects to the homepage format, sorted by most recent activity
+  // Activity = max of: file updatedAt, chat lastMessageAt, project updatedAt
+  // Pass more than needed to account for variable card height
   const sortedProjects = [...allProjects]
     .sort((a, b) => {
-      const aStats = projectChatStats.get(a.id);
-      const bStats = projectChatStats.get(b.id);
-      // Projects with chat activity come first, sorted by last activity
-      // Projects without chats fall back to their updatedAt
-      const aTime = aStats?.lastActivity?.getTime() ?? new Date(a.updatedAt).getTime();
-      const bTime = bStats?.lastActivity?.getTime() ?? new Date(b.updatedAt).getTime();
+      const aChatStats = projectChatStats.get(a.id);
+      const aFileStats = projectFileStats.get(a.id);
+      const bChatStats = projectChatStats.get(b.id);
+      const bFileStats = projectFileStats.get(b.id);
+
+      // Get the most recent activity timestamp for each project
+      const aProjectTime = new Date(a.updatedAt).getTime();
+      const aChatTime = aChatStats?.lastMessageAt?.getTime() ?? 0;
+      const aFileTime = aFileStats?.lastFileActivity?.getTime() ?? 0;
+      const aTime = Math.max(aProjectTime, aChatTime, aFileTime);
+
+      const bProjectTime = new Date(b.updatedAt).getTime();
+      const bChatTime = bChatStats?.lastMessageAt?.getTime() ?? 0;
+      const bFileTime = bFileStats?.lastFileActivity?.getTime() ?? 0;
+      const bTime = Math.max(bProjectTime, bChatTime, bFileTime);
+
       return bTime - aTime;
     })
-    .slice(0, 4);
+    .slice(0, 12);
 
-  const projects: HomepageProject[] = sortedProjects.map(project => ({
-    id: project.id,
-    name: project.name,
-    description: project.description,
-    color: project.color,
-    icon: project.icon,
-    chatCount: projectChatStats.get(project.id)?.count ?? 0,
-    updatedAt: project.updatedAt,
-  }));
+  const projects: HomepageProject[] = sortedProjects.map(project => {
+    // Compute the last activity timestamp (same logic as sorting)
+    const chatStats = projectChatStats.get(project.id);
+    const fileStats = projectFileStats.get(project.id);
+    const projectTime = new Date(project.updatedAt).getTime();
+    const chatTime = chatStats?.lastMessageAt?.getTime() ?? 0;
+    const fileTime = fileStats?.lastFileActivity?.getTime() ?? 0;
+    const lastActivityTime = Math.max(projectTime, chatTime, fileTime);
 
-  // Filter to favorites and add default images
-  const favoriteCharacters: HomepageCharacter[] = await Promise.all(
-    allCharacters
-      .filter(c => c.isFavorite && !c.npc)
-      .slice(0, 4)
-      .map(async (char) => {
-        // Get the default image for this character
-        let defaultImage = null;
-        let defaultImageId = null;
+    return {
+      id: project.id,
+      name: project.name,
+      description: project.description,
+      color: project.color,
+      icon: project.icon,
+      chatCount: chatStats?.count ?? 0,
+      lastActivity: new Date(lastActivityTime).toISOString(),
+    };
+  });
 
-        // First, try to get the character's default image directly by ID
-        let defaultImg: FileEntry | null = null;
-        if (char.defaultImageId) {
-          defaultImg = await repos.files.findById(char.defaultImageId);
-        }
+  // Compute chat counts per character from existing chat data
+  const characterChatCounts = new Map<string, number>();
+  for (const chat of allChatsRaw) {
+    for (const participant of chat.participants) {
+      if (participant.characterId) {
+        const current = characterChatCounts.get(participant.characterId) ?? 0;
+        characterChatCounts.set(participant.characterId, current + 1);
+      }
+    }
+  }
 
-        // Fallback: search by linkedTo (for avatar tagged images)
-        if (!defaultImg) {
-          const images = await repos.files.findByLinkedTo(char.id);
-          defaultImg = images.find((img: FileEntry) => img.tags?.includes('avatar'))
-            || images[0]
-            || null;
-        }
+  // Get all non-NPC characters, sorted like the /characters page:
+  // 1. NPCs last (already filtered out)
+  // 2. Favorites first
+  // 3. Chat count descending
+  // 4. Alphabetically by name
+  const sortedCharacters = allCharacters
+    .filter(c => !c.npc)
+    .sort((a, b) => {
+      // Favorites first
+      if (a.isFavorite !== b.isFavorite) {
+        return a.isFavorite ? -1 : 1;
+      }
+      // Then by chat count (descending)
+      const aChats = characterChatCounts.get(a.id) ?? 0;
+      const bChats = characterChatCounts.get(b.id) ?? 0;
+      if (aChats !== bChats) {
+        return bChats - aChats;
+      }
+      // Then alphabetically
+      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+    })
+    .slice(0, 24);
 
-        if (defaultImg) {
-          defaultImageId = defaultImg.id;
-          defaultImage = {
-            id: defaultImg.id,
-            filepath: getFilePath(defaultImg),
-            url: null,
-          };
-        }
+  // Add default images to sorted characters
+  const homepageCharacters: HomepageCharacter[] = await Promise.all(
+    sortedCharacters.map(async (char) => {
+      // Get the default image for this character
+      let defaultImage = null;
+      let defaultImageId = null;
 
-        return {
-          id: char.id,
-          name: char.name,
-          title: char.title || null,
-          avatarUrl: char.avatarUrl || null,
-          defaultImageId,
-          defaultImage,
-          tags: char.tags || [],
+      // First, try to get the character's default image directly by ID
+      let defaultImg: FileEntry | null = null;
+      if (char.defaultImageId) {
+        defaultImg = await repos.files.findById(char.defaultImageId);
+      }
+
+      // Fallback: search by linkedTo (for avatar tagged images)
+      if (!defaultImg) {
+        const images = await repos.files.findByLinkedTo(char.id);
+        defaultImg = images.find((img: FileEntry) => img.tags?.includes('avatar'))
+          || images[0]
+          || null;
+      }
+
+      if (defaultImg) {
+        defaultImageId = defaultImg.id;
+        defaultImage = {
+          id: defaultImg.id,
+          filepath: getFilePath(defaultImg),
+          url: null,
         };
-      })
+      }
+
+      return {
+        id: char.id,
+        name: char.name,
+        title: char.title || null,
+        avatarUrl: char.avatarUrl || null,
+        defaultImageId,
+        defaultImage,
+        tags: char.tags || [],
+        isFavorite: char.isFavorite ?? false,
+        npc: char.npc ?? false,
+        chatCount: characterChatCounts.get(char.id) ?? 0,
+      };
+    })
   );
 
   const displayName = user?.name || session.user?.name || 'there';
 
   return (
-    <div className="qt-page-container max-w-6xl mx-auto">
+    <div className="qt-homepage-container">
       {/* Welcome section */}
       <WelcomeSection displayName={displayName} />
 
       {/* Quick action buttons */}
       <QuickActionsRow lastChatId={lastChatId} />
 
-      {/* Three-column grid */}
+      {/* Three-column grid - fills remaining space */}
       <div className="qt-homepage-grid">
         {/* Recent Chats */}
         <RecentChatsSection chats={recentChats} />
@@ -225,8 +304,8 @@ export default async function Home() {
         {/* Active Projects */}
         <ProjectsSection projects={projects} />
 
-        {/* Favorite Characters */}
-        <CharactersSection characters={favoriteCharacters} />
+        {/* Characters */}
+        <CharactersSection characters={homepageCharacters} />
       </div>
     </div>
   );

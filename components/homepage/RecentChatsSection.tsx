@@ -16,6 +16,7 @@ export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
   const { shouldHideByIds } = useQuickHide()
 
   // Filter chats using quick-hide (same logic as chats page)
+  // CSS overflow:hidden will hide chats that don't fit in the card
   const visibleChats = useMemo(() => {
     return chats.filter(chat => {
       // Collect all tag IDs from character participants

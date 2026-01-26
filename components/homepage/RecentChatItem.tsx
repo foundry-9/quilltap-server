@@ -45,7 +45,7 @@ export function RecentChatItem({ chat }: RecentChatItemProps) {
       </div>
       <div className="flex flex-col items-end shrink-0">
         <span className="text-xs text-muted-foreground">
-          {formatMessageTime(chat.updatedAt)}
+          {formatMessageTime(chat.lastMessageAt ?? chat.updatedAt)}
         </span>
         <span className="text-xs text-primary">
           {chat._count.messages} msgs
