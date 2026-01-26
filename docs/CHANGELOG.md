@@ -4,6 +4,20 @@
 
 ### 2.8-dev
 
+- fix: Mount point path migration now correctly handles tilde-prefixed paths (2026-01-26)
+  - The centralized data directory migration was not updating mount points with `~/.quilltap/files` paths
+  - Migration now correctly detects both expanded paths (`/Users/name/.quilltap/files`) and tilde-prefixed paths (`~/.quilltap/files`)
+  - Fixes broken file serving after migrating from old Linux-style paths to platform-specific paths on macOS/Windows
+- feat: Add migrate-to-single-user CLI script for converting multi-user installations to single-user mode (2026-01-26)
+  - New script: `npx ts-node scripts/migrate-to-single-user.ts` migrates an existing user's data to the unauthenticated user
+  - Supports interactive mode (lists users for selection) and non-interactive mode (`--user-id <uuid>`)
+  - Includes `--dry-run` flag to preview changes without modifying data
+  - Migrates all user-owned data: characters, chats, files, settings, connection profiles, etc.
+  - Moves physical files from source user directory to unauthenticated user directory
+  - Updates storageKey references in database to match new file locations
+  - Automatically sets `AUTH_DISABLED="true"` and preserves user's display name in .env.local
+  - Cleans up source user's sessions, OAuth accounts, and user record after migration
+  - New migration `clear-auth-on-disabled-v1` automatically cleans up stale auth data on startup when `AUTH_DISABLED=true`
 - fix: User-controlled characters now correctly show "Queue" button instead of "Nudge" (2026-01-25)
   - User-controlled characters (controlledBy: 'user') were incorrectly treated as LLM characters
   - Clicking their action button tried to generate an LLM response, causing "no connection profile" errors

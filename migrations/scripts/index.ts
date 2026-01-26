@@ -33,6 +33,8 @@ import { migrateToCentralizedDataDirMigration } from './migrate-to-centralized-d
 import { perProjectMountPointsMigration } from './per-project-mount-points';
 // Folder entities migration
 import { createFolderEntitiesMigration } from './create-folder-entities';
+// Clear auth data when AUTH_DISABLED
+import { clearAuthOnDisabledMigration } from './clear-auth-on-disabled';
 
 /**
  * All available migrations.
@@ -61,6 +63,8 @@ export const migrations: Migration[] = [
   perProjectMountPointsMigration,
   // Folder entities migration
   createFolderEntitiesMigration,
+  // Clear auth data when AUTH_DISABLED
+  clearAuthOnDisabledMigration,
 ];
 
 export {
@@ -84,4 +88,6 @@ export {
   perProjectMountPointsMigration,
   // Folder entities migration
   createFolderEntitiesMigration,
+  // Clear auth data when AUTH_DISABLED
+  clearAuthOnDisabledMigration,
 };

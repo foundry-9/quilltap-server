@@ -128,6 +128,36 @@ function findLegacyDataDir(): string | null {
 }
 
 /**
+ * Expand tilde in path to home directory
+ */
+function expandTilde(inputPath: string): string {
+  if (inputPath.startsWith('~')) {
+    return path.join(os.homedir(), inputPath.slice(1));
+  }
+  return inputPath;
+}
+
+/**
+ * Check if a path matches the old Linux-style ~/.quilltap/files path
+ * Handles both expanded paths and tilde-prefixed paths
+ */
+function isOldFilesPath(basePath: string): boolean {
+  if (!basePath) return false;
+
+  const homeDir = os.homedir();
+  const oldPathExpanded = path.join(homeDir, '.quilltap', 'files');
+  const oldPathTilde = '~/.quilltap/files';
+
+  // Check both the expanded path and the tilde-prefixed version
+  const expandedBasePath = expandTilde(basePath);
+  return (
+    basePath === oldPathTilde ||
+    basePath === oldPathExpanded ||
+    path.resolve(expandedBasePath) === path.resolve(oldPathExpanded)
+  );
+}
+
+/**
  * Update existing mount points that reference old ~/.quilltap/files path
  */
 async function updateMountPointPaths(): Promise<{ updated: number; errors: string[] }> {
@@ -140,14 +170,7 @@ async function updateMountPointPaths(): Promise<{ updated: number; errors: strin
     return { updated, errors };
   }
 
-  const homeDir = os.homedir();
-  const oldFilesPath = path.join(homeDir, '.quilltap', 'files');
   const newFilesPath = getFilesDir();
-
-  // If paths are the same (due to QUILLTAP_DATA_DIR override), skip
-  if (path.resolve(oldFilesPath) === path.resolve(newFilesPath)) {
-    return { updated, errors };
-  }
 
   if (isSQLiteBackend()) {
     try {
@@ -168,7 +191,15 @@ async function updateMountPointPaths(): Promise<{ updated: number; errors: strin
       for (const mp of mountPoints) {
         try {
           const config = JSON.parse(mp.backendConfig);
-          if (config.basePath === oldFilesPath) {
+          const oldPath = config.basePath;
+
+          // Check if this mount point uses the old path (handles both ~ and expanded paths)
+          if (isOldFilesPath(config.basePath)) {
+            // Skip if already pointing to the correct path
+            if (path.resolve(expandTilde(config.basePath)) === path.resolve(newFilesPath)) {
+              continue;
+            }
+
             config.basePath = newFilesPath;
             updateStmt.run(
               JSON.stringify(config),
@@ -180,7 +211,7 @@ async function updateMountPointPaths(): Promise<{ updated: number; errors: strin
             logger.info('Updated mount point basePath', {
               context: 'migration.centralized-data-dir',
               mountPointId: mp.id,
-              oldPath: oldFilesPath,
+              oldPath,
               newPath: newFilesPath,
             });
           }
