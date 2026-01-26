@@ -7,7 +7,6 @@ This document tracks planned features and improvements for Quilltap.
 ### Authentication Enhancements
 
 - [ ] Make all plugins either dist or site-wide
-- [ ] Remove authentication (this will be a local-only website)
 
 ## Planned Features
 
@@ -63,6 +62,7 @@ This document tracks planned features and improvements for Quilltap.
 ## Completed in v2.8
 
 - [X] Make the signout actually completely wipe the session data from the browser and take you back to the beginning page
+- [X] Remove authentication (this will be a local-only website)
 
 ## Completed in v2.7
 

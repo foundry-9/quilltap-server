@@ -17,16 +17,23 @@
  * 3. Ensures the unauthenticated user exists
  * 4. Deletes any existing unauthenticated user data (to avoid conflicts)
  * 5. Migrates all user-owned data to the unauthenticated user
- * 6. Moves physical files to the new user's directory
- * 7. Updates .env.local to set AUTH_DISABLED="true"
- * 8. Deletes the source user and their auth data (sessions, accounts)
+ * 6. RE-ENCRYPTS API KEYS with the new user ID (critical for encryption to work!)
+ * 7. Moves physical files to the new user's directory
+ * 8. Updates .env.local to set AUTH_DISABLED="true"
+ * 9. Deletes the source user and their auth data (sessions, accounts)
  */
 
 import Database, { Database as DatabaseType } from 'better-sqlite3';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
+import * as crypto from 'crypto';
+import * as dotenv from 'dotenv';
 import { getSQLiteDatabasePath, getFilesDir, ensureDataDirectoriesExist } from '../lib/paths';
+
+// Load environment variables from .env.local
+dotenv.config({ path: path.join(process.cwd(), '.env.local') });
+dotenv.config({ path: path.join(process.cwd(), '.env') });
 
 // ============================================================================
 // Constants
@@ -70,6 +77,13 @@ const TABLES_WITH_UNIQUE_CONSTRAINTS = [
   'plugin_configs', // UNIQUE(userId, pluginName)
 ];
 
+// Encryption constants (must match lib/encryption.ts)
+const ALGORITHM = 'aes-256-gcm';
+const KEY_LENGTH = 32;
+const IV_LENGTH = 16;
+const PBKDF2_ITERATIONS = 100000;
+const PBKDF2_DIGEST = 'sha256';
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -85,7 +99,71 @@ interface UserSummary {
 interface MigrationStats {
   tables: Record<string, number>;
   filesMoved: number;
+  apiKeysReencrypted: number;
   errors: string[];
+}
+
+// ============================================================================
+// Encryption Functions (duplicated to avoid import issues)
+// ============================================================================
+
+function getMasterPepper(): string {
+  const pepper = process.env.ENCRYPTION_MASTER_PEPPER || '';
+  if (!pepper) {
+    console.error('ERROR: ENCRYPTION_MASTER_PEPPER environment variable is not set');
+    console.error('This is required to re-encrypt API keys during migration.');
+    console.error('Please set it in your .env.local file or environment.');
+    process.exit(1);
+  }
+  return pepper;
+}
+
+function deriveUserKey(userId: string): Buffer {
+  return crypto.pbkdf2Sync(
+    userId,
+    getMasterPepper(),
+    PBKDF2_ITERATIONS,
+    KEY_LENGTH,
+    PBKDF2_DIGEST
+  );
+}
+
+function encryptApiKey(apiKey: string, userId: string) {
+  const key = deriveUserKey(userId);
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const cipher = crypto.createCipheriv(ALGORITHM, new Uint8Array(key), new Uint8Array(iv));
+
+  let encrypted = cipher.update(apiKey, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+
+  const authTag = cipher.getAuthTag();
+
+  return {
+    encrypted,
+    iv: iv.toString('hex'),
+    authTag: authTag.toString('hex'),
+  };
+}
+
+function decryptApiKey(
+  encrypted: string,
+  iv: string,
+  authTag: string,
+  userId: string
+): string {
+  const key = deriveUserKey(userId);
+  const decipher = crypto.createDecipheriv(
+    ALGORITHM,
+    new Uint8Array(key),
+    new Uint8Array(Buffer.from(iv, 'hex'))
+  );
+
+  decipher.setAuthTag(new Uint8Array(Buffer.from(authTag, 'hex')));
+
+  let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+
+  return decrypted;
 }
 
 // ============================================================================
@@ -320,6 +398,71 @@ function mergeDirectories(source: string, target: string): void {
   }
 }
 
+function reencryptApiKeys(db: DatabaseType, sourceId: string, targetId: string, dryRun: boolean): number {
+  console.log('\nRe-encrypting API keys...');
+
+  // Get all API keys for the source user (they haven't been migrated yet)
+  const apiKeys = db.prepare(`
+    SELECT id, provider, label, ciphertext, iv, authTag
+    FROM api_keys
+    WHERE userId = ?
+  `).all(sourceId) as Array<{
+    id: string;
+    provider: string;
+    label: string;
+    ciphertext: string;
+    iv: string;
+    authTag: string;
+  }>;
+
+  if (apiKeys.length === 0) {
+    console.log('  No API keys to re-encrypt');
+    return 0;
+  }
+
+  if (dryRun) {
+    console.log(`  [DRY RUN] Would re-encrypt ${apiKeys.length} API key(s)`);
+    return apiKeys.length;
+  }
+
+  let reencrypted = 0;
+  const updateStmt = db.prepare(`
+    UPDATE api_keys
+    SET ciphertext = ?, iv = ?, authTag = ?, userId = ?, updatedAt = ?
+    WHERE id = ?
+  `);
+
+  for (const key of apiKeys) {
+    try {
+      // Decrypt with old user ID
+      const plaintext = decryptApiKey(key.ciphertext, key.iv, key.authTag, sourceId);
+
+      // Re-encrypt with new user ID
+      const encrypted = encryptApiKey(plaintext, targetId);
+
+      // Update the record
+      updateStmt.run(
+        encrypted.encrypted,
+        encrypted.iv,
+        encrypted.authTag,
+        targetId,
+        new Date().toISOString(),
+        key.id
+      );
+
+      console.log(`  Re-encrypted: ${key.provider} / ${key.label}`);
+      reencrypted++;
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.error(`  ERROR re-encrypting ${key.provider} / ${key.label}: ${errorMsg}`);
+      // Don't throw - continue with other keys
+    }
+  }
+
+  console.log(`  Re-encrypted ${reencrypted} of ${apiKeys.length} API key(s)`);
+  return reencrypted;
+}
+
 function countFilesRecursive(dir: string): number {
   let count = 0;
   try {
@@ -546,6 +689,7 @@ async function main() {
     const stats: MigrationStats = {
       tables: {},
       filesMoved: 0,
+      apiKeysReencrypted: 0,
       errors: [],
     };
 
@@ -561,19 +705,23 @@ async function main() {
         console.log('\n[DRY RUN] Would clear existing unauthenticated user data');
       }
 
-      // Step 3: Migrate table data
+      // Step 3: Re-encrypt API keys (MUST be done before table migration!)
+      // This decrypts with the old user ID and re-encrypts with the new user ID
+      stats.apiKeysReencrypted = reencryptApiKeys(db, selectedUserId, UNAUTHENTICATED_USER_ID, isDryRun);
+
+      // Step 4: Migrate table data (api_keys already migrated by reencryptApiKeys)
       stats.tables = migrateTableData(db, selectedUserId, UNAUTHENTICATED_USER_ID, isDryRun);
 
-      // Step 4: Migrate physical files
+      // Step 5: Migrate physical files
       stats.filesMoved = migrateFiles(db, selectedUserId, UNAUTHENTICATED_USER_ID, isDryRun);
 
-      // Step 5: Copy user profile
+      // Step 6: Copy user profile
       copyUserProfile(db, sourceUser, isDryRun);
 
-      // Step 6: Update environment file
+      // Step 7: Update environment file
       updateEnvFile(sourceUser, isDryRun);
 
-      // Step 7: Cleanup source user
+      // Step 8: Cleanup source user
       cleanupSourceUser(db, selectedUserId, isDryRun);
     };
 
@@ -594,6 +742,7 @@ async function main() {
     console.log(`\nData migrated:`);
     console.log(`  Tables updated: ${Object.keys(stats.tables).length}`);
     console.log(`  Total rows: ${totalRows}`);
+    console.log(`  API keys re-encrypted: ${stats.apiKeysReencrypted}`);
     console.log(`  Files moved: ${stats.filesMoved}`);
 
     if (stats.errors.length > 0) {

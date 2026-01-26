@@ -35,6 +35,8 @@ import { perProjectMountPointsMigration } from './per-project-mount-points';
 import { createFolderEntitiesMigration } from './create-folder-entities';
 // Remove auth tables (single-user mode)
 import { removeAuthTablesMigration } from './remove-auth-tables';
+// Re-encrypt API keys after single-user migration
+import { reencryptApiKeysMigration } from './reencrypt-api-keys';
 
 /**
  * All available migrations.
@@ -65,6 +67,8 @@ export const migrations: Migration[] = [
   createFolderEntitiesMigration,
   // Remove auth tables (single-user mode)
   removeAuthTablesMigration,
+  // Re-encrypt API keys after single-user migration
+  reencryptApiKeysMigration,
 ];
 
 export {
@@ -90,4 +94,6 @@ export {
   createFolderEntitiesMigration,
   // Remove auth tables (single-user mode)
   removeAuthTablesMigration,
+  // Re-encrypt API keys after single-user migration
+  reencryptApiKeysMigration,
 };

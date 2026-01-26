@@ -4,6 +4,25 @@
 
 ### 2.8-dev
 
+- fix: API key creation modal now properly closes and refreshes list after successful creation (2026-01-26)
+  - API response was not wrapped in `{ apiKey: ... }` as the client expected
+  - Modal would hang after clicking Create because response parsing failed silently
+- fix: Server startup no longer fails due to env validation during Turbopack compilation (2026-01-26)
+  - Migration logger was importing `@/lib/env` which validates at import time
+  - Created standalone logger for migrations that doesn't trigger env validation
+  - Server now starts correctly with pending migrations
+- fix: API key re-encryption migration no longer crashes server on undecryptable keys (2026-01-26)
+  - Migration now succeeds with a warning when keys can't be decrypted
+  - Users are informed they need to re-enter affected API keys manually
+  - Prevents server from failing to start after single-user migration
+- feat: Add `reencrypt-api-keys-v1` migration for handling API keys after single-user migration (2026-01-26)
+  - Detects API keys encrypted with old user IDs by scanning files directory
+  - Attempts to re-encrypt keys with the new single-user ID
+  - Includes CLI runner for manual execution with `--old-user-id` flag
+- feat: `migrate-to-single-user.ts` now re-encrypts API keys during migration (2026-01-26)
+  - API keys are encrypted with user-specific derived keys
+  - Migration now properly re-encrypts keys with the new user ID
+  - Prevents "Failed to decrypt API key" errors after migration
 - **BREAKING**: Remove all authentication code - Quilltap now operates in single-user mode only (2026-01-26)
   - Removed OAuth/Arctic authentication infrastructure
   - Removed local email/password login

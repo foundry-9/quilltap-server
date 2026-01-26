@@ -150,13 +150,15 @@ async function handleCreate(req: NextRequest, user: { id: string }) {
 
     return NextResponse.json(
       {
-        id: newKey.id,
-        provider: newKey.provider,
-        label: newKey.label,
-        isActive: newKey.isActive,
-        createdAt: newKey.createdAt,
-        updatedAt: newKey.updatedAt,
-        associations: associationResult.associations,
+        apiKey: {
+          id: newKey.id,
+          provider: newKey.provider,
+          label: newKey.label,
+          isActive: newKey.isActive,
+          createdAt: newKey.createdAt,
+          updatedAt: newKey.updatedAt,
+          associations: associationResult.associations,
+        },
       },
       { status: 201 }
     );
