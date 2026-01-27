@@ -24,7 +24,7 @@ export function initialize(): void {
  */
 export const metadata = {
   name: 'qtap-plugin-theme-rains',
-  version: '1.1.1',
+  version: '1.2.0',
   type: 'THEME',
 } as const;
 

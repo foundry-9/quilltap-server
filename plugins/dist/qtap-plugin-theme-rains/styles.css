@@ -1,13 +1,15 @@
 /**
- * Rains Theme - ChatGPT-inspired dark mode with warm greys
+ * Rains Theme - Warm & Minimalist with Light/Dark Mode Support
+ *
+ * Dark mode: ChatGPT-inspired warm greys with clay/orange accent
+ * Light mode: Opus-inspired warm paper aesthetic with terracotta accent
  *
  * This theme uses the qt-* semantic class system for consistent,
- * themeable component styling. Features warm neutral greys with
- * a characteristic clay/orange accent.
+ * themeable component styling.
  */
 
 /* ============================================================================
-   ROOT BASELINE & COLOR PALETTE
+   ROOT BASELINE - SHARED BETWEEN MODES
    ============================================================================ */
 [data-theme="rains"] {
   /* Tailwind/Browser Reset - Essential only */
@@ -26,7 +28,6 @@
   scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
   height: 100dvh;
-  color-scheme: dark;
 
   /* Tailwind Transform/Ring Defaults */
   --tw-border-spacing-x: 0;
@@ -41,7 +42,6 @@
   --tw-ring-inset: ;
   --tw-ring-offset-width: 0px;
   --tw-ring-offset-color: #fff;
-  --tw-ring-color: hsl(var(--accent-secondary-100) / 1);
   --tw-ring-offset-shadow: 0 0 #0000;
   --tw-ring-shadow: 0 0 #0000;
   --tw-shadow: 0 0 #0000;
@@ -49,13 +49,47 @@
 
   /* Scrollbar */
   scrollbar-width: thin;
-  scrollbar-color: hsl(var(--border-300) / 0.35) transparent;
 
   /* ============================================================================
-     RAINS COLOR PALETTE - ChatGPT-inspired warm greys
+     FONT STACKS (SHARED)
      ============================================================================ */
+  --default-font-family: "Inter", system-ui, "Segoe UI", Roboto, sans-serif;
+  --default-mono-font-family: "Fira Code", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
-  /* Accent Colors - Clay/orange brand */
+  --font-anthropic-sans: var(--theme-font-sans, var(--default-font-family));
+  --font-anthropic-serif: var(--theme-font-serif, Georgia, Cambria, "Times New Roman", Times, serif);
+  --font-open-dyslexic: var(--theme-font-serif, Georgia, serif);
+  --font-jetbrains: var(--theme-font-mono, var(--default-mono-font-family));
+  --font-ui: var(--font-anthropic-sans);
+  --font-ui-serif: var(--font-anthropic-serif);
+  --font-sans-serif: var(--font-ui);
+  --font-serif: var(--font-ui-serif);
+  --font-system: system-ui, sans-serif;
+  --font-dyslexia: var(--font-open-dyslexic), "Comic Sans MS", ui-serif, Georgia, serif;
+  --font-mono: var(--font-jetbrains);
+  --font-user-message: var(--font-sans-serif);
+  --font-claude-response: var(--font-serif);
+  font-family: var(--font-ui);
+  font-weight: 300;
+
+  /* ============================================================================
+     SPACING & RADIUS (SHARED)
+     ============================================================================ */
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
+  --radius-pill: 9999px;
+}
+
+/* ============================================================================
+   DARK MODE (DEFAULT)
+   ============================================================================ */
+[data-theme="rains"],
+[data-theme="rains"].dark {
+  color-scheme: dark;
+
+  /* Color Palette - ChatGPT-inspired warm greys */
   --accent-brand: 15 55% 59%;
   --accent-main-000: 15 45% 52%;
   --accent-main-100: 15 55% 59%;
@@ -127,31 +161,13 @@
   --always-white: 0 0% 100%;
   --always-black: 0 0% 0%;
 
-  /* ============================================================================
-     FONT STACKS (PRESERVED FROM ORIGINAL)
-     ============================================================================ */
-  --default-font-family: "Inter", system-ui, "Segoe UI", Roboto, sans-serif;
-  --default-mono-font-family: "Fira Code", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  /* Ring color for dark mode */
+  --tw-ring-color: hsl(var(--accent-secondary-100) / 1);
 
-  --font-anthropic-sans: var(--theme-font-sans, var(--default-font-family));
-  --font-anthropic-serif: var(--theme-font-serif, Georgia, Cambria, "Times New Roman", Times, serif);
-  --font-open-dyslexic: var(--theme-font-serif, Georgia, serif);
-  --font-jetbrains: var(--theme-font-mono, var(--default-mono-font-family));
-  --font-ui: var(--font-anthropic-sans);
-  --font-ui-serif: var(--font-anthropic-serif);
-  --font-sans-serif: var(--font-ui);
-  --font-serif: var(--font-ui-serif);
-  --font-system: system-ui, sans-serif;
-  --font-dyslexia: var(--font-open-dyslexic), "Comic Sans MS", ui-serif, Georgia, serif;
-  --font-mono: var(--font-jetbrains);
-  --font-user-message: var(--font-sans-serif);
-  --font-claude-response: var(--font-serif);
-  font-family: var(--font-ui);
-  font-weight: 300;
+  /* Scrollbar for dark mode */
+  scrollbar-color: hsl(var(--border-300) / 0.35) transparent;
 
-  /* ============================================================================
-     SURFACE & SHADOW VARIABLES
-     ============================================================================ */
+  /* Surface & Shadow Variables - Dark */
   --surface-base: hsl(var(--bg-200));
   --surface-raised: hsl(var(--bg-100));
   --surface-muted: hsl(var(--bg-300));
@@ -166,19 +182,116 @@
   color: hsl(var(--text-000));
   border-color: hsl(var(--border-300) / 0.2);
   outline-color: hsl(var(--accent-secondary-100));
+}
 
-  /* ============================================================================
-     SPACING & RADIUS - ChatGPT-inspired
-     ============================================================================ */
-  --radius-sm: 6px;
-  --radius-md: 12px;
-  --radius-lg: 24px;
-  --radius-xl: 32px;
+/* ============================================================================
+   LIGHT MODE - Opus-inspired warm paper aesthetic
+   ============================================================================ */
+[data-theme="rains"].light {
+  color-scheme: light;
 
-  /* ============================================================================
-     QT-* VARIABLE OVERRIDES
-     ============================================================================ */
+  /* Color Palette - Warm & Minimalist */
+  --accent-brand: 10 53% 53%;           /* Terracotta #C75945 */
+  --accent-main-000: 10 53% 48%;
+  --accent-main-100: 10 53% 53%;
+  --accent-main-200: 10 53% 58%;
+  --accent-main-900: 10 40% 25%;
 
+  /* Pro/Purple Accent - Adjusted for light */
+  --accent-pro-000: 251 60% 60%;
+  --accent-pro-100: 251 50% 50%;
+  --accent-pro-200: 251 45% 45%;
+  --accent-pro-900: 250 35% 85%;
+
+  /* Secondary/Blue Accent - Adjusted for light */
+  --accent-secondary-000: 210 70% 45%;
+  --accent-secondary-100: 210 70% 50%;
+  --accent-secondary-200: 210 65% 55%;
+  --accent-secondary-900: 210 40% 90%;
+
+  /* Background Tones - Warm paper */
+  --bg-000: 0 0% 100%;         /* #FFFFFF - cards/inputs */
+  --bg-100: 30 22% 97%;        /* #FAF8F6 - main bg */
+  --bg-200: 30 11% 94%;        /* #F2F0EE - sidebar */
+  --bg-300: 30 15% 92%;        /* Slightly darker */
+  --bg-400: 30 12% 88%;
+  --bg-500: 30 10% 85%;
+
+  /* Border Tones - Subtle warm */
+  --border-100: 30 10% 89%;    /* #E6E4E2 */
+  --border-200: 30 8% 84%;
+  --border-300: 30 6% 78%;
+  --border-400: 45 6% 80%;     /* Focus ring #D0CFCB */
+
+  /* Status Colors - Adjusted for light bg */
+  --danger-000: 0 70% 55%;
+  --danger-100: 0 65% 50%;
+  --danger-200: 0 60% 45%;
+  --danger-900: 0 30% 95%;
+
+  --success-000: 142 60% 40%;
+  --success-100: 142 55% 35%;
+  --success-200: 142 50% 30%;
+  --success-900: 142 30% 95%;
+
+  --warning-000: 38 92% 50%;
+  --warning-100: 38 85% 45%;
+  --warning-200: 38 80% 40%;
+  --warning-900: 38 40% 95%;
+
+  /* On-Color Text - Dark on light accents */
+  --oncolor-100: 0 0% 100%;
+  --oncolor-200: 0 0% 100%;
+  --oncolor-300: 0 0% 10%;
+
+  /* Pictogram Tones - Light mode */
+  --pictogram-100: 30 8% 90%;
+  --pictogram-200: 30 10% 85%;
+  --pictogram-300: 30 8% 80%;
+  --pictogram-400: 30 6% 75%;
+
+  /* Text Colors - Sharp charcoal */
+  --text-000: 0 0% 10%;        /* #1A1A1A - primary */
+  --text-100: 0 0% 10%;
+  --text-200: 0 0% 35%;        /* #585858 - secondary */
+  --text-300: 0 0% 35%;
+  --text-400: 0 0% 50%;        /* Muted */
+  --text-500: 0 0% 60%;        /* Placeholder */
+
+  /* Always Colors */
+  --always-white: 0 0% 100%;
+  --always-black: 0 0% 0%;
+
+  /* Ring color for light mode */
+  --tw-ring-color: hsl(var(--accent-brand) / 0.5);
+
+  /* Scrollbar for light mode */
+  scrollbar-color: hsl(var(--border-300) / 0.5) transparent;
+
+  /* Surface & Shadow Variables - Light */
+  --surface-base: hsl(var(--bg-100));
+  --surface-raised: hsl(var(--bg-000));
+  --surface-muted: hsl(var(--bg-200));
+  --surface-deep: hsl(var(--bg-300));
+  --stroke-soft: hsl(var(--always-black) / 0.06);
+  --stroke-strong: hsl(var(--always-black) / 0.1);
+  --card-shadow: 0 2px 6px hsl(var(--always-black) / 0.04);
+  --chat-shadow: 0 1px 3px hsl(var(--always-black) / 0.03);
+
+  /* Apply base colors */
+  background-color: hsl(var(--bg-100));
+  color: hsl(var(--text-000));
+  border-color: hsl(var(--border-100));
+  outline-color: hsl(var(--accent-brand));
+}
+
+/* ============================================================================
+   QT-* VARIABLE OVERRIDES - SHARED STRUCTURE
+   Both modes use these, with colors coming from the mode-specific palette
+   ============================================================================ */
+[data-theme="rains"],
+[data-theme="rains"].dark,
+[data-theme="rains"].light {
   /* Button Variables */
   --qt-button-radius: var(--radius-sm);
   --qt-button-primary-bg: hsl(var(--accent-brand));
@@ -199,7 +312,7 @@
   --qt-button-destructive-fg: hsl(var(--oncolor-100));
   --qt-button-destructive-hover-bg: hsl(var(--danger-000));
 
-  /* Copy Button Variables - Warm grey style */
+  /* Copy Button Variables */
   --qt-copy-button-bg: hsl(var(--bg-100) / 0.9);
   --qt-copy-button-text: hsl(var(--text-200));
   --qt-copy-button-border: hsl(var(--border-300) / 0.2);
@@ -234,19 +347,19 @@
   --qt-card-border: var(--stroke-strong);
   --qt-card-border-opacity: 1;
   --qt-card-shadow: var(--card-shadow);
-  --qt-card-shadow-hover: 0 4px 8px hsl(var(--always-black) / 0.15);
+  --qt-card-shadow-hover: 0 4px 8px hsl(var(--always-black) / 0.08);
 
   /* Input Variables */
   --qt-input-radius: var(--radius-md);
-  --qt-input-bg: hsl(var(--bg-100));
+  --qt-input-bg: hsl(var(--bg-000));
   --qt-input-fg: hsl(var(--text-000));
   --qt-input-border: var(--stroke-strong);
-  --qt-input-placeholder: hsl(var(--text-200));
-  --qt-input-focus-ring: hsl(var(--accent-secondary-100));
+  --qt-input-placeholder: hsl(var(--text-400));
+  --qt-input-focus-ring: hsl(var(--accent-brand));
 
   /* Navbar Variables */
   --qt-navbar-height: 4rem;
-  --qt-navbar-bg: hsl(var(--bg-300));
+  --qt-navbar-bg: hsl(var(--bg-200));
   --qt-navbar-border: var(--stroke-soft);
   --qt-navbar-blur: blur(0);
   --qt-navbar-shadow: none;
@@ -259,7 +372,7 @@
 
   /* Sidebar Variables */
   --qt-sidebar-width: 260px;
-  --qt-sidebar-bg: hsl(var(--bg-300));
+  --qt-sidebar-bg: hsl(var(--bg-200));
   --qt-sidebar-border: var(--stroke-soft);
   --qt-sidebar-item-padding-x: 0.75rem;
   --qt-sidebar-item-padding-y: 0.625rem;
@@ -275,10 +388,10 @@
   --qt-panel-shadow: var(--card-shadow);
 
   --qt-dialog-radius: var(--radius-md);
-  --qt-dialog-bg: hsl(var(--bg-100));
+  --qt-dialog-bg: hsl(var(--bg-000));
   --qt-dialog-border: var(--stroke-strong);
   --qt-dialog-shadow: 0 4px 6px hsl(var(--always-black) / 0.1);
-  --qt-dialog-backdrop: hsl(var(--always-black) / 0.7);
+  --qt-dialog-backdrop: hsl(var(--always-black) / 0.5);
 
   --qt-popover-radius: var(--radius-md);
   --qt-popover-bg: var(--surface-raised);
@@ -291,17 +404,17 @@
   --qt-chat-message-padding: 1rem;
   --qt-chat-message-shadow: var(--chat-shadow);
 
-  --qt-chat-user-bg: hsl(var(--bg-100));
+  --qt-chat-user-bg: hsl(var(--bg-000));
   --qt-chat-user-fg: hsl(var(--text-000));
   --qt-chat-user-border: var(--stroke-strong);
   --qt-chat-user-font: var(--font-user-message);
 
-  --qt-chat-assistant-bg: hsl(var(--bg-200));
+  --qt-chat-assistant-bg: var(--surface-base);
   --qt-chat-assistant-fg: hsl(var(--text-200));
   --qt-chat-assistant-border: var(--stroke-soft);
   --qt-chat-assistant-font: var(--font-claude-response);
 
-  --qt-chat-composer-bg: hsl(var(--bg-100));
+  --qt-chat-composer-bg: hsl(var(--bg-000));
   --qt-chat-composer-border: var(--stroke-strong);
   --qt-chat-composer-radius: var(--radius-md);
   --qt-chat-composer-padding-x: 0.75rem;
@@ -318,14 +431,14 @@
   --qt-chat-attachment-overlay: rgb(0 0 0 / 0.55);
 
   --qt-chat-sidebar-width: 21rem;
-  --qt-chat-sidebar-bg: hsl(var(--bg-300));
+  --qt-chat-sidebar-bg: hsl(var(--bg-200));
   --qt-chat-sidebar-border: var(--stroke-soft);
   --qt-chat-sidebar-header-border: var(--stroke-soft);
   --qt-chat-sidebar-muted: hsl(var(--text-400));
   --qt-chat-sidebar-heading: hsl(var(--text-000));
 
   --qt-participant-card-radius: var(--radius-sm);
-  --qt-participant-card-bg: hsl(var(--bg-100));
+  --qt-participant-card-bg: hsl(var(--bg-000));
   --qt-participant-card-border: var(--stroke-strong);
   --qt-participant-card-active-border: hsl(var(--accent-brand) / 0.6);
   --qt-participant-card-active-shadow: none;
@@ -346,14 +459,14 @@
   --qt-badge-outline-fg: hsl(var(--text-100));
   --qt-badge-outline-border: hsl(var(--border-300) / 0.5);
 
-  /* Highlight Variables - Clay/orange accent for search highlights */
-  --qt-highlight-bg: hsl(var(--accent-brand) / 0.3);
+  /* Highlight Variables */
+  --qt-highlight-bg: hsl(var(--accent-brand) / 0.2);
   --qt-highlight-fg: hsl(var(--text-000));
   --qt-highlight-radius: 0.125rem;
   --qt-highlight-padding-x: 0.125rem;
   --qt-highlight-font-weight: 500;
 
-  /* Filter Chip Variables - Clay/orange accent for active state */
+  /* Filter Chip Variables */
   --qt-filter-chip-active-bg: hsl(var(--accent-brand));
   --qt-filter-chip-active-fg: hsl(var(--oncolor-100));
   --qt-filter-chip-active-border: transparent;
@@ -374,7 +487,7 @@
 
   /* Code Block Variables */
   --qt-code-radius: var(--radius-sm);
-  --qt-code-bg: hsl(var(--bg-300));
+  --qt-code-bg: hsl(var(--bg-200));
   --qt-code-fg: hsl(var(--text-000));
   --qt-code-border: var(--stroke-soft);
   --qt-code-font: var(--font-mono);
@@ -386,7 +499,7 @@
   --qt-link-decoration-hover: underline;
 
   /* Footer Variables */
-  --qt-footer-bg: hsl(var(--bg-300));
+  --qt-footer-bg: hsl(var(--bg-200));
   --qt-footer-border: var(--stroke-soft);
   --qt-footer-fg: hsl(var(--text-200));
   --qt-footer-link-hover: hsl(var(--text-000));
@@ -416,7 +529,7 @@
 
   /* Auth Page Variables */
   --qt-auth-page-bg: hsl(var(--bg-200));
-  --qt-auth-card-bg: hsl(var(--bg-100));
+  --qt-auth-card-bg: hsl(var(--bg-000));
   --qt-auth-card-fg: hsl(var(--text-000));
   --qt-auth-title-fg: hsl(var(--text-000));
   --qt-auth-subtitle-fg: hsl(var(--text-400));
@@ -425,9 +538,7 @@
   --qt-auth-footer-fg: hsl(var(--text-400));
   --qt-auth-divider-color: var(--stroke-strong);
 
-  /* ==========================================================================
-     TAB VARIABLES
-     ========================================================================== */
+  /* Tab Variables */
   --qt-tab-radius: var(--radius-sm) var(--radius-sm) 0 0;
   --qt-tab-padding-x: 1rem;
   --qt-tab-padding-y: 0.625rem;
@@ -443,14 +554,12 @@
   --qt-tab-active-border: var(--stroke-soft);
   --qt-tab-divider-color: var(--stroke-soft);
 
-  /* ==========================================================================
-     ROLEPLAY ANNOTATION VARIABLES
-     ========================================================================== */
+  /* Roleplay Annotation Variables */
   --qt-rp-dialogue-color: hsl(var(--text-000));
   --qt-rp-dialogue-bg: transparent;
 
   --qt-rp-narration-color: hsl(var(--text-200));
-  --qt-rp-narration-bg: hsl(var(--bg-300));
+  --qt-rp-narration-bg: hsl(var(--bg-200));
   --qt-rp-narration-style: normal;
   --qt-rp-narration-padding: 0.125rem 0.375rem;
   --qt-rp-narration-radius: 0.25rem;
@@ -461,8 +570,8 @@
   --qt-rp-inner-monologue-padding: 0.125rem 0.375rem;
   --qt-rp-inner-monologue-radius: 0.25rem;
 
-  --qt-rp-ooc-color: hsl(120 100% 60%);
-  --qt-rp-ooc-bg: hsl(0 0% 5%);
+  --qt-rp-ooc-color: hsl(120 100% 30%);
+  --qt-rp-ooc-bg: hsl(120 20% 95%);
   --qt-rp-ooc-font: var(--font-mono);
   --qt-rp-ooc-padding: 0.125rem 0.375rem;
   --qt-rp-ooc-radius: 0.25rem;
@@ -471,12 +580,10 @@
   --qt-rp-button-narration-fg: hsl(var(--text-000));
   --qt-rp-button-internal-bg: hsl(var(--accent-pro-100));
   --qt-rp-button-internal-fg: hsl(var(--oncolor-100));
-  --qt-rp-button-ooc-bg: hsl(120 100% 20%);
-  --qt-rp-button-ooc-fg: hsl(120 100% 75%);
+  --qt-rp-button-ooc-bg: hsl(120 40% 85%);
+  --qt-rp-button-ooc-fg: hsl(120 60% 25%);
 
-  /* ==========================================================================
-     DEVCONSOLE VARIABLES
-     ========================================================================== */
+  /* DevConsole Variables */
   --qt-devconsole-bg: hsl(var(--bg-200));
   --qt-devconsole-header-bg: hsl(var(--bg-100));
   --qt-devconsole-tabs-bg: hsl(var(--bg-300));
@@ -484,18 +591,18 @@
   --qt-devconsole-footer-bg: hsl(var(--bg-100));
   --qt-devconsole-border: var(--stroke-strong);
 
-  --qt-log-error-bg: hsl(0 40% 12%);
-  --qt-log-error-fg: hsl(var(--danger-000));
+  --qt-log-error-bg: hsl(0 40% 95%);
+  --qt-log-error-fg: hsl(var(--danger-100));
   --qt-log-error-border: hsl(var(--danger-100));
-  --qt-log-error-details-bg: hsl(0 35% 10%);
-  --qt-log-error-stack-fg: hsl(var(--danger-000) / 0.85);
+  --qt-log-error-details-bg: hsl(0 35% 93%);
+  --qt-log-error-stack-fg: hsl(var(--danger-100) / 0.85);
 
-  --qt-log-warn-bg: hsl(38 40% 12%);
-  --qt-log-warn-fg: hsl(var(--warning-000));
+  --qt-log-warn-bg: hsl(38 60% 95%);
+  --qt-log-warn-fg: hsl(var(--warning-100));
   --qt-log-warn-border: hsl(var(--warning-100));
 
-  --qt-log-info-bg: hsl(210 40% 12%);
-  --qt-log-info-fg: hsl(var(--accent-secondary-000));
+  --qt-log-info-bg: hsl(210 60% 95%);
+  --qt-log-info-fg: hsl(var(--accent-secondary-100));
   --qt-log-info-border: hsl(var(--accent-secondary-100));
 
   --qt-log-debug-bg: hsl(var(--bg-100));
@@ -506,11 +613,75 @@
   --qt-log-default-fg: hsl(var(--text-200));
   --qt-log-default-border: var(--stroke-soft);
 
-  --qt-debug-outgoing-bg: hsl(210 35% 14%);
+  --qt-debug-outgoing-bg: hsl(210 50% 95%);
   --qt-debug-outgoing-border: hsl(var(--accent-secondary-100));
+  --qt-debug-outgoing-fg: hsl(var(--accent-secondary-100));
+  --qt-debug-incoming-bg: hsl(142 50% 95%);
+  --qt-debug-incoming-border: hsl(var(--success-100));
+  --qt-debug-incoming-fg: hsl(var(--success-100));
+
+  --qt-debug-cyan-bg: hsl(187 50% 95%);
+  --qt-debug-cyan-fg: hsl(187 60% 35%);
+  --qt-debug-cyan-hover: hsl(187 50% 92%);
+  --qt-debug-cyan-border: hsl(187 40% 70%);
+  --qt-debug-cyan-content-bg: hsl(187 50% 97%);
+  --qt-debug-cyan-meta: hsl(187 60% 40%);
+
+  --qt-debug-violet-bg: hsl(var(--accent-pro-900));
+  --qt-debug-violet-fg: hsl(var(--accent-pro-100));
+  --qt-debug-violet-hover: hsl(251 30% 92%);
+  --qt-debug-violet-border: hsl(251 40% 75%);
+  --qt-debug-violet-content-bg: hsl(251 30% 97%);
+  --qt-debug-violet-meta: hsl(var(--accent-pro-100));
+
+  --qt-debug-emerald-bg: hsl(152 50% 95%);
+  --qt-debug-emerald-fg: hsl(152 55% 35%);
+  --qt-debug-emerald-hover: hsl(152 50% 92%);
+  --qt-debug-emerald-border: hsl(152 40% 70%);
+  --qt-debug-emerald-content-bg: hsl(152 50% 97%);
+  --qt-debug-emerald-meta: hsl(152 55% 40%);
+
+  --qt-debug-amber-bg: hsl(var(--warning-900));
+  --qt-debug-amber-fg: hsl(var(--warning-100));
+  --qt-debug-amber-hover: hsl(38 60% 92%);
+  --qt-debug-amber-border: hsl(38 50% 70%);
+  --qt-debug-amber-content-bg: hsl(38 60% 97%);
+  --qt-debug-amber-meta: hsl(var(--warning-100));
+
+  --qt-debug-purple-bg: hsl(280 50% 95%);
+  --qt-debug-purple-fg: hsl(280 55% 45%);
+  --qt-debug-purple-hover: hsl(280 50% 92%);
+  --qt-debug-purple-border: hsl(280 40% 75%);
+  --qt-debug-purple-content-bg: hsl(280 50% 97%);
+  --qt-debug-purple-meta: hsl(280 55% 50%);
+
+  --qt-debug-indigo-bg: hsl(239 50% 95%);
+  --qt-debug-indigo-fg: hsl(239 55% 50%);
+  --qt-debug-indigo-hover: hsl(239 50% 92%);
+  --qt-debug-indigo-border: hsl(239 45% 75%);
+  --qt-debug-indigo-content-bg: hsl(239 50% 97%);
+  --qt-debug-indigo-meta: hsl(239 55% 55%);
+}
+
+/* ============================================================================
+   DARK MODE SPECIFIC OVERRIDES
+   ============================================================================ */
+[data-theme="rains"].dark {
+  /* Dark mode specific devconsole colors */
+  --qt-log-error-bg: hsl(0 40% 12%);
+  --qt-log-error-fg: hsl(var(--danger-000));
+  --qt-log-error-details-bg: hsl(0 35% 10%);
+  --qt-log-error-stack-fg: hsl(var(--danger-000) / 0.85);
+
+  --qt-log-warn-bg: hsl(38 40% 12%);
+  --qt-log-warn-fg: hsl(var(--warning-000));
+
+  --qt-log-info-bg: hsl(210 40% 12%);
+  --qt-log-info-fg: hsl(var(--accent-secondary-000));
+
+  --qt-debug-outgoing-bg: hsl(210 35% 14%);
   --qt-debug-outgoing-fg: hsl(var(--accent-secondary-000));
   --qt-debug-incoming-bg: hsl(97 35% 12%);
-  --qt-debug-incoming-border: hsl(var(--success-100));
   --qt-debug-incoming-fg: hsl(var(--success-000));
 
   --qt-debug-cyan-bg: hsl(187 35% 12%);
@@ -554,7 +725,29 @@
   --qt-debug-indigo-border: hsl(239 45% 45%);
   --qt-debug-indigo-content-bg: hsl(239 35% 11%);
   --qt-debug-indigo-meta: hsl(239 70% 68%);
+
+  /* Dark mode OOC styling */
+  --qt-rp-ooc-color: hsl(120 100% 60%);
+  --qt-rp-ooc-bg: hsl(0 0% 5%);
+  --qt-rp-button-ooc-bg: hsl(120 100% 20%);
+  --qt-rp-button-ooc-fg: hsl(120 100% 75%);
 }
+
+/* ============================================================================
+   LIGHT MODE SPECIFIC OVERRIDES
+   ============================================================================ */
+[data-theme="rains"].light {
+  /* Links use terracotta accent in light mode for cohesion */
+  --qt-link-color: hsl(var(--accent-brand));
+  --qt-link-hover-color: hsl(var(--accent-main-000));
+
+  /* Slightly more visible highlight in light mode */
+  --qt-highlight-bg: hsl(var(--accent-brand) / 0.15);
+}
+
+/* ============================================================================
+   COMPONENT CLASS OVERRIDES (BOTH MODES)
+   ============================================================================ */
 
 /* Body/App Shell */
 [data-theme="rains"] body,
@@ -562,11 +755,6 @@
   background: var(--surface-base);
   color: hsl(var(--text-000));
 }
-
-/* ============================================================================
-   QT-* CLASS OVERRIDES
-   Minimal overrides - most styling through variables
-   ============================================================================ */
 
 /* Primary Button - Solid with simple hover */
 [data-theme="rains"] .qt-button-primary {
@@ -592,7 +780,7 @@
   border-color: hsl(var(--border-300) / 0.25);
 }
 
-/* Headings - Serif font (preserved typography) */
+/* Headings - Serif font */
 [data-theme="rains"] h1,
 [data-theme="rains"] h2,
 [data-theme="rains"] h3,
@@ -605,91 +793,91 @@
 
 /* Sidebar item - Active state */
 [data-theme="rains"] .qt-sidebar-item-active {
-  background: hsl(var(--bg-100));
+  background: hsl(var(--bg-000));
 }
 
 /* Entity type badges */
 [data-theme="rains"] .qt-badge-character {
-  background: hsl(210 35% 15%);
-  color: hsl(var(--accent-secondary-000));
-  border: 1px solid hsl(var(--accent-secondary-100) / 0.4);
+  background: hsl(210 35% 90%);
+  color: hsl(var(--accent-secondary-100));
+  border: 1px solid hsl(var(--accent-secondary-100) / 0.3);
 }
 
 [data-theme="rains"] .qt-badge-persona {
-  background: hsl(var(--accent-pro-900) / 0.7);
-  color: hsl(var(--accent-pro-000));
-  border: 1px solid hsl(var(--accent-pro-100) / 0.4);
+  background: hsl(var(--accent-pro-900));
+  color: hsl(var(--accent-pro-100));
+  border: 1px solid hsl(var(--accent-pro-100) / 0.3);
 }
 
 [data-theme="rains"] .qt-badge-chat {
-  background: hsl(var(--success-900) / 0.5);
-  color: hsl(var(--success-000));
-  border: 1px solid hsl(var(--success-100) / 0.4);
+  background: hsl(var(--success-900));
+  color: hsl(var(--success-100));
+  border: 1px solid hsl(var(--success-100) / 0.3);
 }
 
 [data-theme="rains"] .qt-badge-tag {
-  background: hsl(25 40% 14%);
+  background: hsl(10 40% 92%);
   color: hsl(var(--accent-brand));
-  border: 1px solid hsl(var(--accent-brand) / 0.4);
+  border: 1px solid hsl(var(--accent-brand) / 0.3);
 }
 
 [data-theme="rains"] .qt-badge-memory {
-  background: hsl(330 35% 14%);
-  color: hsl(330 80% 75%);
-  border: 1px solid hsl(330 60% 50% / 0.4);
+  background: hsl(330 35% 92%);
+  color: hsl(330 60% 45%);
+  border: 1px solid hsl(330 60% 50% / 0.3);
 }
 
 [data-theme="rains"] .qt-badge-project {
-  background: hsl(185 35% 14%);
-  color: hsl(185 80% 70%);
-  border: 1px solid hsl(185 60% 45% / 0.4);
+  background: hsl(185 35% 92%);
+  color: hsl(185 60% 35%);
+  border: 1px solid hsl(185 60% 45% / 0.3);
 }
 
 /* Dashboard count badges */
 [data-theme="rains"] .qt-badge-characters {
-  background: hsl(210 35% 15%);
-  color: hsl(var(--accent-secondary-000));
+  background: hsl(210 35% 90%);
+  color: hsl(var(--accent-secondary-100));
 }
 
 [data-theme="rains"] .qt-badge-chats {
-  background: hsl(var(--success-900) / 0.5);
-  color: hsl(var(--success-000));
+  background: hsl(var(--success-900));
+  color: hsl(var(--success-100));
 }
 
 [data-theme="rains"] .qt-badge-personas {
-  background: hsl(var(--accent-pro-900) / 0.7);
-  color: hsl(var(--accent-pro-000));
+  background: hsl(var(--accent-pro-900));
+  color: hsl(var(--accent-pro-100));
 }
 
 /* Status badges */
 [data-theme="rains"] .qt-badge-enabled {
-  background: hsl(var(--success-900) / 0.4);
-  color: hsl(var(--success-000));
+  background: hsl(var(--success-900));
+  color: hsl(var(--success-100));
 }
 
 [data-theme="rains"] .qt-badge-disabled {
-  background: hsl(var(--bg-300));
+  background: hsl(var(--bg-200));
   color: hsl(var(--text-400));
 }
 
 /* Source badges */
 [data-theme="rains"] .qt-badge-source-included {
-  background: hsl(var(--accent-pro-900) / 0.6);
-  color: hsl(var(--accent-pro-000));
+  background: hsl(var(--accent-pro-900));
+  color: hsl(var(--accent-pro-100));
 }
 
 [data-theme="rains"] .qt-badge-source-npm {
-  background: hsl(0 40% 14%);
-  color: hsl(var(--danger-000));
+  background: hsl(0 40% 92%);
+  color: hsl(var(--danger-100));
 }
 
 [data-theme="rains"] .qt-badge-source-git {
-  background: hsl(25 40% 14%);
+  background: hsl(10 40% 92%);
   color: hsl(var(--accent-brand));
 }
 
 [data-theme="rains"] .qt-badge-source-manual {
-  background: hsl(var(--bg-300));
+  background: hsl(var(--bg-200));
   color: hsl(var(--text-200));
 }
 
@@ -697,25 +885,25 @@
 [data-theme="rains"] .qt-alert-error {
   background: hsl(var(--danger-900) / 0.35);
   border-color: hsl(var(--danger-100) / 0.5);
-  color: hsl(var(--danger-000));
+  color: hsl(var(--danger-100));
 }
 
 [data-theme="rains"] .qt-alert-warning {
   background: hsl(var(--warning-900) / 0.35);
   border-color: hsl(var(--warning-100) / 0.5);
-  color: hsl(var(--warning-000));
+  color: hsl(var(--warning-100));
 }
 
 [data-theme="rains"] .qt-alert-success {
   background: hsl(var(--success-900) / 0.35);
   border-color: hsl(var(--success-100) / 0.5);
-  color: hsl(var(--success-000));
+  color: hsl(var(--success-100));
 }
 
 [data-theme="rains"] .qt-alert-info {
   background: hsl(var(--accent-secondary-900) / 0.35);
   border-color: hsl(var(--accent-secondary-100) / 0.5);
-  color: hsl(var(--accent-secondary-000));
+  color: hsl(var(--accent-secondary-100));
 }
 
 /* Navbar link styling */
@@ -738,19 +926,19 @@
   color: hsl(var(--text-000));
 }
 
-/* Empty state title - Serif font (preserved typography) */
+/* Empty state title - Serif font */
 [data-theme="rains"] .qt-empty-state-title {
   font-family: Georgia, "Times New Roman", Times, serif;
 }
 
-/* Auth title - Serif font (preserved typography) */
+/* Auth title - Serif font */
 [data-theme="rains"] .qt-auth-title {
   font-family: Georgia, "Times New Roman", Times, serif;
 }
 
 /* Auth card */
 [data-theme="rains"] .qt-auth-card {
-  background: hsl(var(--bg-100));
+  background: hsl(var(--bg-000));
   border: 1px solid var(--stroke-strong);
   box-shadow: var(--card-shadow);
   border-radius: var(--radius-md);
@@ -779,28 +967,28 @@
 [data-theme="rains"] .qt-input:focus,
 [data-theme="rains"] .qt-textarea:focus,
 [data-theme="rains"] .qt-select:focus {
-  border-color: hsl(var(--accent-secondary-100));
-  box-shadow: 0 0 0 2px hsl(var(--accent-secondary-000) / 0.15);
+  border-color: hsl(var(--accent-brand));
+  box-shadow: 0 0 0 2px hsl(var(--accent-brand) / 0.15);
 }
 
-/* Wikilinks - Clay/orange accent matching theme */
+/* Wikilinks */
 [data-theme="rains"] .qt-wikilink {
   color: hsl(var(--accent-brand));
-  background: hsl(var(--accent-brand) / 0.12);
+  background: hsl(var(--accent-brand) / 0.1);
 }
 
 [data-theme="rains"] .qt-wikilink:hover {
-  background: hsl(var(--accent-brand) / 0.22);
+  background: hsl(var(--accent-brand) / 0.2);
 }
 
 [data-theme="rains"] .qt-wikilink-broken {
   color: hsl(var(--text-400));
-  background: hsl(var(--bg-300));
+  background: hsl(var(--bg-200));
 }
 
-/* File preview panel - Warm grey for consistency */
+/* File preview panel */
 [data-theme="rains"] .qt-file-preview-panel {
-  background: hsl(var(--bg-300) / 0.5);
+  background: hsl(var(--bg-200) / 0.5);
 }
 
 /* ============================================================================
@@ -828,12 +1016,12 @@
    SELECTION & FOCUS
    ============================================================================ */
 [data-theme="rains"] ::selection {
-  background: hsl(var(--accent-secondary-000) / 0.35);
+  background: hsl(var(--accent-brand) / 0.25);
   color: hsl(var(--text-000));
 }
 
 [data-theme="rains"] :focus-visible {
-  outline: 2px solid hsl(var(--accent-secondary-100));
+  outline: 2px solid hsl(var(--accent-brand));
   outline-offset: 2px;
 }
 
