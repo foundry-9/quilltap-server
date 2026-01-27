@@ -39,6 +39,8 @@ import { removeAuthTablesMigration } from './remove-auth-tables';
 import { reencryptApiKeysMigration } from './reencrypt-api-keys';
 // Add defaultImageProfileId to characters
 import { addDefaultImageProfileFieldMigration } from './add-default-image-profile-field';
+// Migrate user plugins to site plugins (single-user mode)
+import { migrateUserPluginsToSiteMigration } from './migrate-user-plugins-to-site';
 
 /**
  * All available migrations.
@@ -73,6 +75,8 @@ export const migrations: Migration[] = [
   reencryptApiKeysMigration,
   // Add defaultImageProfileId to characters
   addDefaultImageProfileFieldMigration,
+  // Migrate user plugins to site plugins (single-user mode)
+  migrateUserPluginsToSiteMigration,
 ];
 
 export {
@@ -102,4 +106,6 @@ export {
   reencryptApiKeysMigration,
   // Add defaultImageProfileId to characters
   addDefaultImageProfileFieldMigration,
+  // Migrate user plugins to site plugins (single-user mode)
+  migrateUserPluginsToSiteMigration,
 };

@@ -1822,12 +1822,9 @@ Install a plugin from npm.
 **Request Body:**
 ```json
 {
-  "packageName": "qtap-plugin-example",
-  "scope": "user"
+  "packageName": "qtap-plugin-example"
 }
 ```
-
-- `scope` - Installation scope: `"user"` (personal) or `"site"` (shared across all users)
 
 **Response:**
 ```json
@@ -1851,8 +1848,7 @@ Uninstall an installed plugin.
 **Request Body:**
 ```json
 {
-  "packageName": "qtap-plugin-example",
-  "scope": "user"
+  "packageName": "qtap-plugin-example"
 }
 ```
 
@@ -1866,14 +1862,13 @@ Uninstall an installed plugin.
 
 **Notes:**
 - Bundled plugins cannot be uninstalled
-- Site-wide plugins require admin privileges (TODO)
 
 #### `GET /api/plugins/installed`
 
 Get all installed plugins with metadata.
 
 **Query Parameters:**
-- `scope` - Filter by scope: `"all"`, `"bundled"`, `"site"`, `"user"` (default: `"all"`)
+- `scope` - Filter by scope: `"all"`, `"bundled"`, `"site"` (default: `"all"`)
 - `check` - Package name to check installation status
 
 **Response:**

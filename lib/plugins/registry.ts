@@ -248,13 +248,8 @@ class PluginRegistry {
       initialized: this.state.initialized,
       lastScanTime: this.state.lastScanTime?.toISOString() || null,
       plugins: Array.from(this.state.plugins.entries()).map(([name, plugin]) => {
-        // Determine scope from plugin path
-        let scope: 'site' | 'user' | undefined;
-        if (plugin.pluginPath.includes(path.join('plugins', 'site'))) {
-          scope = 'site';
-        } else if (plugin.pluginPath.includes(path.join('plugins', 'users'))) {
-          scope = 'user';
-        }
+        // Determine scope from plugin path (site-installed vs bundled)
+        const scope = plugin.pluginPath.includes(path.join('plugins', 'site')) ? 'site' : undefined;
 
         return {
           name,

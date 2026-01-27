@@ -11,8 +11,7 @@ import {
   serverError,
   successResponse,
 } from '@/lib/api/responses';
-import { providerRegistry, hotLoadProviderPlugin } from '@/lib/plugins/provider-registry';
-import { scanPlugins } from '@/lib/plugins/manifest-loader';
+import { providerRegistry } from '@/lib/plugins/provider-registry';
 
 // ============================================================================
 // GET Handler
@@ -20,25 +19,6 @@ import { scanPlugins } from '@/lib/plugins/manifest-loader';
 
 export const GET = createAuthenticatedHandler(async (req, context) => {
   try {
-
-    // Lazy-load user's LLM provider plugins (not loaded at startup)
-    try {
-      const userPlugins = await scanPlugins(undefined, context.user.id);
-      for (const plugin of userPlugins.plugins) {
-        if (plugin.manifest.capabilities.includes('LLM_PROVIDER')) {
-          // Try to hot-load if not already registered
-          if (!providerRegistry.hasProvider(plugin.manifest.providerConfig?.providerName || '')) {hotLoadProviderPlugin(plugin.pluginPath, plugin.manifest);
-          }
-        }
-      }
-    } catch (error) {
-      logger.warn('[Providers v1] Failed to scan user plugins for lazy-loading', {
-        userId: context.user.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      // Continue anyway - user plugins are optional
-    }
-
     // Get all registered providers
     const plugins = providerRegistry.getAllProviders();
 

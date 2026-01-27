@@ -12,7 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { pluginRegistry } from '@/lib/plugins/registry';
 import { initializePlugins } from '@/lib/startup/plugin-initialization';
-import { installPluginFromNpm, uninstallPlugin, type PluginScope } from '@/lib/plugins/installer';
+import { installPluginFromNpm, uninstallPlugin } from '@/lib/plugins/installer';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { badRequest, serverError, validationError } from '@/lib/api/responses';
@@ -29,12 +29,10 @@ const searchPluginsSchema = z.object({
 const installPluginSchema = z.object({
   packageName: z.string().min(1, 'Package name is required'),
   version: z.string().optional(),
-  scope: z.enum(['site', 'user']).optional().prefault('user'),
 });
 
 const uninstallPluginSchema = z.object({
   packageName: z.string().min(1, 'Package name is required'),
-  scope: z.enum(['site', 'user']).optional().prefault('user'),
 });
 
 type SearchPluginsInput = z.infer<typeof searchPluginsSchema>;
@@ -149,15 +147,10 @@ async function handleInstall(req: NextRequest, context: any) {
       userId: context.user.id,
       packageName: validatedData.packageName,
       version: validatedData.version,
-      scope: validatedData.scope,
     });
 
     // Call the actual install function
-    const result = await installPluginFromNpm(
-      validatedData.packageName,
-      validatedData.scope as PluginScope,
-      validatedData.scope === 'user' ? context.user.id : undefined
-    );
+    const result = await installPluginFromNpm(validatedData.packageName);
 
     if (!result.success) {
       logger.warn('[Plugins v1] Plugin install failed', {
@@ -171,7 +164,6 @@ async function handleInstall(req: NextRequest, context: any) {
     logger.info('[Plugins v1] Plugin installed successfully', {
       userId: context.user.id,
       packageName: validatedData.packageName,
-      scope: validatedData.scope,
     });
 
     // Reinitialize plugin system to reflect changes
@@ -211,15 +203,10 @@ async function handleUninstall(req: NextRequest, context: any) {
     logger.info('[Plugins v1] POST uninstall', {
       userId: context.user.id,
       packageName: validatedData.packageName,
-      scope: validatedData.scope,
     });
 
     // Call the actual uninstall function
-    const result = await uninstallPlugin(
-      validatedData.packageName,
-      validatedData.scope as PluginScope,
-      validatedData.scope === 'user' ? context.user.id : undefined
-    );
+    const result = await uninstallPlugin(validatedData.packageName);
 
     if (!result.success) {
       logger.warn('[Plugins v1] Plugin uninstall failed', {
@@ -233,7 +220,6 @@ async function handleUninstall(req: NextRequest, context: any) {
     logger.info('[Plugins v1] Plugin uninstalled successfully', {
       userId: context.user.id,
       packageName: validatedData.packageName,
-      scope: validatedData.scope,
     });
 
     // Reinitialize plugin system to reflect changes
@@ -261,7 +247,7 @@ async function handleUninstall(req: NextRequest, context: any) {
 // GET Handler
 // ============================================================================
 
-export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
+export const GET = createAuthenticatedHandler(async (req: NextRequest, { user }) => {
   try {
 
     // Ensure plugin system is initialized before accessing registry
@@ -274,50 +260,19 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
     const { searchParams } = new URL(req.url);
     const filter = searchParams.get('filter');
 
-    // Get site/bundled plugins from registry
+    // Get all plugins from registry
     const state = pluginRegistry.exportState();
     const plugins = [...state.plugins];
 
-    // Also scan user-specific plugins
-    const { scanPlugins } = await import('@/lib/plugins/manifest-loader');
-    const userScanResult = await scanPlugins(undefined, user.id);
-    
-    // Add user plugins to the list (filter to only user-scoped ones to avoid duplicates)
-    const userPlugins = userScanResult.plugins
-      .filter(plugin => plugin.pluginPath.includes(`plugins/users/${user.id}`))
-      .map(plugin => ({
-        name: plugin.manifest.name,
-        title: plugin.manifest.title,
-        version: plugin.packageVersion ?? plugin.manifest.version,
-        enabled: plugin.enabled,
-        capabilities: plugin.capabilities,
-        path: plugin.pluginPath,
-        source: plugin.source,
-        scope: 'user' as const,
-        packageName: plugin.packageName,
-        hasConfigSchema: Array.isArray(plugin.manifest.configSchema) && plugin.manifest.configSchema.length > 0,
-      }));
-    
-    const allPlugins = [...plugins, ...userPlugins];
-
     // Apply filter
-    let filteredPlugins = allPlugins;
+    let filteredPlugins = plugins;
     if (filter === 'installed') {
-      filteredPlugins = allPlugins.filter((p: any) => p.enabled);}
-
-    // Calculate stats including user plugins
-    const totalPlugins = allPlugins.length;
-    const enabledPlugins = allPlugins.filter((p: any) => p.enabled).length;
-    const stats = {
-      ...state.stats,
-      total: totalPlugins,
-      enabled: enabledPlugins,
-      disabled: totalPlugins - enabledPlugins,
-    };
+      filteredPlugins = plugins.filter((p: any) => p.enabled);
+    }
 
     return NextResponse.json({
       plugins: filteredPlugins,
-      stats,
+      stats: state.stats,
       errors: state.errors,
       count: filteredPlugins.length,
     });

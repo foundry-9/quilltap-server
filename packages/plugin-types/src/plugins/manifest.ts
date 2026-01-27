@@ -220,8 +220,8 @@ export interface InstalledPluginInfo extends PluginManifest {
   installedAt?: string;
   /** Last update timestamp */
   updatedAt?: string;
-  /** Installation scope */
-  scope?: 'site' | 'user';
+  /** Installation scope (all plugins are site-wide) */
+  scope?: 'site';
   /** Path to installed plugin */
   installPath?: string;
 }

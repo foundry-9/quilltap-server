@@ -1,13 +1,12 @@
-# Feature Request: npm-based Plugin Installation
+# Feature: npm-based Plugin Installation
 
 ## Overview
 
-Enable users to discover, install, and manage Quilltap plugins from the npm registry. Plugins following the `qtap-plugin-*` naming convention can be searched, installed into the appropriate scope (site-wide or per-user), and loaded alongside bundled plugins.
+Enable users to discover, install, and manage Quilltap plugins from the npm registry. Plugins following the `qtap-plugin-*` naming convention can be searched, installed site-wide, and loaded alongside bundled plugins.
 
 ## Goals
 
-- Allow site admins to install shared plugins from npm
-- Allow individual users to install personal plugins
+- Allow installation of plugins from npm
 - Maintain the existing bundled plugin system
 - Validate plugins against the manifest schema before activation
 - Provide a frontend UI for browsing and installing plugins
@@ -20,19 +19,12 @@ plugins/
 │   ├── qtap-plugin-openai/
 │   ├── qtap-plugin-anthropic/
 │   └── ...
-├── site/                              # Site-admin installed plugins (shared across all users)
-│   ├── qtap-plugin-some-provider/
-│   │   ├── node_modules/
-│   │   ├── package.json
-│   │   └── ... (installed via npm)
-│   └── registry.json                  # Tracks installed site plugins
-└── users/                             # Per-user installed plugins
-    └── [user-uuid]/
-        ├── qtap-plugin-custom/
-        │   ├── node_modules/
-        │   ├── package.json
-        │   └── ...
-        └── registry.json              # Tracks this user's installed plugins
+└── site/                              # Installed plugins from npm
+    ├── qtap-plugin-some-provider/
+    │   ├── node_modules/
+    │   ├── package.json
+    │   └── ... (installed via npm)
+    └── registry.json                  # Tracks installed plugins
 ```
 
 ## Implementation Components
@@ -126,9 +118,7 @@ interface PluginRegistry {
 }
 
 export async function installPluginFromNpm(
-  packageName: string,
-  scope: 'site' | 'user',
-  userId?: string
+  packageName: string
 ): Promise<InstallResult> {
   // Validate naming convention
   if (!packageName.startsWith('qtap-plugin-')) {
@@ -140,17 +130,8 @@ export async function installPluginFromNpm(
     return { success: false, error: 'Invalid package name format' };
   }
 
-  // Determine installation directory
-  let pluginBaseDir: string;
-  if (scope === 'site') {
-    pluginBaseDir = path.join(process.cwd(), 'plugins', 'site');
-  } else {
-    if (!userId) {
-      return { success: false, error: 'User ID required for user-scoped plugins' };
-    }
-    pluginBaseDir = path.join(process.cwd(), 'plugins', 'users', userId);
-  }
-
+  // All plugins are installed site-wide
+  const pluginBaseDir = path.join(process.cwd(), 'plugins', 'site');
   const pluginDir = path.join(pluginBaseDir, packageName);
 
   logger.info('Installing plugin from npm', {
@@ -263,26 +244,15 @@ export async function installPluginFromNpm(
 }
 
 export async function uninstallPlugin(
-  packageName: string,
-  scope: 'site' | 'user',
-  userId?: string
+  packageName: string
 ): Promise<{ success: boolean; error?: string }> {
   // Validate naming convention
   if (!packageName.startsWith('qtap-plugin-')) {
     return { success: false, error: 'Invalid package name' };
   }
 
-  // Determine installation directory
-  let pluginBaseDir: string;
-  if (scope === 'site') {
-    pluginBaseDir = path.join(process.cwd(), 'plugins', 'site');
-  } else {
-    if (!userId) {
-      return { success: false, error: 'User ID required for user-scoped plugins' };
-    }
-    pluginBaseDir = path.join(process.cwd(), 'plugins', 'users', userId);
-  }
-
+  // All plugins are in the site directory
+  const pluginBaseDir = path.join(process.cwd(), 'plugins', 'site');
   const pluginDir = path.join(pluginBaseDir, packageName);
 
   logger.info('Uninstalling plugin', {
@@ -318,8 +288,7 @@ export async function uninstallPlugin(
 }
 
 export async function getInstalledPlugins(
-  scope: 'all' | 'bundled' | 'site' | 'user',
-  userId?: string
+  scope: 'all' | 'bundled' | 'site' = 'all'
 ): Promise<Array<{ name: string; version: string; source: string; manifest: any }>> {
   const plugins: Array<{ name: string; version: string; source: string; manifest: any }> = [];
 
@@ -337,19 +306,12 @@ export async function getInstalledPlugins(
     plugins.push(...site);
   }
 
-  // User plugins
-  if ((scope === 'all' || scope === 'user') && userId) {
-    const userDir = path.join(process.cwd(), 'plugins', 'users', userId);
-    const user = await scanPluginDirectory(userDir, 'user');
-    plugins.push(...user);
-  }
-
   return plugins;
 }
 
 async function scanPluginDirectory(
   baseDir: string,
-  source: 'bundled' | 'site' | 'user'
+  source: 'bundled' | 'site'
 ): Promise<Array<{ name: string; version: string; source: string; manifest: any }>> {
   const plugins: Array<{ name: string; version: string; source: string; manifest: any }> = [];
 
@@ -468,7 +430,7 @@ Add support for scanning site and user plugin directories alongside bundled plug
 ```typescript
 // Add to existing loader.ts
 
-export async function discoverAllPlugins(userId?: string): Promise<PluginInfo[]> {
+export async function discoverAllPlugins(): Promise<PluginInfo[]> {
   const plugins: PluginInfo[] = [];
 
   // 1. Load bundled plugins (highest priority, always loaded)
@@ -479,18 +441,12 @@ export async function discoverAllPlugins(userId?: string): Promise<PluginInfo[]>
   const siteDir = path.join(process.cwd(), 'plugins', 'site');
   plugins.push(...await scanPluginDirectoryForLoader(siteDir, 'site'));
 
-  // 3. Load user-installed plugins (if userId provided)
-  if (userId) {
-    const userDir = path.join(process.cwd(), 'plugins', 'users', userId);
-    plugins.push(...await scanPluginDirectoryForLoader(userDir, 'user'));
-  }
-
   return plugins;
 }
 
 async function scanPluginDirectoryForLoader(
   baseDir: string,
-  source: 'bundled' | 'site' | 'user'
+  source: 'bundled' | 'site'
 ): Promise<PluginInfo[]> {
   const plugins: PluginInfo[] = [];
 
@@ -543,7 +499,7 @@ interface PluginInfo {
   name: string;
   path: string;
   manifest: any;
-  source: 'bundled' | 'site' | 'user';
+  source: 'bundled' | 'site';
 }
 ```
 
@@ -561,26 +517,13 @@ export async function POST(req: Request) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { packageName, scope = 'user' } = await req.json();
+  const { packageName } = await req.json();
 
   if (!packageName || typeof packageName !== 'string') {
     return Response.json({ error: 'Package name required' }, { status: 400 });
   }
 
-  // Only admins can install site-wide plugins
-  // TODO: Add isAdmin check to user model
-  if (scope === 'site') {
-    // For now, allow any authenticated user; add admin check later
-    // if (!session.user.isAdmin) {
-    //   return Response.json({ error: 'Admin required for site plugins' }, { status: 403 });
-    // }
-  }
-
-  const result = await installPluginFromNpm(
-    packageName,
-    scope,
-    scope === 'user' ? session.user.id : undefined
-  );
+  const result = await installPluginFromNpm(packageName);
 
   if (!result.success) {
     return Response.json({ error: result.error }, { status: 400 });
@@ -606,27 +549,13 @@ export async function POST(req: Request) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { packageName, scope = 'user' } = await req.json();
+  const { packageName } = await req.json();
 
   if (!packageName || typeof packageName !== 'string') {
     return Response.json({ error: 'Package name required' }, { status: 400 });
   }
 
-  // Only admins can uninstall site-wide plugins
-  if (scope === 'site') {
-    // TODO: Add admin check
-  }
-
-  // Prevent uninstalling bundled plugins
-  if (scope === 'bundled') {
-    return Response.json({ error: 'Cannot uninstall bundled plugins' }, { status: 400 });
-  }
-
-  const result = await uninstallPlugin(
-    packageName,
-    scope,
-    scope === 'user' ? session.user.id : undefined
-  );
+  const result = await uninstallPlugin(packageName);
 
   if (!result.success) {
     return Response.json({ error: result.error }, { status: 400 });
@@ -652,9 +581,9 @@ export async function GET(req: Request) {
   }
 
   const { searchParams } = new URL(req.url);
-  const scope = (searchParams.get('scope') || 'all') as 'all' | 'bundled' | 'site' | 'user';
+  const scope = (searchParams.get('scope') || 'all') as 'all' | 'bundled' | 'site';
 
-  const plugins = await getInstalledPlugins(scope, session.user.id);
+  const plugins = await getInstalledPlugins(scope);
 
   return Response.json({ plugins });
 }
@@ -673,7 +602,7 @@ import { Button } from '@/components/ui/Button';
 interface InstalledPlugin {
   name: string;
   version: string;
-  source: 'bundled' | 'site' | 'user';
+  source: 'bundled' | 'site';
   manifest: {
     title: string;
     description: string;
@@ -734,7 +663,7 @@ export function PluginManager() {
       const res = await fetch('/api/plugins/install', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ packageName, scope: 'user' }),
+        body: JSON.stringify({ packageName }),
       });
 
       const data = await res.json();
@@ -964,7 +893,7 @@ import { PluginManager } from '@/components/settings/PluginManager';
 
 Add volume mounts for plugin persistence in docker-compose files:
 
-**docker-compose.dev-mongo.yml:**
+**docker-compose.dev.yml:**
 
 ```yaml
 services:
@@ -972,10 +901,6 @@ services:
     volumes:
       # ... existing volumes ...
       - ./plugins/site:/app/plugins/site
-      - plugin-user-data:/app/plugins/users
-
-volumes:
-  plugin-user-data:
 ```
 
 **docker-compose.prod.yml:**
@@ -986,7 +911,6 @@ services:
     volumes:
       # ... existing volumes ...
       - ./data/plugins/site:/app/plugins/site
-      - ./data/plugins/users:/app/plugins/users
 ```
 
 ## Security Considerations
@@ -994,9 +918,7 @@ services:
 1. **Package name validation**: Only allow `qtap-plugin-[a-z0-9-]+` pattern
 2. **Manifest validation**: Validate against existing JSON schema before loading
 3. **Version compatibility**: Check `quilltapVersion` in manifest.compatibility
-4. **Scope separation**: User plugins cannot affect other users
-5. **Admin controls**: Only admins should install site-wide plugins (TODO: implement isAdmin)
-6. **Network permissions**: Consider validating manifest.permissions.network domains
+4. **Network permissions**: Consider validating manifest.permissions.network domains
 
 ## Future Enhancements
 
@@ -1016,8 +938,7 @@ services:
 - [ ] Install updates registry.json
 - [ ] Uninstall removes directory and registry entry
 - [ ] Cannot uninstall bundled plugins
-- [ ] Plugin loader discovers plugins in all three locations
-- [ ] User plugins are isolated per user
+- [ ] Plugin loader discovers plugins in dist and site directories
 - [ ] UI shows installed plugins with correct source badges
 - [ ] UI allows searching and installing from npm
 - [ ] Restart activates newly installed plugins

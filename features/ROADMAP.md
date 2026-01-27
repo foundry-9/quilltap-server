@@ -6,7 +6,7 @@ This document tracks planned features and improvements for Quilltap.
 
 ### Authentication Enhancements
 
-- [ ] Make all plugins either dist or site-wide
+- [X] Make all plugins either dist or site-wide
 
 ## Planned Features
 

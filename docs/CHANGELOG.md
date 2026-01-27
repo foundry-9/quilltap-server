@@ -4,6 +4,14 @@
 
 ### 2.8-dev
 
+- **BREAKING**: Remove per-user plugin installation - all plugins are now site-wide only (2026-01-27)
+  - Removed `PluginScope` type and all user-scoped plugin installation code
+  - Plugins install to `plugins/site/` directory only
+  - Removed `plugins/users/` directory support
+  - Simplified plugin API - no more `scope` parameter on install/uninstall
+  - UI no longer shows "Install" vs "Install Site-wide" options
+  - Added `migrate-user-plugins-to-site-v1` migration to move existing user plugins to site directory
+  - Updated documentation in `features/complete/plugin_installation.md`
 - fix: Google API keys now appear in image profile form when selecting Google Gemini provider (2026-01-26)
   - Added `legacyNames` field to ProviderMetadata interface for backward compatibility
   - Plugins can now declare legacy provider names that should be treated as aliases

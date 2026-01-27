@@ -228,6 +228,9 @@ Only v2.7.0+ migrations are included in the codebase. Legacy migrations (v2.0.0â
 | sqlite-initial-schema-v1 | 2.8.0 | Create SQLite database schema | None |
 | create-folder-entities-v1 | 2.8.0 | Create folder entities | per-project-mount-points-v1 |
 | remove-auth-tables-v1 | 2.8.0 | Drop accounts and sessions tables (single-user mode) | None |
+| reencrypt-api-keys-v1 | 2.8.0 | Re-encrypt API keys after single-user migration | remove-auth-tables-v1 |
+| add-default-image-profile-field-v1 | 2.8.0 | Add defaultImageProfileId field to characters | None |
+| migrate-user-plugins-to-site-v1 | 2.9.0 | Migrate per-user plugins to site-wide directory (single-user mode) | None |
 
 **Notes**:
 - Minimum supported version for upgrades is v2.7.0

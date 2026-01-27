@@ -302,29 +302,17 @@ export const PUT = createAuthenticatedParamsHandler<{ name: string }>(
       // Try to find plugin by name first in registry
       let pluginName = name;
       let found = false;
-      
+
       if (pluginRegistry.has(pluginName)) {
         found = true;
       } else {
         // Try to find by package name if direct name lookup fails
         const allPlugins = pluginRegistry.getAll();
         const registryPlugin = allPlugins.find(p => p.packageName === name);
-        
+
         if (registryPlugin) {
           pluginName = registryPlugin.manifest.name;
           found = true;
-        } else {
-          // Try to find in user plugins
-          const { scanPlugins } = await import('@/lib/plugins/manifest-loader');
-          const userScanResult = await scanPlugins(undefined, user.id);
-          const userPlugin = userScanResult.plugins.find(
-            p => p.manifest.name === name || p.packageName === name
-          );
-          
-          if (userPlugin) {
-            pluginName = userPlugin.manifest.name;
-            found = true;
-          }
         }
       }
 

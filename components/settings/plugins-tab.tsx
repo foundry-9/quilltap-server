@@ -5,7 +5,7 @@ import { showErrorToast, showSuccessToast, showWarningToast } from '@/lib/toast'
 import { BrandName } from '@/components/ui/brand-name'
 import { PluginConfigModal } from './plugins/PluginConfigModal'
 
-type PluginSource = 'included' | 'npm' | 'git' | 'manual' | 'bundled' | 'site' | 'user'
+type PluginSource = 'included' | 'npm' | 'git' | 'manual' | 'bundled' | 'site'
 type ActiveTab = 'installed' | 'browse'
 
 interface DeploymentInfo {
@@ -21,7 +21,6 @@ interface Plugin {
   capabilities: string[]
   path: string
   source: PluginSource
-  scope?: 'site' | 'user'
   packageName?: string
   hasConfigSchema?: boolean
 }
@@ -32,7 +31,7 @@ interface InstalledPlugin {
   version: string
   description?: string
   author?: { name: string; email?: string; url?: string }
-  source: 'bundled' | 'site' | 'user'
+  source: 'bundled' | 'site'
   capabilities: string[]
   installedAt?: string
 }
@@ -70,13 +69,8 @@ const getSourceBadge = (source: PluginSource) => {
       }
     case 'site':
       return {
-        label: 'Site',
-        className: 'qt-badge-source-npm', // Using npm style for site plugins
-      }
-    case 'user':
-      return {
-        label: 'Personal',
-        className: 'qt-badge-source-manual', // Using manual style for user plugins
+        label: 'Installed',
+        className: 'qt-badge-source-npm',
       }
     case 'git':
       return {
@@ -229,13 +223,13 @@ export default function PluginsTab() {
     }
   }
 
-  const installPlugin = async (packageName: string, scope: 'site' | 'user' = 'user') => {
+  const installPlugin = async (packageName: string) => {
     setActionInProgress(packageName)
     try {
       const res = await fetch('/api/v1/plugins?action=install', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ packageName, scope }),
+        body: JSON.stringify({ packageName }),
       })
 
       const data = await res.json()
@@ -271,21 +265,18 @@ export default function PluginsTab() {
     }
   }
 
-  const uninstallPlugin = async (packageName: string, source: string, scope?: 'site' | 'user') => {
+  const uninstallPlugin = async (packageName: string, source: string) => {
     if (source === 'bundled' || source === 'included') {
       showErrorToast('Cannot uninstall bundled plugins')
       return
     }
-
-    // Use provided scope, or derive from source for backward compatibility
-    const pluginScope = scope || (source === 'site' ? 'site' : 'user')
 
     setActionInProgress(packageName)
     try {
       const res = await fetch('/api/v1/plugins?action=uninstall', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ packageName, scope: pluginScope }),
+        body: JSON.stringify({ packageName }),
       })
 
       const data = await res.json()
@@ -314,7 +305,7 @@ export default function PluginsTab() {
   }
 
   const canUninstall = (source: string): boolean => {
-    return source === 'site' || source === 'user' || source === 'npm'
+    return source === 'site' || source === 'npm'
   }
 
   if (loading) {
@@ -509,7 +500,7 @@ export default function PluginsTab() {
                         {/* Uninstall Button (for non-bundled plugins) */}
                         {canUninstall(plugin.source) && (
                           <button
-                            onClick={() => uninstallPlugin(plugin.packageName || plugin.name, plugin.source, plugin.scope)}
+                            onClick={() => uninstallPlugin(plugin.packageName || plugin.name, plugin.source)}
                             disabled={isUninstalling}
                             className="px-3 py-1 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors disabled:opacity-50"
                           >
@@ -677,23 +668,13 @@ export default function PluginsTab() {
                           Installed
                         </span>
                       ) : (
-                        <>
-                          <button
-                            onClick={() => installPlugin(plugin.name, 'user')}
-                            disabled={isInstalling}
-                            className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 transition-colors"
-                          >
-                            {isInstalling ? 'Installing...' : 'Install'}
-                          </button>
-                          <button
-                            onClick={() => installPlugin(plugin.name, 'site')}
-                            disabled={isInstalling}
-                            className="px-4 py-2 text-sm border border-border text-foreground rounded-md hover:bg-accent disabled:opacity-50 transition-colors"
-                            title="Install for all users"
-                          >
-                            Install Site-wide
-                          </button>
-                        </>
+                        <button
+                          onClick={() => installPlugin(plugin.name)}
+                          disabled={isInstalling}
+                          className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                        >
+                          {isInstalling ? 'Installing...' : 'Install'}
+                        </button>
                       )}
                     </div>
                   </div>
