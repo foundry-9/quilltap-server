@@ -49,6 +49,7 @@ This document tracks planned features and improvements for Quilltap.
 
 - [ ] Arcadia "art deco" theme to show off what the theme system can really do
 - [ ] Get theme-storybook to match the app for everything
+- [ ] Have the previews of themes actually match the themes
 
 ### Setup & Onboarding
 

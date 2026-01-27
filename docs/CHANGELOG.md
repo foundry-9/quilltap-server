@@ -4,6 +4,15 @@
 
 ### 2.8-dev
 
+- feat: Enhanced theme previews in Appearance settings (2026-01-27)
+  - Theme cards now have a "Preview" button that expands to show rich, interactive previews
+  - Preview panels render actual UI elements (buttons, inputs, badges, cards) with the theme's styling
+  - Shows both light and dark mode previews side-by-side for themes that support dark mode
+  - Preview CSS is scoped to prevent affecting page styling
+  - Theme fonts are loaded and displayed in previews
+  - Added `generateScopedThemeCSS` utility function for creating isolated theme CSS
+  - Added `useThemePreview` hook for lazy-loading theme tokens
+  - Created `ThemePreviewPanel` and `ThemePreviewElements` components
 - **BREAKING**: Remove per-user plugin installation - all plugins are now site-wide only (2026-01-27)
   - Removed `PluginScope` type and all user-scoped plugin installation code
   - Plugins install to `plugins/site/` directory only

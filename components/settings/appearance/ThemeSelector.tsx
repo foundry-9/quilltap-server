@@ -5,30 +5,15 @@
  *
  * Displays available themes as selectable cards with previews.
  * Includes default theme and plugin-provided themes.
+ * Supports expandable rich previews with only one expanded at a time.
  *
  * @module components/settings/appearance/ThemeSelector
  */
 
+import { useState, useCallback } from 'react'
 import type { ThemeSummary } from '@/components/providers/theme-provider'
 import { BrandName } from '@/components/ui/brand-name'
-import { DEFAULT_THEME_TOKENS } from '@/lib/themes/default-tokens'
 import { ThemeCard } from './components/ThemeCard'
-
-// Default theme preview colors (from DEFAULT_THEME_TOKENS)
-const DEFAULT_PREVIEW_COLORS = {
-  light: {
-    background: DEFAULT_THEME_TOKENS.colors.light.background,
-    primary: DEFAULT_THEME_TOKENS.colors.light.primary,
-    secondary: DEFAULT_THEME_TOKENS.colors.light.secondary,
-    accent: DEFAULT_THEME_TOKENS.colors.light.accent,
-  },
-  dark: {
-    background: DEFAULT_THEME_TOKENS.colors.dark.background,
-    primary: DEFAULT_THEME_TOKENS.colors.dark.primary,
-    secondary: DEFAULT_THEME_TOKENS.colors.dark.secondary,
-    accent: DEFAULT_THEME_TOKENS.colors.dark.accent,
-  },
-}
 
 interface ThemeSelectorProps {
   activeThemeId: string | null
@@ -46,6 +31,22 @@ export function ThemeSelector({
   isLoading = false,
   onThemeSelect,
 }: ThemeSelectorProps) {
+  // Track which theme has its preview expanded (null = none, 'default' = default theme)
+  const [expandedThemeId, setExpandedThemeId] = useState<string | null>(null)
+
+  // Handle toggle expand - only one can be expanded at a time
+  const handleToggleExpand = useCallback((themeId: string | null) => {
+    setExpandedThemeId((current) => {
+      // If clicking the same one that's expanded, collapse it
+      const key = themeId ?? 'default'
+      if (current === key) {
+        return null
+      }
+      // Otherwise expand this one (and implicitly collapse any other)
+      return key
+    })
+  }, [])
+
   return (
     <section className="border-t border-border pt-8">
       <h2 className="text-xl font-semibold mb-2 text-foreground">Theme</h2>
@@ -65,6 +66,8 @@ export function ThemeSelector({
           isActive={activeThemeId === null}
           onSelect={() => onThemeSelect(null)}
           disabled={isLoading}
+          isExpanded={expandedThemeId === 'default'}
+          onToggleExpand={() => handleToggleExpand(null)}
         />
 
         {/* Plugin Theme Cards */}
@@ -75,6 +78,8 @@ export function ThemeSelector({
             isActive={activeThemeId === theme.id}
             onSelect={() => onThemeSelect(theme.id)}
             disabled={isLoading}
+            isExpanded={expandedThemeId === theme.id}
+            onToggleExpand={() => handleToggleExpand(theme.id)}
           />
         ))}
       </div>

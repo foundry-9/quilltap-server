@@ -564,3 +564,158 @@ export {
   SPACING_VAR_MAP,
   EFFECTS_VAR_MAP,
 };
+
+// ============================================================================
+// SCOPED CSS GENERATION FOR THEME PREVIEWS
+// ============================================================================
+
+/**
+ * Generate scoped CSS for a theme preview
+ *
+ * Creates CSS that is scoped to a specific container class, allowing
+ * theme previews to be isolated from the rest of the page.
+ *
+ * @param tokens - Theme tokens
+ * @param fonts - Font definitions (optional)
+ * @param scopeClass - CSS class name for scoping (e.g., 'theme-preview-rains-light')
+ * @param mode - Color mode ('light' or 'dark')
+ * @returns Complete CSS string with font-face rules and scoped variables
+ */
+export function generateScopedThemeCSS(
+  tokens: ThemeTokens,
+  fonts: FontFaceDefinition[] | undefined,
+  scopeClass: string,
+  mode: 'light' | 'dark'
+): string {
+  const colors = mode === 'light' ? tokens.colors.light : tokens.colors.dark;
+  const colorVars = generateColorVariables(colors);
+
+  const typographyVars = tokens.typography
+    ? generateTypographyVariables(tokens.typography)
+    : [];
+  const spacingVars = tokens.spacing
+    ? generateSpacingVariables(tokens.spacing)
+    : [];
+  const effectsVars = tokens.effects
+    ? generateEffectsVariables(tokens.effects)
+    : [];
+
+  // Generate font-face rules
+  const fontFaces = fonts && fonts.length > 0
+    ? generateFontFacesCSS(fonts)
+    : '';
+
+  // Component variables that need to be re-declared so they pick up
+  // the scoped --color-* values (CSS custom properties don't auto-update)
+  const componentVars = `
+  /* Button variables - re-declared for scoped colors */
+  --qt-button-primary-bg: var(--color-primary);
+  --qt-button-primary-fg: var(--color-primary-foreground);
+  --qt-button-primary-hover-bg: color-mix(in srgb, var(--color-primary) 90%, black);
+  --qt-button-secondary-bg: var(--color-secondary);
+  --qt-button-secondary-fg: var(--color-secondary-foreground);
+  --qt-button-secondary-border: var(--color-border);
+  --qt-button-secondary-hover-bg: color-mix(in srgb, var(--color-secondary) 80%, black);
+  --qt-button-ghost-bg: transparent;
+  --qt-button-ghost-fg: var(--color-foreground);
+  --qt-button-ghost-hover-bg: var(--color-muted);
+
+  /* Input variables */
+  --qt-input-bg: var(--color-background);
+  --qt-input-fg: var(--color-foreground);
+  --qt-input-border: var(--color-input);
+  --qt-input-focus-ring: var(--color-ring);
+
+  /* Card variables */
+  --qt-card-bg: var(--color-card);
+  --qt-card-fg: var(--color-card-foreground);
+  --qt-card-border: var(--color-border);
+
+  /* Badge variables */
+  --qt-badge-primary-bg: var(--color-primary);
+  --qt-badge-primary-fg: var(--color-primary-foreground);
+  --qt-badge-secondary-bg: var(--color-secondary);
+  --qt-badge-secondary-fg: var(--color-secondary-foreground);
+
+  /* Typography variables */
+  --qt-text-secondary-fg: var(--color-muted-foreground);
+  --qt-heading-font: var(--theme-font-sans, var(--font-sans));
+
+  /* Status colors for badges */
+  --qt-status-success-bg: color-mix(in srgb, var(--color-success, hsl(142 76% 36%)) 85%, transparent);
+  --qt-status-success-fg: var(--color-success-foreground, hsl(142 76% 30%));
+  --qt-status-success-border: var(--color-success, hsl(142 76% 36%));`;
+
+  // Dark mode specific component variables
+  const darkModeComponentVars = mode === 'dark' ? `
+  /* Dark mode badge adjustments */
+  --qt-badge-character-bg: hsl(217 91% 60% / 0.3);
+  --qt-badge-character-fg: hsl(217 91% 70%);
+  --qt-badge-chat-bg: hsl(142 76% 36% / 0.3);
+  --qt-badge-chat-fg: hsl(142 76% 65%);
+  --qt-status-success-bg: color-mix(in srgb, var(--color-success, hsl(142 76% 36%)) 30%, transparent);
+  --qt-status-success-fg: hsl(142 76% 65%);` : `
+  /* Light mode badge adjustments */
+  --qt-badge-character-bg: hsl(217 91% 60% / 0.15);
+  --qt-badge-character-fg: hsl(217 91% 45%);
+  --qt-badge-chat-bg: hsl(142 76% 36% / 0.15);
+  --qt-badge-chat-fg: hsl(142 76% 30%);`;
+
+  // Generate the scoped CSS
+  const css = `
+${fontFaces}
+
+.${scopeClass} {
+  /* Color variables */
+  ${colorVars.join('\n  ')}
+
+  /* Map theme variables to color variables for Tailwind */
+  --color-background: var(--theme-background);
+  --color-foreground: var(--theme-foreground);
+  --color-primary: var(--theme-primary);
+  --color-primary-foreground: var(--theme-primary-foreground);
+  --color-secondary: var(--theme-secondary);
+  --color-secondary-foreground: var(--theme-secondary-foreground);
+  --color-muted: var(--theme-muted);
+  --color-muted-foreground: var(--theme-muted-foreground);
+  --color-accent: var(--theme-accent);
+  --color-accent-foreground: var(--theme-accent-foreground);
+  --color-destructive: var(--theme-destructive);
+  --color-destructive-foreground: var(--theme-destructive-foreground);
+  --color-card: var(--theme-card);
+  --color-card-foreground: var(--theme-card-foreground);
+  --color-popover: var(--theme-popover);
+  --color-popover-foreground: var(--theme-popover-foreground);
+  --color-border: var(--theme-border);
+  --color-input: var(--theme-input);
+  --color-ring: var(--theme-ring);
+
+  /* Map theme spacing to Tailwind radius variables */
+  --radius-sm: var(--theme-radius-sm, 0.25rem);
+  --radius-md: var(--theme-radius-md, 0.375rem);
+  --radius-lg: var(--theme-radius-lg, 0.5rem);
+
+  /* Map theme fonts to Tailwind font variables */
+  --font-sans: var(--theme-font-sans, ui-sans-serif, system-ui, sans-serif);
+  --font-serif: var(--theme-font-serif, ui-serif, Georgia, serif);
+  --font-mono: var(--theme-font-mono, ui-monospace, monospace);
+
+  /* Typography */
+  ${typographyVars.length > 0 ? typographyVars.join('\n  ') : ''}
+
+  /* Spacing & Radius */
+  ${spacingVars.length > 0 ? spacingVars.join('\n  ') : ''}
+
+  /* Effects */
+  ${effectsVars.length > 0 ? effectsVars.join('\n  ') : ''}
+${componentVars}
+${darkModeComponentVars}
+
+  /* Apply background and text color to the container */
+  background-color: var(--theme-background);
+  color: var(--theme-foreground);
+}
+`.trim();
+
+  return css;
+}
