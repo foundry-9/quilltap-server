@@ -15,7 +15,6 @@
  * GET /api/v1/system/tools?action=capabilities-report-list - List saved reports
  * GET /api/v1/system/tools?action=capabilities-report-get - Get a specific report
  * POST /api/v1/system/tools?action=capabilities-report-delete - Delete a specific report
- * GET /api/v1/system/tools?action=database-status - Get current database backend status
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -845,38 +844,6 @@ async function handleCapabilitiesReportDelete(req: NextRequest, context: any) {
 }
 
 // ============================================================================
-// Database Status Handler
-// ============================================================================
-
-async function handleDatabaseStatus(req: NextRequest, context: any) {
-  const { user } = context;
-
-  try {
-    logger.debug('[System Tools v1] Getting database status', { userId: user.id });
-
-    // SQLite is the only supported backend
-    const currentBackend = 'sqlite';
-    const sqliteAvailable = true; // SQLite is always available (can be created)
-
-    return NextResponse.json({
-      currentBackend,
-      sqliteAvailable,
-      health: {
-        healthy: true,
-        latencyMs: 0,
-      },
-    });
-  } catch (error) {
-    logger.error(
-      '[System Tools v1] Error getting database status',
-      { userId: user.id },
-      error instanceof Error ? error : undefined
-    );
-    return serverError('Failed to get database status');
-  }
-}
-
-// ============================================================================
 // Request Handlers
 // ============================================================================
 
@@ -900,11 +867,9 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, context) 
       return handleCapabilitiesReportList(req, context);
     case 'capabilities-report-get':
       return handleCapabilitiesReportGet(req, context);
-    case 'database-status':
-      return handleDatabaseStatus(req, context);
     default:
       return badRequest(
-        `Unknown action: ${action}. Available GET actions: tasks-queue, delete-data-preview, export-entities, export-preview, capabilities-report, capabilities-report-list, capabilities-report-get, database-status`
+        `Unknown action: ${action}. Available GET actions: tasks-queue, delete-data-preview, export-entities, export-preview, capabilities-report, capabilities-report-list, capabilities-report-get`
       );
   }
 });
