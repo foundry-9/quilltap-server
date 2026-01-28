@@ -13,20 +13,13 @@ import { z } from 'zod';
 export { ThemePreferenceSchema, type ThemePreference } from '@/lib/themes/types';
 
 // ============================================================================
-// VERSION CONSTANTS (for Sync API compatibility)
+// VERSION CONSTANTS
 // ============================================================================
 
 /**
  * Current schema version for data compatibility checks.
- * Major version must match for sync to proceed between instances.
  */
 export const SCHEMA_VERSION = '2.5.0';
-
-/**
- * Sync protocol version.
- * Must match exactly between instances for sync to proceed.
- */
-export const SYNC_PROTOCOL_VERSION = '1.0';
 
 // ============================================================================
 // ENUMS

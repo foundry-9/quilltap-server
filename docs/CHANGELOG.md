@@ -4,6 +4,15 @@
 
 ### 2.8-dev
 
+- refactor: Remove all sync functionality (2026-01-28)
+  - Removed sync UI components from Tools page
+  - Removed `/api/v1/sync/` API routes
+  - Removed `lib/sync/` library (sync service, delta detector, conflict resolver, remote client)
+  - Removed sync repositories (sync_instances, sync_mappings, sync_operations, user_sync_api_keys)
+  - Removed `SYNC_PROTOCOL_VERSION` constant
+  - Added `drop-sync-tables-v1` migration to clean up existing databases
+  - Removed sync-related tables from initial SQLite schema
+  - Removed sync documentation and tests
 - feat: Enhanced theme previews in Appearance settings (2026-01-27)
   - Theme cards now have a "Preview" button that expands to show rich, interactive previews
   - Preview panels render actual UI elements (buttons, inputs, badges, cards) with the theme's styling

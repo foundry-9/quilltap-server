@@ -41,6 +41,8 @@ import { reencryptApiKeysMigration } from './reencrypt-api-keys';
 import { addDefaultImageProfileFieldMigration } from './add-default-image-profile-field';
 // Migrate user plugins to site plugins (single-user mode)
 import { migrateUserPluginsToSiteMigration } from './migrate-user-plugins-to-site';
+// Drop sync tables (sync functionality removed)
+import { dropSyncTablesMigration } from './drop-sync-tables';
 
 /**
  * All available migrations.
@@ -77,6 +79,8 @@ export const migrations: Migration[] = [
   addDefaultImageProfileFieldMigration,
   // Migrate user plugins to site plugins (single-user mode)
   migrateUserPluginsToSiteMigration,
+  // Drop sync tables (sync functionality removed)
+  dropSyncTablesMigration,
 ];
 
 export {
@@ -108,4 +112,6 @@ export {
   addDefaultImageProfileFieldMigration,
   // Migrate user plugins to site plugins (single-user mode)
   migrateUserPluginsToSiteMigration,
+  // Drop sync tables (sync functionality removed)
+  dropSyncTablesMigration,
 };

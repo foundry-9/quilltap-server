@@ -43,7 +43,7 @@ This document tracks planned features and improvements for Quilltap.
 - [ ] Python script support
 - [ ] ComfyUI + LORA support for local installations (see [feature request](./comfy_ui_local_image.md))
 - [ ] Ability to auto-upgrade plugins
-- [ ] Removal of sync functionality
+- [X] Removal of sync functionality
 
 ### Themes & UI
 

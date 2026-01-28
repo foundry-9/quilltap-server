@@ -16,7 +16,6 @@ Quilltap is a repository from Foundry-9 LLC being actively developed for general
 - **Data Storage**: SQLite with zero external dependencies. Uses `better-sqlite3` driver directly. Data models are defined as TypeScript interfaces with Zod schemas.
 - **File Storage**: local or optional S3-compatible storage (embedded MinIO for development, external S3 for production)
 - **AI and LLM Services**: OpenAI, Anthropic, xAI/Grok, Google, OpenRouter
-- **Cloud Services**: AWS first
 - **Design Documentation**: Storybook
 - **API Structure**: Versioned REST API under `/api/v1/` with action dispatch pattern
 
@@ -117,7 +116,6 @@ Legacy routes outside `/api/v1/` have deprecation headers and will be removed af
   - [features/complete/new_ui_layout.md](features/complete/new_ui_layout.md) — Documents the new UI layout with left sidebar navigation, collapsible sidebar, mobile overlay drawer, and simplified header — Grade: A (implemented layout) — Last updated: 2026-01-01
   - [features/distant_future_separate_api.md](features/distant_future_separate_api.md) — Future plan to split the monolith into a Fastify API + React SPA, covering phases, risks, testing, and AWS deployment strategy — Grade: C (distant concept, not scheduled) — Last updated: 2025-12-12
   - [features/random-numbers-plugin.md](features/random-numbers-plugin.md) — Feature request outlining a random number/choice plugin (dice, coin flip, random participant) — Grade: B (idea backlog) — Last updated: 2025-12-12
-  - [features/sync_api.md](features/sync_api.md) — Comprehensive specification for bidirectional sync between Quilltap instances: data models, API endpoints, sync algorithm, conflict resolution, and Settings UI — Grade: B (planning doc) — Last updated: 2025-12-23
   - [features/usage-tracking.md](features/usage-tracking.md) — Request for provider usage/balance tracking: per-provider notes, UX requirements, engineering tasks, and open questions — Grade: B (idea backlog) — Last updated: 2025-12-10
   - [lib/llm/ATTACHMENT_SUPPORT.md](lib/llm/ATTACHMENT_SUPPORT.md) — Reference for attachment support utilities: supported MIME types per provider, helper APIs, and usage examples — Grade: A (matches helper behavior) — Last updated: 2025-11-29
   - [packages/plugin-types/README.md](packages/plugin-types/README.md) — Documentation for the @quilltap/plugin-types npm package: installation, usage, type reference, and plugin manifest guide for third-party plugin development — Grade: A (package documentation) — Last updated: 2025-12-31
@@ -133,8 +131,7 @@ Legacy routes outside `/api/v1/` have deprecation headers and will be removed af
 
 ## Claude-specific instructions
 
-- If you have access to Opus and agents, then plan work in Opus and delegate it to agents running Haiku with specific instructions. If you can't use Opus then use Sonnet to plan. Feel free to aggressively agentize the work.
-- If you are asked to work on a large change (adding a significant feature, a refactor that does a lot of things, or something else that touches a lot of files), then plan it in Opus and delegate the work to Haiku agents.
+- If you have access to Opus and agents, then plan work in Opus for a change of any significant size and delegate it to agents running Haiku with specific instructions. If you can't use Opus then use Sonnet to plan. Feel free to aggressively agentize the work.
 - For every new feature and all existing functionality that is updated or touched in the backend, make sure that there are debug logs being fired for everything, and appropriate levels of logging for everything else, using the built-in logging system in this app
 - I am developing this in macOS, so take BSD versions of tools into account, and the fact that I have installed homebrew's coreutils and gnu-sed so that you can use GNU versions of things with "g"-prefixed utilities if you need them.
 - Default location for files depends on OS and category:
@@ -159,13 +156,12 @@ Legacy routes outside `/api/v1/` have deprecation headers and will be removed af
 - Every time we change a plugin, let's go ahead and bump the release number (the last of the three numbers in semver) on its package.json, and manifest.json if required, and re-run `npm run build:plugins` before we add things to the commit.
 - Check for Typescript errors by running "npx tsc" rather than "npm run build"
 - When committing, record basic changes in `docs/CHANGELOG.md` in reverse chronological order
-- Themes and styling should depend primarily on the qt-* utility classes that we have defined. When possible, use those and update those with Tailwind and other things. That way the themes will always be able to override changes. **IMPORTANT:** If you add new Tailwind classes, then almost certainly you should be adding them to the qt-* utility classes instead, and then apply those classes to the components you want to change.
+- Themes and styling should depend primarily on the `qt-*` utility classes that we have defined. When possible, use those and update those with Tailwind and other things. That way the themes will always be able to override changes. **IMPORTANT:** If you add new Tailwind classes, then almost certainly you should be adding them to the `qt-*` utility classes instead, and then apply those classes to the components you want to change.
 - Keep the documentation above up to date, and update this file if you add more documentation, in the same format.
 - Any change to data, particularly the schemas used to read or write data either to files or to the database, should be checked to see if they need to be reflected in exports, backups, and/or the migrations/ directory.
 - Any files that exist in the app source code only because they are necessary for migrations should move to the `migrations/` directory.
-- If we make changes to anything in the `packages/` directory, we need to pause make sure we update package.json numbers and pause to allow `npm publish` to push those packages into npmjs. We do *not* just copy things down into the appropriate directories! We wait to publish the new npm package first. You can stop everything, ask me to publish the new version, then install the new one. If that doesn't work, lets fix the NPM problem we're having, **NOT** work around it.
+- If we make changes to anything in the `packages/` directory, we need to make sure we update package.json numbers and pause to allow the developer/human user to `npm publish` to push those packages into npmjs. We do *not* just copy things down into the appropriate directories! We wait to publish the new npm package first. You can stop everything, ask me to publish the new version, then install the new one. If that doesn't work, let's fix the NPM problem we're having, **NOT** work around it.
 - Commits take a long time because there is a precommit script in `.githooks/pre-commit` that kills the dev server, runs lint, runs the unit tests, does a test compile with `npx tsc`, builds the plugins, and then does a full Next.js build of the app, to ensure that we're committing something that basically works.
-- If we're troubleshooting hosted dev, then you can try running `scripts/ecs-logs.sh` and the output should contain the most recent logs for hosted dev; those can then be compared to what we see running it locally in `logs/combined.log`.
 - Leave no stubs and "TODO" code behind unless you have agreed on it with me ahead of time
 
 ## Best Practices and Principles

@@ -287,12 +287,6 @@ export interface DeleteSummary {
     prompt: number;
     roleplay: number;
   };
-  sync: {
-    instances: number;
-    mappings: number;
-    operations: number;
-    syncApiKeys: number;
-  };
 }
 
 /**
@@ -306,7 +300,7 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
   const globalRepos = getRepositories();
 
   // First, count everything before deletion
-  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, apiKeys, promptTemplates, roleplayTemplates, syncInstances, syncOperations, syncApiKeys, projects] =
+  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, apiKeys, promptTemplates, roleplayTemplates, projects] =
     await Promise.all([
       repos.characters.findAll(),
       repos.chats.findAll(),
@@ -318,9 +312,6 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
       repos.connections.getAllApiKeys(),
       globalRepos.promptTemplates.findByUserId(userId),
       globalRepos.roleplayTemplates.findByUserId(userId),
-      globalRepos.syncInstances.findByUserId(userId),
-      globalRepos.syncOperations.findByUserId(userId, 10000), // High limit to get all
-      globalRepos.userSyncApiKeys.findByUserId(userId),
       repos.projects.findAll(),
     ]);
 
@@ -331,16 +322,9 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
     memoriesCount += memories.length;
   }
 
-  // Count sync mappings (need to count per instance)
-  let syncMappingsCount = 0;
-  for (const instance of syncInstances) {
-    const mappings = await globalRepos.syncMappings.findAllForInstance(userId, instance.id);
-    syncMappingsCount += mappings.length;
-  }
-
   // List and count backups
   const allBackupFiles = files.filter(
-    (f) => f.folderPath === '/backups' || f.originalFilename?.endsWith('.zip')
+    (f: FileEntry) => f.folderPath === '/backups' || f.originalFilename?.endsWith('.zip')
   );
   const backupsCount = allBackupFiles.length;
 
@@ -365,45 +349,6 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
     backupsCount,
   });
 
-  // Reset sync data
-  // Delete mappings for each instance (so entities get re-mapped on next sync)
-  for (const instance of syncInstances) {
-    try {
-      await globalRepos.syncMappings.deleteByInstanceId(instance.id);
-    } catch (error) {
-      moduleLogger.warn('Failed to delete sync mappings for instance', {
-        instanceId: instance.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  // Reset sync state on instances (clear lastSyncAt so next sync pulls all data)
-  // We keep the instances themselves so user doesn't have to re-enter remote server info
-  try {
-    await globalRepos.syncInstances.resetSyncStateForUser(userId);
-    moduleLogger.info('Reset sync state for all user instances', { userId });
-  } catch (error) {
-    moduleLogger.warn('Failed to reset sync state for instances', {
-      userId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-
-  // Delete sync operations (clear history)
-  for (const operation of syncOperations) {
-    try {
-      await globalRepos.syncOperations.delete(operation.id);
-    } catch (error) {
-      moduleLogger.warn('Failed to delete sync operation', {
-        operationId: operation.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  // Keep sync API keys - they're needed for remote instances to sync to us
-
   const summary: DeleteSummary = {
     characters: characters.length,
     chats: chats.length,
@@ -422,14 +367,6 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
       prompt: promptTemplates.length,
       roleplay: roleplayTemplates.length,
     },
-    sync: {
-      // Instances are reset (not deleted), so count shows how many were reset
-      instances: syncInstances.length,
-      mappings: syncMappingsCount,
-      operations: syncOperations.length,
-      // API keys are kept (not deleted)
-      syncApiKeys: 0,
-    },
   };
 
   moduleLogger.info('Complete user data deletion finished', { userId, summary });
@@ -444,7 +381,7 @@ export async function previewDeleteAllUserData(userId: string): Promise<DeleteSu
   const repos = getUserRepositories(userId);
   const globalRepos = getRepositories();
 
-  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, apiKeys, promptTemplates, roleplayTemplates, syncInstances, syncOperations, syncApiKeys, projects] =
+  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, apiKeys, promptTemplates, roleplayTemplates, projects] =
     await Promise.all([
       repos.characters.findAll(),
       repos.chats.findAll(),
@@ -456,9 +393,6 @@ export async function previewDeleteAllUserData(userId: string): Promise<DeleteSu
       repos.connections.getAllApiKeys(),
       globalRepos.promptTemplates.findByUserId(userId),
       globalRepos.roleplayTemplates.findByUserId(userId),
-      globalRepos.syncInstances.findByUserId(userId),
-      globalRepos.syncOperations.findByUserId(userId, 10000), // High limit to get all
-      globalRepos.userSyncApiKeys.findByUserId(userId),
       repos.projects.findAll(),
     ]);
 
@@ -469,16 +403,9 @@ export async function previewDeleteAllUserData(userId: string): Promise<DeleteSu
     memoriesCount += memories.length;
   }
 
-  // Count sync mappings (need to count per instance)
-  let syncMappingsCount = 0;
-  for (const instance of syncInstances) {
-    const mappings = await globalRepos.syncMappings.findAllForInstance(userId, instance.id);
-    syncMappingsCount += mappings.length;
-  }
-
   // List and count backups from files
   const backupFiles = files.filter(
-    (f) => f.folderPath === '/backups' || f.originalFilename?.endsWith('.zip')
+    (f: FileEntry) => f.folderPath === '/backups' || f.originalFilename?.endsWith('.zip')
   );
 
   return {
@@ -498,14 +425,6 @@ export async function previewDeleteAllUserData(userId: string): Promise<DeleteSu
     templates: {
       prompt: promptTemplates.length,
       roleplay: roleplayTemplates.length,
-    },
-    sync: {
-      // Instances will be reset (not deleted), count shows how many will be reset
-      instances: syncInstances.length,
-      mappings: syncMappingsCount,
-      operations: syncOperations.length,
-      // API keys are kept (not deleted)
-      syncApiKeys: 0,
     },
   };
 }

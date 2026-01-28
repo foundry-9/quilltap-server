@@ -16,7 +16,6 @@
 export {
   // Version constants
   SCHEMA_VERSION,
-  SYNC_PROTOCOL_VERSION,
   // Enums
   ProviderEnum,
   ImageProviderEnum,

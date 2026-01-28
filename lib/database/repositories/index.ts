@@ -31,12 +31,8 @@ export { ProjectsRepository } from './projects.repository';
 export { PromptTemplatesRepository } from './prompt-templates.repository';
 export { ProviderModelsRepository } from './provider-models.repository';
 export { RoleplayTemplatesRepository } from './roleplay-templates.repository';
-export { SyncInstancesRepository } from './sync-instances.repository';
-export { SyncMappingsRepository } from './sync-mappings.repository';
-export { SyncOperationsRepository } from './sync-operations.repository';
 export { TagsRepository } from './tags.repository';
 export { UsersRepository } from './users.repository';
-export { UserSyncApiKeysRepository } from './user-sync-api-keys.repository';
 export { VectorIndicesRepository } from './vector-indices.repository';
 
 // Import all repository classes for container
@@ -58,12 +54,8 @@ import { ProjectsRepository } from './projects.repository';
 import { PromptTemplatesRepository } from './prompt-templates.repository';
 import { ProviderModelsRepository } from './provider-models.repository';
 import { RoleplayTemplatesRepository } from './roleplay-templates.repository';
-import { SyncInstancesRepository } from './sync-instances.repository';
-import { SyncMappingsRepository } from './sync-mappings.repository';
-import { SyncOperationsRepository } from './sync-operations.repository';
 import { TagsRepository } from './tags.repository';
 import { UsersRepository } from './users.repository';
-import { UserSyncApiKeysRepository } from './user-sync-api-keys.repository';
 import { VectorIndicesRepository } from './vector-indices.repository';
 
 /**
@@ -90,12 +82,8 @@ export interface RepositoryContainer {
   promptTemplates: PromptTemplatesRepository;
   providerModels: ProviderModelsRepository;
   roleplayTemplates: RoleplayTemplatesRepository;
-  syncInstances: SyncInstancesRepository;
-  syncMappings: SyncMappingsRepository;
-  syncOperations: SyncOperationsRepository;
   tags: TagsRepository;
   users: UsersRepository;
-  userSyncApiKeys: UserSyncApiKeysRepository;
   vectorIndices: VectorIndicesRepository;
 }
 
@@ -134,12 +122,8 @@ export function createRepositories(): RepositoryContainer {
       promptTemplates: new PromptTemplatesRepository(),
       providerModels: new ProviderModelsRepository(),
       roleplayTemplates: new RoleplayTemplatesRepository(),
-      syncInstances: new SyncInstancesRepository(),
-      syncMappings: new SyncMappingsRepository(),
-      syncOperations: new SyncOperationsRepository(),
       tags: new TagsRepository(),
       users: new UsersRepository(),
-      userSyncApiKeys: new UserSyncApiKeysRepository(),
       vectorIndices: new VectorIndicesRepository(),
     };
     return repositories;
