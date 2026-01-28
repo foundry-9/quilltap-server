@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, ReactNode } from 'react'
 import { showErrorToast, showSuccessToast, showWarningToast } from '@/lib/toast'
 import { BrandName } from '@/components/ui/brand-name'
 import { PluginConfigModal } from './plugins/PluginConfigModal'
+import { SettingsCard, SettingsCardBadge } from '@/components/ui/SettingsCard'
 
 type PluginSource = 'included' | 'npm' | 'git' | 'manual' | 'bundled' | 'site'
 type ActiveTab = 'installed' | 'browse'
@@ -54,40 +55,120 @@ interface PluginStats {
   initialized: boolean
 }
 
-const getSourceBadge = (source: PluginSource) => {
+const getSourceBadge = (source: PluginSource): SettingsCardBadge => {
   switch (source) {
     case 'included':
     case 'bundled':
-      return {
-        label: 'Bundled',
-        className: 'qt-badge-source-included',
-      }
+      return { text: 'Bundled', variant: 'info' }
     case 'npm':
-      return {
-        label: 'NPM',
-        className: 'qt-badge-source-npm',
-      }
+      return { text: 'NPM', variant: 'warning' }
     case 'site':
-      return {
-        label: 'Installed',
-        className: 'qt-badge-source-npm',
-      }
+      return { text: 'Installed', variant: 'success' }
     case 'git':
-      return {
-        label: 'Git',
-        className: 'qt-badge-source-git',
-      }
+      return { text: 'Git', variant: 'warning' }
     case 'manual':
-      return {
-        label: 'Manual',
-        className: 'qt-badge-source-manual',
-      }
+      return { text: 'Manual', variant: 'muted' }
     default:
-      return {
-        label: 'Unknown',
-        className: 'qt-badge-source-manual',
-      }
+      return { text: 'Unknown', variant: 'muted' }
   }
+}
+
+/**
+ * Toggle switch component for plugin enable/disable
+ */
+function PluginToggle({
+  enabled,
+  isToggling,
+  onToggle,
+}: {
+  enabled: boolean
+  isToggling: boolean
+  onToggle: () => void
+}) {
+  return (
+    <button
+      onClick={onToggle}
+      disabled={isToggling}
+      className={`
+        relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent
+        transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-ring
+        focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed
+        ${enabled ? 'bg-primary' : 'bg-muted'}
+      `}
+      role="switch"
+      aria-checked={enabled}
+    >
+      <span
+        className={`
+          pointer-events-none inline-block h-5 w-5 transform rounded-full bg-background shadow ring-0
+          transition duration-200 ease-in-out
+          ${enabled ? 'translate-x-5' : 'translate-x-0'}
+        `}
+      />
+    </button>
+  )
+}
+
+/**
+ * Settings icon button for plugins with config schema
+ */
+function SettingsButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="qt-button-ghost qt-button-sm flex items-center gap-1"
+    >
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+        />
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+        />
+      </svg>
+      Settings
+    </button>
+  )
+}
+
+/**
+ * Capability badges display
+ */
+function CapabilityBadges({ capabilities }: { capabilities: string[] }) {
+  if (capabilities.length === 0) return null
+
+  return (
+    <div className="flex flex-wrap gap-1.5 mt-2">
+      {capabilities.map((cap) => (
+        <span key={cap} className="qt-badge-capability">
+          {cap}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * Keyword badges display for npm plugins
+ */
+function KeywordBadges({ keywords }: { keywords?: string[] }) {
+  if (!keywords || keywords.length === 0) return null
+
+  return (
+    <div className="flex flex-wrap gap-1.5 mt-2">
+      {keywords.slice(0, 5).map((keyword) => (
+        <span key={keyword} className="qt-badge-secondary">
+          {keyword}
+        </span>
+      ))}
+    </div>
+  )
 }
 
 export default function PluginsTab() {
@@ -207,7 +288,7 @@ export default function PluginsTab() {
           type: 'all',
         }),
       })
-      
+
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Search failed')
@@ -391,7 +472,7 @@ export default function PluginsTab() {
           </div>
 
           {plugins.length === 0 ? (
-            <div className="bg-card rounded-lg border border-border p-8 text-center">
+            <div className="qt-card p-8 text-center">
               <svg
                 className="mx-auto h-12 w-12 text-muted-foreground"
                 fill="none"
@@ -413,125 +494,61 @@ export default function PluginsTab() {
               </p>
               <button
                 onClick={() => setActiveTab('browse')}
-                className="mt-4 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+                className="mt-4 qt-button-primary"
               >
                 Browse Plugins
               </button>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="qt-card-grid-auto">
               {plugins.toSorted((a, b) => a.title.localeCompare(b.title)).map((plugin) => {
                 const isToggling = toggling.has(plugin.name)
                 const isUninstalling = actionInProgress === plugin.name
+
+                // Build badges array
+                const badges: SettingsCardBadge[] = [
+                  { text: `v${plugin.version}`, variant: 'muted' },
+                  getSourceBadge(plugin.source),
+                  plugin.enabled
+                    ? { text: 'Enabled', variant: 'success' }
+                    : { text: 'Disabled', variant: 'muted' },
+                ]
+
                 return (
-                  <div
+                  <SettingsCard
                     key={plugin.name}
-                    className="bg-card rounded-lg border border-border p-4 hover:shadow-md transition-shadow"
+                    title={plugin.title}
+                    subtitle={plugin.name}
+                    badges={badges}
+                    headerExtra={
+                      <PluginToggle
+                        enabled={plugin.enabled}
+                        isToggling={isToggling}
+                        onToggle={() => handleTogglePlugin(plugin.name, plugin.enabled)}
+                      />
+                    }
                   >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-2 flex-wrap">
-                          <h3 className="text-lg qt-text-primary">
-                            {plugin.title}
-                          </h3>
-                          <span className="px-2 py-0.5 qt-text-label-xs bg-muted rounded">
-                            v{plugin.version}
-                          </span>
-                          <span className={`px-2 py-0.5 qt-text-label-xs rounded ${getSourceBadge(plugin.source).className}`}>
-                            {getSourceBadge(plugin.source).label}
-                          </span>
-                          {plugin.enabled ? (
-                            <span className="px-2 py-0.5 qt-text-label-xs rounded bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
-                              Enabled
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 qt-text-label-xs rounded bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">
-                              Disabled
-                            </span>
-                          )}
-                        </div>
-                        <p className="qt-text-small mb-2 text-muted-foreground">
-                          {plugin.name}
-                        </p>
-                        {plugin.capabilities.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5">
-                            {plugin.capabilities.map((cap) => (
-                              <span
-                                key={cap}
-                                className="px-2 py-0.5 qt-text-label-xs rounded bg-accent text-accent-foreground"
-                              >
-                                {cap}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-3 flex-shrink-0">
-                        {/* Settings Button (for plugins with configSchema) */}
-                        {plugin.hasConfigSchema && (
-                          <button
-                            onClick={() => setConfigModalPlugin({ name: plugin.name, title: plugin.title })}
-                            className="px-3 py-1 text-sm text-foreground hover:bg-accent rounded transition-colors flex items-center gap-1"
-                          >
-                            <svg
-                              className="w-4 h-4"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                              />
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                              />
-                            </svg>
-                            Settings
-                          </button>
-                        )}
-
-                        {/* Uninstall Button (for non-bundled plugins) */}
-                        {canUninstall(plugin.source) && (
-                          <button
-                            onClick={() => uninstallPlugin(plugin.packageName || plugin.name, plugin.source)}
-                            disabled={isUninstalling}
-                            className="px-3 py-1 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors disabled:opacity-50"
-                          >
-                            {isUninstalling ? 'Removing...' : 'Uninstall'}
-                          </button>
-                        )}
-
-                        {/* Toggle Button */}
+                    {/* Plugin actions */}
+                    <div className="flex items-center gap-2 mt-2">
+                      {plugin.hasConfigSchema && (
+                        <SettingsButton
+                          onClick={() => setConfigModalPlugin({ name: plugin.name, title: plugin.title })}
+                        />
+                      )}
+                      {canUninstall(plugin.source) && (
                         <button
-                          onClick={() => handleTogglePlugin(plugin.name, plugin.enabled)}
-                          disabled={isToggling}
-                          className={`
-                            relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent
-                            transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-ring
-                            focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed
-                            ${plugin.enabled ? 'bg-primary' : 'bg-muted'}
-                          `}
-                          role="switch"
-                          aria-checked={plugin.enabled}
+                          onClick={() => uninstallPlugin(plugin.packageName || plugin.name, plugin.source)}
+                          disabled={isUninstalling}
+                          className="qt-button-destructive qt-button-sm"
                         >
-                          <span
-                            className={`
-                              pointer-events-none inline-block h-5 w-5 transform rounded-full bg-background shadow ring-0
-                              transition duration-200 ease-in-out
-                              ${plugin.enabled ? 'translate-x-5' : 'translate-x-0'}
-                            `}
-                          />
+                          {isUninstalling ? 'Removing...' : 'Uninstall'}
                         </button>
-                      </div>
+                      )}
                     </div>
-                  </div>
+
+                    {/* Capability badges */}
+                    <CapabilityBadges capabilities={plugin.capabilities} />
+                  </SettingsCard>
                 )
               })}
             </div>
@@ -561,13 +578,13 @@ export default function PluginsTab() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && searchNpmPlugins()}
                 placeholder="Search plugins (e.g., 'llm', 'theme', 'openai')..."
-                className="w-full px-4 py-2 border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                className="qt-input"
               />
             </div>
             <button
               onClick={searchNpmPlugins}
               disabled={searching}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center gap-2"
+              className="qt-button-primary flex items-center gap-2"
             >
               {searching ? (
                 <>
@@ -586,9 +603,9 @@ export default function PluginsTab() {
           </p>
 
           {/* Search Results */}
-          <div className="space-y-3">
+          <div className="qt-card-grid-auto">
             {searchResults.length === 0 && !searching && (
-              <div className="bg-card rounded-lg border border-border p-8 text-center">
+              <div className="qt-card p-8 text-center">
                 <svg
                   className="mx-auto h-12 w-12 text-muted-foreground"
                   fill="none"
@@ -615,70 +632,45 @@ export default function PluginsTab() {
               const installed = isPluginInstalled(plugin.name)
               const isInstalling = actionInProgress === plugin.name
 
-              return (
-                <div
-                  key={plugin.name}
-                  className="bg-card rounded-lg border border-border p-4 hover:shadow-md transition-shadow"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <h3 className="text-lg font-medium text-foreground">
-                          {plugin.name}
-                        </h3>
-                        <span className="px-2 py-0.5 qt-text-label-xs bg-muted rounded">
-                          v{plugin.version}
-                        </span>
-                        {installed && (
-                          <span className="px-2 py-0.5 qt-text-label-xs rounded bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
-                            Installed
-                          </span>
-                        )}
-                      </div>
-                      <p className="qt-text-small text-muted-foreground mb-2">
-                        {plugin.description || 'No description available'}
-                      </p>
-                      <div className="flex items-center gap-4 qt-text-small text-muted-foreground">
-                        {plugin.author && (
-                          <span>by {plugin.author}</span>
-                        )}
-                        {plugin.updated && (
-                          <span>
-                            Updated {new Date(plugin.updated).toLocaleDateString()}
-                          </span>
-                        )}
-                      </div>
-                      {plugin.keywords && plugin.keywords.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 mt-2">
-                          {plugin.keywords.slice(0, 5).map((keyword) => (
-                            <span
-                              key={keyword}
-                              className="px-2 py-0.5 qt-text-label-xs rounded bg-accent text-accent-foreground"
-                            >
-                              {keyword}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+              // Build badges array
+              const badges: SettingsCardBadge[] = [
+                { text: `v${plugin.version}`, variant: 'muted' },
+              ]
+              if (installed) {
+                badges.push({ text: 'Installed', variant: 'success' })
+              }
 
-                    <div className="flex flex-col gap-2 flex-shrink-0">
-                      {installed ? (
-                        <span className="px-4 py-2 text-sm text-muted-foreground bg-muted rounded-md">
-                          Installed
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => installPlugin(plugin.name)}
-                          disabled={isInstalling}
-                          className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 transition-colors"
-                        >
-                          {isInstalling ? 'Installing...' : 'Install'}
-                        </button>
-                      )}
-                    </div>
+              return (
+                <SettingsCard
+                  key={plugin.name}
+                  title={plugin.name}
+                  subtitle={plugin.description || 'No description available'}
+                  badges={badges}
+                  headerExtra={
+                    installed ? (
+                      <span className="qt-badge-secondary">Installed</span>
+                    ) : (
+                      <button
+                        onClick={() => installPlugin(plugin.name)}
+                        disabled={isInstalling}
+                        className="qt-button-primary qt-button-sm"
+                      >
+                        {isInstalling ? 'Installing...' : 'Install'}
+                      </button>
+                    )
+                  }
+                >
+                  {/* Author and update info */}
+                  <div className="flex items-center gap-4 qt-text-small text-muted-foreground mt-1">
+                    {plugin.author && <span>by {plugin.author}</span>}
+                    {plugin.updated && (
+                      <span>Updated {new Date(plugin.updated).toLocaleDateString()}</span>
+                    )}
                   </div>
-                </div>
+
+                  {/* Keyword badges */}
+                  <KeywordBadges keywords={plugin.keywords} />
+                </SettingsCard>
               )
             })}
           </div>
@@ -686,10 +678,10 @@ export default function PluginsTab() {
       )}
 
       {/* Refresh Note */}
-      <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-4 border border-amber-200 dark:border-amber-800">
+      <div className="qt-alert-warning">
         <div className="flex items-start gap-3">
           <svg
-            className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5"
+            className="w-5 h-5 flex-shrink-0 mt-0.5"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -702,16 +694,16 @@ export default function PluginsTab() {
             />
           </svg>
           <div>
-            <h4 className="qt-text-label text-amber-900 dark:text-amber-200">
+            <h4 className="qt-text-label">
               Note about plugin changes
             </h4>
-            <p className="qt-text-small text-amber-700 dark:text-amber-300 mt-1">
+            <p className="qt-text-small mt-1">
               Newly installed plugins require an application restart to activate.
               Enabling or disabling existing plugins takes effect immediately,
               but some features may require a page refresh.
             </p>
             {deploymentInfo?.isHosted && (
-              <p className="qt-text-small text-amber-700 dark:text-amber-300 mt-2">
+              <p className="qt-text-small mt-2">
                 <strong>Hosted deployment:</strong> Some plugins (such as authentication or database backends)
                 require site-wide installation and will trigger an automatic server restart.
               </p>

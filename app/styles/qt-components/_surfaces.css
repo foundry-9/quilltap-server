@@ -90,10 +90,11 @@
   }
 
   /**
-   * Card title
+   * Card title - uses theme heading font for proper typography
    */
   .qt-card-title {
     @apply text-lg font-semibold text-foreground;
+    font-family: var(--qt-heading-font);
   }
 
   /**

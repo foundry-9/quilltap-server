@@ -938,12 +938,7 @@
     padding-top: var(--qt-navbar-height);
   }
 
-  /**
-   * Page content container
-   */
-  .qt-page-container {
-    @apply container mx-auto px-4 py-6;
-  }
+  /* Note: .qt-page-container is defined in _content.css with CSS variable support */
 
   /**
    * Page header
@@ -995,6 +990,16 @@
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
     /* qt-card-grid-2 stays at 2 columns */
+  }
+
+  /**
+   * Auto-fill card grid - fits as many cards as possible at min width
+   * Uses --qt-card-grid-auto-min (default 550px) for minimum card width
+   */
+  .qt-card-grid-auto {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fill, minmax(var(--qt-card-grid-auto-min, 550px), 1fr));
   }
 
   /**

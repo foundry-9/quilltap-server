@@ -4,6 +4,16 @@
 
 ### 2.8-dev
 
+- refactor: Create SettingsCard component for consistent settings tab styling (2026-01-28)
+  - New `SettingsCard` component in `/components/ui/SettingsCard.tsx` with support for badges, metadata grids, inline/footer actions, status messages, and delete confirmation
+  - Updated `qt-card-title` CSS class to use `var(--qt-heading-font)` for theme-appropriate typography
+  - Uses explicit `border border-border` for visible borders across all themes
+  - ProfileCard is now a backward-compatible alias for SettingsCard
+  - Migrated `image-profiles-tab.tsx` to use SettingsCard directly
+  - Migrated `plugins-tab.tsx` (both installed and browse tabs) to use SettingsCard
+  - Refactored `MountPointCard.tsx` to use SettingsCard with footer actions and status messages
+  - Migrated `PromptCard.tsx` and `TemplateCard.tsx` (Prompts and RP Templates) to use SettingsCard
+  - Existing ProfileCard consumers (API keys, connection profiles, embedding profiles) automatically get new styling
 - refactor: Remove all sync functionality (2026-01-28)
   - Removed sync UI components from Tools page
   - Removed `/api/v1/sync/` API routes

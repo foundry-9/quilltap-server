@@ -249,7 +249,11 @@
   --qt-chat-message-row-max-width: 800px;
 
   /* Page container width - respects content width toggle */
-  --qt-page-max-width: 64rem;
+  /* Note: This default is overridden by ContentWidthProvider at runtime */
+  --qt-page-max-width: 75rem;
+
+  /* Auto-fill card grid minimum width */
+  --qt-card-grid-auto-min: 550px;
 
   --qt-chat-sidebar-width: 20rem;
   --qt-chat-sidebar-collapsed-width: 4rem;

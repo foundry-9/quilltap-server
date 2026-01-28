@@ -1,6 +1,7 @@
 'use client'
 
 import { RoleplayTemplate } from './types'
+import { SettingsCard, SettingsCardBadge, SettingsCardAction } from '@/components/ui/SettingsCard'
 
 interface TemplateCardProps {
   template: RoleplayTemplate
@@ -15,6 +16,10 @@ interface TemplateCardProps {
   saving?: boolean
 }
 
+/**
+ * Card component for displaying a single roleplay template
+ * Uses SettingsCard for consistent styling
+ */
 export function TemplateCard({
   template,
   isBuiltIn = false,
@@ -27,83 +32,48 @@ export function TemplateCard({
   onCancelDelete,
   saving = false,
 }: TemplateCardProps) {
+  // Build badges array
+  const badges: SettingsCardBadge[] = []
+  if (isBuiltIn) {
+    badges.push({ text: template.pluginName || 'Built-in', variant: 'info' })
+  }
+
+  // Build actions array
+  const actions: SettingsCardAction[] = [
+    { label: 'Preview', onClick: () => onPreview(template), variant: 'secondary' },
+  ]
+
+  if (onCopyAsNew) {
+    actions.push({ label: 'Copy as New', onClick: () => onCopyAsNew(template), variant: 'secondary' })
+  }
+
+  if (onEdit) {
+    actions.push({ label: 'Edit', onClick: () => onEdit(template), variant: 'secondary' })
+  }
+
+  // Delete config using popover pattern for consistency
+  const deleteConfig = onDelete ? {
+    isConfirming: deleteConfirm === template.id,
+    onConfirmChange: (confirming: boolean) => {
+      if (confirming) {
+        onDelete(template.id)
+      } else {
+        onCancelDelete?.()
+      }
+    },
+    onConfirm: () => onConfirmDelete?.(template.id),
+    message: 'Are you sure you want to delete this template?',
+    isDeleting: saving,
+  } : undefined
+
   return (
-    <div className="border border-border rounded-lg p-4 bg-card shadow-sm">
-      <div className={isBuiltIn ? 'flex items-start justify-between gap-2' : ''}>
-        <div className="flex-1 min-w-0">
-          <h3 className="qt-text-primary truncate">{template.name}</h3>
-          {template.description && (
-            <p className="qt-text-small mt-1 line-clamp-2">
-              {template.description}
-            </p>
-          )}
-        </div>
-        {isBuiltIn && (
-          <span className="px-2 py-0.5 qt-text-label-xs bg-primary/10 text-primary rounded">
-            {template.pluginName || 'Built-in'}
-          </span>
-        )}
-      </div>
-
-      <div className="flex gap-2 mt-4 flex-wrap">
-        <button
-          type="button"
-          onClick={() => onPreview(template)}
-          className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-accent"
-        >
-          Preview
-        </button>
-
-        {onCopyAsNew && (
-          <button
-            type="button"
-            onClick={() => onCopyAsNew(template)}
-            className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-accent"
-          >
-            Copy as New
-          </button>
-        )}
-
-        {onEdit && (
-          <button
-            type="button"
-            onClick={() => onEdit(template)}
-            className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-accent"
-          >
-            Edit
-          </button>
-        )}
-
-        {onDelete && deleteConfirm === template.id ? (
-          <>
-            <button
-              type="button"
-              onClick={() => onConfirmDelete?.(template.id)}
-              disabled={saving}
-              className="px-3 py-1.5 text-sm rounded-md bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
-            >
-              Confirm
-            </button>
-            <button
-              type="button"
-              onClick={onCancelDelete}
-              className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-accent"
-            >
-              Cancel
-            </button>
-          </>
-        ) : (
-          onDelete && (
-            <button
-              type="button"
-              onClick={() => onDelete(template.id)}
-              className="px-3 py-1.5 text-sm rounded-md text-destructive border border-destructive/30 hover:bg-destructive/10"
-            >
-              Delete
-            </button>
-          )
-        )}
-      </div>
-    </div>
+    <SettingsCard
+      title={template.name}
+      subtitle={template.description || undefined}
+      badges={badges}
+      actions={actions}
+      actionsPosition="footer"
+      deleteConfig={deleteConfig}
+    />
   )
 }
