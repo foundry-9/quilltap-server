@@ -1,5 +1,6 @@
 'use client'
 
+import { SettingsCard } from '@/components/ui/SettingsCard'
 import { ChatSettings, ConnectionProfile, VISION_PROVIDERS } from './types'
 
 export interface ImageDescriptionSettingsProps {
@@ -26,13 +27,10 @@ export function ImageDescriptionSettings({
   )
 
   return (
-    <div className="border-t border-border pt-6">
-      <h2 className="text-xl font-semibold mb-4">Image Description Profile</h2>
-      <p className="text-muted-foreground mb-4">
-        When you attach an image to a chat with a provider that doesn&apos;t support images (like Ollama, OpenRouter, etc.),
-        this profile will be used to generate a text description of the image.
-      </p>
-
+    <SettingsCard
+      title="Image Description Profile"
+      subtitle="When you attach an image to a chat with a provider that doesn't support images (like Ollama, OpenRouter, etc.), this profile will be used to generate a text description of the image."
+    >
       <div className="space-y-4">
         <div>
           <label className="block qt-text-label mb-2">
@@ -65,6 +63,6 @@ export function ImageDescriptionSettings({
           )}
         </div>
       </div>
-    </div>
+    </SettingsCard>
   )
 }

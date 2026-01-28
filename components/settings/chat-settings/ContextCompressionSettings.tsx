@@ -8,6 +8,7 @@
  */
 
 import { useState } from 'react'
+import { SettingsCard } from '@/components/ui/SettingsCard'
 import {
   ChatSettings,
   ContextCompressionSettings,
@@ -99,13 +100,10 @@ export function ContextCompressionSettingsComponent({
   }
 
   return (
-    <div className="qt-card">
-      <h3 className="qt-heading-xs mb-3">Context Compression</h3>
-      <p className="qt-text-small text-muted-foreground mb-4">
-        Reduce token costs in long conversations by compressing older messages using a cheap LLM.
-        Recent messages are kept in full context while older messages are summarized.
-      </p>
-
+    <SettingsCard
+      title="Context Compression"
+      subtitle="Reduce token costs in long conversations by compressing older messages using a cheap LLM. Recent messages are kept in full context while older messages are summarized."
+    >
       <div className="space-y-6">
         {/* Enable/Disable Toggle */}
         <div className="flex items-center justify-between">
@@ -238,6 +236,6 @@ export function ContextCompressionSettingsComponent({
           </ul>
         </div>
       </div>
-    </div>
+    </SettingsCard>
   )
 }

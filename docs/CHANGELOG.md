@@ -4,6 +4,15 @@
 
 ### 2.8-dev
 
+- refactor: Migrate Appearance Settings tab to use SettingsCard components (2026-01-28)
+  - Quick Theme Access, Color Mode, and Sidebar Width sections now wrapped in SettingsCard
+  - Added `qt-card-grid-auto` wrapper for responsive grid layout
+  - Theme section remains full-width for expandable preview functionality
+  - Color Mode selector redesigned as compact horizontal button group (Light/Dark/System)
+- refactor: Migrate Chat Settings tab to use SettingsCard components (2026-01-28)
+  - All 8 sections now wrapped in SettingsCard: Message Avatar Display, Avatar Display Style, Cheap LLM Settings, Image Description Profile, Memory Cascade Behavior, Context Compression, LLM Request Logging, Token & Cost Display
+  - Added `qt-card-grid-auto` wrapper for responsive grid layout (2 cards per row on wide screens)
+  - Removed manual `border-t` dividers between sections
 - refactor: Create SettingsCard component for consistent settings tab styling (2026-01-28)
   - New `SettingsCard` component in `/components/ui/SettingsCard.tsx` with support for badges, metadata grids, inline/footer actions, status messages, and delete confirmation
   - Updated `qt-card-title` CSS class to use `var(--qt-heading-font)` for theme-appropriate typography

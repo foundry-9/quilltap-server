@@ -1,5 +1,6 @@
 'use client'
 
+import { SettingsCard } from '@/components/ui/SettingsCard'
 import { ChatSettings, LLMLoggingSettings, DEFAULT_LLM_LOGGING_SETTINGS } from './types'
 
 export interface LLMLoggingSettingsProps {
@@ -21,13 +22,10 @@ export function LLMLoggingSettingsComponent({
   const loggingSettings = settings.llmLoggingSettings || DEFAULT_LLM_LOGGING_SETTINGS
 
   return (
-    <div>
-      <h2 className="text-xl font-semibold mb-4">LLM Request Logging</h2>
-      <p className="text-muted-foreground mb-4">
-        Log LLM API requests and responses for debugging and monitoring.
-        Logs can be viewed per message in chats or on the Tools page.
-      </p>
-
+    <SettingsCard
+      title="LLM Request Logging"
+      subtitle="Log LLM API requests and responses for debugging and monitoring. Logs can be viewed per message in chats or on the Tools page."
+    >
       <div className="space-y-3">
         {/* Enable logging toggle */}
         <label className="flex items-start gap-3 p-4 border border-border rounded hover:bg-accent cursor-pointer transition-colors">
@@ -95,6 +93,6 @@ export function LLMLoggingSettingsComponent({
           Logs are automatically cleaned up based on your retention settings.
         </p>
       </div>
-    </div>
+    </SettingsCard>
   )
 }

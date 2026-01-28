@@ -70,51 +70,49 @@ export default function ChatSettingsTab() {
         </div>
       )}
 
-      <AvatarSettings
-        settings={settings}
-        saving={saving}
-        onAvatarModeChange={handleAvatarModeChange}
-        onAvatarStyleChange={handleAvatarStyleChange}
-      />
+      <div className="qt-card-grid-auto">
+        <AvatarSettings
+          settings={settings}
+          saving={saving}
+          onAvatarModeChange={handleAvatarModeChange}
+          onAvatarStyleChange={handleAvatarStyleChange}
+        />
 
-      <CheapLLMSettings
-        settings={settings}
-        saving={saving}
-        loadingProfiles={loadingProfiles}
-        connectionProfiles={connectionProfiles}
-        embeddingProfiles={embeddingProfiles}
-        onUpdate={handleCheapLLMUpdate}
-      />
+        <CheapLLMSettings
+          settings={settings}
+          saving={saving}
+          loadingProfiles={loadingProfiles}
+          connectionProfiles={connectionProfiles}
+          embeddingProfiles={embeddingProfiles}
+          onUpdate={handleCheapLLMUpdate}
+        />
 
-      <ImageDescriptionSettings
-        settings={settings}
-        saving={saving}
-        loadingProfiles={loadingProfiles}
-        connectionProfiles={connectionProfiles}
-        onProfileChange={handleImageDescriptionProfileChange}
-      />
+        <ImageDescriptionSettings
+          settings={settings}
+          saving={saving}
+          loadingProfiles={loadingProfiles}
+          connectionProfiles={connectionProfiles}
+          onProfileChange={handleImageDescriptionProfileChange}
+        />
 
-      <MemoryCascadeSettings
-        settings={settings}
-        saving={saving}
-        onUpdate={handleMemoryCascadeUpdate}
-      />
+        <MemoryCascadeSettings
+          settings={settings}
+          saving={saving}
+          onUpdate={handleMemoryCascadeUpdate}
+        />
 
-      <ContextCompressionSettingsComponent
-        settings={settings}
-        saving={saving}
-        onUpdate={handleContextCompressionUpdate}
-      />
+        <ContextCompressionSettingsComponent
+          settings={settings}
+          saving={saving}
+          onUpdate={handleContextCompressionUpdate}
+        />
 
-      <div className="border-t border-border pt-6">
         <LLMLoggingSettingsComponent
           settings={settings}
           saving={saving}
           onLLMLoggingChange={handleLLMLoggingChange}
         />
-      </div>
 
-      <div className="border-t border-border pt-6">
         <TokenDisplaySettingsComponent
           settings={settings}
           saving={saving}

@@ -7,6 +7,7 @@
  * or regenerated (swiped).
  */
 
+import { SettingsCard } from '@/components/ui/SettingsCard'
 import {
   ChatSettings,
   MemoryCascadePreferences,
@@ -37,12 +38,10 @@ export function MemoryCascadeSettings({
   }
 
   return (
-    <div className="qt-card">
-      <h3 className="qt-heading-xs mb-3">Memory Cascade Behavior</h3>
-      <p className="qt-text-small text-muted-foreground mb-4">
-        Control what happens to auto-extracted memories when you delete or regenerate messages.
-      </p>
-
+    <SettingsCard
+      title="Memory Cascade Behavior"
+      subtitle="Control what happens to auto-extracted memories when you delete or regenerate messages."
+    >
       <div className="space-y-6">
         {/* On Message Delete */}
         <div>
@@ -84,6 +83,6 @@ export function MemoryCascadeSettings({
           </p>
         </div>
       </div>
-    </div>
+    </SettingsCard>
   )
 }

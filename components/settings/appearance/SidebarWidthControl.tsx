@@ -10,6 +10,7 @@
  */
 
 import { useSidebar, DEFAULT_SIDEBAR_WIDTH } from '@/components/providers/sidebar-provider'
+import { SettingsCard } from '@/components/ui/SettingsCard'
 
 /**
  * Renders the sidebar width control section
@@ -19,12 +20,10 @@ export function SidebarWidthControl() {
   const isDefault = width === DEFAULT_SIDEBAR_WIDTH
 
   return (
-    <section>
-      <h2 className="text-xl font-semibold mb-2 text-foreground">Sidebar Width</h2>
-      <p className="text-muted-foreground mb-4">
-        Drag the right edge of the sidebar to resize it. The width is saved automatically.
-      </p>
-
+    <SettingsCard
+      title="Sidebar Width"
+      subtitle="Drag the right edge of the sidebar to resize it. The width is saved automatically."
+    >
       <div className="flex items-center justify-between gap-4 p-4 border rounded-lg border-border bg-card">
         <div className="flex items-center gap-4">
           <div className="flex-shrink-0 p-2 rounded-full bg-muted text-muted-foreground">
@@ -70,6 +69,6 @@ export function SidebarWidthControl() {
           Reset to Default
         </button>
       </div>
-    </section>
+    </SettingsCard>
   )
 }
