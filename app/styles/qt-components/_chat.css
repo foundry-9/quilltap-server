@@ -109,6 +109,17 @@
   }
 
   /**
+   * User message content - must use user foreground color, not global foreground
+   * This overrides the generic .qt-chat-message-content color to ensure
+   * white text on the blue user message bubble.
+   */
+  .qt-chat-message-user .qt-chat-message-content {
+    --tw-prose-body: var(--qt-chat-user-fg);
+    --tw-prose-invert-body: var(--qt-chat-user-fg);
+    color: var(--qt-chat-user-fg);
+  }
+
+  /**
    * Message actions (edit, delete, copy, etc.)
    */
   .qt-chat-message-actions {
@@ -982,8 +993,33 @@
     @apply w-4 h-4;
   }
 
+  /**
+   * User message action icons - use white/light colors on blue background
+   */
+  .qt-chat-message-user .qt-chat-message-action-bar {
+    border-top-color: color-mix(in srgb, var(--qt-chat-user-fg) 30%, transparent);
+  }
+
+  .qt-chat-message-user .qt-chat-message-action-icon {
+    color: color-mix(in srgb, var(--qt-chat-user-fg) 70%, transparent);
+  }
+
+  .qt-chat-message-user .qt-chat-message-action-icon:hover {
+    color: var(--qt-chat-user-fg);
+    background: color-mix(in srgb, var(--qt-chat-user-fg) 15%, transparent);
+  }
+
+  .qt-chat-message-user .qt-chat-message-action-icon-danger:hover {
+    color: hsl(0 100% 85%);
+    background: color-mix(in srgb, hsl(0 70% 50%) 25%, transparent);
+  }
+
   .qt-chat-message-action-timestamp {
     @apply text-xs text-muted-foreground ml-auto;
+  }
+
+  .qt-chat-message-user .qt-chat-message-action-timestamp {
+    color: color-mix(in srgb, var(--qt-chat-user-fg) 70%, transparent);
   }
 
   /**

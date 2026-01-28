@@ -4,6 +4,21 @@
 
 ### 2.8-dev
 
+- feat: Add light/dark/system mode toggle to themes menu in sidebar (2026-01-28)
+  - Color mode options displayed as vertical list below theme options
+  - Each option shows icon, label, and checkmark for active selection
+- fix: Chat user message text and action icons now visible on blue background (2026-01-28)
+  - User message content was using global foreground color instead of white
+  - Added CSS override for `.qt-chat-message-user .qt-chat-message-content` to use user foreground
+  - Action bar icons in user messages now use semi-transparent white with proper hover states
+  - Danger icon hover state uses light red visible on blue background
+- refactor: Update default theme to warm slate-blue palette (2026-01-28)
+  - Light mode: background shifted from pure white to warm off-white (`hsl(220 20% 97%)`)
+  - Dark mode: visible surface hierarchy - page (8%) → card (12%) → popover (15%)
+  - Secondary, muted, and accent tokens now have distinct values instead of being identical
+  - Added sidebar-specific theme tokens (`--theme-sidebar-*`) for visual separation
+  - Updated `lib/themes/default-tokens.ts` to match new globals.css values
+  - Card shadows tuned for warm slate-blue theme
 - refactor: Migrate Appearance Settings tab to use SettingsCard components (2026-01-28)
   - Quick Theme Access, Color Mode, and Sidebar Width sections now wrapped in SettingsCard
   - Added `qt-card-grid-auto` wrapper for responsive grid layout

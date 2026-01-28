@@ -39,11 +39,11 @@
   --qt-button-destructive-hover-bg: color-mix(in srgb, var(--color-destructive) 90%, black);
 
   --qt-button-success-bg: var(--color-success);
-  --qt-button-success-fg: hsl(0 0% 10%); /* Dark text for contrast on bright green */
+  --qt-button-success-fg: var(--color-success-foreground);
   --qt-button-success-hover-bg: color-mix(in srgb, var(--color-success) 85%, black);
 
   --qt-button-warning-bg: var(--color-warning);
-  --qt-button-warning-fg: hsl(0 0% 10%); /* Dark text for contrast on amber */
+  --qt-button-warning-fg: var(--color-warning-foreground);
   --qt-button-warning-hover-bg: color-mix(in srgb, var(--color-warning) 85%, black);
 
   /* ==========================================================================
@@ -88,6 +88,9 @@
 
   /* ==========================================================================
      CARD VARIABLES
+     Shadow values tuned for the warm slate-blue theme:
+     - Light mode: subtle shadows using the foreground color
+     - Dark mode overrides below use pure black for depth
      ========================================================================== */
   --qt-card-radius: var(--radius-lg);
   --qt-card-padding: 1.5rem;
@@ -95,8 +98,8 @@
   --qt-card-fg: var(--color-card-foreground);
   --qt-card-border: var(--color-border);
   --qt-card-border-opacity: 0.6;
-  --qt-card-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-  --qt-card-shadow-hover: 0 10px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  --qt-card-shadow: 0 1px 3px hsl(220 25% 12% / 0.05), 0 1px 2px hsl(220 25% 12% / 0.03);
+  --qt-card-shadow-hover: 0 4px 12px hsl(220 25% 12% / 0.08), 0 2px 4px hsl(220 25% 12% / 0.04);
   --qt-card-transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
 
   /* Entity card - extends card for character/persona/chat list items */
@@ -147,28 +150,32 @@
 
   /* ==========================================================================
      SIDEBAR VARIABLES
+     Uses dedicated sidebar theme colors for better visual separation
      ========================================================================== */
   --qt-sidebar-width: 16rem;
-  --qt-sidebar-bg: var(--color-background);
-  --qt-sidebar-border: var(--color-border);
+  --qt-sidebar-bg: var(--color-sidebar-background);
+  --qt-sidebar-border: var(--color-sidebar-border);
+  --qt-sidebar-fg: var(--color-sidebar-foreground);
+  --qt-sidebar-muted: var(--color-sidebar-muted);
 
   --qt-sidebar-item-padding-x: 0.75rem;
   --qt-sidebar-item-padding-y: 0.5rem;
   --qt-sidebar-item-radius: var(--radius-md);
-  --qt-sidebar-item-hover-bg: var(--color-muted);
+  --qt-sidebar-item-hover-bg: var(--color-sidebar-accent);
   --qt-sidebar-item-active-bg: color-mix(in srgb, var(--color-primary) 10%, transparent);
   --qt-sidebar-item-active-border: var(--color-primary);
 
   /* ==========================================================================
      LEFT SIDEBAR VARIABLES (App Navigation)
+     Uses dedicated sidebar theme colors for visual separation from content
      ========================================================================== */
   --qt-left-sidebar-width: 16rem;
   --qt-left-sidebar-min-width: 16rem;
   --qt-left-sidebar-max-width: 32rem;
   --qt-left-sidebar-collapsed-width: 4rem;
   --qt-left-sidebar-resize-handle-width: 4px;
-  --qt-left-sidebar-bg: var(--color-background);
-  --qt-left-sidebar-border: var(--color-border);
+  --qt-left-sidebar-bg: var(--color-sidebar-background);
+  --qt-left-sidebar-border: var(--color-sidebar-border);
   --qt-left-sidebar-transition: width 200ms ease, transform 300ms ease;
 
   --qt-left-sidebar-header-height: 4rem;
@@ -176,7 +183,7 @@
 
   --qt-left-sidebar-section-padding: 0.75rem;
   --qt-left-sidebar-section-gap: 0.25rem;
-  --qt-left-sidebar-section-title-fg: var(--color-muted-foreground);
+  --qt-left-sidebar-section-title-fg: var(--color-sidebar-muted);
 
   --qt-left-sidebar-item-gap: 0.5rem;
   --qt-left-sidebar-item-icon-size: 1.25rem;
@@ -489,6 +496,13 @@
    Adjusted colors for dark backgrounds with better contrast
    ========================================================================== */
 .dark {
+  /* Card shadows - more subtle, using pure black for depth on dark backgrounds */
+  --qt-card-shadow: 0 1px 3px hsl(0 0% 0% / 0.2), 0 1px 2px hsl(0 0% 0% / 0.15);
+  --qt-card-shadow-hover: 0 4px 12px hsl(0 0% 0% / 0.25), 0 2px 4px hsl(0 0% 0% / 0.15);
+
+  /* Borders slightly more visible in dark mode */
+  --qt-card-border-opacity: 0.4;
+
   /* Alert tokens - brighter, more saturated for dark backgrounds */
   --qt-alert-success-bg: hsl(142 76% 36% / 0.2);
   --qt-alert-success-fg: hsl(142 76% 65%);
