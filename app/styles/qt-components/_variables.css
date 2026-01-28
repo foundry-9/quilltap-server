@@ -97,9 +97,9 @@
   --qt-card-bg: var(--color-card);
   --qt-card-fg: var(--color-card-foreground);
   --qt-card-border: var(--color-border);
-  --qt-card-border-opacity: 0.6;
-  --qt-card-shadow: 0 1px 3px hsl(220 25% 12% / 0.05), 0 1px 2px hsl(220 25% 12% / 0.03);
-  --qt-card-shadow-hover: 0 4px 12px hsl(220 25% 12% / 0.08), 0 2px 4px hsl(220 25% 12% / 0.04);
+  --qt-card-border-opacity: 0.55;
+  --qt-card-shadow: 0 1px 3px hsl(220 25% 12% / 0.08), 0 1px 2px hsl(220 25% 12% / 0.05);
+  --qt-card-shadow-hover: 0 4px 12px hsl(220 25% 12% / 0.12), 0 2px 4px hsl(220 25% 12% / 0.06);
   --qt-card-transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
 
   /* Entity card - extends card for character/persona/chat list items */
@@ -496,12 +496,12 @@
    Adjusted colors for dark backgrounds with better contrast
    ========================================================================== */
 .dark {
-  /* Card shadows - more subtle, using pure black for depth on dark backgrounds */
-  --qt-card-shadow: 0 1px 3px hsl(0 0% 0% / 0.2), 0 1px 2px hsl(0 0% 0% / 0.15);
-  --qt-card-shadow-hover: 0 4px 12px hsl(0 0% 0% / 0.25), 0 2px 4px hsl(0 0% 0% / 0.15);
+  /* Card shadows - black shadow for depth plus faint light edge for definition */
+  --qt-card-shadow: 0 1px 3px hsl(220 15% 0% / 0.3), 0 0 1px hsl(220 15% 100% / 0.05);
+  --qt-card-shadow-hover: 0 4px 12px hsl(220 15% 0% / 0.4), 0 0 1px hsl(220 15% 100% / 0.08);
 
-  /* Borders slightly more visible in dark mode */
-  --qt-card-border-opacity: 0.4;
+  /* Borders more visible in dark mode to compensate for reduced shadow effectiveness */
+  --qt-card-border-opacity: 0.7;
 
   /* Alert tokens - brighter, more saturated for dark backgrounds */
   --qt-alert-success-bg: hsl(142 76% 36% / 0.2);

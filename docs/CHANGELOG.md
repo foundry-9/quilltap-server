@@ -4,6 +4,12 @@
 
 ### 2.8-dev
 
+- refactor: Add semantic typography system and improve card visibility (2026-01-28)
+  - New `_typography.css` with semantic classes: `qt-page-title`, `qt-section-title`, `qt-card-title`, `qt-card-subtitle`, `qt-meta`, `qt-label`, `qt-helper`, `qt-body`, `qt-link`, `qt-action`
+  - Updated card shadows for better visibility in both light and dark modes
+  - Homepage section cards now use proper shadow and border opacity from card system
+  - Updated homepage components (RecentChatItem, ProjectItem, CharacterCard) to use new typography classes
+  - Improved muted foreground contrast in light mode (45% → 40% lightness)
 - feat: Add light/dark/system mode toggle to themes menu in sidebar (2026-01-28)
   - Color mode options displayed as vertical list below theme options
   - Each option shows icon, label, and checkmark for active selection

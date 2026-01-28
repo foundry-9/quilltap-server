@@ -36,18 +36,18 @@ export function RecentChatItem({ chat }: RecentChatItemProps) {
     >
       <AvatarStack entities={characters} size="sm" maxDisplay={2} />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-foreground truncate">
+        <p className="qt-card-title truncate">
           {chat.title}
         </p>
-        <p className="text-xs text-muted-foreground truncate">
+        <p className="qt-card-subtitle truncate">
           {characterNames}
         </p>
       </div>
       <div className="flex flex-col items-end shrink-0">
-        <span className="text-xs text-muted-foreground">
+        <span className="qt-meta">
           {formatMessageTime(chat.lastMessageAt ?? chat.updatedAt)}
         </span>
-        <span className="text-xs text-primary">
+        <span className="qt-meta text-primary">
           {chat._count.messages} msgs
         </span>
       </div>

@@ -127,7 +127,7 @@
    * Lighter than secondary, clearly "quiet"
    */
   --theme-muted: hsl(220 15% 94%);
-  --theme-muted-foreground: hsl(220 10% 45%);
+  --theme-muted-foreground: hsl(220 12% 40%);
 
   /*
    * ACCENT

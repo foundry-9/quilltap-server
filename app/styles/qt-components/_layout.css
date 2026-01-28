@@ -1241,10 +1241,11 @@
   .qt-homepage-section {
     @apply flex flex-col overflow-hidden;
     @apply p-4 rounded-lg;
-    @apply border border-border;
     min-width: 0; /* Prevent flex/grid item from expanding */
     min-height: 0; /* Allow shrinking in flex/grid context */
     background: var(--qt-card-bg, var(--color-card));
+    border: 1px solid color-mix(in srgb, var(--qt-card-border) calc(var(--qt-card-border-opacity) * 100%), transparent);
+    box-shadow: var(--qt-card-shadow);
   }
 
   /**
@@ -1256,11 +1257,14 @@
   }
 
   .qt-homepage-section-title {
-    @apply text-lg font-semibold text-foreground;
+    @apply text-lg font-semibold;
+    color: var(--color-foreground);
   }
 
   .qt-homepage-section-link {
-    @apply text-sm text-muted-foreground hover:text-foreground transition-colors;
+    @apply text-sm font-normal;
+    @apply text-muted-foreground hover:text-foreground;
+    @apply transition-colors;
   }
 
   /**

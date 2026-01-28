@@ -33,11 +33,11 @@ export function CharacterCard({ character }: CharacterCardProps) {
             size="md"
           />
           <div className="text-center min-w-0 w-full">
-            <p className="text-sm font-medium text-foreground truncate">
+            <p className="qt-card-title truncate">
               {character.name}
             </p>
             {character.title && (
-              <p className="text-xs text-muted-foreground truncate">
+              <p className="qt-card-subtitle truncate italic">
                 {character.title}
               </p>
             )}

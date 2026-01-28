@@ -812,18 +812,22 @@
 
   /**
    * Empty state title
+   * Matches qt-section-title for visual consistency
    */
   .qt-empty-state-title {
-    @apply text-lg font-medium text-foreground;
+    @apply text-lg font-semibold;
     @apply mb-1;
+    color: var(--color-foreground);
   }
 
   /**
    * Empty state description
+   * Matches qt-card-subtitle for visual consistency
    */
   .qt-empty-state-description {
-    @apply text-sm text-muted-foreground;
+    @apply text-sm font-normal;
     @apply max-w-sm;
+    color: var(--color-muted-foreground);
   }
 
   /**

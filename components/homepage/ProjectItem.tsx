@@ -39,20 +39,20 @@ export function ProjectItem({ project }: ProjectItemProps) {
         <FolderIcon className="w-5 h-5" color={project.color} />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-foreground truncate">
+        <p className="qt-card-title truncate">
           {project.name}
         </p>
         {project.description && (
-          <p className="text-xs text-muted-foreground truncate">
+          <p className="qt-card-subtitle truncate">
             {project.description}
           </p>
         )}
       </div>
       <div className="flex flex-col items-end shrink-0">
-        <span className="text-xs text-muted-foreground">
+        <span className="qt-meta">
           {formatMessageTime(project.lastActivity)}
         </span>
-        <span className="text-xs text-primary">
+        <span className="qt-meta text-primary">
           {project.chatCount} {project.chatCount === 1 ? 'chat' : 'chats'}
         </span>
       </div>
