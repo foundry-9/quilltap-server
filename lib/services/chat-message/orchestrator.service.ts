@@ -31,6 +31,7 @@ import {
   loadAndProcessFiles,
   buildMessageContext,
 } from './context-builder.service'
+import type { ProjectContext } from '@/lib/chat/context-manager'
 import {
   processToolCalls,
   saveToolMessages,
@@ -202,6 +203,7 @@ async function processMessage(
     windowSize: 5,
     compressionTargetTokens: 800,
     systemPromptTargetTokens: 1500,
+    projectContextReinjectInterval: 5,
   }
 
   // Get cheap LLM selection for compression
@@ -259,6 +261,48 @@ async function processMessage(
 
   // Get existing messages
   const existingMessages = await repos.chats.getMessages(chatId)
+
+  // ============================================================================
+  // Project Context Injection
+  // ============================================================================
+  // Load project context and determine if it should be injected this message
+  let projectContext: ProjectContext | null = null
+
+  if (chat.projectId) {
+    const project = await repos.projects.findById(chat.projectId)
+    if (project && (project.description || project.instructions)) {
+      // Calculate if we should inject project context this message
+      // Default interval matches windowSize (5), can be configured to 0 to disable
+      const reinjectInterval = contextCompressionSettings.projectContextReinjectInterval ?? 5
+      const messageCount = existingMessages.filter(m => m.type === 'message').length
+
+      // Inject on first message (count 0) or every N messages after that
+      // Using messageCount because the new user message hasn't been saved yet
+      const shouldInject = reinjectInterval > 0 && (messageCount === 0 || messageCount % reinjectInterval === 0)
+
+      if (shouldInject) {
+        projectContext = {
+          name: project.name,
+          description: project.description,
+          instructions: project.instructions,
+        }
+        logger.debug('Injecting project context into system prompt', {
+          chatId,
+          projectId: chat.projectId,
+          messageCount,
+          reinjectInterval,
+        })
+      } else {
+        logger.debug('Skipping project context injection (not at interval)', {
+          chatId,
+          projectId: chat.projectId,
+          messageCount,
+          reinjectInterval,
+          nextInjection: reinjectInterval - (messageCount % reinjectInterval),
+        })
+      }
+    }
+  }
 
   // Process file attachments
   const fileProcessing = await loadAndProcessFiles(
@@ -388,6 +432,8 @@ async function processMessage(
       pseudoToolInstructions,
       newUserMessage: finalUserMessageContent,
       isContinueMode,
+      // Project context (injected at configured interval)
+      projectContext,
       // Context compression options
       contextCompressionSettings: compressionEnabled ? contextCompressionSettings : null,
       cheapLLMSelection,

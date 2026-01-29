@@ -264,6 +264,8 @@ export interface ContextCompressionSettings {
   windowSize: number
   compressionTargetTokens: number
   systemPromptTargetTokens: number
+  /** How often to re-inject project context (0 = never after initial, must be >= windowSize) */
+  projectContextReinjectInterval: number
 }
 
 /**
@@ -274,6 +276,7 @@ export const DEFAULT_CONTEXT_COMPRESSION_SETTINGS: ContextCompressionSettings = 
   windowSize: 5,
   compressionTargetTokens: 800,
   systemPromptTargetTokens: 1500,
+  projectContextReinjectInterval: 5,
 }
 
 /**

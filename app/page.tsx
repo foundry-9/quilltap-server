@@ -182,13 +182,13 @@ export default async function Home() {
     }
   }
 
-  // Get all non-NPC characters, sorted like the /characters page:
-  // 1. NPCs last (already filtered out)
-  // 2. Favorites first
-  // 3. Chat count descending
-  // 4. Alphabetically by name
+  // Get AI-controlled characters only (exclude NPCs and user-controlled characters)
+  // Sorted like the /characters page:
+  // 1. Favorites first
+  // 2. Chat count descending
+  // 3. Alphabetically by name
   const sortedCharacters = allCharacters
-    .filter(c => !c.npc)
+    .filter(c => !c.npc && c.controlledBy !== 'user')
     .sort((a, b) => {
       // Favorites first
       if (a.isFavorite !== b.isFavorite) {

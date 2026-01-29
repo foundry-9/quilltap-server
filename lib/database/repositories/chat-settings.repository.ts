@@ -210,6 +210,7 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
             windowSize: 5,
             compressionTargetTokens: 800,
             systemPromptTargetTokens: 1500,
+            projectContextReinjectInterval: 5,
           },
           llmLoggingSettings: {
             enabled: true,

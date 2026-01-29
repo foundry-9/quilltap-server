@@ -4,6 +4,17 @@
 
 ### 2.8-dev
 
+- feat: Add project context re-injection for long conversations (2026-01-29)
+  - Project instructions are now periodically re-injected into the system prompt during conversations
+  - New setting `projectContextReinjectInterval` in Context Compression settings (default: 5 messages)
+  - Ensures project context survives context compression by refreshing it before older messages are compressed
+  - UI slider in Settings → Chat → Context Compression card
+  - Minimum interval is always >= sliding window size (no benefit to injecting more often)
+  - Only applies to chats in projects with non-empty instructions or descriptions
+- fix: Filter out NPCs and user-controlled characters from homepage character list (2026-01-29)
+  - Homepage now only shows AI-controlled, non-NPC characters
+  - User-controlled characters (controlledBy: 'user') and ad-hoc NPCs are excluded
+  - Full character list still available on /characters page
 - refactor: Add semantic typography system and improve card visibility (2026-01-28)
   - New `_typography.css` with semantic classes: `qt-page-title`, `qt-section-title`, `qt-card-title`, `qt-card-subtitle`, `qt-meta`, `qt-label`, `qt-helper`, `qt-body`, `qt-link`, `qt-action`
   - Updated card shadows for better visibility in both light and dark modes

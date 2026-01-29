@@ -30,6 +30,8 @@ export const ContextCompressionSettingsSchema = z.object({
   compressionTargetTokens: z.number().min(300).max(2000).default(800),
   /** Target token count for compressed system prompt */
   systemPromptTargetTokens: z.number().min(500).max(3000).default(1500),
+  /** How often to re-inject project context into the system prompt (0 = never after initial, matches windowSize by default) */
+  projectContextReinjectInterval: z.number().min(0).max(20).default(5),
 });
 
 export type ContextCompressionSettings = z.infer<typeof ContextCompressionSettingsSchema>;
@@ -198,6 +200,7 @@ export const ChatSettingsSchema = z.object({
     windowSize: 5,
     compressionTargetTokens: 800,
     systemPromptTargetTokens: 1500,
+    projectContextReinjectInterval: 5,
   }),
   /** LLM logging settings for tracking API calls */
   llmLoggingSettings: LLMLoggingSettingsSchema.default({
