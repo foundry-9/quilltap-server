@@ -4,6 +4,21 @@
 
 ### 2.8-dev
 
+- refactor: Rains theme revision - Claude-inspired aesthetic (2026-01-29)
+  - Dark mode: Clean charcoal with subtle warmth (hue 40), replacing muddy orange-brown
+  - Light mode: Refined warm parchment/cream backgrounds
+  - Accent color shifted from terracotta (hue 15) to orange-amber (hue 28)
+  - Higher contrast text colors for improved readability
+  - Added Nunito Sans (weight 400) for user messages - clean, delicate strokes at regular weight
+  - User message foreground brightened to near-white (`hsl(40 6% 98%)`)
+  - Added `--qt-card-*` tokens for consistent card styling
+  - Updated comments from "ChatGPT-inspired" to "Claude-inspired"
+  - Plugin bumped to v1.3.2
+- feat: Earl Grey theme card tokens (2026-01-29)
+  - Added `--qt-card-shadow`, `--qt-card-shadow-hover`, `--qt-card-border-opacity` tokens
+  - Dark mode: layered shadows with faint white edge for definition
+  - Light mode: subtle neutral gray shadows
+  - Plugin bumped to v1.3.1
 - fix: Remove duplicate avatar in streaming message indicator (2026-01-29)
   - Removed leftover mobile header code from StreamingMessage component
   - Mobile header rendered a second avatar above the quill animation

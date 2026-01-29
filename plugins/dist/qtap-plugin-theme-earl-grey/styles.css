@@ -173,6 +173,16 @@
   --card-shadow: 0 4px 12px hsl(var(--always-black) / 0.2);
   --chat-shadow: 0 4px 12px hsl(var(--always-black) / 0.2);
 
+  /* ================================================================
+     QT-CARD COMPONENT TOKENS - Dark Mode
+     Black shadows for depth plus faint light edge for definition
+     ================================================================ */
+  --qt-card-shadow: 0 1px 3px hsl(0 0% 0% / 0.3), 0 0 1px hsl(0 0% 100% / 0.05);
+  --qt-card-shadow-hover: 0 4px 12px hsl(0 0% 0% / 0.4), 0 0 1px hsl(0 0% 100% / 0.08);
+  --qt-card-border-opacity: 0.7;
+  --qt-card-bg: var(--color-card);
+  --qt-card-border: var(--color-border);
+
   /* Apply base colors */
   background-color: hsl(var(--bg-100));
   color: hsl(var(--text-000));
@@ -257,6 +267,16 @@
   --stroke-strong: hsl(var(--always-black) / 0.1);
   --card-shadow: 0 1px 3px hsl(var(--always-black) / 0.08);
   --chat-shadow: none;
+
+  /* ================================================================
+     QT-CARD COMPONENT TOKENS - Light Mode
+     These integrate with the .qt-homepage-section card system
+     ================================================================ */
+  --qt-card-shadow: 0 1px 3px hsl(0 0% 12% / 0.08), 0 1px 2px hsl(0 0% 12% / 0.05);
+  --qt-card-shadow-hover: 0 4px 12px hsl(0 0% 12% / 0.12), 0 2px 4px hsl(0 0% 12% / 0.06);
+  --qt-card-border-opacity: 0.55;
+  --qt-card-bg: var(--color-card);
+  --qt-card-border: var(--color-border);
 
   /* Apply base colors */
   background-color: hsl(var(--bg-100));

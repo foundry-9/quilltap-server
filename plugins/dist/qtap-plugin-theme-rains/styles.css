@@ -1,12 +1,31 @@
 /**
  * Rains Theme - Warm & Minimalist with Light/Dark Mode Support
  *
- * Dark mode: ChatGPT-inspired warm greys with clay/orange accent
- * Light mode: Opus-inspired warm paper aesthetic with terracotta accent
+ * Dark mode: Claude-inspired clean charcoal with subtle warmth
+ * Light mode: Warm parchment/cream aesthetic with orange-amber accent
  *
  * This theme uses the qt-* semantic class system for consistent,
  * themeable component styling.
  */
+
+/* ============================================================================
+   FONT FACES
+   ============================================================================ */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('fonts/NunitoSans-Regular.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('fonts/NunitoSans-Italic.woff2') format('woff2');
+}
 
 /* ============================================================================
    ROOT BASELINE - SHARED BETWEEN MODES
@@ -67,7 +86,7 @@
   --font-system: system-ui, sans-serif;
   --font-dyslexia: var(--font-open-dyslexic), "Comic Sans MS", ui-serif, Georgia, serif;
   --font-mono: var(--font-jetbrains);
-  --font-user-message: var(--font-sans-serif);
+  --font-user-message: "Nunito Sans", system-ui, sans-serif;
   --font-claude-response: var(--font-serif);
   font-family: var(--font-ui);
   font-weight: 300;
@@ -84,17 +103,18 @@
 
 /* ============================================================================
    DARK MODE (DEFAULT)
+   Claude-inspired clean charcoal with subtle warmth
    ============================================================================ */
 [data-theme="rains"],
 [data-theme="rains"].dark {
   color-scheme: dark;
 
-  /* Color Palette - ChatGPT-inspired warm greys */
-  --accent-brand: 15 55% 59%;
-  --accent-main-000: 15 45% 52%;
-  --accent-main-100: 15 55% 59%;
-  --accent-main-200: 15 55% 59%;
-  --accent-main-900: 0 0% 0%;
+  /* Color Palette - Orange-amber accent (Claude's signature) */
+  --accent-brand: 28 85% 58%;           /* Vibrant orange-amber */
+  --accent-main-000: 28 80% 55%;        /* Hover state */
+  --accent-main-100: 28 85% 58%;        /* Default */
+  --accent-main-200: 28 80% 52%;        /* Pressed */
+  --accent-main-900: 28 60% 25%;        /* Very dark variant */
 
   /* Pro/Purple Accent */
   --accent-pro-000: 251 84.6% 74.5%;
@@ -102,25 +122,26 @@
   --accent-pro-200: 251 40% 45.1%;
   --accent-pro-900: 250 25.3% 19.4%;
 
-  /* Secondary/Blue Accent */
-  --accent-secondary-000: 210 65.5% 67.1%;
-  --accent-secondary-100: 210 70.9% 51.6%;
-  --accent-secondary-200: 210 70.9% 51.6%;
-  --accent-secondary-900: 210 55.9% 24.6%;
+  /* Secondary/Blue Accent - Muted blue for links, info */
+  --accent-secondary-000: 210 45% 60%;
+  --accent-secondary-100: 210 50% 55%;
+  --accent-secondary-200: 210 45% 50%;
+  --accent-secondary-900: 210 35% 30%;
 
-  /* Background Tones - Warm dark greys */
-  --bg-000: 0 0% 23%;      /* #3a3a3a - hover states */
-  --bg-100: 0 0% 19%;      /* #303030 - elements */
-  --bg-200: 0 0% 13%;      /* #212121 - main bg */
-  --bg-300: 0 0% 10%;      /* #1a1a1a - sidebar */
-  --bg-400: 0 0% 6%;
-  --bg-500: 0 0% 0%;
+  /* Background Tones - Clean charcoal with subtle warmth */
+  /* Hue 40 (warm neutral/olive-tan), low saturation for clean feel */
+  --bg-000: 40 6% 20%;      /* #363432 - hover states, lightest */
+  --bg-100: 40 5% 16%;      /* #2b2928 - elements, cards */
+  --bg-200: 40 4% 13%;      /* #232221 - main background */
+  --bg-300: 40 4% 11%;      /* #1e1d1c - sidebar */
+  --bg-400: 40 3% 9%;       /* #181717 - deeper surfaces */
+  --bg-500: 40 2% 7%;       /* #131212 - darkest */
 
   /* Border Tones */
-  --border-100: 0 0% 85%;
-  --border-200: 0 0% 70%;
-  --border-300: 0 0% 40%;
-  --border-400: 0 0% 30%;
+  --border-100: 40 5% 85%;    /* Light borders */
+  --border-200: 40 4% 70%;
+  --border-300: 40 3% 40%;
+  --border-400: 40 2% 25%;    /* Dark borders */
 
   /* Status Colors */
   --danger-000: 0 98.4% 75.1%;
@@ -128,15 +149,15 @@
   --danger-200: 0 67% 59.6%;
   --danger-900: 0 46.5% 27.8%;
 
-  --success-000: 97 59.1% 46.1%;
-  --success-100: 97 75% 32.9%;
-  --success-200: 97 75% 32.9%;
-  --success-900: 127 100% 13.9%;
+  --success-000: 142 71% 55%;
+  --success-100: 142 71% 45%;
+  --success-200: 142 71% 45%;
+  --success-900: 142 76.6% 22%;
 
-  --warning-000: 40 71% 50%;
-  --warning-100: 39 93.4% 35.9%;
-  --warning-200: 39 93.4% 35.9%;
-  --warning-900: 45 94.8% 15.1%;
+  --warning-000: 45 93% 57%;
+  --warning-100: 45 93% 47%;
+  --warning-200: 45 93% 47%;
+  --warning-900: 45 94.8% 20%;
 
   /* On-Color Text */
   --oncolor-100: 0 0% 100%;
@@ -144,25 +165,25 @@
   --oncolor-300: 0 0% 97%;
 
   /* Pictogram Tones - Warm greys */
-  --pictogram-100: 0 0% 30%;
-  --pictogram-200: 0 0% 24%;
-  --pictogram-300: 0 0% 19%;
-  --pictogram-400: 0 0% 13%;
+  --pictogram-100: 40 4% 30%;
+  --pictogram-200: 40 4% 24%;
+  --pictogram-300: 40 4% 19%;
+  --pictogram-400: 40 4% 13%;
 
-  /* Text Colors */
-  --text-000: 0 0% 93%;     /* #ececec - primary */
-  --text-100: 0 0% 93%;
-  --text-200: 0 0% 62%;     /* #9e9e9e - secondary */
-  --text-300: 0 0% 62%;
-  --text-400: 0 0% 40%;     /* #666666 - muted */
-  --text-500: 0 0% 40%;
+  /* Text Colors - Higher contrast */
+  --text-000: 40 10% 95%;   /* #f4f3f1 - primary text */
+  --text-100: 40 8% 90%;    /* #e8e6e3 - primary alt */
+  --text-200: 40 5% 65%;    /* #a8a6a3 - secondary */
+  --text-300: 40 4% 55%;    /* #908e8b - tertiary */
+  --text-400: 40 3% 45%;    /* #757372 - muted */
+  --text-500: 40 2% 38%;    /* #636160 - very muted */
 
   /* Always Colors */
   --always-white: 0 0% 100%;
   --always-black: 0 0% 0%;
 
   /* Ring color for dark mode */
-  --tw-ring-color: hsl(var(--accent-secondary-100) / 1);
+  --tw-ring-color: hsl(var(--accent-brand) / 1);
 
   /* Scrollbar for dark mode */
   scrollbar-color: hsl(var(--border-300) / 0.35) transparent;
@@ -172,30 +193,38 @@
   --surface-raised: hsl(var(--bg-100));
   --surface-muted: hsl(var(--bg-300));
   --surface-deep: hsl(var(--bg-400));
-  --stroke-soft: hsl(var(--always-white) / 0.05);
-  --stroke-strong: hsl(var(--always-white) / 0.08);
-  --card-shadow: 0 4px 6px hsl(var(--always-black) / 0.1);
-  --chat-shadow: 0 2px 4px hsl(var(--always-black) / 0.1);
+  --stroke-soft: hsl(var(--always-white) / 0.08);
+  --stroke-strong: hsl(var(--always-white) / 0.12);
+  --card-shadow: 0 4px 6px hsl(var(--always-black) / 0.15);
+  --chat-shadow: 0 2px 4px hsl(var(--always-black) / 0.12);
+
+  /* ================================================================
+     QT-CARD COMPONENT TOKENS - Dark Mode
+     Black shadows for depth plus faint light edge for definition
+     ================================================================ */
+  --qt-card-shadow: 0 1px 3px hsl(40 5% 0% / 0.25), 0 0 1px hsl(40 5% 100% / 0.06);
+  --qt-card-shadow-hover: 0 4px 12px hsl(40 5% 0% / 0.35), 0 0 1px hsl(40 5% 100% / 0.08);
+  --qt-card-border-opacity: 0.65;
 
   /* Apply base colors */
   background-color: hsl(var(--bg-200));
   color: hsl(var(--text-000));
   border-color: hsl(var(--border-300) / 0.2);
-  outline-color: hsl(var(--accent-secondary-100));
+  outline-color: hsl(var(--accent-brand));
 }
 
 /* ============================================================================
-   LIGHT MODE - Opus-inspired warm paper aesthetic
+   LIGHT MODE - Warm parchment/cream aesthetic
    ============================================================================ */
 [data-theme="rains"].light {
   color-scheme: light;
 
-  /* Color Palette - Warm & Minimalist */
-  --accent-brand: 10 53% 53%;           /* Terracotta #C75945 */
-  --accent-main-000: 10 53% 48%;
-  --accent-main-100: 10 53% 53%;
-  --accent-main-200: 10 53% 58%;
-  --accent-main-900: 10 40% 25%;
+  /* Color Palette - Orange-amber (same hue family as dark) */
+  --accent-brand: 28 75% 50%;           /* Slightly deeper for light bg */
+  --accent-main-000: 28 70% 45%;
+  --accent-main-100: 28 75% 50%;
+  --accent-main-200: 28 70% 55%;
+  --accent-main-900: 28 50% 85%;
 
   /* Pro/Purple Accent - Adjusted for light */
   --accent-pro-000: 251 60% 60%;
@@ -209,19 +238,19 @@
   --accent-secondary-200: 210 65% 55%;
   --accent-secondary-900: 210 40% 90%;
 
-  /* Background Tones - Warm paper */
-  --bg-000: 0 0% 100%;         /* #FFFFFF - cards/inputs */
-  --bg-100: 30 22% 97%;        /* #FAF8F6 - main bg */
-  --bg-200: 30 11% 94%;        /* #F2F0EE - sidebar */
-  --bg-300: 30 15% 92%;        /* Slightly darker */
-  --bg-400: 30 12% 88%;
-  --bg-500: 30 10% 85%;
+  /* Background Tones - Warm parchment */
+  --bg-000: 35 20% 100%;      /* Pure white for inputs/cards */
+  --bg-100: 35 25% 97%;       /* #FAF8F5 - warm off-white */
+  --bg-200: 35 18% 94%;       /* #F2EFEB - main background */
+  --bg-300: 35 15% 91%;       /* #EAE7E2 - sidebar */
+  --bg-400: 35 12% 87%;       /* #E0DCD6 - slightly darker */
+  --bg-500: 35 10% 83%;       /* #D6D1CA - darkest light surface */
 
   /* Border Tones - Subtle warm */
-  --border-100: 30 10% 89%;    /* #E6E4E2 */
-  --border-200: 30 8% 84%;
-  --border-300: 30 6% 78%;
-  --border-400: 45 6% 80%;     /* Focus ring #D0CFCB */
+  --border-100: 35 10% 89%;   /* #E6E4E2 */
+  --border-200: 35 8% 84%;
+  --border-300: 35 6% 78%;
+  --border-400: 35 6% 75%;    /* Focus ring */
 
   /* Status Colors - Adjusted for light bg */
   --danger-000: 0 70% 55%;
@@ -245,18 +274,18 @@
   --oncolor-300: 0 0% 10%;
 
   /* Pictogram Tones - Light mode */
-  --pictogram-100: 30 8% 90%;
-  --pictogram-200: 30 10% 85%;
-  --pictogram-300: 30 8% 80%;
-  --pictogram-400: 30 6% 75%;
+  --pictogram-100: 35 8% 90%;
+  --pictogram-200: 35 10% 85%;
+  --pictogram-300: 35 8% 80%;
+  --pictogram-400: 35 6% 75%;
 
-  /* Text Colors - Sharp charcoal */
-  --text-000: 0 0% 10%;        /* #1A1A1A - primary */
-  --text-100: 0 0% 10%;
-  --text-200: 0 0% 35%;        /* #585858 - secondary */
-  --text-300: 0 0% 35%;
-  --text-400: 0 0% 50%;        /* Muted */
-  --text-500: 0 0% 60%;        /* Placeholder */
+  /* Text Colors - Warm charcoal */
+  --text-000: 35 15% 10%;     /* Near black, warm */
+  --text-100: 35 12% 15%;     /* Primary */
+  --text-200: 35 8% 35%;      /* Secondary */
+  --text-300: 35 6% 45%;      /* Tertiary */
+  --text-400: 35 5% 55%;      /* Muted */
+  --text-500: 35 4% 65%;      /* Very muted */
 
   /* Always Colors */
   --always-white: 0 0% 100%;
@@ -277,6 +306,14 @@
   --stroke-strong: hsl(var(--always-black) / 0.1);
   --card-shadow: 0 2px 6px hsl(var(--always-black) / 0.04);
   --chat-shadow: 0 1px 3px hsl(var(--always-black) / 0.03);
+
+  /* ================================================================
+     QT-CARD COMPONENT TOKENS - Light Mode
+     Warm shadows matching parchment aesthetic
+     ================================================================ */
+  --qt-card-shadow: 0 1px 3px hsl(35 15% 20% / 0.08), 0 1px 2px hsl(35 15% 20% / 0.05);
+  --qt-card-shadow-hover: 0 4px 12px hsl(35 15% 20% / 0.12), 0 2px 4px hsl(35 15% 20% / 0.06);
+  --qt-card-border-opacity: 0.55;
 
   /* Apply base colors */
   background-color: hsl(var(--bg-100));
@@ -405,9 +442,10 @@
   --qt-chat-message-shadow: var(--chat-shadow);
 
   --qt-chat-user-bg: hsl(var(--bg-000));
-  --qt-chat-user-fg: hsl(var(--text-000));
+  --qt-chat-user-fg: hsl(40 6% 98%);
   --qt-chat-user-border: var(--stroke-strong);
   --qt-chat-user-font: var(--font-user-message);
+  --qt-chat-user-font-weight: 400;
 
   --qt-chat-assistant-bg: var(--surface-base);
   --qt-chat-assistant-fg: hsl(var(--text-200));
@@ -737,7 +775,7 @@
    LIGHT MODE SPECIFIC OVERRIDES
    ============================================================================ */
 [data-theme="rains"].light {
-  /* Links use terracotta accent in light mode for cohesion */
+  /* Links use orange-amber accent in light mode for cohesion */
   --qt-link-color: hsl(var(--accent-brand));
   --qt-link-hover-color: hsl(var(--accent-main-000));
 
