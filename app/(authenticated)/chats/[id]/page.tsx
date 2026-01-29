@@ -15,6 +15,7 @@ import MobileParticipantDropdown from '@/components/chat/MobileParticipantDropdo
 import AddCharacterDialog from '@/components/chat/AddCharacterDialog'
 import ReattributeMessageDialog from '@/components/chat/ReattributeMessageDialog'
 import BulkCharacterReplaceModal from '@/components/chat/BulkCharacterReplaceModal'
+import ChatToolSettingsModal from '@/components/chat/ChatToolSettingsModal'
 import { SearchReplaceModal } from '@/components/tools/search-replace'
 import AllLLMPauseModal from '@/components/chat/AllLLMPauseModal'
 import LLMLogViewerModal from '@/components/chat/LLMLogViewerModal'
@@ -126,6 +127,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   } | null>(null)
   const [searchReplaceModalOpen, setSearchReplaceModalOpen] = useState(false)
   const [bulkReplaceModalOpen, setBulkReplaceModalOpen] = useState(false)
+  const [toolSettingsModalOpen, setToolSettingsModalOpen] = useState(false)
   const [toolExecutionStatus, setToolExecutionStatus] = useState<{ tool: string; status: 'pending' | 'success' | 'error'; message: string } | null>(null)
   const [pendingToolCalls, setPendingToolCalls] = useState<Array<{ id: string; name: string; status: 'pending' | 'success' | 'error'; result?: unknown; arguments?: Record<string, unknown> }>>([])
   const [showPreview, setShowPreview] = useState(false)
@@ -2181,6 +2183,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onReextractMemoriesClick={handleReextractMemories}
           onSearchReplaceClick={() => setSearchReplaceModalOpen(true)}
           onBulkCharacterReplaceClick={() => setBulkReplaceModalOpen(true)}
+          onToolSettingsClick={() => setToolSettingsModalOpen(true)}
           onStopStreaming={stopStreaming}
         />
 
@@ -2334,6 +2337,25 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             participants={chat.participants}
             messages={messages}
             onSuccess={fetchChat}
+          />
+        )}
+
+        {/* Tool Settings Modal */}
+        {chat && (
+          <ChatToolSettingsModal
+            isOpen={toolSettingsModalOpen}
+            onClose={() => setToolSettingsModalOpen(false)}
+            chatId={id}
+            disabledTools={chat.disabledTools || []}
+            disabledToolGroups={chat.disabledToolGroups || []}
+            onSuccess={(newDisabledTools, newDisabledToolGroups) => {
+              // Update local chat state with new disabled tools and groups
+              setChat(prev => prev ? {
+                ...prev,
+                disabledTools: newDisabledTools,
+                disabledToolGroups: newDisabledToolGroups,
+              } : prev)
+            }}
           />
         )}
 

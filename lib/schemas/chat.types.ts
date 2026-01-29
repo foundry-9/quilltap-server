@@ -238,6 +238,15 @@ export const ChatMetadataSchema = z.object({
   /** Flag set when AI calls request_full_context tool - bypasses compression on next message */
   requestFullContextOnNextMessage: z.boolean().default(false),
 
+  /** List of tool IDs that are disabled for this chat (empty = all enabled) */
+  disabledTools: z.array(z.string()).default([]),
+
+  /** Groups of tools that are disabled (e.g., "plugin:mcp", "plugin:mcp:subgroup:filesystem") */
+  disabledToolGroups: z.array(z.string()).default([]),
+
+  /** Force tools to be sent with next message (set when tool settings change) */
+  forceToolsOnNextMessage: z.boolean().default(false),
+
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 }).refine(
@@ -295,6 +304,15 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** Flag set when AI calls request_full_context tool - bypasses compression on next message */
   requestFullContextOnNextMessage: z.boolean().default(false),
+
+  /** List of tool IDs that are disabled for this chat (empty = all enabled) */
+  disabledTools: z.array(z.string()).default([]),
+
+  /** Groups of tools that are disabled (e.g., "plugin:mcp", "plugin:mcp:subgroup:filesystem") */
+  disabledToolGroups: z.array(z.string()).default([]),
+
+  /** Force tools to be sent with next message (set when tool settings change) */
+  forceToolsOnNextMessage: z.boolean().default(false),
 
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

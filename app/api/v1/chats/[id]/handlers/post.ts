@@ -22,6 +22,7 @@ import {
   handleRemoveAvatar,
   handleBulkReattribute,
   handleAddToolResult,
+  handleUpdateToolSettings,
   handleQueueMemories,
 } from '../actions';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
@@ -89,9 +90,12 @@ export async function handlePost(
     case 'queue-memories':
       return handleQueueMemories(req, chatId, chat, ctx);
 
+    case 'update-tool-settings':
+      return handleUpdateToolSettings(req, chatId, ctx);
+
     default:
       return badRequest(
-        `Unknown action: ${action}. Available actions: regenerate-title, add-tag, remove-tag, impersonate, stop-impersonate, set-active-speaker, turn, add-participant, update-participant, remove-participant, bulk-reattribute, get-avatars, set-avatar, remove-avatar, add-tool-result, queue-memories`
+        `Unknown action: ${action}. Available actions: regenerate-title, add-tag, remove-tag, impersonate, stop-impersonate, set-active-speaker, turn, add-participant, update-participant, remove-participant, bulk-reattribute, get-avatars, set-avatar, remove-avatar, add-tool-result, queue-memories, update-tool-settings`
       );
   }
 }

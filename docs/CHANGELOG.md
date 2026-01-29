@@ -4,6 +4,33 @@
 
 ### 2.8-dev
 
+- feat: Hierarchical tool management for per-chat tool settings (2026-01-29)
+  - Added plugin-level toggling: enable/disable all tools from a plugin at once
+  - Added subgroup-level toggling: for MCP plugin, enable/disable all tools from a specific server
+  - Individual tool toggling preserved from previous implementation
+  - New `getToolHierarchy` method in ToolPlugin interface for plugins to expose subgroup metadata
+  - MCP plugin now reports tool hierarchy via `connectionManager.getToolHierarchy()`
+  - `/api/v1/tools` response extended with `subgroupId` and `subgroupDisplayName` fields
+  - `/api/v1/tools?chatId=xxx` returns availability info for context-dependent tools
+  - Unavailable tools (e.g., generate_image without image profile) shown grayed out with explanation
+  - Tool counts show enabled/available format (e.g., "4/5") excluding unavailable tools
+  - New `disabledToolGroups` field on chat metadata for group-level disabling
+  - Group patterns: `plugin:{name}` for plugin-level, `plugin:{name}:subgroup:{id}` for subgroup-level
+  - ChatToolSettingsModal rewritten with collapsible hierarchy, tri-state checkboxes
+  - Tool filtering logic updated to check both individual and group disables
+  - System message injected when tool settings change to notify LLM of available tools
+  - Chat GET endpoint now returns `disabledTools` and `disabledToolGroups` for proper state persistence
+  - Migration `add-chat-tool-settings-fields-v1` adds required columns to chats table
+  - @quilltap/plugin-types bumped to 1.9.3, qtap-plugin-mcp bumped to 1.1.6
+- feat: Per-chat tool settings and tool re-injection optimization (2026-01-29)
+  - Added per-chat tool settings allowing users to enable/disable specific LLM tools
+  - New "Tools" button in Tool Palette opens ChatToolSettingsModal
+  - Shows both built-in tools (image generation, memory search, web search, etc.) and plugin tools
+  - `request_full_context` tool is never user-toggleable (safety valve for context compression)
+  - Tool re-injection optimization: tools are only sent to LLM every N messages (matching sliding window)
+  - `forceToolsOnNextMessage` flag ensures tools are re-sent when settings change
+  - New API endpoints: `POST /api/v1/chats/[id]?action=update-tool-settings`, `GET /api/v1/tools`
+  - Schema additions: `disabledTools` and `forceToolsOnNextMessage` fields on chat metadata
 - feat: Add project context re-injection for long conversations (2026-01-29)
   - Project instructions are now periodically re-injected into the system prompt during conversations
   - New setting `projectContextReinjectInterval` in Context Compression settings (default: 5 messages)

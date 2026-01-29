@@ -63,6 +63,7 @@ interface ChatComposerProps {
   onReextractMemoriesClick: () => void
   onSearchReplaceClick?: () => void
   onBulkCharacterReplaceClick?: () => void
+  onToolSettingsClick?: () => void
   onStopStreaming: () => void
 }
 
@@ -129,6 +130,7 @@ export function ChatComposer({
   onReextractMemoriesClick,
   onSearchReplaceClick,
   onBulkCharacterReplaceClick,
+  onToolSettingsClick,
   onStopStreaming,
 }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -328,6 +330,7 @@ export function ChatComposer({
         onReextractMemoriesClick={onReextractMemoriesClick}
         chatMemoryCount={chatMemoryCount}
         onBulkCharacterReplaceClick={onBulkCharacterReplaceClick}
+        onToolSettingsClick={onToolSettingsClick}
         disabled={sending || !hasActiveCharacters}
       />
 
@@ -426,6 +429,7 @@ export function ChatComposer({
             onReextractMemoriesClick={onReextractMemoriesClick}
             onSearchReplaceClick={onSearchReplaceClick}
             onBulkCharacterReplaceClick={onBulkCharacterReplaceClick}
+            onToolSettingsClick={onToolSettingsClick}
             chatPhotoCount={chatPhotoCount}
             hasImageProfile={hasImageProfile}
             showAddCharacter={isSingleCharacterChat}

@@ -17,5 +17,5 @@ export {
 export { handleTurnAction } from './turn';
 export { handleGetAvatars, handleSetAvatar, handleRemoveAvatar } from './avatars';
 export { handleBulkReattribute } from './bulk';
-export { handleAddToolResult } from './tools';
+export { handleAddToolResult, handleUpdateToolSettings } from './tools';
 export { handleQueueMemories } from './memories';

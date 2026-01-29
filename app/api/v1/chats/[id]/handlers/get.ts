@@ -186,6 +186,8 @@ export async function handleGet(
       messages,
       projectId: chatMetadata.projectId || null,
       projectName,
+      disabledTools: chatMetadata.disabledTools || [],
+      disabledToolGroups: chatMetadata.disabledToolGroups || [],
     };
 
     return NextResponse.json({ chat });

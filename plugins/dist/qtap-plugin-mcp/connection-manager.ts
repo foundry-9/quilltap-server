@@ -370,6 +370,29 @@ export class MCPConnectionManager {
   }
 
   /**
+   * Get tool hierarchy information for all tools
+   *
+   * Returns metadata about which server each tool came from,
+   * for hierarchical display in the UI.
+   */
+  getToolHierarchy(): Array<{ toolId: string; subgroupId: string; subgroupDisplayName: string }> {
+    const hierarchy: Array<{ toolId: string; subgroupId: string; subgroupDisplayName: string }> = [];
+
+    for (const [quilltapName, mapping] of this.toolIndex) {
+      const client = this.clients.get(mapping.serverId);
+      const config = client?.getConfig();
+
+      hierarchy.push({
+        toolId: quilltapName,
+        subgroupId: mapping.serverId,
+        subgroupDisplayName: config?.displayName || mapping.serverId,
+      });
+    }
+
+    return hierarchy;
+  }
+
+  /**
    * Attempt to reconnect disconnected servers
    */
   async reconnectDisconnected(): Promise<void> {

@@ -43,6 +43,8 @@ import { addDefaultImageProfileFieldMigration } from './add-default-image-profil
 import { migrateUserPluginsToSiteMigration } from './migrate-user-plugins-to-site';
 // Drop sync tables (sync functionality removed)
 import { dropSyncTablesMigration } from './drop-sync-tables';
+// Add tool settings fields to chats
+import { addChatToolSettingsFieldsMigration } from './add-chat-tool-settings-fields';
 
 /**
  * All available migrations.
@@ -81,6 +83,8 @@ export const migrations: Migration[] = [
   migrateUserPluginsToSiteMigration,
   // Drop sync tables (sync functionality removed)
   dropSyncTablesMigration,
+  // Add tool settings fields to chats
+  addChatToolSettingsFieldsMigration,
 ];
 
 export {
@@ -114,4 +118,6 @@ export {
   migrateUserPluginsToSiteMigration,
   // Drop sync tables (sync functionality removed)
   dropSyncTablesMigration,
+  // Add tool settings fields to chats
+  addChatToolSettingsFieldsMigration,
 };

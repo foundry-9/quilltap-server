@@ -345,6 +345,41 @@ async function processMessage(
     ? undefined
     : (fileProcessing.messageContentPrefix ? fileProcessing.messageContentPrefix + content : content)
 
+  // ============================================================================
+  // Tool Re-injection Logic
+  // ============================================================================
+  // Determine if tools should be sent this message (similar to project context re-injection)
+  // Tools are sent: on first message, when forced (settings changed), or at window interval
+  const toolReinjectInterval = contextCompressionSettings.windowSize // Reuse compression window size
+  const toolMessageCount = existingMessages.filter(m => m.type === 'message').length
+  const toolSettingsChanged = chat.forceToolsOnNextMessage === true
+  const shouldSendTools =
+    toolSettingsChanged ||                     // Tool settings changed
+    toolMessageCount === 0 ||                  // First message
+    toolMessageCount % toolReinjectInterval === 0  // At interval
+
+  // Clear forceToolsOnNextMessage flag if it was set
+  if (toolSettingsChanged) {
+    await repos.chats.update(chatId, { forceToolsOnNextMessage: false })
+    logger.debug('Cleared forceToolsOnNextMessage flag', { chatId })
+  }
+
+  if (!shouldSendTools) {
+    logger.debug('Skipping tool injection (not at interval)', {
+      chatId,
+      messageCount: toolMessageCount,
+      reinjectInterval: toolReinjectInterval,
+      nextInjection: toolReinjectInterval - (toolMessageCount % toolReinjectInterval),
+    })
+  } else {
+    logger.debug('Injecting tools with message', {
+      chatId,
+      messageCount: toolMessageCount,
+      reinjectInterval: toolReinjectInterval,
+      forced: toolSettingsChanged,
+    })
+  }
+
   // Check for pseudo-tools
   const enabledToolOptions = determineEnabledToolOptions(
     imageProfileId,
@@ -352,6 +387,7 @@ async function processMessage(
   )
 
   // Build tools (include request_full_context when compression is enabled)
+  // Pass disabledTools and disabledToolGroups for filtering (shouldSendTools controls tool injection)
   const { tools, modelSupportsNativeTools, useNativeWebSearch } = await buildTools(
     connectionProfile,
     imageProfileId,
@@ -359,7 +395,9 @@ async function processMessage(
     userId,
     false, // Will check pseudo-tools after
     undefined, // projectId (will be set if needed)
-    compressionEnabled // requestFullContext - enable the tool when compression is active
+    compressionEnabled, // requestFullContext - enable the tool when compression is active
+    shouldSendTools ? (chat.disabledTools ?? []) : undefined, // Pass disabledTools only when sending tools
+    shouldSendTools ? (chat.disabledToolGroups ?? []) : undefined // Pass disabledToolGroups only when sending tools
   )
 
   const usePseudoTools = checkShouldUsePseudoTools(modelSupportsNativeTools)
@@ -461,6 +499,49 @@ async function processMessage(
     chatSettings?.cheapLLMSettings?.embeddingProfileId ?? undefined,
     chat.projectId
   )
+
+  // ============================================================================
+  // Tool Change Notification
+  // ============================================================================
+  // If tool settings were changed, inject a system message to inform the LLM
+  // This only happens when the user explicitly changed settings, not on first message or interval
+  if (toolSettingsChanged) {
+    // Extract tool names from the tools array
+    const toolNames = actualTools.map((tool: unknown) => {
+      const toolObj = tool as { function?: { name?: string }; name?: string }
+      return toolObj.function?.name || toolObj.name || 'unknown'
+    }).filter(name => name !== 'unknown')
+
+    let toolChangeContent: string
+    if (toolNames.length === 0) {
+      toolChangeContent = '[System Notice] Your available tools have been updated. All tools have been disabled for this chat. Do not attempt to use any tools.'
+    } else {
+      toolChangeContent = `[System Notice] Your available tools have been updated. You now have access to the following ${toolNames.length} tool(s): ${toolNames.join(', ')}. Tools not listed are no longer available for this chat.`
+    }
+
+    const toolChangeMessage = {
+      role: 'system',
+      content: toolChangeContent,
+      attachments: [],
+    }
+
+    // Insert before the last message (which should be the user's new message)
+    const lastUserMessageIndex = formattedMessages.findIndex(
+      (m, i, arr) => m.role === 'user' && i === arr.length - 1
+    )
+    if (lastUserMessageIndex > 0) {
+      formattedMessages.splice(lastUserMessageIndex, 0, toolChangeMessage)
+    } else {
+      // Fallback: just add it near the end
+      formattedMessages.push(toolChangeMessage)
+    }
+
+    logger.info('Injected tool change notification', {
+      chatId,
+      toolCount: toolNames.length,
+      tools: toolNames,
+    })
+  }
 
   // Send debug info
   controller.enqueue(encodeDebugInfo(encoder, {

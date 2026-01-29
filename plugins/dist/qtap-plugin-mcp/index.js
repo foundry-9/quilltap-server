@@ -13123,6 +13123,25 @@ var MCPConnectionManager = class {
     return false;
   }
   /**
+   * Get tool hierarchy information for all tools
+   *
+   * Returns metadata about which server each tool came from,
+   * for hierarchical display in the UI.
+   */
+  getToolHierarchy() {
+    const hierarchy = [];
+    for (const [quilltapName, mapping] of this.toolIndex) {
+      const client = this.clients.get(mapping.serverId);
+      const config = client?.getConfig();
+      hierarchy.push({
+        toolId: quilltapName,
+        subgroupId: mapping.serverId,
+        subgroupDisplayName: config?.displayName || mapping.serverId
+      });
+    }
+    return hierarchy;
+  }
+  /**
    * Attempt to reconnect disconnected servers
    */
   async reconnectDisconnected() {
@@ -13322,6 +13341,16 @@ ${output}`;
         error: error instanceof Error ? error.message : String(error)
       });
     }
+  },
+  /**
+   * Get hierarchy information for tools provided by this plugin
+   *
+   * Returns metadata about which MCP server each tool came from,
+   * allowing the UI to display tools grouped by server.
+   */
+  async getToolHierarchy(config) {
+    await ensureInitialized(config);
+    return connectionManager.getToolHierarchy();
   }
 };
 var pluginExport = { plugin };

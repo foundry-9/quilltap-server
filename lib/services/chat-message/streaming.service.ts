@@ -66,6 +66,52 @@ export type StreamChunkCallback = (chunk: {
 }) => void
 
 /**
+ * Metadata about a tool's source for hierarchical filtering
+ */
+interface ToolSourceMetadata {
+  pluginName?: string
+  subgroupId?: string
+}
+
+/**
+ * Check if a tool is disabled based on individual tool disabling or group patterns
+ *
+ * @param toolId The tool's ID (function name)
+ * @param disabledTools List of individually disabled tool IDs
+ * @param disabledToolGroups List of disabled group patterns (e.g., "plugin:mcp", "plugin:mcp:subgroup:filesystem")
+ * @param sourceMetadata Metadata about the tool's source (plugin name, subgroup)
+ * @returns true if the tool is disabled
+ */
+function isToolDisabled(
+  toolId: string,
+  disabledTools: string[],
+  disabledToolGroups: string[],
+  sourceMetadata: ToolSourceMetadata
+): boolean {
+  // Never disable request_full_context - it's a critical safety valve
+  if (toolId === 'request_full_context') return false
+
+  // Check individual tool disable
+  if (disabledTools.includes(toolId)) return true
+
+  // Check plugin-level disable: "plugin:{pluginName}"
+  if (sourceMetadata.pluginName) {
+    if (disabledToolGroups.includes(`plugin:${sourceMetadata.pluginName}`)) {
+      return true
+    }
+
+    // Check subgroup-level disable: "plugin:{pluginName}:subgroup:{subgroupId}"
+    if (sourceMetadata.subgroupId) {
+      if (disabledToolGroups.includes(`plugin:${sourceMetadata.pluginName}:subgroup:${sourceMetadata.subgroupId}`)) {
+        return true
+      }
+    }
+  }
+
+  return false
+}
+
+/**
  * Build tools for the provider
  */
 export async function buildTools(
@@ -77,7 +123,11 @@ export async function buildTools(
   /** Project ID if chat is associated with a project (enables project_info tool) */
   projectId?: string | null,
   /** Whether context compression is enabled (enables request_full_context tool) */
-  requestFullContext?: boolean
+  requestFullContext?: boolean,
+  /** List of tool IDs to disable (or undefined to return empty tools for this message) */
+  disabledTools?: string[],
+  /** List of disabled group patterns (e.g., "plugin:mcp", "plugin:mcp:subgroup:filesystem") */
+  disabledToolGroups?: string[]
 ): Promise<{
   tools: unknown[]
   modelSupportsNativeTools: boolean
@@ -120,8 +170,17 @@ export async function buildTools(
     })
   }
 
+  // If disabledTools is undefined (not an array), skip tools entirely for this message
+  // This happens when shouldSendTools is false - tools won't be sent at all
+  if (disabledTools === undefined) {
+    logger.debug('Skipping tool injection (tool re-injection interval not reached)', {
+      provider: connectionProfile.provider,
+    })
+    return { tools: [], modelSupportsNativeTools, useNativeWebSearch }
+  }
+
   // Web search tool is independent of native web search - user can enable both
-  const tools = await buildToolsForProvider(connectionProfile.provider, {
+  let tools = await buildToolsForProvider(connectionProfile.provider, {
     imageGeneration: !!imageProfileId,
     imageProviderType: imageProfile?.provider,
     memorySearch: true,
@@ -130,6 +189,68 @@ export async function buildTools(
     requestFullContext: !!requestFullContext,
     toolConfigs,
   })
+
+  // Filter out disabled tools (individual IDs and group patterns)
+  const hasDisabledTools = disabledTools.length > 0
+  const hasDisabledGroups = disabledToolGroups && disabledToolGroups.length > 0
+
+  if (hasDisabledTools || hasDisabledGroups) {
+    // Build a map of tool name -> source metadata for group filtering
+    // We need to know which plugin/subgroup each tool came from
+    const toolSourceMap = new Map<string, ToolSourceMetadata>()
+
+    // Get hierarchy info from all plugins that support it
+    const allPlugins = (await import('@/lib/plugins/tool-registry')).toolRegistry.getAllPlugins()
+    for (const plugin of allPlugins) {
+      if (typeof plugin.getToolHierarchy === 'function') {
+        try {
+          const pluginName = plugin.metadata.toolName
+          const config = toolConfigs.get(pluginName) || {}
+          const hierarchy = await plugin.getToolHierarchy(config)
+
+          for (const info of hierarchy) {
+            toolSourceMap.set(info.toolId, {
+              pluginName,
+              subgroupId: info.subgroupId,
+            })
+          }
+        } catch (err) {
+          logger.warn('Failed to get tool hierarchy for filtering', {
+            plugin: plugin.metadata.toolName,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
+      }
+    }
+
+    const originalCount = tools.length
+    tools = tools.filter((tool: unknown) => {
+      // Get tool name from the tool object (handle different formats)
+      const toolObj = tool as { function?: { name?: string }; name?: string }
+      const toolName = toolObj.function?.name || toolObj.name
+      if (!toolName) return true // Keep tools without names
+
+      // Get source metadata for this tool (may be empty for built-in tools)
+      const sourceMetadata = toolSourceMap.get(toolName) || {}
+
+      // Check if tool is disabled (handles both individual and group patterns)
+      return !isToolDisabled(
+        toolName,
+        disabledTools,
+        disabledToolGroups || [],
+        sourceMetadata
+      )
+    })
+
+    if (tools.length !== originalCount) {
+      logger.debug('Filtered disabled tools', {
+        originalCount,
+        filteredCount: tools.length,
+        disabledTools,
+        disabledToolGroups,
+      })
+    }
+  }
 
   return { tools, modelSupportsNativeTools, useNativeWebSearch }
 }
