@@ -4,6 +4,16 @@
 
 ### 2.8-dev
 
+- feat: Auto-upgrade npm-installed plugins at startup (2026-01-29)
+  - Plugins installed via npm are automatically checked for updates during server startup
+  - Non-breaking updates (minor/patch per semver) are applied automatically
+  - Breaking updates (major version changes) are skipped and logged
+  - Sequential toast notifications inform users of upgrades after app loads
+  - New startup phase "plugin-updates" between migrations and plugin initialization
+  - Environment variable `PLUGIN_AUTO_UPDATE=false` to disable feature
+  - New API endpoint: `GET/POST /api/v1/system/plugins/upgrades` for notification state
+  - New components: `PluginUpgradeNotifier`, version-checker, upgrader modules
+  - Unit tests for version comparison and upgrade sequencing logic
 - chore: Upgrade @openrouter/sdk from 0.4.0 to 0.5.1 (2026-01-29)
   - Updated in main app and qtap-plugin-openrouter
   - Plugin bumped to v1.0.14

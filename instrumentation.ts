@@ -204,6 +204,56 @@ export async function register() {
       await migrationRunner.cleanup();
 
       // ================================================================
+      // PHASE 1.5: Auto-upgrade npm-installed plugins
+      // ================================================================
+      startupState.setPhase('plugin-updates');
+
+      try {
+        const { checkForUpdates } = await import('./lib/plugins/version-checker');
+        const { upgradePlugins } = await import('./lib/plugins/upgrader');
+
+        logger.info('Checking for plugin updates', {
+          context: 'instrumentation.register',
+        });
+
+        const updates = await checkForUpdates();
+        const nonBreakingUpdates = updates.filter(u => u.isNonBreaking);
+
+        if (nonBreakingUpdates.length > 0) {
+          logger.info('Non-breaking plugin updates available, upgrading', {
+            context: 'instrumentation.register',
+            count: nonBreakingUpdates.length,
+            plugins: nonBreakingUpdates.map(u => `${u.packageName}@${u.currentVersion} -> ${u.latestVersion}`),
+          });
+
+          const results = await upgradePlugins(nonBreakingUpdates);
+          startupState.setPluginUpgrades(results);
+
+          logger.info('Plugin auto-upgrade complete', {
+            context: 'instrumentation.register',
+            upgraded: results.upgraded.length,
+            failed: results.failed.length,
+          });
+        } else if (updates.length > 0) {
+          // Only breaking updates available
+          logger.info('Only breaking plugin updates available, skipping auto-upgrade', {
+            context: 'instrumentation.register',
+            breakingUpdates: updates.filter(u => !u.isNonBreaking).map(u => `${u.packageName}@${u.currentVersion} -> ${u.latestVersion}`),
+          });
+        } else {
+          logger.info('No plugin updates available', {
+            context: 'instrumentation.register',
+          });
+        }
+      } catch (pluginUpdateError) {
+        // Plugin updates failing should not block startup
+        logger.warn('Error during plugin auto-upgrade, continuing startup', {
+          context: 'instrumentation.register',
+          error: pluginUpdateError instanceof Error ? pluginUpdateError.message : String(pluginUpdateError),
+        });
+      }
+
+      // ================================================================
       // PHASE 2: Initialize Plugins (MongoDB support removed)
       // ================================================================
       const { initializePlugins } = await import('./lib/startup/plugin-initialization');

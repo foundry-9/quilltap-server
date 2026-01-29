@@ -7,10 +7,11 @@
  * The startup sequence is:
  * 1. 'pending' - Server just started
  * 2. 'migrations' - Running startup migrations (CRITICAL - must complete)
- * 3. 'plugins' - Plugin initialization in progress
- * 4. 'file-storage' - File storage initialization in progress
- * 5. 'complete' - All initialization complete
- * 6. 'failed' - Initialization failed (server still runs but may have issues)
+ * 3. 'plugin-updates' - Auto-upgrading npm-installed plugins (non-blocking)
+ * 4. 'plugins' - Plugin initialization in progress
+ * 5. 'file-storage' - File storage initialization in progress
+ * 6. 'complete' - All initialization complete
+ * 7. 'failed' - Initialization failed (server still runs but may have issues)
  *
  * NOTE: State is stored in `global` to persist across Next.js module reloads.
  * This is critical because instrumentation.ts runs in a separate context from
@@ -18,10 +19,12 @@
  */
 
 import { logger } from '@/lib/logger';
+import type { UpgradeResults } from '@/lib/plugins/upgrader';
 
 export type StartupPhase =
   | 'pending'
   | 'migrations'
+  | 'plugin-updates'
   | 'plugins'
   | 'file-storage'
   | 'complete'
@@ -34,6 +37,10 @@ interface StartupStateData {
   startTime: number;
   readyTime: number | null;
   error: string | null;
+  /** Plugin upgrade results from startup */
+  pluginUpgrades: UpgradeResults | null;
+  /** Whether upgrade notifications have been sent to the client */
+  upgradesNotified: boolean;
 }
 
 // Extend globalThis type for our startup state
@@ -56,6 +63,8 @@ function getGlobalState(): StartupStateData {
       startTime: Date.now(),
       readyTime: null,
       error: null,
+      pluginUpgrades: null,
+      upgradesNotified: false,
     };
   }
   return global.__quilltapStartupState;
@@ -175,6 +184,53 @@ export const startupState = {
   },
 
   /**
+   * Store plugin upgrade results
+   */
+  setPluginUpgrades(results: UpgradeResults): void {
+    const state = getGlobalState();
+    state.pluginUpgrades = results;
+    logger.debug('Plugin upgrade results stored', {
+      context: 'startup-state.setPluginUpgrades',
+      upgraded: results.upgraded.length,
+      failed: results.failed.length,
+    });
+  },
+
+  /**
+   * Get plugin upgrade results
+   */
+  getPluginUpgrades(): UpgradeResults | null {
+    return getGlobalState().pluginUpgrades;
+  },
+
+  /**
+   * Mark that upgrade notifications have been sent to the client
+   */
+  markUpgradesNotified(): void {
+    const state = getGlobalState();
+    state.upgradesNotified = true;
+    logger.debug('Plugin upgrades marked as notified', {
+      context: 'startup-state.markUpgradesNotified',
+    });
+  },
+
+  /**
+   * Check if there are un-notified upgrades
+   */
+  hasUnnotifiedUpgrades(): boolean {
+    const state = getGlobalState();
+    if (state.upgradesNotified) {
+      return false;
+    }
+    const upgrades = state.pluginUpgrades;
+    if (!upgrades) {
+      return false;
+    }
+    // Has un-notified upgrades if there are any upgraded or failed plugins
+    return upgrades.upgraded.length > 0 || upgrades.failed.length > 0;
+  },
+
+  /**
    * Wait for the server to be ready
    * Returns immediately if already ready
    * Times out after maxWaitMs (default 30 seconds)
@@ -257,6 +313,8 @@ export const startupState = {
       startTime: Date.now(),
       readyTime: null,
       error: null,
+      pluginUpgrades: null,
+      upgradesNotified: false,
     };
     setReadyPromise(undefined);
     setReadyResolve(undefined);
