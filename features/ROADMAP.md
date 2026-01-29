@@ -26,12 +26,12 @@ This document tracks planned features and improvements for Quilltap.
 - [ ] Finish file read/write tool calling support with permissions
 - [ ] Option for built-in TF-IDF embedding if you don't need full semantic support
 - [ ] More intelligent handling of empty messages from the LLM (usually some kind of error, but a plain blank often means you crossed a provider line - NSFW, content filtering)
+- [ ] Fully agentic capabilities (limits on how many turns it takes, trading information back and forth, etc.)
 
 ### Content & Worldbuilding
 
 - [ ] Worldbook/Lore system
 - [ ] Complete AI wizard for characters or NPCs
-- [ ] Pull NPC tab out of settings and just list them among the characters
 
 ### External Integrations
 
@@ -55,6 +55,7 @@ This document tracks planned features and improvements for Quilltap.
 
 ## Completed in v2.8
 
+- [X] Pull NPC tab out of settings and just list them among the characters
 - [X] Ability to auto-upgrade plugins
 - [X] Removal of sync functionality
 - [X] Have the previews of themes actually match the themes

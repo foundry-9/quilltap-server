@@ -4,6 +4,11 @@
 
 ### 2.8-dev
 
+- refactor: Move NPCs from Settings to Characters page (2026-01-29)
+  - Removed NPCs tab from Settings page
+  - Deleted `components/settings/npcs-tab.tsx` and `components/settings/npcs/` directory
+  - NPCs now display on `/characters` page, sorted last (after non-NPC characters)
+  - Fixed character view breadcrumb to always link to `/characters` (was linking to Settings for NPCs)
 - feat: Add Upgrades tab to plugin settings for manual upgrade of breaking changes (2026-01-29)
   - New "Upgrades" tab in Settings > Plugins between Installed and Browse npm
   - Shows plugins with available updates (breaking changes that weren't auto-upgraded)

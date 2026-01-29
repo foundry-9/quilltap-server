@@ -279,10 +279,10 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     <div className="character-view qt-page-container min-h-screen text-foreground">
       <div>
         <Link
-          href={character?.npc ? '/settings?tab=npcs' : '/characters'}
+          href="/characters"
           className="mb-4 inline-flex items-center text-sm font-medium text-primary transition hover:text-primary/80"
         >
-          {character?.npc ? '← Back to NPCs' : '← Back to Characters'}
+          ← Back to Characters
         </Link>
 
         <CharacterHeader
