@@ -4,10 +4,11 @@ import { useState, useEffect, useCallback, ReactNode } from 'react'
 import { showErrorToast, showSuccessToast, showWarningToast } from '@/lib/toast'
 import { BrandName } from '@/components/ui/brand-name'
 import { PluginConfigModal } from './plugins/PluginConfigModal'
+import { UpgradeConfirmModal, type PluginUpgrade } from './plugins/UpgradeConfirmModal'
 import { SettingsCard, SettingsCardBadge } from '@/components/ui/SettingsCard'
 
 type PluginSource = 'included' | 'npm' | 'git' | 'manual' | 'bundled' | 'site'
-type ActiveTab = 'installed' | 'browse'
+type ActiveTab = 'installed' | 'upgrades' | 'browse'
 
 interface DeploymentInfo {
   isUserManaged: boolean
@@ -189,6 +190,13 @@ export default function PluginsTab() {
   // Config modal state
   const [configModalPlugin, setConfigModalPlugin] = useState<{ name: string; title: string } | null>(null)
 
+  // Upgrades state
+  const [availableUpgrades, setAvailableUpgrades] = useState<PluginUpgrade[]>([])
+  const [upgradesLoading, setUpgradesLoading] = useState(false)
+  const [upgradesLastChecked, setUpgradesLastChecked] = useState<string | null>(null)
+  const [upgradeInProgress, setUpgradeInProgress] = useState<string | null>(null)
+  const [confirmingUpgrade, setConfirmingUpgrade] = useState<PluginUpgrade | null>(null)
+
   const fetchPlugins = useCallback(async () => {
     try {
       const res = await fetch('/api/v1/plugins')
@@ -224,14 +232,31 @@ export default function PluginsTab() {
     }
   }, [])
 
+  const fetchAvailableUpgrades = useCallback(async () => {
+    setUpgradesLoading(true)
+    try {
+      const res = await fetch('/api/v1/plugins?action=check-upgrades')
+      if (!res.ok) throw new Error('Failed to check for upgrades')
+      const data = await res.json()
+      setAvailableUpgrades(data.upgrades || [])
+      setUpgradesLastChecked(data.lastChecked || new Date().toISOString())
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to check for upgrades')
+    } finally {
+      setUpgradesLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     const loadData = async () => {
       setLoading(true)
       await Promise.all([fetchPlugins(), fetchInstalledPlugins(), fetchDeploymentInfo()])
       setLoading(false)
+      // Fetch upgrades in background after initial load
+      fetchAvailableUpgrades()
     }
     loadData()
-  }, [fetchPlugins, fetchInstalledPlugins, fetchDeploymentInfo])
+  }, [fetchPlugins, fetchInstalledPlugins, fetchDeploymentInfo, fetchAvailableUpgrades])
 
   const handleTogglePlugin = async (pluginName: string, currentEnabled: boolean) => {
     setToggling(prev => new Set(prev).add(pluginName))
@@ -380,6 +405,50 @@ export default function PluginsTab() {
     }
   }
 
+  const upgradePlugin = async (upgrade: PluginUpgrade) => {
+    setUpgradeInProgress(upgrade.packageName)
+    try {
+      const res = await fetch('/api/v1/plugins?action=install', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ packageName: upgrade.packageName }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Upgrade failed')
+      }
+
+      showSuccessToast(`${upgrade.pluginTitle} upgraded to v${upgrade.latestVersion}`)
+
+      // Remove from available upgrades list
+      setAvailableUpgrades(prev => prev.filter(u => u.packageName !== upgrade.packageName))
+
+      // Refresh plugins list
+      await fetchPlugins()
+      await fetchInstalledPlugins()
+
+      // Close confirmation modal if open
+      setConfirmingUpgrade(null)
+
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Upgrade failed')
+    } finally {
+      setUpgradeInProgress(null)
+    }
+  }
+
+  const handleUpgradeClick = (upgrade: PluginUpgrade) => {
+    if (upgrade.isNonBreaking) {
+      // Non-breaking: upgrade directly
+      upgradePlugin(upgrade)
+    } else {
+      // Breaking: show confirmation modal
+      setConfirmingUpgrade(upgrade)
+    }
+  }
+
   const isPluginInstalled = (packageName: string): boolean => {
     return installedPlugins.some(p => p.name === packageName) ||
            plugins.some(p => p.name === packageName)
@@ -404,23 +473,31 @@ export default function PluginsTab() {
     <div className="space-y-6">
       {/* Stats Header */}
       {stats && (
-        <div className="bg-accent rounded-lg p-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="qt-card p-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div>
-              <p className="qt-text-small">Total Plugins</p>
-              <p className="text-2xl font-bold text-foreground">{stats.total}</p>
+              <p className="qt-text-label">Total Plugins</p>
+              <p className="text-2xl font-bold qt-text-primary">{stats.total}</p>
             </div>
             <div>
-              <p className="qt-text-small">Enabled</p>
-              <p className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.enabled}</p>
+              <p className="qt-text-label">Enabled</p>
+              <p className="text-2xl font-bold qt-text-success">{stats.enabled}</p>
             </div>
             <div>
-              <p className="qt-text-small">Disabled</p>
-              <p className="text-2xl font-bold text-muted-foreground">{stats.disabled}</p>
+              <p className="qt-text-label">Upgrades</p>
+              <p className={`text-2xl font-bold ${availableUpgrades.length > 0 ? 'qt-text-warning' : 'qt-text-muted'}`}>
+                {availableUpgrades.length}
+              </p>
             </div>
             <div>
-              <p className="qt-text-small">Errors</p>
-              <p className="text-2xl font-bold text-red-600 dark:text-red-400">{stats.errors}</p>
+              <p className="qt-text-label">Disabled</p>
+              <p className="text-2xl font-bold qt-text-muted">{stats.disabled}</p>
+            </div>
+            <div>
+              <p className="qt-text-label">Errors</p>
+              <p className={`text-2xl font-bold ${stats.errors > 0 ? 'qt-text-destructive' : 'qt-text-muted'}`}>
+                {stats.errors}
+              </p>
             </div>
           </div>
         </div>
@@ -439,6 +516,19 @@ export default function PluginsTab() {
           >
             Installed
             {activeTab === 'installed' && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('upgrades')}
+            className={`pb-2 px-1 text-sm font-medium transition-colors relative ${
+              activeTab === 'upgrades'
+                ? 'text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Upgrades{availableUpgrades.length > 0 && ` (${availableUpgrades.length})`}
+            {activeTab === 'upgrades' && (
               <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
             )}
           </button>
@@ -548,6 +638,196 @@ export default function PluginsTab() {
 
                     {/* Capability badges */}
                     <CapabilityBadges capabilities={plugin.capabilities} />
+                  </SettingsCard>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Upgrades Tab */}
+      {activeTab === 'upgrades' && (
+        <div className="space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground mb-2">
+                Available Upgrades
+              </h2>
+              <p className="qt-text-small">
+                Review and upgrade plugins that have newer versions available. Breaking changes
+                require manual confirmation before upgrading.
+              </p>
+            </div>
+            <button
+              onClick={fetchAvailableUpgrades}
+              disabled={upgradesLoading}
+              className="qt-button-secondary flex items-center gap-2 flex-shrink-0"
+            >
+              {upgradesLoading ? (
+                <>
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent" />
+                  Checking...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Check for Updates
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Last checked timestamp */}
+          {upgradesLastChecked && (
+            <p className="qt-text-small text-muted-foreground">
+              Last checked: {new Date(upgradesLastChecked).toLocaleString()}
+            </p>
+          )}
+
+          {/* Breaking changes warning banner */}
+          {availableUpgrades.some(u => !u.isNonBreaking) && (
+            <div className="qt-alert-warning flex items-start gap-3">
+              <svg
+                className="w-5 h-5 flex-shrink-0 mt-0.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
+              </svg>
+              <div>
+                <h4 className="qt-text-label">
+                  Breaking Changes Available
+                </h4>
+                <p className="qt-text-small mt-1">
+                  Some upgrades include major version changes that may contain breaking changes.
+                  Review the changelog before upgrading these plugins.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {upgradesLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="flex items-center gap-3">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-r-transparent"></div>
+                <p className="text-muted-foreground">Checking for updates...</p>
+              </div>
+            </div>
+          ) : availableUpgrades.length === 0 ? (
+            <div className="qt-card p-8 text-center">
+              <svg
+                className="mx-auto h-12 w-12 text-green-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <h3 className="mt-4 text-lg qt-text-primary">
+                All Plugins Up to Date
+              </h3>
+              <p className="mt-2 qt-text-small">
+                All installed plugins are running the latest version.
+              </p>
+            </div>
+          ) : (
+            <div className="qt-card-grid-auto">
+              {availableUpgrades.map((upgrade) => {
+                const isUpgrading = upgradeInProgress === upgrade.packageName
+
+                // Build badges array
+                const badges: SettingsCardBadge[] = [
+                  upgrade.isNonBreaking
+                    ? { text: 'Update', variant: 'success' }
+                    : { text: 'Breaking', variant: 'warning' },
+                ]
+
+                return (
+                  <SettingsCard
+                    key={upgrade.packageName}
+                    title={upgrade.pluginTitle}
+                    subtitle={upgrade.packageName}
+                    badges={badges}
+                    headerExtra={
+                      <button
+                        onClick={() => handleUpgradeClick(upgrade)}
+                        disabled={isUpgrading || upgradeInProgress !== null}
+                        className={`qt-button-sm ${upgrade.isNonBreaking ? 'qt-button-primary' : 'qt-button-warning'}`}
+                      >
+                        {isUpgrading ? 'Upgrading...' : 'Upgrade'}
+                      </button>
+                    }
+                  >
+                    {/* Version transition */}
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="qt-badge-secondary font-mono text-xs">v{upgrade.currentVersion}</span>
+                      <svg className="w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                      </svg>
+                      <span className={`font-mono text-xs ${upgrade.isNonBreaking ? 'qt-badge-success' : 'qt-badge-warning'}`}>
+                        v{upgrade.latestVersion}
+                      </span>
+                    </div>
+
+                    {/* Description */}
+                    {upgrade.pluginDescription && (
+                      <p className="qt-text-small mt-2 line-clamp-2">{upgrade.pluginDescription}</p>
+                    )}
+
+                    {/* External links */}
+                    <div className="flex items-center gap-3 mt-3 qt-text-small">
+                      {upgrade.repository && (
+                        <a
+                          href={upgrade.repository}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+                        >
+                          Repository
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
+                      )}
+                      {upgrade.changelogUrl && (
+                        <a
+                          href={upgrade.changelogUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+                        >
+                          Changelog
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
+                      )}
+                      <a
+                        href={upgrade.npmUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+                      >
+                        npm
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                      </a>
+                    </div>
                   </SettingsCard>
                 )
               })}
@@ -723,6 +1003,17 @@ export default function PluginsTab() {
             // Refresh plugins list to update any status changes
             fetchPlugins()
           }}
+        />
+      )}
+
+      {/* Upgrade Confirmation Modal */}
+      {confirmingUpgrade && (
+        <UpgradeConfirmModal
+          isOpen={true}
+          onClose={() => setConfirmingUpgrade(null)}
+          onConfirm={() => upgradePlugin(confirmingUpgrade)}
+          upgrade={confirmingUpgrade}
+          isUpgrading={upgradeInProgress === confirmingUpgrade.packageName}
         />
       )}
     </div>

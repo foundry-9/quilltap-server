@@ -21,6 +21,7 @@
   .qt-button-secondary,
   .qt-button-ghost,
   .qt-button-destructive,
+  .qt-button-warning,
   .qt-button-icon {
     @apply inline-flex items-center justify-center gap-2;
     @apply text-sm font-medium;
@@ -91,6 +92,18 @@
 
   .qt-button-destructive:hover:not(:disabled) {
     background: var(--qt-button-destructive-hover-bg);
+  }
+
+  /**
+   * Warning button - cautionary actions requiring attention
+   */
+  .qt-button-warning {
+    background: var(--qt-button-warning-bg);
+    color: var(--qt-button-warning-fg);
+  }
+
+  .qt-button-warning:hover:not(:disabled) {
+    background: var(--qt-button-warning-hover-bg);
   }
 
   /**

@@ -284,6 +284,15 @@
   background-color: var(--qt-button-destructive-hover-bg);
 }
 
+.qt-button-warning {
+  background-color: var(--qt-button-warning-bg);
+  color: var(--qt-button-warning-fg);
+}
+
+.qt-button-warning:hover:not(:disabled) {
+  background-color: var(--qt-button-warning-hover-bg);
+}
+
 .qt-button-success {
   display: inline-flex;
   align-items: center;

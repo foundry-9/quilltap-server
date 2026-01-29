@@ -38,7 +38,6 @@ This document tracks planned features and improvements for Quilltap.
 - [ ] General SSE-based MCP support improvements
 - [ ] Python script support
 - [ ] ComfyUI + LORA support for local installations (see [feature request](./comfy_ui_local_image.md))
-- [ ] Ability to auto-upgrade plugins
 
 ### Themes & UI
 
@@ -56,6 +55,7 @@ This document tracks planned features and improvements for Quilltap.
 
 ## Completed in v2.8
 
+- [X] Ability to auto-upgrade plugins
 - [X] Removal of sync functionality
 - [X] Have the previews of themes actually match the themes
 - [X] Make all plugins either dist or site-wide

@@ -27,6 +27,24 @@ export interface PluginUpdateInfo {
   isNonBreaking: boolean;
 }
 
+/**
+ * Enhanced plugin update info with additional metadata for UI display
+ */
+export interface EnhancedPluginUpdateInfo extends PluginUpdateInfo {
+  /** Display title from plugin manifest */
+  pluginTitle: string;
+  /** Plugin description from manifest */
+  pluginDescription?: string;
+  /** Plugin homepage URL */
+  homepage?: string;
+  /** Normalized repository URL (GitHub, GitLab, etc.) */
+  repository?: string;
+  /** npm package URL */
+  npmUrl: string;
+  /** Changelog URL derived from repository */
+  changelogUrl?: string;
+}
+
 // ============================================================================
 // VERSION UTILITIES
 // ============================================================================
@@ -289,6 +307,158 @@ export async function checkForUpdates(): Promise<PluginUpdateInfo[]> {
     logger.error(
       'Failed to check for plugin updates',
       { context: 'VersionChecker.checkForUpdates' },
+      error instanceof Error ? error : new Error(String(error))
+    );
+    return [];
+  }
+}
+
+// ============================================================================
+// ENHANCED UPDATE CHECKING (WITH METADATA)
+// ============================================================================
+
+/**
+ * Normalize a repository URL to a clean HTTPS URL
+ * Handles various formats: git+https://, git://, ssh://, and object forms
+ */
+function normalizeRepositoryUrl(repository: unknown): string | undefined {
+  if (!repository) return undefined;
+
+  let url: string;
+
+  if (typeof repository === 'string') {
+    url = repository;
+  } else if (typeof repository === 'object' && repository !== null) {
+    const repo = repository as { url?: string };
+    if (repo.url) {
+      url = repo.url;
+    } else {
+      return undefined;
+    }
+  } else {
+    return undefined;
+  }
+
+  // Remove git+ prefix
+  url = url.replace(/^git\+/, '');
+
+  // Convert git:// to https://
+  url = url.replace(/^git:\/\//, 'https://');
+
+  // Convert SSH format to HTTPS
+  url = url.replace(/^git@github\.com:/, 'https://github.com/');
+  url = url.replace(/^git@gitlab\.com:/, 'https://gitlab.com/');
+  url = url.replace(/^git@bitbucket\.org:/, 'https://bitbucket.org/');
+
+  // Remove .git suffix
+  url = url.replace(/\.git$/, '');
+
+  return url;
+}
+
+/**
+ * Derive a changelog URL from a repository URL
+ * Returns the releases page for GitHub, etc.
+ */
+function deriveChangelogUrl(repositoryUrl: string | undefined): string | undefined {
+  if (!repositoryUrl) return undefined;
+
+  // GitHub: use releases page
+  if (repositoryUrl.includes('github.com')) {
+    return `${repositoryUrl}/releases`;
+  }
+
+  // GitLab: use -/releases
+  if (repositoryUrl.includes('gitlab.com')) {
+    return `${repositoryUrl}/-/releases`;
+  }
+
+  // Bitbucket: use downloads
+  if (repositoryUrl.includes('bitbucket.org')) {
+    return `${repositoryUrl}/downloads`;
+  }
+
+  return undefined;
+}
+
+/**
+ * Check for plugin updates with enhanced metadata for UI display
+ *
+ * This function extends checkForUpdates() by adding plugin title, description,
+ * homepage, repository URL, npm URL, and derived changelog URL for each update.
+ *
+ * @returns Array of enhanced plugin update info with metadata
+ */
+export async function checkForUpdatesWithMetadata(): Promise<EnhancedPluginUpdateInfo[]> {
+  logger.info('Checking for plugin updates with metadata', {
+    context: 'VersionChecker.checkForUpdatesWithMetadata',
+  });
+
+  try {
+    // Get basic update info
+    const updates = await checkForUpdates();
+
+    if (updates.length === 0) {
+      logger.debug('No updates available, returning empty array', {
+        context: 'VersionChecker.checkForUpdatesWithMetadata',
+      });
+      return [];
+    }
+
+    // Get installed plugins to enrich with metadata
+    const sitePlugins = await getInstalledPlugins('site');
+    const pluginMap = new Map(sitePlugins.map(p => [p.manifest.name, p]));
+
+    // Enrich each update with metadata
+    const enhancedUpdates: EnhancedPluginUpdateInfo[] = updates.map(update => {
+      const pluginInfo = pluginMap.get(update.packageName);
+      const manifest = pluginInfo?.manifest;
+
+      // Build npm URL
+      const npmUrl = `https://www.npmjs.com/package/${encodeURIComponent(update.packageName)}`;
+
+      // Normalize repository URL
+      const repository = normalizeRepositoryUrl(manifest?.repository);
+
+      // Derive changelog URL from repository
+      const changelogUrl = deriveChangelogUrl(repository);
+
+      // Get homepage, fallback to repository if not specified
+      const homepage = manifest?.homepage || repository;
+
+      const enhanced: EnhancedPluginUpdateInfo = {
+        ...update,
+        pluginTitle: manifest?.title || update.packageName,
+        pluginDescription: manifest?.description,
+        homepage,
+        repository,
+        npmUrl,
+        changelogUrl,
+      };
+
+      logger.debug('Enriched update info', {
+        context: 'VersionChecker.checkForUpdatesWithMetadata',
+        packageName: update.packageName,
+        pluginTitle: enhanced.pluginTitle,
+        hasRepository: !!repository,
+        hasChangelog: !!changelogUrl,
+      });
+
+      return enhanced;
+    });
+
+    logger.info('Plugin updates check with metadata complete', {
+      context: 'VersionChecker.checkForUpdatesWithMetadata',
+      totalUpdates: enhancedUpdates.length,
+      withRepository: enhancedUpdates.filter(u => u.repository).length,
+      withChangelog: enhancedUpdates.filter(u => u.changelogUrl).length,
+    });
+
+    return enhancedUpdates;
+  } catch (error) {
+    logger.error(
+      'Failed to check for plugin updates with metadata',
+      { context: 'VersionChecker.checkForUpdatesWithMetadata' },
       error instanceof Error ? error : new Error(String(error))
     );
     return [];

@@ -13,6 +13,7 @@ import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { pluginRegistry } from '@/lib/plugins/registry';
 import { initializePlugins } from '@/lib/startup/plugin-initialization';
 import { installPluginFromNpm, uninstallPlugin } from '@/lib/plugins/installer';
+import { checkForUpdatesWithMetadata } from '@/lib/plugins/version-checker';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { badRequest, serverError, validationError } from '@/lib/api/responses';
@@ -243,12 +244,52 @@ async function handleUninstall(req: NextRequest, context: any) {
   }
 }
 
+/**
+ * Check for available plugin upgrades with enhanced metadata
+ * GET /api/v1/plugins?action=check-upgrades
+ */
+async function handleCheckUpgrades(context: any) {
+  try {
+    logger.info('[Plugins v1] GET check-upgrades', {
+      userId: context.user.id,
+    });
+
+    const upgrades = await checkForUpdatesWithMetadata();
+
+    logger.info('[Plugins v1] Upgrade check complete', {
+      userId: context.user.id,
+      upgradesAvailable: upgrades.length,
+      breakingUpgrades: upgrades.filter(u => !u.isNonBreaking).length,
+    });
+
+    return NextResponse.json({
+      upgrades,
+      lastChecked: new Date().toISOString(),
+      count: upgrades.length,
+    });
+  } catch (error) {
+    logger.error(
+      '[Plugins v1] Error checking for upgrades',
+      { userId: context.user.id },
+      error instanceof Error ? error : undefined
+    );
+    return serverError('Failed to check for plugin upgrades');
+  }
+}
+
 // ============================================================================
 // GET Handler
 // ============================================================================
 
-export const GET = createAuthenticatedHandler(async (req: NextRequest, { user }) => {
+export const GET = createAuthenticatedHandler(async (req: NextRequest, context) => {
   try {
+    const { searchParams } = new URL(req.url);
+    const action = searchParams.get('action');
+
+    // Handle action-based requests
+    if (action === 'check-upgrades') {
+      return handleCheckUpgrades(context);
+    }
 
     // Ensure plugin system is initialized before accessing registry
     // This handles cases where the API is called before startup initialization completes
@@ -257,7 +298,6 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user })
       await initializePlugins();
     }
 
-    const { searchParams } = new URL(req.url);
     const filter = searchParams.get('filter');
 
     // Get all plugins from registry
@@ -279,7 +319,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user })
   } catch (error) {
     logger.error(
       '[Plugins v1] Error listing plugins',
-      { userId: user.id },
+      { userId: context.user.id },
       error instanceof Error ? error : undefined
     );
     return serverError('Failed to fetch plugins');

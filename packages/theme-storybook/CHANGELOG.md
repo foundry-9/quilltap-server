@@ -2,6 +2,11 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.15] - 2026-01-29
+
+### Added
+- `.qt-button-warning` class for cautionary action buttons (uses `--qt-button-warning-*` variables)
+
 ## [1.0.14] - 2026-01-25
 
 ### Added

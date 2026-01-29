@@ -4,6 +4,16 @@
 
 ### 2.8-dev
 
+- feat: Add Upgrades tab to plugin settings for manual upgrade of breaking changes (2026-01-29)
+  - New "Upgrades" tab in Settings > Plugins between Installed and Browse npm
+  - Shows plugins with available updates (breaking changes that weren't auto-upgraded)
+  - Cards display version transition, breaking/non-breaking badges, and external links
+  - Links to repository, changelog (GitHub releases), and npm package page
+  - Non-breaking upgrades apply directly; breaking upgrades require confirmation modal
+  - "Check for Updates" button with last checked timestamp
+  - New API: `GET /api/v1/plugins?action=check-upgrades` returns enhanced upgrade metadata
+  - New backend function: `checkForUpdatesWithMetadata()` enriches update info with URLs
+  - New component: `UpgradeConfirmModal` for breaking change confirmation
 - feat: Auto-upgrade npm-installed plugins at startup (2026-01-29)
   - Plugins installed via npm are automatically checked for updates during server startup
   - Non-breaking updates (minor/patch per semver) are applied automatically
