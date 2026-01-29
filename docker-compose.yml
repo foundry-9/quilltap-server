@@ -31,4 +31,7 @@ services:
     env_file:
       - .env.local
     volumes:
+      # All Quilltap data (database, files, logs) in one directory
       - ${QUILLTAP_HOST_DATA_DIR:-~/.quilltap}:/app/quilltap
+      # Plugin directory for npm-installed plugins (persists across container restarts)
+      - ${QUILLTAP_HOST_DATA_DIR:-~/.quilltap}/plugins/site:/app/plugins/site

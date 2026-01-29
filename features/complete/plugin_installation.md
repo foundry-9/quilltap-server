@@ -891,16 +891,18 @@ import { PluginManager } from '@/components/settings/PluginManager';
 
 ## Docker Configuration
 
-Add volume mounts for plugin persistence in docker-compose files:
+Plugin persistence requires volume mounts to store npm-installed plugins on the host filesystem. Without this, plugins will be lost when the container restarts.
 
-**docker-compose.dev.yml:**
+**docker-compose.yml (basic):**
 
 ```yaml
 services:
   app:
     volumes:
-      # ... existing volumes ...
-      - ./plugins/site:/app/plugins/site
+      # All Quilltap data (database, files, logs) in one directory
+      - ${QUILLTAP_HOST_DATA_DIR:-~/.quilltap}:/app/quilltap
+      # Plugin directory for npm-installed plugins (persists across container restarts)
+      - ${QUILLTAP_HOST_DATA_DIR:-~/.quilltap}/plugins/site:/app/plugins/site
 ```
 
 **docker-compose.prod.yml:**
@@ -909,9 +911,21 @@ services:
 services:
   app:
     volumes:
-      # ... existing volumes ...
-      - ./data/plugins/site:/app/plugins/site
+      # All Quilltap data (database, files, logs) in one directory
+      - ${QUILLTAP_HOST_DATA_DIR:-~/.quilltap}:/app/quilltap
+      # Plugin directory for npm-installed plugins (persists on host filesystem)
+      - ${QUILLTAP_HOST_DATA_DIR:-~/.quilltap}/plugins/site:/app/plugins/site
 ```
+
+**Important Notes:**
+
+1. The plugin directory is stored alongside other Quilltap data (at `~/.quilltap/plugins/site` by default on Linux)
+2. Platform-specific recommended paths:
+   - Linux: `~/.quilltap/plugins/site`
+   - macOS: `~/Library/Application Support/Quilltap/plugins/site`
+   - Windows: `%APPDATA%\Quilltap\plugins\site`
+3. The Dockerfile creates `/app/plugins/site` with proper permissions for the `nextjs` user
+4. Plugins installed via npm are stored in `<plugin-name>/node_modules/<plugin-name>/` structure
 
 ## Security Considerations
 

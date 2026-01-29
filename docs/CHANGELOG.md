@@ -4,6 +4,14 @@
 
 ### 2.8-dev
 
+- fix: npm-installed plugins not persisting in Docker (2026-01-29)
+  - docker-compose.yml: Added missing volume mount for `/app/plugins/site`
+  - docker-compose.prod.yml: Changed from named volume to host-mounted path
+  - Both now mount `${QUILLTAP_HOST_DATA_DIR:-~/.quilltap}/plugins/site:/app/plugins/site`
+  - Dockerfile: Creates `/app/plugins/site` directory with proper permissions
+  - Fixed duplicate USER/EXPOSE/CMD lines at end of Dockerfile
+  - Updated docs/DEPLOYMENT.md with new Plugin Management section
+  - Updated features/complete/plugin_installation.md Docker Configuration section
 - refactor: Redesign image modal character tagging UI (2026-01-29)
   - Split UI into two sections: tagged characters list and add-character dropdown
   - Tagged characters show name, Avatar badge (if current image), Set Avatar button, and remove (×) button

@@ -275,6 +275,90 @@ docker compose -f docker-compose.prod.yml restart nginx
 3. **Keep `.env.production` secret** - Never commit to version control
 4. **Restrict file permissions** - `chmod 600 .env.production`
 
+## Plugin Management
+
+### npm-Installed Plugins in Docker
+
+Quilltap supports installing third-party plugins from npm. In Docker deployments, these plugins must be persisted on the host filesystem to survive container restarts.
+
+Both `docker-compose.yml` and `docker-compose.prod.yml` mount the plugin directory:
+
+```yaml
+volumes:
+  - ${QUILLTAP_HOST_DATA_DIR:-~/.quilltap}/plugins/site:/app/plugins/site
+```
+
+This stores plugins at `~/.quilltap/plugins/site` (or your configured data directory) on the host.
+
+### Plugin Directory Structure
+
+```
+~/.quilltap/                     # Host data directory
+├── data/                        # SQLite database
+├── files/                       # User files
+├── logs/                        # Application logs
+└── plugins/
+    └── site/                    # npm-installed plugins
+        ├── qtap-plugin-foo/
+        │   └── node_modules/
+        │       └── qtap-plugin-foo/
+        │           └── manifest.json
+        └── registry.json        # Tracks installed plugins
+```
+
+### Installing Plugins
+
+Plugins can be installed via the Settings → Plugins page in the web UI, or via API:
+
+```bash
+curl -X POST https://yourdomain.com/api/v1/plugins?action=install \
+  -H "Content-Type: application/json" \
+  -d '{"packageName": "qtap-plugin-example"}'
+```
+
+After installing, restart the container to activate the plugin:
+
+```bash
+docker compose -f docker-compose.prod.yml restart app
+```
+
+### Troubleshooting Plugins
+
+If plugins appear to install but don't work:
+
+1. **Check the plugin directory exists on host**:
+   ```bash
+   ls -la ~/.quilltap/plugins/site/
+   ```
+
+2. **Check plugin registry**:
+   ```bash
+   cat ~/.quilltap/plugins/site/registry.json
+   ```
+
+3. **Verify manifest exists**:
+   ```bash
+   cat ~/.quilltap/plugins/site/qtap-plugin-foo/node_modules/qtap-plugin-foo/manifest.json
+   ```
+
+4. **Check container logs for plugin errors**:
+   ```bash
+   docker compose -f docker-compose.prod.yml logs app | grep -i plugin
+   ```
+
+### Plugin Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `SITE_PLUGINS_ENABLED` | Comma-separated plugin IDs, or `all` | `all` |
+| `SITE_PLUGINS_DISABLED` | Comma-separated plugin IDs to disable | (empty) |
+
+Example: Enable all plugins except one:
+```env
+SITE_PLUGINS_ENABLED=all
+SITE_PLUGINS_DISABLED=qtap-plugin-experimental
+```
+
 ## Data Management
 
 Quilltap stores application data in two places:

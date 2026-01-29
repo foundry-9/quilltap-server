@@ -65,9 +65,9 @@ ENV DOCKER_CONTAINER=true
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Create data directories (data, files, logs)
-RUN mkdir -p /app/quilltap/data /app/quilltap/files /app/quilltap/logs && \
-    chown -R nextjs:nodejs /app/quilltap
+# Create data directories (data, files, logs) and plugin site directory
+RUN mkdir -p /app/quilltap/data /app/quilltap/files /app/quilltap/logs /app/plugins/site && \
+    chown -R nextjs:nodejs /app/quilltap /app/plugins/site
 
 # Copy built assets
 COPY --from=builder /app/public ./public
@@ -85,15 +85,6 @@ RUN npm ci --only=production
 
 # Rebuild native modules for the current Alpine Linux platform
 RUN npm rebuild
-
-USER nextjs
-
-EXPOSE 3000
-
-ENV PORT=3000
-ENV HOSTNAME="0.0.0.0"
-
-CMD ["node", "server.js"]
 
 USER nextjs
 
