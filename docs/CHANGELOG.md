@@ -4,6 +4,19 @@
 
 ### 2.8-dev
 
+- refactor: Redesign image modal character tagging UI (2026-01-29)
+  - Split UI into two sections: tagged characters list and add-character dropdown
+  - Tagged characters show name, Avatar badge (if current image), Set Avatar button, and remove (×) button
+  - Untagged characters appear in dropdown for easy tagging
+  - Fixed avatar detection bug: was comparing `character.defaultImageId === character.id` instead of `=== imageId`
+  - Fixed state management: ImageDetailModal now uses hook's `taggedCharacterIds` state instead of duplicate state
+  - Fixed API calls in useImageActions to use v1 action dispatch pattern (`?action=add-tag`, `?action=remove-tag`)
+- fix: Avatar set/clear using wrong HTTP method (2026-01-29)
+  - Changed `PATCH` to `POST` for avatar actions in multiple files
+  - Fixed `useGalleryData.ts` (handleSetAvatar, handleClearAvatar, handleDeleteImage)
+  - Fixed `CreateNPCDialog.tsx` (avatar set after NPC creation)
+  - Fixed `useCharacterEdit.ts` (setCharacterAvatar, clearAvatar)
+  - API expects `POST /api/v1/characters/[id]?action=avatar`, not PATCH
 - refactor: Move NPCs from Settings to Characters page (2026-01-29)
   - Removed NPCs tab from Settings page
   - Deleted `components/settings/npcs-tab.tsx` and `components/settings/npcs/` directory
