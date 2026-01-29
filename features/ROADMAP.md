@@ -4,10 +4,6 @@ This document tracks planned features and improvements for Quilltap.
 
 ## In Progress
 
-### Authentication Enhancements
-
-- [X] Make all plugins either dist or site-wide
-
 ## Planned Features
 
 ### Plugin architecture
@@ -43,13 +39,11 @@ This document tracks planned features and improvements for Quilltap.
 - [ ] Python script support
 - [ ] ComfyUI + LORA support for local installations (see [feature request](./comfy_ui_local_image.md))
 - [ ] Ability to auto-upgrade plugins
-- [X] Removal of sync functionality
 
 ### Themes & UI
 
 - [ ] Arcadia "art deco" theme to show off what the theme system can really do
 - [ ] Get theme-storybook to match the app for everything
-- [X] Have the previews of themes actually match the themes
 
 ### Setup & Onboarding
 
@@ -62,6 +56,9 @@ This document tracks planned features and improvements for Quilltap.
 
 ## Completed in v2.8
 
+- [X] Removal of sync functionality
+- [X] Have the previews of themes actually match the themes
+- [X] Make all plugins either dist or site-wide
 - [X] Make the signout actually completely wipe the session data from the browser and take you back to the beginning page
 - [X] Remove authentication (this will be a local-only website)
 

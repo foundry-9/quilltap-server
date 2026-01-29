@@ -4,6 +4,10 @@
 
 ### 2.8-dev
 
+- chore: Upgrade @openrouter/sdk from 0.4.0 to 0.5.1 (2026-01-29)
+  - Updated in main app and qtap-plugin-openrouter
+  - Plugin bumped to v1.0.14
+  - No code changes required (minor release with Speakeasy CLI updates)
 - refactor: Rains theme revision - Claude-inspired aesthetic (2026-01-29)
   - Dark mode: Clean charcoal with subtle warmth (hue 40), replacing muddy orange-brown
   - Light mode: Refined warm parchment/cream backgrounds

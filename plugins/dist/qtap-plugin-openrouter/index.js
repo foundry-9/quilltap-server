@@ -452,7 +452,7 @@ function isFunctionCallArgumentsDoneEvent(event) {
 function isOutputMessage(item) {
   return typeof item === "object" && item !== null && "type" in item && item.type === "message";
 }
-function isFunctionCallOutputItem(item) {
+function isFunctionCallItem(item) {
   return typeof item === "object" && item !== null && "type" in item && item.type === "function_call";
 }
 function isReasoningOutputItem(item) {
@@ -595,7 +595,7 @@ function handleOutputItemAdded(event, itemsInProgress) {
       content: []
     };
   }
-  if (isFunctionCallOutputItem(item)) {
+  if (isFunctionCallItem(item)) {
     const itemKey = item.id ?? item.callId;
     itemsInProgress.set(itemKey, {
       type: "function_call",
@@ -709,7 +709,7 @@ function handleOutputItemDone(event, itemsInProgress) {
     itemsInProgress.delete(item.id);
     return item;
   }
-  if (isFunctionCallOutputItem(item)) {
+  if (isFunctionCallItem(item)) {
     itemsInProgress.delete(item.id ?? item.callId);
     return item;
   }
@@ -815,7 +815,7 @@ function extractTextFromResponse(response) {
 function extractToolCallsFromResponse(response) {
   const toolCalls = [];
   for (const item of response.output) {
-    if (isFunctionCallOutputItem(item)) {
+    if (isFunctionCallItem(item)) {
       try {
         const parsedArguments = JSON.parse(item.arguments);
         toolCalls.push({
@@ -846,7 +846,7 @@ async function* buildToolCallStream(stream) {
     }
     switch (event.type) {
       case "response.output_item.added": {
-        if (isOutputItemAddedEvent(event) && event.item && isFunctionCallOutputItem(event.item)) {
+        if (isOutputItemAddedEvent(event) && event.item && isFunctionCallItem(event.item)) {
           toolCallsInProgress.set(event.item.callId, {
             id: event.item.callId,
             name: event.item.name,
@@ -890,7 +890,7 @@ Arguments: ${event.arguments.substring(0, 100)}${event.arguments.length > 100 ? 
         break;
       }
       case "response.output_item.done": {
-        if (isOutputItemDoneEvent(event) && event.item && isFunctionCallOutputItem(event.item)) {
+        if (isOutputItemDoneEvent(event) && event.item && isFunctionCallItem(event.item)) {
           if (toolCallsInProgress.has(event.item.callId)) {
             try {
               const parsedArguments = JSON.parse(event.item.arguments);
@@ -1051,9 +1051,9 @@ function serverURLFromOptions(options) {
 var SDK_METADATA = {
   language: "typescript",
   openapiDocVersion: "1.0.0",
-  sdkVersion: "0.4.0",
+  sdkVersion: "0.5.1",
   genVersion: "2.788.4",
-  userAgent: "speakeasy-sdk/typescript 0.4.0 2.788.4 1.0.0 @openrouter/sdk"
+  userAgent: "speakeasy-sdk/typescript 0.5.1 2.788.4 1.0.0 @openrouter/sdk"
 };
 
 // node_modules/@openrouter/sdk/esm/lib/http.js
@@ -6004,22 +6004,30 @@ var __classPrivateFieldGet = function(receiver, state, kind, f) {
   if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
   return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
 };
+var _ClientSDK_instances;
 var _ClientSDK_httpClient;
 var _ClientSDK_hooks;
 var _ClientSDK_logger;
+var _ClientSDK_registerHook;
 var gt = typeof globalThis === "undefined" ? null : globalThis;
 var webWorkerLike = typeof gt === "object" && gt != null && "importScripts" in gt && typeof gt["importScripts"] === "function";
 var isBrowserLike = webWorkerLike || typeof navigator !== "undefined" && "serviceWorker" in navigator || typeof window === "object" && typeof window.document !== "undefined";
 var ClientSDK = class {
   constructor(options = {}) {
+    _ClientSDK_instances.add(this);
     _ClientSDK_httpClient.set(this, void 0);
     _ClientSDK_hooks.set(this, void 0);
     _ClientSDK_logger.set(this, void 0);
-    const opt = options;
-    if (typeof opt === "object" && opt != null && "hooks" in opt && opt.hooks instanceof SDKHooks) {
-      __classPrivateFieldSet(this, _ClientSDK_hooks, opt.hooks, "f");
+    if (options.hooks instanceof SDKHooks) {
+      __classPrivateFieldSet(this, _ClientSDK_hooks, options.hooks, "f");
     } else {
       __classPrivateFieldSet(this, _ClientSDK_hooks, new SDKHooks(), "f");
+      if (options.hooks) {
+        const hooksArray = Array.isArray(options.hooks) ? options.hooks : [options.hooks];
+        for (const hook of hooksArray) {
+          __classPrivateFieldGet(this, _ClientSDK_instances, "m", _ClientSDK_registerHook).call(this, hook);
+        }
+      }
     }
     const defaultHttpClient = new HTTPClient();
     options.httpClient = options.httpClient || defaultHttpClient;
@@ -6154,7 +6162,23 @@ var ClientSDK = class {
     });
   }
 };
-_ClientSDK_httpClient = /* @__PURE__ */ new WeakMap(), _ClientSDK_hooks = /* @__PURE__ */ new WeakMap(), _ClientSDK_logger = /* @__PURE__ */ new WeakMap();
+_ClientSDK_httpClient = /* @__PURE__ */ new WeakMap(), _ClientSDK_hooks = /* @__PURE__ */ new WeakMap(), _ClientSDK_logger = /* @__PURE__ */ new WeakMap(), _ClientSDK_instances = /* @__PURE__ */ new WeakSet(), _ClientSDK_registerHook = function _ClientSDK_registerHook2(hook) {
+  if ("sdkInit" in hook) {
+    __classPrivateFieldGet(this, _ClientSDK_hooks, "f").registerSDKInitHook(hook);
+  }
+  if ("beforeCreateRequest" in hook) {
+    __classPrivateFieldGet(this, _ClientSDK_hooks, "f").registerBeforeCreateRequestHook(hook);
+  }
+  if ("beforeRequest" in hook) {
+    __classPrivateFieldGet(this, _ClientSDK_hooks, "f").registerBeforeRequestHook(hook);
+  }
+  if ("afterSuccess" in hook) {
+    __classPrivateFieldGet(this, _ClientSDK_hooks, "f").registerAfterSuccessHook(hook);
+  }
+  if ("afterError" in hook) {
+    __classPrivateFieldGet(this, _ClientSDK_hooks, "f").registerAfterErrorHook(hook);
+  }
+};
 var jsonLikeContentTypeRE = /(application|text)\/.*?\+*json.*/;
 var jsonlLikeContentTypeRE = /(application|text)\/(.*?\+*\bjsonl\b.*|.*?\+*\bx-ndjson\b.*)/;
 async function logRequest(logger4, req) {
@@ -11380,7 +11404,10 @@ async function executeGeneratorTool(tool, toolCall, context, onPreliminaryResult
     let hasFinalResult = false;
     let lastEmittedValue = void 0;
     let hasEmittedValue = false;
-    for await (const event of tool.function.execute(validatedInput, context)) {
+    const iterator = tool.function.execute(validatedInput, context);
+    let iterResult = await iterator.next();
+    while (!iterResult.done) {
+      const event = iterResult.value;
       lastEmittedValue = event;
       hasEmittedValue = true;
       const matchesOutputSchema = tryValidate(tool.function.outputSchema, event);
@@ -11395,11 +11422,16 @@ async function executeGeneratorTool(tool, toolCall, context, onPreliminaryResult
           onPreliminaryResult(toolCall.id, validatedPreliminary);
         }
       }
+      iterResult = await iterator.next();
     }
-    if (!hasEmittedValue) {
-      throw new Error(`Generator tool "${toolCall.name}" completed without emitting any values`);
+    if (iterResult.value !== void 0) {
+      finalResult = validateToolOutput(tool.function.outputSchema, iterResult.value);
+      hasFinalResult = true;
     }
     if (!hasFinalResult) {
+      if (!hasEmittedValue) {
+        throw new Error(`Generator tool "${toolCall.name}" completed without emitting any values or returning a result`);
+      }
       finalResult = validateToolOutput(tool.function.outputSchema, lastEmittedValue);
     }
     return {
@@ -11676,6 +11708,25 @@ var ModelResult = class {
       const tool = this.options.tools?.find((t) => t.function.name === toolCall.name);
       if (!tool || !hasExecuteFunction(tool))
         continue;
+      const args = toolCall.arguments;
+      if (typeof args === "string") {
+        const rawArgs = args;
+        const errorMessage = `Failed to parse tool call arguments for "${toolCall.name}": The model provided invalid JSON. Raw arguments received: "${rawArgs}". Please provide valid JSON arguments for this tool call.`;
+        if (this.toolEventBroadcaster) {
+          this.toolEventBroadcaster.push({
+            type: "tool_result",
+            toolCallId: toolCall.id,
+            result: { error: errorMessage }
+          });
+        }
+        toolResults.push({
+          type: "function_call_output",
+          id: `output_${toolCall.id}`,
+          callId: toolCall.id,
+          output: JSON.stringify({ error: errorMessage })
+        });
+        continue;
+      }
       const preliminaryResultsForCall = [];
       const onPreliminaryResult = this.toolEventBroadcaster ? (callId, resultValue) => {
         const typedResult = resultValue;
@@ -11714,7 +11765,12 @@ var ModelResult = class {
   async resolveAsyncFunctionsForTurn(turnContext) {
     if (hasAsyncFunctions(this.options.request)) {
       const resolved = await resolveAsyncFunctions(this.options.request, turnContext);
-      this.resolvedRequest = { ...resolved, stream: false };
+      const preservedInput = this.resolvedRequest?.input;
+      this.resolvedRequest = {
+        ...resolved,
+        stream: false,
+        ...preservedInput !== void 0 && { input: preservedInput }
+      };
     }
   }
   /**
@@ -11741,16 +11797,22 @@ var ModelResult = class {
    * @returns The new response from the API
    */
   async makeFollowupRequest(currentResponse, toolResults) {
+    const originalInput = this.resolvedRequest?.input;
+    const normalizedOriginalInput = Array.isArray(originalInput) ? originalInput : originalInput ? [{ role: "user", content: originalInput }] : [];
     const newInput = [
+      ...normalizedOriginalInput,
       ...Array.isArray(currentResponse.output) ? currentResponse.output : [currentResponse.output],
       ...toolResults
     ];
     if (!this.resolvedRequest) {
       throw new Error("Request not initialized");
     }
+    this.resolvedRequest = {
+      ...this.resolvedRequest,
+      input: newInput
+    };
     const newRequest = {
       ...this.resolvedRequest,
-      input: newInput,
       stream: false
     };
     const newResult = await betaResponsesSend(this.options.client, newRequest, this.options.options);
@@ -12175,13 +12237,20 @@ var ModelResult = class {
       yield* buildItemsStream(this.reusableStream);
       await this.executeToolsIfNeeded();
       for (const round of this.allToolExecutionRounds) {
+        if (round.round > 0) {
+          for (const item of round.response.output) {
+            if (isFunctionCallItem(item)) {
+              yield item;
+            }
+          }
+        }
         for (const toolResult of round.toolResults) {
           yield toolResult;
         }
       }
       if (this.finalResponse && this.allToolExecutionRounds.length > 0) {
         for (const item of this.finalResponse.output) {
-          if (isOutputMessage(item) || isFunctionCallOutputItem(item) || isReasoningOutputItem(item) || isWebSearchCallOutputItem(item) || isFileSearchCallOutputItem(item) || isImageGenerationCallOutputItem(item)) {
+          if (isOutputMessage(item) || isFunctionCallItem(item) || isReasoningOutputItem(item) || isWebSearchCallOutputItem(item) || isFileSearchCallOutputItem(item) || isImageGenerationCallOutputItem(item)) {
             yield item;
           }
         }
@@ -12195,8 +12264,9 @@ var ModelResult = class {
    *
    * Stream incremental message updates as content is added in responses format.
    * Each iteration yields an updated version of the message with new content.
-   * Also yields OpenResponsesFunctionCallOutput after tool execution completes.
-   * Returns ResponsesOutputMessage or OpenResponsesFunctionCallOutput compatible with OpenAI Responses API format.
+   * Also yields function_call items and OpenResponsesFunctionCallOutput after tool execution completes.
+   * Returns ResponsesOutputMessage, ResponsesOutputItemFunctionCall, or OpenResponsesFunctionCallOutput
+   * compatible with OpenAI Responses API format.
    */
   getNewMessagesStream() {
     return async function* () {
@@ -12207,6 +12277,11 @@ var ModelResult = class {
       yield* buildResponsesMessageStream(this.reusableStream);
       await this.executeToolsIfNeeded();
       for (const round of this.allToolExecutionRounds) {
+        for (const item of round.response.output) {
+          if (isFunctionCallItem(item)) {
+            yield item;
+          }
+        }
         for (const toolResult of round.toolResults) {
           yield toolResult;
         }
