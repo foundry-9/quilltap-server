@@ -2,7 +2,6 @@
 
 import { useRef, useEffect, useLayoutEffect, useCallback } from 'react'
 import ToolPalette from '@/components/chat/ToolPalette'
-import MobileToolPalette from '@/components/chat/MobileToolPalette'
 import FormattingToolbar from '@/components/chat/FormattingToolbar'
 import MessageContent from '@/components/chat/MessageContent'
 import type { AttachedFile } from '../types'
@@ -27,8 +26,6 @@ interface ChatComposerProps {
   waitingForResponse: boolean
   toolPaletteOpen: boolean
   setToolPaletteOpen: (open: boolean) => void
-  mobileToolPaletteOpen: boolean
-  setMobileToolPaletteOpen: (open: boolean) => void
   showPreview: boolean
   setShowPreview: (show: boolean) => void
   uploadingFile: boolean
@@ -77,13 +74,6 @@ const resizeTextarea = (textarea: HTMLTextAreaElement, maxHeight: number) => {
 const getTextareaMaxHeight = (): number => {
   if (typeof globalThis === 'undefined' || !globalThis.window) return 200
   const windowHeight = globalThis.window.innerHeight
-  const isMobile = globalThis.window.matchMedia('(max-width: 768px)').matches
-  if (isMobile) {
-    const navbarHeight = 64
-    const paletteReserved = windowHeight * 0.5
-    const composerChrome = 96
-    return Math.max(40, windowHeight - navbarHeight - paletteReserved - composerChrome)
-  }
   return windowHeight / 3
 }
 
@@ -100,8 +90,6 @@ export function ChatComposer({
   waitingForResponse,
   toolPaletteOpen,
   setToolPaletteOpen,
-  mobileToolPaletteOpen,
-  setMobileToolPaletteOpen,
   showPreview,
   setShowPreview,
   uploadingFile,
@@ -134,8 +122,7 @@ export function ChatComposer({
   onStopStreaming,
 }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const mobileToolPaletteToggleRef = useRef<HTMLButtonElement>(null)
-  const desktopToolPaletteToggleRef = useRef<HTMLButtonElement>(null)
+  const toolPaletteToggleRef = useRef<HTMLButtonElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   // Track the last external input value to detect when parent clears it
   const lastExternalInputRef = useRef(input)
@@ -306,34 +293,6 @@ export function ChatComposer({
 
   return (
     <div className="qt-chat-composer">
-      {/* Mobile Tool Palette - positioned absolutely above the composer */}
-      <MobileToolPalette
-        isOpen={mobileToolPaletteOpen}
-        onClose={() => setMobileToolPaletteOpen(false)}
-        toggleButtonRef={mobileToolPaletteToggleRef}
-        onAttachFileClick={handleAttachFileClick}
-        uploadingFile={uploadingFile}
-        showPreview={showPreview}
-        onTogglePreview={() => setShowPreview(!showPreview)}
-        onGalleryClick={onGalleryClick}
-        chatPhotoCount={chatPhotoCount}
-        onGenerateImageClick={onGenerateImageClick}
-        hasImageProfile={hasImageProfile}
-        onAddCharacterClick={onAddCharacterClick}
-        showAddCharacter={isSingleCharacterChat}
-        onSettingsClick={onSettingsClick}
-        onRenameClick={onRenameClick}
-        onProjectClick={onProjectClick}
-        projectName={projectName}
-        chatId={id}
-        onDeleteChatMemoriesClick={onDeleteChatMemoriesClick}
-        onReextractMemoriesClick={onReextractMemoriesClick}
-        chatMemoryCount={chatMemoryCount}
-        onBulkCharacterReplaceClick={onBulkCharacterReplaceClick}
-        onToolSettingsClick={onToolSettingsClick}
-        disabled={sending || !hasActiveCharacters}
-      />
-
       {/* No active characters warning */}
       {!hasActiveCharacters && (
         <div className="qt-alert qt-alert-warning flex items-center gap-3">
@@ -412,36 +371,34 @@ export function ChatComposer({
           </div>
         )}
 
-        {/* Desktop tool palette bar - shows above the composer when open */}
-        <div className="qt-desktop-only">
-          <ToolPalette
-            isOpen={toolPaletteOpen}
-            onClose={() => setToolPaletteOpen(false)}
-            toggleButtonRef={desktopToolPaletteToggleRef}
-            onGalleryClick={onGalleryClick}
-            onGenerateImageClick={onGenerateImageClick}
-            onSettingsClick={onSettingsClick}
-            onRenameClick={onRenameClick}
-            onProjectClick={onProjectClick}
-            projectName={projectName}
-            onAddCharacterClick={onAddCharacterClick}
-            onDeleteChatMemoriesClick={onDeleteChatMemoriesClick}
-            onReextractMemoriesClick={onReextractMemoriesClick}
-            onSearchReplaceClick={onSearchReplaceClick}
-            onBulkCharacterReplaceClick={onBulkCharacterReplaceClick}
-            onToolSettingsClick={onToolSettingsClick}
-            chatPhotoCount={chatPhotoCount}
-            hasImageProfile={hasImageProfile}
-            showAddCharacter={isSingleCharacterChat}
-            chatId={id}
-            chatMemoryCount={chatMemoryCount}
-            onAttachFileClick={handleAttachFileClick}
-            uploadingFile={uploadingFile}
-            showPreview={showPreview}
-            onTogglePreview={() => setShowPreview(!showPreview)}
-            disabled={sending || !hasActiveCharacters}
-          />
-        </div>
+        {/* Tool palette bar - shows above the composer when open */}
+        <ToolPalette
+          isOpen={toolPaletteOpen}
+          onClose={() => setToolPaletteOpen(false)}
+          toggleButtonRef={toolPaletteToggleRef}
+          onGalleryClick={onGalleryClick}
+          onGenerateImageClick={onGenerateImageClick}
+          onSettingsClick={onSettingsClick}
+          onRenameClick={onRenameClick}
+          onProjectClick={onProjectClick}
+          projectName={projectName}
+          onAddCharacterClick={onAddCharacterClick}
+          onDeleteChatMemoriesClick={onDeleteChatMemoriesClick}
+          onReextractMemoriesClick={onReextractMemoriesClick}
+          onSearchReplaceClick={onSearchReplaceClick}
+          onBulkCharacterReplaceClick={onBulkCharacterReplaceClick}
+          onToolSettingsClick={onToolSettingsClick}
+          chatPhotoCount={chatPhotoCount}
+          hasImageProfile={hasImageProfile}
+          showAddCharacter={isSingleCharacterChat}
+          chatId={id}
+          chatMemoryCount={chatMemoryCount}
+          onAttachFileClick={handleAttachFileClick}
+          uploadingFile={uploadingFile}
+          showPreview={showPreview}
+          onTogglePreview={() => setShowPreview(!showPreview)}
+          disabled={sending || !hasActiveCharacters}
+        />
 
         {/* Formatting toolbar - shown above the form when document editing mode is enabled */}
         {documentEditingMode && (
@@ -466,31 +423,15 @@ export function ChatComposer({
 
           {/* Tool palette toggle button - left side */}
           <div className="qt-chat-toolbar">
-            {/* Mobile: Tool palette toggle button */}
+            {/* Tool palette toggle button */}
             <button
-              ref={mobileToolPaletteToggleRef}
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                setMobileToolPaletteOpen(!mobileToolPaletteOpen)
-              }}
-              className="qt-chat-toolbar-button qt-mobile-only"
-              title="Tools"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-
-            {/* Desktop: Tool palette toggle button */}
-            <button
-              ref={desktopToolPaletteToggleRef}
+              ref={toolPaletteToggleRef}
               type="button"
               onClick={(e) => {
                 e.stopPropagation()
                 setToolPaletteOpen(!toolPaletteOpen)
               }}
-              className="qt-chat-toolbar-button qt-desktop-only"
+              className="qt-chat-toolbar-button"
               title="Tools"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

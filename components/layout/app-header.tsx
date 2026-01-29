@@ -12,53 +12,13 @@
 import Link from 'next/link'
 import { SearchBar } from '@/components/search/search-bar'
 import { NavContentWidthToggle } from '@/components/dashboard/nav-content-width-toggle'
-import { useSidebarOptional } from '@/components/providers/sidebar-provider'
 import { BrandLogo } from '@/components/ui/brand-logo'
 
-/**
- * Hamburger menu icon
- */
-function HamburgerIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <line x1="3" y1="6" x2="21" y2="6" />
-      <line x1="3" y1="12" x2="21" y2="12" />
-      <line x1="3" y1="18" x2="21" y2="18" />
-    </svg>
-  )
-}
-
 export function AppHeader() {
-  const sidebar = useSidebarOptional()
-
-  const handleHamburgerClick = () => {
-    if (sidebar) {
-      sidebar.openMobile()
-    }
-  }
-
   return (
     <header className="qt-app-header">
-      {/* Left section: hamburger (mobile) + logo */}
+      {/* Left section: logo */}
       <div className="qt-app-header-left">
-        {/* Hamburger menu - mobile only */}
-        <button
-          type="button"
-          onClick={handleHamburgerClick}
-          className="qt-hamburger"
-          aria-label="Open menu"
-        >
-          <HamburgerIcon className="w-6 h-6" />
-        </button>
-
         {/* Logo */}
         <Link href="/" className="flex items-center hover:opacity-80 transition-opacity">
           <BrandLogo size="sm" />

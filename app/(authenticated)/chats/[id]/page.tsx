@@ -5,13 +5,11 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import ImageModal from '@/components/chat/ImageModal'
 import PhotoGalleryModal from '@/components/images/PhotoGalleryModal'
 import ToolPalette from '@/components/chat/ToolPalette'
-import MobileToolPalette from '@/components/chat/MobileToolPalette'
 import ChatSettingsModal from '@/components/chat/ChatSettingsModal'
 import ChatProjectModal from '@/components/chat/ChatProjectModal'
 import ChatRenameModal from '@/components/chat/ChatRenameModal'
 import GenerateImageDialog from '@/components/chat/GenerateImageDialog'
 import ParticipantSidebar from '@/components/chat/ParticipantSidebar'
-import MobileParticipantDropdown from '@/components/chat/MobileParticipantDropdown'
 import AddCharacterDialog from '@/components/chat/AddCharacterDialog'
 import ReattributeMessageDialog from '@/components/chat/ReattributeMessageDialog'
 import BulkCharacterReplaceModal from '@/components/chat/BulkCharacterReplaceModal'
@@ -113,7 +111,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [roleplayDialogueDetection, setRoleplayDialogueDetection] = useState<DialogueDetection | null | undefined>(undefined)
   const [galleryOpen, setGalleryOpen] = useState(false)
   const [toolPaletteOpen, setToolPaletteOpen] = useState(false)
-  const [mobileToolPaletteOpen, setMobileToolPaletteOpen] = useState(false)
   const [documentEditingMode, setDocumentEditingMode] = useState(false)
   const [chatSettingsModalOpen, setChatSettingsModalOpen] = useState(false)
   const [chatProjectModalOpen, setChatProjectModalOpen] = useState(false)
@@ -136,7 +133,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [turnSelectionResult, setTurnSelectionResult] = useState<TurnSelectionResult | null>(null)
   const [ephemeralMessages, setEphemeralMessages] = useState<EphemeralMessageData[]>([])
   const [respondingParticipantId, setRespondingParticipantId] = useState<string | null>(null)
-  const [mobileParticipantDropdownId, setMobileParticipantDropdownId] = useState<string | null>(null)
   const [isPaused, setIsPaused] = useState(false)
 
   // Impersonation state (Characters Not Personas)
@@ -183,12 +179,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const { conflictInfo, isConflictDialogOpen, resolvingConflict, handleConflictResolution, cancelConflict } = fileHook
 
   // Refs
-  const mobileParticipantRefs = useRef<Map<string, HTMLButtonElement | null>>(new Map())
   const lastAutoTriggeredRef = useRef<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const mobileToolPaletteToggleRef = useRef<HTMLButtonElement>(null)
   const desktopToolPaletteToggleRef = useRef<HTMLButtonElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const userStoppedStreamRef = useRef<boolean>(false)
@@ -342,13 +336,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const getTextareaMaxHeight = useCallback(() => {
     if (typeof globalThis === 'undefined' || !globalThis.window) return 200
     const windowHeight = globalThis.window.innerHeight
-    const isMobile = globalThis.window.matchMedia('(max-width: 768px)').matches
-    if (isMobile) {
-      const navbarHeight = 64
-      const paletteReserved = windowHeight * 0.5
-      const composerChrome = 96
-      return Math.max(40, windowHeight - navbarHeight - paletteReserved - composerChrome)
-    }
     return windowHeight / 3
   }, [])
 
@@ -2006,8 +1993,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                       turnState={turnState}
                       streaming={streaming}
                       waitingForResponse={waitingForResponse}
-                      mobileParticipantDropdownId={mobileParticipantDropdownId}
-                      mobileParticipantRefs={mobileParticipantRefs}
                       userParticipantId={userParticipantId}
                       isPaused={isPaused}
                       onTogglePause={togglePause}
@@ -2025,7 +2010,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                       onImageClick={(filepath, filename, fileId) => {
                         setModalImage({ src: filepath, filename, fileId })
                       }}
-                      onMobileParticipantDropdownChange={setMobileParticipantDropdownId}
                       onHandleNudge={turnManagement.handleNudge}
                       onHandleQueue={turnManagement.handleQueue}
                       onHandleDequeue={turnManagement.handleDequeue}
@@ -2141,8 +2125,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           waitingForResponse={waitingForResponse}
           toolPaletteOpen={toolPaletteOpen}
           setToolPaletteOpen={setToolPaletteOpen}
-          mobileToolPaletteOpen={mobileToolPaletteOpen}
-          setMobileToolPaletteOpen={setMobileToolPaletteOpen}
           showPreview={showPreview}
           setShowPreview={setShowPreview}
           uploadingFile={uploadingFile}

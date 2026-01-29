@@ -4,6 +4,17 @@
 
 ### 2.8-dev
 
+- refactor: Remove mobile/phone UI support (2026-01-29)
+  - App now targets tablet and desktop viewports only (minimum 768px)
+  - Deleted: MobileToolPalette.tsx, MobileParticipantDropdown.tsx
+  - Removed: isMobile, openMobile, closeMobile, isMobileOpen from sidebar-provider
+  - Removed: hamburger menu from app-header and page-toolbar
+  - Removed: mobile sidebar overlay and off-canvas behavior
+  - Removed: @media (max-width: 768px) and related mobile CSS
+  - Removed: mobile-specific CSS variables and utility classes (qt-mobile-*, qt-desktop-only)
+  - Removed: mobile message header, mobile participant bar/dropdown/controls
+  - ParticipantSidebar always visible (no longer hidden on mobile)
+  - Updated feature documentation in features/complete/new_ui_layout.md
 - feat: Hierarchical tool management for per-chat tool settings (2026-01-29)
   - Added plugin-level toggling: enable/disable all tools from a plugin at once
   - Added subgroup-level toggling: for MCP plugin, enable/disable all tools from a specific server

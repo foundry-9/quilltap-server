@@ -3,7 +3,7 @@
 /**
  * Sidebar Provider
  *
- * Manages the left sidebar state (collapsed/expanded, mobile open/closed).
+ * Manages the left sidebar state (collapsed/expanded).
  * Persists collapsed preference to localStorage.
  *
  * @module components/providers/sidebar-provider
@@ -23,20 +23,12 @@ export const MAX_SIDEBAR_WIDTH = 512
 interface SidebarContextValue {
   /** Whether the sidebar is collapsed (desktop) */
   isCollapsed: boolean
-  /** Whether the sidebar is open on mobile */
-  isMobileOpen: boolean
   /** Current sidebar width in pixels */
   width: number
   /** Toggle collapsed state (desktop) */
   toggleCollapse: () => void
   /** Set collapsed state explicitly */
   setCollapsed: (collapsed: boolean) => void
-  /** Open sidebar on mobile */
-  openMobile: () => void
-  /** Close sidebar on mobile */
-  closeMobile: () => void
-  /** Whether we're on a mobile viewport */
-  isMobile: boolean
   /** Set sidebar width (clamped to min/max) */
   setWidth: (width: number) => void
   /** Reset sidebar width to default */
@@ -50,14 +42,11 @@ interface SidebarContextValue {
 const STORAGE_KEY = 'quilltap.sidebar.collapsed'
 const WIDTH_STORAGE_KEY = 'quilltap.sidebar.width'
 const SECTIONS_STORAGE_KEY = 'quilltap.sidebar.sections.collapsed'
-const MOBILE_BREAKPOINT = 768
 
 const SidebarContext = createContext<SidebarContextValue | null>(null)
 
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const [isCollapsed, setIsCollapsed] = useState(false)
-  const [isMobileOpen, setIsMobileOpen] = useState(false)
-  const [isMobile, setIsMobile] = useState(false)
   const [storageReady, setStorageReady] = useState(false)
   const [width, setWidthState] = useState(DEFAULT_SIDEBAR_WIDTH)
   const [sectionCollapsed, setSectionCollapsed] = useState<Record<string, boolean>>({})
@@ -222,53 +211,6 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('storage', handler)
   }, [])
 
-  // Track viewport width for mobile detection
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-
-    const mediaQuery = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`)
-
-    const updateMobile = () => {
-      const mobile = mediaQuery.matches
-      setIsMobile(mobile)
-      // Close mobile menu when switching to desktop
-      if (!mobile) {
-        setIsMobileOpen(false)
-      }
-    }
-
-    updateMobile()
-    mediaQuery.addEventListener('change', updateMobile)
-    return () => mediaQuery.removeEventListener('change', updateMobile)
-  }, [])
-
-  // Close mobile sidebar when pressing Escape
-  useEffect(() => {
-    if (!isMobileOpen) return
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setIsMobileOpen(false)
-      }
-    }
-
-    window.addEventListener('keydown', handleEscape)
-    return () => window.removeEventListener('keydown', handleEscape)
-  }, [isMobileOpen])
-
-  // Prevent body scroll when mobile sidebar is open
-  useEffect(() => {
-    if (typeof document === 'undefined') return
-    if (isMobileOpen) {
-      document.body.style.overflow = 'hidden'
-    } else {
-      document.body.style.overflow = ''
-    }
-    return () => {
-      document.body.style.overflow = ''
-    }
-  }, [isMobileOpen])
-
   const toggleCollapse = useCallback(() => {
     setIsCollapsed(prev => {
       const next = !prev
@@ -278,14 +220,6 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 
   const setCollapsed = useCallback((collapsed: boolean) => {
     setIsCollapsed(collapsed)
-  }, [])
-
-  const openMobile = useCallback(() => {
-    setIsMobileOpen(true)
-  }, [])
-
-  const closeMobile = useCallback(() => {
-    setIsMobileOpen(false)
   }, [])
 
   const setWidth = useCallback((newWidth: number) => {
@@ -307,19 +241,15 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<SidebarContextValue>(
     () => ({
       isCollapsed,
-      isMobileOpen,
       width,
       toggleCollapse,
       setCollapsed,
-      openMobile,
-      closeMobile,
-      isMobile,
       setWidth,
       resetWidth,
       sectionCollapsed,
       toggleSectionCollapsed,
     }),
-    [isCollapsed, isMobileOpen, width, toggleCollapse, setCollapsed, openMobile, closeMobile, isMobile, setWidth, resetWidth, sectionCollapsed, toggleSectionCollapsed]
+    [isCollapsed, width, toggleCollapse, setCollapsed, setWidth, resetWidth, sectionCollapsed, toggleSectionCollapsed]
   )
 
   return (

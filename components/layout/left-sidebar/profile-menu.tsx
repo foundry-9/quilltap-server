@@ -76,7 +76,7 @@ function ChevronUpIcon({ className }: { className?: string }) {
 
 export function ProfileMenu() {
   const { data: session } = useSession()
-  const { isCollapsed, closeMobile, isMobile } = useSidebar()
+  const { isCollapsed } = useSidebar()
   const router = useRouter()
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -96,13 +96,11 @@ export function ProfileMenu() {
 
   const handleProfileClick = () => {
     setIsOpen(false)
-    if (isMobile) closeMobile()
     router.push('/profile')
   }
 
   const handleAboutClick = () => {
     setIsOpen(false)
-    if (isMobile) closeMobile()
     router.push('/about')
   }
 

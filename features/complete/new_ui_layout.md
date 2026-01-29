@@ -1,8 +1,15 @@
 # Feature: New UI Layout
 
 **Status: Implemented** (2025-12-31)
+**Updated: Removed mobile/phone UI support** (2026-01-29)
 
 In preparation for projects and files, we needed a new layout for the desktop UI.
+
+## Target Viewports
+
+**Minimum supported viewport: 768px (tablet portrait and larger)**
+
+As of 2026-01-29, mobile/phone-specific UI elements have been removed. The app now targets tablet and desktop viewports only.
 
 ## Features of the new layout
 
@@ -11,8 +18,8 @@ In preparation for projects and files, we needed a new layout for the desktop UI
   - Brand logo at top (quill icon when collapsed, full Quilltap logo when expanded) - links to home
   - Button to push to fold sidebar in and out (collapsed state persisted to localStorage)
   - Resizable sidebar width - drag the right edge to resize (256px to 512px range), width persisted to localStorage
-  - Projects (placeholder - "Coming soon")
-  - Files (placeholder - "Coming soon")
+  - Projects
+  - Files
   - Characters (favorites and top-conversation-participants at the top, ends with a link to Characters page)
   - Chats (most recent to less recent, flex-fills screen, at the bottom of the list is a link to Chats page)
   - (At the bottom after Chats list) Settings button - takes you to settings
@@ -23,9 +30,7 @@ In preparation for projects and files, we needed a new layout for the desktop UI
 - Page Toolbar (at top of main content area, not a fixed header)
   - Centered search bar
   - Auto-widen full-screen toggle button
-  - Hamburger menu on mobile to open sidebar overlay
 - Footer (same as before)
-- Mobile: sidebar is an overlay drawer from the left
 
 ## State Persistence
 
@@ -66,7 +71,6 @@ In preparation for projects and files, we needed a new layout for the desktop UI
   - `.qt-left-sidebar-brand` - Brand logo in sidebar header
   - `.qt-app-layout` - Root layout container
   - `.qt-page-toolbar` - Page toolbar (search bar and actions)
-  - `.qt-hamburger` - Mobile hamburger menu button
   - `.qt-app-header-*` - Deprecated header styles (kept for reference)
 
 ### Modified Files

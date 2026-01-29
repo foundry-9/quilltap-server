@@ -754,6 +754,7 @@ function TriStateCheckbox({ state, onChange, label }: Readonly<TriStateCheckboxP
   return (
     <button
       type="button"
+      role="checkbox"
       onClick={(e) => {
         e.stopPropagation()
         onChange()

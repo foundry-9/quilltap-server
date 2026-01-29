@@ -805,17 +805,6 @@ describe('ParticipantSidebar', () => {
       expect(resumeButton).toHaveAttribute('title', 'Resume auto-responses')
     })
 
-    it('applies desktop-only class for responsive behavior', () => {
-      const { container } = render(
-        <ParticipantSidebar
-          {...createDefaultProps()}
-        />
-      )
-
-      const sidebar = container.firstChild
-      expect(sidebar).toHaveClass('qt-desktop-only')
-    })
-
     it('applies custom className when provided', () => {
       const { container } = render(
         <ParticipantSidebar

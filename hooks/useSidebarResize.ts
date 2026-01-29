@@ -23,15 +23,15 @@ interface UseSidebarResizeReturn {
 }
 
 export function useSidebarResize(): UseSidebarResizeReturn {
-  const { width, setWidth, isCollapsed, isMobile } = useSidebar()
+  const { width, setWidth, isCollapsed } = useSidebar()
   const handleRef = useRef<HTMLDivElement | null>(null)
   const [isResizing, setIsResizing] = useState(false)
   const startXRef = useRef(0)
   const startWidthRef = useRef(width)
 
   const startResize = useCallback((e: React.MouseEvent) => {
-    // Don't resize when collapsed or on mobile
-    if (isCollapsed || isMobile) return
+    // Don't resize when collapsed
+    if (isCollapsed) return
 
     e.preventDefault()
     setIsResizing(true)
@@ -40,7 +40,7 @@ export function useSidebarResize(): UseSidebarResizeReturn {
 
     // Add resizing class to body to prevent text selection
     document.body.classList.add('qt-left-sidebar-resizing')
-  }, [isCollapsed, isMobile, width])
+  }, [isCollapsed, width])
 
   useEffect(() => {
     if (!isResizing) return

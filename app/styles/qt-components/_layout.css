@@ -302,13 +302,6 @@
     @apply inline sm:hidden;
   }
 
-  @media (max-width: 479px) {
-    .qt-navbar-menu-item-label-full,
-    .qt-navbar-menu-item-label-short {
-      @apply hidden;
-    }
-  }
-
   /**
    * Compact chip-style navbar buttons (quick-hide tags)
    */
@@ -403,8 +396,7 @@
 
   /**
    * Left sidebar - main app navigation
-   * Desktop: persistent, collapsible
-   * Mobile: off-canvas overlay
+   * Persistent sidebar with collapse/expand functionality
    */
   .qt-left-sidebar {
     @apply flex flex-col h-full;
@@ -696,62 +688,6 @@
   }
 
   /**
-   * Mobile sidebar overlay backdrop
-   */
-  .qt-left-sidebar-overlay {
-    @apply fixed inset-0;
-    background: var(--qt-left-sidebar-overlay-bg);
-    z-index: var(--qt-left-sidebar-overlay-z);
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 300ms ease, visibility 300ms ease;
-  }
-
-  .qt-left-sidebar-overlay-visible {
-    opacity: 1;
-    visibility: visible;
-  }
-
-  /* Mobile: sidebar is off-canvas by default */
-  @media (max-width: 767px) {
-    .qt-left-sidebar {
-      @apply fixed top-0 left-0 bottom-0;
-      transform: translateX(-100%);
-    }
-
-    .qt-left-sidebar-mobile-open {
-      transform: translateX(0);
-    }
-
-    /* Force expanded state on mobile when open */
-    .qt-left-sidebar-mobile-open.qt-left-sidebar-collapsed {
-      width: var(--qt-left-sidebar-width);
-    }
-
-    .qt-left-sidebar-mobile-open.qt-left-sidebar-collapsed .qt-left-sidebar-item-label,
-    .qt-left-sidebar-mobile-open.qt-left-sidebar-collapsed .qt-left-sidebar-section-title,
-    .qt-left-sidebar-mobile-open.qt-left-sidebar-collapsed .qt-left-sidebar-view-all {
-      @apply block;
-    }
-
-    .qt-left-sidebar-mobile-open.qt-left-sidebar-collapsed .qt-left-sidebar-section-header {
-      @apply flex;
-    }
-
-    .qt-left-sidebar-mobile-open.qt-left-sidebar-collapsed .qt-left-sidebar-item {
-      @apply justify-start px-3;
-    }
-  }
-
-  /* Desktop: sidebar is in document flow */
-  @media (min-width: 768px) {
-    .qt-left-sidebar {
-      @apply relative;
-      flex-shrink: 0;
-    }
-  }
-
-  /**
    * Resize handle - draggable edge for width adjustment
    */
   .qt-left-sidebar-resize-handle {
@@ -771,13 +707,6 @@
   /* Hide resize handle when collapsed */
   .qt-left-sidebar-collapsed .qt-left-sidebar-resize-handle {
     @apply hidden;
-  }
-
-  /* Hide resize handle on mobile */
-  @media (max-width: 767px) {
-    .qt-left-sidebar-resize-handle {
-      @apply hidden;
-    }
   }
 
   /* Prevent text selection while resizing */
@@ -866,28 +795,6 @@
 
   .qt-app-header-right {
     @apply flex items-center gap-2;
-  }
-
-  /**
-   * Hamburger menu button (mobile only)
-   */
-  .qt-hamburger {
-    @apply hidden;
-    @apply items-center justify-center;
-    @apply w-10 h-10 rounded-md;
-    @apply transition-colors duration-150;
-    cursor: pointer;
-    color: var(--color-foreground);
-  }
-
-  .qt-hamburger:hover {
-    background: var(--color-muted);
-  }
-
-  @media (max-width: 767px) {
-    .qt-hamburger {
-      @apply flex;
-    }
   }
 
   /* ==========================================================================

@@ -91,10 +91,8 @@ function getChatDisplayName(chat: SidebarChat): string {
  */
 function ProjectChatItem({
   chat,
-  onClick,
 }: {
   chat: SidebarChat
-  onClick: () => void
 }) {
   const displayName = getChatDisplayName(chat)
   const firstParticipant = chat.participants[0]
@@ -105,7 +103,6 @@ function ProjectChatItem({
     <Link
       href={`/chats/${chat.id}`}
       className="qt-left-sidebar-item pl-6"
-      onClick={onClick}
     >
       {avatarSrc ? (
         <img
@@ -133,14 +130,12 @@ function ProjectItem({
   isCollapsed,
   isExpanded,
   onToggleExpand,
-  onItemClick,
   projectChats,
 }: {
   project: SidebarProject
   isCollapsed: boolean
   isExpanded: boolean
   onToggleExpand: () => void
-  onItemClick: () => void
   projectChats: SidebarChat[]
 }) {
   const totalCount = project.chatCount + project.fileCount
@@ -170,7 +165,6 @@ function ProjectItem({
         <Link
           href={`/projects/${project.id}`}
           className="flex items-center gap-2 flex-1 min-w-0"
-          onClick={onItemClick}
           title={isCollapsed ? `${project.name} (${totalCount} items)` : undefined}
         >
           <span className="qt-left-sidebar-item-icon flex-shrink-0">
@@ -199,14 +193,12 @@ function ProjectItem({
             <ProjectChatItem
               key={chat.id}
               chat={chat}
-              onClick={onItemClick}
             />
           ))}
           {projectChats.length > 5 && (
             <Link
               href={`/projects/${project.id}`}
               className="qt-left-sidebar-item pl-6 text-xs text-muted-foreground hover:text-foreground"
-              onClick={onItemClick}
             >
               +{projectChats.length - 5} more...
             </Link>
@@ -218,15 +210,9 @@ function ProjectItem({
 }
 
 export function ProjectsSection() {
-  const { isCollapsed, closeMobile, isMobile, sectionCollapsed, toggleSectionCollapsed } = useSidebar()
+  const { isCollapsed, sectionCollapsed, toggleSectionCollapsed } = useSidebar()
   const { projects, chats, loading } = useSidebarData()
   const { shouldHideByIds } = useQuickHide()
-
-  const handleItemClick = () => {
-    if (isMobile) {
-      closeMobile()
-    }
-  }
 
   // Filter chats by project and apply quick-hide filter
   const getProjectChats = (projectId: string): SidebarChat[] => {
@@ -279,7 +265,6 @@ export function ProjectsSection() {
           isCollapsed={isCollapsed}
           isExpanded={isProjectExpanded(project.id)}
           onToggleExpand={() => handleToggleExpand(project.id)}
-          onItemClick={handleItemClick}
           projectChats={getProjectChats(project.id)}
         />
       ))}
