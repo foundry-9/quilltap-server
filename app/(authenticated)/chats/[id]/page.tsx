@@ -2092,7 +2092,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               renderingPatterns={roleplayRenderingPatterns}
               dialogueDetection={roleplayDialogueDetection}
               shouldShowAvatars={shouldShowAvatars()}
-              onStopClick={stopStreaming}
             />
 
             <div ref={messagesEndRef} />

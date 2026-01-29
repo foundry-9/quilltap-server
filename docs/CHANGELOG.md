@@ -4,6 +4,10 @@
 
 ### 2.8-dev
 
+- fix: Remove duplicate avatar in streaming message indicator (2026-01-29)
+  - Removed leftover mobile header code from StreamingMessage component
+  - Mobile header rendered a second avatar above the quill animation
+  - Cleaned up unused onStopClick prop (stop button exists in ChatComposer)
 - feat: Project-level default tool settings (2026-01-29)
   - Projects can now configure default tool settings that apply to new chats
   - New `defaultDisabledTools` and `defaultDisabledToolGroups` fields on projects
