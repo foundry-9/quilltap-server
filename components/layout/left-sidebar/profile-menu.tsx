@@ -8,7 +8,7 @@
  * @module components/layout/left-sidebar/profile-menu
  */
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from '@/components/providers/session-provider'
 import { useSidebar } from '@/components/providers/sidebar-provider'
@@ -30,27 +30,6 @@ function ProfileIcon({ className }: { className?: string }) {
     >
       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
       <circle cx="12" cy="7" r="4" />
-    </svg>
-  )
-}
-
-/**
- * Sign out icon
- */
-function SignOutIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-      <polyline points="16 17 21 12 16 7" />
-      <line x1="21" y1="12" x2="9" y2="12" />
     </svg>
   )
 }
@@ -102,23 +81,8 @@ export function ProfileMenu() {
   const menuRef = useRef<HTMLDivElement>(null)
 
   const [isOpen, setIsOpen] = useState(false)
-  const [authDisabled, setAuthDisabled] = useState(false)
 
   const user = session?.user
-
-  // Check if auth is disabled
-  useEffect(() => {
-    fetch('/api/v1/auth/status')
-      .then(res => res.json())
-      .then(data => {
-        if (data.authDisabled) {
-          setAuthDisabled(true)
-        }
-      })
-      .catch(() => {
-        // Ignore errors, default to showing sign out
-      })
-  }, [])
 
   // Close menu when clicking outside
   useClickOutside(menuRef, () => setIsOpen(false), {
@@ -140,25 +104,6 @@ export function ProfileMenu() {
     setIsOpen(false)
     if (isMobile) closeMobile()
     router.push('/about')
-  }
-
-  const handleSignOut = async () => {
-    setIsOpen(false)
-    if (isMobile) closeMobile()
-    try {
-      await fetch('/api/v1/auth/logout', {
-        method: 'POST',
-        credentials: 'include',
-      })
-    } catch (error) {
-      console.error('Sign out failed', error)
-    }
-    // Force a full page reload to clear all React state and session data
-    // Using window.location.href instead of router.push ensures:
-    // - All React state is cleared
-    // - SessionProvider re-initializes from scratch
-    // - No stale UI elements remain (sidebar, etc.)
-    window.location.href = '/'
   }
 
   if (!user) {
@@ -223,21 +168,6 @@ export function ProfileMenu() {
               <InfoIcon className="w-4 h-4" />
               About
             </button>
-
-            {/* Divider */}
-            {!authDisabled && <div className="border-t border-border my-1" />}
-
-            {/* Sign out */}
-            {!authDisabled && (
-              <button
-                type="button"
-                onClick={handleSignOut}
-                className="flex items-center gap-3 w-full px-3 py-2 text-sm rounded-md hover:bg-destructive/10 text-destructive transition-colors"
-              >
-                <SignOutIcon className="w-4 h-4" />
-                Sign out
-              </button>
-            )}
           </div>
         </div>
       )}
