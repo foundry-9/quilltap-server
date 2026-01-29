@@ -1,6 +1,6 @@
 # Quilltap API Documentation
 
-Complete API reference for Quilltap v2.7.
+Complete API reference for Quilltap v2.8.
 
 ## Table of Contents
 
@@ -30,10 +30,11 @@ Complete API reference for Quilltap v2.7.
   - [Themes](#themes)
   - [Search](#search)
   - [Plugins](#plugins)
+  - [Projects](#projects)
 
 ## API Versioning
 
-As of v2.7, all core API endpoints use the `/api/v1/` prefix. This enables future versioning as the API evolves.
+As of v2.7+, all core API endpoints use the `/api/v1/` prefix. This enables future versioning as the API evolves.
 
 ### Route Structure
 
@@ -1893,6 +1894,161 @@ Get all installed plugins with metadata.
   }
 }
 ```
+
+---
+
+### Projects
+
+Project management endpoints for organizing chats, files, and characters.
+
+#### `GET /api/v1/projects`
+
+List all projects for the current user.
+
+#### `POST /api/v1/projects`
+
+Create a new project.
+
+**Request Body:**
+```json
+{
+  "name": "My Project",
+  "description": "Optional description",
+  "instructions": "Optional system prompt instructions",
+  "allowAnyCharacter": false
+}
+```
+
+#### `GET /api/v1/projects/[id]`
+
+Get project details with enriched character roster and counts.
+
+#### `PUT /api/v1/projects/[id]`
+
+Update project properties.
+
+**Request Body:**
+```json
+{
+  "name": "Updated Name",
+  "description": "Updated description",
+  "instructions": "Updated instructions",
+  "allowAnyCharacter": true,
+  "color": "#3b82f6",
+  "icon": "folder"
+}
+```
+
+#### `DELETE /api/v1/projects/[id]`
+
+Delete a project. Chats and files are disassociated (not deleted).
+
+#### `POST /api/v1/projects/[id]?action=add-character`
+
+Add a character to the project roster.
+
+**Request Body:**
+```json
+{
+  "characterId": "uuid"
+}
+```
+
+#### `DELETE /api/v1/projects/[id]?action=remove-character`
+
+Remove a character from the project roster.
+
+**Request Body:**
+```json
+{
+  "characterId": "uuid"
+}
+```
+
+#### `GET /api/v1/projects/[id]?action=list-chats`
+
+List chats in the project with pagination.
+
+**Query Parameters:**
+- `limit` - Number of chats to return (default: 20)
+- `offset` - Offset for pagination (default: 0)
+
+#### `POST /api/v1/projects/[id]?action=add-chat`
+
+Associate a chat with the project.
+
+**Request Body:**
+```json
+{
+  "chatId": "uuid"
+}
+```
+
+#### `DELETE /api/v1/projects/[id]?action=remove-chat`
+
+Remove a chat from the project.
+
+**Request Body:**
+```json
+{
+  "chatId": "uuid"
+}
+```
+
+#### `GET /api/v1/projects/[id]?action=get-mount-point`
+
+Get project mount point configuration.
+
+**Response:**
+```json
+{
+  "projectId": "uuid",
+  "mountPointId": "uuid",
+  "currentMountPoint": { "id": "uuid", "name": "Local", "backendType": "local" },
+  "defaultMountPoint": { "id": "uuid", "name": "Local", "backendType": "local" },
+  "effectiveMountPoint": { "id": "uuid", "name": "Local", "backendType": "local" },
+  "fileCount": 5
+}
+```
+
+#### `PUT /api/v1/projects/[id]?action=set-mount-point`
+
+Set project mount point with optional file migration.
+
+**Request Body:**
+```json
+{
+  "mountPointId": "uuid",
+  "migrateFiles": true
+}
+```
+
+#### `DELETE /api/v1/projects/[id]?action=clear-mount-point`
+
+Clear project mount point (use system default).
+
+#### `POST /api/v1/projects/[id]?action=update-tool-settings`
+
+Update default tool settings for new chats in the project.
+
+**Request Body:**
+```json
+{
+  "defaultDisabledTools": ["tool_id_1", "tool_id_2"],
+  "defaultDisabledToolGroups": ["plugin:mcp"]
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "defaultDisabledTools": ["tool_id_1", "tool_id_2"],
+  "defaultDisabledToolGroups": ["plugin:mcp"]
+}
+```
+
+When a new chat is created within a project, it inherits these default tool settings. Existing chats are not affected.
 
 ---
 

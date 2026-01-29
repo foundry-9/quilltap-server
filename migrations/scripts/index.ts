@@ -45,6 +45,8 @@ import { migrateUserPluginsToSiteMigration } from './migrate-user-plugins-to-sit
 import { dropSyncTablesMigration } from './drop-sync-tables';
 // Add tool settings fields to chats
 import { addChatToolSettingsFieldsMigration } from './add-chat-tool-settings-fields';
+// Add default tool settings fields to projects
+import { addProjectToolSettingsFieldsMigration } from './add-project-tool-settings-fields';
 
 /**
  * All available migrations.
@@ -85,6 +87,8 @@ export const migrations: Migration[] = [
   dropSyncTablesMigration,
   // Add tool settings fields to chats
   addChatToolSettingsFieldsMigration,
+  // Add default tool settings fields to projects
+  addProjectToolSettingsFieldsMigration,
 ];
 
 export {
@@ -120,4 +124,6 @@ export {
   dropSyncTablesMigration,
   // Add tool settings fields to chats
   addChatToolSettingsFieldsMigration,
+  // Add default tool settings fields to projects
+  addProjectToolSettingsFieldsMigration,
 };

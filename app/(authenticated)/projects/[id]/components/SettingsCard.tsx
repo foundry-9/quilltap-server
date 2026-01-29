@@ -7,9 +7,10 @@
  * and allow any character toggle.
  */
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { fetchJson } from '@/lib/fetch-helpers'
 import type { Project, EditForm, MountPointInfo } from '../types'
+import { ProjectToolSettingsModal } from '@/components/tools/tool-settings'
 
 interface MountPointData {
   projectId: string
@@ -78,6 +79,33 @@ export function SettingsCard({
   const [mountPointError, setMountPointError] = useState<string | null>(null)
   const [showMigrationConfirm, setShowMigrationConfirm] = useState(false)
   const [pendingMountPointId, setPendingMountPointId] = useState<string | null>(null)
+  const [showToolSettingsModal, setShowToolSettingsModal] = useState(false)
+  const [localDisabledTools, setLocalDisabledTools] = useState<string[]>(project.defaultDisabledTools || [])
+  const [localDisabledToolGroups, setLocalDisabledToolGroups] = useState<string[]>(project.defaultDisabledToolGroups || [])
+
+  // Compute tool summary text
+  const toolSummary = useMemo(() => {
+    const toolCount = localDisabledTools.length
+    const groupCount = localDisabledToolGroups.length
+    if (toolCount === 0 && groupCount === 0) {
+      return 'All tools enabled'
+    }
+    const parts: string[] = []
+    if (toolCount > 0) {
+      parts.push(`${toolCount} tool${toolCount !== 1 ? 's' : ''} disabled`)
+    }
+    if (groupCount > 0) {
+      parts.push(`${groupCount} group${groupCount !== 1 ? 's' : ''} disabled`)
+    }
+    return parts.join(', ')
+  }, [localDisabledTools, localDisabledToolGroups])
+
+  // Handle tool settings save
+  const handleToolSettingsSuccess = useCallback((newDisabledTools: string[], newDisabledToolGroups: string[]) => {
+    setLocalDisabledTools(newDisabledTools)
+    setLocalDisabledToolGroups(newDisabledToolGroups)
+    onProjectUpdate?.()
+  }, [onProjectUpdate])
 
   // Load mount point data
   const loadMountPointData = useCallback(async () => {
@@ -291,8 +319,34 @@ export function SettingsCard({
               />
             </button>
           </div>
+
+          {/* Default Tool Settings */}
+          <div className="flex items-center justify-between p-3 rounded-lg qt-border qt-bg-surface">
+            <div>
+              <h4 className="text-sm font-medium text-foreground">Default Tool Settings</h4>
+              <p className="qt-text-xs qt-text-secondary">
+                {toolSummary}
+              </p>
+            </div>
+            <button
+              onClick={() => setShowToolSettingsModal(true)}
+              className="qt-button qt-button-secondary qt-button-sm"
+            >
+              Configure
+            </button>
+          </div>
         </div>
       )}
+
+      {/* Tool Settings Modal */}
+      <ProjectToolSettingsModal
+        isOpen={showToolSettingsModal}
+        onClose={() => setShowToolSettingsModal(false)}
+        projectId={project.id}
+        disabledTools={localDisabledTools}
+        disabledToolGroups={localDisabledToolGroups}
+        onSuccess={handleToolSettingsSuccess}
+      />
     </div>
   )
 }

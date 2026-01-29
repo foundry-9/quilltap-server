@@ -4,6 +4,16 @@
 
 ### 2.8-dev
 
+- feat: Project-level default tool settings (2026-01-29)
+  - Projects can now configure default tool settings that apply to new chats
+  - New `defaultDisabledTools` and `defaultDisabledToolGroups` fields on projects
+  - Settings Card in project view has new "Default Tool Settings" section with Configure button
+  - ProjectToolSettingsModal allows configuring which tools are enabled by default
+  - New chats in the project inherit these default settings (existing chats unaffected)
+  - API: `POST /api/v1/projects/[id]?action=update-tool-settings` for programmatic access
+  - Tool settings components modularized for reuse (ToolSettingsContent, shared types/utils)
+  - ChatToolSettingsModal refactored to use shared ToolSettingsContent component
+  - Migration `add-project-tool-settings-fields-v1` adds columns to projects table
 - refactor: Remove mobile/phone UI support (2026-01-29)
   - App now targets tablet and desktop viewports only (minimum 768px)
   - Deleted: MobileToolPalette.tsx, MobileParticipantDropdown.tsx

@@ -404,11 +404,23 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       updatedAt: now,
     }));
 
+    // Default tool settings from project (if creating chat within a project)
+    let projectToolDefaults = {
+      disabledTools: [] as string[],
+      disabledToolGroups: [] as string[],
+    };
+
     if (validatedData.projectId) {
       const project = await repos.projects.findById(validatedData.projectId);
       if (!project || project.userId !== user.id) {
         return notFound('Project');
       }
+
+      // Extract default tool settings from project
+      projectToolDefaults = {
+        disabledTools: project.defaultDisabledTools || [],
+        disabledToolGroups: project.defaultDisabledToolGroups || [],
+      };
 
       if (!project.allowAnyCharacter) {
         const characterIds = participantsWithTimestamps
@@ -416,7 +428,8 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
           .map((p) => p.characterId as string);
 
         const newCharacterIds = characterIds.filter((id) => !project.characterRoster.includes(id));
-        if (newCharacterIds.length > 0) {await repos.projects.update(validatedData.projectId, {
+        if (newCharacterIds.length > 0) {
+          await repos.projects.update(validatedData.projectId, {
             characterRoster: [...project.characterRoster, ...newCharacterIds],
           });
         }
@@ -435,6 +448,8 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       lastMessageAt: null,
       lastRenameCheckInterchange: 0,
       projectId: validatedData.projectId || null,
+      disabledTools: projectToolDefaults.disabledTools,
+      disabledToolGroups: projectToolDefaults.disabledToolGroups,
     });
 
     await createInitialMessages(

@@ -76,6 +76,11 @@ const setMountPointSchema = z.object({
   migrateFiles: z.boolean().optional().default(false),
 });
 
+const updateToolSettingsSchema = z.object({
+  defaultDisabledTools: z.array(z.string()),
+  defaultDisabledToolGroups: z.array(z.string()),
+});
+
 // ============================================================================
 // GET Handlers
 // ============================================================================
@@ -813,6 +818,45 @@ async function handleAddFile(req: NextRequest, context: AuthenticatedContext, { 
   }
 }
 
+async function handleUpdateToolSettings(req: NextRequest, context: AuthenticatedContext, { id }: { id: string }) {
+  const { user, repos } = context;
+
+  try {
+    const project = await repos.projects.findById(id);
+    if (!checkOwnership(project, user.id)) {
+      return notFound('Project');
+    }
+
+    const body = await req.json();
+    const { defaultDisabledTools, defaultDisabledToolGroups } = updateToolSettingsSchema.parse(body);
+
+    // Update project with new default tool settings
+    await repos.projects.update(id, {
+      defaultDisabledTools,
+      defaultDisabledToolGroups,
+    });
+
+    logger.info('[Projects v1] Default tool settings updated', {
+      projectId: id,
+      disabledToolsCount: defaultDisabledTools.length,
+      disabledGroupsCount: defaultDisabledToolGroups.length,
+    });
+
+    return successResponse({
+      success: true,
+      defaultDisabledTools,
+      defaultDisabledToolGroups,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return validationError(error);
+    }
+
+    logger.error('[Projects v1] Error updating tool settings', { projectId: id }, error instanceof Error ? error : undefined);
+    return serverError('Failed to update tool settings');
+  }
+}
+
 export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req, context, { id }) => {
   const action = getActionParam(req);
 
@@ -823,6 +867,8 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
       return handleAddChat(req, context, { id });
     case 'add-file':
       return handleAddFile(req, context, { id });
+    case 'update-tool-settings':
+      return handleUpdateToolSettings(req, context, { id });
     default:
       return badRequest('Unknown action or missing action parameter');
   }

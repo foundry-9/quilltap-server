@@ -1,35 +1,35 @@
 'use client'
 
 /**
- * Chat Tool Settings Modal
+ * Project Tool Settings Modal
  *
- * Modal for configuring tool enable/disable settings for a specific chat.
- * Shows availability status for context-dependent tools.
+ * Modal for configuring default tool settings for new chats in a project.
+ * Tools configured here are applied as defaults when creating new chats in the project.
  */
 
 import { useState, useEffect, useCallback } from 'react'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
-import { ToolSettingsContent } from '@/components/tools/tool-settings'
-import type { AvailableTool } from '@/components/tools/tool-settings'
+import { ToolSettingsContent } from './ToolSettingsContent'
+import type { AvailableTool } from './types'
 
-interface ChatToolSettingsModalProps {
+interface ProjectToolSettingsModalProps {
   isOpen: boolean
   onClose: () => void
-  chatId: string
+  projectId: string
   disabledTools: string[]
   disabledToolGroups: string[]
   onSuccess?: (newDisabledTools: string[], newDisabledToolGroups: string[]) => void
 }
 
-export default function ChatToolSettingsModal({
+export function ProjectToolSettingsModal({
   isOpen,
   onClose,
-  chatId,
+  projectId,
   disabledTools,
   disabledToolGroups,
   onSuccess,
-}: Readonly<ChatToolSettingsModalProps>) {
+}: Readonly<ProjectToolSettingsModalProps>) {
   const [availableTools, setAvailableTools] = useState<AvailableTool[]>([])
   const [localDisabledTools, setLocalDisabledTools] = useState<Set<string>>(new Set(disabledTools))
   const [localDisabledGroups, setLocalDisabledGroups] = useState<Set<string>>(new Set(disabledToolGroups))
@@ -43,8 +43,8 @@ export default function ChatToolSettingsModal({
     const fetchTools = async () => {
       setLoading(true)
       try {
-        // Pass chatId to get availability info for context-dependent tools
-        const response = await fetch(`/api/v1/tools?chatId=${encodeURIComponent(chatId)}`)
+        // Fetch tools without chatId - no availability info for project-level settings
+        const response = await fetch('/api/v1/tools')
         if (!response.ok) {
           throw new Error('Failed to fetch tools')
         }
@@ -59,7 +59,7 @@ export default function ChatToolSettingsModal({
     }
 
     fetchTools()
-  }, [isOpen, chatId])
+  }, [isOpen])
 
   // Reset local state when props change
   useEffect(() => {
@@ -71,12 +71,12 @@ export default function ChatToolSettingsModal({
   const handleSave = useCallback(async () => {
     setSaving(true)
     try {
-      const response = await fetch(`/api/v1/chats/${chatId}?action=update-tool-settings`, {
+      const response = await fetch(`/api/v1/projects/${projectId}?action=update-tool-settings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          disabledTools: Array.from(localDisabledTools),
-          disabledToolGroups: Array.from(localDisabledGroups),
+          defaultDisabledTools: Array.from(localDisabledTools),
+          defaultDisabledToolGroups: Array.from(localDisabledGroups),
         }),
       })
 
@@ -85,7 +85,7 @@ export default function ChatToolSettingsModal({
         throw new Error(errorData.error || 'Failed to save tool settings')
       }
 
-      showSuccessToast('Tool settings saved')
+      showSuccessToast('Default tool settings saved')
       onSuccess?.(Array.from(localDisabledTools), Array.from(localDisabledGroups))
       onClose()
     } catch (error) {
@@ -94,7 +94,7 @@ export default function ChatToolSettingsModal({
     } finally {
       setSaving(false)
     }
-  }, [chatId, localDisabledTools, localDisabledGroups, onSuccess, onClose])
+  }, [projectId, localDisabledTools, localDisabledGroups, onSuccess, onClose])
 
   // Check for changes
   const hasChanges = useCallback(() => {
@@ -120,7 +120,7 @@ export default function ChatToolSettingsModal({
     <BaseModal
       isOpen={isOpen}
       onClose={onClose}
-      title="LLM Tool Settings"
+      title="Default Tool Settings"
     >
       <div className="qt-dialog-body">
         <ToolSettingsContent
@@ -129,9 +129,9 @@ export default function ChatToolSettingsModal({
           disabledGroups={localDisabledGroups}
           onDisabledToolsChange={setLocalDisabledTools}
           onDisabledGroupsChange={setLocalDisabledGroups}
-          showAvailability={true}
+          showAvailability={false}
           loading={loading}
-          footerNote="Disabled tools will not be available to the AI for this chat. Changes take effect on the next message."
+          footerNote="Configure which tools are enabled by default for new chats in this project. Existing chats are not affected."
         />
       </div>
 
