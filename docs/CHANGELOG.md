@@ -4,6 +4,13 @@
 
 ### 2.8-dev
 
+- test: Add unit tests for new features and API routes (2026-01-30)
+  - **llm-logging.service.test.ts** (12 tests): LLM logging service behavior, settings checks, error handling
+  - **llm-logs-api.test.ts** (13 tests): LLM logs API routes, filtering, pagination, ownership checks
+  - **tools-api.test.ts** (2 tests): Tools API with built-in tools list and chat-specific availability
+  - **session-api.test.ts** (2 tests): Session API for single-user mode authentication
+  - Extended mock repository container with llmLogs and pluginConfigs support
+  - All tests use relative imports to avoid TypeScript path resolution issues in test environment
 - refactor: Dead code cleanup via knip analysis (2026-01-30)
   - Deleted 21 unused files including old nav components, search service, and obsolete utilities
   - Removed unused dependencies: bcrypt, qrcode, @types/bcrypt, @types/qrcode, ts-jest
