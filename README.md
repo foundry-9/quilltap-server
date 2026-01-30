@@ -7,7 +7,7 @@ A self-hosted AI chat platform that puts you in control. Connect to any LLM prov
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.8.0--dev.62-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.8.0--dev.63-yellow.svg)](package.json)
 
 ## Why Quilltap?
 

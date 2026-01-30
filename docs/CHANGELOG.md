@@ -4,6 +4,15 @@
 
 ### 2.8-dev
 
+- test: Add comprehensive unit tests for 2.8-dev features (2026-01-30)
+  - Created 6 new test files with 146+ unit tests covering new features since 2.7.0
+  - **sillytavern-png-placeholder.test.ts** (21 tests): PNG placeholder generation for character exports
+  - **plugin-upgrader.test.ts** (19 tests): Plugin upgrade system with version comparison logic
+  - **builtin-tools.test.ts** (27 tests): Built-in tool collision detection for MCP plugin
+  - **tool-settings.test.ts** (20 tests): Per-chat and per-project tool settings hierarchies
+  - **theme-system.test.ts** (25 tests): Theme selection with heading fonts and preview generation
+  - **single-user-migration.test.ts** (34 tests): Single-user migration from multi-user mode
+  - All tests passing with comprehensive coverage of business logic and edge cases
 - feat: Implement PNG placeholder generation for SillyTavern character exports (2026-01-30)
   - Characters can now be exported as PNG even without an avatar image
   - Generates colored placeholder PNG based on character name hash
