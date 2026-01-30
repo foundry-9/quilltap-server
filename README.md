@@ -1,132 +1,64 @@
 # Quilltap
 
-A self-hosted AI chat platform that puts you in control. Connect to any LLM provider, organize your work into projects, manage files, and chat with AI characters—all while keeping your data private and under your control.
+**Your AI, your projects, your stories, your partners, your rules.**
 
-<p align="center">
-  <img src="./website/images/welcome-to-quilltap.png" alt="Welcome to Quilltap" />
-</p>
+Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, and anyone who wants an AI assistant that actually knows what they're working on. Connect to any LLM provider, organize your work into projects with persistent files and context, create characters with real personalities, and build a private AI environment that learns and remembers.
+
+No subscriptions. No data harvested. No forgetting everything between sessions.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.8.0--dev.69-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.8.0--dev.70-yellow.svg)](package.json)
 
-## Why Quilltap?
+<p align="center">
+  <img src="./website/images/welcome-to-quilltap-2-8.png" alt="Welcome to Quilltap" />
+</p>
 
-- **Self-hosted & private**: Your conversations, characters, and files stay on your infrastructure
-- **Simple deployment**: Uses SQLite with zero external database dependencies
-- **Provider-agnostic**: Use OpenAI, Anthropic, Google, xAI, Ollama, OpenRouter, or any OpenAI-compatible API
-- **Extensible**: Plugin system for themes, LLM providers, templates, and tools
-- **Organized**: Projects with files, folders, and custom instructions for focused AI conversations
-- **Flexible**: From casual chat to multi-character roleplay to structured work with file access
+---
 
-## Key Features
+## What Quilltap Does
 
-### Multi-Provider Support
+**For fiction writers and worldbuilders:** Organize your notes, characters, and lore into projects. The AI can read your files, search semantically across your worldbuilding, and actually understand the context of what you're creating—not just the last few messages.
 
-Connect to the AI providers you prefer:
+**For roleplayers:** Create detailed AI characters with personalities, backstories, and voices. Run multi-character scenes. Import your SillyTavern characters and chats. Have conversations that feel like collaboration, not customer service.
 
-| Provider | Capabilities |
-| -------- | ------------ |
-| **OpenAI** | GPT-5/5.1, GPT-4o series, tool calling, image generation |
-| **Anthropic** | Claude 4/4.5 (Opus, Sonnet, Haiku), image understanding, tool use |
-| **Google Gemini** | Gemini 2.5 Flash/Pro, multimodal inputs, Imagen 4 image generation |
-| **Grok (xAI)** | Grok 4/4.1 and Grok 3, multimodal, native image generation |
-| **Ollama** | Local models (Llama, Phi, etc.) for offline use |
-| **OpenRouter** | 200+ models, unified API, automatic pricing |
-| **OpenAI-Compatible** | LM Studio, vLLM, Text Generation Web UI, etc. |
+**For everyone else:** Use it as a private AI desktop. Connect to Claude, GPT, Gemini, Grok, or local models through Ollama. Your conversations stay on your machine. The AI builds long-term memory across sessions. You control everything.
 
-### Projects & Files
+---
 
-Organize your work with projects that give AI context about what you're working on:
+## Why Not Just Use Claude or ChatGPT?
 
-- **Project instructions**: Custom system prompts for all chats in a project
-- **File management**: Upload, organize, and let AI read your documents
-- **Folder structure**: Create folders to organize project files
-- **LLM file access**: AI can list, read, and write files with your permission
-- **Syntax highlighting**: Code files display with proper highlighting
-- **PDF support**: PDF.js viewer for document preview
-- **Markdown rendering**: Full GitHub-flavored Markdown with wikilinks
+| What you get with hosted AI | What you get with Quilltap |
+| --------------------------- | -------------------------- |
+| Conversations disappear or get compressed | Persistent memory across all your chats |
+| The AI forgets your project between sessions | Projects with files, folders, and custom instructions |
+| One provider, their pricing, their rules | Connect to any provider—or run models locally |
+| Your data on someone else's servers | Everything stays on your infrastructure |
+| Generic assistant personality | Characters with real voices and personalities |
 
-### LLM Tools
+---
 
-AI assistants can use tools to help you:
+## Why Not SillyTavern?
 
-- **Web search**: Search the web for current information (requires Serper API key)
-- **Memory search**: Find relevant information from past conversations
-- **Image generation**: Create images mid-conversation
-- **File management**: Read/write files in your projects
-- **MCP connector**: Connect to Model Context Protocol servers for additional tools
-- **curl**: Make HTTP requests (configurable allowlist)
-- **Custom tools via plugins**: Extend with your own tools
+SillyTavern is excellent for maximally customized character chat. Quilltap started from a similar place but grew in a different direction:
 
-### Characters & Chat
+- **Project-based organization** — files, folders, semantic search, not just chat logs
+- **LLM file access** — the AI can read and write your project files with permission
+- **Long-term memory** — semantic recall across conversations, not just within them
+- **Structured workflows** — for people who are *making* something, not just chatting
+- **Easier configuration** - more safeguards in place to try to keep things working
 
-- **AI characters**: Create detailed characters with personalities, backstories, and system prompts
-- **User characters**: Represent yourself with your own character profile
-- **Multi-character chats**: Multiple AI characters conversing with turn management
-- **Impersonation**: Take control of any character mid-conversation
-- **Real-time streaming**: See responses as they're generated
-- **Swipes**: Generate alternative responses
-- **Draft persistence**: Unsent messages are saved automatically
-- **SillyTavern import**: Import characters and chats from SillyTavern
+If you're coming from SillyTavern, Quilltap imports your characters and chats directly.
 
-### Memory & Context
+---
 
-- **Long-term memory**: AI remembers important details across conversations
-- **Semantic search**: Find memories by meaning, not just keywords
-- **Context compression**: Automatic summarization for long conversations to reduce costs
-- **Full context reload**: AI can request complete context when needed
-
-### Token Tracking & Cost
-
-- **Per-message tokens**: See input/output tokens for each message
-- **Chat totals**: Track cumulative token usage and estimated cost
-- **OpenRouter pricing**: Automatic cost estimation using real pricing data
-- **System events**: Track background operations (memory extraction, summaries)
-
-### Sync & Backup
-
-- **Multi-instance sync**: Bidirectional sync between Quilltap instances
-- **Native export/import**: Selective .qtap format export with conflict resolution
-- **Cloud backups**: Store backups in S3-compatible storage
-- **SillyTavern format**: Import/export characters and chats
-
-### Image Generation
-
-Create images directly within conversations:
-
-- **Multiple providers**: OpenAI, Google Imagen, Grok, OpenRouter
-- **Prompt expansion**: AI enhances your prompts using character context
-- **Gallery integration**: Generated images saved for reuse
-- **Profile-based**: Configure different settings per provider
-
-### Themes & Customization
-
-- **Theme plugins**: Ocean, Earl Grey, and Rains included
-- **Live switching**: Change themes without reload
-- **Create your own**: npm packages with CSS tokens and fonts
-- **Semantic classes**: qt-* utility classes for consistent theming
-
-### Security (local encryption)
-
-Security ultimately depends mostly on **your own PC or Mac's security.**
-Keep that up to date!
-
-- **Encrypted API keys**: AES-256-GCM encryption
-- **Single-user mode**: Designed for private/local deployments
-- **Multi-user mode**: No longer supported as of 2.8.0
-
-## Getting Started
+## Quick Start
 
 ### Prerequisites
 
-- **Docker and Docker Compose** (recommended)
-- **Node.js 22+** (for local development and hosting)
+- **Docker and Docker Compose** (recommended), or
+- **Node.js 22+** (for local development)
 
-#### Optional Storage
-
-- **S3-compatible storage** (embedded MinIO for development)
-
-### Quick Start with Docker
+### With Docker (Recommended)
 
 ```bash
 # Clone the repository
@@ -135,209 +67,224 @@ cd quilltap
 
 # Configure environment
 cp .env.example .env.local
-# Edit .env.local with your settings (see Configuration below)
 
-# Generate secrets
-openssl rand -base64 32  # For JWT_SECRET
-openssl rand -base64 32  # For ENCRYPTION_MASTER_PEPPER
+# Generate your secrets
+openssl rand -base64 32  # Use this for JWT_SECRET
+openssl rand -base64 32  # Use this for ENCRYPTION_MASTER_PEPPER
 
-# Start with Docker
+# Edit .env.local with your values, then:
 docker-compose up
 ```
 
-The application will be available at `http://localhost:3000`.
+Open `http://localhost:3000` and you're running.
 
-### Configuration
+### Essential Configuration
 
-Create `.env.local` with these essential settings:
+Your `.env.local` needs at minimum:
 
 ```env
-# Required
-BASE_URL="https://localhost:3000"
-ENCRYPTION_MASTER_PEPPER="your-encryption-pepper"
-
-# S3 Storage (embedded MinIO is default)
-S3_MODE="embedded"
-
-# Plugins
-SITE_PLUGINS_ENABLED="all"  # Or comma-separated plugin IDs
-
-# Optional features
-SERPER_API_KEY=""  # For web search tool
-LOG_LEVEL="info"   # error, warn, info, debug
+BASE_URL="http://localhost:3000"
+ENCRYPTION_MASTER_PEPPER="your-generated-pepper-here"
 ```
 
-**Important**: Back up `ENCRYPTION_MASTER_PEPPER`—if lost, all encrypted API keys become unrecoverable.
+**Important:** Back up your `ENCRYPTION_MASTER_PEPPER`. If you lose it, all your encrypted API keys become unrecoverable.
 
-### Local Development
+For production deployment with SSL, see the [Deployment Guide](docs/DEPLOYMENT.md).
 
-```bash
-npm install
+---
 
-# Start dev server
-npm run dev
-```
+## Core Features
 
-## Production Deployment
+### Projects & Files
 
-For production with SSL:
+Organize your work the way your brain works:
 
-```bash
-# Configure .env.production
-cp .env.example .env.production
-# Set BASE_URL to your domain, configure external S3
+- **Project instructions** — Custom system prompts that apply to every chat in a project
+- **File management** — Upload documents, organize into folders, let the AI read them
+- **LLM file access** — AI can list, read, and write files with your permission
+- **Semantic search** — Find things by meaning, not just keywords
+- **Markdown rendering** — Full GitHub-flavored Markdown with wikilink support
+- **Code highlighting** — Syntax highlighting for code files
+- **PDF viewer** — Built-in PDF.js for document preview
 
-# Initialize SSL
-chmod +x docker/init-letsencrypt.sh
-./docker/init-letsencrypt.sh yourdomain.com admin@yourdomain.com
+### Characters & Roleplay
 
-# Start production services
-docker-compose -f docker-compose.prod.yml up -d
-```
+Create AI personalities that feel like collaborators:
 
-See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for detailed production setup including Nginx, cron backups, and monitoring.
+- **AI characters** — Detailed profiles with personality, backstory, and system prompts
+- **User characters** — Represent yourself however you want
+- **Multi-character chats** — Multiple AI characters in one conversation with turn management
+- **Impersonation** — Take control of any character mid-scene
+- **Swipes** — Generate alternative responses when one doesn't land
+- **SillyTavern import** — Bring your existing characters and chats
 
-## Plugin System
+### Memory & Context
 
-Quilltap uses plugins for extensibility:
+An AI that actually remembers:
 
-- **LLM Providers**: Add support for new AI services
-- **Themes**: Custom visual styles
-- **Templates**: Roleplay formatting templates
-- **Tools**: Custom LLM tools
-- **Storage**: File storage backends
+- **Long-term memory** — Important details persist across conversations
+- **Semantic recall** — Find memories by meaning, not exact keywords
+- **Context compression** — Automatic summarization for long conversations
+- **Full context reload** — AI can request complete context when needed
 
-### Installing Plugins
+The key difference here is this: we recommend that you set up at least two AI LLM models and one "embedding" model:
 
-Plugins can be installed from npm via Settings > Plugins.
+1. **The usual chat model** - this is the one that "thinks," that is what you remember as being that special something that makes this AI connect with you
+2. **The cheap model** - this does the housework, what your brain does when you're asleep or thinking about something else. It makes memories, it titles conversations, it explains what's in an image you attached. The cheap LLM is the special sauce that explains why, when you talk to ChatGPT or Claude or whatever, it asks how that meeting went, or whether your lunch was good
+3. **The embedding model** - this is what your AI uses to search for relevant memories
 
-### Creating Plugins
+Memories are stored in the database and keyed to that "character" and their interaction with you. They can search their memories. The searches are semantically linked, so they are more likely to remember relevant things that irrelevant ones.
 
-- [Theme Plugin Development](docs/THEME_PLUGIN_DEVELOPMENT.md)
-- [Template Plugin Development](docs/TEMPLATE_PLUGIN_DEVELOPMENT.md)
-- [Tool Plugin Development](docs/TOOL_PLUGIN_DEVELOPMENT.md)
-- [Provider Plugin Development](docs/PROVIDER_PLUGIN_DEVELOPMENT.md)
-- [Plugin Manifest Reference](docs/PLUGIN_MANIFEST.md)
+### LLM Tools
 
-NPM packages for plugin development:
+Your AI can do more than talk:
 
-- `@quilltap/plugin-types` - TypeScript types
-- `@quilltap/plugin-utils` - Utility functions
-- `@quilltap/theme-storybook` - Storybook preset for themes
-- `create-quilltap-theme` - Theme scaffolding CLI
+- **Web search** — Current information via Serper API
+- **Memory search** — Query past conversations, it naturally remembers things
+- **Image generation** — Create images mid-conversation (OpenAI, Google Imagen, Grok)
+- **File management** — Read/write project files
+- **MCP connector** — Connect to Model Context Protocol servers
+- **Custom tools** — Extend with plugins
+
+---
+
+## Supported Providers
+
+Connect to the AI services you prefer:
+
+| Provider | Models | Notes |
+| ---------- | -------- | ------- |
+| **Anthropic** | Claude 4/4.5 (Opus, Sonnet, Haiku) | Image understanding, tool use |
+| **OpenAI** | GPT-5/5.1, GPT-4o series | Tool calling, GPT-Image/DALL-E |
+| **Google** | Gemini 3/2.5 Flash/Pro | Multimodal, Imagen 4 (Nano Banana), tool use |
+| **xAI** | Grok 4/4.1, Grok 3 | Native image generation |
+| **Ollama** | Llama, Phi, Mistral, etc. | Fully local, offline capable |
+| **OpenRouter** | 200+ models | Unified API, automatic pricing |
+| **OpenAI-Compatible** | LM Studio, vLLM, etc. | Any compatible endpoint |
+
+For best results we recommend Ollama or OpenAI for embedding, a "nano" or "lite" model for the cheap LLM, and Claude, ChatGPT, Gemini, GLM, or DeepSeek for the primary model. OpenRouter can get you access to all of these for pretty good rates - pay one provider and get a lot - but you will probably want to use Ollama as a local embedder if you do that.
+
+---
+
+## Customization
+
+### Themes
+
+Quilltap includes three themes (Ocean, Earl Grey, Rains) and supports custom theme plugins. Switch themes live without reloading.
+
+### Plugins
+
+Extend Quilltap with npm packages:
+
+- **LLM Providers** — Add new AI services, including chat and image generation
+- **Themes** — Custom visual styles
+- **Templates** — Roleplay formatting templates
+- **Tools** — Custom LLM capabilities
+- **Storage** — Alternative file backends
+
+See the plugin development guides:
+
+- [Theme Development](docs/THEME_PLUGIN_DEVELOPMENT.md)
+- [Template Development](docs/TEMPLATE_PLUGIN_DEVELOPMENT.md)
+- [Tool Development](docs/TOOL_PLUGIN_DEVELOPMENT.md)
+- [Provider Development](docs/PROVIDER_PLUGIN_DEVELOPMENT.md)
+
+---
+
+## Data & Backup
+
+### What's stored where
+
+- **Database:** SQLite file (no external database needed)
+- **Files:** Local filesystem or S3-compatible storage
+- **API keys:** AES-256-GCM encrypted
+
+### Backup options
+
+- **Native export** — Selective .qtap format with conflict resolution
+- **Cloud backup** — S3-compatible storage (AWS, MinIO, Cloudflare R2)
+- **Multi-instance sync** — Bidirectional sync between Quilltap installations
+- **SillyTavern format** — Import/export for compatibility
+
+See [Backup & Restore](docs/BACKUP-RESTORE.md) for details.
+
+---
 
 ## Documentation
 
-- [API Reference](docs/API.md) - REST API endpoints
-- [Deployment Guide](docs/DEPLOYMENT.md) - Production setup
-- [Backup & Restore](docs/BACKUP-RESTORE.md) - Data management
-- [Image Generation](docs/IMAGE_GENERATION.md) - Provider configuration
-- [File LLM Access](docs/FILE_LLM_ACCESS.md) - File management tool
-- [Development Guide](DEVELOPMENT.md) - Local development
-- [Changelog](docs/CHANGELOG.md) - Release history
-- [Roadmap](features/ROADMAP.md) - Planned features
+- [Deployment Guide](docs/DEPLOYMENT.md) — Production setup with SSL
+- [API Reference](docs/API.md) — REST endpoints
+- [Image Generation](docs/IMAGE_GENERATION.md) — Provider configuration
+- [File LLM Access](docs/FILE_LLM_ACCESS.md) — How AI reads your files
+- [Development Guide](DEVELOPMENT.md) — Contributing and local dev
+- [Changelog](docs/CHANGELOG.md) — Release history
+- [Roadmap](features/ROADMAP.md) — What's coming
 
-## Tech Stack
-
-- **Framework**: Next.js 16 (App Router) with React 19
-- **Language**: TypeScript 5.6
-- **Database**: SQLite (zero external dependencies)
-- **File Storage**: local or S3-compatible (MinIO, AWS S3, Cloudflare R2)
-- **Encryption**: AES-256-GCM
-- **Styling**: Tailwind CSS 4.1
-- **Container**: Docker + Docker Compose
-- **Testing**: Jest (3400+ tests), Playwright
+---
 
 ## Troubleshooting
 
-### Application won't start
+**Application won't start:**
 
-#### If using Docker
+- Docker: Check `docker ps` and `docker-compose logs -f app`
+- Verify port 3000 isn't in use
+- Confirm `BASE_URL` matches your actual URL
 
-- Check Docker is running: `docker ps`
-- Check logs: `docker-compose logs -f app`
+**Files not displaying (S3/MinIO):**
 
-#### Under any circumstances
-
-- Ensure port 3000 isn't in use
-- Check `BASE_URL` matches your actual URL
-
-### Files not displaying (S3/MinIO only)
-
-- Check S3/MinIO is running and accessible
 - Verify S3 credentials in `.env.local`
-- Check MinIO console at `localhost:9001` if using MinIO
+- Check MinIO console at `localhost:9001` if using embedded MinIO
 
-For more help: [GitHub Issues](https://github.com/foundry-9/quilltap/issues)
+More help: [GitHub Issues](https://github.com/foundry-9/quilltap/issues)
+
+---
+
+## Tech Stack
+
+Next.js 16 (App Router) • React 19 • TypeScript 5.6 • SQLite • Tailwind CSS 4.1 • Docker
+
+3,400+ tests with Jest and Playwright.
+
+---
 
 ## Contributing
 
-Contributions are welcome! Please:
+Contributions welcome. Please open an issue to discuss major changes before submitting a PR.
 
-1. Open an issue to discuss major changes
-2. Fork the repository
-3. Create a feature branch
-4. Submit a pull request
+---
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT License — see [LICENSE](LICENSE)
 
-Copyright (c) 2025, 2026 Foundry-9 LLC
+Copyright © 2025, 2026 Foundry-9 LLC
+
+---
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/foundry-9/quilltap/issues)
-- **Author**: Charles Sebold
-- **Email**: <charles.sebold@foundry-9.com>
-- **Website**: <https://foundry-9.com>
+- **Issues:** [GitHub Issues](https://github.com/foundry-9/quilltap/issues)
+- **Author:** Charles Sebold
+- **Email:** <charles.sebold@foundry-9.com>
+- **Website:** [foundry-9.com](https://foundry-9.com)
 
-## Acknowledgments
+---
+
+<details>
+<summary>**Acknowledgments**</summary>
 
 Built with these excellent open source projects:
 
-### Core Framework
+**Core:** React, Next.js, TypeScript, better-sqlite3
 
-- [React](https://react.dev/) - UI library
-- [Next.js](https://nextjs.org/) - React framework
-- [TypeScript](https://www.typescriptlang.org/) - Type-safe JavaScript
+**AI/LLM:** OpenAI SDK, Anthropic SDK, Google Generative AI SDK, OpenRouter SDK, Model Context Protocol SDK
 
-### Data & Storage
+**UI:** Tailwind CSS, React Markdown, React Syntax Highlighter, PDF.js, sharp
 
-- [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) - Embedded SQLite database with zero external dependencies
+**Infrastructure:** Docker, Nginx, MinIO, AWS SDK
 
-### AI & LLM
+**Testing:** Jest, Playwright, Storybook, Testing Library
 
-- [OpenAI Node SDK](https://github.com/openai/openai-node) - LLM API integration
-- [Anthropic SDK](https://github.com/anthropics/anthropic-sdk-typescript) - Claude integration
-- [OpenRouter SDK](https://github.com/openrouter/sdk) - Multi-provider API
-- [Google Generative AI SDK](https://googleapis.github.io/js-genai/release_docs/index.html)
-- [Model Context Protocol SDK](https://github.com/modelcontextprotocol/sdk) - MCP client
+Special thanks to [SillyTavern](https://github.com/SillyTavern/SillyTavern) for pioneering this space and inspiring character format compatibility.
 
-### UI & Rendering
-
-- [Tailwind CSS](https://tailwindcss.com/) - Utility-first styling
-- [React Markdown](https://github.com/remarkjs/react-markdown) - Markdown rendering
-- [React Syntax Highlighter](https://github.com/react-syntax-highlighter/react-syntax-highlighter) - Code highlighting
-- [PDF.js](https://mozilla.github.io/pdf.js/) - PDF rendering
-- [sharp](https://sharp.pixelplumbing.com/) - Image processing
-
-### Validation & Schema
-
-- [Zod](https://zod.dev/) - TypeScript-first schema validation
-
-### Testing & Development
-
-- [Jest](https://jestjs.io/) - Unit testing
-- [Playwright](https://playwright.dev/) - End-to-end testing
-- [Storybook](https://storybook.js.org/) - Component development
-- [Testing Library](https://testing-library.com/) - React testing utilities
-
-### Infrastructure
-
-- [Docker](https://www.docker.com/) - Containerization
-- [Nginx](https://nginx.org/) - Reverse proxy
-- [MinIO](https://min.io/) - S3-compatible object storage
-- [AWS SDK for JavaScript](https://aws.amazon.com/sdk-for-javascript/) - S3 client
-
-Special thanks to the [SillyTavern](https://github.com/SillyTavern/SillyTavern) project for pioneering this space and inspiring the character format compatibility.
+</details>
