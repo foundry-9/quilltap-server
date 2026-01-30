@@ -189,11 +189,6 @@ export const startupState = {
   setPluginUpgrades(results: UpgradeResults): void {
     const state = getGlobalState();
     state.pluginUpgrades = results;
-    logger.debug('Plugin upgrade results stored', {
-      context: 'startup-state.setPluginUpgrades',
-      upgraded: results.upgraded.length,
-      failed: results.failed.length,
-    });
   },
 
   /**
@@ -209,9 +204,6 @@ export const startupState = {
   markUpgradesNotified(): void {
     const state = getGlobalState();
     state.upgradesNotified = true;
-    logger.debug('Plugin upgrades marked as notified', {
-      context: 'startup-state.markUpgradesNotified',
-    });
   },
 
   /**

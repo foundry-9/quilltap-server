@@ -132,9 +132,6 @@ export async function upgradePlugins(updates: PluginUpdateInfo[]): Promise<Upgra
   };
 
   if (updates.length === 0) {
-    logger.debug('No plugins to upgrade', {
-      context: 'PluginUpgrader.upgradePlugins',
-    });
     return results;
   }
 

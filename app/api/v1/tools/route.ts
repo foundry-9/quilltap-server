@@ -119,13 +119,6 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
           }
 
           chatContext = { hasImageProfile, hasProject, allowsWebSearch };
-
-          logger.debug('[Tools v1] Chat context for availability check', {
-            chatId,
-            hasImageProfile,
-            hasProject,
-            allowsWebSearch,
-          });
         }
       } catch (chatError) {
         logger.warn('[Tools v1] Failed to load chat for availability check', {
@@ -248,15 +241,6 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
         }
       }
     }
-
-    logger.debug('[Tools v1] Listed available tools', {
-      userId: user.id,
-      chatId: chatId || undefined,
-      totalCount: tools.length,
-      builtInCount: BUILT_IN_TOOLS.length,
-      pluginCount: tools.length - BUILT_IN_TOOLS.length,
-      unavailableCount: chatContext ? tools.filter(t => !t.available).length : 0,
-    });
 
     return successResponse({
       tools,

@@ -241,9 +241,8 @@ In development, logs are written to `logs/combined.log` and `logs/error.log`. Us
 8. As much as possible, plugins should be self-contained or use `plugin-types` and `plugin-utils` to access Quilltap internals; even distributed plugins in `plugins/dist/` should use these, since these plugins are models to independent plugin developers
 9. If we updated any packages (in `packages/`), make sure that those are published to npmjs and properly installed in any NPM package.json files that exist throughout the application, including other packages, plugins, and the primary one at the root level
 10. Verify that the backup/restore system includes everything that can be backed up (usually everything but things that are so secret they need to be encrypted, like API keys)
-11. Verify that the sync system will sync everything that is not local-only
-12. Make sure that lint/test/build in Github Actions are working
-13. Check the following Markdown files to be sure they are up-to-date:
+11. Make sure that lint/test/build in Github Actions are working
+12. Check the following Markdown files to be sure they are up-to-date:
     - [README](README.md)
     - [Changelog](docs/CHANGELOG.md)
     - [API Documentation](docs/API.md)

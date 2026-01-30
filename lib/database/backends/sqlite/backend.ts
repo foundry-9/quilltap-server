@@ -521,13 +521,6 @@ export class SQLiteBackend implements DatabaseBackend {
       this.collectionJsonColumns.set(name, jsonColumns);
       this.collectionArrayColumns.set(name, arrayColumns);
       this.collectionBooleanColumns.set(name, booleanColumns);
-
-      logger.info('Ensured collection exists', {
-        table: name,
-        jsonColumns,
-        arrayColumns,
-        booleanColumns,
-      });
     } catch (error) {
       logger.error('Failed to ensure collection', {
         table: name,

@@ -370,12 +370,6 @@ export async function scanPlugins(
   // Scan plugins/site directory (site-wide npm-installed plugins)
   await scanDirectory(PLUGINS_SITE_DIR, true);
 
-  logger.info('Plugin scan complete', {
-    context: 'scanPlugins',
-    found: result.plugins.length,
-    errors: result.errors.length,
-  });
-
   return result;
 }
 

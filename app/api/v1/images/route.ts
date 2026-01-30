@@ -138,8 +138,6 @@ export const GET = createAuthenticatedHandler(async (request, { user, repos }) =
       };
     });
 
-    logger.info('[Images v1] Retrieved image list', { userId: user.id, imageCount: data.length });
-
     return successResponse({ data });
   } catch (error) {
     logger.error('[Images v1] Error fetching images', {}, error instanceof Error ? error : undefined);

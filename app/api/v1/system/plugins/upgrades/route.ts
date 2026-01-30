@@ -24,10 +24,6 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET() {
   try {
-    logger.debug('[Plugin Upgrades v1] GET upgrade notifications requested', {
-      context: 'api.v1.system.plugins.upgrades.GET',
-    });
-
     // Check if server is ready
     if (!startupState.isReady()) {
       return NextResponse.json({
@@ -86,10 +82,6 @@ export async function GET() {
  */
 export async function POST() {
   try {
-    logger.debug('[Plugin Upgrades v1] POST mark upgrades as notified', {
-      context: 'api.v1.system.plugins.upgrades.POST',
-    });
-
     startupState.markUpgradesNotified();
 
     logger.info('[Plugin Upgrades v1] Upgrades marked as notified', {

@@ -34,9 +34,6 @@ export const addDefaultImageProfileFieldMigration: Migration = {
 
     // Check if characters table exists
     if (!sqliteTableExists('characters')) {
-      logger.debug('Characters table does not exist, skipping migration', {
-        context: 'migration.add-default-image-profile-field',
-      });
       return false;
     }
 
@@ -45,9 +42,6 @@ export const addDefaultImageProfileFieldMigration: Migration = {
     const hasColumn = columns.some((col) => col.name === 'defaultImageProfileId');
 
     if (hasColumn) {
-      logger.debug('defaultImageProfileId column already exists', {
-        context: 'migration.add-default-image-profile-field',
-      });
       return false;
     }
 

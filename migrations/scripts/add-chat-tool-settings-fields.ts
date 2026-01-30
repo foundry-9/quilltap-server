@@ -35,9 +35,6 @@ export const addChatToolSettingsFieldsMigration: Migration = {
 
     // Check if chats table exists
     if (!sqliteTableExists('chats')) {
-      logger.debug('Chats table does not exist, skipping migration', {
-        context: 'migration.add-chat-tool-settings-fields',
-      });
       return false;
     }
 
@@ -54,9 +51,6 @@ export const addChatToolSettingsFieldsMigration: Migration = {
       return true;
     }
 
-    logger.debug('All tool settings columns already exist', {
-      context: 'migration.add-chat-tool-settings-fields',
-    });
     return false;
   },
 

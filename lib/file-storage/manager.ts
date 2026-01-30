@@ -182,7 +182,6 @@ class FileStorageManager {
       for (const [id, mountPoint] of this.mountPoints) {
         if (mountPoint.isDefault && !this.defaultMountPointId) {
           this.defaultMountPointId = id;
-          logger.info('Set default mount point', { mountPointId: id });
           break;
         }
       }
@@ -195,11 +194,6 @@ class FileStorageManager {
       }
 
       this.initialized = true;
-      logger.info('File storage manager initialized', {
-        mountPointCount: this.mountPoints.size,
-        backendCount: this.backends.size,
-        defaultMountPointId: this.defaultMountPointId,
-      });
     } catch (error) {
       const errorMsg =
         error instanceof Error ? error.message : 'Unknown initialization error';
@@ -513,10 +507,6 @@ class FileStorageManager {
       for (const mp of mountPoints) {
         this.mountPoints.set(mp.id, mp);
       }
-
-      logger.info('Mount points refreshed', {
-        count: this.mountPoints.size,
-      });
     } catch (error) {
       const errorMsg =
         error instanceof Error ? error.message : 'Unknown database error';
@@ -643,12 +633,6 @@ class FileStorageManager {
       const backend = await this.getBackendForFile(file);
 
       const content = await backend.download(effectiveStorageKey);
-
-      logger.info('File downloaded successfully', {
-        fileId: file.id,
-        userId: file.userId,
-        size: content.length,
-      });
 
       return content;
     } catch (error) {

@@ -88,7 +88,6 @@ export async function initializePlugins(): Promise<PluginInitializationResult> {
  */
 async function performInitialization(): Promise<PluginInitializationResult> {
   const startTime = Date.now();
-  logger.info('Starting plugin system initialization');
 
   const result: PluginInitializationResult = {
     success: false,
@@ -296,24 +295,9 @@ async function performInitialization(): Promise<PluginInitializationResult> {
 
     // Then initialize the registry (handles file-based themes and default theme)
     await initializeThemeRegistry();
-    const themeStats = themeRegistry.getStats();
-    if (themeStats.total > 1) { // More than just the default theme
-      logger.info('Theme plugins initialized', {
-        total: themeStats.total,
-        withDarkMode: themeStats.withDarkMode,
-        withCssOverrides: themeStats.withCssOverrides,
-      });
-    }
 
     // Initialize roleplay template registry from enabled plugins with ROLEPLAY_TEMPLATE capability
     await initializeRoleplayTemplateRegistry();
-    const templateStats = roleplayTemplateRegistry.getStats();
-    if (templateStats.total > 0) {
-      logger.info('Roleplay template plugins initialized', {
-        total: templateStats.total,
-        templates: roleplayTemplateRegistry.getAll().map(t => t.name),
-      });
-    }
 
     // Initialize tool registry from enabled plugins with TOOL_PROVIDER capability
     const toolPlugins = pluginRegistry.getEnabledByCapability('TOOL_PROVIDER');
@@ -346,11 +330,6 @@ async function performInitialization(): Promise<PluginInitializationResult> {
 
       if (tools.length > 0) {
         await initializeToolRegistry(tools);
-        const toolStats = toolRegistry.getStats();
-        logger.info('Tool plugins initialized', {
-          total: toolStats.total,
-          plugins: toolStats.plugins,
-        });
       }
     }
 
@@ -381,17 +360,12 @@ async function performInitialization(): Promise<PluginInitializationResult> {
           });
         }
       }
-
-      logger.info('File backend plugins initialized', {
-        total: fileBackendPlugins.length,
-      });
     }
 
     // Initialize the file storage manager after backend plugins are registered
     // This loads mount points from the database and sets up the default backend
     try {
       await fileStorageManager.initialize();
-      logger.info('File storage manager initialized successfully');
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       logger.error('Failed to initialize file storage manager', { error: errorMsg });

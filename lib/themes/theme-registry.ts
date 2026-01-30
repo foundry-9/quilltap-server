@@ -155,9 +155,6 @@ class ThemeRegistry {
    * Note: Module-based themes should be registered via registerThemeModule() before calling this
    */
   async initialize(): Promise<void> {
-    const startTime = Date.now();
-    logger.info('Initializing theme registry');
-
     // Clear errors but preserve themes registered via registerThemeModule()
     this.state.errors = [];
 
@@ -188,14 +185,6 @@ class ThemeRegistry {
 
     this.state.initialized = true;
     this.state.lastInitTime = new Date();
-
-    const duration = Date.now() - startTime;
-    logger.info('Theme registry initialized', {
-      duration: `${duration}ms`,
-      themeCount: this.state.themes.size,
-      errorCount: this.state.errors.length,
-      themes: Array.from(this.state.themes.keys()),
-    });
   }
 
   /**
@@ -493,14 +482,6 @@ class ThemeRegistry {
 
     // Register the theme
     this.state.themes.set(themeId, loadedTheme);
-
-    logger.info('Theme loaded successfully', {
-      themeId,
-      name: loadedTheme.name,
-      supportsDarkMode: loadedTheme.supportsDarkMode,
-      hasCssOverrides: !!cssOverrides,
-      fontCount: fonts.length,
-    });
   }
 
   // ============================================================================

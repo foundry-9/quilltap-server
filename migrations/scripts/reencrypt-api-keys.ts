@@ -134,12 +134,8 @@ function findOldUserIds(): string[] {
             }
           }
         }
-      } catch (error) {
+      } catch {
         // Directory might not be accessible
-        logger.debug('Could not read users directory', {
-          context: 'migrations.reencrypt-api-keys.findOldUserIds',
-          path: usersDir,
-        });
       }
     }
   }
@@ -170,9 +166,6 @@ export const reencryptApiKeysMigration: Migration = {
     // Find potential old user IDs
     const oldUserIds = findOldUserIds();
     if (oldUserIds.length === 0) {
-      logger.debug('No old user IDs found, skipping re-encryption migration', {
-        context: 'migrations.reencrypt-api-keys.shouldRun',
-      });
       return false;
     }
 
@@ -245,11 +238,6 @@ export const reencryptApiKeysMigration: Migration = {
         // First try to decrypt with SINGLE_USER_ID (already correct)
         const alreadyValid = tryDecrypt(key.ciphertext, key.iv, key.authTag, SINGLE_USER_ID);
         if (alreadyValid !== null) {
-          logger.debug('API key already valid', {
-            context: 'migrations.reencrypt-api-keys.run',
-            keyId: key.id,
-            provider: key.provider,
-          });
           continue;
         }
 

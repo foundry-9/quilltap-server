@@ -140,11 +140,6 @@ const NPM_TIMEOUT = 30000; // 30 seconds for npm queries
  */
 export async function getLatestVersion(packageName: string): Promise<string | null> {
   try {
-    logger.debug('Checking npm for latest version', {
-      context: 'VersionChecker.getLatestVersion',
-      packageName,
-    });
-
     const { stdout, stderr } = await execAsync(
       `npm view ${packageName} version --json`,
       {
@@ -164,12 +159,6 @@ export async function getLatestVersion(packageName: string): Promise<string | nu
 
     // npm view returns the version as a JSON string (e.g., "1.2.3")
     const version = JSON.parse(stdout.trim());
-
-    logger.debug('Found latest version', {
-      context: 'VersionChecker.getLatestVersion',
-      packageName,
-      version,
-    });
 
     return version;
   } catch (error) {
@@ -214,15 +203,8 @@ export async function getLatestVersion(packageName: string): Promise<string | nu
 export async function checkForUpdates(): Promise<PluginUpdateInfo[]> {
   // Check if auto-update is disabled via environment variable
   if (process.env.PLUGIN_AUTO_UPDATE === 'false') {
-    logger.info('Plugin auto-update is disabled via PLUGIN_AUTO_UPDATE=false', {
-      context: 'VersionChecker.checkForUpdates',
-    });
     return [];
   }
-
-  logger.info('Checking for plugin updates', {
-    context: 'VersionChecker.checkForUpdates',
-  });
 
   const updates: PluginUpdateInfo[] = [];
 
@@ -231,17 +213,8 @@ export async function checkForUpdates(): Promise<PluginUpdateInfo[]> {
     const sitePlugins = await getInstalledPlugins('site');
 
     if (sitePlugins.length === 0) {
-      logger.debug('No site plugins installed, skipping update check', {
-        context: 'VersionChecker.checkForUpdates',
-      });
       return [];
     }
-
-    logger.info('Checking updates for site plugins', {
-      context: 'VersionChecker.checkForUpdates',
-      count: sitePlugins.length,
-      plugins: sitePlugins.map(p => p.manifest.name),
-    });
 
     // Check each plugin sequentially to avoid overwhelming npm
     for (const plugin of sitePlugins) {
@@ -251,10 +224,6 @@ export async function checkForUpdates(): Promise<PluginUpdateInfo[]> {
         const latestVersion = await getLatestVersion(packageName);
 
         if (!latestVersion) {
-          logger.debug('Could not fetch latest version for plugin', {
-            context: 'VersionChecker.checkForUpdates',
-            packageName,
-          });
           continue;
         }
 
@@ -276,13 +245,6 @@ export async function checkForUpdates(): Promise<PluginUpdateInfo[]> {
             latestVersion,
             isNonBreaking: updateInfo.isNonBreaking,
           });
-        } else {
-          logger.debug('Plugin is up to date', {
-            context: 'VersionChecker.checkForUpdates',
-            packageName,
-            currentVersion,
-            latestVersion,
-          });
         }
       } catch (error) {
         // Log but continue checking other plugins
@@ -293,14 +255,6 @@ export async function checkForUpdates(): Promise<PluginUpdateInfo[]> {
         });
       }
     }
-
-    logger.info('Plugin update check complete', {
-      context: 'VersionChecker.checkForUpdates',
-      totalChecked: sitePlugins.length,
-      updatesAvailable: updates.length,
-      nonBreakingUpdates: updates.filter(u => u.isNonBreaking).length,
-      breakingUpdates: updates.filter(u => !u.isNonBreaking).length,
-    });
 
     return updates;
   } catch (error) {
@@ -390,18 +344,11 @@ function deriveChangelogUrl(repositoryUrl: string | undefined): string | undefin
  * @returns Array of enhanced plugin update info with metadata
  */
 export async function checkForUpdatesWithMetadata(): Promise<EnhancedPluginUpdateInfo[]> {
-  logger.info('Checking for plugin updates with metadata', {
-    context: 'VersionChecker.checkForUpdatesWithMetadata',
-  });
-
   try {
     // Get basic update info
     const updates = await checkForUpdates();
 
     if (updates.length === 0) {
-      logger.debug('No updates available, returning empty array', {
-        context: 'VersionChecker.checkForUpdatesWithMetadata',
-      });
       return [];
     }
 
@@ -436,22 +383,7 @@ export async function checkForUpdatesWithMetadata(): Promise<EnhancedPluginUpdat
         changelogUrl,
       };
 
-      logger.debug('Enriched update info', {
-        context: 'VersionChecker.checkForUpdatesWithMetadata',
-        packageName: update.packageName,
-        pluginTitle: enhanced.pluginTitle,
-        hasRepository: !!repository,
-        hasChangelog: !!changelogUrl,
-      });
-
       return enhanced;
-    });
-
-    logger.info('Plugin updates check with metadata complete', {
-      context: 'VersionChecker.checkForUpdatesWithMetadata',
-      totalUpdates: enhancedUpdates.length,
-      withRepository: enhancedUpdates.filter(u => u.repository).length,
-      withChangelog: enhancedUpdates.filter(u => u.changelogUrl).length,
     });
 
     return enhancedUpdates;

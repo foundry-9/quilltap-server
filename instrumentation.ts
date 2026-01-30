@@ -212,10 +212,6 @@ export async function register() {
         const { checkForUpdates } = await import('./lib/plugins/version-checker');
         const { upgradePlugins } = await import('./lib/plugins/upgrader');
 
-        logger.info('Checking for plugin updates', {
-          context: 'instrumentation.register',
-        });
-
         const updates = await checkForUpdates();
         const nonBreakingUpdates = updates.filter(u => u.isNonBreaking);
 
@@ -282,13 +278,7 @@ export async function register() {
       const { fileStorageManager } = await import('./lib/file-storage/manager');
       startupState.setPhase('file-storage');
       if (!fileStorageManager.isInitialized()) {
-        logger.info('Initializing file storage manager', {
-          context: 'instrumentation.register',
-        });
         await fileStorageManager.initialize();
-        logger.info('File storage manager initialized', {
-          context: 'instrumentation.register',
-        });
       }
 
       // ================================================================

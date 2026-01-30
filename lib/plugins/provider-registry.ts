@@ -398,10 +398,6 @@ class ProviderRegistry {
    * @param providers Array of provider plugins to register
    */
   async initialize(providers: LLMProviderPlugin[]): Promise<void> {
-    this.logger.info('Initializing provider registry', {
-      providerCount: providers.length,
-    });
-
     // Clear existing state
     this.state.providers.clear();
     this.state.errors.clear();
@@ -423,11 +419,6 @@ class ProviderRegistry {
 
     this.state.initialized = true;
     this.state.lastInitTime = new Date();
-
-    this.logger.info('Provider registry initialized', {
-      registered: this.state.providers.size,
-      errors: this.state.errors.size,
-    });
   }
 
   /**

@@ -4,6 +4,16 @@
 
 ### 2.8-dev
 
+- refactor: Remove excessive logging from codebase (2026-01-30)
+  - Removed all `logger.debug()` calls added since v2.7.0 (31 calls across 12 files)
+  - Removed noisy info-level logs for routine operations that work as expected
+  - API routes: removed success logs for file/image list retrieval, plugin init requests
+  - File storage: removed logs for download success, mount point setup, initialization
+  - Database: removed "Ensured collection exists" that fired 450+ times per session
+  - Plugin system: removed redundant registry init logs (kept top-level summary only)
+  - Plugin updates: removed routine check start/complete logs
+  - Kept all error/warning logs and the final "Plugin system initialized" summary
+  - Significantly reduces log noise in production and development
 - test: Add comprehensive unit tests for 2.8-dev features (2026-01-30)
   - Created 6 new test files with 146+ unit tests covering new features since 2.7.0
   - **sillytavern-png-placeholder.test.ts** (21 tests): PNG placeholder generation for character exports

@@ -115,8 +115,6 @@ export function getRepositories(): RepositoryContainer {
     return cachedRepositories;
   }
 
-  const backend = getDataBackend();
-  logger.info('Initializing backend repositories', { backend });
   cachedRepositories = getDatabaseRepos();
   return cachedRepositories;
 }

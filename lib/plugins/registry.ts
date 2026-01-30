@@ -62,11 +62,6 @@ class PluginRegistry {
    * Initialize the registry with scanned plugins
    */
   async initialize(scanResult: PluginScanResult): Promise<void> {
-    logger.info('Initializing plugin registry', {
-      pluginCount: scanResult.plugins.length,
-      errorCount: scanResult.errors.length,
-    });
-
     // Clear existing state
     this.state.plugins.clear();
     this.state.errors.clear();
@@ -84,11 +79,6 @@ class PluginRegistry {
 
     this.state.initialized = true;
     this.state.lastScanTime = new Date();
-
-    logger.info('Plugin registry initialized', {
-      registered: this.state.plugins.size,
-      errors: this.state.errors.size,
-    });
   }
 
   /**

@@ -173,9 +173,6 @@ export async function buildTools(
   // If disabledTools is undefined (not an array), skip tools entirely for this message
   // This happens when shouldSendTools is false - tools won't be sent at all
   if (disabledTools === undefined) {
-    logger.debug('Skipping tool injection (tool re-injection interval not reached)', {
-      provider: connectionProfile.provider,
-    })
     return { tools: [], modelSupportsNativeTools, useNativeWebSearch }
   }
 
@@ -242,14 +239,6 @@ export async function buildTools(
       )
     })
 
-    if (tools.length !== originalCount) {
-      logger.debug('Filtered disabled tools', {
-        originalCount,
-        filteredCount: tools.length,
-        disabledTools,
-        disabledToolGroups,
-      })
-    }
   }
 
   return { tools, modelSupportsNativeTools, useNativeWebSearch }

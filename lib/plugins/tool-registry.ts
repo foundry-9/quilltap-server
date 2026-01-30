@@ -421,10 +421,6 @@ class ToolRegistry {
    * @param plugins Array of tool plugins to register
    */
   async initialize(plugins: ToolPlugin[]): Promise<void> {
-    this.logger.info('Initializing tool registry', {
-      pluginCount: plugins.length,
-    });
-
     // Clear existing state
     this.state.plugins.clear();
     this.state.errors.clear();
@@ -446,11 +442,6 @@ class ToolRegistry {
 
     this.state.initialized = true;
     this.state.lastInitTime = new Date();
-
-    this.logger.info('Tool registry initialized', {
-      registered: this.state.plugins.size,
-      errors: this.state.errors.size,
-    });
   }
 
   /**

@@ -22,8 +22,6 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST() {
   try {
-    logger.info('[System Plugins v1] Plugin initialization requested via API');
-
     const result = await initializePlugins();
 
     if (!result.success) {
@@ -46,10 +44,6 @@ export async function POST() {
         warnings: result.warnings,
       });
     }
-
-    logger.info('[System Plugins v1] Plugin initialization completed successfully', {
-      stats: result.stats,
-    });
 
     return NextResponse.json({
       success: true,

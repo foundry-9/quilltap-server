@@ -137,8 +137,6 @@ function validateHandlerExists(handlerPath: string): boolean {
  * Gracefully handles missing or invalid handler files by logging errors and continuing
  */
 export function registerPluginRoutes(): void {
-  logger.info('Registering plugin routes');
-
   // Clear existing routes
   pluginRouteRegistry.routes.clear();
 
@@ -192,13 +190,6 @@ export function registerPluginRoutes(): void {
   }
 
   pluginRouteRegistry.initialized = true;
-
-  logger.info('Plugin routes registered', {
-    totalRoutes: totalRoutesRegistered,
-    skippedRoutes: totalRoutesSkipped,
-    uniquePaths: pluginRouteRegistry.routes.size,
-    pluginsProcessed: enabledPlugins.length,
-  });
 
   // Log a summary warning if any routes were skipped
   if (totalRoutesSkipped > 0) {

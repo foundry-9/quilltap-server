@@ -286,20 +286,6 @@ async function processMessage(
           description: project.description,
           instructions: project.instructions,
         }
-        logger.debug('Injecting project context into system prompt', {
-          chatId,
-          projectId: chat.projectId,
-          messageCount,
-          reinjectInterval,
-        })
-      } else {
-        logger.debug('Skipping project context injection (not at interval)', {
-          chatId,
-          projectId: chat.projectId,
-          messageCount,
-          reinjectInterval,
-          nextInjection: reinjectInterval - (messageCount % reinjectInterval),
-        })
       }
     }
   }
@@ -361,23 +347,6 @@ async function processMessage(
   // Clear forceToolsOnNextMessage flag if it was set
   if (toolSettingsChanged) {
     await repos.chats.update(chatId, { forceToolsOnNextMessage: false })
-    logger.debug('Cleared forceToolsOnNextMessage flag', { chatId })
-  }
-
-  if (!shouldSendTools) {
-    logger.debug('Skipping tool injection (not at interval)', {
-      chatId,
-      messageCount: toolMessageCount,
-      reinjectInterval: toolReinjectInterval,
-      nextInjection: toolReinjectInterval - (toolMessageCount % toolReinjectInterval),
-    })
-  } else {
-    logger.debug('Injecting tools with message', {
-      chatId,
-      messageCount: toolMessageCount,
-      reinjectInterval: toolReinjectInterval,
-      forced: toolSettingsChanged,
-    })
   }
 
   // Check for pseudo-tools

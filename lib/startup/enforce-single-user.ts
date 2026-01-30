@@ -52,8 +52,4 @@ Then remove AUTH_DISABLED from your environment or set it to 'true'.
       authDisabled,
     });
   }
-
-  logger.debug('Single-user mode enforcement check passed', {
-    context: 'enforceSingleUserMode',
-  });
 }

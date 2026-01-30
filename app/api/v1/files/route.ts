@@ -59,8 +59,6 @@ export const GET = createAuthenticatedHandler(async (request, { user, repos }) =
     // Sort by createdAt descending
     files.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    logger.info('[Files v1] Retrieved file list', { userId: user.id, fileCount: files.length, filter });
-
     return successResponse({
       files: files.map((file: any) => ({
         id: file.id,

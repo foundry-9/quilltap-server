@@ -119,9 +119,6 @@ class RoleplayTemplateRegistry {
    * Initialize the template registry by loading templates from enabled ROLEPLAY_TEMPLATE plugins
    */
   async initialize(): Promise<void> {
-    const startTime = Date.now();
-    this.logger.info('Initializing roleplay template registry');
-
     // Clear existing state
     this.state.templates.clear();
     this.state.errors = [];
@@ -149,14 +146,6 @@ class RoleplayTemplateRegistry {
 
     this.state.initialized = true;
     this.state.lastInitTime = new Date();
-
-    const duration = Date.now() - startTime;
-    this.logger.info('Roleplay template registry initialized', {
-      duration: `${duration}ms`,
-      templateCount: this.state.templates.size,
-      errorCount: this.state.errors.length,
-      templates: Array.from(this.state.templates.keys()),
-    });
   }
 
   /**
@@ -206,12 +195,6 @@ class RoleplayTemplateRegistry {
 
     // Register the template
     this.state.templates.set(templateId, loadedTemplate);
-
-    this.logger.info('Roleplay template loaded successfully', {
-      templateId,
-      name: loadedTemplate.name,
-      pluginName: plugin.manifest.name,
-    });
   }
 
   // ============================================================================

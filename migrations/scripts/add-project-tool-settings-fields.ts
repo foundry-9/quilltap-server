@@ -36,9 +36,6 @@ export const addProjectToolSettingsFieldsMigration: Migration = {
 
     // Check if projects table exists
     if (!sqliteTableExists('projects')) {
-      logger.debug('Projects table does not exist, skipping migration', {
-        context: 'migration.add-project-tool-settings-fields',
-      });
       return false;
     }
 
@@ -54,9 +51,6 @@ export const addProjectToolSettingsFieldsMigration: Migration = {
       return true;
     }
 
-    logger.debug('All project tool settings columns already exist', {
-      context: 'migration.add-project-tool-settings-fields',
-    });
     return false;
   },
 
