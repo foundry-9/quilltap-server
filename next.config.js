@@ -112,7 +112,7 @@ const nextConfig = {
             return callback(null, `commonjs ${request}`);
           }
           // Exclude native modules from bundling
-          if (request === 'better-sqlite3' || request === 'bcrypt') {
+          if (request === 'better-sqlite3') {
             return callback(null, `commonjs ${request}`);
           }
           callback();

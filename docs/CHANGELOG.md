@@ -4,6 +4,13 @@
 
 ### 2.8-dev
 
+- refactor: Dead code cleanup via knip analysis (2026-01-30)
+  - Deleted 21 unused files including old nav components, search service, and obsolete utilities
+  - Removed unused dependencies: bcrypt, qrcode, @types/bcrypt, @types/qrcode, ts-jest
+  - Added missing dependencies: pdfjs-dist, @testing-library/user-event, jsdom
+  - Deleted obsolete MongoDB scripts (debug-files.ts, consolidate-duplicate-tags.ts)
+  - Added knip.json configuration for ongoing dead code detection
+  - Updated jest.config.ts and next.config.js to remove MongoDB/bcrypt references
 - refactor: Remove excessive logging from codebase (2026-01-30)
   - Removed all `logger.debug()` calls added since v2.7.0 (31 calls across 12 files)
   - Removed noisy info-level logs for routine operations that work as expected
