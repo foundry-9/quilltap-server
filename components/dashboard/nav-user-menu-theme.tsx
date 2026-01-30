@@ -4,13 +4,14 @@
  * Theme Submenu Content
  *
  * Flyout submenu content for theme selection within the user menu.
- * Displays available themes with color previews.
+ * Displays available themes with color previews and heading fonts.
  *
  * @module components/dashboard/nav-user-menu-theme
  */
 
+import { useEffect, useMemo } from 'react'
 import { useTheme, type ThemeSummary } from '@/components/providers/theme-provider'
-import { DEFAULT_THEME_TOKENS } from '@/lib/themes/default-tokens'
+import { DEFAULT_THEME_TOKENS, DEFAULT_TYPOGRAPHY } from '@/lib/themes/default-tokens'
 import type { ColorMode } from '@/lib/themes/types'
 
 // Default theme preview colors - derived from DEFAULT_THEME_TOKENS
@@ -29,11 +30,90 @@ const DEFAULT_PREVIEW_COLORS = {
   },
 }
 
+// Default heading font (Inter/sans-serif)
+const DEFAULT_HEADING_FONT = DEFAULT_TYPOGRAPHY.fontSans
+
+/**
+ * Generate @font-face CSS for a custom font
+ */
+function generateFontFaceCSS(family: string, url: string): string {
+  // Check if URL is a data URL or embedded base64
+  const isDataUrl = url.startsWith('data:')
+  const format = isDataUrl
+    ? url.includes('woff2') ? 'woff2' : 'woff'
+    : url.endsWith('.woff2') ? 'woff2' : 'woff'
+
+  return `
+    @font-face {
+      font-family: '${family}';
+      src: url('${url}') format('${format}');
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+  `
+}
+
+/**
+ * Hook to lazy load custom theme fonts
+ * Injects @font-face CSS for custom fonts when themes are available
+ */
+function useThemeFonts(themes: ThemeSummary[]) {
+  // Collect all custom fonts that need loading
+  const fontsToLoad = useMemo(() => {
+    const fonts: Array<{ family: string; url: string }> = []
+    const seen = new Set<string>()
+
+    for (const theme of themes) {
+      if (theme.headingFont?.url && !seen.has(theme.headingFont.family)) {
+        seen.add(theme.headingFont.family)
+        fonts.push({
+          family: theme.headingFont.family,
+          url: theme.headingFont.url,
+        })
+      }
+    }
+    return fonts
+  }, [themes])
+
+  // Load fonts when component mounts or themes change
+  useEffect(() => {
+    if (fontsToLoad.length === 0) return
+
+    // Generate CSS for all fonts
+    const css = fontsToLoad
+      .map(font => generateFontFaceCSS(font.family, font.url))
+      .join('\n')
+
+    // Create style element
+    const styleId = 'theme-preview-fonts'
+    let styleEl = document.getElementById(styleId) as HTMLStyleElement | null
+
+    if (!styleEl) {
+      styleEl = document.createElement('style')
+      styleEl.id = styleId
+      document.head.appendChild(styleEl)
+    }
+
+    styleEl.textContent = css
+
+    // Cleanup on unmount
+    return () => {
+      const el = document.getElementById(styleId)
+      if (el) {
+        el.remove()
+      }
+    }
+  }, [fontsToLoad])
+}
+
 interface ThemeOptionProps {
   theme: ThemeSummary | null // null = default theme
   isActive: boolean
   onSelect: () => void
   resolvedColorMode: 'light' | 'dark'
+  /** Font family to use for the theme name */
+  headingFontFamily?: string
 }
 
 interface ColorModeOptionProps {
@@ -99,7 +179,7 @@ const COLOR_MODE_OPTIONS: { mode: ColorMode; label: string; icon: React.ReactNod
   },
 ]
 
-function ThemeOption({ theme, isActive, onSelect, resolvedColorMode }: ThemeOptionProps) {
+function ThemeOption({ theme, isActive, onSelect, resolvedColorMode, headingFontFamily }: ThemeOptionProps) {
   const isDefault = theme === null
   const name = isDefault ? 'Default' : theme.name
 
@@ -149,8 +229,11 @@ function ThemeOption({ theme, isActive, onSelect, resolvedColorMode }: ThemeOpti
         />
       </div>
 
-      {/* Theme name */}
-      <span className="text-sm qt-text-primary truncate flex-1">
+      {/* Theme name - displayed in the theme's heading font */}
+      <span
+        className="text-sm qt-text-primary truncate flex-1 font-semibold"
+        style={{ fontFamily: headingFontFamily }}
+      >
         {name}
       </span>
 
@@ -190,6 +273,9 @@ export function NavUserMenuThemeContent({ onThemeSelected }: NavUserMenuThemeCon
   // Ensure availableThemes is always an array
   const themes = Array.isArray(availableThemes) ? availableThemes : []
 
+  // Lazy load custom fonts for theme preview
+  useThemeFonts(themes)
+
   const handleThemeSelect = async (themeId: string | null) => {
     await setTheme(themeId)
     onThemeSelected?.()
@@ -197,6 +283,15 @@ export function NavUserMenuThemeContent({ onThemeSelected }: NavUserMenuThemeCon
 
   const handleColorModeSelect = async (mode: ColorMode) => {
     await setColorMode(mode)
+  }
+
+  // Get heading font family for a theme
+  const getHeadingFontFamily = (theme: ThemeSummary | null): string => {
+    if (theme === null) {
+      // Default theme uses Inter
+      return DEFAULT_HEADING_FONT
+    }
+    return theme.headingFont?.family || DEFAULT_HEADING_FONT
   }
 
   if (isLoading) {
@@ -215,6 +310,7 @@ export function NavUserMenuThemeContent({ onThemeSelected }: NavUserMenuThemeCon
         isActive={activeThemeId === null}
         onSelect={() => handleThemeSelect(null)}
         resolvedColorMode={resolvedColorMode}
+        headingFontFamily={getHeadingFontFamily(null)}
       />
 
       {/* Divider if there are plugin themes */}
@@ -230,6 +326,7 @@ export function NavUserMenuThemeContent({ onThemeSelected }: NavUserMenuThemeCon
           isActive={activeThemeId === theme.id}
           onSelect={() => handleThemeSelect(theme.id)}
           resolvedColorMode={resolvedColorMode}
+          headingFontFamily={getHeadingFontFamily(theme)}
         />
       ))}
 

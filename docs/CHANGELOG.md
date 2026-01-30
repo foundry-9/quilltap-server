@@ -4,6 +4,17 @@
 
 ### 2.8-dev
 
+- feat: Theme selector shows each theme name in its heading font (2026-01-30)
+  - Theme popout menu lazy-loads custom fonts when opened
+  - Each theme name displays in that theme's heading font for preview
+  - Added `headingFont` property to `ThemeSummary` type (family + optional URL)
+  - `getThemeList()` now includes heading font from custom fonts or fontSerif
+  - System fonts (Georgia, Inter, etc.) work immediately; custom fonts load on-demand
+  - Helps users understand each theme represents more than just a color change
+- refactor: Expand homepage character card descriptions to two lines (2026-01-30)
+  - Changed character description from single-line truncate to 2-line with ellipsis
+  - Added `min-h-[2.5rem]` for consistent card heights even with short descriptions
+  - Updated `CARD_HEIGHT_ESTIMATE` from 165px to 185px for grid calculations
 - fix: npm-installed plugins not persisting in Docker (2026-01-29)
   - docker-compose.yml: Added missing volume mount for `/app/plugins/site`
   - docker-compose.prod.yml: Changed from named volume to host-mounted path

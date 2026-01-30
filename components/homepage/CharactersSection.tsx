@@ -15,7 +15,7 @@ import type { CharactersSectionProps } from './types'
 
 // Card dimensions for calculating grid fit
 const CARD_WIDTH_ESTIMATE = 150 // Card max width
-const CARD_HEIGHT_ESTIMATE = 165 // Card height including content
+const CARD_HEIGHT_ESTIMATE = 185 // Card height including 2-line description
 const GRID_GAP = 12 // gap-3 = 0.75rem = 12px
 // Minimum characters to show even if they don't all fit
 const MIN_CHARACTERS = 2

@@ -681,31 +681,70 @@ class ThemeRegistry {
       light: { background: string; primary: string; secondary: string; accent: string };
       dark: { background: string; primary: string; secondary: string; accent: string };
     };
+    headingFont?: {
+      family: string;
+      url?: string;
+    };
   }> {
-    return this.getAll().map(theme => ({
-      id: theme.id,
-      name: theme.name,
-      description: theme.description,
-      supportsDarkMode: theme.supportsDarkMode,
-      previewImage: theme.previewImage,
-      tags: theme.tags,
-      isDefault: theme.isDefault,
-      // Include just the preview colors needed for theme cards
-      previewColors: {
-        light: {
-          background: theme.tokens.colors.light.background,
-          primary: theme.tokens.colors.light.primary,
-          secondary: theme.tokens.colors.light.secondary,
-          accent: theme.tokens.colors.light.accent,
+    return this.getAll().map(theme => {
+      // Determine heading font for preview
+      // Use fontSerif from tokens as the heading font (matches --qt-heading-font in most themes)
+      // For default theme, use fontSans since it uses sans-serif for headings
+      let headingFont: { family: string; url?: string } | undefined;
+
+      // Get the heading font family from tokens
+      const headingFontFamily = theme.isDefault
+        ? theme.tokens.typography?.fontSans
+        : theme.tokens.typography?.fontSerif;
+
+      if (headingFontFamily) {
+        // Extract the primary font name (first in the stack)
+        const primaryFont = headingFontFamily.split(',')[0].trim().replace(/['"]/g, '');
+
+        // Check if this font needs to be loaded (has a matching custom font file)
+        const matchingFont = theme.fonts?.find(f => f.family === primaryFont);
+
+        if (matchingFont) {
+          headingFont = {
+            family: primaryFont,
+            url: matchingFont.isEmbedded && matchingFont.embeddedData
+              ? matchingFont.embeddedData
+              : `/api/themes/fonts/${theme.pluginName}/${matchingFont.src}`,
+          };
+        } else {
+          // System font - no URL needed
+          headingFont = {
+            family: headingFontFamily,
+          };
+        }
+      }
+
+      return {
+        id: theme.id,
+        name: theme.name,
+        description: theme.description,
+        supportsDarkMode: theme.supportsDarkMode,
+        previewImage: theme.previewImage,
+        tags: theme.tags,
+        isDefault: theme.isDefault,
+        // Include just the preview colors needed for theme cards
+        previewColors: {
+          light: {
+            background: theme.tokens.colors.light.background,
+            primary: theme.tokens.colors.light.primary,
+            secondary: theme.tokens.colors.light.secondary,
+            accent: theme.tokens.colors.light.accent,
+          },
+          dark: {
+            background: theme.tokens.colors.dark.background,
+            primary: theme.tokens.colors.dark.primary,
+            secondary: theme.tokens.colors.dark.secondary,
+            accent: theme.tokens.colors.dark.accent,
+          },
         },
-        dark: {
-          background: theme.tokens.colors.dark.background,
-          primary: theme.tokens.colors.dark.primary,
-          secondary: theme.tokens.colors.dark.secondary,
-          accent: theme.tokens.colors.dark.accent,
-        },
-      },
-    }));
+        headingFont,
+      };
+    });
   }
 }
 

@@ -36,11 +36,9 @@ export function CharacterCard({ character }: CharacterCardProps) {
             <p className="qt-card-title truncate">
               {character.name}
             </p>
-            {character.title && (
-              <p className="qt-card-subtitle truncate italic">
-                {character.title}
-              </p>
-            )}
+            <p className="qt-card-subtitle line-clamp-2 italic min-h-[2.5rem]">
+              {character.title || '\u00A0'}
+            </p>
           </div>
         </Link>
         <button
