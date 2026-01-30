@@ -26,16 +26,16 @@ Quilltap uses **SQLite** as its database backend. SQLite provides:
 
 ### Development
 
-Use `docker-compose.sqlite.yml` for local development with SQLite:
+Use `docker-compose.yml` for local development with SQLite:
 ```bash
-docker-compose -f docker-compose.sqlite.yml up
+docker-compose -f docker-compose.yml up
 ```
 
 ### Production
 
-Use `docker-compose.prod-sqlite.yml` for production deployments:
+Use `docker-compose.prod.yml` for production deployments:
 ```bash
-docker-compose -f docker-compose.prod-sqlite.yml up -d
+docker-compose -f docker-compose.prod.yml up -d
 ```
 
 ## Architecture

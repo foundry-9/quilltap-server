@@ -106,18 +106,24 @@ Create images directly within conversations:
 - **Create your own**: npm packages with CSS tokens and fonts
 - **Semantic classes**: qt-* utility classes for consistent theming
 
-### Security
+### Security (local encryption)
+
+Security ultimately depends mostly on **your own PC or Mac's security.**
+Keep that up to date!
 
 - **Encrypted API keys**: AES-256-GCM encryption
 - **Single-user mode**: Designed for private/local deployments
-- **Per-user storage**: Files organized in S3-compatible storage
+- **Multi-user mode**: No longer supported as of 2.8.0
 
 ## Getting Started
 
 ### Prerequisites
 
 - **Docker and Docker Compose** (recommended)
-- **Node.js 22+** (for local development)
+- **Node.js 22+** (for local development and hosting)
+
+#### Optional Storage
+
 - **S3-compatible storage** (embedded MinIO for development)
 
 ### Quick Start with Docker
@@ -136,15 +142,10 @@ openssl rand -base64 32  # For JWT_SECRET
 openssl rand -base64 32  # For ENCRYPTION_MASTER_PEPPER
 
 # Start with Docker
-docker-compose -f docker-compose.sqlite.yml up
+docker-compose up
 ```
 
-The application will be available at `https://localhost:3000`.
-
-This starts:
-
-- **Quilltap** on `https://localhost:3000`
-- **MinIO** (S3 storage) on `localhost:9000` (API) and `localhost:9001` (console)
+The application will be available at `http://localhost:3000`.
 
 ### Configuration
 
@@ -173,11 +174,8 @@ LOG_LEVEL="info"   # error, warn, info, debug
 ```bash
 npm install
 
-# Start MinIO (using Docker) for file storage
-docker-compose -f docker-compose.sqlite.yml up -d minio createbuckets
-
 # Start dev server
-npm run devssl
+npm run dev
 ```
 
 ## Production Deployment
@@ -187,7 +185,7 @@ For production with SSL:
 ```bash
 # Configure .env.production
 cp .env.example .env.production
-# Set BASE_URL to your domain, configure external MongoDB/S3
+# Set BASE_URL to your domain, configure external S3
 
 # Initialize SSL
 chmod +x docker/init-letsencrypt.sh
@@ -244,7 +242,7 @@ NPM packages for plugin development:
 - **Framework**: Next.js 16 (App Router) with React 19
 - **Language**: TypeScript 5.6
 - **Database**: SQLite (zero external dependencies)
-- **File Storage**: S3-compatible (MinIO, AWS S3, Cloudflare R2)
+- **File Storage**: local or S3-compatible (MinIO, AWS S3, Cloudflare R2)
 - **Encryption**: AES-256-GCM
 - **Styling**: Tailwind CSS 4.1
 - **Container**: Docker + Docker Compose
@@ -254,16 +252,21 @@ NPM packages for plugin development:
 
 ### Application won't start
 
+#### If using Docker
+
 - Check Docker is running: `docker ps`
 - Check logs: `docker-compose logs -f app`
+
+#### Under any circumstances
+
 - Ensure port 3000 isn't in use
 - Check `BASE_URL` matches your actual URL
 
-### Files not displaying
+### Files not displaying (S3/MinIO only)
 
 - Check S3/MinIO is running and accessible
 - Verify S3 credentials in `.env.local`
-- Check MinIO console at `localhost:9001`
+- Check MinIO console at `localhost:9001` if using MinIO
 
 For more help: [GitHub Issues](https://github.com/foundry-9/quilltap/issues)
 
@@ -301,20 +304,15 @@ Built with these excellent open source projects:
 
 ### Data & Storage
 
-- [MongoDB](https://www.mongodb.com/) - Document database
-- [MinIO](https://min.io/) - S3-compatible object storage
-- [AWS SDK for JavaScript](https://aws.amazon.com/sdk-for-javascript/) - S3 client
+- [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) - Embedded SQLite database with zero external dependencies
 
 ### AI & LLM
 
 - [OpenAI Node SDK](https://github.com/openai/openai-node) - LLM API integration
 - [Anthropic SDK](https://github.com/anthropics/anthropic-sdk-typescript) - Claude integration
 - [OpenRouter SDK](https://github.com/openrouter/sdk) - Multi-provider API
+- [Google Generative AI SDK](https://googleapis.github.io/js-genai/release_docs/index.html)
 - [Model Context Protocol SDK](https://github.com/modelcontextprotocol/sdk) - MCP client
-
-### Security
-
-- [bcrypt](https://github.com/kelektiv/node.bcrypt.js) - Password hashing for sync API keys
 
 ### UI & Rendering
 
@@ -339,5 +337,7 @@ Built with these excellent open source projects:
 
 - [Docker](https://www.docker.com/) - Containerization
 - [Nginx](https://nginx.org/) - Reverse proxy
+- [MinIO](https://min.io/) - S3-compatible object storage
+- [AWS SDK for JavaScript](https://aws.amazon.com/sdk-for-javascript/) - S3 client
 
 Special thanks to the [SillyTavern](https://github.com/SillyTavern/SillyTavern) project for pioneering this space and inspiring the character format compatibility.

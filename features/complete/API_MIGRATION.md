@@ -1,13 +1,17 @@
 # Plan: Migrate Remaining API Routes to v1
 
+**Status:** Complete
+
 ## Overview
 
-Migrate 159 remaining non-v1 API routes to the consolidated `/api/v1/` structure using action dispatch patterns. This continues the work started with characters, chats, messages, and memories.
+Migrate all non-v1 API routes to the consolidated `/api/v1/` structure using action dispatch patterns.
 
 ## Current State
 
-- **Completed**: Characters, Chats, Messages, Memories (31 routes converted to 410 stubs, v1 equivalents working)
-- **Remaining**: 159 routes across 20+ categories still using legacy patterns
+- **Completed**: All 159 legacy routes have been converted to deprecation stubs pointing to their v1 equivalents
+- **v1 Routes**: 65 route files under `/api/v1/`
+- **Legacy Stubs**: 157 routes converted to `movedToV1()` stubs returning 410 Gone
+- **Intentionally Kept**: 4 routes remain outside v1 (health check, plugin dispatcher, theme asset serving)
 
 ## Migration Strategy
 

@@ -53,13 +53,14 @@ POST /api/v1/chats/[id]?action=regenerate-title  # Regenerate title
 GET /api/v1/characters/[id]?action=export  # Export character
 ```
 
-### Backwards Compatibility
+### Legacy Routes Removed
 
-Legacy routes (without `/v1/` prefix) are deprecated but still functional. They return:
-- `Deprecation` header with sunset date
-- `Link` header pointing to migration docs
+As of v2.8, legacy routes (without `/v1/` prefix) have been removed. Only `/api/v1/` routes are supported.
 
-Legacy routes will be removed after 2026-04-15.
+A few non-v1 routes remain for specific purposes:
+- `/api/health` - Health check endpoint
+- `/api/plugin-routes/[...path]` - Plugin route dispatcher
+- `/api/themes/*` - Theme asset serving
 
 ## Authentication
 
@@ -440,29 +441,29 @@ Send a test message using a profile.
 
 ### Embedding Profiles
 
-#### `GET /api/embedding-profiles`
+#### `GET /api/v1/embedding-profiles`
 
 List embedding profiles.
 
-#### `POST /api/embedding-profiles`
+#### `POST /api/v1/embedding-profiles`
 
 Create an embedding profile.
 
 **Supported Providers**: `OPENAI`, `OLLAMA`, `OPENROUTER`
 
-#### `GET /api/embedding-profiles/[id]`
+#### `GET /api/v1/embedding-profiles/[id]`
 
 Get a specific embedding profile.
 
-#### `PUT /api/embedding-profiles/[id]`
+#### `PUT /api/v1/embedding-profiles/[id]`
 
 Update an embedding profile.
 
-#### `DELETE /api/embedding-profiles/[id]`
+#### `DELETE /api/v1/embedding-profiles/[id]`
 
 Delete an embedding profile.
 
-#### `GET /api/embedding-profiles/models`
+#### `GET /api/v1/embedding-profiles/models`
 
 Get available embedding models for a provider.
 
@@ -1289,11 +1290,11 @@ Generate embeddings for memories missing them.
 
 ### Tags
 
-#### `GET /api/tags`
+#### `GET /api/v1/tags`
 
 List all tags.
 
-#### `POST /api/tags`
+#### `POST /api/v1/tags`
 
 Create a tag.
 
@@ -1307,15 +1308,15 @@ Create a tag.
 }
 ```
 
-#### `GET /api/tags/[id]`
+#### `GET /api/v1/tags/[id]`
 
 Get a specific tag.
 
-#### `PUT /api/tags/[id]`
+#### `PUT /api/v1/tags/[id]`
 
 Update a tag.
 
-#### `DELETE /api/tags/[id]`
+#### `DELETE /api/v1/tags/[id]`
 
 Delete a tag.
 
@@ -1481,13 +1482,13 @@ Delete an empty folder. Returns error if folder contains files or subfolders.
 
 User-created system prompt templates.
 
-- `GET /api/prompt-templates` - List templates
-- `POST /api/prompt-templates` - Create template
-- `GET /api/prompt-templates/[id]` - Get template
-- `PUT /api/prompt-templates/[id]` - Update template
-- `DELETE /api/prompt-templates/[id]` - Delete template
+- `GET /api/v1/prompt-templates` - List templates
+- `POST /api/v1/prompt-templates` - Create template
+- `GET /api/v1/prompt-templates/[id]` - Get template
+- `PUT /api/v1/prompt-templates/[id]` - Update template
+- `DELETE /api/v1/prompt-templates/[id]` - Delete template
 
-#### `GET /api/sample-prompts`
+#### `GET /api/v1/sample-prompts`
 
 Get built-in sample prompts (read-only, can be imported).
 
@@ -1495,11 +1496,11 @@ Get built-in sample prompts (read-only, can be imported).
 
 Per-chat roleplay formatting templates.
 
-- `GET /api/roleplay-templates` - List templates
-- `POST /api/roleplay-templates` - Create template
-- `GET /api/roleplay-templates/[id]` - Get template
-- `PUT /api/roleplay-templates/[id]` - Update template
-- `DELETE /api/roleplay-templates/[id]` - Delete template
+- `GET /api/v1/roleplay-templates` - List templates
+- `POST /api/v1/roleplay-templates` - Create template
+- `GET /api/v1/roleplay-templates/[id]` - Get template
+- `PUT /api/v1/roleplay-templates/[id]` - Update template
+- `DELETE /api/v1/roleplay-templates/[id]` - Delete template
 
 ---
 
@@ -1685,7 +1686,7 @@ Update theme preference.
 
 ### Search
 
-#### `GET /api/search?q=query`
+#### `GET /api/v1/search?q=query`
 
 Global search across characters and chats.
 
@@ -2120,9 +2121,9 @@ characters = data['characters']
 
 ## Versioning
 
-Current API version: **v2.7**
+Current API version: **v2.8**
 
-All core endpoints now use the `/api/v1/` prefix. Legacy routes (without prefix) are deprecated and will be removed after 2026-04-15.
+All core endpoints use the `/api/v1/` prefix. Legacy routes (without prefix) were removed in v2.8.
 
 The API follows semantic versioning. Breaking changes are avoided where possible.
 

@@ -26,7 +26,6 @@ const {
   deprecatedRedirect,
   withDeprecationHeaders,
   buildRedirectUrl,
-  movedToV1,
   V1_MIGRATION_DEPRECATION,
 } = require('@/lib/api/responses');
 
@@ -513,46 +512,6 @@ describe('API Response Helpers', () => {
       expect(url).toContain('userId=456');
       expect(url).not.toContain('token');
       expect(url).not.toContain('id=123');
-    });
-  });
-
-  describe('movedToV1', () => {
-    it('should create 410 Gone response', async () => {
-      const response = movedToV1('/api/v1/characters');
-      expect(response.status).toBe(410);
-      
-      const body = await response.json();
-      expect(body.error).toBe('Endpoint removed');
-    });
-
-    it('should include new endpoint in message', async () => {
-      const response = movedToV1('/api/v1/characters');
-      const body = await response.json();
-      
-      expect(body.details.message).toContain('/api/v1/characters');
-      expect(body.details.newEndpoint).toBe('/api/v1/characters');
-    });
-
-    it('should include action hint when provided', async () => {
-      const response = movedToV1('/api/v1/characters/[id]', 'action=favorite');
-      const body = await response.json();
-      
-      expect(body.details.message).toContain('action=favorite');
-      expect(body.details.actionHint).toBe('action=favorite');
-    });
-
-    it('should include documentation link', async () => {
-      const response = movedToV1('/api/v1/new');
-      const body = await response.json();
-      
-      expect(body.details.documentation).toBe('/docs/api-v1-migration');
-    });
-
-    it('should have null actionHint when not provided', async () => {
-      const response = movedToV1('/api/v1/new');
-      const body = await response.json();
-      
-      expect(body.details.actionHint).toBeNull();
     });
   });
 

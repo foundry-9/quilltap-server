@@ -4,6 +4,12 @@
 
 ### 2.8-dev
 
+- refactor: Remove legacy API routes (2026-01-30)
+  - Deleted 157 deprecated API route stubs that were returning 410 Gone
+  - All API access now exclusively through `/api/v1/` endpoints
+  - Removed `movedToV1()` helper function (no longer needed)
+  - Deleted 16 test files that were testing stub behavior
+  - Non-v1 routes retained: `/api/health`, `/api/plugin-routes/[...path]`, `/api/themes/*`
 - feat: Google plugin native tool support and Gemini 3 improvements (2026-01-30)
   - Implemented native `functionResponse` tool result format (previously used text-based fallback)
   - Added `thinkingBudget: 4096` configuration for Gemini 3 thinking models to prevent empty responses

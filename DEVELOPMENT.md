@@ -29,7 +29,6 @@ quilltap/
 │   ├── chat/                 # Chat logic (context-manager, turn-manager, tool execution)
 │   ├── llm/                  # LLM utilities (formatting, pricing, streaming)
 │   ├── memory/               # Memory and embedding logic
-│   ├── mongodb/              # MongoDB repositories and connection
 │   ├── plugins/              # Plugin registry and loader
 │   ├── s3/                   # S3 storage utilities
 │   ├── sillytavern/          # SillyTavern import/export
@@ -86,7 +85,7 @@ npm install
 npm run build:plugins
 
 # Start MinIO via Docker (recommended for file storage)
-docker-compose -f docker-compose.sqlite.yml up -d minio createbuckets
+docker-compose -f docker-compose.yml up -d minio createbuckets
 
 # Start the development server with HTTPS
 npm run devssl
@@ -101,10 +100,10 @@ The application will be available at [https://localhost:3000](https://localhost:
 
 ```bash
 # Start everything (app + MinIO + SQLite)
-docker-compose -f docker-compose.sqlite.yml up
+docker-compose -f docker-compose.yml up
 
 # View logs
-docker-compose -f docker-compose.sqlite.yml logs -f app
+docker-compose -f docker-compose.yml logs -f app
 ```
 
 ### Testing

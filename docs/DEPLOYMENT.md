@@ -465,22 +465,22 @@ docker compose -f docker-compose.prod.yml \
 
 BACKUP_DIR="/home/quilltap/backups"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-MONGODB_URI="mongodb://localhost:27017/quilltap"
+SQLITE_PATH="/app/quilltap/data/quilltap.db"
 
 # Create backup directory
 mkdir -p "$BACKUP_DIR"
 
-# Backup MongoDB
-mongodump --uri="$MONGODB_URI" --out="$BACKUP_DIR/mongo_$TIMESTAMP"
-tar -czf "$BACKUP_DIR/quilltap_mongo_$TIMESTAMP.tar.gz" \
-  -C "$BACKUP_DIR" "mongo_$TIMESTAMP"
-rm -rf "$BACKUP_DIR/mongo_$TIMESTAMP"
+# Backup SQLite database
+cp "$SQLITE_PATH" "$BACKUP_DIR/quilltap_$TIMESTAMP.db"
+tar -czf "$BACKUP_DIR/quilltap_$TIMESTAMP.db.tar.gz" \
+  -C "$BACKUP_DIR" "quilltap_$TIMESTAMP.db"
+rm "$BACKUP_DIR/quilltap_$TIMESTAMP.db"
 
 # Backup S3 files (if using MinIO locally)
 # mc mirror myminio/quilltap-files "$BACKUP_DIR/s3_$TIMESTAMP"
 
 # Keep only last 7 days
-find "$BACKUP_DIR" -name "quilltap_*.tar.gz" -mtime +7 -delete
+find "$BACKUP_DIR" -name "quilltap_*.db.tar.gz" -mtime +7 -delete
 
 # Log backup
 echo "$(date): Backup completed: $TIMESTAMP" >> "$BACKUP_DIR/backup.log"
@@ -517,13 +517,13 @@ gsutil cp "$BACKUP_FILE" gs://my-backups/quilltap/
 
 ```bash
 # List recent backups
-ls -lh ~/backups/quilltap_*.tar.gz | tail -10
+ls -lh ~/backups/quilltap_*.db.tar.gz | tail -10
 
-# Verify MongoDB backup integrity
-tar -tzf ~/backups/quilltap_mongo_20250120_120000.tar.gz | head
+# Verify SQLite backup integrity
+tar -tzf ~/backups/quilltap_20250120_120000.db.tar.gz | head
 
 # Check backup size
-du -h ~/backups/quilltap_*.tar.gz
+du -h ~/backups/quilltap_*.db.tar.gz
 ```
 
 See [Backup & Restore Guide](BACKUP-RESTORE.md) for detailed procedures.
@@ -743,4 +743,4 @@ No additional tuning usually needed.
 - [ ] JWT_SECRET is strong (32+ characters)
 - [ ] No Quilltap sensitive files in version control
 
-That's it! Your Quilltap instance is now running securely in production with MongoDB and S3-compatible storage.
+That's it! Your Quilltap instance is now running securely in production with SQLite and S3-compatible storage.

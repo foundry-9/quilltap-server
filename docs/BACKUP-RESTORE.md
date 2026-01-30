@@ -72,7 +72,7 @@ curl -X POST https://your-quilltap/api/tools/backup/restore \
 
 ## Manual Backup Procedures
 
-For server administrators who need direct database access or want additional backup strategies:
+For server administrators who need direct database access or want additional backup strategies involving SQLite:
 
 ## Data Structure
 
@@ -410,7 +410,7 @@ echo "Validation complete"
 Usage:
 
 ```bash
-bash backup-validate.sh quilltap-mongo.gz
+bash backup-validate.sh quilltap-20250120_120000.db.tar.gz
 ```
 
 ### Alert on Missing Backups
@@ -421,7 +421,7 @@ bash backup-validate.sh quilltap-mongo.gz
 BACKUP_DIR="/backups/quilltap"
 MAX_AGE_DAYS=2
 
-LATEST=$(ls -t "$BACKUP_DIR"/quilltap_mongo_*.gz 2>/dev/null | head -1)
+LATEST=$(ls -t "$BACKUP_DIR"/quilltap_*.db.tar.gz 2>/dev/null | head -1)
 
 if [ -z "$LATEST" ]; then
   echo "ERROR: No backups found in $BACKUP_DIR"
@@ -463,7 +463,7 @@ echo "Latest backup is current: $AGE days old"
 1. **Verify you have the backup:**
 
    ```bash
-   ls -lh /backups/quilltap/quilltap_mongo_*.gz | tail -3
+   ls -lh /backups/quilltap/quilltap_*.db.tar.gz | tail -3
    ```
 
 2. **Stop the application:**
@@ -515,8 +515,8 @@ echo "Latest backup is current: $AGE days old"
 # Implement retention policy
 BACKUP_DIR="/backups/quilltap"
 
-# Delete MongoDB backups older than 7 days
-find "$BACKUP_DIR" -name "quilltap_mongo_*.gz" -mtime +7 -delete
+# Delete SQLite backups older than 7 days
+find "$BACKUP_DIR" -name "quilltap_*.db.tar.gz" -mtime +7 -delete
 
 # Verify deletion
 ls -lh "$BACKUP_DIR"
@@ -527,7 +527,7 @@ ls -lh "$BACKUP_DIR"
 ```bash
 # Log all backup operations
 echo "$(date): Backup started" >> $BACKUP_DIR/backup.log
-mongodump --uri="$MONGODB_URI" --archive="$BACKUP_FILE" --gzip >> $BACKUP_DIR/backup.log 2>&1
+cp "$SQLITE_PATH" "$BACKUP_FILE" >> $BACKUP_DIR/backup.log 2>&1
 echo "$(date): Backup completed. Size: $(du -h $BACKUP_FILE)" >> $BACKUP_DIR/backup.log
 ```
 
