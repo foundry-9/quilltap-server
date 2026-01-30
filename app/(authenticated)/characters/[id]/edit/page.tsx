@@ -191,7 +191,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
 
           {/* Title and AI Wizard Button */}
           <div className="flex-1 flex items-center justify-between">
-            <h1 className="text-3xl font-bold text-foreground">
+            <h1 className="qt-heading-1">
               Edit: {character?.name || 'Loading...'}
             </h1>
             <button

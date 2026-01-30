@@ -4,6 +4,20 @@
 
 ### 2.8-dev
 
+- refactor: Code quality improvements and qt-* class migration (2026-01-30)
+  - Removed dead code: empty if blocks in `background-jobs.repository.ts` (update/delete methods)
+  - Removed dead code: empty if block in `app/api/v1/chats/route.ts` (redundant excludeTagIds check)
+  - Removed dead code: unused `collection` variable in `getStats()` method
+  - Converted settings page to use qt-* semantic classes (qt-heading-1, qt-text-muted, qt-link)
+  - Converted tools page to use qt-* semantic classes
+  - Converted about page to use qt-* semantic classes
+  - Converted profile page heading to qt-heading-1
+  - Converted character edit/new pages to use qt-heading-1
+  - Converted WelcomeSection heading to qt-heading-1
+  - Converted RenameReplaceTab to use qt-text-muted instead of raw Tailwind color classes
+  - Converted CreateProjectDialog to use `qt-*` classes (qt-dialog-overlay, qt-dialog, qt-input, qt-textarea, qt-button-*)
+  - Updated API.md: removed "PNG not yet implemented" note (PNG export is implemented)
+  - Updated homepage-components.test.tsx to expect qt-heading-1 class
 - test: Add unit tests for new features and API routes (2026-01-30)
   - **llm-logging.service.test.ts** (12 tests): LLM logging service behavior, settings checks, error handling
   - **llm-logs-api.test.ts** (13 tests): LLM logs API routes, filtering, pagination, ownership checks

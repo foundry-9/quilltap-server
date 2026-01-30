@@ -236,10 +236,6 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
   async update(id: string, data: Partial<BackgroundJob>): Promise<BackgroundJob | null> {
     try {
       const result = await this._update(id, data);
-
-      if (result) {
-      }
-
       return result;
     } catch (error) {
       logger.error('Error updating background job', {
@@ -366,10 +362,6 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
   async delete(id: string): Promise<boolean> {
     try {
       const result = await this._delete(id);
-
-      if (result) {
-      }
-
       return result;
     } catch (error) {
       logger.error('Error deleting background job', {
@@ -385,11 +377,8 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
    */
   async getStats(userId?: string): Promise<QueueStats> {
     try {
-      const collection = await this.getCollection();
-
-      // For aggregation queries, we need to use the raw query capability
       // Since the abstraction layer may not support full aggregation pipelines,
-      // we'll fetch all items and aggregate in JavaScript
+      // we fetch all items and aggregate in JavaScript
       const filter = userId ? ({ userId } as QueryFilter) : {};
       const jobs = await this.findByFilter(filter);
 

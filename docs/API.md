@@ -700,10 +700,10 @@ Delete a character.
 
 #### `GET /api/v1/characters/[id]?action=export`
 
-Export character as SillyTavern-compatible JSON.
+Export character in SillyTavern-compatible format.
 
 **Query Parameters**:
-- `format=json|png` - Export format (PNG not yet implemented)
+- `format=json|png` - Export format (JSON for data, PNG for character card image)
 
 #### `POST /api/v1/characters/[id]?action=favorite`
 

@@ -359,8 +359,6 @@ async function handleList(req: NextRequest, context: AuthenticatedContext) {
     const enrichedChats = await enrichChatsForList(chatMetadata, repos);
     let filteredChats = filterChatsByExcludedTags(enrichedChats, excludeTagIds);
 
-    if (excludeTagIds.length > 0) {}
-
     if (limit && limit > 0) {
       filteredChats = filteredChats.slice(0, limit);
     }

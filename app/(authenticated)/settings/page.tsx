@@ -149,8 +149,8 @@ export default function SettingsPage() {
   return (
     <div className="qt-page-container">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold">Settings</h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-2">Manage your API keys, connection profiles, and plugins</p>
+        <h1 className="qt-heading-1">Settings</h1>
+        <p className="qt-text-muted mt-2">Manage your API keys, connection profiles, and plugins</p>
       </div>
 
       {/* Tabs */}
@@ -160,10 +160,7 @@ export default function SettingsPage() {
 
       {/* Back Link */}
       <div className="mt-8">
-        <Link
-          href="/"
-          className="text-blue-600 dark:text-blue-400 hover:underline"
-        >
+        <Link href="/" className="qt-link">
           ← Back to Home
         </Link>
       </div>

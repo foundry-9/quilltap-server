@@ -81,7 +81,7 @@ export default function ProfilePage() {
         >
           ← Back to Home
         </Link>
-        <h1 className="text-3xl font-bold">Profile</h1>
+        <h1 className="qt-heading-1">Profile</h1>
         <p className="qt-text-muted mt-2">
           Manage your profile settings
         </p>

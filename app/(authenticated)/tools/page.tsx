@@ -14,8 +14,8 @@ export default function ToolsPage() {
     <div className="qt-page-container">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold">Tools</h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-2">Utility tools for managing your <BrandName /> data</p>
+        <h1 className="qt-heading-1">Tools</h1>
+        <p className="qt-text-muted mt-2">Utility tools for managing your <BrandName /> data</p>
       </div>
 
       {/* Tool Cards Grid */}
@@ -30,10 +30,7 @@ export default function ToolsPage() {
 
       {/* Back Link */}
       <div className="mt-8">
-        <Link
-          href="/"
-          className="text-blue-600 dark:text-blue-400 hover:underline"
-        >
+        <Link href="/" className="qt-link">
           ← Back to Home
         </Link>
       </div>

@@ -216,7 +216,7 @@ describe('WelcomeSection', () => {
   it('renders h1 with correct classes', () => {
     const { container } = render(<WelcomeSection displayName="John" />)
     const h1 = container.querySelector('h1')
-    expect(h1).toHaveClass('text-3xl', 'font-bold', 'mb-2')
+    expect(h1).toHaveClass('qt-heading-1', 'mb-2')
   })
 
   it('renders paragraph with muted foreground class', () => {
