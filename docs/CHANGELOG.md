@@ -4,6 +4,31 @@
 
 ### 2.8-dev
 
+- feat: Google plugin native tool support and Gemini 3 improvements (2026-01-30)
+  - Implemented native `functionResponse` tool result format (previously used text-based fallback)
+  - Added `thinkingBudget: 4096` configuration for Gemini 3 thinking models to prevent empty responses
+  - Recognized `gemini-pro-latest` as Gemini 3 (a thinking model requiring special handling)
+  - Added model metadata warnings for gemini-pro-latest, gemini-1.5 models, and Gemini 2.0 deprecation
+  - Updated tool-executor.ts to return native tool format for Google provider
+  - Updated qtap-plugin-google to v1.1.3
+- feat: Migrate Google plugin to new @google/genai SDK (2026-01-30)
+  - **BREAKING**: Replaced deprecated `@google/generative-ai` SDK with new `@google/genai` v1.37.0
+  - The old SDK lost support on August 31, 2025; new SDK is actively maintained by Google DeepMind
+  - New SDK uses `ai.models.generateContent()` and `ai.models.generateContentStream()` API pattern
+  - Implemented dynamic model listing via `ai.models.list()` API instead of hardcoded list
+  - Updated configuration structure to use `config` object for tools, safety settings, system instructions
+  - Fixed Gemini 3 Thinking models returning empty content by properly extracting text from response parts
+  - Added proper handling for thought summaries (parts with `thought: true`)
+  - Updated model list to include current models: gemini-3-flash-preview, gemini-3-pro-preview, gemini-2.5-flash, etc.
+  - Added deprecation warning for Gemini 2.0 models (retiring March 3, 2026)
+  - Added `sanitizeSchemaForGoogle()` to filter unsupported JSON Schema fields (e.g., `propertyNames`) from tool parameters
+  - Convert SDK response class instances to plain objects for Zod validation compatibility
+  - Updated qtap-plugin-google to v1.1.0
+- fix: Rains theme font loading on nested routes (2026-01-30)
+  - Removed duplicate @font-face rules with relative URLs from styles.css
+  - Fonts are properly declared in manifest.json and loaded by the theme system
+  - Fixed 404 errors for fonts when viewing pages like /chats/[id]
+  - Updated qtap-plugin-theme-rains to v1.3.3
 - refactor: Code quality improvements and qt-* class migration (2026-01-30)
   - Removed dead code: empty if blocks in `background-jobs.repository.ts` (update/delete methods)
   - Removed dead code: empty if block in `app/api/v1/chats/route.ts` (redundant excludeTagIds check)

@@ -6,26 +6,10 @@
  *
  * This theme uses the qt-* semantic class system for consistent,
  * themeable component styling.
+ *
+ * Note: Font faces are declared in manifest.json and loaded by the theme system.
+ * Do not add @font-face rules here as they will have incorrect relative paths.
  */
-
-/* ============================================================================
-   FONT FACES
-   ============================================================================ */
-@font-face {
-  font-family: 'Nunito Sans';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('fonts/NunitoSans-Regular.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'Nunito Sans';
-  font-style: italic;
-  font-weight: 400;
-  font-display: swap;
-  src: url('fonts/NunitoSans-Italic.woff2') format('woff2');
-}
 
 /* ============================================================================
    ROOT BASELINE - SHARED BETWEEN MODES

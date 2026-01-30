@@ -20,16 +20,23 @@ const logger = createPluginLogger('qtap-plugin-google');
  * These models require responseModalities: ["TEXT", "IMAGE"]
  */
 const GEMINI_IMAGE_MODELS = [
-  'gemini-2.0-flash-exp',
   'gemini-2.5-flash-image',
-  'gemini-2.5-flash-preview-native-image',
-  'gemini-3-pro-image-preview', // Nano Banana Pro
+  'gemini-3-pro-image-preview',
 ];
 
 /**
  * Models that use the Imagen predict API
+ * Maps user-friendly names to actual API model IDs
  */
 const IMAGEN_MODELS = ['imagen-4', 'imagen-4-fast'];
+
+/**
+ * Map user-friendly model names to actual Google API model IDs
+ */
+const IMAGEN_MODEL_MAP: Record<string, string> = {
+  'imagen-4': 'imagen-4.0-generate-001',
+  'imagen-4-fast': 'imagen-4.0-fast-generate-001',
+};
 
 export class GoogleImagenProvider implements ImageGenProviderBase {
   readonly provider = 'GOOGLE';
@@ -163,7 +170,15 @@ export class GoogleImagenProvider implements ImageGenProviderBase {
     model: string
   ): Promise<ImageGenResponse> {
     const baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
-    const endpoint = `${baseUrl}/models/${model}:predict`;
+    // Map user-friendly model name to actual API model ID
+    const apiModelId = IMAGEN_MODEL_MAP[model] || model;
+    const endpoint = `${baseUrl}/models/${apiModelId}:predict`;
+
+    logger.debug('Calling Imagen API', {
+      context: 'GoogleImagenProvider.generateWithImagen',
+      userModel: model,
+      apiModel: apiModelId,
+    });
 
     const requestBody: Record<string, unknown> = {
       instances: [

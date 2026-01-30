@@ -12704,7 +12704,7 @@ var safeJSON = (text2) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ../../../node_modules/openai/version.mjs
-var VERSION = "6.16.0";
+var VERSION = "6.17.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -15755,12 +15755,7 @@ var Assistants = class extends APIResource {
   /**
    * Create an assistant with a model and instructions.
    *
-   * @example
-   * ```ts
-   * const assistant = await client.beta.assistants.create({
-   *   model: 'gpt-4o',
-   * });
-   * ```
+   * @deprecated
    */
   create(body, options) {
     return this._client.post("/assistants", {
@@ -15772,12 +15767,7 @@ var Assistants = class extends APIResource {
   /**
    * Retrieves an assistant.
    *
-   * @example
-   * ```ts
-   * const assistant = await client.beta.assistants.retrieve(
-   *   'assistant_id',
-   * );
-   * ```
+   * @deprecated
    */
   retrieve(assistantID, options) {
     return this._client.get(path`/assistants/${assistantID}`, {
@@ -15788,12 +15778,7 @@ var Assistants = class extends APIResource {
   /**
    * Modifies an assistant.
    *
-   * @example
-   * ```ts
-   * const assistant = await client.beta.assistants.update(
-   *   'assistant_id',
-   * );
-   * ```
+   * @deprecated
    */
   update(assistantID, body, options) {
     return this._client.post(path`/assistants/${assistantID}`, {
@@ -15805,13 +15790,7 @@ var Assistants = class extends APIResource {
   /**
    * Returns a list of assistants.
    *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const assistant of client.beta.assistants.list()) {
-   *   // ...
-   * }
-   * ```
+   * @deprecated
    */
   list(query = {}, options) {
     return this._client.getAPIList("/assistants", CursorPage, {
@@ -15823,11 +15802,7 @@ var Assistants = class extends APIResource {
   /**
    * Delete an assistant.
    *
-   * @example
-   * ```ts
-   * const assistantDeleted =
-   *   await client.beta.assistants.delete('assistant_id');
-   * ```
+   * @deprecated
    */
   delete(assistantID, options) {
     return this._client.delete(path`/assistants/${assistantID}`, {
@@ -17265,8 +17240,8 @@ Evals.Runs = Runs2;
 var Files2 = class extends APIResource {
   /**
    * Upload a file that can be used across various endpoints. Individual files can be
-   * up to 512 MB, and the size of all files uploaded by one organization can be up
-   * to 1 TB.
+   * up to 512 MB, and each project can store up to 2.5 TB of files in total. There
+   * is no organization-wide storage limit.
    *
    * - The Assistants API supports files up to 2 million tokens and of specific file
    *   types. See the

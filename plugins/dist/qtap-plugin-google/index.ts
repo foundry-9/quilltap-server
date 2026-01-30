@@ -85,8 +85,8 @@ const messageFormat = {
  * Cheap model configuration for background tasks
  */
 const cheapModels = {
-  defaultModel: 'gemini-2.0-flash',
-  recommendedModels: ['gemini-2.0-flash', 'gemini-1.5-flash'],
+  defaultModel: 'gemini-2.5-flash',
+  recommendedModels: ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-3-flash-preview'],
 };
 
 /**
@@ -155,10 +155,28 @@ export const plugin: LLMProviderPlugin = {
   /**
    * Get static model information
    * Returns cached information about Google models without needing API calls
+   * Note: Use getAvailableModels() for dynamic listing from API
    */
   getModelInfo: () => {
     return [
-      // Chat models
+      // Gemini 3 models (latest thinking/reasoning models)
+      {
+        id: 'gemini-3-flash-preview',
+        name: 'Gemini 3 Flash (Preview)',
+        contextWindow: 1000000,
+        maxOutputTokens: 8192,
+        supportsImages: true,
+        supportsTools: true,
+      },
+      {
+        id: 'gemini-3-pro-preview',
+        name: 'Gemini 3 Pro (Preview)',
+        contextWindow: 1000000,
+        maxOutputTokens: 8192,
+        supportsImages: true,
+        supportsTools: true,
+      },
+      // Gemini 2.5 models
       {
         id: 'gemini-2.5-flash',
         name: 'Gemini 2.5 Flash',
@@ -168,45 +186,37 @@ export const plugin: LLMProviderPlugin = {
         supportsTools: true,
       },
       {
-        id: 'gemini-pro-vision',
-        name: 'Gemini Pro Vision',
-        contextWindow: 32000,
-        maxOutputTokens: 4096,
-        supportsImages: true,
-        supportsTools: true,
-      },
-      // Gemini image generation models (use generateContent API)
-      {
-        id: 'gemini-2.0-flash-exp',
-        name: 'Gemini 2.0 Flash Experimental',
+        id: 'gemini-2.5-flash-lite',
+        name: 'Gemini 2.5 Flash Lite',
         contextWindow: 1000000,
         maxOutputTokens: 8192,
         supportsImages: true,
         supportsTools: true,
       },
+      {
+        id: 'gemini-2.5-pro',
+        name: 'Gemini 2.5 Pro',
+        contextWindow: 1000000,
+        maxOutputTokens: 8192,
+        supportsImages: true,
+        supportsTools: true,
+      },
+      // Image generation models
       {
         id: 'gemini-2.5-flash-image',
-        name: 'Gemini 2.5 Flash Image (Nano Banana)',
+        name: 'Gemini 2.5 Flash Image',
         contextWindow: 1000000,
         maxOutputTokens: 8192,
         supportsImages: true,
-        supportsTools: true,
-      },
-      {
-        id: 'gemini-2.5-flash-preview-native-image',
-        name: 'Gemini 2.5 Flash Native Image',
-        contextWindow: 1000000,
-        maxOutputTokens: 8192,
-        supportsImages: true,
-        supportsTools: true,
+        supportsTools: false,
       },
       {
         id: 'gemini-3-pro-image-preview',
-        name: 'Gemini 3 Pro Image Preview (Nano Banana Pro)',
+        name: 'Gemini 3 Pro Image (Preview)',
         contextWindow: 65536,
         maxOutputTokens: 32768,
         supportsImages: true,
-        supportsTools: true,
+        supportsTools: false,
       },
       // Imagen models (use predict API)
       {
@@ -236,24 +246,8 @@ export const plugin: LLMProviderPlugin = {
     return [
       // Gemini image generation models (use generateContent API)
       {
-        id: 'gemini-2.0-flash-exp',
-        name: 'Gemini 2.0 Flash Experimental',
-        supportedAspectRatios: [
-          '1:1',
-          '2:3',
-          '3:2',
-          '3:4',
-          '4:3',
-          '4:5',
-          '5:4',
-          '9:16',
-          '16:9',
-        ],
-        description: 'Experimental Gemini 2.0 model with image generation',
-      },
-      {
         id: 'gemini-2.5-flash-image',
-        name: 'Gemini 2.5 Flash Image (Nano Banana)',
+        name: 'Gemini 2.5 Flash Image',
         supportedAspectRatios: [
           '1:1',
           '2:3',
@@ -270,25 +264,8 @@ export const plugin: LLMProviderPlugin = {
           'Fast, efficient model for general image generation with text rendering',
       },
       {
-        id: 'gemini-2.5-flash-preview-native-image',
-        name: 'Gemini 2.5 Flash Native Image',
-        supportedAspectRatios: [
-          '1:1',
-          '2:3',
-          '3:2',
-          '3:4',
-          '4:3',
-          '4:5',
-          '5:4',
-          '9:16',
-          '16:9',
-          '21:9',
-        ],
-        description: 'Native image generation variant of Gemini 2.5 Flash',
-      },
-      {
         id: 'gemini-3-pro-image-preview',
-        name: 'Gemini 3 Pro Image Preview (Nano Banana Pro)',
+        name: 'Gemini 3 Pro Image (Preview)',
         supportedAspectRatios: [
           '1:1',
           '2:3',
@@ -302,9 +279,9 @@ export const plugin: LLMProviderPlugin = {
           '21:9',
         ],
         description:
-          'Advanced image generation with fine-grained creative controls, 2K/4K output, up to 14 reference images',
+          'Advanced image generation with reasoning, fine-grained creative controls, 2K/4K output, up to 14 reference images',
       },
-      // Imagen models (use predict API)
+      // Imagen models (use predict API via GoogleImagenProvider)
       {
         id: 'imagen-4',
         name: 'Imagen 4',

@@ -82,34 +82,62 @@ export interface ToolExecutionContext {
 }
 
 /**
+ * Formatted tool result for inclusion in conversation context
+ */
+export interface FormattedToolResult {
+  role: 'user' | 'tool';
+  content: string;
+  /** Tool call ID for native tool result format (Google, OpenAI) */
+  toolCallId?: string;
+}
+
+/**
  * Format tool result for inclusion in conversation context
  * Different LLM providers may have different formats
+ *
+ * @param toolResult - The executed tool result
+ * @param provider - The LLM provider name (GOOGLE, ANTHROPIC, OPENAI, etc.)
+ * @returns Formatted message for inclusion in conversation
  */
 export function formatToolResult(
   toolResult: ToolResult,
   provider: string
-): { role: string; content: string } {
+): FormattedToolResult {
   const resultText = toolResult.success
     ? JSON.stringify(toolResult.result, null, 2)
     : `Error: ${toolResult.error || 'Unknown error'}${toolResult.message ? ` - ${toolResult.message}` : ''}`;
 
-  // Different providers may want different formatting
+  // Different providers have different native formats
   switch (provider) {
+    case 'GOOGLE':
+      // Google uses functionResponse format - pass as tool role with toolCallId
+      // The Google provider will convert this to proper functionResponse parts
+      return {
+        role: 'tool',
+        content: resultText,
+        toolCallId: toolResult.toolName,
+      };
+
     case 'ANTHROPIC':
-      // Anthropic expects tool results in a specific format
+      // TODO: Anthropic should use tool_result content blocks
+      // For now, use text-based format (works but not optimal)
       return {
         role: 'user',
         content: `Tool Result: ${toolResult.toolName}\n\n${resultText}`,
       };
 
     case 'OPENAI':
-      // OpenAI format
+    case 'GROK':
+    case 'OPENROUTER':
+      // TODO: OpenAI-compatible providers should use tool role with tool_call_id
+      // For now, use text-based format (works but not optimal)
       return {
         role: 'user',
         content: `Tool Result: ${toolResult.toolName}\n\n${resultText}`,
       };
 
     default:
+      // Default to text-based format for unknown providers
       return {
         role: 'user',
         content: `Tool Result: ${toolResult.toolName}\n\n${resultText}`,
