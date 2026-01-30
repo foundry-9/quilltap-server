@@ -62,9 +62,6 @@ export function getEncryptionKey(): Buffer {
   // Try to get key from explicit encryption key env var first
   const explicitKey = process.env.QUILLTAP_ENCRYPTION_KEY;
   if (explicitKey) {
-    logger.debug('Using QUILLTAP_ENCRYPTION_KEY for mount point secrets', {
-      keyLength: explicitKey.length,
-    });
     cachedKey = deriveKey(explicitKey);
     return cachedKey;
   }
@@ -72,9 +69,6 @@ export function getEncryptionKey(): Buffer {
   // Fall back to master pepper
   const pepper = process.env.ENCRYPTION_MASTER_PEPPER;
   if (pepper) {
-    logger.debug('Using ENCRYPTION_MASTER_PEPPER for mount point secrets', {
-      pepperLength: pepper.length,
-    });
     cachedKey = deriveKey(pepper);
     return cachedKey;
   }
@@ -120,12 +114,6 @@ export function encryptSecrets(secrets: Record<string, string>): string {
 
     // Return as base64 for easier storage/transmission
     const encoded = Buffer.from(combined, 'hex').toString('base64');
-
-    logger.debug('Encrypted mount point secrets', {
-      secretsCount: Object.keys(secrets).length,
-      encryptedLength: encoded.length,
-    });
-
     return encoded;
   } catch (error) {
     const errorMsg =
@@ -178,19 +166,10 @@ export function decryptSecrets(encrypted: string): Record<string, string> {
     decrypted += decipher.final('utf8');
 
     const secrets = JSON.parse(decrypted) as Record<string, string>;
-
-    logger.debug('Decrypted mount point secrets', {
-      secretsCount: Object.keys(secrets).length,
-    });
-
     return secrets;
   } catch (error) {
     const errorMsg =
       error instanceof Error ? error.message : 'Unknown decryption error';
-    logger.debug('Failed to decrypt secrets', {
-      error: errorMsg,
-    });
-
     // Don't expose internal error details to caller
     throw new Error(
       'Failed to decrypt secrets. Invalid encryption key or corrupted data.'

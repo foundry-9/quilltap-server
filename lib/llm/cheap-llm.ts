@@ -131,14 +131,6 @@ export function getCheapLLMProvider(
   ollamaAvailable: boolean = false,
   onNoCheapLLM?: () => void
 ): CheapLLMSelection {
-  logger.debug('[CheapLLM] Selection started', {
-    context: 'getCheapLLMProvider',
-    strategy: config.strategy,
-    userDefinedProfileId: config.userDefinedProfileId,
-    defaultCheapProfileId: config.defaultCheapProfileId,
-    availableProfileCount: availableProfiles.length,
-    availableProfileIds: availableProfiles.map(p => p.id),
-  })
 
   // Priority 1: Global default cheap profile (always takes precedence if set)
   if (config.defaultCheapProfileId) {
@@ -159,12 +151,7 @@ export function getCheapLLMProvider(
   if (config.strategy === 'USER_DEFINED' && config.userDefinedProfileId) {
     const userProfile = availableProfiles.find(p => p.id === config.userDefinedProfileId)
     if (userProfile) {
-      logger.debug('[CheapLLM] Using USER_DEFINED profile', {
-        context: 'getCheapLLMProvider',
-        profileId: userProfile.id,
-        provider: userProfile.provider,
-        modelName: userProfile.modelName,
-      })
+
       return {
         provider: userProfile.provider,
         modelName: userProfile.modelName,

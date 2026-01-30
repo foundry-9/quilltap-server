@@ -141,14 +141,12 @@ export async function handleParticipantUpdate(
     const isCurrentlyImpersonating = currentImpersonating.includes(participantId);
 
     if (participantData.controlledBy === 'user' && !isCurrentlyImpersonating) {
-      logger.debug('[Chats v1] Adding participant to impersonation', { chatId, participantId });
       const newImpersonating = [...currentImpersonating, participantId];
       await repos.chats.update(chatId, {
         impersonatingParticipantIds: newImpersonating,
         ...(result.activeTypingParticipantId ? {} : { activeTypingParticipantId: participantId }),
       });
     } else if (participantData.controlledBy === 'llm' && isCurrentlyImpersonating) {
-      logger.debug('[Chats v1] Removing participant from impersonation', { chatId, participantId });
       const newImpersonating = currentImpersonating.filter((id) => id !== participantId);
       const updateData: Partial<ChatMetadata> = { impersonatingParticipantIds: newImpersonating };
 
@@ -222,14 +220,7 @@ export async function handleAddParticipant(
     const existingTagIds = new Set(result.tags || []);
     const newTags = character.tags.filter((tagId: string) => !existingTagIds.has(tagId));
 
-    if (newTags.length > 0) {
-      logger.debug('[Chats v1] Adding character tags to chat', {
-        chatId,
-        characterId: data.characterId,
-        newTagCount: newTags.length,
-      });
-
-      const mergedTags = [...(result.tags || []), ...newTags];
+    if (newTags.length > 0) {const mergedTags = [...(result.tags || []), ...newTags];
       const updatedChat = await repos.chats.update(chatId, { tags: mergedTags });
       if (updatedChat) {
         return { chat: updatedChat };

@@ -82,14 +82,6 @@ export function validateProviderConfig(
     const label = requirements.apiKeyLabel || 'API key';
     errors.push(`${label} is required for ${provider}`);
   }
-
-  logger.debug('Provider config validation result', {
-    provider,
-    valid: errors.length === 0,
-    errorCount: errors.length,
-    context: 'provider-validation.validateProviderConfig',
-  });
-
   return {
     valid: errors.length === 0,
     errors,
@@ -155,13 +147,6 @@ export async function testProviderConnection(
   apiKey: string,
   baseUrl?: string
 ): Promise<ProviderConnectionTestResult> {
-  logger.debug('Testing provider connection', {
-    provider,
-    hasApiKey: !!apiKey,
-    hasBaseUrl: !!baseUrl,
-    context: 'provider-validation.testProviderConnection',
-  });
-
   // Get provider plugin
   const providerPlugin = getProvider(provider);
   if (!providerPlugin) {
@@ -189,17 +174,8 @@ export async function testProviderConnection(
     const isValid = await providerPlugin.validateApiKey(apiKey, baseUrl);
 
     if (isValid) {
-      logger.debug('Provider connection test successful', {
-        provider,
-        context: 'provider-validation.testProviderConnection',
-      });
       return { valid: true };
     }
-
-    logger.debug('Provider connection test failed', {
-      provider,
-      context: 'provider-validation.testProviderConnection',
-    });
     return {
       valid: false,
       error: `Failed to validate connection to ${providerPlugin.metadata.displayName}`,
@@ -257,27 +233,15 @@ export function getEmbeddingModels(provider: string): Array<{
   }
 
   if (!providerPlugin.capabilities.embeddings) {
-    logger.debug('Provider does not support embeddings', {
-      provider,
-      context: 'provider-validation.getEmbeddingModels',
-    });
     return [];
   }
 
   // Use plugin's getEmbeddingModels method
   if (providerPlugin.getEmbeddingModels) {
-    logger.debug('Getting embedding models from plugin', {
-      provider,
-      context: 'provider-validation.getEmbeddingModels',
-    });
     return providerPlugin.getEmbeddingModels();
   }
 
   // Fallback: return empty array if plugin doesn't implement embedding models
-  logger.debug('Provider does not implement getEmbeddingModels', {
-    provider,
-    context: 'provider-validation.getEmbeddingModels',
-  });
   return [];
 }
 

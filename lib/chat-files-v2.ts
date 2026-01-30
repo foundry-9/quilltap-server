@@ -143,16 +143,6 @@ export async function uploadChatFile(
   // Detect text content and infer better MIME type if needed
   const textDetection = detectTextContent(buffer, file.name, file.type);
   const mimeType = getBestMimeType(textDetection, file.type);
-
-  logger.debug('Text detection result for chat file', {
-    context: 'chat-files-v2',
-    filename: file.name,
-    providedMimeType: file.type,
-    detectedMimeType: textDetection.detectedMimeType,
-    finalMimeType: mimeType,
-    isPlainText: textDetection.isPlainText,
-  });
-
   // Determine category based on MIME type
   const category: FileCategory = mimeType.startsWith('image/') ? 'IMAGE' : 'ATTACHMENT';
 
@@ -166,13 +156,6 @@ export async function uploadChatFile(
 
   // For project files, check for duplicates within the project
   if (projectId) {
-    logger.debug('Checking for duplicates in project', {
-      context: 'chat-files-v2',
-      projectId,
-      filename: file.name,
-      sha256,
-    });
-
     // Check for content duplicate (same SHA256) in project
     const existingByHash = await repos.files.findBySha256(sha256);
     const contentDuplicate = existingByHash.find(f => f.projectId === projectId);
@@ -193,14 +176,6 @@ export async function uploadChatFile(
 
       // Use the more relevant duplicate for the response
       const existingFile = hasFilenameConflict ? filenameDuplicate! : contentDuplicate!;
-
-      logger.debug('Duplicate file detected in project', {
-        context: 'chat-files-v2',
-        projectId,
-        conflictType,
-        existingFileId: existingFile.id,
-      });
-
       return {
         duplicate: true,
         conflictType,
@@ -221,12 +196,6 @@ export async function uploadChatFile(
 
     // Handle resolution
     if (resolution) {
-      logger.debug('Handling conflict resolution', {
-        context: 'chat-files-v2',
-        resolution,
-        conflictingFileId,
-      });
-
       if (resolution === 'skip') {
         // User chose to skip - return the existing file info
         const existingFile = conflictingFileId
@@ -234,11 +203,6 @@ export async function uploadChatFile(
           : (filenameDuplicate || contentDuplicate);
 
         if (existingFile) {
-          logger.debug('Skipping upload, returning existing file', {
-            context: 'chat-files-v2',
-            fileId: existingFile.id,
-          });
-
           return {
             id: existingFile.id,
             filename: existingFile.originalFilename,
@@ -258,10 +222,6 @@ export async function uploadChatFile(
         if (existingFile) {
           try {
             await fileStorageManager.deleteFile(existingFile);
-            logger.debug('Deleted existing file from storage for replacement', {
-              context: 'chat-files-v2',
-              fileId: conflictingFileId,
-            });
           } catch (error) {
             logger.error('Failed to delete existing file from storage', {
               context: 'chat-files-v2',
@@ -270,10 +230,6 @@ export async function uploadChatFile(
           }
         }
         await repos.files.delete(conflictingFileId);
-        logger.debug('Deleted existing file for replacement', {
-          context: 'chat-files-v2',
-          fileId: conflictingFileId,
-        });
       }
 
       // For 'keepBoth', generate a unique filename
@@ -282,11 +238,6 @@ export async function uploadChatFile(
         const projectFiles = await repos.files.findByProjectId(userId, projectId);
         const existingFilenames = new Set(projectFiles.map(f => f.originalFilename));
         finalFilename = generateUniqueFilename(file.name, existingFilenames);
-        logger.debug('Generated unique filename for keepBoth', {
-          context: 'chat-files-v2',
-          originalFilename: file.name,
-          newFilename: finalFilename,
-        });
       }
 
       // Proceed with upload using the final filename
@@ -313,7 +264,6 @@ export async function uploadChatFile(
     if (updatedLinkedTo.length > existing.linkedTo.length) {
       const updated = await repos.files.update(existing.id, { linkedTo: updatedLinkedTo });
       if (updated) {
-        logger.debug('Updated existing chat file with new links', { fileId: existing.id, newLinks: linkedTo });
         return {
           id: updated.id,
           filename: updated.originalFilename,
@@ -326,7 +276,6 @@ export async function uploadChatFile(
         };
       }
     }
-    logger.debug('Chat file with same hash already exists', { fileId: existing.id, sha256 });
     return {
       id: existing.id,
       filename: existing.originalFilename,
@@ -386,17 +335,8 @@ async function uploadFileToProject(
       sha256,
     },
   });
-  logger.debug('Uploaded chat file to storage', { fileId, storageKey, mountPointId, size: buffer.length, projectId });
-
   // Inherit tags from the chat (and any other linked entities)
   const inheritedTags = await getInheritedTags(linkedTo, userId);
-
-  logger.debug('Inherited tags for chat file', {
-    context: 'chat-files-v2',
-    fileId,
-    inheritedTagCount: inheritedTags.length,
-  });
-
   // Create metadata in repository
   // IMPORTANT: Pass the fileId to ensure metadata matches storage path
   const fileEntry = await repos.files.create({
@@ -421,9 +361,6 @@ async function uploadFileToProject(
     storageKey,
     mountPointId,
   }, { id: fileId });
-
-  logger.debug('Created chat file metadata in repository', { fileId: fileEntry.id, storageKey, mountPointId, projectId });
-
   return {
     id: fileEntry.id,
     filename: fileEntry.originalFilename,
@@ -469,9 +406,6 @@ async function readFileAsBase64(
   let buffer = await fileStorageManager.downloadFile(entry);
   let outputMimeType = mimeType;
   let wasResized = false;
-
-  logger.debug('Downloaded file from storage for base64', { fileId, storageKey: entry.storageKey, size: buffer.length });
-
   // Check if this is an image that might need resizing
   if (provider && mimeType.startsWith('image/') && canResizeImage(mimeType)) {
     const maxBase64Size = getProviderMaxBase64Size(provider);
@@ -528,8 +462,6 @@ export async function loadChatFilesForLLM(
   options: LoadChatFilesOptions = {}
 ): Promise<FileAttachment[]> {
   const { provider, autoResize = true } = options;
-
-  logger.debug('Loading chat files for LLM', { fileIds, provider, autoResize });
   const attachments: FileAttachment[] = [];
   const repos = getRepositories();
 
@@ -556,23 +488,11 @@ export async function loadChatFilesForLLM(
         size: fileEntry.size,
         data,
       });
-
-      logger.debug('Loaded chat file', {
-        fileId: fileEntry.id,
-        filename: fileEntry.originalFilename,
-        mimeType,
-        originalMimeType: fileEntry.mimeType,
-        size: fileEntry.size,
-        dataLength: data?.length || 0,
-        wasResized,
-      });
     } catch (error) {
       logger.error(`Failed to load chat file ${fileId}:`, {}, error instanceof Error ? error : new Error(String(error)));
       // Skip files that can't be loaded
     }
   }
-
-  logger.debug('Loaded chat files for LLM', { count: attachments.length });
   return attachments;
 }
 
@@ -584,21 +504,18 @@ export async function deleteChatFileById(fileId: string): Promise<void> {
   const entry = await repos.files.findById(fileId);
 
   if (!entry) {
-    logger.debug('Chat file not found for deletion', { fileId });
     return;
   }
 
   // Delete the file bytes from storage
   try {
     await fileStorageManager.deleteFile(entry);
-    logger.debug('Deleted chat file from storage', { fileId, storageKey: entry.storageKey });
   } catch (error) {
     logger.error('Failed to delete chat file from storage', { fileId, storageKey: entry.storageKey }, error instanceof Error ? error : undefined);
   }
 
   // Delete metadata from repository
   await repos.files.delete(fileId);
-  logger.debug('Deleted chat file metadata from repository', { fileId });
 }
 
 /**
@@ -626,7 +543,6 @@ export async function readChatFileBuffer(fileId: string): Promise<Buffer> {
 
   // Download from file storage
   const buffer = await fileStorageManager.downloadFile(entry);
-  logger.debug('Downloaded chat file from storage', { fileId, storageKey: entry.storageKey, size: buffer.length });
   return buffer;
 }
 

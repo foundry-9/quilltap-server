@@ -32,10 +32,6 @@ export async function fetchOpenRouterPricing(
   apiKey: string
 ): Promise<ModelPricing[]> {
   try {
-    logger.debug('Fetching OpenRouter pricing data', {
-      context: 'fetchOpenRouterPricing',
-    });
-
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || 'http://localhost:3000',

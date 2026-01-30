@@ -109,6 +109,9 @@ export function ParticipantCard({
   const talkativeness = participant.character?.talkativeness ?? 0.5
 
 
+  // Check if this is a user-controlled character (not LLM-controlled)
+  const isUserControlledCharacter = isCharacter && participant.controlledBy === 'user'
+
   // Handle nudge/queue button click
   const handleActionClick = () => {
     if (queuePosition > 0) {
@@ -117,12 +120,12 @@ export function ParticipantCard({
     } else if (isGenerating) {
       // Someone is actively generating - add to queue for later
       onQueue(participant.id)
-    } else if (isCharacter) {
-      // Not generating and this is a character - nudge for immediate response
-      // Characters can always be nudged when no one is generating
+    } else if (isCharacter && !isUserControlledCharacter) {
+      // Not generating and this is an LLM-controlled character - nudge for immediate response
+      // Only LLM-controlled characters can be nudged for AI response
       onNudge(participant.id)
     } else {
-      // User persona - queue them
+      // User persona or user-controlled character - queue them
       onQueue(participant.id)
     }
   }
@@ -142,8 +145,9 @@ export function ParticipantCard({
     if (queuePosition > 0) return 'Dequeue'
     if (isGenerating && isCurrentTurn) return 'Speaking...'
     if (isGenerating) return 'Queue'
-    if (isCurrentTurn) return 'Nudge' // Their turn but not yet generating - can nudge to start
-    return isCharacter ? 'Nudge' : 'Queue'
+    if (isCurrentTurn) return isUserControlledCharacter ? 'Queue' : 'Nudge' // Their turn but not yet generating - can nudge to start (LLM only)
+    // Only LLM-controlled characters show "Nudge", user-controlled show "Queue"
+    return (isCharacter && !isUserControlledCharacter) ? 'Nudge' : 'Queue'
   }
 
   // Determine if button should be disabled - only disabled while actively generating

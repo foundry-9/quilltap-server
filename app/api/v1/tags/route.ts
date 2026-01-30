@@ -26,7 +26,6 @@ const createTagSchema = z.object({
 
 export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
   try {
-    logger.debug('[Tags v1] GET list', { userId: user.id });
 
     const searchParams = req.nextUrl.searchParams;
     const search = searchParams.get('search');
@@ -68,7 +67,6 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
       };
     });
 
-    logger.debug('[Tags v1] Tags fetched', { count: tagsWithCounts.length, searched: !!search });
 
     return successResponse({
       tags: tagsWithCounts,
@@ -89,20 +87,13 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, 
     const body = await req.json();
     const validatedData = createTagSchema.parse(body);
 
-    logger.debug('[Tags v1] Creating tag', { userId: user.id, name: validatedData.name });
 
     const nameLower = validatedData.name.toLowerCase();
 
     // Check if tag already exists (case-insensitive)
     const existingTag = await repos.tags.findByName(user.id, validatedData.name);
 
-    if (existingTag) {
-      logger.debug('[Tags v1] Found existing tag, returning it', {
-        userId: user.id,
-        tagName: validatedData.name,
-        tagId: existingTag.id,
-      });
-      // Return existing tag instead of creating duplicate
+    if (existingTag) {// Return existing tag instead of creating duplicate
       return successResponse({ tag: existingTag });
     }
 

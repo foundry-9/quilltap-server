@@ -42,9 +42,9 @@ type Repos = RepositoryContainer;
 // Participant schema for chat creation
 const createParticipantSchema = z.object({
   type: z.literal('CHARACTER'),
-  characterId: z.string().uuid(),
-  connectionProfileId: z.string().uuid().optional(),
-  imageProfileId: z.string().uuid().optional(),
+  characterId: z.uuid(),
+  connectionProfileId: z.uuid().optional(),
+  imageProfileId: z.uuid().optional(),
   systemPromptOverride: z.string().optional(),
   controlledBy: z.enum(['llm', 'user']).optional(),
 });
@@ -54,7 +54,7 @@ const createChatSchema = z.object({
   title: z.string().optional(),
   scenario: z.string().optional(),
   timestampConfig: TimestampConfigSchema.optional(),
-  projectId: z.string().uuid().optional(),
+  projectId: z.uuid().optional(),
 });
 
 // ============================================================================
@@ -216,14 +216,7 @@ async function createInitialMessages(
     attachments: [],
     createdAt: new Date().toISOString(),
   };
-  await repos.chats.addMessage(chatId, firstMessage);
-
-  logger.debug('[Chats v1] Created initial greeting message', {
-    chatId,
-    participantId: firstCharacterParticipant?.id,
-    characterId: context.character.id,
-  });
-}
+  await repos.chats.addMessage(chatId, firstMessage);}
 
 async function autoGenerateFirstMessage(
   context: ChatContext,
@@ -270,17 +263,7 @@ async function autoGenerateFirstMessage(
 
   try {
     const chatSettings = await repos.chatSettings.findByUserId(userId);
-    const embeddingProfileId = chatSettings?.cheapLLMSettings?.embeddingProfileId;
-
-    logger.debug('[Chats v1] Building first message context', {
-      characterId: context.character.id,
-      characterName: context.character.name,
-      participantCount: participants.length,
-      hasProjectId: !!projectId,
-      hasEmbeddingProfile: !!embeddingProfileId,
-    });
-
-    const firstMessageContext = await buildFirstMessageContext(context.character.id, participants, {
+    const embeddingProfileId = chatSettings?.cheapLLMSettings?.embeddingProfileId;const firstMessageContext = await buildFirstMessageContext(context.character.id, participants, {
       userId,
       projectId,
       embeddingProfileId: embeddingProfileId ?? undefined,
@@ -372,24 +355,9 @@ async function handleList(req: NextRequest, context: AuthenticatedContext) {
     const excludeTagIdsParam = searchParams.get('excludeTagIds');
     const limitParam = searchParams.get('limit');
     const excludeTagIds = excludeTagIdsParam ? excludeTagIdsParam.split(',').filter(Boolean) : [];
-    const limit = limitParam ? parseInt(limitParam, 10) : undefined;
-
-    logger.debug('[Chats v1] GET list', {
-      userId: user.id,
-      excludeTagIds: excludeTagIds.length > 0 ? excludeTagIds : undefined,
-      limit,
-    });
-
-    const chatMetadata = await repos.chats.findByUserId(user.id);
+    const limit = limitParam ? parseInt(limitParam, 10) : undefined;const chatMetadata = await repos.chats.findByUserId(user.id);
     const enrichedChats = await enrichChatsForList(chatMetadata, repos);
     let filteredChats = filterChatsByExcludedTags(enrichedChats, excludeTagIds);
-
-    if (excludeTagIds.length > 0) {
-      logger.debug('[Chats v1] Filtered by excluded tags', {
-        originalCount: enrichedChats.length,
-        filteredCount: filteredChats.length,
-      });
-    }
 
     if (limit && limit > 0) {
       filteredChats = filteredChats.slice(0, limit);
@@ -426,13 +394,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     );
 
     const chatSettings = await repos.chatSettings.findByUserId(user.id);
-    const defaultRoleplayTemplateId = chatSettings?.defaultRoleplayTemplateId || null;
-
-    logger.debug('[Chats v1] Creating chat with roleplay template', {
-      roleplayTemplateId: defaultRoleplayTemplateId,
-    });
-
-    const now = new Date().toISOString();
+    const defaultRoleplayTemplateId = chatSettings?.defaultRoleplayTemplateId || null;const now = new Date().toISOString();
     const participantsWithTimestamps: ChatParticipantBaseInput[] = buildResult.participants.map((p) => ({
       ...p,
       id: crypto.randomUUID(),
@@ -440,11 +402,23 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       updatedAt: now,
     }));
 
+    // Default tool settings from project (if creating chat within a project)
+    let projectToolDefaults = {
+      disabledTools: [] as string[],
+      disabledToolGroups: [] as string[],
+    };
+
     if (validatedData.projectId) {
       const project = await repos.projects.findById(validatedData.projectId);
       if (!project || project.userId !== user.id) {
         return notFound('Project');
       }
+
+      // Extract default tool settings from project
+      projectToolDefaults = {
+        disabledTools: project.defaultDisabledTools || [],
+        disabledToolGroups: project.defaultDisabledToolGroups || [],
+      };
 
       if (!project.allowAnyCharacter) {
         const characterIds = participantsWithTimestamps
@@ -453,10 +427,6 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
 
         const newCharacterIds = characterIds.filter((id) => !project.characterRoster.includes(id));
         if (newCharacterIds.length > 0) {
-          logger.debug('[Chats v1] Auto-adding characters to project roster', {
-            projectId: validatedData.projectId,
-            newCharacterIds,
-          });
           await repos.projects.update(validatedData.projectId, {
             characterRoster: [...project.characterRoster, ...newCharacterIds],
           });
@@ -476,6 +446,8 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       lastMessageAt: null,
       lastRenameCheckInterchange: 0,
       projectId: validatedData.projectId || null,
+      disabledTools: projectToolDefaults.disabledTools,
+      disabledToolGroups: projectToolDefaults.disabledToolGroups,
     });
 
     await createInitialMessages(

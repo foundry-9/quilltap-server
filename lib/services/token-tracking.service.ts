@@ -26,7 +26,6 @@ export async function incrementProfileTokenUsage(
   const completionTokens = usage.completionTokens || 0;
 
   if (promptTokens === 0 && completionTokens === 0) {
-    logger.debug('No tokens to increment for profile', { profileId });
     return;
   }
 
@@ -39,12 +38,6 @@ export async function incrementProfileTokenUsage(
       promptTokens,
       completionTokens
     );
-
-    logger.debug('Incremented profile token usage', {
-      profileId,
-      promptTokens,
-      completionTokens,
-    });
   } catch (error) {
     logger.error('Failed to increment profile token usage', {
       profileId,
@@ -66,7 +59,6 @@ export async function updateChatTokenAggregates(
   const completionTokens = usage.completionTokens || 0;
 
   if (promptTokens === 0 && completionTokens === 0) {
-    logger.debug('No tokens to aggregate for chat', { chatId });
     return;
   }
 
@@ -81,14 +73,6 @@ export async function updateChatTokenAggregates(
       estimatedCost,
       priceSource
     );
-
-    logger.debug('Updated chat token aggregates', {
-      chatId,
-      promptTokens,
-      completionTokens,
-      estimatedCost,
-      priceSource,
-    });
   } catch (error) {
     logger.error('Failed to update chat token aggregates', {
       chatId,
@@ -108,14 +92,6 @@ export async function trackMessageTokenUsage(
   estimatedCost: number | null,
   priceSource?: PriceSource
 ): Promise<void> {
-  logger.debug('Tracking message token usage', {
-    chatId,
-    profileId,
-    usage,
-    estimatedCost,
-    priceSource,
-  });
-
   // Increment profile tokens if profile ID is available
   if (profileId) {
     await incrementProfileTokenUsage(profileId, usage);

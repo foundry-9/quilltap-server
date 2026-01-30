@@ -74,11 +74,9 @@ function formatFileSize(bytes: number): string {
 function FileItem({
   file,
   isCollapsed,
-  onClick,
 }: {
   file: SidebarFile
   isCollapsed: boolean
-  onClick: () => void
 }) {
   const isImage = file.mimeType.startsWith('image/')
 
@@ -86,7 +84,6 @@ function FileItem({
     <Link
       href={`/files?fileId=${file.id}`}
       className={`qt-left-sidebar-item ${isCollapsed ? 'justify-center px-0' : ''}`}
-      onClick={onClick}
       title={isCollapsed ? `${file.originalFilename} (${formatFileSize(file.size)})` : undefined}
     >
       <span className="qt-left-sidebar-item-icon flex-shrink-0">
@@ -109,7 +106,7 @@ function FileItem({
 }
 
 export function FilesSection() {
-  const { isCollapsed, closeMobile, isMobile } = useSidebar()
+  const { isCollapsed } = useSidebar()
   const [files, setFiles] = useState<SidebarFile[]>([])
   const [loading, setLoading] = useState(true)
   const [totalCount, setTotalCount] = useState(0)
@@ -138,12 +135,6 @@ export function FilesSection() {
   useEffect(() => {
     fetchFiles()
   }, [fetchFiles])
-
-  const handleItemClick = () => {
-    if (isMobile) {
-      closeMobile()
-    }
-  }
 
   // Loading state
   if (loading) {
@@ -176,7 +167,6 @@ export function FilesSection() {
           key={file.id}
           file={file}
           isCollapsed={isCollapsed}
-          onClick={handleItemClick}
         />
       ))}
       {totalCount > 5 && <ViewAllLink href="/files" label={`${totalCount - 5} more...`} />}

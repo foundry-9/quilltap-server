@@ -52,20 +52,8 @@ function getErrorDetails(error: unknown): { message: string; stack?: string } {
 async function checkAuthentication(
   routeMatch: PluginRouteInfo,
   apiPath: string
-): Promise<{ authenticated: true; userId: string } | { authenticated: false; response: NextResponse }> {
-  logger.debug('Checking authentication for plugin route', {
-    plugin: routeMatch.plugin.manifest.name,
-    apiPath,
-    requiresAuth: routeMatch.route.requiresAuth,
-  });
-
-  // If route doesn't require auth, allow through
-  if (!routeMatch.route.requiresAuth) {
-    logger.debug('Route does not require authentication', {
-      plugin: routeMatch.plugin.manifest.name,
-      apiPath,
-    });
-    return { authenticated: true, userId: '' };
+): Promise<{ authenticated: true; userId: string } | { authenticated: false; response: NextResponse }> {// If route doesn't require auth, allow through
+  if (!routeMatch.route.requiresAuth) {return { authenticated: true, userId: '' };
   }
 
   // Check session
@@ -90,15 +78,7 @@ async function checkAuthentication(
         { status: 401 }
       ),
     };
-  }
-
-  logger.debug('User authenticated for plugin route', {
-    plugin: routeMatch.plugin.manifest.name,
-    apiPath,
-    userId: session.user.id,
-  });
-
-  return { authenticated: true, userId: session.user.id };
+  }return { authenticated: true, userId: session.user.id };
 }
 
 /**
@@ -108,19 +88,8 @@ async function checkAuthentication(
 async function loadHandlerModule(
   routeMatch: PluginRouteInfo,
   apiPath: string
-): Promise<PluginRouteHandler | null> {
-  logger.debug('Loading handler module', {
-    handlerPath: routeMatch.handlerPath,
-    plugin: routeMatch.plugin.manifest.name,
-  });
-
-  try {
-    const handlerModule = await import(routeMatch.handlerPath) as PluginRouteHandler;
-    logger.debug('Handler module loaded', {
-      plugin: routeMatch.plugin.manifest.name,
-      exports: Object.keys(handlerModule),
-    });
-    return handlerModule;
+): Promise<PluginRouteHandler | null> {try {
+    const handlerModule = await import(routeMatch.handlerPath) as PluginRouteHandler;return handlerModule;
   } catch (importError) {
     const errorDetails = getErrorDetails(importError);
     logger.error('Plugin failed to provide route handler - handler module could not be loaded', {
@@ -146,14 +115,7 @@ async function invokeHandler(
   apiPath: string,
   pathSegments: string[],
   userId: string
-): Promise<NextResponse> {
-  logger.debug('Invoking plugin handler', {
-    plugin: routeMatch.plugin.manifest.name,
-    method,
-    apiPath,
-  });
-
-  try {
+): Promise<NextResponse> {try {
     return await handler(request, {
       params: { path: pathSegments },
       plugin: routeMatch.plugin.manifest.name,
@@ -201,7 +163,6 @@ async function handleRequest(
     const { path: pathSegments } = await params.params;
     const apiPath = `/api/${pathSegments.join('/')}`;
 
-    logger.debug('Plugin route request received', { method, pathSegments, url: request.url });
 
     // Find matching plugin route
     const routeMatch = findPluginRoute(apiPath, method);
@@ -211,15 +172,7 @@ async function handleRequest(
         { error: 'Not Found', message: `No plugin route found for ${method} ${apiPath}`, path: apiPath, method },
         { status: 404 }
       );
-    }
-
-    logger.debug('Found matching plugin route', {
-      plugin: routeMatch.plugin.manifest.name,
-      routePath: routeMatch.route.path,
-      methods: routeMatch.route.methods,
-    });
-
-    // Check if method is allowed for this route
+    }// Check if method is allowed for this route
     if (!routeMatch.route.methods.includes(method)) {
       logger.warn('HTTP method not allowed for plugin route', { apiPath, method, allowedMethods: routeMatch.route.methods });
       return NextResponse.json(
@@ -350,7 +303,6 @@ export async function OPTIONS(request: NextRequest, params: RouteParams): Promis
     const { path: pathSegments } = await params.params;
     const apiPath = `/api/${pathSegments.join('/')}`;
 
-    logger.debug('OPTIONS request received', { apiPath });
 
     // Try to find the route to get allowed methods
     // We check for each method to build the allowed list
@@ -364,7 +316,6 @@ export async function OPTIONS(request: NextRequest, params: RouteParams): Promis
     }
 
     if (methods.length === 0) {
-      logger.debug('No plugin routes found for OPTIONS request', { apiPath });
 
       return NextResponse.json(
         {
@@ -375,7 +326,6 @@ export async function OPTIONS(request: NextRequest, params: RouteParams): Promis
       );
     }
 
-    logger.debug('OPTIONS response prepared', { apiPath, allowedMethods: methods });
 
     return new NextResponse(null, {
       status: 200,

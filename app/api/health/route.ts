@@ -1,13 +1,12 @@
 /**
  * Health check endpoint for monitoring
- * Checks connectivity for JSON store, MongoDB (optional), and S3 (optional)
+ * Checks connectivity for JSON store and file storage
  * Returns 200 OK if healthy, 503 if degraded or unhealthy
  */
 
 import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import { validateMongoDBConfig, testMongoDBConnection } from '@/lib/mongodb/config';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { getErrorMessage } from '@/lib/errors';
 
@@ -29,7 +28,6 @@ interface HealthResponse {
   environment: string | undefined;
   services: {
     json?: ServiceHealth;
-    mongodb?: ServiceHealth;
     s3?: ServiceHealth;
   };
 }
@@ -42,7 +40,7 @@ async function checkJsonStoreHealth(
   services: HealthResponse['services'],
   serviceStatuses: HealthStatus[]
 ): Promise<void> {
-  healthLogger.debug('Checking JSON store health');
+
   try {
     const repos = getRepositories();
     await repos.users.getCurrentUser();
@@ -52,7 +50,7 @@ async function checkJsonStoreHealth(
       message: 'JSON store is operational',
     };
     serviceStatuses.push('healthy');
-    healthLogger.debug('JSON store health check passed');
+
   } catch (error) {
     const errorMessage = getErrorMessage(error);
     services.json = {
@@ -65,63 +63,6 @@ async function checkJsonStoreHealth(
 }
 
 /**
- * Check MongoDB health
- */
-async function checkMongoDBHealth(
-  healthLogger: ReturnType<typeof logger.child>,
-  services: HealthResponse['services'],
-  serviceStatuses: HealthStatus[]
-): Promise<void> {
-  healthLogger.debug('Checking MongoDB health', { dataBackend: process.env.DATA_BACKEND });
-
-  const mongoConfig = validateMongoDBConfig();
-
-  if (mongoConfig.isConfigured) {
-    try {
-      const mongoResult = await testMongoDBConnection();
-
-      if (mongoResult.success) {
-        services.mongodb = {
-          status: 'healthy',
-          message: mongoResult.message,
-          latencyMs: mongoResult.latencyMs,
-        };
-        serviceStatuses.push('healthy');
-        healthLogger.debug('MongoDB health check passed', {
-          latencyMs: mongoResult.latencyMs,
-        });
-      } else {
-        services.mongodb = {
-          status: 'unhealthy',
-          message: mongoResult.message,
-          latencyMs: mongoResult.latencyMs,
-        };
-        serviceStatuses.push('unhealthy');
-        healthLogger.warn('MongoDB health check failed', {
-          message: mongoResult.message,
-          latencyMs: mongoResult.latencyMs,
-        });
-      }
-    } catch (error) {
-      const errorMessage = getErrorMessage(error);
-      services.mongodb = {
-        status: 'unhealthy',
-        message: `MongoDB connection test error: ${errorMessage}`,
-      };
-      serviceStatuses.push('unhealthy');
-      healthLogger.error('MongoDB health check error', { error: errorMessage });
-    }
-  } else {
-    services.mongodb = {
-      status: 'degraded',
-      message: `MongoDB not properly configured: ${mongoConfig.errors.join('; ')}`,
-    };
-    serviceStatuses.push('degraded');
-    healthLogger.warn('MongoDB configuration invalid', { errors: mongoConfig.errors });
-  }
-}
-
-/**
  * Check file storage health
  */
 async function checkFileStorageHealth(
@@ -129,7 +70,7 @@ async function checkFileStorageHealth(
   services: HealthResponse['services'],
   serviceStatuses: HealthStatus[]
 ): Promise<void> {
-  healthLogger.debug('Checking file storage health');
+
 
   try {
     if (!fileStorageManager.isInitialized()) {
@@ -158,10 +99,7 @@ async function checkFileStorageHealth(
       mode: metadata.displayName,
     };
     serviceStatuses.push('healthy');
-    healthLogger.debug('File storage health check passed', {
-      backendCount: mountPoints.length,
-      defaultBackend: metadata.displayName,
-    });
+
   } catch (error) {
     const errorMessage = getErrorMessage(error);
     services.s3 = {
@@ -198,24 +136,15 @@ export async function GET() {
   const startTime = Date.now();
 
   try {
-    healthLogger.debug('Starting health check');
-
     const timestamp = new Date().toISOString();
     const uptime = process.uptime();
     const environment = process.env.NODE_ENV;
-    const dataBackend = process.env.DATA_BACKEND || 'mongodb';
-    const s3Mode = process.env.S3_MODE || 'disabled';
 
     const services: HealthResponse['services'] = {};
     const serviceStatuses: HealthStatus[] = [];
 
     // Check JSON store (always available as fallback)
     await checkJsonStoreHealth(healthLogger, services, serviceStatuses);
-
-    // Check MongoDB if configured as data backend
-    if (dataBackend === 'mongodb' || dataBackend === 'dual') {
-      await checkMongoDBHealth(healthLogger, services, serviceStatuses);
-    }
 
     // Check file storage
     await checkFileStorageHealth(healthLogger, services, serviceStatuses);

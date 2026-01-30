@@ -1,0 +1,172 @@
+/**
+ * Quilltap Component System - Typography
+ *
+ * Semantic typography classes for application chrome (UI elements).
+ * Markdown/prose content uses .qt-markdown in _content.css.
+ *
+ * Design principles:
+ * - Hierarchy through weight AND size, not size alone
+ * - Inter for UI chrome, EB Garamond available for long-form reading
+ * - 500 weight (medium) bridges the gap between normal and semibold
+ * - Metadata uses medium weight for scannability without size increase
+ */
+
+@layer components {
+  /* ==========================================================================
+     PAGE-LEVEL TYPOGRAPHY
+     ========================================================================== */
+
+  /**
+   * Page title - largest UI heading
+   * Use for: main page headers ("Settings", "Characters", welcome messages)
+   */
+  .qt-page-title {
+    @apply text-2xl font-bold tracking-tight;
+    color: var(--color-foreground);
+  }
+
+  /**
+   * Page subtitle - supporting text below page title
+   * Use for: page descriptions, instructions
+   */
+  .qt-page-subtitle {
+    @apply text-base font-normal;
+    color: var(--color-muted-foreground);
+  }
+
+  /* ==========================================================================
+     SECTION-LEVEL TYPOGRAPHY
+     ========================================================================== */
+
+  /**
+   * Section title - card/panel headers
+   * Use for: "Recent Chats", "Active Projects", "Characters", settings groups
+   */
+  .qt-section-title {
+    @apply text-lg font-semibold;
+    color: var(--color-foreground);
+  }
+
+  /**
+   * Section subtitle - supporting text for sections
+   * Use for: section descriptions, helper text below section titles
+   */
+  .qt-section-subtitle {
+    @apply text-sm font-normal;
+    color: var(--color-muted-foreground);
+  }
+
+  /* ==========================================================================
+     CARD/ITEM-LEVEL TYPOGRAPHY
+     ========================================================================== */
+
+  /**
+   * Card title - individual item names
+   * Use for: chat titles, project names, character names in lists
+   * Note: Uses font-medium (500) for distinction from body text
+   */
+  .qt-card-title {
+    @apply text-base font-medium;
+    color: var(--color-foreground);
+  }
+
+  /**
+   * Card subtitle - secondary line on cards
+   * Use for: participant names, character subtitles, brief descriptions
+   */
+  .qt-card-subtitle {
+    @apply text-sm font-normal;
+    color: var(--color-muted-foreground);
+  }
+
+  /* ==========================================================================
+     FORM TYPOGRAPHY
+     ========================================================================== */
+
+  /**
+   * Label - form labels and small headings
+   * Use for: input labels, toggle labels, small section headers
+   */
+  .qt-label {
+    @apply text-sm font-medium;
+    color: var(--color-foreground);
+  }
+
+  /**
+   * Helper text - form field descriptions
+   * Use for: input descriptions, validation hints, field context
+   */
+  .qt-helper {
+    @apply text-xs font-normal;
+    color: var(--color-muted-foreground);
+  }
+
+  /* ==========================================================================
+     BODY TEXT
+     ========================================================================== */
+
+  /**
+   * Body text - default readable text
+   * Use for: paragraphs, descriptions, general content
+   */
+  .qt-body {
+    @apply text-sm font-normal leading-relaxed;
+    color: var(--color-foreground);
+  }
+
+  /**
+   * Body small - compact body text
+   * Use for: dense UI areas, secondary content blocks
+   */
+  .qt-body-sm {
+    @apply text-xs font-normal leading-relaxed;
+    color: var(--color-foreground);
+  }
+
+  /* ==========================================================================
+     METADATA & AUXILIARY TEXT
+     ========================================================================== */
+
+  /**
+   * Meta text - timestamps, counts, auxiliary info
+   * Use for: "Jan 26", "14 msgs", "5h ago", "10 chats"
+   * Note: Uses font-medium (500) for scannability at small size
+   */
+  .qt-meta {
+    @apply text-xs font-medium;
+    color: var(--color-muted-foreground);
+  }
+
+  /**
+   * Caption - smallest text, footnotes
+   * Use for: copyright, version numbers, tertiary info
+   */
+  .qt-caption {
+    @apply text-xs font-normal;
+    color: var(--color-muted-foreground);
+  }
+
+  /* ==========================================================================
+     INTERACTIVE TEXT
+     ========================================================================== */
+
+  /**
+   * Link text - styled links outside of markdown
+   * Use for: "View all ->", navigation links, action text
+   */
+  .qt-link {
+    @apply text-sm font-normal;
+    @apply text-muted-foreground hover:text-foreground;
+    @apply transition-colors;
+  }
+
+  /**
+   * Action text - clickable text that performs an action
+   * Use for: "Edit", "Delete", inline actions
+   */
+  .qt-action {
+    @apply text-sm font-medium;
+    @apply text-primary hover:text-primary/80;
+    @apply transition-colors cursor-pointer;
+  }
+}

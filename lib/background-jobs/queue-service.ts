@@ -2,13 +2,13 @@
  * Background Job Queue Service
  *
  * Provides functions to enqueue background jobs for processing.
- * Jobs are stored in MongoDB and processed by the job processor.
+ * Jobs are stored in the database and processed by the job processor.
  */
 
 import { getRepositories } from '@/lib/repositories/factory';
 import { BackgroundJobType } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
-import type { QueueStats } from '@/lib/mongodb/repositories/background-jobs.repository';
+import type { QueueStats } from '@/lib/database/repositories';
 import { ensureProcessorRunning } from './processor';
 
 /**
@@ -74,6 +74,15 @@ export interface TitleUpdatePayload {
 }
 
 /**
+ * Payload for LLM log cleanup job
+ */
+export interface LLMLogCleanupPayload {
+  userId: string;
+  /** Optional: override the retention days from settings (for manual cleanup) */
+  retentionDays?: number;
+}
+
+/**
  * Message pair for batch memory extraction
  */
 export interface MessagePair {
@@ -92,8 +101,6 @@ export async function enqueueJob(
   payload: Record<string, unknown>,
   options?: EnqueueJobOptions
 ): Promise<string> {
-  logger.debug('Enqueueing background job', { userId, type });
-
   const repos = getRepositories();
   const now = new Date().toISOString();
 
@@ -164,6 +171,17 @@ export async function enqueueTitleUpdate(
 }
 
 /**
+ * Enqueue an LLM log cleanup job
+ */
+export async function enqueueLLMLogCleanup(
+  userId: string,
+  payload: LLMLogCleanupPayload,
+  options?: EnqueueJobOptions
+): Promise<string> {
+  return enqueueJob(userId, 'LLM_LOG_CLEANUP', payload as unknown as Record<string, unknown>, options);
+}
+
+/**
  * Batch enqueue memory extraction jobs for an imported chat
  * Creates one job per message pair
  */
@@ -176,15 +194,7 @@ export async function enqueueMemoryExtractionBatch(
   messagePairs: MessagePair[],
   options?: EnqueueJobOptions
 ): Promise<string[]> {
-  logger.debug('Enqueueing memory extraction batch', {
-    userId,
-    chatId,
-    characterId,
-    pairCount: messagePairs.length,
-  });
-
   if (messagePairs.length === 0) {
-    logger.debug('No message pairs to enqueue');
     return [];
   }
 

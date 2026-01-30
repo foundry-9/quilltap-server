@@ -39,7 +39,6 @@ function startCleanup() {
     for (const [backupId, data] of temporaryBackups.entries()) {
       if (now.getTime() - data.createdAt.getTime() > BACKUP_EXPIRY_MS) {
         temporaryBackups.delete(backupId);
-        logger.debug('[System Backup v1] Cleaned up expired backup', { backupId });
       }
     }
   }, CLEANUP_INTERVAL_MS);
@@ -50,7 +49,6 @@ function startCleanup() {
  */
 export const GET = createAuthenticatedHandler(async (req, { user }) => {
   try {
-    logger.debug('[System Backup v1] Listing backups', { userId: user.id });
 
     const backups = await listS3Backups(user.id);
 
@@ -93,15 +91,7 @@ export const POST = createAuthenticatedHandler(async (req, { user }) => {
     });
 
     // Create the backup
-    const { zipBuffer, manifest } = await createBackup(user.id);
-
-    logger.debug('[System Backup v1] Backup created', {
-      userId: user.id,
-      zipSize: zipBuffer.length,
-      entityCounts: manifest.counts,
-    });
-
-    if (destination === 's3') {
+    const { zipBuffer, manifest } = await createBackup(user.id);if (destination === 's3') {
       // Save to S3
       const s3Key = await saveBackupToS3(user.id, zipBuffer, filename);
 

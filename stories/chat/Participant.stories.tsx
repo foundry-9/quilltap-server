@@ -57,32 +57,6 @@ const ParticipantShowcase: React.FC = () => {
       </section>
 
       <section>
-        <h3 className="text-lg font-semibold mb-4">Mobile Participant Bar</h3>
-        <div className="qt-mobile-participant-bar">
-          <div className="qt-mobile-participant-avatar">
-            <div className="qt-avatar qt-avatar-sm">
-              <div className="qt-avatar-fallback">AC</div>
-            </div>
-          </div>
-          <div className="qt-mobile-participant-avatar">
-            <div className="qt-avatar qt-avatar-sm">
-              <div className="qt-avatar-fallback">BC</div>
-            </div>
-          </div>
-          <div className="qt-mobile-participant-avatar">
-            <div className="qt-avatar qt-avatar-sm">
-              <div className="qt-avatar-fallback">YO</div>
-            </div>
-          </div>
-          <button className="qt-mobile-participant-dropdown">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-        </div>
-      </section>
-
-      <section>
         <h3 className="text-lg font-semibold mb-4">Chat Sidebar Layout</h3>
         <div className="flex gap-4">
           <div className="flex-1 qt-card p-4">

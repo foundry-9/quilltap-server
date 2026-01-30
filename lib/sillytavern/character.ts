@@ -178,6 +178,101 @@ export async function parseSTCharacterPNG(
 }
 
 /**
+ * Generate a simple colored PNG placeholder with the character's initial
+ * Creates a 256x256 PNG with a colored background and white initial
+ */
+function generatePlaceholderPNG(characterName: string): Buffer {
+  // Simple colors based on character name hash
+  const colors = [
+    [74, 144, 226],   // Blue
+    [80, 200, 120],   // Green
+    [255, 149, 0],    // Orange
+    [175, 82, 222],   // Purple
+    [255, 59, 48],    // Red
+    [90, 200, 250],   // Teal
+    [255, 204, 0],    // Yellow
+    [88, 86, 214],    // Indigo
+  ]
+
+  // Hash the name to get a consistent color
+  let hash = 0
+  for (let i = 0; i < characterName.length; i++) {
+    hash = ((hash << 5) - hash) + characterName.charCodeAt(i)
+    hash = hash & hash
+  }
+  const colorIndex = Math.abs(hash) % colors.length
+  const [r, g, b] = colors[colorIndex]
+
+  // Create a 256x256 PNG with colored background
+  const width = 256
+  const height = 256
+
+  // PNG signature
+  const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
+
+  // IHDR chunk (image header)
+  const ihdrData = Buffer.alloc(13)
+  ihdrData.writeUInt32BE(width, 0)
+  ihdrData.writeUInt32BE(height, 4)
+  ihdrData.writeUInt8(8, 8)   // Bit depth
+  ihdrData.writeUInt8(2, 9)   // Color type (RGB)
+  ihdrData.writeUInt8(0, 10)  // Compression
+  ihdrData.writeUInt8(0, 11)  // Filter
+  ihdrData.writeUInt8(0, 12)  // Interlace
+  const ihdrChunk = createPNGChunk('IHDR', ihdrData)
+
+  // IDAT chunk (image data)
+  // Create raw pixel data (filter byte + RGB for each row)
+  const rawData = Buffer.alloc(height * (1 + width * 3))
+  for (let y = 0; y < height; y++) {
+    const rowOffset = y * (1 + width * 3)
+    rawData[rowOffset] = 0 // No filter
+    for (let x = 0; x < width; x++) {
+      const pixelOffset = rowOffset + 1 + x * 3
+      rawData[pixelOffset] = r
+      rawData[pixelOffset + 1] = g
+      rawData[pixelOffset + 2] = b
+    }
+  }
+
+  // Compress with zlib (deflate)
+  const zlib = require('zlib')
+  const compressedData = zlib.deflateSync(rawData)
+  const idatChunk = createPNGChunk('IDAT', compressedData)
+
+  // IEND chunk (image end)
+  const iendChunk = createPNGChunk('IEND', Buffer.alloc(0))
+
+  return Buffer.concat([
+    new Uint8Array(signature),
+    new Uint8Array(ihdrChunk),
+    new Uint8Array(idatChunk),
+    new Uint8Array(iendChunk),
+  ])
+}
+
+/**
+ * Create a PNG chunk with proper length, type, data, and CRC
+ */
+function createPNGChunk(type: string, data: Buffer): Buffer {
+  const length = Buffer.alloc(4)
+  length.writeUInt32BE(data.length)
+
+  const typeBuffer = Buffer.from(type, 'ascii')
+  const crcInput = Buffer.concat([new Uint8Array(typeBuffer), new Uint8Array(data)])
+  const crc = calculateCRC32(crcInput)
+  const crcBuffer = Buffer.alloc(4)
+  crcBuffer.writeUInt32BE(crc)
+
+  return Buffer.concat([
+    new Uint8Array(length),
+    new Uint8Array(typeBuffer),
+    new Uint8Array(data),
+    new Uint8Array(crcBuffer),
+  ])
+}
+
+/**
  * Create SillyTavern character PNG with embedded JSON
  */
 export async function createSTCharacterPNG(
@@ -187,17 +282,12 @@ export async function createSTCharacterPNG(
   const stCard = exportSTCharacter(character)
   const jsonData = JSON.stringify(stCard)
 
-  // If no avatar provided, create a simple placeholder
+  // If no avatar provided, generate a colored placeholder
   if (!avatarBuffer) {
-    // TODO: Generate a simple colored PNG placeholder
-    // For now, we'll require an avatar or handle this in the API
-    throw new Error('Avatar image required for PNG export')
+    avatarBuffer = generatePlaceholderPNG(character.name || 'Character')
   }
 
-  // Insert tEXt chunk into PNG
-  const pngSignature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
-
-  // Create tEXt chunk
+  // Create tEXt chunk for embedding character data
   const keyword = 'chara'
   const keywordBuffer = Buffer.from(keyword, 'utf8')
   const nullByte = Buffer.from([0])
@@ -224,9 +314,9 @@ export async function createSTCharacterPNG(
 
   // Construct new PNG with tEXt chunk inserted
   const result = Buffer.concat([
-    new Uint8Array(avatarBuffer.slice(0, insertOffset)),
+    new Uint8Array(avatarBuffer.subarray(0, insertOffset)),
     new Uint8Array(textChunk),
-    new Uint8Array(avatarBuffer.slice(insertOffset)),
+    new Uint8Array(avatarBuffer.subarray(insertOffset)),
   ])
 
   return result

@@ -33,7 +33,6 @@ type UpdateTemplateInput = z.infer<typeof updateTemplateSchema>;
 export const GET = createAuthenticatedParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }, { id }) => {
     try {
-      logger.debug('[Prompt Templates v1] GET template', { templateId: id, userId: user.id });
 
       const template = await repos.promptTemplates.findById(id);
 
@@ -53,15 +52,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
           ownerId: template.userId,
         });
         return forbidden();
-      }
-
-      logger.debug('[Prompt Templates v1] Retrieved template', {
-        templateId: id,
-        userId: user.id,
-        isBuiltIn: template.isBuiltIn,
-      });
-
-      return NextResponse.json({ template });
+      }return NextResponse.json({ template });
     } catch (error) {
       logger.error(
         '[Prompt Templates v1] Error fetching template',
@@ -80,7 +71,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }, { id }) => {
     try {
-      logger.debug('[Prompt Templates v1] PUT template', { templateId: id, userId: user.id });
 
       const body = await req.json();
       const validatedData = updateTemplateSchema.parse(body);
@@ -142,11 +132,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
 
       return NextResponse.json({ template });
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        logger.debug('[Prompt Templates v1] Validation error on update', {
-          errors: error.errors,
-        });
-        return validationError(error);
+      if (error instanceof z.ZodError) {return validationError(error);
       }
 
       logger.error(
@@ -166,7 +152,6 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
 export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }, { id }) => {
     try {
-      logger.debug('[Prompt Templates v1] DELETE template', { templateId: id, userId: user.id });
 
       const existingTemplate = await repos.promptTemplates.findById(id);
 

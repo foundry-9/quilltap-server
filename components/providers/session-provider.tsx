@@ -77,13 +77,15 @@ function CustomSessionProvider({
 
   const fetchSession = useCallback(async (): Promise<Session | null> => {
     try {
-      const response = await fetch("/api/v1/auth/session", {
+      // In single-user mode, session endpoint always returns the user
+      const response = await fetch("/api/v1/session", {
         credentials: "include",
       });
 
       if (!response.ok) {
-        setSession(null);
-        setStatus("unauthenticated");
+        // This shouldn't happen in single-user mode - log and retry
+        console.error("Failed to fetch session, will retry");
+        setStatus("loading");
         return null;
       }
 

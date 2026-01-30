@@ -9,6 +9,7 @@ import {
   getThemeDifferences,
   generateFontFaceRule,
   generateFontFacesCSS,
+  generateScopedThemeCSS,
 } from '@/lib/themes/utils'
 import { DEFAULT_THEME_TOKENS, getDefaultThemeTokens } from '@/lib/themes/default-tokens'
 import type { ThemeTokens } from '@/lib/themes/types'
@@ -352,6 +353,69 @@ describe('theme utility helpers', () => {
 
       const optionalRule = generateFontFaceRule({ family: 'F', src: '/f.woff2', display: 'optional' })
       expect(optionalRule).toContain('font-display: optional')
+    })
+  })
+
+  describe('scoped CSS generation for previews', () => {
+    it('generates scoped CSS for light mode', () => {
+      const css = generateScopedThemeCSS(DEFAULT_THEME_TOKENS, undefined, 'my-preview', 'light')
+      expect(css).toContain('.my-preview')
+      expect(css).toContain('--theme-background')
+      expect(css).toContain('--color-background: var(--theme-background)')
+      expect(css).toContain('background-color: var(--theme-background)')
+      expect(css).toContain('color: var(--theme-foreground)')
+    })
+
+    it('generates scoped CSS for dark mode', () => {
+      const css = generateScopedThemeCSS(DEFAULT_THEME_TOKENS, undefined, 'dark-preview', 'dark')
+      expect(css).toContain('.dark-preview')
+      expect(css).toContain('--theme-background')
+      // Dark mode uses dark colors
+      expect(css).toContain(DEFAULT_THEME_TOKENS.colors.dark.background)
+    })
+
+    it('includes font-face rules when fonts are provided', () => {
+      const fonts = [
+        { family: 'CustomFont', src: '/fonts/custom.woff2', weight: '400' },
+      ]
+      const css = generateScopedThemeCSS(DEFAULT_THEME_TOKENS, fonts, 'font-preview', 'light')
+      expect(css).toContain('@font-face')
+      expect(css).toContain('CustomFont')
+      expect(css).toContain('.font-preview')
+    })
+
+    it('maps theme variables to color variables for Tailwind', () => {
+      const css = generateScopedThemeCSS(DEFAULT_THEME_TOKENS, undefined, 'tw-preview', 'light')
+      expect(css).toContain('--color-primary: var(--theme-primary)')
+      expect(css).toContain('--color-secondary: var(--theme-secondary)')
+      expect(css).toContain('--color-muted: var(--theme-muted)')
+      expect(css).toContain('--color-destructive: var(--theme-destructive)')
+    })
+
+    it('includes typography, spacing, and effects variables', () => {
+      const css = generateScopedThemeCSS(DEFAULT_THEME_TOKENS, undefined, 'full-preview', 'light')
+      expect(css).toContain('--theme-font-sans')
+      expect(css).toContain('--theme-radius-lg')
+      expect(css).toContain('--theme-shadow-md')
+    })
+
+    it('handles minimal tokens without optional sections', () => {
+      const minimalTokens = {
+        colors: {
+          light: DEFAULT_THEME_TOKENS.colors.light,
+          dark: DEFAULT_THEME_TOKENS.colors.dark,
+        },
+      }
+      const css = generateScopedThemeCSS(minimalTokens, undefined, 'minimal-preview', 'light')
+      expect(css).toContain('.minimal-preview')
+      expect(css).toContain('--theme-background')
+      // Should not throw even without typography/spacing/effects
+    })
+
+    it('sanitizes scope class name with special characters', () => {
+      // The scope class should be used as-is, but themeId sanitization happens in the component
+      const css = generateScopedThemeCSS(DEFAULT_THEME_TOKENS, undefined, 'preview-test-123', 'light')
+      expect(css).toContain('.preview-test-123')
     })
   })
 })

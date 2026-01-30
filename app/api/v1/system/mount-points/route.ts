@@ -20,11 +20,11 @@ import { fileStorageManager } from '@/lib/file-storage/manager';
 const createMountPointSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
   backendType: z.enum(['s3', 'local', 'azure'], {
-    errorMap: () => ({ message: 'Invalid backend type' }),
+    error: () => 'Invalid backend type',
   }),
   path: z.string().min(1, 'Path is required'),
-  isDefault: z.boolean().default(false),
-  config: z.record(z.unknown()).optional(),
+  isDefault: z.boolean().prefault(false),
+  config: z.record(z.string(), z.unknown()).optional(),
 });
 
 type CreateMountPointInput = z.infer<typeof createMountPointSchema>;
@@ -35,7 +35,6 @@ type CreateMountPointInput = z.infer<typeof createMountPointSchema>;
 
 async function handleListBackends(req: NextRequest) {
   try {
-    logger.debug('[Mount Points v1] GET list-backends');
 
     // Return available backend types
     const backends = [
@@ -59,7 +58,6 @@ async function handleListBackends(req: NextRequest) {
       },
     ];
 
-    logger.debug('[Mount Points v1] Retrieved backend list', { count: backends.length });
 
     return NextResponse.json({ backends });
   } catch (error) {
@@ -75,14 +73,7 @@ async function handleListBackends(req: NextRequest) {
 async function handleCreate(req: NextRequest, { user, repos }: any) {
   try {
     const body = await req.json();
-    const validatedData = createMountPointSchema.parse(body);
-
-    logger.debug('[Mount Points v1] POST create mount point', {
-      name: validatedData.name,
-      backendType: validatedData.backendType,
-    });
-
-    // Create the mount point in the repository
+    const validatedData = createMountPointSchema.parse(body);// Create the mount point in the repository
     const mountPoint = await repos.mountPoints.create({
       name: validatedData.name,
       description: undefined,
@@ -104,7 +95,6 @@ async function handleCreate(req: NextRequest, { user, repos }: any) {
     return NextResponse.json({ mountPoint }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      logger.debug('[Mount Points v1] Validation error', { errors: error.errors });
       return validationError(error);
     }
 
@@ -130,17 +120,9 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
   }
 
   try {
-    logger.debug('[Mount Points v1] GET list mount points', { userId: user.id });
 
     // Fetch all mount points from the repository
-    const mountPoints = await repos.mountPoints.findAll();
-
-    logger.debug('[Mount Points v1] Retrieved mount points', {
-      userId: user.id,
-      count: mountPoints.length,
-    });
-
-    return NextResponse.json({
+    const mountPoints = await repos.mountPoints.findAll();return NextResponse.json({
       mountPoints,
       count: mountPoints.length,
     });

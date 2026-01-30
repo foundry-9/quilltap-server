@@ -78,16 +78,13 @@ function isCacheValid(
     entry.messageCount === currentMessageCount - 1
 
   if (!validForCount) {
-    logger.debug('[CompressionCache] Cache entry stale (message count mismatch)', {
-      cachedMessageCount: entry.messageCount,
-      currentMessageCount,
-    })
+
     return false
   }
 
   // Check if system prompt changed
   if (entry.systemPromptHash !== currentSystemPromptHash) {
-    logger.debug('[CompressionCache] Cache entry stale (system prompt changed)')
+
     return false
   }
 
@@ -103,11 +100,7 @@ export function triggerAsyncCompression(options: AsyncCompressionOptions): void 
 
   // Don't pre-compress if there aren't enough messages
   if (messages.length <= compressionOptions.windowSize) {
-    logger.debug('[CompressionCache] Skipping pre-compression (not enough messages)', {
-      chatId,
-      messageCount: messages.length,
-      windowSize: compressionOptions.windowSize,
-    })
+
     return
   }
 
@@ -116,10 +109,7 @@ export function triggerAsyncCompression(options: AsyncCompressionOptions): void 
   // Check if we already have a valid cache entry
   const existingEntry = compressionCache.get(chatId)
   if (existingEntry && isCacheValid(existingEntry, messages.length, systemPromptHash)) {
-    logger.debug('[CompressionCache] Valid cache entry already exists, skipping pre-compression', {
-      chatId,
-      messageCount: messages.length,
-    })
+
     return
   }
 
@@ -195,7 +185,7 @@ export async function getCachedCompression(
   const entry = compressionCache.get(chatId)
 
   if (!entry) {
-    logger.debug('[CompressionCache] No cache entry found', { chatId })
+
     return undefined
   }
 
@@ -206,11 +196,7 @@ export async function getCachedCompression(
     entry.messageCount === currentMessageCount - 1
 
   if (!validForCount) {
-    logger.debug('[CompressionCache] Cache entry stale (message count mismatch)', {
-      chatId,
-      cachedMessageCount: entry.messageCount,
-      currentMessageCount,
-    })
+
     compressionCache.delete(chatId)
     return undefined
   }
@@ -254,7 +240,7 @@ export async function getCachedCompression(
  */
 export function invalidateCompressionCache(chatId: string): void {
   if (compressionCache.has(chatId)) {
-    logger.debug('[CompressionCache] Invalidating cache', { chatId })
+
     compressionCache.delete(chatId)
   }
 }
@@ -264,9 +250,7 @@ export function invalidateCompressionCache(chatId: string): void {
  * Useful for testing or when settings change globally
  */
 export function clearCompressionCache(): void {
-  logger.debug('[CompressionCache] Clearing all cache entries', {
-    count: compressionCache.size,
-  })
+
   compressionCache.clear()
 }
 

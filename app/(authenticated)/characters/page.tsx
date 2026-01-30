@@ -139,7 +139,7 @@ export default function CharactersPage() {
   const toggleFavorite = async (e: React.MouseEvent, id: string) => {
     e.preventDefault()
     try {
-      const res = await fetch(`/api/v1/characters/${id}?action=favorite`, { method: 'PATCH' })
+      const res = await fetch(`/api/v1/characters/${id}?action=favorite`, { method: 'POST' })
       if (!res.ok) throw new Error('Failed to toggle favorite')
       const data = await res.json()
       setCharacters(characters.map((c) => (c.id === id ? { ...c, isFavorite: data.character.isFavorite } : c)))

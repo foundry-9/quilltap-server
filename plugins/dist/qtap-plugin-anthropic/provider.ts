@@ -192,7 +192,6 @@ export class AnthropicProvider implements LLMProvider {
   }
 
   async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
-    logger.debug('Anthropic sendMessage called', { context: 'AnthropicProvider.sendMessage', model: params.model })
 
     const client = new Anthropic({ apiKey })
 
@@ -222,11 +221,7 @@ export class AnthropicProvider implements LLMProvider {
       if (cachingEnabled) {
         // Use array format with cache_control for prompt caching
         // This can reduce costs by 90% for repeated system prompts
-        logger.debug('Enabling cache control for system message', {
-          context: 'AnthropicProvider.sendMessage',
-          cacheStrategy,
-          cacheTTL: cacheTTL || '5m',
-        })
+
         requestParams.system = [{
           type: 'text',
           text: systemMessage.content,
@@ -253,7 +248,6 @@ export class AnthropicProvider implements LLMProvider {
     const tools: any[] = params.tools ? [...params.tools] : []
 
     if (tools.length > 0) {
-      logger.debug('Adding tools to request', { context: 'AnthropicProvider.sendMessage', toolCount: tools.length })
 
       // Add cache_control to the last tool when caching is enabled
       if (cachingEnabled) {
@@ -262,20 +256,13 @@ export class AnthropicProvider implements LLMProvider {
           ...lastTool,
           cache_control: this.buildCacheControl(cacheTTL),
         }
-        logger.debug('Added cache control to last tool', { context: 'AnthropicProvider.sendMessage' })
+
       }
 
       requestParams.tools = tools
     }
 
     const response = await client.messages.create(requestParams)
-
-    logger.debug('Received Anthropic response', {
-      context: 'AnthropicProvider.sendMessage',
-      finishReason: response.stop_reason,
-      promptTokens: response.usage.input_tokens,
-      completionTokens: response.usage.output_tokens,
-    })
 
     const content = response.content[0]
 
@@ -289,11 +276,7 @@ export class AnthropicProvider implements LLMProvider {
       : undefined
 
     if (cacheUsage) {
-      logger.debug('Anthropic cache usage', {
-        context: 'AnthropicProvider.sendMessage',
-        cacheCreationInputTokens: cacheUsage.cacheCreationInputTokens,
-        cacheReadInputTokens: cacheUsage.cacheReadInputTokens,
-      })
+
     }
 
     return {
@@ -311,7 +294,6 @@ export class AnthropicProvider implements LLMProvider {
   }
 
   async *streamMessage(params: LLMParams, apiKey: string): AsyncGenerator<StreamChunk> {
-    logger.debug('Anthropic streamMessage called', { context: 'AnthropicProvider.streamMessage', model: params.model })
 
     const client = new Anthropic({ apiKey })
 
@@ -340,11 +322,7 @@ export class AnthropicProvider implements LLMProvider {
     if (systemMessage?.content) {
       if (cachingEnabled) {
         // Use array format with cache_control for prompt caching
-        logger.debug('Enabling cache control for streaming system message', {
-          context: 'AnthropicProvider.streamMessage',
-          cacheStrategy,
-          cacheTTL: cacheTTL || '5m',
-        })
+
         requestParams.system = [{
           type: 'text',
           text: systemMessage.content,
@@ -371,7 +349,6 @@ export class AnthropicProvider implements LLMProvider {
     const tools: any[] = params.tools ? [...params.tools] : []
 
     if (tools.length > 0) {
-      logger.debug('Adding tools to stream request', { context: 'AnthropicProvider.streamMessage', toolCount: tools.length })
 
       // Add cache_control to the last tool when caching is enabled
       if (cachingEnabled) {
@@ -380,7 +357,7 @@ export class AnthropicProvider implements LLMProvider {
           ...lastTool,
           cache_control: this.buildCacheControl(cacheTTL),
         }
-        logger.debug('Added cache control to last tool for streaming', { context: 'AnthropicProvider.streamMessage' })
+
       }
 
       requestParams.tools = tools
@@ -414,12 +391,7 @@ export class AnthropicProvider implements LLMProvider {
         if (block.type === 'text') {
           contentBlocks[event.index] = { type: 'text', text: block.text || '' }
         } else if (block.type === 'tool_use') {
-          logger.debug('Tool use block started', {
-            context: 'AnthropicProvider.streamMessage',
-            index: event.index,
-            toolName: block.name,
-            toolId: block.id,
-          })
+
           contentBlocks[event.index] = {
             type: 'tool_use',
             id: block.id,
@@ -436,7 +408,7 @@ export class AnthropicProvider implements LLMProvider {
         const blockIndex = event.index
 
         if (delta?.type === 'text_delta' && delta?.text) {
-          logger.debug('Stream text delta', { context: 'AnthropicProvider.streamMessage', textLength: delta.text.length })
+
           fullContent += delta.text
           // Update the content block
           if (contentBlocks[blockIndex]) {
@@ -450,11 +422,7 @@ export class AnthropicProvider implements LLMProvider {
           // Accumulate partial JSON for tool_use blocks
           if (contentBlocks[blockIndex] && contentBlocks[blockIndex].type === 'tool_use') {
             contentBlocks[blockIndex].partialJson = (contentBlocks[blockIndex].partialJson || '') + delta.partial_json
-            logger.debug('Tool use input delta', {
-              context: 'AnthropicProvider.streamMessage',
-              index: blockIndex,
-              chunkLength: delta.partial_json.length,
-            })
+
           }
         }
       }
@@ -467,12 +435,7 @@ export class AnthropicProvider implements LLMProvider {
         if (block && block.type === 'tool_use' && block.partialJson) {
           try {
             block.input = JSON.parse(block.partialJson)
-            logger.debug('Tool use input parsed', {
-              context: 'AnthropicProvider.streamMessage',
-              index: blockIndex,
-              toolName: block.name,
-              inputKeys: Object.keys(block.input || {}),
-            })
+
           } catch (e) {
             logger.error('Failed to parse tool use input JSON', {
               context: 'AnthropicProvider.streamMessage',
@@ -517,16 +480,6 @@ export class AnthropicProvider implements LLMProvider {
         // Count tool_use blocks for logging
         const toolUseCount = contentBlocks.filter(b => b.type === 'tool_use').length
 
-        logger.debug('Stream completed', {
-          context: 'AnthropicProvider.streamMessage',
-          promptTokens: totalInputTokens,
-          completionTokens: totalOutputTokens,
-          cacheCreationInputTokens,
-          cacheReadInputTokens,
-          contentBlockCount: contentBlocks.length,
-          toolUseCount,
-        })
-
         // Build the full message object for tool call detection
         // Use the tracked content blocks which include both text and tool_use
         const fullMessage = {
@@ -560,7 +513,7 @@ export class AnthropicProvider implements LLMProvider {
 
   async validateApiKey(apiKey: string): Promise<boolean> {
     try {
-      logger.debug('Validating Anthropic API key', { context: 'AnthropicProvider.validateApiKey' })
+
       const client = new Anthropic({ apiKey })
       // Anthropic doesn't have a direct validation endpoint, so we make a minimal request
       await client.messages.create({
@@ -568,7 +521,7 @@ export class AnthropicProvider implements LLMProvider {
         max_tokens: 1,
         messages: [{ role: 'user', content: 'test' }],
       })
-      logger.debug('Anthropic API key validation successful', { context: 'AnthropicProvider.validateApiKey' })
+
       return true
     } catch (error) {
       logger.error('Anthropic API key validation failed', { context: 'AnthropicProvider.validateApiKey' }, error instanceof Error ? error : undefined)
@@ -577,7 +530,7 @@ export class AnthropicProvider implements LLMProvider {
   }
 
   async getAvailableModels(apiKey: string): Promise<string[]> {
-    logger.debug('Fetching Anthropic models from API', { context: 'AnthropicProvider.getAvailableModels' })
+
     try {
       const client = new Anthropic({ apiKey })
       const response = await client.models.list()
@@ -588,11 +541,6 @@ export class AnthropicProvider implements LLMProvider {
         models.push(model.id)
       }
 
-      logger.debug('Retrieved Anthropic models from API', {
-        context: 'AnthropicProvider.getAvailableModels',
-        modelCount: models.length,
-        models
-      })
       return models
     } catch (error) {
       logger.error('Failed to fetch Anthropic models from API, using fallback list',
@@ -611,10 +559,7 @@ export class AnthropicProvider implements LLMProvider {
         'claude-3-5-haiku-20241022',
         'claude-3-haiku-20240307',
       ]
-      logger.debug('Using fallback Anthropic models', {
-        context: 'AnthropicProvider.getAvailableModels',
-        modelCount: fallbackModels.length
-      })
+
       return fallbackModels
     }
   }

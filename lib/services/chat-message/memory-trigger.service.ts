@@ -47,7 +47,7 @@ export async function triggerMemoryExtraction(
     const availableProfiles = await repos.connections.findByUserId(options.userId)
 
     if (!options.chatSettings.cheapLLMSettings) {
-      logger.debug('Skipping memory extraction - no cheapLLMSettings')
+
       return
     }
 
@@ -128,7 +128,7 @@ export async function triggerInterCharacterMemory(
 ): Promise<void> {
   try {
     if (!options.chatSettings.cheapLLMSettings) {
-      logger.debug('Skipping inter-character memory extraction - no cheapLLMSettings')
+
       return
     }
 
@@ -170,10 +170,6 @@ export async function triggerInterCharacterMemory(
       })
     }
 
-    logger.debug('Triggered inter-character memory extraction', {
-      characterId: options.character.id,
-      otherCharacterCount: otherCharacterMessages.length,
-    })
   } catch (error) {
     logger.error('Failed to trigger inter-character memory extraction', {}, error as Error)
   }
@@ -214,7 +210,7 @@ export async function triggerUserControlledCharacterMemory(
 ): Promise<void> {
   try {
     if (!options.chatSettings.cheapLLMSettings) {
-      logger.debug('Skipping user-controlled character memory - no cheapLLMSettings')
+
       return
     }
 
@@ -242,15 +238,9 @@ export async function triggerUserControlledCharacterMemory(
     }
 
     if (!connectionProfile) {
-      logger.debug('Skipping user-controlled character memory - no valid cheap LLM profile configured')
+
       return
     }
-
-    logger.debug('Triggering memory extraction for user-controlled character', {
-      characterId: options.userControlledCharacter.id,
-      characterName: options.userControlledCharacter.name,
-      respondingCharacterName: options.respondingCharacter.name,
-    })
 
     // The user-controlled character forms memories about what they said
     // and how the other character responded
@@ -271,13 +261,7 @@ export async function triggerUserControlledCharacterMemory(
       cheapLLMSettings: options.chatSettings.cheapLLMSettings,
       availableProfiles,
     }, async (result) => {
-      logger.debug('User-controlled character memory extraction complete', {
-        characterId: options.userControlledCharacter.id,
-        characterName: options.userControlledCharacter.name,
-        memoryCreated: result.memoryCreated,
-        memoryId: result.memoryId,
-        debugLogs: result.debugLogs,
-      })
+
     })
   } catch (error) {
     logger.error('Failed to trigger user-controlled character memory', {}, error as Error)
@@ -300,7 +284,7 @@ export async function triggerContextSummaryCheck(
 ): Promise<void> {
   try {
     if (!options.chatSettings.cheapLLMSettings) {
-      logger.debug('Skipping context summary check - no cheapLLMSettings')
+
       return
     }
 

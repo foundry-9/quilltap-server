@@ -2,7 +2,7 @@
  * Plugin Installer
  *
  * Handles installation and uninstallation of plugins from npm registry.
- * Supports both site-wide and per-user plugin installations.
+ * All plugins are installed site-wide.
  */
 
 import { exec } from 'child_process';
@@ -19,8 +19,6 @@ const execAsync = promisify(exec);
 // ============================================================================
 // TYPES
 // ============================================================================
-
-export type PluginScope = 'site' | 'user';
 
 export interface InstallResult {
   success: boolean;
@@ -41,7 +39,6 @@ export interface PluginRegistryEntry {
   version: string;
   installedAt: string;
   source: 'npm' | 'local';
-  scope?: 'site' | 'user';
 }
 
 export interface PluginRegistry {
@@ -51,7 +48,7 @@ export interface PluginRegistry {
 export interface InstalledPluginInfo {
   name: string;
   version: string;
-  source: 'bundled' | 'site' | 'user';
+  source: 'bundled' | 'site';
   manifest: PluginManifest;
   installedAt?: string;
 }
@@ -62,7 +59,6 @@ export interface InstalledPluginInfo {
 
 const PLUGINS_BASE_DIR = path.join(process.cwd(), 'plugins');
 const PLUGINS_SITE_DIR = path.join(PLUGINS_BASE_DIR, 'site');
-const PLUGINS_USERS_DIR = path.join(PLUGINS_BASE_DIR, 'users');
 const PLUGINS_DIST_DIR = path.join(PLUGINS_BASE_DIR, 'dist');
 
 // Regex for unscoped plugins: qtap-plugin-*
@@ -109,20 +105,14 @@ function dirToPackageName(dirName: string): string {
  * Installs a plugin from npm registry
  *
  * @param packageName - npm package name (must start with "qtap-plugin-")
- * @param scope - Installation scope ('site' for shared, 'user' for personal)
- * @param userId - User ID (required for user-scoped installations)
  * @returns Installation result with manifest on success
  */
 export async function installPluginFromNpm(
-  packageName: string,
-  scope: PluginScope,
-  userId?: string
+  packageName: string
 ): Promise<InstallResult> {
   logger.info('Starting plugin installation from npm', {
     context: 'PluginInstaller.installPluginFromNpm',
     packageName,
-    scope,
-    userId: userId ? `${userId.substring(0, 8)}...` : undefined,
   });
 
   // Validate package name format (supports both scoped and unscoped)
@@ -137,31 +127,12 @@ export async function installPluginFromNpm(
     };
   }
 
-  // Determine installation directory
-  let pluginBaseDir: string;
-  if (scope === 'site') {
-    pluginBaseDir = PLUGINS_SITE_DIR;
-  } else {
-    if (!userId) {
-      return { success: false, error: 'User ID required for user-scoped plugins' };
-    }
-    // Sanitize userId to prevent path traversal
-    const sanitizedUserId = userId.replace(/[^a-zA-Z0-9-]/g, '');
-    if (sanitizedUserId !== userId) {
-      return { success: false, error: 'Invalid user ID format' };
-    }
-    pluginBaseDir = path.join(PLUGINS_USERS_DIR, userId);
-  }
+  // All plugins are installed site-wide
+  const pluginBaseDir = PLUGINS_SITE_DIR;
 
   // Convert scoped package names to safe directory names (@org/pkg -> @org--pkg)
   const safeDirName = packageNameToDir(packageName);
   const pluginDir = path.join(pluginBaseDir, safeDirName);
-
-  logger.debug('Plugin installation directory', {
-    context: 'PluginInstaller.installPluginFromNpm',
-    pluginDir,
-  });
-
   try {
     // Check if already installed
     const alreadyExists = await fs.access(pluginDir).then(() => true).catch(() => false);
@@ -188,12 +159,6 @@ export async function installPluginFromNpm(
       path.join(pluginDir, 'package.json'),
       JSON.stringify(wrapperPkg, null, 2)
     );
-
-    logger.debug('Running npm install', {
-      context: 'PluginInstaller.installPluginFromNpm',
-      packageName,
-    });
-
     // Install the plugin from npm
     const { stdout, stderr } = await execAsync(
       `npm install ${packageName} --save --legacy-peer-deps`,
@@ -203,13 +168,6 @@ export async function installPluginFromNpm(
         env: { ...process.env, NODE_ENV: 'production' },
       }
     );
-
-    logger.debug('npm install output', {
-      context: 'PluginInstaller.installPluginFromNpm',
-      stdout: stdout.substring(0, 500),
-      stderr: stderr.substring(0, 500),
-    });
-
     // Check for npm errors (warnings are ok)
     if (stderr && stderr.includes('ERR!')) {
       logger.error('npm install failed with error', {
@@ -303,16 +261,11 @@ export async function installPluginFromNpm(
       version: installedVersion,
       installedAt: new Date().toISOString(),
       source: 'npm',
-      scope,
     });
 
     // Attempt to hot-load LLM provider plugins so they're available immediately
     let hotLoaded = false;
     if (manifest.capabilities.includes('LLM_PROVIDER')) {
-      logger.debug('Attempting to hot-load LLM provider plugin', {
-        context: 'PluginInstaller.installPluginFromNpm',
-        packageName,
-      });
       hotLoaded = hotLoadProviderPlugin(installedPath, manifest);
       if (hotLoaded) {
         logger.info('LLM provider plugin hot-loaded successfully', {
@@ -329,7 +282,6 @@ export async function installPluginFromNpm(
       context: 'PluginInstaller.installPluginFromNpm',
       packageName,
       version: installedVersion,
-      scope,
       requiresRestart,
       hotLoaded,
     });
@@ -368,19 +320,14 @@ export async function installPluginFromNpm(
  * Uninstalls a plugin
  *
  * @param packageName - Plugin package name
- * @param scope - Installation scope
- * @param userId - User ID (required for user-scoped plugins)
  * @returns Uninstall result
  */
 export async function uninstallPlugin(
-  packageName: string,
-  scope: PluginScope,
-  userId?: string
+  packageName: string
 ): Promise<UninstallResult> {
   logger.info('Uninstalling plugin', {
     context: 'PluginInstaller.uninstallPlugin',
     packageName,
-    scope,
   });
 
   // Validate package name (supports both scoped and unscoped)
@@ -388,16 +335,8 @@ export async function uninstallPlugin(
     return { success: false, error: 'Invalid package name. Must be qtap-plugin-* or @org/qtap-plugin-*' };
   }
 
-  // Determine installation directory
-  let pluginBaseDir: string;
-  if (scope === 'site') {
-    pluginBaseDir = PLUGINS_SITE_DIR;
-  } else {
-    if (!userId) {
-      return { success: false, error: 'User ID required for user-scoped plugins' };
-    }
-    pluginBaseDir = path.join(PLUGINS_USERS_DIR, userId);
-  }
+  // All plugins are in the site directory
+  const pluginBaseDir = PLUGINS_SITE_DIR;
 
   // Convert scoped package names to safe directory names
   const safeDirName = packageNameToDir(packageName);
@@ -419,7 +358,6 @@ export async function uninstallPlugin(
     logger.info('Plugin uninstalled successfully', {
       context: 'PluginInstaller.uninstallPlugin',
       packageName,
-      scope,
     });
 
     return { success: true };
@@ -443,15 +381,13 @@ export async function uninstallPlugin(
 // ============================================================================
 
 /**
- * Gets all installed plugins across all scopes
+ * Gets all installed plugins
  *
- * @param scope - Filter by scope ('all', 'bundled', 'site', 'user')
- * @param userId - User ID (required when scope includes 'user')
+ * @param scope - Filter by scope ('all', 'bundled', 'site')
  * @returns List of installed plugins with their info
  */
 export async function getInstalledPlugins(
-  scope: 'all' | 'bundled' | 'site' | 'user',
-  userId?: string
+  scope: 'all' | 'bundled' | 'site' = 'all'
 ): Promise<InstalledPluginInfo[]> {
   const plugins: InstalledPluginInfo[] = [];
 
@@ -467,19 +403,6 @@ export async function getInstalledPlugins(
     plugins.push(...site);
   }
 
-  // User plugins
-  if ((scope === 'all' || scope === 'user') && userId) {
-    const userDir = path.join(PLUGINS_USERS_DIR, userId);
-    const user = await scanPluginDirectory(userDir, 'user');
-    plugins.push(...user);
-  }
-
-  logger.debug('Retrieved installed plugins', {
-    context: 'PluginInstaller.getInstalledPlugins',
-    scope,
-    count: plugins.length,
-  });
-
   return plugins;
 }
 
@@ -487,13 +410,11 @@ export async function getInstalledPlugins(
  * Checks if a plugin is installed
  *
  * @param packageName - Plugin package name
- * @param userId - User ID for checking user-scoped installations
  * @returns True if installed in any scope
  */
 export async function isPluginInstalled(
-  packageName: string,
-  userId?: string
-): Promise<{ installed: boolean; scope?: 'bundled' | 'site' | 'user' }> {
+  packageName: string
+): Promise<{ installed: boolean; scope?: 'bundled' | 'site' }> {
   // Convert scoped package names to safe directory names for path lookups
   const safeDirName = packageNameToDir(packageName);
 
@@ -509,14 +430,6 @@ export async function isPluginInstalled(
     return { installed: true, scope: 'site' };
   }
 
-  // Check user
-  if (userId) {
-    const userPath = path.join(PLUGINS_USERS_DIR, userId, safeDirName, 'node_modules', packageName, 'manifest.json');
-    if (await fs.access(userPath).then(() => true).catch(() => false)) {
-      return { installed: true, scope: 'user' };
-    }
-  }
-
   return { installed: false };
 }
 
@@ -529,7 +442,7 @@ export async function isPluginInstalled(
  */
 async function scanPluginDirectory(
   baseDir: string,
-  source: 'bundled' | 'site' | 'user'
+  source: 'bundled' | 'site'
 ): Promise<InstalledPluginInfo[]> {
   const plugins: InstalledPluginInfo[] = [];
 
@@ -621,11 +534,6 @@ async function scanPluginDirectory(
       }
     }
   } catch (error) {
-    logger.debug('Plugin directory scan skipped', {
-      context: 'PluginInstaller.scanPluginDirectory',
-      baseDir,
-      reason: error instanceof Error ? error.message : String(error),
-    });
   }
 
   return plugins;
@@ -654,12 +562,6 @@ async function updateRegistry(
 
   await fs.mkdir(baseDir, { recursive: true });
   await fs.writeFile(registryPath, JSON.stringify(registry, null, 2));
-
-  logger.debug('Updated plugin registry', {
-    context: 'PluginInstaller.updateRegistry',
-    plugin: plugin.name,
-    totalPlugins: registry.plugins.length,
-  });
 }
 
 /**
@@ -684,10 +586,6 @@ async function removeFromRegistry(
 
   if (registry.plugins.length !== previousCount) {
     await fs.writeFile(registryPath, JSON.stringify(registry, null, 2));
-    logger.debug('Removed plugin from registry', {
-      context: 'PluginInstaller.removeFromRegistry',
-      plugin: packageName,
-    });
   }
 }
 
@@ -697,6 +595,5 @@ async function removeFromRegistry(
 
 export {
   PLUGINS_SITE_DIR,
-  PLUGINS_USERS_DIR,
   PLUGINS_DIST_DIR,
 };

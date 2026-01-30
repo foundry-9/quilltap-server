@@ -16,54 +16,56 @@ import type { ThemeTokens, Typography, Spacing, Effects } from './types';
 
 /**
  * Default light mode colors
- * Extracted from globals.css @theme block
+ * Extracted from globals.css - warm slate-blue palette
+ * Base hue: 220 (slate-blue) for professional, neutral warmth
  */
 const DEFAULT_LIGHT_COLORS = {
-  background: 'hsl(0 0% 100%)',
-  foreground: 'hsl(222.2 84% 4.9%)',
-  primary: 'hsl(222.2 47.4% 11.2%)',
-  primaryForeground: 'hsl(210 40% 98%)',
-  secondary: 'hsl(210 40% 96.1%)',
-  secondaryForeground: 'hsl(222.2 47.4% 11.2%)',
-  muted: 'hsl(210 40% 96.1%)',
-  mutedForeground: 'hsl(215.4 16.3% 46.9%)',
-  accent: 'hsl(210 40% 96.1%)',
-  accentForeground: 'hsl(222.2 47.4% 11.2%)',
-  destructive: 'hsl(0 84.2% 60.2%)',
-  destructiveForeground: 'hsl(210 40% 98%)',
-  card: 'hsl(0 0% 100%)',
-  cardForeground: 'hsl(222.2 84% 4.9%)',
-  popover: 'hsl(0 0% 100%)',
-  popoverForeground: 'hsl(222.2 84% 4.9%)',
-  border: 'hsl(214.3 31.8% 91.4%)',
-  input: 'hsl(214.3 31.8% 91.4%)',
-  ring: 'hsl(222.2 84% 4.9%)',
+  background: 'hsl(220 20% 97%)',
+  foreground: 'hsl(220 25% 12%)',
+  primary: 'hsl(220 60% 20%)',
+  primaryForeground: 'hsl(220 20% 98%)',
+  secondary: 'hsl(220 15% 92%)',
+  secondaryForeground: 'hsl(220 25% 25%)',
+  muted: 'hsl(220 15% 94%)',
+  mutedForeground: 'hsl(220 10% 45%)',
+  accent: 'hsl(210 60% 95%)',
+  accentForeground: 'hsl(210 70% 35%)',
+  destructive: 'hsl(0 72% 51%)',
+  destructiveForeground: 'hsl(0 0% 100%)',
+  card: 'hsl(220 20% 100%)',
+  cardForeground: 'hsl(220 25% 12%)',
+  popover: 'hsl(220 20% 100%)',
+  popoverForeground: 'hsl(220 25% 12%)',
+  border: 'hsl(220 15% 88%)',
+  input: 'hsl(220 15% 88%)',
+  ring: 'hsl(220 60% 50%)',
 } as const;
 
 /**
  * Default dark mode colors
- * Extracted from globals.css .dark @theme block
+ * Extracted from globals.css - warm slate-blue palette
+ * Creates visible surface hierarchy: page (8%) → card (12%) → popover (15%)
  */
 const DEFAULT_DARK_COLORS = {
-  background: 'hsl(222.2 84% 4.9%)',
-  foreground: 'hsl(210 40% 98%)',
-  primary: 'hsl(210 40% 98%)',
-  primaryForeground: 'hsl(222.2 47.4% 11.2%)',
-  secondary: 'hsl(217.2 32.6% 17.5%)',
-  secondaryForeground: 'hsl(210 40% 98%)',
-  muted: 'hsl(217.2 32.6% 17.5%)',
-  mutedForeground: 'hsl(215 20.2% 65.1%)',
-  accent: 'hsl(217.2 32.6% 17.5%)',
-  accentForeground: 'hsl(210 40% 98%)',
-  destructive: 'hsl(0 62.8% 30.6%)',
-  destructiveForeground: 'hsl(210 40% 98%)',
-  card: 'hsl(222.2 84% 4.9%)',
-  cardForeground: 'hsl(210 40% 98%)',
-  popover: 'hsl(222.2 84% 4.9%)',
-  popoverForeground: 'hsl(210 40% 98%)',
-  border: 'hsl(217.2 32.6% 17.5%)',
-  input: 'hsl(217.2 32.6% 17.5%)',
-  ring: 'hsl(212.7 26.8% 83.9%)',
+  background: 'hsl(220 25% 8%)',
+  foreground: 'hsl(220 15% 92%)',
+  primary: 'hsl(220 50% 75%)',
+  primaryForeground: 'hsl(220 25% 8%)',
+  secondary: 'hsl(220 20% 18%)',
+  secondaryForeground: 'hsl(220 15% 85%)',
+  muted: 'hsl(220 15% 15%)',
+  mutedForeground: 'hsl(220 10% 55%)',
+  accent: 'hsl(210 50% 20%)',
+  accentForeground: 'hsl(210 70% 75%)',
+  destructive: 'hsl(0 65% 55%)',
+  destructiveForeground: 'hsl(0 0% 100%)',
+  card: 'hsl(220 20% 12%)',
+  cardForeground: 'hsl(220 15% 92%)',
+  popover: 'hsl(220 20% 15%)',
+  popoverForeground: 'hsl(220 15% 92%)',
+  border: 'hsl(220 15% 20%)',
+  input: 'hsl(220 15% 20%)',
+  ring: 'hsl(220 60% 60%)',
 } as const;
 
 // ============================================================================

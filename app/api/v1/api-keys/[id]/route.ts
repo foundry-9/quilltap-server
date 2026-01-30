@@ -26,7 +26,6 @@ async function testProviderApiKey(
   baseUrl?: string
 ): Promise<{ valid: boolean; error?: string }> {
   try {
-    logger.debug('[API Keys v1] Testing provider API key', { provider });
 
     // Get provider plugin from registry
     const plugin = providerRegistry.getProvider(provider);
@@ -37,7 +36,6 @@ async function testProviderApiKey(
 
     // Use plugin's validateApiKey method
     const isValid = await plugin.validateApiKey(apiKey, baseUrl);
-    logger.debug('[API Keys v1] Key validation result', { provider, valid: isValid });
 
     return { valid: isValid };
   } catch (error) {
@@ -55,7 +53,6 @@ async function testProviderApiKey(
 export const GET = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     try {
-      logger.debug('[API Keys v1] GET key', { keyId: id, userId: user.id });
 
       const apiKey = await repos.connections.findApiKeyById(id);
 
@@ -89,7 +86,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     try {
-      logger.debug('[API Keys v1] PUT key', { keyId: id, userId: user.id });
 
       // Verify key exists
       const existingKey = await repos.connections.findApiKeyById(id);
@@ -162,7 +158,6 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
 export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     try {
-      logger.debug('[API Keys v1] DELETE key', { keyId: id, userId: user.id });
 
       // Verify key exists
       const existingKey = await repos.connections.findApiKeyById(id);
@@ -199,7 +194,6 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
     }
 
     try {
-      logger.debug('[API Keys v1] Testing key', { keyId: id, userId: user.id });
 
       // Get the API key
       const apiKey = await repos.connections.findApiKeyByIdAndUserId(id, user.id);

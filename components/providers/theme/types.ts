@@ -21,6 +21,13 @@ export interface ThemeSummary {
     light: { background: string; primary: string; secondary: string; accent: string };
     dark: { background: string; primary: string; secondary: string; accent: string };
   };
+  /** Heading font for theme preview in selector */
+  headingFont?: {
+    /** CSS font-family value */
+    family: string;
+    /** URL to load the font (for custom fonts) */
+    url?: string;
+  };
 }
 
 /**

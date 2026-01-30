@@ -3,7 +3,7 @@
 /**
  * Color Mode Selector Component
  *
- * Displays radio button options for selecting color mode:
+ * Displays compact button options for selecting color mode:
  * - Light mode
  * - Dark mode
  * - System (follows OS settings)
@@ -20,7 +20,7 @@ const COLOR_MODE_OPTIONS: ColorModeOption[] = [
     label: 'Light',
     description: 'Always use light mode',
     icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -35,7 +35,7 @@ const COLOR_MODE_OPTIONS: ColorModeOption[] = [
     label: 'Dark',
     description: 'Always use dark mode',
     icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -50,7 +50,7 @@ const COLOR_MODE_OPTIONS: ColorModeOption[] = [
     label: 'System',
     description: 'Follow your system settings',
     icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -63,7 +63,7 @@ const COLOR_MODE_OPTIONS: ColorModeOption[] = [
 ]
 
 /**
- * Renders color mode selector with radio button options
+ * Renders color mode selector as a compact horizontal button group
  */
 export function ColorModeSelector({
   value,
@@ -72,79 +72,35 @@ export function ColorModeSelector({
   disabled,
 }: ColorModeSelectorProps) {
   return (
-    <div className="space-y-3">
-      {COLOR_MODE_OPTIONS.map((option) => (
-        <label
-          key={option.value}
-          className={`
-            flex items-center gap-4 p-4 border rounded-lg transition-colors
-            ${
-              value === option.value
-                ? 'border-primary bg-accent'
-                : 'border-border hover:bg-accent'
-            }
-            ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-          `}
-        >
-          <input
-            type="radio"
-            name="colorMode"
-            value={option.value}
-            checked={value === option.value}
-            onChange={() => {
-              if (!disabled) {
-                onChange(option.value as ColorMode)
-              }
-            }}
-            disabled={disabled}
-            className="sr-only"
-          />
+    <div className="flex gap-2">
+      {COLOR_MODE_OPTIONS.map((option) => {
+        const isSelected = value === option.value
+        const displayLabel = option.value === 'system'
+          ? `System (${resolvedMode})`
+          : option.label
 
-          {/* Icon */}
-          <div
+        return (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => !disabled && onChange(option.value as ColorMode)}
+            disabled={disabled}
             className={`
-            flex-shrink-0 p-2 rounded-full
-            ${
-              value === option.value
-                ? 'bg-primary/10 text-primary'
-                : 'bg-muted text-muted-foreground'
-            }
-          `}
+              flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium
+              border rounded-lg transition-colors
+              ${isSelected
+                ? 'border-primary bg-primary text-primary-foreground'
+                : 'border-border bg-card hover:bg-accent text-foreground'
+              }
+              ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+            `}
+            aria-pressed={isSelected}
           >
             {option.icon}
-          </div>
-
-          {/* Label and Description */}
-          <div className="flex-1">
-            <div className="qt-text-primary">{option.label}</div>
-            <div className="qt-text-small">
-              {option.description}
-              {option.value === 'system' && (
-                <span className="ml-1 text-xs">
-                  (currently {resolvedMode})
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Selected Indicator */}
-          {value === option.value && (
-            <div className="flex-shrink-0">
-              <svg
-                className="w-5 h-5 text-primary"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </div>
-          )}
-        </label>
-      ))}
+            <span>{displayLabel}</span>
+          </button>
+        )
+      })}
     </div>
   )
 }

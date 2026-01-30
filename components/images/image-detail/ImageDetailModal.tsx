@@ -18,15 +18,16 @@ export default function ImageDetailModal({
 }: ImageDetailModalProps) {
   const [characters, setCharacters] = useState<Character[]>([])
   const [loadingEntities, setLoadingEntities] = useState(true)
-  const [taggedCharacterIds, setTaggedCharacterIds] = useState<Set<string>>(new Set())
   const [imageMissing, setImageMissing] = useState(false)
 
   const {
+    taggedCharacterIds,
     taggingInProgress,
     settingAvatar,
     toggleCharacterTag,
     setAsAvatar,
     handleDownload,
+    updateTaggedCharacters,
   } = useImageActions(image, characters, onAvatarSet)
 
   // Load characters on mount (includes former personas now with controlledBy: 'user')
@@ -70,11 +71,11 @@ export default function ImageDetailModal({
         }
       })
 
-      setTaggedCharacterIds(charIds)
+      updateTaggedCharacters(charIds)
     } else {
-      setTaggedCharacterIds(new Set())
+      updateTaggedCharacters(new Set())
     }
-  }, [image, characters])
+  }, [image, characters, updateTaggedCharacters])
 
   // Keyboard navigation (Escape, arrow keys)
   useImageNavigation({
@@ -127,6 +128,7 @@ export default function ImageDetailModal({
         {/* Tag buttons panel */}
         {!imageMissing && (
           <ImageMetadata
+            imageId={image.id}
             characters={characters}
             loadingEntities={loadingEntities}
             taggedCharacterIds={taggedCharacterIds}

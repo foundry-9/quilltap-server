@@ -39,11 +39,11 @@
   --qt-button-destructive-hover-bg: color-mix(in srgb, var(--color-destructive) 90%, black);
 
   --qt-button-success-bg: var(--color-success);
-  --qt-button-success-fg: hsl(0 0% 10%); /* Dark text for contrast on bright green */
+  --qt-button-success-fg: var(--color-success-foreground);
   --qt-button-success-hover-bg: color-mix(in srgb, var(--color-success) 85%, black);
 
   --qt-button-warning-bg: var(--color-warning);
-  --qt-button-warning-fg: hsl(0 0% 10%); /* Dark text for contrast on amber */
+  --qt-button-warning-fg: var(--color-warning-foreground);
   --qt-button-warning-hover-bg: color-mix(in srgb, var(--color-warning) 85%, black);
 
   /* ==========================================================================
@@ -88,15 +88,18 @@
 
   /* ==========================================================================
      CARD VARIABLES
+     Shadow values tuned for the warm slate-blue theme:
+     - Light mode: subtle shadows using the foreground color
+     - Dark mode overrides below use pure black for depth
      ========================================================================== */
   --qt-card-radius: var(--radius-lg);
   --qt-card-padding: 1.5rem;
   --qt-card-bg: var(--color-card);
   --qt-card-fg: var(--color-card-foreground);
   --qt-card-border: var(--color-border);
-  --qt-card-border-opacity: 0.6;
-  --qt-card-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-  --qt-card-shadow-hover: 0 10px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  --qt-card-border-opacity: 0.55;
+  --qt-card-shadow: 0 1px 3px hsl(220 25% 12% / 0.08), 0 1px 2px hsl(220 25% 12% / 0.05);
+  --qt-card-shadow-hover: 0 4px 12px hsl(220 25% 12% / 0.12), 0 2px 4px hsl(220 25% 12% / 0.06);
   --qt-card-transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
 
   /* Entity card - extends card for character/persona/chat list items */
@@ -147,28 +150,32 @@
 
   /* ==========================================================================
      SIDEBAR VARIABLES
+     Uses dedicated sidebar theme colors for better visual separation
      ========================================================================== */
   --qt-sidebar-width: 16rem;
-  --qt-sidebar-bg: var(--color-background);
-  --qt-sidebar-border: var(--color-border);
+  --qt-sidebar-bg: var(--color-sidebar-background);
+  --qt-sidebar-border: var(--color-sidebar-border);
+  --qt-sidebar-fg: var(--color-sidebar-foreground);
+  --qt-sidebar-muted: var(--color-sidebar-muted);
 
   --qt-sidebar-item-padding-x: 0.75rem;
   --qt-sidebar-item-padding-y: 0.5rem;
   --qt-sidebar-item-radius: var(--radius-md);
-  --qt-sidebar-item-hover-bg: var(--color-muted);
+  --qt-sidebar-item-hover-bg: var(--color-sidebar-accent);
   --qt-sidebar-item-active-bg: color-mix(in srgb, var(--color-primary) 10%, transparent);
   --qt-sidebar-item-active-border: var(--color-primary);
 
   /* ==========================================================================
      LEFT SIDEBAR VARIABLES (App Navigation)
+     Uses dedicated sidebar theme colors for visual separation from content
      ========================================================================== */
   --qt-left-sidebar-width: 16rem;
   --qt-left-sidebar-min-width: 16rem;
   --qt-left-sidebar-max-width: 32rem;
   --qt-left-sidebar-collapsed-width: 4rem;
   --qt-left-sidebar-resize-handle-width: 4px;
-  --qt-left-sidebar-bg: var(--color-background);
-  --qt-left-sidebar-border: var(--color-border);
+  --qt-left-sidebar-bg: var(--color-sidebar-background);
+  --qt-left-sidebar-border: var(--color-sidebar-border);
   --qt-left-sidebar-transition: width 200ms ease, transform 300ms ease;
 
   --qt-left-sidebar-header-height: 4rem;
@@ -176,7 +183,7 @@
 
   --qt-left-sidebar-section-padding: 0.75rem;
   --qt-left-sidebar-section-gap: 0.25rem;
-  --qt-left-sidebar-section-title-fg: var(--color-muted-foreground);
+  --qt-left-sidebar-section-title-fg: var(--color-sidebar-muted);
 
   --qt-left-sidebar-item-gap: 0.5rem;
   --qt-left-sidebar-item-icon-size: 1.25rem;
@@ -249,7 +256,11 @@
   --qt-chat-message-row-max-width: 800px;
 
   /* Page container width - respects content width toggle */
-  --qt-page-max-width: 64rem;
+  /* Note: This default is overridden by ContentWidthProvider at runtime */
+  --qt-page-max-width: 75rem;
+
+  /* Auto-fill card grid minimum width */
+  --qt-card-grid-auto-min: 550px;
 
   --qt-chat-sidebar-width: 20rem;
   --qt-chat-sidebar-collapsed-width: 4rem;
@@ -258,12 +269,6 @@
   --qt-chat-sidebar-header-border: var(--color-border);
   --qt-chat-sidebar-muted: var(--color-muted-foreground);
   --qt-chat-sidebar-heading: var(--color-foreground);
-
-  /* Mobile chat composer variables */
-  --qt-mobile-composer-input-min-height: 2.5rem;
-  --qt-mobile-tool-palette-max-height: 50vh;
-  --qt-mobile-tool-palette-bg: var(--color-background);
-  --qt-mobile-tool-palette-border: var(--color-border);
 
   --qt-participant-card-radius: var(--radius-lg);
   --qt-participant-card-bg: var(--color-card);
@@ -338,6 +343,8 @@
   --qt-badge-tag-fg: hsl(25 95% 40%);
   --qt-badge-memory-bg: hsl(330 80% 60% / 0.15);
   --qt-badge-memory-fg: hsl(330 80% 40%);
+  --qt-badge-project-bg: hsl(185 80% 40% / 0.15);
+  --qt-badge-project-fg: hsl(185 80% 30%);
 
   /* Status badge colors - Enabled, Disabled, etc. */
   --qt-badge-enabled-bg: hsl(142 76% 36% / 0.15);
@@ -483,6 +490,13 @@
    Adjusted colors for dark backgrounds with better contrast
    ========================================================================== */
 .dark {
+  /* Card shadows - black shadow for depth plus faint light edge for definition */
+  --qt-card-shadow: 0 1px 3px hsl(220 15% 0% / 0.3), 0 0 1px hsl(220 15% 100% / 0.05);
+  --qt-card-shadow-hover: 0 4px 12px hsl(220 15% 0% / 0.4), 0 0 1px hsl(220 15% 100% / 0.08);
+
+  /* Borders more visible in dark mode to compensate for reduced shadow effectiveness */
+  --qt-card-border-opacity: 0.7;
+
   /* Alert tokens - brighter, more saturated for dark backgrounds */
   --qt-alert-success-bg: hsl(142 76% 36% / 0.2);
   --qt-alert-success-fg: hsl(142 76% 65%);

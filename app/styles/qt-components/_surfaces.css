@@ -90,10 +90,11 @@
   }
 
   /**
-   * Card title
+   * Card title - uses theme heading font for proper typography
    */
   .qt-card-title {
     @apply text-lg font-semibold text-foreground;
+    font-family: var(--qt-heading-font);
   }
 
   /**
@@ -195,6 +196,14 @@
     @apply bg-muted;
     border-top: 1px solid var(--qt-dialog-border);
     border-radius: 0 0 var(--qt-dialog-radius) var(--qt-dialog-radius);
+  }
+
+  /**
+   * Wide dialog variant - matches page container width
+   * Respects full-width mode via --qt-page-max-width CSS variable
+   */
+  .qt-dialog-wide {
+    max-width: min(var(--qt-page-max-width), calc(100vw - 2rem));
   }
 
   /* ==========================================================================

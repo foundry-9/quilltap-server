@@ -66,25 +66,12 @@ export async function estimateMessageCost(
   completionTokens: number,
   userId: string
 ): Promise<CostEstimateResult> {
-  logger.debug('Estimating message cost', {
-    provider,
-    modelName,
-    promptTokens,
-    completionTokens,
-  });
-
   try {
     // First try OpenRouter pricing if the provider is OpenRouter
     if (provider === 'OPENROUTER') {
       const openRouterPricing = await fetchModelPricing('OPENROUTER', modelName, userId);
       if (openRouterPricing) {
         const cost = estimateCost(openRouterPricing, promptTokens, completionTokens);
-        logger.debug('Cost estimated from OpenRouter', {
-          cost,
-          modelName,
-          promptCostPer1M: openRouterPricing.promptCostPer1M,
-          completionCostPer1M: openRouterPricing.completionCostPer1M,
-        });
         return {
           cost,
           source: 'openrouter',
@@ -97,13 +84,6 @@ export async function estimateMessageCost(
     const registryPricing = getModelPricingFromRegistry(provider, modelName);
     if (registryPricing) {
       const cost = estimateCost(registryPricing, promptTokens, completionTokens);
-      logger.debug('Cost estimated from registry/fallback', {
-        cost,
-        modelName,
-        provider,
-        promptCostPer1M: registryPricing.promptCostPer1M,
-        completionCostPer1M: registryPricing.completionCostPer1M,
-      });
       return {
         cost,
         source: 'registry',
@@ -115,11 +95,6 @@ export async function estimateMessageCost(
     const fetchedPricing = await fetchModelPricing(provider, modelName, userId);
     if (fetchedPricing) {
       const cost = estimateCost(fetchedPricing, promptTokens, completionTokens);
-      logger.debug('Cost estimated from pricing cache', {
-        cost,
-        modelName,
-        provider,
-      });
       return {
         cost,
         source: 'fallback',
@@ -133,14 +108,6 @@ export async function estimateMessageCost(
       const openRouterEstimate = await getOpenRouterPricingForModel(provider, modelName);
       if (openRouterEstimate) {
         const cost = estimateCost(openRouterEstimate, promptTokens, completionTokens);
-        logger.debug('Cost estimated from OpenRouter public pricing', {
-          cost,
-          modelName,
-          provider,
-          openRouterModelId: openRouterEstimate.modelId,
-          promptCostPer1M: openRouterEstimate.promptCostPer1M,
-          completionCostPer1M: openRouterEstimate.completionCostPer1M,
-        });
         return {
           cost,
           source: 'openrouter-estimate',
@@ -150,7 +117,6 @@ export async function estimateMessageCost(
     }
 
     // No pricing available
-    logger.debug('No pricing data available', { provider, modelName });
     return {
       cost: null,
       source: 'unavailable',
@@ -174,8 +140,6 @@ export async function getChatCostBreakdown(
   chatId: string,
   userId: string
 ): Promise<ChatCostBreakdown> {
-  logger.debug('Getting chat cost breakdown', { chatId });
-
   try {
     const { getRepositories } = await import('@/lib/repositories/factory');
     const repos = getRepositories();
@@ -206,15 +170,6 @@ export async function getChatCostBreakdown(
       // Legacy chats without priceSource field - assume registry
       priceSource = 'registry';
     }
-
-    logger.debug('Chat cost breakdown retrieved', {
-      chatId,
-      totalTokens,
-      totalPromptTokens,
-      totalCompletionTokens,
-      estimatedCostUSD,
-    });
-
     return {
       totalTokens,
       promptTokens: totalPromptTokens,
@@ -242,8 +197,6 @@ export async function getDetailedChatCostBreakdown(
   chatId: string,
   userId: string
 ): Promise<ChatCostBreakdown> {
-  logger.debug('Getting detailed chat cost breakdown', { chatId });
-
   try {
     const { getRepositories } = await import('@/lib/repositories/factory');
     const repos = getRepositories();
@@ -314,16 +267,6 @@ export async function getDetailedChatCostBreakdown(
     if (hasAnyCost) {
       primarySource = 'registry';
     }
-
-    logger.debug('Detailed chat cost breakdown calculated', {
-      chatId,
-      messageCount: messageBreakdown.length,
-      systemEventCount: systemEventBreakdown.length,
-      totalPromptTokens,
-      totalCompletionTokens,
-      totalCost: hasAnyCost ? totalCost : null,
-    });
-
     return {
       totalTokens: totalPromptTokens + totalCompletionTokens,
       promptTokens: totalPromptTokens,

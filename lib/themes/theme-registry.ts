@@ -116,25 +116,45 @@ export interface ThemeRegistryState {
 }
 
 // ============================================================================
+// GLOBAL STATE PERSISTENCE
+// ============================================================================
+
+// Extend globalThis type for our theme registry state
+// This ensures state persists across Next.js hot module reloads in development
+declare global {
+  var __quilltapThemeRegistryState: ThemeRegistryState | undefined;
+}
+
+/**
+ * Get or create the global registry state
+ * Using global ensures state persists across Next.js module reloads
+ */
+function getGlobalState(): ThemeRegistryState {
+  if (!global.__quilltapThemeRegistryState) {
+    global.__quilltapThemeRegistryState = {
+      initialized: false,
+      themes: new Map(),
+      errors: [],
+      lastInitTime: null,
+    };
+  }
+  return global.__quilltapThemeRegistryState;
+}
+
+// ============================================================================
 // THEME REGISTRY CLASS
 // ============================================================================
 
 class ThemeRegistry {
-  private state: ThemeRegistryState = {
-    initialized: false,
-    themes: new Map(),
-    errors: [],
-    lastInitTime: null,
-  };
+  private get state(): ThemeRegistryState {
+    return getGlobalState();
+  }
 
   /**
    * Initialize the theme registry by loading themes from enabled THEME plugins
    * Note: Module-based themes should be registered via registerThemeModule() before calling this
    */
   async initialize(): Promise<void> {
-    const startTime = Date.now();
-    logger.info('Initializing theme registry');
-
     // Clear errors but preserve themes registered via registerThemeModule()
     this.state.errors = [];
 
@@ -145,12 +165,6 @@ class ThemeRegistry {
 
     // Get enabled theme plugins
     const themePlugins = getEnabledPluginsByCapability('THEME');
-
-    logger.debug('Found theme plugins', {
-      count: themePlugins.length,
-      plugins: themePlugins.map(p => p.manifest.name),
-    });
-
     // Load each theme plugin
     for (const plugin of themePlugins) {
       try {
@@ -171,14 +185,6 @@ class ThemeRegistry {
 
     this.state.initialized = true;
     this.state.lastInitTime = new Date();
-
-    const duration = Date.now() - startTime;
-    logger.info('Theme registry initialized', {
-      duration: `${duration}ms`,
-      themeCount: this.state.themes.size,
-      errorCount: this.state.errors.length,
-      themes: Array.from(this.state.themes.keys()),
-    });
   }
 
   /**
@@ -199,7 +205,6 @@ class ThemeRegistry {
     };
 
     this.state.themes.set('default', defaultTheme);
-    logger.debug('Registered default theme');
   }
 
   /**
@@ -224,9 +229,6 @@ class ThemeRegistry {
 
     // Check if this theme was already registered via module loading
     if (this.state.themes.has(themeId)) {
-      logger.debug('Theme already registered (via module), skipping file-based load', {
-        themeId,
-      });
       return;
     }
 
@@ -243,18 +245,8 @@ class ThemeRegistry {
     themePlugin: ThemePlugin
   ): boolean {
     const themeId = this.extractThemeId(plugin.manifest.name);
-
-    logger.debug('Registering theme from pre-loaded module', {
-      themeId,
-      plugin: plugin.manifest.name,
-    });
-
     // Check if module exports a theme plugin
     if (!themePlugin?.tokens) {
-      logger.debug('Module does not export valid theme tokens', {
-        themeId,
-        hasTokens: !!themePlugin?.tokens,
-      });
       return false;
     }
 
@@ -262,7 +254,7 @@ class ThemeRegistry {
     const validationResult = safeValidateThemeTokens(themePlugin.tokens);
     if (!validationResult.success) {
       throw new Error(
-        `Invalid theme tokens in module: ${validationResult.errors.errors
+        `Invalid theme tokens in module: ${validationResult.errors.issues
           .map((e) => `${e.path.join('.')}: ${e.message}`)
           .join(', ')}`
       );
@@ -371,13 +363,6 @@ class ThemeRegistry {
     if (!themeConfig) {
       throw new Error('Plugin does not have themeConfig');
     }
-
-    logger.debug('Loading theme from files', {
-      themeId,
-      plugin: plugin.manifest.name,
-      tokensPath: themeConfig.tokensPath,
-    });
-
     // Load tokens file
     const tokensPath = path.join(plugin.pluginPath, themeConfig.tokensPath || 'tokens.json');
 
@@ -398,7 +383,7 @@ class ThemeRegistry {
     // Validate tokens
     const validationResult = safeValidateThemeTokens(rawTokens);
     if (!validationResult.success) {
-      throw new Error(`Invalid theme tokens: ${validationResult.errors.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`);
+      throw new Error(`Invalid theme tokens: ${validationResult.errors.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`);
     }
 
     let tokens = validationResult.data;
@@ -410,10 +395,6 @@ class ThemeRegistry {
       );
       if (baseTheme) {
         tokens = mergeThemeTokens(baseTheme.tokens, tokens);
-        logger.debug('Theme extended base theme', {
-          themeId,
-          baseTheme: themeConfig.extendsTheme,
-        });
       } else {
         logger.warn('Base theme not found for inheritance', {
           themeId,
@@ -430,11 +411,6 @@ class ThemeRegistry {
       const stylesPath = path.join(plugin.pluginPath, themeConfig.stylesPath);
       try {
         cssOverrides = await fs.readFile(stylesPath, 'utf-8');
-        logger.debug('Loaded theme CSS overrides', {
-          themeId,
-          path: stylesPath,
-          size: cssOverrides.length,
-        });
       } catch (error) {
         logger.warn('Failed to load theme CSS overrides', {
           themeId,
@@ -476,12 +452,6 @@ class ThemeRegistry {
             pluginName: plugin.manifest.name,
             src: fontDef.src,
           });
-          logger.debug('Loaded theme font', {
-            themeId,
-            family: fontDef.family,
-            weight: fontDef.weight,
-            path: fontPath,
-          });
         } catch {
           logger.warn('Theme font file not found', {
             themeId,
@@ -512,14 +482,6 @@ class ThemeRegistry {
 
     // Register the theme
     this.state.themes.set(themeId, loadedTheme);
-
-    logger.info('Theme loaded successfully', {
-      themeId,
-      name: loadedTheme.name,
-      supportsDarkMode: loadedTheme.supportsDarkMode,
-      hasCssOverrides: !!cssOverrides,
-      fontCount: fonts.length,
-    });
   }
 
   // ============================================================================
@@ -651,11 +613,13 @@ class ThemeRegistry {
    * Reset the registry (for testing)
    */
   reset(): void {
-    this.state.initialized = false;
-    this.state.themes.clear();
-    this.state.errors = [];
-    this.state.lastInitTime = null;
-    logger.debug('Theme registry reset');
+    // Reset the global state entirely
+    global.__quilltapThemeRegistryState = {
+      initialized: false,
+      themes: new Map(),
+      errors: [],
+      lastInitTime: null,
+    };
   }
 
   /**
@@ -698,31 +662,70 @@ class ThemeRegistry {
       light: { background: string; primary: string; secondary: string; accent: string };
       dark: { background: string; primary: string; secondary: string; accent: string };
     };
+    headingFont?: {
+      family: string;
+      url?: string;
+    };
   }> {
-    return this.getAll().map(theme => ({
-      id: theme.id,
-      name: theme.name,
-      description: theme.description,
-      supportsDarkMode: theme.supportsDarkMode,
-      previewImage: theme.previewImage,
-      tags: theme.tags,
-      isDefault: theme.isDefault,
-      // Include just the preview colors needed for theme cards
-      previewColors: {
-        light: {
-          background: theme.tokens.colors.light.background,
-          primary: theme.tokens.colors.light.primary,
-          secondary: theme.tokens.colors.light.secondary,
-          accent: theme.tokens.colors.light.accent,
+    return this.getAll().map(theme => {
+      // Determine heading font for preview
+      // Use fontSerif from tokens as the heading font (matches --qt-heading-font in most themes)
+      // For default theme, use fontSans since it uses sans-serif for headings
+      let headingFont: { family: string; url?: string } | undefined;
+
+      // Get the heading font family from tokens
+      const headingFontFamily = theme.isDefault
+        ? theme.tokens.typography?.fontSans
+        : theme.tokens.typography?.fontSerif;
+
+      if (headingFontFamily) {
+        // Extract the primary font name (first in the stack)
+        const primaryFont = headingFontFamily.split(',')[0].trim().replace(/['"]/g, '');
+
+        // Check if this font needs to be loaded (has a matching custom font file)
+        const matchingFont = theme.fonts?.find(f => f.family === primaryFont);
+
+        if (matchingFont) {
+          headingFont = {
+            family: primaryFont,
+            url: matchingFont.isEmbedded && matchingFont.embeddedData
+              ? matchingFont.embeddedData
+              : `/api/themes/fonts/${theme.pluginName}/${matchingFont.src}`,
+          };
+        } else {
+          // System font - no URL needed
+          headingFont = {
+            family: headingFontFamily,
+          };
+        }
+      }
+
+      return {
+        id: theme.id,
+        name: theme.name,
+        description: theme.description,
+        supportsDarkMode: theme.supportsDarkMode,
+        previewImage: theme.previewImage,
+        tags: theme.tags,
+        isDefault: theme.isDefault,
+        // Include just the preview colors needed for theme cards
+        previewColors: {
+          light: {
+            background: theme.tokens.colors.light.background,
+            primary: theme.tokens.colors.light.primary,
+            secondary: theme.tokens.colors.light.secondary,
+            accent: theme.tokens.colors.light.accent,
+          },
+          dark: {
+            background: theme.tokens.colors.dark.background,
+            primary: theme.tokens.colors.dark.primary,
+            secondary: theme.tokens.colors.dark.secondary,
+            accent: theme.tokens.colors.dark.accent,
+          },
         },
-        dark: {
-          background: theme.tokens.colors.dark.background,
-          primary: theme.tokens.colors.dark.primary,
-          secondary: theme.tokens.colors.dark.secondary,
-          accent: theme.tokens.colors.dark.accent,
-        },
-      },
-    }));
+        headingFont,
+      };
+    });
   }
 }
 

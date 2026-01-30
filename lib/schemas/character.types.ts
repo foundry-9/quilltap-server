@@ -73,6 +73,7 @@ export const CharacterSchema = z.object({
   defaultConnectionProfileId: UUIDSchema.nullable().optional(),
   defaultPartnerId: UUIDSchema.nullable().optional(),  // Default user-controlled character to pair with when chatting
   defaultRoleplayTemplateId: UUIDSchema.nullable().optional(),  // Default roleplay template for this character
+  defaultImageProfileId: UUIDSchema.nullable().optional(),  // Default image generation profile for this character
   sillyTavernData: JsonSchema.nullable().optional(),
   isFavorite: z.boolean().default(false),
   npc: z.boolean().default(false),  // NPC flag - true for ad-hoc NPCs created in chat

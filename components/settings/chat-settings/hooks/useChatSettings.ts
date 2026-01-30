@@ -12,9 +12,11 @@ import {
   MemoryCascadePreferences,
   TokenDisplaySettings,
   ContextCompressionSettings,
+  LLMLoggingSettings,
   DEFAULT_MEMORY_CASCADE_PREFERENCES,
   DEFAULT_TOKEN_DISPLAY_SETTINGS,
   DEFAULT_CONTEXT_COMPRESSION_SETTINGS,
+  DEFAULT_LLM_LOGGING_SETTINGS,
 } from '../types'
 
 interface UseChatSettingsReturn {
@@ -34,6 +36,7 @@ interface UseChatSettingsReturn {
   handleMemoryCascadeUpdate: (updates: Partial<MemoryCascadePreferences>) => Promise<void>
   handleTokenDisplayChange: (key: keyof TokenDisplaySettings, value: boolean) => Promise<void>
   handleContextCompressionUpdate: (updates: Partial<ContextCompressionSettings>) => Promise<void>
+  handleLLMLoggingChange: (key: keyof LLMLoggingSettings, value: boolean | number) => Promise<void>
 }
 
 export function useChatSettings(): UseChatSettingsReturn {
@@ -407,6 +410,46 @@ export function useChatSettings(): UseChatSettingsReturn {
     [settings, showSuccess]
   )
 
+  /**
+   * Update LLM logging settings
+   */
+  const handleLLMLoggingChange = useCallback(
+    async (key: keyof LLMLoggingSettings, value: boolean | number) => {
+      if (!settings) return
+
+      try {
+        setSaving(true)
+        setError(null)
+        setSuccess(false)
+
+        const currentSettings = settings.llmLoggingSettings || DEFAULT_LLM_LOGGING_SETTINGS
+        const res = await fetch('/api/v1/settings/chat', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            llmLoggingSettings: { ...currentSettings, [key]: value },
+          }),
+        })
+
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Failed to update LLM logging settings')
+        }
+
+        const updatedSettings = await res.json()
+        setSettings(updatedSettings)
+        showSuccess()
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
+        console.error('Failed to update LLM logging settings', { error: errorMsg })
+        setError(errorMsg)
+      } finally {
+        setSaving(false)
+      }
+    },
+    [settings, showSuccess]
+  )
+
   return {
     settings,
     loading,
@@ -424,5 +467,6 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleMemoryCascadeUpdate,
     handleTokenDisplayChange,
     handleContextCompressionUpdate,
+    handleLLMLoggingChange,
   }
 }

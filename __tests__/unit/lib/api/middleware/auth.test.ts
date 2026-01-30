@@ -1,7 +1,7 @@
 /**
- * Unit Tests for API Auth Middleware
+ * Unit Tests for API Auth Middleware (Single-User Mode)
  * Tests lib/api/middleware/auth.ts
- * v2.7-dev: Authentication wrapper middleware
+ * v2.8-dev: Single-user mode - always authenticated
  */
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
@@ -10,6 +10,13 @@ import { NextRequest, NextResponse } from 'next/server';
 // Mock dependencies before importing
 jest.mock('@/lib/auth/session');
 jest.mock('@/lib/repositories/factory');
+jest.mock('@/lib/startup/startup-state', () => ({
+  startupState: {
+    isReady: jest.fn().mockReturnValue(true),
+    waitForReady: jest.fn().mockResolvedValue(true),
+    getPhase: jest.fn().mockReturnValue('ready'),
+  },
+}));
 
 const {
   withAuth,
@@ -25,7 +32,7 @@ const { getRepositoriesSafe } = require('@/lib/repositories/factory');
 const mockGetServerSession = jest.mocked(getServerSession);
 const mockGetRepositoriesSafe = jest.mocked(getRepositoriesSafe);
 
-describe('API Auth Middleware', () => {
+describe('API Auth Middleware (Single-User Mode)', () => {
   let mockRepos: any;
   let mockUser: any;
   let mockSession: any;
@@ -34,15 +41,15 @@ describe('API Auth Middleware', () => {
     jest.clearAllMocks();
 
     mockUser = {
-      id: 'user-123',
-      email: 'test@example.com',
-      username: 'testuser',
+      id: 'ffffffff-ffff-ffff-ffff-ffffffffffff',
+      email: 'user@localhost.localdomain',
+      username: 'localUser',
     };
 
     mockSession = {
       user: {
-        id: 'user-123',
-        email: 'test@example.com',
+        id: 'ffffffff-ffff-ffff-ffff-ffffffffffff',
+        email: 'user@localhost.localdomain',
       },
     };
 
@@ -66,7 +73,7 @@ describe('API Auth Middleware', () => {
 
       expect(mockGetServerSession).toHaveBeenCalled();
       expect(mockGetRepositoriesSafe).toHaveBeenCalled();
-      expect(mockRepos.users.findById).toHaveBeenCalledWith('user-123');
+      expect(mockRepos.users.findById).toHaveBeenCalledWith('ffffffff-ffff-ffff-ffff-ffffffffffff');
       expect(handler).toHaveBeenCalledWith(
         expect.any(Object),
         expect.objectContaining({
@@ -80,37 +87,37 @@ describe('API Auth Middleware', () => {
       expect(body).toEqual({ success: true });
     });
 
-    it('should return 401 when no session', async () => {
+    it('should return 500 when session fails (should not happen in single-user mode)', async () => {
       mockGetServerSession.mockResolvedValue(null);
       const handler = jest.fn();
 
       const response = await withAuth(handler);
 
-      expect(response.status).toBe(401);
+      expect(response.status).toBe(500);
       const body = await response.json();
-      expect(body).toEqual({ error: 'Unauthorized' });
+      expect(body).toEqual({ error: 'Internal server error' });
       expect(handler).not.toHaveBeenCalled();
     });
 
-    it('should return 401 when session missing user ID', async () => {
+    it('should return 500 when session missing user ID (should not happen in single-user mode)', async () => {
       mockGetServerSession.mockResolvedValue({ user: {} });
       const handler = jest.fn();
 
       const response = await withAuth(handler);
 
-      expect(response.status).toBe(401);
+      expect(response.status).toBe(500);
       const body = await response.json();
-      expect(body).toEqual({ error: 'Unauthorized' });
+      expect(body).toEqual({ error: 'Internal server error' });
       expect(handler).not.toHaveBeenCalled();
     });
 
-    it('should return 404 when user not found in database', async () => {
+    it('should return 500 when user not found in database (should not happen in single-user mode)', async () => {
       mockRepos.users.findById.mockResolvedValue(null);
       const handler = jest.fn();
 
       const response = await withAuth(handler);
 
-      expect(response.status).toBe(404);
+      expect(response.status).toBe(500);
       const body = await response.json();
       expect(body).toEqual({ error: 'User not found' });
       expect(handler).not.toHaveBeenCalled();
@@ -145,7 +152,7 @@ describe('API Auth Middleware', () => {
       expect(body).toEqual({ id: 'char-1' });
     });
 
-    it('should return 401 when no session with params', async () => {
+    it('should return 500 when session fails with params', async () => {
       mockGetServerSession.mockResolvedValue(null);
       const request = new NextRequest('https://example.com/api/test');
       const params = { id: 'test-1' };
@@ -153,11 +160,11 @@ describe('API Auth Middleware', () => {
 
       const response = await withAuthParams(request, params, handler);
 
-      expect(response.status).toBe(401);
+      expect(response.status).toBe(500);
       expect(handler).not.toHaveBeenCalled();
     });
 
-    it('should return 404 when user not found with params', async () => {
+    it('should return 500 when user not found with params', async () => {
       mockRepos.users.findById.mockResolvedValue(null);
       const request = new NextRequest('https://example.com/api/test');
       const params = { id: 'test-1' };
@@ -165,7 +172,7 @@ describe('API Auth Middleware', () => {
 
       const response = await withAuthParams(request, params, handler);
 
-      expect(response.status).toBe(404);
+      expect(response.status).toBe(500);
       expect(handler).not.toHaveBeenCalled();
     });
 
@@ -195,7 +202,7 @@ describe('API Auth Middleware', () => {
       const response = await handler(request);
 
       expect(mockGetServerSession).toHaveBeenCalled();
-      expect(mockRepos.users.findById).toHaveBeenCalledWith('user-123');
+      expect(mockRepos.users.findById).toHaveBeenCalledWith('ffffffff-ffff-ffff-ffff-ffffffffffff');
       expect(innerHandler).toHaveBeenCalledWith(
         request,
         expect.objectContaining({
@@ -209,7 +216,7 @@ describe('API Auth Middleware', () => {
       expect(body).toEqual({ data: 'test' });
     });
 
-    it('should return 401 for unauthenticated request', async () => {
+    it('should return 500 when session fails (should not happen in single-user mode)', async () => {
       mockGetServerSession.mockResolvedValue(null);
       const innerHandler = jest.fn();
       const handler = createAuthenticatedHandler(innerHandler);
@@ -217,7 +224,7 @@ describe('API Auth Middleware', () => {
 
       const response = await handler(request);
 
-      expect(response.status).toBe(401);
+      expect(response.status).toBe(500);
       expect(innerHandler).not.toHaveBeenCalled();
     });
 
@@ -232,7 +239,7 @@ describe('API Auth Middleware', () => {
       const response = await handler(request);
 
       const body = await response.json();
-      expect(body).toEqual({ userId: 'user-123' });
+      expect(body).toEqual({ userId: 'ffffffff-ffff-ffff-ffff-ffffffffffff' });
     });
   });
 
@@ -288,9 +295,9 @@ describe('API Auth Middleware', () => {
       );
     });
 
-    it('should return 401 before awaiting params if no session', async () => {
+    it('should return 500 when session fails (should not happen in single-user mode)', async () => {
       mockGetServerSession.mockResolvedValue(null);
-      
+
       const innerHandler = jest.fn();
       const handler = createAuthenticatedParamsHandler(innerHandler);
       const request = new NextRequest('https://example.com/api/test');
@@ -298,7 +305,7 @@ describe('API Auth Middleware', () => {
 
       const response = await handler(request, context);
 
-      expect(response.status).toBe(401);
+      expect(response.status).toBe(500);
       expect(innerHandler).not.toHaveBeenCalled();
     });
 
@@ -315,15 +322,15 @@ describe('API Auth Middleware', () => {
       const response = await handler(request, context);
 
       const body = await response.json();
-      expect(body).toEqual({ userId: 'user-123', characterId: 'char-1' });
+      expect(body).toEqual({ userId: 'ffffffff-ffff-ffff-ffff-ffffffffffff', characterId: 'char-1' });
     });
   });
 
   describe('checkOwnership', () => {
-    const userId = 'user-123';
+    const userId = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
 
     it('should return true for resource owned by user', () => {
-      const resource = { id: 'res-1', userId: 'user-123', name: 'Test' };
+      const resource = { id: 'res-1', userId: 'ffffffff-ffff-ffff-ffff-ffffffffffff', name: 'Test' };
       expect(checkOwnership(resource, userId)).toBe(true);
     });
 
@@ -348,12 +355,12 @@ describe('API Auth Middleware', () => {
     it('should work as type guard', () => {
       const resource: { id: string; userId?: string } | null = {
         id: 'res-1',
-        userId: 'user-123',
+        userId: 'ffffffff-ffff-ffff-ffff-ffffffffffff',
       };
 
       if (checkOwnership(resource, userId)) {
         // TypeScript should know resource is not null and has userId
-        expect(resource.userId).toBe('user-123');
+        expect(resource.userId).toBe('ffffffff-ffff-ffff-ffff-ffffffffffff');
       }
     });
   });

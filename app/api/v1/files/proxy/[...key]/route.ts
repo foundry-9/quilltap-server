@@ -48,7 +48,6 @@ export async function GET(
     // Get and verify authentication
     const session = await getServerSession();
     if (!session?.user?.id) {
-      logger.debug('[Files v1] Proxy: Unauthorized request - no valid session');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -62,27 +61,13 @@ export async function GET(
     // Extract storage key from params
     const { key: keyArray } = await params;
     if (!keyArray || keyArray.length === 0) {
-      logger.debug('[Files v1] Proxy: No storage key provided');
       return notFound('File');
     }
 
     const encodedKey = keyArray.join('/');
-    const storageKey = decodeURIComponent(encodedKey);
-
-    logger.debug('[Files v1] Proxy: File request', {
-      userId: user.id,
-      encodedKey,
-      storageKey,
-    });
-
-    // Find the file in the database by storageKey
+    const storageKey = decodeURIComponent(encodedKey);// Find the file in the database by storageKey
     const fileEntry = await repos.files.findByStorageKey(storageKey);
-    if (!fileEntry) {
-      logger.debug('[Files v1] Proxy: File not found by storage key', {
-        userId: user.id,
-        storageKey,
-      });
-      return notFound('File');
+    if (!fileEntry) {return notFound('File');
     }
 
     // Verify the user has access to this file
@@ -94,26 +79,10 @@ export async function GET(
         storageKey,
       });
       return forbidden();
-    }
-
-    logger.debug('[Files v1] Proxy: User verified for file access', {
-      userId: user.id,
-      fileId: fileEntry.id,
-      filename: fileEntry.originalFilename,
-      mimeType: fileEntry.mimeType,
-    });
-
-    // Download the file content using the file storage manager
+    }// Download the file content using the file storage manager
     let buffer: Buffer;
     try {
-      buffer = await fileStorageManager.downloadFile(fileEntry);
-
-      logger.debug('[Files v1] Proxy: File downloaded successfully', {
-        fileId: fileEntry.id,
-        downloadedSize: buffer.length,
-        expectedSize: fileEntry.size,
-      });
-    } catch (downloadError) {
+      buffer = await fileStorageManager.downloadFile(fileEntry);} catch (downloadError) {
       logger.error('[Files v1] Proxy: Failed to download file from storage', {
         fileId: fileEntry.id,
         storageKey,

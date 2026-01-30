@@ -1,6 +1,6 @@
 # Quilltap API Documentation
 
-Complete API reference for Quilltap v2.7.
+Complete API reference for Quilltap v2.8.
 
 ## Table of Contents
 
@@ -26,13 +26,15 @@ Complete API reference for Quilltap v2.7.
   - [Folders](#folders)
   - [Templates](#templates)
   - [System & Backup](#system--backup)
+  - [LLM Logs](#llm-logs)
   - [Themes](#themes)
   - [Search](#search)
   - [Plugins](#plugins)
+  - [Projects](#projects)
 
 ## API Versioning
 
-As of v2.7, all core API endpoints use the `/api/v1/` prefix. This enables future versioning as the API evolves.
+As of v2.7+, all core API endpoints use the `/api/v1/` prefix. This enables future versioning as the API evolves.
 
 ### Route Structure
 
@@ -51,28 +53,41 @@ POST /api/v1/chats/[id]?action=regenerate-title  # Regenerate title
 GET /api/v1/characters/[id]?action=export  # Export character
 ```
 
-### Backwards Compatibility
+### Legacy Routes Removed
 
-Legacy routes (without `/v1/` prefix) are deprecated but still functional. They return:
-- `Deprecation` header with sunset date
-- `Link` header pointing to migration docs
+As of v2.8, legacy routes (without `/v1/` prefix) have been removed. Only `/api/v1/` routes are supported.
 
-Legacy routes will be removed after 2026-04-15.
+A few non-v1 routes remain for specific purposes:
+- `/api/health` - Health check endpoint
+- `/api/plugin-routes/[...path]` - Plugin route dispatcher
+- `/api/themes/*` - Theme asset serving
 
 ## Authentication
 
-All API endpoints (except `/api/health`) require authentication via session cookies.
+Quilltap operates in **single-user mode**. All API endpoints automatically use the single local user account - no login is required.
 
-### Session Cookie
+### Session Endpoint
 
-Authentication is handled through custom JWT session cookies, which support:
+#### `GET /api/v1/session`
 
-- **Google OAuth** (if Google plugin is enabled and `OAUTH_DISABLED=false`)
-- **Email/password login** (local accounts)
-- **No-auth mode** (`AUTH_DISABLED=true` for local/offline deployments, auto-logs in as unauthenticatedLocalUser)
-- **Credentials-only mode** (`OAUTH_DISABLED=true` hides OAuth buttons, credentials login still works)
+Returns the current user session.
 
-Include credentials in requests:
+**Response**: `200 OK`
+
+```json
+{
+  "user": {
+    "id": "ffffffff-ffff-ffff-ffff-ffffffffffff",
+    "email": "user@localhost.localdomain",
+    "name": "Local User"
+  },
+  "expires": "2025-02-19T10:00:00.000Z"
+}
+```
+
+### Including Credentials
+
+For consistency, include credentials in requests:
 
 ```javascript
 fetch('/api/characters', {
@@ -83,24 +98,13 @@ fetch('/api/characters', {
 });
 ```
 
-### Unauthorized Response
-
-```json
-{
-  "error": "Unauthorized",
-  "message": "You must be signed in to access this resource"
-}
-```
-
 ## Rate Limiting
 
 Rate limits are enforced on all endpoints:
 
 | Endpoint Type | Limit | Window |
 |--------------|-------|--------|
-| Auth endpoints | 5 requests | 60 seconds |
 | Chat streaming | 20 messages | 60 seconds |
-| Settings endpoints | 30 requests | 60 seconds |
 | API endpoints | 100 requests | 10 seconds |
 | General | 100 requests | 60 seconds |
 
@@ -196,14 +200,12 @@ Get current user's profile information.
 ```json
 {
   "id": "user-uuid",
-  "username": "johndoe",
-  "email": "john@example.com",
-  "name": "John Doe",
+  "username": "localUser",
+  "email": "user@localhost.localdomain",
+  "name": "Local User",
   "image": "/api/files/avatar-uuid",
-  "emailVerified": "2025-01-15T12:00:00.000Z",
   "createdAt": "2025-01-15T12:00:00.000Z",
-  "updatedAt": "2025-01-19T10:00:00.000Z",
-  "totpEnabled": true
+  "updatedAt": "2025-01-19T10:00:00.000Z"
 }
 ```
 
@@ -439,29 +441,29 @@ Send a test message using a profile.
 
 ### Embedding Profiles
 
-#### `GET /api/embedding-profiles`
+#### `GET /api/v1/embedding-profiles`
 
 List embedding profiles.
 
-#### `POST /api/embedding-profiles`
+#### `POST /api/v1/embedding-profiles`
 
 Create an embedding profile.
 
 **Supported Providers**: `OPENAI`, `OLLAMA`, `OPENROUTER`
 
-#### `GET /api/embedding-profiles/[id]`
+#### `GET /api/v1/embedding-profiles/[id]`
 
 Get a specific embedding profile.
 
-#### `PUT /api/embedding-profiles/[id]`
+#### `PUT /api/v1/embedding-profiles/[id]`
 
 Update an embedding profile.
 
-#### `DELETE /api/embedding-profiles/[id]`
+#### `DELETE /api/v1/embedding-profiles/[id]`
 
 Delete an embedding profile.
 
-#### `GET /api/embedding-profiles/models`
+#### `GET /api/v1/embedding-profiles/models`
 
 Get available embedding models for a provider.
 
@@ -699,10 +701,10 @@ Delete a character.
 
 #### `GET /api/v1/characters/[id]?action=export`
 
-Export character as SillyTavern-compatible JSON.
+Export character in SillyTavern-compatible format.
 
 **Query Parameters**:
-- `format=json|png` - Export format (PNG not yet implemented)
+- `format=json|png` - Export format (JSON for data, PNG for character card image)
 
 #### `POST /api/v1/characters/[id]?action=favorite`
 
@@ -1288,11 +1290,11 @@ Generate embeddings for memories missing them.
 
 ### Tags
 
-#### `GET /api/tags`
+#### `GET /api/v1/tags`
 
 List all tags.
 
-#### `POST /api/tags`
+#### `POST /api/v1/tags`
 
 Create a tag.
 
@@ -1306,15 +1308,15 @@ Create a tag.
 }
 ```
 
-#### `GET /api/tags/[id]`
+#### `GET /api/v1/tags/[id]`
 
 Get a specific tag.
 
-#### `PUT /api/tags/[id]`
+#### `PUT /api/v1/tags/[id]`
 
 Update a tag.
 
-#### `DELETE /api/tags/[id]`
+#### `DELETE /api/v1/tags/[id]`
 
 Delete a tag.
 
@@ -1480,13 +1482,13 @@ Delete an empty folder. Returns error if folder contains files or subfolders.
 
 User-created system prompt templates.
 
-- `GET /api/prompt-templates` - List templates
-- `POST /api/prompt-templates` - Create template
-- `GET /api/prompt-templates/[id]` - Get template
-- `PUT /api/prompt-templates/[id]` - Update template
-- `DELETE /api/prompt-templates/[id]` - Delete template
+- `GET /api/v1/prompt-templates` - List templates
+- `POST /api/v1/prompt-templates` - Create template
+- `GET /api/v1/prompt-templates/[id]` - Get template
+- `PUT /api/v1/prompt-templates/[id]` - Update template
+- `DELETE /api/v1/prompt-templates/[id]` - Delete template
 
-#### `GET /api/sample-prompts`
+#### `GET /api/v1/sample-prompts`
 
 Get built-in sample prompts (read-only, can be imported).
 
@@ -1494,11 +1496,11 @@ Get built-in sample prompts (read-only, can be imported).
 
 Per-chat roleplay formatting templates.
 
-- `GET /api/roleplay-templates` - List templates
-- `POST /api/roleplay-templates` - Create template
-- `GET /api/roleplay-templates/[id]` - Get template
-- `PUT /api/roleplay-templates/[id]` - Update template
-- `DELETE /api/roleplay-templates/[id]` - Delete template
+- `GET /api/v1/roleplay-templates` - List templates
+- `POST /api/v1/roleplay-templates` - Create template
+- `GET /api/v1/roleplay-templates/[id]` - Get template
+- `PUT /api/v1/roleplay-templates/[id]` - Update template
+- `DELETE /api/v1/roleplay-templates/[id]` - Delete template
 
 ---
 
@@ -1563,6 +1565,97 @@ Download a report.
 
 ---
 
+### LLM Logs
+
+#### `GET /api/v1/llm-logs`
+
+List LLM logs with filters.
+
+**Query Parameters**:
+- `messageId` - Filter by message ID
+- `chatId` - Filter by chat ID
+- `characterId` - Filter by character ID
+- `type` - Filter by log type (CHAT_MESSAGE, TOOL_CONTINUATION, MEMORY_EXTRACTION, CHARACTER_WIZARD, etc.)
+- `standalone` - Set to 'true' for logs without entity associations
+- `limit` - Max results (default 50, max 100)
+- `offset` - Pagination offset
+
+**Response**: `200 OK`
+
+```json
+{
+  "logs": [
+    {
+      "id": "log-uuid",
+      "type": "CHAT_MESSAGE",
+      "messageId": "msg-uuid",
+      "chatId": "chat-uuid",
+      "characterId": "char-uuid",
+      "request": {
+        "model": "gpt-4",
+        "messages": [...],
+        "temperature": 0.8
+      },
+      "response": {
+        "choices": [
+          {
+            "message": {
+              "role": "assistant",
+              "content": "Response text"
+            }
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 100,
+          "completion_tokens": 50,
+          "total_tokens": 150
+        }
+      },
+      "timestamp": "2026-01-23T10:00:00.000Z",
+      "durationMs": 1500
+    }
+  ],
+  "count": 1,
+  "total": 50,
+  "limit": 50,
+  "offset": 0
+}
+```
+
+#### `GET /api/v1/llm-logs/[id]`
+
+Get a single log entry by ID.
+
+**Response**: `200 OK`
+
+```json
+{
+  "id": "log-uuid",
+  "type": "CHAT_MESSAGE",
+  "messageId": "msg-uuid",
+  "chatId": "chat-uuid",
+  "characterId": "char-uuid",
+  "request": {...},
+  "response": {...},
+  "timestamp": "2026-01-23T10:00:00.000Z",
+  "durationMs": 1500
+}
+```
+
+#### `DELETE /api/v1/llm-logs/[id]`
+
+Delete a log entry by ID.
+
+**Response**: `200 OK`
+
+```json
+{
+  "message": "Log deleted"
+}
+```
+
+---
+
 ### Themes
 
 #### `GET /api/themes`
@@ -1593,7 +1686,7 @@ Update theme preference.
 
 ### Search
 
-#### `GET /api/search?q=query`
+#### `GET /api/v1/search?q=query`
 
 Global search across characters and chats.
 
@@ -1731,12 +1824,9 @@ Install a plugin from npm.
 **Request Body:**
 ```json
 {
-  "packageName": "qtap-plugin-example",
-  "scope": "user"
+  "packageName": "qtap-plugin-example"
 }
 ```
-
-- `scope` - Installation scope: `"user"` (personal) or `"site"` (shared across all users)
 
 **Response:**
 ```json
@@ -1760,8 +1850,7 @@ Uninstall an installed plugin.
 **Request Body:**
 ```json
 {
-  "packageName": "qtap-plugin-example",
-  "scope": "user"
+  "packageName": "qtap-plugin-example"
 }
 ```
 
@@ -1775,14 +1864,13 @@ Uninstall an installed plugin.
 
 **Notes:**
 - Bundled plugins cannot be uninstalled
-- Site-wide plugins require admin privileges (TODO)
 
 #### `GET /api/plugins/installed`
 
 Get all installed plugins with metadata.
 
 **Query Parameters:**
-- `scope` - Filter by scope: `"all"`, `"bundled"`, `"site"`, `"user"` (default: `"all"`)
+- `scope` - Filter by scope: `"all"`, `"bundled"`, `"site"` (default: `"all"`)
 - `check` - Package name to check installation status
 
 **Response:**
@@ -1807,6 +1895,161 @@ Get all installed plugins with metadata.
   }
 }
 ```
+
+---
+
+### Projects
+
+Project management endpoints for organizing chats, files, and characters.
+
+#### `GET /api/v1/projects`
+
+List all projects for the current user.
+
+#### `POST /api/v1/projects`
+
+Create a new project.
+
+**Request Body:**
+```json
+{
+  "name": "My Project",
+  "description": "Optional description",
+  "instructions": "Optional system prompt instructions",
+  "allowAnyCharacter": false
+}
+```
+
+#### `GET /api/v1/projects/[id]`
+
+Get project details with enriched character roster and counts.
+
+#### `PUT /api/v1/projects/[id]`
+
+Update project properties.
+
+**Request Body:**
+```json
+{
+  "name": "Updated Name",
+  "description": "Updated description",
+  "instructions": "Updated instructions",
+  "allowAnyCharacter": true,
+  "color": "#3b82f6",
+  "icon": "folder"
+}
+```
+
+#### `DELETE /api/v1/projects/[id]`
+
+Delete a project. Chats and files are disassociated (not deleted).
+
+#### `POST /api/v1/projects/[id]?action=add-character`
+
+Add a character to the project roster.
+
+**Request Body:**
+```json
+{
+  "characterId": "uuid"
+}
+```
+
+#### `DELETE /api/v1/projects/[id]?action=remove-character`
+
+Remove a character from the project roster.
+
+**Request Body:**
+```json
+{
+  "characterId": "uuid"
+}
+```
+
+#### `GET /api/v1/projects/[id]?action=list-chats`
+
+List chats in the project with pagination.
+
+**Query Parameters:**
+- `limit` - Number of chats to return (default: 20)
+- `offset` - Offset for pagination (default: 0)
+
+#### `POST /api/v1/projects/[id]?action=add-chat`
+
+Associate a chat with the project.
+
+**Request Body:**
+```json
+{
+  "chatId": "uuid"
+}
+```
+
+#### `DELETE /api/v1/projects/[id]?action=remove-chat`
+
+Remove a chat from the project.
+
+**Request Body:**
+```json
+{
+  "chatId": "uuid"
+}
+```
+
+#### `GET /api/v1/projects/[id]?action=get-mount-point`
+
+Get project mount point configuration.
+
+**Response:**
+```json
+{
+  "projectId": "uuid",
+  "mountPointId": "uuid",
+  "currentMountPoint": { "id": "uuid", "name": "Local", "backendType": "local" },
+  "defaultMountPoint": { "id": "uuid", "name": "Local", "backendType": "local" },
+  "effectiveMountPoint": { "id": "uuid", "name": "Local", "backendType": "local" },
+  "fileCount": 5
+}
+```
+
+#### `PUT /api/v1/projects/[id]?action=set-mount-point`
+
+Set project mount point with optional file migration.
+
+**Request Body:**
+```json
+{
+  "mountPointId": "uuid",
+  "migrateFiles": true
+}
+```
+
+#### `DELETE /api/v1/projects/[id]?action=clear-mount-point`
+
+Clear project mount point (use system default).
+
+#### `POST /api/v1/projects/[id]?action=update-tool-settings`
+
+Update default tool settings for new chats in the project.
+
+**Request Body:**
+```json
+{
+  "defaultDisabledTools": ["tool_id_1", "tool_id_2"],
+  "defaultDisabledToolGroups": ["plugin:mcp"]
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "defaultDisabledTools": ["tool_id_1", "tool_id_2"],
+  "defaultDisabledToolGroups": ["plugin:mcp"]
+}
+```
+
+When a new chat is created within a project, it inherits these default tool settings. Existing chats are not affected.
 
 ---
 
@@ -1878,9 +2121,9 @@ characters = data['characters']
 
 ## Versioning
 
-Current API version: **v2.7**
+Current API version: **v2.8**
 
-All core endpoints now use the `/api/v1/` prefix. Legacy routes (without prefix) are deprecated and will be removed after 2026-04-15.
+All core endpoints use the `/api/v1/` prefix. Legacy routes (without prefix) were removed in v2.8.
 
 The API follows semantic versioning. Breaking changes are avoided where possible.
 

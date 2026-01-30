@@ -242,7 +242,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ../../../node_modules/openai/version.mjs
-var VERSION = "6.16.0";
+var VERSION = "6.17.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -3293,12 +3293,7 @@ var Assistants = class extends APIResource {
   /**
    * Create an assistant with a model and instructions.
    *
-   * @example
-   * ```ts
-   * const assistant = await client.beta.assistants.create({
-   *   model: 'gpt-4o',
-   * });
-   * ```
+   * @deprecated
    */
   create(body, options) {
     return this._client.post("/assistants", {
@@ -3310,12 +3305,7 @@ var Assistants = class extends APIResource {
   /**
    * Retrieves an assistant.
    *
-   * @example
-   * ```ts
-   * const assistant = await client.beta.assistants.retrieve(
-   *   'assistant_id',
-   * );
-   * ```
+   * @deprecated
    */
   retrieve(assistantID, options) {
     return this._client.get(path`/assistants/${assistantID}`, {
@@ -3326,12 +3316,7 @@ var Assistants = class extends APIResource {
   /**
    * Modifies an assistant.
    *
-   * @example
-   * ```ts
-   * const assistant = await client.beta.assistants.update(
-   *   'assistant_id',
-   * );
-   * ```
+   * @deprecated
    */
   update(assistantID, body, options) {
     return this._client.post(path`/assistants/${assistantID}`, {
@@ -3343,13 +3328,7 @@ var Assistants = class extends APIResource {
   /**
    * Returns a list of assistants.
    *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const assistant of client.beta.assistants.list()) {
-   *   // ...
-   * }
-   * ```
+   * @deprecated
    */
   list(query = {}, options) {
     return this._client.getAPIList("/assistants", CursorPage, {
@@ -3361,11 +3340,7 @@ var Assistants = class extends APIResource {
   /**
    * Delete an assistant.
    *
-   * @example
-   * ```ts
-   * const assistantDeleted =
-   *   await client.beta.assistants.delete('assistant_id');
-   * ```
+   * @deprecated
    */
   delete(assistantID, options) {
     return this._client.delete(path`/assistants/${assistantID}`, {
@@ -4803,8 +4778,8 @@ Evals.Runs = Runs2;
 var Files2 = class extends APIResource {
   /**
    * Upload a file that can be used across various endpoints. Individual files can be
-   * up to 512 MB, and the size of all files uploaded by one organization can be up
-   * to 1 TB.
+   * up to 512 MB, and each project can store up to 2.5 TB of files in total. There
+   * is no organization-wide storage limit.
    *
    * - The Assistants API supports files up to 2 million tokens and of specific file
    *   types. See the
@@ -6941,7 +6916,6 @@ var OllamaProvider = class {
     this.supportedMimeTypes = [];
     this.supportsImageGeneration = false;
     this.supportsWebSearch = false;
-    logger.debug("Initializing Ollama provider", { context: "OllamaProvider.constructor", baseUrl });
   }
   // Helper to collect attachment failures for unsupported provider
   collectAttachmentFailures(params) {
@@ -6959,7 +6933,6 @@ var OllamaProvider = class {
     return { sent: [], failed };
   }
   async sendMessage(params, apiKey) {
-    logger.debug("Ollama sendMessage called", { context: "OllamaProvider.sendMessage", model: params.model, baseUrl: this.baseUrl });
     const attachmentResults = this.collectAttachmentFailures(params);
     const messages = params.messages.map((m) => ({
       role: m.role,
@@ -6977,7 +6950,6 @@ var OllamaProvider = class {
       }
     };
     if (params.tools && params.tools.length > 0) {
-      logger.debug("Adding tools to request", { context: "OllamaProvider.sendMessage", toolCount: params.tools.length });
       requestBody.tools = params.tools;
     }
     try {
@@ -6992,13 +6964,6 @@ var OllamaProvider = class {
         throw new Error(`Ollama API error: ${response.status} ${errorText}`);
       }
       const data = await response.json();
-      logger.debug("Received Ollama response", {
-        context: "OllamaProvider.sendMessage",
-        model: params.model,
-        done: data.done,
-        promptTokens: data.prompt_eval_count,
-        completionTokens: data.eval_count
-      });
       return {
         content: data.message.content,
         finishReason: data.done ? "stop" : "length",
@@ -7016,29 +6981,11 @@ var OllamaProvider = class {
     }
   }
   async *streamMessage(params, apiKey) {
-    logger.debug("Ollama streamMessage called", {
-      context: "OllamaProvider.streamMessage",
-      model: params.model,
-      baseUrl: this.baseUrl,
-      messageCount: params.messages.length,
-      temperature: params.temperature,
-      maxTokens: params.maxTokens,
-      topP: params.topP
-    });
     const attachmentResults = this.collectAttachmentFailures(params);
     const messages = params.messages.map((m) => ({
       role: m.role,
       content: m.content
     }));
-    logger.debug("Ollama request messages", {
-      context: "OllamaProvider.streamMessage",
-      messages: messages.map((m, i) => ({
-        index: i,
-        role: m.role,
-        contentLength: m.content.length,
-        contentPreview: m.content.substring(0, 100) + (m.content.length > 100 ? "..." : "")
-      }))
-    });
     const requestBody = {
       model: params.model,
       messages,
@@ -7049,31 +6996,14 @@ var OllamaProvider = class {
         top_p: params.topP ?? 1
       }
     };
-    logger.debug("Ollama request body", {
-      context: "OllamaProvider.streamMessage",
-      model: requestBody.model,
-      messageCount: requestBody.messages.length,
-      options: requestBody.options
-    });
     if (params.tools && params.tools.length > 0) {
-      logger.debug("Adding tools to stream request", { context: "OllamaProvider.streamMessage", toolCount: params.tools.length });
       requestBody.tools = params.tools;
     }
     try {
-      logger.debug("Sending request to Ollama", {
-        context: "OllamaProvider.streamMessage",
-        url: `${this.baseUrl}/api/chat`
-      });
       const response = await fetch(`${this.baseUrl}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody)
-      });
-      logger.debug("Ollama response received", {
-        context: "OllamaProvider.streamMessage",
-        status: response.status,
-        ok: response.ok,
-        headers: Object.fromEntries(response.headers.entries())
       });
       if (!response.ok) {
         const errorText = await response.text();
@@ -7095,45 +7025,17 @@ var OllamaProvider = class {
         while (true) {
           const { done, value } = await reader.read();
           if (done) {
-            logger.debug("Stream reader done", {
-              context: "OllamaProvider.streamMessage",
-              chunkCount,
-              totalContentLength: totalContent.length,
-              toolCallCount: toolCalls.length
-            });
             break;
           }
           const chunk = decoder.decode(value, { stream: true });
           const lines = chunk.split("\n").filter(Boolean);
-          logger.debug("Processing stream chunk", {
-            context: "OllamaProvider.streamMessage",
-            chunkLength: chunk.length,
-            lineCount: lines.length,
-            rawChunkPreview: chunk.substring(0, 200)
-          });
           for (const line of lines) {
             try {
               const data = JSON.parse(line);
-              logger.debug("Parsed Ollama stream data", {
-                context: "OllamaProvider.streamMessage",
-                hasMessage: !!data.message,
-                messageContent: data.message?.content?.substring(0, 50),
-                hasToolCalls: !!data.message?.tool_calls,
-                toolCallCount: data.message?.tool_calls?.length,
-                done: data.done,
-                model: data.model
-              });
               if (data.model) {
                 lastModel = data.model;
               }
               if (data.message?.tool_calls && Array.isArray(data.message.tool_calls)) {
-                logger.debug("Captured tool calls from Ollama response", {
-                  context: "OllamaProvider.streamMessage",
-                  toolCalls: data.message.tool_calls.map((tc) => ({
-                    id: tc.id,
-                    name: tc.function?.name
-                  }))
-                });
                 toolCalls = [...toolCalls, ...data.message.tool_calls];
               }
               if (data.message?.content) {
@@ -7144,11 +7046,6 @@ var OllamaProvider = class {
                   done: false
                 };
               } else if (data.message && !data.message.content && !data.done && !data.message.tool_calls) {
-                logger.debug("Ollama message without content or tool calls", {
-                  context: "OllamaProvider.streamMessage",
-                  message: data.message,
-                  done: data.done
-                });
               }
               if (data.prompt_eval_count) {
                 totalPromptTokens = data.prompt_eval_count;
@@ -7157,15 +7054,6 @@ var OllamaProvider = class {
                 totalCompletionTokens = data.eval_count;
               }
               if (data.done) {
-                logger.debug("Stream completed", {
-                  context: "OllamaProvider.streamMessage",
-                  model: params.model,
-                  chunkCount,
-                  promptTokens: totalPromptTokens,
-                  completionTokens: totalCompletionTokens,
-                  hasToolCalls: toolCalls.length > 0,
-                  toolCallCount: toolCalls.length
-                });
                 const rawResponse = {
                   model: lastModel,
                   message: {
@@ -7184,19 +7072,6 @@ var OllamaProvider = class {
                     }
                   }));
                   rawResponse.tool_calls = normalizedToolCalls;
-                  logger.debug("Including normalized tool calls in rawResponse", {
-                    context: "OllamaProvider.streamMessage",
-                    originalFormat: toolCalls.map((tc) => ({
-                      id: tc.id,
-                      name: tc.function?.name,
-                      argsType: typeof tc.function?.arguments
-                    })),
-                    normalizedFormat: normalizedToolCalls.map((tc) => ({
-                      id: tc.id,
-                      type: tc.type,
-                      name: tc.function?.name
-                    }))
-                  });
                 }
                 yield {
                   content: "",
@@ -7229,13 +7104,11 @@ var OllamaProvider = class {
     }
   }
   async validateApiKey(apiKey) {
-    logger.debug("Validating Ollama server", { context: "OllamaProvider.validateApiKey", baseUrl: this.baseUrl });
     try {
       const response = await fetch(`${this.baseUrl}/api/tags`, {
         method: "GET"
       });
       const isValid = response.ok;
-      logger.debug("Ollama server validation result", { context: "OllamaProvider.validateApiKey", isValid, baseUrl: this.baseUrl });
       return isValid;
     } catch (error) {
       logger.error("Ollama server validation failed", { context: "OllamaProvider.validateApiKey", baseUrl: this.baseUrl }, error instanceof Error ? error : void 0);
@@ -7243,7 +7116,6 @@ var OllamaProvider = class {
     }
   }
   async getAvailableModels(apiKey) {
-    logger.debug("Fetching available Ollama models", { context: "OllamaProvider.getAvailableModels", baseUrl: this.baseUrl });
     try {
       const response = await fetch(`${this.baseUrl}/api/tags`, {
         method: "GET"
@@ -7254,7 +7126,6 @@ var OllamaProvider = class {
       }
       const data = await response.json();
       const models = data.models?.map((m) => m.name) ?? [];
-      logger.debug("Retrieved Ollama models", { context: "OllamaProvider.getAvailableModels", modelCount: models.length });
       return models;
     } catch (error) {
       logger.error("Failed to fetch Ollama models", { context: "OllamaProvider.getAvailableModels", baseUrl: this.baseUrl }, error instanceof Error ? error : void 0);
@@ -7365,14 +7236,12 @@ var plugin = {
    */
   createProvider: (baseUrl) => {
     const url = baseUrl || config.baseUrlDefault;
-    logger2.debug("Creating Ollama provider instance", { context: "plugin.createProvider", baseUrl: url });
     return new OllamaProvider(url);
   },
   /**
    * Ollama does not support image generation
    */
   createImageProvider: (baseUrl) => {
-    logger2.debug("Image provider requested but not supported for Ollama", { context: "plugin.createImageProvider" });
     throw new Error("Ollama does not support image generation");
   },
   /**
@@ -7381,11 +7250,9 @@ var plugin = {
    */
   getAvailableModels: async (apiKey, baseUrl) => {
     const url = baseUrl || config.baseUrlDefault;
-    logger2.debug("Fetching available Ollama models", { context: "plugin.getAvailableModels", baseUrl: url });
     try {
       const provider = new OllamaProvider(url);
       const models = await provider.getAvailableModels(apiKey);
-      logger2.debug("Successfully fetched Ollama models", { context: "plugin.getAvailableModels", count: models.length });
       return models;
     } catch (error) {
       logger2.error("Failed to fetch Ollama models", { context: "plugin.getAvailableModels", baseUrl: url }, error instanceof Error ? error : void 0);
@@ -7398,11 +7265,9 @@ var plugin = {
    */
   validateApiKey: async (apiKey, baseUrl) => {
     const url = baseUrl || config.baseUrlDefault;
-    logger2.debug("Validating Ollama server", { context: "plugin.validateApiKey", baseUrl: url });
     try {
       const provider = new OllamaProvider(url);
       const isValid = await provider.validateApiKey(apiKey);
-      logger2.debug("Ollama server validation result", { context: "plugin.validateApiKey", isValid });
       return isValid;
     } catch (error) {
       logger2.error("Error validating Ollama server", { context: "plugin.validateApiKey", baseUrl: url }, error instanceof Error ? error : void 0);
@@ -7462,7 +7327,6 @@ var plugin = {
    * Returns static information about available embedding models
    */
   getEmbeddingModels: () => {
-    logger2.debug("Getting Ollama embedding models", { context: "plugin.getEmbeddingModels" });
     return [
       {
         id: "nomic-embed-text",
@@ -7494,7 +7358,6 @@ var plugin = {
    * Render the Ollama icon
    */
   renderIcon: (props) => {
-    logger2.debug("Rendering Ollama icon", { context: "plugin.renderIcon", className: props.className });
     return OllamaIcon(props);
   },
   /**
@@ -7505,10 +7368,6 @@ var plugin = {
    * @returns Array of tools in OpenAI format
    */
   formatTools: (tools) => {
-    logger2.debug("Formatting tools for Ollama provider", {
-      context: "plugin.formatTools",
-      toolCount: tools.length
-    });
     try {
       const formattedTools = [];
       for (const tool of tools) {
@@ -7520,10 +7379,6 @@ var plugin = {
         }
         formattedTools.push(tool);
       }
-      logger2.debug("Successfully formatted tools", {
-        context: "plugin.formatTools",
-        count: formattedTools.length
-      });
       return formattedTools;
     } catch (error) {
       logger2.error(
@@ -7542,15 +7397,8 @@ var plugin = {
    * @returns Array of tool call requests
    */
   parseToolCalls: (response) => {
-    logger2.debug("Parsing tool calls from Ollama response", {
-      context: "plugin.parseToolCalls"
-    });
     try {
       const toolCalls = parseOpenAIToolCalls(response);
-      logger2.debug("Successfully parsed tool calls", {
-        context: "plugin.parseToolCalls",
-        count: toolCalls.length
-      });
       return toolCalls;
     } catch (error) {
       logger2.error(

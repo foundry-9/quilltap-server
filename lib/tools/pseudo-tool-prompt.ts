@@ -77,13 +77,6 @@ ${toolDocs.join('\n')}
 - Don't use tools unnecessarily - only when you actually need the information or capability
 `
 
-  logger.debug('[PseudoToolPrompt] Built pseudo-tool instructions', {
-    enabledTools: [
-      options.memorySearch !== false ? 'memory' : null,
-      options.imageGeneration ? 'image' : null,
-      options.webSearch ? 'search' : null,
-    ].filter(Boolean),
-  })
 
   return instructions.trim()
 }

@@ -1,5 +1,6 @@
 'use client'
 
+import { SettingsCard } from '@/components/ui/SettingsCard'
 import { ChatSettings, AvatarDisplayMode, AvatarDisplayStyle, AVATAR_MODES, AVATAR_STYLES } from './types'
 
 export interface AvatarSettingsProps {
@@ -22,12 +23,10 @@ export function AvatarSettings({
   return (
     <>
       {/* Avatar Display Mode */}
-      <div>
-        <h2 className="text-xl font-semibold mb-4">Message Avatar Display</h2>
-        <p className="text-muted-foreground mb-4">
-          Control how avatars are displayed in chat messages
-        </p>
-
+      <SettingsCard
+        title="Message Avatar Display"
+        subtitle="Control how avatars are displayed in chat messages"
+      >
         <div className="space-y-3">
           {AVATAR_MODES.map((mode) => (
             <label
@@ -52,15 +51,13 @@ export function AvatarSettings({
             </label>
           ))}
         </div>
-      </div>
+      </SettingsCard>
 
       {/* Avatar Display Style */}
-      <div className="border-t border-border pt-6">
-        <h2 className="text-xl font-semibold mb-4">Avatar Display Style</h2>
-        <p className="text-muted-foreground mb-4">
-          Choose how avatars are shaped and displayed throughout the application
-        </p>
-
+      <SettingsCard
+        title="Avatar Display Style"
+        subtitle="Choose how avatars are shaped and displayed throughout the application"
+      >
         <div className="space-y-3">
           {AVATAR_STYLES.map((style) => (
             <label
@@ -86,7 +83,7 @@ export function AvatarSettings({
             </label>
           ))}
         </div>
-      </div>
+      </SettingsCard>
     </>
   )
 }

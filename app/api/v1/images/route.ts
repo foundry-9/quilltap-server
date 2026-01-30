@@ -21,7 +21,7 @@ import { createHash } from 'crypto';
 import type { FileCategory, FileSource } from '@/lib/schemas/types';
 
 const importFromUrlSchema = z.object({
-  url: z.string().url(),
+  url: z.url(),
   tags: z
     .array(
       z.object({
@@ -34,7 +34,7 @@ const importFromUrlSchema = z.object({
 
 const generateImageSchema = z.object({
   prompt: z.string().min(1).max(4000),
-  profileId: z.string().uuid(),
+  profileId: z.uuid(),
   tags: z
     .array(
       z.object({
@@ -45,7 +45,7 @@ const generateImageSchema = z.object({
     .optional(),
   options: z
     .object({
-      n: z.number().int().min(1).max(10).optional(),
+      n: z.int().min(1).max(10).optional(),
       size: z.string().optional(),
       quality: z.enum(['standard', 'hd']).optional(),
       style: z.enum(['vivid', 'natural']).optional(),
@@ -60,7 +60,6 @@ const generateImageSchema = z.object({
 
 export const GET = createAuthenticatedHandler(async (request, { user, repos }) => {
   try {
-    logger.debug('[Images v1] GET list images', { userId: user.id });
 
     const searchParams = request.nextUrl.searchParams;
     const tagId = searchParams.get('tagId');
@@ -139,8 +138,6 @@ export const GET = createAuthenticatedHandler(async (request, { user, repos }) =
       };
     });
 
-    logger.info('[Images v1] Retrieved image list', { userId: user.id, imageCount: data.length });
-
     return successResponse({ data });
   } catch (error) {
     logger.error('[Images v1] Error fetching images', {}, error instanceof Error ? error : undefined);
@@ -173,13 +170,11 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
     const body = await request.json();
     const { prompt, profileId, tags, options = {} } = generateImageSchema.parse(body);
 
-    logger.debug('[Images v1] Generating image', { profileId, userId: user.id });
 
     // Load and validate connection profile
     const profile = await repos.connections.findById(profileId);
 
     if (!profile || profile.userId !== user.id) {
-      logger.debug('[Images v1] Connection profile not found or not owned by user', { profileId });
       return badRequest('Connection profile not found');
     }
 
@@ -197,7 +192,6 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
 
     // Verify provider supports image generation
     if (!provider.supportsImageGeneration) {
-      logger.debug('[Images v1] Provider does not support image generation', { provider: profile.provider });
       return badRequest(`${profile.provider} provider does not support image generation`);
     }
 
@@ -211,11 +205,6 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
       style: options.style,
       aspectRatio: options.aspectRatio,
     };
-
-    logger.debug('[Images v1] Generating images with provider', {
-      provider: profile.provider,
-      prompt: prompt.substring(0, 100),
-    });
 
     // Generate images - generateImage takes (request, apiKey)
     const imageGenResponse = await provider.generateImage(imageGenRequest, decryptedKey);
@@ -254,7 +243,6 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
           folderPath: '/',
         });
 
-        logger.debug('[Images v1] Uploaded generated image to storage', { fileId, storageKey, size: imageBuffer.length });
 
         // Inherit tags from linked entities
         const inheritedTags = await getInheritedTags(linkedTo, user.id);
@@ -330,8 +318,6 @@ async function handleUploadOrImport(request: NextRequest, user: { id: string }, 
       const body = await request.json();
       const { url, tags } = importFromUrlSchema.parse(body);
 
-      logger.debug('[Images v1] Importing image from URL', { url: url.substring(0, 50), userId: user.id });
-
       // Build linkedTo array from tags
       const linkedTo = tags ? tags.map(t => t.tagId) : [];
 
@@ -377,7 +363,6 @@ async function handleUploadOrImport(request: NextRequest, user: { id: string }, 
         return badRequest('No file provided');
       }
 
-      logger.debug('[Images v1] Uploading image file', { filename: file.name, size: file.size, userId: user.id });
 
       // Parse tags if provided
       let tags: Array<{ tagType: 'CHARACTER' | 'PERSONA' | 'CHAT' | 'THEME'; tagId: string }> | undefined;

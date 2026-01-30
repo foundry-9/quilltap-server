@@ -69,11 +69,9 @@ function FolderIcon({ className }: { className?: string }) {
 function ChatItem({
   chat,
   isCollapsed,
-  onClick,
 }: {
   chat: SidebarChat
   isCollapsed: boolean
-  onClick: () => void
 }) {
   const displayName = getChatDisplayName(chat)
   const firstParticipant = chat.participants[0]
@@ -85,7 +83,6 @@ function ChatItem({
     <Link
       href={`/chats/${chat.id}`}
       className={`qt-left-sidebar-item ${isCollapsed ? 'justify-center px-0' : ''}`}
-      onClick={onClick}
       title={isCollapsed ? `${displayName}${chat.projectName ? ` (${chat.projectName})` : ''} (${messageCount} messages)` : undefined}
     >
       {avatarSrc ? (
@@ -122,15 +119,9 @@ function ChatItem({
 }
 
 export function ChatsSection() {
-  const { isCollapsed, closeMobile, isMobile } = useSidebar()
+  const { isCollapsed } = useSidebar()
   const { shouldHideByIds } = useQuickHide()
   const { chats, loading } = useSidebarData()
-
-  const handleItemClick = () => {
-    if (isMobile) {
-      closeMobile()
-    }
-  }
 
   // Don't show section if loading or no chats
   if (loading) {
@@ -167,7 +158,6 @@ export function ChatsSection() {
           key={chat.id}
           chat={chat}
           isCollapsed={isCollapsed}
-          onClick={handleItemClick}
         />
       ))}
       <ViewAllLink href="/chats" />

@@ -25,11 +25,11 @@ const editMessageSchema = z.object({
 });
 
 const swipeActionSchema = z.object({
-  swipeIndex: z.number().int().min(0).optional(), // For switching swipes
+  swipeIndex: z.int().min(0).optional(), // For switching swipes
 });
 
 const reattributeActionSchema = z.object({
-  newParticipantId: z.string().uuid('New participant ID is required'),
+  newParticipantId: z.uuid('New participant ID is required'),
 });
 
 // =============================================================================
@@ -74,13 +74,7 @@ async function findMessageInUserChats(
 
 export const GET = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id: messageId }) => {
-    try {
-      logger.debug('[Messages API v1] GET message', {
-        messageId,
-        userId: user.id,
-      });
-
-      const result = await findMessageInUserChats(repos, user.id, messageId);
+    try {const result = await findMessageInUserChats(repos, user.id, messageId);
       if (!result) {
         return notFound('Message');
       }
@@ -101,14 +95,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id: messageId }) => {
     try {
       const body = await req.json();
-      const { content } = editMessageSchema.parse(body);
-
-      logger.debug('[Messages API v1] PUT message', {
-        messageId,
-        userId: user.id,
-      });
-
-      const result = await findMessageInUserChats(repos, user.id, messageId);
+      const { content } = editMessageSchema.parse(body);const result = await findMessageInUserChats(repos, user.id, messageId);
       if (!result) {
         return notFound('Message');
       }
@@ -129,14 +116,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
       }
 
       // Update chat's updatedAt timestamp
-      await repos.chats.update(result.chat.id, {});
-
-      logger.debug('[Messages API v1] Message updated', {
-        messageId,
-        chatId: result.chat.id,
-      });
-
-      return NextResponse.json({ message: updatedMessage });
+      await repos.chats.update(result.chat.id, {});return NextResponse.json({ message: updatedMessage });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return validationError(error);
@@ -157,16 +137,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       // Parse query params for memory handling
       const url = new URL(req.url);
       const memoryAction = url.searchParams.get('memoryAction') as MemoryCascadeAction | null;
-      const skipConfirmation = url.searchParams.get('skipConfirmation') === 'true';
-
-      logger.debug('[Messages API v1] DELETE message', {
-        messageId,
-        userId: user.id,
-        memoryAction,
-        skipConfirmation,
-      });
-
-      const result = await findMessageInUserChats(repos, user.id, messageId);
+      const skipConfirmation = url.searchParams.get('skipConfirmation') === 'true';const result = await findMessageInUserChats(repos, user.id, messageId);
       if (!result) {
         return notFound('Message');
       }
@@ -189,14 +160,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       const memoryCount = await repos.memories.countBySourceMessageIds(messageIdsToDelete);
 
       // If memories exist and no action specified, return info for confirmation dialog
-      if (memoryCount > 0 && !memoryAction && !skipConfirmation) {
-        logger.debug('[Messages API v1] Message has associated memories, returning for confirmation', {
-          messageId,
-          memoryCount,
-          isSwipeGroup: !!result.message.swipeGroupId,
-        });
-
-        return NextResponse.json({
+      if (memoryCount > 0 && !memoryAction && !skipConfirmation) {return NextResponse.json({
           requiresConfirmation: true,
           memoryCount,
           messageIds: messageIdsToDelete,
@@ -405,14 +369,7 @@ async function handleGenerateSwipe(
   if (cascadeAction !== 'KEEP_MEMORIES') {
     const memoryCount = await repos.memories.countBySourceMessageId(messageId);
     if (memoryCount > 0) {
-      const { deleted, vectorsRemoved } = await deleteMemoriesBySourceMessageWithVectors(messageId);
-      logger.debug('[Messages API v1] Deleted memories for swipe regeneration', {
-        originalMessageId: messageId,
-        deleted,
-        vectorsRemoved,
-        cascadeAction,
-      });
-    }
+      const { deleted, vectorsRemoved } = await deleteMemoriesBySourceMessageWithVectors(messageId);}
   }
 
   // Create new swipe message
@@ -481,14 +438,7 @@ async function handleReattributeAction(
 ): Promise<NextResponse> {
   try {
     const body = await req.json();
-    const { newParticipantId } = reattributeActionSchema.parse(body);
-
-    logger.debug('[Messages API v1] Processing message re-attribution', {
-      messageId,
-      newParticipantId,
-    });
-
-    const result = await findMessageInUserChats(repos, user.id, messageId);
+    const { newParticipantId } = reattributeActionSchema.parse(body);const result = await findMessageInUserChats(repos, user.id, messageId);
     if (!result) {
       return notFound('Message');
     }
@@ -509,14 +459,7 @@ async function handleReattributeAction(
 
     // Find and delete memories associated with this message
     const memoriesFromMessage = await repos.memories.findBySourceMessageId(messageId);
-    let memoriesDeleted = 0;
-
-    logger.debug('[Messages API v1] Found memories to delete for re-attribution', {
-      messageId,
-      memoryCount: memoriesFromMessage.length,
-    });
-
-    for (const memory of memoriesFromMessage) {
+    let memoriesDeleted = 0;for (const memory of memoriesFromMessage) {
       try {
         const deleted = await deleteMemoryWithVector(memory.characterId, memory.id);
         if (deleted) {

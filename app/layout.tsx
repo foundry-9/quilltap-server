@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "@/components/providers/session-provider";
-import { PluginInitializer } from "@/components/startup";
+import { PluginInitializer, PluginUpgradeNotifier } from "@/components/startup";
 import { AppLayout } from "@/components/layout/app-layout";
 
 export const metadata: Metadata = {
@@ -19,6 +19,7 @@ export default function RootLayout({
       <body className="font-sans" suppressHydrationWarning>
         <Providers>
           <PluginInitializer />
+          <PluginUpgradeNotifier />
           <AppLayout>
             {children}
           </AppLayout>

@@ -17,7 +17,6 @@ import { logger } from '@/lib/logger';
 export const GET = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     try {
-      logger.debug('[Embedding Profiles v1] GET profile', { profileId: id, userId: user.id });
 
       const profile = await repos.embeddingProfiles.findById(id);
 
@@ -65,7 +64,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     try {
-      logger.debug('[Embedding Profiles v1] PUT update profile', { profileId: id, userId: user.id });
 
       // Verify ownership
       const existingProfile = await repos.embeddingProfiles.findById(id);
@@ -200,7 +198,6 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
 export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     try {
-      logger.debug('[Embedding Profiles v1] DELETE profile', { profileId: id, userId: user.id });
 
       // Verify ownership
       const existingProfile = await repos.embeddingProfiles.findById(id);

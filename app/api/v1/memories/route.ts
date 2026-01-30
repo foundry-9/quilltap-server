@@ -34,30 +34,30 @@ import type { ChatEvent, MessageEvent, ChatMetadata } from '@/lib/schemas/types'
 // =============================================================================
 
 const createMemorySchema = z.object({
-  characterId: z.string().uuid('Character ID is required'),
+  characterId: z.uuid('Character ID is required'),
   content: z.string().min(1, 'Memory content is required'),
   summary: z.string().min(1, 'Memory summary is required'),
-  keywords: z.array(z.string()).default([]),
-  tags: z.array(z.string().uuid()).default([]),
-  importance: z.number().min(0).max(1).default(0.5),
-  aboutCharacterId: z.string().uuid().nullable().optional(),
-  personaId: z.string().uuid().nullable().optional(), // Legacy support
-  chatId: z.string().uuid().nullable().optional(),
-  source: z.enum(['AUTO', 'MANUAL']).default('MANUAL'),
-  sourceMessageId: z.string().uuid().nullable().optional(),
+  keywords: z.array(z.string()).prefault([]),
+  tags: z.array(z.uuid()).prefault([]),
+  importance: z.number().min(0).max(1).prefault(0.5),
+  aboutCharacterId: z.uuid().nullable().optional(),
+  personaId: z.uuid().nullable().optional(), // Legacy support
+  chatId: z.uuid().nullable().optional(),
+  source: z.enum(['AUTO', 'MANUAL']).prefault('MANUAL'),
+  sourceMessageId: z.uuid().nullable().optional(),
 });
 
 const searchMemorySchema = z.object({
-  characterId: z.string().uuid('Character ID is required'),
+  characterId: z.uuid('Character ID is required'),
   query: z.string().min(1, 'Search query is required'),
-  limit: z.number().min(1).max(100).default(20),
+  limit: z.number().min(1).max(100).prefault(20),
   minImportance: z.number().min(0).max(1).optional(),
   minScore: z.number().min(0).max(1).optional(),
   source: z.enum(['AUTO', 'MANUAL']).optional(),
 });
 
 const housekeepingOptionsSchema = z.object({
-  characterId: z.string().uuid('Character ID is required'),
+  characterId: z.uuid('Character ID is required'),
   maxMemories: z.number().min(10).max(10000).optional(),
   maxAgeMonths: z.number().min(1).max(120).optional(),
   maxInactiveMonths: z.number().min(1).max(120).optional(),
@@ -68,14 +68,14 @@ const housekeepingOptionsSchema = z.object({
 });
 
 const generateEmbeddingsSchema = z.object({
-  characterId: z.string().uuid('Character ID is required'),
-  batchSize: z.number().min(1).max(50).default(10),
+  characterId: z.uuid('Character ID is required'),
+  batchSize: z.number().min(1).max(50).prefault(10),
 });
 
 const rebuildIndexSchema = z.object({
-  characterId: z.string().uuid('Character ID is required'),
+  characterId: z.uuid('Character ID is required'),
   confirm: z.literal(true, {
-    errorMap: () => ({ message: 'Must confirm rebuild with confirm: true' }),
+    error: () => 'Must confirm rebuild with confirm: true',
   }),
 });
 

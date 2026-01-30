@@ -76,11 +76,7 @@ export async function buildChatContext(
         description: uc.description,
         personality: uc.personality,
       }
-      logger.debug('buildChatContext: Using specified user character', {
-        context: 'chat-initialize',
-        userCharacterId,
-        userCharacterName: uc.name,
-      })
+
     }
   } else if (character.defaultPartnerId) {
     // Fall back to character's default partner
@@ -92,11 +88,7 @@ export async function buildChatContext(
         description: defaultPartner.description,
         personality: defaultPartner.personality,
       }
-      logger.debug('buildChatContext: Using default partner', {
-        context: 'chat-initialize',
-        defaultPartnerId: character.defaultPartnerId,
-        partnerName: defaultPartner.name,
-      })
+
     }
   }
 

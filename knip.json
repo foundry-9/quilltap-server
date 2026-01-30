@@ -1,0 +1,31 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "app/**/*.{ts,tsx}",
+    "scripts/*.ts",
+    "migrations/*.ts",
+    "lib/database/index.ts",
+    "lib/chat/context/index.ts"
+  ],
+  "project": [
+    "**/*.{ts,tsx}",
+    "!packages/**",
+    "!plugins/**"
+  ],
+  "ignore": [
+    "packages/**",
+    "plugins/**",
+    "migrations/lib/**",
+    "**/*.d.ts",
+    "**/*.stories.tsx",
+    ".storybook/**"
+  ],
+  "ignoreDependencies": [
+    "@types/*",
+    "ts-node",
+    "@vitest/mocker"
+  ],
+  "ignoreBinaries": [
+    "docker-compose"
+  ]
+}

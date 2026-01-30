@@ -1,7 +1,7 @@
 /**
  * Restore Service
  *
- * Restores user data from a backup ZIP archive to MongoDB and S3.
+ * Restores user data from a backup ZIP archive to the database and S3.
  * Supports two modes:
  * - 'replace': Deletes existing data and restores from backup
  * - 'new-account': Regenerates all UUIDs and imports to a new account
@@ -35,6 +35,7 @@ import type {
   RoleplayTemplate,
   ProviderModel,
   Project,
+  LLMLog,
 } from '@/lib/schemas/types';
 
 const moduleLogger = logger.child({ module: 'backup:restore-service' });
@@ -43,8 +44,6 @@ const moduleLogger = logger.child({ module: 'backup:restore-service' });
  * Parses a backup ZIP file and extracts its data
  */
 export function parseBackupZip(zipBuffer: Buffer): BackupData {
-  moduleLogger.debug('Parsing backup ZIP', { size: zipBuffer.length });
-
   const zip = new AdmZip(zipBuffer);
   const entries = zip.getEntries();
 
@@ -60,9 +59,6 @@ export function parseBackupZip(zipBuffer: Buffer): BackupData {
   if (!rootFolder) {
     throw new Error('Invalid backup: manifest.json not found');
   }
-
-  moduleLogger.debug('Found backup root folder', { rootFolder });
-
   // Helper to read JSON from zip
   const readJson = <T>(path: string): T => {
     const entry = zip.getEntry(rootFolder + path);
@@ -77,7 +73,6 @@ export function parseBackupZip(zipBuffer: Buffer): BackupData {
   const readJsonOptional = <T>(path: string, fallback: T): T => {
     const entry = zip.getEntry(rootFolder + path);
     if (!entry) {
-      moduleLogger.debug('Optional file not found in backup, using fallback', { path });
       return fallback;
     }
     const content = entry.getData().toString('utf8');
@@ -101,6 +96,8 @@ export function parseBackupZip(zipBuffer: Buffer): BackupData {
   const providerModels = readJsonOptional<ProviderModel[]>('data/provider-models.json', []);
   // Projects are optional for backwards compatibility with older backups
   const projects = readJsonOptional<Project[]>('data/projects.json', []);
+  // LLM logs are optional for backwards compatibility with older backups
+  const llmLogs = readJsonOptional<LLMLog[]>('data/llm-logs.json', []);
 
   moduleLogger.info('Parsed backup ZIP', {
     version: manifest.version,
@@ -122,6 +119,7 @@ export function parseBackupZip(zipBuffer: Buffer): BackupData {
     roleplayTemplates,
     providerModels,
     projects,
+    llmLogs,
   };
 }
 
@@ -182,6 +180,7 @@ export function previewRestore(zipBuffer: Buffer): RestoreSummary {
     },
     providerModels: data.providerModels.length,
     projects: data.projects.length,
+    llmLogs: data.llmLogs.length,
     warnings: [],
   };
 }
@@ -197,7 +196,7 @@ async function deleteUserData(userId: string): Promise<void> {
   const globalRepos = getRepositories();
 
   // Get all entities to delete
-  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, promptTemplates, roleplayTemplates, projects] =
+  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, promptTemplates, roleplayTemplates, projects, llmLogs] =
     await Promise.all([
       repos.characters.findAll(),
       repos.chats.findAll(),
@@ -209,6 +208,7 @@ async function deleteUserData(userId: string): Promise<void> {
       globalRepos.promptTemplates.findByUserId(userId),
       globalRepos.roleplayTemplates.findByUserId(userId),
       repos.projects.findAll(),
+      repos.llmLogs.findAll(10000), // High limit to get all user logs
     ]);
 
   // Delete memories for each character first
@@ -219,7 +219,7 @@ async function deleteUserData(userId: string): Promise<void> {
     }
   }
 
-  // Delete all entities (including user-created templates and projects)
+  // Delete all entities (including user-created templates, projects, and LLM logs)
   await Promise.all([
     ...characters.map((c) => repos.characters.delete(c.id)),
     ...chats.map((c) => repos.chats.delete(c.id)),
@@ -230,6 +230,7 @@ async function deleteUserData(userId: string): Promise<void> {
     ...promptTemplates.map((pt) => globalRepos.promptTemplates.delete(pt.id)),
     ...roleplayTemplates.map((rt) => globalRepos.roleplayTemplates.delete(rt.id)),
     ...projects.map((p) => repos.projects.delete(p.id)),
+    ...llmLogs.map((log) => repos.llmLogs.delete(log.id)),
   ]);
 
   // Delete files from storage
@@ -260,6 +261,7 @@ async function deleteUserData(userId: string): Promise<void> {
       promptTemplates: promptTemplates.length,
       roleplayTemplates: roleplayTemplates.length,
       projects: projects.length,
+      llmLogs: llmLogs.length,
     },
   });
 }
@@ -285,12 +287,6 @@ export interface DeleteSummary {
     prompt: number;
     roleplay: number;
   };
-  sync: {
-    instances: number;
-    mappings: number;
-    operations: number;
-    syncApiKeys: number;
-  };
 }
 
 /**
@@ -304,7 +300,7 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
   const globalRepos = getRepositories();
 
   // First, count everything before deletion
-  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, apiKeys, promptTemplates, roleplayTemplates, syncInstances, syncOperations, syncApiKeys, projects] =
+  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, apiKeys, promptTemplates, roleplayTemplates, projects] =
     await Promise.all([
       repos.characters.findAll(),
       repos.chats.findAll(),
@@ -316,9 +312,6 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
       repos.connections.getAllApiKeys(),
       globalRepos.promptTemplates.findByUserId(userId),
       globalRepos.roleplayTemplates.findByUserId(userId),
-      globalRepos.syncInstances.findByUserId(userId),
-      globalRepos.syncOperations.findByUserId(userId, 10000), // High limit to get all
-      globalRepos.userSyncApiKeys.findByUserId(userId),
       repos.projects.findAll(),
     ]);
 
@@ -329,16 +322,9 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
     memoriesCount += memories.length;
   }
 
-  // Count sync mappings (need to count per instance)
-  let syncMappingsCount = 0;
-  for (const instance of syncInstances) {
-    const mappings = await globalRepos.syncMappings.findAllForInstance(userId, instance.id);
-    syncMappingsCount += mappings.length;
-  }
-
   // List and count backups
   const allBackupFiles = files.filter(
-    (f) => f.folderPath === '/backups' || f.originalFilename?.endsWith('.zip')
+    (f: FileEntry) => f.folderPath === '/backups' || f.originalFilename?.endsWith('.zip')
   );
   const backupsCount = allBackupFiles.length;
 
@@ -363,45 +349,6 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
     backupsCount,
   });
 
-  // Reset sync data
-  // Delete mappings for each instance (so entities get re-mapped on next sync)
-  for (const instance of syncInstances) {
-    try {
-      await globalRepos.syncMappings.deleteByInstanceId(instance.id);
-    } catch (error) {
-      moduleLogger.warn('Failed to delete sync mappings for instance', {
-        instanceId: instance.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  // Reset sync state on instances (clear lastSyncAt so next sync pulls all data)
-  // We keep the instances themselves so user doesn't have to re-enter remote server info
-  try {
-    await globalRepos.syncInstances.resetSyncStateForUser(userId);
-    moduleLogger.info('Reset sync state for all user instances', { userId });
-  } catch (error) {
-    moduleLogger.warn('Failed to reset sync state for instances', {
-      userId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-
-  // Delete sync operations (clear history)
-  for (const operation of syncOperations) {
-    try {
-      await globalRepos.syncOperations.delete(operation.id);
-    } catch (error) {
-      moduleLogger.warn('Failed to delete sync operation', {
-        operationId: operation.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  // Keep sync API keys - they're needed for remote instances to sync to us
-
   const summary: DeleteSummary = {
     characters: characters.length,
     chats: chats.length,
@@ -420,14 +367,6 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
       prompt: promptTemplates.length,
       roleplay: roleplayTemplates.length,
     },
-    sync: {
-      // Instances are reset (not deleted), so count shows how many were reset
-      instances: syncInstances.length,
-      mappings: syncMappingsCount,
-      operations: syncOperations.length,
-      // API keys are kept (not deleted)
-      syncApiKeys: 0,
-    },
   };
 
   moduleLogger.info('Complete user data deletion finished', { userId, summary });
@@ -439,12 +378,10 @@ export async function deleteAllUserData(userId: string): Promise<DeleteSummary> 
  * Preview what will be deleted (counts only, no actual deletion)
  */
 export async function previewDeleteAllUserData(userId: string): Promise<DeleteSummary> {
-  moduleLogger.debug('Previewing data to be deleted', { userId });
-
   const repos = getUserRepositories(userId);
   const globalRepos = getRepositories();
 
-  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, apiKeys, promptTemplates, roleplayTemplates, syncInstances, syncOperations, syncApiKeys, projects] =
+  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, apiKeys, promptTemplates, roleplayTemplates, projects] =
     await Promise.all([
       repos.characters.findAll(),
       repos.chats.findAll(),
@@ -456,9 +393,6 @@ export async function previewDeleteAllUserData(userId: string): Promise<DeleteSu
       repos.connections.getAllApiKeys(),
       globalRepos.promptTemplates.findByUserId(userId),
       globalRepos.roleplayTemplates.findByUserId(userId),
-      globalRepos.syncInstances.findByUserId(userId),
-      globalRepos.syncOperations.findByUserId(userId, 10000), // High limit to get all
-      globalRepos.userSyncApiKeys.findByUserId(userId),
       repos.projects.findAll(),
     ]);
 
@@ -469,16 +403,9 @@ export async function previewDeleteAllUserData(userId: string): Promise<DeleteSu
     memoriesCount += memories.length;
   }
 
-  // Count sync mappings (need to count per instance)
-  let syncMappingsCount = 0;
-  for (const instance of syncInstances) {
-    const mappings = await globalRepos.syncMappings.findAllForInstance(userId, instance.id);
-    syncMappingsCount += mappings.length;
-  }
-
   // List and count backups from files
   const backupFiles = files.filter(
-    (f) => f.folderPath === '/backups' || f.originalFilename?.endsWith('.zip')
+    (f: FileEntry) => f.folderPath === '/backups' || f.originalFilename?.endsWith('.zip')
   );
 
   return {
@@ -499,14 +426,6 @@ export async function previewDeleteAllUserData(userId: string): Promise<DeleteSu
       prompt: promptTemplates.length,
       roleplay: roleplayTemplates.length,
     },
-    sync: {
-      // Instances will be reset (not deleted), count shows how many will be reset
-      instances: syncInstances.length,
-      mappings: syncMappingsCount,
-      operations: syncOperations.length,
-      // API keys are kept (not deleted)
-      syncApiKeys: 0,
-    },
   };
 }
 
@@ -518,8 +437,6 @@ function remapBackupData(
   targetUserId: string,
   remapper: UuidRemapper
 ): BackupData {
-  moduleLogger.debug('Remapping backup data UUIDs', { targetUserId });
-
   // Remap tags
   const remappedTags = data.tags.map((tag) => ({
     ...remapper.remapFields(tag, ['id']),
@@ -643,6 +560,12 @@ function remapBackupData(
     userId: targetUserId,
   })) as Project[];
 
+  // Remap LLM logs
+  const remappedLLMLogs = data.llmLogs.map((log) => ({
+    ...remapper.remapFields(log, ['id', 'messageId', 'chatId', 'characterId']),
+    userId: targetUserId,
+  })) as LLMLog[];
+
   return {
     manifest: data.manifest,
     characters: remappedCharacters,
@@ -657,6 +580,7 @@ function remapBackupData(
     roleplayTemplates: remappedRoleplayTemplates,
     providerModels: remappedProviderModels,
     projects: remappedProjects,
+    llmLogs: remappedLLMLogs,
   };
 }
 
@@ -683,9 +607,6 @@ export async function restore(
   if (mode === 'new-account') {
     const remapper = new UuidRemapper();
     data = remapBackupData(data, targetUserId, remapper);
-    moduleLogger.debug('UUID remapping complete', {
-      mappingSize: remapper.getSize(),
-    });
   }
 
   const repos = getUserRepositories(targetUserId);
@@ -703,7 +624,6 @@ export async function restore(
 
   // Restore in dependency order
   // 1. Tags (no dependencies)
-  moduleLogger.debug('Restoring tags', { count: data.tags.length });
   for (const tag of data.tags) {
     try {
       const { id: backupId, userId, createdAt, updatedAt, ...tagData } = tag;
@@ -716,7 +636,6 @@ export async function restore(
   }
 
   // 2. Connection profiles (no entity dependencies, but have tag refs)
-  moduleLogger.debug('Restoring connection profiles', { count: data.connectionProfiles.length });
   for (const profile of data.connectionProfiles) {
     try {
       const { id: backupId, userId, createdAt, updatedAt, apiKeyId, ...profileData } = profile;
@@ -730,7 +649,6 @@ export async function restore(
   }
 
   // 3. Image profiles
-  moduleLogger.debug('Restoring image profiles', { count: data.imageProfiles.length });
   for (const profile of data.imageProfiles) {
     try {
       const { id: backupId, userId, createdAt, updatedAt, apiKeyId, ...profileData } = profile;
@@ -743,7 +661,6 @@ export async function restore(
   }
 
   // 4. Embedding profiles
-  moduleLogger.debug('Restoring embedding profiles', { count: data.embeddingProfiles.length });
   for (const profile of data.embeddingProfiles) {
     try {
       const { id: backupId, userId, createdAt, updatedAt, apiKeyId, ...profileData } = profile;
@@ -756,7 +673,6 @@ export async function restore(
   }
 
   // 5. Files (upload to storage and create metadata)
-  moduleLogger.debug('Restoring files', { count: data.files.length });
   let filesRestored = 0;
   for (const file of data.files) {
     try {
@@ -795,14 +711,12 @@ export async function restore(
   }
 
   // 6. Characters
-  moduleLogger.debug('Restoring characters', { count: data.characters.length });
   for (const character of data.characters) {
     try {
       const { id: backupId, userId, createdAt, updatedAt, ...charData } = character;
       const createdCharacter = await repos.characters.create(charData);
       // Track the mapping from backup ID to newly created ID
       characterIdMap.set(backupId, createdCharacter.id);
-      moduleLogger.debug('Character ID mapping created', { backupId, newId: createdCharacter.id });
     } catch (error) {
       warnings.push(`Failed to restore character "${character.name}": ${error instanceof Error ? error.message : String(error)}`);
       moduleLogger.warn('Failed to restore character', { characterId: character.id, error });
@@ -810,7 +724,6 @@ export async function restore(
   }
 
   // 7. Chats (with messages)
-  moduleLogger.debug('Restoring chats', { count: data.chats.length });
   let messagesRestored = 0;
   for (const chat of data.chats) {
     try {
@@ -836,7 +749,6 @@ export async function restore(
   // 9. Memories
   // Note: Characters Not Personas migration (Phase 7) will convert personaId to aboutCharacterId
   // after restore if needed. For new backups, aboutCharacterId may already be set.
-  moduleLogger.debug('Restoring memories', { count: data.memories.length });
   for (const memory of data.memories) {
     try {
       const { id, createdAt, updatedAt, ...memoryData } = memory;
@@ -860,10 +772,6 @@ export async function restore(
       if (memoryData.aboutCharacterId) {
         newAboutCharacterId = characterIdMap.get(memoryData.aboutCharacterId) || null;
         if (!newAboutCharacterId) {
-          moduleLogger.debug('Memory aboutCharacterId not found in restored entities, setting to null', {
-            memoryId: memory.id,
-            backupAboutCharacterId: memoryData.aboutCharacterId,
-          });
         }
       }
 
@@ -882,7 +790,6 @@ export async function restore(
   // 10. Prompt Templates (user-created only)
   const globalRepos = getRepositories();
   let promptTemplatesRestored = 0;
-  moduleLogger.debug('Restoring prompt templates', { count: data.promptTemplates.length });
   for (const template of data.promptTemplates) {
     try {
       const { id, userId, createdAt, updatedAt, ...templateData } = template;
@@ -899,7 +806,6 @@ export async function restore(
 
   // 11. Roleplay Templates (user-created only)
   let roleplayTemplatesRestored = 0;
-  moduleLogger.debug('Restoring roleplay templates', { count: data.roleplayTemplates.length });
   for (const template of data.roleplayTemplates) {
     try {
       const { id, userId, createdAt, updatedAt, ...templateData } = template;
@@ -915,7 +821,6 @@ export async function restore(
   }
 
   // 12. Provider Models (global cache)
-  moduleLogger.debug('Restoring provider models', { count: data.providerModels.length });
   let providerModelsRestored = 0;
   for (const model of data.providerModels) {
     try {
@@ -929,7 +834,6 @@ export async function restore(
   }
 
   // 13. Projects
-  moduleLogger.debug('Restoring projects', { count: data.projects.length });
   let projectsRestored = 0;
   for (const project of data.projects) {
     try {
@@ -940,6 +844,19 @@ export async function restore(
     } catch (error) {
       warnings.push(`Failed to restore project "${project.name}": ${error instanceof Error ? error.message : String(error)}`);
       moduleLogger.warn('Failed to restore project', { projectId: project.id, error });
+    }
+  }
+
+  // 14. LLM Logs
+  let llmLogsRestored = 0;
+  for (const log of data.llmLogs) {
+    try {
+      const { id, createdAt, ...logData } = log;
+      await repos.llmLogs.create(logData, { id, createdAt });
+      llmLogsRestored++;
+    } catch (error) {
+      warnings.push(`Failed to restore LLM log: ${error instanceof Error ? error.message : String(error)}`);
+      moduleLogger.warn('Failed to restore LLM log', { logId: log.id, error });
     }
   }
 
@@ -975,7 +892,6 @@ export async function restore(
   };
 
   // 13. Update characters with correct relationship IDs
-  moduleLogger.debug('Reconciling character relationships');
   for (const [backupId, newId] of characterIdMap) {
     try {
       // Find the original character data to get relationship fields
@@ -1044,7 +960,6 @@ export async function restore(
 
       if (hasUpdates) {
         await repos.characters.update(newId, updates);
-        moduleLogger.debug('Updated character relationships', { characterId: newId, updates: Object.keys(updates) });
       }
     } catch (error) {
       warnings.push(`Failed to reconcile character relationships: ${error instanceof Error ? error.message : String(error)}`);
@@ -1053,7 +968,6 @@ export async function restore(
   }
 
   // 14. Update chats with correct participant IDs
-  moduleLogger.debug('Reconciling chat relationships');
   for (const [backupId, newId] of chatIdMap) {
     try {
       const originalChat = data.chats.find((c) => c.id === backupId);
@@ -1107,7 +1021,6 @@ export async function restore(
 
       if (hasUpdates) {
         await repos.chats.update(newId, updates);
-        moduleLogger.debug('Updated chat relationships', { chatId: newId, updates: Object.keys(updates) });
       }
     } catch (error) {
       warnings.push(`Failed to reconcile chat relationships: ${error instanceof Error ? error.message : String(error)}`);
@@ -1116,7 +1029,6 @@ export async function restore(
   }
 
   // 15. Update projects with correct characterRoster IDs
-  moduleLogger.debug('Reconciling project relationships');
   for (const [backupId, newId] of projectIdMap) {
     try {
       const originalProject = data.projects.find((p) => p.id === backupId);
@@ -1136,7 +1048,6 @@ export async function restore(
 
       if (hasUpdates) {
         await repos.projects.update(newId, updates);
-        moduleLogger.debug('Updated project relationships', { projectId: newId, updates: Object.keys(updates) });
       }
     } catch (error) {
       warnings.push(`Failed to reconcile project relationships: ${error instanceof Error ? error.message : String(error)}`);
@@ -1164,6 +1075,7 @@ export async function restore(
     },
     providerModels: providerModelsRestored,
     projects: projectsRestored,
+    llmLogs: llmLogsRestored,
     warnings,
   };
 

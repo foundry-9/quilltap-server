@@ -34,7 +34,6 @@ export async function handleImpersonate(
     const body = await req.json();
     const { participantId } = impersonateSchema.parse(body);
 
-    logger.debug('[Chats v1] Starting impersonation', { chatId, participantId });
 
     const participant = chat.participants.find((p) => p.id === participantId);
     if (!participant) {
@@ -88,7 +87,6 @@ export async function handleStopImpersonate(
     const body = await req.json();
     const { participantId, newConnectionProfileId } = stopImpersonateSchema.parse(body);
 
-    logger.debug('[Chats v1] Stopping impersonation', { chatId, participantId });
 
     const participant = chat.participants.find((p) => p.id === participantId);
     if (!participant) {
@@ -152,7 +150,6 @@ export async function handleSetActiveSpeaker(
     const body = await req.json();
     const { participantId } = setActiveSpeakerSchema.parse(body);
 
-    logger.debug('[Chats v1] Setting active speaker', { chatId, participantId });
 
     const participant = chat.participants.find((p) => p.id === participantId);
     if (!participant) {
@@ -216,7 +213,6 @@ export async function handleAddParticipantAction(
     const body = await req.json();
     const validatedData = addParticipantSchema.parse(body);
 
-    logger.debug('[Chats v1] Adding participant', { chatId, type: validatedData.type });
 
     // Check if character is already in the chat
     if (validatedData.type === 'CHARACTER' && validatedData.characterId) {
@@ -266,7 +262,6 @@ export async function handleUpdateParticipantAction(
     const body = await req.json();
     const validatedData = updateParticipantSchema.parse(body);
 
-    logger.debug('[Chats v1] Updating participant', { chatId, participantId: validatedData.participantId });
 
     const result = await handleParticipantUpdate(chatId, validatedData, user.id, repos);
 
@@ -304,7 +299,6 @@ export async function handleRemoveParticipantAction(
     const body = await req.json();
     const validatedData = removeParticipantSchema.parse(body);
 
-    logger.debug('[Chats v1] Removing participant', { chatId, participantId: validatedData.participantId });
 
     const participantToRemove = chat.participants.find((p) => p.id === validatedData.participantId);
     if (!participantToRemove) {

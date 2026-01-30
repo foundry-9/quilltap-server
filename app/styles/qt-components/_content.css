@@ -42,6 +42,7 @@
   .qt-badge-chat,
   .qt-badge-tag,
   .qt-badge-memory,
+  .qt-badge-project,
   .qt-badge-characters,
   .qt-badge-chats,
   .qt-badge-personas,
@@ -811,18 +812,22 @@
 
   /**
    * Empty state title
+   * Matches qt-section-title for visual consistency
    */
   .qt-empty-state-title {
-    @apply text-lg font-medium text-foreground;
+    @apply text-lg font-semibold;
     @apply mb-1;
+    color: var(--color-foreground);
   }
 
   /**
    * Empty state description
+   * Matches qt-card-subtitle for visual consistency
    */
   .qt-empty-state-description {
-    @apply text-sm text-muted-foreground;
+    @apply text-sm font-normal;
     @apply max-w-sm;
+    color: var(--color-muted-foreground);
   }
 
   /**
@@ -997,6 +1002,14 @@
   .qt-badge-memory {
     background-color: var(--qt-badge-memory-bg);
     color: var(--qt-badge-memory-fg);
+  }
+
+  /**
+   * Project badge (teal)
+   */
+  .qt-badge-project {
+    background-color: var(--qt-badge-project-bg);
+    color: var(--qt-badge-project-fg);
   }
 
   /* ==========================================================================

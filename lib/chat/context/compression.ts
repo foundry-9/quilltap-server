@@ -137,14 +137,6 @@ export function splitMessagesForCompression(
   // Compress everything before the window
   const messagesToCompress = messages.slice(0, messages.length - windowSize)
 
-  logger.debug('[ContextCompression] Split messages for compression', {
-    context: 'context-compression',
-    totalMessages: messages.length,
-    toCompress: messagesToCompress.length,
-    inWindow: windowMessages.length,
-    windowSize,
-  })
-
   return {
     messagesToCompress,
     windowMessages,

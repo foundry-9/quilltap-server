@@ -131,21 +131,38 @@ describe('Tool Executor', () => {
       expect(formatted.content).toContain('Memory 2')
     })
 
-    it('should return consistent structure for all providers', () => {
+    it('should return consistent structure for text-based providers', () => {
       const toolResult: ToolResult = {
         toolName: 'test_tool',
         success: true,
         result: { data: 'test' },
       }
 
-      const providers = ['ANTHROPIC', 'OPENAI', 'GROK', 'GOOGLE', 'UNKNOWN']
+      // Providers that use text-based tool results
+      const textProviders = ['ANTHROPIC', 'OPENAI', 'GROK', 'UNKNOWN']
 
-      for (const provider of providers) {
+      for (const provider of textProviders) {
         const formatted = formatToolResult(toolResult, provider)
         expect(formatted).toHaveProperty('role', 'user')
         expect(formatted).toHaveProperty('content')
         expect(formatted.content).toContain('Tool Result: test_tool')
       }
+    })
+
+    it('should return native tool format for Google', () => {
+      const toolResult: ToolResult = {
+        toolName: 'search_memories',
+        success: true,
+        result: { memories: ['memory1', 'memory2'] },
+      }
+
+      const formatted = formatToolResult(toolResult, 'GOOGLE')
+
+      // Google uses native functionResponse format via tool role
+      expect(formatted).toHaveProperty('role', 'tool')
+      expect(formatted).toHaveProperty('toolCallId', 'search_memories')
+      expect(formatted).toHaveProperty('content')
+      expect(formatted.content).toContain('memory1')
     })
   })
 

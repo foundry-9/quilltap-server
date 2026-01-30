@@ -17,15 +17,21 @@
  * GET /api/v1/projects/[id]?action=list-files - List project files
  * POST /api/v1/projects/[id]?action=add-file - Associate file with project
  * DELETE /api/v1/projects/[id]?action=remove-file - Remove file from project
+ *
+ * GET /api/v1/projects/[id]?action=get-mount-point - Get project mount point config
+ * PUT /api/v1/projects/[id]?action=set-mount-point - Set project mount point
+ * DELETE /api/v1/projects/[id]?action=clear-mount-point - Clear project mount point (use system default)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedParamsHandler, checkOwnership, AuthenticatedContext, withActionDispatch } from '@/lib/api/middleware';
+import { createAuthenticatedParamsHandler, checkOwnership, AuthenticatedContext } from '@/lib/api/middleware';
 import { getFilePath } from '@/lib/api/middleware/file-path';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, badRequest, validationError, serverError, successResponse } from '@/lib/api/responses';
+import { mountPointsRepository } from '@/lib/database/repositories/mount-points.repository';
+import { fileStorageManager } from '@/lib/file-storage/manager';
 
 // ============================================================================
 // Schemas
@@ -36,47 +42,44 @@ const updateProjectSchema = z.object({
   description: z.string().max(2000).nullable().optional(),
   instructions: z.string().max(10000).nullable().optional(),
   allowAnyCharacter: z.boolean().optional(),
-  characterRoster: z.array(z.string().uuid()).optional(),
+  characterRoster: z.array(z.uuid()).optional(),
   color: z.string().regex(/^#(?:[0-9a-fA-F]{3}){1,2}$/).nullable().optional(),
   icon: z.string().max(50).nullable().optional(),
 });
 
 const addCharacterSchema = z.object({
-  characterId: z.string().uuid(),
+  characterId: z.uuid(),
 });
 
 const removeCharacterSchema = z.object({
-  characterId: z.string().uuid(),
+  characterId: z.uuid(),
 });
 
 const addChatSchema = z.object({
-  chatId: z.string().uuid(),
+  chatId: z.uuid(),
 });
 
 const removeChatSchema = z.object({
-  chatId: z.string().uuid(),
+  chatId: z.uuid(),
 });
 
 const addFileSchema = z.object({
-  fileId: z.string().uuid(),
+  fileId: z.uuid(),
 });
 
 const removeFileSchema = z.object({
-  fileId: z.string().uuid(),
+  fileId: z.uuid(),
 });
 
-// ============================================================================
-// Helper: Check Project Ownership
-// ============================================================================
+const setMountPointSchema = z.object({
+  mountPointId: z.uuid(),
+  migrateFiles: z.boolean().optional().default(false),
+});
 
-async function checkProjectOwnership(
-  repos: any,
-  projectId: string,
-  userId: string
-): Promise<boolean> {
-  const project = await repos.projects.findById(projectId);
-  return checkOwnership(project, userId);
-}
+const updateToolSettingsSchema = z.object({
+  defaultDisabledTools: z.array(z.string()),
+  defaultDisabledToolGroups: z.array(z.string()),
+});
 
 // ============================================================================
 // GET Handlers
@@ -86,7 +89,6 @@ async function handleGetDefault(req: NextRequest, context: AuthenticatedContext,
   const { user, repos } = context;
 
   try {
-    logger.debug('[Projects v1] GET project', { projectId: id, userId: user.id });
 
     const project = await repos.projects.findById(id);
 
@@ -159,7 +161,6 @@ async function handleListCharacters(req: NextRequest, context: AuthenticatedCont
   const { user, repos } = context;
 
   try {
-    logger.debug('[Projects v1] LIST characters in project', { projectId: id });
 
     const project = await repos.projects.findById(id);
     if (!checkOwnership(project, user.id)) {
@@ -195,7 +196,6 @@ async function handleListChats(req: NextRequest, context: AuthenticatedContext, 
   const { user, repos } = context;
 
   try {
-    logger.debug('[Projects v1] LIST chats in project', { projectId: id });
 
     const project = await repos.projects.findById(id);
     if (!checkOwnership(project, user.id)) {
@@ -275,17 +275,7 @@ async function handleListChats(req: NextRequest, context: AuthenticatedContext, 
           createdAt: chat.createdAt,
         };
       })
-    );
-
-    logger.debug('[Projects v1] Fetched project chats', {
-      projectId: id,
-      total,
-      offset,
-      limit,
-      returned: enrichedChats.length,
-    });
-
-    return successResponse({
+    );return successResponse({
       chats: enrichedChats,
       pagination: {
         total,
@@ -304,7 +294,6 @@ async function handleListFiles(req: NextRequest, context: AuthenticatedContext, 
   const { user, repos } = context;
 
   try {
-    logger.debug('[Projects v1] LIST files in project', { projectId: id });
 
     const project = await repos.projects.findById(id);
     if (!checkOwnership(project, user.id)) {
@@ -332,6 +321,63 @@ async function handleListFiles(req: NextRequest, context: AuthenticatedContext, 
   }
 }
 
+async function handleGetMountPoint(req: NextRequest, context: AuthenticatedContext, { id }: { id: string }) {
+  const { user, repos } = context;
+
+  try {
+
+    const project = await repos.projects.findById(id);
+    if (!checkOwnership(project, user.id)) {
+      return notFound('Project');
+    }
+
+    // Get current mount point if set
+    let currentMountPoint = null;
+    if (project.mountPointId) {
+      const mp = await mountPointsRepository.findById(project.mountPointId);
+      if (mp) {
+        currentMountPoint = {
+          id: mp.id,
+          name: mp.name,
+          backendType: mp.backendType,
+          healthStatus: mp.healthStatus,
+        };
+      }
+    }
+
+    // Get system default mount point
+    let defaultMountPoint = null;
+    const defaultMp = await mountPointsRepository.findDefault();
+    if (defaultMp) {
+      defaultMountPoint = {
+        id: defaultMp.id,
+        name: defaultMp.name,
+        backendType: defaultMp.backendType,
+        healthStatus: defaultMp.healthStatus,
+      };
+    }
+
+    // Effective mount point is current if set, otherwise default
+    const effectiveMountPoint = currentMountPoint || defaultMountPoint;
+
+    // Count files in this project
+    const allFiles = await repos.files.findAll();
+    const fileCount = allFiles.filter(f => f.projectId === id).length;
+
+    return successResponse({
+      projectId: id,
+      mountPointId: project.mountPointId || null,
+      currentMountPoint,
+      defaultMountPoint,
+      effectiveMountPoint,
+      fileCount,
+    });
+  } catch (error) {
+    logger.error('[Projects v1] Error getting project mount point', { projectId: id }, error instanceof Error ? error : undefined);
+    return serverError('Failed to get mount point');
+  }
+}
+
 export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, context, { id }) => {
   const action = getActionParam(req);
 
@@ -342,18 +388,21 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
       return handleListChats(req, context, { id });
     case 'list-files':
       return handleListFiles(req, context, { id });
+    case 'get-mount-point':
+      return handleGetMountPoint(req, context, { id });
     default:
       return handleGetDefault(req, context, { id });
   }
 });
 
 // ============================================================================
-// PUT Handler
+// PUT Handlers
 // ============================================================================
 
-export const PUT = createAuthenticatedParamsHandler<{ id: string }>(async (req, { user, repos }, { id }) => {
+async function handlePutDefault(req: NextRequest, context: AuthenticatedContext, { id }: { id: string }) {
+  const { user, repos } = context;
+
   try {
-    logger.debug('[Projects v1] PUT project', { projectId: id });
 
     const existingProject = await repos.projects.findById(id);
 
@@ -377,6 +426,116 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
     logger.error('[Projects v1] Error updating project', { projectId: id }, error instanceof Error ? error : undefined);
     return serverError('Failed to update project');
   }
+}
+
+async function handleSetMountPoint(req: NextRequest, context: AuthenticatedContext, { id }: { id: string }) {
+  const { user, repos } = context;
+
+  try {
+    const project = await repos.projects.findById(id);
+    if (!checkOwnership(project, user.id)) {
+      return notFound('Project');
+    }
+
+    const body = await req.json();
+    const { mountPointId, migrateFiles } = setMountPointSchema.parse(body);
+
+
+    // Verify mount point exists
+    const mountPoint = await mountPointsRepository.findById(mountPointId);
+    if (!mountPoint) {
+      return notFound('Mount point');
+    }
+
+    // If migrateFiles is requested, migrate all project files to the new mount point
+    let migrationResult = { migrated: 0, failed: 0, errors: [] as Array<{ fileId: string; error: string }> };
+
+    if (migrateFiles) {
+      const allFiles = await repos.files.findAll();
+      const projectFiles = allFiles.filter(f => f.projectId === id);
+
+      for (const file of projectFiles) {
+        try {
+          // Skip if file is already on the target mount point
+          if (file.mountPointId === mountPointId) {
+            continue;
+          }
+
+          // Download file from current location
+          const buffer = await fileStorageManager.downloadFile(file);
+
+          // Upload to new mount point
+          const uploadResult = await fileStorageManager.uploadFile({
+            userId: user.id,
+            fileId: file.id,
+            filename: file.originalFilename,
+            content: buffer,
+            contentType: file.mimeType,
+            projectId: id,
+            mountPointId: mountPointId,
+          });
+
+          // Update file record with new storage info
+          await repos.files.update(file.id, {
+            mountPointId: uploadResult.mountPointId,
+            storageKey: uploadResult.storageKey,
+          });
+
+          // Delete from old mount point
+          await fileStorageManager.deleteFile(file);
+
+          migrationResult.migrated++;
+        } catch (error) {
+          migrationResult.failed++;
+          migrationResult.errors.push({
+            fileId: file.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          logger.error('[Projects v1] Failed to migrate file', {
+            fileId: file.id,
+            projectId: id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      logger.info('[Projects v1] File migration completed', {
+        projectId: id,
+        mountPointId,
+        migrated: migrationResult.migrated,
+        failed: migrationResult.failed,
+      });
+    }
+
+    // Update project with new mount point
+    await repos.projects.setMountPoint(id, mountPointId);
+
+    logger.info('[Projects v1] Mount point set for project', { projectId: id, mountPointId });
+
+    return successResponse({
+      success: true,
+      mountPointId,
+      migration: migrateFiles ? migrationResult : undefined,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return validationError(error);
+    }
+
+    logger.error('[Projects v1] Error setting mount point', { projectId: id }, error instanceof Error ? error : undefined);
+    return serverError('Failed to set mount point');
+  }
+}
+
+export const PUT = createAuthenticatedParamsHandler<{ id: string }>(async (req, context, { id }) => {
+  const action = getActionParam(req);
+
+  switch (action) {
+    case 'set-mount-point':
+      return handleSetMountPoint(req, context, { id });
+    default:
+      return handlePutDefault(req, context, { id });
+  }
 });
 
 // ============================================================================
@@ -395,7 +554,6 @@ async function handleRemoveCharacter(req: NextRequest, context: AuthenticatedCon
     const body = await req.json();
     const { characterId } = removeCharacterSchema.parse(body);
 
-    logger.debug('[Projects v1] REMOVE character from project', { projectId: id, characterId });
 
     // Remove from roster
     const updatedRoster = project.characterRoster.filter((cid: string) => cid !== characterId);
@@ -426,7 +584,6 @@ async function handleRemoveChat(req: NextRequest, context: AuthenticatedContext,
     const body = await req.json();
     const { chatId } = removeChatSchema.parse(body);
 
-    logger.debug('[Projects v1] REMOVE chat from project', { projectId: id, chatId });
 
     // Remove projectId from chat
     await repos.chats.update(chatId, { projectId: null });
@@ -456,7 +613,6 @@ async function handleRemoveFile(req: NextRequest, context: AuthenticatedContext,
     const body = await req.json();
     const { fileId } = removeFileSchema.parse(body);
 
-    logger.debug('[Projects v1] REMOVE file from project', { projectId: id, fileId });
 
     // Remove projectId from file
     await repos.files.update(fileId, { projectId: null });
@@ -484,7 +640,6 @@ async function handleDeleteProject(req: NextRequest, context: AuthenticatedConte
       return notFound('Project');
     }
 
-    logger.debug('[Projects v1] DELETE project', { projectId: id });
 
     // Remove projectId from associated chats
     const allChats = await repos.chats.findAll();
@@ -512,6 +667,28 @@ async function handleDeleteProject(req: NextRequest, context: AuthenticatedConte
   }
 }
 
+async function handleClearMountPoint(req: NextRequest, context: AuthenticatedContext, { id }: { id: string }) {
+  const { user, repos } = context;
+
+  try {
+    const project = await repos.projects.findById(id);
+    if (!checkOwnership(project, user.id)) {
+      return notFound('Project');
+    }
+
+
+    // Clear mount point (will use system default)
+    await repos.projects.setMountPoint(id, null);
+
+    logger.info('[Projects v1] Mount point cleared for project', { projectId: id });
+
+    return successResponse({ success: true });
+  } catch (error) {
+    logger.error('[Projects v1] Error clearing mount point', { projectId: id }, error instanceof Error ? error : undefined);
+    return serverError('Failed to clear mount point');
+  }
+}
+
 export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (req, context, { id }) => {
   const action = getActionParam(req);
 
@@ -522,6 +699,8 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
       return handleRemoveChat(req, context, { id });
     case 'remove-file':
       return handleRemoveFile(req, context, { id });
+    case 'clear-mount-point':
+      return handleClearMountPoint(req, context, { id });
     default:
       return handleDeleteProject(req, context, { id });
   }
@@ -543,7 +722,6 @@ async function handleAddCharacter(req: NextRequest, context: AuthenticatedContex
     const body = await req.json();
     const { characterId } = addCharacterSchema.parse(body);
 
-    logger.debug('[Projects v1] ADD character to project', { projectId: id, characterId });
 
     // Check character exists and is owned by user
     const character = await repos.characters.findById(characterId);
@@ -582,7 +760,6 @@ async function handleAddChat(req: NextRequest, context: AuthenticatedContext, { 
     const body = await req.json();
     const { chatId } = addChatSchema.parse(body);
 
-    logger.debug('[Projects v1] ADD chat to project', { projectId: id, chatId });
 
     // Check chat exists and is owned by user
     const chat = await repos.chats.findById(chatId);
@@ -618,7 +795,6 @@ async function handleAddFile(req: NextRequest, context: AuthenticatedContext, { 
     const body = await req.json();
     const { fileId } = addFileSchema.parse(body);
 
-    logger.debug('[Projects v1] ADD file to project', { projectId: id, fileId });
 
     // Check file exists and is owned by user
     const file = await repos.files.findById(fileId);
@@ -642,6 +818,45 @@ async function handleAddFile(req: NextRequest, context: AuthenticatedContext, { 
   }
 }
 
+async function handleUpdateToolSettings(req: NextRequest, context: AuthenticatedContext, { id }: { id: string }) {
+  const { user, repos } = context;
+
+  try {
+    const project = await repos.projects.findById(id);
+    if (!checkOwnership(project, user.id)) {
+      return notFound('Project');
+    }
+
+    const body = await req.json();
+    const { defaultDisabledTools, defaultDisabledToolGroups } = updateToolSettingsSchema.parse(body);
+
+    // Update project with new default tool settings
+    await repos.projects.update(id, {
+      defaultDisabledTools,
+      defaultDisabledToolGroups,
+    });
+
+    logger.info('[Projects v1] Default tool settings updated', {
+      projectId: id,
+      disabledToolsCount: defaultDisabledTools.length,
+      disabledGroupsCount: defaultDisabledToolGroups.length,
+    });
+
+    return successResponse({
+      success: true,
+      defaultDisabledTools,
+      defaultDisabledToolGroups,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return validationError(error);
+    }
+
+    logger.error('[Projects v1] Error updating tool settings', { projectId: id }, error instanceof Error ? error : undefined);
+    return serverError('Failed to update tool settings');
+  }
+}
+
 export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req, context, { id }) => {
   const action = getActionParam(req);
 
@@ -652,6 +867,8 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
       return handleAddChat(req, context, { id });
     case 'add-file':
       return handleAddFile(req, context, { id });
+    case 'update-tool-settings':
+      return handleUpdateToolSettings(req, context, { id });
     default:
       return badRequest('Unknown action or missing action parameter');
   }

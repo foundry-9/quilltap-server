@@ -60,7 +60,7 @@ export function ProfileList({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="qt-card-grid-auto">
       {deleteError && (
         <ErrorAlert
           message={deleteError}

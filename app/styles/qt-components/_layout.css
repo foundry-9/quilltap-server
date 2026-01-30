@@ -302,13 +302,6 @@
     @apply inline sm:hidden;
   }
 
-  @media (max-width: 479px) {
-    .qt-navbar-menu-item-label-full,
-    .qt-navbar-menu-item-label-short {
-      @apply hidden;
-    }
-  }
-
   /**
    * Compact chip-style navbar buttons (quick-hide tags)
    */
@@ -403,8 +396,7 @@
 
   /**
    * Left sidebar - main app navigation
-   * Desktop: persistent, collapsible
-   * Mobile: off-canvas overlay
+   * Persistent sidebar with collapse/expand functionality
    */
   .qt-left-sidebar {
     @apply flex flex-col h-full;
@@ -696,62 +688,6 @@
   }
 
   /**
-   * Mobile sidebar overlay backdrop
-   */
-  .qt-left-sidebar-overlay {
-    @apply fixed inset-0;
-    background: var(--qt-left-sidebar-overlay-bg);
-    z-index: var(--qt-left-sidebar-overlay-z);
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 300ms ease, visibility 300ms ease;
-  }
-
-  .qt-left-sidebar-overlay-visible {
-    opacity: 1;
-    visibility: visible;
-  }
-
-  /* Mobile: sidebar is off-canvas by default */
-  @media (max-width: 767px) {
-    .qt-left-sidebar {
-      @apply fixed top-0 left-0 bottom-0;
-      transform: translateX(-100%);
-    }
-
-    .qt-left-sidebar-mobile-open {
-      transform: translateX(0);
-    }
-
-    /* Force expanded state on mobile when open */
-    .qt-left-sidebar-mobile-open.qt-left-sidebar-collapsed {
-      width: var(--qt-left-sidebar-width);
-    }
-
-    .qt-left-sidebar-mobile-open.qt-left-sidebar-collapsed .qt-left-sidebar-item-label,
-    .qt-left-sidebar-mobile-open.qt-left-sidebar-collapsed .qt-left-sidebar-section-title,
-    .qt-left-sidebar-mobile-open.qt-left-sidebar-collapsed .qt-left-sidebar-view-all {
-      @apply block;
-    }
-
-    .qt-left-sidebar-mobile-open.qt-left-sidebar-collapsed .qt-left-sidebar-section-header {
-      @apply flex;
-    }
-
-    .qt-left-sidebar-mobile-open.qt-left-sidebar-collapsed .qt-left-sidebar-item {
-      @apply justify-start px-3;
-    }
-  }
-
-  /* Desktop: sidebar is in document flow */
-  @media (min-width: 768px) {
-    .qt-left-sidebar {
-      @apply relative;
-      flex-shrink: 0;
-    }
-  }
-
-  /**
    * Resize handle - draggable edge for width adjustment
    */
   .qt-left-sidebar-resize-handle {
@@ -771,13 +707,6 @@
   /* Hide resize handle when collapsed */
   .qt-left-sidebar-collapsed .qt-left-sidebar-resize-handle {
     @apply hidden;
-  }
-
-  /* Hide resize handle on mobile */
-  @media (max-width: 767px) {
-    .qt-left-sidebar-resize-handle {
-      @apply hidden;
-    }
   }
 
   /* Prevent text selection while resizing */
@@ -868,28 +797,6 @@
     @apply flex items-center gap-2;
   }
 
-  /**
-   * Hamburger menu button (mobile only)
-   */
-  .qt-hamburger {
-    @apply hidden;
-    @apply items-center justify-center;
-    @apply w-10 h-10 rounded-md;
-    @apply transition-colors duration-150;
-    cursor: pointer;
-    color: var(--color-foreground);
-  }
-
-  .qt-hamburger:hover {
-    background: var(--color-muted);
-  }
-
-  @media (max-width: 767px) {
-    .qt-hamburger {
-      @apply flex;
-    }
-  }
-
   /* ==========================================================================
      CONTENT AREA
      ========================================================================== */
@@ -938,12 +845,7 @@
     padding-top: var(--qt-navbar-height);
   }
 
-  /**
-   * Page content container
-   */
-  .qt-page-container {
-    @apply container mx-auto px-4 py-6;
-  }
+  /* Note: .qt-page-container is defined in _content.css with CSS variable support */
 
   /**
    * Page header
@@ -995,6 +897,16 @@
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
     /* qt-card-grid-2 stays at 2 columns */
+  }
+
+  /**
+   * Auto-fill card grid - fits as many cards as possible at min width
+   * Uses --qt-card-grid-auto-min (default 550px) for minimum card width
+   */
+  .qt-card-grid-auto {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fill, minmax(var(--qt-card-grid-auto-min, 550px), 1fr));
   }
 
   /**
@@ -1193,14 +1105,25 @@
      ========================================================================== */
 
   /**
+   * Homepage container - fills available viewport height
+   * Used instead of qt-page-container for homepage to enable full-height cards
+   */
+  .qt-homepage-container {
+    @apply flex flex-col h-full w-full mx-auto px-4 py-6;
+    max-width: var(--qt-page-max-width);
+  }
+
+  /**
    * Homepage 3-column grid - responsive layout for dashboard sections
    * Uses minmax(0, 1fr) to prevent content from expanding columns
-   * Desktop (1100px+): 3 columns
+   * flex-1 makes it fill remaining space after welcome/actions
+   * Desktop (1100px+): 3 columns (equal thirds by default)
+   * Full-width mode: 30% / 30% / 40% columns (via data-full-width attribute)
    * Tablet (700-1100px): 2 columns
-   * Mobile (<700px): 1 column
+   * Mobile (<700px): 1 column stacked with auto height
    */
   .qt-homepage-grid {
-    @apply grid gap-6;
+    @apply grid gap-6 flex-1 min-h-0;
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
@@ -1213,40 +1136,51 @@
   @media (max-width: 700px) {
     .qt-homepage-grid {
       grid-template-columns: minmax(0, 1fr);
+      /* On mobile, cards stack and don't fill height */
+      @apply flex-none h-auto;
     }
   }
 
   /**
    * Homepage section card - container for each dashboard section
+   * Fills its grid cell height on desktop/tablet
    */
   .qt-homepage-section {
     @apply flex flex-col overflow-hidden;
     @apply p-4 rounded-lg;
-    @apply border border-border;
     min-width: 0; /* Prevent flex/grid item from expanding */
+    min-height: 0; /* Allow shrinking in flex/grid context */
     background: var(--qt-card-bg, var(--color-card));
+    border: 1px solid color-mix(in srgb, var(--qt-card-border) calc(var(--qt-card-border-opacity) * 100%), transparent);
+    box-shadow: var(--qt-card-shadow);
   }
 
   /**
    * Homepage section header - title with optional action link
+   * Flex-shrink-0 to prevent header from shrinking
    */
   .qt-homepage-section-header {
-    @apply flex items-center justify-between mb-4;
+    @apply flex items-center justify-between mb-4 flex-shrink-0;
   }
 
   .qt-homepage-section-title {
-    @apply text-lg font-semibold text-foreground;
+    @apply text-lg font-semibold;
+    color: var(--color-foreground);
   }
 
   .qt-homepage-section-link {
-    @apply text-sm text-muted-foreground hover:text-foreground transition-colors;
+    @apply text-sm font-normal;
+    @apply text-muted-foreground hover:text-foreground;
+    @apply transition-colors;
   }
 
   /**
-   * Homepage section content - scrollable area with items
+   * Homepage section content - fills remaining card space, hides overflow
+   * Items that don't fit are hidden (no scrolling)
+   * Small padding ensures borders aren't clipped by overflow:hidden
    */
   .qt-homepage-section-content {
-    @apply flex-1 space-y-2;
+    @apply flex-1 min-h-0 overflow-hidden space-y-2 p-1 -m-1;
   }
 
   /**
@@ -1257,10 +1191,23 @@
   }
 
   /**
-   * Characters 2x2 grid for homepage
+   * Characters grid for homepage
+   * Standard mode: 2 columns with fixed card widths
+   * Full-width mode: auto-fill to show 3-4 cards per row
    */
   .qt-characters-grid {
-    @apply grid gap-3;
-    grid-template-columns: repeat(2, 1fr);
+    @apply grid gap-3 justify-center;
+    grid-template-columns: repeat(2, minmax(0, 140px));
+  }
+}
+
+/* Full-width mode overrides - outside @layer for higher specificity */
+@media (min-width: 1101px) {
+  :root[data-full-width="true"] .qt-homepage-grid {
+    grid-template-columns: 3fr 3fr 4fr;
+  }
+
+  :root[data-full-width="true"] .qt-characters-grid {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 150px));
   }
 }

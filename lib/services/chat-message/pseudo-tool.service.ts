@@ -73,11 +73,6 @@ export function parsePseudoToolsFromResponse(
 export function stripPseudoToolMarkersFromResponse(response: string): string {
   const strippedResponse = stripPseudoToolMarkers(response)
 
-  logger.debug('Stripped pseudo-tool markers from response', {
-    originalLength: response.length,
-    strippedLength: strippedResponse.length,
-  })
-
   return strippedResponse
 }
 

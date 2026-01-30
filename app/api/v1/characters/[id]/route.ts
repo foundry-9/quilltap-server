@@ -27,7 +27,8 @@ import { createAuthenticatedParamsHandler, checkOwnership, AuthenticatedContext 
 import { getFilePath } from '@/lib/api/middleware/file-path';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { executeCascadeDelete, getCascadeDeletePreview } from '@/lib/cascade-delete';
-import { exportSTCharacter } from '@/lib/sillytavern/character';
+import { exportSTCharacter, createSTCharacterPNG } from '@/lib/sillytavern/character';
+import { readImageBuffer } from '@/lib/images-v2';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, forbidden, badRequest, serverError, validationError } from '@/lib/api/responses';
@@ -44,18 +45,20 @@ const updateCharacterSchema = z.object({
   scenario: z.string().optional(),
   firstMessage: z.string().optional(),
   exampleDialogues: z.string().optional(),
-  avatarUrl: z
-    .string()
-    .url()
+  avatarUrl: z.url()
     .optional()
     .or(z.literal('')),
-  defaultConnectionProfileId: z
-    .string()
-    .uuid()
+  defaultConnectionProfileId: z.uuid()
     .optional()
     .or(
       z.literal('').transform(() => undefined)
     ),
+  defaultImageProfileId: z.uuid()
+    .optional()
+    .or(
+      z.literal('').transform(() => undefined)
+    )
+    .nullable(),
   controlledBy: z.enum(['llm', 'user']).optional(),
   npc: z.boolean().optional(),
 });
@@ -65,15 +68,15 @@ const avatarSchema = z.object({
 });
 
 const addTagSchema = z.object({
-  tagId: z.string().uuid(),
+  tagId: z.uuid(),
 });
 
 const removeTagSchema = z.object({
-  tagId: z.string().uuid(),
+  tagId: z.uuid(),
 });
 
 const setDefaultPartnerSchema = z.object({
-  partnerId: z.string().uuid().nullable(),
+  partnerId: z.uuid().nullable(),
 });
 
 // ============================================================================
@@ -96,21 +99,32 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
         const { searchParams } = new URL(req.url);
         const format = searchParams.get('format') || 'json';
 
-        const stCharacter = exportSTCharacter(character);
-
         if (format === 'png') {
-          if (!character.avatarUrl) {
-            return badRequest('Character must have an avatar for PNG export');
+          // Get avatar buffer if character has an avatar
+          let avatarBuffer: Buffer | undefined;
+          if (character.defaultImageId) {
+            try {
+              avatarBuffer = await readImageBuffer(character.defaultImageId);
+            } catch (error) {
+              logger.warn('[Characters v1] Could not read avatar for PNG export, using placeholder', {
+                characterId: id,
+                imageId: character.defaultImageId,
+              });
+              // Will use generated placeholder
+            }
           }
 
-          // PNG export not yet implemented
-          return NextResponse.json(
-            {
-              error: 'PNG export requires avatar storage implementation. Use JSON export for now.',
+          // Create PNG with embedded character data (uses placeholder if no avatar)
+          const pngBuffer = await createSTCharacterPNG(character, avatarBuffer);
+
+          return new NextResponse(new Uint8Array(pngBuffer), {
+            headers: {
+              'Content-Type': 'image/png',
+              'Content-Disposition': `attachment; filename="${character.name}.png"`,
             },
-            { status: 501 }
-          );
+          });
         } else {
+          const stCharacter = exportSTCharacter(character);
           return new NextResponse(JSON.stringify(stCharacter, null, 2), {
             headers: {
               'Content-Type': 'application/json',
@@ -135,17 +149,27 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
         // Get chats with this character
         const allChats = await repos.chats.findByCharacterId(id);
 
-        // Filter by user and sort by updatedAt descending
-        let userChats = allChats
-          .filter((chat) => chat.userId === user.id)
-          .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+        // Filter by user
+        const userChats = allChats.filter((chat) => chat.userId === user.id);
 
-        // Pre-fetch messages for search if needed, and for enrichment
+        // Pre-fetch messages for search, enrichment, and sorting by last message
         const chatsWithMessages = await Promise.all(
           userChats.map(async (chat) => {
             const allMessages = await repos.chats.getMessages(chat.id);
-            return { chat, messages: allMessages };
+            // Calculate the timestamp of the last message
+            const messageTimestamps = allMessages
+              .filter((msg) => msg.type === 'message')
+              .map((msg) => new Date(msg.createdAt).getTime());
+            const lastMessageAt = messageTimestamps.length > 0
+              ? new Date(Math.max(...messageTimestamps)).toISOString()
+              : chat.updatedAt; // Fallback to chat updatedAt if no messages
+            return { chat, messages: allMessages, lastMessageAt };
           })
+        );
+
+        // Sort by last message timestamp descending
+        chatsWithMessages.sort((a, b) =>
+          new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
         );
 
         // Apply search filter if provided
@@ -166,9 +190,25 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
         // Apply pagination
         const paginatedChats = filteredChats.slice(offset, offset + limit);
 
+        // Collect unique project IDs from chats
+        const projectIds = new Set<string>();
+        for (const { chat } of paginatedChats) {
+          if (chat.projectId) {
+            projectIds.add(chat.projectId);
+          }
+        }
+
+        // Fetch all projects at once
+        const projectMap = new Map<string, { id: string; name: string }>();
+        for (const projectId of projectIds) {
+          const project = await repos.projects.findById(projectId);
+          if (project) {
+            projectMap.set(projectId, { id: project.id, name: project.name });
+          }
+        }
         // Enrich chats with related data
         const enrichedChats = await Promise.all(
-          paginatedChats.map(async ({ chat, messages }) => {
+          paginatedChats.map(async ({ chat, messages, lastMessageAt }) => {
             // Get tags
             const tagData = await Promise.all(
               (chat.tags || []).map(async (tagId) => {
@@ -176,7 +216,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
                 return tag ? { tag: { id: tag.id, name: tag.name } } : null;
               })
             );
-            logger.debug('[Characters v1] Fetched tags for chat', { chatId: chat.id, tagCount: tagData.filter(Boolean).length });
 
             // Get all messages and count them for badge
             const messageCount = messages.filter((msg) => msg.type === 'message').length;
@@ -193,15 +232,20 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
                 createdAt: msg.createdAt,
               }));
 
+            // Get project info if chat belongs to a project
+            const project = chat.projectId ? projectMap.get(chat.projectId) || null : null;
+
             return {
               id: chat.id,
               title: chat.title,
               createdAt: chat.createdAt,
               updatedAt: chat.updatedAt,
+              lastMessageAt,
               character: {
                 id: character.id,
                 name: character.name,
               },
+              project,
               messages: recentMessages,
               tags: tagData.filter((tag): tag is { tag: { id: string; name: string } } => tag !== null),
               _count: {
@@ -211,7 +255,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
           })
         );
 
-        logger.debug('[Characters v1] Fetched character chats', { characterId: id, count: enrichedChats.length });
         return NextResponse.json({ chats: enrichedChats, total: filteredChats.length });
       } catch (error) {
         logger.error('[Characters v1] Error fetching character chats', { characterId: id }, error instanceof Error ? error : undefined);
@@ -228,7 +271,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
           return serverError('Failed to generate preview');
         }
 
-        logger.debug('[Characters v1] Generated cascade preview', { characterId: id });
         return NextResponse.json({
           characterId: preview.characterId,
           characterName: preview.characterName,
@@ -253,7 +295,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
     // Get default partner
     case 'default-partner': {
       try {
-        logger.debug('[Characters v1] Fetched default partner', { characterId: id, partnerId: character.defaultPartnerId });
         return NextResponse.json({
           partnerId: character.defaultPartnerId || null,
         });
@@ -277,7 +318,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
         // Filter out null values (tags that no longer exist)
         const validTags = tagDetails.filter(Boolean);
 
-        logger.debug('[Characters v1] Fetched character tags', { characterId: id, count: validTags.length });
         return NextResponse.json({ tags: validTags });
       } catch (error) {
         logger.error('[Characters v1] Error fetching character tags', { characterId: id }, error instanceof Error ? error : undefined);
@@ -288,8 +328,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
     // Default: get character
     default: {
       try {
-        logger.debug('[Characters v1] GET character', { characterId: id, userId: user.id });
-
         // Get default image
         let defaultImage = null;
         if (character.defaultImageId) {
@@ -329,8 +367,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
 
 export const PUT = createAuthenticatedParamsHandler<{ id: string }>(async (req, { user, repos }, { id }) => {
   try {
-    logger.debug('[Characters v1] PUT character', { characterId: id, userId: user.id });
-
     const existingCharacter = await repos.characters.findById(id);
 
     if (!checkOwnership(existingCharacter, user.id)) {
@@ -363,8 +399,6 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
 
 export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (req, { user, repos }, { id }) => {
   try {
-    logger.debug('[Characters v1] DELETE character', { characterId: id, userId: user.id });
-
     const existingCharacter = await repos.characters.findById(id);
 
     if (!checkOwnership(existingCharacter, user.id)) {

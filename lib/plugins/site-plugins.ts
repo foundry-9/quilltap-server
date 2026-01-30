@@ -69,13 +69,6 @@ function parsePluginList(envValue: string | undefined): string[] | 'all' {
 export function getSitePluginsEnabled(): string[] | 'all' {
   const enabledValue = process.env.SITE_PLUGINS_ENABLED;
   const result = parsePluginList(enabledValue);
-
-  logger.debug('Site plugins enabled configuration loaded', {
-    context: 'getSitePluginsEnabled',
-    enabledValue,
-    result: typeof result === 'string' ? result : `[${result.join(', ')}]`,
-  });
-
   return result.length === 0 ? DEFAULT_ENABLED : result;
 }
 
@@ -87,13 +80,6 @@ export function getSitePluginsEnabled(): string[] | 'all' {
 export function getSitePluginsDisabled(): string[] {
   const disabledValue = process.env.SITE_PLUGINS_DISABLED;
   const result = parsePluginList(disabledValue);
-
-  logger.debug('Site plugins disabled configuration loaded', {
-    context: 'getSitePluginsDisabled',
-    disabledValue,
-    result: typeof result === 'string' ? [] : `[${result.join(', ')}]`,
-  });
-
   // If result is 'all', that doesn't make sense for disabled list, treat as empty
   return typeof result === 'string' ? DEFAULT_DISABLED : result;
 }
@@ -113,24 +99,11 @@ export function isSitePluginEnabled(pluginName: string): boolean {
 
   // Check if plugin is in disabled list
   if (disabled.includes(pluginName)) {
-    logger.debug('Site plugin is explicitly disabled', {
-      context: 'isSitePluginEnabled',
-      pluginName,
-      disabled: `[${disabled.join(', ')}]`,
-    });
     return false;
   }
 
   // Check if plugin is in enabled list
   const isInEnabledList = enabled === 'all' || enabled.includes(pluginName);
-
-  logger.debug('Site plugin enablement determination', {
-    context: 'isSitePluginEnabled',
-    pluginName,
-    enabledConfig: typeof enabled === 'string' ? enabled : `[${enabled.join(', ')}]`,
-    isEnabled: isInEnabledList,
-  });
-
   return isInEnabledList;
 }
 
@@ -143,14 +116,5 @@ export function getSitePluginsConfig(): SitePluginsConfig {
     enabled: getSitePluginsEnabled(),
     disabled: getSitePluginsDisabled(),
   };
-
-  logger.debug('Site plugins configuration retrieved', {
-    context: 'getSitePluginsConfig',
-    config: {
-      enabled: typeof config.enabled === 'string' ? config.enabled : `[${config.enabled.join(', ')}]`,
-      disabled: `[${config.disabled.join(', ')}]`,
-    },
-  });
-
   return config;
 }

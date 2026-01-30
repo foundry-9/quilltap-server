@@ -18,21 +18,8 @@ import { logger } from '@/lib/logger';
  * Returns both built-in templates and user-created templates
  */
 export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
-  try {
-    logger.debug('Fetching roleplay templates', {
-      endpoint: '/api/v1/roleplay-templates',
-      method: 'GET',
-    });
-
-    // Get all templates available to user (built-in + user's own)
-    const templates = await repos.roleplayTemplates.findAllForUser(user.id);
-
-    logger.debug('Retrieved roleplay templates for user', {
-      userId: user.id,
-      count: templates.length,
-    });
-
-    // Sort: built-in first, then by name
+  try {// Get all templates available to user (built-in + user's own)
+    const templates = await repos.roleplayTemplates.findAllForUser(user.id);// Sort: built-in first, then by name
     templates.sort((a, b) => {
       // Built-in templates first
       if (a.isBuiltIn !== b.isBuiltIn) {
@@ -67,13 +54,7 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
  * }
  */
 export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
-  try {
-    logger.debug('Creating roleplay template', {
-      endpoint: '/api/v1/roleplay-templates',
-      method: 'POST',
-    });
-
-    const body = await req.json();
+  try {const body = await req.json();
     const { name, description, systemPrompt } = body;
 
     // Validation

@@ -20,16 +20,23 @@ const logger = createPluginLogger('qtap-plugin-google');
  * These models require responseModalities: ["TEXT", "IMAGE"]
  */
 const GEMINI_IMAGE_MODELS = [
-  'gemini-2.0-flash-exp',
   'gemini-2.5-flash-image',
-  'gemini-2.5-flash-preview-native-image',
-  'gemini-3-pro-image-preview', // Nano Banana Pro
+  'gemini-3-pro-image-preview',
 ];
 
 /**
  * Models that use the Imagen predict API
+ * Maps user-friendly names to actual API model IDs
  */
 const IMAGEN_MODELS = ['imagen-4', 'imagen-4-fast'];
+
+/**
+ * Map user-friendly model names to actual Google API model IDs
+ */
+const IMAGEN_MODEL_MAP: Record<string, string> = {
+  'imagen-4': 'imagen-4.0-generate-001',
+  'imagen-4-fast': 'imagen-4.0-fast-generate-001',
+};
 
 export class GoogleImagenProvider implements ImageGenProviderBase {
   readonly provider = 'GOOGLE';
@@ -49,14 +56,6 @@ export class GoogleImagenProvider implements ImageGenProviderBase {
     apiKey: string
   ): Promise<ImageGenResponse> {
     const model = params.model ?? 'imagen-4';
-
-    logger.debug('Google image generation started', {
-      context: 'GoogleImagenProvider.generateImage',
-      model,
-      promptLength: params.prompt.length,
-      isGeminiModel: this.isGeminiImageModel(model),
-    });
-
     // Route to the appropriate API based on model type
     if (this.isGeminiImageModel(model)) {
       return this.generateWithGemini(params, apiKey, model);
@@ -108,14 +107,6 @@ export class GoogleImagenProvider implements ImageGenProviderBase {
       (requestBody.generationConfig as Record<string, unknown>).imageConfig =
         imageConfig;
     }
-
-    logger.debug('Sending request to Gemini generateContent API', {
-      context: 'GoogleImagenProvider.generateWithGemini',
-      endpoint,
-      model,
-      hasImageConfig: Object.keys(imageConfig).length > 0,
-    });
-
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
@@ -157,13 +148,6 @@ export class GoogleImagenProvider implements ImageGenProviderBase {
         }
       }
     }
-
-    logger.debug('Gemini image generation completed', {
-      context: 'GoogleImagenProvider.generateWithGemini',
-      imageCount: images.length,
-      hasTextResponse: !!textResponse,
-    });
-
     if (images.length === 0) {
       throw new Error(
         textResponse || 'No images returned from Gemini API'
@@ -186,7 +170,15 @@ export class GoogleImagenProvider implements ImageGenProviderBase {
     model: string
   ): Promise<ImageGenResponse> {
     const baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
-    const endpoint = `${baseUrl}/models/${model}:predict`;
+    // Map user-friendly model name to actual API model ID
+    const apiModelId = IMAGEN_MODEL_MAP[model] || model;
+    const endpoint = `${baseUrl}/models/${apiModelId}:predict`;
+
+    logger.debug('Calling Imagen API', {
+      context: 'GoogleImagenProvider.generateWithImagen',
+      userModel: model,
+      apiModel: apiModelId,
+    });
 
     const requestBody: Record<string, unknown> = {
       instances: [
@@ -211,14 +203,6 @@ export class GoogleImagenProvider implements ImageGenProviderBase {
       (requestBody.parameters as Record<string, unknown>).seed =
         extendedParams.seed;
     }
-
-    logger.debug('Sending request to Google Imagen API', {
-      context: 'GoogleImagenProvider.generateWithImagen',
-      endpoint,
-      sampleCount: (requestBody.parameters as Record<string, unknown>)
-        .sampleCount,
-    });
-
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
@@ -241,12 +225,6 @@ export class GoogleImagenProvider implements ImageGenProviderBase {
     }
 
     const data = await response.json();
-
-    logger.debug('Imagen generation completed', {
-      context: 'GoogleImagenProvider.generateWithImagen',
-      imageCount: data.predictions?.length ?? 0,
-    });
-
     return {
       images: (data.predictions ?? []).map((pred: any) => ({
         data: pred.bytesBase64Encoded,
@@ -258,8 +236,6 @@ export class GoogleImagenProvider implements ImageGenProviderBase {
 
   async validateApiKey(apiKey: string): Promise<boolean> {
     try {
-      logger.debug('Validating Google API key for image generation', { context: 'GoogleImagenProvider.validateApiKey' });
-
       // Validate the API key by calling the models list endpoint
       const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models', {
         method: 'GET',
@@ -269,7 +245,6 @@ export class GoogleImagenProvider implements ImageGenProviderBase {
       });
 
       const isValid = response.ok;
-      logger.debug('Google API key validation result', { context: 'GoogleImagenProvider.validateApiKey', isValid });
       return isValid;
     } catch (error) {
       logger.error('Google API key validation failed for image generation', {
@@ -280,7 +255,6 @@ export class GoogleImagenProvider implements ImageGenProviderBase {
   }
 
   async getAvailableModels(): Promise<string[]> {
-    logger.debug('Getting available Google image models', { context: 'GoogleImagenProvider.getAvailableModels' });
     return this.supportedModels;
   }
 }

@@ -31,12 +31,9 @@ const removeTagSchema = z.object({
 
 export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, { user, repos }, { id }) => {
   try {
-    logger.debug('[Images v1] GET image', { imageId: id, userId: user.id });
-
     const image = await repos.files.findById(id);
 
     if (!image) {
-      logger.debug('[Images v1] Image not found', { imageId: id });
       return notFound('Image');
     }
 
@@ -52,7 +49,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
 
     // Verify file category
     if (image.category !== 'IMAGE' && image.category !== 'AVATAR') {
-      logger.debug('[Images v1] File is not an image', { imageId: id, category: image.category });
       return notFound('Image');
     }
 
@@ -77,11 +73,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
         tagType = 'CHARACTER';
       }
       return { tagId, tagType };
-    });
-
-    logger.debug('[Images v1] Image fetched successfully', {
-      imageId: id,
-      filename: image.originalFilename,
     });
 
     return successResponse({
@@ -118,13 +109,10 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
 
 export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (req, { user, repos }, { id }) => {
   try {
-    logger.debug('[Images v1] DELETE image', { imageId: id, userId: user.id });
-
     // Check if image exists
     const image = await repos.files.findById(id);
 
     if (!image) {
-      logger.debug('[Images v1] Image not found', { imageId: id });
       return notFound('Image');
     }
 
@@ -140,7 +128,6 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
 
     // Verify file category
     if (image.category !== 'IMAGE' && image.category !== 'AVATAR') {
-      logger.debug('[Images v1] File is not an image', { imageId: id, category: image.category });
       return notFound('Image');
     }
 
@@ -150,7 +137,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
       try {
         fileExists = await fileStorageManager.fileExists(image);
       } catch {
-        logger.debug('[Images v1] Storage file does not exist (orphaned)', { imageId: id, storageKey: image.storageKey });
+        // Storage file does not exist (orphaned)
       }
     }
 
@@ -179,7 +166,6 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
       // Clear defaultImageId on characters
       for (const character of charactersUsingAsDefault) {
         await repos.characters.update(character.id, { defaultImageId: null });
-        logger.debug('[Images v1] Cleared defaultImageId on character', { characterId: character.id });
       }
 
       // Clear avatar overrides
@@ -188,16 +174,10 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
         if (character) {
           const updatedOverrides = character.avatarOverrides.filter(o => o.imageId !== id);
           await repos.characters.update(characterId, { avatarOverrides: updatedOverrides });
-          logger.debug('[Images v1] Cleared avatar overrides on character', { characterId, removedCount: overrides.length });
         }
       }
     } else if (isInUse) {
       // File exists and is in use - don't allow deletion
-      logger.debug('[Images v1] Image is in use, cannot delete', {
-        imageId: id,
-        charactersUsingAsDefault: charactersUsingAsDefault.length,
-        chatAvatarOverrides: chatAvatarOverrides.length,
-      });
       return badRequest('Image is in use', {
         message: 'This image is currently being used as an avatar or in chat overrides. Please remove all usages before deleting.',
         code: 'IMAGE_IN_USE',
@@ -212,7 +192,6 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
     if (image.storageKey) {
       try {
         await fileStorageManager.deleteFile(image);
-        logger.debug('[Images v1] Deleted from storage', { imageId: id, storageKey: image.storageKey });
       } catch (storageError) {
         logger.warn('[Images v1] Failed to delete from storage', {
           imageId: id,
@@ -279,16 +258,8 @@ async function handleAddTag(req: NextRequest, user: any, repos: any, imageId: st
     const body = await req.json();
     const { tagType, tagId } = addTagSchema.parse(body);
 
-    logger.debug('[Images v1] Adding tag to image', {
-      imageId,
-      tagType,
-      tagId,
-      userId: user.id,
-    });
-
     // Verify file is an image
     if (image.category !== 'IMAGE') {
-      logger.debug('[Images v1] File is not an image', { imageId, category: image.category });
       return badRequest('File is not an image');
     }
 
@@ -302,11 +273,6 @@ async function handleAddTag(req: NextRequest, user: any, repos: any, imageId: st
     const alreadyTagged = image.tags && image.tags.includes(tagId);
 
     if (alreadyTagged) {
-      logger.debug('[Images v1] File already has tag', {
-        imageId,
-        tagId,
-        tagType,
-      });
       return successResponse({
         data: {
           imageId,
@@ -355,12 +321,6 @@ async function handleRemoveTag(req: NextRequest, user: any, repos: any, imageId:
     const body = await req.json();
     const { tagId } = removeTagSchema.parse(body);
 
-    logger.debug('[Images v1] Removing tag from image', {
-      imageId,
-      tagId,
-      userId: user.id,
-    });
-
     // Remove the tag using repository
     await repos.files.removeTag(imageId, tagId);
 
@@ -393,7 +353,6 @@ async function verifyTaggedEntity(
   if (tagType === 'CHARACTER') {
     const character = await repos.characters.findById(tagId);
     if (!character) {
-      logger.debug('[Images v1] Character not found', { characterId: tagId });
       return notFound('Character');
     }
     // Security: verify character belongs to user
@@ -404,7 +363,6 @@ async function verifyTaggedEntity(
   } else if (tagType === 'CHAT') {
     const chat = await repos.chats.findById(tagId);
     if (!chat) {
-      logger.debug('[Images v1] Chat not found', { chatId: tagId });
       return notFound('Chat');
     }
     // Security: verify chat belongs to user

@@ -99,14 +99,14 @@ beforeEach(() => {
 
 describe('Roleplay Template Routes', () => {
   describe('GET /api/v1/roleplay-templates', () => {
-    it('requires authentication', async () => {
+    it('returns 500 when session fails (should not happen in single-user mode)', async () => {
       mockGetServerSession.mockResolvedValueOnce(null as any)
 
       const res = await listRoleplayTemplates(createMockRequest('http://localhost/api/v1/roleplay-templates'))
       const data = await res.json()
 
-      expect(res.status).toBe(401)
-      expect(data).toEqual({ error: 'Unauthorized' })
+      expect(res.status).toBe(500)
+      expect(data).toEqual({ error: 'Internal server error' })
       expect(mockRoleplayRepo.findAllForUser).not.toHaveBeenCalled()
     })
 
@@ -205,7 +205,7 @@ describe('Roleplay Template Routes', () => {
   })
 
   describe('GET /api/v1/roleplay-templates/[id]', () => {
-    it('requires authentication', async () => {
+    it('returns 500 when session fails (should not happen in single-user mode)', async () => {
       mockGetServerSession.mockResolvedValueOnce(null as any)
 
       const res = await getRoleplayTemplate(
@@ -213,7 +213,7 @@ describe('Roleplay Template Routes', () => {
         createParams('template-1') as any,
       )
 
-      expect(res.status).toBe(401)
+      expect(res.status).toBe(500)
       expect(mockRoleplayRepo.findById).not.toHaveBeenCalled()
     })
 

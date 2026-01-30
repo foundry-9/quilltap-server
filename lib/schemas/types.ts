@@ -2,7 +2,7 @@
  * Shared Type Definitions - Barrel File
  *
  * Central re-export file for all schema types used across the application.
- * These correspond to entity schemas stored in MongoDB.
+ * These correspond to entity schemas stored in the database.
  *
  * This file re-exports all types from domain-specific files for backwards
  * compatibility with existing imports from '@/lib/schemas/types'.
@@ -16,7 +16,6 @@
 export {
   // Version constants
   SCHEMA_VERSION,
-  SYNC_PROTOCOL_VERSION,
   // Enums
   ProviderEnum,
   ImageProviderEnum,
@@ -50,31 +49,11 @@ export type {
 } from './common.types';
 
 // ============================================================================
-// AUTHENTICATION TYPES
+// USER TYPES (Single-User Mode)
 // ============================================================================
-export {
-  TOTPSecretSchema,
-  BackupCodesSchema,
-  TOTPAttemptsSchema,
-  TrustedDeviceSchema,
-  UserSchema,
-  AccountSchema,
-  SessionSchema,
-  VerificationTokenSchema,
-  AuthAccountsSchema,
-} from './auth.types';
+export { UserSchema } from './auth.types';
 
-export type {
-  TOTPSecret,
-  BackupCodes,
-  TOTPAttempts,
-  TrustedDevice,
-  User,
-  Account,
-  Session,
-  VerificationToken,
-  AuthAccounts,
-} from './auth.types';
+export type { User } from './auth.types';
 
 // ============================================================================
 // SETTINGS TYPES
@@ -305,3 +284,41 @@ export type {
   ModelType,
   ProviderModel,
 } from './model.types';
+
+// ============================================================================
+// LLM LOG TYPES
+// ============================================================================
+export {
+  LLMLogTypeEnum,
+  LLMLogMessageSummarySchema,
+  LLMLogRequestSummarySchema,
+  LLMLogResponseSummarySchema,
+  LLMLogTokenUsageSchema,
+  LLMLogCacheUsageSchema,
+  LLMLogSchema,
+} from './llm-log.types';
+
+export type {
+  LLMLogType,
+  LLMLogMessageSummary,
+  LLMLogRequestSummary,
+  LLMLogResponseSummary,
+  LLMLogTokenUsage,
+  LLMLogCacheUsage,
+  LLMLog,
+} from './llm-log.types';
+
+// ============================================================================
+// VECTOR INDICES TYPES
+// ============================================================================
+export {
+  VectorMetadataSchema,
+  VectorEntrySchema,
+  VectorIndexSchema,
+} from './vector-indices.types';
+
+export type {
+  VectorMetadata,
+  VectorEntry,
+  VectorIndex,
+} from './vector-indices.types';

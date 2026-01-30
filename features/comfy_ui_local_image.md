@@ -1,5 +1,7 @@
 # Feature Request: ComfyUI Image Generation Plugin
 
+**Status:** Proposal / Not Implemented
+
 ## Summary
 
 Add ComfyUI as an image generation provider via a new plugin (`qtap-plugin-imagegen-comfyui`), enabling locally-hosted Stable Diffusion image generation with full LoRA support.

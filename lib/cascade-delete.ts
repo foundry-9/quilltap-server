@@ -19,7 +19,7 @@ async function deleteFileCompletely(fileId: string): Promise<boolean> {
   const entry = await repos.files.findById(fileId)
 
   if (!entry) {
-    logger.debug('File not found for deletion', { fileId })
+
     return false
   }
 
@@ -27,7 +27,7 @@ async function deleteFileCompletely(fileId: string): Promise<boolean> {
   if (entry.storageKey) {
     try {
       await fileStorageManager.deleteFile(entry)
-      logger.debug('Deleted file from storage', { fileId, storageKey: entry.storageKey })
+
     } catch (error) {
       logger.error('Failed to delete file from storage', { fileId, storageKey: entry.storageKey }, error instanceof Error ? error : undefined)
     }
@@ -37,7 +37,7 @@ async function deleteFileCompletely(fileId: string): Promise<boolean> {
 
   // Delete metadata from repository
   const deleted = await repos.files.delete(fileId)
-  logger.debug('Deleted file metadata from repository', { fileId, success: deleted })
+
   return deleted
 }
 

@@ -1,5 +1,7 @@
 # Feature: Built-in Semantic Documentation Search
 
+**Status:** Proposal / Not Implemented
+
 ## Overview
 Implement a searchable, embedded documentation system that ships with Quilltap. This allows users to ask the integrated LLM assistant questions about how to use the application, with the assistant drawing from up-to-date help documentation.
 

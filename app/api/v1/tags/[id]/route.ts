@@ -29,7 +29,6 @@ const updateTagSchema = z.object({
 
 export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, { user, repos }, { id }) => {
   try {
-    logger.debug('[Tags v1] GET tag', { tagId: id, userId: user.id });
 
     const tag = await repos.tags.findById(id);
 
@@ -55,7 +54,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
       },
     };
 
-    logger.debug('[Tags v1] Tag fetched', { tagId: id });
 
     return successResponse({ tag: enrichedTag });
   } catch (error) {
@@ -70,7 +68,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
 
 export const PUT = createAuthenticatedParamsHandler<{ id: string }>(async (req, { user, repos }, { id }) => {
   try {
-    logger.debug('[Tags v1] PUT tag', { tagId: id });
 
     const existingTag = await repos.tags.findById(id);
 
@@ -111,7 +108,6 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
 
 export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (req, { user, repos }, { id }) => {
   try {
-    logger.debug('[Tags v1] DELETE tag', { tagId: id });
 
     const existingTag = await repos.tags.findById(id);
 
