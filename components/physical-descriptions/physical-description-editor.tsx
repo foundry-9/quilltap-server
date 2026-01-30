@@ -106,8 +106,11 @@ export function PhysicalDescriptionEditor({
         type="button"
       />
 
-      {/* Dialog */}
-      <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-auto">
+      {/* Dialog - wrapper needs width for qt-dialog-wide to work */}
+      <div
+        className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-auto"
+        style={{ width: 'min(var(--qt-page-max-width), calc(100vw - 2rem))' }}
+      >
         <div className="qt-dialog qt-dialog-wide max-h-[90vh] overflow-y-auto flex flex-col">
           <div className="qt-dialog-header sticky top-0 flex-shrink-0">
             <div className="flex items-center justify-between">
