@@ -108,7 +108,7 @@ export function PhysicalDescriptionEditor({
 
       {/* Dialog */}
       <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-auto">
-        <div className="qt-dialog max-w-2xl max-h-[90vh] overflow-y-auto flex flex-col">
+        <div className="qt-dialog qt-dialog-wide max-h-[90vh] overflow-y-auto flex flex-col">
           <div className="qt-dialog-header sticky top-0 flex-shrink-0">
             <div className="flex items-center justify-between">
               <h2 className="qt-dialog-title">

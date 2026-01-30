@@ -2,6 +2,11 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.16] - 2026-01-30
+
+### Added
+- `.qt-dialog-wide` class for dialogs that match page container width (uses `--qt-page-max-width` variable)
+
 ## [1.0.15] - 2026-01-29
 
 ### Added

@@ -4,6 +4,13 @@
 
 ### 2.8-dev
 
+- chore: Add script to upgrade dependencies in packages and plugins (2026-01-30)
+  - New `scripts/upgrade-dependencies.sh` runs `npm upgrade` in all packages/ and plugins/dist/
+  - Added `npm run update:npm` convenience script in package.json
+- refactor: Physical description editor now uses wide dialog (2026-01-30)
+  - New `qt-dialog-wide` class matches page container width (respects full-width mode)
+  - Dialog expands to `--qt-page-max-width` instead of fixed 672px
+  - Updated `@quilltap/theme-storybook` to v1.0.16 with matching class
 - feat: Theme selector shows each theme name in its heading font (2026-01-30)
   - Theme popout menu lazy-loads custom fonts when opened
   - Each theme name displays in that theme's heading font for preview

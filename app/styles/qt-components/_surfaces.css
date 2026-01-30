@@ -198,6 +198,14 @@
     border-radius: 0 0 var(--qt-dialog-radius) var(--qt-dialog-radius);
   }
 
+  /**
+   * Wide dialog variant - matches page container width
+   * Respects full-width mode via --qt-page-max-width CSS variable
+   */
+  .qt-dialog-wide {
+    max-width: min(var(--qt-page-max-width), calc(100vw - 2rem));
+  }
+
   /* ==========================================================================
      POPOVERS - Shared base styles
      ========================================================================== */

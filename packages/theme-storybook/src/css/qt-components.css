@@ -642,6 +642,11 @@
   padding-top: 0;
 }
 
+/* Wide dialog variant - matches page container width */
+.qt-dialog-wide {
+  max-width: min(var(--qt-page-max-width, 75rem), calc(100vw - 2rem));
+}
+
 /* ==========================================================================
    TAB COMPONENTS
    ========================================================================== */
