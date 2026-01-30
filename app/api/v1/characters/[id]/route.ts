@@ -27,7 +27,8 @@ import { createAuthenticatedParamsHandler, checkOwnership, AuthenticatedContext 
 import { getFilePath } from '@/lib/api/middleware/file-path';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { executeCascadeDelete, getCascadeDeletePreview } from '@/lib/cascade-delete';
-import { exportSTCharacter } from '@/lib/sillytavern/character';
+import { exportSTCharacter, createSTCharacterPNG } from '@/lib/sillytavern/character';
+import { readImageBuffer } from '@/lib/images-v2';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, forbidden, badRequest, serverError, validationError } from '@/lib/api/responses';
@@ -98,21 +99,32 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
         const { searchParams } = new URL(req.url);
         const format = searchParams.get('format') || 'json';
 
-        const stCharacter = exportSTCharacter(character);
-
         if (format === 'png') {
-          if (!character.avatarUrl) {
-            return badRequest('Character must have an avatar for PNG export');
+          // Get avatar buffer if character has an avatar
+          let avatarBuffer: Buffer | undefined;
+          if (character.defaultImageId) {
+            try {
+              avatarBuffer = await readImageBuffer(character.defaultImageId);
+            } catch (error) {
+              logger.warn('[Characters v1] Could not read avatar for PNG export, using placeholder', {
+                characterId: id,
+                imageId: character.defaultImageId,
+              });
+              // Will use generated placeholder
+            }
           }
 
-          // PNG export not yet implemented
-          return NextResponse.json(
-            {
-              error: 'PNG export requires avatar storage implementation. Use JSON export for now.',
+          // Create PNG with embedded character data (uses placeholder if no avatar)
+          const pngBuffer = await createSTCharacterPNG(character, avatarBuffer);
+
+          return new NextResponse(new Uint8Array(pngBuffer), {
+            headers: {
+              'Content-Type': 'image/png',
+              'Content-Disposition': `attachment; filename="${character.name}.png"`,
             },
-            { status: 501 }
-          );
+          });
         } else {
+          const stCharacter = exportSTCharacter(character);
           return new NextResponse(JSON.stringify(stCharacter, null, 2), {
             headers: {
               'Content-Type': 'application/json',

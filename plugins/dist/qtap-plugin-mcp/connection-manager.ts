@@ -6,6 +6,7 @@
  */
 
 import { logger } from '@/lib/logger';
+import { getBuiltinToolNames } from '@quilltap/plugin-utils';
 import type { UniversalTool } from '@quilltap/plugin-types';
 import { MCPClient } from './mcp-client';
 import { parseServerConfigs } from './security';
@@ -160,8 +161,9 @@ export class MCPConnectionManager {
     }
 
     // Convert with collision detection across all servers
-    // TODO: Pass existingToolNames from Quilltap's built-in tools for full collision detection
-    const { tools, mappings } = convertToolsWithCollisionHandling(serverTools);
+    // Pass built-in Quilltap tool names to avoid shadowing them
+    const existingToolNames = getBuiltinToolNames();
+    const { tools, mappings } = convertToolsWithCollisionHandling(serverTools, existingToolNames);
 
     this.allTools = tools;
 

@@ -4,6 +4,24 @@
 
 ### 2.8-dev
 
+- feat: Implement PNG placeholder generation for SillyTavern character exports (2026-01-30)
+  - Characters can now be exported as PNG even without an avatar image
+  - Generates colored placeholder PNG based on character name hash
+  - Updated `/api/v1/characters/[id]?action=export&format=png` to use new functionality
+  - Removed 501 "Not Implemented" error for PNG exports
+- refactor: Remove legacy `lib/images.ts` in favor of `lib/images-v2.ts` (2026-01-30)
+  - Deleted `lib/images.ts` (legacy file-based image storage)
+  - Removed outdated `__tests__/unit/images.test.ts` that tested legacy implementation
+  - `lib/images-v2.ts` uses repository pattern and file storage manager
+- test: Add comprehensive unit tests for prompt templates API (2026-01-30)
+  - Created `__tests__/unit/prompt-templates-api.test.ts` with 14 tests
+  - Removed broken integration tests that were skipped since v1 API migration
+  - Tests cover GET, POST, PUT, DELETE operations and authentication
+- feat: MCP plugin now avoids shadowing built-in Quilltap tools (2026-01-30)
+  - Added `getBuiltinToolNames()` to `@quilltap/plugin-utils` v1.3.0
+  - MCP plugin passes built-in tool names to collision detection
+  - Tools from MCP servers that would shadow built-in tools get prefixed
+  - Updated qtap-plugin-mcp to v1.1.7
 - chore: Add script to upgrade dependencies in packages and plugins (2026-01-30)
   - New `scripts/upgrade-dependencies.sh` runs `npm upgrade` in all packages/ and plugins/dist/
   - Added `npm run update:npm` convenience script in package.json

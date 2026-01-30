@@ -2,6 +2,16 @@
 
 All notable changes to @quilltap/plugin-utils will be documented in this file.
 
+## [1.3.0] - 2026-01-30
+
+### Added
+
+- **Built-in Tool Names for Collision Detection**
+  - Added `BUILTIN_TOOL_NAMES` constant with names of Quilltap's built-in tools
+  - Added `getBuiltinToolNames()` function for dynamic access to the set
+  - Enables plugins (like MCP connectors) to avoid shadowing built-in functionality
+  - Built-in tools: `generate_image`, `search_memories`, `search_web`, `project_info`, `file_management`, `request_full_context`
+
 ## [1.2.5] - 2026-01-25
 
 ### Fixed
