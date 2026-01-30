@@ -1,15 +1,17 @@
 # Earl Grey Theme Plugin
 
-A sophisticated dark theme for Quilltap with deep slate grays and soft blue accents, inspired by the elegance of classic earl grey tea.
+A sophisticated theme for Quilltap with high-contrast neutral grays and bright blue accents, inspired by modern AI chat interfaces. Supports both light and dark modes with carefully calibrated palettes for each.
 
 ## Features
 
-- **Dark Mode Focus**: Optimized for dark mode with carefully balanced contrast
-- **Blue Accents**: Soft, refined blue (#007aff) accent colors throughout
-- **Neutral Palette**: Deep grays (#212121, #2f2f2f, #424242) for a clean, modern look
+- **Dual Mode Support**: Fully optimized for both light and dark modes
+- **High Contrast**: Pure black sidebar in dark mode, crisp white in light mode
+- **Blue Accents**: Bright, vibrant blue (#007aff) accent colors throughout
+- **Neutral Palette**: Pure grays without warmth for a clean, modern look
 - **Component Overrides**: Enhanced styling for chat messages, buttons, and more
+- **Pill-Shaped Elements**: Rounded 26px radius inputs and 8px sidebar items
 - **Smooth Animations**: Subtle fade and pulse animations for loading states
-- **Accessible**: Maintains proper contrast ratios for readability
+- **Accessible**: Maintains proper contrast ratios for readability in both modes
 
 ## Installation
 
@@ -22,23 +24,35 @@ This theme is included with Quilltap. To enable it:
 ## Color Palette
 
 ### Dark Mode
-- **Background**: Deep gray (`#212121` / `hsl(0 0% 13%)`)
+- **Sidebar**: Pure black (`#000000`)
+- **Background**: Charcoal (`#212121` / `hsl(0 0% 13%)`)
 - **Surface**: Elevated gray (`#2f2f2f` / `hsl(0 0% 18.4%)`)
-- **Primary**: Classic blue (`#007aff` / `hsl(211 100% 50%)`)
+- **Primary Button**: White pill with black text
 - **Text**: Pure white (`#ffffff`)
-- **Accent**: Soft blue (`#66b5ff` / `hsl(211 100% 70%)`)
+- **Accent**: Bright blue (`#007aff` / `hsl(211 100% 50%)`)
 
-### Key Colors
+### Light Mode
+- **Background**: Pure white (`#ffffff` / `hsl(0 0% 100%)`)
+- **Sidebar**: Very light gray (`#f9f9f9` / `hsl(0 0% 98%)`)
+- **Input Fields**: Light gray (`#f4f4f4` / `hsl(0 0% 96%)`)
+- **Primary Button**: Black pill with white text (inverted from dark mode)
+- **Text**: Near black (`#0d0d0d` / `hsl(0 0% 5%)`)
+- **Secondary Text**: Medium gray (`#676767` / `hsl(0 0% 40%)`)
+- **Borders**: Soft gray (`#e5e5e5` / `hsl(0 0% 90%)`)
+- **Accent**: Bright blue (`#007aff` / `hsl(211 100% 50%)`)
+
+### Key Colors (Both Modes)
 - **Success**: Emerald green (`hsl(142 71% 45%)`)
 - **Warning**: Amber yellow (`hsl(45 93% 47%)`)
-- **Danger**: Coral red (`hsl(0 84.2% 60.2%)`)
+- **Danger**: Coral red (`hsl(0 67% 50%)`)
+- **Info/Accent**: Bright blue (`hsl(211 100% 50%)`)
 
 ## Customization
 
 The theme provides three tiers of customization:
 
 ### Tier 1: Design Tokens
-Core color, typography, and spacing values defined in `tokens.json`. These CSS custom properties are applied globally.
+Core color, typography, and spacing values defined in `tokens.json`. These CSS custom properties are applied globally and include separate values for light and dark modes.
 
 ### Tier 2: Component Tokens
 Semantic tokens for component-level styling that reference the design tokens.
@@ -51,6 +65,7 @@ Advanced CSS in `styles.css` for specific component enhancements:
 - Subtle loading animations
 - Enhanced focus states with blue glow
 - Blue-accented avatars and interactive elements
+- Mode-specific button inversions (white/black pills)
 
 ## Bundled Fonts
 
@@ -91,6 +106,7 @@ qtap-plugin-theme-earl-grey/
 1. Enable the plugin in the Quilltap plugin settings
 2. Select the Earl Grey theme in Appearance settings
 3. Verify both light and dark modes work correctly
+4. Test the System preference to ensure it follows OS settings
 
 ### Modifying Colors
 
@@ -99,8 +115,13 @@ Edit `tokens.json` to adjust the color palette. The theme uses HSL color format 
 ```json
 {
   "colors": {
+    "light": {
+      "primary": "hsl(0 0% 5%)",
+      "primaryForeground": "hsl(0 0% 100%)"
+    },
     "dark": {
-      "primary": "hsl(211 100% 50%)"
+      "primary": "hsl(0 0% 100%)",
+      "primaryForeground": "hsl(0 0% 0%)"
     }
   }
 }
@@ -108,31 +129,56 @@ Edit `tokens.json` to adjust the color palette. The theme uses HSL color format 
 
 ### Adding Component Overrides
 
-Add CSS rules to `styles.css` using the `[data-theme="earl-grey"]` selector:
+Add CSS rules to `styles.css` using mode-specific selectors:
 
 ```css
+/* Base styles for both modes */
 [data-theme="earl-grey"] .my-component {
-  /* Custom styles */
+  /* Shared styles */
+}
+
+/* Light mode specific */
+[data-theme="earl-grey"].light .my-component {
+  /* Light mode styles */
+}
+
+/* Dark mode specific */
+[data-theme="earl-grey"].dark .my-component {
+  /* Dark mode styles */
 }
 ```
 
 ## Design Philosophy
 
 The Earl Grey theme draws inspiration from:
-- **Classic elegance**: Refined, sophisticated color choices
-- **Modern minimalism**: Clean grays without warmth or coolness
-- **Blue accents**: A nod to the bergamot notes in Earl Grey tea
-- **Depth through shadow**: Layered surfaces with subtle shadows
+- **Modern AI interfaces**: Clean, high-contrast design language
+- **Neutral minimalism**: Pure grays without warmth or coolness
+- **Blue accents**: Bright, vibrant blue for interactive elements
+- **Inverted primaries**: Black pills on light, white pills on dark
+- **Depth through contrast**: Strong visual hierarchy via background layering
 
-The goal is to create a visually clean, professional environment that's easy on the eyes during extended use, particularly in low-light conditions.
+The goal is to create a visually clean, professional environment that works beautifully in both light and dark conditions. Light mode features a crisp, paper-like white background, while dark mode offers deep blacks and charcoals for comfortable low-light use.
 
 ## Credits
 
-- **Author**: Foundry-9
+- **Author**: Foundry-9 LLC
 - **License**: MIT
-- **Version**: 1.0.6
+- **Version**: 1.3.0
 
 ## Changelog
+
+### 1.3.0
+
+- Added comprehensive light mode support
+- Pure white background with light gray sidebar in light mode
+- Inverted primary button colors (black pill in light, white pill in dark)
+- Updated badge and filter chip styling for light mode
+- Enhanced focus states for both modes
+- Restructured CSS with `.light` and `.dark` class selectors
+
+### 1.2.0
+
+- Various styling improvements and bug fixes
 
 ### 1.0.6
 

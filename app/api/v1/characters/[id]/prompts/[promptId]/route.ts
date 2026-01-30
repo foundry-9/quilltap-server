@@ -21,14 +21,7 @@ const updatePromptSchema = z.object({
 // GET /api/v1/characters/[id]/prompts/[promptId]
 export const GET = createAuthenticatedParamsHandler<{ id: string; promptId: string }>(
   async (request, { user, repos }, { id: characterId, promptId }) => {
-    try {
-      logger.debug('[Characters v1] Fetching character system prompt', {
-        characterId,
-        promptId,
-        userId: user.id,
-      });
-
-      const character = await repos.characters.findById(characterId);
+    try {const character = await repos.characters.findById(characterId);
 
       if (!checkOwnership(character, user.id)) {
         return notFound('Character');
@@ -43,14 +36,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string; promptId: stri
           userId: user.id,
         });
         return notFound('Prompt');
-      }
-
-      logger.debug('[Characters v1] Retrieved character system prompt', {
-        characterId,
-        promptId,
-      });
-
-      return NextResponse.json({ prompt });
+      }return NextResponse.json({ prompt });
     } catch (error) {
       logger.error('[Characters v1] Error fetching character system prompt', { characterId, promptId }, error instanceof Error ? error : undefined);
       return serverError('Failed to fetch character prompt');
@@ -63,15 +49,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string; promptId: stri
   async (request, { user, repos }, { id: characterId, promptId }) => {
     try {
       const body = await request.json();
-      const validated = updatePromptSchema.parse(body);
-
-      logger.debug('[Characters v1] Updating character system prompt', {
-        characterId,
-        promptId,
-        userId: user.id,
-      });
-
-      // Verify character exists and belongs to user
+      const validated = updatePromptSchema.parse(body);// Verify character exists and belongs to user
       const character = await repos.characters.findById(characterId);
 
       if (!checkOwnership(character, user.id)) {
@@ -114,7 +92,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string; promptId: stri
       return NextResponse.json({ prompt });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        logger.warn('[Characters v1] Invalid character prompt update data', { errors: error.errors });
+        logger.warn('[Characters v1] Invalid character prompt update data', { errors: error.issues });
         return validationError(error);
       }
       logger.error('[Characters v1] Error updating character system prompt', { characterId, promptId }, error instanceof Error ? error : undefined);
@@ -126,14 +104,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string; promptId: stri
 // DELETE /api/v1/characters/[id]/prompts/[promptId]
 export const DELETE = createAuthenticatedParamsHandler<{ id: string; promptId: string }>(
   async (request, { user, repos }, { id: characterId, promptId }) => {
-    try {
-      logger.debug('[Characters v1] Deleting character system prompt', {
-        characterId,
-        promptId,
-        userId: user.id,
-      });
-
-      // Verify character exists and belongs to user
+    try {// Verify character exists and belongs to user
       const character = await repos.characters.findById(characterId);
 
       if (!checkOwnership(character, user.id)) {

@@ -21,7 +21,6 @@ import { notFound, forbidden, badRequest, serverError } from '@/lib/api/response
 export const GET = createAuthenticatedParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }: AuthenticatedContext, { id }) => {
     try {
-      logger.debug('[System Jobs v1] GET job', { jobId: id, userId: user.id });
 
       const job = await repos.backgroundJobs.findById(id);
 
@@ -49,7 +48,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }: AuthenticatedContext, { id }) => {
     try {
-      logger.debug('[System Jobs v1] DELETE job', { jobId: id, userId: user.id });
 
       const job = await repos.backgroundJobs.findById(id);
 
@@ -93,14 +91,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       return badRequest('Invalid action. Available actions: pause, resume');
     }
 
-    try {
-      logger.debug('[System Jobs v1] Job action', {
-        jobId: id,
-        userId: user.id,
-        action,
-      });
-
-      const job = await repos.backgroundJobs.findById(id);
+    try {const job = await repos.backgroundJobs.findById(id);
 
       if (!job) {
         return notFound('Job');

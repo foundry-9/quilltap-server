@@ -52,12 +52,6 @@ export class OpenRouterEmbeddingProvider {
       dimensions?: number;
     }
   ): Promise<EmbeddingResult> {
-    logger.debug('OpenRouter generateEmbedding called', {
-      context: 'OpenRouterEmbeddingProvider.generateEmbedding',
-      model,
-      textLength: text.length,
-    });
-
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || 'http://localhost:3000',
@@ -92,14 +86,6 @@ export class OpenRouterEmbeddingProvider {
     } else {
       embedding = embeddingData;
     }
-
-    logger.debug('OpenRouter embedding generated', {
-      context: 'OpenRouterEmbeddingProvider.generateEmbedding',
-      model: response.model,
-      dimensions: embedding.length,
-      usage: response.usage,
-    });
-
     return {
       embedding,
       model: response.model,
@@ -131,12 +117,6 @@ export class OpenRouterEmbeddingProvider {
       dimensions?: number;
     }
   ): Promise<EmbeddingResult[]> {
-    logger.debug('OpenRouter generateBatchEmbeddings called', {
-      context: 'OpenRouterEmbeddingProvider.generateBatchEmbeddings',
-      model,
-      count: texts.length,
-    });
-
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || 'http://localhost:3000',
@@ -185,13 +165,6 @@ export class OpenRouterEmbeddingProvider {
           : undefined,
       });
     }
-
-    logger.debug('OpenRouter batch embeddings generated', {
-      context: 'OpenRouterEmbeddingProvider.generateBatchEmbeddings',
-      model: response.model,
-      count: results.length,
-    });
-
     return results;
   }
 
@@ -202,10 +175,6 @@ export class OpenRouterEmbeddingProvider {
    * @returns Array of model IDs
    */
   async getAvailableModels(apiKey: string): Promise<string[]> {
-    logger.debug('OpenRouter getAvailableModels called', {
-      context: 'OpenRouterEmbeddingProvider.getAvailableModels',
-    });
-
     try {
       const client = new OpenRouter({
         apiKey,
@@ -215,12 +184,6 @@ export class OpenRouterEmbeddingProvider {
 
       const response = await client.embeddings.listModels();
       const models = response.data?.map((m) => m.id) ?? [];
-
-      logger.debug('OpenRouter embedding models fetched', {
-        context: 'OpenRouterEmbeddingProvider.getAvailableModels',
-        count: models.length,
-      });
-
       return models;
     } catch (error) {
       logger.error(

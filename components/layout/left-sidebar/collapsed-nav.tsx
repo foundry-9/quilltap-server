@@ -108,17 +108,12 @@ const navItems: NavItem[] = [
 ]
 
 export function CollapsedNav() {
-  const { setCollapsed, closeMobile, isMobile } = useSidebar()
+  const { setCollapsed } = useSidebar()
   const router = useRouter()
 
   const handleNavClick = (item: NavItem) => {
     // Expand the sidebar
     setCollapsed(false)
-
-    // Close mobile menu if open
-    if (isMobile) {
-      closeMobile()
-    }
 
     // Navigate to the view-all page
     router.push(item.href)

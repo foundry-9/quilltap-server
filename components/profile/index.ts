@@ -1,11 +1,9 @@
 /**
  * Profile Components Module
  *
- * Components for the user profile page
+ * Components for the user profile page (single-user mode)
  */
 
 export { ProfileInfoSection } from './ProfileInfoSection'
 export { ProfileEditSection } from './ProfileEditSection'
-export { TwoFactorSection } from './TwoFactorSection'
-export { TrustedDevicesSection } from './TrustedDevicesSection'
-export type { UserProfile, TrustedDevice, EncryptedTOTPData } from './types'
+export type { UserProfile } from './types'

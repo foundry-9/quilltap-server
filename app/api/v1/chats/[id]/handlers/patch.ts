@@ -39,11 +39,6 @@ export async function handlePatch(
     const body = await req.json();
     const { lastTurnParticipantId } = persistTurnSchema.parse(body);
 
-    logger.debug('[Chats v1] Persisting turn state', {
-      chatId,
-      lastTurnParticipantId,
-    });
-
     // If a participant ID is provided, verify it exists and is active
     if (lastTurnParticipantId !== null) {
       const participant = chat.participants.find(p => p.id === lastTurnParticipantId);
@@ -51,20 +46,12 @@ export async function handlePatch(
         return notFound('Participant');
       }
       if (!participant.isActive) {
-        // If the participant is no longer active, log but continue
-        logger.debug('[Chats v1] Participant inactive during turn persist', {
-          participantId: lastTurnParticipantId,
-        });
+        // If the participant is no longer active, continue without logging
       }
     }
 
     // Update the chat metadata with the turn state
     await repos.chats.update(chatId, {
-      lastTurnParticipantId,
-    });
-
-    logger.debug('[Chats v1] Turn state persisted', {
-      chatId,
       lastTurnParticipantId,
     });
 

@@ -20,7 +20,6 @@ export async function handleGetAvatars(
   { user, repos }: AuthenticatedContext
 ): Promise<NextResponse> {
   try {
-    logger.debug('[Chats v1] Getting avatar overrides', { chatId });
 
     const chat = await repos.chats.findById(chatId);
     if (!chat || chat.userId !== user.id) {
@@ -71,7 +70,6 @@ export async function handleSetAvatar(
     const body = await req.json();
     const { characterId, imageId } = avatarOverrideSchema.parse(body);
 
-    logger.debug('[Chats v1] Setting avatar override', { chatId, characterId, imageId });
 
     // Verify character exists and belongs to user
     const character = await repos.characters.findById(characterId);
@@ -137,7 +135,6 @@ export async function handleRemoveAvatar(
     const body = await req.json();
     const { characterId } = removeAvatarSchema.parse(body);
 
-    logger.debug('[Chats v1] Removing avatar override', { chatId, characterId });
 
     // Verify character exists and belongs to user
     const character = await repos.characters.findById(characterId);

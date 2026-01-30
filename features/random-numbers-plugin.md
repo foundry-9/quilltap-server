@@ -1,5 +1,7 @@
 # Feature request: Random Numbers or Choices plugin
 
+**Status:** Proposal / Not Implemented
+
 A plugin to produce any of the following as a tool:
 
 1. A random number in the traditional sense, that is any decimal between 0 and 1

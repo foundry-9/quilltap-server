@@ -79,10 +79,7 @@ export function useQuickChat(): UseQuickChatReturn {
       if (userCharsRes.ok) {
         const data = await userCharsRes.json()
         const characters = data.characters || []
-        console.debug('[useQuickChat] User-controlled characters fetched', {
-          count: characters.length,
-          characters: characters.map((c: any) => ({ id: c.id, name: c.name })),
-        })
+
         setUserControlledCharacters(characters.map((c: any) => ({
           id: c.id,
           name: c.name,

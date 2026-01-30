@@ -1,5 +1,7 @@
 # Feature Request: Local File CRUD via MCP Server
 
+**Status:** Proposal / Not Implemented
+
 ## Summary
 
 Add a local MCP server to Quilltap that exposes file system operations as tools, enabling LLMs to read, create, update, and delete Markdown and other files while respecting token limitations through chunked access patterns.

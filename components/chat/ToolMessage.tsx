@@ -164,16 +164,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
           {(toolData.arguments || toolData.prompt) && (
             <div className="mt-2">
               <button
-                onClick={() => {
-                  if (process.env.NODE_ENV === 'development') {
-                    console.debug('ToolMessage: Toggling Tool Request view', {
-                      messageId: message.id,
-                      toolName: toolData.toolName,
-                      showRequest: !showRequest
-                    })
-                  }
-                  setShowRequest(!showRequest)
-                }}
+                onClick={() => setShowRequest(!showRequest)}
                 className="qt-text-label-xs hover:text-foreground transition-colors"
                 type="button"
               >
@@ -197,16 +188,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
           {(toolData.result || (toolData.toolName === 'generate_image' && imageAttachments.length > 0)) && (
             <div className="mt-2">
               <button
-                onClick={() => {
-                  if (process.env.NODE_ENV === 'development') {
-                    console.debug('ToolMessage: Toggling Tool Response view', {
-                      messageId: message.id,
-                      toolName: toolData.toolName,
-                      showResponse: !showResponse
-                    })
-                  }
-                  setShowResponse(!showResponse)
-                }}
+                onClick={() => setShowResponse(!showResponse)}
                 className="qt-text-label-xs hover:text-foreground transition-colors"
                 type="button"
               >

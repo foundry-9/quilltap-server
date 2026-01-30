@@ -123,6 +123,32 @@ export interface MockFilesRepository {
   delete: jest.Mock<(id: string) => Promise<boolean>>;
 }
 
+export interface MockLLMLogsRepository {
+  create: jest.Mock;
+  findById: jest.Mock;
+  delete: jest.Mock;
+  deleteByUserId: jest.Mock;
+  findByMessageId: jest.Mock;
+  findByChatId: jest.Mock;
+  findByCharacterId: jest.Mock;
+  findStandalone: jest.Mock;
+  findByType: jest.Mock;
+  findRecent: jest.Mock;
+  findByUserId: jest.Mock;
+  countByUserId: jest.Mock;
+  countByMessageId: jest.Mock;
+  getTotalTokenUsage: jest.Mock;
+  cleanupOldLogs: jest.Mock;
+}
+
+export interface MockPluginConfigsRepository {
+  findByUserId: jest.Mock;
+  findById: jest.Mock;
+  create: jest.Mock;
+  update: jest.Mock;
+  delete: jest.Mock;
+}
+
 export interface MockUserRepositories {
   characters: MockCharactersRepository;
   personas: MockPersonasRepository;
@@ -292,6 +318,42 @@ export function createMockFilesRepository(): MockFilesRepository {
     create: jest.fn<(data: Partial<FileEntry>) => Promise<FileEntry>>(),
     update: jest.fn<(id: string, data: Partial<FileEntry>) => Promise<FileEntry | null>>().mockResolvedValue(null),
     delete: jest.fn<(id: string) => Promise<boolean>>().mockResolvedValue(true),
+  };
+}
+
+/**
+ * Create a mock LLM logs repository
+ */
+export function createMockLLMLogsRepository(): MockLLMLogsRepository {
+  return {
+    create: jest.fn(),
+    findById: jest.fn().mockResolvedValue(null),
+    delete: jest.fn().mockResolvedValue(true),
+    deleteByUserId: jest.fn().mockResolvedValue(0),
+    findByMessageId: jest.fn().mockResolvedValue([]),
+    findByChatId: jest.fn().mockResolvedValue([]),
+    findByCharacterId: jest.fn().mockResolvedValue([]),
+    findStandalone: jest.fn().mockResolvedValue([]),
+    findByType: jest.fn().mockResolvedValue([]),
+    findRecent: jest.fn().mockResolvedValue([]),
+    findByUserId: jest.fn().mockResolvedValue([]),
+    countByUserId: jest.fn().mockResolvedValue(0),
+    countByMessageId: jest.fn().mockResolvedValue(0),
+    getTotalTokenUsage: jest.fn().mockResolvedValue({ promptTokens: 0, completionTokens: 0, totalTokens: 0 }),
+    cleanupOldLogs: jest.fn().mockResolvedValue(0),
+  };
+}
+
+/**
+ * Create a mock plugin configs repository
+ */
+export function createMockPluginConfigsRepository(): MockPluginConfigsRepository {
+  return {
+    findByUserId: jest.fn().mockResolvedValue([]),
+    findById: jest.fn().mockResolvedValue(null),
+    create: jest.fn(),
+    update: jest.fn().mockResolvedValue(null),
+    delete: jest.fn().mockResolvedValue(true),
   };
 }
 
@@ -474,6 +536,8 @@ export interface MockRepositoryContainer {
   embeddingProfiles: MockEmbeddingProfilesRepository;
   memories: MockMemoriesRepository;
   files: MockFilesRepository;
+  llmLogs: MockLLMLogsRepository;
+  pluginConfigs: MockPluginConfigsRepository;
   backgroundJobs: MockBackgroundJobsRepository;
   roleplayTemplates: MockRoleplayTemplatesRepository;
   promptTemplates: MockPromptTemplatesRepository;
@@ -482,7 +546,7 @@ export interface MockRepositoryContainer {
   syncMappings: { findAll: jest.Mock; findById: jest.Mock; create: jest.Mock; update: jest.Mock; delete: jest.Mock };
   syncOperations: { findAll: jest.Mock; findById: jest.Mock; create: jest.Mock; update: jest.Mock; delete: jest.Mock };
   userSyncApiKeys: { findAll: jest.Mock; findById: jest.Mock; create: jest.Mock; update: jest.Mock; delete: jest.Mock };
-  chatSettings: { findByUserId: jest.Mock; upsert: jest.Mock };
+  chatSettings: { findByUserId: jest.Mock; findAll: jest.Mock; upsert: jest.Mock };
 }
 
 /**
@@ -502,6 +566,8 @@ export function createMockRepositoryContainer(): MockRepositoryContainer {
     embeddingProfiles: createMockEmbeddingProfilesRepository(),
     memories: createMockMemoriesRepository(),
     files: createMockFilesRepository(),
+    llmLogs: createMockLLMLogsRepository(),
+    pluginConfigs: createMockPluginConfigsRepository(),
     backgroundJobs: createMockBackgroundJobsRepository(),
     roleplayTemplates: createMockRoleplayTemplatesRepository(),
     promptTemplates: createMockPromptTemplatesRepository(),
@@ -510,7 +576,7 @@ export function createMockRepositoryContainer(): MockRepositoryContainer {
     syncMappings: { findAll: jest.fn().mockResolvedValue([]), findById: jest.fn().mockResolvedValue(null), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
     syncOperations: { findAll: jest.fn().mockResolvedValue([]), findById: jest.fn().mockResolvedValue(null), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
     userSyncApiKeys: { findAll: jest.fn().mockResolvedValue([]), findById: jest.fn().mockResolvedValue(null), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
-    chatSettings: { findByUserId: jest.fn().mockResolvedValue(null), upsert: jest.fn() },
+    chatSettings: { findByUserId: jest.fn().mockResolvedValue(null), findAll: jest.fn().mockResolvedValue([]), upsert: jest.fn() },
   };
 }
 

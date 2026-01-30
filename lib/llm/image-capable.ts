@@ -27,19 +27,10 @@ export function supportsImageGeneration(provider: string): boolean {
 
   // Check if registry is initialized
   if (!providerRegistry.isInitialized()) {
-    moduleLogger.debug('Provider registry not initialized, cannot check image capability', {
-      provider: normalizedProvider,
-    });
     return false;
   }
 
   const result = providerRegistry.supportsCapability(normalizedProvider, 'imageGeneration');
-
-  moduleLogger.debug('Checked image generation support', {
-    provider: normalizedProvider,
-    supportsImageGeneration: result,
-  });
-
   return result;
 }
 
@@ -52,18 +43,11 @@ export function supportsImageGeneration(provider: string): boolean {
  */
 export function getImageCapableProviders(): string[] {
   if (!providerRegistry.isInitialized()) {
-    moduleLogger.debug('Provider registry not initialized, returning empty list');
     return [];
   }
 
   const providers = providerRegistry
     .getProvidersByCapability('imageGeneration')
     .map(plugin => plugin.metadata.providerName);
-
-  moduleLogger.debug('Retrieved image-capable providers', {
-    count: providers.length,
-    providers,
-  });
-
   return providers;
 }

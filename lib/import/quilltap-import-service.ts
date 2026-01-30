@@ -123,15 +123,9 @@ interface IdMappingState {
  * Parses a JSON string as a QuilltapExport
  */
 export function parseExportFile(jsonString: string): QuilltapExport {
-  moduleLogger.debug('Parsing export file JSON');
-
   try {
     const data = JSON.parse(jsonString);
     validateExportFormat(data);
-    moduleLogger.debug('Export file parsed successfully', {
-      format: data.manifest.format,
-      version: data.manifest.version,
-    });
     return data;
   } catch (error) {
     moduleLogger.error('Failed to parse export file', {
@@ -178,8 +172,6 @@ export function validateExportFormat(data: unknown): asserts data is QuilltapExp
   if (!obj.data || typeof obj.data !== 'object') {
     throw new Error('Missing or invalid data section');
   }
-
-  moduleLogger.debug('Export format validation passed');
 }
 
 // ============================================================================
@@ -543,7 +535,6 @@ async function importTags(
   idMaps: IdMappingState,
   repos: ReturnType<typeof getUserRepositories>
 ): Promise<ImportCounts> {
-  moduleLogger.debug('Importing tags', { count: tags.length });
   let imported = 0;
   let skipped = 0;
 
@@ -597,7 +588,6 @@ async function importConnectionProfiles(
   idMaps: IdMappingState,
   repos: ReturnType<typeof getUserRepositories>
 ): Promise<ImportCounts> {
-  moduleLogger.debug('Importing connection profiles', { count: profiles.length });
   let imported = 0;
   let skipped = 0;
 
@@ -655,7 +645,6 @@ async function importImageProfiles(
   idMaps: IdMappingState,
   repos: ReturnType<typeof getUserRepositories>
 ): Promise<ImportCounts> {
-  moduleLogger.debug('Importing image profiles', { count: profiles.length });
   let imported = 0;
   let skipped = 0;
 
@@ -713,7 +702,6 @@ async function importEmbeddingProfiles(
   idMaps: IdMappingState,
   repos: ReturnType<typeof getUserRepositories>
 ): Promise<ImportCounts> {
-  moduleLogger.debug('Importing embedding profiles', { count: profiles.length });
   let imported = 0;
   let skipped = 0;
 
@@ -771,7 +759,6 @@ async function importRoleplayTemplates(
   idMaps: IdMappingState,
   globalRepos: ReturnType<typeof getRepositories>
 ): Promise<ImportCounts> {
-  moduleLogger.debug('Importing roleplay templates', { count: templates.length });
   let imported = 0;
   let skipped = 0;
 
@@ -830,7 +817,6 @@ async function importProjects(
   repos: ReturnType<typeof getUserRepositories>,
   warnings: string[]
 ): Promise<ImportCounts> {
-  moduleLogger.debug('Importing projects', { count: projects.length });
   let imported = 0;
   let skipped = 0;
 
@@ -890,7 +876,6 @@ async function importCharacters(
   repos: ReturnType<typeof getUserRepositories>,
   warnings: string[]
 ): Promise<ImportCounts> {
-  moduleLogger.debug('Importing characters', { count: characters.length });
   let imported = 0;
   let skipped = 0;
 
@@ -950,7 +935,6 @@ async function importChats(
   repos: ReturnType<typeof getUserRepositories>,
   warnings: string[]
 ): Promise<ImportCounts> {
-  moduleLogger.debug('Importing chats', { count: chats.length });
   let imported = 0;
   let skipped = 0;
   let messages = 0;
@@ -1040,7 +1024,6 @@ async function importMemories(
   repos: ReturnType<typeof getUserRepositories>,
   warnings: string[]
 ): Promise<ImportCounts> {
-  moduleLogger.debug('Importing memories', { count: memories.length });
   let imported = 0;
   let skipped = 0;
 
@@ -1151,9 +1134,6 @@ async function reconcileRelationships(
 
       if (hasUpdates) {
         await repos.characters.update(newId, updates);
-        moduleLogger.debug('Reconciled character relationships', {
-          characterId: newId,
-        });
       }
     } catch (error) {
       warnings.push(
@@ -1229,7 +1209,6 @@ async function reconcileRelationships(
 
       if (hasUpdates) {
         await repos.chats.update(newId, updates);
-        moduleLogger.debug('Reconciled chat relationships', { chatId: newId });
       }
     } catch (error) {
       warnings.push(
@@ -1264,7 +1243,6 @@ async function reconcileRelationships(
 
       if (hasUpdates) {
         await repos.projects.update(newId, updates);
-        moduleLogger.debug('Reconciled project relationships', { projectId: newId });
       }
     } catch (error) {
       warnings.push(

@@ -1,7 +1,7 @@
 import { QuillAnimation } from '@/components/chat/QuillAnimation'
 import MessageContent from '@/components/chat/MessageContent'
 import Avatar from '@/components/ui/Avatar'
-import type { CharacterData, Participant } from '../types'
+import type { CharacterData } from '../types'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
 
 interface StreamingMessageProps {
@@ -14,7 +14,6 @@ interface StreamingMessageProps {
   /** Optional dialogue detection for paragraph-level styling */
   dialogueDetection?: DialogueDetection | null
   shouldShowAvatars: boolean
-  onStopClick: () => void
 }
 
 export function StreamingMessage({
@@ -25,7 +24,6 @@ export function StreamingMessage({
   renderingPatterns,
   dialogueDetection,
   shouldShowAvatars,
-  onStopClick,
 }: StreamingMessageProps) {
   if (!waitingForResponse && !streaming) return null
 
@@ -45,40 +43,6 @@ export function StreamingMessage({
         </div>
       )}
       <div className="qt-chat-message-body">
-        {shouldShowAvatars && (
-          <div className="qt-chat-message-mobile-header">
-            <div className="qt-chat-message-mobile-avatar">
-              {(() => {
-                const avatarSrc = respondingCharacter?.avatarUrl || (respondingCharacter?.defaultImage?.url || respondingCharacter?.defaultImage?.filepath)
-                const normalizedSrc = avatarSrc && (avatarSrc.startsWith('/') ? avatarSrc : `/${avatarSrc}`)
-                return normalizedSrc ? (
-                   
-                  <img src={normalizedSrc} alt={respondingCharacter?.name || 'AI'} />
-                ) : (
-                  <div className="qt-chat-message-mobile-avatar-initial">
-                    {(respondingCharacter?.name || 'AI').charAt(0).toUpperCase()}
-                  </div>
-                )
-              })()}
-            </div>
-            <span className="qt-chat-message-mobile-name">{respondingCharacter?.name || 'AI'}</span>
-            {streaming && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onStopClick()
-                }}
-                className="qt-button qt-chat-stop-button-mobile"
-                title="Stop generating"
-              >
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                  <rect x="6" y="6" width="12" height="12" rx="1" />
-                </svg>
-              </button>
-            )}
-          </div>
-        )}
         {waitingForResponse && !streaming ? (
           <div className="text-muted-foreground">
             <QuillAnimation size="lg" />

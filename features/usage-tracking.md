@@ -1,5 +1,7 @@
 # Usage & Remaining-Balance Tracking Feature Request
 
+**Status:** Proposal / Not Implemented
+
 ## Summary
 
 Improve the Tools workspace and provider plugins so that Quilltap surfaces how much budget is left on each configured LLM API key. Today admins must open every provider’s dashboard manually. This feature captures the expected UX, required provider API calls, and guardrails identified during investigation.

@@ -1,15 +1,15 @@
 # Rains Theme Plugin
 
-A warm, earthy dark theme for Quilltap with rich browns and amber accents, inspired by rain-soaked autumn evenings.
+A warm, minimalist theme for Quilltap with full light and dark mode support. The dark mode features ChatGPT-inspired warm greys with clay/orange accents, while the light mode offers an Opus-inspired warm paper aesthetic with terracotta accents.
 
 ## Features
 
-- **Light & Dark Mode**: Full support for both light and dark color schemes
-- **Warm Color Palette**: Carefully crafted browns, ambers, and earthy tones
+- **Light & Dark Mode**: Full support for both color schemes with distinct aesthetics
+- **Warm Color Palette**: Carefully crafted earthy tones for comfortable viewing
 - **Component Overrides**: Enhanced styling for chat messages, buttons, and more
-- **Smooth Animations**: Gentle rain-inspired animations for loading states
+- **Smooth Animations**: Gentle fade-in animations for messages
 - **Accessible**: Maintains proper contrast ratios for readability
-- **Cozy Aesthetic**: Perfect for late-night coding or reading sessions
+- **Cozy Aesthetic**: Perfect for extended reading and writing sessions
 
 ## Installation
 
@@ -21,17 +21,23 @@ This theme is included with Quilltap. To enable it:
 
 ## Color Palette
 
-### Light Mode
-- **Background**: Warm off-white (`hsl(30 15% 96%)`)
-- **Primary**: Rich amber (`hsl(30 80% 45%)`)
-- **Accent**: Bright amber (`hsl(25 85% 50%)`)
-- **Text**: Deep brown (`hsl(30 20% 15%)`)
+### Light Mode (Opus-inspired)
+- **Background**: Warm off-white paper (`#FAF8F6`)
+- **Sidebar**: Soft warm grey (`#F2F0EE`)
+- **Cards/Inputs**: Pure white (`#FFFFFF`)
+- **Primary Text**: Sharp charcoal (`#1A1A1A`)
+- **Secondary Text**: Muted grey (`#585858`)
+- **Accent**: Terracotta (`hsl(10 53% 53%)`)
+- **Border**: Subtle warm (`#E6E4E2`)
 
-### Dark Mode
-- **Background**: Deep brown (`hsl(25 12% 10%)`)
-- **Primary**: Warm amber (`hsl(30 75% 55%)`)
-- **Accent**: Vibrant amber (`hsl(28 85% 55%)`)
-- **Text**: Soft cream (`hsl(35 20% 90%)`)
+### Dark Mode (ChatGPT-inspired)
+- **Background**: Dark charcoal (`#212121`)
+- **Sidebar**: Deep grey (`#1a1a1a`)
+- **Cards/Inputs**: Elevated grey (`#303030`)
+- **Primary Text**: Soft white (`#ececec`)
+- **Secondary Text**: Muted grey (`#9e9e9e`)
+- **Accent**: Clay/orange (`hsl(15 55% 59%)`)
+- **Border**: White at low opacity
 
 ## Customization
 
@@ -45,12 +51,11 @@ Semantic tokens for component-level styling that reference the design tokens.
 
 ### Tier 3: Component Overrides
 Advanced CSS in `styles.css` for specific component enhancements:
+- Mode-specific color palettes
 - Warm gradient backgrounds for user/assistant messages
-- Frosted glass navigation effect
 - Custom scrollbar styling
-- Rain-inspired loading animations
-- Enhanced focus states with amber glow
-- Amber-accented avatars
+- Enhanced focus states with accent glow
+- Serif headings for a refined look
 
 ## Bundled Fonts
 
@@ -89,7 +94,7 @@ qtap-plugin-theme-rains/
 
 1. Enable the plugin in the Quilltap plugin settings
 2. Select the Rains theme in Appearance settings
-3. Verify both light and dark modes work correctly
+3. Toggle between light and dark modes to verify both work correctly
 
 ### Modifying Colors
 
@@ -98,8 +103,11 @@ Edit `tokens.json` to adjust the color palette. The theme uses HSL color format 
 ```json
 {
   "colors": {
+    "light": {
+      "primary": "hsl(10 53% 53%)"
+    },
     "dark": {
-      "primary": "hsl(30 75% 55%)"
+      "primary": "hsl(15 63.1% 59.6%)"
     }
   }
 }
@@ -107,36 +115,67 @@ Edit `tokens.json` to adjust the color palette. The theme uses HSL color format 
 
 ### Adding Component Overrides
 
-Add CSS rules to `styles.css` using the `[data-theme="rains"]` selector:
+Add CSS rules to `styles.css` using the appropriate selectors:
 
 ```css
+/* Both modes */
 [data-theme="rains"] .my-component {
-  /* Custom styles */
+  /* Shared styles */
+}
+
+/* Light mode only */
+[data-theme="rains"].light .my-component {
+  /* Light mode styles */
+}
+
+/* Dark mode only */
+[data-theme="rains"].dark .my-component {
+  /* Dark mode styles */
 }
 ```
 
 ## Design Philosophy
 
 The Rains theme draws inspiration from:
-- **Autumn evenings**: Warm browns and rich ambers
-- **Rain on windows**: Soft, diffused lighting effects
-- **Cozy interiors**: Comfortable contrast that's easy on the eyes
-- **Natural earth tones**: Grounding, calming color palette
 
-The goal is to create a visually warm environment that reduces eye strain during extended use, particularly in low-light conditions.
+**Light Mode:**
+- Warm, minimalist paper aesthetic
+- Clean typography with high readability
+- Subtle borders and shadows
+- Terracotta accent for warmth
+
+**Dark Mode:**
+- ChatGPT-style warm neutral greys
+- Clay/orange brand accent
+- Comfortable contrast for extended use
+- Subtle transparency-based borders
+
+The goal is to create a visually comfortable environment that reduces eye strain during extended use, whether in bright daylight or low-light conditions.
 
 ## Credits
 
 - **Author**: Foundry-9
 - **License**: MIT
-- **Version**: 1.0.0
+- **Version**: 1.2.0
 
 ## Changelog
 
+### 1.2.0
+- Added full light mode support with Opus-inspired warm paper aesthetic
+- Restructured CSS for proper light/dark mode switching
+- Updated tokens.json with distinct light and dark palettes
+- Light mode uses terracotta accent, dark mode uses clay/orange
+- Improved badge, alert, and status color definitions for both modes
+- Updated dev console colors for proper contrast in both modes
+
+### 1.1.0
+- Refactored to ChatGPT-inspired aesthetic
+- Updated color palette to warm neutral greys
+- Added clay/orange brand accent
+
 ### 1.0.0
 - Initial release
-- Light and dark mode support
+- Dark mode support only
 - Full design token system
 - Component override CSS for enhanced styling
 - Warm amber accent colors
-- Rain-inspired animations

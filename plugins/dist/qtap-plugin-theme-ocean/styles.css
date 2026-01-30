@@ -890,6 +890,12 @@
   border: 1px solid hsl(var(--seaweed-green) / 0.3);
 }
 
+[data-theme="ocean"] .qt-badge-project {
+  background: hsl(var(--dolphin-grey) / 0.15);
+  color: hsl(var(--dolphin-grey));
+  border: 1px solid hsl(var(--dolphin-grey) / 0.3);
+}
+
 /* Dashboard count badges */
 [data-theme="ocean"] .qt-badge-characters {
   background: hsl(var(--jellyfish-purple) / 0.15);

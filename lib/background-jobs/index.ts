@@ -1,7 +1,7 @@
 /**
  * Background Jobs Module
  *
- * Provides a MongoDB-backed queue system for processing cheap LLM tasks
+ * Provides a database-backed queue system for processing cheap LLM tasks
  * in the background, one at a time to avoid rate limiting.
  *
  * Usage:
@@ -34,6 +34,7 @@ export {
   enqueueInterCharacterMemory,
   enqueueContextSummary,
   enqueueTitleUpdate,
+  enqueueLLMLogCleanup,
   enqueueMemoryExtractionBatch,
   getJobStatus,
   getQueueStats,
@@ -45,6 +46,7 @@ export {
   type InterCharacterMemoryPayload,
   type ContextSummaryPayload,
   type TitleUpdatePayload,
+  type LLMLogCleanupPayload,
   type MessagePair,
 } from './queue-service';
 
@@ -62,3 +64,12 @@ export {
 
 // Handler types
 export type { JobHandler } from './handlers';
+
+// Scheduled cleanup
+export {
+  scheduleCleanup,
+  stopCleanupScheduler,
+  isCleanupSchedulerRunning,
+  runScheduledCleanup,
+  triggerUserCleanup,
+} from './scheduled-cleanup';

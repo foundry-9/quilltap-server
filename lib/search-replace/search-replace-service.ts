@@ -5,7 +5,7 @@
  * chat messages and memories.
  */
 
-import { getRepositories } from '@/lib/mongodb/repositories';
+import { getRepositories } from '@/lib/repositories/factory';
 import { updateMemoryWithEmbedding } from '@/lib/memory/memory-service';
 import { logger } from '@/lib/logger';
 import type { ChatMetadata } from '@/lib/schemas/types';
@@ -77,13 +77,6 @@ export async function getSearchReplacePreview(
   request: SearchReplaceRequest,
   userId: string
 ): Promise<SearchReplacePreview> {
-  logger.debug('Getting search/replace preview', {
-    scope: request.scope,
-    searchTextLength: request.searchText.length,
-    includeMessages: request.includeMessages,
-    includeMemories: request.includeMemories,
-  });
-
   const repos = getRepositories();
   let messageMatches = 0;
   let memoryMatches = 0;
@@ -94,8 +87,6 @@ export async function getSearchReplacePreview(
     // Count message matches
     if (request.includeMessages) {
       const chatIds = await getChatIdsForScope(request.scope, userId);
-      logger.debug('Counting messages in chats', { chatCount: chatIds.length });
-
       for (const chatId of chatIds) {
         const count = await repos.chats.countMessagesWithText(chatId, request.searchText);
         if (count > 0) {
@@ -125,8 +116,6 @@ export async function getSearchReplacePreview(
       affectedChats,
       affectedMemories,
     };
-
-    logger.debug('Search/replace preview complete', preview);
     return preview;
   } catch (error) {
     logger.error('Error getting search/replace preview', {
@@ -162,8 +151,6 @@ export async function executeSearchReplace(
     // Process messages
     if (request.includeMessages) {
       const chatIds = await getChatIdsForScope(request.scope, userId);
-      logger.debug('Processing messages in chats', { chatCount: chatIds.length });
-
       for (let i = 0; i < chatIds.length; i++) {
         const chatId = chatIds[i];
         onProgress?.('Updating messages', i + 1, chatIds.length);
@@ -190,17 +177,12 @@ export async function executeSearchReplace(
     // Note: personaId parameter removed - personas are now characters with controlledBy: 'user'
     if (request.includeMemories) {
       const memoryQuery = getMemoryQueryForScope(request.scope);
-      logger.debug('Finding memories to update', memoryQuery);
-
       const memoriesToUpdate = await repos.memories.findMemoriesWithText(
         memoryQuery.characterId,
         null, // personaId - no longer used, personas are now characters
         memoryQuery.chatId,
         request.searchText
       );
-
-      logger.debug('Found memories to update', { count: memoriesToUpdate.length });
-
       if (memoriesToUpdate.length > 0) {
         onProgress?.('Updating memories', 0, memoriesToUpdate.length);
 
@@ -214,10 +196,6 @@ export async function executeSearchReplace(
         memoriesUpdated = updatedMemories.length;
 
         // Regenerate embeddings for updated memories
-        logger.debug('Regenerating embeddings for updated memories', {
-          count: updatedMemories.length,
-        });
-
         for (let i = 0; i < updatedMemories.length; i++) {
           const memory = updatedMemories[i];
           onProgress?.('Regenerating embeddings', i + 1, updatedMemories.length);

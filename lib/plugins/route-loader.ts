@@ -70,12 +70,6 @@ export function getPluginRoutes(): PluginRouteInfo[] {
   for (const routeList of pluginRouteRegistry.routes.values()) {
     routes.push(...routeList);
   }
-
-  logger.debug('Retrieved plugin routes', {
-    totalRoutes: routes.length,
-    uniquePaths: pluginRouteRegistry.routes.size,
-  });
-
   return routes;
 }
 
@@ -86,11 +80,8 @@ export function getPluginRoutes(): PluginRouteInfo[] {
  * @returns The matching route info or null if not found
  */
 export function findPluginRoute(path: string, method: string): PluginRouteInfo | null {
-  logger.debug('Finding plugin route', { path, method });
-
   const routeList = pluginRouteRegistry.routes.get(path);
   if (!routeList || routeList.length === 0) {
-    logger.debug('No routes found for path', { path });
     return null;
   }
 
@@ -102,16 +93,8 @@ export function findPluginRoute(path: string, method: string): PluginRouteInfo |
   );
 
   if (matchedRoute) {
-    logger.debug('Found plugin route', {
-      path,
-      method,
-      plugin: matchedRoute.plugin.manifest.name,
-      handlerPath: matchedRoute.handlerPath,
-    });
     return matchedRoute;
   }
-
-  logger.debug('No enabled route found for method', { path, method });
   return null;
 }
 
@@ -154,29 +137,16 @@ function validateHandlerExists(handlerPath: string): boolean {
  * Gracefully handles missing or invalid handler files by logging errors and continuing
  */
 export function registerPluginRoutes(): void {
-  logger.info('Registering plugin routes');
-
   // Clear existing routes
   pluginRouteRegistry.routes.clear();
 
   // Get all enabled plugins with API_ROUTES capability
   const enabledPlugins = getEnabledPluginsByCapability('API_ROUTES');
-
-  logger.debug('Found plugins with API_ROUTES capability', {
-    pluginCount: enabledPlugins.length,
-  });
-
   let totalRoutesRegistered = 0;
   let totalRoutesSkipped = 0;
 
   for (const plugin of enabledPlugins) {
     const apiRoutes = plugin.manifest.apiRoutes || [];
-
-    logger.debug('Processing plugin routes', {
-      plugin: plugin.manifest.name,
-      routeCount: apiRoutes.length,
-    });
-
     for (const route of apiRoutes) {
       // Resolve handler path
       const handlerPath = path.join(plugin.pluginPath, route.handler);
@@ -193,14 +163,6 @@ export function registerPluginRoutes(): void {
         totalRoutesSkipped++;
         continue;
       }
-
-      logger.debug('Registering route', {
-        plugin: plugin.manifest.name,
-        path: route.path,
-        methods: route.methods,
-        handlerPath,
-      });
-
       const routeInfo: PluginRouteInfo = {
         plugin,
         route,
@@ -228,13 +190,6 @@ export function registerPluginRoutes(): void {
   }
 
   pluginRouteRegistry.initialized = true;
-
-  logger.info('Plugin routes registered', {
-    totalRoutes: totalRoutesRegistered,
-    skippedRoutes: totalRoutesSkipped,
-    uniquePaths: pluginRouteRegistry.routes.size,
-    pluginsProcessed: enabledPlugins.length,
-  });
 
   // Log a summary warning if any routes were skipped
   if (totalRoutesSkipped > 0) {
@@ -271,12 +226,6 @@ export function unregisterPluginRoutes(pluginName: string): void {
         // Update with filtered routes
         pluginRouteRegistry.routes.set(path, filtered);
       }
-
-      logger.debug('Removed routes for path', {
-        path,
-        plugin: pluginName,
-        count: beforeLength - filtered.length,
-      });
     }
   }
 

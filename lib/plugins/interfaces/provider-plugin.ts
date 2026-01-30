@@ -41,6 +41,13 @@ export interface ProviderMetadata {
 
   /** Short abbreviation for icon display (e.g., 'OAI', 'ANT') */
   abbreviation: string;
+
+  /**
+   * Legacy provider names that should be treated as aliases for this provider.
+   * Used for backward compatibility when provider names change.
+   * Example: ['GOOGLE_IMAGEN'] for the GOOGLE provider.
+   */
+  legacyNames?: string[];
 }
 
 /**

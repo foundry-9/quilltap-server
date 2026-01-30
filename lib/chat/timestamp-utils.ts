@@ -159,12 +159,6 @@ export function calculateCurrentTimestamp(config: TimestampConfig): CalculatedTi
     timestamp = new Date(fictionalBase.getTime() + elapsedMs)
     isFictional = true
 
-    logger.debug('[TimestampUtils] Calculated fictional time', {
-      fictionalBase: config.fictionalBaseTimestamp,
-      realBase: config.fictionalBaseRealTime,
-      elapsedMs,
-      result: timestamp.toISOString(),
-    })
   } else {
     timestamp = new Date()
   }

@@ -1,7 +1,7 @@
 {
   "name": "qtap-plugin-theme-earl-grey",
-  "version": "1.2.5",
-  "description": "Earl Grey theme plugin for Quilltap - A high-contrast dark theme inspired by modern AI chat interfaces",
+  "version": "1.3.1",
+  "description": "Earl Grey theme plugin for Quilltap - sophisticated styling with light and dark mode support",
   "main": "index.js",
   "types": "index.d.ts",
   "author": "Foundry-9 LLC",

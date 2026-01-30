@@ -17,6 +17,7 @@ interface Chat {
   id: string
   title: string | null
   updatedAt: string
+  lastMessageAt?: string
   character?: {
     id: string
     name: string
@@ -25,6 +26,10 @@ interface Chat {
     id: string
     name: string
     title?: string | null
+  } | null
+  project?: {
+    id: string
+    name: string
   } | null
   messages: Message[]
   tags?: Array<{
@@ -286,6 +291,11 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
                   <h3 className="qt-text-primary truncate">
                     {chat.title || `Chat with ${characterName}`}
                   </h3>
+                  {chat.project && (
+                    <span className="qt-badge-project">
+                      {chat.project.name}
+                    </span>
+                  )}
                   <span className="inline-block bg-blue-100 text-blue-800 text-sm font-semibold px-3 py-1 rounded-full flex-shrink-0">
                     {chat._count?.messages ?? chat.messages.length}
                   </span>
@@ -297,7 +307,7 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
                       {' \u2022 '}
                     </>
                   )}
-                  {formatDate(chat.updatedAt)}
+                  {formatDate(chat.lastMessageAt || chat.updatedAt)}
                 </p>
                 <p className="qt-text-small line-clamp-1 mt-2">
                   {getPreviewText(chat.messages)}

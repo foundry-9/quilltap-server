@@ -217,27 +217,27 @@ describe('Sidebar Characters API Route (v1)', () => {
   // GET /api/v1/ui/sidebar?type=characters Tests
   // ============================================================================
   describe('GET /api/v1/ui/sidebar?type=characters', () => {
-    describe('Authentication', () => {
-      it('should return 401 when no session exists', async () => {
+    describe('Authentication (Single-User Mode)', () => {
+      it('should return 500 when session fails (should not happen in single-user mode)', async () => {
         mockGetServerSession.mockResolvedValue(null)
 
         const request = createRequest('characters')
         const response = await GET(request)
         const body = await response.json()
 
-        expect(response.status).toBe(401)
-        expect(body.error).toBe('Unauthorized')
+        expect(response.status).toBe(500)
+        expect(body.error).toBe('Internal server error')
       })
 
-      it('should return 401 when session has no user id', async () => {
+      it('should return 500 when session has no user id (should not happen in single-user mode)', async () => {
         mockGetServerSession.mockResolvedValue({ user: {}, expires: '2024-12-31' })
 
         const request = createRequest('characters')
         const response = await GET(request)
         const body = await response.json()
 
-        expect(response.status).toBe(401)
-        expect(body.error).toBe('Unauthorized')
+        expect(response.status).toBe(500)
+        expect(body.error).toBe('Internal server error')
       })
     })
 

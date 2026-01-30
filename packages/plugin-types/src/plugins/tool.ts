@@ -30,6 +30,24 @@ export interface ToolMetadata {
 }
 
 /**
+ * Hierarchy information for a tool
+ *
+ * Used by plugins that provide multiple tools from different sources
+ * (e.g., MCP plugin with multiple servers) to expose subgroup metadata
+ * for hierarchical display in the UI.
+ */
+export interface ToolHierarchyInfo {
+  /** Tool ID (Quilltap tool name) */
+  toolId: string;
+
+  /** Subgroup identifier within the plugin (e.g., MCP server name) */
+  subgroupId?: string;
+
+  /** Human-readable subgroup name */
+  subgroupDisplayName?: string;
+}
+
+/**
  * Context provided to tool execution
  *
  * Contains information about the current chat session and user,
@@ -225,6 +243,17 @@ export interface ToolPlugin {
    * @param config The updated user configuration
    */
   onConfigurationChange?: (config: Record<string, unknown>) => Promise<void>;
+
+  /**
+   * Get hierarchy information for tools provided by this plugin (optional)
+   *
+   * For plugins that provide tools from multiple sources (e.g., MCP servers),
+   * this returns metadata about each tool's source for hierarchical display.
+   *
+   * @param config User configuration for this plugin
+   * @returns Promise resolving to array of tool hierarchy info
+   */
+  getToolHierarchy?: (config: Record<string, unknown>) => Promise<ToolHierarchyInfo[]>;
 
   // ============================================================================
   // Deprecated Methods (for backwards compatibility)

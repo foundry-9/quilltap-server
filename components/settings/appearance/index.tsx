@@ -77,21 +77,23 @@ export default function AppearanceTab() {
 
   return (
     <div className="space-y-8">
-      {/* Display Options (Color Mode & Nav Selector) */}
-      <DisplayOptions
-        colorMode={colorMode}
-        resolvedColorMode={resolvedColorMode}
-        showNavThemeSelector={showNavThemeSelector}
-        isLoading={isLoading}
-        error={error}
-        onColorModeChange={handleColorModeChange}
-        onNavThemeSelectorChange={handleNavThemeSelectorChange}
-      />
+      {/* Display Options and Sidebar Width in responsive grid */}
+      <div className="qt-card-grid-auto">
+        <DisplayOptions
+          colorMode={colorMode}
+          resolvedColorMode={resolvedColorMode}
+          showNavThemeSelector={showNavThemeSelector}
+          isLoading={isLoading}
+          error={error}
+          onColorModeChange={handleColorModeChange}
+          onNavThemeSelectorChange={handleNavThemeSelectorChange}
+        />
 
-      {/* Sidebar Width */}
-      <SidebarWidthControl />
+        {/* Sidebar Width */}
+        <SidebarWidthControl />
+      </div>
 
-      {/* Theme Selector */}
+      {/* Theme Selector - full width with expandable previews */}
       <ThemeSelector
         activeThemeId={activeThemeId}
         availableThemes={availableThemes}

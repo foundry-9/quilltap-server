@@ -241,30 +241,6 @@ describe('User-Scoped Repositories', () => {
       expect(repos2.userId).toBe(TEST_USER_ID_2);
     });
 
-    it('logs cache hit on subsequent calls', () => {
-      userScoped.getUserRepositories(TEST_USER_ID); // First call
-      jest.clearAllMocks();
-      userScoped.getUserRepositories(TEST_USER_ID); // Second call
-      
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        'Returning cached user-scoped repositories',
-        { userId: TEST_USER_ID }
-      );
-    });
-
-    it('logs container creation on first call', () => {
-      userScoped.getUserRepositories(TEST_USER_ID);
-      
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        'Creating new user-scoped repository container',
-        { userId: TEST_USER_ID }
-      );
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        'User-scoped repository container created',
-        { userId: TEST_USER_ID }
-      );
-    });
-
     it('provides images as alias for files repository', () => {
       const repos = userScoped.getUserRepositories(TEST_USER_ID);
       expect(repos.images).toBe(repos.files);
@@ -327,20 +303,6 @@ describe('User-Scoped Repositories', () => {
       expect(repos2).not.toBe(repos2New);
     });
 
-    it('logs cache clearing for specific user', () => {
-      userScoped.clearUserRepositoryCache(TEST_USER_ID);
-      
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        'Cleared user repository cache for user',
-        { userId: TEST_USER_ID }
-      );
-    });
-
-    it('logs cache clearing for all users', () => {
-      userScoped.clearUserRepositoryCache();
-      
-      expect(mockLogger.debug).toHaveBeenCalledWith('Cleared all user repository caches');
-    });
   });
 
   describe('UserScopedCharactersRepository', () => {

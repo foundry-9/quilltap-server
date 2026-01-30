@@ -118,6 +118,10 @@ export interface Chat {
   projectId?: string | null
   /** Project name for display purposes */
   projectName?: string | null
+  /** List of tool IDs that are disabled for this chat */
+  disabledTools?: string[]
+  /** Groups of tools that are disabled for this chat */
+  disabledToolGroups?: string[]
 }
 
 export type MemoryCascadeAction = 'DELETE_MEMORIES' | 'KEEP_MEMORIES' | 'REGENERATE_MEMORIES' | 'ASK_EVERY_TIME'

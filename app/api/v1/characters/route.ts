@@ -30,16 +30,16 @@ const createCharacterSchema = z.object({
   scenario: z.string().optional(),
   firstMessage: z.string().optional(),
   exampleDialogues: z.string().optional(),
-  avatarUrl: z.string().url().optional().or(z.literal('')),
-  defaultConnectionProfileId: z.string().uuid().optional(),
+  avatarUrl: z.url().optional().or(z.literal('')),
+  defaultConnectionProfileId: z.uuid().optional(),
   npc: z.boolean().optional(),
   systemPrompts: z
     .array(
       z.object({
-        id: z.string().uuid(),
+        id: z.uuid(),
         name: z.string().min(1).max(100),
         content: z.string().min(1),
-        isDefault: z.boolean().default(false),
+        isDefault: z.boolean().prefault(false),
         createdAt: z.string(),
         updatedAt: z.string(),
       })
@@ -48,7 +48,7 @@ const createCharacterSchema = z.object({
   physicalDescriptions: z
     .array(
       z.object({
-        id: z.string().uuid(),
+        id: z.uuid(),
         name: z.string().min(1),
         shortPrompt: z.string().max(350).nullable().optional(),
         mediumPrompt: z.string().max(500).nullable().optional(),
@@ -64,14 +64,14 @@ const createCharacterSchema = z.object({
 
 const quickCreateSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
-  defaultConnectionProfileId: z.string().uuid().optional(),
+  defaultConnectionProfileId: z.uuid().optional(),
 });
 
 const wizardRequestSchema = z.object({
-  primaryProfileId: z.string().uuid(),
-  visionProfileId: z.string().uuid().optional(),
+  primaryProfileId: z.uuid(),
+  visionProfileId: z.uuid().optional(),
   sourceType: z.enum(['existing', 'upload', 'gallery', 'skip']),
-  imageId: z.string().uuid().optional(),
+  imageId: z.uuid().optional(),
   characterName: z.string().min(1),
   existingData: z
     .object({
@@ -95,7 +95,7 @@ const wizardRequestSchema = z.object({
       'physicalDescription',
     ])
   ),
-  characterId: z.string().uuid().optional(),
+  characterId: z.uuid().optional(),
 });
 
 // ============================================================================
@@ -104,7 +104,6 @@ const wizardRequestSchema = z.object({
 
 export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
   try {
-    logger.debug('[Characters v1] GET list', { userId: user.id });
 
     let characters = await repos.characters.findByUserId(user.id);
 
@@ -122,13 +121,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
     const controlledByFilter = searchParams.get('controlledBy');
     if (controlledByFilter === 'user') {
       const beforeCount = characters.length;
-      characters = characters.filter((c) => c.controlledBy === 'user');
-      logger.debug('[Characters v1] Filtered by controlledBy=user', {
-        beforeCount,
-        afterCount: characters.length,
-        userId: user.id,
-      });
-    } else if (controlledByFilter === 'llm') {
+      characters = characters.filter((c) => c.controlledBy === 'user');} else if (controlledByFilter === 'llm') {
       characters = characters.filter((c) => c.controlledBy === 'llm' || c.controlledBy === undefined);
     }
 

@@ -107,8 +107,6 @@ export class OpenAIProvider implements LLMProvider {
 
   async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
     const isReasoning = isReasoningModel(params.model);
-    logger.debug('OpenAI sendMessage called', { context: 'OpenAIProvider.sendMessage', model: params.model, isReasoningModel: isReasoning });
-
     const client = new OpenAI({
       apiKey,
       dangerouslyAllowBrowser: process.env.NODE_ENV === 'test',
@@ -140,18 +138,11 @@ export class OpenAIProvider implements LLMProvider {
       const minTokensForReasoning = 4096;
       if ((params.maxTokens ?? 0) < minTokensForReasoning) {
         requestParams.max_completion_tokens = minTokensForReasoning;
-        logger.debug('Increased max_completion_tokens for reasoning model', {
-          context: 'OpenAIProvider.sendMessage',
-          model: params.model,
-          original: params.maxTokens,
-          adjusted: minTokensForReasoning
-        });
       }
     }
 
     // Add tools if provided
     if (params.tools && params.tools.length > 0) {
-      logger.debug('Adding tools to request', { context: 'OpenAIProvider.sendMessage', toolCount: params.tools.length });
       requestParams.tools = params.tools;
       // Explicitly enable tool use with "auto" - let the model decide when to use tools
       requestParams.tool_choice = 'auto';
@@ -160,21 +151,12 @@ export class OpenAIProvider implements LLMProvider {
     // Add native web search if enabled
     // Requires gpt-4o-search-preview or gpt-4o-mini-search-preview models
     if (params.webSearchEnabled) {
-      logger.debug('Web search enabled', { context: 'OpenAIProvider.sendMessage' });
       requestParams.web_search_options = {};
     }
 
     const response = await client.chat.completions.create(requestParams);
 
     const choice = response.choices[0];
-
-    logger.debug('Received OpenAI response', {
-      context: 'OpenAIProvider.sendMessage',
-      finishReason: choice.finish_reason,
-      promptTokens: response.usage?.prompt_tokens,
-      completionTokens: response.usage?.completion_tokens,
-    });
-
     return {
       content: choice.message.content ?? '',
       finishReason: choice.finish_reason,
@@ -190,8 +172,6 @@ export class OpenAIProvider implements LLMProvider {
 
   async *streamMessage(params: LLMParams, apiKey: string): AsyncGenerator<StreamChunk> {
     const isReasoning = isReasoningModel(params.model);
-    logger.debug('OpenAI streamMessage called', { context: 'OpenAIProvider.streamMessage', model: params.model, isReasoningModel: isReasoning });
-
     const client = new OpenAI({
       apiKey,
       dangerouslyAllowBrowser: process.env.NODE_ENV === 'test',
@@ -222,18 +202,11 @@ export class OpenAIProvider implements LLMProvider {
       const minTokensForReasoning = 4096;
       if ((params.maxTokens ?? 0) < minTokensForReasoning) {
         requestParams.max_completion_tokens = minTokensForReasoning;
-        logger.debug('Increased max_completion_tokens for reasoning model', {
-          context: 'OpenAIProvider.streamMessage',
-          model: params.model,
-          original: params.maxTokens,
-          adjusted: minTokensForReasoning
-        });
       }
     }
 
     // Add tools if provided
     if (params.tools && params.tools.length > 0) {
-      logger.debug('Adding tools to stream request', { context: 'OpenAIProvider.streamMessage', toolCount: params.tools.length });
       requestParams.tools = params.tools;
       // Explicitly enable tool use with "auto" - let the model decide when to use tools
       requestParams.tool_choice = 'auto';
@@ -241,7 +214,6 @@ export class OpenAIProvider implements LLMProvider {
 
     // Add native web search if enabled
     if (params.webSearchEnabled) {
-      logger.debug('Web search enabled for stream', { context: 'OpenAIProvider.streamMessage' });
       requestParams.web_search_options = {};
     }
 
@@ -322,7 +294,6 @@ export class OpenAIProvider implements LLMProvider {
       // For tool calls: OpenAI sends finish_reason='tool_calls' in one chunk, usage in the next
       // We yield immediately when we see tool_calls finish reason
       if (finishReasonSeen && finishReason === 'tool_calls' && !usageSeen) {
-        logger.debug('Tool calls detected in stream', { context: 'OpenAIProvider.streamMessage', toolCallCount: fullMessage.choices[0].message.tool_calls.length });
         yield {
           content: '',
           done: true,
@@ -337,13 +308,6 @@ export class OpenAIProvider implements LLMProvider {
         // Continue reading to drain the stream
       } else if (finishReasonSeen && usageSeen) {
         // For regular text responses, we get both finish_reason and usage
-        logger.debug('Stream completed', {
-          context: 'OpenAIProvider.streamMessage',
-          finishReason,
-          chunks: chunkCount,
-          promptTokens: fullMessage.usage?.prompt_tokens,
-          completionTokens: fullMessage.usage?.completion_tokens,
-        });
         yield {
           content: '',
           done: true,
@@ -361,10 +325,8 @@ export class OpenAIProvider implements LLMProvider {
 
   async validateApiKey(apiKey: string): Promise<boolean> {
     try {
-      logger.debug('Validating OpenAI API key', { context: 'OpenAIProvider.validateApiKey' });
       const client = new OpenAI({ apiKey });
       await client.models.list();
-      logger.debug('OpenAI API key validation successful', { context: 'OpenAIProvider.validateApiKey' });
       return true;
     } catch (error) {
       logger.error('OpenAI API key validation failed', { context: 'OpenAIProvider.validateApiKey' }, error instanceof Error ? error : undefined);
@@ -374,14 +336,12 @@ export class OpenAIProvider implements LLMProvider {
 
   async getAvailableModels(apiKey: string): Promise<string[]> {
     try {
-      logger.debug('Fetching OpenAI models', { context: 'OpenAIProvider.getAvailableModels' });
       const client = new OpenAI({ apiKey });
       const models = await client.models.list();
       const gptModels = models.data
         .filter((m) => m.id.includes('gpt'))
         .map((m) => m.id)
         .sort();
-      logger.debug('Retrieved OpenAI models', { context: 'OpenAIProvider.getAvailableModels', modelCount: gptModels.length });
       return gptModels;
     } catch (error) {
       logger.error('Failed to fetch OpenAI models', { context: 'OpenAIProvider.getAvailableModels' }, error instanceof Error ? error : undefined);
@@ -390,8 +350,6 @@ export class OpenAIProvider implements LLMProvider {
   }
 
   async generateImage(params: ImageGenParams, apiKey: string): Promise<ImageGenResponse> {
-    logger.debug('Generating image with OpenAI', { context: 'OpenAIProvider.generateImage', model: params.model, prompt: params.prompt.substring(0, 100) });
-
     const client = new OpenAI({ apiKey });
 
     const response = await client.images.generate({
@@ -417,9 +375,6 @@ export class OpenAIProvider implements LLMProvider {
         };
       })
     );
-
-    logger.debug('Image generation completed', { context: 'OpenAIProvider.generateImage', imageCount: images.length });
-
     return {
       images,
       raw: response,

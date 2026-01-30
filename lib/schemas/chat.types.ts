@@ -149,7 +149,9 @@ export const ChatParticipantSchema = z.object({
   updatedAt: TimestampSchema,
 }).refine(
   (data) => data.characterId != null,
-  { message: 'Participants must have characterId' }
+  {
+      error: 'Participants must have characterId'
+}
 );
 
 export type ChatParticipant = z.infer<typeof ChatParticipantSchema>;
@@ -236,11 +238,22 @@ export const ChatMetadataSchema = z.object({
   /** Flag set when AI calls request_full_context tool - bypasses compression on next message */
   requestFullContextOnNextMessage: z.boolean().default(false),
 
+  /** List of tool IDs that are disabled for this chat (empty = all enabled) */
+  disabledTools: z.array(z.string()).default([]),
+
+  /** Groups of tools that are disabled (e.g., "plugin:mcp", "plugin:mcp:subgroup:filesystem") */
+  disabledToolGroups: z.array(z.string()).default([]),
+
+  /** Force tools to be sent with next message (set when tool settings change) */
+  forceToolsOnNextMessage: z.boolean().default(false),
+
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 }).refine(
   (data) => data.participants.length > 0,
-  { message: 'Chat must have at least one participant' }
+  {
+      error: 'Chat must have at least one participant'
+}
 );
 
 export type ChatMetadata = z.infer<typeof ChatMetadataSchema>;
@@ -291,6 +304,15 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** Flag set when AI calls request_full_context tool - bypasses compression on next message */
   requestFullContextOnNextMessage: z.boolean().default(false),
+
+  /** List of tool IDs that are disabled for this chat (empty = all enabled) */
+  disabledTools: z.array(z.string()).default([]),
+
+  /** Groups of tools that are disabled (e.g., "plugin:mcp", "plugin:mcp:subgroup:filesystem") */
+  disabledToolGroups: z.array(z.string()).default([]),
+
+  /** Force tools to be sent with next message (set when tool settings change) */
+  forceToolsOnNextMessage: z.boolean().default(false),
 
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

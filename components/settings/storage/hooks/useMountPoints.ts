@@ -60,7 +60,7 @@ export function useMountPoints(): UseMountPointsResult {
                 type: 'string',
                 required: false,
                 description: 'Base directory for file storage (uses default if not set)',
-                placeholder: '/app/data/files',
+                placeholder: '/app/quilltap/files',
               },
             ],
           },

@@ -17,14 +17,6 @@ import type { InterCharacterMemoryPayload } from '../queue-service';
  */
 export async function handleInterCharacterMemory(job: BackgroundJob): Promise<void> {
   const payload = job.payload as unknown as InterCharacterMemoryPayload;
-
-  logger.debug('[InterCharacterMemory] Starting job', {
-    jobId: job.id,
-    chatId: payload.chatId,
-    observerCharacterId: payload.observerCharacterId,
-    subjectCharacterId: payload.subjectCharacterId,
-  });
-
   const repos = getRepositories();
 
   // Get connection profile
@@ -56,13 +48,6 @@ export async function handleInterCharacterMemory(job: BackgroundJob): Promise<vo
     cheapLLMConfig,
     availableProfiles
   );
-
-  logger.debug('[InterCharacterMemory] Using cheap LLM', {
-    jobId: job.id,
-    provider: cheapLLMSelection.provider,
-    model: cheapLLMSelection.modelName,
-  });
-
   // Extract inter-character memory
   const result = await extractInterCharacterMemoryFromMessage(
     payload.observerCharacterName,
@@ -84,10 +69,6 @@ export async function handleInterCharacterMemory(job: BackgroundJob): Promise<vo
 
   // If nothing significant was found, we're done
   if (!result.result || !result.result.significant) {
-    logger.debug('[InterCharacterMemory] No significant memory found', {
-      jobId: job.id,
-      chatId: payload.chatId,
-    });
     return;
   }
 

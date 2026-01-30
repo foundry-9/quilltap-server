@@ -279,7 +279,7 @@ export async function executeProjectInfoTool(
   try {
     // Validate input
     if (!validateProjectInfoInput(input)) {
-      log.debug('Invalid input received', { input })
+
       return {
         success: false,
         action: 'get_info',
@@ -288,8 +288,6 @@ export async function executeProjectInfoTool(
     }
 
     const { action, fileId, query, limit = 10 } = input
-
-    log.debug('Executing project info tool', { action, fileId, query, limit })
 
     switch (action) {
       case 'get_info': {

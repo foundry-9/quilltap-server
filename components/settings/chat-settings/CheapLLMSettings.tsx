@@ -1,5 +1,6 @@
 'use client'
 
+import { SettingsCard } from '@/components/ui/SettingsCard'
 import type { ChatSettings, CheapLLMSettings as CheapLLMSettingsType, ConnectionProfile, EmbeddingProfile, CheapLLMStrategy, EmbeddingProvider } from './types'
 
 export interface CheapLLMSettingsProps {
@@ -24,12 +25,10 @@ export function CheapLLMSettings({
   onUpdate,
 }: CheapLLMSettingsProps) {
   return (
-    <div className="border-t border-border pt-6">
-      <h2 className="text-xl font-semibold mb-4">Cheap LLM Settings</h2>
-      <p className="text-muted-foreground mb-4">
-        Configure which LLM to use for background tasks like memory extraction and summarization
-      </p>
-
+    <SettingsCard
+      title="Cheap LLM Settings"
+      subtitle="Configure which LLM to use for background tasks like memory extraction and summarization"
+    >
       <div className="space-y-4">
         {/* Strategy Selection */}
         <div>
@@ -238,6 +237,6 @@ export function CheapLLMSettings({
           )}
         </div>
       </div>
-    </div>
+    </SettingsCard>
   )
 }

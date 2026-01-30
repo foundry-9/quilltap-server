@@ -1,3 +1,17 @@
+# SQLite-only production setup (no MongoDB required)
+# Use this for simpler deployments or single-user scenarios
+#
+# Usage: docker-compose -f docker-compose.prod-sqlite.yml up -d
+#
+# Data is stored in ${QUILLTAP_HOST_DATA_DIR:-~/.quilltap} on the host
+# To use a different location, set the QUILLTAP_HOST_DATA_DIR environment variable:
+#   QUILLTAP_HOST_DATA_DIR=/path/to/data docker-compose -f docker-compose.prod-sqlite.yml up -d
+#
+# Platform-specific recommended paths:
+#   Linux:   ~/.quilltap (default)
+#   macOS:   ~/Library/Application Support/Quilltap
+#   Windows: %APPDATA%\Quilltap
+
 services:
   nginx:
     image: nginx:alpine
@@ -25,20 +39,6 @@ services:
     restart: unless-stopped
     networks:
       - quilltap-network
-
-  mongo:
-    image: mongo:7
-    container_name: quilltap-mongo
-    volumes:
-      - mongo-data:/data/db
-    restart: unless-stopped
-    networks:
-      - quilltap-network
-    healthcheck:
-      test: mongosh --eval 'db.runCommand("ping").ok' --quiet
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   minio:
     image: minio/minio
@@ -81,19 +81,22 @@ services:
     expose:
       - "3000"
     volumes:
-      # Plugin directories for npm-installed plugins
-      - plugin-site-data:/app/plugins/site
-      - plugin-user-data:/app/plugins/users
+      # All Quilltap data (database, files, logs) in one directory
+      - ${QUILLTAP_HOST_DATA_DIR:-~/.quilltap}:/app/quilltap
+      # Plugin directory for npm-installed plugins (persists on host filesystem)
+      - ${QUILLTAP_HOST_DATA_DIR:-~/.quilltap}/plugins/site:/app/plugins/site
     environment:
       - NODE_ENV=production
+      - DOCKER_CONTAINER=true
       - BASE_URL=${BASE_URL:-https://yourdomain.com}
       - JWT_SECRET=${JWT_SECRET}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
       - ENCRYPTION_MASTER_PEPPER=${ENCRYPTION_MASTER_PEPPER}
-      # MongoDB configuration
-      - MONGODB_URI=mongodb://mongo:27017/quilltap
-      - MONGODB_DATABASE=quilltap
+      # SQLite configuration (no MongoDB)
+      - DATABASE_BACKEND=sqlite
+      - SQLITE_PATH=/app/quilltap/data/quilltap.db
+      - SQLITE_WAL_MODE=true
       # S3 configuration (embedded MinIO)
       - S3_MODE=external
       - S3_ENDPOINT=http://minio:9000
@@ -102,8 +105,6 @@ services:
       - S3_BUCKET=${S3_BUCKET:-quilltap-files}
       - S3_FORCE_PATH_STYLE=true
     depends_on:
-      mongo:
-        condition: service_healthy
       minio:
         condition: service_healthy
     restart: unless-stopped
@@ -117,10 +118,7 @@ services:
       start_period: 40s
 
 volumes:
-  mongo-data:
   minio-data:
-  plugin-site-data:
-  plugin-user-data:
 
 networks:
   quilltap-network:

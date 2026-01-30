@@ -242,7 +242,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // node_modules/openai/version.mjs
-var VERSION = "6.16.0";
+var VERSION = "6.17.0";
 
 // node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -3293,12 +3293,7 @@ var Assistants = class extends APIResource {
   /**
    * Create an assistant with a model and instructions.
    *
-   * @example
-   * ```ts
-   * const assistant = await client.beta.assistants.create({
-   *   model: 'gpt-4o',
-   * });
-   * ```
+   * @deprecated
    */
   create(body, options) {
     return this._client.post("/assistants", {
@@ -3310,12 +3305,7 @@ var Assistants = class extends APIResource {
   /**
    * Retrieves an assistant.
    *
-   * @example
-   * ```ts
-   * const assistant = await client.beta.assistants.retrieve(
-   *   'assistant_id',
-   * );
-   * ```
+   * @deprecated
    */
   retrieve(assistantID, options) {
     return this._client.get(path`/assistants/${assistantID}`, {
@@ -3326,12 +3316,7 @@ var Assistants = class extends APIResource {
   /**
    * Modifies an assistant.
    *
-   * @example
-   * ```ts
-   * const assistant = await client.beta.assistants.update(
-   *   'assistant_id',
-   * );
-   * ```
+   * @deprecated
    */
   update(assistantID, body, options) {
     return this._client.post(path`/assistants/${assistantID}`, {
@@ -3343,13 +3328,7 @@ var Assistants = class extends APIResource {
   /**
    * Returns a list of assistants.
    *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const assistant of client.beta.assistants.list()) {
-   *   // ...
-   * }
-   * ```
+   * @deprecated
    */
   list(query = {}, options) {
     return this._client.getAPIList("/assistants", CursorPage, {
@@ -3361,11 +3340,7 @@ var Assistants = class extends APIResource {
   /**
    * Delete an assistant.
    *
-   * @example
-   * ```ts
-   * const assistantDeleted =
-   *   await client.beta.assistants.delete('assistant_id');
-   * ```
+   * @deprecated
    */
   delete(assistantID, options) {
     return this._client.delete(path`/assistants/${assistantID}`, {
@@ -4803,8 +4778,8 @@ Evals.Runs = Runs2;
 var Files2 = class extends APIResource {
   /**
    * Upload a file that can be used across various endpoints. Individual files can be
-   * up to 512 MB, and the size of all files uploaded by one organization can be up
-   * to 1 TB.
+   * up to 512 MB, and each project can store up to 2.5 TB of files in total. There
+   * is no organization-wide storage limit.
    *
    * - The Assistants API supports files up to 2 million tokens and of specific file
    *   types. See the
@@ -7019,7 +6994,6 @@ ${textContent}`
     return { messages: formattedMessages, attachmentResults: { sent, failed } };
   }
   async sendMessage(params, apiKey) {
-    logger.debug("Grok sendMessage called", { context: "GrokProvider.sendMessage", model: params.model });
     if (!apiKey) {
       throw new Error("Grok provider requires an API key");
     }
@@ -7037,12 +7011,10 @@ ${textContent}`
       stop: params.stop
     };
     if (params.tools && params.tools.length > 0) {
-      logger.debug("Adding tools to request", { context: "GrokProvider.sendMessage", toolCount: params.tools.length });
       requestParams.tools = params.tools;
       requestParams.tool_choice = "auto";
     }
     if (params.webSearchEnabled) {
-      logger.debug("Web search enabled", { context: "GrokProvider.sendMessage" });
       requestParams.search_parameters = {
         mode: "auto",
         // Model decides when to search
@@ -7058,12 +7030,6 @@ ${textContent}`
     }
     const response = await client.chat.completions.create(requestParams);
     const choice = response.choices[0];
-    logger.debug("Received Grok response", {
-      context: "GrokProvider.sendMessage",
-      finishReason: choice.finish_reason,
-      promptTokens: response.usage?.prompt_tokens,
-      completionTokens: response.usage?.completion_tokens
-    });
     return {
       content: choice.message.content ?? "",
       finishReason: choice.finish_reason,
@@ -7077,7 +7043,6 @@ ${textContent}`
     };
   }
   async *streamMessage(params, apiKey) {
-    logger.debug("Grok streamMessage called", { context: "GrokProvider.streamMessage", model: params.model });
     if (!apiKey) {
       throw new Error("Grok provider requires an API key");
     }
@@ -7096,12 +7061,10 @@ ${textContent}`
       stream_options: { include_usage: true }
     };
     if (params.tools && params.tools.length > 0) {
-      logger.debug("Adding tools to stream request", { context: "GrokProvider.streamMessage", toolCount: params.tools.length });
       requestParams.tools = params.tools;
       requestParams.tool_choice = "auto";
     }
     if (params.webSearchEnabled) {
-      logger.debug("Web search enabled for stream", { context: "GrokProvider.streamMessage" });
       requestParams.search_parameters = {
         mode: "auto",
         return_citations: true,
@@ -7170,7 +7133,6 @@ ${textContent}`
         };
       }
       if (finishReasonSeen && finishReason === "tool_calls" && !usageSeen) {
-        logger.debug("Tool calls detected in stream", { context: "GrokProvider.streamMessage", toolCallCount: fullMessage.choices[0].message.tool_calls.length });
         yield {
           content: "",
           done: true,
@@ -7183,13 +7145,6 @@ ${textContent}`
           rawResponse: fullMessage
         };
       } else if (finishReasonSeen && usageSeen) {
-        logger.debug("Stream completed", {
-          context: "GrokProvider.streamMessage",
-          finishReason,
-          chunks: chunkCount,
-          promptTokens: fullMessage.usage?.prompt_tokens,
-          completionTokens: fullMessage.usage?.completion_tokens
-        });
         yield {
           content: "",
           done: true,
@@ -7206,13 +7161,11 @@ ${textContent}`
   }
   async validateApiKey(apiKey) {
     try {
-      logger.debug("Validating Grok API key", { context: "GrokProvider.validateApiKey" });
       const client = new OpenAI({
         apiKey,
         baseURL: this.baseUrl
       });
       await client.models.list();
-      logger.debug("Grok API key validation successful", { context: "GrokProvider.validateApiKey" });
       return true;
     } catch (error) {
       logger.error("Grok API key validation failed", { context: "GrokProvider.validateApiKey" }, error instanceof Error ? error : void 0);
@@ -7221,14 +7174,12 @@ ${textContent}`
   }
   async getAvailableModels(apiKey) {
     try {
-      logger.debug("Fetching Grok models", { context: "GrokProvider.getAvailableModels" });
       const client = new OpenAI({
         apiKey,
         baseURL: this.baseUrl
       });
       const models = await client.models.list();
       const grokModels = models.data.map((m) => m.id).sort();
-      logger.debug("Retrieved Grok models", { context: "GrokProvider.getAvailableModels", modelCount: grokModels.length });
       return grokModels;
     } catch (error) {
       logger.error("Failed to fetch Grok models", { context: "GrokProvider.getAvailableModels" }, error instanceof Error ? error : void 0);
@@ -7236,7 +7187,6 @@ ${textContent}`
     }
   }
   async generateImage(params, apiKey) {
-    logger.debug("Generating image with Grok", { context: "GrokProvider.generateImage", model: params.model, prompt: params.prompt.substring(0, 100) });
     if (!apiKey) {
       throw new Error("Grok provider requires an API key");
     }
@@ -7262,7 +7212,6 @@ ${textContent}`
         };
       })
     );
-    logger.debug("Image generation completed", { context: "GrokProvider.generateImage", imageCount: images.length });
     return {
       images,
       raw: response
@@ -7279,12 +7228,6 @@ var GrokImageProvider = class {
     this.baseUrl = "https://api.x.ai/v1";
   }
   async generateImage(params, apiKey) {
-    logger2.debug("Grok image generation started", {
-      context: "GrokImageProvider.generateImage",
-      model: params.model,
-      promptLength: params.prompt.length,
-      n: params.n ?? 1
-    });
     if (!apiKey) {
       throw new Error("Grok provider requires an API key");
     }
@@ -7302,10 +7245,6 @@ var GrokImageProvider = class {
       logger2.error("Invalid response from Grok Images API", { context: "GrokImageProvider.generateImage" });
       throw new Error("Invalid response from Grok Images API");
     }
-    logger2.debug("Image generation completed", {
-      context: "GrokImageProvider.generateImage",
-      imageCount: response.data.length
-    });
     return {
       images: response.data.map((img) => ({
         data: img.b64_json || img.url || "",
@@ -7317,13 +7256,11 @@ var GrokImageProvider = class {
   }
   async validateApiKey(apiKey) {
     try {
-      logger2.debug("Validating Grok API key for image generation", { context: "GrokImageProvider.validateApiKey" });
       const client = new OpenAI({
         apiKey,
         baseURL: this.baseUrl
       });
       await client.models.list();
-      logger2.debug("Grok API key validation successful", { context: "GrokImageProvider.validateApiKey" });
       return true;
     } catch (error) {
       logger2.error("Grok API key validation failed for image generation", { context: "GrokImageProvider.validateApiKey" }, error instanceof Error ? error : void 0);
@@ -7331,7 +7268,6 @@ var GrokImageProvider = class {
     }
   }
   async getAvailableModels() {
-    logger2.debug("Getting available Grok image models", { context: "GrokImageProvider.getAvailableModels" });
     return this.supportedModels;
   }
 };
@@ -7438,14 +7374,12 @@ var plugin = {
    * Factory method to create a Grok LLM provider instance
    */
   createProvider: (baseUrl) => {
-    logger3.debug("Creating Grok provider instance", { context: "plugin.createProvider", baseUrl });
     return new GrokProvider();
   },
   /**
    * Factory method to create a Grok image generation provider instance
    */
   createImageProvider: (baseUrl) => {
-    logger3.debug("Creating Grok image provider instance", { context: "plugin.createImageProvider", baseUrl });
     return new GrokImageProvider();
   },
   /**
@@ -7453,11 +7387,9 @@ var plugin = {
    * Requires a valid API key
    */
   getAvailableModels: async (apiKey, baseUrl) => {
-    logger3.debug("Fetching available Grok models", { context: "plugin.getAvailableModels" });
     try {
       const provider = new GrokProvider();
       const models = await provider.getAvailableModels(apiKey);
-      logger3.debug("Successfully fetched Grok models", { context: "plugin.getAvailableModels", count: models.length });
       return models;
     } catch (error) {
       logger3.error("Failed to fetch Grok models", { context: "plugin.getAvailableModels" }, error instanceof Error ? error : void 0);
@@ -7468,11 +7400,9 @@ var plugin = {
    * Validate a Grok API key
    */
   validateApiKey: async (apiKey, baseUrl) => {
-    logger3.debug("Validating Grok API key", { context: "plugin.validateApiKey" });
     try {
       const provider = new GrokProvider();
       const isValid = await provider.validateApiKey(apiKey);
-      logger3.debug("Grok API key validation result", { context: "plugin.validateApiKey", isValid });
       return isValid;
     } catch (error) {
       logger3.error("Error validating Grok API key", { context: "plugin.validateApiKey" }, error instanceof Error ? error : void 0);
@@ -7515,7 +7445,6 @@ var plugin = {
    * Render the Grok icon
    */
   renderIcon: (props) => {
-    logger3.debug("Rendering Grok icon", { context: "plugin.renderIcon", className: props.className });
     return GrokIcon(props);
   },
   /**
@@ -7526,10 +7455,6 @@ var plugin = {
    * @returns Array of tools in OpenAI format
    */
   formatTools: (tools) => {
-    logger3.debug("Formatting tools for Grok provider", {
-      context: "plugin.formatTools",
-      toolCount: tools.length
-    });
     try {
       const formattedTools = [];
       for (const tool of tools) {
@@ -7541,10 +7466,6 @@ var plugin = {
         }
         formattedTools.push(tool);
       }
-      logger3.debug("Successfully formatted tools", {
-        context: "plugin.formatTools",
-        count: formattedTools.length
-      });
       return formattedTools;
     } catch (error) {
       logger3.error(
@@ -7563,15 +7484,8 @@ var plugin = {
    * @returns Array of tool call requests
    */
   parseToolCalls: (response) => {
-    logger3.debug("Parsing tool calls from Grok response", {
-      context: "plugin.parseToolCalls"
-    });
     try {
       const toolCalls = parseOpenAIToolCalls(response);
-      logger3.debug("Successfully parsed tool calls", {
-        context: "plugin.parseToolCalls",
-        count: toolCalls.length
-      });
       return toolCalls;
     } catch (error) {
       logger3.error(
@@ -7589,9 +7503,6 @@ var plugin = {
    * @returns Image provider constraints including prompt byte limit
    */
   getImageProviderConstraints: () => {
-    logger3.debug("Getting Grok image provider constraints", {
-      context: "plugin.getImageProviderConstraints"
-    });
     return GROK_IMAGE_CONSTRAINTS;
   }
 };

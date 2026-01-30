@@ -204,7 +204,7 @@ export function useCharacterEdit(id: string) {
       }
 
       const res = await fetch(`/api/v1/characters/${id}?action=avatar`, {
-        method: 'PATCH',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageId: imageId || null }),
       })
@@ -261,7 +261,7 @@ export function useCharacterEdit(id: string) {
   const clearAvatar = async () => {
     try {
       const res = await fetch(`/api/v1/characters/${id}?action=avatar`, {
-        method: 'PATCH',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageId: null }),
       })

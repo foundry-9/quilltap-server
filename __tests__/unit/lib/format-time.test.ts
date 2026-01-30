@@ -116,19 +116,26 @@ describe('formatMessageTime', () => {
 
   describe('edge cases', () => {
     it('should handle midnight boundary correctly', () => {
-      jest.setSystemTime(new Date('2026-01-22T00:05:00Z')); // 5 minutes after midnight
-      const justBeforeMidnight = new Date('2026-01-21T23:50:00Z').toISOString();
-      const result = formatMessageTime(justBeforeMidnight);
-      // 15 minutes ago, still shows "Xm ago" even though different calendar day
-      expect(result).toBe('15m ago');
+      // Test that crossing calendar day boundary shows date, not relative time
+      // Use local timezone to ensure consistent behavior across environments
+      const now = new Date('2026-01-22T00:05:00');
+      jest.setSystemTime(now);
+      // Create a date from yesterday (local time) - clearly a different calendar day
+      const yesterday = new Date('2026-01-21T23:50:00');
+      const result = formatMessageTime(yesterday.toISOString());
+      // Different calendar day shows date format
+      expect(result).toBe('Jan 21');
     });
 
-    it('should handle messages from exactly midnight today', () => {
-      jest.setSystemTime(new Date('2026-01-22T12:00:00Z'));
-      const midnight = new Date('2026-01-22T00:00:00Z').toISOString();
-      const result = formatMessageTime(midnight);
-      // Midnight is from yesterday (different calendar date), shows "Jan 21"
-      expect(result).toBe('Jan 21');
+    it('should handle messages from earlier today', () => {
+      // Test that messages from earlier today show relative time
+      const now = new Date('2026-01-22T12:00:00');
+      jest.setSystemTime(now);
+      // Midnight of the same calendar day (local time)
+      const midnight = new Date('2026-01-22T00:00:00');
+      const result = formatMessageTime(midnight.toISOString());
+      // Same calendar day shows relative time
+      expect(result).toBe('12h ago');
     });
 
     it('should handle invalid date strings gracefully', () => {

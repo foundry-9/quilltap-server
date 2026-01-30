@@ -227,7 +227,7 @@ export default function ApiKeysTab() {
             }}
           />
         ) : (
-          <div className="space-y-3">
+          <div className="qt-card-grid-auto">
             {sortedKeys.map((key) => (
               <ProfileCard
                 key={key.id}

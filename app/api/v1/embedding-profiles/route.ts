@@ -33,7 +33,6 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
   }
 
   try {
-    logger.debug('[Embedding Profiles v1] GET list', { userId: user.id });
 
     // Get all embedding profiles for user
     const profiles = await repos.embeddingProfiles.findByUserId(user.id);
@@ -100,21 +99,10 @@ async function handleListModels(req: NextRequest, context: AuthenticatedContext)
     if (provider) {
       const embeddingProviders = getEmbeddingProviders();
 
-      if (!embeddingProviders.includes(provider)) {
-        logger.debug('[Embedding Profiles v1] Invalid embedding provider requested', {
-          provider,
-          validProviders: embeddingProviders,
-        });
-        return badRequest('Invalid provider. Must be one of: ' + embeddingProviders.join(', '));
+      if (!embeddingProviders.includes(provider)) {return badRequest('Invalid provider. Must be one of: ' + embeddingProviders.join(', '));
       }
 
-      const models = getEmbeddingModels(provider);
-      logger.debug('[Embedding Profiles v1] Returning embedding models for provider', {
-        provider,
-        modelCount: models.length,
-      });
-
-      // Cache the fetched embedding models in the database
+      const models = getEmbeddingModels(provider);// Cache the fetched embedding models in the database
       try {
         await context.repos.providerModels.upsertModelsForProvider(
           provider,
@@ -135,12 +123,7 @@ async function handleListModels(req: NextRequest, context: AuthenticatedContext)
     }
 
     // Return all models grouped by provider
-    const allModels = getAllEmbeddingModels();
-    logger.debug('[Embedding Profiles v1] Returning all embedding models', {
-      providerCount: Object.keys(allModels).length,
-    });
-
-    // Cache all embedding models in the database
+    const allModels = getAllEmbeddingModels();// Cache all embedding models in the database
     try {
       for (const [providerName, models] of Object.entries(allModels)) {
         await context.repos.providerModels.upsertModelsForProvider(
@@ -182,7 +165,6 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
       isDefault = false,
     } = body;
 
-    logger.debug('[Embedding Profiles v1] POST create', { userId: user.id, name, provider });
 
     // Validation
     if (!name || typeof name !== 'string' || name.trim().length === 0) {

@@ -19,8 +19,8 @@ const createProjectSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
   description: z.string().max(2000).optional(),
   instructions: z.string().max(10000).optional(),
-  allowAnyCharacter: z.boolean().optional().default(false),
-  characterRoster: z.array(z.string().uuid()).optional().default([]),
+  allowAnyCharacter: z.boolean().optional().prefault(false),
+  characterRoster: z.array(z.uuid()).optional().prefault([]),
   color: z.string().regex(/^#(?:[0-9a-fA-F]{3}){1,2}$/).optional(),
   icon: z.string().max(50).optional(),
 });
@@ -31,7 +31,6 @@ const createProjectSchema = z.object({
 
 export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
   try {
-    logger.debug('[Projects v1] GET list', { userId: user.id });
 
     let projects = await repos.projects.findAll();
 
@@ -60,7 +59,6 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
       })
     );
 
-    logger.debug('[Projects v1] Projects fetched', { count: enrichedProjects.length });
 
     return NextResponse.json({ projects: enrichedProjects });
   } catch (error) {
@@ -78,7 +76,6 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, 
     const body = await req.json();
     const validatedData = createProjectSchema.parse(body);
 
-    logger.debug('[Projects v1] Creating project', { userId: user.id, name: validatedData.name });
 
     const project = await repos.projects.create({
       userId: user.id,
@@ -89,6 +86,8 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, 
       characterRoster: validatedData.characterRoster,
       color: validatedData.color || null,
       icon: validatedData.icon || null,
+      defaultDisabledTools: [],
+      defaultDisabledToolGroups: [],
     });
 
     logger.info('[Projects v1] Project created', {

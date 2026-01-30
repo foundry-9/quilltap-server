@@ -247,13 +247,6 @@ async function createMemoryFromCandidate(
     }
   )
 
-  logger.debug('[Memory] Created memory with aboutCharacterId', {
-    memoryId: memory.id,
-    characterId: ctx.characterId,
-    aboutCharacterId: ctx.userCharacterId || null,
-    hasUserCharacterId: !!ctx.userCharacterId,
-  })
-
   return memory
 }
 
@@ -660,11 +653,7 @@ export async function processInterCharacterMemory(
             `  Importance: ${candidate.importance}\n` +
             `  Keywords: ${candidate.keywords?.join(', ')}`
           debugLogs.push(logMsg)
-          logger.debug(logMsg, {
-            observerCharacterId: ctx.observerCharacterId,
-            subjectCharacterId: ctx.subjectCharacterId,
-            chatId: ctx.chatId,
-          })
+
         } else {
           const logMsg = `[Memory] INTER-CHARACTER memory skipped (duplicate): ${ctx.observerCharacterName} about ${ctx.subjectCharacterName}:\n` +
             `  Summary: ${candidate.summary}`

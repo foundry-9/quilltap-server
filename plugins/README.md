@@ -8,7 +8,6 @@ This directory contains Quilltap plugins. Plugins extend Quilltap's functionalit
 plugins/
 ├── README.md                           # This file
 ├── LLM-PROVIDER-GUIDE.md               # Detailed guide for LLM providers
-├── AUTH-PROVIDER-GUIDE.md              # Detailed guide for auth providers
 ├── dist/                               # Built-in plugins shipped with Quilltap
 │   ├── qtap-plugin-template/           # Example plugin template
 │   ├── qtap-plugin-openai/             # OpenAI provider
@@ -17,9 +16,7 @@ plugins/
 │   ├── qtap-plugin-grok/               # Grok/xAI provider
 │   ├── qtap-plugin-ollama/             # Ollama provider
 │   ├── qtap-plugin-openrouter/         # OpenRouter provider
-│   ├── qtap-plugin-openai-compatible/  # OpenAI-compatible provider
-│   ├── qtap-plugin-auth-google/        # Google OAuth authentication
-│   └── qtap-plugin-upgrade/            # Database migration utility
+│   └── qtap-plugin-openai-compatible/  # OpenAI-compatible provider
 └── [user-plugins]/                     # User-installed plugins go here
 ```
 
@@ -50,38 +47,11 @@ Provider plugins add support for new LLM services. Each provider plugin includes
 | `qtap-plugin-openrouter` | OpenRouter | Chat (100+ models), pricing sync |
 | `qtap-plugin-openai-compatible` | Generic | Chat (any OpenAI-format API) |
 
-### Authentication Provider Plugins
-
-Auth plugins add support for OAuth authentication providers. Each auth plugin includes:
-
-- OAuth provider configuration
-- Environment variable validation
-- Configuration status reporting
-- Sign-in button styling
-
-**Built-in auth providers:**
-
-| Plugin | Provider | Required Env Vars |
-|--------|----------|-------------------|
-| `qtap-plugin-auth-google` | Google OAuth | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` |
-
-For detailed auth plugin development, see [AUTH-PROVIDER-GUIDE.md](./AUTH-PROVIDER-GUIDE.md).
-
-### Upgrade Plugin
-
-The `qtap-plugin-upgrade` plugin handles database migrations between Quilltap versions:
-
-- OpenRouter profile format migration
-- Provider plugin enablement
-- Extensible migration runner
-
 ### Other Plugin Types (Planned)
 
 - **Themes** - Custom UI themes and styling
 - **Integrations** - External service connections
 - **Storage Backends** - Alternative data storage (S3, etc.)
-- **Database Backends** - Alternative databases (MongoDB, etc.)
-- **More OAuth Providers** - GitHub, Apple, Microsoft, etc.
 
 ## Creating a Plugin
 
@@ -297,10 +267,8 @@ Check the browser console for plugin loading messages:
 ## Documentation
 
 - [LLM Provider Guide](./LLM-PROVIDER-GUIDE.md) - Detailed guide for LLM provider plugins
-- [Auth Provider Guide](./AUTH-PROVIDER-GUIDE.md) - Detailed guide for auth provider plugins
 - [Plugin Manifest Reference](../docs/PLUGIN_MANIFEST.md) - Complete manifest schema
 - [Plugin Initialization](../docs/PLUGIN_INITIALIZATION.md) - How plugins are loaded
-- [Plugin System Overview](../features/plugins.md) - Feature status and roadmap
 
 ## Support
 

@@ -11,6 +11,7 @@
 import type {
   ToolPlugin,
   ToolMetadata,
+  ToolHierarchyInfo,
   ToolExecutionContext,
   ToolExecutionResult,
   UniversalTool,
@@ -261,6 +262,18 @@ export const plugin: ToolPlugin = {
         error: error instanceof Error ? error.message : String(error),
       });
     }
+  },
+
+  /**
+   * Get hierarchy information for tools provided by this plugin
+   *
+   * Returns metadata about which MCP server each tool came from,
+   * allowing the UI to display tools grouped by server.
+   */
+  async getToolHierarchy(config: Record<string, unknown>): Promise<ToolHierarchyInfo[]> {
+    // Ensure plugin is initialized before returning hierarchy
+    await ensureInitialized(config);
+    return connectionManager.getToolHierarchy();
   },
 };
 

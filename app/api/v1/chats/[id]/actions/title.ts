@@ -21,7 +21,6 @@ export async function handleRegenerateTitle(
   { user, repos }: AuthenticatedContext
 ): Promise<NextResponse> {
   try {
-    logger.debug('[Chats v1] Regenerating title', { chatId });
 
     const chatSettings = await repos.chatSettings.findByUserId(user.id);
     if (!chatSettings?.cheapLLMSettings) {

@@ -29,7 +29,6 @@ quilltap/
 │   ├── chat/                 # Chat logic (context-manager, turn-manager, tool execution)
 │   ├── llm/                  # LLM utilities (formatting, pricing, streaming)
 │   ├── memory/               # Memory and embedding logic
-│   ├── mongodb/              # MongoDB repositories and connection
 │   ├── plugins/              # Plugin registry and loader
 │   ├── s3/                   # S3 storage utilities
 │   ├── sillytavern/          # SillyTavern import/export
@@ -73,7 +72,7 @@ quilltap/
 ### Prerequisites
 
 - **Node.js 22+**
-- **MongoDB** (local or via Docker)
+- **SQLite** (automatic with better-sqlite3)
 - **MinIO or S3-compatible storage** (embedded MinIO for development)
 
 ### Running Locally
@@ -85,8 +84,8 @@ npm install
 # Build plugins (required before first run)
 npm run build:plugins
 
-# Start MongoDB and MinIO via Docker (recommended)
-docker-compose -f docker-compose.dev-mongo.yml up -d mongo minio createbuckets
+# Start MinIO via Docker (recommended for file storage)
+docker-compose -f docker-compose.yml up -d minio createbuckets
 
 # Start the development server with HTTPS
 npm run devssl
@@ -100,11 +99,11 @@ The application will be available at [https://localhost:3000](https://localhost:
 ### Running with Docker
 
 ```bash
-# Start everything (app + MongoDB + MinIO)
-docker-compose -f docker-compose.dev-mongo.yml up
+# Start everything (app + MinIO + SQLite)
+docker-compose -f docker-compose.yml up
 
 # View logs
-docker-compose -f docker-compose.dev-mongo.yml logs -f app
+docker-compose -f docker-compose.yml logs -f app
 ```
 
 ### Testing
@@ -162,12 +161,11 @@ When making changes to a plugin, bump the patch version in its `package.json` an
 
 ## Data Storage
 
-### MongoDB (Required)
+### SQLite Database
 
-All application data is stored in MongoDB:
+All application data is stored in SQLite:
 
 - **users** - User accounts and authentication
-- **api_keys** - Encrypted provider API keys
 - **characters** - Character definitions and metadata (includes `controlledBy: 'llm' | 'user'` for control mode)
 - **chats** - Chat metadata, message history, and impersonation state
 - **files** - File metadata (actual files in S3)
@@ -179,6 +177,8 @@ All application data is stored in MongoDB:
 - **promptTemplates** - User-created system prompt templates
 - **roleplayTemplates** - Roleplay format templates
 - **providerModels** - Cached provider model lists
+
+The SQLite database file is stored at `~/.quilltap/data/quilltap.db` on local systems or `/app/quilltap/data/quilltap.db` in Docker.
 
 ### S3 Storage (Required)
 
@@ -240,9 +240,8 @@ In development, logs are written to `logs/combined.log` and `logs/error.log`. Us
 8. As much as possible, plugins should be self-contained or use `plugin-types` and `plugin-utils` to access Quilltap internals; even distributed plugins in `plugins/dist/` should use these, since these plugins are models to independent plugin developers
 9. If we updated any packages (in `packages/`), make sure that those are published to npmjs and properly installed in any NPM package.json files that exist throughout the application, including other packages, plugins, and the primary one at the root level
 10. Verify that the backup/restore system includes everything that can be backed up (usually everything but things that are so secret they need to be encrypted, like API keys)
-11. Verify that the sync system will sync everything that is not local-only
-12. Make sure that lint/test/build in Github Actions are working
-13. Check the following Markdown files to be sure they are up-to-date:
+11. Make sure that lint/test/build in Github Actions are working
+12. Check the following Markdown files to be sure they are up-to-date:
     - [README](README.md)
     - [Changelog](docs/CHANGELOG.md)
     - [API Documentation](docs/API.md)
@@ -267,7 +266,7 @@ npm install
 # Get new release version for tags
 NEWRELEASE=$(sed -n -E 's/.*"version": "([^"]*)".*/\1/p' package.json)
 # Change the badge to release version standards
-sed -i '' -E 's/(badge\/version-)[^.]*\./\1'"$NEWRELEASE"'-green./' README.md
+sed -i '' -E 's/(badge\/version-)[^)]+\.svg/\1'"$NEWRELEASE"'-green.svg/' README.md
 # Presumably we ran tests and bumped prerelease versions when we committed last time
 git add package.json package-lock.json README.md
 git commit --no-verify -m "release: $NEWRELEASE"

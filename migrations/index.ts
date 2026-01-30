@@ -9,7 +9,13 @@
  */
 
 import { logger } from './lib/logger';
-import { getMongoDatabase, isMongoDBBackend, closeMongoDB } from './lib/mongodb-utils';
+import {
+  isMongoDBBackend,
+  isSQLiteBackend,
+  closeDatabase,
+  waitForDatabaseReady,
+  detectDatabaseBackend,
+} from './lib/database-utils';
 import { loadMigrationState, isMigrationCompleted, recordCompletedMigration } from './state';
 import type { Migration, MigrationResult, MigrationState, MigrationRunResult } from './types';
 
@@ -58,41 +64,6 @@ function sortMigrationsByDependency(migrations: Migration[]): Migration[] {
 }
 
 /**
- * Wait for MongoDB to be accessible with retries
- */
-async function waitForMongoDBReady(maxRetries: number = 10, retryDelayMs: number = 1000): Promise<boolean> {
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const db = await getMongoDatabase();
-      await db.command({ ping: 1 });
-
-      logger.debug('MongoDB is ready for migrations', {
-        context: 'migrations.waitForMongoDBReady',
-        attempt,
-      });
-      return true;
-    } catch (error) {
-      logger.debug('MongoDB not ready yet, retrying', {
-        context: 'migrations.waitForMongoDBReady',
-        attempt,
-        maxRetries,
-        error: error instanceof Error ? error.message : String(error),
-      });
-
-      if (attempt < maxRetries) {
-        await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
-      }
-    }
-  }
-
-  logger.error('MongoDB not accessible after retries', {
-    context: 'migrations.waitForMongoDBReady',
-    maxRetries,
-  });
-  return false;
-}
-
-/**
  * MigrationRunner class
  *
  * Orchestrates the execution of all migrations at server startup.
@@ -117,33 +88,33 @@ export class MigrationRunner {
     let migrationsSkipped = 0;
     const failed: string[] = [];
 
+    const backend = detectDatabaseBackend();
     logger.info('Starting migration runner', {
       context: 'migrations.runMigrations',
       totalMigrations: this.migrations.length,
+      backend,
     });
 
-    // Check if MongoDB is configured and wait for it to be ready
-    if (isMongoDBBackend()) {
-      logger.info('Waiting for MongoDB to be ready', {
+    // Wait for the database to be ready
+    logger.info(`Waiting for ${backend} to be ready`, {
+      context: 'migrations.runMigrations',
+    });
+
+    const dbReady = await waitForDatabaseReady();
+    if (!dbReady) {
+      const error = `${backend} not accessible - cannot run migrations`;
+      logger.error(error, {
         context: 'migrations.runMigrations',
       });
-
-      const mongoReady = await waitForMongoDBReady();
-      if (!mongoReady) {
-        const error = 'MongoDB not accessible - cannot run migrations';
-        logger.error(error, {
-          context: 'migrations.runMigrations',
-        });
-        return {
-          success: false,
-          migrationsRun: 0,
-          migrationsSkipped: 0,
-          results: [],
-          totalDurationMs: Date.now() - startTime,
-          failed: [],
-          error,
-        };
-      }
+      return {
+        success: false,
+        migrationsRun: 0,
+        migrationsSkipped: 0,
+        results: [],
+        totalDurationMs: Date.now() - startTime,
+        failed: [],
+        error,
+      };
     }
 
     // Load current state
@@ -151,19 +122,9 @@ export class MigrationRunner {
 
     // Sort migrations by dependency
     const sortedMigrations = sortMigrationsByDependency(this.migrations);
-
-    logger.debug('Migrations sorted by dependency', {
-      context: 'migrations.runMigrations',
-      order: sortedMigrations.map(m => m.id),
-    });
-
     for (const migration of sortedMigrations) {
       // Check if already completed
       if (isMigrationCompleted(state, migration.id)) {
-        logger.debug('Migration already completed, skipping', {
-          context: 'migrations.runMigrations',
-          migrationId: migration.id,
-        });
         migrationsSkipped++;
         continue;
       }
@@ -172,10 +133,6 @@ export class MigrationRunner {
       try {
         const shouldRun = await migration.shouldRun();
         if (!shouldRun) {
-          logger.debug('Migration conditions not met, skipping', {
-            context: 'migrations.runMigrations',
-            migrationId: migration.id,
-          });
           migrationsSkipped++;
           continue;
         }
@@ -310,7 +267,7 @@ export class MigrationRunner {
    * Close any open database connections
    */
   async cleanup(): Promise<void> {
-    await closeMongoDB();
+    await closeDatabase();
   }
 }
 

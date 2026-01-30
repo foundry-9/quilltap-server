@@ -1,7 +1,7 @@
 /**
  * Profile Component Types
  *
- * Shared types for the profile page and its components
+ * Shared types for the profile page and its components (single-user mode)
  */
 
 export interface UserProfile {
@@ -10,22 +10,6 @@ export interface UserProfile {
   email: string | null
   name: string | null
   image: string | null
-  emailVerified: string | null
   createdAt: string
   updatedAt: string
-  totpEnabled: boolean
-}
-
-export interface TrustedDevice {
-  id: string
-  name: string
-  createdAt: string
-  lastUsedAt: string
-  expiresAt: string
-}
-
-export interface EncryptedTOTPData {
-  secret: string
-  iv: string
-  authTag: string
 }

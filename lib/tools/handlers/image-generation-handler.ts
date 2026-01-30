@@ -91,22 +91,8 @@ async function saveGeneratedImage(
       projectId: null,
       folderPath: '/',
     });
-    logger.debug('Uploaded generated image to file storage', {
-      fileId,
-      storageKey: uploadResult.storageKey,
-      mountPointId: uploadResult.mountPointId,
-      size: buffer.length,
-    });
-
     // Inherit tags from linked entities (e.g., the chat)
     const inheritedTags = await getInheritedTags(linkedTo, userId);
-
-    logger.debug('Inherited tags for generated image', {
-      context: 'image-generation-handler',
-      fileId,
-      chatId,
-      inheritedTagCount: inheritedTags.length,
-    });
 
     // Create metadata in repository
     // IMPORTANT: Pass the fileId to ensure metadata matches storage path
@@ -276,38 +262,10 @@ async function generateImagesWithProvider(
     imageProfile.modelName
   );
 
-  // Debug log: Image generation request
-  logger.debug('[Image Generation Request] image-generation-handler.ts:generateImagesWithProvider', {
-    context: 'llm-api',
-    provider: imageProfile.provider,
-    model: imageProfile.modelName,
-    promptLength: mergedParams.prompt.length,
-    request: JSON.stringify({
-      prompt: mergedParams.prompt,
-      negativePrompt: mergedParams.negativePrompt,
-      model: mergedParams.model,
-      n: mergedParams.n,
-      size: mergedParams.size,
-      aspectRatio: mergedParams.aspectRatio,
-      quality: mergedParams.quality,
-      style: mergedParams.style,
-    }),
-  })
-
   // Generate images
   let generationResponse;
   try {
     generationResponse = await provider.generateImage(mergedParams, decryptedKey);
-
-    // Debug log: Image generation response
-    logger.debug('[Image Generation Response] image-generation-handler.ts:generateImagesWithProvider', {
-      context: 'llm-api',
-      provider: imageProfile.provider,
-      model: imageProfile.modelName,
-      imageCount: generationResponse.images.length,
-      imageSizes: generationResponse.images.map(img => img.data.length),
-      revisedPrompts: generationResponse.images.map(img => img.revisedPrompt),
-    })
   } catch (error) {
     const errorMessage = getErrorMessage(error);
     logger.error('Image generation failed:', { errorMessage }, error as Error);
@@ -384,13 +342,6 @@ async function expandPromptWithDescriptions(
     if (cheapLLMSettings?.imagePromptProfileId) {
       const imagePromptProfile = allProfiles.find(p => p.id === cheapLLMSettings.imagePromptProfileId);
       if (imagePromptProfile) {
-        logger.debug('[Image Generation] Using dedicated image prompt LLM override', {
-          context: 'llm-api',
-          profileId: imagePromptProfile.id,
-          profileName: imagePromptProfile.name,
-          provider: imagePromptProfile.provider,
-          model: imagePromptProfile.modelName,
-        });
         // Create a direct selection from the override profile
         const isLocal = imagePromptProfile.provider === 'OLLAMA';
         cheapLLMSelection = {
@@ -437,21 +388,7 @@ async function expandPromptWithDescriptions(
         false // ollamaAvailable - could be detected
       );
 
-      logger.debug('[Image Generation] Using global cheap LLM for prompt expansion', {
-        context: 'llm-api',
-        provider: cheapLLMSelection.provider,
-        model: cheapLLMSelection.modelName,
-        isLocal: cheapLLMSelection.isLocal,
-      });
     }
-
-    // Craft the image prompt using cheap LLM
-    logger.debug('[Image Generation] Cheap LLM Input for prompt expansion', {
-      context: 'llm-api',
-      originalPrompt: expansionContext.originalPrompt,
-      placeholderCount: expansionContext.placeholders?.length,
-      provider: expansionContext.provider,
-    })
 
     const craftResult = await craftImagePrompt(
       {
@@ -463,12 +400,6 @@ async function expandPromptWithDescriptions(
       cheapLLMSelection,
       userId
     );
-
-    logger.debug('[Image Generation] Cheap LLM Output from prompt expansion', {
-      context: 'llm-api',
-      success: craftResult.success,
-      expandedPrompt: craftResult.result,
-    })
 
     if (craftResult.success && craftResult.result) {
       return {
@@ -551,11 +482,6 @@ export async function executeImageGenerationTool(
     let chatSettings;
     try {
       chatSettings = await repos.chatSettings.findByUserId(context.userId);
-      logger.debug('[Image Generation] Loaded chat settings for prompt expansion', {
-        context: 'llm-api',
-        hasChatSettings: !!chatSettings,
-        hasImagePromptOverride: !!chatSettings?.cheapLLMSettings?.imagePromptProfileId,
-      });
     } catch (error) {
       logger.warn('[Image Generation] Failed to load chat settings, using defaults', {
         errorMessage: getErrorMessage(error),
@@ -585,13 +511,6 @@ export async function executeImageGenerationTool(
       ...toolInput,
       prompt: expandedPrompt,
     };
-
-    logger.debug('[Image Generation] Final Input to Provider', {
-      context: 'llm-api',
-      originalPrompt: toolInput.prompt,
-      expandedPrompt: expandedPrompt,
-      wasExpanded: expandedPrompt !== toolInput.prompt,
-    })
 
     // 5. Generate images
     const savedImages = await generateImagesWithProvider(

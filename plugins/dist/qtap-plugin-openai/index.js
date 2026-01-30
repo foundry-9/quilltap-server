@@ -242,7 +242,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // node_modules/openai/version.mjs
-var VERSION = "6.16.0";
+var VERSION = "6.17.0";
 
 // node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -3293,12 +3293,7 @@ var Assistants = class extends APIResource {
   /**
    * Create an assistant with a model and instructions.
    *
-   * @example
-   * ```ts
-   * const assistant = await client.beta.assistants.create({
-   *   model: 'gpt-4o',
-   * });
-   * ```
+   * @deprecated
    */
   create(body, options) {
     return this._client.post("/assistants", {
@@ -3310,12 +3305,7 @@ var Assistants = class extends APIResource {
   /**
    * Retrieves an assistant.
    *
-   * @example
-   * ```ts
-   * const assistant = await client.beta.assistants.retrieve(
-   *   'assistant_id',
-   * );
-   * ```
+   * @deprecated
    */
   retrieve(assistantID, options) {
     return this._client.get(path`/assistants/${assistantID}`, {
@@ -3326,12 +3316,7 @@ var Assistants = class extends APIResource {
   /**
    * Modifies an assistant.
    *
-   * @example
-   * ```ts
-   * const assistant = await client.beta.assistants.update(
-   *   'assistant_id',
-   * );
-   * ```
+   * @deprecated
    */
   update(assistantID, body, options) {
     return this._client.post(path`/assistants/${assistantID}`, {
@@ -3343,13 +3328,7 @@ var Assistants = class extends APIResource {
   /**
    * Returns a list of assistants.
    *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const assistant of client.beta.assistants.list()) {
-   *   // ...
-   * }
-   * ```
+   * @deprecated
    */
   list(query = {}, options) {
     return this._client.getAPIList("/assistants", CursorPage, {
@@ -3361,11 +3340,7 @@ var Assistants = class extends APIResource {
   /**
    * Delete an assistant.
    *
-   * @example
-   * ```ts
-   * const assistantDeleted =
-   *   await client.beta.assistants.delete('assistant_id');
-   * ```
+   * @deprecated
    */
   delete(assistantID, options) {
     return this._client.delete(path`/assistants/${assistantID}`, {
@@ -4803,8 +4778,8 @@ Evals.Runs = Runs2;
 var Files2 = class extends APIResource {
   /**
    * Upload a file that can be used across various endpoints. Individual files can be
-   * up to 512 MB, and the size of all files uploaded by one organization can be up
-   * to 1 TB.
+   * up to 512 MB, and each project can store up to 2.5 TB of files in total. There
+   * is no organization-wide storage limit.
    *
    * - The Assistants API supports files up to 2 million tokens and of specific file
    *   types. See the
@@ -7000,7 +6975,6 @@ var OpenAIProvider = class {
   }
   async sendMessage(params, apiKey) {
     const isReasoning = isReasoningModel(params.model);
-    logger.debug("OpenAI sendMessage called", { context: "OpenAIProvider.sendMessage", model: params.model, isReasoningModel: isReasoning });
     const client = new OpenAI({
       apiKey,
       dangerouslyAllowBrowser: process.env.NODE_ENV === "test"
@@ -7021,31 +6995,17 @@ var OpenAIProvider = class {
       const minTokensForReasoning = 4096;
       if ((params.maxTokens ?? 0) < minTokensForReasoning) {
         requestParams.max_completion_tokens = minTokensForReasoning;
-        logger.debug("Increased max_completion_tokens for reasoning model", {
-          context: "OpenAIProvider.sendMessage",
-          model: params.model,
-          original: params.maxTokens,
-          adjusted: minTokensForReasoning
-        });
       }
     }
     if (params.tools && params.tools.length > 0) {
-      logger.debug("Adding tools to request", { context: "OpenAIProvider.sendMessage", toolCount: params.tools.length });
       requestParams.tools = params.tools;
       requestParams.tool_choice = "auto";
     }
     if (params.webSearchEnabled) {
-      logger.debug("Web search enabled", { context: "OpenAIProvider.sendMessage" });
       requestParams.web_search_options = {};
     }
     const response = await client.chat.completions.create(requestParams);
     const choice = response.choices[0];
-    logger.debug("Received OpenAI response", {
-      context: "OpenAIProvider.sendMessage",
-      finishReason: choice.finish_reason,
-      promptTokens: response.usage?.prompt_tokens,
-      completionTokens: response.usage?.completion_tokens
-    });
     return {
       content: choice.message.content ?? "",
       finishReason: choice.finish_reason,
@@ -7060,7 +7020,6 @@ var OpenAIProvider = class {
   }
   async *streamMessage(params, apiKey) {
     const isReasoning = isReasoningModel(params.model);
-    logger.debug("OpenAI streamMessage called", { context: "OpenAIProvider.streamMessage", model: params.model, isReasoningModel: isReasoning });
     const client = new OpenAI({
       apiKey,
       dangerouslyAllowBrowser: process.env.NODE_ENV === "test"
@@ -7082,21 +7041,13 @@ var OpenAIProvider = class {
       const minTokensForReasoning = 4096;
       if ((params.maxTokens ?? 0) < minTokensForReasoning) {
         requestParams.max_completion_tokens = minTokensForReasoning;
-        logger.debug("Increased max_completion_tokens for reasoning model", {
-          context: "OpenAIProvider.streamMessage",
-          model: params.model,
-          original: params.maxTokens,
-          adjusted: minTokensForReasoning
-        });
       }
     }
     if (params.tools && params.tools.length > 0) {
-      logger.debug("Adding tools to stream request", { context: "OpenAIProvider.streamMessage", toolCount: params.tools.length });
       requestParams.tools = params.tools;
       requestParams.tool_choice = "auto";
     }
     if (params.webSearchEnabled) {
-      logger.debug("Web search enabled for stream", { context: "OpenAIProvider.streamMessage" });
       requestParams.web_search_options = {};
     }
     const stream = await client.chat.completions.create(requestParams);
@@ -7157,7 +7108,6 @@ var OpenAIProvider = class {
         };
       }
       if (finishReasonSeen && finishReason === "tool_calls" && !usageSeen) {
-        logger.debug("Tool calls detected in stream", { context: "OpenAIProvider.streamMessage", toolCallCount: fullMessage.choices[0].message.tool_calls.length });
         yield {
           content: "",
           done: true,
@@ -7170,13 +7120,6 @@ var OpenAIProvider = class {
           rawResponse: fullMessage
         };
       } else if (finishReasonSeen && usageSeen) {
-        logger.debug("Stream completed", {
-          context: "OpenAIProvider.streamMessage",
-          finishReason,
-          chunks: chunkCount,
-          promptTokens: fullMessage.usage?.prompt_tokens,
-          completionTokens: fullMessage.usage?.completion_tokens
-        });
         yield {
           content: "",
           done: true,
@@ -7193,10 +7136,8 @@ var OpenAIProvider = class {
   }
   async validateApiKey(apiKey) {
     try {
-      logger.debug("Validating OpenAI API key", { context: "OpenAIProvider.validateApiKey" });
       const client = new OpenAI({ apiKey });
       await client.models.list();
-      logger.debug("OpenAI API key validation successful", { context: "OpenAIProvider.validateApiKey" });
       return true;
     } catch (error) {
       logger.error("OpenAI API key validation failed", { context: "OpenAIProvider.validateApiKey" }, error instanceof Error ? error : void 0);
@@ -7205,11 +7146,9 @@ var OpenAIProvider = class {
   }
   async getAvailableModels(apiKey) {
     try {
-      logger.debug("Fetching OpenAI models", { context: "OpenAIProvider.getAvailableModels" });
       const client = new OpenAI({ apiKey });
       const models = await client.models.list();
       const gptModels = models.data.filter((m) => m.id.includes("gpt")).map((m) => m.id).sort();
-      logger.debug("Retrieved OpenAI models", { context: "OpenAIProvider.getAvailableModels", modelCount: gptModels.length });
       return gptModels;
     } catch (error) {
       logger.error("Failed to fetch OpenAI models", { context: "OpenAIProvider.getAvailableModels" }, error instanceof Error ? error : void 0);
@@ -7217,7 +7156,6 @@ var OpenAIProvider = class {
     }
   }
   async generateImage(params, apiKey) {
-    logger.debug("Generating image with OpenAI", { context: "OpenAIProvider.generateImage", model: params.model, prompt: params.prompt.substring(0, 100) });
     const client = new OpenAI({ apiKey });
     const response = await client.images.generate({
       model: params.model ?? "dall-e-3",
@@ -7240,7 +7178,6 @@ var OpenAIProvider = class {
         };
       })
     );
-    logger.debug("Image generation completed", { context: "OpenAIProvider.generateImage", imageCount: images.length });
     return {
       images,
       raw: response
@@ -7276,7 +7213,6 @@ var OpenAIImageProvider = class {
       if (gptImageSizes.includes(size)) {
         return size;
       }
-      logger2.debug("Normalizing size for gpt-image model", { context: "OpenAIImageProvider.validateAndNormalizeSize", model, originalSize: size, normalizedSize: "1024x1024" });
       return "1024x1024";
     }
     if (model === "dall-e-3") {
@@ -7284,23 +7220,15 @@ var OpenAIImageProvider = class {
       if (dalleThreeSizes.includes(size)) {
         return size;
       }
-      logger2.debug("Normalizing size for dall-e-3", { context: "OpenAIImageProvider.validateAndNormalizeSize", originalSize: size, normalizedSize: "1024x1024" });
       return "1024x1024";
     }
     const dalleTwoSizes = ["256x256", "512x512", "1024x1024"];
     if (dalleTwoSizes.includes(size)) {
       return size;
     }
-    logger2.debug("Normalizing size for dall-e-2", { context: "OpenAIImageProvider.validateAndNormalizeSize", originalSize: size, normalizedSize: "1024x1024" });
     return "1024x1024";
   }
   async generateImage(params, apiKey) {
-    logger2.debug("OpenAI image generation started", {
-      context: "OpenAIImageProvider.generateImage",
-      model: params.model,
-      promptLength: params.prompt.length,
-      n: params.n ?? 1
-    });
     const client = new OpenAI({ apiKey });
     const isGptImage = this.isGptImageModel(params.model ?? "");
     const requestParams = {
@@ -7316,21 +7244,12 @@ var OpenAIImageProvider = class {
     if (!isGptImage) {
       requestParams.quality = params.quality ?? "standard";
       requestParams.style = params.style ?? "vivid";
-      logger2.debug("Applied DALL-E specific parameters", {
-        context: "OpenAIImageProvider.generateImage",
-        quality: requestParams.quality,
-        style: requestParams.style
-      });
     }
     const response = await client.images.generate(requestParams);
     if (!response.data || !Array.isArray(response.data)) {
       logger2.error("Invalid response from OpenAI Images API", { context: "OpenAIImageProvider.generateImage" });
       throw new Error("Invalid response from OpenAI Images API");
     }
-    logger2.debug("Image generation completed", {
-      context: "OpenAIImageProvider.generateImage",
-      imageCount: response.data.length
-    });
     return {
       images: response.data.map((img) => ({
         // gpt-image-1 returns urls, DALL-E models return b64_json
@@ -7343,10 +7262,8 @@ var OpenAIImageProvider = class {
   }
   async validateApiKey(apiKey) {
     try {
-      logger2.debug("Validating OpenAI API key for image generation", { context: "OpenAIImageProvider.validateApiKey" });
       const client = new OpenAI({ apiKey });
       await client.models.list();
-      logger2.debug("OpenAI API key validation successful", { context: "OpenAIImageProvider.validateApiKey" });
       return true;
     } catch (error) {
       logger2.error("OpenAI API key validation failed for image generation", { context: "OpenAIImageProvider.validateApiKey" }, error instanceof Error ? error : void 0);
@@ -7354,7 +7271,6 @@ var OpenAIImageProvider = class {
     }
   }
   async getAvailableModels() {
-    logger2.debug("Getting available OpenAI image models", { context: "OpenAIImageProvider.getAvailableModels" });
     return this.supportedModels;
   }
 };
@@ -7455,14 +7371,12 @@ var plugin = {
    * Factory method to create an OpenAI LLM provider instance
    */
   createProvider: (baseUrl) => {
-    logger3.debug("Creating OpenAI provider instance", { context: "plugin.createProvider", baseUrl });
     return new OpenAIProvider();
   },
   /**
    * Factory method to create an OpenAI image generation provider instance
    */
   createImageProvider: (baseUrl) => {
-    logger3.debug("Creating OpenAI image provider instance", { context: "plugin.createImageProvider", baseUrl });
     return new OpenAIImageProvider();
   },
   /**
@@ -7470,11 +7384,9 @@ var plugin = {
    * Requires a valid API key
    */
   getAvailableModels: async (apiKey, baseUrl) => {
-    logger3.debug("Fetching available OpenAI models", { context: "plugin.getAvailableModels" });
     try {
       const provider = new OpenAIProvider();
       const models = await provider.getAvailableModels(apiKey);
-      logger3.debug("Successfully fetched OpenAI models", { context: "plugin.getAvailableModels", count: models.length });
       return models;
     } catch (error) {
       logger3.error("Failed to fetch OpenAI models", { context: "plugin.getAvailableModels" }, error instanceof Error ? error : void 0);
@@ -7485,11 +7397,9 @@ var plugin = {
    * Validate an OpenAI API key
    */
   validateApiKey: async (apiKey, baseUrl) => {
-    logger3.debug("Validating OpenAI API key", { context: "plugin.validateApiKey" });
     try {
       const provider = new OpenAIProvider();
       const isValid = await provider.validateApiKey(apiKey);
-      logger3.debug("OpenAI API key validation result", { context: "plugin.validateApiKey", isValid });
       return isValid;
     } catch (error) {
       logger3.error("Error validating OpenAI API key", { context: "plugin.validateApiKey" }, error instanceof Error ? error : void 0);
@@ -7541,7 +7451,6 @@ var plugin = {
    * Returns cached information about available embedding models
    */
   getEmbeddingModels: () => {
-    logger3.debug("Getting OpenAI embedding models", { context: "plugin.getEmbeddingModels" });
     return [
       {
         id: "text-embedding-3-small",
@@ -7567,7 +7476,6 @@ var plugin = {
    * Render the OpenAI icon
    */
   renderIcon: (props) => {
-    logger3.debug("Rendering OpenAI icon", { context: "plugin.renderIcon", className: props.className });
     return OpenAIIcon(props);
   },
   /**
@@ -7578,10 +7486,6 @@ var plugin = {
    * @returns Array of tools in OpenAI format
    */
   formatTools: (tools) => {
-    logger3.debug("Formatting tools for OpenAI provider", {
-      context: "plugin.formatTools",
-      toolCount: tools.length
-    });
     try {
       const formattedTools = [];
       for (const tool of tools) {
@@ -7593,10 +7497,6 @@ var plugin = {
         }
         formattedTools.push(tool);
       }
-      logger3.debug("Successfully formatted tools", {
-        context: "plugin.formatTools",
-        count: formattedTools.length
-      });
       return formattedTools;
     } catch (error) {
       logger3.error(
@@ -7615,15 +7515,8 @@ var plugin = {
    * @returns Array of tool call requests
    */
   parseToolCalls: (response) => {
-    logger3.debug("Parsing tool calls from OpenAI response", {
-      context: "plugin.parseToolCalls"
-    });
     try {
       const toolCalls = parseOpenAIToolCalls(response);
-      logger3.debug("Successfully parsed tool calls", {
-        context: "plugin.parseToolCalls",
-        count: toolCalls.length
-      });
       return toolCalls;
     } catch (error) {
       logger3.error(

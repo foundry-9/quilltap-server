@@ -5,26 +5,20 @@ import Link from 'next/link'
 import {
   ProfileInfoSection,
   ProfileEditSection,
-  TwoFactorSection,
-  TrustedDevicesSection,
   UserProfile,
 } from '@/components/profile'
 
 /**
- * Profile Page
+ * Profile Page (Single-User Mode)
  *
  * Displays and manages user profile information:
  * - Account information (read-only)
  * - Profile settings (editable: name, email, avatar)
- * - Two-factor authentication (when auth is enabled)
- * - Trusted devices (when 2FA is enabled)
  */
 export default function ProfilePage() {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [authDisabled, setAuthDisabled] = useState(false)
-
 
   const fetchProfile = useCallback(async () => {
     try {
@@ -46,32 +40,12 @@ export default function ProfilePage() {
     }
   }, [])
 
-  const fetchAuthStatus = useCallback(async () => {
-    try {
-      const res = await fetch('/api/v1/auth/status')
-      if (res.ok) {
-        const data = await res.json()
-        setAuthDisabled(data.authDisabled || false)
-      }
-    } catch (err) {
-      console.error('Failed to fetch auth status', { error: err })
-      // Default to showing 2FA section if we can't determine auth status
-    }
-  }, [])
-
   useEffect(() => {
     fetchProfile()
-    fetchAuthStatus()
-  }, [fetchProfile, fetchAuthStatus])
+  }, [fetchProfile])
 
   const handleProfileUpdate = (updatedProfile: UserProfile) => {
     setProfile(updatedProfile)
-  }
-
-  const handleTotpStatusChange = (enabled: boolean) => {
-    if (profile) {
-      setProfile({ ...profile, totpEnabled: enabled })
-    }
   }
 
   if (loading) {
@@ -107,9 +81,9 @@ export default function ProfilePage() {
         >
           ← Back to Home
         </Link>
-        <h1 className="text-3xl font-bold">Profile</h1>
+        <h1 className="qt-heading-1">Profile</h1>
         <p className="qt-text-muted mt-2">
-          Manage your account settings and security preferences
+          Manage your profile settings
         </p>
       </div>
 
@@ -119,34 +93,6 @@ export default function ProfilePage() {
 
         {/* Account Information (read-only) */}
         <ProfileInfoSection profile={profile} />
-
-        {/* Two-Factor Authentication (only when auth is enabled) */}
-        {!authDisabled && (
-          <TwoFactorSection
-            totpEnabled={profile.totpEnabled}
-            onStatusChange={handleTotpStatusChange}
-          />
-        )}
-
-        {/* Trusted Devices (only when 2FA is enabled) */}
-        {!authDisabled && (
-          <TrustedDevicesSection totpEnabled={profile.totpEnabled} />
-        )}
-
-        {/* Auth Disabled Notice */}
-        {authDisabled && (
-          <div className="qt-card">
-            <div className="qt-card-content">
-              <div className="qt-alert-info">
-                <p className="font-medium">Authentication Disabled</p>
-                <p className="text-sm mt-1">
-                  Two-factor authentication and trusted devices are not available when
-                  authentication is disabled. The application is currently in local-only mode.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )

@@ -108,15 +108,7 @@ export async function handleGet(
 
       const breakdown = detailed
         ? await getDetailedChatCostBreakdown(chatId, user.id)
-        : await getChatCostBreakdown(chatId, user.id);
-
-      logger.debug('[Chats v1] Cost breakdown retrieved', {
-        chatId,
-        totalTokens: breakdown.totalTokens,
-        estimatedCostUSD: breakdown.estimatedCostUSD,
-      });
-
-      return NextResponse.json(breakdown);
+        : await getChatCostBreakdown(chatId, user.id);return NextResponse.json(breakdown);
     } catch (error) {
       logger.error('[Chats v1] Failed to get cost breakdown', { chatId }, error instanceof Error ? error : undefined);
       return serverError('Failed to get cost breakdown');
@@ -125,7 +117,6 @@ export async function handleGet(
 
   // Default: get chat
   try {
-    logger.debug('[Chats v1] GET chat', { chatId, userId: user.id });
 
     const chatMetadata = await repos.chats.findById(chatId);
     if (!chatMetadata || chatMetadata.userId !== user.id) {
@@ -195,6 +186,8 @@ export async function handleGet(
       messages,
       projectId: chatMetadata.projectId || null,
       projectName,
+      disabledTools: chatMetadata.disabledTools || [],
+      disabledToolGroups: chatMetadata.disabledToolGroups || [],
     };
 
     return NextResponse.json({ chat });

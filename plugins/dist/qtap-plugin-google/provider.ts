@@ -2,10 +2,11 @@
  * Google Provider Implementation for Quilltap Plugin
  *
  * Provides chat completion functionality using Google's Generative AI API
+ * Uses the new @google/genai SDK (replacing deprecated @google/generative-ai)
  * Supports Gemini models with multimodal capabilities (text + images)
  */
 
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import type { LLMProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage, ImageGenParams, ImageGenResponse, ModelMetadata } from './types';
 import { createPluginLogger } from '@quilltap/plugin-utils';
 
@@ -19,6 +20,73 @@ const GOOGLE_SUPPORTED_MIME_TYPES = [
   'image/webp',
 ];
 
+// Safety setting categories
+const SAFETY_CATEGORIES = [
+  'HARM_CATEGORY_HATE_SPEECH',
+  'HARM_CATEGORY_SEXUALLY_EXPLICIT',
+  'HARM_CATEGORY_DANGEROUS_CONTENT',
+  'HARM_CATEGORY_HARASSMENT',
+];
+
+// Fields that Google's function calling API doesn't support
+// These are valid JSON Schema fields but not accepted by Google
+const UNSUPPORTED_SCHEMA_FIELDS = [
+  'propertyNames',
+  'additionalItems',
+  'contains',
+  'patternProperties',
+  'dependencies',
+  'if',
+  'then',
+  'else',
+  'allOf',
+  'anyOf',
+  'oneOf',
+  'not',
+  '$schema',
+  '$id',
+  '$ref',
+  '$comment',
+  'definitions',
+  '$defs',
+  'examples',
+  'default',
+  'const',
+  'contentMediaType',
+  'contentEncoding',
+];
+
+/**
+ * Recursively sanitize a JSON Schema object for Google's function calling API
+ * Removes unsupported fields that would cause API errors
+ */
+function sanitizeSchemaForGoogle(schema: any): any {
+  if (!schema || typeof schema !== 'object') {
+    return schema;
+  }
+
+  if (Array.isArray(schema)) {
+    return schema.map(sanitizeSchemaForGoogle);
+  }
+
+  const sanitized: any = {};
+  for (const [key, value] of Object.entries(schema)) {
+    // Skip unsupported fields
+    if (UNSUPPORTED_SCHEMA_FIELDS.includes(key)) {
+      continue;
+    }
+
+    // Recursively sanitize nested objects
+    if (value && typeof value === 'object') {
+      sanitized[key] = sanitizeSchemaForGoogle(value);
+    } else {
+      sanitized[key] = value;
+    }
+  }
+
+  return sanitized;
+}
+
 export class GoogleProvider implements LLMProvider {
   readonly supportsFileAttachments = true;
   readonly supportedMimeTypes = GOOGLE_SUPPORTED_MIME_TYPES;
@@ -26,18 +94,30 @@ export class GoogleProvider implements LLMProvider {
   readonly supportsWebSearch = true;
 
   /**
-   * Check if a model is a Gemini 3 thinking model that requires thought signatures
-   * These models require thought signatures on ALL model responses when tools are enabled
+   * Check if a model is a Gemini thinking model that requires special response handling
+   * These models may return content in 'thought' parts that need to be extracted differently
+   * They also require thought signatures on ALL model responses when tools are enabled
    */
   private isThinkingModel(modelName: string): boolean {
+    const lowerName = modelName.toLowerCase();
+
+    // Gemini 3.x models are thinking models
+    if (lowerName.includes('gemini-3') || lowerName.includes('gemini-3.')) {
+      return true;
+    }
+
+    // gemini-pro-latest resolves to Gemini 3
+    if (lowerName === 'gemini-pro-latest') {
+      return true;
+    }
+
+    // Specific 2.5 models with thinking capabilities
     const thinkingModels = [
-      'gemini-3-pro',
-      'gemini-3-pro-preview',
-      'gemini-3-pro-image-preview',
-      'gemini-2.5-pro', // 2.5 Pro also has thinking capabilities
+      'gemini-2.5-pro', // 2.5 Pro has thinking capabilities
       'gemini-2.5-flash-preview-05-20', // Thinking preview
+      'gemini-2.5-flash-thinking', // Potential future model
     ];
-    return thinkingModels.some(m => modelName.toLowerCase().includes(m.toLowerCase()));
+    return thinkingModels.some(m => lowerName.includes(m.toLowerCase()));
   }
 
   /**
@@ -84,20 +164,12 @@ export class GoogleProvider implements LLMProvider {
       // The thoughtSignature is typically on the first part
       const firstPart = parts[0];
       if (firstPart?.thoughtSignature) {
-        logger.debug('Extracted thought signature from response', {
-          context: 'GoogleProvider.extractThoughtSignature',
-          signatureLength: firstPart.thoughtSignature.length,
-        });
         return firstPart.thoughtSignature;
       }
 
       // Also check for functionCall parts which may have signatures
       for (const part of parts) {
         if (part?.functionCall?.thoughtSignature) {
-          logger.debug('Extracted thought signature from function call', {
-            context: 'GoogleProvider.extractThoughtSignature',
-            functionName: part.functionCall.name,
-          });
           return part.functionCall.thoughtSignature;
         }
       }
@@ -112,19 +184,85 @@ export class GoogleProvider implements LLMProvider {
     }
   }
 
-  private async formatMessagesWithAttachments(
+  /**
+   * Extract text content from Gemini response
+   * For thinking models, we need to filter out thought parts and get actual response text
+   */
+  private extractTextFromResponse(response: any, modelName: string): string {
+    try {
+      // Try the SDK's text property first (new SDK provides this directly)
+      if (response?.text) {
+        return response.text;
+      }
+
+      // Fall back to extracting from candidates/parts
+      const candidates = response?.candidates;
+      if (!candidates || !Array.isArray(candidates) || candidates.length === 0) {
+        logger.warn('No candidates found in Google response', {
+          context: 'GoogleProvider.extractTextFromResponse',
+          modelName,
+          blockReason: response?.promptFeedback?.blockReason,
+        });
+        return '';
+      }
+
+      const firstCandidate = candidates[0];
+      const parts = firstCandidate?.content?.parts;
+      if (!parts || !Array.isArray(parts) || parts.length === 0) {
+        const content = firstCandidate?.content;
+        logger.warn('No parts found in Google response candidate', {
+          context: 'GoogleProvider.extractTextFromResponse',
+          modelName,
+          finishReason: firstCandidate?.finishReason,
+        });
+
+        // Try to extract text if it's directly on content (SDK variation)
+        if (content?.text) {
+          return content.text;
+        }
+
+        return '';
+      }
+
+      // Collect all text from non-thought parts
+      const textParts: string[] = [];
+      for (const part of parts) {
+        // Skip functionCall parts and thought parts (internal reasoning)
+        if (part.functionCall || part.thought === true) {
+          continue;
+        }
+
+        if (part.text) {
+          textParts.push(part.text);
+        }
+      }
+
+      return textParts.join('');
+    } catch (error) {
+      logger.warn('Error extracting text from response', {
+        context: 'GoogleProvider.extractTextFromResponse',
+        modelName,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return '';
+    }
+  }
+
+  /**
+   * Format messages for the Google Gemini API
+   * Converts from Quilltap's message format to Google's content format
+   */
+  private formatMessagesForGoogle(
     messages: LLMMessage[],
     modelName: string,
     hasTools: boolean
-  ): Promise<{ messages: any[]; systemInstruction?: string; shouldDisableTools: boolean; attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } }> {
-    logger.debug('Formatting messages with attachments', { context: 'GoogleProvider.formatMessagesWithAttachments', messageCount: messages.length });
-
+  ): { contents: any[]; systemInstruction?: string; shouldDisableTools: boolean; attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } } {
     const sent: string[] = [];
     const failed: { id: string; error: string }[] = [];
 
     const isThinking = this.isThinkingModel(modelName);
 
-    // Extract system message to use as systemInstruction (better for Google API)
+    // Extract system message to use as systemInstruction
     let systemInstruction: string | undefined;
     let nonSystemMessages = messages;
 
@@ -132,42 +270,29 @@ export class GoogleProvider implements LLMProvider {
     if (systemMessages.length > 0) {
       systemInstruction = systemMessages.map(m => m.content).join('\n\n');
       nonSystemMessages = messages.filter(m => m.role !== 'system');
-      logger.debug('Extracted system instruction', {
-        context: 'GoogleProvider.formatMessagesWithAttachments',
-        systemMessageCount: systemMessages.length,
-        instructionLength: systemInstruction.length,
-      });
     }
 
     // Check if this model supports function calling at all
-    // Some models (like image generation models) don't support tools
-    let filteredMessages = nonSystemMessages;
     let shouldDisableTools = false;
 
     if (hasTools && !this.supportsToolCalling(modelName)) {
       shouldDisableTools = true;
       logger.info('Disabling tools - model does not support function calling', {
-        context: 'GoogleProvider.formatMessagesWithAttachments',
+        context: 'GoogleProvider.formatMessagesForGoogle',
         modelName,
       });
     }
 
-    // For thinking models with tools, we need to handle assistant messages without thought signatures.
-    // Gemini 3 thinking models require thought signatures on ALL model responses when tools are enabled.
-    //
-    // Strategy: Check if ANY assistant message lacks a thought signature. If so, we'll signal to
-    // disable tools for this request (to preserve conversation context) rather than filter messages.
-    // Once the conversation has proper thought signatures, tools will work normally.
+    // For thinking models with tools, check for legacy messages without thought signatures
+    // Gemini 3 requires thought signatures on ALL model responses when tools are enabled
     if (!shouldDisableTools && isThinking && hasTools) {
       const assistantMessages = nonSystemMessages.filter(m => m.role === 'assistant');
       const assistantWithoutSig = assistantMessages.filter(m => !m.thoughtSignature);
 
       if (assistantWithoutSig.length > 0) {
-        // Instead of filtering messages (which loses context), disable tools for this request
-        // This allows the model to respond normally while preserving conversation history
         shouldDisableTools = true;
         logger.warn('Disabling tools for thinking model due to legacy messages without thought signatures', {
-          context: 'GoogleProvider.formatMessagesWithAttachments',
+          context: 'GoogleProvider.formatMessagesForGoogle',
           legacyMessageCount: assistantWithoutSig.length,
           totalAssistantMessages: assistantMessages.length,
           modelName,
@@ -175,60 +300,114 @@ export class GoogleProvider implements LLMProvider {
       }
     }
 
-    // Google API requires alternating user/model roles - merge consecutive user messages if any exist
-    // (This shouldn't happen often with our new approach of disabling tools instead of filtering)
+    // Google API requires alternating user/model roles - merge consecutive user messages
+    // But DON'T merge tool result messages - they need special handling
     const mergedMessages: LLMMessage[] = [];
-    for (const msg of filteredMessages) {
+    for (const msg of nonSystemMessages) {
       const lastMsg = mergedMessages[mergedMessages.length - 1];
-      if (lastMsg && lastMsg.role === 'user' && msg.role === 'user') {
+      // Only merge regular user messages (not tool results)
+      if (lastMsg && lastMsg.role === 'user' && msg.role === 'user' && !msg.toolCallId) {
         // Merge consecutive user messages
         lastMsg.content = lastMsg.content + '\n\n' + msg.content;
         // Merge attachments if any
         if (msg.attachments) {
           lastMsg.attachments = [...(lastMsg.attachments || []), ...msg.attachments];
         }
-        logger.debug('Merged consecutive user messages', {
-          context: 'GoogleProvider.formatMessagesWithAttachments',
-        });
       } else {
         mergedMessages.push({ ...msg });
       }
     }
 
-    // Debug: log what messages we're actually sending
-    logger.debug('Messages after processing', {
-      context: 'GoogleProvider.formatMessagesWithAttachments',
-      originalCount: messages.length,
-      afterSystemExtraction: nonSystemMessages.length,
-      afterMerging: mergedMessages.length,
-      finalRoles: mergedMessages.map(m => m.role),
-      hasSystemInstruction: !!systemInstruction,
-      shouldDisableTools,
-    });
+    // Format messages for Google API
+    const contents: any[] = [];
 
-    const formattedMessages: any[] = [];
+    // Track consecutive tool results to batch them into a single user message
+    let pendingToolResponses: any[] = [];
+
+    const flushToolResponses = () => {
+      if (pendingToolResponses.length > 0) {
+        contents.push({
+          role: 'user',
+          parts: pendingToolResponses,
+        });
+        pendingToolResponses = [];
+      }
+    };
+
     for (const msg of mergedMessages) {
-      const formattedMessage: any = {
-        role: msg.role === 'assistant' ? 'model' : 'user',
-        parts: [],
-      };
+      // Handle tool result messages (role: 'tool' or messages with toolCallId)
+      if (msg.role === 'tool' || msg.toolCallId) {
+        // Parse the content - it might be JSON or plain text
+        let responseData: any;
+        try {
+          responseData = JSON.parse(msg.content);
+        } catch {
+          // If not JSON, wrap as text response
+          responseData = { result: msg.content };
+        }
 
-      // Add text content
-      if (msg.content) {
-        formattedMessage.parts.push({ text: msg.content });
+        // Use toolCallId as the function name, or extract from content if available
+        const functionName = msg.toolCallId || 'unknown_function';
+
+        pendingToolResponses.push({
+          functionResponse: {
+            name: functionName,
+            response: responseData,
+          },
+        });
+        continue;
       }
 
-      // Add thought signature for assistant messages (required for Gemini 3 thinking models)
-      // The thoughtSignature must be included in the parts for multi-turn function calling
-      if (msg.role === 'assistant' && msg.thoughtSignature) {
-        // Add thought signature to the first text part if it exists
-        if (formattedMessage.parts.length > 0 && formattedMessage.parts[0].text !== undefined) {
-          formattedMessage.parts[0].thoughtSignature = msg.thoughtSignature;
+      // Flush any pending tool responses before non-tool messages
+      flushToolResponses();
+
+      const parts: any[] = [];
+
+      // Handle assistant messages with tool calls
+      if (msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0) {
+        // Add text content first if present
+        if (msg.content) {
+          const textPart: any = { text: msg.content };
+          if (msg.thoughtSignature) {
+            textPart.thoughtSignature = msg.thoughtSignature;
+          }
+          parts.push(textPart);
         }
-        logger.debug('Added thought signature to message', {
-          context: 'GoogleProvider.formatMessagesWithAttachments',
-          hasSignature: true,
+
+        // Add function calls
+        for (const toolCall of msg.toolCalls) {
+          let args: Record<string, unknown>;
+          try {
+            args = typeof toolCall.function.arguments === 'string'
+              ? JSON.parse(toolCall.function.arguments)
+              : toolCall.function.arguments;
+          } catch {
+            args = {};
+          }
+
+          parts.push({
+            functionCall: {
+              name: toolCall.function.name,
+              args,
+            },
+          });
+        }
+
+        contents.push({
+          role: 'model',
+          parts,
         });
+        continue;
+      }
+
+      // Add text content for regular messages
+      if (msg.content) {
+        const textPart: any = { text: msg.content };
+        // Add thought signature for assistant messages (required for Gemini 3 thinking models)
+        if (msg.role === 'assistant' && msg.thoughtSignature) {
+          textPart.thoughtSignature = msg.thoughtSignature;
+        }
+        parts.push(textPart);
       }
 
       // Add image attachments
@@ -236,7 +415,7 @@ export class GoogleProvider implements LLMProvider {
         for (const attachment of msg.attachments) {
           if (!this.supportedMimeTypes.includes(attachment.mimeType)) {
             logger.warn('Unsupported attachment type', {
-              context: 'GoogleProvider.formatMessagesWithAttachments',
+              context: 'GoogleProvider.formatMessagesForGoogle',
               mimeType: attachment.mimeType,
             });
             failed.push({
@@ -248,7 +427,7 @@ export class GoogleProvider implements LLMProvider {
 
           if (!attachment.data) {
             logger.warn('Attachment data not loaded', {
-              context: 'GoogleProvider.formatMessagesWithAttachments',
+              context: 'GoogleProvider.formatMessagesForGoogle',
               attachmentId: attachment.id,
             });
             failed.push({
@@ -258,7 +437,7 @@ export class GoogleProvider implements LLMProvider {
             continue;
           }
 
-          formattedMessage.parts.push({
+          parts.push({
             inlineData: {
               mimeType: attachment.mimeType,
               data: attachment.data,
@@ -268,37 +447,34 @@ export class GoogleProvider implements LLMProvider {
         }
       }
 
-      formattedMessages.push(formattedMessage);
+      contents.push({
+        role: msg.role === 'assistant' ? 'model' : 'user',
+        parts,
+      });
     }
 
-    logger.debug('Messages formatted with attachments', {
-      context: 'GoogleProvider.formatMessagesWithAttachments',
-      sentCount: sent.length,
-      failedCount: failed.length,
-      messageCount: formattedMessages.length,
-    });
+    // Flush any remaining tool responses
+    flushToolResponses();
 
-    return { messages: formattedMessages, systemInstruction, shouldDisableTools, attachmentResults: { sent, failed } };
+    return { contents, systemInstruction, shouldDisableTools, attachmentResults: { sent, failed } };
   }
 
   async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
-    logger.debug('Google sendMessage called', { context: 'GoogleProvider.sendMessage', model: params.model });
+    const ai = new GoogleGenAI({ apiKey });
 
-    const client = new GoogleGenerativeAI(apiKey);
-
-    // Build tools array first so we can pass hasTools to formatMessagesWithAttachments
+    // Build tools configuration
     const tools: any[] = [];
 
     // Add function declarations if provided
     if (params.tools && params.tools.length > 0) {
-      logger.debug('Adding tools to request', { context: 'GoogleProvider.sendMessage', toolCount: params.tools.length });
       tools.push({
         functionDeclarations: params.tools.map((tool: any) => ({
           name: tool.name,
           description: tool.description,
           parameters: {
             type: 'OBJECT',
-            properties: tool.parameters?.properties || {},
+            // Sanitize properties to remove unsupported JSON Schema fields
+            properties: sanitizeSchemaForGoogle(tool.parameters?.properties || {}),
             required: tool.parameters?.required || [],
           },
         })),
@@ -306,118 +482,109 @@ export class GoogleProvider implements LLMProvider {
     }
 
     // Add Google Search grounding if web search is enabled
-    // Uses googleSearch for Gemini 2.0+ models
     if (params.webSearchEnabled) {
-      logger.debug('Web search enabled', { context: 'GoogleProvider.sendMessage' });
       tools.push({ googleSearch: {} });
     }
 
     const hasTools = tools.length > 0;
-    const { messages, systemInstruction, shouldDisableTools, attachmentResults } = await this.formatMessagesWithAttachments(params.messages, params.model, hasTools);
+    const { contents, systemInstruction, shouldDisableTools, attachmentResults } = this.formatMessagesForGoogle(params.messages, params.model, hasTools);
 
-    const modelConfig: any = {
-      model: params.model,
-      safetySettings: [
-        {
-          category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-          threshold: HarmBlockThreshold.BLOCK_NONE,
-        },
-        {
-          category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-          threshold: HarmBlockThreshold.BLOCK_NONE,
-        },
-        {
-          category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-          threshold: HarmBlockThreshold.BLOCK_NONE,
-        },
-        {
-          category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-          threshold: HarmBlockThreshold.BLOCK_NONE,
-        },
-      ],
+    // Build config object
+    const config: any = {
+      // Safety settings - set to minimum blocking
+      safetySettings: SAFETY_CATEGORIES.map(category => ({
+        category,
+        threshold: 'BLOCK_NONE',
+      })),
+      // Generation config
+      temperature: params.temperature ?? 0.7,
+      maxOutputTokens: params.maxTokens ?? 4096,
+      topP: params.topP ?? 1,
     };
 
-    // Add systemInstruction if we extracted one from system messages
+    // Add system instruction if we extracted one from system messages
     if (systemInstruction) {
-      modelConfig.systemInstruction = systemInstruction;
-      logger.debug('Using systemInstruction', { context: 'GoogleProvider.sendMessage', instructionLength: systemInstruction.length });
+      config.systemInstruction = systemInstruction;
     }
 
-    // Only add tools if we have them AND we shouldn't disable them
-    // shouldDisableTools is true when conversation has legacy messages without thought signatures
+    // Add tools if we have them AND we shouldn't disable them
     if (hasTools && !shouldDisableTools) {
-      modelConfig.tools = tools;
+      config.tools = tools;
     } else if (shouldDisableTools) {
-      logger.info('Tools disabled for this request due to legacy messages without thought signatures', {
+      logger.info('Tools disabled for this request due to model limitations or legacy messages', {
         context: 'GoogleProvider.sendMessage',
         toolCount: tools.length,
       });
     }
 
-    const model = client.getGenerativeModel(modelConfig);
-
     // Normalize stop sequences to array format
-    const stopSequences = params.stop
-      ? (Array.isArray(params.stop) ? params.stop : [params.stop])
-      : undefined;
+    if (params.stop) {
+      config.stopSequences = Array.isArray(params.stop) ? params.stop : [params.stop];
+    }
 
-    const response = (await model.generateContent({
-      contents: messages,
-      generationConfig: {
-        temperature: params.temperature ?? 0.7,
-        maxOutputTokens: params.maxTokens ?? 4096,
-        topP: params.topP ?? 1,
-        stopSequences,
-      },
-    })) as any;
+    // Configure thinking for thinking models
+    // Gemini 3 (gemini-pro-latest) needs explicit thinking budget to ensure output
+    if (this.isThinkingModel(params.model)) {
+      config.thinkingConfig = {
+        thinkingBudget: 4096,
+      };
+      config.maxOutputTokens = Math.max(config.maxOutputTokens, 8192);
+    }
 
-    const text = response.text?.() ?? '';
-    const finishReason = response.candidates?.[0]?.finishReason ?? 'STOP';
-    const usage = response.usageMetadata;
+    try {
+      const response = await ai.models.generateContent({
+        model: params.model,
+        contents,
+        config,
+      });
 
-    // Extract thought signature for Gemini 3 thinking models
-    const thoughtSignature = this.extractThoughtSignature(response.response ?? response);
+      // Extract text using our helper that handles thinking models correctly
+      const text = this.extractTextFromResponse(response, params.model);
+      const finishReason = response.candidates?.[0]?.finishReason ?? 'STOP';
+      const usage = response.usageMetadata;
 
-    logger.debug('Received Google response', {
-      context: 'GoogleProvider.sendMessage',
-      finishReason,
-      promptTokens: usage?.promptTokenCount,
-      completionTokens: usage?.candidatesTokenCount,
-      hasThoughtSignature: !!thoughtSignature,
-    });
+      // Extract thought signature for Gemini 3 thinking models
+      const thoughtSignature = this.extractThoughtSignature(response);
 
-    return {
-      content: text,
-      finishReason,
-      usage: {
-        promptTokens: usage?.promptTokenCount ?? 0,
-        completionTokens: usage?.candidatesTokenCount ?? 0,
-        totalTokens: usage?.totalTokenCount ?? 0,
-      },
-      raw: response,
-      attachmentResults,
-      thoughtSignature,
-    };
+      return {
+        content: text,
+        finishReason,
+        usage: {
+          promptTokens: usage?.promptTokenCount ?? 0,
+          completionTokens: usage?.candidatesTokenCount ?? 0,
+          totalTokens: usage?.totalTokenCount ?? 0,
+        },
+        // Convert SDK response class to plain object for Zod validation
+        raw: JSON.parse(JSON.stringify(response)),
+        attachmentResults,
+        thoughtSignature,
+      };
+    } catch (error) {
+      logger.error('Error calling Google Gemini API', {
+        context: 'GoogleProvider.sendMessage',
+        model: params.model,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
   }
 
   async *streamMessage(params: LLMParams, apiKey: string): AsyncGenerator<StreamChunk> {
-    logger.debug('Google streamMessage called', { context: 'GoogleProvider.streamMessage', model: params.model });
+    const ai = new GoogleGenAI({ apiKey });
 
-    const client = new GoogleGenerativeAI(apiKey);
-
-    // Build tools array first so we can pass hasTools to formatMessagesWithAttachments
+    // Build tools configuration
     const tools: any[] = [];
 
     // Add function declarations if provided
     if (params.tools && params.tools.length > 0) {
-      logger.debug('Adding tools to stream request', { context: 'GoogleProvider.streamMessage', toolCount: params.tools.length });
       tools.push({
         functionDeclarations: params.tools.map((tool: any) => ({
           name: tool.name,
           description: tool.description,
           parameters: {
             type: 'OBJECT',
-            properties: tool.parameters?.properties || {},
+            // Sanitize properties to remove unsupported JSON Schema fields
+            properties: sanitizeSchemaForGoogle(tool.parameters?.properties || {}),
             required: tool.parameters?.required || [],
           },
         })),
@@ -426,130 +593,129 @@ export class GoogleProvider implements LLMProvider {
 
     // Add Google Search grounding if web search is enabled
     if (params.webSearchEnabled) {
-      logger.debug('Web search enabled for stream', { context: 'GoogleProvider.streamMessage' });
       tools.push({ googleSearch: {} });
     }
 
     const hasTools = tools.length > 0;
-    const { messages, systemInstruction, shouldDisableTools, attachmentResults } = await this.formatMessagesWithAttachments(params.messages, params.model, hasTools);
+    const { contents, systemInstruction, shouldDisableTools, attachmentResults } = this.formatMessagesForGoogle(params.messages, params.model, hasTools);
 
-    const modelConfig: any = {
-      model: params.model,
-      safetySettings: [
-        {
-          category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-          threshold: HarmBlockThreshold.BLOCK_NONE,
-        },
-        {
-          category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-          threshold: HarmBlockThreshold.BLOCK_NONE,
-        },
-        {
-          category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-          threshold: HarmBlockThreshold.BLOCK_NONE,
-        },
-        {
-          category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-          threshold: HarmBlockThreshold.BLOCK_NONE,
-        },
-      ],
+    // Build config object
+    const config: any = {
+      // Safety settings - set to minimum blocking
+      safetySettings: SAFETY_CATEGORIES.map(category => ({
+        category,
+        threshold: 'BLOCK_NONE',
+      })),
+      // Generation config
+      temperature: params.temperature ?? 0.7,
+      maxOutputTokens: params.maxTokens ?? 4096,
+      topP: params.topP ?? 1,
     };
 
-    // Add systemInstruction if we extracted one from system messages
+    // Add system instruction
     if (systemInstruction) {
-      modelConfig.systemInstruction = systemInstruction;
-      logger.debug('Using systemInstruction for stream', { context: 'GoogleProvider.streamMessage', instructionLength: systemInstruction.length });
+      config.systemInstruction = systemInstruction;
     }
 
-    // Only add tools if we have them AND we shouldn't disable them
-    // shouldDisableTools is true when conversation has legacy messages without thought signatures
+    // Add tools if appropriate
     if (hasTools && !shouldDisableTools) {
-      modelConfig.tools = tools;
+      config.tools = tools;
     } else if (shouldDisableTools) {
-      logger.info('Tools disabled for this stream request due to legacy messages without thought signatures', {
+      logger.info('Tools disabled for this stream request due to model limitations or legacy messages', {
         context: 'GoogleProvider.streamMessage',
         toolCount: tools.length,
       });
     }
 
-    const model = client.getGenerativeModel(modelConfig);
-
-    // Normalize stop sequences to array format
-    const stopSequences = params.stop
-      ? (Array.isArray(params.stop) ? params.stop : [params.stop])
-      : undefined;
-
-    const stream = await model.generateContentStream({
-      contents: messages,
-      generationConfig: {
-        temperature: params.temperature ?? 0.7,
-        maxOutputTokens: params.maxTokens ?? 4096,
-        topP: params.topP ?? 1,
-        stopSequences,
-      },
-    });
-
-    let chunkCount = 0;
-    for await (const chunk of stream.stream) {
-      chunkCount++;
-      const text = (chunk as any).text?.() ?? '';
-      if (text) {
-        logger.debug('Received stream chunk', { context: 'GoogleProvider.streamMessage', chunkNumber: chunkCount, contentLength: text.length });
-        yield {
-          content: text,
-          done: false,
-        };
-      }
+    // Normalize stop sequences
+    if (params.stop) {
+      config.stopSequences = Array.isArray(params.stop) ? params.stop : [params.stop];
     }
 
-    // Final chunk with usage info
-    const response = (await stream.response) as any;
-    const usage = response.usageMetadata;
+    // Configure thinking for thinking models (same as sendMessage)
+    if (this.isThinkingModel(params.model)) {
+      config.thinkingConfig = {
+        thinkingBudget: 4096,
+      };
+      config.maxOutputTokens = Math.max(config.maxOutputTokens, 8192);
+    }
 
-    // Extract thought signature for Gemini 3 thinking models
-    const thoughtSignature = this.extractThoughtSignature(response);
+    try {
+      const response = await ai.models.generateContentStream({
+        model: params.model,
+        contents,
+        config,
+      });
 
-    // Debug: log full response structure for troubleshooting
-    const candidates = response?.candidates;
-    const firstCandidate = candidates?.[0];
-    const parts = firstCandidate?.content?.parts || [];
-    const hasFunctionCall = parts.some((p: any) => p.functionCall);
-    const finishReason = firstCandidate?.finishReason;
+      let totalStreamedContent = '';
+      const isThinking = this.isThinkingModel(params.model);
+      let lastResponse: any = null;
 
-    logger.debug('Stream completed', {
-      context: 'GoogleProvider.streamMessage',
-      totalChunks: chunkCount,
-      promptTokens: usage?.promptTokenCount,
-      completionTokens: usage?.candidatesTokenCount,
-      hasThoughtSignature: !!thoughtSignature,
-      hasFunctionCall,
-      finishReason,
-      partsCount: parts.length,
-      partTypes: parts.map((p: any) => Object.keys(p)),
-    });
+      for await (const chunk of response) {
+        lastResponse = chunk;
 
-    yield {
-      content: '',
-      done: true,
-      usage: {
-        promptTokens: usage?.promptTokenCount ?? 0,
-        completionTokens: usage?.candidatesTokenCount ?? 0,
-        totalTokens: usage?.totalTokenCount ?? 0,
-      },
-      attachmentResults,
-      rawResponse: response,
-      thoughtSignature,
-    };
+        // Extract text from chunk, skipping thought parts
+        const candidates = chunk.candidates;
+        if (candidates && candidates.length > 0) {
+          const parts = candidates[0]?.content?.parts || [];
+          for (const part of parts) {
+            // Skip thought parts and function calls
+            if (part.thought === true || part.functionCall) {
+              continue;
+            }
+            if (part.text) {
+              totalStreamedContent += part.text;
+              yield {
+                content: part.text,
+                done: false,
+              };
+            }
+          }
+        }
+      }
+
+      // Extract usage and thought signature from last chunk
+      const usage = lastResponse?.usageMetadata;
+      const thoughtSignature = this.extractThoughtSignature(lastResponse);
+
+      // For thinking models, if we didn't get any content during streaming,
+      // extract the full text from the final response
+      let finalContent = '';
+      if (isThinking && !totalStreamedContent && lastResponse) {
+        finalContent = this.extractTextFromResponse(lastResponse, params.model);
+      }
+
+      yield {
+        content: finalContent,
+        done: true,
+        usage: {
+          promptTokens: usage?.promptTokenCount ?? 0,
+          completionTokens: usage?.candidatesTokenCount ?? 0,
+          totalTokens: usage?.totalTokenCount ?? 0,
+        },
+        attachmentResults,
+        // Convert SDK response class to plain object for Zod validation
+        rawResponse: lastResponse ? JSON.parse(JSON.stringify(lastResponse)) : undefined,
+        thoughtSignature,
+      };
+    } catch (error) {
+      logger.error('Error streaming from Google Gemini API', {
+        context: 'GoogleProvider.streamMessage',
+        model: params.model,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
   }
 
   async validateApiKey(apiKey: string): Promise<boolean> {
     try {
-      logger.debug('Validating Google API key', { context: 'GoogleProvider.validateApiKey' });
-      const client = new GoogleGenerativeAI(apiKey);
-      // Try to get a simple model to validate the API key
-      const model = client.getGenerativeModel({ model: 'gemini-2.5-flash' });
-      await model.generateContent('test');
-      logger.debug('Google API key validation successful', { context: 'GoogleProvider.validateApiKey' });
+      const ai = new GoogleGenAI({ apiKey });
+      // Try to generate simple content to validate the API key
+      await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: 'test',
+      });
       return true;
     } catch (error) {
       logger.error('Google API key validation failed', { context: 'GoogleProvider.validateApiKey' }, error instanceof Error ? error : undefined);
@@ -559,102 +725,122 @@ export class GoogleProvider implements LLMProvider {
 
   async getAvailableModels(apiKey: string): Promise<string[]> {
     try {
-      logger.debug('Fetching Google models', { context: 'GoogleProvider.getAvailableModels' });
-      // Return known Google models that support chat
-      const models = [
-        'gemini-2.5-flash-image',
-        'gemini-3-pro-image-preview',
-        'imagen-4',
-        'imagen-4-fast',
-        'gemini-2.5-flash',
-        'gemini-pro-vision',
-      ];
-      logger.debug('Retrieved Google models', { context: 'GoogleProvider.getAvailableModels', modelCount: models.length });
-      return models;
+      const ai = new GoogleGenAI({ apiKey });
+
+      // Use the models.list() API to get available models dynamically
+      const modelList: string[] = [];
+      const pager = await ai.models.list();
+
+      for await (const model of pager) {
+        // Filter for models that support generateContent
+        if (model.supportedActions?.includes('generateContent')) {
+          // Extract model ID from the full name (e.g., "models/gemini-2.5-flash" -> "gemini-2.5-flash")
+          const modelId = model.name?.replace('models/', '') || model.name;
+          if (modelId) {
+            modelList.push(modelId);
+          }
+        }
+      }
+
+      logger.info('Fetched available Google models', {
+        context: 'GoogleProvider.getAvailableModels',
+        count: modelList.length,
+      });
+
+      // If API returns empty list, fall back to known models
+      if (modelList.length === 0) {
+        logger.warn('No models returned from API, using fallback list', {
+          context: 'GoogleProvider.getAvailableModels',
+        });
+        return [
+          'gemini-3-flash-preview',
+          'gemini-3-pro-preview',
+          'gemini-3-pro-image-preview',
+          'gemini-2.5-flash',
+          'gemini-2.5-pro',
+          'gemini-2.5-flash-image',
+          'imagen-4',
+          'imagen-4-fast',
+        ];
+      }
+
+      return modelList;
     } catch (error) {
       logger.error('Failed to fetch Google models', { context: 'GoogleProvider.getAvailableModels' }, error instanceof Error ? error : undefined);
-      return [];
+      // Return fallback list on error
+      return [
+        'gemini-3-flash-preview',
+        'gemini-3-pro-preview',
+        'gemini-3-pro-image-preview',
+        'gemini-2.5-flash',
+        'gemini-2.5-pro',
+        'gemini-2.5-flash-image',
+        'imagen-4',
+        'imagen-4-fast',
+      ];
     }
   }
 
   async generateImage(params: ImageGenParams, apiKey: string): Promise<ImageGenResponse> {
-    logger.debug('Generating image with Google', {
-      context: 'GoogleProvider.generateImage',
-      model: params.model,
-      promptLength: params.prompt.length,
-    });
-
-    const client = new GoogleGenerativeAI(apiKey);
+    const ai = new GoogleGenAI({ apiKey });
 
     // Use the specified model or default to gemini-2.5-flash-image
     const modelName = params.model ?? 'gemini-2.5-flash-image';
-    const model = client.getGenerativeModel({
-      model: modelName,
-      safetySettings: [
-        {
-          category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-          threshold: HarmBlockThreshold.BLOCK_NONE,
-        },
-        {
-          category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-          threshold: HarmBlockThreshold.BLOCK_NONE,
-        },
-        {
-          category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-          threshold: HarmBlockThreshold.BLOCK_NONE,
-        },
-        {
-          category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-          threshold: HarmBlockThreshold.BLOCK_NONE,
-        },
-      ],
-    });
 
     const config: any = {
       temperature: 0.7,
+      safetySettings: SAFETY_CATEGORIES.map(category => ({
+        category,
+        threshold: 'BLOCK_NONE',
+      })),
     };
 
-    if (params.aspectRatio) {
-      config.aspectRatio = params.aspectRatio;
-    }
+    // Note: aspect ratio support varies by model
+    // if (params.aspectRatio) {
+    //   config.aspectRatio = params.aspectRatio;
+    // }
 
-    const response = (await model.generateContent({
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: params.prompt }],
-        },
-      ],
-      generationConfig: config,
-    })) as any;
+    try {
+      const response = await ai.models.generateContent({
+        model: modelName,
+        contents: params.prompt,
+        config,
+      });
 
-    const images: Array<{ data: string; mimeType: string; revisedPrompt?: string }> = [];
+      const images: Array<{ data: string; mimeType: string; revisedPrompt?: string }> = [];
 
-    // Extract images from response - check candidates array
-    const candidates = response.candidates ?? [];
-    for (const candidate of candidates) {
-      const parts = candidate.content?.parts ?? [];
-      for (const part of parts) {
-        if ('inlineData' in part && part.inlineData) {
-          images.push({
-            data: part.inlineData.data,
-            mimeType: part.inlineData.mimeType || 'image/png',
-          });
+      // Extract images from response - check candidates array
+      const candidates = response.candidates ?? [];
+      for (const candidate of candidates) {
+        const parts = candidate.content?.parts ?? [];
+        for (const part of parts) {
+          if (part.inlineData && part.inlineData.data) {
+            images.push({
+              data: part.inlineData.data,
+              mimeType: part.inlineData.mimeType || 'image/png',
+            });
+          }
         }
       }
+
+      if (images.length === 0) {
+        logger.error('No images generated in response', { context: 'GoogleProvider.generateImage' });
+        throw new Error('No images generated in response');
+      }
+
+      return {
+        images,
+        // Convert SDK response class to plain object for Zod validation
+        raw: JSON.parse(JSON.stringify(response)),
+      };
+    } catch (error) {
+      logger.error('Error generating image with Google Gemini', {
+        context: 'GoogleProvider.generateImage',
+        model: modelName,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
     }
-
-    if (images.length === 0) {
-      logger.error('No images generated in response', { context: 'GoogleProvider.generateImage' });
-      throw new Error('No images generated in response');
-    }
-
-    logger.debug('Image generation completed', { context: 'GoogleProvider.generateImage', imageCount: images.length });
-
-    return {
-      images,
-      raw: response,
-    };
   }
 
   /**
@@ -664,19 +850,34 @@ export class GoogleProvider implements LLMProvider {
   getModelMetadata(modelId: string): ModelMetadata | undefined {
     const lowerModelId = modelId.toLowerCase();
 
-    // Gemini 3 thinking models with known issues
-    if (lowerModelId.includes('gemini-3-pro')) {
+    // Gemini 3 thinking models
+    if (lowerModelId.includes('gemini-3-pro') && !lowerModelId.includes('image')) {
       return {
         id: modelId,
         displayName: 'Gemini 3 Pro',
         experimental: true,
         warnings: [
           {
-            level: 'warning',
-            message: 'This thinking model may return empty responses due to a known Gemini API issue. Thought signature support is experimental.',
+            level: 'info',
+            message: 'This is a thinking/reasoning model. Responses may take longer as the model reasons through complex problems.',
           },
         ],
-        missingCapabilities: lowerModelId.includes('-image') ? ['reliable-responses'] : undefined,
+      };
+    }
+
+    // Gemini 3 image models
+    if (lowerModelId.includes('gemini-3') && lowerModelId.includes('image')) {
+      return {
+        id: modelId,
+        displayName: 'Gemini 3 Pro Image',
+        experimental: true,
+        warnings: [
+          {
+            level: 'info',
+            message: 'This model supports high-quality image generation with reasoning capabilities.',
+          },
+        ],
+        missingCapabilities: ['function-calling'],
       };
     }
 
@@ -710,6 +911,49 @@ export class GoogleProvider implements LLMProvider {
       };
     }
 
+    // Gemini 2.0 deprecation warning
+    if (lowerModelId.includes('gemini-2.0')) {
+      return {
+        id: modelId,
+        displayName: 'Gemini 2.0',
+        warnings: [
+          {
+            level: 'warning',
+            message: 'Gemini 2.0 models are being deprecated on March 3, 2026. Consider switching to Gemini 2.5 or newer.',
+          },
+        ],
+      };
+    }
+
+    // gemini-pro-latest resolves to Gemini 3 - it's a thinking model
+    if (lowerModelId === 'gemini-pro-latest') {
+      return {
+        id: modelId,
+        displayName: 'Gemini 3 Pro (Latest)',
+        experimental: true,
+        warnings: [
+          {
+            level: 'info',
+            message: 'This is Gemini 3 Pro, a thinking/reasoning model. Responses may take longer as the model reasons through complex problems.',
+          },
+        ],
+      };
+    }
+
+    // Gemini 1.5 models - older generation
+    if (lowerModelId.includes('gemini-1.5')) {
+      return {
+        id: modelId,
+        displayName: modelId.includes('pro') ? 'Gemini 1.5 Pro' : 'Gemini 1.5 Flash',
+        warnings: [
+          {
+            level: 'info',
+            message: 'Gemini 1.5 models are an older generation. For best results, consider using Gemini 2.5 or 3 models.',
+          },
+        ],
+      };
+    }
+
     return undefined;
   }
 
@@ -719,8 +963,11 @@ export class GoogleProvider implements LLMProvider {
   async getModelsWithMetadata(_apiKey: string): Promise<ModelMetadata[]> {
     // Return metadata for all models that have warnings
     const modelsWithWarnings = [
+      'gemini-3-pro-preview',
       'gemini-3-pro-image-preview',
       'gemini-2.5-flash-image',
+      'gemini-2.0-flash',
+      'gemini-pro-latest',
       'imagen-4',
       'imagen-4-fast',
     ];

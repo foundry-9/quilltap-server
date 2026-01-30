@@ -110,7 +110,6 @@ export const plugin: LLMProviderPlugin = {
    */
   createProvider: (baseUrl?: string) => {
     const url = baseUrl || config.baseUrlDefault;
-    logger.debug('Creating Ollama provider instance', { context: 'plugin.createProvider', baseUrl: url });
     return new OllamaProvider(url);
   },
 
@@ -118,7 +117,6 @@ export const plugin: LLMProviderPlugin = {
    * Ollama does not support image generation
    */
   createImageProvider: (baseUrl?: string) => {
-    logger.debug('Image provider requested but not supported for Ollama', { context: 'plugin.createImageProvider' });
     throw new Error('Ollama does not support image generation');
   },
 
@@ -128,11 +126,9 @@ export const plugin: LLMProviderPlugin = {
    */
   getAvailableModels: async (apiKey: string, baseUrl?: string) => {
     const url = baseUrl || config.baseUrlDefault;
-    logger.debug('Fetching available Ollama models', { context: 'plugin.getAvailableModels', baseUrl: url });
     try {
       const provider = new OllamaProvider(url);
       const models = await provider.getAvailableModels(apiKey);
-      logger.debug('Successfully fetched Ollama models', { context: 'plugin.getAvailableModels', count: models.length });
       return models;
     } catch (error) {
       logger.error('Failed to fetch Ollama models', { context: 'plugin.getAvailableModels', baseUrl: url }, error instanceof Error ? error : undefined);
@@ -146,11 +142,9 @@ export const plugin: LLMProviderPlugin = {
    */
   validateApiKey: async (apiKey: string, baseUrl?: string) => {
     const url = baseUrl || config.baseUrlDefault;
-    logger.debug('Validating Ollama server', { context: 'plugin.validateApiKey', baseUrl: url });
     try {
       const provider = new OllamaProvider(url);
       const isValid = await provider.validateApiKey(apiKey);
-      logger.debug('Ollama server validation result', { context: 'plugin.validateApiKey', isValid });
       return isValid;
     } catch (error) {
       logger.error('Error validating Ollama server', { context: 'plugin.validateApiKey', baseUrl: url }, error instanceof Error ? error : undefined);
@@ -212,7 +206,6 @@ export const plugin: LLMProviderPlugin = {
    * Returns static information about available embedding models
    */
   getEmbeddingModels: (): EmbeddingModelInfo[] => {
-    logger.debug('Getting Ollama embedding models', { context: 'plugin.getEmbeddingModels' });
     return [
       {
         id: 'nomic-embed-text',
@@ -245,7 +238,6 @@ export const plugin: LLMProviderPlugin = {
    * Render the Ollama icon
    */
   renderIcon: (props) => {
-    logger.debug('Rendering Ollama icon', { context: 'plugin.renderIcon', className: props.className });
     return OllamaIcon(props);
   },
 
@@ -259,11 +251,6 @@ export const plugin: LLMProviderPlugin = {
   formatTools: (
     tools: (OpenAIToolDefinition | Record<string, unknown>)[],
   ): OpenAIToolDefinition[] => {
-    logger.debug('Formatting tools for Ollama provider', {
-      context: 'plugin.formatTools',
-      toolCount: tools.length,
-    });
-
     try {
       const formattedTools: OpenAIToolDefinition[] = [];
 
@@ -279,12 +266,6 @@ export const plugin: LLMProviderPlugin = {
         // Tools already in OpenAI format, pass through
         formattedTools.push(tool as OpenAIToolDefinition);
       }
-
-      logger.debug('Successfully formatted tools', {
-        context: 'plugin.formatTools',
-        count: formattedTools.length,
-      });
-
       return formattedTools;
     } catch (error) {
       logger.error(
@@ -304,18 +285,8 @@ export const plugin: LLMProviderPlugin = {
    * @returns Array of tool call requests
    */
   parseToolCalls: (response: any): ToolCallRequest[] => {
-    logger.debug('Parsing tool calls from Ollama response', {
-      context: 'plugin.parseToolCalls',
-    });
-
     try {
       const toolCalls = parseOpenAIToolCalls(response);
-
-      logger.debug('Successfully parsed tool calls', {
-        context: 'plugin.parseToolCalls',
-        count: toolCalls.length,
-      });
-
       return toolCalls;
     } catch (error) {
       logger.error(

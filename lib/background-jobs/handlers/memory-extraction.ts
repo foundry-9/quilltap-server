@@ -16,13 +16,6 @@ import type { MemoryExtractionPayload } from '../queue-service';
  */
 export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> {
   const payload = job.payload as unknown as MemoryExtractionPayload;
-
-  logger.debug('[MemoryExtraction] Starting job', {
-    jobId: job.id,
-    chatId: payload.chatId,
-    characterId: payload.characterId,
-  });
-
   const repos = getRepositories();
 
   // Get connection profile
@@ -41,14 +34,6 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
   const availableProfiles = await repos.connections.findByUserId(job.userId);
 
   // Debug: log what settings we're using
-  logger.debug('[MemoryExtraction] Loaded settings', {
-    jobId: job.id,
-    userId: job.userId,
-    cheapLLMSettings: JSON.stringify(chatSettings.cheapLLMSettings),
-    availableProfileCount: availableProfiles.length,
-    availableProfileModels: availableProfiles.map(p => ({ id: p.id, model: p.modelName, provider: p.provider })),
-  });
-
   // Build the memory extraction context
   const ctx: MemoryExtractionContext = {
     characterId: payload.characterId,
@@ -76,11 +61,6 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
         characterId: payload.characterId,
       });
     } else {
-      logger.debug('[MemoryExtraction] No significant memory found', {
-        jobId: job.id,
-        chatId: payload.chatId,
-        characterId: payload.characterId,
-      });
     }
   } else {
     // Log the error but don't throw - let the job complete

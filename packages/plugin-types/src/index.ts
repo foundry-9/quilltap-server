@@ -120,6 +120,7 @@ export type {
 export type {
   // Tool plugin types
   ToolMetadata,
+  ToolHierarchyInfo,
   ToolExecutionContext,
   ToolExecutionResult,
   ToolPlugin,

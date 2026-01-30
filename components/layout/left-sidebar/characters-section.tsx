@@ -39,11 +39,9 @@ function StarIcon({ className }: { className?: string }) {
 function CharacterItem({
   character,
   isCollapsed,
-  onClick,
 }: {
   character: SidebarCharacter
   isCollapsed: boolean
-  onClick: () => void
 }) {
   // Build avatar source object for Avatar component
   const avatarSrc = character.avatarUrl
@@ -56,7 +54,6 @@ function CharacterItem({
     <Link
       href={`/characters/${character.id}`}
       className={`qt-left-sidebar-item ${isCollapsed ? 'justify-center px-0' : ''}`}
-      onClick={onClick}
       title={isCollapsed ? character.name : undefined}
     >
       <Avatar
@@ -78,15 +75,9 @@ function CharacterItem({
 }
 
 export function CharactersSection() {
-  const { isCollapsed, closeMobile, isMobile } = useSidebar()
+  const { isCollapsed } = useSidebar()
   const { shouldHideByIds } = useQuickHide()
   const { characters, loading } = useSidebarData()
-
-  const handleItemClick = () => {
-    if (isMobile) {
-      closeMobile()
-    }
-  }
 
   // Don't show section if loading or no characters
   if (loading) {
@@ -122,7 +113,6 @@ export function CharactersSection() {
           key={character.id}
           character={character}
           isCollapsed={isCollapsed}
-          onClick={handleItemClick}
         />
       ))}
       <ViewAllLink href="/characters" />

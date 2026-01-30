@@ -9,6 +9,7 @@ import { createServiceLogger } from '@/lib/logging/create-logger'
 import { createLLMProvider, type LLMMessage } from '@/lib/llm'
 import { buildToolsForProvider, checkModelSupportsTools } from '@/lib/tools'
 import { getRepositories } from '@/lib/repositories/factory'
+import { logLLMCall } from '@/lib/services/llm-logging.service'
 import type { ConnectionProfile, ImageProfile } from '@/lib/schemas/types'
 import type { BuiltContext } from '@/lib/chat/context-manager'
 import type { FallbackResult } from '@/lib/chat/file-attachment-fallback'
@@ -32,6 +33,9 @@ export interface StreamOptions {
   modelParams: Record<string, unknown>
   tools: unknown[]
   useNativeWebSearch: boolean
+  userId?: string
+  messageId?: string
+  chatId?: string
 }
 
 /**
@@ -62,6 +66,52 @@ export type StreamChunkCallback = (chunk: {
 }) => void
 
 /**
+ * Metadata about a tool's source for hierarchical filtering
+ */
+interface ToolSourceMetadata {
+  pluginName?: string
+  subgroupId?: string
+}
+
+/**
+ * Check if a tool is disabled based on individual tool disabling or group patterns
+ *
+ * @param toolId The tool's ID (function name)
+ * @param disabledTools List of individually disabled tool IDs
+ * @param disabledToolGroups List of disabled group patterns (e.g., "plugin:mcp", "plugin:mcp:subgroup:filesystem")
+ * @param sourceMetadata Metadata about the tool's source (plugin name, subgroup)
+ * @returns true if the tool is disabled
+ */
+function isToolDisabled(
+  toolId: string,
+  disabledTools: string[],
+  disabledToolGroups: string[],
+  sourceMetadata: ToolSourceMetadata
+): boolean {
+  // Never disable request_full_context - it's a critical safety valve
+  if (toolId === 'request_full_context') return false
+
+  // Check individual tool disable
+  if (disabledTools.includes(toolId)) return true
+
+  // Check plugin-level disable: "plugin:{pluginName}"
+  if (sourceMetadata.pluginName) {
+    if (disabledToolGroups.includes(`plugin:${sourceMetadata.pluginName}`)) {
+      return true
+    }
+
+    // Check subgroup-level disable: "plugin:{pluginName}:subgroup:{subgroupId}"
+    if (sourceMetadata.subgroupId) {
+      if (disabledToolGroups.includes(`plugin:${sourceMetadata.pluginName}:subgroup:${sourceMetadata.subgroupId}`)) {
+        return true
+      }
+    }
+  }
+
+  return false
+}
+
+/**
  * Build tools for the provider
  */
 export async function buildTools(
@@ -73,7 +123,11 @@ export async function buildTools(
   /** Project ID if chat is associated with a project (enables project_info tool) */
   projectId?: string | null,
   /** Whether context compression is enabled (enables request_full_context tool) */
-  requestFullContext?: boolean
+  requestFullContext?: boolean,
+  /** List of tool IDs to disable (or undefined to return empty tools for this message) */
+  disabledTools?: string[],
+  /** List of disabled group patterns (e.g., "plugin:mcp", "plugin:mcp:subgroup:filesystem") */
+  disabledToolGroups?: string[]
 ): Promise<{
   tools: unknown[]
   modelSupportsNativeTools: boolean
@@ -94,23 +148,9 @@ export async function buildTools(
   const useNativeWebSearch = connectionProfile.useNativeWebSearch && provider.supportsWebSearch
 
   if (usePseudoTools) {
-    logger.debug('Skipping native tools (using pseudo-tools)', {
-      provider: connectionProfile.provider,
-      model: connectionProfile.modelName,
-    })
+
     return { tools: [], modelSupportsNativeTools, useNativeWebSearch }
   }
-
-  logger.debug('Building native tools for provider', {
-    provider: connectionProfile.provider,
-    imageProfileId: !!imageProfileId,
-    imageProviderType: imageProfile?.provider,
-    memorySearchEnabled: true,
-    webSearchToolEnabled: connectionProfile.allowWebSearch,
-    projectInfoEnabled: !!projectId,
-    requestFullContextEnabled: !!requestFullContext,
-    useNativeWebSearch,
-  })
 
   // Fetch user's plugin tool configurations from database
   let toolConfigs = new Map<string, Record<string, unknown>>()
@@ -122,11 +162,7 @@ export async function buildTools(
       const toolName = config.pluginName.replace(/^qtap-plugin-/, '')
       toolConfigs.set(toolName, config.config)
     }
-    logger.debug('Loaded plugin tool configs', {
-      userId,
-      configCount: toolConfigs.size,
-      tools: Array.from(toolConfigs.keys()),
-    })
+
   } catch (configError) {
     logger.warn('Failed to load plugin tool configs, using defaults', {
       userId,
@@ -134,8 +170,14 @@ export async function buildTools(
     })
   }
 
+  // If disabledTools is undefined (not an array), skip tools entirely for this message
+  // This happens when shouldSendTools is false - tools won't be sent at all
+  if (disabledTools === undefined) {
+    return { tools: [], modelSupportsNativeTools, useNativeWebSearch }
+  }
+
   // Web search tool is independent of native web search - user can enable both
-  const tools = await buildToolsForProvider(connectionProfile.provider, {
+  let tools = await buildToolsForProvider(connectionProfile.provider, {
     imageGeneration: !!imageProfileId,
     imageProviderType: imageProfile?.provider,
     memorySearch: true,
@@ -145,10 +187,59 @@ export async function buildTools(
     toolConfigs,
   })
 
-  logger.debug('Native tools built successfully', {
-    toolCount: tools.length,
-    tools: tools.map((t: unknown) => (t as { name?: string; function?: { name?: string } }).name || (t as { function?: { name?: string } }).function?.name || 'unknown'),
-  })
+  // Filter out disabled tools (individual IDs and group patterns)
+  const hasDisabledTools = disabledTools.length > 0
+  const hasDisabledGroups = disabledToolGroups && disabledToolGroups.length > 0
+
+  if (hasDisabledTools || hasDisabledGroups) {
+    // Build a map of tool name -> source metadata for group filtering
+    // We need to know which plugin/subgroup each tool came from
+    const toolSourceMap = new Map<string, ToolSourceMetadata>()
+
+    // Get hierarchy info from all plugins that support it
+    const allPlugins = (await import('@/lib/plugins/tool-registry')).toolRegistry.getAllPlugins()
+    for (const plugin of allPlugins) {
+      if (typeof plugin.getToolHierarchy === 'function') {
+        try {
+          const pluginName = plugin.metadata.toolName
+          const config = toolConfigs.get(pluginName) || {}
+          const hierarchy = await plugin.getToolHierarchy(config)
+
+          for (const info of hierarchy) {
+            toolSourceMap.set(info.toolId, {
+              pluginName,
+              subgroupId: info.subgroupId,
+            })
+          }
+        } catch (err) {
+          logger.warn('Failed to get tool hierarchy for filtering', {
+            plugin: plugin.metadata.toolName,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
+      }
+    }
+
+    const originalCount = tools.length
+    tools = tools.filter((tool: unknown) => {
+      // Get tool name from the tool object (handle different formats)
+      const toolObj = tool as { function?: { name?: string }; name?: string }
+      const toolName = toolObj.function?.name || toolObj.name
+      if (!toolName) return true // Keep tools without names
+
+      // Get source metadata for this tool (may be empty for built-in tools)
+      const sourceMetadata = toolSourceMap.get(toolName) || {}
+
+      // Check if tool is disabled (handles both individual and group patterns)
+      return !isToolDisabled(
+        toolName,
+        disabledTools,
+        disabledToolGroups || [],
+        sourceMetadata
+      )
+    })
+
+  }
 
   return { tools, modelSupportsNativeTools, useNativeWebSearch }
 }
@@ -167,7 +258,7 @@ export async function* streamMessage(
   rawResponse?: unknown
   thoughtSignature?: string
 }> {
-  const { messages, connectionProfile, apiKey, modelParams, tools, useNativeWebSearch } = options
+  const { messages, connectionProfile, apiKey, modelParams, tools, useNativeWebSearch, userId, messageId, chatId } = options
 
   const provider = await createLLMProvider(
     connectionProfile.provider,
@@ -200,26 +291,12 @@ export async function* streamMessage(
     toolCount: tools.length,
     webSearchEnabled: useNativeWebSearch,
   }
-  logger.debug('[LLM Request] streaming.service.ts:streamMessage - Sending to provider', {
-    context: 'llm-api',
-    provider: connectionProfile.provider,
-    model: connectionProfile.modelName,
-    request: JSON.stringify(requestPayload),
-  })
-  logger.debug('[LLM Request] Full message contents', {
-    context: 'llm-api-verbose',
-    provider: connectionProfile.provider,
-    model: connectionProfile.modelName,
-    messages: JSON.stringify(llmMessages.map(m => ({
-      role: m.role,
-      content: m.content,
-      name: m.name,
-    }))),
-    tools: tools.length > 0 ? JSON.stringify(tools) : undefined,
-  })
 
+  // Track timing and accumulated content
+  const startTime = Date.now()
   let chunkCount = 0
   let totalContentLength = 0
+  let accumulatedContent = ''
   let lastUsage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | undefined
   let lastCacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | undefined
 
@@ -239,6 +316,7 @@ export async function* streamMessage(
     chunkCount++
     if (chunk.content) {
       totalContentLength += chunk.content.length
+      accumulatedContent += chunk.content
     }
     if (chunk.usage) {
       lastUsage = chunk.usage
@@ -247,16 +325,41 @@ export async function* streamMessage(
       lastCacheUsage = chunk.cacheUsage
     }
     if (chunk.done) {
-      logger.debug('[LLM Response] streaming.service.ts:streamMessage - Stream complete', {
-        context: 'llm-api',
-        provider: connectionProfile.provider,
-        model: connectionProfile.modelName,
-        chunkCount,
-        totalContentLength,
-        usage: lastUsage ? JSON.stringify(lastUsage) : undefined,
-        cacheUsage: lastCacheUsage ? JSON.stringify(lastCacheUsage) : undefined,
-        hasThoughtSignature: !!chunk.thoughtSignature,
-      })
+
+      // Log the LLM call if userId is provided
+      if (userId) {
+        const durationMs = Date.now() - startTime
+
+        logLLMCall({
+          userId,
+          type: 'CHAT_MESSAGE',
+          messageId,
+          chatId,
+          provider: connectionProfile.provider,
+          modelName: connectionProfile.modelName,
+          request: {
+            messages: llmMessages.map(m => ({
+              role: m.role,
+              content: m.content,
+              attachments: m.attachments,
+            })),
+            temperature: modelParams.temperature as number | undefined,
+            maxTokens: modelParams.maxTokens as number | undefined,
+            tools: tools.length > 0 ? tools : undefined,
+          },
+          response: {
+            content: accumulatedContent,
+          },
+          usage: lastUsage,
+          cacheUsage: lastCacheUsage,
+          durationMs,
+        }).catch(err => {
+          logger.warn('Failed to log LLM call from streaming service', {
+            userId,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        })
+      }
     }
     yield chunk
   }
@@ -387,9 +490,7 @@ export function safeEnqueue(
     return true
   } catch (error) {
     // Controller is already closed (client disconnected, timeout, etc.)
-    logger.debug('Stream controller closed, enqueue skipped', {
-      error: error instanceof Error ? error.message : String(error),
-    })
+
     return false
   }
 }

@@ -102,12 +102,6 @@ export async function autoAssociateAllKeys(
     associations: [],
     errors: [],
   };
-
-  logger.debug('Starting API key auto-association (all keys)', {
-    context: 'auto-associate.autoAssociateAllKeys',
-    userId,
-  });
-
   try {
     const repos = getUserRepositories(userId);
 
@@ -115,10 +109,6 @@ export async function autoAssociateAllKeys(
     const allApiKeys = await repos.connections.getAllApiKeys();
 
     if (!allApiKeys.length) {
-      logger.debug('No API keys available for auto-association', {
-        context: 'auto-associate.autoAssociateAllKeys',
-        userId,
-      });
       return result;
     }
 
@@ -128,15 +118,6 @@ export async function autoAssociateAllKeys(
       repos.imageProfiles.findAll(),
       repos.embeddingProfiles.findAll(),
     ]);
-
-    logger.debug('Fetched profiles for auto-association', {
-      context: 'auto-associate.autoAssociateAllKeys',
-      connectionProfiles: connectionProfiles.length,
-      imageProfiles: imageProfiles.length,
-      embeddingProfiles: embeddingProfiles.length,
-      apiKeys: allApiKeys.length,
-    });
-
     // Process connection profiles
     for (const profile of connectionProfiles) {
       try {
@@ -282,10 +263,6 @@ export async function autoAssociateApiKeys(
   };
 
   if (!newKeyIds.length) {
-    logger.debug('No new keys to auto-associate', {
-      context: 'auto-associate.autoAssociateApiKeys',
-      userId,
-    });
     return result;
   }
 
@@ -307,15 +284,6 @@ export async function autoAssociateApiKeys(
       repos.imageProfiles.findAll(),
       repos.embeddingProfiles.findAll(),
     ]);
-
-    logger.debug('Fetched profiles for auto-association', {
-      context: 'auto-associate.autoAssociateApiKeys',
-      connectionProfiles: connectionProfiles.length,
-      imageProfiles: imageProfiles.length,
-      embeddingProfiles: embeddingProfiles.length,
-      apiKeys: allApiKeys.length,
-    });
-
     // Process connection profiles
     for (const profile of connectionProfiles) {
       try {

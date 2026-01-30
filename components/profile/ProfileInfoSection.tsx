@@ -131,10 +131,6 @@ export function ProfileInfoSection({ profile }: ProfileInfoSectionProps) {
         <dl>
           <InfoField label="User ID" value={profile.id} copyable />
           <InfoField label="Username" value={profile.username} />
-          <InfoField
-            label="Email Verified"
-            value={profile.emailVerified ? formatDate(profile.emailVerified) : 'Not verified'}
-          />
           <InfoField label="Account Created" value={formatDate(profile.createdAt)} />
           <InfoField label="Last Updated" value={formatDate(profile.updatedAt)} />
         </dl>

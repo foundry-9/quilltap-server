@@ -19,7 +19,7 @@ import { notFound, badRequest, serverError, validationError } from '@/lib/api/re
 // ============================================================================
 
 const setConfigSchema = z.object({
-  config: z.record(z.unknown()),
+  config: z.record(z.string(), z.unknown()),
 });
 
 type SetConfigInput = z.infer<typeof setConfigSchema>;
@@ -32,7 +32,6 @@ async function handleGetConfig(req: NextRequest, context: any, name: string) {
   const { user, repos } = context;
 
   try {
-    logger.debug('[Plugins v1] GET config', { pluginName: name, userId: user.id });
 
     if (!pluginRegistry.has(name)) {
       logger.warn('[Plugins v1] Plugin not found for config request', {
@@ -65,15 +64,7 @@ async function handleGetConfig(req: NextRequest, context: any, name: string) {
     const effectiveConfig = {
       ...defaultConfig,
       ...(userConfig?.config || {}),
-    };
-
-    logger.debug('[Plugins v1] Retrieved plugin config', {
-      pluginName: name,
-      userId: user.id,
-      hasUserConfig: !!userConfig,
-    });
-
-    return NextResponse.json({
+    };return NextResponse.json({
       pluginName: name,
       pluginTitle: plugin.manifest.title,
       configSchema,
@@ -94,7 +85,6 @@ async function handleSetConfig(req: NextRequest, context: any, name: string) {
   const { user, repos } = context;
 
   try {
-    logger.debug('[Plugins v1] POST set-config', { pluginName: name, userId: user.id });
 
     if (!pluginRegistry.has(name)) {
       logger.warn('[Plugins v1] Plugin not found for config update', {
@@ -113,12 +103,7 @@ async function handleSetConfig(req: NextRequest, context: any, name: string) {
     const body = await req.json();
     const parseResult = setConfigSchema.safeParse(body);
 
-    if (!parseResult.success) {
-      logger.debug('[Plugins v1] Invalid config update request', {
-        pluginName: name,
-        errors: parseResult.error.errors,
-      });
-      return validationError(parseResult.error);
+    if (!parseResult.success) {return validationError(parseResult.error);
     }
 
     const { config } = parseResult.data;
@@ -195,12 +180,7 @@ async function handleSetConfig(req: NextRequest, context: any, name: string) {
       }
     }
 
-    if (errors.length > 0) {
-      logger.debug('[Plugins v1] Config validation failed', {
-        pluginName: name,
-        errors,
-      });
-      return NextResponse.json(
+    if (errors.length > 0) {return NextResponse.json(
         { error: 'Validation failed', details: errors },
         { status: 400 }
       );
@@ -226,7 +206,6 @@ async function handleSetConfig(req: NextRequest, context: any, name: string) {
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      logger.debug('[Plugins v1] Validation error on set-config', { errors: error.errors });
       return validationError(error);
     }
 
@@ -248,7 +227,6 @@ export const GET = createAuthenticatedParamsHandler<{ name: string }>(
     const { user } = context;
 
     try {
-      logger.debug('[Plugins v1] GET plugin', { pluginName: name, userId: user.id });
 
       const { searchParams } = new URL(req.url);
       const action = searchParams.get('action');
@@ -265,14 +243,7 @@ export const GET = createAuthenticatedParamsHandler<{ name: string }>(
         return notFound('Plugin');
       }
 
-      const plugin = pluginRegistry.get(name);
-
-      logger.debug('[Plugins v1] Retrieved plugin details', {
-        pluginName: name,
-        userId: user.id,
-      });
-
-      return NextResponse.json({
+      const plugin = pluginRegistry.get(name);return NextResponse.json({
         name: plugin?.manifest.name,
         title: plugin?.manifest.title,
         version: plugin?.manifest.version,
@@ -301,7 +272,6 @@ export const POST = createAuthenticatedParamsHandler<{ name: string }>(
     const { searchParams } = new URL(req.url);
     const action = searchParams.get('action');
 
-    logger.debug('[Plugins v1] POST request', { action, pluginName: name, userId: context.user.id });
 
     switch (action) {
       case 'set-config':
@@ -321,7 +291,6 @@ export const PUT = createAuthenticatedParamsHandler<{ name: string }>(
     const { user } = context;
 
     try {
-      logger.debug('[Plugins v1] PUT request to toggle plugin', { pluginName: name, userId: user.id });
 
       const body = await req.json().catch(() => ({}));
       const { enabled } = body;
@@ -333,29 +302,17 @@ export const PUT = createAuthenticatedParamsHandler<{ name: string }>(
       // Try to find plugin by name first in registry
       let pluginName = name;
       let found = false;
-      
+
       if (pluginRegistry.has(pluginName)) {
         found = true;
       } else {
         // Try to find by package name if direct name lookup fails
         const allPlugins = pluginRegistry.getAll();
         const registryPlugin = allPlugins.find(p => p.packageName === name);
-        
+
         if (registryPlugin) {
           pluginName = registryPlugin.manifest.name;
           found = true;
-        } else {
-          // Try to find in user plugins
-          const { scanPlugins } = await import('@/lib/plugins/manifest-loader');
-          const userScanResult = await scanPlugins(undefined, user.id);
-          const userPlugin = userScanResult.plugins.find(
-            p => p.manifest.name === name || p.packageName === name
-          );
-          
-          if (userPlugin) {
-            pluginName = userPlugin.manifest.name;
-            found = true;
-          }
         }
       }
 

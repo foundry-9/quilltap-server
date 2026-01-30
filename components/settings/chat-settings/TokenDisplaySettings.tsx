@@ -1,5 +1,6 @@
 'use client'
 
+import { SettingsCard } from '@/components/ui/SettingsCard'
 import { ChatSettings, TokenDisplaySettings, TOKEN_DISPLAY_OPTIONS, DEFAULT_TOKEN_DISPLAY_SETTINGS } from './types'
 
 export interface TokenDisplaySettingsProps {
@@ -21,13 +22,10 @@ export function TokenDisplaySettingsComponent({
   const tokenSettings = settings.tokenDisplaySettings || DEFAULT_TOKEN_DISPLAY_SETTINGS
 
   return (
-    <div>
-      <h2 className="text-xl font-semibold mb-4">Token & Cost Display</h2>
-      <p className="text-muted-foreground mb-4">
-        Control the visibility of token usage and cost information in chats.
-        Enabling these options helps you track your API usage and costs.
-      </p>
-
+    <SettingsCard
+      title="Token & Cost Display"
+      subtitle="Control the visibility of token usage and cost information in chats. Enabling these options helps you track your API usage and costs."
+    >
       <div className="space-y-3">
         {TOKEN_DISPLAY_OPTIONS.map((option) => (
           <label
@@ -57,6 +55,6 @@ export function TokenDisplaySettingsComponent({
           or fallback pricing for other providers. Actual costs may vary slightly.
         </p>
       </div>
-    </div>
+    </SettingsCard>
   )
 }

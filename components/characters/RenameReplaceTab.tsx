@@ -198,7 +198,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
         <h3 className="qt-text-section mb-4 text-gray-900 dark:text-white">
           Rename Character
         </h3>
-        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+        <p className="text-sm qt-text-muted mb-4">
           Change this character&apos;s name across all associated data including details, physical descriptions, memories, and chat conversations.
         </p>
 
@@ -246,7 +246,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
             <h3 className="qt-text-section text-gray-900 dark:text-white">
               Additional Replacements
             </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="text-sm qt-text-muted">
               Replace nicknames, aliases, or other terms associated with this character.
             </p>
           </div>
@@ -275,7 +275,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
               >
                 <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="block qt-text-label-xs mb-1 text-gray-600 dark:text-gray-400">
+                    <label className="block qt-text-label-xs mb-1 qt-text-muted">
                       Find
                     </label>
                     <input
@@ -287,7 +287,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
                     />
                   </div>
                   <div>
-                    <label className="block qt-text-label-xs mb-1 text-gray-600 dark:text-gray-400">
+                    <label className="block qt-text-label-xs mb-1 qt-text-muted">
                       Replace with
                     </label>
                     <input
@@ -300,7 +300,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
                   </div>
                 </div>
                 <div className="flex flex-col items-center gap-2 pt-5">
-                  <label className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400" title="Case sensitive">
+                  <label className="flex items-center gap-1 text-xs qt-text-muted" title="Case sensitive">
                     <input
                       type="checkbox"
                       checked={replacement.caseSensitive}
@@ -356,23 +356,23 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
             <div className="bg-gray-50 dark:bg-slate-700/50 rounded p-3 text-center">
               <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{preview.summary.characterFields}</div>
-              <div className="text-xs text-gray-600 dark:text-gray-400">Character Fields</div>
+              <div className="text-xs qt-text-muted">Character Fields</div>
             </div>
             <div className="bg-gray-50 dark:bg-slate-700/50 rounded p-3 text-center">
               <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{preview.summary.physicalDescriptions}</div>
-              <div className="text-xs text-gray-600 dark:text-gray-400">Descriptions</div>
+              <div className="text-xs qt-text-muted">Descriptions</div>
             </div>
             <div className="bg-gray-50 dark:bg-slate-700/50 rounded p-3 text-center">
               <div className="text-2xl font-bold text-green-600 dark:text-green-400">{preview.summary.memories}</div>
-              <div className="text-xs text-gray-600 dark:text-gray-400">Memories</div>
+              <div className="text-xs qt-text-muted">Memories</div>
             </div>
             <div className="bg-gray-50 dark:bg-slate-700/50 rounded p-3 text-center">
               <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">{preview.summary.chatTitles}</div>
-              <div className="text-xs text-gray-600 dark:text-gray-400">Chat Titles</div>
+              <div className="text-xs qt-text-muted">Chat Titles</div>
             </div>
             <div className="bg-gray-50 dark:bg-slate-700/50 rounded p-3 text-center">
               <div className="text-2xl font-bold text-red-600 dark:text-red-400">{preview.summary.chatMessages}</div>
-              <div className="text-xs text-gray-600 dark:text-gray-400">Messages</div>
+              <div className="text-xs qt-text-muted">Messages</div>
             </div>
             <div className="bg-blue-50 dark:bg-blue-900/30 rounded p-3 text-center border border-blue-200 dark:border-blue-700">
               <div className="text-2xl font-bold text-blue-700 dark:text-blue-300">{preview.summary.total}</div>
@@ -390,10 +390,10 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 dark:bg-slate-700 sticky top-0">
                     <tr>
-                      <th className="text-left px-3 py-2 text-gray-600 dark:text-gray-400">Location</th>
-                      <th className="text-left px-3 py-2 text-gray-600 dark:text-gray-400">Field</th>
-                      <th className="text-left px-3 py-2 text-gray-600 dark:text-gray-400">Change</th>
-                      <th className="text-left px-3 py-2 text-gray-600 dark:text-gray-400">Context</th>
+                      <th className="text-left px-3 py-2 qt-text-muted">Location</th>
+                      <th className="text-left px-3 py-2 qt-text-muted">Field</th>
+                      <th className="text-left px-3 py-2 qt-text-muted">Change</th>
+                      <th className="text-left px-3 py-2 qt-text-muted">Context</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
@@ -414,7 +414,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
                   </tbody>
                 </table>
                 {preview.replacements.length > 100 && (
-                  <div className="px-3 py-2 bg-gray-50 dark:bg-slate-700 text-sm text-gray-600 dark:text-gray-400 text-center">
+                  <div className="px-3 py-2 bg-gray-50 dark:bg-slate-700 text-sm qt-text-muted text-center">
                     ...and {preview.replacements.length - 100} more
                   </div>
                 )}

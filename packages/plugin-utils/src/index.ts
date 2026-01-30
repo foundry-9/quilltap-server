@@ -116,6 +116,15 @@ export type {
 } from './roleplay-templates';
 
 // ============================================================================
+// Built-in Tool Names
+// ============================================================================
+
+export {
+  BUILTIN_TOOL_NAMES,
+  getBuiltinToolNames,
+} from './builtin-tools';
+
+// ============================================================================
 // Version
 // ============================================================================
 
@@ -123,4 +132,4 @@ export type {
  * Version of the plugin-utils package.
  * Can be used at runtime to check compatibility.
  */
-export const PLUGIN_UTILS_VERSION = '1.2.0';
+export const PLUGIN_UTILS_VERSION = '1.3.0';

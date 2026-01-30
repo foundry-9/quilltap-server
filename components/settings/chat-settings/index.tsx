@@ -7,6 +7,7 @@ import { ImageDescriptionSettings } from './ImageDescriptionSettings'
 import { MemoryCascadeSettings } from './MemoryCascadeSettings'
 import { TokenDisplaySettingsComponent } from './TokenDisplaySettings'
 import { ContextCompressionSettingsComponent } from './ContextCompressionSettings'
+import { LLMLoggingSettingsComponent } from './LLMLoggingSettings'
 
 /**
  * ChatSettingsTab Component
@@ -15,8 +16,9 @@ import { ContextCompressionSettingsComponent } from './ContextCompressionSetting
  * - Cheap LLM configuration
  * - Image description profiles
  * - Memory cascade behavior
- * - Token display preferences
+ * - LLM logging preferences
  * - Context compression settings
+ * - Token display preferences
  */
 export default function ChatSettingsTab() {
   const {
@@ -35,6 +37,7 @@ export default function ChatSettingsTab() {
     handleMemoryCascadeUpdate,
     handleTokenDisplayChange,
     handleContextCompressionUpdate,
+    handleLLMLoggingChange,
   } = useChatSettings()
 
   if (loading) {
@@ -67,43 +70,49 @@ export default function ChatSettingsTab() {
         </div>
       )}
 
-      <AvatarSettings
-        settings={settings}
-        saving={saving}
-        onAvatarModeChange={handleAvatarModeChange}
-        onAvatarStyleChange={handleAvatarStyleChange}
-      />
+      <div className="qt-card-grid-auto">
+        <AvatarSettings
+          settings={settings}
+          saving={saving}
+          onAvatarModeChange={handleAvatarModeChange}
+          onAvatarStyleChange={handleAvatarStyleChange}
+        />
 
-      <CheapLLMSettings
-        settings={settings}
-        saving={saving}
-        loadingProfiles={loadingProfiles}
-        connectionProfiles={connectionProfiles}
-        embeddingProfiles={embeddingProfiles}
-        onUpdate={handleCheapLLMUpdate}
-      />
+        <CheapLLMSettings
+          settings={settings}
+          saving={saving}
+          loadingProfiles={loadingProfiles}
+          connectionProfiles={connectionProfiles}
+          embeddingProfiles={embeddingProfiles}
+          onUpdate={handleCheapLLMUpdate}
+        />
 
-      <ImageDescriptionSettings
-        settings={settings}
-        saving={saving}
-        loadingProfiles={loadingProfiles}
-        connectionProfiles={connectionProfiles}
-        onProfileChange={handleImageDescriptionProfileChange}
-      />
+        <ImageDescriptionSettings
+          settings={settings}
+          saving={saving}
+          loadingProfiles={loadingProfiles}
+          connectionProfiles={connectionProfiles}
+          onProfileChange={handleImageDescriptionProfileChange}
+        />
 
-      <MemoryCascadeSettings
-        settings={settings}
-        saving={saving}
-        onUpdate={handleMemoryCascadeUpdate}
-      />
+        <MemoryCascadeSettings
+          settings={settings}
+          saving={saving}
+          onUpdate={handleMemoryCascadeUpdate}
+        />
 
-      <ContextCompressionSettingsComponent
-        settings={settings}
-        saving={saving}
-        onUpdate={handleContextCompressionUpdate}
-      />
+        <ContextCompressionSettingsComponent
+          settings={settings}
+          saving={saving}
+          onUpdate={handleContextCompressionUpdate}
+        />
 
-      <div className="border-t border-border pt-6">
+        <LLMLoggingSettingsComponent
+          settings={settings}
+          saving={saving}
+          onLLMLoggingChange={handleLLMLoggingChange}
+        />
+
         <TokenDisplaySettingsComponent
           settings={settings}
           saving={saving}

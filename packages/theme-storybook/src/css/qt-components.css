@@ -118,6 +118,8 @@
   --qt-badge-tag-fg: hsl(25 95% 40%);
   --qt-badge-memory-bg: hsl(330 80% 60% / 0.15);
   --qt-badge-memory-fg: hsl(330 80% 40%);
+  --qt-badge-project-bg: hsl(185 80% 40% / 0.15);
+  --qt-badge-project-fg: hsl(185 80% 30%);
 
   /* Status badge colors */
   --qt-badge-enabled-bg: hsl(142 76% 36% / 0.15);
@@ -280,6 +282,15 @@
 
 .qt-button-destructive:hover:not(:disabled) {
   background-color: var(--qt-button-destructive-hover-bg);
+}
+
+.qt-button-warning {
+  background-color: var(--qt-button-warning-bg);
+  color: var(--qt-button-warning-fg);
+}
+
+.qt-button-warning:hover:not(:disabled) {
+  background-color: var(--qt-button-warning-hover-bg);
 }
 
 .qt-button-success {
@@ -629,6 +640,11 @@
   gap: 0.5rem;
   padding: 1.5rem;
   padding-top: 0;
+}
+
+/* Wide dialog variant - matches page container width */
+.qt-dialog-wide {
+  max-width: min(var(--qt-page-max-width, 75rem), calc(100vw - 2rem));
 }
 
 /* ==========================================================================
@@ -1239,6 +1255,8 @@
   --qt-badge-tag-fg: hsl(25 95% 65%);
   --qt-badge-memory-bg: hsl(330 80% 60% / 0.3);
   --qt-badge-memory-fg: hsl(330 80% 70%);
+  --qt-badge-project-bg: hsl(185 80% 40% / 0.3);
+  --qt-badge-project-fg: hsl(185 80% 70%);
 
   /* Status badge tokens */
   --qt-badge-enabled-bg: hsl(142 76% 36% / 0.3);

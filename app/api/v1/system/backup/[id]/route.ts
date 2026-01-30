@@ -26,15 +26,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user }, { id }) => {
     try {
       const { searchParams } = new URL(req.url);
-      const s3Key = searchParams.get('s3Key');
-
-      logger.debug('[System Backup v1] Download request', {
-        userId: user.id,
-        id,
-        hasS3Key: !!s3Key,
-      });
-
-      let zipBuffer: Buffer;
+      const s3Key = searchParams.get('s3Key');let zipBuffer: Buffer;
       let filename: string;
 
       if (s3Key) {
@@ -120,14 +112,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
           s3Key,
         });
         return forbidden();
-      }
-
-      logger.debug('[System Backup v1] Deleting backup', {
-        userId: user.id,
-        s3Key,
-      });
-
-      await deleteBackupFromS3(user.id, s3Key);
+      }await deleteBackupFromS3(user.id, s3Key);
 
       logger.info('[System Backup v1] Backup deleted', {
         userId: user.id,

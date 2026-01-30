@@ -42,13 +42,21 @@ export function useTurnManagement(
   }, [participantsAsBase])
 
   const handleNudge = useCallback(async (participantId: string) => {
+    // Find participant to validate it's LLM-controlled
+    const participant = participantData.find(p => p.id === participantId)
+    const participantBase = participantsAsBase.find(p => p.id === participantId)
+
+    // Safety check: Only LLM-controlled characters can be nudged for AI response
+    if (participantBase?.controlledBy === 'user') {
+      showErrorToast('User-controlled characters cannot be nudged for AI response. Use Queue instead.')
+      return
+    }
+
     // If chat is paused, unpause it first
     if (isPaused && onUnpause) {
       await onUnpause()
     }
 
-    // Find participant name for ephemeral message
-    const participant = participantData.find(p => p.id === participantId)
     const participantName = participant?.character?.name || participant?.persona?.name || 'Participant'
 
     // Add ephemeral nudge notification
@@ -114,9 +122,16 @@ export function useTurnManagement(
     }
 
     // Get the next character to speak
-    let result = selectNextSpeaker(participantsAsBase, charactersMap, turnState, userParticipantId)
+    const result = selectNextSpeaker(participantsAsBase, charactersMap, turnState, userParticipantId)
 
     if (result.nextSpeakerId && result.nextSpeakerId !== userParticipantId) {
+      // Verify the selected participant is LLM-controlled before triggering
+      const nextParticipant = participantsAsBase.find(p => p.id === result.nextSpeakerId)
+      if (nextParticipant?.controlledBy === 'user') {
+        // User-controlled character was selected (likely from queue) - can't auto-generate
+        showInfoToast("It's a user-controlled character's turn. Type a message as them.")
+        return
+      }
       triggerContinueMode(result.nextSpeakerId)
     } else {
       showInfoToast('No characters available to speak. Try adding or activating a character.')

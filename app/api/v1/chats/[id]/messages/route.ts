@@ -38,13 +38,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
 
       // Validate request based on mode
       if (isContinueMode) {
-        const parsed = continueMessageSchema.parse(body);
-        logger.debug('[Chats v1 Messages] Continue mode request', {
-          chatId: id,
-          respondingParticipantId: parsed.respondingParticipantId,
-        });
-
-        // Handle the message via orchestrator
+        const parsed = continueMessageSchema.parse(body);// Handle the message via orchestrator
         const stream = await handleSendMessage(repos, id, user.id, {
           continueMode: true,
           respondingParticipantId: parsed.respondingParticipantId,
@@ -58,14 +52,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
           },
         });
       } else {
-        const parsed = sendMessageSchema.parse(body);
-        logger.debug('[Chats v1 Messages] Send message request', {
-          chatId: id,
-          contentLength: parsed.content.length,
-          fileCount: parsed.fileIds?.length || 0,
-        });
-
-        // Handle the message via orchestrator
+        const parsed = sendMessageSchema.parse(body);// Handle the message via orchestrator
         const stream = await handleSendMessage(repos, id, user.id, {
           content: parsed.content,
           fileIds: parsed.fileIds,

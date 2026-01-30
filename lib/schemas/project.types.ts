@@ -38,6 +38,12 @@ export const ProjectSchema = z.object({
   // Storage
   mountPointId: UUIDSchema.nullable().optional(), // Storage mount point for project files
 
+  // Default tool settings for new chats
+  /** Default list of tool IDs that are disabled for new chats in this project */
+  defaultDisabledTools: z.array(z.string()).default([]),
+  /** Default groups of tools that are disabled (e.g., "plugin:mcp") */
+  defaultDisabledToolGroups: z.array(z.string()).default([]),
+
   // Timestamps
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

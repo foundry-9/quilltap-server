@@ -23,24 +23,24 @@ import { createHash } from 'crypto';
 
 const grantPermissionSchema = z.object({
   scope: FileWritePermissionScopeEnum,
-  fileId: z.string().uuid().optional(),
-  projectId: z.string().uuid().optional(),
-  grantedInChatId: z.string().uuid().optional(),
+  fileId: z.uuid().optional(),
+  projectId: z.uuid().optional(),
+  grantedInChatId: z.uuid().optional(),
 });
 
 const revokePermissionSchema = z.object({
-  permissionId: z.string().uuid(),
+  permissionId: z.uuid(),
 });
 
 const completeWriteSchema = z.object({
-  chatId: z.string().uuid(),
+  chatId: z.uuid(),
   action: z.enum(['approve', 'deny']),
   pendingWrite: z.object({
     filename: z.string().min(1),
     content: z.string(),
-    mimeType: z.string().optional().default('text/plain'),
-    folderPath: z.string().optional().default('/'),
-    projectId: z.string().uuid().nullable(),
+    mimeType: z.string().optional().prefault('text/plain'),
+    folderPath: z.string().optional().prefault('/'),
+    projectId: z.uuid().nullable(),
   }),
 });
 
@@ -50,7 +50,6 @@ const completeWriteSchema = z.object({
 
 export const GET = createAuthenticatedHandler(async (_request, { user, repos }) => {
   try {
-    logger.debug('[Files v1] GET list file write permissions', { userId: user.id });
 
     const permissions = await repos.filePermissions.findByUserId(user.id);
 
@@ -82,14 +81,7 @@ export const GET = createAuthenticatedHandler(async (_request, { user, repos }) 
           createdAt: perm.createdAt,
         };
       })
-    );
-
-    logger.debug('[Files v1] Retrieved file write permissions', {
-      userId: user.id,
-      count: enrichedPermissions.length,
-    });
-
-    return successResponse({ permissions: enrichedPermissions });
+    );return successResponse({ permissions: enrichedPermissions });
   } catch (error) {
     logger.error('[Files v1] Error fetching file write permissions', {}, error instanceof Error ? error : undefined);
     return serverError('Failed to fetch permissions');
@@ -124,21 +116,10 @@ async function handleGrantPermission(request: NextRequest, user: any, repos: any
     const parsed = grantPermissionSchema.safeParse(body);
 
     if (!parsed.success) {
-      logger.debug('[Files v1] Invalid permission grant request', { errors: parsed.error.errors });
       return validationError(parsed.error);
     }
 
-    const { scope, fileId, projectId, grantedInChatId } = parsed.data;
-
-    logger.debug('[Files v1] Processing file write permission grant', {
-      userId: user.id,
-      scope,
-      fileId,
-      projectId,
-      grantedInChatId,
-    });
-
-    // Validate that required IDs are provided based on scope
+    const { scope, fileId, projectId, grantedInChatId } = parsed.data;// Validate that required IDs are provided based on scope
     if (scope === 'SINGLE_FILE' && !fileId) {
       return badRequest('fileId is required for SINGLE_FILE scope');
     }
@@ -150,7 +131,6 @@ async function handleGrantPermission(request: NextRequest, user: any, repos: any
     if (fileId) {
       const file = await repos.files.findById(fileId);
       if (!file || file.userId !== user.id) {
-        logger.debug('[Files v1] File not found or not owned by user', { fileId });
         return notFound('File');
       }
     }
@@ -158,7 +138,6 @@ async function handleGrantPermission(request: NextRequest, user: any, repos: any
     if (projectId) {
       const project = await repos.projects.findById(projectId);
       if (!project || project.userId !== user.id) {
-        logger.debug('[Files v1] Project not found or not owned by user', { projectId });
         return notFound('Project');
       }
     }
@@ -166,7 +145,6 @@ async function handleGrantPermission(request: NextRequest, user: any, repos: any
     if (grantedInChatId) {
       const chat = await repos.chats.findById(grantedInChatId);
       if (!chat || chat.userId !== user.id) {
-        logger.debug('[Files v1] Chat not found or not owned by user', { grantedInChatId });
         return notFound('Chat');
       }
     }
@@ -239,18 +217,10 @@ async function handleRevokePermission(request: NextRequest, user: any, repos: an
       return validationError(parsed.error);
     }
 
-    const { permissionId } = parsed.data;
-
-    logger.debug('[Files v1] Processing permission revoke request', {
-      userId: user.id,
-      permissionId,
-    });
-
-    // Get the permission to verify ownership
+    const { permissionId } = parsed.data;// Get the permission to verify ownership
     const permission = await repos.filePermissions.findById(permissionId);
 
     if (!permission) {
-      logger.debug('[Files v1] Permission not found', { permissionId });
       return notFound('Permission');
     }
 
@@ -297,20 +267,10 @@ async function handleCompleteWrite(request: NextRequest, user: any, repos: any):
     const parsed = completeWriteSchema.safeParse(body);
 
     if (!parsed.success) {
-      logger.debug('[Files v1] Invalid completion request', { errors: parsed.error.errors });
       return validationError(parsed.error);
     }
 
-    const { chatId, action, pendingWrite } = parsed.data;
-
-    logger.debug('[Files v1] Processing write completion', {
-      chatId,
-      action,
-      filename: pendingWrite.filename,
-      projectId: pendingWrite.projectId,
-    });
-
-    // Verify chat exists and belongs to user
+    const { chatId, action, pendingWrite } = parsed.data;// Verify chat exists and belongs to user
     const chat = await repos.chats.findById(chatId);
     if (!chat || chat.userId !== user.id) {
       return badRequest('Chat not found');

@@ -43,7 +43,7 @@ export function MountPointList({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="qt-card-grid-auto">
       {mountPoints.map((mountPoint) => (
         <MountPointCard
           key={mountPoint.id}

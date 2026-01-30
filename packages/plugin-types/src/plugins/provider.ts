@@ -29,6 +29,12 @@ export interface ProviderMetadata {
     /** Icon color class (e.g., 'text-green-600') */
     icon: string;
   };
+  /**
+   * Legacy provider names that should be treated as aliases for this provider.
+   * Used for backward compatibility when provider names change.
+   * Example: ['GOOGLE_IMAGEN'] for the GOOGLE provider.
+   */
+  legacyNames?: string[];
 }
 
 /**
