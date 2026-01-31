@@ -4,6 +4,11 @@
 
 ### 2.8.1
 
+- fix: Memory extraction handles LLM returning object instead of string (2026-01-31)
+  - Some LLMs return `content` as an object instead of a string in memory extraction
+  - Added type coercion to stringify non-string content/summary fields
+  - Prevents Zod validation error "expected string, received object"
+  - Added debug logging to track which task types encounter this issue
 - feat: First-startup character seeding (2026-01-31)
   - Seeds default character "Ben" on first startup when database is empty
   - Created `first-startup/` directory with seed character data

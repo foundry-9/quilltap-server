@@ -435,10 +435,23 @@ ${characterLabel} says:
         }
 
         const parsed = JSON.parse(cleanContent)
+        // Ensure content is always a string (some LLMs return objects)
+        if (parsed.content && typeof parsed.content !== 'string') {
+          logger.debug('[Memory] LLM returned non-string content, coercing to string', {
+            taskType: 'memory-extraction-user',
+            contentType: typeof parsed.content,
+          })
+        }
+        const memoryContent = typeof parsed.content === 'string'
+          ? parsed.content
+          : (parsed.content ? JSON.stringify(parsed.content) : undefined)
+        const memorySummary = typeof parsed.summary === 'string'
+          ? parsed.summary
+          : (parsed.summary ? JSON.stringify(parsed.summary) : undefined)
         return {
           significant: parsed.significant === true,
-          content: parsed.content,
-          summary: parsed.summary,
+          content: memoryContent,
+          summary: memorySummary,
           keywords: parsed.keywords || [],
           importance: typeof parsed.importance === 'number' ? parsed.importance : 0.5,
         }
@@ -512,10 +525,23 @@ ${characterLabel} says:
         }
 
         const parsed = JSON.parse(cleanContent)
+        // Ensure content is always a string (some LLMs return objects)
+        if (parsed.content && typeof parsed.content !== 'string') {
+          logger.debug('[Memory] LLM returned non-string content, coercing to string', {
+            taskType: 'memory-extraction-character',
+            contentType: typeof parsed.content,
+          })
+        }
+        const memoryContent = typeof parsed.content === 'string'
+          ? parsed.content
+          : (parsed.content ? JSON.stringify(parsed.content) : undefined)
+        const memorySummary = typeof parsed.summary === 'string'
+          ? parsed.summary
+          : (parsed.summary ? JSON.stringify(parsed.summary) : undefined)
         return {
           significant: parsed.significant === true,
-          content: parsed.content,
-          summary: parsed.summary,
+          content: memoryContent,
+          summary: memorySummary,
           keywords: parsed.keywords || [],
           importance: typeof parsed.importance === 'number' ? parsed.importance : 0.5,
         }
@@ -609,10 +635,23 @@ ${characterBName}: ${characterBMessage}`,
         }
 
         const parsed = JSON.parse(cleanContent)
+        // Ensure content is always a string (some LLMs return objects)
+        if (parsed.content && typeof parsed.content !== 'string') {
+          logger.debug('[Memory] LLM returned non-string content, coercing to string', {
+            taskType: 'memory-extraction-inter-character',
+            contentType: typeof parsed.content,
+          })
+        }
+        const memoryContent = typeof parsed.content === 'string'
+          ? parsed.content
+          : (parsed.content ? JSON.stringify(parsed.content) : undefined)
+        const memorySummary = typeof parsed.summary === 'string'
+          ? parsed.summary
+          : (parsed.summary ? JSON.stringify(parsed.summary) : undefined)
         return {
           significant: parsed.significant === true,
-          content: parsed.content,
-          summary: parsed.summary,
+          content: memoryContent,
+          summary: memorySummary,
           keywords: parsed.keywords || [],
           importance: typeof parsed.importance === 'number' ? parsed.importance : 0.5,
         }
@@ -1088,13 +1127,29 @@ ${exchangesText}`,
           return []
         }
 
-        return parsed.map((item: Record<string, unknown>) => ({
-          significant: item.significant === true,
-          content: item.content as string | undefined,
-          summary: item.summary as string | undefined,
-          keywords: (item.keywords as string[]) || [],
-          importance: typeof item.importance === 'number' ? item.importance : 0.5,
-        }))
+        return parsed.map((item: Record<string, unknown>, index: number) => {
+          // Ensure content is always a string (some LLMs return objects)
+          if (item.content && typeof item.content !== 'string') {
+            logger.debug('[Memory] LLM returned non-string content in batch extraction, coercing to string', {
+              taskType: 'batch-memory-extraction',
+              contentType: typeof item.content,
+              itemIndex: index,
+            })
+          }
+          const content = typeof item.content === 'string'
+            ? item.content
+            : (item.content ? JSON.stringify(item.content) : undefined)
+          const summary = typeof item.summary === 'string'
+            ? item.summary
+            : (item.summary ? JSON.stringify(item.summary) : undefined)
+          return {
+            significant: item.significant === true,
+            content,
+            summary,
+            keywords: (item.keywords as string[]) || [],
+            importance: typeof item.importance === 'number' ? item.importance : 0.5,
+          }
+        })
       } catch {
         // If parsing fails, return empty array
         return []
