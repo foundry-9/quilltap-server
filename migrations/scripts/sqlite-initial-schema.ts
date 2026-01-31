@@ -594,6 +594,50 @@ export const SQLITE_TABLES = [
     )`,
     indexes: [],
   },
+  // TF-IDF vocabulary storage (one row per embedding profile using BUILTIN)
+  {
+    name: 'tfidf_vocabularies',
+    sql: `CREATE TABLE IF NOT EXISTS "tfidf_vocabularies" (
+      "id" TEXT PRIMARY KEY,
+      "profileId" TEXT NOT NULL UNIQUE,
+      "userId" TEXT NOT NULL,
+      "vocabulary" TEXT NOT NULL,
+      "idf" TEXT NOT NULL,
+      "avgDocLength" REAL NOT NULL,
+      "vocabularySize" INTEGER NOT NULL,
+      "includeBigrams" INTEGER DEFAULT 1,
+      "fittedAt" TEXT NOT NULL,
+      "createdAt" TEXT NOT NULL,
+      "updatedAt" TEXT NOT NULL,
+      FOREIGN KEY ("profileId") REFERENCES "embedding_profiles"("id") ON DELETE CASCADE
+    )`,
+    indexes: [
+      `CREATE INDEX IF NOT EXISTS "idx_tfidf_vocabularies_userId" ON "tfidf_vocabularies" ("userId")`,
+      `CREATE INDEX IF NOT EXISTS "idx_tfidf_vocabularies_profileId" ON "tfidf_vocabularies" ("profileId")`,
+    ],
+  },
+  // Track embedding status per entity (allows monitoring which items need embedding)
+  {
+    name: 'embedding_status',
+    sql: `CREATE TABLE IF NOT EXISTS "embedding_status" (
+      "id" TEXT PRIMARY KEY,
+      "userId" TEXT NOT NULL,
+      "entityType" TEXT NOT NULL,
+      "entityId" TEXT NOT NULL,
+      "profileId" TEXT NOT NULL,
+      "status" TEXT DEFAULT 'PENDING',
+      "embeddedAt" TEXT,
+      "error" TEXT,
+      "createdAt" TEXT NOT NULL,
+      "updatedAt" TEXT NOT NULL,
+      UNIQUE("entityType", "entityId", "profileId")
+    )`,
+    indexes: [
+      `CREATE INDEX IF NOT EXISTS "idx_embedding_status_userId" ON "embedding_status" ("userId")`,
+      `CREATE INDEX IF NOT EXISTS "idx_embedding_status_status" ON "embedding_status" ("status")`,
+      `CREATE INDEX IF NOT EXISTS "idx_embedding_status_entityType_entityId" ON "embedding_status" ("entityType", "entityId")`,
+    ],
+  },
 ];
 
 export const sqliteInitialSchemaMigration: Migration = {

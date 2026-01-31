@@ -22,6 +22,7 @@ import {
  * GET /api/v1/embedding-profiles
  * List all embedding profiles for the authenticated user
  * GET /api/v1/embedding-profiles?action=list-models - List available models
+ * GET /api/v1/embedding-profiles?action=list-providers - List available providers
  */
 export const GET = createAuthenticatedHandler(async (req, context) => {
   const { user, repos } = context;
@@ -32,12 +33,17 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
     return handleListModels(req, context);
   }
 
+  // Handle list-providers action
+  if (action === 'list-providers') {
+    return handleListProviders();
+  }
+
   try {
 
     // Get all embedding profiles for user
     const profiles = await repos.embeddingProfiles.findByUserId(user.id);
 
-    // Enrich with API key info and tags
+    // Enrich with API key info, tags, vocabulary stats, and embedding stats
     const enrichedProfiles = await Promise.all(
       profiles.map(async (profile) => {
         // Get API key info if exists
@@ -62,10 +68,37 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
           })
         );
 
+        // Get vocabulary stats for BUILTIN profiles
+        let vocabularyStats = null;
+        if (profile.provider === 'BUILTIN') {
+          const vocab = await repos.tfidfVocabularies.findByProfileId(profile.id);
+          if (vocab) {
+            vocabularyStats = {
+              vocabularySize: vocab.vocabularySize,
+              avgDocLength: vocab.avgDocLength,
+              includeBigrams: vocab.includeBigrams,
+              fittedAt: vocab.fittedAt,
+            };
+          }
+        }
+
+        // Get embedding status stats
+        let embeddingStats = null;
+        try {
+          const stats = await repos.embeddingStatus.getStatsByProfileId(profile.id);
+          if (stats.total > 0) {
+            embeddingStats = stats;
+          }
+        } catch {
+          // Ignore errors - stats are optional
+        }
+
         return {
           ...profile,
           apiKey,
           tags: tagDetails.filter(Boolean),
+          vocabularyStats,
+          embeddingStats,
         };
       })
     );
@@ -87,6 +120,20 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
     return serverError('Failed to fetch embedding profiles');
   }
 });
+
+/**
+ * Handle list-providers action
+ * Returns the list of providers that support embeddings
+ */
+function handleListProviders() {
+  try {
+    const providers = getEmbeddingProviders();
+    return successResponse({ providers });
+  } catch (error) {
+    logger.error('[Embedding Profiles v1] Error in list-providers', {}, error instanceof Error ? error : undefined);
+    return serverError('Failed to fetch embedding providers');
+  }
+}
 
 /**
  * Handle list-models action

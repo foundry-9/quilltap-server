@@ -1,0 +1,55 @@
+{
+  "$schema": "../qtap-plugin-template/schemas/plugin-manifest.schema.json",
+  "name": "qtap-plugin-builtin-embeddings",
+  "title": "Built-in Embeddings",
+  "description": "Zero-dependency, offline TF-IDF embeddings with BM25 enhancement and Porter stemming - no API keys required",
+  "version": "1.0.0",
+  "author": {
+    "name": "Foundry-9 LLC",
+    "email": "charles.sebold@foundry-9.com",
+    "url": "https://foundry-9.com"
+  },
+  "license": "MIT",
+  "compatibility": {
+    "quilltapVersion": ">=2.9.0",
+    "nodeVersion": ">=18.0.0"
+  },
+  "capabilities": ["EMBEDDING_PROVIDER"],
+  "category": "PROVIDER",
+  "main": "index.js",
+  "typescript": true,
+  "frontend": "REACT",
+  "styling": "TAILWIND",
+  "enabledByDefault": true,
+  "status": "STABLE",
+  "keywords": ["embeddings", "tfidf", "bm25", "offline", "builtin", "local", "semantic-search"],
+  "providerConfig": {
+    "providerName": "BUILTIN",
+    "displayName": "Built-in (TF-IDF)",
+    "description": "Offline embeddings using TF-IDF with BM25 enhancement - no API keys required",
+    "abbreviation": "TF",
+    "colors": {
+      "bg": "bg-emerald-100",
+      "text": "text-emerald-800",
+      "icon": "text-emerald-600"
+    },
+    "requiresApiKey": false,
+    "requiresBaseUrl": false,
+    "capabilities": {
+      "chat": false,
+      "imageGeneration": false,
+      "embeddings": true,
+      "webSearch": false
+    },
+    "attachmentSupport": {
+      "supported": false,
+      "mimeTypes": [],
+      "description": "No file attachments - embedding provider only"
+    }
+  },
+  "permissions": {
+    "network": [],
+    "userData": false,
+    "database": false
+  }
+}

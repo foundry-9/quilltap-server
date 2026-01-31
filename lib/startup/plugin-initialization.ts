@@ -238,12 +238,19 @@ async function performInitialization(): Promise<PluginInitializationResult> {
       });
     }
 
-    // Initialize provider registry from enabled plugins with LLM_PROVIDER capability
-    const providerPlugins = pluginRegistry.getEnabledByCapability('LLM_PROVIDER');
-    if (providerPlugins.length > 0) {
+    // Initialize provider registry from enabled plugins with LLM_PROVIDER or EMBEDDING_PROVIDER capability
+    // LLM_PROVIDER plugins provide chat, image generation, and optionally embeddings
+    // EMBEDDING_PROVIDER plugins provide only embeddings (no LLM_PROVIDER capability)
+    const llmProviderPlugins = pluginRegistry.getEnabledByCapability('LLM_PROVIDER');
+    const embeddingProviderPlugins = pluginRegistry.getEnabledByCapability('EMBEDDING_PROVIDER')
+      .filter(p => !p.capabilities.includes('LLM_PROVIDER')); // Exclude plugins that are already LLM providers
+
+    const allProviderPlugins = [...llmProviderPlugins, ...embeddingProviderPlugins];
+
+    if (allProviderPlugins.length > 0) {
       // Load provider plugins using require() - plugins are transpiled to JS first
       const providers: any[] = [];
-      for (const loadedPlugin of providerPlugins) {
+      for (const loadedPlugin of allProviderPlugins) {
         try {
           const mainFile = loadedPlugin.manifest.main || 'index.js';
           const modulePath = resolve(process.cwd(), loadedPlugin.pluginPath, mainFile);
@@ -252,8 +259,16 @@ async function performInitialization(): Promise<PluginInitializationResult> {
 
           if (pluginModule?.plugin) {
             providers.push(pluginModule.plugin);
+            logger.debug('Loaded provider plugin', {
+              plugin: loadedPlugin.manifest.name,
+              capabilities: loadedPlugin.capabilities,
+            });
           } else if (pluginModule?.default?.plugin) {
             providers.push(pluginModule.default.plugin);
+            logger.debug('Loaded provider plugin (default export)', {
+              plugin: loadedPlugin.manifest.name,
+              capabilities: loadedPlugin.capabilities,
+            });
           } else {
             logger.warn('Provider plugin module does not export a plugin object', {
               plugin: loadedPlugin.manifest.name,
@@ -270,6 +285,11 @@ async function performInitialization(): Promise<PluginInitializationResult> {
 
       if (providers.length > 0) {
         await initializeProviderRegistry(providers);
+        logger.info('Provider registry initialized', {
+          llmProviders: llmProviderPlugins.length,
+          embeddingOnlyProviders: embeddingProviderPlugins.length,
+          totalProviders: providers.length,
+        });
       }
     }
 

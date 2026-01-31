@@ -7,6 +7,7 @@ import { BaseModal } from '@/components/ui/BaseModal'
 import { FormActions } from '@/components/ui/FormActions'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import type { ApiKey, EmbeddingModel, EmbeddingProfile, EmbeddingProfileFormData } from './types'
+import type { EmbeddingProviderInfo } from './hooks/useEmbeddingProfiles'
 
 interface ProfileModalProps {
   isOpen: boolean
@@ -15,6 +16,7 @@ interface ProfileModalProps {
   profile?: EmbeddingProfile | null
   apiKeys: ApiKey[]
   embeddingModels: Record<string, EmbeddingModel[]>
+  embeddingProviders: EmbeddingProviderInfo[]
 }
 
 export function ProfileModal({
@@ -24,6 +26,7 @@ export function ProfileModal({
   profile,
   apiKeys,
   embeddingModels,
+  embeddingProviders,
 }: ProfileModalProps) {
   const {
     loading: formLoading,
@@ -32,9 +35,12 @@ export function ProfileModal({
     clearError: clearFormError,
   } = useAsyncOperation<void>()
 
+  // Default to first available provider or 'BUILTIN'
+  const defaultProvider = embeddingProviders[0]?.name || 'BUILTIN'
+
   const form = useFormState<EmbeddingProfileFormData>({
     name: profile?.name || '',
-    provider: profile?.provider || ('OPENAI' as const),
+    provider: profile?.provider || defaultProvider,
     apiKeyId: profile?.apiKeyId || '',
     baseUrl: profile?.baseUrl || '',
     modelName: profile?.modelName || '',
@@ -55,12 +61,17 @@ export function ProfileModal({
   const handleSubmit = async () => {
 
     await executeFormSubmit(async () => {
+      // For BUILTIN provider, set default model name
+      const modelName = form.formData.provider === 'BUILTIN'
+        ? 'tfidf-bm25-v1'
+        : form.formData.modelName
+
       const payload = {
         name: form.formData.name,
         provider: form.formData.provider,
         apiKeyId: form.formData.apiKeyId || undefined,
         baseUrl: form.formData.baseUrl || undefined,
-        modelName: form.formData.modelName,
+        modelName,
         dimensions: form.formData.dimensions ? parseInt(form.formData.dimensions) : undefined,
         isDefault: form.formData.isDefault,
       }
@@ -96,15 +107,20 @@ export function ProfileModal({
     form.setField('dimensions', '')
   }
 
+  // Get current provider info
+  const currentProviderInfo = embeddingProviders.find(p => p.name === form.formData.provider)
+
   // Filter API keys for selected provider
-  const filteredApiKeys = apiKeys.filter(key => {
-    if (form.formData.provider === 'OPENAI') return key.provider === 'OPENAI'
-    if (form.formData.provider === 'OLLAMA') return key.provider === 'OLLAMA'
-    return false
-  })
+  const filteredApiKeys = apiKeys.filter(key => key.provider === form.formData.provider)
+
+  // Determine what the current provider needs
+  const isBuiltin = form.formData.provider === 'BUILTIN'
+  const needsApiKey = currentProviderInfo?.requiresApiKey ?? false
+  const needsBaseUrl = currentProviderInfo?.requiresBaseUrl ?? false
 
   const currentModels = embeddingModels[form.formData.provider] || []
-  const isValid = form.formData.name.trim() && form.formData.modelName.trim()
+  // BUILTIN doesn't require a model name (it's auto-set)
+  const isValid = form.formData.name.trim() && (isBuiltin || form.formData.modelName.trim())
 
   return (
     <BaseModal
@@ -153,13 +169,21 @@ export function ProfileModal({
                 onChange={handleProviderChange}
                 className="qt-select"
               >
-                <option value="OPENAI">OpenAI</option>
-                <option value="OLLAMA">Ollama (Local)</option>
+                {embeddingProviders.map(provider => (
+                  <option key={provider.name} value={provider.name}>
+                    {provider.displayName}
+                  </option>
+                ))}
               </select>
+              {currentProviderInfo?.description && (
+                <p className="mt-1 qt-text-xs text-muted-foreground">
+                  {currentProviderInfo.description}
+                </p>
+              )}
             </div>
 
-            {/* API Key (for OpenAI) */}
-            {form.formData.provider === 'OPENAI' && (
+            {/* API Key (for providers that need it) */}
+            {needsApiKey && (
               <div>
                 <label className="qt-label mb-1">
                   API Key
@@ -179,14 +203,14 @@ export function ProfileModal({
                 </select>
                 {filteredApiKeys.length === 0 && (
                   <p className="mt-1 qt-text-xs text-amber-600">
-                    No OpenAI API keys found. Add one in the API Keys tab first.
+                    No {form.formData.provider} API keys found. Add one in the API Keys tab first.
                   </p>
                 )}
               </div>
             )}
 
-            {/* Base URL (for Ollama) */}
-            {form.formData.provider === 'OLLAMA' && (
+            {/* Base URL (for providers that need it) */}
+            {needsBaseUrl && (
               <div>
                 <label className="qt-label mb-1">
                   Base URL
@@ -200,65 +224,69 @@ export function ProfileModal({
                   placeholder="http://localhost:11434"
                 />
                 <p className="mt-1 qt-text-xs">
-                  Leave empty for default Ollama URL (http://localhost:11434)
+                  Leave empty for default URL
                 </p>
               </div>
             )}
 
-            {/* Model Selection */}
-            <div>
-              <label className="qt-label mb-1">
-                Model *
-              </label>
-              {currentModels.length > 0 ? (
-                <div className="space-y-2">
-                  <select
+            {/* Model Selection - not needed for BUILTIN */}
+            {!isBuiltin && (
+              <div>
+                <label className="qt-label mb-1">
+                  Model *
+                </label>
+                {currentModels.length > 0 ? (
+                  <div className="space-y-2">
+                    <select
+                      value={form.formData.modelName}
+                      onChange={e => handleModelSelect(e.target.value)}
+                      className="qt-select"
+                    >
+                      <option value="">Select a model...</option>
+                      {currentModels.map(model => (
+                        <option key={model.id} value={model.id}>
+                          {model.name} ({model.dimensions} dims)
+                        </option>
+                      ))}
+                    </select>
+                    {form.formData.modelName && (
+                      <p className="qt-text-xs">
+                        {currentModels.find(m => m.id === form.formData.modelName)?.description}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    name="modelName"
                     value={form.formData.modelName}
-                    onChange={e => handleModelSelect(e.target.value)}
-                    className="qt-select"
-                  >
-                    <option value="">Select a model...</option>
-                    {currentModels.map(model => (
-                      <option key={model.id} value={model.id}>
-                        {model.name} ({model.dimensions} dims)
-                      </option>
-                    ))}
-                  </select>
-                  {form.formData.modelName && (
-                    <p className="qt-text-xs">
-                      {currentModels.find(m => m.id === form.formData.modelName)?.description}
-                    </p>
-                  )}
-                </div>
-              ) : (
+                    onChange={form.handleChange}
+                    className="qt-input"
+                    placeholder="text-embedding-3-small"
+                  />
+                )}
+              </div>
+            )}
+
+            {/* Dimensions (optional override) - not needed for BUILTIN */}
+            {!isBuiltin && (
+              <div>
+                <label className="qt-label mb-1">
+                  Dimensions (optional)
+                </label>
                 <input
                   type="text"
-                  name="modelName"
-                  value={form.formData.modelName}
+                  name="dimensions"
+                  value={form.formData.dimensions}
                   onChange={form.handleChange}
                   className="qt-input"
-                  placeholder="text-embedding-3-small"
+                  placeholder="1536"
                 />
-              )}
-            </div>
-
-            {/* Dimensions (optional override) */}
-            <div>
-              <label className="qt-label mb-1">
-                Dimensions (optional)
-              </label>
-              <input
-                type="text"
-                name="dimensions"
-                value={form.formData.dimensions}
-                onChange={form.handleChange}
-                className="qt-input"
-                placeholder="1536"
-              />
-              <p className="mt-1 qt-text-xs">
-                Leave empty to use the model&apos;s default dimensions
-              </p>
-            </div>
+                <p className="mt-1 qt-text-xs">
+                  Leave empty to use the model&apos;s default dimensions
+                </p>
+              </div>
+            )}
 
         {/* Default */}
         <div className="flex items-center">

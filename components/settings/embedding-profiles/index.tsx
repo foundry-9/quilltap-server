@@ -15,8 +15,11 @@ export type {
   EmbeddingModel,
   EmbeddingProfile,
   EmbeddingProfileFormData,
+  EmbeddingProvider,
+  VocabularyStats,
+  EmbeddingStatusStats,
 } from './types'
-export { PROVIDER_COLORS } from './types'
+export { PROVIDER_BADGE_CLASSES, PROVIDER_COLORS } from './types'
 export { useEmbeddingProfiles } from './hooks/useEmbeddingProfiles'
 export { ProfileForm } from './ProfileForm'
 export { ProfileList } from './ProfileList'
@@ -35,6 +38,7 @@ export default function EmbeddingProfilesTab() {
     profiles,
     apiKeys,
     embeddingModels,
+    embeddingProviders,
     loading: initialLoading,
     error: loadError,
     loadData,
@@ -121,6 +125,7 @@ export default function EmbeddingProfilesTab() {
         profile={editingProfile}
         apiKeys={apiKeys}
         embeddingModels={embeddingModels}
+        embeddingProviders={embeddingProviders}
       />
     </div>
   )

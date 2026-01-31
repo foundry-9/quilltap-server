@@ -11,6 +11,7 @@ import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, forbidden, serverError, validationError } from '@/lib/api/responses';
+import { scheduleRefit, handleEntityDeletion } from '@/lib/embedding/embedding-job-scheduler';
 
 // Validation schema for updating a memory
 const updateMemorySchema = z.object({
@@ -96,7 +97,17 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
 
       if (!memory) {
         return notFound('Memory');
-      }return NextResponse.json({ memory });
+      }
+
+      // Schedule refit for BUILTIN profiles (non-blocking)
+      scheduleRefit(user.id).catch((err: Error) =>
+        logger.warn('[Memories API v1] Failed to schedule refit after update', {
+          memoryId,
+          error: err.message,
+        })
+      );
+
+      return NextResponse.json({ memory });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return validationError(error);
@@ -126,6 +137,22 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       }
 
       await repos.memories.deleteForCharacter(existingMemory.characterId, memoryId);
+
+      // Clean up embedding status (non-blocking)
+      handleEntityDeletion('MEMORY', memoryId).catch((err: Error) =>
+        logger.warn('[Memories API v1] Failed to handle entity deletion', {
+          memoryId,
+          error: err.message,
+        })
+      );
+
+      // Schedule refit for BUILTIN profiles (non-blocking)
+      scheduleRefit(user.id).catch((err: Error) =>
+        logger.warn('[Memories API v1] Failed to schedule refit after delete', {
+          memoryId,
+          error: err.message,
+        })
+      );
 
       logger.info('[Memories API v1] Memory deleted', {
         memoryId,

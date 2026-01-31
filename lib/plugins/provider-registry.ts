@@ -483,8 +483,11 @@ class ProviderRegistry {
    * @returns true if provider was loaded and registered, false otherwise
    */
   hotLoadProviderPlugin(pluginPath: string, manifest: PluginManifest): boolean {
-    // Only handle LLM_PROVIDER plugins
-    if (!manifest.capabilities.includes('LLM_PROVIDER')) {
+    // Handle LLM_PROVIDER or EMBEDDING_PROVIDER plugins
+    const isLLMProvider = manifest.capabilities.includes('LLM_PROVIDER');
+    const isEmbeddingProvider = manifest.capabilities.includes('EMBEDDING_PROVIDER');
+
+    if (!isLLMProvider && !isEmbeddingProvider) {
       return false;
     }
 

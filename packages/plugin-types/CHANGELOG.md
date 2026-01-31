@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.4] - 2026-01-30
+
+### Added
+
+- New embedding provider types for building embedding plugins:
+  - `EmbeddingResult` - Result of an embedding operation (vector, model, dimensions, usage)
+  - `EmbeddingOptions` - Options for embedding generation (dimensions)
+  - `EmbeddingProvider` - Interface for API-based embedding providers (OpenAI, Ollama, etc.)
+  - `LocalEmbeddingProvider` - Extended interface for local/offline providers like TF-IDF
+  - `LocalEmbeddingProviderState` - Serializable state for local providers (vocabulary, IDF, etc.)
+  - `isLocalEmbeddingProvider` - Type guard function to detect local providers
+- Updated `createEmbeddingProvider` method on `LLMProviderPlugin` to return proper typed interface
+  - Now returns `EmbeddingProvider | LocalEmbeddingProvider` instead of `unknown`
+
 ## [1.9.2] - 2026-01-27
 
 ### Changed

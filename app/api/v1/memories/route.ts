@@ -24,6 +24,7 @@ import {
 import { createMemoryWithEmbedding, searchMemoriesSemantic, generateMissingEmbeddings, rebuildVectorIndex } from '@/lib/memory/memory-service';
 import { runHousekeeping, getHousekeepingPreview, HousekeepingOptions } from '@/lib/memory/housekeeping';
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store';
+import { scheduleRefit } from '@/lib/embedding/embedding-job-scheduler';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, forbidden, badRequest, serverError, validationError } from '@/lib/api/responses';
@@ -391,6 +392,14 @@ async function handleCreateMemory(
     },
     { userId: user.id }
   );
+
+  // Schedule vocabulary refit for BUILTIN profiles (debounced)
+  // This runs in the background and doesn't block the response
+  scheduleRefit(user.id).catch((error) => {
+    logger.warn('[Memories API] Failed to schedule refit', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
 
   return NextResponse.json({ memory }, { status: 201 });
 }

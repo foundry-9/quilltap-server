@@ -214,6 +214,63 @@ async function generateOpenRouterEmbedding(
 }
 
 /**
+ * Generate an embedding for text using the built-in TF-IDF provider
+ */
+async function generateBuiltinEmbedding(
+  text: string,
+  profile: EmbeddingProfile,
+  userId: string
+): Promise<EmbeddingResult> {
+  const repos = getRepositories()
+
+  // Get the stored vocabulary for this profile
+  const vocabulary = await repos.tfidfVocabularies.findByProfileId(profile.id)
+
+  if (!vocabulary) {
+    throw new EmbeddingError(
+      'Built-in embedding profile not yet fitted. ' +
+      'Please wait for the vocabulary to be built from your memories.',
+      'BUILTIN'
+    )
+  }
+
+  try {
+    // Import the TF-IDF vectorizer from the plugin
+    const plugin = await import('@/plugins/dist/qtap-plugin-builtin-embeddings')
+    const vectorizer = new plugin.TfIdfVectorizer(vocabulary.includeBigrams)
+
+    // Load the saved state
+    vectorizer.loadState({
+      vocabulary: JSON.parse(vocabulary.vocabulary),
+      idf: JSON.parse(vocabulary.idf),
+      avgDocLength: vocabulary.avgDocLength,
+      vocabularySize: vocabulary.vocabularySize,
+      includeBigrams: vocabulary.includeBigrams,
+      fittedAt: vocabulary.fittedAt,
+    })
+
+    // Generate the embedding
+    const embedding = vectorizer.transform(text)
+
+    return {
+      embedding,
+      model: 'tfidf-bm25-v1',
+      dimensions: embedding.length,
+      provider: 'BUILTIN',
+    }
+  } catch (error) {
+    if (error instanceof EmbeddingError) {
+      throw error
+    }
+    throw new EmbeddingError(
+      `Built-in embedding failed: ${error instanceof Error ? error.message : String(error)}`,
+      'BUILTIN',
+      error instanceof Error ? error : undefined
+    )
+  }
+}
+
+/**
  * Get the decrypted API key for an embedding profile
  */
 async function getApiKeyForProfile(
@@ -258,6 +315,10 @@ export async function generateEmbedding(
       throw new EmbeddingError('No API key found for OpenRouter embedding profile', 'OPENROUTER')
     }
     return generateOpenRouterEmbedding(text, profile, apiKey)
+  }
+
+  if (profile.provider === 'BUILTIN') {
+    return generateBuiltinEmbedding(text, profile, userId)
   }
 
   throw new EmbeddingError(`Unsupported embedding provider: ${profile.provider}`)
@@ -429,4 +490,37 @@ export async function isEmbeddingAvailable(userId: string): Promise<boolean> {
 export async function getUserEmbeddingProfiles(userId: string): Promise<EmbeddingProfile[]> {
   const repos = getRepositories()
   return repos.embeddingProfiles.findByUserId(userId)
+}
+
+/**
+ * Invalidate all embeddings for a profile
+ * Marks all embedding statuses as PENDING so they will be re-embedded
+ *
+ * @param userId The user ID
+ * @param profileId The embedding profile ID
+ * @returns Number of embeddings invalidated
+ */
+export async function invalidateAllEmbeddings(
+  userId: string,
+  profileId: string
+): Promise<number> {
+  const repos = getRepositories()
+
+  logger.info('Invalidating all embeddings for profile', {
+    context: 'embedding-service.invalidateAllEmbeddings',
+    userId,
+    profileId,
+  })
+
+  // Mark all embedding statuses as PENDING
+  const invalidatedCount = await repos.embeddingStatus.markAllPendingByProfileId(profileId)
+
+  logger.info('Embeddings invalidated', {
+    context: 'embedding-service.invalidateAllEmbeddings',
+    userId,
+    profileId,
+    invalidatedCount,
+  })
+
+  return invalidatedCount
 }

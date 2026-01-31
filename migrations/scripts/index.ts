@@ -49,6 +49,8 @@ import { dropSyncTablesMigration } from './drop-sync-tables';
 import { addChatToolSettingsFieldsMigration } from './add-chat-tool-settings-fields';
 // Add default tool settings fields to projects
 import { addProjectToolSettingsFieldsMigration } from './add-project-tool-settings-fields';
+// Create embedding tables for built-in TF-IDF provider
+import { createEmbeddingTablesMigration } from './create-embedding-tables';
 
 /**
  * All available migrations.
@@ -93,6 +95,8 @@ export const migrations: Migration[] = [
   addChatToolSettingsFieldsMigration,
   // Add default tool settings fields to projects
   addProjectToolSettingsFieldsMigration,
+  // Create embedding tables for built-in TF-IDF provider
+  createEmbeddingTablesMigration,
 ];
 
 export {
@@ -132,4 +136,6 @@ export {
   addChatToolSettingsFieldsMigration,
   // Add default tool settings fields to projects
   addProjectToolSettingsFieldsMigration,
+  // Create embedding tables for built-in TF-IDF provider
+  createEmbeddingTablesMigration,
 };

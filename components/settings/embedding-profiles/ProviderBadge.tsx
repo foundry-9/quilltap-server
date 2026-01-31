@@ -1,7 +1,7 @@
 'use client'
 
 import type { FC } from 'react'
-import { PROVIDER_COLORS } from './types'
+import { PROVIDER_BADGE_CLASSES } from './types'
 
 interface ProviderBadgeProps {
   provider: string
@@ -9,10 +9,13 @@ interface ProviderBadgeProps {
 
 /**
  * Badge component to display embedding provider
+ * Uses qt-badge-provider-* CSS classes for theme-aware styling
  */
 export const ProviderBadge: FC<ProviderBadgeProps> = ({ provider }) => {
+  const badgeClass = PROVIDER_BADGE_CLASSES[provider] || 'qt-badge-secondary'
+
   return (
-    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${PROVIDER_COLORS[provider] || 'bg-muted text-foreground'}`}>
+    <span className={badgeClass}>
       {provider}
     </span>
   )
