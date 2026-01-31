@@ -2,6 +2,17 @@
 
 ## Recent Changes
 
+### 2.9-dev
+
+- refactor: Rename auth middleware to context middleware (2026-01-30)
+  - Renamed `createAuthenticatedHandler` → `createContextHandler`
+  - Renamed `createAuthenticatedParamsHandler` → `createContextParamsHandler`
+  - Renamed `AuthenticatedContext` → `RequestContext`
+  - Renamed `withAuth` → `withContext`, `withAuthParams` → `withContextParams`
+  - Replaced `checkOwnership` with simpler `exists` type guard (ownership check meaningless in single-user mode)
+  - Legacy aliases maintained for backward compatibility
+  - Updated tests and documentation
+
 ### 2.8.1
 
 - fix: Memory extraction handles LLM returning object instead of string (2026-01-31)
@@ -61,15 +72,13 @@
   - `searchByContent` and `searchByContentAboutCharacter` now escape regex metacharacters
   - Previously, chat messages with `*`, `?`, `()` etc. would crash the fallback search
   - Matches existing behavior in `countMemoriesWithText` and `findMemoriesWithText`
-- refactor: Rename auth middleware to context middleware (2026-01-30)
-  - Renamed `createAuthenticatedHandler` → `createContextHandler`
-  - Renamed `createAuthenticatedParamsHandler` → `createContextParamsHandler`
-  - Renamed `AuthenticatedContext` → `RequestContext`
-  - Renamed `withAuth` → `withContext`, `withAuthParams` → `withContextParams`
-  - Replaced `checkOwnership` with simpler `exists` type guard (ownership check meaningless in single-user mode)
-  - Legacy aliases maintained for backward compatibility
-  - Updated tests and documentation
 
+- feat: Log data directory configuration at startup (2026-01-31)
+  - Added `getBaseDataDirWithSource()` function to `lib/paths.ts`
+  - Startup now logs the base directory path, source (environment or platform-default), and human-readable description
+  - Helps users understand where Quilltap stores data and whether it's using an override or default location
+  - Clarified that `QUILLTAP_DATA_DIR` is ignored in Docker (container must use /app/quilltap to match volume mounts)
+  - Clarified documentation: `QUILLTAP_HOST_DATA_DIR` is used by docker-compose.yml (not the application)
 - feat: Built-in TF-IDF embedding provider plugin (2026-01-30)
   - New `qtap-plugin-builtin-embeddings` plugin provides zero-dependency, offline embedding
   - Uses TF-IDF with BM25 enhancement and Porter stemming for semantic search

@@ -59,8 +59,6 @@ This document tracks planned features and improvements for Quilltap.
 
 ## Completed in v2.9
 
-- [X] Option for built-in TF-IDF embedding if you don't need full semantic support (v2.9)
-
 ## Completed in v2.8
 
 - [X] Pull NPC tab out of settings and just list them among the characters

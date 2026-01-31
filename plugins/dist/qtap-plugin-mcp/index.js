@@ -7125,15 +7125,38 @@ function getPlatformDefaultBaseDir() {
       return import_path2.default.join(homeDir, ".quilltap");
   }
 }
-function getBaseDataDir() {
+function getBaseDataDirWithSource() {
+  const platform = getPlatform();
+  const platformDescriptions = {
+    docker: "Docker container default (/app/quilltap)",
+    darwin: "macOS default (~/Library/Application Support/Quilltap)",
+    win32: "Windows default (%APPDATA%\\Quilltap)",
+    linux: "Linux default (~/.quilltap)"
+  };
+  if (platform === "docker") {
+    return {
+      path: getPlatformDefaultBaseDir(),
+      source: "platform-default",
+      sourceDescription: platformDescriptions[platform]
+    };
+  }
   const envOverride = process.env.QUILLTAP_DATA_DIR;
   if (envOverride) {
-    if (envOverride.startsWith("~")) {
-      return import_path2.default.join(import_os.default.homedir(), envOverride.slice(1));
-    }
-    return envOverride;
+    const resolvedPath = envOverride.startsWith("~") ? import_path2.default.join(import_os.default.homedir(), envOverride.slice(1)) : envOverride;
+    return {
+      path: resolvedPath,
+      source: "environment",
+      sourceDescription: `QUILLTAP_DATA_DIR environment variable (${envOverride})`
+    };
   }
-  return getPlatformDefaultBaseDir();
+  return {
+    path: getPlatformDefaultBaseDir(),
+    source: "platform-default",
+    sourceDescription: platformDescriptions[platform]
+  };
+}
+function getBaseDataDir() {
+  return getBaseDataDirWithSource().path;
 }
 function getLogsDir() {
   return import_path2.default.join(getBaseDataDir(), "logs");
