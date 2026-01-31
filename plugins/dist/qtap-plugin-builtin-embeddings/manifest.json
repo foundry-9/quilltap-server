@@ -11,7 +11,7 @@
   },
   "license": "MIT",
   "compatibility": {
-    "quilltapVersion": ">=2.9.0",
+    "quilltapVersion": ">=2.8.0",
     "nodeVersion": ">=18.0.0"
   },
   "capabilities": ["EMBEDDING_PROVIDER"],
