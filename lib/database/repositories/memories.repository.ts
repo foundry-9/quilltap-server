@@ -116,7 +116,9 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    */
   async searchByContent(characterId: string, query: string): Promise<Memory[]> {
     try {
-      const regex = new RegExp(query, 'i'); // Case-insensitive regex search
+      // Escape special regex characters to treat query as literal text
+      const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escapedQuery, 'i'); // Case-insensitive regex search
 
       const memories = await this.findByFilter({
         characterId,
@@ -870,7 +872,9 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
     query: string
   ): Promise<Memory[]> {
     try {
-      const regex = new RegExp(query, 'i');
+      // Escape special regex characters to treat query as literal text
+      const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escapedQuery, 'i');
 
       const memories = await this.findByFilter({
         characterId,

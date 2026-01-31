@@ -2,7 +2,31 @@
 
 ## Recent Changes
 
-### 2.9-dev
+### 2.8.1
+
+- feat: First-startup character seeding (2026-01-31)
+  - Seeds default character "Ben" on first startup when database is empty
+  - Created `first-startup/` directory with seed character data
+  - Added `lib/startup/seed-initial-data.ts` for seeding logic
+  - Seeding runs after migrations in `instrumentation.ts` as phase 1.25
+  - Added 'seeding' phase to startup state tracking
+  - Safe to call multiple times - only seeds when no characters exist
+- fix: Connection profile test errors now display in UI (2026-01-31)
+  - Added `connectError` prop to ProfileModal
+  - Displays error message in red box when connection test fails
+  - Improved error logging in useAsyncOperation to show message directly
+- fix: Auto-fill base URL when selecting provider with default (2026-01-31)
+  - Selecting Ollama now pre-fills base URL with `http://localhost:11434`
+  - Works for any provider that has `baseUrlDefault` in config
+  - Updated ProviderConfig type to include baseUrlLabel and baseUrlDefault
+- fix: Ollama 405 error on test message (2026-01-31)
+  - Fixed trailing slash in base URL causing double-slash in API paths
+  - OllamaProvider now strips trailing slashes from base URL
+  - Updated qtap-plugin-ollama to v1.0.8
+- fix: Memory search regex error when semantic search unavailable (2026-01-31)
+  - `searchByContent` and `searchByContentAboutCharacter` now escape regex metacharacters
+  - Previously, chat messages with `*`, `?`, `()` etc. would crash the fallback search
+  - Matches existing behavior in `countMemoriesWithText` and `findMemoriesWithText`
 
 ### 2.8.0
 

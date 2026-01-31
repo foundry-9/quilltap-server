@@ -25,6 +25,7 @@ interface ProfileModalProps {
   operations: {
     saveLoading: boolean
     connectLoading: boolean
+    connectError: string | null
     fetchModelsLoading: boolean
     testMessageLoading: boolean
     handleConnect: (callback: (data: any) => void) => Promise<any>
@@ -157,6 +158,17 @@ export function ProfileModal({
   const reqs = operations.getProviderRequirements(form.formData.provider)
   const isValid = form.formData.name.trim() && form.formData.modelName.trim()
 
+  // Handle provider change - auto-fill base URL for providers that have defaults
+  const handleProviderChange = (newProvider: string) => {
+    form.setField('provider', newProvider)
+
+    // Auto-fill base URL for providers with defaults
+    const providerConfig = providers.find(p => p.name === newProvider)
+    if (providerConfig?.configRequirements?.baseUrlDefault && !form.formData.baseUrl) {
+      form.setField('baseUrl', providerConfig.configRequirements.baseUrlDefault)
+    }
+  }
+
   const footer = (
     <FormActions
       onCancel={handleClose}
@@ -202,7 +214,7 @@ export function ProfileModal({
                   id="provider"
                   name="provider"
                   value={form.formData.provider}
-                  onChange={(e) => form.setField('provider', e.target.value)}
+                  onChange={(e) => handleProviderChange(e.target.value)}
                   className="qt-select"
                 >
                   {providers.length > 0 ? (
@@ -325,6 +337,12 @@ export function ProfileModal({
               {connectionMessage && (
                 <div className="text-sm text-green-700 bg-green-50/50 border border-green-200/70 rounded px-3 py-2 mb-2">
                   ✓ {connectionMessage}
+                </div>
+              )}
+
+              {operations.connectError && (
+                <div className="text-sm text-red-700 bg-red-50/50 border border-red-200/70 rounded px-3 py-2 mb-2">
+                  ✗ {operations.connectError}
                 </div>
               )}
 
