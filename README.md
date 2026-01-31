@@ -203,7 +203,7 @@ See the plugin development guides:
 
 All Quilltap data (database, files, logs) is stored in a single directory:
 
-| Environment | Default Location | Override Variable |
+| Environment | Default Location                                   | Override Variable         |
 | ----------- | -------------------------------------------------- | ------------------------- |
 | **Linux**   | `~/.quilltap`                                      | `QUILLTAP_DATA_DIR`       |
 | **macOS**   | `~/Library/Application Support/Quilltap`           | `QUILLTAP_DATA_DIR`       |

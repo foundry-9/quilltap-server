@@ -24,7 +24,6 @@ This document tracks planned features and improvements for Quilltap.
 
 - [ ] Tool management UI - Settings interface to enable/disable individual tools per connection profile, project, chat
 - [ ] Finish file read/write tool calling support with permissions
-- [X] Option for built-in TF-IDF embedding if you don't need full semantic support (v2.8.1)
 - [ ] Refactor embedding service to use plugin architecture
   - Currently `lib/embedding/embedding-service.ts` has hardcoded handlers for each provider
   - Should delegate to plugins via `createEmbeddingProvider()` interface
@@ -58,6 +57,10 @@ This document tracks planned features and improvements for Quilltap.
 - [ ] Application web page and useful help and videos hosted there
 
 ## Completed in v2.9
+
+## Completed in v2.8.1
+
+- [X] Option for built-in TF-IDF embedding if you don't need full semantic support (v2.8.1)
 
 ## Completed in v2.8
 
