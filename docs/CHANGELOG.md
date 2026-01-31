@@ -49,6 +49,9 @@
   - Previously only LLM_PROVIDER plugins were registered, excluding embedding-only providers
   - Fixed hotLoadProviderPlugin to also handle EMBEDDING_PROVIDER capability
   - BUILTIN provider now correctly appears in embedding profile settings
+- fix: Ollama cheap LLM fallback uses current model instead of hardcoded one (2026-01-31)
+  - Previously fell back to hardcoded `llama3.2:3b` which may not exist
+  - Now uses the current profile's model since all Ollama models are free/local
 - fix: Memory search regex error when semantic search unavailable (2026-01-31)
   - `searchByContent` and `searchByContentAboutCharacter` now escape regex metacharacters
   - Previously, chat messages with `*`, `?`, `()` etc. would crash the fallback search
