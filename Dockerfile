@@ -65,9 +65,9 @@ ENV DOCKER_CONTAINER=true
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Create data directories (data, files, logs) and plugin site directory
-RUN mkdir -p /app/quilltap/data /app/quilltap/files /app/quilltap/logs /app/plugins/site && \
-    chown -R nextjs:nodejs /app/quilltap /app/plugins/site
+# Create data directories (data, files, logs, plugins/npm)
+RUN mkdir -p /app/quilltap/data /app/quilltap/files /app/quilltap/logs /app/quilltap/plugins/npm && \
+    chown -R nextjs:nodejs /app/quilltap
 
 # Copy built assets
 COPY --from=builder /app/public ./public

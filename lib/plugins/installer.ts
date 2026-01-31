@@ -13,6 +13,7 @@ import { logger } from '@/lib/logger';
 import { safeValidatePluginManifest, pluginRequiresRestart, type PluginManifest } from '@/lib/schemas/plugin-manifest';
 import { isPluginCompatible } from './manifest-loader';
 import { hotLoadProviderPlugin } from './provider-registry';
+import { getNpmPluginsDir } from '@/lib/paths';
 
 const execAsync = promisify(exec);
 
@@ -58,8 +59,15 @@ export interface InstalledPluginInfo {
 // ============================================================================
 
 const PLUGINS_BASE_DIR = path.join(process.cwd(), 'plugins');
-const PLUGINS_SITE_DIR = path.join(PLUGINS_BASE_DIR, 'site');
 const PLUGINS_DIST_DIR = path.join(PLUGINS_BASE_DIR, 'dist');
+
+/**
+ * Get the npm plugins directory path
+ * Uses the data directory for persistence across app updates
+ */
+function getPluginsNpmDir(): string {
+  return getNpmPluginsDir();
+}
 
 // Regex for unscoped plugins: qtap-plugin-*
 const UNSCOPED_PLUGIN_REGEX = /^qtap-plugin-[a-z0-9-]+$/;
@@ -128,7 +136,7 @@ export async function installPluginFromNpm(
   }
 
   // All plugins are installed site-wide
-  const pluginBaseDir = PLUGINS_SITE_DIR;
+  const pluginBaseDir = getPluginsNpmDir();
 
   // Convert scoped package names to safe directory names (@org/pkg -> @org--pkg)
   const safeDirName = packageNameToDir(packageName);
@@ -336,7 +344,7 @@ export async function uninstallPlugin(
   }
 
   // All plugins are in the site directory
-  const pluginBaseDir = PLUGINS_SITE_DIR;
+  const pluginBaseDir = getPluginsNpmDir();
 
   // Convert scoped package names to safe directory names
   const safeDirName = packageNameToDir(packageName);
@@ -399,7 +407,7 @@ export async function getInstalledPlugins(
 
   // Site plugins
   if (scope === 'all' || scope === 'site') {
-    const site = await scanPluginDirectory(PLUGINS_SITE_DIR, 'site');
+    const site = await scanPluginDirectory(getPluginsNpmDir(), 'site');
     plugins.push(...site);
   }
 
@@ -425,7 +433,7 @@ export async function isPluginInstalled(
   }
 
   // Check site (npm-installed plugins use safe directory name, but node_modules uses package name)
-  const sitePath = path.join(PLUGINS_SITE_DIR, safeDirName, 'node_modules', packageName, 'manifest.json');
+  const sitePath = path.join(getPluginsNpmDir(), safeDirName, 'node_modules', packageName, 'manifest.json');
   if (await fs.access(sitePath).then(() => true).catch(() => false)) {
     return { installed: true, scope: 'site' };
   }
@@ -594,6 +602,6 @@ async function removeFromRegistry(
 // ============================================================================
 
 export {
-  PLUGINS_SITE_DIR,
+  getPluginsNpmDir,
   PLUGINS_DIST_DIR,
 };

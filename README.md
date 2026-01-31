@@ -7,7 +7,7 @@ Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, 
 No subscriptions. No data harvested. No forgetting everything between sessions.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.8.0--bugfix.0-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.8.0--bugfix.80-yellow.svg)](package.json)
 
 <p align="center">
   <img src="./website/images/welcome-to-quilltap-2-8.png" alt="Welcome to Quilltap" />
@@ -59,6 +59,12 @@ If you're coming from SillyTavern, Quilltap imports your characters and chats di
 - **Node.js 22+** (for local development)
 
 ### With Docker (Recommended)
+
+#### Use Docker production image
+
+[csebold/quilltap](https://hub.docker.com/repository/docker/csebold/quilltap/general)
+
+#### For local development
 
 ```bash
 # Clone the repository
@@ -192,6 +198,31 @@ See the plugin development guides:
 ---
 
 ## Data & Backup
+
+### Data directory location
+
+All Quilltap data (database, files, logs) is stored in a single directory:
+
+| Environment | Default Location | Override Variable |
+| ----------- | -------------------------------------------------- | ------------------------- |
+| **Linux**   | `~/.quilltap`                                      | `QUILLTAP_DATA_DIR`       |
+| **macOS**   | `~/Library/Application Support/Quilltap`           | `QUILLTAP_DATA_DIR`       |
+| **Windows** | `%APPDATA%\Quilltap`                               | `QUILLTAP_DATA_DIR`       |
+| **Docker**  | Host: `~/.quilltap` → Container: `/app/quilltap`   | `QUILLTAP_HOST_DATA_DIR`  |
+
+**Docker users:** Set `QUILLTAP_HOST_DATA_DIR` to change where data is stored on your host machine:
+
+```bash
+QUILLTAP_HOST_DATA_DIR=/mnt/data/quilltap docker-compose up
+```
+
+**Non-Docker users:** Set `QUILLTAP_DATA_DIR` to override the default:
+
+```bash
+QUILLTAP_DATA_DIR=/custom/path npm run dev
+```
+
+At startup, Quilltap logs which directory it's using and where that configuration came from.
 
 ### What's stored where
 

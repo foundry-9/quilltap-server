@@ -81,10 +81,8 @@ services:
     expose:
       - "3000"
     volumes:
-      # All Quilltap data (database, files, logs) in one directory
+      # All Quilltap data (database, files, logs, plugins) in one directory
       - ${QUILLTAP_HOST_DATA_DIR:-~/.quilltap}:/app/quilltap
-      # Plugin directory for npm-installed plugins (persists on host filesystem)
-      - ${QUILLTAP_HOST_DATA_DIR:-~/.quilltap}/plugins/site:/app/plugins/site
     environment:
       - NODE_ENV=production
       - DOCKER_CONTAINER=true

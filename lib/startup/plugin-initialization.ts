@@ -61,8 +61,18 @@ let initialized = false;
  *
  * Note: Migrations are now run in instrumentation.ts BEFORE this function is called,
  * so all data is guaranteed to be in the correct format when plugins are initialized.
+ *
+ * @param forceRescan - If true, forces a full rescan even if already initialized.
+ *                      Use this after installing or uninstalling plugins.
  */
-export async function initializePlugins(): Promise<PluginInitializationResult> {
+export async function initializePlugins(forceRescan: boolean = false): Promise<PluginInitializationResult> {
+  // If force rescan requested, reset state to allow reinitialization
+  if (forceRescan) {
+    logger.info('Forcing plugin system rescan', { context: 'initializePlugins' });
+    initialized = false;
+    initializationPromise = null;
+  }
+
   // If already initialized, return existing result
   if (initialized) {
     return {

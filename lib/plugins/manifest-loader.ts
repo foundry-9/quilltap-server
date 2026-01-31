@@ -15,6 +15,7 @@ import {
   type PluginCapability,
 } from '@/lib/schemas/plugin-manifest';
 import { isSitePluginEnabled } from './site-plugins';
+import { getNpmPluginsDir } from '@/lib/paths';
 
 // ============================================================================
 // TYPES
@@ -53,8 +54,15 @@ export interface PluginScanResult {
 
 const PLUGINS_DIR = path.join(process.cwd(), 'plugins');
 const PLUGINS_DIST_DIR = path.join(process.cwd(), 'plugins', 'dist');
-const PLUGINS_SITE_DIR = path.join(process.cwd(), 'plugins', 'site');
 const MANIFEST_FILENAME = 'manifest.json';
+
+/**
+ * Get the npm plugins directory path
+ * Uses the data directory for persistence across app updates
+ */
+function getPluginsNpmDir(): string {
+  return getNpmPluginsDir();
+}
 
 /**
  * Check if a directory name is a valid plugin directory
@@ -256,7 +264,7 @@ async function isPluginDirectory(dirPath: string): Promise<boolean> {
 
 /**
  * Scans plugin directories for all installed plugins
- * Searches in the plugins/dist directory and plugins/site directory
+ * Searches in the plugins/dist directory and data directory plugins/npm
  * @param pluginsDir - Base plugins directory (defaults to ./plugins)
  * @returns Scan results with loaded plugins and errors
  */
@@ -276,7 +284,7 @@ export async function scanPlugins(
       const dirExists = await fs.access(dirPath).then(() => true).catch(() => false);
       if (!dirExists) {
         // Only create site directory automatically
-        if (dirPath === PLUGINS_SITE_DIR) {
+        if (dirPath === getPluginsNpmDir()) {
           await fs.mkdir(dirPath, { recursive: true });
         } else {
           return; // Skip non-existent directories
@@ -367,15 +375,15 @@ export async function scanPlugins(
   // Scan plugins/dist directory (bundled plugins)
   await scanDirectory(PLUGINS_DIST_DIR);
 
-  // Scan plugins/site directory (site-wide npm-installed plugins)
-  await scanDirectory(PLUGINS_SITE_DIR, true);
+  // Scan data directory plugins/npm (site-wide npm-installed plugins)
+  await scanDirectory(getPluginsNpmDir(), true);
 
   return result;
 }
 
 /**
  * Loads a specific plugin by name
- * Searches in plugins/dist and plugins/site directories
+ * Searches in plugins/dist and data directory plugins/npm
  * @param pluginName - Name of the plugin (directory name)
  * @param pluginsDir - Base plugins directory (defaults to ./plugins)
  * @returns Loaded plugin or null if not found/invalid
@@ -419,7 +427,7 @@ export async function loadPlugin(
   // Search order: dist (bundled) > site > top-level (legacy)
   const searchPaths: Array<{ path: string; isNpm: boolean }> = [
     { path: PLUGINS_DIST_DIR, isNpm: false },
-    { path: PLUGINS_SITE_DIR, isNpm: true },
+    { path: getPluginsNpmDir(), isNpm: true },
     { path: pluginsDir, isNpm: false },
   ];
 
@@ -548,6 +556,6 @@ export function validatePluginSecurity(manifest: PluginManifest): string[] {
 export {
   PLUGINS_DIR,
   PLUGINS_DIST_DIR,
-  PLUGINS_SITE_DIR,
+  getPluginsNpmDir,
   MANIFEST_FILENAME,
 };
