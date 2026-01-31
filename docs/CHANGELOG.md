@@ -70,6 +70,15 @@
   - Legacy aliases maintained for backward compatibility
   - Updated tests and documentation
 
+- refactor: Rename auth middleware to context middleware (2026-01-30)
+  - Renamed `createAuthenticatedHandler` → `createContextHandler`
+  - Renamed `createAuthenticatedParamsHandler` → `createContextParamsHandler`
+  - Renamed `AuthenticatedContext` → `RequestContext`
+  - Renamed `withAuth` → `withContext`, `withAuthParams` → `withContextParams`
+  - Replaced `checkOwnership` with simpler `exists` type guard (ownership check meaningless in single-user mode)
+  - Legacy aliases maintained for backward compatibility
+  - Updated tests and documentation
+
 ### 2.8.0
 
 - refactor: Remove legacy API routes (2026-01-30)
@@ -687,4 +696,3 @@
   - Request messages and response content are no longer truncated
   - Full content stored for complete debugging regardless of verbose mode setting
 - Started 2.8 dev cycle
-

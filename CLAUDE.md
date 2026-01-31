@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Quilltap is a repository from Foundry-9 LLC being actively developed for general use and hopefully as a basis for web hosting in the cloud someday, to use AI to chat, solve problems, and generally be an LLM front end.
+Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, and anyone who wants an AI assistant that actually knows what they're working on. Connect to any LLM provider, organize your work into projects with persistent files and context, create characters with real personalities, and build a private AI environment that learns and remembers.
 
 ## Technology Stack
 
@@ -42,9 +42,9 @@ Instead of creating separate routes for each action, use the `?action=` query pa
 // POST /api/v1/characters/[id]?action=favorite
 // GET /api/v1/characters/[id]?action=export
 
-import { createAuthenticatedParamsHandler, withActionDispatch } from '@/lib/api/middleware';
+import { createContextHandler, withActionDispatch } from '@/lib/api/middleware';
 
-export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+export const POST = createContextHandler<{ id: string }>(
   withActionDispatch({
     favorite: handleFavorite,
     avatar: handleAvatar,
@@ -54,7 +54,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
 
 ### Middleware & Response Utilities
 
-- **Authentication**: Use `createAuthenticatedHandler` or `createAuthenticatedParamsHandler` from `@/lib/api/middleware`
+- **Context**: Use `createContextHandler` or `withContext` from `@/lib/api/middleware`
 - **Action dispatch**: Use `withActionDispatch` or `withCollectionActionDispatch` from `@/lib/api/middleware/actions`
 - **Responses**: Use helpers from `@/lib/api/responses`: `successResponse`, `errorResponse`, `notFound`, `badRequest`, `validationError`, `created`, etc.
 
