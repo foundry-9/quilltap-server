@@ -23,6 +23,9 @@ export const BackgroundJobTypeEnum = z.enum([
   'CONTEXT_SUMMARY',
   'TITLE_UPDATE',
   'LLM_LOG_CLEANUP',
+  'EMBEDDING_GENERATE',    // Generate embedding for a single entity (memory)
+  'EMBEDDING_REFIT',       // Rebuild TF-IDF vocabulary from all memories
+  'EMBEDDING_REINDEX_ALL', // Re-embed all memories after vocabulary change
 ]);
 export type BackgroundJobType = z.infer<typeof BackgroundJobTypeEnum>;
 

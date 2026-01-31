@@ -56,7 +56,7 @@ export function useAsyncOperation<T>(): UseAsyncOperationResult<T> {
       } catch (err) {
         const errorMessage = getErrorMessage(err, 'Operation failed');
 
-        console.error('Async operation failed', { message: errorMessage });
+        console.error('Async operation failed:', errorMessage, err);
 
         setErrorState(errorMessage);
         setLoading(false);

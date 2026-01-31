@@ -4,8 +4,9 @@
  * This file is automatically run by Next.js on server startup.
  * We use it to:
  * 1. Run migrations FIRST - before any requests can be served
- * 2. Initialize the plugin system
- * 3. Initialize file storage
+ * 2. Seed initial data (on first startup)
+ * 3. Initialize the plugin system
+ * 4. Initialize file storage
  *
  * CRITICAL: Migrations MUST complete successfully before the server accepts requests.
  * If migrations fail, the process exits with code 1 to prevent serving stale data.
@@ -202,6 +203,23 @@ export async function register() {
 
       // Clean up migration runner's database connection
       await migrationRunner.cleanup();
+
+      // ================================================================
+      // PHASE 1.25: Seed Initial Data (first startup only)
+      // ================================================================
+      // Seeds default character(s) when database is empty
+      startupState.setPhase('seeding');
+
+      try {
+        const { seedInitialData } = await import('./lib/startup/seed-initial-data');
+        await seedInitialData();
+      } catch (seedError) {
+        // Seeding failure should not block startup
+        logger.warn('Error during initial data seeding, continuing startup', {
+          context: 'instrumentation.register',
+          error: seedError instanceof Error ? seedError.message : String(seedError),
+        });
+      }
 
       // ================================================================
       // PHASE 1.5: Auto-upgrade npm-installed plugins

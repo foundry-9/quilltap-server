@@ -167,8 +167,8 @@ async function handleInstall(req: NextRequest, context: any) {
       packageName: validatedData.packageName,
     });
 
-    // Reinitialize plugin system to reflect changes
-    await initializePlugins();
+    // Reinitialize plugin system to reflect changes (force rescan)
+    await initializePlugins(true);
 
     return NextResponse.json(
       {
@@ -223,8 +223,8 @@ async function handleUninstall(req: NextRequest, context: any) {
       packageName: validatedData.packageName,
     });
 
-    // Reinitialize plugin system to reflect changes
-    await initializePlugins();
+    // Reinitialize plugin system to reflect changes (force rescan)
+    await initializePlugins(true);
 
     return NextResponse.json({
       success: true,

@@ -7,6 +7,7 @@
 import type { ReactNode } from 'react';
 import type { LLMProvider, ImageGenProvider } from '../llm/base';
 import type { ToolCallRequest, ToolFormatOptions } from '../llm/tools';
+import type { EmbeddingProvider, LocalEmbeddingProvider } from '../llm/embeddings';
 
 /**
  * Provider metadata for UI display and identification
@@ -273,8 +274,9 @@ export interface LLMProviderPlugin {
    * Factory method to create an embedding provider (optional)
    * Only required if capabilities.embeddings is true
    * @param baseUrl Optional base URL for the provider
+   * @returns EmbeddingProvider for API-based providers, LocalEmbeddingProvider for local providers
    */
-  createEmbeddingProvider?: (baseUrl?: string) => unknown;
+  createEmbeddingProvider?: (baseUrl?: string) => EmbeddingProvider | LocalEmbeddingProvider;
 
   /**
    * Get list of available models for this provider

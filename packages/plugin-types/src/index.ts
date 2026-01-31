@@ -59,6 +59,17 @@ export type {
   ToolFormatOptions,
 } from './llm/tools';
 
+export type {
+  // Embedding types
+  EmbeddingResult,
+  EmbeddingOptions,
+  EmbeddingProvider,
+  LocalEmbeddingProviderState,
+  LocalEmbeddingProvider,
+} from './llm/embeddings';
+
+export { isLocalEmbeddingProvider } from './llm/embeddings';
+
 // ============================================================================
 // Plugin Types
 // ============================================================================

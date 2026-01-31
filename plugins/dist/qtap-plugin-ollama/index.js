@@ -6911,11 +6911,11 @@ function createPluginLogger(pluginName, minLevel = "debug") {
 var logger = createPluginLogger("qtap-plugin-ollama");
 var OllamaProvider = class {
   constructor(baseUrl) {
-    this.baseUrl = baseUrl;
     this.supportsFileAttachments = false;
     this.supportedMimeTypes = [];
     this.supportsImageGeneration = false;
     this.supportsWebSearch = false;
+    this.baseUrl = baseUrl.replace(/\/+$/, "");
   }
   // Helper to collect attachment failures for unsupported provider
   collectAttachmentFailures(params) {

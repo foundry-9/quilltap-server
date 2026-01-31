@@ -10,6 +10,9 @@ import { handleInterCharacterMemory } from './inter-character-memory';
 import { handleContextSummary } from './context-summary';
 import { handleTitleUpdate } from './title-update';
 import { handleLLMLogCleanup } from './llm-log-cleanup';
+import { handleEmbeddingGenerate } from './embedding-generate';
+import { handleEmbeddingRefit } from './embedding-refit';
+import { handleEmbeddingReindexAll } from './embedding-reindex';
 
 /**
  * Job handler function type
@@ -25,6 +28,9 @@ const handlers: Record<BackgroundJobType, JobHandler> = {
   CONTEXT_SUMMARY: handleContextSummary,
   TITLE_UPDATE: handleTitleUpdate,
   LLM_LOG_CLEANUP: handleLLMLogCleanup,
+  EMBEDDING_GENERATE: handleEmbeddingGenerate,
+  EMBEDDING_REFIT: handleEmbeddingRefit,
+  EMBEDDING_REINDEX_ALL: handleEmbeddingReindexAll,
 };
 
 /**
@@ -44,3 +50,6 @@ export { handleInterCharacterMemory };
 export { handleContextSummary };
 export { handleTitleUpdate };
 export { handleLLMLogCleanup };
+export { handleEmbeddingGenerate };
+export { handleEmbeddingRefit };
+export { handleEmbeddingReindexAll };

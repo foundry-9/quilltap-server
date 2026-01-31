@@ -2,6 +2,8 @@
  * Type definitions for embedding profiles
  */
 
+export type EmbeddingProvider = 'OPENAI' | 'OLLAMA' | 'OPENROUTER' | 'BUILTIN'
+
 export interface ApiKey {
   id: string
   label: string
@@ -16,21 +18,45 @@ export interface EmbeddingModel {
   description: string
 }
 
+/**
+ * Vocabulary stats for BUILTIN TF-IDF profiles
+ */
+export interface VocabularyStats {
+  vocabularySize: number
+  avgDocLength: number
+  includeBigrams: boolean
+  fittedAt: string
+}
+
+/**
+ * Embedding status stats for a profile
+ */
+export interface EmbeddingStatusStats {
+  pending: number
+  embedded: number
+  failed: number
+  total: number
+}
+
 export interface EmbeddingProfile {
   id: string
   name: string
-  provider: 'OPENAI' | 'OLLAMA'
+  provider: EmbeddingProvider
   apiKeyId?: string
   baseUrl?: string
   modelName: string
   dimensions?: number
   isDefault: boolean
   apiKey?: ApiKey | null
+  /** Vocabulary stats for BUILTIN profiles */
+  vocabularyStats?: VocabularyStats | null
+  /** Embedding status stats */
+  embeddingStats?: EmbeddingStatusStats | null
 }
 
 export interface EmbeddingProfileFormData {
   name: string
-  provider: 'OPENAI' | 'OLLAMA'
+  provider: EmbeddingProvider
   apiKeyId: string
   baseUrl: string
   modelName: string
@@ -38,7 +64,17 @@ export interface EmbeddingProfileFormData {
   isDefault: boolean
 }
 
-export const PROVIDER_COLORS: Record<string, string> = {
-  OPENAI: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
-  OLLAMA: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
+/**
+ * Map provider names to qt-badge-provider-* CSS classes
+ */
+export const PROVIDER_BADGE_CLASSES: Record<string, string> = {
+  OPENAI: 'qt-badge-provider-openai',
+  OLLAMA: 'qt-badge-provider-ollama',
+  OPENROUTER: 'qt-badge-provider-openrouter',
+  BUILTIN: 'qt-badge-provider-builtin',
 }
+
+/**
+ * @deprecated Use PROVIDER_BADGE_CLASSES instead
+ */
+export const PROVIDER_COLORS = PROVIDER_BADGE_CLASSES

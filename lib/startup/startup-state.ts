@@ -7,11 +7,12 @@
  * The startup sequence is:
  * 1. 'pending' - Server just started
  * 2. 'migrations' - Running startup migrations (CRITICAL - must complete)
- * 3. 'plugin-updates' - Auto-upgrading npm-installed plugins (non-blocking)
- * 4. 'plugins' - Plugin initialization in progress
- * 5. 'file-storage' - File storage initialization in progress
- * 6. 'complete' - All initialization complete
- * 7. 'failed' - Initialization failed (server still runs but may have issues)
+ * 3. 'seeding' - Seeding initial data (first startup only, non-blocking)
+ * 4. 'plugin-updates' - Auto-upgrading npm-installed plugins (non-blocking)
+ * 5. 'plugins' - Plugin initialization in progress
+ * 6. 'file-storage' - File storage initialization in progress
+ * 7. 'complete' - All initialization complete
+ * 8. 'failed' - Initialization failed (server still runs but may have issues)
  *
  * NOTE: State is stored in `global` to persist across Next.js module reloads.
  * This is critical because instrumentation.ts runs in a separate context from
@@ -24,6 +25,7 @@ import type { UpgradeResults } from '@/lib/plugins/upgrader';
 export type StartupPhase =
   | 'pending'
   | 'migrations'
+  | 'seeding'
   | 'plugin-updates'
   | 'plugins'
   | 'file-storage'

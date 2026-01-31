@@ -256,6 +256,26 @@ docker compose -f docker-compose.prod.yml restart nginx
 | `S3_SECRET_KEY` | S3 secret key (for external mode) | - |
 | `S3_BUCKET` | S3 bucket name | `quilltap-files` |
 
+### Data Directory (Docker)
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `QUILLTAP_HOST_DATA_DIR` | Where Quilltap data is stored on the **host** machine | `~/.quilltap` |
+
+This variable is read by `docker-compose.yml` to configure the volume mount. The container always sees `/app/quilltap` internally.
+
+**Example:** Store data on an external drive:
+```bash
+QUILLTAP_HOST_DATA_DIR=/mnt/external/quilltap docker-compose -f docker-compose.prod.yml up -d
+```
+
+**Platform-specific recommendations:**
+- Linux: `~/.quilltap` (default)
+- macOS: `~/Library/Application Support/Quilltap`
+- Windows: `%APPDATA%\Quilltap`
+
+**Note:** For non-Docker installations, use `QUILLTAP_DATA_DIR` instead (the application reads this directly).
+
 ### Optional
 
 | Variable | Description | Default |
@@ -279,16 +299,16 @@ docker compose -f docker-compose.prod.yml restart nginx
 
 ### npm-Installed Plugins in Docker
 
-Quilltap supports installing third-party plugins from npm. In Docker deployments, these plugins must be persisted on the host filesystem to survive container restarts.
+Quilltap supports installing third-party plugins from npm. In Docker deployments, plugins are stored in the data directory which is mounted from the host, so they persist across container restarts.
 
-Both `docker-compose.yml` and `docker-compose.prod.yml` mount the plugin directory:
+The data directory mount in `docker-compose.yml` and `docker-compose.prod.yml` includes the plugins:
 
 ```yaml
 volumes:
-  - ${QUILLTAP_HOST_DATA_DIR:-~/.quilltap}/plugins/site:/app/plugins/site
+  - ${QUILLTAP_HOST_DATA_DIR:-~/.quilltap}:/app/quilltap
 ```
 
-This stores plugins at `~/.quilltap/plugins/site` (or your configured data directory) on the host.
+This stores plugins at `~/.quilltap/plugins/npm/` (or your configured data directory) on the host.
 
 ### Plugin Directory Structure
 
@@ -298,7 +318,7 @@ This stores plugins at `~/.quilltap/plugins/site` (or your configured data direc
 ├── files/                       # User files
 ├── logs/                        # Application logs
 └── plugins/
-    └── site/                    # npm-installed plugins
+    └── npm/                     # npm-installed plugins
         ├── qtap-plugin-foo/
         │   └── node_modules/
         │       └── qtap-plugin-foo/
@@ -328,17 +348,17 @@ If plugins appear to install but don't work:
 
 1. **Check the plugin directory exists on host**:
    ```bash
-   ls -la ~/.quilltap/plugins/site/
+   ls -la ~/.quilltap/plugins/npm/
    ```
 
 2. **Check plugin registry**:
    ```bash
-   cat ~/.quilltap/plugins/site/registry.json
+   cat ~/.quilltap/plugins/npm/registry.json
    ```
 
 3. **Verify manifest exists**:
    ```bash
-   cat ~/.quilltap/plugins/site/qtap-plugin-foo/node_modules/qtap-plugin-foo/manifest.json
+   cat ~/.quilltap/plugins/npm/qtap-plugin-foo/node_modules/qtap-plugin-foo/manifest.json
    ```
 
 4. **Check container logs for plugin errors**:

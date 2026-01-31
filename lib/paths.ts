@@ -12,9 +12,11 @@
  *
  * Directory structure under base:
  * <base>/
- * ├── data/     - Database files (SQLite)
- * ├── files/    - User file storage (default mount point)
- * └── logs/     - Application logs
+ * ├── data/        - Database files (SQLite)
+ * ├── files/       - User file storage (default mount point)
+ * ├── logs/        - Application logs
+ * └── plugins/
+ *     └── npm/     - npm-installed plugins
  *
  * Environment variable QUILLTAP_DATA_DIR overrides the base directory.
  * For Docker, set QUILLTAP_HOST_DATA_DIR to change the host mount location.
@@ -196,6 +198,26 @@ export function getSQLiteDatabasePath(): string {
   return path.join(getDataDir(), 'quilltap.db');
 }
 
+/**
+ * Get the plugins directory path
+ *
+ * @returns Plugins directory path (<base>/plugins)
+ */
+export function getPluginsDir(): string {
+  return path.join(getBaseDataDir(), 'plugins');
+}
+
+/**
+ * Get the npm plugins directory path
+ *
+ * Site-wide npm-installed plugins are stored here.
+ *
+ * @returns npm plugins directory path (<base>/plugins/npm)
+ */
+export function getNpmPluginsDir(): string {
+  return path.join(getPluginsDir(), 'npm');
+}
+
 // ============================================================================
 // Directory Management
 // ============================================================================
@@ -207,6 +229,7 @@ export function getSQLiteDatabasePath(): string {
  * - <base>/data
  * - <base>/files
  * - <base>/logs
+ * - <base>/plugins/npm
  *
  * @throws {Error} If directory creation fails
  */
@@ -215,6 +238,7 @@ export function ensureDataDirectoriesExist(): void {
     getDataDir(),
     getFilesDir(),
     getLogsDir(),
+    getNpmPluginsDir(),
   ];
 
   for (const dir of dirs) {
