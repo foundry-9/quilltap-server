@@ -70,6 +70,23 @@
   - Legacy aliases maintained for backward compatibility
   - Updated tests and documentation
 
+- feat: Built-in TF-IDF embedding provider plugin (2026-01-30)
+  - New `qtap-plugin-builtin-embeddings` plugin provides zero-dependency, offline embedding
+  - Uses TF-IDF with BM25 enhancement and Porter stemming for semantic search
+  - Supports bigrams for better phrase matching
+  - Vocabulary automatically fits to user's memory corpus
+  - Added 'BUILTIN' to embedding profile providers (alongside OPENAI, OLLAMA, OPENROUTER)
+  - New database tables: `tfidf_vocabularies` for vocabulary storage, `embedding_status` for tracking
+  - Background jobs: EMBEDDING_GENERATE, EMBEDDING_REFIT, EMBEDDING_REINDEX_ALL
+  - Debounced vocabulary refitting when memories change (5-second debounce)
+  - API endpoints: POST `?action=refit` and `?action=reindex` on embedding profiles
+  - UI: Vocabulary stats display, manual refit button, embedding progress indicators
+  - Added qt-badge-provider-* CSS classes for theme-aware provider badges
+- fix: Embedding-only providers not appearing in provider dropdown (2026-01-31)
+  - Extended plugin initialization to register EMBEDDING_PROVIDER plugins to provider registry
+  - Previously only LLM_PROVIDER plugins were registered, excluding embedding-only providers
+  - Fixed hotLoadProviderPlugin to also handle EMBEDDING_PROVIDER capability
+  - BUILTIN provider now correctly appears in embedding profile settings
 - refactor: Rename auth middleware to context middleware (2026-01-30)
   - Renamed `createAuthenticatedHandler` → `createContextHandler`
   - Renamed `createAuthenticatedParamsHandler` → `createContextParamsHandler`
