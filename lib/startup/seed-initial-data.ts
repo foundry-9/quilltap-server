@@ -2,8 +2,9 @@
  * Initial Data Seeding Service
  *
  * Seeds default data on first application startup when the database
- * is empty. Currently seeds a default character to provide immediate
- * functionality for new users.
+ * is empty. Seeds default character(s) and a TF-IDF embedding profile
+ * to provide immediate functionality for new users without requiring
+ * any API keys.
  *
  * @module lib/startup/seed-initial-data
  */
@@ -11,7 +12,12 @@
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/database/repositories';
 import { SINGLE_USER_ID } from '@/lib/auth/single-user';
-import { getSeedCharacters, prepareSeedCharacter } from '@/first-startup';
+import {
+  getSeedCharacters,
+  prepareSeedCharacter,
+  getSeedEmbeddingProfiles,
+  prepareSeedEmbeddingProfile,
+} from '@/first-startup';
 
 /**
  * Seed initial data if the database is empty
@@ -73,15 +79,88 @@ export async function seedInitialData(): Promise<void> {
       }
     }
 
-    logger.info('Initial data seeding complete', {
+    logger.info('Character seeding complete', {
       context,
       seededCount: seedCharacters.length,
     });
+
+    // Seed embedding profiles if none exist
+    await seedEmbeddingProfiles(repos, context);
+
+    logger.info('Initial data seeding complete', { context });
   } catch (error) {
     logger.error('Error during initial data seeding', {
       context,
       error: error instanceof Error ? error.message : String(error),
     });
     // Don't throw - seeding failure should not prevent startup
+  }
+}
+
+/**
+ * Seed default embedding profile if none exist
+ *
+ * Creates a default TF-IDF embedding profile to enable semantic search
+ * without requiring any API keys. This provides immediate functionality
+ * for memory search and retrieval.
+ */
+async function seedEmbeddingProfiles(
+  repos: ReturnType<typeof getRepositories>,
+  context: string
+): Promise<void> {
+  try {
+    // Check if any embedding profiles exist
+    const existingProfiles = await repos.embeddingProfiles.findAll();
+
+    if (existingProfiles.length > 0) {
+      // Embedding profiles already exist, no need to seed
+      logger.debug('Embedding profiles already exist, skipping seed', {
+        context,
+        existingCount: existingProfiles.length,
+      });
+      return;
+    }
+
+    // Get seed embedding profiles
+    const seedProfiles = getSeedEmbeddingProfiles();
+
+    if (seedProfiles.length === 0) {
+      logger.warn('No seed embedding profiles defined', { context });
+      return;
+    }
+
+    logger.info('Seeding default embedding profile', {
+      context,
+      profileCount: seedProfiles.length,
+    });
+
+    // Create each seed embedding profile
+    for (const seedData of seedProfiles) {
+      try {
+        const profileData = prepareSeedEmbeddingProfile(seedData, SINGLE_USER_ID);
+        const created = await repos.embeddingProfiles.create(profileData);
+
+        logger.info('Seeded embedding profile', {
+          context,
+          profileId: created.id,
+          profileName: created.name,
+          provider: created.provider,
+          isDefault: created.isDefault,
+        });
+      } catch (profileError) {
+        logger.error('Failed to seed embedding profile', {
+          context,
+          profileName: seedData.name,
+          error: profileError instanceof Error ? profileError.message : String(profileError),
+        });
+        // Continue with other profiles even if one fails
+      }
+    }
+  } catch (error) {
+    logger.error('Error seeding embedding profiles', {
+      context,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    // Don't throw - this is non-critical
   }
 }

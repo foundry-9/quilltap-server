@@ -11,6 +11,11 @@
   - Seeding runs after migrations in `instrumentation.ts` as phase 1.25
   - Added 'seeding' phase to startup state tracking
   - Safe to call multiple times - only seeds when no characters exist
+- feat: First-startup TF-IDF embedding profile seeding (2026-01-31)
+  - Seeds default "Built-in TF-IDF" embedding profile on first startup
+  - Enables semantic memory search without requiring any API keys
+  - Profile is set as default so memories use it immediately
+  - Added embedding profile seed data to `first-startup/` module
 - feat: Built-in TF-IDF embedding provider plugin (2026-01-30)
   - New `qtap-plugin-builtin-embeddings` plugin provides zero-dependency, offline embedding
   - Uses TF-IDF with BM25 enhancement and Porter stemming for semantic search

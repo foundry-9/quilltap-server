@@ -2,13 +2,14 @@
  * First-Startup Seed Data Loader
  *
  * Loads and exports seed data for initial application setup.
- * This module provides type-safe access to seed characters that
- * are created when the application starts with an empty database.
+ * This module provides type-safe access to seed characters and
+ * embedding profiles that are created when the application starts
+ * with an empty database.
  *
  * @module first-startup
  */
 
-import { CharacterInput } from '@/lib/schemas/types';
+import { CharacterInput, EmbeddingProfile } from '@/lib/schemas/types';
 import benData from './characters/ben.json';
 
 /**
@@ -89,5 +90,64 @@ export function prepareSeedCharacter(
     talkativeness: seedData.talkativeness ?? 0.5,
     npc: seedData.npc ?? false,
     isFavorite: seedData.isFavorite ?? false,
+  };
+}
+
+// ============================================================================
+// EMBEDDING PROFILES
+// ============================================================================
+
+/**
+ * Seed embedding profile data structure
+ */
+export interface SeedEmbeddingProfileData {
+  name: string;
+  provider: 'OPENAI' | 'OLLAMA' | 'OPENROUTER' | 'BUILTIN';
+  modelName: string;
+  dimensions?: number | null;
+  isDefault: boolean;
+}
+
+/**
+ * Default TF-IDF embedding profile for first startup
+ * This provides zero-config semantic search without requiring API keys
+ */
+const defaultEmbeddingProfile: SeedEmbeddingProfileData = {
+  name: 'Built-in TF-IDF',
+  provider: 'BUILTIN',
+  modelName: 'tfidf-bm25-v1',
+  dimensions: null, // Determined dynamically based on vocabulary
+  isDefault: true,
+};
+
+/**
+ * Get all seed embedding profiles to be created on first startup
+ * @returns Array of seed embedding profile data
+ */
+export function getSeedEmbeddingProfiles(): SeedEmbeddingProfileData[] {
+  return [defaultEmbeddingProfile];
+}
+
+/**
+ * Prepare seed embedding profile data for insertion into the database
+ *
+ * @param seedData The seed embedding profile data
+ * @param userId The user ID to assign to the profile
+ * @returns Embedding profile data ready for repository.create()
+ */
+export function prepareSeedEmbeddingProfile(
+  seedData: SeedEmbeddingProfileData,
+  userId: string
+): Omit<EmbeddingProfile, 'id' | 'createdAt' | 'updatedAt'> {
+  return {
+    userId,
+    name: seedData.name,
+    provider: seedData.provider,
+    apiKeyId: null,
+    baseUrl: null,
+    modelName: seedData.modelName,
+    dimensions: seedData.dimensions ?? null,
+    isDefault: seedData.isDefault,
+    tags: [],
   };
 }
