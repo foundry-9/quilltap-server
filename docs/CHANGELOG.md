@@ -32,6 +32,10 @@
   - Added `connectError` prop to ProfileModal
   - Displays error message in red box when connection test fails
   - Improved error logging in useAsyncOperation to show message directly
+- feat: Auto-fill profile name when selecting model (2026-01-31)
+  - When creating a new profile, selecting a model auto-fills name with `PROVIDER/MODEL_NAME`
+  - Only triggers if name field is empty
+  - Works with ModelSelector dropdown and manual text input
 - fix: Auto-fill base URL when selecting provider with default (2026-01-31)
   - Selecting Ollama now pre-fills base URL with `http://localhost:11434`
   - Works for any provider that has `baseUrlDefault` in config

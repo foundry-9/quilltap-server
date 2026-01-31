@@ -169,6 +169,16 @@ export function ProfileModal({
     }
   }
 
+  // Handle model change - auto-fill name if empty (new profile only)
+  const handleModelChange = (modelName: string) => {
+    form.setField('modelName', modelName)
+
+    // Auto-fill name with PROVIDER/MODEL if name is empty and this is a new profile
+    if (!profile?.id && !form.formData.name.trim() && modelName.trim()) {
+      form.setField('name', `${form.formData.provider}/${modelName}`)
+    }
+  }
+
   const footer = (
     <FormActions
       onCancel={handleClose}
@@ -375,7 +385,7 @@ export function ProfileModal({
                     id="modelName"
                     name="modelName"
                     value={form.formData.modelName}
-                    onChange={(e) => form.setField('modelName', e.target.value)}
+                    onChange={(e) => handleModelChange(e.target.value)}
                     placeholder="e.g., openai/gpt-4-turbo"
                     list="modelSuggestions"
                     className="qt-input"
@@ -393,7 +403,7 @@ export function ProfileModal({
                   models={fetchedModels}
                   modelsWithInfo={fetchedModelsWithInfo}
                   value={form.formData.modelName}
-                  onChange={(value) => form.setField('modelName', value)}
+                  onChange={handleModelChange}
                   placeholder="Select or search a model"
                   required
                   showFetchedCount
@@ -405,7 +415,7 @@ export function ProfileModal({
                     id="modelName"
                     name="modelName"
                     value={form.formData.modelName}
-                    onChange={(e) => form.setField('modelName', e.target.value)}
+                    onChange={(e) => handleModelChange(e.target.value)}
                     placeholder="e.g., gpt-4"
                     list="modelSuggestions"
                     className="qt-input"
