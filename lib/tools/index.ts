@@ -144,6 +144,26 @@ export {
   type RequestFullContextToolContext,
 } from './handlers/request-full-context-handler';
 
+// Help Search Tool
+export {
+  helpSearchToolDefinition,
+  anthropicHelpSearchToolDefinition,
+  getOpenAIHelpSearchTool,
+  getAnthropicHelpSearchTool,
+  getGoogleHelpSearchTool,
+  validateHelpSearchInput,
+  type HelpSearchToolInput,
+  type HelpSearchToolOutput,
+  type HelpSearchResult,
+} from './help-search-tool';
+
+export {
+  executeHelpSearchTool,
+  formatHelpSearchResults,
+  HelpSearchError,
+  type HelpSearchToolContext,
+} from './handlers/help-search-handler';
+
 // Plugin-Based Tool Builder (Phase 3)
 export {
   buildToolsForProvider,

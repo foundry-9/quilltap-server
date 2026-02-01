@@ -22,6 +22,7 @@ import {
   projectInfoToolDefinition,
   fileManagementToolDefinition,
   requestFullContextToolDefinition,
+  helpSearchToolDefinition,
 } from '@/lib/tools';
 import type { UniversalTool, ImageProviderConstraints } from '@/lib/plugins/interfaces';
 
@@ -90,6 +91,9 @@ export interface BuildToolsOptions {
   /** Whether to enable request_full_context tool (enabled when context compression is active) */
   requestFullContext?: boolean;
 
+  /** Whether to enable help search tool (enabled by default) */
+  helpSearch?: boolean;
+
   /** Whether to include tools from the tool registry (plugin tools) */
   includePluginTools?: boolean;
 
@@ -128,6 +132,20 @@ export async function buildToolsForProvider(
     module: 'plugin-tool-builder',
     provider: providerName,
   });
+
+  logger_.debug('buildToolsForProvider called', {
+    options: {
+      imageGeneration: options.imageGeneration,
+      memorySearch: options.memorySearch,
+      webSearch: options.webSearch,
+      projectInfo: options.projectInfo,
+      fileManagement: options.fileManagement,
+      requestFullContext: options.requestFullContext,
+      helpSearch: options.helpSearch,
+      includePluginTools: options.includePluginTools,
+    },
+  });
+
   // Step 1: Build array of universal tools based on enabled options
   const universalTools: UniversalTool[] = [];
 
@@ -167,6 +185,12 @@ export async function buildToolsForProvider(
     universalTools.push(requestFullContextToolDefinition as UniversalTool);
   }
 
+  // Add help search tool if enabled (defaults to true when not specified)
+  if (options.helpSearch !== false) {
+    universalTools.push(helpSearchToolDefinition as UniversalTool);
+    logger_.debug('Added help search tool to universal tools');
+  }
+
   // Add plugin tools if enabled (defaults to true when not specified)
   if (options.includePluginTools !== false) {
     // Get configured tool definitions from the tool registry (async for multi-tool plugins)
@@ -182,6 +206,13 @@ export async function buildToolsForProvider(
   if (universalTools.length === 0) {
     return [];
   }
+
+  // Log the tools being built
+  logger_.info('Built universal tools', {
+    count: universalTools.length,
+    toolNames: universalTools.map(t => t.function.name),
+  });
+
   // Step 2: Get the provider plugin from registry
   const plugin = getProvider(providerName);
 

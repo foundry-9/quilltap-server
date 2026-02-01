@@ -4,6 +4,13 @@
 
 ### 2.9-dev
 
+- feat: Built-in search_help LLM tool (2026-01-31)
+  - New tool allows LLMs to search Quilltap help documentation during conversations
+  - Uses semantic search when OPENAI_API_KEY is available, keyword fallback otherwise
+  - Always enabled by default - helps users understand Quilltap features
+  - Loads pre-computed embeddings from help-bundle.msgpack.gz
+  - Added to BUILT_IN_TOOLS in tool-executor.ts, plugin-utils, and tools API route
+  - Visible in chat tool settings UI under "Built-in" category
 - docs: Comprehensive startup wizard guide (2026-01-31)
   - Complete rewrite of `help/startup-wizard.md` with step-by-step setup instructions
   - Covers choosing AI providers: Ollama, OpenRouter, OpenAI, Anthropic, and OpenAI-compatible

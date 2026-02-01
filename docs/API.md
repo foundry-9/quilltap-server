@@ -29,6 +29,7 @@ Complete API reference for Quilltap v2.8.
   - [LLM Logs](#llm-logs)
   - [Themes](#themes)
   - [Search](#search)
+  - [LLM Tools](#llm-tools)
   - [Plugins](#plugins)
   - [Projects](#projects)
 
@@ -1746,6 +1747,94 @@ Resume a paused job.
 #### `GET /api/tools/tasks-queue`
 
 Get tasks queue status (UI endpoint).
+
+---
+
+### LLM Tools
+
+Endpoints for managing LLM tools available during chat conversations.
+
+#### `GET /api/v1/tools`
+
+List all available LLM tools that can be enabled/disabled per chat.
+
+**Query Parameters:**
+- `chatId` (optional) - Chat ID to check tool availability in context
+
+**Response:**
+```json
+{
+  "tools": [
+    {
+      "id": "generate_image",
+      "name": "Generate Image",
+      "description": "Generate images using AI image generation providers",
+      "source": "built-in",
+      "category": "media",
+      "available": true
+    },
+    {
+      "id": "search_memories",
+      "name": "Search Memories",
+      "description": "Search through character memories and past conversations",
+      "source": "built-in",
+      "category": "memory",
+      "available": true
+    },
+    {
+      "id": "search_web",
+      "name": "Search Web",
+      "description": "Search the web for current information",
+      "source": "built-in",
+      "category": "search",
+      "available": false,
+      "unavailableReason": "Web search must be enabled in the connection profile"
+    },
+    {
+      "id": "project_info",
+      "name": "Project Info",
+      "description": "Access project information and files",
+      "source": "built-in",
+      "category": "project",
+      "available": false,
+      "unavailableReason": "Chat must be associated with a project"
+    },
+    {
+      "id": "manage_files",
+      "name": "Manage Files",
+      "description": "Read, write, and manage files in the file system",
+      "source": "built-in",
+      "category": "files",
+      "available": true
+    },
+    {
+      "id": "search_help",
+      "name": "Search Help",
+      "description": "Search Quilltap help documentation for features, settings, and usage guidance",
+      "source": "built-in",
+      "category": "help",
+      "available": true
+    }
+  ],
+  "count": 6
+}
+```
+
+**Built-in Tools:**
+
+| Tool ID | Name | Description | Context Requirements |
+|---------|------|-------------|---------------------|
+| `generate_image` | Generate Image | AI image generation | Requires image profile on character |
+| `search_memories` | Search Memories | Search character memories | Always available |
+| `search_web` | Search Web | Web search for current info | Requires web search enabled in connection profile |
+| `project_info` | Project Info | Access project files | Chat must be in a project |
+| `manage_files` | Manage Files | File system operations | Always available |
+| `search_help` | Search Help | Search Quilltap documentation | Always available |
+
+**Notes:**
+- When `chatId` is provided, the response includes `available` and `unavailableReason` fields
+- Plugin-provided tools are also included with `source: "plugin"`
+- The `request_full_context` tool is intentionally excluded (always available when context compression is enabled)
 
 ---
 

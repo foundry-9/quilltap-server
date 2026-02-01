@@ -341,7 +341,7 @@ async function processMessage(
   const toolSettingsChanged = chat.forceToolsOnNextMessage === true
   const shouldSendTools =
     toolSettingsChanged ||                     // Tool settings changed
-    toolMessageCount === 0 ||                  // First message
+    toolMessageCount <= 2 ||                   // First few messages (greeting flow may create 2 messages)
     toolMessageCount % toolReinjectInterval === 0  // At interval
 
   // Clear forceToolsOnNextMessage flag if it was set

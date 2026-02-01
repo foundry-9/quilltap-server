@@ -35,6 +35,11 @@ import {
   formatRequestFullContextResults,
   type RequestFullContextToolContext,
 } from '@/lib/tools/handlers/request-full-context-handler';
+import {
+  executeHelpSearchTool,
+  formatHelpSearchResults,
+  type HelpSearchToolContext,
+} from '@/lib/tools/handlers/help-search-handler';
 
 export interface ToolCallRequest {
   name: string;
@@ -173,6 +178,7 @@ const BUILT_IN_TOOLS = new Set([
   'project_info',
   'file_management',
   'request_full_context',
+  'search_help',
 ]);
 
 export async function executeToolCallWithContext(
@@ -475,6 +481,33 @@ export async function executeToolCallWithContext(
           formattedText: formattedResult,
         } : null,
         error: result.success ? undefined : result.message,
+      };
+    }
+
+    // Handle search_help (help documentation search)
+    if (toolCall.name === 'search_help') {
+      // Execute help search tool
+      const helpContext: HelpSearchToolContext = {
+        userId,
+      };
+
+      const result = await executeHelpSearchTool(toolCall.arguments, helpContext);
+
+      // Format results for LLM consumption
+      const formattedResult = result.success && result.results
+        ? formatHelpSearchResults(result.results)
+        : result.error || 'No help documentation found';
+
+      return {
+        toolName: 'search_help',
+        success: result.success,
+        result: result.success ? {
+          formattedText: formattedResult,
+          results: result.results,
+          totalFound: result.totalFound,
+          query: result.query,
+        } : null,
+        error: result.success ? undefined : result.error,
       };
     }
 

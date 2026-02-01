@@ -51,6 +51,12 @@ These tools are always available in Quilltap:
 - Always available
 - Useful for: Working with documents and file-based information
 
+**Search Help**
+
+- Searches Quilltap's help documentation for features, settings, and usage guidance
+- Always available
+- Useful for: Getting accurate information about how to use Quilltap features, configure settings, or troubleshoot issues
+
 ### Plugin Tools
 
 Additional tools provided by installed plugins or extensions:
