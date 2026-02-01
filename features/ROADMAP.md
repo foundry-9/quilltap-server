@@ -34,7 +34,7 @@ This document tracks planned features and improvements for Quilltap.
 ### Content & Worldbuilding
 
 - [ ] Worldbook/Lore system
-- [ ] Complete AI wizard for characters or NPCs
+- [X] Complete AI wizard for characters or NPCs
 
 ### External Integrations
 

@@ -4,6 +4,19 @@
 
 ### 2.9-dev
 
+- feat: AI Wizard shows real-time generation progress (2026-02-01)
+  - Each field now shows a checkmark and snippet as it completes
+  - Progress updates stream in real-time via Server-Sent Events
+  - Shows current field being generated with spinner
+  - Displays error messages inline for failed fields
+  - Added `POST /api/v1/characters?action=ai-wizard-stream` streaming endpoint
+- feat: AI Wizard can upload documents as character source (2026-02-01)
+  - New "Upload a document" option in Physical Description Source step
+  - Supports text (.txt), Markdown (.md), and PDF files
+  - Document content is extracted and used as context for character generation
+  - Uses existing file-content-extractor service for text/PDF parsing
+  - Added `/api/v1/files?action=upload` endpoint for multipart file uploads
+  - Updated help documentation with new option
 - feat: AI Wizard can now generate character names (2026-02-01)
   - AI Wizard button on character creation page no longer requires a name first
   - Added "Name" as a generatable field in the AI Wizard (appears at top of field list)

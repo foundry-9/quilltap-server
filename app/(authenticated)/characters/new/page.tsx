@@ -73,10 +73,17 @@ export default function NewCharacterPage() {
     setError(null)
 
     try {
+      // Filter out empty strings for optional UUID fields
+      const submitData = {
+        ...formData,
+        defaultConnectionProfileId: formData.defaultConnectionProfileId || undefined,
+        avatarUrl: formData.avatarUrl || undefined,
+      }
+
       const res = await fetch('/api/v1/characters', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(submitData),
       })
 
       if (!res.ok) {
@@ -90,7 +97,7 @@ export default function NewCharacterPage() {
       // Save pending physical description if any
       if (pendingPhysicalDescription.current) {
         try {
-          const descResponse = await fetch(`/api/v1/characters/${characterId}?action=descriptions`, {
+          const descResponse = await fetch(`/api/v1/characters/${characterId}/descriptions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

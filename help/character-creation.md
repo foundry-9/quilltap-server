@@ -167,10 +167,11 @@ If you want AI to generate content:
    - Click **Next**
 6. **Step 2: Physical Description Source**
    - Choose one:
-     - Skip (no description)
-     - Generate from text (AI creates appearance)
-     - Upload image (AI analyzes image)
+     - Use existing character data (AI creates from description/personality)
+     - Upload a new image (AI analyzes image)
      - Select from gallery (use existing image)
+     - Upload a document (text, Markdown, or PDF with character details)
+     - Skip (no description)
 7. **Step 3: Select Fields to Generate**
    - Check which fields AI should create:
      - ☐ Name (if not provided)

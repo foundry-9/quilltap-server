@@ -12,7 +12,7 @@ import type { ConnectionProfile } from '@/lib/schemas/types'
 
 export type WizardStep = 1 | 2 | 3 | 4
 
-export type DescriptionSourceType = 'existing' | 'upload' | 'gallery' | 'skip'
+export type DescriptionSourceType = 'existing' | 'upload' | 'gallery' | 'document' | 'skip'
 
 export type GeneratableField =
   | 'name'
@@ -27,6 +27,7 @@ export type GeneratableField =
 export interface GenerationProgress {
   currentField: GeneratableField | null
   completedFields: GeneratableField[]
+  snippets: Record<string, string>
   errors: Record<string, string>
 }
 
@@ -65,6 +66,8 @@ export interface AIWizardState {
   uploadedImageUrl: string | null
   selectedGalleryImageId: string | null
   selectedGalleryImageUrl: string | null
+  uploadedDocumentId: string | null
+  uploadedDocumentName: string | null
   visionProfileId: string | null
   needsVisionProfile: boolean
 
@@ -92,6 +95,7 @@ export interface AIWizardRequest {
 
   sourceType: DescriptionSourceType
   imageId?: string
+  documentId?: string
 
   characterName: string
   existingData?: {
@@ -153,6 +157,9 @@ export interface DescriptionSourceStepProps {
   selectedGalleryImageId: string | null
   selectedGalleryImageUrl: string | null
   onGallerySelect: (imageId: string, imageUrl: string) => void
+  uploadedDocumentId: string | null
+  uploadedDocumentName: string | null
+  onDocumentUpload: (documentId: string, documentName: string) => void
   needsVisionProfile: boolean
   visionProfileId: string | null
   visionProfiles: ConnectionProfile[]
