@@ -20,11 +20,94 @@ import { fileStorageManager } from '@/lib/file-storage/manager';
 import type { FileStorageProviderPlugin } from '@/lib/file-storage/interfaces';
 import packageJson from '@/package.json';
 import { createRequire } from 'node:module';
-import { resolve } from 'node:path';
+import { resolve, dirname, join } from 'node:path';
 import { existsSync } from 'node:fs';
 
 // Create a require function that bypasses Next.js bundling for dynamic plugin loading
 const dynamicRequire = createRequire(import.meta.url || __filename);
+
+// Get the Module object dynamically to avoid Next.js bundler issues
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const Module = dynamicRequire('module') as typeof import('module');
+
+// Get the app's node_modules path for peer dependency resolution
+const appNodeModules = join(process.cwd(), 'node_modules');
+
+// Peer dependencies that external plugins can use from the host app
+const PEER_DEPENDENCIES = new Set([
+  'react',
+  'react/jsx-runtime',
+  'react/jsx-dev-runtime',
+  'react-dom',
+]);
+
+/**
+ * Load an external plugin module with peer dependency resolution.
+ *
+ * External npm-installed plugins need to be able to use React and other
+ * peer dependencies from the host app's node_modules. This function
+ * temporarily patches Module._resolveFilename to fall back to the app's
+ * node_modules when the plugin can't find a peer dependency.
+ */
+function loadExternalPluginModule(modulePath: string): unknown {
+  // Store original _resolveFilename
+  type ResolveFilenameFunction = (
+    request: string,
+    parent: { filename?: string; paths?: string[] } | null,
+    isMain: boolean,
+    options?: object
+  ) => string;
+  const ModuleInternal = Module as unknown as {
+    _resolveFilename: ResolveFilenameFunction;
+    _nodeModulePaths: (from: string) => string[];
+  };
+  const originalResolveFilename = ModuleInternal._resolveFilename;
+
+  // Create app module paths for fallback resolution
+  const appModulePaths = ModuleInternal._nodeModulePaths(appNodeModules);
+
+  // Patch _resolveFilename to handle peer dependencies
+  ModuleInternal._resolveFilename = function(
+    request: string,
+    parent: { filename?: string; paths?: string[] } | null,
+    isMain: boolean,
+    options?: object
+  ) {
+    // First, try the original resolution
+    try {
+      return originalResolveFilename.call(this, request, parent, isMain, options);
+    } catch (error) {
+      // If it's a peer dependency and we're loading from an external plugin, try the app's node_modules
+      if (PEER_DEPENDENCIES.has(request) && parent?.filename && !parent.filename.includes(join('plugins', 'dist'))) {
+        try {
+          // Create a fake parent with paths pointing to the app's node_modules
+          const fakeParent = {
+            filename: join(appNodeModules, 'react', 'index.js'),
+            paths: appModulePaths,
+          };
+          return originalResolveFilename.call(this, request, fakeParent, isMain, options);
+        } catch {
+          // Fall through to throw original error
+        }
+      }
+      throw error;
+    }
+  };
+
+  try {
+    // Clear the module from cache to ensure fresh load with our patched resolver
+    delete require.cache[require.resolve(modulePath)];
+  } catch {
+    // Module not in cache, that's fine
+  }
+
+  try {
+    return dynamicRequire(modulePath);
+  } finally {
+    // Restore original _resolveFilename
+    ModuleInternal._resolveFilename = originalResolveFilename;
+  }
+}
 
 // ============================================================================
 // TYPES
@@ -254,25 +337,32 @@ async function performInitialization(): Promise<PluginInitializationResult> {
         try {
           const mainFile = loadedPlugin.manifest.main || 'index.js';
           const modulePath = resolve(process.cwd(), loadedPlugin.pluginPath, mainFile);
-          // Use require() to load the compiled JavaScript module
-          const pluginModule = dynamicRequire(modulePath);
+
+          // Use external loader for npm-installed plugins to resolve peer dependencies
+          // Bundled plugins (in plugins/dist) can use dynamicRequire directly
+          const isExternalPlugin = loadedPlugin.source === 'npm';
+          const pluginModule = isExternalPlugin
+            ? loadExternalPluginModule(modulePath)
+            : dynamicRequire(modulePath);
 
           if (pluginModule?.plugin) {
             providers.push(pluginModule.plugin);
             logger.debug('Loaded provider plugin', {
               plugin: loadedPlugin.manifest.name,
               capabilities: loadedPlugin.capabilities,
+              source: loadedPlugin.source,
             });
           } else if (pluginModule?.default?.plugin) {
             providers.push(pluginModule.default.plugin);
             logger.debug('Loaded provider plugin (default export)', {
               plugin: loadedPlugin.manifest.name,
               capabilities: loadedPlugin.capabilities,
+              source: loadedPlugin.source,
             });
           } else {
             logger.warn('Provider plugin module does not export a plugin object', {
               plugin: loadedPlugin.manifest.name,
-              exports: Object.keys(pluginModule),
+              exports: Object.keys(pluginModule as object),
             });
           }
         } catch (error) {
@@ -312,12 +402,18 @@ async function performInitialization(): Promise<PluginInitializationResult> {
         if (!existsSync(modulePath)) {
           continue; // No module file, will fall back to file-based
         }
-        // Use require() to load the compiled JavaScript module
-        const pluginModule = dynamicRequire(modulePath);
-        const themePlugin = pluginModule?.plugin || pluginModule?.default?.plugin;
 
-        if (themePlugin?.tokens) {
-          themeRegistry.registerThemeModule(loadedPlugin, themePlugin);
+        // Use external loader for npm-installed plugins to resolve peer dependencies
+        const isExternalPlugin = loadedPlugin.source === 'npm';
+        const pluginModule = isExternalPlugin
+          ? loadExternalPluginModule(modulePath)
+          : dynamicRequire(modulePath);
+        const themePlugin = (pluginModule as { plugin?: unknown; default?: { plugin?: unknown } })?.plugin
+          || (pluginModule as { default?: { plugin?: unknown } })?.default?.plugin;
+
+        if (themePlugin && typeof themePlugin === 'object' && 'tokens' in themePlugin) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          themeRegistry.registerThemeModule(loadedPlugin, themePlugin as any);
         }
       } catch (error) {
       }
@@ -337,17 +433,21 @@ async function performInitialization(): Promise<PluginInitializationResult> {
         try {
           const mainFile = loadedPlugin.manifest.main || 'index.js';
           const modulePath = resolve(process.cwd(), loadedPlugin.pluginPath, mainFile);
-          // Use require() to load the compiled JavaScript module
-          const pluginModule = dynamicRequire(modulePath);
 
-          if (pluginModule?.plugin) {
-            tools.push(pluginModule.plugin as ToolPlugin);
-          } else if (pluginModule?.default?.plugin) {
-            tools.push(pluginModule.default.plugin as ToolPlugin);
+          // Use external loader for npm-installed plugins to resolve peer dependencies
+          const isExternalPlugin = loadedPlugin.source === 'npm';
+          const pluginModule = isExternalPlugin
+            ? loadExternalPluginModule(modulePath)
+            : dynamicRequire(modulePath);
+
+          if ((pluginModule as { plugin?: unknown })?.plugin) {
+            tools.push((pluginModule as { plugin: ToolPlugin }).plugin);
+          } else if ((pluginModule as { default?: { plugin?: unknown } })?.default?.plugin) {
+            tools.push((pluginModule as { default: { plugin: ToolPlugin } }).default.plugin);
           } else {
             logger.warn('Tool plugin module does not export a plugin object', {
               plugin: loadedPlugin.manifest.name,
-              exports: Object.keys(pluginModule),
+              exports: Object.keys(pluginModule as object),
             });
           }
         } catch (error) {
@@ -370,17 +470,21 @@ async function performInitialization(): Promise<PluginInitializationResult> {
         try {
           const mainFile = loadedPlugin.manifest.main || 'index.js';
           const modulePath = resolve(process.cwd(), loadedPlugin.pluginPath, mainFile);
-          // Use require() to load the compiled JavaScript module
-          const pluginModule = dynamicRequire(modulePath);
 
-          if (pluginModule?.plugin) {
-            fileStorageManager.registerProviderPlugin(pluginModule.plugin as FileStorageProviderPlugin);
-          } else if (pluginModule?.default?.plugin) {
-            fileStorageManager.registerProviderPlugin(pluginModule.default.plugin as FileStorageProviderPlugin);
+          // Use external loader for npm-installed plugins to resolve peer dependencies
+          const isExternalPlugin = loadedPlugin.source === 'npm';
+          const pluginModule = isExternalPlugin
+            ? loadExternalPluginModule(modulePath)
+            : dynamicRequire(modulePath);
+
+          if ((pluginModule as { plugin?: unknown })?.plugin) {
+            fileStorageManager.registerProviderPlugin((pluginModule as { plugin: FileStorageProviderPlugin }).plugin);
+          } else if ((pluginModule as { default?: { plugin?: unknown } })?.default?.plugin) {
+            fileStorageManager.registerProviderPlugin((pluginModule as { default: { plugin: FileStorageProviderPlugin } }).default.plugin);
           } else {
             logger.warn('File backend plugin module does not export a plugin object', {
               plugin: loadedPlugin.manifest.name,
-              exports: Object.keys(pluginModule),
+              exports: Object.keys(pluginModule as object),
             });
           }
         } catch (error) {

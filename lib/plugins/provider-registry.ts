@@ -18,11 +18,80 @@ import type { ImageGenProvider } from '@/lib/image-gen/base';
 import { getErrorMessage } from '@/lib/errors';
 import type { PluginManifest } from '@/lib/schemas/plugin-manifest';
 import { createRequire } from 'node:module';
-import { resolve } from 'node:path';
+import { resolve, join } from 'node:path';
 import { existsSync } from 'node:fs';
 
 // Create a require function for dynamic plugin loading
 const dynamicRequire = createRequire(import.meta.url || __filename);
+
+// Get the Module object dynamically to avoid Next.js bundler issues
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const Module = dynamicRequire('module') as typeof import('module');
+
+// Get the app's node_modules path for peer dependency resolution
+const appNodeModules = join(process.cwd(), 'node_modules');
+
+// Peer dependencies that external plugins can use from the host app
+const PEER_DEPENDENCIES = new Set([
+  'react',
+  'react/jsx-runtime',
+  'react/jsx-dev-runtime',
+  'react-dom',
+]);
+
+/**
+ * Load an external plugin module with peer dependency resolution.
+ */
+function loadExternalPluginModule(modulePath: string): unknown {
+  type ResolveFilenameFunction = (
+    request: string,
+    parent: { filename?: string; paths?: string[] } | null,
+    isMain: boolean,
+    options?: object
+  ) => string;
+  const ModuleInternal = Module as unknown as {
+    _resolveFilename: ResolveFilenameFunction;
+    _nodeModulePaths: (from: string) => string[];
+  };
+  const originalResolveFilename = ModuleInternal._resolveFilename;
+  const appModulePaths = ModuleInternal._nodeModulePaths(appNodeModules);
+
+  ModuleInternal._resolveFilename = function(
+    request: string,
+    parent: { filename?: string; paths?: string[] } | null,
+    isMain: boolean,
+    options?: object
+  ) {
+    try {
+      return originalResolveFilename.call(this, request, parent, isMain, options);
+    } catch (error) {
+      if (PEER_DEPENDENCIES.has(request) && parent?.filename && !parent.filename.includes(join('plugins', 'dist'))) {
+        try {
+          const fakeParent = {
+            filename: join(appNodeModules, 'react', 'index.js'),
+            paths: appModulePaths,
+          };
+          return originalResolveFilename.call(this, request, fakeParent, isMain, options);
+        } catch {
+          // Fall through
+        }
+      }
+      throw error;
+    }
+  };
+
+  try {
+    delete require.cache[require.resolve(modulePath)];
+  } catch {
+    // Not in cache
+  }
+
+  try {
+    return dynamicRequire(modulePath);
+  } finally {
+    ModuleInternal._resolveFilename = originalResolveFilename;
+  }
+}
 
 // ============================================================================
 // TYPES
@@ -503,17 +572,23 @@ class ProviderRegistry {
         return false;
       }
 
-      // Clear require cache to ensure fresh load
-      // Use dynamicRequire to avoid webpack static analysis issues
-      try {
-        const resolvedPath = dynamicRequire.resolve(modulePath);
-        delete dynamicRequire.cache[resolvedPath];
-      } catch {
-        // Module may not be in cache yet, that's fine
-      }
+      // Determine if this is an external (npm-installed) plugin
+      // External plugins have paths containing node_modules but not in plugins/dist
+      const isExternalPlugin = pluginPath.includes('node_modules') && !pluginPath.includes(join('plugins', 'dist'));
 
-      // Load the plugin module
-      const pluginModule = dynamicRequire(modulePath);
+      // Load the plugin module with peer dependency resolution for external plugins
+      const pluginModule = isExternalPlugin
+        ? loadExternalPluginModule(modulePath)
+        : (() => {
+            // Clear require cache for bundled plugins
+            try {
+              const resolvedPath = dynamicRequire.resolve(modulePath);
+              delete dynamicRequire.cache[resolvedPath];
+            } catch {
+              // Module may not be in cache yet, that's fine
+            }
+            return dynamicRequire(modulePath);
+          })();
 
       // Extract the provider plugin object
       const providerPlugin = pluginModule?.plugin || pluginModule?.default?.plugin;

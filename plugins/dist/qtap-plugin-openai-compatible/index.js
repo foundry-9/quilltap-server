@@ -28,46 +28,6 @@ module.exports = __toCommonJS(index_exports);
 // provider.ts
 var import_plugin_utils = require("@quilltap/plugin-utils");
 
-// icon.tsx
-var import_jsx_runtime = require("react/jsx-runtime");
-function OpenAICompatibleIcon({ className = "h-5 w-5" }) {
-  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
-    "svg",
-    {
-      className: `text-slate-600 ${className}`,
-      fill: "currentColor",
-      viewBox: "0 0 24 24",
-      xmlns: "http://www.w3.org/2000/svg",
-      "data-testid": "openai-compatible-icon",
-      children: [
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { cx: "12", cy: "12", r: "11", fill: "none", stroke: "currentColor", strokeWidth: "2" }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-          "path",
-          {
-            d: "M12 2A10 10 0 1 1 2 12A10 10 0 0 1 12 2Z",
-            fill: "currentColor",
-            opacity: "0.1"
-          }
-        ),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-          "text",
-          {
-            x: "50%",
-            y: "50%",
-            textAnchor: "middle",
-            dominantBaseline: "middle",
-            fill: "currentColor",
-            fontSize: "9",
-            fontWeight: "bold",
-            fontFamily: "system-ui, -apple-system, sans-serif",
-            children: "OAC"
-          }
-        )
-      ]
-    }
-  );
-}
-
 // index.ts
 var import_plugin_utils2 = require("@quilltap/plugin-utils");
 var logger = (0, import_plugin_utils2.createPluginLogger)("qtap-plugin-openai-compatible");
@@ -194,9 +154,6 @@ var plugin = {
   /**
    * Render the OpenAI-compatible icon
    */
-  renderIcon: (props) => {
-    return OpenAICompatibleIcon(props);
-  },
   /**
    * Format tools from OpenAI format to OpenAI format
    * OpenAI-compatible providers use OpenAI format, with Grok constraints applied if needed

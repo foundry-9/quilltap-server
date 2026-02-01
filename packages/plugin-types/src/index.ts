@@ -85,6 +85,7 @@ export type {
   ImageGenerationModelInfo,
   ImageProviderConstraints,
   IconProps,
+  PluginIconData,
   LLMProviderPlugin,
   ProviderPluginExport,
   // Runtime configuration types

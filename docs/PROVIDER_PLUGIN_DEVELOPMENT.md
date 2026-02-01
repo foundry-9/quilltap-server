@@ -374,8 +374,11 @@ export const plugin: LLMProviderPlugin = {
     },
   ],
 
-  // Provider icon (React component)
-  renderIcon: (props) => <MyAIIcon {...props} />,
+  // Provider icon (SVG data - no React required)
+  icon: {
+    viewBox: '0 0 24 24',
+    paths: [{ d: 'M12 2L2 7l10 5 10-5-10-5z', fill: 'currentColor' }],
+  },
 
   // Optional: Tool format (default is 'openai')
   toolFormat: 'openai',
@@ -841,7 +844,11 @@ interface LLMProviderPlugin {
   createProvider(baseUrl?: string): LLMProvider;
   getAvailableModels(apiKey: string, baseUrl?: string): Promise<string[]>;
   validateApiKey(apiKey: string, baseUrl?: string): Promise<boolean>;
-  renderIcon(props: { className?: string }): React.ReactNode;
+
+  // Icon (recommended - no React required)
+  icon?: PluginIconData;
+  // Deprecated: use icon instead
+  renderIcon?(props: { className?: string }): React.ReactNode;
 
   // Optional factories
   createImageProvider?(baseUrl?: string): ImageGenProvider;

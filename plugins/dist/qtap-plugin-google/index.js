@@ -46503,46 +46503,6 @@ var GoogleImagenProvider = class {
   }
 };
 
-// icon.tsx
-var import_jsx_runtime = require("react/jsx-runtime");
-function GoogleIcon({ className = "h-5 w-5" }) {
-  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
-    "svg",
-    {
-      className: `text-blue-600 ${className}`,
-      fill: "currentColor",
-      viewBox: "0 0 24 24",
-      xmlns: "http://www.w3.org/2000/svg",
-      "data-testid": "google-icon",
-      children: [
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { cx: "12", cy: "12", r: "11", fill: "none", stroke: "currentColor", strokeWidth: "2" }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-          "path",
-          {
-            d: "M12 2A10 10 0 1 1 2 12A10 10 0 0 1 12 2Z",
-            fill: "currentColor",
-            opacity: "0.1"
-          }
-        ),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-          "text",
-          {
-            x: "50%",
-            y: "50%",
-            textAnchor: "middle",
-            dominantBaseline: "middle",
-            fill: "currentColor",
-            fontSize: "10",
-            fontWeight: "bold",
-            fontFamily: "system-ui, -apple-system, sans-serif",
-            children: "GGL"
-          }
-        )
-      ]
-    }
-  );
-}
-
 // index.ts
 var logger3 = createPluginLogger("qtap-plugin-google");
 var metadata = {
@@ -46780,9 +46740,6 @@ var plugin = {
   /**
    * Render the Google icon
    */
-  renderIcon: (props) => {
-    return GoogleIcon(props);
-  },
   /**
    * Format tools from OpenAI format to Google format
    * Converts tool definitions to Google's function calling format

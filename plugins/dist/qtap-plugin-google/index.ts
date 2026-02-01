@@ -13,7 +13,6 @@
 import type { LLMProviderPlugin, ImageGenerationModelInfo } from './types';
 import { GoogleProvider } from './provider';
 import { GoogleImagenProvider } from './image-provider';
-import { GoogleIcon } from './icon';
 import {
   createPluginLogger,
   convertToGoogleFormat,
@@ -300,9 +299,6 @@ export const plugin: LLMProviderPlugin = {
   /**
    * Render the Google icon
    */
-  renderIcon: (props) => {
-    return GoogleIcon(props);
-  },
 
   /**
    * Format tools from OpenAI format to Google format

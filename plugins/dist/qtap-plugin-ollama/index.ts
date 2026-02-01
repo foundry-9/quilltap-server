@@ -12,7 +12,6 @@
 
 import type { LLMProviderPlugin, EmbeddingModelInfo } from './types';
 import { OllamaProvider } from './provider';
-import { OllamaIcon } from './icon';
 import {
   createPluginLogger,
   parseOpenAIToolCalls,
@@ -237,9 +236,6 @@ export const plugin: LLMProviderPlugin = {
   /**
    * Render the Ollama icon
    */
-  renderIcon: (props) => {
-    return OllamaIcon(props);
-  },
 
   /**
    * Format tools from OpenAI format to OpenAI format

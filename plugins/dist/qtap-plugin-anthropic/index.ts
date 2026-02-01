@@ -10,7 +10,6 @@
 
 import type { LLMProviderPlugin } from './types'
 import { AnthropicProvider } from './provider'
-import { AnthropicIcon } from './icon'
 import {
   createPluginLogger,
   convertToAnthropicFormat,
@@ -211,9 +210,6 @@ export const plugin: LLMProviderPlugin = {
   /**
    * Render the Anthropic icon
    */
-  renderIcon: (props) => {
-    return AnthropicIcon(props);
-  },
 
   /**
    * Format tools from OpenAI format to Anthropic format

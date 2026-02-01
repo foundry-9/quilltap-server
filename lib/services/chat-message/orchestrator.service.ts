@@ -14,7 +14,7 @@ import {
   getActiveCharacterParticipants,
   isMultiCharacterChat,
 } from '@/lib/chat/turn-manager'
-import { stripCharacterNamePrefix } from '@/lib/llm/message-formatter'
+import { stripCharacterNamePrefix, normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
 import { z } from 'zod'
 
 import type { getRepositories } from '@/lib/repositories/factory'
@@ -838,9 +838,13 @@ async function processMessage(
   let assistantMessageId: string | null = null
 
   if (fullResponse && fullResponse.trim().length > 0) {
+    // Normalize content that may be wrapped in content block format
+    // e.g., [{'type': 'text', 'text': "actual content"}]
+    const normalizedResponse = normalizeContentBlockFormat(fullResponse)
+
     // Strip any character name prefixes that the LLM might have echoed back
     // This handles cases where LLMs mimic the [Name] prefix format from the input
-    const cleanedResponse = stripCharacterNamePrefix(fullResponse, character.name)
+    const cleanedResponse = stripCharacterNamePrefix(normalizedResponse, character.name)
 
     assistantMessageId = await saveAssistantMessage(
       repos,

@@ -511,7 +511,75 @@ export interface LLMProviderPlugin {
   validateApiKey: (apiKey: string, baseUrl?: string) => Promise<boolean>;
 
   /**
-   * Render the provider icon as a React component
+   * Provider icon as SVG data (RECOMMENDED)
+   *
+   * Provides the icon as raw SVG data that Quilltap will render.
+   * This is the preferred approach as it doesn't require React in the plugin.
+   *
+   * Can be either:
+   * - A raw SVG string: `<svg viewBox="0 0 24 24">...</svg>`
+   * - Structured data with viewBox and path elements
+   *
+   * If not provided, falls back to `renderIcon` (deprecated) or generates
+   * a default icon from the provider's abbreviation.
+   *
+   * @example
+   * ```typescript
+   * // Option 1: Raw SVG string
+   * icon: {
+   *   svg: '<svg viewBox="0 0 24 24"><path d="M12 2..." fill="currentColor"/></svg>'
+   * }
+   *
+   * // Option 2: Structured data (useful for simple icons)
+   * icon: {
+   *   viewBox: '0 0 24 24',
+   *   paths: [
+   *     { d: 'M12 2L2 7l10 5 10-5-10-5z', fill: 'currentColor' },
+   *     { d: 'M2 17l10 5 10-5', fill: 'currentColor', opacity: '0.5' }
+   *   ]
+   * }
+   * ```
+   */
+  icon?: {
+    /** Raw SVG string (complete <svg> element) */
+    svg?: string;
+    /** SVG viewBox attribute (e.g., '0 0 24 24') - used with paths */
+    viewBox?: string;
+    /** SVG path elements - used with viewBox */
+    paths?: Array<{
+      d: string;
+      fill?: string;
+      stroke?: string;
+      strokeWidth?: string;
+      opacity?: string;
+      fillRule?: 'nonzero' | 'evenodd';
+    }>;
+    /** SVG circle elements - used with viewBox */
+    circles?: Array<{
+      cx: string | number;
+      cy: string | number;
+      r: string | number;
+      fill?: string;
+      stroke?: string;
+      strokeWidth?: string;
+      opacity?: string;
+    }>;
+    /** SVG text element for abbreviation - used with viewBox */
+    text?: {
+      content: string;
+      x?: string;
+      y?: string;
+      fontSize?: string;
+      fontWeight?: string;
+      fill?: string;
+    };
+  };
+
+  /**
+   * Render the provider icon as a React component (DEPRECATED)
+   *
+   * @deprecated Use the `icon` property instead, which doesn't require React.
+   * This method is kept for backwards compatibility with existing external plugins.
    *
    * Returns a function that renders the provider's icon.
    * Called by the UI to display provider icons in various places.
@@ -524,7 +592,7 @@ export interface LLMProviderPlugin {
    * const Icon = plugin.renderIcon({ className: 'w-6 h-6' });
    * ```
    */
-  renderIcon: (props: { className?: string }) => React.ReactNode;
+  renderIcon?: (props: { className?: string }) => React.ReactNode;
 
   /**
    * Convert universal tool format to provider-specific format (OPTIONAL)

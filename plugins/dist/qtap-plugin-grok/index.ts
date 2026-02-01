@@ -13,7 +13,6 @@
 import type { LLMProviderPlugin, ImageProviderConstraints } from './types';
 import { GrokProvider } from './provider';
 import { GrokImageProvider } from './image-provider';
-import { GrokIcon } from './icon';
 import {
   createPluginLogger,
   parseOpenAIToolCalls,
@@ -195,9 +194,6 @@ export const plugin: LLMProviderPlugin = {
   /**
    * Render the Grok icon
    */
-  renderIcon: (props) => {
-    return GrokIcon(props);
-  },
 
   /**
    * Format tools from OpenAI format to OpenAI format

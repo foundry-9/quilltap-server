@@ -4,6 +4,22 @@
 
 ### 2.9-dev
 
+- refactor: Plugin icon system redesigned to remove React dependency (2026-02-01)
+  - Plugins now provide SVG data via `icon` property instead of React components via `renderIcon`
+  - Added `PluginIconData` interface to `@quilltap/plugin-types` v1.10.0
+  - `renderIcon` is now optional and deprecated (kept for backwards compatibility)
+  - Removed `react` peer dependency from all bundled provider plugins
+  - ProviderIcon component renders SVG data from plugins with fallback to abbreviation
+  - External plugins no longer need React just for icons
+- fix: "Import from Template" modal now shows templates correctly (2026-02-01)
+  - Fixed prompt-templates response handling to extract `.templates` array
+  - Added `?all=true` parameter to sample-prompts API for flattened prompt list
+  - Sample prompts now return correct structure (content, modelHint, category, filename)
+- fix: Normalize LLM responses wrapped in content block format (2026-02-01)
+  - Some LLM providers return responses wrapped in `[{'type': 'text', 'text': "..."}]` format
+  - Added `normalizeContentBlockFormat()` utility to extract the actual text content
+  - Applied normalization in streaming service and orchestrator
+  - Handles both Python-style single quotes and JSON double quotes
 - feat: AI Wizard shows real-time generation progress (2026-02-01)
   - Each field now shows a checkmark and snippet as it completes
   - Progress updates stream in real-time via Server-Sent Events

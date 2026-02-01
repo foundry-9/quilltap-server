@@ -13,7 +13,6 @@
 import type { LLMProviderPlugin, EmbeddingModelInfo } from './types';
 import { OpenAIProvider } from './provider';
 import { OpenAIImageProvider } from './image-provider';
-import { OpenAIIcon } from './icon';
 import {
   createPluginLogger,
   parseOpenAIToolCalls,
@@ -214,13 +213,6 @@ export const plugin: LLMProviderPlugin = {
         description: 'Legacy model. Consider using text-embedding-3-small instead.',
       },
     ];
-  },
-
-  /**
-   * Render the OpenAI icon
-   */
-  renderIcon: (props) => {
-    return OpenAIIcon(props);
   },
 
   /**

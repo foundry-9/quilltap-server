@@ -10,6 +10,7 @@ import { createLLMProvider, type LLMMessage } from '@/lib/llm'
 import { buildToolsForProvider, checkModelSupportsTools } from '@/lib/tools'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
+import { normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
 import type { ConnectionProfile, ImageProfile } from '@/lib/schemas/types'
 import type { BuiltContext } from '@/lib/chat/context-manager'
 import type { FallbackResult } from '@/lib/chat/file-attachment-fallback'
@@ -315,6 +316,12 @@ export async function* streamMessage(
   )) {
     chunkCount++
     if (chunk.content) {
+      // Normalize content that may be wrapped in content block format
+      // e.g., [{'type': 'text', 'text': "actual content"}]
+      const normalizedContent = normalizeContentBlockFormat(chunk.content)
+      if (normalizedContent !== chunk.content) {
+        chunk.content = normalizedContent
+      }
       totalContentLength += chunk.content.length
       accumulatedContent += chunk.content
     }
