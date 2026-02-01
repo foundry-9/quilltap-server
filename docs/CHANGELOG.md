@@ -4,6 +4,9 @@
 
 ### 2.9-dev
 
+- fix: Include help-bundle.msgpack.gz in repository for CI tests (2026-02-01)
+  - Removed from .gitignore so the pre-built bundle is available in GitHub Actions
+  - Fixes test failures in help-search-handler.test.ts that depend on the bundle file
 - feat: Built-in search_help LLM tool (2026-01-31)
   - New tool allows LLMs to search Quilltap help documentation during conversations
   - Uses semantic search when OPENAI_API_KEY is available, keyword fallback otherwise

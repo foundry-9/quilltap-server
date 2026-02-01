@@ -163,6 +163,5 @@ plugins/*
 plugins/**/node_modules/
 plugins/**/package-lock.json
 
-# Generated help bundles (built from help/ Markdown files)
-public/help-bundle.msgpack.gz
+# Help index JSON (generated from help/ Markdown files)
 help/help-index.json

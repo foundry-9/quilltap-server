@@ -55,6 +55,7 @@ This document tracks planned features and improvements for Quilltap.
   - [ ] Has intimate knowledge of this application
   - [ ] Works well enough with simple, low-cost or local LLMs (e.g., Mistral or Qwen)
 - [ ] Application web page and useful help and videos hosted there
+- [ ] Built-in help able to be toggled so it works with every LLM with or without tools (a "help" conversation will be different, it will always search for what you say or what the conversation has been about recently and provide that data as part of the context for every message to the LLM)
 
 ## Completed in v2.9
 
