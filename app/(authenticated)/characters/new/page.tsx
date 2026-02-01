@@ -38,6 +38,7 @@ export default function NewCharacterPage() {
   const handleWizardApply = (data: GeneratedCharacterData) => {
     setFormData((prev) => ({
       ...prev,
+      ...(data.name && { name: data.name }),
       ...(data.title && { title: data.title }),
       ...(data.description && { description: data.description }),
       ...(data.personality && { personality: data.personality }),
@@ -57,7 +58,7 @@ export default function NewCharacterPage() {
         const res = await fetch('/api/v1/connection-profiles')
         if (res.ok) {
           const data = await res.json()
-          setProfiles(data)
+          setProfiles(data.profiles || [])
         }
       } catch (err) {
         console.error('Failed to fetch profiles', { error: err instanceof Error ? err.message : String(err) })
@@ -146,9 +147,8 @@ export default function NewCharacterPage() {
           <button
             type="button"
             onClick={() => setShowWizard(true)}
-            disabled={!formData.name.trim()}
-            className="qt-button-secondary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            title={!formData.name.trim() ? 'Enter a character name first' : 'Use AI to generate character details'}
+            className="qt-button-secondary flex items-center gap-2"
+            title="Use AI to generate character details"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />

@@ -4,6 +4,12 @@
 
 ### 2.9-dev
 
+- feat: AI Wizard can now generate character names (2026-02-01)
+  - AI Wizard button on character creation page no longer requires a name first
+  - Added "Name" as a generatable field in the AI Wizard (appears at top of field list)
+  - Enables creating completely random characters with AI-generated names
+  - Name is generated first and used as context for subsequent field generation
+  - Updated help documentation for character creation wizard workflow
 - fix: Include help-bundle.msgpack.gz in repository for CI tests (2026-02-01)
   - Removed from .gitignore so the pre-built bundle is available in GitHub Actions
   - Fixes test failures in help-search-handler.test.ts that depend on the bundle file

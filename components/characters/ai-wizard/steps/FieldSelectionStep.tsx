@@ -34,6 +34,7 @@ export function FieldSelectionStep({
 }: FieldSelectionStepProps) {
   // All possible fields
   const allFields: GeneratableField[] = [
+    'name',
     'title',
     'description',
     'personality',

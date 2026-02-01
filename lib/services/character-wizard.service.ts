@@ -37,6 +37,7 @@ export interface WizardRequest {
   };
   background: string;
   fieldsToGenerate: (
+    | 'name'
     | 'title'
     | 'description'
     | 'personality'
@@ -68,6 +69,14 @@ export interface WizardResult {
 // ============================================================================
 
 const FIELD_PROMPTS: Record<string, string> = {
+  name: `Generate a unique, memorable name for this character that fits the world and background context provided.
+The name should be:
+- Appropriate to the setting (fantasy, modern, sci-fi, etc.)
+- Easy to pronounce and remember
+- Evocative of the character's nature or background
+
+Respond with ONLY the name, no quotes or explanation.`,
+
   title: `Generate a short, evocative title or epithet for this character (2-5 words).
 Examples: "The Wandering Scholar", "Knight of the Fallen Star", "Last of the Old Guard"
 
@@ -173,9 +182,17 @@ export function buildContextPrompt(
   imageDescription?: string
 ): string {
   let context = `You are a character creation assistant for a roleplay/chat application. You are helping create a character profile that will be used by an AI to roleplay as this character.
+`;
 
+  if (characterName.trim()) {
+    context += `
 Character Name: ${characterName}
 `;
+  } else {
+    context += `
+Note: The character does not yet have a name. You may be asked to generate one.
+`;
+  }
 
   if (background.trim()) {
     context += `
@@ -517,19 +534,59 @@ export async function runCharacterWizard(
     );
   }
 
-  // Build context prompt
+  // Generate requested fields
+  const generated: Record<string, unknown> = {};
+  const errors: Record<string, string> = {};
+
+  // Track the effective character name (may be generated)
+  let effectiveCharacterName = request.characterName;
+
+  // If 'name' is in the fields to generate, generate it first
+  if (request.fieldsToGenerate.includes('name')) {
+    try {
+      // Build initial context without a name
+      const nameContextPrompt = buildContextPrompt(
+        '',
+        request.background,
+        request.existingData,
+        imageDescription
+      );
+
+      const namePrompt = FIELD_PROMPTS.name;
+      const generatedName = await generateField(
+        primaryProvider,
+        primaryApiKey,
+        primaryProfile.modelName,
+        nameContextPrompt,
+        namePrompt,
+        100,
+        userId,
+        request.characterId,
+        primaryProfile.provider
+      );
+      generated.name = generatedName;
+      effectiveCharacterName = generatedName;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Generation failed';
+      errors.name = errorMessage;
+      logger.error('[CharacterWizard] Failed to generate field: name', {
+        error: errorMessage,
+      });
+    }
+  }
+
+  // Build context prompt with the effective character name
   const contextPrompt = buildContextPrompt(
-    request.characterName,
+    effectiveCharacterName,
     request.background,
     request.existingData,
     imageDescription
   );
 
-  // Generate requested fields
-  const generated: Record<string, unknown> = {};
-  const errors: Record<string, string> = {};
-
+  // Generate remaining fields (excluding 'name' which was already handled)
   for (const field of request.fieldsToGenerate) {
+    if (field === 'name') continue; // Already handled above
+
     try {
       if (field === 'physicalDescription') {
         generated.physicalDescription = await generatePhysicalDescriptions(

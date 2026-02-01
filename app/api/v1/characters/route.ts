@@ -72,7 +72,7 @@ const wizardRequestSchema = z.object({
   visionProfileId: z.uuid().optional(),
   sourceType: z.enum(['existing', 'upload', 'gallery', 'skip']),
   imageId: z.uuid().optional(),
-  characterName: z.string().min(1),
+  characterName: z.string(),
   existingData: z
     .object({
       title: z.string().optional(),
@@ -86,6 +86,7 @@ const wizardRequestSchema = z.object({
   background: z.string(),
   fieldsToGenerate: z.array(
     z.enum([
+      'name',
       'title',
       'description',
       'personality',

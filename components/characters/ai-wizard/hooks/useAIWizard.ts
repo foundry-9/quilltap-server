@@ -122,6 +122,8 @@ export function useAIWizard({
   const availableFields = useMemo((): GeneratableField[] => {
     const fields: GeneratableField[] = []
 
+    // Name is available if characterName is empty
+    if (!characterName.trim()) fields.push('name')
     if (!currentData.title?.trim()) fields.push('title')
     if (!currentData.description?.trim()) fields.push('description')
     if (!currentData.personality?.trim()) fields.push('personality')
@@ -135,7 +137,7 @@ export function useAIWizard({
     }
 
     return fields
-  }, [currentData, descriptionSource])
+  }, [characterName, currentData, descriptionSource])
 
   // Computed: Can proceed to next step?
   const canProceed = useMemo(() => {

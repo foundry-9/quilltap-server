@@ -15,6 +15,7 @@ export type WizardStep = 1 | 2 | 3 | 4
 export type DescriptionSourceType = 'existing' | 'upload' | 'gallery' | 'skip'
 
 export type GeneratableField =
+  | 'name'
   | 'title'
   | 'description'
   | 'personality'
@@ -39,6 +40,7 @@ export interface GeneratedPhysicalDescription {
 }
 
 export interface GeneratedCharacterData {
+  name?: string
   title?: string
   description?: string
   personality?: string
@@ -182,6 +184,7 @@ export interface GenerationStepProps {
 // ============================================================================
 
 export const FIELD_LABELS: Record<GeneratableField, string> = {
+  name: 'Name',
   title: 'Title',
   description: 'Description',
   personality: 'Personality',
@@ -192,6 +195,7 @@ export const FIELD_LABELS: Record<GeneratableField, string> = {
 }
 
 export const FIELD_DESCRIPTIONS: Record<GeneratableField, string> = {
+  name: 'The character\'s name',
   title: 'A short epithet or title (e.g., "The Wanderer")',
   description: 'Character appearance, background, and key traits',
   personality: 'Personality traits and behavioral patterns',

@@ -159,7 +159,7 @@ For a well-developed character:
 If you want AI to generate content:
 
 1. Click **Create Character**
-2. Enter **Name** (required to enable wizard)
+2. Optionally enter **Name** (or let wizard generate)
 3. Enter short **Description** (or let wizard generate)
 4. Click **AI Wizard** button
 5. **Step 1: Select LLM Profile**
@@ -173,6 +173,8 @@ If you want AI to generate content:
      - Select from gallery (use existing image)
 7. **Step 3: Select Fields to Generate**
    - Check which fields AI should create:
+     - ☐ Name (if not provided)
+     - ☐ Title
      - ☐ Personality
      - ☐ Scenario
      - ☐ First Message
@@ -187,7 +189,7 @@ If you want AI to generate content:
 10. Character created with generated content
 
 **Time:** 2-5 minutes
-**Best for:** When you have a concept but need help fleshing it out
+**Best for:** When you have a concept but need help fleshing it out, or want a completely random character
 
 ## Character Fields: Detailed Guide
 
