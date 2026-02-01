@@ -4,6 +4,40 @@
 
 ### 2.9-dev
 
+- docs: Comprehensive startup wizard guide (2026-01-31)
+  - Complete rewrite of `help/startup-wizard.md` with step-by-step setup instructions
+  - Covers choosing AI providers: Ollama, OpenRouter, OpenAI, Anthropic, and OpenAI-compatible
+  - Step-by-step instructions for getting API keys from each provider
+  - Guide to adding API keys and creating connection profiles
+  - Embedding setup: built-in TF-IDF vs external providers
+  - Cheap LLM configuration for background tasks
+  - First chat walkthrough with troubleshooting section
+  - Quick reference table with direct links to all settings pages
+- docs: Add page links to all help files (2026-01-31)
+  - Every help file now includes a prominent link to the corresponding app page
+  - Format: `> **[Open this page in Quilltap](/path)**` after the main heading
+  - Settings pages include `?tab=` parameter to navigate directly to the correct tab
+  - Tab mappings: keys, profiles, chat, appearance, image-profiles, embedding-profiles, plugins, storage, tags, templates, prompts
+- docs: Comprehensive projects functionality user documentation (2026-01-31)
+  - Added `help/projects.md` - Main projects overview with creation, organization, and best practices
+  - Added `help/project-files.md` - File management, supported types, AI access, and organization
+  - Added `help/project-chats.md` - Chat association, context injection, and project tools
+  - Added `help/project-characters.md` - Character roster, access modes, and cast management
+  - Added `help/project-settings.md` - Instructions, storage, tools, and configuration options
+  - Covers project instructions, file semantic search, roster mode, and mount point configuration
+- docs: Comprehensive chat functionality user documentation (2026-01-31)
+  - Added `help/chats.md` - Main chat overview with basic operations and navigation
+  - Added `help/chat-multi-character.md` - Multi-character chat setup and management
+  - Added `help/chat-turn-manager.md` - Turn system, speaker selection, and queue management
+  - Added `help/chat-participants.md` - Participants sidebar controls and features
+  - Added `help/chat-message-actions.md` - Message editing, swipes, deletion, and bulk actions
+  - Covers impersonation, talkativeness, nudge/queue, all-LLM auto-pause, and memory cascade
+- refactor: Replace JSON help embeddings with gzipped MessagePack bundle (2026-01-31)
+  - New build script `npm run build:help` generates `public/help-bundle.msgpack.gz`
+  - Bundle uses whole-document embeddings (1 per file) instead of heading-based chunks
+  - Reduced bundle size from ~24MB JSON to ~3-4MB compressed MessagePack
+  - Added `lib/help-search.ts` runtime loader with semantic search via cosine similarity
+  - Removed old `scripts/embed_help_files.ts` script
 - refactor: Rename auth middleware to context middleware (2026-01-30)
   - Renamed `createAuthenticatedHandler` → `createContextHandler`
   - Renamed `createAuthenticatedParamsHandler` → `createContextParamsHandler`

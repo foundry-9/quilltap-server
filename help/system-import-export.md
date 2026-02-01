@@ -1,0 +1,262 @@
+# Import & Export Data
+
+> **[Open this page in Quilltap](/tools)**
+
+The Import & Export tool lets you save your Quilltap data to files and load data from files back into your system.
+
+## Export: Saving Your Data
+
+Export lets you save characters, chats, memories, and templates to files in Quilltap format.
+
+**What can you export:**
+
+- Characters and their configurations
+- Chat histories and messages
+- Associated memories
+- Roleplay templates
+- All metadata
+
+**Why export:**
+
+- Share characters or chats with others
+- Back up specific data (not a full system backup)
+- Migrate to another Quilltap instance
+- Create archives of completed projects
+- Share setups with other users
+
+### How to Export
+
+**Step-by-Step:**
+
+1. **Go to the Tools page** (`/tools`)
+
+2. **Find the Import / Export card**
+
+3. **Click "Export Data"** button
+
+4. **Select what to export:**
+   - Choose which characters, chats, or templates to include
+   - Check/uncheck items you want included
+
+5. **Choose export options:**
+   - **Include Memories:** Whether to include associated memories
+   - Shows how many memories will be included
+
+6. **Review your selection**
+   - Verify the items you're exporting
+   - Confirm memory inclusion setting
+
+7. **Click "Export"**
+   - System creates the export file
+   - May take several minutes for large exports
+
+8. **Download the file**
+   - A `.quilltap` file downloads to your computer
+   - Store it in a safe location
+   - Share it if needed
+
+**Export file contains:**
+
+- All selected data in Quilltap format
+- Metadata about characters, chats, memories
+- Images and media (if included)
+- Complete chat histories
+- Memory data
+
+## Import: Loading Data
+
+Import lets you load exported data from `.quilltap` files back into your system.
+
+**What can you import:**
+
+- Exported characters
+- Exported chats
+- Associated memories
+- Templates and settings
+
+**Why import:**
+
+- Restore from an export file
+- Use characters/chats shared by others
+- Migrate from another instance
+- Add previously exported data back
+
+### How to Import
+
+**Step-by-Step:**
+
+1. **Go to the Tools page** (`/tools`)
+
+2. **Find the Import / Export card**
+
+3. **Click "Import Data"** button
+
+4. **Select import file**
+   - Click to choose a `.quilltap` file from your computer
+   - Or drag and drop the file
+   - System reads the file and previews contents
+
+5. **Review what will be imported**
+   - List of characters, chats, memories to import
+   - Count of each entity type
+   - File sizes and metadata
+
+6. **Choose conflict resolution strategy:**
+   - **Keep Existing:** Don't overwrite if item already exists
+   - **Replace:** Overwrite existing items with imported versions
+   - **Create New:** Always create new items (rename if necessary)
+
+7. **Choose memory handling:**
+   - **Include Memories:** Import associated memories if included in export
+   - **Skip Memories:** Don't import memories (import only items)
+
+8. **Select which items to import**
+   - You can deselect specific characters, chats, or templates
+   - Only checked items will be imported
+
+9. **Review your choices** and click "Import"
+
+10. **Wait for import to complete**
+    - System processes the import
+    - May take several minutes
+    - Creates new items in your system
+
+11. **Import complete**
+    - Success message shows what was imported
+    - New items appear in your system
+    - Memories may be queued for processing
+
+### Understanding Conflict Resolution
+
+**Keep Existing (Recommended for merging):**
+
+- If you already have a character named "Alice", the import is skipped
+- Use this to add new items without overwriting
+- Safe option that won't lose existing work
+
+**Replace (Recommended for updating):**
+
+- If you already have a character named "Alice", it's overwritten with the imported version
+- Use this to update items with newer versions
+- Replaces completely, no merging
+
+**Create New (Recommended for duplicating):**
+
+- Creates a copy even if item exists
+- Imported character becomes "Alice 2" if "Alice" exists
+- Useful for having multiple versions
+
+## Understanding Import Results
+
+After import completes, you see:
+
+**Summary of what was imported:**
+
+- Number of characters created
+- Number of chats created
+- Number of templates created
+- Number of memories queued (if included)
+
+**Next steps:**
+
+- New items appear in your system immediately
+- Memories may take time to process
+- You can review imported items
+
+## Exporting from Chats
+
+You can also export individual chats directly from within a chat:
+
+1. **Open a chat**
+2. **Look for export option** (usually in chat menu)
+3. **Click "Export Chat"**
+4. **Choose export options**
+5. **Chat is exported** to a file
+
+This creates a quick export of just that chat.
+
+## Import/Export File Format
+
+**File format:** `.quilltap` (Zip archive with JSON data)
+
+**Structure:**
+
+- Contains all data in standardized JSON format
+- Includes metadata for each entity
+- Images stored as base64 or file references
+- Memories stored separately from chat data
+
+**Compatibility:**
+
+- Export from version 2.5+ can be imported into version 2.5+
+- Older exports may not be compatible with newest versions
+- Contact support if import fails
+
+## Troubleshooting
+
+**Export failed**
+
+- Check that you selected at least one item
+- Try exporting fewer items (may be too large)
+- Ensure sufficient disk space
+- Contact support if issue persists
+
+**Import failed**
+
+- Verify file is valid `.quilltap` format
+- Check that file hasn't been corrupted
+- Try changing conflict resolution strategy
+- Contact support if error persists
+
+**Import very slow**
+
+- Large imports take time (importing 1000+ messages can be slow)
+- Don't close browser tab during import
+- Check Tasks Queue to see import progress
+- Very large files may need to be split
+
+**Memories didn't import**
+
+- Memories import as separate queue items
+- Check Tasks Queue to see memory processing jobs
+- Memories may take time to process
+- Check if "Include Memories" was selected during import
+
+**Duplicate items created**
+
+- If using "Create New" strategy, duplicates are expected
+- To avoid duplicates, use "Replace" or "Keep Existing"
+- Delete duplicates manually if not wanted
+
+## Best Practices
+
+**For Sharing:**
+
+- Export specific characters or chats
+- Test import in test instance before sharing
+- Document any customizations in export
+
+**For Backups:**
+
+- Export regularly alongside full backups
+- Export by feature/topic for organization
+- Store exports with descriptive names
+
+**For Migration:**
+
+- Export all data from old instance
+- Import into new instance
+- Verify all items imported successfully
+- Compare item counts
+
+**For Collaboration:**
+
+- Share specific exports with team members
+- Use "Keep Existing" when importing collaborative exports
+- Coordinate who owns which items
+
+## Related Topics
+
+- [System Tools](system-tools.md) - Overview of all system tools
+- [Backup & Restore](system-backup-restore.md) - Full system backup and restore
+- [Managing Tasks](system-tasks-queue.md) - Monitoring import/export jobs

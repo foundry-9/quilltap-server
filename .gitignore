@@ -162,3 +162,7 @@ plugins/*
 # Ignore node_modules and package-lock.json everywhere under plugins, including under dist
 plugins/**/node_modules/
 plugins/**/package-lock.json
+
+# Generated help bundles (built from help/ Markdown files)
+public/help-bundle.msgpack.gz
+help/help-index.json

@@ -1,0 +1,348 @@
+# Image Generation Profiles
+
+> **[Open this page in Quilltap](/settings?tab=image-profiles)**
+
+Image Generation Profiles configure services that can create images during chats. With an image generation profile set up, you can ask an AI to generate images as part of your conversations.
+
+## Understanding Image Generation
+
+Image generation allows your AI to create images based on descriptions you provide. For example:
+
+- "Generate a fantasy landscape with mountains"
+- "Create a character portrait in anime style"
+- "Make an illustration of a castle"
+
+The AI sends your description to an image generation service, which creates and returns an image.
+
+## Accessing Image Generation Profiles
+
+1. Click **Settings** (gear icon) in the left sidebar
+2. Click the **Image Profiles** tab
+3. You'll see any existing profiles and an option to create new ones
+
+## Viewing Image Profiles
+
+The profiles list shows:
+
+- **Profile Name** — Name you gave the profile
+- **Provider** — Which image service (DALL-E, Midjourney, Stable Diffusion, etc.)
+- **Default Badge** — If this is the default image generation profile
+- **Status** — Whether configuration is complete
+- **Actions** — Buttons to edit or delete the profile
+
+## Creating a New Image Generation Profile
+
+### Step 1: Get an API Key
+
+First, obtain an API key from an image generation provider:
+
+**DALL-E (OpenAI):**
+
+1. Go to platform.openai.com
+2. Create or use an existing OpenAI API key
+3. Return to Quilltap
+
+**Stable Diffusion:**
+
+1. Create account at stability.ai
+2. Get your API key from the console
+3. Copy and save it
+
+**Midjourney:**
+
+1. Use Midjourney Discord bot (different setup)
+2. Or use third-party API wrapper
+3. Get API key from wrapper service
+
+**Other Providers:**
+
+1. Check their documentation
+2. Obtain API key
+3. Store it securely
+
+### Step 2: Add the Key to Quilltap
+
+1. Go to Settings → **API Keys** tab
+2. Click **Add API Key**
+3. Select the image provider from the dropdown
+4. Enter your API key
+5. Click Save
+6. Test the key to verify it works
+
+### Step 3: Create the Image Profile
+
+1. Go back to Settings → **Image Profiles** tab
+2. Click **Add Image Profile**
+3. A form appears with these fields:
+
+   **Basic Information:**
+   - **Profile Name** — Name this configuration (e.g., "DALL-E Production", "Stable Diffusion Fast")
+   - **Provider** — Select the image service
+   - **API Key** — Choose from your stored API keys (must match provider)
+
+   **Model Selection:**
+   - **Model** — Select which image model to use
+     - DALL-E: dall-e-3, dall-e-2
+     - Stable Diffusion: Various model versions
+     - Midjourney: Different subscription tiers
+   - **Available Models** — Click to see what's available
+
+   **Configuration:**
+   - **Default Size** — Image dimensions (1024x1024, 512x512, etc.)
+   - **Quality** — Level of detail (Standard, HD, Premium)
+   - **Style** — Art style options (Photorealistic, Artistic, Cartoon, etc.)
+
+4. Click **Save** to create the profile
+
+## Editing an Image Profile
+
+To modify an existing profile:
+
+1. Find the profile in the list
+2. Click **Edit** button (pencil icon)
+3. Update any settings:
+   - Profile name
+   - API key (switch to different key)
+   - Model (switch to different model)
+   - Size, quality, or style defaults
+4. Click **Save Changes**
+
+## Setting a Default Profile
+
+Your default profile is used when:
+
+- You use image generation in a chat
+- The chat doesn't have a specific image profile selected
+
+To set as default:
+
+1. Find the profile in the list
+2. Click **Set as Default**
+3. A checkmark shows this is now the default
+4. Other profiles become secondary options
+
+**Why have a default:**
+
+- Most images use the default profile
+- Saves configuration time
+- Can override per-chat if needed
+
+## Deleting an Image Profile
+
+To remove a profile:
+
+1. Find the profile in the list
+2. Click **Delete** button (trash icon)
+3. Confirm the deletion
+4. Profile is removed
+5. Any chats using it will need a new profile
+
+## Using Image Profiles in Chats
+
+### Requesting Image Generation
+
+To ask for an image in a chat:
+
+1. Type a description of the image you want
+2. Example: "Generate a portrait of a fantasy character with purple hair"
+3. Send the message
+4. The AI uses your default image profile to generate the image
+5. The generated image appears in the chat
+
+### Selecting a Different Profile
+
+Some chats may have a different image profile selected. To check:
+
+1. Open a chat
+2. Look for chat settings or profile selector
+3. See which image profile is active for that chat
+4. Can usually change it before requesting image generation
+
+### Image Quality Factors
+
+The quality of generated images depends on:
+
+- **Provider quality** — DALL-E, Midjourney, etc. have different capabilities
+- **Model version** — Newer models usually produce better results
+- **Prompt quality** — Detailed descriptions produce better results
+- **Settings** — Quality, size, and style settings affect output
+- **Cost** — Higher quality usually costs more
+
+## Supported Image Providers
+
+### DALL-E (OpenAI)
+
+- **Models:** DALL-E 3, DALL-E 2
+- **Strengths:** Good all-around quality, text in images
+- **Sizes:** 1024x1024, 1024x1792, 1792x1024 (varies by model)
+- **Quality:** Standard, HD
+- **Cost:** Medium ($0.04-$0.12 per image depending on size/quality)
+
+### Stable Diffusion
+
+- **Providers:** Stability AI, others
+- **Models:** Multiple versions available
+- **Strengths:** Fast, flexible, good control
+- **Sizes:** Various
+- **Quality:** Variable
+- **Cost:** Low to Medium
+
+### Midjourney
+
+- **Access:** Via Discord bot or API
+- **Strengths:** High quality, artistic results
+- **Styles:** Many options
+- **Upscaling:** Available
+- **Cost:** Subscription-based
+
+### Other Providers
+
+- **Grok** — Text-to-image capability
+- **Custom providers** — Self-hosted or alternative services
+- **Comfy UI** — Local image generation
+- Check each provider's documentation for capabilities
+
+## Configuration Tips
+
+### For Fast Generation
+
+- Choose a faster model
+- Use standard quality
+- Use smaller sizes
+- May sacrifice quality for speed
+
+### For High Quality
+
+- Use newer models
+- Enable HD quality
+- Use larger sizes
+- Costs more and takes longer
+
+### For Specific Styles
+
+- Set preferred style in profile
+- Include style description in image prompt
+- Example styles: Photorealistic, Watercolor, 3D Render, Sketch
+
+### Cost Optimization
+
+- Create different profiles for different uses
+- Use cheaper provider for drafts
+- Use high-quality provider for final images
+- Monitor token/credit usage
+
+## Image Generation Workflow
+
+### Before First Use
+
+1. Create API key with image provider
+2. Add API key to Quilltap (API Keys tab)
+3. Create image generation profile
+4. Test profile works
+5. Set as default (optional)
+
+### In a Chat
+
+1. Type a description of image you want
+2. Ask the AI to generate it
+3. AI uses active profile to create image
+4. Generated image appears in chat
+5. Can ask AI to modify, regenerate, or create variations
+
+### After Generation
+
+- Images are saved in chat history
+- Can be downloaded or exported
+- Can be used as attachments in other messages
+- Can be added to image library
+
+## Troubleshooting Image Generation
+
+### API key validation failed
+
+**Solution:**
+
+- Verify API key in API Keys tab
+- Test key directly with provider
+- Check that key has image generation permission
+- Some API keys may have restricted permissions
+
+### Can't find image profile in chat
+
+**Reasons:**
+
+- Profile might not be created yet
+- No valid API key for provider
+- Chat may have specific profile that was deleted
+
+**Solutions:**
+
+- Create image profile in Settings
+- Ensure API key is valid
+- Create new profile for chat to use
+
+### Image generation not working in chat
+
+**Check:**
+
+- Is an image profile set as default?
+- Does the profile have a valid API key?
+- Does your provider account have available credits?
+- Is the model still available/active?
+
+**Solutions:**
+
+- Create or select an image profile
+- Verify API key in API Keys tab
+- Check provider account status and credits
+- Try a different model
+
+### Images look low quality
+
+**Causes:**
+
+- Using lower-quality model
+- Profile set to "standard" instead of "HD"
+- Prompt wasn't detailed enough
+- Provider limitations
+
+**Solutions:**
+
+- Try different profile with better model
+- Enable HD quality
+- Use more detailed image descriptions
+- Try different provider
+
+### Generation is very slow
+
+**Causes:**
+
+- Model is processing-intensive
+- Provider is overloaded
+- Large image size requested
+- Low internet connection
+
+**Solutions:**
+
+- Try faster model
+- Use standard quality instead of HD
+- Request smaller image size
+- Try again during less busy times
+
+### No images generated, error message
+
+**Common errors:**
+
+- "Invalid API key" — API key is wrong or expired
+- "Insufficient credits" — Provider account is out of money
+- "Model not found" — Model is no longer available
+- "Rate limit exceeded" — Too many requests at once
+
+**Solutions:** Check error message and troubleshoot accordingly
+
+## Related Settings
+
+- **API Keys** — Store credentials for image providers
+- **Chat Settings** — Configure image description provider (different from generation)
+- **Connection Profiles** — For LLM that interprets image requests
+- **Chat Memory** — Stores generated images in history
