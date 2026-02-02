@@ -4,6 +4,11 @@
 
 ### 2.9-dev
 
+- fix: Compression cache invalidated incorrectly in multi-character chats (2026-02-02)
+  - Cache validation was comparing filtered message count (only `type === 'message'`) against raw event count (includes tool results, system events)
+  - This caused cache to appear "too stale" with 100+ message difference when there were only a few new messages
+  - Now uses consistent message counting (filtered to `type === 'message'`) for both persisting and validating cache
+  - Multi-turn conversations with tool calls (RNG, state, MCP) now properly benefit from compression caching
 - perf: Compression cache fallback for faster responses when async not ready (2026-02-02)
   - When async pre-compression isn't ready, falls back to previous cache instead of waiting
   - Dynamic window calculation ensures no messages are lost when using older cache

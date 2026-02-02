@@ -514,11 +514,14 @@ async function processMessage(
     // Try to get cached compression from previous async pre-computation
     // This returns immediately without waiting for in-flight compression,
     // falling back to previous cache if async isn't ready yet
-    cachedCompressionResponse = await getCachedCompression(chatId, existingMessages.length)
+    // IMPORTANT: Use filtered message count (only type === 'message') to match
+    // how messages are counted when persisting the cache
+    const actualMessageCount = existingMessages.filter(m => m.type === 'message').length
+    cachedCompressionResponse = await getCachedCompression(chatId, actualMessageCount)
     if (cachedCompressionResponse) {
       logger.info('Using cached compression from async pre-computation', {
         chatId,
-        messageCount: existingMessages.length,
+        messageCount: actualMessageCount,
         cachedMessageCount: cachedCompressionResponse.cachedMessageCount,
         isFallback: cachedCompressionResponse.isFallback,
         savings: cachedCompressionResponse.result.compressionDetails?.totalSavings,
