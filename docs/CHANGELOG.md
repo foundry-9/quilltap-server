@@ -4,6 +4,17 @@
 
 ### 2.9-dev
 
+- feat: Image provider prompting guidance and style trigger phrases (2026-02-01)
+  - Added `promptingGuidance` field to `ImageProviderConstraints` for provider-specific prompting tips
+  - Added `styleInfo` field with `ImageStyleInfo` interface for style/LoRA details and trigger phrases
+  - Chat LLM now receives provider-specific guidance in the image generation tool description
+  - Cheap LLM prompt crafting now incorporates style trigger phrases when generating expanded prompts
+  - Updated `@quilltap/plugin-types` to v1.12.0 with new interfaces
+  - Removed React peer dependency from plugin-types (deprecated `renderIcon` now returns `unknown`)
+  - Updated PROVIDER_PLUGIN_DEVELOPMENT.md with documentation for new features
+- chore: Update plugin dependencies (2026-02-01)
+  - Updated @anthropic-ai/sdk to ^0.72.1
+  - Rebuilt bundled plugins with latest dependencies
 - chore: Add ESLint rule to catch "Quilttap" misspellings (2026-02-01)
   - Custom ESLint rule flags "Quilttap" (with double-t) as an error
   - Helps prevent common misspelling of project name throughout codebase

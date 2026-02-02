@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.12.0] - 2026-02-01
+
+### Removed
+
+- **Breaking:** Removed React peer dependency entirely
+  - `renderIcon` return type changed from `ReactNode` to `unknown`
+  - Removed `peerDependencies` and `peerDependenciesMeta` for React
+  - Removed `@types/react` from devDependencies
+  - Plugins using deprecated `renderIcon` still work at runtime but lose type safety
+  - Use the `icon` property with `PluginIconData` instead (recommended)
+
+## [1.11.0] - 2026-02-01
+
+### Added
+
+- `ImageStyleInfo` interface for describing style/LoRA information:
+  - `name: string` - Human-readable name for the style
+  - `loraId: string` - Internal LoRA/style identifier used in API calls
+  - `description: string` - Description for UI display and LLM context
+  - `triggerPhrase?: string | null` - Trigger phrase to include in prompt for this style
+- New fields on `ImageProviderConstraints`:
+  - `promptingGuidance?: string` - Provider-specific guidance for the LLM when crafting image prompts
+  - `styleInfo?: Record<string, ImageStyleInfo>` - Detailed information about available styles/LoRAs
+- Exported `ImageStyleInfo` from the main package entry point
+
 ## [1.10.0] - 2026-02-01
 
 ### Added

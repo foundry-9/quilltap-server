@@ -9,6 +9,7 @@ import { fileStorageManager } from '@/lib/file-storage/manager';
 import { decryptApiKey } from '@/lib/encryption';
 import type { FileCategory, FileSource } from '@/lib/schemas/types';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
+import { getImageProviderConstraints } from '@/lib/plugins/provider-registry';
 import {
   ImageGenerationToolInput,
   ImageGenerationToolOutput,
@@ -302,6 +303,16 @@ async function generateImagesWithProvider(
 }
 
 /**
+ * Options for prompt expansion with style trigger phrases
+ */
+interface PromptExpansionOptions {
+  /** Style trigger phrase to incorporate into the prompt */
+  styleTriggerPhrase?: string;
+  /** Name of the selected style (for context) */
+  styleName?: string;
+}
+
+/**
  * Expand prompt with character/persona placeholders using cheap LLM
  */
 async function expandPromptWithDescriptions(
@@ -310,7 +321,8 @@ async function expandPromptWithDescriptions(
   provider: string,
   chatId?: string,
   callingParticipantId?: string,
-  cheapLLMSettings?: CheapLLMSettings
+  cheapLLMSettings?: CheapLLMSettings,
+  styleOptions?: PromptExpansionOptions
 ): Promise<{ expandedPrompt: string; wasExpanded: boolean }> {
   try {
     // Map ImageProvider string to the enum type
@@ -396,6 +408,8 @@ async function expandPromptWithDescriptions(
         placeholders: expansionContext.placeholders,
         targetLength: expansionContext.targetLength,
         provider: expansionContext.provider,
+        styleTriggerPhrase: styleOptions?.styleTriggerPhrase,
+        styleName: styleOptions?.styleName,
       },
       cheapLLMSelection,
       userId
@@ -488,7 +502,33 @@ export async function executeImageGenerationTool(
       });
     }
 
-    // 5. Expand prompt with character/persona descriptions if needed
+    // 5. Get style trigger phrase if available
+    let styleOptions: PromptExpansionOptions | undefined;
+    const constraints = getImageProviderConstraints(imageProfile.provider);
+
+    if (constraints?.styleInfo) {
+      // Determine the selected style from tool input or profile defaults
+      const selectedStyle =
+        toolInput.style ||
+        (imageProfile.parameters as Record<string, unknown>)?.style as string | undefined;
+
+      if (selectedStyle && constraints.styleInfo[selectedStyle]) {
+        const styleInfo = constraints.styleInfo[selectedStyle];
+        if (styleInfo.triggerPhrase) {
+          styleOptions = {
+            styleTriggerPhrase: styleInfo.triggerPhrase,
+            styleName: styleInfo.name,
+          };
+          logger.debug('Found style trigger phrase for image generation', {
+            style: selectedStyle,
+            styleName: styleInfo.name,
+            hasTriggerPhrase: true,
+          });
+        }
+      }
+    }
+
+    // 6. Expand prompt with character/persona descriptions if needed
     let expandedPrompt = toolInput.prompt;
     try {
       const expandResult = await expandPromptWithDescriptions(
@@ -497,7 +537,8 @@ export async function executeImageGenerationTool(
         imageProfile.provider,
         context.chatId,
         context.callingParticipantId,
-        chatSettings?.cheapLLMSettings
+        chatSettings?.cheapLLMSettings,
+        styleOptions
       );
       expandedPrompt = expandResult.expandedPrompt;
     } catch (error) {
@@ -512,7 +553,7 @@ export async function executeImageGenerationTool(
       prompt: expandedPrompt,
     };
 
-    // 5. Generate images
+    // 7. Generate images
     const savedImages = await generateImagesWithProvider(
       finalInput,
       imageProfile,
@@ -520,7 +561,7 @@ export async function executeImageGenerationTool(
       context.chatId
     );
 
-    // 6. Return success response
+    // 8. Return success response
     return {
       success: true,
       images: savedImages,

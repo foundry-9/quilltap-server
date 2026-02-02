@@ -207,6 +207,29 @@ export interface ProviderCapabilities {
 }
 
 /**
+ * Information about a style or LoRA available for an image provider
+ *
+ * @interface ImageStyleInfo
+ */
+export interface ImageStyleInfo {
+  /** Human-readable name for the style */
+  name: string;
+
+  /** Internal LoRA/style identifier used in API calls */
+  loraId: string;
+
+  /** Description for UI display and LLM context */
+  description: string;
+
+  /**
+   * Trigger phrase to include in prompt when this style is active.
+   * The LLM should incorporate this phrase into the image prompt
+   * for optimal results with this style.
+   */
+  triggerPhrase?: string | null;
+}
+
+/**
  * Constraints for image generation providers
  *
  * Describes limitations and requirements for image generation,
@@ -230,6 +253,23 @@ export interface ImageProviderConstraints {
 
   /** Supported image sizes (e.g., ['1024x1024', '512x512']) */
   supportedSizes?: string[];
+
+  /**
+   * Prompting guidance text that should be provided to the chat LLM
+   * when it's generating image prompts for this provider.
+   * This can include structure recommendations, best practices,
+   * and provider-specific tips for writing effective prompts.
+   */
+  promptingGuidance?: string;
+
+  /**
+   * Detailed information about available styles/LoRAs.
+   * Keys are the style identifiers (matching supportedStyles if defined).
+   * When a style is selected, the LLM can use the styleInfo to understand
+   * how to craft prompts that work well with that style, including
+   * incorporating any required trigger phrases.
+   */
+  styleInfo?: Record<string, ImageStyleInfo>;
 }
 
 /**

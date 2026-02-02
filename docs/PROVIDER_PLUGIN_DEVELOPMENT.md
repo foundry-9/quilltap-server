@@ -589,11 +589,38 @@ createImageProvider: (baseUrl?: string) => {
 },
 
 getImageProviderConstraints: () => ({
+  // Basic constraints
   maxPromptBytes: 4000,
   promptConstraintWarning: 'Prompts limited to 4000 bytes',
   maxImagesPerRequest: 4,
   supportedSizes: ['1024x1024', '512x512', '256x256'],
   supportedStyles: ['vivid', 'natural'],
+
+  // Optional: Prompting guidance for the chat LLM
+  // This text is included in the image generation tool description
+  // to help the LLM write better prompts for your provider
+  promptingGuidance: `For best results with MyAI:
+- Start with the subject, then describe style and mood
+- Include lighting and color palette details
+- Avoid negative phrasing; use positive descriptions instead`,
+
+  // Optional: Style/LoRA information with trigger phrases
+  // When a style is selected, the trigger phrase is automatically
+  // incorporated into the final image prompt
+  styleInfo: {
+    'vivid': {
+      name: 'Vivid',
+      loraId: 'vivid-v1',
+      description: 'Dramatic, hyper-real images with vibrant colors',
+      triggerPhrase: null, // No trigger phrase needed
+    },
+    'anime': {
+      name: 'Anime Style',
+      loraId: 'anime-lora-v2',
+      description: 'Japanese anime-inspired artwork',
+      triggerPhrase: 'anime style illustration of', // Required for this style
+    },
+  },
 }),
 ```
 

@@ -15,6 +15,7 @@ export type {
   ModelInfo,
   EmbeddingModelInfo,
   ProviderCapabilities,
+  ImageStyleInfo,
   ImageProviderConstraints,
   UniversalTool,
   ToolFormatOptions,

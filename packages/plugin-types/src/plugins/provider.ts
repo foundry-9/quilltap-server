@@ -4,7 +4,6 @@
  * @module @quilltap/plugin-types/plugins/provider
  */
 
-import type { ReactNode } from 'react';
 import type { LLMProvider, ImageGenProvider } from '../llm/base';
 import type { ToolCallRequest, ToolFormatOptions } from '../llm/tools';
 import type { EmbeddingProvider, LocalEmbeddingProvider } from '../llm/embeddings';
@@ -208,6 +207,24 @@ export interface ImageGenerationModelInfo {
 }
 
 /**
+ * Information about a style or LoRA available for an image provider
+ */
+export interface ImageStyleInfo {
+  /** Human-readable name for the style */
+  name: string;
+  /** Internal LoRA/style identifier used in API calls */
+  loraId: string;
+  /** Description for UI display and LLM context */
+  description: string;
+  /**
+   * Trigger phrase to include in prompt when this style is active.
+   * The LLM should incorporate this phrase into the image prompt
+   * for optimal results with this style.
+   */
+  triggerPhrase?: string | null;
+}
+
+/**
  * Constraints for image generation
  */
 export interface ImageProviderConstraints {
@@ -221,6 +238,21 @@ export interface ImageProviderConstraints {
   supportedAspectRatios?: string[];
   /** Supported image sizes */
   supportedSizes?: string[];
+  /**
+   * Prompting guidance text that should be provided to the chat LLM
+   * when it's generating image prompts for this provider.
+   * This can include structure recommendations, best practices,
+   * and provider-specific tips for writing effective prompts.
+   */
+  promptingGuidance?: string;
+  /**
+   * Detailed information about available styles/LoRAs.
+   * Keys are the style identifiers (matching supportedStyles if defined).
+   * When a style is selected, the LLM can use the styleInfo to understand
+   * how to craft prompts that work well with that style, including
+   * incorporating any required trigger phrases.
+   */
+  styleInfo?: Record<string, ImageStyleInfo>;
 }
 
 /**
@@ -393,7 +425,7 @@ export interface LLMProviderPlugin {
    * This is kept for backwards compatibility with existing external plugins.
    * @param props Icon component props
    */
-  renderIcon?: (props: IconProps) => ReactNode;
+  renderIcon?: (props: IconProps) => unknown;
 
   /**
    * Convert universal tool format to provider-specific format (optional)

@@ -220,7 +220,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // node_modules/@anthropic-ai/sdk/version.mjs
-var VERSION = "0.71.2";
+var VERSION = "0.72.1";
 
 // node_modules/@anthropic-ai/sdk/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -1115,12 +1115,13 @@ function makeFile(fileBits, fileName, options) {
   checkFileSupport();
   return new File(fileBits, fileName ?? "unknown_file", options);
 }
-function getName(value) {
-  return (typeof value === "object" && value !== null && ("name" in value && value.name && String(value.name) || "url" in value && value.url && String(value.url) || "filename" in value && value.filename && String(value.filename) || "path" in value && value.path && String(value.path)) || "").split(/[\\/]/).pop() || void 0;
+function getName(value, stripPath) {
+  const val = typeof value === "object" && value !== null && ("name" in value && value.name && String(value.name) || "url" in value && value.url && String(value.url) || "filename" in value && value.filename && String(value.filename) || "path" in value && value.path && String(value.path)) || "";
+  return stripPath ? val.split(/[\\/]/).pop() || void 0 : val;
 }
 var isAsyncIterable = (value) => value != null && typeof value === "object" && typeof value[Symbol.asyncIterator] === "function";
-var multipartFormRequestOptions = async (opts, fetch2) => {
-  return { ...opts, body: await createForm(opts.body, fetch2) };
+var multipartFormRequestOptions = async (opts, fetch2, stripFilenames = true) => {
+  return { ...opts, body: await createForm(opts.body, fetch2, stripFilenames) };
 };
 var supportsFormDataMap = /* @__PURE__ */ new WeakMap();
 function supportsFormData(fetchObject) {
@@ -1143,16 +1144,16 @@ function supportsFormData(fetchObject) {
   supportsFormDataMap.set(fetch2, promise);
   return promise;
 }
-var createForm = async (body, fetch2) => {
+var createForm = async (body, fetch2, stripFilenames = true) => {
   if (!await supportsFormData(fetch2)) {
     throw new TypeError("The provided fetch function does not support file uploads with the current global FormData class.");
   }
   const form = new FormData();
-  await Promise.all(Object.entries(body || {}).map(([key, value]) => addFormValue(form, key, value)));
+  await Promise.all(Object.entries(body || {}).map(([key, value]) => addFormValue(form, key, value, stripFilenames)));
   return form;
 };
 var isNamedBlob = (value) => value instanceof Blob && "name" in value;
-var addFormValue = async (form, key, value) => {
+var addFormValue = async (form, key, value, stripFilenames) => {
   if (value === void 0)
     return;
   if (value == null) {
@@ -1166,15 +1167,15 @@ var addFormValue = async (form, key, value) => {
     if (contentType) {
       options = { type: contentType };
     }
-    form.append(key, makeFile([await value.blob()], getName(value), options));
+    form.append(key, makeFile([await value.blob()], getName(value, stripFilenames), options));
   } else if (isAsyncIterable(value)) {
-    form.append(key, makeFile([await new Response(ReadableStreamFrom(value)).blob()], getName(value)));
+    form.append(key, makeFile([await new Response(ReadableStreamFrom(value)).blob()], getName(value, stripFilenames)));
   } else if (isNamedBlob(value)) {
-    form.append(key, makeFile([value], getName(value), { type: value.type }));
+    form.append(key, makeFile([value], getName(value, stripFilenames), { type: value.type }));
   } else if (Array.isArray(value)) {
-    await Promise.all(value.map((entry) => addFormValue(form, key + "[]", entry)));
+    await Promise.all(value.map((entry) => addFormValue(form, key + "[]", entry, stripFilenames)));
   } else if (typeof value === "object") {
-    await Promise.all(Object.entries(value).map(([name, prop]) => addFormValue(form, `${key}[${name}]`, prop)));
+    await Promise.all(Object.entries(value).map(([name, prop]) => addFormValue(form, `${key}[${name}]`, prop, stripFilenames)));
   } else {
     throw new TypeError(`Invalid value given to form, expected a string, number, boolean, object, Array, File or Blob but got ${value} instead`);
   }
@@ -1187,7 +1188,7 @@ var isResponseLike = (value) => value != null && typeof value === "object" && ty
 async function toFile(value, name, options) {
   checkFileSupport();
   value = await value;
-  name || (name = getName(value));
+  name || (name = getName(value, true));
   if (isFileLike(value)) {
     if (value instanceof File && name == null && options == null) {
       return value;
@@ -1305,6 +1306,49 @@ var buildHeaders = (newHeaders) => {
   }
   return { [brand_privateNullableHeaders]: true, values: targetHeaders, nulls: nullHeaders };
 };
+
+// node_modules/@anthropic-ai/sdk/lib/stainless-helper-header.mjs
+var SDK_HELPER_SYMBOL = /* @__PURE__ */ Symbol("anthropic.sdk.stainlessHelper");
+function wasCreatedByStainlessHelper(value) {
+  return typeof value === "object" && value !== null && SDK_HELPER_SYMBOL in value;
+}
+function collectStainlessHelpers(tools, messages) {
+  const helpers = /* @__PURE__ */ new Set();
+  if (tools) {
+    for (const tool of tools) {
+      if (wasCreatedByStainlessHelper(tool)) {
+        helpers.add(tool[SDK_HELPER_SYMBOL]);
+      }
+    }
+  }
+  if (messages) {
+    for (const message of messages) {
+      if (wasCreatedByStainlessHelper(message)) {
+        helpers.add(message[SDK_HELPER_SYMBOL]);
+      }
+      if (Array.isArray(message.content)) {
+        for (const block of message.content) {
+          if (wasCreatedByStainlessHelper(block)) {
+            helpers.add(block[SDK_HELPER_SYMBOL]);
+          }
+        }
+      }
+    }
+  }
+  return Array.from(helpers);
+}
+function stainlessHelperHeader(tools, messages) {
+  const helpers = collectStainlessHelpers(tools, messages);
+  if (helpers.length === 0)
+    return {};
+  return { "x-stainless-helper": helpers.join(", ") };
+}
+function stainlessHelperHeaderFromFile(file) {
+  if (wasCreatedByStainlessHelper(file)) {
+    return { "x-stainless-helper": file[SDK_HELPER_SYMBOL] };
+  }
+  return {};
+}
 
 // node_modules/@anthropic-ai/sdk/internal/utils/path.mjs
 function encodeURIPath(str2) {
@@ -1468,6 +1512,7 @@ var Files = class extends APIResource {
       ...options,
       headers: buildHeaders([
         { "anthropic-beta": [...betas ?? [], "files-api-2025-04-14"].toString() },
+        stainlessHelperHeaderFromFile(body.file),
         options?.headers
       ])
     }, this._client));
@@ -1539,8 +1584,12 @@ var MODEL_NONSTREAMING_TOKENS = {
 };
 
 // node_modules/@anthropic-ai/sdk/lib/beta-parser.mjs
+function getOutputFormat(params) {
+  return params?.output_format ?? params?.output_config?.format;
+}
 function maybeParseBetaMessage(message, params, opts) {
-  if (!params || !("parse" in (params.output_format ?? {}))) {
+  const outputFormat = getOutputFormat(params);
+  if (!params || !("parse" in (outputFormat ?? {}))) {
     return {
       ...message,
       content: message.content.map((block) => {
@@ -1593,12 +1642,13 @@ function parseBetaMessage(message, params, opts) {
   };
 }
 function parseBetaOutputFormat(params, content) {
-  if (params.output_format?.type !== "json_schema") {
+  const outputFormat = getOutputFormat(params);
+  if (outputFormat?.type !== "json_schema") {
     return null;
   }
   try {
-    if ("parse" in params.output_format) {
-      return params.output_format.parse(content);
+    if ("parse" in outputFormat) {
+      return outputFormat.parse(content);
     }
     return JSON.parse(content);
   } catch (error) {
@@ -2423,6 +2473,20 @@ var BetaMessageStream = class _BetaMessageStream {
 function checkNever(x) {
 }
 
+// node_modules/@anthropic-ai/sdk/lib/tools/ToolError.mjs
+var ToolError = class extends Error {
+  constructor(content) {
+    const message = typeof content === "string" ? content : content.map((block) => {
+      if (block.type === "text")
+        return block.text;
+      return `[${block.type}]`;
+    }).join(" ");
+    super(message);
+    this.name = "ToolError";
+    this.content = content;
+  }
+};
+
 // node_modules/@anthropic-ai/sdk/lib/tools/CompactionControl.mjs
 var DEFAULT_TOKEN_THRESHOLD = 1e5;
 var DEFAULT_SUMMARY_PROMPT = `You have been working on the task described above but have not yet completed it. Write a continuation summary that will allow you (or another instance of yourself) to resume work efficiently in a future context window where the conversation history will be replaced with this summary. Your summary should be structured, concise, and actionable. Include:
@@ -2491,9 +2555,11 @@ var BetaToolRunner = class {
         messages: structuredClone(params.messages)
       }
     }, "f");
+    const helpers = collectStainlessHelpers(params.tools, params.messages);
+    const helperValue = ["BetaToolRunner", ...helpers].join(", ");
     __classPrivateFieldSet(this, _BetaToolRunner_options, {
       ...options,
-      headers: buildHeaders([{ "x-stainless-helper": "BetaToolRunner" }, options?.headers])
+      headers: buildHeaders([{ "x-stainless-helper": helperValue }, options?.headers])
     }, "f");
     __classPrivateFieldSet(this, _BetaToolRunner_completion, promiseWithResolvers(), "f");
   }
@@ -2771,7 +2837,7 @@ async function generateToolResponse(params, lastMessage = params.messages.at(-1)
       return {
         type: "tool_result",
         tool_use_id: toolUse.id,
-        content: `Error: ${error instanceof Error ? error.message : String(error)}`,
+        content: error instanceof ToolError ? error.content : `Error: ${error instanceof Error ? error.message : String(error)}`,
         is_error: true
       };
     }
@@ -3026,7 +3092,8 @@ var Messages = class extends APIResource {
     this.batches = new Batches(this._client);
   }
   create(params, options) {
-    const { betas, ...body } = params;
+    const modifiedParams = transformOutputFormat(params);
+    const { betas, ...body } = modifiedParams;
     if (body.model in DEPRECATED_MODELS) {
       console.warn(`The model '${body.model}' is deprecated and will reach end-of-life on ${DEPRECATED_MODELS[body.model]}
 Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resources/model-deprecations for more information.`);
@@ -3036,15 +3103,17 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
       const maxNonstreamingTokens = MODEL_NONSTREAMING_TOKENS[body.model] ?? void 0;
       timeout = this._client.calculateNonstreamingTimeout(body.max_tokens, maxNonstreamingTokens);
     }
+    const helperHeader = stainlessHelperHeader(body.tools, body.messages);
     return this._client.post("/v1/messages?beta=true", {
       body,
       timeout: timeout ?? 6e5,
       ...options,
       headers: buildHeaders([
         { ...betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0 },
+        helperHeader,
         options?.headers
       ]),
-      stream: params.stream ?? false
+      stream: modifiedParams.stream ?? false
     });
   }
   /**
@@ -3067,7 +3136,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
     options = {
       ...options,
       headers: buildHeaders([
-        { "anthropic-beta": [...params.betas ?? [], "structured-outputs-2025-11-13"].toString() },
+        { "anthropic-beta": [...params.betas ?? [], "structured-outputs-2025-12-15"].toString() },
         options?.headers
       ])
     };
@@ -3098,7 +3167,8 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
    * ```
    */
   countTokens(params, options) {
-    const { betas, ...body } = params;
+    const modifiedParams = transformOutputFormat(params);
+    const { betas, ...body } = modifiedParams;
     return this._client.post("/v1/messages/count_tokens?beta=true", {
       body,
       ...options,
@@ -3112,8 +3182,25 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
     return new BetaToolRunner(this._client, body, options);
   }
 };
+function transformOutputFormat(params) {
+  if (!params.output_format) {
+    return params;
+  }
+  if (params.output_config?.format) {
+    throw new AnthropicError("Both output_format and output_config.format were provided. Please use only output_config.format (output_format is deprecated).");
+  }
+  const { output_format, ...rest } = params;
+  return {
+    ...rest,
+    output_config: {
+      ...params.output_config,
+      format: output_format
+    }
+  };
+}
 Messages.Batches = Batches;
 Messages.BetaToolRunner = BetaToolRunner;
+Messages.ToolError = ToolError;
 
 // node_modules/@anthropic-ai/sdk/resources/beta/skills/versions.mjs
 var Versions = class extends APIResource {
@@ -3229,7 +3316,7 @@ var Skills = class extends APIResource {
         { "anthropic-beta": [...betas ?? [], "skills-2025-10-02"].toString() },
         options?.headers
       ])
-    }, this._client));
+    }, this._client, false));
   }
   /**
    * Get Skill
@@ -3324,9 +3411,71 @@ var Completions = class extends APIResource {
   }
 };
 
+// node_modules/@anthropic-ai/sdk/lib/parser.mjs
+function getOutputFormat2(params) {
+  return params?.output_config?.format;
+}
+function maybeParseMessage(message, params, opts) {
+  const outputFormat = getOutputFormat2(params);
+  if (!params || !("parse" in (outputFormat ?? {}))) {
+    return {
+      ...message,
+      content: message.content.map((block) => {
+        if (block.type === "text") {
+          const parsedBlock = Object.defineProperty({ ...block }, "parsed_output", {
+            value: null,
+            enumerable: false
+          });
+          return parsedBlock;
+        }
+        return block;
+      }),
+      parsed_output: null
+    };
+  }
+  return parseMessage(message, params, opts);
+}
+function parseMessage(message, params, opts) {
+  let firstParsedOutput = null;
+  const content = message.content.map((block) => {
+    if (block.type === "text") {
+      const parsedOutput = parseOutputFormat(params, block.text);
+      if (firstParsedOutput === null) {
+        firstParsedOutput = parsedOutput;
+      }
+      const parsedBlock = Object.defineProperty({ ...block }, "parsed_output", {
+        value: parsedOutput,
+        enumerable: false
+      });
+      return parsedBlock;
+    }
+    return block;
+  });
+  return {
+    ...message,
+    content,
+    parsed_output: firstParsedOutput
+  };
+}
+function parseOutputFormat(params, content) {
+  const outputFormat = getOutputFormat2(params);
+  if (outputFormat?.type !== "json_schema") {
+    return null;
+  }
+  try {
+    if ("parse" in outputFormat) {
+      return outputFormat.parse(content);
+    }
+    return JSON.parse(content);
+  } catch (error) {
+    throw new AnthropicError(`Failed to parse structured output: ${error}`);
+  }
+}
+
 // node_modules/@anthropic-ai/sdk/lib/MessageStream.mjs
 var _MessageStream_instances;
 var _MessageStream_currentMessageSnapshot;
+var _MessageStream_params;
 var _MessageStream_connectedPromise;
 var _MessageStream_resolveConnectedPromise;
 var _MessageStream_rejectConnectedPromise;
@@ -3340,6 +3489,7 @@ var _MessageStream_aborted;
 var _MessageStream_catchingPromiseCreated;
 var _MessageStream_response;
 var _MessageStream_request_id;
+var _MessageStream_logger;
 var _MessageStream_getFinalMessage;
 var _MessageStream_getFinalText;
 var _MessageStream_handleError;
@@ -3352,11 +3502,12 @@ function tracksToolInput2(content) {
   return content.type === "tool_use" || content.type === "server_tool_use";
 }
 var MessageStream = class _MessageStream {
-  constructor() {
+  constructor(params, opts) {
     _MessageStream_instances.add(this);
     this.messages = [];
     this.receivedMessages = [];
     _MessageStream_currentMessageSnapshot.set(this, void 0);
+    _MessageStream_params.set(this, null);
     this.controller = new AbortController();
     _MessageStream_connectedPromise.set(this, void 0);
     _MessageStream_resolveConnectedPromise.set(this, () => {
@@ -3375,6 +3526,7 @@ var MessageStream = class _MessageStream {
     _MessageStream_catchingPromiseCreated.set(this, false);
     _MessageStream_response.set(this, void 0);
     _MessageStream_request_id.set(this, void 0);
+    _MessageStream_logger.set(this, void 0);
     _MessageStream_handleError.set(this, (error) => {
       __classPrivateFieldSet(this, _MessageStream_errored, true, "f");
       if (isAbortError(error)) {
@@ -3406,6 +3558,8 @@ var MessageStream = class _MessageStream {
     });
     __classPrivateFieldGet(this, _MessageStream_endPromise, "f").catch(() => {
     });
+    __classPrivateFieldSet(this, _MessageStream_params, params, "f");
+    __classPrivateFieldSet(this, _MessageStream_logger, opts?.logger ?? console, "f");
   }
   get response() {
     return __classPrivateFieldGet(this, _MessageStream_response, "f");
@@ -3443,15 +3597,16 @@ var MessageStream = class _MessageStream {
    * in this context.
    */
   static fromReadableStream(stream) {
-    const runner = new _MessageStream();
+    const runner = new _MessageStream(null);
     runner._run(() => runner._fromReadableStream(stream));
     return runner;
   }
-  static createMessage(messages, params, options) {
-    const runner = new _MessageStream();
+  static createMessage(messages, params, options, { logger: logger3 } = {}) {
+    const runner = new _MessageStream(params, { logger: logger3 });
     for (const message of params.messages) {
       runner._addMessageParam(message);
     }
+    __classPrivateFieldSet(runner, _MessageStream_params, { ...params, stream: true }, "f");
     runner._run(() => runner._createMessage(messages, { ...params, stream: true }, { ...options, headers: { ...options?.headers, "X-Stainless-Helper-Method": "stream" } }));
     return runner;
   }
@@ -3583,6 +3738,7 @@ var MessageStream = class _MessageStream {
   /**
    * @returns a promise that resolves with the the final assistant Message response,
    * or rejects if an error occurred or the stream ended prematurely without producing a Message.
+   * If structured outputs were used, this will be a ParsedMessage with a `parsed_output` field.
    */
   async finalMessage() {
     await this.done();
@@ -3661,7 +3817,7 @@ var MessageStream = class _MessageStream {
       }
     }
   }
-  [(_MessageStream_currentMessageSnapshot = /* @__PURE__ */ new WeakMap(), _MessageStream_connectedPromise = /* @__PURE__ */ new WeakMap(), _MessageStream_resolveConnectedPromise = /* @__PURE__ */ new WeakMap(), _MessageStream_rejectConnectedPromise = /* @__PURE__ */ new WeakMap(), _MessageStream_endPromise = /* @__PURE__ */ new WeakMap(), _MessageStream_resolveEndPromise = /* @__PURE__ */ new WeakMap(), _MessageStream_rejectEndPromise = /* @__PURE__ */ new WeakMap(), _MessageStream_listeners = /* @__PURE__ */ new WeakMap(), _MessageStream_ended = /* @__PURE__ */ new WeakMap(), _MessageStream_errored = /* @__PURE__ */ new WeakMap(), _MessageStream_aborted = /* @__PURE__ */ new WeakMap(), _MessageStream_catchingPromiseCreated = /* @__PURE__ */ new WeakMap(), _MessageStream_response = /* @__PURE__ */ new WeakMap(), _MessageStream_request_id = /* @__PURE__ */ new WeakMap(), _MessageStream_handleError = /* @__PURE__ */ new WeakMap(), _MessageStream_instances = /* @__PURE__ */ new WeakSet(), _MessageStream_getFinalMessage = function _MessageStream_getFinalMessage2() {
+  [(_MessageStream_currentMessageSnapshot = /* @__PURE__ */ new WeakMap(), _MessageStream_params = /* @__PURE__ */ new WeakMap(), _MessageStream_connectedPromise = /* @__PURE__ */ new WeakMap(), _MessageStream_resolveConnectedPromise = /* @__PURE__ */ new WeakMap(), _MessageStream_rejectConnectedPromise = /* @__PURE__ */ new WeakMap(), _MessageStream_endPromise = /* @__PURE__ */ new WeakMap(), _MessageStream_resolveEndPromise = /* @__PURE__ */ new WeakMap(), _MessageStream_rejectEndPromise = /* @__PURE__ */ new WeakMap(), _MessageStream_listeners = /* @__PURE__ */ new WeakMap(), _MessageStream_ended = /* @__PURE__ */ new WeakMap(), _MessageStream_errored = /* @__PURE__ */ new WeakMap(), _MessageStream_aborted = /* @__PURE__ */ new WeakMap(), _MessageStream_catchingPromiseCreated = /* @__PURE__ */ new WeakMap(), _MessageStream_response = /* @__PURE__ */ new WeakMap(), _MessageStream_request_id = /* @__PURE__ */ new WeakMap(), _MessageStream_logger = /* @__PURE__ */ new WeakMap(), _MessageStream_handleError = /* @__PURE__ */ new WeakMap(), _MessageStream_instances = /* @__PURE__ */ new WeakSet(), _MessageStream_getFinalMessage = function _MessageStream_getFinalMessage2() {
     if (this.receivedMessages.length === 0) {
       throw new AnthropicError("stream ended without producing a Message with role=assistant");
     }
@@ -3725,7 +3881,7 @@ var MessageStream = class _MessageStream {
       }
       case "message_stop": {
         this._addMessageParam(messageSnapshot);
-        this._addMessage(messageSnapshot, true);
+        this._addMessage(maybeParseMessage(messageSnapshot, __classPrivateFieldGet(this, _MessageStream_params, "f"), { logger: __classPrivateFieldGet(this, _MessageStream_logger, "f") }), true);
         break;
       }
       case "content_block_stop": {
@@ -3749,7 +3905,7 @@ var MessageStream = class _MessageStream {
       throw new AnthropicError(`request ended without sending any chunks`);
     }
     __classPrivateFieldSet(this, _MessageStream_currentMessageSnapshot, void 0, "f");
-    return snapshot;
+    return maybeParseMessage(snapshot, __classPrivateFieldGet(this, _MessageStream_params, "f"), { logger: __classPrivateFieldGet(this, _MessageStream_logger, "f") });
   }, _MessageStream_accumulateMessage = function _MessageStream_accumulateMessage2(event) {
     let snapshot = __classPrivateFieldGet(this, _MessageStream_currentMessageSnapshot, "f");
     if (event.type === "message_start") {
@@ -4063,18 +4219,59 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
       const maxNonstreamingTokens = MODEL_NONSTREAMING_TOKENS[body.model] ?? void 0;
       timeout = this._client.calculateNonstreamingTimeout(body.max_tokens, maxNonstreamingTokens);
     }
+    const helperHeader = stainlessHelperHeader(body.tools, body.messages);
     return this._client.post("/v1/messages", {
       body,
       timeout: timeout ?? 6e5,
       ...options,
+      headers: buildHeaders([helperHeader, options?.headers]),
       stream: body.stream ?? false
     });
   }
   /**
-   * Create a Message stream
+   * Send a structured list of input messages with text and/or image content, along with an expected `output_config.format` and
+   * the response will be automatically parsed and available in the `parsed_output` property of the message.
+   *
+   * @example
+   * ```ts
+   * const message = await client.messages.parse({
+   *   model: 'claude-sonnet-4-5-20250929',
+   *   max_tokens: 1024,
+   *   messages: [{ role: 'user', content: 'What is 2+2?' }],
+   *   output_config: {
+   *     format: zodOutputFormat(z.object({ answer: z.number() })),
+   *   },
+   * });
+   *
+   * console.log(message.parsed_output?.answer); // 4
+   * ```
+   */
+  parse(params, options) {
+    return this.create(params, options).then((message) => parseMessage(message, params, { logger: this._client.logger ?? console }));
+  }
+  /**
+   * Create a Message stream.
+   *
+   * If `output_config.format` is provided with a parseable format (like `zodOutputFormat()`),
+   * the final message will include a `parsed_output` property with the parsed content.
+   *
+   * @example
+   * ```ts
+   * const stream = client.messages.stream({
+   *   model: 'claude-sonnet-4-5-20250929',
+   *   max_tokens: 1024,
+   *   messages: [{ role: 'user', content: 'What is 2+2?' }],
+   *   output_config: {
+   *     format: zodOutputFormat(z.object({ answer: z.number() })),
+   *   },
+   * });
+   *
+   * const message = await stream.finalMessage();
+   * console.log(message.parsed_output?.answer); // 4
+   * ```
    */
   stream(body, options) {
-    return MessageStream.createMessage(this, body, options);
+    return MessageStream.createMessage(this, body, options, { logger: this._client.logger ?? console });
   }
   /**
    * Count the number of tokens in a Message.
@@ -4109,7 +4306,9 @@ var DEPRECATED_MODELS2 = {
   "claude-2.1": "July 21st, 2025",
   "claude-2.0": "July 21st, 2025",
   "claude-3-7-sonnet-latest": "February 19th, 2026",
-  "claude-3-7-sonnet-20250219": "February 19th, 2026"
+  "claude-3-7-sonnet-20250219": "February 19th, 2026",
+  "claude-3-5-haiku-latest": "February 19th, 2026",
+  "claude-3-5-haiku-20241022": "February 19th, 2026"
 };
 Messages2.Batches = Batches2;
 

@@ -29,8 +29,11 @@ import type { UniversalTool, ImageProviderConstraints } from '@/lib/plugins/inte
 /**
  * Apply image provider constraints to the image generation tool
  *
- * If the image provider has a prompt constraint warning, it will be appended
- * to the prompt parameter's description.
+ * This function enriches the tool definition with provider-specific information:
+ * - promptingGuidance: Added to the main tool description to help the LLM
+ *   understand how to write effective prompts for this specific provider
+ * - promptConstraintWarning: Added to the prompt parameter description
+ *   for length/format warnings
  *
  * @param baseTool The base image generation tool definition
  * @param constraints The image provider constraints to apply
@@ -42,28 +45,60 @@ function applyImageConstraintsToTool(
   constraints: ImageProviderConstraints | null,
   moduleLogger: ReturnType<typeof logger.child>
 ): UniversalTool {
-  if (!constraints?.promptConstraintWarning) {
+  // If no constraints at all, return the base tool unchanged
+  if (!constraints) {
     return baseTool;
   }
-  const properties = baseTool.function.parameters.properties as Record<string, Record<string, string>>;
-  const existingDescription = properties.prompt?.description || '';
 
-  return {
-    ...baseTool,
-    function: {
-      ...baseTool.function,
+  const hasGuidance = !!constraints.promptingGuidance;
+  const hasWarning = !!constraints.promptConstraintWarning;
+
+  // If no relevant constraints, return unchanged
+  if (!hasGuidance && !hasWarning) {
+    return baseTool;
+  }
+
+  moduleLogger.debug('Applying image provider constraints to tool', {
+    hasGuidance,
+    hasWarning,
+  });
+
+  let result = { ...baseTool };
+  let functionDef = { ...baseTool.function };
+
+  // Apply prompting guidance to the main tool description
+  if (hasGuidance) {
+    const existingToolDescription = functionDef.description || '';
+    functionDef = {
+      ...functionDef,
+      description: existingToolDescription +
+        '\n\n**Provider-Specific Prompting Guidance:**\n' +
+        constraints.promptingGuidance,
+    };
+  }
+
+  // Apply prompt constraint warning to the prompt parameter
+  if (hasWarning) {
+    const properties = functionDef.parameters.properties as Record<string, Record<string, string>>;
+    const existingPromptDescription = properties.prompt?.description || '';
+
+    functionDef = {
+      ...functionDef,
       parameters: {
-        ...baseTool.function.parameters,
+        ...functionDef.parameters,
         properties: {
-          ...baseTool.function.parameters.properties,
+          ...functionDef.parameters.properties,
           prompt: {
             ...properties.prompt,
-            description: existingDescription + ' ' + constraints.promptConstraintWarning,
+            description: existingPromptDescription + ' ' + constraints.promptConstraintWarning,
           },
         },
       },
-    },
-  };
+    };
+  }
+
+  result.function = functionDef;
+  return result;
 }
 
 /**
