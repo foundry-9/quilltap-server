@@ -45,6 +45,11 @@ import {
   formatRngResults,
   type RngToolContext,
 } from '@/lib/tools/handlers/rng-handler';
+import {
+  executeStateTool,
+  formatStateResults,
+  type StateToolContext,
+} from '@/lib/tools/handlers/state-handler';
 
 export interface ToolCallRequest {
   name: string;
@@ -185,6 +190,7 @@ const BUILT_IN_TOOLS = new Set([
   'request_full_context',
   'search_help',
   'rng',
+  'state',
 ]);
 
 export async function executeToolCallWithContext(
@@ -539,6 +545,35 @@ export async function executeToolCallWithContext(
           rollCount: result.rollCount,
           results: result.results,
           sum: result.sum,
+        } : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle state (persistent state management)
+    if (toolCall.name === 'state') {
+      // Execute state tool
+      const stateContext: StateToolContext = {
+        userId,
+        chatId,
+        projectId: context.projectId,
+      };
+
+      const result = await executeStateTool(toolCall.arguments, stateContext);
+
+      // Format results for LLM consumption
+      const formattedResult = formatStateResults(result);
+
+      return {
+        toolName: 'state',
+        success: result.success,
+        result: result.success ? {
+          formattedText: formattedResult,
+          operation: result.operation,
+          context: result.context,
+          path: result.path,
+          value: result.value,
+          previousValue: result.previousValue,
         } : null,
         error: result.success ? undefined : result.error,
       };

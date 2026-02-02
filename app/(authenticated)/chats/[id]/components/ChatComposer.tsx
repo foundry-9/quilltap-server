@@ -65,6 +65,7 @@ interface ChatComposerProps {
   onSearchReplaceClick?: () => void
   onBulkCharacterReplaceClick?: () => void
   onToolSettingsClick?: () => void
+  onStateClick?: () => void
   onStopStreaming: () => void
   /** Callback when a pending tool result is added */
   onPendingToolResult?: (result: Omit<PendingToolResult, 'id' | 'createdAt'>) => void
@@ -127,6 +128,7 @@ export function ChatComposer({
   onSearchReplaceClick,
   onBulkCharacterReplaceClick,
   onToolSettingsClick,
+  onStateClick,
   onStopStreaming,
   onPendingToolResult,
 }: ChatComposerProps) {
@@ -423,6 +425,7 @@ export function ChatComposer({
           onSearchReplaceClick={onSearchReplaceClick}
           onBulkCharacterReplaceClick={onBulkCharacterReplaceClick}
           onToolSettingsClick={onToolSettingsClick}
+          onStateClick={onStateClick}
           chatPhotoCount={chatPhotoCount}
           hasImageProfile={hasImageProfile}
           showAddCharacter={isSingleCharacterChat}

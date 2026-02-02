@@ -24,6 +24,7 @@ import {
   requestFullContextToolDefinition,
   helpSearchToolDefinition,
   rngToolDefinition,
+  stateToolDefinition,
 } from '@/lib/tools';
 import type { UniversalTool, ImageProviderConstraints } from '@/lib/plugins/interfaces';
 
@@ -133,6 +134,9 @@ export interface BuildToolsOptions {
   /** Whether to enable RNG (random number generator) tool (enabled by default) */
   rng?: boolean;
 
+  /** Whether to enable state (persistent state management) tool (enabled by default) */
+  state?: boolean;
+
   /** Whether to include tools from the tool registry (plugin tools) */
   includePluginTools?: boolean;
 
@@ -182,6 +186,7 @@ export async function buildToolsForProvider(
       requestFullContext: options.requestFullContext,
       helpSearch: options.helpSearch,
       rng: options.rng,
+      state: options.state,
       includePluginTools: options.includePluginTools,
     },
   });
@@ -235,6 +240,12 @@ export async function buildToolsForProvider(
   if (options.rng !== false) {
     universalTools.push(rngToolDefinition as UniversalTool);
     logger_.debug('Added RNG tool to universal tools');
+  }
+
+  // Add state tool if enabled (defaults to true when not specified)
+  if (options.state !== false) {
+    universalTools.push(stateToolDefinition as UniversalTool);
+    logger_.debug('Added state tool to universal tools');
   }
 
   // Add plugin tools if enabled (defaults to true when not specified)

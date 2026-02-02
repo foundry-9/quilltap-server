@@ -14,6 +14,7 @@ import AddCharacterDialog from '@/components/chat/AddCharacterDialog'
 import ReattributeMessageDialog from '@/components/chat/ReattributeMessageDialog'
 import BulkCharacterReplaceModal from '@/components/chat/BulkCharacterReplaceModal'
 import ChatToolSettingsModal from '@/components/chat/ChatToolSettingsModal'
+import StateEditorModal from '@/components/state/StateEditorModal'
 import { SearchReplaceModal } from '@/components/tools/search-replace'
 import AllLLMPauseModal from '@/components/chat/AllLLMPauseModal'
 import LLMLogViewerModal from '@/components/chat/LLMLogViewerModal'
@@ -125,6 +126,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [searchReplaceModalOpen, setSearchReplaceModalOpen] = useState(false)
   const [bulkReplaceModalOpen, setBulkReplaceModalOpen] = useState(false)
   const [toolSettingsModalOpen, setToolSettingsModalOpen] = useState(false)
+  const [stateEditorModalOpen, setStateEditorModalOpen] = useState(false)
   const [toolExecutionStatus, setToolExecutionStatus] = useState<{ tool: string; status: 'pending' | 'success' | 'error'; message: string } | null>(null)
   const [pendingToolCalls, setPendingToolCalls] = useState<Array<{ id: string; name: string; status: 'pending' | 'success' | 'error'; result?: unknown; arguments?: Record<string, unknown> }>>([])
   const [showPreview, setShowPreview] = useState(false)
@@ -2232,6 +2234,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onSearchReplaceClick={() => setSearchReplaceModalOpen(true)}
           onBulkCharacterReplaceClick={() => setBulkReplaceModalOpen(true)}
           onToolSettingsClick={() => setToolSettingsModalOpen(true)}
+          onStateClick={() => setStateEditorModalOpen(true)}
           onStopStreaming={stopStreaming}
           onPendingToolResult={handleAddPendingToolResult}
         />
@@ -2405,6 +2408,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 disabledToolGroups: newDisabledToolGroups,
               } : prev)
             }}
+          />
+        )}
+
+        {/* State Editor Modal */}
+        {chat && (
+          <StateEditorModal
+            isOpen={stateEditorModalOpen}
+            onClose={() => setStateEditorModalOpen(false)}
+            entityType="chat"
+            entityId={id}
+            entityName={chat.title}
           />
         )}
 

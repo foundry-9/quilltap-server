@@ -185,6 +185,27 @@ export {
   type RngToolContext,
 } from './handlers/rng-handler';
 
+// State (Persistent State Management) Tool
+export {
+  stateToolDefinition,
+  anthropicStateToolDefinition,
+  getOpenAIStateTool,
+  getAnthropicStateTool,
+  getGoogleStateTool,
+  validateStateInput,
+  type StateOperation,
+  type StateContext,
+  type StateToolInput,
+  type StateToolOutput,
+} from './state-tool';
+
+export {
+  executeStateTool,
+  formatStateResults,
+  StateError,
+  type StateToolContext,
+} from './handlers/state-handler';
+
 // Plugin-Based Tool Builder (Phase 3)
 export {
   buildToolsForProvider,

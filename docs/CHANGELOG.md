@@ -4,6 +4,18 @@
 
 ### 2.9-dev
 
+- feat: Chat State for persistent JSON storage (2026-02-02)
+  - New `state` field on chats and projects for storing persistent JSON data
+  - Database migration adds state column to chats and projects tables
+  - New built-in LLM tool `state` for fetch/set/delete operations
+  - Path syntax supports dot notation and array indexing (e.g., "player.health", "inventory[0].name")
+  - Inheritance model: chat state overrides project state for chats in projects
+  - Underscore-prefixed keys (e.g., `_notes`) are protected from AI modification
+  - New StateEditorModal component for viewing/editing state in UI
+  - State button added to chat ToolPalette (database icon)
+  - Project State section added to project settings card
+  - API endpoints: GET/PUT/DELETE ?action=get-state/set-state/reset-state for both chats and projects
+  - Added help documentation (help/chat-state.md)
 - feat: Auto-detect RNG patterns in user and assistant messages (2026-02-02)
   - Dice notation (e.g., "2d6", "d20", "3d10") is detected and executed automatically
   - Coin flip phrases (e.g., "flip a coin") trigger automatic coin flips
@@ -688,7 +700,7 @@
   - Supports `--dry-run` mode to preview record counts without migrating
   - Handles special transformations: chat_messages (embedded array to rows), migrations_state
   - Auto-serializes object/array fields to JSON for SQLite compatibility
-  - All 31 tables and 57 indexes hardcoded from Quilttap schema
+  - All 31 tables and 57 indexes hardcoded from Quilltap schema
   - Updated `docs/DATABASE_ABSTRACTION.md` with CLI tool documentation
 - feat: Centralized data directory with platform-specific defaults (2026-01-25)
   - New `lib/paths.ts` module providing single source of truth for all data paths

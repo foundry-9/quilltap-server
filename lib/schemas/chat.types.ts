@@ -247,6 +247,9 @@ export const ChatMetadataSchema = z.object({
   /** Flag to trigger tool change notification on next message (set when tool settings change) */
   forceToolsOnNextMessage: z.boolean().default(false),
 
+  /** Persistent JSON state for games, inventory, session data, etc. */
+  state: JsonSchema.default({}),
+
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 }).refine(
@@ -313,6 +316,9 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** Flag to trigger tool change notification on next message (set when tool settings change) */
   forceToolsOnNextMessage: z.boolean().default(false),
+
+  /** Persistent JSON state for games, inventory, session data, etc. */
+  state: JsonSchema.default({}),
 
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
