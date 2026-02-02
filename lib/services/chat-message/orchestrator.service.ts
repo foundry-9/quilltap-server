@@ -324,6 +324,7 @@ async function processMessage(
   )
 
   // Save pending tool results as TOOL messages (before user message)
+  // Also add them to existingMessages so they're included in context building
   if (!isContinueMode && options.pendingToolResults && options.pendingToolResults.length > 0) {
     for (const toolResult of options.pendingToolResults) {
       const toolMessageId = crypto.randomUUID()
@@ -343,6 +344,9 @@ async function processMessage(
         attachments: [],
       }
       await repos.chats.addMessage(chatId, toolMessage)
+      // Add to existingMessages so it's included in context building
+      // (existingMessages was loaded before this save operation)
+      existingMessages.push(toolMessage)
       logger.debug('Saved pending tool result as message', {
         chatId,
         tool: toolResult.tool,

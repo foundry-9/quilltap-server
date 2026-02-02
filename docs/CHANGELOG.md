@@ -4,6 +4,13 @@
 
 ### 2.9-dev
 
+- fix: User-initiated tool results not sent to LLM (2026-02-02)
+  - Tool results from RNG and other user-run tools were saved to DB but not included in LLM context
+  - Root cause 1: Field name mismatch - user tools stored `tool` but context builder read `toolName`
+  - Root cause 2: `existingMessages` was loaded before tool results were saved, so they weren't included
+  - Fix: Context builder now checks both `toolName` and `tool` fields
+  - Fix: Orchestrator now adds saved tool messages to `existingMessages` array
+  - Added debug logging for tool result handling in context builder and chat page
 - fix: Virtualizer positioning bug when messages are replaced (2026-02-02)
   - Messages would appear in wrong positions (overlapping) after sending
   - Root cause: virtualizer used indices as keys, so measurement cache became stale when `fetchChat()` replaced the messages array

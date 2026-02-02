@@ -186,10 +186,19 @@ export function buildConversationMessages(
         try {
           const toolData = JSON.parse(msg.content || '{}')
           const resultText = toolData.result || 'No result'
+          // Handle both LLM-initiated (toolName) and user-initiated (tool) field names
+          const toolName = toolData.toolName || toolData.tool || 'Unknown'
+
+          logger.debug('Including TOOL message in context', {
+            messageId: msg.id,
+            toolName,
+            initiatedBy: toolData.initiatedBy || 'llm',
+            resultLength: resultText.length,
+          })
 
           return {
             role: 'USER' as const,
-            content: `[Tool Result: ${toolData.toolName}]\n${resultText}`,
+            content: `[Tool Result: ${toolName}]\n${resultText}`,
             id: msg.id,
           }
         } catch {
@@ -221,10 +230,19 @@ export function buildConversationMessages(
           try {
             const toolData = JSON.parse(msg.content || '{}')
             const resultText = toolData.result || 'No result'
+            // Handle both LLM-initiated (toolName) and user-initiated (tool) field names
+            const toolName = toolData.toolName || toolData.tool || 'Unknown'
+
+            logger.debug('Including TOOL message in multi-character context', {
+              messageId: msg.id,
+              toolName,
+              initiatedBy: toolData.initiatedBy || 'llm',
+              resultLength: resultText.length,
+            })
 
             return {
               role: 'USER' as const,
-              content: `[Tool Result: ${toolData.toolName}]\n${resultText}`,
+              content: `[Tool Result: ${toolName}]\n${resultText}`,
               id: msg.id,
               createdAt: msg.createdAt,
               participantId: null,
