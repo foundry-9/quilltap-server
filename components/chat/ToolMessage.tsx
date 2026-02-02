@@ -119,7 +119,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
   }
 
   return (
-    <div className={`flex gap-4 w-[90%] justify-start`}>
+    <div className="qt-chat-message-row-tool">
       {/* Tool icon avatar with tooltip */}
       <div className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-full bg-muted text-lg relative group cursor-help">
 

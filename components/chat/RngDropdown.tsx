@@ -24,11 +24,25 @@ const QUICK_OPTIONS: RngOption[] = [
   { label: 'Spin the Bottle', type: 'spin_the_bottle', rolls: 1 },
 ]
 
+/** Pending tool result data returned from preview mode */
+export interface RngPendingResult {
+  tool: 'rng'
+  displayName: string
+  icon: string
+  summary: string
+  formattedResult: string
+  requestPrompt: string
+  arguments: Record<string, unknown>
+  success: boolean
+}
+
 interface RngDropdownProps {
   /** Chat ID for API call */
   chatId: string
-  /** Called when RNG is successfully executed */
+  /** Called when RNG is successfully executed (legacy mode) */
   onSuccess?: (result: { formattedText: string }) => void
+  /** Called when RNG preview result is ready to be added as pending */
+  onPendingResult?: (result: RngPendingResult) => void
   /** Whether the dropdown is disabled */
   disabled?: boolean
   /** Called to close the parent ToolPalette */
@@ -38,6 +52,7 @@ interface RngDropdownProps {
 export function RngDropdown({
   chatId,
   onSuccess,
+  onPendingResult,
   disabled = false,
   onClose,
 }: Readonly<RngDropdownProps>) {
@@ -60,11 +75,14 @@ export function RngDropdown({
     setIsLoading(true)
     setError(null)
 
+    // Use preview mode if onPendingResult callback is provided
+    const usePreview = !!onPendingResult
+
     try {
       const response = await fetch(`/api/v1/chats/${chatId}?action=rng`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, rolls }),
+        body: JSON.stringify({ type, rolls, preview: usePreview }),
       })
 
       const data = await response.json()
@@ -73,7 +91,23 @@ export function RngDropdown({
         throw new Error(data.message || data.error || 'RNG failed')
       }
 
-      onSuccess?.(data.result)
+      if (usePreview && data.preview) {
+        // Return pending result for display in composer
+        onPendingResult({
+          tool: 'rng',
+          displayName: 'Random Number Generator',
+          icon: '🎲',
+          summary: data.result.summary,
+          formattedResult: data.result.formattedText,
+          requestPrompt: data.result.requestPrompt,
+          arguments: data.result.arguments,
+          success: true,
+        })
+      } else {
+        // Legacy mode: message was created directly
+        onSuccess?.(data.result)
+      }
+
       setIsOpen(false)
       setIsCustomOpen(false)
       onClose?.()

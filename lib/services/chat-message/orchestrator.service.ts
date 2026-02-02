@@ -85,11 +85,35 @@ import {
 const logger = createServiceLogger('ChatMessageOrchestrator')
 
 /**
+ * Schema for pending tool results (user-initiated tool calls shown in composer)
+ */
+const pendingToolResultSchema = z.object({
+  tool: z.string(),
+  success: z.boolean(),
+  result: z.string(),
+  prompt: z.string(),
+  arguments: z.record(z.string(), z.unknown()),
+  createdAt: z.string(),
+})
+
+/**
  * Validation schema for send message
+ * Content can be empty if there are pending tool results or file attachments
  */
 export const sendMessageSchema = z.object({
-  content: z.string().min(1, 'Message content is required'),
+  content: z.string().default(''),
   fileIds: z.array(z.string()).optional(),
+  /** Pending tool results to be saved as TOOL messages before the user message */
+  pendingToolResults: z.array(pendingToolResultSchema).optional(),
+}).superRefine((data, ctx) => {
+  if (data.content.trim().length === 0 &&
+      (!data.fileIds || data.fileIds.length === 0) &&
+      (!data.pendingToolResults || data.pendingToolResults.length === 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Message must have content, attached files, or tool results',
+    })
+  }
 })
 
 /**
@@ -298,6 +322,34 @@ async function processMessage(
     connectionProfile,
     options.fileIds
   )
+
+  // Save pending tool results as TOOL messages (before user message)
+  if (!isContinueMode && options.pendingToolResults && options.pendingToolResults.length > 0) {
+    for (const toolResult of options.pendingToolResults) {
+      const toolMessageId = crypto.randomUUID()
+      const toolMessage = {
+        id: toolMessageId,
+        type: 'message' as const,
+        role: 'TOOL' as const,
+        content: JSON.stringify({
+          tool: toolResult.tool,
+          initiatedBy: 'user',
+          success: toolResult.success,
+          result: toolResult.result,
+          prompt: toolResult.prompt,
+          arguments: toolResult.arguments,
+        }),
+        createdAt: toolResult.createdAt,
+        attachments: [],
+      }
+      await repos.chats.addMessage(chatId, toolMessage)
+      logger.debug('Saved pending tool result as message', {
+        chatId,
+        tool: toolResult.tool,
+        messageId: toolMessageId,
+      })
+    }
+  }
 
   // Save user message (not in continue mode)
   let userMessageId: string | null = null

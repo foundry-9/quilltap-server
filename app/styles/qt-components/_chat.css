@@ -720,6 +720,22 @@
   }
 
   /**
+   * Tool message row - for tool request/response messages
+   * Uses isolation: isolate to create stacking context like regular message rows
+   * Has vertical margin to separate from adjacent messages
+   */
+  .qt-chat-message-row-tool {
+    @apply flex gap-4;
+    width: 90%;
+    max-width: var(--qt-chat-message-row-max-width);
+    isolation: isolate;
+    position: relative;
+    justify-content: flex-start;
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  /**
    * Desktop avatar container
    * Ensures avatar with name/title doesn't overflow into adjacent rows
    */
@@ -807,6 +823,22 @@
   .qt-chat-attachment-chip-remove {
     color: var(--color-muted-foreground);
     transition: color 150ms ease;
+  }
+
+  /**
+   * Tool result chip variant - for pending tool results in composer
+   * Distinct from file attachment chips with a colored border
+   */
+  .qt-chat-tool-result-chip {
+    @apply inline-flex items-center gap-2 rounded-lg text-sm;
+    padding: 0.375rem 0.75rem;
+    background: color-mix(in srgb, var(--qt-status-info-bg) 50%, var(--color-muted));
+    color: var(--color-foreground);
+    border: 1px solid var(--qt-status-info-border);
+  }
+
+  .qt-chat-tool-result-chip:hover {
+    background: color-mix(in srgb, var(--qt-status-info-bg) 70%, var(--color-muted));
   }
 
   .qt-chat-attachment-chip-remove:hover {

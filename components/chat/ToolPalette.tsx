@@ -2,7 +2,7 @@
 
 import { useRef } from 'react'
 import { useClickOutside } from '@/hooks/useClickOutside'
-import RngDropdown from './RngDropdown'
+import RngDropdown, { type RngPendingResult } from './RngDropdown'
 
 interface ToolPaletteProps {
   isOpen: boolean
@@ -32,6 +32,8 @@ interface ToolPaletteProps {
   showPreview?: boolean
   onTogglePreview?: () => void
   disabled?: boolean
+  // Pending tool result callback
+  onPendingToolResult?: (result: RngPendingResult) => void
 }
 
 export default function ToolPalette({
@@ -62,6 +64,8 @@ export default function ToolPalette({
   showPreview = false,
   onTogglePreview,
   disabled = false,
+  // Pending tool result
+  onPendingToolResult,
 }: ToolPaletteProps) {
   const paletteRef = useRef<HTMLDivElement>(null)
 
@@ -326,6 +330,7 @@ export default function ToolPalette({
           chatId={chatId}
           onClose={onClose}
           disabled={disabled}
+          onPendingResult={onPendingToolResult}
         />
       </div>
 

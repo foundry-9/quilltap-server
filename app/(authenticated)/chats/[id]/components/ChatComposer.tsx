@@ -4,7 +4,7 @@ import { useRef, useEffect, useLayoutEffect, useCallback } from 'react'
 import ToolPalette from '@/components/chat/ToolPalette'
 import FormattingToolbar from '@/components/chat/FormattingToolbar'
 import MessageContent from '@/components/chat/MessageContent'
-import type { AttachedFile } from '../types'
+import type { AttachedFile, PendingToolResult } from '../types'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
 
 // Platform detection for keyboard shortcuts
@@ -19,6 +19,10 @@ interface ChatComposerProps {
   setInput: (value: string) => void
   attachedFiles: AttachedFile[]
   onRemoveAttachedFile: (fileId: string) => void
+  /** Pending tool results to display in composer */
+  pendingToolResults: PendingToolResult[]
+  /** Remove a pending tool result */
+  onRemovePendingToolResult: (id: string) => void
   disabled: boolean
   sending: boolean
   hasActiveCharacters: boolean
@@ -62,6 +66,8 @@ interface ChatComposerProps {
   onBulkCharacterReplaceClick?: () => void
   onToolSettingsClick?: () => void
   onStopStreaming: () => void
+  /** Callback when a pending tool result is added */
+  onPendingToolResult?: (result: Omit<PendingToolResult, 'id' | 'createdAt'>) => void
 }
 
 const resizeTextarea = (textarea: HTMLTextAreaElement, maxHeight: number) => {
@@ -83,6 +89,8 @@ export function ChatComposer({
   setInput,
   attachedFiles,
   onRemoveAttachedFile,
+  pendingToolResults,
+  onRemovePendingToolResult,
   disabled,
   sending,
   hasActiveCharacters,
@@ -120,6 +128,7 @@ export function ChatComposer({
   onBulkCharacterReplaceClick,
   onToolSettingsClick,
   onStopStreaming,
+  onPendingToolResult,
 }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const toolPaletteToggleRef = useRef<HTMLButtonElement>(null)
@@ -217,7 +226,7 @@ export function ChatComposer({
   // Helper to submit the form
   const submitForm = (textarea: HTMLTextAreaElement) => {
     const currentValue = textarea.value
-    if (currentValue.trim() || attachedFiles.length > 0) {
+    if (currentValue.trim() || attachedFiles.length > 0 || pendingToolResults.length > 0) {
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current)
         debounceTimerRef.current = null
@@ -337,9 +346,10 @@ export function ChatComposer({
           </div>
         )}
 
-        {/* Attached files preview */}
-        {attachedFiles.length > 0 && (
+        {/* Attached files and pending tool results preview */}
+        {(attachedFiles.length > 0 || pendingToolResults.length > 0) && (
           <div className="qt-chat-attachment-list mb-2">
+            {/* Attached files */}
             {attachedFiles.map((file) => (
               <div
                 key={file.id}
@@ -361,6 +371,31 @@ export function ChatComposer({
                   type="button"
                   onClick={() => onRemoveAttachedFile(file.id)}
                   className="qt-chat-attachment-chip-remove"
+                  title="Remove attachment"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+
+            {/* Pending tool results */}
+            {pendingToolResults.map((result) => (
+              <div
+                key={result.id}
+                className="qt-chat-tool-result-chip group relative"
+                title={`${result.requestPrompt}\n\n${result.formattedResult}`}
+              >
+                <span className="text-base leading-none">{result.icon}</span>
+                <span className="text-foreground max-w-[200px] truncate">
+                  {result.summary}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onRemovePendingToolResult(result.id)}
+                  className="qt-chat-attachment-chip-remove"
+                  title="Remove tool result"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -398,6 +433,7 @@ export function ChatComposer({
           showPreview={showPreview}
           onTogglePreview={() => setShowPreview(!showPreview)}
           disabled={sending || !hasActiveCharacters}
+          onPendingToolResult={onPendingToolResult}
         />
 
         {/* Formatting toolbar - shown above the form when document editing mode is enabled */}
@@ -502,7 +538,7 @@ export function ChatComposer({
             /* Send button - right side */
             <button
               type="submit"
-              disabled={sending || (!input.trim() && attachedFiles.length === 0) || !hasActiveCharacters}
+              disabled={sending || (!input.trim() && attachedFiles.length === 0 && pendingToolResults.length === 0) || !hasActiveCharacters}
               className="qt-chat-composer-send"
               title={!hasActiveCharacters ? "Add a character to start chatting" : "Send message"}
             >

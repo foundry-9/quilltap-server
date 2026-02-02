@@ -22,6 +22,8 @@ const rngRequestSchema = z.object({
     z.enum(['flip_coin', 'spin_the_bottle']),
   ]),
   rolls: z.number().int().min(1).max(100).default(1),
+  /** Preview mode returns result without creating a message */
+  preview: z.boolean().optional().default(false),
 });
 
 /**
@@ -41,6 +43,7 @@ export async function handleRng(
       userId: user.id,
       type: validated.type,
       rolls: validated.rolls,
+      preview: validated.preview,
     });
 
     // Execute the RNG tool
@@ -77,6 +80,49 @@ export async function handleRng(
       requestPrompt = validated.rolls === 1
         ? `Roll a d${validated.type}`
         : `Roll ${validated.rolls}d${validated.type}`;
+    }
+
+    // Generate short summary for chip display
+    let summary: string;
+    if (validated.type === 'flip_coin') {
+      summary = validated.rolls === 1
+        ? `${result.results?.[0]}`
+        : `${result.results?.join(', ')}`;
+    } else if (validated.type === 'spin_the_bottle') {
+      summary = validated.rolls === 1
+        ? `${result.results?.[0]}`
+        : `${result.results?.join(', ')}`;
+    } else {
+      summary = validated.rolls === 1
+        ? `d${validated.type}: ${result.results?.[0]}`
+        : `${validated.rolls}d${validated.type}: ${result.sum}`;
+    }
+
+    // Preview mode: return result without creating message
+    if (validated.preview) {
+      logger.debug('[Chats v1] RNG preview result', {
+        chatId,
+        userId: user.id,
+        summary,
+      });
+
+      return NextResponse.json({
+        success: true,
+        preview: true,
+        result: {
+          type: result.type,
+          rollCount: result.rollCount,
+          results: result.results,
+          sum: result.sum,
+          formattedText: formattedResult,
+          summary,
+          requestPrompt,
+          arguments: {
+            type: validated.type,
+            rolls: validated.rolls,
+          },
+        },
+      });
     }
 
     // Add the result as a TOOL message to the chat

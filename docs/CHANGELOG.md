@@ -4,6 +4,25 @@
 
 ### 2.9-dev
 
+- fix: Virtualizer positioning bug when messages are replaced (2026-02-02)
+  - Messages would appear in wrong positions (overlapping) after sending
+  - Root cause: virtualizer used indices as keys, so measurement cache became stale when `fetchChat()` replaced the messages array
+  - Fix: Added `getItemKey` to virtualizer to use message IDs instead of indices
+  - Now measurements properly track items across array replacements
+- fix: Pending tool results not persisting to database (2026-02-02)
+  - Tool messages shown in composer would disappear after chat refresh
+  - Root cause: API route parsed `pendingToolResults` but didn't pass it to orchestrator
+  - Fix: Added missing `pendingToolResults` parameter in messages API route
+- feat: Pending tool results shown in composer before sending (2026-02-02)
+  - User-initiated tool calls (like RNG) now show results as chips in the composer
+  - Results can be removed before sending using the X button
+  - Full result details shown in tooltip on hover
+  - RNG API updated with `preview` mode to return results without creating messages
+  - Tool messages are created when the user sends their message
+  - Distinct visual styling for tool result chips vs file attachment chips
+- style: Tool message spacing and styling (2026-02-02)
+  - Added `qt-chat-message-row-tool` CSS class for tool messages
+  - Tool messages now have vertical margin (1rem top and bottom) for visual separation
 - feat: RNG (Random Number Generator) tool for dice rolls, coin flips, and spin the bottle (2026-02-02)
   - New built-in LLM tool `rng` for generating random results in chats
   - Supports dice rolls with any number of sides (2-1000), coin flips, and random participant selection

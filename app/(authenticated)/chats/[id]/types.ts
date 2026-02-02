@@ -158,6 +158,32 @@ export interface AttachedFile {
   url?: string
 }
 
+/**
+ * Pending tool result - shown in composer before sending
+ */
+export interface PendingToolResult {
+  /** Unique ID for this pending result */
+  id: string
+  /** Tool name (e.g., 'rng') */
+  tool: string
+  /** Tool display name (e.g., 'Random Number Generator') */
+  displayName: string
+  /** Icon for the tool (emoji) */
+  icon: string
+  /** Short summary for chip display (e.g., '🎲 d20: 17') */
+  summary: string
+  /** Full formatted result for tooltip */
+  formattedResult: string
+  /** Human-readable request description (e.g., 'Roll a d20') */
+  requestPrompt: string
+  /** Raw arguments for recreating the request */
+  arguments: Record<string, unknown>
+  /** Whether the tool execution was successful */
+  success: boolean
+  /** Timestamp when result was generated */
+  createdAt: string
+}
+
 export interface ChatParticipantData {
   id: string
   type: 'CHARACTER' | 'PERSONA'
