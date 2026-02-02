@@ -4,7 +4,7 @@
  *
  * This plugin provides:
  * - Chat completion using Grok-2 and other Grok models
- * - Image generation using grok-2-image
+ * - Image generation using grok-imagine-image
  * - Vision capabilities (image analysis)
  * - Function calling / tool use
  * - Web search integration (Live Search API)
@@ -25,11 +25,12 @@ const logger = createPluginLogger('qtap-plugin-grok');
 /**
  * Grok image generation constraints
  * Grok has a strict 1024-byte limit for image generation prompts
+ * Grok uses aspect ratios instead of fixed sizes
  */
 const GROK_IMAGE_CONSTRAINTS: ImageProviderConstraints = {
   maxPromptBytes: 1024,
   promptConstraintWarning: 'IMPORTANT: Grok has a strict limit of 1024 bytes for image generation prompts. Keep your prompt concise and under this limit.',
-  supportedSizes: ['1024x1024'],
+  supportedAspectRatios: ['1:1', '4:3', '3:4', '16:9', '9:16'],
 };
 
 /**
@@ -181,8 +182,8 @@ export const plugin: LLMProviderPlugin = {
         supportsTools: true,
       },
       {
-        id: 'grok-2-image',
-        name: 'Grok-2 Image',
+        id: 'grok-imagine-image',
+        name: 'Grok Imagine Image',
         contextWindow: 2048,
         maxOutputTokens: 1024,
         supportsImages: false,

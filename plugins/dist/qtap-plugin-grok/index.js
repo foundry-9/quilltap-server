@@ -7224,7 +7224,7 @@ var logger2 = createPluginLogger("qtap-plugin-grok");
 var GrokImageProvider = class {
   constructor() {
     this.provider = "GROK";
-    this.supportedModels = ["grok-2-image"];
+    this.supportedModels = ["grok-imagine-image"];
     this.baseUrl = "https://api.x.ai/v1";
   }
   async generateImage(params, apiKey) {
@@ -7235,13 +7235,17 @@ var GrokImageProvider = class {
       apiKey,
       baseURL: this.baseUrl
     });
-    const response = await client.images.generate({
-      model: params.model ?? "grok-2-image",
+    const requestParams = {
+      model: params.model ?? "grok-imagine-image",
       prompt: params.prompt,
       n: params.n ?? 1,
       response_format: "b64_json"
-    });
-    if (!response.data || !Array.isArray(response.data)) {
+    };
+    if (params.aspectRatio) {
+      requestParams.aspect_ratio = params.aspectRatio;
+    }
+    const response = await client.images.generate(requestParams);
+    if (!("data" in response) || !response.data || !Array.isArray(response.data)) {
       logger2.error("Invalid response from Grok Images API", { context: "GrokImageProvider.generateImage" });
       throw new Error("Invalid response from Grok Images API");
     }
@@ -7277,7 +7281,7 @@ var logger3 = createPluginLogger("qtap-plugin-grok");
 var GROK_IMAGE_CONSTRAINTS = {
   maxPromptBytes: 1024,
   promptConstraintWarning: "IMPORTANT: Grok has a strict limit of 1024 bytes for image generation prompts. Keep your prompt concise and under this limit.",
-  supportedSizes: ["1024x1024"]
+  supportedAspectRatios: ["1:1", "4:3", "3:4", "16:9", "9:16"]
 };
 var metadata = {
   providerName: "GROK",
@@ -7392,8 +7396,8 @@ var plugin = {
         supportsTools: true
       },
       {
-        id: "grok-2-image",
-        name: "Grok-2 Image",
+        id: "grok-imagine-image",
+        name: "Grok Imagine Image",
         contextWindow: 2048,
         maxOutputTokens: 1024,
         supportsImages: false,
