@@ -1,6 +1,6 @@
 {
   "name": "quilltap",
-  "version": "2.9.0-dev.11",
+  "version": "2.9.0-dev.12",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -14,7 +14,7 @@
     "url": "https://github.com/foundry-9/quilltap.git"
   },
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --webpack",
     "devssl": "next dev --experimental-https --experimental-https-key ./certs/localhost-key.pem --experimental-https-cert ./certs/localhost.pem",
     "build": "npm run build:plugins && next build",
     "build:plugins": "tsx scripts/build-plugins.ts",

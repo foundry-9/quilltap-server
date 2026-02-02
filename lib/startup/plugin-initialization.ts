@@ -19,16 +19,28 @@ import { injectPluginLoggerFactory, clearPluginLoggerFactory } from '@/lib/plugi
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import type { FileStorageProviderPlugin } from '@/lib/file-storage/interfaces';
 import packageJson from '@/package.json';
-import { createRequire } from 'node:module';
-import { resolve, dirname, join } from 'node:path';
+import { resolve, join } from 'node:path';
 import { existsSync } from 'node:fs';
 
-// Create a require function that bypasses Next.js bundling for dynamic plugin loading
-const dynamicRequire = createRequire(import.meta.url || __filename);
+// Use __non_webpack_require__ to bypass bundler static analysis for dynamic plugin loading
+// This magic global is provided by webpack/Turbopack for native Node.js require access
+const dynamicRequire: NodeRequire = typeof __non_webpack_require__ !== 'undefined'
+  ? __non_webpack_require__
+  : require;
 
 // Get the Module object dynamically to avoid Next.js bundler issues
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const Module = dynamicRequire('module') as typeof import('module');
+// Using explicit interface instead of `typeof import('module')` to avoid bundler tracing
+interface NodeModuleParent {
+  filename?: string;
+  paths?: string[];
+}
+interface NodeModule {
+  _resolveFilename: (request: string, parent: NodeModuleParent | null, isMain: boolean, options?: object) => string;
+  _nodeModulePaths: (from: string) => string[];
+}
+const Module: NodeModule = typeof __non_webpack_require__ !== 'undefined'
+  ? __non_webpack_require__('module')
+  : require('module');
 
 // Get the app's node_modules path for peer dependency resolution
 const appNodeModules = join(process.cwd(), 'node_modules');
@@ -51,23 +63,13 @@ const PEER_DEPENDENCIES = new Set([
  */
 function loadExternalPluginModule(modulePath: string): unknown {
   // Store original _resolveFilename
-  type ResolveFilenameFunction = (
-    request: string,
-    parent: { filename?: string; paths?: string[] } | null,
-    isMain: boolean,
-    options?: object
-  ) => string;
-  const ModuleInternal = Module as unknown as {
-    _resolveFilename: ResolveFilenameFunction;
-    _nodeModulePaths: (from: string) => string[];
-  };
-  const originalResolveFilename = ModuleInternal._resolveFilename;
+  const originalResolveFilename = Module._resolveFilename;
 
   // Create app module paths for fallback resolution
-  const appModulePaths = ModuleInternal._nodeModulePaths(appNodeModules);
+  const appModulePaths = Module._nodeModulePaths(appNodeModules);
 
   // Patch _resolveFilename to handle peer dependencies
-  ModuleInternal._resolveFilename = function(
+  Module._resolveFilename = function(
     request: string,
     parent: { filename?: string; paths?: string[] } | null,
     isMain: boolean,
@@ -105,7 +107,7 @@ function loadExternalPluginModule(modulePath: string): unknown {
     return dynamicRequire(modulePath);
   } finally {
     // Restore original _resolveFilename
-    ModuleInternal._resolveFilename = originalResolveFilename;
+    Module._resolveFilename = originalResolveFilename;
   }
 }
 
