@@ -4,6 +4,13 @@
 
 ### 2.9-dev
 
+- perf: Compression cache fallback for faster responses when async not ready (2026-02-02)
+  - When async pre-compression isn't ready, falls back to previous cache instead of waiting
+  - Dynamic window calculation ensures no messages are lost when using older cache
+  - Trade-off: slightly more tokens (larger window) for faster response time
+  - New `CachedCompressionResponse` type with metadata for fallback detection
+  - Returns `cachedMessageCount` and `isFallback` for debugging and dynamic window sizing
+  - Context manager calculates effective window size when cache is behind current message count
 - feat: Chat response status indicator showing processing stages (2026-02-02)
   - Visual indicator in chat composer shows current stage during AI response generation
   - Stages: compressing (blue), gathering (purple), building (amber), sending (blue), streaming (green), tool_executing (purple)

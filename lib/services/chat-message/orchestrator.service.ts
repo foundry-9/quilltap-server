@@ -81,6 +81,7 @@ import {
   getCachedCompression,
   triggerAsyncCompression,
   invalidateCompressionCache,
+  type CachedCompressionResponse,
 } from './compression-cache.service'
 import {
   detectAndConvertRngPatterns,
@@ -500,7 +501,7 @@ async function processMessage(
   // ============================================================================
   // Async Pre-Compression: Get cached compression result if available
   // ============================================================================
-  let cachedCompressionResult = null
+  let cachedCompressionResponse: CachedCompressionResponse | undefined = undefined
   if (compressionEnabled && !bypassCompression) {
     // Send status update for compression check
     safeEnqueue(controller, encodeStatusEvent(encoder, {
@@ -511,12 +512,16 @@ async function processMessage(
     }))
 
     // Try to get cached compression from previous async pre-computation
-    cachedCompressionResult = await getCachedCompression(chatId, existingMessages.length)
-    if (cachedCompressionResult) {
+    // This returns immediately without waiting for in-flight compression,
+    // falling back to previous cache if async isn't ready yet
+    cachedCompressionResponse = await getCachedCompression(chatId, existingMessages.length)
+    if (cachedCompressionResponse) {
       logger.info('Using cached compression from async pre-computation', {
         chatId,
         messageCount: existingMessages.length,
-        savings: cachedCompressionResult.compressionDetails?.totalSavings,
+        cachedMessageCount: cachedCompressionResponse.cachedMessageCount,
+        isFallback: cachedCompressionResponse.isFallback,
+        savings: cachedCompressionResponse.result.compressionDetails?.totalSavings,
       })
     }
   } else if (bypassCompression) {
@@ -527,7 +532,7 @@ async function processMessage(
   // Start keep-alive pings during context building (especially important during compression)
   // This prevents proxy/load balancer timeouts during long compression operations
   let keepAliveInterval: ReturnType<typeof setInterval> | null = null
-  if (compressionEnabled && !cachedCompressionResult) {
+  if (compressionEnabled && !cachedCompressionResponse) {
 
     keepAliveInterval = setInterval(() => {
       if (!safeEnqueue(controller, encodeKeepAlive(encoder))) {
@@ -570,7 +575,9 @@ async function processMessage(
       contextCompressionSettings: compressionEnabled ? contextCompressionSettings : null,
       cheapLLMSelection,
       bypassCompression,
-      cachedCompressionResult,
+      // Pass cached compression result and message count for dynamic window calculation
+      cachedCompressionResult: cachedCompressionResponse?.result,
+      cachedCompressionMessageCount: cachedCompressionResponse?.cachedMessageCount,
     },
     existingMessages,
     fileProcessing.attachmentsToSend

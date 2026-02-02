@@ -241,6 +241,14 @@ export interface BuildContextOptions {
   bypassCompression?: boolean
   /** Pre-computed compression result from async cache (avoids blocking on compression) */
   cachedCompressionResult?: ContextCompressionResult | null
+  /**
+   * Message count when the cached compression was computed.
+   * Used to calculate dynamic window size when using a fallback cache.
+   * If the cache was computed for fewer messages than we currently have,
+   * the effective window must be larger to include all messages since
+   * the compression point.
+   */
+  cachedCompressionMessageCount?: number
 }
 
 /**
@@ -452,13 +460,39 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       finalSystemPrompt
     )
 
+    // Calculate effective window size
+    // When using a fallback cache (older compression), we need to include all
+    // messages since the compression point, not just the standard windowSize.
+    // This ensures no messages are lost when the async compression wasn't ready.
+    const standardWindowSize = contextCompressionSettings?.windowSize || 5
+    const { cachedCompressionMessageCount } = options
+
+    let effectiveWindowSize = standardWindowSize
+    if (cachedCompressionMessageCount !== undefined && cachedCompressionMessageCount < existingMessages.length) {
+      // Cache was computed for fewer messages than we have now
+      // The compressed history covers messages up to (cachedCount - standardWindowSize)
+      // So we need to include all messages after that point
+      // effectiveWindowSize = currentCount - (cachedCount - standardWindowSize)
+      //                     = currentCount - cachedCount + standardWindowSize
+      const messagesSinceCache = existingMessages.length - cachedCompressionMessageCount
+      effectiveWindowSize = standardWindowSize + messagesSinceCache
+
+      logger.info('[ContextManager] Using dynamic window size for fallback cache', {
+        standardWindowSize,
+        cachedMessageCount: cachedCompressionMessageCount,
+        currentMessageCount: existingMessages.length,
+        messagesSinceCache,
+        effectiveWindowSize,
+      })
+    }
+
     // Only keep window messages (the ones that weren't compressed)
     const { windowMessages } = splitMessagesForCompression(
       existingMessages.map(m => ({
         role: m.role as 'user' | 'assistant' | 'system',
         content: m.content,
       })),
-      contextCompressionSettings?.windowSize || 5
+      effectiveWindowSize
     )
 
     // Map back to the original format with all metadata

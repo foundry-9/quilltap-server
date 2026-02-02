@@ -57,6 +57,11 @@ export interface BuildMessageContextOptions {
   bypassCompression?: boolean
   /** Pre-computed compression result from async cache (avoids blocking on compression) */
   cachedCompressionResult?: ContextCompressionResult | null
+  /**
+   * Message count when the cached compression was computed.
+   * Used to calculate dynamic window size when using a fallback cache.
+   */
+  cachedCompressionMessageCount?: number
 }
 
 /**
@@ -293,6 +298,7 @@ export async function buildMessageContext(
     cheapLLMSelection,
     bypassCompression,
     cachedCompressionResult,
+    cachedCompressionMessageCount,
   } = options
 
   // Build conversation messages
@@ -340,6 +346,7 @@ export async function buildMessageContext(
     cheapLLMSelection,
     bypassCompression,
     cachedCompressionResult,
+    cachedCompressionMessageCount,
   })
 
   // Log context building results for debugging

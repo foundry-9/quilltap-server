@@ -295,24 +295,39 @@ export function triggerAsyncCompression(options: AsyncCompressionOptions): void 
 }
 
 /**
- * Get cached compression result, waiting for in-flight compression if needed
+ * Result from getCachedCompression with metadata
+ */
+export interface CachedCompressionResponse {
+  /** The compression result */
+  result: ContextCompressionResult
+  /** Message count when this compression was computed */
+  cachedMessageCount: number
+  /** Whether this is a fallback to older cache (async wasn't ready) */
+  isFallback: boolean
+}
+
+/**
+ * Get cached compression result, preferring speed over waiting for in-flight compression
  *
  * Checks in this order:
- * 1. In-memory cache (fastest)
- * 2. In-flight compression (wait for it)
- * 3. Database cache (survives restarts)
- * 4. Returns undefined (caller should do sync compression)
+ * 1. In-memory cache with completed result (fastest)
+ * 2. Database cache / previous result (fallback when async not ready)
+ * 3. Returns undefined (caller should do sync compression)
+ *
+ * IMPORTANT: This function does NOT wait for in-flight compression. Instead, it
+ * falls back to the previous compression result (from database) to avoid blocking.
+ * This trades more tokens (larger effective window) for faster response time.
  *
  * @param chatId - The chat ID
  * @param currentMessageCount - Current number of messages (excluding new user message)
  * @param currentSystemPromptHash - Hash of the current system prompt (optional, for validation)
- * @returns Cached compression result or undefined if not available
+ * @returns Cached compression response with metadata, or undefined if not available
  */
 export async function getCachedCompression(
   chatId: string,
   currentMessageCount: number,
   currentSystemPromptHash?: string
-): Promise<ContextCompressionResult | undefined> {
+): Promise<CachedCompressionResponse | undefined> {
   // 1. Check in-memory cache first (fastest path)
   const memoryEntry = compressionCache.get(chatId)
 
@@ -352,50 +367,58 @@ export async function getCachedCompression(
           messageCount: currentMessageCount,
           cachedMessageCount: memoryEntry.messageCount,
         })
-        return memoryEntry.result
+        return {
+          result: memoryEntry.result,
+          cachedMessageCount: memoryEntry.messageCount,
+          isFallback: false,
+        }
       }
 
-      // 2. If compression is in-flight, wait for it
+      // 2. If compression is in-flight, DON'T wait - fall back to database instead
+      // This trades more tokens (larger window) for faster response
       if (memoryEntry.promise) {
-        logger.info('[CompressionCache] Waiting for in-flight compression', {
+        logger.info('[CompressionCache] Async compression in-flight, checking for fallback cache', {
           chatId,
         })
-        try {
-          const result = await memoryEntry.promise
-          return result
-        } catch {
-          // Compression failed, continue to check database
-          logger.warn('[CompressionCache] In-flight compression failed, checking database', {
-            chatId,
-          })
-        }
+        // Fall through to database check
       }
     }
   }
 
-  // 3. Check database cache (survives restarts)
+  // 3. Check database cache (survives restarts, also serves as fallback)
   logger.debug('[CompressionCache] Checking database for cached compression', { chatId })
   const dbEntry = await loadFromDatabase(chatId)
 
   if (dbEntry) {
     // Validate the database entry
     if (isCacheValid(dbEntry, currentMessageCount, currentSystemPromptHash)) {
+      // Determine if this is a fallback (async was in-flight but we're using older cache)
+      const isFallback = !!(memoryEntry?.promise && !memoryEntry.result)
+
       logger.info('[CompressionCache] Using database cached compression result', {
         chatId,
         messageCount: currentMessageCount,
         cachedMessageCount: dbEntry.messageCount,
         cacheAge: Date.now() - dbEntry.createdAt,
+        isFallback,
       })
 
-      // Populate in-memory cache for faster subsequent access
-      compressionCache.set(chatId, {
+      // Only populate in-memory cache if there's no in-flight compression
+      // (don't overwrite the pending promise entry)
+      if (!memoryEntry?.promise) {
+        compressionCache.set(chatId, {
+          result: dbEntry.result,
+          messageCount: dbEntry.messageCount,
+          createdAt: dbEntry.createdAt,
+          systemPromptHash: dbEntry.systemPromptHash,
+        })
+      }
+
+      return {
         result: dbEntry.result,
-        messageCount: dbEntry.messageCount,
-        createdAt: dbEntry.createdAt,
-        systemPromptHash: dbEntry.systemPromptHash,
-      })
-
-      return dbEntry.result
+        cachedMessageCount: dbEntry.messageCount,
+        isFallback,
+      }
     } else {
       logger.debug('[CompressionCache] Database cache invalid, clearing', {
         chatId,
