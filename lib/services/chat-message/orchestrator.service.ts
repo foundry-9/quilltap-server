@@ -81,6 +81,11 @@ import {
   triggerAsyncCompression,
   invalidateCompressionCache,
 } from './compression-cache.service'
+import {
+  detectAndConvertRngPatterns,
+  type RngToolCall,
+} from './rng-pattern-detector.service'
+import { executeRngTool, formatRngResults } from '@/lib/tools/handlers/rng-handler'
 
 const logger = createServiceLogger('ChatMessageOrchestrator')
 
@@ -352,6 +357,58 @@ async function processMessage(
         tool: toolResult.tool,
         messageId: toolMessageId,
       })
+    }
+  }
+
+  // ============================================================================
+  // Auto-Detect RNG Patterns
+  // ============================================================================
+  // When enabled, detect dice rolls, coin flips, and spin-the-bottle patterns
+  // in user messages and automatically execute them as RNG tool calls
+  const autoDetectRng = chatSettings?.autoDetectRng ?? true
+  if (autoDetectRng && !isContinueMode && options.content) {
+    const rngPatterns = detectAndConvertRngPatterns(options.content)
+    if (rngPatterns.length > 0) {
+      logger.info('Auto-detected RNG patterns in user message', {
+        chatId,
+        userId,
+        patternCount: rngPatterns.length,
+        patterns: rngPatterns.map(p => ({ type: p.type, rolls: p.rolls, matchText: p.matchText })),
+      })
+
+      // Execute each detected pattern and save as TOOL messages
+      for (const pattern of rngPatterns) {
+        const rngContext = { userId, chatId }
+        const result = await executeRngTool({ type: pattern.type, rolls: pattern.rolls }, rngContext)
+        const formattedResult = formatRngResults(result)
+
+        const toolMessageId = crypto.randomUUID()
+        const toolMessage = {
+          id: toolMessageId,
+          type: 'message' as const,
+          role: 'TOOL' as const,
+          content: JSON.stringify({
+            tool: 'rng',
+            initiatedBy: 'auto-detect',
+            success: result.success,
+            result: formattedResult,
+            prompt: pattern.matchText,
+            arguments: { type: pattern.type, rolls: pattern.rolls },
+          }),
+          createdAt: new Date().toISOString(),
+          attachments: [],
+        }
+
+        await repos.chats.addMessage(chatId, toolMessage)
+        existingMessages.push(toolMessage)
+
+        logger.debug('Saved auto-detected RNG result as message', {
+          chatId,
+          pattern: pattern.matchText,
+          messageId: toolMessageId,
+          result: formattedResult,
+        })
+      }
     }
   }
 
@@ -922,6 +979,65 @@ async function processMessage(
         userId
       )
       await trackMessageTokenUsage(chatId, connectionProfile.id, usage, costResult.cost, costResult.source)
+    }
+
+    // ============================================================================
+    // Auto-Detect RNG Patterns in Assistant Response
+    // ============================================================================
+    // When enabled, detect dice rolls, coin flips, and spin-the-bottle patterns
+    // in assistant messages and automatically execute them as RNG tool calls
+    const autoDetectRngInResponse = chatSettings?.autoDetectRng ?? true
+    if (autoDetectRngInResponse && cleanedResponse) {
+      const rngPatternsInResponse = detectAndConvertRngPatterns(cleanedResponse)
+      if (rngPatternsInResponse.length > 0) {
+        logger.info('Auto-detected RNG patterns in assistant response', {
+          chatId,
+          userId,
+          patternCount: rngPatternsInResponse.length,
+          patterns: rngPatternsInResponse.map(p => ({ type: p.type, rolls: p.rolls, matchText: p.matchText })),
+        })
+
+        // Execute each detected pattern and save as TOOL messages after the assistant message
+        for (const pattern of rngPatternsInResponse) {
+          const rngContext = { userId, chatId }
+          const result = await executeRngTool({ type: pattern.type, rolls: pattern.rolls }, rngContext)
+          const formattedResult = formatRngResults(result)
+
+          const toolMessageId = crypto.randomUUID()
+          const toolMessage = {
+            id: toolMessageId,
+            type: 'message' as const,
+            role: 'TOOL' as const,
+            content: JSON.stringify({
+              tool: 'rng',
+              initiatedBy: 'auto-detect-response',
+              success: result.success,
+              result: formattedResult,
+              prompt: pattern.matchText,
+              arguments: { type: pattern.type, rolls: pattern.rolls },
+            }),
+            createdAt: new Date().toISOString(),
+            attachments: [],
+          }
+
+          await repos.chats.addMessage(chatId, toolMessage)
+
+          // Add to toolMessages array so done event reflects the execution
+          toolMessages.push({
+            toolName: 'rng',
+            content: formattedResult,
+            success: result.success,
+            arguments: { type: pattern.type, rolls: pattern.rolls },
+          })
+
+          logger.debug('Saved auto-detected RNG result from assistant response', {
+            chatId,
+            pattern: pattern.matchText,
+            messageId: toolMessageId,
+            result: formattedResult,
+          })
+        }
+      }
     }
 
     // Update chat timestamp

@@ -4,6 +4,30 @@ The RNG tool lets you roll dice, flip coins, or randomly select a chat participa
 
 ## How to Use
 
+### Auto-Detection (Default)
+
+By default, Quilltap automatically detects RNG patterns in both your messages and character responses, executing them automatically. Just type naturally:
+
+- "I roll 2d6 for damage" → Quilltap automatically rolls 2d6
+- "Let's flip a coin" → Quilltap flips a coin
+- "Spin the bottle to see who goes next" → Quilltap randomly selects a participant
+
+**Works on character responses too!** When a character says something like:
+
+- *"I roll a d20 to see if I succeed"* → The d20 is actually rolled
+- *"Let me flip a coin to decide"* → A real coin flip happens
+- *"20d2"* → Even creative dice notations are detected and rolled
+
+**Detected patterns:**
+
+- **Dice notation**: `d6`, `2d20`, `3d10`, etc. (1-100 dice, 2-1000 sides)
+- **Coin flips**: "flip a coin" (with up to 3 characters between "flip" and "coin")
+- **Spin the bottle**: "spin the bottle", "spin a bottle"
+
+For your messages, results appear as tool messages before your message. For character responses, results appear as tool messages after the response. Either way, everyone in the chat sees the outcome.
+
+**Note:** This feature can be disabled in [Chat Settings](/settings?tab=chat) under "Automation" if you prefer to use the manual tool palette or want to discuss dice without executing rolls.
+
 ### From the Tool Palette
 
 1. Open the **Tool Palette** in a chat (the toolbar button)

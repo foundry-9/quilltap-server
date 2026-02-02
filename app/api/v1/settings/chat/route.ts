@@ -30,7 +30,8 @@ async function updateChatSettings(
   sidebarWidth?: number,
   tokenDisplaySettings?: unknown,
   memoryCascadePreferences?: unknown,
-  llmLoggingSettings?: unknown
+  llmLoggingSettings?: unknown,
+  autoDetectRng?: boolean
 ) {
   // Validate avatarDisplayMode if provided
   if (avatarDisplayMode) {
@@ -117,6 +118,12 @@ async function updateChatSettings(
     const validatedLLMLoggingSettings = LLMLoggingSettingsSchema.parse(llmLoggingSettings)
     updateData.llmLoggingSettings = validatedLLMLoggingSettings
   }
+  if (typeof autoDetectRng !== 'undefined') {
+    if (typeof autoDetectRng !== 'boolean') {
+      throw new Error('Invalid autoDetectRng value (must be boolean)')
+    }
+    updateData.autoDetectRng = autoDetectRng
+  }
 
   return repos.chatSettings.updateForUser(userId, updateData)
 }
@@ -170,7 +177,8 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, r
       sidebarWidth,
       tokenDisplaySettings,
       memoryCascadePreferences,
-      llmLoggingSettings
+      llmLoggingSettings,
+      autoDetectRng,
     } = body
 
     const chatSettings = await updateChatSettings(
@@ -186,7 +194,8 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, r
       sidebarWidth,
       tokenDisplaySettings,
       memoryCascadePreferences,
-      llmLoggingSettings
+      llmLoggingSettings,
+      autoDetectRng
     )
 
     return successResponse(chatSettings)

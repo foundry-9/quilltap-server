@@ -17,6 +17,7 @@ import {
   DEFAULT_TOKEN_DISPLAY_SETTINGS,
   DEFAULT_CONTEXT_COMPRESSION_SETTINGS,
   DEFAULT_LLM_LOGGING_SETTINGS,
+  DEFAULT_AUTO_DETECT_RNG,
 } from '../types'
 
 interface UseChatSettingsReturn {
@@ -37,6 +38,7 @@ interface UseChatSettingsReturn {
   handleTokenDisplayChange: (key: keyof TokenDisplaySettings, value: boolean) => Promise<void>
   handleContextCompressionUpdate: (updates: Partial<ContextCompressionSettings>) => Promise<void>
   handleLLMLoggingChange: (key: keyof LLMLoggingSettings, value: boolean | number) => Promise<void>
+  handleAutoDetectRngChange: (value: boolean) => Promise<void>
 }
 
 export function useChatSettings(): UseChatSettingsReturn {
@@ -450,6 +452,43 @@ export function useChatSettings(): UseChatSettingsReturn {
     [settings, showSuccess]
   )
 
+  /**
+   * Update auto-detect RNG setting
+   */
+  const handleAutoDetectRngChange = useCallback(
+    async (value: boolean) => {
+      if (!settings) return
+
+      try {
+        setSaving(true)
+        setError(null)
+        setSuccess(false)
+
+        const res = await fetch('/api/v1/settings/chat', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ autoDetectRng: value }),
+        })
+
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Failed to update auto-detect RNG setting')
+        }
+
+        const updatedSettings = await res.json()
+        setSettings(updatedSettings)
+        showSuccess()
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
+        console.error('Failed to update auto-detect RNG setting', { error: errorMsg })
+        setError(errorMsg)
+      } finally {
+        setSaving(false)
+      }
+    },
+    [settings, showSuccess]
+  )
+
   return {
     settings,
     loading,
@@ -468,5 +507,6 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleTokenDisplayChange,
     handleContextCompressionUpdate,
     handleLLMLoggingChange,
+    handleAutoDetectRngChange,
   }
 }

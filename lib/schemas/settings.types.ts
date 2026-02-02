@@ -208,6 +208,8 @@ export const ChatSettingsSchema = z.object({
     verboseMode: false,
     retentionDays: 30,
   }),
+  /** Auto-detect RNG patterns (dice rolls, coin flips) in user messages and execute them automatically (default: true) */
+  autoDetectRng: z.boolean().default(true),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });

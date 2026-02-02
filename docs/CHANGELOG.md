@@ -4,6 +4,15 @@
 
 ### 2.9-dev
 
+- feat: Auto-detect RNG patterns in user and assistant messages (2026-02-02)
+  - Dice notation (e.g., "2d6", "d20", "3d10") is detected and executed automatically
+  - Coin flip phrases (e.g., "flip a coin") trigger automatic coin flips
+  - "Spin the bottle" phrases randomly select a chat participant
+  - Works on both user messages (results appear before message) and assistant responses (results appear after)
+  - When a character says "I roll 2d6", the dice actually get rolled
+  - New `autoDetectRng` chat setting (default: true) in Settings > Chat Settings > Automation
+  - Can be disabled for users who prefer manual tool invocation
+  - Updated help documentation for RNG tool and chat settings
 - fix: User-initiated tool results not sent to LLM (2026-02-02)
   - Tool results from RNG and other user-run tools were saved to DB but not included in LLM context
   - Root cause 1: Field name mismatch - user tools stored `tool` but context builder read `toolName`

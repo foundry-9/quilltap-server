@@ -217,6 +217,43 @@ Controls whether interactions with AI providers are logged and stored.
 
 **Privacy Note:** Logs contain your chat content. Keep retention period reasonable if privacy is a concern.
 
+### Automation Settings
+
+Controls automatic behavior during chat interactions.
+
+**Setting Options:**
+
+- **Auto-Detect RNG Calls** — Automatically detect and execute dice rolls, coin flips, and "spin the bottle" commands in both your messages and character responses:
+  - **Dice notation**: Patterns like "2d6", "d20", "3d10" are detected and rolled automatically
+  - **Coin flips**: Phrases like "flip a coin" trigger automatic coin flips
+  - **Spin the bottle**: Phrases like "spin the bottle" randomly select a chat participant
+
+**How it works:**
+
+1. When enabled (default), Quilltap scans both your messages and character responses for RNG patterns
+2. For your messages: patterns are executed before sending, results appear before your message
+3. For character responses: patterns are executed after the response, results appear after
+4. Results appear as tool messages in the chat, visible to all participants
+
+**Why this is useful:**
+
+- When a character says "I roll a d20 to attack", the dice actually get rolled
+- Creates immersive tabletop RPG experiences where dice mentions become real rolls
+- Both you and the AI can trigger random events naturally through conversation
+
+**When to disable:**
+
+- When discussing dice or probability without wanting actual rolls
+- When you prefer to use the manual RNG tool in the tool palette
+- When writing content that mentions dice notation without wanting it executed
+
+**Example patterns detected:**
+
+- "I roll 2d6 for damage" → Executes 2d6 roll
+- "Let's flip a coin" → Executes coin flip
+- "Spin the bottle to see who goes next" → Randomly selects a participant
+- Character: *"I roll a d20"* → Executes d20 roll after the response
+
 ## Saving Chat Settings
 
 Most settings save automatically as you make changes. You'll see:
