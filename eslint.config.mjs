@@ -1,5 +1,6 @@
 import { defineConfig } from 'eslint/config'
 import nextVitals from 'eslint-config-next/core-web-vitals'
+import quilltapPlugin from './eslint-quilltap-plugin.js'
 
 const eslintConfig = defineConfig([
   ...nextVitals,
@@ -24,6 +25,14 @@ const eslintConfig = defineConfig([
       // Disable no-img-element globally - we often use <img> intentionally
       // for dynamic/external images that Next.js Image can't optimize
       '@next/next/no-img-element': 'off',
+    },
+  },
+  {
+    plugins: {
+      quilltap: quilltapPlugin,
+    },
+    rules: {
+      'quilltap/no-quilltap-misspelling': 'error',
     },
   },
 ])

@@ -4,6 +4,10 @@
 
 ### 2.9-dev
 
+- chore: Add ESLint rule to catch "Quilttap" misspellings (2026-02-01)
+  - Custom ESLint rule flags "Quilttap" (with double-t) as an error
+  - Helps prevent common misspelling of project name throughout codebase
+  - Rule checks string literals and template strings across all source and markdown files
 - refactor: Plugin icon system redesigned to remove React dependency (2026-02-01)
   - Plugins now provide SVG data via `icon` property instead of React components via `renderIcon`
   - Added `PluginIconData` interface to `@quilltap/plugin-types` v1.10.0
