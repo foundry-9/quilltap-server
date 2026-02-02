@@ -57,6 +57,13 @@ These tools are always available in Quilltap:
 - Always available
 - Useful for: Getting accurate information about how to use Quilltap features, configure settings, or troubleshoot issues
 
+**Random Number Generator (RNG)**
+
+- Rolls dice, flips coins, or randomly selects a chat participant
+- Always available
+- Useful for: Tabletop gaming, roleplay decisions, adding chance elements to stories
+- See [RNG Tool](rng-tool.md) for detailed usage
+
 ### Plugin Tools
 
 Additional tools provided by installed plugins or extensions:

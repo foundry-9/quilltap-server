@@ -19,3 +19,4 @@ export { handleGetAvatars, handleSetAvatar, handleRemoveAvatar } from './avatars
 export { handleBulkReattribute } from './bulk';
 export { handleAddToolResult, handleUpdateToolSettings } from './tools';
 export { handleQueueMemories } from './memories';
+export { handleRng } from './rng';

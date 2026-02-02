@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
 import { useClickOutside } from '@/hooks/useClickOutside'
+import RngDropdown from './RngDropdown'
 
 interface ToolPaletteProps {
   isOpen: boolean
@@ -319,6 +320,13 @@ export default function ToolPalette({
             <span>Bulk Replace</span>
           </button>
         )}
+
+        {/* RNG Dropdown */}
+        <RngDropdown
+          chatId={chatId}
+          onClose={onClose}
+          disabled={disabled}
+        />
       </div>
 
       {/* Right section: Re-extract, Delete, Preview */}

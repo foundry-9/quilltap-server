@@ -65,6 +65,13 @@ const BUILT_IN_TOOLS = [
     source: 'built-in' as const,
     category: 'help',
   },
+  {
+    id: 'rng',
+    name: 'Random Number Generator',
+    description: 'Roll dice, flip coins, or randomly select a chat participant (spin the bottle)',
+    source: 'built-in' as const,
+    category: 'utility',
+  },
   // Note: request_full_context is intentionally excluded - it's a safety valve
   // that should always be available when context compression is enabled
 ];

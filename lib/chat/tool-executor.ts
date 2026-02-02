@@ -40,6 +40,11 @@ import {
   formatHelpSearchResults,
   type HelpSearchToolContext,
 } from '@/lib/tools/handlers/help-search-handler';
+import {
+  executeRngTool,
+  formatRngResults,
+  type RngToolContext,
+} from '@/lib/tools/handlers/rng-handler';
 
 export interface ToolCallRequest {
   name: string;
@@ -179,6 +184,7 @@ const BUILT_IN_TOOLS = new Set([
   'file_management',
   'request_full_context',
   'search_help',
+  'rng',
 ]);
 
 export async function executeToolCallWithContext(
@@ -506,6 +512,33 @@ export async function executeToolCallWithContext(
           results: result.results,
           totalFound: result.totalFound,
           query: result.query,
+        } : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle rng (random number generator)
+    if (toolCall.name === 'rng') {
+      // Execute RNG tool
+      const rngContext: RngToolContext = {
+        userId,
+        chatId,
+      };
+
+      const result = await executeRngTool(toolCall.arguments, rngContext);
+
+      // Format results for LLM consumption
+      const formattedResult = formatRngResults(result);
+
+      return {
+        toolName: 'rng',
+        success: result.success,
+        result: result.success ? {
+          formattedText: formattedResult,
+          type: result.type,
+          rollCount: result.rollCount,
+          results: result.results,
+          sum: result.sum,
         } : null,
         error: result.success ? undefined : result.error,
       };

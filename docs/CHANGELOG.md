@@ -4,6 +4,19 @@
 
 ### 2.9-dev
 
+- feat: RNG (Random Number Generator) tool for dice rolls, coin flips, and spin the bottle (2026-02-02)
+  - New built-in LLM tool `rng` for generating random results in chats
+  - Supports dice rolls with any number of sides (2-1000), coin flips, and random participant selection
+  - Results are permanent chat messages visible to all characters
+  - Manual invocation via RngDropdown in ToolPalette with quick options (d6, d20, 2d6, coin, bottle)
+  - Custom roll interface for arbitrary dice configurations
+  - Uses cryptographically secure random numbers
+  - Added help documentation (help/rng-tool.md)
+  - Added POST /api/v1/chats/[id]?action=rng API endpoint
+- refactor: Tools are now sent with every LLM prompt (2026-02-02)
+  - Removed periodic tool re-injection logic that only sent tools every N messages
+  - Tools are now always included in every LLM request for consistent availability
+  - `forceToolsOnNextMessage` flag is retained only to trigger tool change notifications
 - feat: Image provider prompting guidance and style trigger phrases (2026-02-01)
   - Added `promptingGuidance` field to `ImageProviderConstraints` for provider-specific prompting tips
   - Added `styleInfo` field with `ImageStyleInfo` interface for style/LoRA details and trigger phrases

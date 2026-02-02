@@ -244,7 +244,7 @@ export const ChatMetadataSchema = z.object({
   /** Groups of tools that are disabled (e.g., "plugin:mcp", "plugin:mcp:subgroup:filesystem") */
   disabledToolGroups: z.array(z.string()).default([]),
 
-  /** Force tools to be sent with next message (set when tool settings change) */
+  /** Flag to trigger tool change notification on next message (set when tool settings change) */
   forceToolsOnNextMessage: z.boolean().default(false),
 
   createdAt: TimestampSchema,
@@ -311,7 +311,7 @@ export const ChatMetadataBaseSchema = z.object({
   /** Groups of tools that are disabled (e.g., "plugin:mcp", "plugin:mcp:subgroup:filesystem") */
   disabledToolGroups: z.array(z.string()).default([]),
 
-  /** Force tools to be sent with next message (set when tool settings change) */
+  /** Flag to trigger tool change notification on next message (set when tool settings change) */
   forceToolsOnNextMessage: z.boolean().default(false),
 
   createdAt: TimestampSchema,

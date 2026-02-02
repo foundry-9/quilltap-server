@@ -23,6 +23,7 @@ import {
   fileManagementToolDefinition,
   requestFullContextToolDefinition,
   helpSearchToolDefinition,
+  rngToolDefinition,
 } from '@/lib/tools';
 import type { UniversalTool, ImageProviderConstraints } from '@/lib/plugins/interfaces';
 
@@ -129,6 +130,9 @@ export interface BuildToolsOptions {
   /** Whether to enable help search tool (enabled by default) */
   helpSearch?: boolean;
 
+  /** Whether to enable RNG (random number generator) tool (enabled by default) */
+  rng?: boolean;
+
   /** Whether to include tools from the tool registry (plugin tools) */
   includePluginTools?: boolean;
 
@@ -177,6 +181,7 @@ export async function buildToolsForProvider(
       fileManagement: options.fileManagement,
       requestFullContext: options.requestFullContext,
       helpSearch: options.helpSearch,
+      rng: options.rng,
       includePluginTools: options.includePluginTools,
     },
   });
@@ -224,6 +229,12 @@ export async function buildToolsForProvider(
   if (options.helpSearch !== false) {
     universalTools.push(helpSearchToolDefinition as UniversalTool);
     logger_.debug('Added help search tool to universal tools');
+  }
+
+  // Add RNG tool if enabled (defaults to true when not specified)
+  if (options.rng !== false) {
+    universalTools.push(rngToolDefinition as UniversalTool);
+    logger_.debug('Added RNG tool to universal tools');
   }
 
   // Add plugin tools if enabled (defaults to true when not specified)

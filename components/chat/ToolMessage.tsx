@@ -39,7 +39,8 @@ interface ToolResult {
   toolName?: string
   initiatedBy?: 'user' | 'character'
   success?: boolean
-  result?: string
+  /** Result can be a string or object (for backwards compatibility with older RNG results) */
+  result?: string | Record<string, unknown>
   arguments?: Record<string, unknown>
   provider?: string
   model?: string
@@ -102,6 +103,11 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
     file_management: {
       displayName: 'File Management',
       icon: '📁',
+      bgColor: 'bg-muted border border-border',
+    },
+    rng: {
+      displayName: 'Random Number Generator',
+      icon: '🎲',
       bgColor: 'bg-muted border border-border',
     },
   }
@@ -173,8 +179,8 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
               {showRequest && (
                 <div className="mt-2 bg-background rounded p-3 overflow-x-auto border border-border">
                   <pre className="text-xs text-foreground font-mono whitespace-pre-wrap break-words">
-                    {/* For image generation, show the expanded prompt (with {{me}} resolved) if available */}
-                    {toolData.toolName === 'generate_image' && toolData.prompt
+                    {/* Show prompt if available (image generation, RNG, etc.), otherwise show arguments */}
+                    {toolData.prompt
                       ? toolData.prompt
                       : JSON.stringify(toolData.arguments || {}, null, 2)}
                   </pre>
@@ -243,9 +249,15 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                   )}
                   {/* Show JSON/text result if present */}
                   {toolData.result && (() => {
+                    // Handle result as string or object (backwards compatibility)
+                    const resultString = typeof toolData.result === 'object'
+                      ? (toolData.result as Record<string, unknown>).formattedText as string
+                        || JSON.stringify(toolData.result, null, 2)
+                      : toolData.result
+
                     // Try to parse and pretty-print as JSON
                     try {
-                      const parsed = JSON.parse(toolData.result!)
+                      const parsed = JSON.parse(resultString)
                       const formatted = JSON.stringify(parsed, null, 2)
                       return (
                         <ReactMarkdown>
@@ -256,7 +268,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                       // Not JSON, display as plain text
                       return (
                         <pre className="text-xs text-foreground font-mono whitespace-pre-wrap break-words">
-                          {toolData.result}
+                          {resultString}
                         </pre>
                       )
                     }

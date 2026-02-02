@@ -22,6 +22,7 @@
  * POST /api/v1/chats/[id]?action=remove-avatar - Remove avatar override
  * POST /api/v1/chats/[id]?action=add-tool-result - Add tool result message
  * POST /api/v1/chats/[id]?action=queue-memories - Queue memory extraction jobs
+ * POST /api/v1/chats/[id]?action=rng - Execute random number generator (dice, coin, bottle)
  * PATCH /api/v1/chats/[id]?action=turn - Persist turn state (lastTurnParticipantId)
  */
 

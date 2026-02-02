@@ -332,17 +332,12 @@ async function processMessage(
     : (fileProcessing.messageContentPrefix ? fileProcessing.messageContentPrefix + content : content)
 
   // ============================================================================
-  // Tool Re-injection Logic
+  // Tool Injection
   // ============================================================================
-  // Determine if tools should be sent this message (similar to project context re-injection)
-  // Tools are sent: on first message, when forced (settings changed), or at window interval
-  const toolReinjectInterval = contextCompressionSettings.windowSize // Reuse compression window size
-  const toolMessageCount = existingMessages.filter(m => m.type === 'message').length
+  // Tools are always sent with every LLM prompt to ensure consistent availability
+
+  // Check if tool settings were just changed (for notification message)
   const toolSettingsChanged = chat.forceToolsOnNextMessage === true
-  const shouldSendTools =
-    toolSettingsChanged ||                     // Tool settings changed
-    toolMessageCount <= 2 ||                   // First few messages (greeting flow may create 2 messages)
-    toolMessageCount % toolReinjectInterval === 0  // At interval
 
   // Clear forceToolsOnNextMessage flag if it was set
   if (toolSettingsChanged) {
@@ -356,7 +351,7 @@ async function processMessage(
   )
 
   // Build tools (include request_full_context when compression is enabled)
-  // Pass disabledTools and disabledToolGroups for filtering (shouldSendTools controls tool injection)
+  // Always pass disabledTools and disabledToolGroups for filtering
   const { tools, modelSupportsNativeTools, useNativeWebSearch } = await buildTools(
     connectionProfile,
     imageProfileId,
@@ -365,8 +360,8 @@ async function processMessage(
     false, // Will check pseudo-tools after
     undefined, // projectId (will be set if needed)
     compressionEnabled, // requestFullContext - enable the tool when compression is active
-    shouldSendTools ? (chat.disabledTools ?? []) : undefined, // Pass disabledTools only when sending tools
-    shouldSendTools ? (chat.disabledToolGroups ?? []) : undefined // Pass disabledToolGroups only when sending tools
+    chat.disabledTools ?? [],
+    chat.disabledToolGroups ?? []
   )
 
   const usePseudoTools = checkShouldUsePseudoTools(modelSupportsNativeTools)

@@ -172,7 +172,7 @@ export async function buildTools(
   }
 
   // If disabledTools is undefined (not an array), skip tools entirely for this message
-  // This happens when shouldSendTools is false - tools won't be sent at all
+  // This is a legacy fallback - tools are now always sent with every prompt
   if (disabledTools === undefined) {
     return { tools: [], modelSupportsNativeTools, useNativeWebSearch }
   }

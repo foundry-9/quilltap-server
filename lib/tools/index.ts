@@ -164,6 +164,27 @@ export {
   type HelpSearchToolContext,
 } from './handlers/help-search-handler';
 
+// RNG (Random Number Generator) Tool
+export {
+  rngToolDefinition,
+  anthropicRngToolDefinition,
+  getOpenAIRngTool,
+  getAnthropicRngTool,
+  getGoogleRngTool,
+  validateRngInput,
+  type RngType,
+  type RngToolInput,
+  type RngToolOutput,
+  type RngResult,
+} from './rng-tool';
+
+export {
+  executeRngTool,
+  formatRngResults,
+  RngError,
+  type RngToolContext,
+} from './handlers/rng-handler';
+
 // Plugin-Based Tool Builder (Phase 3)
 export {
   buildToolsForProvider,
