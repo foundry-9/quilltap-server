@@ -297,7 +297,7 @@ describe('Compression Cache Service', () => {
       expect(result?.compressionApplied).toBe(true)
     })
 
-    it('returns undefined when cache is stale (message count mismatch)', async () => {
+    it('returns undefined when cache is too stale (>50 messages behind)', async () => {
       const compressionResult = makeCompressionResult()
       mockApplyContextCompression.mockResolvedValue(compressionResult)
 
@@ -307,12 +307,12 @@ describe('Compression Cache Service', () => {
       // Wait for completion
       await new Promise(resolve => setTimeout(resolve, 10))
 
-      // Request with different message count (too different from cached)
-      const result = await getCachedCompression('chat-123', 20)
+      // Request with message count more than 50 ahead of cached (6 + 51 = 57)
+      const result = await getCachedCompression('chat-123', 57)
       expect(result).toBeUndefined()
     })
 
-    it('accepts cache for current message count or count - 1', async () => {
+    it('accepts cache when message count is up to 50 messages ahead', async () => {
       const compressionResult = makeCompressionResult()
       mockApplyContextCompression.mockResolvedValue(compressionResult)
 
@@ -327,9 +327,13 @@ describe('Compression Cache Service', () => {
       const result1 = await getCachedCompression('chat-123', 6)
       expect(result1).toBeDefined()
 
-      // Should also be valid for count 7 (cached is count - 1)
-      const result2 = await getCachedCompression('chat-123', 7)
+      // Should be valid for count 56 (50 messages ahead, at the limit)
+      const result2 = await getCachedCompression('chat-123', 56)
       expect(result2).toBeDefined()
+
+      // Should be valid for count 20 (14 messages ahead, well within tolerance)
+      const result3 = await getCachedCompression('chat-123', 20)
+      expect(result3).toBeDefined()
     })
 
     it('returns failure result when in-flight compression fails', async () => {

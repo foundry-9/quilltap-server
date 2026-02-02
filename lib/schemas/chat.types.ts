@@ -250,6 +250,9 @@ export const ChatMetadataSchema = z.object({
   /** Persistent JSON state for games, inventory, session data, etc. */
   state: JsonSchema.default({}),
 
+  /** Cached compression result for context compression (persisted across restarts) */
+  compressionCache: JsonSchema.nullable().optional(),
+
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 }).refine(
@@ -319,6 +322,9 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** Persistent JSON state for games, inventory, session data, etc. */
   state: JsonSchema.default({}),
+
+  /** Cached compression result for context compression (persisted across restarts) */
+  compressionCache: JsonSchema.nullable().optional(),
 
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

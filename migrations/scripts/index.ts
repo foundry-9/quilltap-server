@@ -55,6 +55,8 @@ import { createEmbeddingTablesMigration } from './create-embedding-tables';
 import { addStateFieldsMigration } from './add-state-fields';
 // Add autoDetectRng field to chat_settings
 import { addAutoDetectRngFieldMigration } from './add-auto-detect-rng-field';
+// Add compressionCache field to chats
+import { addCompressionCacheFieldMigration } from './add-compression-cache-field';
 
 /**
  * All available migrations.
@@ -105,6 +107,8 @@ export const migrations: Migration[] = [
   addStateFieldsMigration,
   // Add autoDetectRng field to chat_settings
   addAutoDetectRngFieldMigration,
+  // Add compressionCache field to chats
+  addCompressionCacheFieldMigration,
 ];
 
 export {
@@ -150,4 +154,6 @@ export {
   addStateFieldsMigration,
   // Add autoDetectRng field to chat_settings
   addAutoDetectRngFieldMigration,
+  // Add compressionCache field to chats
+  addCompressionCacheFieldMigration,
 };

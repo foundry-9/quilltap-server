@@ -968,6 +968,50 @@ async function processMessage(
       preGeneratedAssistantMessageId
     )
 
+    // ============================================================================
+    // Async Pre-Compression: Start EARLY for next message
+    // ============================================================================
+    // Trigger compression as soon as we have the response, BEFORE memory extraction
+    // and other async work. This gives maximum time for compression to complete
+    // before the user sends their next message.
+    if (compressionEnabled && cheapLLMSelection && builtContext.originalSystemPrompt) {
+      const updatedMessages = [
+        ...existingMessages
+          .filter((m): m is MessageEvent => m.type === 'message' && 'role' in m && 'content' in m)
+          .map(m => ({
+            role: m.role.toLowerCase() as 'user' | 'assistant' | 'system',
+            content: m.content || '',
+          })),
+        // Add the user message we just sent (if not continue mode)
+        ...(content && !isContinueMode ? [{
+          role: 'user' as const,
+          content,
+        }] : []),
+        // Add the assistant response we just received
+        {
+          role: 'assistant' as const,
+          content: cleanedResponse,
+        },
+      ]
+
+      // Fire and forget - compression runs in background
+      triggerAsyncCompression({
+        chatId,
+        messages: updatedMessages,
+        systemPrompt: builtContext.originalSystemPrompt,
+        compressionOptions: {
+          enabled: contextCompressionSettings.enabled,
+          windowSize: contextCompressionSettings.windowSize,
+          compressionTargetTokens: contextCompressionSettings.compressionTargetTokens,
+          systemPromptTargetTokens: contextCompressionSettings.systemPromptTargetTokens,
+          selection: cheapLLMSelection,
+          userId,
+          characterName: character.name,
+          userName: 'User',
+        },
+      })
+    }
+
     // Track token usage for profile and chat aggregates
     if (usage && (usage.promptTokens || usage.completionTokens)) {
       // Estimate cost using available pricing data
@@ -1148,49 +1192,6 @@ async function processMessage(
         userId,
         connectionProfile,
         chatSettings: memoryChatSettings,
-      })
-    }
-
-    // ============================================================================
-    // Async Pre-Compression: Trigger compression for next message
-    // ============================================================================
-    // Start compression asynchronously so it's ready for the next message
-    if (compressionEnabled && cheapLLMSelection && builtContext.originalSystemPrompt) {
-      // Build updated messages list (including this response)
-      const updatedMessages = [
-        ...existingMessages
-          .filter((m): m is MessageEvent => m.type === 'message' && 'role' in m && 'content' in m)
-          .map(m => ({
-            role: m.role.toLowerCase() as 'user' | 'assistant' | 'system',
-            content: m.content || '',
-          })),
-        // Add the user message we just sent (if not continue mode)
-        ...(content && !isContinueMode ? [{
-          role: 'user' as const,
-          content,
-        }] : []),
-        // Add the assistant response we just received
-        {
-          role: 'assistant' as const,
-          content: cleanedResponse,
-        },
-      ]
-
-      // Trigger async compression (fire and forget)
-      triggerAsyncCompression({
-        chatId,
-        messages: updatedMessages,
-        systemPrompt: builtContext.originalSystemPrompt,
-        compressionOptions: {
-          enabled: contextCompressionSettings.enabled,
-          windowSize: contextCompressionSettings.windowSize,
-          compressionTargetTokens: contextCompressionSettings.compressionTargetTokens,
-          systemPromptTargetTokens: contextCompressionSettings.systemPromptTargetTokens,
-          selection: cheapLLMSelection,
-          userId,
-          characterName: character.name,
-          userName: 'User',
-        },
       })
     }
   } else if (toolMessages.length > 0) {

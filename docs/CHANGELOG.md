@@ -4,6 +4,19 @@
 
 ### 2.9-dev
 
+- perf: Fix compression cache timing issue causing slow message responses (2026-02-02)
+  - Pre-compression now triggers immediately after assistant message is saved, not after all async work
+  - Previously, pre-compression started after memory extraction and context summary checks (68+ seconds delay)
+  - Now runs in parallel with memory extraction, giving maximum time to complete before next message
+  - Added system prompt hash validation to cache retrieval for better cache validity checks
+  - Added debug logging for cache hit/miss reasons (message count mismatch, hash mismatch)
+  - Compression cache now persists to database, surviving server restarts
+  - New `compressionCache` column added to chats table via migration
+  - Cache lookup order: in-memory (fastest) -> database (survives restarts) -> sync compression (fallback)
+  - Relaxed cache validation: allows up to 50 new messages (was strict count match)
+  - Chats with many tool calls (RNG, state) now benefit from caching between turns
+- style: Add more spacing above user messages in chat (2026-02-02)
+  - User message rows now have 1.5rem top margin for better visual separation from previous messages
 - feat: Chat State for persistent JSON storage (2026-02-02)
   - New `state` field on chats and projects for storing persistent JSON data
   - Database migration adds state column to chats and projects tables

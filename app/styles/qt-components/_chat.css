@@ -713,6 +713,7 @@
   .qt-chat-message-row-user {
     margin-left: auto;
     justify-content: flex-end;
+    margin-top: 1.5rem;
   }
 
   .qt-chat-message-row-assistant {
