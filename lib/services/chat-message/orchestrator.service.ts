@@ -47,6 +47,7 @@ import {
   encodeDoneEvent,
   encodeErrorEvent,
   encodeKeepAlive,
+  encodeStatusEvent,
   safeEnqueue,
   safeClose,
 } from './streaming.service'
@@ -501,6 +502,14 @@ async function processMessage(
   // ============================================================================
   let cachedCompressionResult = null
   if (compressionEnabled && !bypassCompression) {
+    // Send status update for compression check
+    safeEnqueue(controller, encodeStatusEvent(encoder, {
+      stage: 'compressing',
+      message: 'Checking context cache...',
+      characterName: character.name,
+      characterId: character.id,
+    }))
+
     // Try to get cached compression from previous async pre-computation
     cachedCompressionResult = await getCachedCompression(chatId, existingMessages.length)
     if (cachedCompressionResult) {
@@ -530,6 +539,14 @@ async function processMessage(
       }
     }, 15000) // Send ping every 15 seconds
   }
+
+  // Send status update for context gathering
+  safeEnqueue(controller, encodeStatusEvent(encoder, {
+    stage: 'gathering',
+    message: 'Gathering memories and context...',
+    characterName: character.name,
+    characterId: character.id,
+  }))
 
   const { builtContext, formattedMessages, isInitialMessage } = await buildMessageContext(
     {
@@ -651,6 +668,17 @@ async function processMessage(
   // Pre-generate assistant message ID so logs can reference it
   const preGeneratedAssistantMessageId = crypto.randomUUID()
 
+  // Send status update for sending to LLM
+  safeEnqueue(controller, encodeStatusEvent(encoder, {
+    stage: 'sending',
+    message: `Sending to ${character.name}...`,
+    characterName: character.name,
+    characterId: character.id,
+  }))
+
+  // Track if streaming has started for status update
+  let hasStartedStreaming = false
+
   try {
     for await (const chunk of streamMessage({
       messages: formattedMessages,
@@ -664,6 +692,16 @@ async function processMessage(
       chatId,
     })) {
       if (chunk.content) {
+        // Send streaming status on first content
+        if (!hasStartedStreaming) {
+          safeEnqueue(controller, encodeStatusEvent(encoder, {
+            stage: 'streaming',
+            message: `${character.name} is responding...`,
+            characterName: character.name,
+            characterId: character.id,
+          }))
+          hasStartedStreaming = true
+        }
         fullResponse += chunk.content
         controller.enqueue(encodeContentChunk(encoder, chunk.content))
       }
@@ -740,6 +778,17 @@ async function processMessage(
     if (toolCalls.length === 0) break
 
     toolIterations++
+
+    // Send tool executing status for each detected tool
+    for (const toolCall of toolCalls) {
+      safeEnqueue(controller, encodeStatusEvent(encoder, {
+        stage: 'tool_executing',
+        message: `Running ${toolCall.name}...`,
+        toolName: toolCall.name,
+        characterName: character.name,
+        characterId: character.id,
+      }))
+    }
 
     const results = await processToolCalls(toolCalls, toolContext, controller, encoder)
     toolMessages = [...toolMessages, ...results.toolMessages]
@@ -818,6 +867,17 @@ async function processMessage(
         formats: xmlToolCalls.map(tc => tc.format),
       })
 
+      // Send tool executing status for each detected tool
+      for (const toolCall of xmlToolCallRequests) {
+        safeEnqueue(controller, encodeStatusEvent(encoder, {
+          stage: 'tool_executing',
+          message: `Running ${toolCall.name}...`,
+          toolName: toolCall.name,
+          characterName: character.name,
+          characterId: character.id,
+        }))
+      }
+
       const results = await processToolCalls(xmlToolCallRequests, toolContext, controller, encoder)
       toolMessages = [...toolMessages, ...results.toolMessages]
       generatedImagePaths = [...generatedImagePaths, ...results.generatedImagePaths]
@@ -883,6 +943,17 @@ async function processMessage(
     const pseudoToolCalls = parsePseudoToolsFromResponse(fullResponse)
 
     if (pseudoToolCalls.length > 0) {
+      // Send tool executing status for each detected tool
+      for (const toolCall of pseudoToolCalls) {
+        safeEnqueue(controller, encodeStatusEvent(encoder, {
+          stage: 'tool_executing',
+          message: `Running ${toolCall.name}...`,
+          toolName: toolCall.name,
+          characterName: character.name,
+          characterId: character.id,
+        }))
+      }
+
       const results = await processToolCalls(pseudoToolCalls, toolContext, controller, encoder)
       toolMessages = [...toolMessages, ...results.toolMessages]
       generatedImagePaths = [...generatedImagePaths, ...results.generatedImagePaths]

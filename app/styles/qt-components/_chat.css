@@ -1165,6 +1165,68 @@
       opacity: 0;
     }
   }
+
+  /* ==========================================================================
+     RESPONSE STATUS INDICATOR
+     Shows the current processing stage during AI response generation
+     ========================================================================== */
+
+  .qt-chat-response-status {
+    @apply flex items-center gap-2 px-3 py-1.5 text-sm mb-2 rounded-md;
+    background: var(--qt-response-status-bg);
+    color: var(--qt-response-status-fg);
+    border: 1px solid var(--qt-response-status-border);
+    animation: qt-status-fade-in 150ms ease-out;
+  }
+
+  .qt-chat-response-status-icon {
+    @apply flex-shrink-0 w-4 h-4;
+  }
+
+  .qt-chat-response-status-text {
+    @apply font-medium;
+  }
+
+  /* Stage-specific colors */
+  .qt-chat-response-status[data-stage="compressing"] {
+    color: var(--qt-response-status-compressing-fg);
+    border-color: color-mix(in srgb, var(--qt-response-status-compressing-fg) 30%, transparent);
+  }
+
+  .qt-chat-response-status[data-stage="gathering"] {
+    color: var(--qt-response-status-gathering-fg);
+    border-color: color-mix(in srgb, var(--qt-response-status-gathering-fg) 30%, transparent);
+  }
+
+  .qt-chat-response-status[data-stage="building"] {
+    color: var(--qt-response-status-building-fg);
+    border-color: color-mix(in srgb, var(--qt-response-status-building-fg) 30%, transparent);
+  }
+
+  .qt-chat-response-status[data-stage="sending"] {
+    color: var(--qt-response-status-sending-fg);
+    border-color: color-mix(in srgb, var(--qt-response-status-sending-fg) 30%, transparent);
+  }
+
+  .qt-chat-response-status[data-stage="streaming"] {
+    color: var(--qt-response-status-streaming-fg);
+    border-color: color-mix(in srgb, var(--qt-response-status-streaming-fg) 30%, transparent);
+  }
+
+  .qt-chat-response-status[data-stage="tool_executing"] {
+    color: var(--qt-response-status-tool-fg);
+    border-color: color-mix(in srgb, var(--qt-response-status-tool-fg) 30%, transparent);
+  }
+
+  @keyframes qt-status-fade-in {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .qt-chat-response-status { animation: none; }
+    .qt-chat-response-status-icon .animate-pulse { animation: none; }
+  }
 }
 
 /* ==========================================================================

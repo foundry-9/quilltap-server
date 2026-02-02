@@ -485,6 +485,22 @@ export function encodeKeepAlive(encoder: TextEncoder): Uint8Array {
 }
 
 /**
+ * Encode a status update event for UI feedback during response generation
+ */
+export function encodeStatusEvent(
+  encoder: TextEncoder,
+  status: {
+    stage: string
+    message: string
+    toolName?: string
+    characterName?: string
+    characterId?: string
+  }
+): Uint8Array {
+  return encoder.encode(`data: ${JSON.stringify({ status })}\n\n`)
+}
+
+/**
  * Safely enqueue data to a stream controller
  * Returns true if successful, false if the controller is already closed
  */

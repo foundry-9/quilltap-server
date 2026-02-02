@@ -136,6 +136,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [ephemeralMessages, setEphemeralMessages] = useState<EphemeralMessageData[]>([])
   const [respondingParticipantId, setRespondingParticipantId] = useState<string | null>(null)
   const [isPaused, setIsPaused] = useState(false)
+  const [responseStatus, setResponseStatus] = useState<{
+    stage: string
+    message: string
+    toolName?: string
+    characterName?: string
+    characterId?: string
+  } | null>(null)
 
   // Impersonation state (Characters Not Personas)
   const [impersonatingParticipantIds, setImpersonatingParticipantIds] = useState<string[]>([])
@@ -911,6 +918,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             try {
               const data = JSON.parse(rawData)
 
+              // Handle status updates
+              if (data.status) {
+                setResponseStatus(data.status)
+              }
+
               if (data.content) {
                 fullContent += data.content
                 setWaitingForResponse(false)
@@ -919,6 +931,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               }
 
               if (data.error) {
+                // Clear response status
+                setResponseStatus(null)
                 // Include details in error message if available
                 const errorMsg = data.details
                   ? `${data.error}: ${data.details}`
@@ -927,6 +941,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               }
 
               if (data.done) {
+                // Clear response status
+                setResponseStatus(null)
+
                 if (fullContent.trim()) {
                   const newMessage: Message = {
                     id: data.messageId || `continue-${Date.now()}`,
@@ -981,6 +998,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       setWaitingForResponse(false)
       setStreamingContent('')
       setRespondingParticipantId(null)
+      setResponseStatus(null)
       abortControllerRef.current = null
       scrollOnStreamComplete()
       // Return focus to input after AI response completes
@@ -1698,6 +1716,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             try {
               const data = JSON.parse(rawData)
 
+              // Handle status updates
+              if (data.status) {
+                setResponseStatus(data.status)
+              }
+
               if (data.content) {
                 fullContent += data.content
                 setWaitingForResponse(false)
@@ -1776,6 +1799,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               }
 
               if (data.done) {
+                // Clear response status
+                setResponseStatus(null)
+
                 // Check for empty response (known Gemini API issue)
                 if (data.emptyResponse) {
                   showErrorToast(data.emptyResponseReason || 'The AI returned an empty response. Use the Resend button to try again.')
@@ -1810,6 +1836,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               }
 
               if (data.error) {
+                // Clear response status
+                setResponseStatus(null)
                 // Include details in error message if available
                 const errorMsg = data.details
                   ? `${data.error}: ${data.details}`
@@ -1852,6 +1880,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         setStreaming(false)
         setWaitingForResponse(false)
         setRespondingParticipantId(null)
+        setResponseStatus(null)
       } else {
         // Extract error message, handling cases where message may be undefined
         // Network errors (connection dropped, timeout) may have empty messages
@@ -1872,10 +1901,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         setStreaming(false)
         setWaitingForResponse(false)
         setRespondingParticipantId(null)
+        setResponseStatus(null)
       }
     } finally {
       setSending(false)
       abortControllerRef.current = null
+      setResponseStatus(null)
       // Return focus to input after send completes
       // Use longer timeout to let smooth scroll settle, and preventScroll to avoid conflicts
       setTimeout(() => {
@@ -2191,6 +2222,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           hasActiveCharacters={hasActiveCharacters}
           streaming={streaming}
           waitingForResponse={waitingForResponse}
+          responseStatus={responseStatus}
           toolPaletteOpen={toolPaletteOpen}
           setToolPaletteOpen={setToolPaletteOpen}
           showPreview={showPreview}

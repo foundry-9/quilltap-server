@@ -4,6 +4,7 @@ import { useRef, useEffect, useLayoutEffect, useCallback } from 'react'
 import ToolPalette from '@/components/chat/ToolPalette'
 import FormattingToolbar from '@/components/chat/FormattingToolbar'
 import MessageContent from '@/components/chat/MessageContent'
+import { QuillAnimation } from '@/components/chat/QuillAnimation'
 import type { AttachedFile, PendingToolResult } from '../types'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
 
@@ -28,6 +29,13 @@ interface ChatComposerProps {
   hasActiveCharacters: boolean
   streaming: boolean
   waitingForResponse: boolean
+  /** Current response generation status */
+  responseStatus?: {
+    stage: string
+    message: string
+    toolName?: string
+    characterName?: string
+  } | null
   toolPaletteOpen: boolean
   setToolPaletteOpen: (open: boolean) => void
   showPreview: boolean
@@ -97,6 +105,7 @@ export function ChatComposer({
   hasActiveCharacters,
   streaming,
   waitingForResponse,
+  responseStatus,
   toolPaletteOpen,
   setToolPaletteOpen,
   showPreview,
@@ -345,6 +354,30 @@ export function ChatComposer({
               </svg>
             )}
             <span className="text-sm font-medium">{toolExecutionStatus.message}</span>
+          </div>
+        )}
+
+        {/* Response status indicator */}
+        {responseStatus && (
+          <div
+            className="qt-chat-response-status"
+            data-stage={responseStatus.stage}
+            role="status"
+            aria-live="polite"
+          >
+            <div className="qt-chat-response-status-icon">
+              {responseStatus.stage === 'streaming' ? (
+                <QuillAnimation size="sm" />
+              ) : (
+                <svg className="w-4 h-4 animate-pulse" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="12" cy="12" r="10" opacity="0.3" />
+                  <circle cx="12" cy="12" r="4" />
+                </svg>
+              )}
+            </div>
+            <span className="qt-chat-response-status-text">
+              {responseStatus.message}
+            </span>
           </div>
         )}
 

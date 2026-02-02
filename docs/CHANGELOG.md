@@ -4,6 +4,14 @@
 
 ### 2.9-dev
 
+- feat: Chat response status indicator showing processing stages (2026-02-02)
+  - Visual indicator in chat composer shows current stage during AI response generation
+  - Stages: compressing (blue), gathering (purple), building (amber), sending (blue), streaming (green), tool_executing (purple)
+  - Uses QuillAnimation component for streaming stage, pulsing icon for other stages
+  - Stage-specific colors for light and dark modes via CSS custom properties
+  - Accessible with role="status" and aria-live="polite" for screen readers
+  - Respects prefers-reduced-motion for users who prefer less animation
+  - Status clears automatically on completion, error, or abort
 - perf: Fix compression cache timing issue causing slow message responses (2026-02-02)
   - Pre-compression now triggers immediately after assistant message is saved, not after all async work
   - Previously, pre-compression started after memory extraction and context summary checks (68+ seconds delay)
