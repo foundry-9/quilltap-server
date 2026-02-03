@@ -1,27 +1,26 @@
 /**
- * E2E Test User Helper
+ * E2E Test Helper
  *
- * Provides utilities for creating, authenticating, and cleaning up test users
- * in Playwright e2e tests. Uses credentials-based auth (not OAuth).
+ * Provides utilities for creating and cleaning up test data in Playwright e2e tests.
+ * Quilltap runs in single-user mode, so no authentication is required.
  *
  * Usage:
  * ```typescript
- * import { TestUserHelper } from './helpers/test-user'
+ * import { TestHelper } from './helpers/test-user'
  *
  * test.describe('My Tests', () => {
- *   const testUser = new TestUserHelper('my_test_prefix')
+ *   const testHelper = new TestHelper('my_test_prefix')
  *
- *   test('setup: create user', async ({ page }) => {
- *     await testUser.createAndLogin(page)
+ *   test('setup: create test data', async ({ page }) => {
+ *     const characterId = await testHelper.createCharacter(page, { name: 'Test Character' })
  *   })
  *
  *   test('my actual test', async ({ page }) => {
- *     await testUser.login(page)
  *     // ... test code
  *   })
  *
- *   test('cleanup: delete user', async ({ page }) => {
- *     await testUser.cleanup(page)
+ *   test('cleanup: delete test data', async ({ page }) => {
+ *     await testHelper.cleanup(page)
  *   })
  * })
  * ```
@@ -29,95 +28,28 @@
 
 import { Page, expect } from '@playwright/test'
 
-export interface TestUserCredentials {
-  username: string
-  password: string
-  name: string
-}
-
 export interface TestResources {
   characterIds: string[]
   chatIds: string[]
   profileIds: string[]
-  personaIds: string[]
 }
 
-export class TestUserHelper {
+/**
+ * Helper class for managing test resources.
+ * Renamed from TestUserHelper since there's no user management in single-user mode.
+ */
+export class TestHelper {
   private prefix: string
-  private authDisabled: boolean | null = null
-  public credentials: TestUserCredentials
   public resources: TestResources = {
     characterIds: [],
     chatIds: [],
     profileIds: [],
-    personaIds: [],
   }
 
   constructor(prefix: string = 'e2e_test') {
-    // Use a timestamp to ensure uniqueness across parallel test runs
+    // Use a timestamp to ensure uniqueness across test runs
     const timestamp = Date.now()
     this.prefix = `${prefix}_${timestamp}`
-
-    this.credentials = {
-      username: `${this.prefix}_user`,
-      // Password meets requirements: 8+ chars, uppercase, lowercase, number, special char
-      password: 'E2eTest123!',
-      name: `${prefix} Test User`,
-    }
-  }
-
-  private async isAuthDisabled(page: Page): Promise<boolean> {
-    if (this.authDisabled !== null) {
-      return this.authDisabled
-    }
-
-    try {
-      const res = await page.request.get('/api/v1/auth/status')
-      if (res.ok()) {
-        const data = await res.json()
-        this.authDisabled = Boolean(data?.authDisabled)
-        return this.authDisabled
-      }
-    } catch (err) {
-      console.warn('Failed to fetch auth status, assuming auth enabled')
-    }
-
-    this.authDisabled = false
-    return this.authDisabled
-  }
-
-  private async ensureAuthSession(page: Page): Promise<void> {
-    if (await this.isAuthDisabled(page)) {
-      await page.goto('/')
-      await page.waitForLoadState('domcontentloaded')
-    }
-  }
-
-  private async ensureBrowserSessionCookie(page: Page, setCookieHeader?: string): Promise<void> {
-    if (!setCookieHeader) return
-
-    const match = setCookieHeader.match(/qt_session=([^;]+)/)
-    if (!match) return
-
-    const baseUrl = process.env.BASE_URL || 'http://localhost:3000'
-    let cookieUrl: string | null = null
-    try {
-      cookieUrl = new URL(baseUrl).toString()
-    } catch {
-      cookieUrl = null
-    }
-
-    if (!cookieUrl) return
-
-    await page.context().addCookies([
-      {
-        name: 'qt_session',
-        value: match[1],
-        url: cookieUrl,
-        httpOnly: true,
-        sameSite: 'Lax',
-      },
-    ])
   }
 
   private async postWithRetry(
@@ -126,14 +58,14 @@ export class TestUserHelper {
     data: Record<string, unknown>,
     maxAttempts: number = 5
   ) {
-    let lastResponse: ReturnType<Page['request']['post']> | null = null
+    let lastResponse: Awaited<ReturnType<Page['request']['post']>> | null = null
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       const response = await page.request.post(url, { data })
       lastResponse = response
 
       const status = response.status()
-      if (status !== 401 && status !== 429 && status !== 503) {
+      if (status !== 429 && status !== 503) {
         return response
       }
 
@@ -152,14 +84,14 @@ export class TestUserHelper {
     url: string,
     maxAttempts: number = 5
   ) {
-    let lastResponse: ReturnType<Page['request']['delete']> | null = null
+    let lastResponse: Awaited<ReturnType<Page['request']['delete']>> | null = null
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       const response = await page.request.delete(url)
       lastResponse = response
 
       const status = response.status()
-      if (status !== 401 && status !== 429 && status !== 503) {
+      if (status !== 429 && status !== 503) {
         return response
       }
 
@@ -174,86 +106,14 @@ export class TestUserHelper {
   }
 
   /**
-   * Create a new test user via signup API
-   * Returns true if user was created, false if user already exists
+   * Navigate to the app and wait for it to load.
+   * In single-user mode, no login is required.
    */
-  async signup(page: Page): Promise<boolean> {
-    if (await this.isAuthDisabled(page)) {
-      console.log('Auth disabled - skipping user signup')
-      return false
-    }
-
-    const signupRes = await page.request.post('/api/v1/auth/signup', {
-      data: {
-        username: this.credentials.username,
-        password: this.credentials.password,
-        name: this.credentials.name,
-      },
-    })
-
-    if (signupRes.ok()) {
-      console.log(`Created test user: ${this.credentials.username}`)
-      return true
-    }
-
-    const signupError = await signupRes.json().catch(() => ({}))
-    if (signupError.error?.includes('already exists')) {
-      console.log(`Test user already exists: ${this.credentials.username}`)
-      return false
-    }
-
-    console.warn('Signup response:', signupError)
-    return false
-  }
-
-  /**
-   * Login with the test user credentials
-   * Throws if login fails
-   */
-  async login(page: Page): Promise<void> {
-    if (await this.isAuthDisabled(page)) {
-      await this.ensureAuthSession(page)
-      return
-    }
-
-    const loginRes = await page.request.post('/api/v1/auth/login', {
-      data: {
-        username: this.credentials.username,
-        password: this.credentials.password,
-      },
-    })
-
-    if (!loginRes.ok()) {
-      const text = await loginRes.text()
-      throw new Error(`Login failed: ${loginRes.status()} ${text}`)
-    }
-
-    const loginData = await loginRes.json()
-    if (!loginData.success) {
-      throw new Error(`Login unsuccessful: ${JSON.stringify(loginData)}`)
-    }
-
-    await this.ensureBrowserSessionCookie(page, loginRes.headers()['set-cookie'])
-
-    console.log(`Logged in as: ${this.credentials.username}`)
-  }
-
-  /**
-   * Create user if needed and login
-   */
-  async createAndLogin(page: Page): Promise<void> {
-    if (await this.isAuthDisabled(page)) {
-      await this.ensureAuthSession(page)
-      return
-    }
-
-    await this.signup(page)
-    await this.login(page)
-
-    // Verify we can access the home page
+  async ensureReady(page: Page): Promise<void> {
     await page.goto('/')
     await page.waitForLoadState('domcontentloaded')
-    expect(page.url()).not.toContain('/auth/signin')
+    // Verify we're on the home page
+    expect(page.url()).not.toContain('/auth/')
   }
 
   /**
@@ -265,14 +125,14 @@ export class TestUserHelper {
       name?: string
       description?: string
       firstMessage?: string
+      controlledBy?: 'ai' | 'user'
     } = {}
   ): Promise<string> {
-    await this.login(page)
-
-    const characterRes = await this.postWithRetry(page, '/api/characters', {
+    const characterRes = await this.postWithRetry(page, '/api/v1/characters', {
       name: options.name || `${this.prefix} Character`,
       description: options.description || 'A character for e2e testing',
       firstMessage: options.firstMessage || 'Hello! I am a test character.',
+      controlledBy: options.controlledBy || 'ai',
     })
 
     if (!characterRes.ok()) {
@@ -289,64 +149,33 @@ export class TestUserHelper {
   }
 
   /**
-   * Create a test persona
+   * Get or create a connection profile for testing.
+   * Uses Ollama by default since it doesn't require API keys.
    */
-  async createPersona(
+  async getOrCreateProfile(
     page: Page,
     options: {
-      name?: string
-      title?: string
-      description?: string
-      personalityTraits?: string
+      provider?: string
+      modelName?: string
     } = {}
   ): Promise<string> {
-    await this.login(page)
-
-    const personaRes = await this.postWithRetry(page, '/api/personas', {
-      name: options.name || `${this.prefix} Persona`,
-      title: options.title || 'Test Persona',
-      description: options.description || 'A persona for e2e testing',
-      personalityTraits: options.personalityTraits || 'curious, friendly',
-    })
-
-    if (!personaRes.ok()) {
-      const text = await personaRes.text()
-      throw new Error(`Failed to create persona: ${personaRes.status()} ${text}`)
-    }
-
-    const personaData = await personaRes.json()
-    const personaId = personaData.id
-    this.resources.personaIds.push(personaId)
-    console.log(`Created test persona: ${personaId}`)
-
-    return personaId
-  }
-
-  /**
-   * Get or create a connection profile for testing
-   * Uses Ollama which doesn't require API keys
-   */
-  async getOrCreateProfile(page: Page): Promise<string> {
-    await this.login(page)
-
     // Check for existing profiles
-    const profilesRes = await page.request.get('/api/profiles')
+    const profilesRes = await page.request.get('/api/v1/connection-profiles')
     if (profilesRes.ok()) {
-      const profiles = await profilesRes.json()
-      if (profiles[0]?.id) {
+      const data = await profilesRes.json()
+      const profiles = data.profiles || data
+      if (Array.isArray(profiles) && profiles[0]?.id) {
         console.log(`Using existing profile: ${profiles[0].id}`)
         return profiles[0].id
       }
     }
 
-    // Create a test profile
-    const createProfileRes = await page.request.post('/api/profiles', {
-      data: {
-        name: `${this.prefix} Profile`,
-        provider: 'ollama',
-        modelName: 'llama2',
-        isDefault: true,
-      },
+    // Create a test profile using Ollama
+    const createProfileRes = await this.postWithRetry(page, '/api/v1/connection-profiles', {
+      name: `${this.prefix} Profile`,
+      provider: options.provider || 'ollama',
+      modelName: options.modelName || 'llama3.2',
+      isDefault: true,
     })
 
     if (!createProfileRes.ok()) {
@@ -355,7 +184,7 @@ export class TestUserHelper {
     }
 
     const profileData = await createProfileRes.json()
-    const profileId = profileData.id
+    const profileId = profileData.profile?.id || profileData.id
     this.resources.profileIds.push(profileId)
     console.log(`Created test profile: ${profileId}`)
 
@@ -370,11 +199,9 @@ export class TestUserHelper {
     characterId: string,
     profileId?: string
   ): Promise<string> {
-    await this.login(page)
-
     const connectionProfileId = profileId || (await this.getOrCreateProfile(page))
 
-    const chatRes = await this.postWithRetry(page, '/api/chats', {
+    const chatRes = await this.postWithRetry(page, '/api/v1/chats', {
       participants: [
         {
           type: 'CHARACTER',
@@ -400,62 +227,29 @@ export class TestUserHelper {
   /**
    * Delete all test resources created during tests
    */
-  async deleteResources(page: Page): Promise<void> {
-    await this.login(page)
-
+  async cleanup(page: Page): Promise<void> {
     // Delete chats
     for (const chatId of this.resources.chatIds) {
-      const res = await this.deleteWithRetry(page, `/api/chats/${chatId}`)
+      const res = await this.deleteWithRetry(page, `/api/v1/chats/${chatId}`)
       console.log(`Deleted chat: ${chatId}, status: ${res.status()}`)
     }
     this.resources.chatIds = []
 
     // Delete characters
     for (const characterId of this.resources.characterIds) {
-      const res = await this.deleteWithRetry(page, `/api/characters/${characterId}`)
+      const res = await this.deleteWithRetry(page, `/api/v1/characters/${characterId}`)
       console.log(`Deleted character: ${characterId}, status: ${res.status()}`)
     }
     this.resources.characterIds = []
 
     // Delete profiles we created (not pre-existing ones)
     for (const profileId of this.resources.profileIds) {
-      const res = await this.deleteWithRetry(page, `/api/profiles/${profileId}`)
+      const res = await this.deleteWithRetry(page, `/api/v1/connection-profiles/${profileId}`)
       console.log(`Deleted profile: ${profileId}, status: ${res.status()}`)
     }
     this.resources.profileIds = []
-
-    // Delete personas
-    for (const personaId of this.resources.personaIds) {
-      const res = await this.deleteWithRetry(page, `/api/personas/${personaId}`)
-      console.log(`Deleted persona: ${personaId}, status: ${res.status()}`)
-    }
-    this.resources.personaIds = []
-  }
-
-  /**
-   * Delete the test user account
-   */
-  async deleteUser(page: Page): Promise<void> {
-    if (await this.isAuthDisabled(page)) {
-      console.log('Auth disabled - skipping test user deletion')
-      return
-    }
-
-    await this.login(page)
-
-    const res = await this.deleteWithRetry(page, '/api/v1/auth/delete-account')
-    if (res.ok()) {
-      console.log(`Deleted user: ${this.credentials.username}`)
-    } else {
-      console.warn(`Failed to delete user: ${res.status()}`)
-    }
-  }
-
-  /**
-   * Full cleanup: delete all resources and then delete the user
-   */
-  async cleanup(page: Page): Promise<void> {
-    await this.deleteResources(page)
-    await this.deleteUser(page)
   }
 }
+
+// Export with old name for backward compatibility during migration
+export { TestHelper as TestUserHelper }

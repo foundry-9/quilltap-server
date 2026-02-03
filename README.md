@@ -7,7 +7,7 @@ Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, 
 No subscriptions. No data harvested. No forgetting everything between sessions.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.9.0--dev.27-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.9.0--dev.28-yellow.svg)](package.json)
 
 <p align="center">
   <img src="./website/images/welcome-to-quilltap-2-8.png" alt="Welcome to Quilltap" />
