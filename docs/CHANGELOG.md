@@ -4,6 +4,13 @@
 
 ### 2.9-dev
 
+- fix: Complete relationship remapping in native import/export system (2026-02-03)
+  - Character fields now remapped: `defaultConnectionProfileId`, `defaultImageProfileId`, `defaultRoleplayTemplateId`
+  - Chat participant `roleplayTemplateId` now remapped (preserves plugin template references)
+  - Profile tags now reconciled: connection profiles, image profiles, embedding profiles
+  - Roleplay template tags now reconciled on import
+  - Memory fields now remapped: `projectId`, `tags`
+  - Added comprehensive test coverage for all new remapping functionality
 - refactor: Remove S3/cloud backup functionality from backup system (2026-02-03)
   - Backup system now only supports local file download
   - Removed S3 destination option from backup dialog

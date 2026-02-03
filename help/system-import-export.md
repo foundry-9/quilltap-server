@@ -175,15 +175,52 @@ You can also export individual chats directly from within a chat:
 
 This creates a quick export of just that chat.
 
+## Relationship Preservation
+
+When you import data, Quilltap automatically preserves and updates relationships between entities:
+
+**Character relationships:**
+
+- Default connection profile (for LLM selection)
+- Default image profile (for image generation)
+- Default roleplay template (for conversation style)
+- Default partner character (for paired conversations)
+- Tags assigned to the character
+
+**Chat relationships:**
+
+- All participant characters
+- Each participant's connection and image profiles
+- Each participant's roleplay template
+- Project association
+- Tags assigned to the chat
+
+**Memory relationships:**
+
+- Associated character
+- Associated chat
+- Associated project
+- Tags assigned to the memory
+
+**Profile relationships:**
+
+- Tags assigned to connection, image, and embedding profiles
+
+**Template relationships:**
+
+- Tags assigned to roleplay templates
+
+When using the "Create New" conflict strategy, all internal references are automatically updated to point to the newly created copies.
+
 ## Import/Export File Format
 
-**File format:** `.quilltap` (Zip archive with JSON data)
+**File format:** `.qtap` (JSON format)
 
 **Structure:**
 
 - Contains all data in standardized JSON format
 - Includes metadata for each entity
-- Images stored as base64 or file references
+- Relationships stored as references that are remapped on import
 - Memories stored separately from chat data
 
 **Compatibility:**
