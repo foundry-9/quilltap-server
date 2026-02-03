@@ -768,6 +768,135 @@
 }
 
 /* ==========================================================================
+   STATUS COLOR UTILITIES (with opacity variants)
+   ========================================================================== */
+
+/* Background utilities with opacity */
+.qt-bg-muted {
+  background-color: var(--color-muted);
+}
+
+.qt-bg-success\/5 {
+  background-color: color-mix(in srgb, var(--color-success) 5%, transparent);
+}
+
+.qt-bg-success\/10 {
+  background-color: color-mix(in srgb, var(--color-success) 10%, transparent);
+}
+
+.qt-bg-success\/20 {
+  background-color: color-mix(in srgb, var(--color-success) 20%, transparent);
+}
+
+.qt-bg-warning\/5 {
+  background-color: color-mix(in srgb, var(--color-warning) 5%, transparent);
+}
+
+.qt-bg-warning\/10 {
+  background-color: color-mix(in srgb, var(--color-warning) 10%, transparent);
+}
+
+.qt-bg-warning\/20 {
+  background-color: color-mix(in srgb, var(--color-warning) 20%, transparent);
+}
+
+.qt-bg-info\/5 {
+  background-color: color-mix(in srgb, var(--color-info) 5%, transparent);
+}
+
+.qt-bg-info\/10 {
+  background-color: color-mix(in srgb, var(--color-info) 10%, transparent);
+}
+
+.qt-bg-info\/20 {
+  background-color: color-mix(in srgb, var(--color-info) 20%, transparent);
+}
+
+.qt-bg-destructive\/5 {
+  background-color: color-mix(in srgb, var(--color-destructive) 5%, transparent);
+}
+
+.qt-bg-destructive\/10 {
+  background-color: color-mix(in srgb, var(--color-destructive) 10%, transparent);
+}
+
+.qt-bg-destructive\/20 {
+  background-color: color-mix(in srgb, var(--color-destructive) 20%, transparent);
+}
+
+/* Text color utilities */
+.qt-text-warning {
+  color: var(--color-warning);
+}
+
+.qt-text-info {
+  color: var(--color-info);
+}
+
+.qt-text-success {
+  color: var(--color-success);
+}
+
+.qt-text-destructive {
+  color: var(--color-destructive);
+}
+
+/* Border utilities */
+.qt-border-primary {
+  border-color: var(--color-primary);
+}
+
+.qt-border-warning {
+  border-color: var(--color-warning);
+}
+
+.qt-border-info {
+  border-color: var(--color-info);
+}
+
+.qt-border-success {
+  border-color: var(--color-success);
+}
+
+.qt-border-destructive {
+  border-color: var(--color-destructive);
+}
+
+/* Border utilities with 30% opacity */
+.qt-border-success\/30 {
+  border-color: color-mix(in srgb, var(--color-success) 30%, transparent);
+}
+
+.qt-border-warning\/30 {
+  border-color: color-mix(in srgb, var(--color-warning) 30%, transparent);
+}
+
+.qt-border-destructive\/30 {
+  border-color: color-mix(in srgb, var(--color-destructive) 30%, transparent);
+}
+
+.qt-border-info\/30 {
+  border-color: color-mix(in srgb, var(--color-info) 30%, transparent);
+}
+
+/* Hover utilities */
+.hover\:qt-bg-destructive\/10:hover {
+  background-color: color-mix(in srgb, var(--color-destructive) 10%, transparent);
+}
+
+.hover\:qt-bg-success\/10:hover {
+  background-color: color-mix(in srgb, var(--color-success) 10%, transparent);
+}
+
+.hover\:qt-bg-warning\/10:hover {
+  background-color: color-mix(in srgb, var(--color-warning) 10%, transparent);
+}
+
+.hover\:qt-bg-info\/10:hover {
+  background-color: color-mix(in srgb, var(--color-info) 10%, transparent);
+}
+
+/* ==========================================================================
    LEFT SIDEBAR COMPONENTS
    ========================================================================== */
 

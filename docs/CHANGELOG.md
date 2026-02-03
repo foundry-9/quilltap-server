@@ -4,6 +4,15 @@
 
 ### 2.9-dev
 
+- refactor: Dead code removal and qt-* theme class standardization (2026-02-02)
+  - Removed unused functions from lib/avatar-styles.ts: getAvatarAspectRatioStyle, getAvatarMarginClass
+  - Removed unused function from lib/chat/connection-resolver.ts: hasResolvableConnectionProfile
+  - Removed unused exports from lib/chat-files-v2.ts: deleteChatFileById, getChatFileById, readChatFileBuffer, getSupportedMimeTypes
+  - Documented that formatToolResult() in tool-executor.ts is unused (actual formatting in context-builder.service.ts)
+  - Converted hard-coded Tailwind colors to qt-* utility classes in roleplay-templates, housekeeping-dialog, AvatarStack, tags-tab
+  - Added qt-border-*\/30 opacity variants for status colors (success, warning, destructive, info)
+  - Added hover:qt-bg-*\/10 variants for status colors
+  - Theme plugins now properly control all status colors via CSS variables
 - fix: Compression cache invalidated incorrectly in multi-character chats (2026-02-02)
   - Cache validation was comparing filtered message count (only `type === 'message'`) against raw event count (includes tool results, system events)
   - This caused cache to appear "too stale" with 100+ message difference when there were only a few new messages

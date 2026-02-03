@@ -97,7 +97,12 @@ export interface ToolExecutionContext {
 }
 
 /**
- * Formatted tool result for inclusion in conversation context
+ * Formatted tool result for inclusion in conversation context.
+ *
+ * NOTE: This interface and formatToolResult() are currently unused.
+ * The chat system uses context-builder.service.ts and orchestrator.service.ts
+ * to format tool results as user messages with "[Tool Result: name]" prefix.
+ * Kept for potential future use if native tool result formats are needed.
  */
 export interface FormattedToolResult {
   role: 'user' | 'tool';
@@ -107,8 +112,13 @@ export interface FormattedToolResult {
 }
 
 /**
- * Format tool result for inclusion in conversation context
- * Different LLM providers may have different formats
+ * Format tool result for inclusion in conversation context.
+ * Different LLM providers may have different formats.
+ *
+ * NOTE: This function is currently unused in production code.
+ * Tool result formatting is handled by context-builder.service.ts which
+ * converts TOOL messages to user messages with "[Tool Result: name]" prefix.
+ * This function is preserved for potential future native format support.
  *
  * @param toolResult - The executed tool result
  * @param provider - The LLM provider name (GOOGLE, ANTHROPIC, OPENAI, etc.)
@@ -134,7 +144,7 @@ export function formatToolResult(
       };
 
     case 'ANTHROPIC':
-      // TODO: Anthropic should use tool_result content blocks
+      // Anthropic's native format uses tool_result content blocks
       // For now, use text-based format (works but not optimal)
       return {
         role: 'user',
@@ -144,7 +154,7 @@ export function formatToolResult(
     case 'OPENAI':
     case 'GROK':
     case 'OPENROUTER':
-      // TODO: OpenAI-compatible providers should use tool role with tool_call_id
+      // OpenAI-compatible providers' native format uses tool role with tool_call_id
       // For now, use text-based format (works but not optimal)
       return {
         role: 'user',

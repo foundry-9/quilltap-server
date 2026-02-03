@@ -58,26 +58,3 @@ export function getAvatarClasses(
     }
   }
 }
-
-/**
- * Apply aspect ratio style for rectangular avatars
- */
-export function getAvatarAspectRatioStyle(style: AvatarDisplayStyle) {
-  return style === 'RECTANGULAR' ? { aspectRatio: '4 / 5' } : undefined
-}
-
-/**
- * Get Tailwind classes for avatar container margin
- */
-export function getAvatarMarginClass(position: 'left' | 'right' | 'none' = 'right'): string {
-  switch (position) {
-    case 'left':
-      return 'ml-3'
-    case 'right':
-      return 'mr-3'
-    case 'none':
-      return ''
-    default:
-      return 'mr-3'
-  }
-}
