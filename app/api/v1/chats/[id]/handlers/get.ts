@@ -13,10 +13,12 @@ import { getActionParam } from '@/lib/api/middleware/actions';
 import { exportSTChatAsJSONL } from '@/lib/sillytavern/chat';
 import { getChatCostBreakdown, getDetailedChatCostBreakdown } from '@/lib/services/cost-estimation.service';
 import { enrichParticipantDetail } from '@/lib/services/chat-enrichment.service';
+import { renderMarkdownToHtml, canPreRenderMessage } from '@/lib/services/markdown-renderer.service';
 import { logger } from '@/lib/logger';
 import { notFound, forbidden, serverError } from '@/lib/api/responses';
 import { handleGetAvatars, handleGetState } from '../actions';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
+import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types';
 
 /**
  * GET handler for individual chat
@@ -132,7 +134,47 @@ export async function handleGet(
       chatMetadata.participants.map((p) => enrichParticipantDetail(p, repos))
     );
 
+    // Get roleplay template for rendering patterns
+    let renderingPatterns: RenderingPattern[] | undefined;
+    let dialogueDetection: DialogueDetection | null | undefined;
+
+    if (chatMetadata.roleplayTemplateId) {
+      const template = await repos.roleplayTemplates.findById(chatMetadata.roleplayTemplateId);
+      if (template) {
+        renderingPatterns = template.renderingPatterns;
+        dialogueDetection = template.dialogueDetection;
+      }
+    }
+
     const chatEvents = await repos.chats.getMessages(chatId);
+
+    // Check for TOOL messages to identify which messages have embedded tools
+    const toolMessages = chatEvents.filter((event) => event.type === 'message' && event.role === 'TOOL');
+    const messagesWithEmbeddedTools = new Set<string>();
+
+    // Tool messages initiated by character get embedded in the preceding ASSISTANT message
+    // Tool messages initiated by user get embedded in the following USER message
+    // For simplicity, we'll skip pre-rendering for messages adjacent to TOOL messages
+    const messageEvents = chatEvents.filter((event) => event.type === 'message');
+    for (let i = 0; i < messageEvents.length; i++) {
+      const event = messageEvents[i];
+      if (event.type === 'message' && event.role === 'TOOL') {
+        // Mark adjacent messages as having embedded tools
+        if (i > 0) {
+          const prevEvent = messageEvents[i - 1];
+          if (prevEvent.type === 'message') {
+            messagesWithEmbeddedTools.add(prevEvent.id);
+          }
+        }
+        if (i < messageEvents.length - 1) {
+          const nextEvent = messageEvents[i + 1];
+          if (nextEvent.type === 'message') {
+            messagesWithEmbeddedTools.add(nextEvent.id);
+          }
+        }
+      }
+    }
+
     const messages = await Promise.all(
       chatEvents
         .filter((event) => event.type === 'message')
@@ -147,6 +189,28 @@ export async function handleGet(
             mimeType: file.mimeType,
           }));
 
+          // Determine if this message can be pre-rendered
+          const hasAttachments = attachments.length > 0;
+          const hasEmbeddedTool = messagesWithEmbeddedTools.has(event.id);
+          const canPreRender = canPreRenderMessage(event.role, hasAttachments, hasEmbeddedTool);
+
+          // Pre-render simple messages to HTML
+          let renderedHtml: string | null = null;
+          if (canPreRender) {
+            try {
+              renderedHtml = await renderMarkdownToHtml(event.content, {
+                renderingPatterns,
+                dialogueDetection,
+              });
+            } catch (err) {
+              // Log but don't fail - client can still render
+              logger.warn('[Chats v1] Failed to pre-render message', {
+                messageId: event.id,
+                error: err instanceof Error ? err.message : String(err),
+              });
+            }
+          }
+
           return {
             id: event.id,
             role: event.role,
@@ -160,6 +224,7 @@ export async function handleGet(
             participantId: event.participantId || null,
             attachments,
             debugMemoryLogs: event.debugMemoryLogs || undefined,
+            renderedHtml,
           };
         })
     ).then((results) => results.filter(Boolean));

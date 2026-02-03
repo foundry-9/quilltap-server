@@ -4,6 +4,16 @@
 
 ### 2.10-dev
 
+- perf: Server-side markdown pre-rendering for chat messages
+  - Simple messages (no tools, no attachments) are now pre-rendered to HTML on the server
+  - Pre-rendered HTML is returned in the API response and rendered directly without client-side processing
+  - Significantly reduces CPU load when scrolling through long chats
+  - Complex messages with embedded tools or attachments fall back to client-side rendering
+  - Roleplay patterns (dialogue, narration, OOC) are applied server-side for pre-rendered messages
+  - Added `renderedHtml` field to message schema for pre-rendered content
+  - New markdown renderer service using unified/remark/rehype pipeline
+  - Added highlight.js CSS styling for server-rendered code blocks
+
 - feat: Chat composer tool palette revamp
   - Reorganized hamburger menu into four labeled sections: Chat, Organize, Edit Content, Memory
   - Added composer gutter tools: Attach, Generate Image, and RNG now accessible as icon buttons

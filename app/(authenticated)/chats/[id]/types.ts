@@ -25,6 +25,8 @@ export interface Message {
   tokenCount?: number | null
   /** Embedded tool messages that belong to this assistant message */
   toolCalls?: Message[]
+  /** Server-side pre-rendered HTML for simple messages (no tools, no attachments) */
+  renderedHtml?: string | null
 }
 
 export interface CharacterData {

@@ -49,6 +49,9 @@ export const MessageEventSchema = z.object({
   // 'content_limit' = LLM-generated recovery response for content limit errors (PDF pages, etc.)
   // 'content_limit_static' = Static fallback message when LLM recovery for content limit also failed
   recoveryType: z.enum(['token_limit', 'token_limit_static', 'content_limit', 'content_limit_static']).nullable().optional(),
+  // Server-side pre-rendered HTML for simple messages (no tools, no attachments)
+  // Used to avoid client-side markdown processing overhead on chat load
+  renderedHtml: z.string().nullable().optional(),
 });
 
 export type MessageEvent = z.infer<typeof MessageEventSchema>;

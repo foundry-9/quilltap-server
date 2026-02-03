@@ -314,6 +314,79 @@
   }
 
   /* ==========================================================================
+     HIGHLIGHT.JS SYNTAX HIGHLIGHTING (Server-side rendered code blocks)
+     ========================================================================== */
+
+  /**
+   * Highlight.js code block container
+   * Matches the client-side oneDark theme colors
+   */
+  .hljs {
+    @apply p-4 overflow-x-auto;
+    border-radius: var(--qt-code-radius);
+    background: var(--qt-code-bg);
+    color: var(--qt-code-fg);
+    font-family: var(--qt-code-font);
+  }
+
+  /* Highlight.js syntax colors (oneDark-inspired) */
+  .hljs-keyword,
+  .hljs-selector-tag,
+  .hljs-literal,
+  .hljs-section,
+  .hljs-link {
+    color: #c678dd;
+  }
+
+  .hljs-string,
+  .hljs-title,
+  .hljs-name,
+  .hljs-type,
+  .hljs-attribute,
+  .hljs-symbol,
+  .hljs-bullet,
+  .hljs-addition,
+  .hljs-variable,
+  .hljs-template-tag,
+  .hljs-template-variable {
+    color: #98c379;
+  }
+
+  .hljs-comment,
+  .hljs-quote,
+  .hljs-deletion,
+  .hljs-meta {
+    color: #5c6370;
+  }
+
+  .hljs-keyword,
+  .hljs-selector-class,
+  .hljs-function,
+  .hljs-selector-id,
+  .hljs-attr {
+    color: #61afef;
+  }
+
+  .hljs-number,
+  .hljs-regexp,
+  .hljs-built_in,
+  .hljs-params {
+    color: #d19a66;
+  }
+
+  .hljs-tag {
+    color: #e06c75;
+  }
+
+  .hljs-emphasis {
+    font-style: italic;
+  }
+
+  .hljs-strong {
+    font-weight: bold;
+  }
+
+  /* ==========================================================================
      TYPOGRAPHY
      ========================================================================== */
 

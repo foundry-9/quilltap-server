@@ -200,7 +200,7 @@ function MessageRowInner({
                   {message.content}
                 </div>
               ) : (
-                <LazyMessageContent content={message.content} renderingPatterns={renderingPatterns} dialogueDetection={dialogueDetection} forceRender={forceRender} />
+                <LazyMessageContent content={message.content} renderingPatterns={renderingPatterns} dialogueDetection={dialogueDetection} forceRender={forceRender} renderedHtml={message.renderedHtml} />
               )}
               {/* Image attachment thumbnails */}
               {getImageAttachments(message).length > 0 && (
@@ -584,6 +584,9 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
   const prevToolCalls = prev.message.toolCalls || []
   const nextToolCalls = next.message.toolCalls || []
   if (prevToolCalls.length !== nextToolCalls.length) return false
+
+  // Pre-rendered HTML
+  if (prev.message.renderedHtml !== next.message.renderedHtml) return false
 
   // Character data
   if (prev.character?.id !== next.character?.id) return false

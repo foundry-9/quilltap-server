@@ -15,7 +15,7 @@ This document tracks planned features and improvements for Quilltap.
 
 ### Chat & Conversation
 
-- [ ] Server-side Markdown render of historical chat messages to speed up delivery
+- [X] Server-side Markdown render of historical chat messages to speed up delivery
 - [ ] Character checkpointing (backups of a character at a certain point in time)
 - [ ] "Visual Novel" options
 - [ ] Image generation can not only select characters but also different physical descriptions if they have them
