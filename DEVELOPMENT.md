@@ -9,7 +9,7 @@ quilltap/
 ├── app/                      # Next.js App Router entry point
 │   ├── (authenticated)/      # Protected routes (characters, chats, settings, about, tools)
 │   ├── api/                  # API route handlers (auth, chats, characters, providers, backups, etc.)
-│   ├── auth/                 # Auth flows (sign-in, OAuth callbacks, session)
+│   ├── auth/                 # Auth flows (legacy routes, single-user session)
 │   ├── dashboard/            # Dashboard page
 │   ├── styles/               # Qt-* utility class stylesheets
 │   ├── globals.css           # Root styles and Tailwind imports
@@ -25,7 +25,7 @@ quilltap/
 │   ├── providers/            # React context providers
 │   └── ui/                   # Generic UI components (Avatar, Badge, Button, etc.)
 ├── lib/                      # Domain logic and utilities
-│   ├── auth/                 # Authentication (session, adapters, post-login migrations)
+│   ├── auth/                 # Single-user mode and session management
 │   ├── chat/                 # Chat logic (context-manager, turn-manager, tool execution)
 │   ├── llm/                  # LLM utilities (formatting, pricing, streaming)
 │   ├── memory/               # Memory and embedding logic
@@ -73,7 +73,7 @@ quilltap/
 
 - **Node.js 22+**
 - **SQLite** (automatic with better-sqlite3)
-- **MinIO or S3-compatible storage** (embedded MinIO for development)
+- **File storage**: Local filesystem (default) or optionally S3-compatible storage
 
 ### Running Locally
 
@@ -84,14 +84,14 @@ npm install
 # Build plugins (required before first run)
 npm run build:plugins
 
-# Start MinIO via Docker (recommended for file storage)
-docker-compose -f docker-compose.yml up -d minio createbuckets
-
 # Start the development server with HTTPS
 npm run devssl
 
 # Or plain HTTP
 npm run dev
+
+# Optional: Start MinIO for S3-compatible file storage
+docker-compose -f docker-compose.yml up -d minio createbuckets
 ```
 
 The application will be available at [https://localhost:3000](https://localhost:3000)
@@ -165,10 +165,10 @@ When making changes to a plugin, bump the patch version in its `package.json` an
 
 All application data is stored in SQLite:
 
-- **users** - User accounts and authentication
+- **users** - User accounts (single-user mode)
 - **characters** - Character definitions and metadata (includes `controlledBy: 'llm' | 'user'` for control mode)
 - **chats** - Chat metadata, message history, and impersonation state
-- **files** - File metadata (actual files in S3)
+- **files** - File metadata (actual files on filesystem or S3)
 - **tags** - Tag definitions
 - **memories** - Character memory data with inter-character relationships (`aboutCharacterId`)
 - **connectionProfiles** - LLM connection configurations
@@ -180,24 +180,28 @@ All application data is stored in SQLite:
 
 The SQLite database file is stored at `~/.quilltap/data/quilltap.db` on local systems or `/app/quilltap/data/quilltap.db` in Docker.
 
-### S3 Storage (Required)
+### File Storage
 
-All files are stored in S3-compatible storage:
+Files are stored on the local filesystem by default, with optional S3-compatible storage:
 
-- `users/{userId}/files/` - User-uploaded files
-- `users/{userId}/images/` - Generated and uploaded images
-- `users/{userId}/backups/` - Full-account backups
+**Local Filesystem (Default)**:
+- Files stored in platform-specific data directory (e.g., `~/.quilltap/files/` on Linux)
+- No additional configuration required
 
-For development, Docker Compose provides embedded MinIO with auto-created buckets.
+**S3-Compatible Storage (Optional)**:
+- Configure via mount points in Settings > Storage
+- Supports AWS S3, MinIO, Cloudflare R2, etc.
+- For development, Docker Compose provides embedded MinIO
 
 ## Plugin Development
 
 Plugins are self-contained modules in `plugins/src/` that provide:
 
 - **LLM Providers** - Connect to AI services (OpenAI, Anthropic, Google, etc.)
-- **Auth Providers** - Authentication methods (Google OAuth, no-auth)
+- **Storage Backends** - S3-compatible file storage
 - **Themes** - Visual theme packs
-- **Upgrade Scripts** - Data migration utilities
+- **Roleplay Templates** - Message formatting templates
+- **Tool Providers** - Custom LLM tools (MCP connector, etc.)
 
 See [plugins/README.md](plugins/README.md) for the plugin developer guide.
 

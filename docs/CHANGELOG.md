@@ -4,6 +4,17 @@
 
 ### 2.9-dev
 
+- docs: Comprehensive documentation updates for accuracy and completeness (2026-02-03)
+  - Updated About page to match README: new tagline, expanded description, reorganized features list
+  - Removed authentication references from About page (OAuth, TOTP 2FA removed)
+  - Added quilltap.ai link to About page
+  - Changed file storage description from "S3-compatible" to "Local filesystem" (default)
+  - Updated API.md version from v2.8 to v2.9
+  - Added 6 new API documentation sections: Chat Settings, Models, Files (v1), System Backup & Restore, System Data Directory, System Mount Points
+  - Marked legacy endpoints (Files & Images, Tools & Backup) in Table of Contents
+  - Updated DEVELOPMENT.md: MinIO now optional, local filesystem is default
+  - Clarified auth as "single-user mode" in DEVELOPMENT.md project structure
+  - Updated plugin types list in DEVELOPMENT.md (removed Auth Providers, added Storage Backends, Roleplay Templates, Tool Providers)
 - fix: Complete relationship remapping in native import/export system (2026-02-03)
   - Character fields now remapped: `defaultConnectionProfileId`, `defaultImageProfileId`, `defaultRoleplayTemplateId`
   - Chat participant `roleplayTemplateId` now remapped (preserves plugin template references)
