@@ -49,6 +49,8 @@ interface RngDropdownProps {
   disabled?: boolean
   /** Called to close the parent ToolPalette */
   onClose?: () => void
+  /** Button variant: 'palette' (default) for tool palette, 'gutter' for composer gutter */
+  variant?: 'palette' | 'gutter'
 }
 
 export function RngDropdown({
@@ -57,6 +59,7 @@ export function RngDropdown({
   onPendingResult,
   disabled = false,
   onClose,
+  variant = 'palette',
 }: Readonly<RngDropdownProps>) {
   const [isOpen, setIsOpen] = useState(false)
   const [isCustomOpen, setIsCustomOpen] = useState(false)
@@ -172,34 +175,45 @@ export function RngDropdown({
 
   return (
     <div className="relative" ref={dropdownRef}>
-      {/* Main button */}
+      {/* Main button - different styling for gutter vs palette */}
       <button
         type="button"
         onClick={handleToggle}
         disabled={disabled || isLoading}
-        className="qt-tool-palette-button"
+        className={variant === 'gutter' ? 'qt-composer-gutter-button' : 'qt-tool-palette-button'}
         title="Random number generator"
         aria-expanded={isOpen}
         aria-haspopup="menu"
+        aria-label="Random number generator"
       >
         {isLoading ? (
-          <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className={variant === 'gutter' ? 'w-5 h-5 animate-spin' : 'w-4 h-4 animate-spin'} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
         ) : (
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+          // Dice icon - a die showing 5 pips
+          <svg className={variant === 'gutter' ? 'w-5 h-5' : 'w-4 h-4'} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <rect x="4" y="4" width="16" height="16" rx="2" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            <circle cx="8" cy="8" r="1" fill="currentColor" />
+            <circle cx="16" cy="8" r="1" fill="currentColor" />
+            <circle cx="12" cy="12" r="1" fill="currentColor" />
+            <circle cx="8" cy="16" r="1" fill="currentColor" />
+            <circle cx="16" cy="16" r="1" fill="currentColor" />
           </svg>
         )}
-        <span>RNG</span>
-        <svg
-          className={`w-3 h-3 ml-1 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
+        {variant === 'palette' && (
+          <>
+            <span>RNG</span>
+            <svg
+              className={`w-3 h-3 ml-1 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </>
+        )}
       </button>
 
       {/* Dropdown menu */}

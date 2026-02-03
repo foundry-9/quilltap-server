@@ -3,6 +3,7 @@
 import { useRef, useEffect, useLayoutEffect, useCallback } from 'react'
 import ToolPalette from '@/components/chat/ToolPalette'
 import FormattingToolbar from '@/components/chat/FormattingToolbar'
+import ComposerGutterTools from '@/components/chat/ComposerGutterTools'
 import MessageContent from '@/components/chat/MessageContent'
 import { QuillAnimation } from '@/components/chat/QuillAnimation'
 import type { AttachedFile, PendingToolResult } from '../types'
@@ -447,13 +448,12 @@ export function ChatComposer({
           </div>
         )}
 
-        {/* Tool palette bar - shows above the composer when open */}
+        {/* Tool palette popover - shows above the composer when open */}
         <ToolPalette
           isOpen={toolPaletteOpen}
           onClose={() => setToolPaletteOpen(false)}
           toggleButtonRef={toolPaletteToggleRef}
           onGalleryClick={onGalleryClick}
-          onGenerateImageClick={onGenerateImageClick}
           onSettingsClick={onSettingsClick}
           onRenameClick={onRenameClick}
           onProjectClick={onProjectClick}
@@ -466,16 +466,10 @@ export function ChatComposer({
           onToolSettingsClick={onToolSettingsClick}
           onStateClick={onStateClick}
           chatPhotoCount={chatPhotoCount}
-          hasImageProfile={hasImageProfile}
           showAddCharacter={isSingleCharacterChat}
           chatId={id}
           chatMemoryCount={chatMemoryCount}
-          onAttachFileClick={handleAttachFileClick}
-          uploadingFile={uploadingFile}
-          showPreview={showPreview}
-          onTogglePreview={() => setShowPreview(!showPreview)}
           disabled={sending || !hasActiveCharacters}
-          onPendingToolResult={onPendingToolResult}
           agentModeEnabled={agentModeEnabled}
           onAgentModeToggle={onAgentModeToggle}
         />
@@ -488,6 +482,8 @@ export function ChatComposer({
             input={input}
             setInput={setInput}
             disabled={sending || !hasActiveCharacters}
+            showPreview={showPreview}
+            onTogglePreview={() => setShowPreview(!showPreview)}
           />
         )}
 
@@ -501,40 +497,54 @@ export function ChatComposer({
             className="hidden"
           />
 
-          {/* Tool palette toggle button - left side */}
-          <div className="qt-chat-toolbar">
-            {/* Tool palette toggle button */}
-            <button
-              ref={toolPaletteToggleRef}
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                setToolPaletteOpen(!toolPaletteOpen)
-              }}
-              className="qt-chat-toolbar-button"
-              title="Tools"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
+          {/* Left side toolbar - gutter tools, then main toolbar buttons */}
+          <div className="qt-chat-toolbar-row">
+            {/* Gutter tools - Attach, Generate, RNG */}
+            <ComposerGutterTools
+              onAttachFileClick={handleAttachFileClick}
+              uploadingFile={uploadingFile}
+              onGenerateImageClick={onGenerateImageClick}
+              hasImageProfile={hasImageProfile}
+              chatId={id}
+              onPendingToolResult={onPendingToolResult}
+              disabled={sending || !hasActiveCharacters}
+            />
 
-            {/* Document editing mode toggle button */}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                onToggleDocumentEditingMode()
-              }}
-              className={`qt-chat-toolbar-button ${documentEditingMode ? 'qt-chat-toolbar-button-active' : ''}`}
-              title={documentEditingMode
-                ? `Document mode (${isMac ? 'Cmd' : 'Ctrl'}+Enter to send)`
-                : `Chat mode (Enter to send)`}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </button>
+            {/* Main toolbar buttons - hamburger and document mode */}
+            <div className="qt-chat-toolbar">
+              {/* Tool palette toggle button */}
+              <button
+                ref={toolPaletteToggleRef}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setToolPaletteOpen(!toolPaletteOpen)
+                }}
+                className="qt-chat-toolbar-button"
+                title="Tools"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+
+              {/* Document editing mode toggle button */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onToggleDocumentEditingMode()
+                }}
+                className={`qt-chat-toolbar-button ${documentEditingMode ? 'qt-chat-toolbar-button-active' : ''}`}
+                title={documentEditingMode
+                  ? `Document mode (${isMac ? 'Cmd' : 'Ctrl'}+Enter to send)`
+                  : `Chat mode (Enter to send)`}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           {showPreview ? (

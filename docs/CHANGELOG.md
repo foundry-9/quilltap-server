@@ -4,6 +4,17 @@
 
 ### 2.10-dev
 
+- feat: Chat composer tool palette revamp
+  - Reorganized hamburger menu into four labeled sections: Chat, Organize, Edit Content, Memory
+  - Added composer gutter tools: Attach, Generate Image, and RNG now accessible as icon buttons
+  - RNG icon changed from abstract cube to recognizable dice face with pips
+  - Preview toggle moved to formatting toolbar (document editing mode)
+  - New horizontal toolbar layout with gutter tools on left, hamburger/doc-mode buttons closer to textarea
+  - Tool palette popover now aligns with hamburger button, not gutter tools
+  - Full-width mode now properly expands composer textarea to fill available space
+  - New CSS classes: `.qt-composer-gutter-tools`, `.qt-composer-gutter-button`, `.qt-tool-palette-popover`, `.qt-tool-palette-section-header`, `.qt-tool-palette-section-content`
+  - RngDropdown component now supports `variant` prop for palette vs gutter styling
+
 - feat: RNG dropdown improvements
   - Dice roll options (d6, d20) now have up/down spinner buttons to adjust count
   - Removed redundant "Roll 2d6" option since count is now adjustable

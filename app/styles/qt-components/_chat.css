@@ -165,6 +165,15 @@
   }
 
   /**
+   * Horizontal toolbar row - contains gutter tools and main toolbar
+   * Arranges items horizontally with the main toolbar buttons closest to textarea
+   */
+  .qt-chat-toolbar-row {
+    @apply flex items-end;
+    gap: 0.75rem;
+  }
+
+  /**
    * Vertical toolbar stacks for composer buttons
    */
   .qt-chat-toolbar {
@@ -280,23 +289,114 @@
   }
 
   /* ==========================================================================
-     DESKTOP TOOL PALETTE BAR
+     COMPOSER GUTTER TOOLS
      ========================================================================== */
 
   /**
-   * Tool palette bar - full-width bar above the composer textarea
-   * Positioned absolutely above the composer inner form
+   * Container for gutter tools (Attach, Generate, RNG)
+   * Displays icons horizontally with consistent spacing
    */
+  .qt-composer-gutter-tools {
+    @apply flex items-center;
+    gap: 0.5rem;
+  }
+
+  /**
+   * Gutter button - icon-only variant for quick access tools
+   * Smaller and subtler than toolbar buttons
+   */
+  .qt-composer-gutter-button {
+    @apply inline-flex items-center justify-center;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+    @apply disabled:pointer-events-none disabled:opacity-50;
+    @apply transition-colors duration-150;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border-radius: var(--radius-md);
+    border: none;
+    background: transparent;
+    color: var(--color-muted-foreground);
+    cursor: pointer;
+  }
+
+  .qt-composer-gutter-button:hover:not(:disabled) {
+    color: var(--color-foreground);
+    background: color-mix(in srgb, var(--color-muted) 50%, transparent);
+  }
+
+  .qt-composer-gutter-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /**
+   * Container for RNG dropdown in gutter - needed for proper positioning
+   */
+  .qt-composer-gutter-rng {
+    @apply relative;
+  }
+
+  /* ==========================================================================
+     DESKTOP TOOL PALETTE POPOVER
+     ========================================================================== */
+
+  /**
+   * Tool palette popover - sectioned menu above the composer
+   * Replaces the old flat bar with organized sections
+   * Left margin aligns with hamburger button (past the gutter tools)
+   */
+  .qt-tool-palette-popover {
+    @apply flex flex-col;
+    padding: 0.5rem 0;
+    background: var(--qt-chat-composer-bg);
+    border: 1px solid var(--qt-chat-composer-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--qt-card-shadow);
+    animation: qt-slide-up 150ms ease-out;
+    /* Offset to align with hamburger button (3 gutter buttons @ 2rem + gaps) */
+    margin-left: calc(6rem + 1.75rem);
+  }
+
+  /**
+   * Tool palette section - groups related tools together
+   */
+  .qt-tool-palette-section {
+    @apply flex flex-col;
+  }
+
+  .qt-tool-palette-section + .qt-tool-palette-section {
+    border-top: 1px solid var(--color-border);
+    margin-top: 0.25rem;
+    padding-top: 0.25rem;
+  }
+
+  /**
+   * Section header with icon and title
+   */
+  .qt-tool-palette-section-header {
+    @apply flex items-center gap-2;
+    @apply text-xs font-medium uppercase tracking-wide;
+    padding: 0.5rem 0.75rem 0.25rem;
+    color: var(--color-muted-foreground);
+  }
+
+  /**
+   * Section content - horizontal flow of buttons
+   */
+  .qt-tool-palette-section-content {
+    @apply flex flex-wrap items-center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.75rem 0.5rem;
+  }
+
+  /* Legacy support - keep old bar class working */
   .qt-tool-palette-bar {
     @apply flex items-center justify-center gap-2;
     padding: 0.5rem 0.75rem;
     background: var(--qt-chat-composer-bg);
     border-bottom: 1px solid var(--qt-chat-composer-border);
     animation: qt-slide-up 150ms ease-out;
-  }
-
-  .qt-tool-palette-section {
-    @apply flex items-center gap-1.5;
   }
 
   .qt-tool-palette-section-left {
@@ -444,6 +544,30 @@
    */
   .qt-formatting-button-italic {
     font-style: italic;
+  }
+
+  /**
+   * Preview button - toggle for preview mode in formatting toolbar
+   */
+  .qt-formatting-button-preview {
+    @apply flex items-center justify-center;
+    min-width: 1.75rem;
+    height: 1.75rem;
+    padding: 0 0.375rem;
+  }
+
+  /**
+   * Preview button active state - highlighted when preview is on
+   */
+  .qt-formatting-button-preview-active {
+    background: var(--color-primary);
+    color: var(--color-primary-foreground);
+    border-color: var(--color-primary);
+  }
+
+  .qt-formatting-button-preview-active:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-primary) 85%, black);
+    border-color: color-mix(in srgb, var(--color-primary) 85%, black);
   }
 
   /**
@@ -1322,4 +1446,12 @@
 .qt-chat-composer {
   padding-top: 0.625rem;
   padding-bottom: 1.25rem;
+}
+
+/* Full-width mode: popover margin stays the same (gutter tools width) */
+/* but the composer-content max-width is 100%, allowing textarea to expand */
+:root[data-full-width="true"] .qt-chat-composer-content {
+  max-width: 100%;
+  padding-left: 1rem;
+  padding-right: 1rem;
 }
