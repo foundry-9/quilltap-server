@@ -1,7 +1,7 @@
 /**
  * Grok Image Generation Provider Implementation for Quilltap Plugin
  *
- * Supports: grok-imagine-image
+ * Supports: grok-2-image
  * API: POST /v1/images/generations (compatible with OpenAI SDK)
  */
 
@@ -14,7 +14,7 @@ const logger = createPluginLogger('qtap-plugin-grok');
 
 export class GrokImageProvider implements ImageGenProviderBase {
   readonly provider = 'GROK';
-  readonly supportedModels = ['grok-imagine-image'];
+  readonly supportedModels = ['grok-2-image'];
 
   private baseUrl = 'https://api.x.ai/v1';
 
@@ -30,7 +30,7 @@ export class GrokImageProvider implements ImageGenProviderBase {
 
     // Build request params - Grok uses aspect_ratio instead of size
     const requestParams: Images.ImageGenerateParams & { aspect_ratio?: string } = {
-      model: params.model ?? 'grok-imagine-image',
+      model: params.model ?? 'grok-2-image',
       prompt: params.prompt,
       n: params.n ?? 1,
       response_format: 'b64_json',

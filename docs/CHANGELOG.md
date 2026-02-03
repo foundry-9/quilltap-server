@@ -4,6 +4,16 @@
 
 ### 2.9-dev
 
+- feat: Grok plugin migrated to xAI Responses API (2026-02-02)
+  - Migrated from deprecated Chat Completions API to Responses API (`/v1/responses`)
+  - Uses direct HTTP (fetch) instead of OpenAI SDK for chat (SDK doesn't support Responses API)
+  - Added new models: grok-4, grok-4-1-fast (2M context), grok-3, grok-3-mini, grok-2-1212, grok-code-fast-1
+  - Web search now uses server-side tools (web_search, x_search) instead of deprecated Live Search API
+  - Image format changed from `image_url` to `input_image` for Responses API compatibility
+  - Always uses `store: false` for stateless operation (Quilltap manages history locally)
+  - Updated cheapModels to use grok-3-mini as default
+  - Image generation model updated to grok-2-image
+  - Plugin version bumped to 1.0.14
 - refactor: Dead code removal and qt-* theme class standardization (2026-02-02)
   - Removed unused functions from lib/avatar-styles.ts: getAvatarAspectRatioStyle, getAvatarMarginClass
   - Removed unused function from lib/chat/connection-resolver.ts: hasResolvableConnectionProfile

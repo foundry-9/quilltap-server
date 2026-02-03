@@ -92,8 +92,8 @@ const messageFormat = {
  * Cheap model configuration for background tasks
  */
 const cheapModels = {
-  defaultModel: 'grok-2-mini',
-  recommendedModels: ['grok-2-mini'],
+  defaultModel: 'grok-3-mini',
+  recommendedModels: ['grok-3-mini', 'grok-4-1-fast'],
 };
 
 /**
@@ -166,24 +166,56 @@ export const plugin: LLMProviderPlugin = {
   getModelInfo: () => {
     return [
       {
-        id: 'grok-2',
-        name: 'Grok-2',
-        contextWindow: 128000,
+        id: 'grok-4',
+        name: 'Grok 4',
+        contextWindow: 131072,
+        maxOutputTokens: 16384,
+        supportsImages: true,
+        supportsTools: true,
+      },
+      {
+        id: 'grok-4-1-fast',
+        name: 'Grok 4.1 Fast',
+        contextWindow: 2097152,
+        maxOutputTokens: 16384,
+        supportsImages: true,
+        supportsTools: true,
+      },
+      {
+        id: 'grok-3',
+        name: 'Grok 3',
+        contextWindow: 131072,
+        maxOutputTokens: 16384,
+        supportsImages: true,
+        supportsTools: true,
+      },
+      {
+        id: 'grok-3-mini',
+        name: 'Grok 3 Mini',
+        contextWindow: 131072,
+        maxOutputTokens: 16384,
+        supportsImages: true,
+        supportsTools: true,
+      },
+      {
+        id: 'grok-2-1212',
+        name: 'Grok 2 (1212)',
+        contextWindow: 131072,
         maxOutputTokens: 4096,
         supportsImages: true,
         supportsTools: true,
       },
       {
-        id: 'grok-2-vision-1212',
-        name: 'Grok-2 Vision',
-        contextWindow: 128000,
-        maxOutputTokens: 4096,
-        supportsImages: true,
+        id: 'grok-code-fast-1',
+        name: 'Grok Code Fast',
+        contextWindow: 262144,
+        maxOutputTokens: 16384,
+        supportsImages: false,
         supportsTools: true,
       },
       {
-        id: 'grok-imagine-image',
-        name: 'Grok Imagine Image',
+        id: 'grok-2-image',
+        name: 'Grok 2 Image',
         contextWindow: 2048,
         maxOutputTokens: 1024,
         supportsImages: false,

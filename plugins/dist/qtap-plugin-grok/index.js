@@ -6923,51 +6923,61 @@ var GrokProvider = class {
     this.supportsImageGeneration = true;
     this.supportsWebSearch = true;
   }
-  formatMessagesWithAttachments(messages) {
+  /**
+   * Format messages from LLMMessage format to Responses API format
+   * Handles text, image attachments, and role conversion
+   */
+  formatMessagesForResponsesAPI(messages) {
     const sent = [];
     const failed = [];
     const filteredMessages = messages.filter((m) => m.role !== "tool");
-    const formattedMessages = filteredMessages.map((msg) => {
-      if (!msg.attachments || msg.attachments.length === 0) {
+    const input = filteredMessages.map((msg) => {
+      if (msg.role === "system") {
         return {
-          role: msg.role,
+          type: "message",
+          role: "system",
+          content: msg.content
+        };
+      }
+      if (msg.role === "assistant") {
+        return {
+          type: "message",
+          role: "assistant",
           content: msg.content
         };
       }
       const content = [];
       if (msg.content) {
-        content.push({ type: "text", text: msg.content });
+        content.push({ type: "input_text", text: msg.content });
       }
-      for (const attachment of msg.attachments) {
-        if (!this.supportedMimeTypes.includes(attachment.mimeType)) {
-          failed.push({
-            id: attachment.id,
-            error: `Unsupported file type: ${attachment.mimeType}. Grok supports: ${this.supportedMimeTypes.join(", ")}`
-          });
-          continue;
-        }
-        if (!attachment.data) {
-          failed.push({
-            id: attachment.id,
-            error: "File data not loaded"
-          });
-          continue;
-        }
-        if (attachment.mimeType.startsWith("image/")) {
-          content.push({
-            type: "image_url",
-            image_url: {
-              url: `data:${attachment.mimeType};base64,${attachment.data}`,
+      if (msg.attachments && msg.attachments.length > 0) {
+        for (const attachment of msg.attachments) {
+          if (!this.supportedMimeTypes.includes(attachment.mimeType)) {
+            failed.push({
+              id: attachment.id,
+              error: `Unsupported file type: ${attachment.mimeType}. Grok supports: ${this.supportedMimeTypes.join(", ")}`
+            });
+            continue;
+          }
+          if (!attachment.data) {
+            failed.push({
+              id: attachment.id,
+              error: "File data not loaded"
+            });
+            continue;
+          }
+          if (attachment.mimeType.startsWith("image/")) {
+            content.push({
+              type: "input_image",
+              image_url: `data:${attachment.mimeType};base64,${attachment.data}`,
               detail: "auto"
-            }
-          });
-          sent.push(attachment.id);
-        } else {
-          if (attachment.mimeType.startsWith("text/")) {
+            });
+            sent.push(attachment.id);
+          } else if (attachment.mimeType.startsWith("text/")) {
             try {
               const textContent = Buffer.from(attachment.data, "base64").toString("utf-8");
               content.push({
-                type: "text",
+                type: "input_text",
                 text: `[File: ${attachment.filename}]
 ${textContent}`
               });
@@ -6986,59 +6996,188 @@ ${textContent}`
           }
         }
       }
+      if (content.length === 0) {
+        content.push({ type: "input_text", text: "" });
+      }
       return {
-        role: msg.role,
-        content: content.length > 0 ? content : msg.content
+        type: "message",
+        role: "user",
+        content
       };
     });
-    return { messages: formattedMessages, attachmentResults: { sent, failed } };
+    return { input, attachmentResults: { sent, failed } };
+  }
+  /**
+   * Convert OpenAI-format tools to Responses API function tools
+   */
+  formatToolsForResponsesAPI(tools) {
+    if (!tools || tools.length === 0) return [];
+    return tools.map((tool) => {
+      const openAITool = tool;
+      const fn = openAITool.function;
+      return {
+        type: "function",
+        name: fn.name,
+        description: fn.description,
+        parameters: fn.parameters,
+        strict: false
+      };
+    });
+  }
+  /**
+   * Extract text content from Responses API response
+   */
+  extractTextFromResponse(response) {
+    let text = "";
+    for (const item of response.output) {
+      if (item.type === "message") {
+        for (const content of item.content) {
+          if (content.type === "output_text") {
+            text += content.text;
+          }
+        }
+      }
+    }
+    return text;
+  }
+  /**
+   * Build raw response object compatible with OpenAI format for tool parsing
+   */
+  buildRawResponse(response) {
+    const toolCalls = [];
+    for (const item of response.output) {
+      if (item.type === "function_call") {
+        toolCalls.push({
+          id: item.call_id,
+          type: "function",
+          function: {
+            name: item.name,
+            arguments: item.arguments
+          }
+        });
+      }
+    }
+    return {
+      id: response.id,
+      object: "chat.completion",
+      created: response.created_at,
+      model: response.model,
+      choices: [{
+        index: 0,
+        message: {
+          role: "assistant",
+          content: this.extractTextFromResponse(response),
+          tool_calls: toolCalls.length > 0 ? toolCalls : void 0
+        },
+        finish_reason: toolCalls.length > 0 ? "tool_calls" : "stop"
+      }],
+      usage: {
+        prompt_tokens: response.usage.input_tokens,
+        completion_tokens: response.usage.output_tokens,
+        total_tokens: response.usage.total_tokens
+      }
+    };
+  }
+  /**
+   * Determine finish reason from response
+   */
+  getFinishReason(response) {
+    for (const item of response.output) {
+      if (item.type === "function_call") {
+        return "tool_calls";
+      }
+    }
+    if (response.status === "completed") {
+      return "stop";
+    }
+    if (response.status === "incomplete") {
+      return response.incomplete_details?.reason || "length";
+    }
+    if (response.status === "failed") {
+      return "error";
+    }
+    return "stop";
   }
   async sendMessage(params, apiKey) {
     if (!apiKey) {
       throw new Error("Grok provider requires an API key");
     }
-    const client = new OpenAI({
-      apiKey,
-      baseURL: this.baseUrl
-    });
-    const { messages, attachmentResults } = this.formatMessagesWithAttachments(params.messages);
-    const requestParams = {
+    logger.debug("Sending message via Responses API", {
+      context: "GrokProvider.sendMessage",
       model: params.model,
-      messages,
+      messageCount: params.messages.length,
+      hasTools: !!(params.tools && params.tools.length > 0),
+      webSearchEnabled: params.webSearchEnabled
+    });
+    const { input, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
+    const requestBody = {
+      model: params.model,
+      input,
+      store: false,
+      // Stateless operation - Quilltap manages history locally
       temperature: params.temperature ?? 0.7,
-      max_tokens: params.maxTokens ?? 4096,
-      top_p: params.topP ?? 1,
-      stop: params.stop
+      max_output_tokens: params.maxTokens ?? 4096,
+      top_p: params.topP ?? 1
     };
-    if (params.tools && params.tools.length > 0) {
-      requestParams.tools = params.tools;
-      requestParams.tool_choice = "auto";
+    if (params.stop) {
+      requestBody.stop = Array.isArray(params.stop) ? params.stop : [params.stop];
     }
+    const tools = [];
     if (params.webSearchEnabled) {
-      requestParams.search_parameters = {
-        mode: "auto",
-        // Model decides when to search
-        return_citations: true,
-        max_search_results: 20,
-        // Sources must be objects with a "type" field, not plain strings
-        sources: [
-          { type: "web" },
-          { type: "x" },
-          { type: "news" }
-        ]
-      };
+      tools.push({ type: "web_search" });
+      tools.push({ type: "x_search" });
+      requestBody.include = ["citations"];
+      logger.debug("Web search enabled with server-side tools", {
+        context: "GrokProvider.sendMessage"
+      });
     }
-    const response = await client.chat.completions.create(requestParams);
-    const choice = response.choices[0];
-    return {
-      content: choice.message.content ?? "",
-      finishReason: choice.finish_reason,
-      usage: {
-        promptTokens: response.usage?.prompt_tokens ?? 0,
-        completionTokens: response.usage?.completion_tokens ?? 0,
-        totalTokens: response.usage?.total_tokens ?? 0
+    if (params.tools && params.tools.length > 0) {
+      const functionTools = this.formatToolsForResponsesAPI(params.tools);
+      tools.push(...functionTools);
+      logger.debug("Function tools added", {
+        context: "GrokProvider.sendMessage",
+        toolCount: functionTools.length
+      });
+    }
+    if (tools.length > 0) {
+      requestBody.tools = tools;
+    }
+    const response = await fetch(`${this.baseUrl}/responses`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
       },
-      raw: response,
+      body: JSON.stringify(requestBody)
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      logger.error("Responses API request failed", {
+        context: "GrokProvider.sendMessage",
+        status: response.status,
+        error: errorText
+      });
+      throw new Error(`Grok API error (${response.status}): ${errorText}`);
+    }
+    const data = await response.json();
+    logger.debug("Received response from Responses API", {
+      context: "GrokProvider.sendMessage",
+      responseId: data.id,
+      status: data.status,
+      outputCount: data.output.length
+    });
+    const text = this.extractTextFromResponse(data);
+    const finishReason = this.getFinishReason(data);
+    const raw = this.buildRawResponse(data);
+    return {
+      content: text,
+      finishReason,
+      usage: {
+        promptTokens: data.usage.input_tokens,
+        completionTokens: data.usage.output_tokens,
+        totalTokens: data.usage.total_tokens
+      },
+      raw,
       attachmentResults
     };
   }
@@ -7046,117 +7185,138 @@ ${textContent}`
     if (!apiKey) {
       throw new Error("Grok provider requires an API key");
     }
-    const client = new OpenAI({
-      apiKey,
-      baseURL: this.baseUrl
-    });
-    const { messages, attachmentResults } = this.formatMessagesWithAttachments(params.messages);
-    const requestParams = {
+    logger.debug("Starting streaming message via Responses API", {
+      context: "GrokProvider.streamMessage",
       model: params.model,
-      messages,
+      messageCount: params.messages.length,
+      hasTools: !!(params.tools && params.tools.length > 0),
+      webSearchEnabled: params.webSearchEnabled
+    });
+    const { input, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
+    const requestBody = {
+      model: params.model,
+      input,
+      store: false,
       temperature: params.temperature ?? 0.7,
-      max_tokens: params.maxTokens ?? 4096,
+      max_output_tokens: params.maxTokens ?? 4096,
       top_p: params.topP ?? 1,
-      stream: true,
-      stream_options: { include_usage: true }
+      stream: true
     };
-    if (params.tools && params.tools.length > 0) {
-      requestParams.tools = params.tools;
-      requestParams.tool_choice = "auto";
+    if (params.stop) {
+      requestBody.stop = Array.isArray(params.stop) ? params.stop : [params.stop];
     }
+    const tools = [];
     if (params.webSearchEnabled) {
-      requestParams.search_parameters = {
-        mode: "auto",
-        return_citations: true,
-        max_search_results: 20,
-        // Sources must be objects with a "type" field, not plain strings
-        sources: [
-          { type: "web" },
-          { type: "x" },
-          { type: "news" }
-        ]
-      };
+      tools.push({ type: "web_search" });
+      tools.push({ type: "x_search" });
+      requestBody.include = ["citations"];
     }
-    const stream = await client.chat.completions.create(requestParams);
-    let fullMessage = {
-      choices: [{
-        message: {
-          role: "assistant",
-          content: "",
-          tool_calls: []
-        },
-        finish_reason: null
-      }],
-      usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
-    };
-    let chunkCount = 0;
-    let finishReasonSeen = false;
-    let usageSeen = false;
-    for await (const chunk of stream) {
-      chunkCount++;
-      const delta = chunk.choices?.[0]?.delta;
-      const content = delta?.content;
-      const finishReason = chunk.choices?.[0]?.finish_reason;
-      const hasUsage = chunk.usage;
-      if (content) {
-        fullMessage.choices[0].message.content += content;
-      }
-      if (delta?.tool_calls) {
-        for (const toolCall of delta.tool_calls) {
-          const index = toolCall.index ?? 0;
-          if (!fullMessage.choices[0].message.tool_calls[index]) {
-            fullMessage.choices[0].message.tool_calls[index] = {
-              id: "",
-              type: "function",
-              function: { name: "", arguments: "" }
-            };
+    if (params.tools && params.tools.length > 0) {
+      const functionTools = this.formatToolsForResponsesAPI(params.tools);
+      tools.push(...functionTools);
+    }
+    if (tools.length > 0) {
+      requestBody.tools = tools;
+    }
+    const response = await fetch(`${this.baseUrl}/responses`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(requestBody)
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      logger.error("Streaming Responses API request failed", {
+        context: "GrokProvider.streamMessage",
+        status: response.status,
+        error: errorText
+      });
+      throw new Error(`Grok API error (${response.status}): ${errorText}`);
+    }
+    if (!response.body) {
+      throw new Error("No response body received from Grok API");
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let accumulatedContent = "";
+    let finalResponse = null;
+    const functionCallArgs = /* @__PURE__ */ new Map();
+    const functionCallItems = /* @__PURE__ */ new Map();
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const data = line.slice(6).trim();
+            if (data === "[DONE]") {
+              continue;
+            }
+            try {
+              const event = JSON.parse(data);
+              if (event.type === "response.output_text.delta") {
+                const delta = event.delta;
+                accumulatedContent += delta;
+                yield {
+                  content: delta,
+                  done: false
+                };
+              } else if (event.type === "response.output_item.added") {
+                const addedEvent = event;
+                if (addedEvent.item.type === "function_call") {
+                  functionCallItems.set(addedEvent.item.id, addedEvent.item);
+                  functionCallArgs.set(addedEvent.item.id, "");
+                }
+              } else if (event.type === "response.function_call_arguments.delta") {
+                const fcDelta = event;
+                const existing = functionCallArgs.get(fcDelta.item_id) || "";
+                functionCallArgs.set(fcDelta.item_id, existing + fcDelta.delta);
+              } else if (event.type === "response.completed") {
+                finalResponse = event.response;
+              }
+            } catch (parseError) {
+              logger.debug("Failed to parse SSE event", {
+                context: "GrokProvider.streamMessage",
+                data
+              });
+            }
           }
-          if (toolCall.id) fullMessage.choices[0].message.tool_calls[index].id = toolCall.id;
-          if (toolCall.function?.name) fullMessage.choices[0].message.tool_calls[index].function.name = toolCall.function.name;
-          if (toolCall.function?.arguments) fullMessage.choices[0].message.tool_calls[index].function.arguments += toolCall.function.arguments;
         }
       }
-      if (finishReason) {
-        fullMessage.choices[0].finish_reason = finishReason;
-        finishReasonSeen = true;
-      }
-      if (hasUsage) {
-        fullMessage.usage = chunk.usage;
-        usageSeen = true;
-      }
-      const isFinalChunk = finishReasonSeen && usageSeen;
-      const isToolCallsChunk = finishReasonSeen && finishReason === "tool_calls";
-      if (content && !isFinalChunk && !isToolCallsChunk) {
-        yield {
-          content,
-          done: false
-        };
-      }
-      if (finishReasonSeen && finishReason === "tool_calls" && !usageSeen) {
-        yield {
-          content: "",
-          done: true,
-          usage: {
-            promptTokens: fullMessage.usage?.prompt_tokens ?? 0,
-            completionTokens: fullMessage.usage?.completion_tokens ?? 0,
-            totalTokens: fullMessage.usage?.total_tokens ?? 0
-          },
-          attachmentResults,
-          rawResponse: fullMessage
-        };
-      } else if (finishReasonSeen && usageSeen) {
-        yield {
-          content: "",
-          done: true,
-          usage: {
-            promptTokens: fullMessage.usage?.prompt_tokens ?? 0,
-            completionTokens: fullMessage.usage?.completion_tokens ?? 0,
-            totalTokens: fullMessage.usage?.total_tokens ?? 0
-          },
-          attachmentResults,
-          rawResponse: fullMessage
-        };
-      }
+    } finally {
+      reader.releaseLock();
+    }
+    if (finalResponse) {
+      const raw = this.buildRawResponse(finalResponse);
+      const finishReason = this.getFinishReason(finalResponse);
+      yield {
+        content: "",
+        done: true,
+        usage: {
+          promptTokens: finalResponse.usage.input_tokens,
+          completionTokens: finalResponse.usage.output_tokens,
+          totalTokens: finalResponse.usage.total_tokens
+        },
+        attachmentResults,
+        rawResponse: raw
+      };
+    } else {
+      yield {
+        content: "",
+        done: true,
+        usage: {
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0
+        },
+        attachmentResults
+      };
     }
   }
   async validateApiKey(apiKey) {
@@ -7166,6 +7326,9 @@ ${textContent}`
         baseURL: this.baseUrl
       });
       await client.models.list();
+      logger.debug("API key validated successfully", {
+        context: "GrokProvider.validateApiKey"
+      });
       return true;
     } catch (error) {
       logger.error("Grok API key validation failed", { context: "GrokProvider.validateApiKey" }, error instanceof Error ? error : void 0);
@@ -7180,6 +7343,10 @@ ${textContent}`
       });
       const models = await client.models.list();
       const grokModels = models.data.map((m) => m.id).sort();
+      logger.debug("Fetched available models", {
+        context: "GrokProvider.getAvailableModels",
+        modelCount: grokModels.length
+      });
       return grokModels;
     } catch (error) {
       logger.error("Failed to fetch Grok models", { context: "GrokProvider.getAvailableModels" }, error instanceof Error ? error : void 0);
@@ -7190,6 +7357,10 @@ ${textContent}`
     if (!apiKey) {
       throw new Error("Grok provider requires an API key");
     }
+    logger.debug("Generating image", {
+      context: "GrokProvider.generateImage",
+      model: params.model ?? "grok-2-image"
+    });
     const client = new OpenAI({
       apiKey,
       baseURL: this.baseUrl
@@ -7224,7 +7395,7 @@ var logger2 = createPluginLogger("qtap-plugin-grok");
 var GrokImageProvider = class {
   constructor() {
     this.provider = "GROK";
-    this.supportedModels = ["grok-imagine-image"];
+    this.supportedModels = ["grok-2-image"];
     this.baseUrl = "https://api.x.ai/v1";
   }
   async generateImage(params, apiKey) {
@@ -7236,7 +7407,7 @@ var GrokImageProvider = class {
       baseURL: this.baseUrl
     });
     const requestParams = {
-      model: params.model ?? "grok-imagine-image",
+      model: params.model ?? "grok-2-image",
       prompt: params.prompt,
       n: params.n ?? 1,
       response_format: "b64_json"
@@ -7319,8 +7490,8 @@ var messageFormat = {
   maxNameLength: 64
 };
 var cheapModels = {
-  defaultModel: "grok-2-mini",
-  recommendedModels: ["grok-2-mini"]
+  defaultModel: "grok-3-mini",
+  recommendedModels: ["grok-3-mini", "grok-4-1-fast"]
 };
 var plugin = {
   metadata,
@@ -7380,24 +7551,56 @@ var plugin = {
   getModelInfo: () => {
     return [
       {
-        id: "grok-2",
-        name: "Grok-2",
-        contextWindow: 128e3,
+        id: "grok-4",
+        name: "Grok 4",
+        contextWindow: 131072,
+        maxOutputTokens: 16384,
+        supportsImages: true,
+        supportsTools: true
+      },
+      {
+        id: "grok-4-1-fast",
+        name: "Grok 4.1 Fast",
+        contextWindow: 2097152,
+        maxOutputTokens: 16384,
+        supportsImages: true,
+        supportsTools: true
+      },
+      {
+        id: "grok-3",
+        name: "Grok 3",
+        contextWindow: 131072,
+        maxOutputTokens: 16384,
+        supportsImages: true,
+        supportsTools: true
+      },
+      {
+        id: "grok-3-mini",
+        name: "Grok 3 Mini",
+        contextWindow: 131072,
+        maxOutputTokens: 16384,
+        supportsImages: true,
+        supportsTools: true
+      },
+      {
+        id: "grok-2-1212",
+        name: "Grok 2 (1212)",
+        contextWindow: 131072,
         maxOutputTokens: 4096,
         supportsImages: true,
         supportsTools: true
       },
       {
-        id: "grok-2-vision-1212",
-        name: "Grok-2 Vision",
-        contextWindow: 128e3,
-        maxOutputTokens: 4096,
-        supportsImages: true,
+        id: "grok-code-fast-1",
+        name: "Grok Code Fast",
+        contextWindow: 262144,
+        maxOutputTokens: 16384,
+        supportsImages: false,
         supportsTools: true
       },
       {
-        id: "grok-imagine-image",
-        name: "Grok Imagine Image",
+        id: "grok-2-image",
+        name: "Grok 2 Image",
         contextWindow: 2048,
         maxOutputTokens: 1024,
         supportsImages: false,
