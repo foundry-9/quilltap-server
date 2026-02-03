@@ -15,6 +15,7 @@ import { logger } from '@/lib/logger';
 import type { LLMProviderPlugin, ProviderMetadata, AttachmentSupport, ProviderConfigRequirements, ImageProviderConstraints, MessageFormatSupport, CheapModelConfig, ToolFormatType } from './interfaces/provider-plugin';
 import type { LLMProvider } from '@/lib/llm/base';
 import type { ImageGenProvider } from '@/lib/image-gen/base';
+import type { EmbeddingProvider, LocalEmbeddingProvider } from '@quilltap/plugin-types';
 import { getErrorMessage } from '@/lib/errors';
 import type { PluginManifest } from '@/lib/schemas/plugin-manifest';
 import { resolve, join } from 'node:path';
@@ -262,6 +263,45 @@ class ProviderRegistry {
       return plugin.createImageProvider(baseUrl);
     } catch (error) {
       this.logger.error('Failed to create image provider', {
+        provider: name,
+        error: getErrorMessage(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Create an EmbeddingProvider instance from a registered plugin
+   *
+   * @param name The provider name
+   * @param baseUrl Optional base URL for providers that support custom endpoints
+   * @returns An instantiated EmbeddingProvider or LocalEmbeddingProvider
+   * @throws Error if provider not found, doesn't support embeddings, or creation fails
+   */
+  createEmbeddingProvider(name: string, baseUrl?: string): EmbeddingProvider | LocalEmbeddingProvider {
+    const plugin = this.getProvider(name);
+    if (!plugin) {
+      const error = `Provider '${name}' not found in registry`;
+      this.logger.error(error);
+      throw new Error(error);
+    }
+
+    if (!plugin.capabilities.embeddings) {
+      const error = `Provider '${name}' does not support embeddings`;
+      this.logger.warn(error);
+      throw new Error(error);
+    }
+
+    if (!plugin.createEmbeddingProvider) {
+      const error = `Provider '${name}' does not implement createEmbeddingProvider`;
+      this.logger.error(error);
+      throw new Error(error);
+    }
+
+    try {
+      return plugin.createEmbeddingProvider(baseUrl);
+    } catch (error) {
+      this.logger.error('Failed to create embedding provider', {
         provider: name,
         error: getErrorMessage(error),
       });
@@ -752,6 +792,17 @@ export function createLLMProvider(name: string, baseUrl?: string): LLMProvider {
  */
 export function createImageProvider(name: string, baseUrl?: string): ImageGenProvider {
   return providerRegistry.createImageProvider(name, baseUrl);
+}
+
+/**
+ * Create an EmbeddingProvider instance
+ *
+ * @param name The provider name
+ * @param baseUrl Optional base URL
+ * @returns Instantiated EmbeddingProvider or LocalEmbeddingProvider
+ */
+export function createEmbeddingProvider(name: string, baseUrl?: string): EmbeddingProvider | LocalEmbeddingProvider {
+  return providerRegistry.createEmbeddingProvider(name, baseUrl);
 }
 
 /**

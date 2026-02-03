@@ -4,6 +4,17 @@
 
 ### 2.9-dev
 
+- refactor: Embedding service now uses plugin architecture (2026-02-02)
+  - Embedding providers now delegate to plugins via `createEmbeddingProvider()` factory method
+  - Added `EmbeddingProvider` interface support to `LLMProviderPlugin`
+  - Created `OpenAIEmbeddingProvider` class in qtap-plugin-openai
+  - Created `OllamaEmbeddingProvider` class in qtap-plugin-ollama
+  - OpenRouter already had `OpenRouterEmbeddingProvider`, verified working
+  - Built-in TF-IDF provider already implemented as `LocalEmbeddingProvider`
+  - Registry now has `createEmbeddingProvider()` method matching `createImageProvider()` pattern
+  - Plugin factory exports `createEmbeddingProvider()` and `getAllAvailableEmbeddingProviders()`
+  - Removed hardcoded provider handlers from embedding-service.ts
+  - Updated plugin versions: openai 1.0.16, ollama 1.0.10
 - feat: Grok plugin migrated to xAI Responses API (2026-02-02)
   - Migrated from deprecated Chat Completions API to Responses API (`/v1/responses`)
   - Uses direct HTTP (fetch) instead of OpenAI SDK for chat (SDK doesn't support Responses API)

@@ -11,6 +11,7 @@
 import { logger } from '@/lib/logger';
 import type { LLMProvider } from '@/lib/llm/base';
 import type { ImageGenProvider } from '@/lib/image-gen/base';
+import type { EmbeddingProvider, LocalEmbeddingProvider } from '@quilltap/plugin-types';
 
 /**
  * Provider metadata for UI display and identification
@@ -451,9 +452,9 @@ export interface LLMProviderPlugin {
    * Only required if `capabilities.embeddings` is true.
    *
    * @param baseUrl Optional base URL for the provider
-   * @returns An instantiated embedding provider
+   * @returns An instantiated embedding provider (EmbeddingProvider for API-based, LocalEmbeddingProvider for offline)
    */
-  createEmbeddingProvider?: (baseUrl?: string) => unknown;
+  createEmbeddingProvider?: (baseUrl?: string) => EmbeddingProvider | LocalEmbeddingProvider;
 
   /**
    * Get list of available models for this provider

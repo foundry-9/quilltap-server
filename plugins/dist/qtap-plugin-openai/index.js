@@ -948,11 +948,11 @@ var parseLogLevel = (maybeLevel, sourceName, client) => {
 };
 function noop() {
 }
-function makeLogFn(fnLevel, logger4, logLevel) {
-  if (!logger4 || levelNumbers[fnLevel] > levelNumbers[logLevel]) {
+function makeLogFn(fnLevel, logger5, logLevel) {
+  if (!logger5 || levelNumbers[fnLevel] > levelNumbers[logLevel]) {
     return noop;
   } else {
-    return logger4[fnLevel].bind(logger4);
+    return logger5[fnLevel].bind(logger5);
   }
 }
 var noopLogger = {
@@ -963,22 +963,22 @@ var noopLogger = {
 };
 var cachedLoggers = /* @__PURE__ */ new WeakMap();
 function loggerFor(client) {
-  const logger4 = client.logger;
+  const logger5 = client.logger;
   const logLevel = client.logLevel ?? "off";
-  if (!logger4) {
+  if (!logger5) {
     return noopLogger;
   }
-  const cachedLogger = cachedLoggers.get(logger4);
+  const cachedLogger = cachedLoggers.get(logger5);
   if (cachedLogger && cachedLogger[0] === logLevel) {
     return cachedLogger[1];
   }
   const levelLogger = {
-    error: makeLogFn("error", logger4, logLevel),
-    warn: makeLogFn("warn", logger4, logLevel),
-    info: makeLogFn("info", logger4, logLevel),
-    debug: makeLogFn("debug", logger4, logLevel)
+    error: makeLogFn("error", logger5, logLevel),
+    warn: makeLogFn("warn", logger5, logLevel),
+    info: makeLogFn("info", logger5, logLevel),
+    debug: makeLogFn("debug", logger5, logLevel)
   };
-  cachedLoggers.set(logger4, [logLevel, levelLogger]);
+  cachedLoggers.set(logger5, [logLevel, levelLogger]);
   return levelLogger;
 }
 var formatRequestDetails = (details) => {
@@ -1012,7 +1012,7 @@ var Stream = class _Stream {
   }
   static fromSSEResponse(response, controller, client) {
     let consumed = false;
-    const logger4 = client ? loggerFor(client) : console;
+    const logger5 = client ? loggerFor(client) : console;
     async function* iterator() {
       if (consumed) {
         throw new OpenAIError("Cannot iterate over a consumed stream, use `.tee()` to split the stream.");
@@ -1032,8 +1032,8 @@ var Stream = class _Stream {
             try {
               data = JSON.parse(sse.data);
             } catch (e) {
-              logger4.error(`Could not parse message into JSON:`, sse.data);
-              logger4.error(`From chunk:`, sse.raw);
+              logger5.error(`Could not parse message into JSON:`, sse.data);
+              logger5.error(`From chunk:`, sse.raw);
               throw e;
             }
             if (data && data.error) {
@@ -6865,7 +6865,7 @@ function createConsoleLoggerWithChild(prefix, minLevel = "debug", baseContext = 
     const entries = Object.entries(merged).filter(([key]) => key !== "context").map(([key, value]) => `${key}=${JSON.stringify(value)}`).join(" ");
     return entries ? ` ${entries}` : "";
   };
-  const logger4 = {
+  const logger5 = {
     debug: (message, context) => {
       if (shouldLog("debug")) {
         console.debug(`[${prefix}] ${message}${formatContext(context)}`);
@@ -6897,7 +6897,7 @@ ${error.stack || error.message}` : ""
       });
     }
   };
-  return logger4;
+  return logger5;
 }
 function createPluginLogger(pluginName, minLevel = "debug") {
   const coreFactory = getCoreLoggerFactory();
@@ -7275,8 +7275,178 @@ var OpenAIImageProvider = class {
   }
 };
 
-// index.ts
+// embedding-provider.ts
 var logger3 = createPluginLogger("qtap-plugin-openai");
+var OpenAIEmbeddingProvider = class {
+  constructor(baseUrl) {
+    this.baseUrl = baseUrl || "https://api.openai.com/v1";
+  }
+  /**
+   * Generate an embedding for the given text
+   *
+   * @param text The text to embed
+   * @param model The model to use (e.g., 'text-embedding-3-small')
+   * @param apiKey The OpenAI API key
+   * @param options Optional configuration (dimensions)
+   * @returns The embedding result
+   */
+  async generateEmbedding(text, model, apiKey, options) {
+    logger3.debug("Generating OpenAI embedding", {
+      context: "OpenAIEmbeddingProvider.generateEmbedding",
+      model,
+      textLength: text.length,
+      dimensions: options?.dimensions
+    });
+    const requestPayload = {
+      model,
+      input: text
+    };
+    if (options?.dimensions) {
+      requestPayload.dimensions = options.dimensions;
+    }
+    const response = await fetch(`${this.baseUrl}/embeddings`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(requestPayload)
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      const errorMessage = error.error?.message || response.statusText;
+      logger3.error("OpenAI embedding failed", {
+        context: "OpenAIEmbeddingProvider.generateEmbedding",
+        status: response.status,
+        error: errorMessage
+      });
+      throw new Error(`OpenAI embedding failed: ${errorMessage}`);
+    }
+    const data = await response.json();
+    const embedding = data.data[0].embedding;
+    logger3.debug("OpenAI embedding generated successfully", {
+      context: "OpenAIEmbeddingProvider.generateEmbedding",
+      model,
+      dimensions: embedding.length
+    });
+    return {
+      embedding,
+      model,
+      dimensions: embedding.length,
+      usage: data.usage ? {
+        promptTokens: data.usage.prompt_tokens,
+        totalTokens: data.usage.total_tokens
+      } : void 0
+    };
+  }
+  /**
+   * Generate embeddings for multiple texts in a batch
+   *
+   * @param texts Array of texts to embed
+   * @param model The model to use
+   * @param apiKey The OpenAI API key
+   * @param options Optional configuration
+   * @returns Array of embedding results
+   */
+  async generateBatchEmbeddings(texts, model, apiKey, options) {
+    logger3.debug("Generating batch OpenAI embeddings", {
+      context: "OpenAIEmbeddingProvider.generateBatchEmbeddings",
+      model,
+      count: texts.length,
+      dimensions: options?.dimensions
+    });
+    const requestPayload = {
+      model,
+      input: texts
+    };
+    if (options?.dimensions) {
+      requestPayload.dimensions = options.dimensions;
+    }
+    const response = await fetch(`${this.baseUrl}/embeddings`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(requestPayload)
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      const errorMessage = error.error?.message || response.statusText;
+      logger3.error("OpenAI batch embedding failed", {
+        context: "OpenAIEmbeddingProvider.generateBatchEmbeddings",
+        status: response.status,
+        error: errorMessage
+      });
+      throw new Error(`OpenAI batch embedding failed: ${errorMessage}`);
+    }
+    const data = await response.json();
+    const results = [];
+    for (const item of data.data) {
+      results.push({
+        embedding: item.embedding,
+        model,
+        dimensions: item.embedding.length,
+        usage: data.usage ? {
+          promptTokens: data.usage.prompt_tokens,
+          totalTokens: data.usage.total_tokens
+        } : void 0
+      });
+    }
+    logger3.debug("OpenAI batch embeddings generated successfully", {
+      context: "OpenAIEmbeddingProvider.generateBatchEmbeddings",
+      model,
+      count: results.length
+    });
+    return results;
+  }
+  /**
+   * Get available embedding models from OpenAI
+   *
+   * @param apiKey The OpenAI API key
+   * @returns Array of embedding model IDs
+   */
+  async getAvailableModels(apiKey) {
+    try {
+      const response = await fetch(`${this.baseUrl}/models`, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`
+        }
+      });
+      if (!response.ok) {
+        return [];
+      }
+      const data = await response.json();
+      const embeddingModels = data.data.filter((m) => m.id.includes("embedding")).map((m) => m.id);
+      return embeddingModels;
+    } catch (error) {
+      logger3.error("Failed to fetch OpenAI embedding models", {
+        context: "OpenAIEmbeddingProvider.getAvailableModels"
+      }, error instanceof Error ? error : void 0);
+      return [];
+    }
+  }
+  /**
+   * Check if the provider is available
+   *
+   * @param apiKey The API key to validate
+   * @returns True if the provider is ready to use
+   */
+  async isAvailable(apiKey) {
+    if (!apiKey) {
+      return false;
+    }
+    try {
+      const models = await this.getAvailableModels(apiKey);
+      return models.length > 0;
+    } catch {
+      return false;
+    }
+  }
+};
+
+// index.ts
+var logger4 = createPluginLogger("qtap-plugin-openai");
 var metadata = {
   providerName: "OPENAI",
   displayName: "OpenAI",
@@ -7340,6 +7510,12 @@ var plugin = {
     return new OpenAIImageProvider();
   },
   /**
+   * Factory method to create an OpenAI embedding provider instance
+   */
+  createEmbeddingProvider: (baseUrl) => {
+    return new OpenAIEmbeddingProvider(baseUrl);
+  },
+  /**
    * Get list of available models from OpenAI API
    * Requires a valid API key
    */
@@ -7349,7 +7525,7 @@ var plugin = {
       const models = await provider.getAvailableModels(apiKey);
       return models;
     } catch (error) {
-      logger3.error("Failed to fetch OpenAI models", { context: "plugin.getAvailableModels" }, error instanceof Error ? error : void 0);
+      logger4.error("Failed to fetch OpenAI models", { context: "plugin.getAvailableModels" }, error instanceof Error ? error : void 0);
       return [];
     }
   },
@@ -7362,7 +7538,7 @@ var plugin = {
       const isValid = await provider.validateApiKey(apiKey);
       return isValid;
     } catch (error) {
-      logger3.error("Error validating OpenAI API key", { context: "plugin.validateApiKey" }, error instanceof Error ? error : void 0);
+      logger4.error("Error validating OpenAI API key", { context: "plugin.validateApiKey" }, error instanceof Error ? error : void 0);
       return false;
     }
   },
@@ -7444,7 +7620,7 @@ var plugin = {
       const formattedTools = [];
       for (const tool of tools) {
         if (!("function" in tool)) {
-          logger3.warn("Skipping tool with invalid format", {
+          logger4.warn("Skipping tool with invalid format", {
             context: "plugin.formatTools"
           });
           continue;
@@ -7453,7 +7629,7 @@ var plugin = {
       }
       return formattedTools;
     } catch (error) {
-      logger3.error(
+      logger4.error(
         "Error formatting tools for OpenAI",
         { context: "plugin.formatTools" },
         error instanceof Error ? error : void 0
@@ -7473,7 +7649,7 @@ var plugin = {
       const toolCalls = parseOpenAIToolCalls(response);
       return toolCalls;
     } catch (error) {
-      logger3.error(
+      logger4.error(
         "Error parsing tool calls from OpenAI response",
         { context: "plugin.parseToolCalls" },
         error instanceof Error ? error : void 0

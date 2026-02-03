@@ -10,6 +10,7 @@
 import { logger } from '@/lib/logger';
 import type { LLMProvider } from './base';
 import type { ImageGenProvider } from '@/lib/image-gen/base';
+import type { EmbeddingProvider, LocalEmbeddingProvider } from '@quilltap/plugin-types';
 import { providerRegistry } from '@/lib/plugins/provider-registry';
 
 // ============================================================================
@@ -120,6 +121,41 @@ export function getAllAvailableProviders(): string[] {
 export function getAllAvailableImageProviders(): string[] {
   const providers = providerRegistry
     .getProvidersByCapability('imageGeneration')
+    .map(plugin => plugin.metadata.providerName);
+  return providers;
+}
+
+/**
+ * Create an embedding provider instance from the plugin registry
+ *
+ * @param provider The provider name (e.g., 'OPENAI', 'OLLAMA', 'OPENROUTER', 'BUILTIN')
+ * @param baseUrl Optional base URL for providers that support custom endpoints
+ * @returns An instantiated EmbeddingProvider or LocalEmbeddingProvider
+ * @throws Error if provider not found or doesn't support embeddings
+ */
+export function createEmbeddingProvider(
+  provider: string,
+  baseUrl?: string
+): EmbeddingProvider | LocalEmbeddingProvider {
+  try {
+    return providerRegistry.createEmbeddingProvider(provider, baseUrl);
+  } catch (error) {
+    pluginLogger.error('Failed to create embedding provider', {
+      provider,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
+}
+
+/**
+ * Get all available embedding providers
+ *
+ * @returns Array of all available embedding provider names
+ */
+export function getAllAvailableEmbeddingProviders(): string[] {
+  const providers = providerRegistry
+    .getProvidersByCapability('embeddings')
     .map(plugin => plugin.metadata.providerName);
   return providers;
 }

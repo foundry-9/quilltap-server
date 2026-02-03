@@ -12,6 +12,7 @@
 
 import type { LLMProviderPlugin, EmbeddingModelInfo } from './types';
 import { OllamaProvider } from './provider';
+import { OllamaEmbeddingProvider } from './embedding-provider';
 import {
   createPluginLogger,
   parseOpenAIToolCalls,
@@ -117,6 +118,14 @@ export const plugin: LLMProviderPlugin = {
    */
   createImageProvider: (baseUrl?: string) => {
     throw new Error('Ollama does not support image generation');
+  },
+
+  /**
+   * Factory method to create an Ollama embedding provider instance
+   */
+  createEmbeddingProvider: (baseUrl?: string) => {
+    const url = baseUrl || config.baseUrlDefault;
+    return new OllamaEmbeddingProvider(url);
   },
 
   /**

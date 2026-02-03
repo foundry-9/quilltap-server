@@ -13,6 +13,7 @@
 import type { LLMProviderPlugin, EmbeddingModelInfo } from './types';
 import { OpenAIProvider } from './provider';
 import { OpenAIImageProvider } from './image-provider';
+import { OpenAIEmbeddingProvider } from './embedding-provider';
 import {
   createPluginLogger,
   parseOpenAIToolCalls,
@@ -116,6 +117,13 @@ export const plugin: LLMProviderPlugin = {
    */
   createImageProvider: (baseUrl?: string) => {
     return new OpenAIImageProvider();
+  },
+
+  /**
+   * Factory method to create an OpenAI embedding provider instance
+   */
+  createEmbeddingProvider: (baseUrl?: string) => {
+    return new OpenAIEmbeddingProvider(baseUrl);
   },
 
   /**

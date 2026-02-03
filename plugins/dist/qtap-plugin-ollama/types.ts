@@ -21,4 +21,7 @@ export type {
   AttachmentSupport,
   ModelInfo,
   EmbeddingModelInfo,
+  EmbeddingProvider,
+  EmbeddingResult,
+  EmbeddingOptions,
 } from '@quilltap/plugin-types';
