@@ -566,22 +566,12 @@ export async function runCharacterWizard(
       throw new Error('Document not found');
     }
 
-    logger.debug('[CharacterWizard] Extracting document content', {
-      documentId: request.documentId,
-      filename: documentFile.originalFilename,
-      mimeType: documentFile.mimeType,
-    });
-
     const extractResult = await extractFileContent(documentFile);
     if (!extractResult.success || !extractResult.content) {
       throw new Error(extractResult.error || 'Failed to extract document content');
     }
 
     documentContent = extractResult.content;
-    logger.debug('[CharacterWizard] Document content extracted', {
-      contentLength: documentContent.length,
-      truncated: extractResult.truncated,
-    });
   }
 
   // Generate requested fields

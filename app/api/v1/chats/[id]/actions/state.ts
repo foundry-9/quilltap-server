@@ -57,13 +57,6 @@ export async function handleGetState(
     // Return merged state (chat overrides project at top level)
     const mergedState = mergeState(projectState, chatState);
 
-    logger.debug('[Chats v1] Get state', {
-      chatId,
-      userId: user.id,
-      hasProjectState: Object.keys(projectState).length > 0,
-      chatStateKeys: Object.keys(chatState),
-    });
-
     return NextResponse.json({
       success: true,
       state: mergedState,
@@ -93,12 +86,6 @@ export async function handleSetState(
 
     const body = await req.json();
     const validated = setStateRequestSchema.parse(body);
-
-    logger.debug('[Chats v1] Set state', {
-      chatId,
-      userId: user.id,
-      stateKeys: Object.keys(validated.state),
-    });
 
     // Update state
     const updatedChat = await repos.chats.update(chatId, {
@@ -138,12 +125,6 @@ export async function handleResetState(
     }
 
     const previousState = (chat.state || {}) as Record<string, unknown>;
-
-    logger.debug('[Chats v1] Reset state', {
-      chatId,
-      userId: user.id,
-      previousStateKeys: Object.keys(previousState),
-    });
 
     // Reset to empty object
     await repos.chats.update(chatId, {

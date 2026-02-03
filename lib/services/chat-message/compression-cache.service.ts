@@ -133,11 +133,6 @@ async function persistToDatabase(chatId: string, entry: PersistedCompressionCach
     await repos.chats.update(chatId, {
       compressionCache: entry as unknown as Record<string, unknown>,
     })
-
-    logger.debug('[CompressionCache] Persisted to database', {
-      chatId,
-      messageCount: entry.messageCount,
-    })
   } catch (error) {
     logger.error('[CompressionCache] Failed to persist to database', {
       chatId,
@@ -163,7 +158,6 @@ async function loadFromDatabase(chatId: string): Promise<PersistedCompressionCac
     // Validate the structure
     const cache = chat.compressionCache as unknown as PersistedCompressionCache
     if (!cache.result || typeof cache.messageCount !== 'number' || !cache.systemPromptHash) {
-      logger.debug('[CompressionCache] Invalid cache structure in database', { chatId })
       return null
     }
 
@@ -188,8 +182,6 @@ async function clearFromDatabase(chatId: string): Promise<void> {
     await repos.chats.update(chatId, {
       compressionCache: null,
     })
-
-    logger.debug('[CompressionCache] Cleared from database', { chatId })
   } catch (error) {
     logger.error('[CompressionCache] Failed to clear from database', {
       chatId,
@@ -338,26 +330,10 @@ export async function getCachedCompression(
     const cacheTooStale = messageDiff > 50
 
     if (cacheHasMoreMessages) {
-      logger.debug('[CompressionCache] Memory cache invalid: cache has more messages than current (data deleted?)', {
-        chatId,
-        cachedCount: memoryEntry.messageCount,
-        currentCount: currentMessageCount,
-      })
       compressionCache.delete(chatId)
     } else if (cacheTooStale) {
-      logger.debug('[CompressionCache] Memory cache invalid: too stale (>50 messages behind)', {
-        chatId,
-        cachedCount: memoryEntry.messageCount,
-        currentCount: currentMessageCount,
-        diff: messageDiff,
-      })
       compressionCache.delete(chatId)
     } else if (currentSystemPromptHash && memoryEntry.systemPromptHash !== currentSystemPromptHash) {
-      logger.debug('[CompressionCache] Memory cache invalid: system prompt hash mismatch', {
-        chatId,
-        cachedHash: memoryEntry.systemPromptHash,
-        currentHash: currentSystemPromptHash,
-      })
       compressionCache.delete(chatId)
     } else {
       // In-memory entry is valid
@@ -386,7 +362,6 @@ export async function getCachedCompression(
   }
 
   // 3. Check database cache (survives restarts, also serves as fallback)
-  logger.debug('[CompressionCache] Checking database for cached compression', { chatId })
   const dbEntry = await loadFromDatabase(chatId)
 
   if (dbEntry) {
@@ -420,11 +395,6 @@ export async function getCachedCompression(
         isFallback,
       }
     } else {
-      logger.debug('[CompressionCache] Database cache invalid, clearing', {
-        chatId,
-        cachedCount: dbEntry.messageCount,
-        currentCount: currentMessageCount,
-      })
       // Clear invalid database cache
       clearFromDatabase(chatId).catch(() => {
         // Already logged
@@ -433,7 +403,6 @@ export async function getCachedCompression(
   }
 
   // 4. No valid cache found
-  logger.debug('[CompressionCache] No valid cache found', { chatId })
   return undefined
 }
 

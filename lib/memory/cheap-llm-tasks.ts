@@ -436,12 +436,6 @@ ${characterLabel} says:
 
         const parsed = JSON.parse(cleanContent)
         // Ensure content is always a string (some LLMs return objects)
-        if (parsed.content && typeof parsed.content !== 'string') {
-          logger.debug('[Memory] LLM returned non-string content, coercing to string', {
-            taskType: 'memory-extraction-user',
-            contentType: typeof parsed.content,
-          })
-        }
         const memoryContent = typeof parsed.content === 'string'
           ? parsed.content
           : (parsed.content ? JSON.stringify(parsed.content) : undefined)
@@ -526,12 +520,6 @@ ${characterLabel} says:
 
         const parsed = JSON.parse(cleanContent)
         // Ensure content is always a string (some LLMs return objects)
-        if (parsed.content && typeof parsed.content !== 'string') {
-          logger.debug('[Memory] LLM returned non-string content, coercing to string', {
-            taskType: 'memory-extraction-character',
-            contentType: typeof parsed.content,
-          })
-        }
         const memoryContent = typeof parsed.content === 'string'
           ? parsed.content
           : (parsed.content ? JSON.stringify(parsed.content) : undefined)
@@ -636,12 +624,6 @@ ${characterBName}: ${characterBMessage}`,
 
         const parsed = JSON.parse(cleanContent)
         // Ensure content is always a string (some LLMs return objects)
-        if (parsed.content && typeof parsed.content !== 'string') {
-          logger.debug('[Memory] LLM returned non-string content, coercing to string', {
-            taskType: 'memory-extraction-inter-character',
-            contentType: typeof parsed.content,
-          })
-        }
         const memoryContent = typeof parsed.content === 'string'
           ? parsed.content
           : (parsed.content ? JSON.stringify(parsed.content) : undefined)
@@ -1127,15 +1109,8 @@ ${exchangesText}`,
           return []
         }
 
-        return parsed.map((item: Record<string, unknown>, index: number) => {
+        return parsed.map((item: Record<string, unknown>) => {
           // Ensure content is always a string (some LLMs return objects)
-          if (item.content && typeof item.content !== 'string') {
-            logger.debug('[Memory] LLM returned non-string content in batch extraction, coercing to string', {
-              taskType: 'batch-memory-extraction',
-              contentType: typeof item.content,
-              itemIndex: index,
-            })
-          }
           const content = typeof item.content === 'string'
             ? item.content
             : (item.content ? JSON.stringify(item.content) : undefined)

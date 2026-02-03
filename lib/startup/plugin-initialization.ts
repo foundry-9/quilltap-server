@@ -15,6 +15,7 @@ import { initializeThemeRegistry, themeRegistry } from '@/lib/themes/theme-regis
 import { initializeRoleplayTemplateRegistry, roleplayTemplateRegistry } from '@/lib/plugins/roleplay-template-registry';
 import { initializeToolRegistry, toolRegistry } from '@/lib/plugins/tool-registry';
 import type { ToolPlugin } from '@/lib/plugins/interfaces/tool-plugin';
+import type { ThemePlugin } from '@quilltap/plugin-types';
 import { injectPluginLoggerFactory, clearPluginLoggerFactory } from '@/lib/plugins/plugin-logger-bridge';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import type { FileStorageProviderPlugin } from '@/lib/file-storage/interfaces';
@@ -414,8 +415,7 @@ async function performInitialization(): Promise<PluginInitializationResult> {
           || (pluginModule as { default?: { plugin?: unknown } })?.default?.plugin;
 
         if (themePlugin && typeof themePlugin === 'object' && 'tokens' in themePlugin) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          themeRegistry.registerThemeModule(loadedPlugin, themePlugin as any);
+          themeRegistry.registerThemeModule(loadedPlugin, themePlugin as ThemePlugin);
         }
       } catch (error) {
       }

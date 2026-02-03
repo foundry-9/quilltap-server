@@ -519,11 +519,6 @@ export async function executeImageGenerationTool(
             styleTriggerPhrase: styleInfo.triggerPhrase,
             styleName: styleInfo.name,
           };
-          logger.debug('Found style trigger phrase for image generation', {
-            style: selectedStyle,
-            styleName: styleInfo.name,
-            hasTriggerPhrase: true,
-          });
         }
       }
     }

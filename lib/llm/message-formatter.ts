@@ -13,7 +13,6 @@
  */
 
 import { Provider } from '@/lib/schemas/types'
-import { logger } from '@/lib/logger'
 import { getMessageFormat } from '@/lib/plugins/provider-registry'
 import {
   LEGACY_PROVIDER_NAME_SUPPORT,
@@ -257,10 +256,6 @@ export function normalizeContentBlockFormat(content: string): string {
   const pythonPattern = /^\[\s*\{\s*'type'\s*:\s*'text'\s*,\s*'text'\s*:\s*"([\s\S]*)"\s*\}\s*\]$/
   const pythonMatch = trimmed.match(pythonPattern)
   if (pythonMatch) {
-    logger.debug('Normalized Python-style content block format', {
-      originalLength: content.length,
-      extractedLength: pythonMatch[1].length,
-    })
     return pythonMatch[1]
   }
 
@@ -274,10 +269,6 @@ export function normalizeContentBlockFormat(content: string): string {
       parsed[0]?.type === 'text' &&
       typeof parsed[0]?.text === 'string'
     ) {
-      logger.debug('Normalized JSON content block format', {
-        originalLength: content.length,
-        extractedLength: parsed[0].text.length,
-      })
       return parsed[0].text
     }
   } catch {

@@ -340,12 +340,6 @@ async function handleGetState(req: NextRequest, context: AuthenticatedContext, {
 
     const projectState = (project.state || {}) as Record<string, unknown>;
 
-    logger.debug('[Projects v1] Get state', {
-      projectId: id,
-      userId: user.id,
-      stateKeys: Object.keys(projectState),
-    });
-
     return successResponse({
       success: true,
       state: projectState,
@@ -476,12 +470,6 @@ async function handleSetState(req: NextRequest, context: AuthenticatedContext, {
 
     const body = await req.json();
     const validated = setStateSchema.parse(body);
-
-    logger.debug('[Projects v1] Set state', {
-      projectId: id,
-      userId: user.id,
-      stateKeys: Object.keys(validated.state),
-    });
 
     // Update state
     const updatedProject = await repos.projects.update(id, {
@@ -780,12 +768,6 @@ async function handleResetState(req: NextRequest, context: AuthenticatedContext,
     }
 
     const previousState = (project.state || {}) as Record<string, unknown>;
-
-    logger.debug('[Projects v1] Reset state', {
-      projectId: id,
-      userId: user.id,
-      previousStateKeys: Object.keys(previousState),
-    });
 
     // Reset to empty object
     await repos.projects.update(id, {

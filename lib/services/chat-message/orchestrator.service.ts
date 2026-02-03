@@ -354,11 +354,6 @@ async function processMessage(
       // Add to existingMessages so it's included in context building
       // (existingMessages was loaded before this save operation)
       existingMessages.push(toolMessage)
-      logger.debug('Saved pending tool result as message', {
-        chatId,
-        tool: toolResult.tool,
-        messageId: toolMessageId,
-      })
     }
   }
 
@@ -403,13 +398,6 @@ async function processMessage(
 
         await repos.chats.addMessage(chatId, toolMessage)
         existingMessages.push(toolMessage)
-
-        logger.debug('Saved auto-detected RNG result as message', {
-          chatId,
-          pattern: pattern.matchText,
-          messageId: toolMessageId,
-          result: formattedResult,
-        })
       }
     }
   }
@@ -1153,13 +1141,6 @@ async function processMessage(
             content: formattedResult,
             success: result.success,
             arguments: { type: pattern.type, rolls: pattern.rolls },
-          })
-
-          logger.debug('Saved auto-detected RNG result from assistant response', {
-            chatId,
-            pattern: pattern.matchText,
-            messageId: toolMessageId,
-            result: formattedResult,
           })
         }
       }

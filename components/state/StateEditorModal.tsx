@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
 
@@ -33,14 +33,7 @@ export default function StateEditorModal({
   const [resetting, setResetting] = useState(false)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
 
-  // Fetch state when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      fetchState()
-    }
-  }, [isOpen, entityType, entityId])
-
-  const fetchState = async () => {
+  const fetchState = useCallback(async () => {
     try {
       setLoading(true)
       setJsonError(null)
@@ -75,7 +68,14 @@ export default function StateEditorModal({
     } finally {
       setLoading(false)
     }
-  }
+  }, [entityType, entityId])
+
+  // Fetch state when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchState()
+    }
+  }, [isOpen, fetchState])
 
   const handleTextChange = (value: string) => {
     setStateText(value)

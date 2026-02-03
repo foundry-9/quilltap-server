@@ -221,17 +221,6 @@ export async function executeStateTool(
     const { operation, context: stateContext, path, value } = input;
     const parsedPath = parsePath(path);
 
-    logger.debug('Executing state tool', {
-      context: 'state-handler',
-      userId: context.userId,
-      chatId: context.chatId,
-      projectId: context.projectId,
-      operation,
-      stateContext,
-      path,
-      parsedPath,
-    });
-
     // Fetch chat
     const chat = await repos.chats.findById(context.chatId);
     if (!chat || chat.userId !== context.userId) {

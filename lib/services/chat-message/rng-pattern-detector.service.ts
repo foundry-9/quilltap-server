@@ -72,11 +72,6 @@ export function detectRngPatterns(content: string): DetectedRngPattern[] {
         count,
         matchText: diceMatch[0],
       })
-      logger.debug('Detected dice roll pattern', {
-        match: diceMatch[0],
-        sides,
-        count,
-      })
     }
   }
 
@@ -88,9 +83,6 @@ export function detectRngPatterns(content: string): DetectedRngPattern[] {
       count: 1,
       matchText: coinMatch[0],
     })
-    logger.debug('Detected coin flip pattern', {
-      match: coinMatch[0],
-    })
   }
 
   // Detect spin the bottle (e.g., "spin the bottle", "spin a bottle")
@@ -100,9 +92,6 @@ export function detectRngPatterns(content: string): DetectedRngPattern[] {
       type: 'spin_the_bottle',
       count: 1,
       matchText: bottleMatch[0],
-    })
-    logger.debug('Detected spin the bottle pattern', {
-      match: bottleMatch[0],
     })
   }
 

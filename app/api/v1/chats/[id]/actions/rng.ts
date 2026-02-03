@@ -38,14 +38,6 @@ export async function handleRng(
     const body = await req.json();
     const validated = rngRequestSchema.parse(body);
 
-    logger.debug('[Chats v1] RNG action requested', {
-      chatId,
-      userId: user.id,
-      type: validated.type,
-      rolls: validated.rolls,
-      preview: validated.preview,
-    });
-
     // Execute the RNG tool
     const rngContext: RngToolContext = {
       userId: user.id,
@@ -100,12 +92,6 @@ export async function handleRng(
 
     // Preview mode: return result without creating message
     if (validated.preview) {
-      logger.debug('[Chats v1] RNG preview result', {
-        chatId,
-        userId: user.id,
-        summary,
-      });
-
       return NextResponse.json({
         success: true,
         preview: true,

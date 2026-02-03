@@ -177,13 +177,6 @@ export async function executeRngTool(
 
     const { type, rolls = 1 } = input;
 
-    logger.debug('Executing RNG tool', {
-      userId: context.userId,
-      chatId: context.chatId,
-      type,
-      rolls,
-    });
-
     // Handle dice roll
     if (typeof type === 'number') {
       const { results, sum } = rollDice(type, rolls);

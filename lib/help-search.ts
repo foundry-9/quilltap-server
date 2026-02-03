@@ -24,14 +24,12 @@ export class HelpSearch {
    * Load the help bundle from a gzipped MessagePack buffer
    */
   async loadFromBuffer(compressed: Buffer | Uint8Array): Promise<void> {
-    logger.debug('Decompressing help bundle', { context: 'help-search' })
     // Convert to Uint8Array for gunzip compatibility
     const compressedArray = compressed instanceof Uint8Array && !(compressed instanceof Buffer)
       ? compressed
       : new Uint8Array(compressed.buffer, compressed.byteOffset, compressed.length)
     const decompressed = gunzipSync(compressedArray)
 
-    logger.debug('Decoding MessagePack', { context: 'help-search' })
     // Convert Buffer to Uint8Array for msgpack decode
     const uint8Array = new Uint8Array(decompressed.buffer, decompressed.byteOffset, decompressed.length)
     this.bundle = decode(uint8Array) as HelpBundle
@@ -56,7 +54,6 @@ export class HelpSearch {
 
     this.loading = (async () => {
       try {
-        logger.debug('Fetching help bundle', { context: 'help-search', url })
         const response = await fetch(url)
 
         if (!response.ok) {
