@@ -80,6 +80,9 @@ export const CharacterSchema = z.object({
   talkativeness: z.number().min(0.1).max(1.0).default(0.5),
   controlledBy: ControlledByEnum.default('llm'),  // Who controls this character: 'llm' (AI) or 'user' (player)
 
+  /** Default agent mode enabled state for chats with this character (null = inherit from global) */
+  defaultAgentModeEnabled: z.boolean().nullable().optional(),
+
   // Relationships
   personaLinks: z.array(z.object({
     personaId: UUIDSchema,

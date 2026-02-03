@@ -45,6 +45,9 @@ export const ProjectSchema = z.object({
   /** Default groups of tools that are disabled (e.g., "plugin:mcp") */
   defaultDisabledToolGroups: z.array(z.string()).default([]),
 
+  /** Default agent mode enabled state for chats in this project (null = inherit from character or global) */
+  defaultAgentModeEnabled: z.boolean().nullable().optional(),
+
   /** Persistent JSON state for games, inventory, session data, etc. */
   state: JsonSchema.default({}),
 

@@ -144,6 +144,24 @@ export {
   type RequestFullContextToolContext,
 } from './handlers/request-full-context-handler';
 
+// Submit Final Response Tool (Agent Mode Feature)
+export {
+  submitFinalResponseToolDefinition,
+  anthropicSubmitFinalResponseToolDefinition,
+  getOpenAISubmitFinalResponseTool,
+  getAnthropicSubmitFinalResponseTool,
+  getGoogleSubmitFinalResponseTool,
+  validateSubmitFinalResponseInput,
+  type SubmitFinalResponseToolInput,
+  type SubmitFinalResponseToolOutput,
+} from './submit-final-response-tool';
+
+export {
+  executeSubmitFinalResponseTool,
+  formatSubmitFinalResponseResults,
+  type SubmitFinalResponseToolContext,
+} from './handlers/submit-final-response-handler';
+
 // Help Search Tool
 export {
   helpSearchToolDefinition,

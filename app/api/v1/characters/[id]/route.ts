@@ -61,6 +61,7 @@ const updateCharacterSchema = z.object({
     .nullable(),
   controlledBy: z.enum(['llm', 'user']).optional(),
   npc: z.boolean().optional(),
+  defaultAgentModeEnabled: z.boolean().nullable().optional(),
 });
 
 const avatarSchema = z.object({

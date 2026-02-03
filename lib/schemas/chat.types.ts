@@ -253,6 +253,12 @@ export const ChatMetadataSchema = z.object({
   /** Cached compression result for context compression (persisted across restarts) */
   compressionCache: JsonSchema.nullable().optional(),
 
+  /** Whether agent mode is enabled for this chat (null = inherit from project/character/global) */
+  agentModeEnabled: z.boolean().nullable().optional(),
+
+  /** Current agent turn count within the current message processing (resets on new user message) */
+  agentTurnCount: z.number().default(0),
+
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 }).refine(
@@ -325,6 +331,12 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** Cached compression result for context compression (persisted across restarts) */
   compressionCache: JsonSchema.nullable().optional(),
+
+  /** Whether agent mode is enabled for this chat (null = inherit from project/character/global) */
+  agentModeEnabled: z.boolean().nullable().optional(),
+
+  /** Current agent turn count within the current message processing (resets on new user message) */
+  agentTurnCount: z.number().default(0),
 
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

@@ -35,6 +35,7 @@ export default function ProjectDetailPage() {
     fetchProject,
     handleSave,
     handleToggleAllowAnyCharacter,
+    handleSaveAgentMode,
     handleRemoveCharacter,
   } = useProjectDetail(projectId)
 
@@ -113,6 +114,7 @@ export default function ProjectDetailPage() {
           onEditFormChange={setEditForm}
           onSave={handleSave}
           onToggleAllowAnyCharacter={handleToggleAllowAnyCharacter}
+          onAgentModeChange={handleSaveAgentMode}
           expanded={cardState.settings}
           onToggle={() => toggleCard('settings')}
         />

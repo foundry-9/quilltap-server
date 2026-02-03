@@ -66,12 +66,14 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     handleSaveConnectionProfile,
     handleSaveDefaultPartner,
     handleSaveImageProfile,
+    handleSaveAgentMode,
     handleToggleNpc,
     handleToggleFavorite,
     handleToggleControlledBy,
     togglingNpc,
     togglingFavorite,
     togglingControlledBy,
+    savingAgentMode,
   } = useCharacterView(id)
 
   const { creatingChat, handleCreateChat } = useChatCreation()
@@ -215,9 +217,11 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
             savingConnectionProfile={savingConnectionProfile}
             savingPartner={savingPartner}
             savingImageProfile={savingImageProfile}
+            savingAgentMode={savingAgentMode}
             onConnectionProfileChange={handleConnectionProfileSave}
             onPartnerChange={handlePartnerSave}
             onImageProfileChange={handleImageProfileSave}
+            onAgentModeChange={handleSaveAgentMode}
           />
         )
 

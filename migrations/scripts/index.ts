@@ -57,6 +57,8 @@ import { addStateFieldsMigration } from './add-state-fields';
 import { addAutoDetectRngFieldMigration } from './add-auto-detect-rng-field';
 // Add compressionCache field to chats
 import { addCompressionCacheFieldMigration } from './add-compression-cache-field';
+// Add agent mode fields to chat_settings, characters, projects, and chats
+import { addAgentModeFieldsMigration } from './add-agent-mode-fields';
 
 /**
  * All available migrations.
@@ -109,6 +111,8 @@ export const migrations: Migration[] = [
   addAutoDetectRngFieldMigration,
   // Add compressionCache field to chats
   addCompressionCacheFieldMigration,
+  // Add agent mode fields
+  addAgentModeFieldsMigration,
 ];
 
 export {
@@ -156,4 +160,6 @@ export {
   addAutoDetectRngFieldMigration,
   // Add compressionCache field to chats
   addCompressionCacheFieldMigration,
+  // Add agent mode fields
+  addAgentModeFieldsMigration,
 };

@@ -22,6 +22,7 @@ import {
   projectInfoToolDefinition,
   fileManagementToolDefinition,
   requestFullContextToolDefinition,
+  submitFinalResponseToolDefinition,
   helpSearchToolDefinition,
   rngToolDefinition,
   stateToolDefinition,
@@ -137,6 +138,9 @@ export interface BuildToolsOptions {
   /** Whether to enable state (persistent state management) tool (enabled by default) */
   state?: boolean;
 
+  /** Whether to enable submit_final_response tool (for agent mode) */
+  agentMode?: boolean;
+
   /** Whether to include tools from the tool registry (plugin tools) */
   includePluginTools?: boolean;
 
@@ -184,6 +188,7 @@ export async function buildToolsForProvider(
       projectInfo: options.projectInfo,
       fileManagement: options.fileManagement,
       requestFullContext: options.requestFullContext,
+      agentMode: options.agentMode,
       helpSearch: options.helpSearch,
       rng: options.rng,
       state: options.state,
@@ -246,6 +251,12 @@ export async function buildToolsForProvider(
   if (options.state !== false) {
     universalTools.push(stateToolDefinition as UniversalTool);
     logger_.debug('Added state tool to universal tools');
+  }
+
+  // Add submit_final_response tool if agent mode is enabled
+  if (options.agentMode) {
+    universalTools.push(submitFinalResponseToolDefinition as UniversalTool);
+    logger_.debug('Added submit_final_response tool to universal tools (agent mode)');
   }
 
   // Add plugin tools if enabled (defaults to true when not specified)

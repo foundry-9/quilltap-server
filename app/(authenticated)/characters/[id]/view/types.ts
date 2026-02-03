@@ -49,6 +49,7 @@ export interface Character {
   controlledBy?: 'llm' | 'user'
   isFavorite?: boolean
   npc?: boolean
+  defaultAgentModeEnabled?: boolean | null
   defaultImage?: {
     id: string
     filepath: string

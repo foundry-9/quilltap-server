@@ -64,6 +64,8 @@ export interface ChatSettings {
   llmLoggingSettings?: LLMLoggingSettings
   /** Auto-detect RNG patterns (dice rolls, coin flips) in user messages and execute them automatically */
   autoDetectRng?: boolean
+  /** Agent mode settings for iterative tool use with self-correction */
+  agentModeSettings?: AgentModeSettings
   createdAt: string
   updatedAt: string
 }
@@ -339,3 +341,22 @@ export const AUTOMATION_OPTIONS = [
  * Default automation settings
  */
 export const DEFAULT_AUTO_DETECT_RNG = true
+
+/**
+ * Agent Mode Settings
+ * Controls iterative tool use with self-correction
+ */
+export interface AgentModeSettings {
+  /** Maximum number of agent turns (1-25) */
+  maxTurns: number
+  /** Whether agent mode is enabled by default for new chats */
+  defaultEnabled: boolean
+}
+
+/**
+ * Default agent mode settings
+ */
+export const DEFAULT_AGENT_MODE_SETTINGS: AgentModeSettings = {
+  maxTurns: 10,
+  defaultEnabled: false,
+}

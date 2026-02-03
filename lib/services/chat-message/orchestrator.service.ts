@@ -88,6 +88,13 @@ import {
   type RngToolCall,
 } from './rng-pattern-detector.service'
 import { executeRngTool, formatRngResults } from '@/lib/tools/handlers/rng-handler'
+import {
+  resolveAgentModeSetting,
+  buildAgentModeInstructions,
+  buildForceFinalMessage,
+  generateIterationSummary,
+  type ResolvedAgentMode,
+} from './agent-mode-resolver.service'
 
 const logger = createServiceLogger('ChatMessageOrchestrator')
 
@@ -216,6 +223,26 @@ async function processMessage(
   const chatSettings = await repos.chatSettings.findByUserId(userId)
 
   // ============================================================================
+  // Agent Mode Resolution
+  // ============================================================================
+
+  // Get project for agent mode resolution (also used later for project context)
+  const project = chat.projectId ? await repos.projects.findById(chat.projectId) : null
+
+  // Resolve agent mode settings through the cascade
+  const agentMode = resolveAgentModeSetting(
+    chat,
+    project,
+    character,
+    chatSettings
+  )
+
+  // Reset agent turn count on new user message (not continue mode)
+  if (!isContinueMode && agentMode.enabled) {
+    await repos.chats.update(chatId, { agentTurnCount: 0 })
+  }
+
+  // ============================================================================
   // Context Compression Setup
   // ============================================================================
 
@@ -296,27 +323,24 @@ async function processMessage(
   // ============================================================================
   // Project Context Injection
   // ============================================================================
-  // Load project context and determine if it should be injected this message
+  // Use project loaded earlier for agent mode resolution
   let projectContext: ProjectContext | null = null
 
-  if (chat.projectId) {
-    const project = await repos.projects.findById(chat.projectId)
-    if (project && (project.description || project.instructions)) {
-      // Calculate if we should inject project context this message
-      // Default interval matches windowSize (5), can be configured to 0 to disable
-      const reinjectInterval = contextCompressionSettings.projectContextReinjectInterval ?? 5
-      const messageCount = existingMessages.filter(m => m.type === 'message').length
+  if (project && (project.description || project.instructions)) {
+    // Calculate if we should inject project context this message
+    // Default interval matches windowSize (5), can be configured to 0 to disable
+    const reinjectInterval = contextCompressionSettings.projectContextReinjectInterval ?? 5
+    const messageCount = existingMessages.filter(m => m.type === 'message').length
 
-      // Inject on first message (count 0) or every N messages after that
-      // Using messageCount because the new user message hasn't been saved yet
-      const shouldInject = reinjectInterval > 0 && (messageCount === 0 || messageCount % reinjectInterval === 0)
+    // Inject on first message (count 0) or every N messages after that
+    // Using messageCount because the new user message hasn't been saved yet
+    const shouldInject = reinjectInterval > 0 && (messageCount === 0 || messageCount % reinjectInterval === 0)
 
-      if (shouldInject) {
-        projectContext = {
-          name: project.name,
-          description: project.description,
-          instructions: project.instructions,
-        }
+    if (shouldInject) {
+      projectContext = {
+        name: project.name,
+        description: project.description,
+        instructions: project.instructions,
       }
     }
   }
@@ -453,7 +477,7 @@ async function processMessage(
     connectionProfile.allowWebSearch
   )
 
-  // Build tools (include request_full_context when compression is enabled)
+  // Build tools (include request_full_context when compression is enabled, submit_final_response when agent mode is enabled)
   // Always pass disabledTools and disabledToolGroups for filtering
   const { tools, modelSupportsNativeTools, useNativeWebSearch } = await buildTools(
     connectionProfile,
@@ -461,10 +485,11 @@ async function processMessage(
     imageProfile,
     userId,
     false, // Will check pseudo-tools after
-    undefined, // projectId (will be set if needed)
+    chat.projectId ?? undefined, // projectId - enables project_info tool
     compressionEnabled, // requestFullContext - enable the tool when compression is active
     chat.disabledTools ?? [],
-    chat.disabledToolGroups ?? []
+    chat.disabledToolGroups ?? [],
+    agentMode.enabled // agentModeEnabled - enables submit_final_response tool
   )
 
   const usePseudoTools = checkShouldUsePseudoTools(modelSupportsNativeTools)
@@ -635,6 +660,37 @@ async function processMessage(
     })
   }
 
+  // ============================================================================
+  // Agent Mode Instructions
+  // ============================================================================
+  // If agent mode is enabled, inject instructions into the system prompt
+  if (agentMode.enabled) {
+    const agentModeInstructions = buildAgentModeInstructions(agentMode.maxTurns)
+    const agentModeMessage = {
+      role: 'system',
+      content: agentModeInstructions,
+      attachments: [],
+    }
+
+    // Insert agent mode instructions at the beginning (after any existing system messages)
+    // Find the first non-system message and insert before it
+    const firstNonSystemIndex = formattedMessages.findIndex(m => m.role !== 'system')
+    if (firstNonSystemIndex > 0) {
+      formattedMessages.splice(firstNonSystemIndex, 0, agentModeMessage)
+    } else if (firstNonSystemIndex === 0) {
+      formattedMessages.unshift(agentModeMessage)
+    } else {
+      // All messages are system messages - add at end
+      formattedMessages.push(agentModeMessage)
+    }
+
+    logger.info('Injected agent mode instructions', {
+      chatId,
+      maxTurns: agentMode.maxTurns,
+      enabledSource: agentMode.enabledSource,
+    })
+  }
+
   // Send debug info
   controller.enqueue(encodeDebugInfo(encoder, {
     builtContext,
@@ -766,16 +822,67 @@ async function processMessage(
   let currentMessages = [...formattedMessages]
   let currentResponse = fullResponse
   let currentRawResponse = rawResponse
-  const MAX_TOOL_ITERATIONS = 5
+  // Use agent mode max turns if enabled, otherwise default to 5
+  const effectiveMaxTurns = agentMode.enabled ? agentMode.maxTurns : 5
   let toolIterations = 0
+  let agentModeCompleted = false
+  let agentFinalResponse: string | undefined
 
   // Tool call loop
-  while (currentRawResponse && toolIterations < MAX_TOOL_ITERATIONS) {
+  while (currentRawResponse && toolIterations < effectiveMaxTurns) {
     const toolCalls = detectToolCallsInResponse(currentRawResponse, connectionProfile.provider)
 
     if (toolCalls.length === 0) break
 
+    // Check if this is the submit_final_response tool in agent mode
+    const submitFinalCall = agentMode.enabled
+      ? toolCalls.find(tc => tc.name === 'submit_final_response')
+      : undefined
+
+    if (submitFinalCall) {
+      // Agent mode completion - extract final response
+      const args = submitFinalCall.arguments as { response?: string; summary?: string; confidence?: number }
+      agentFinalResponse = args.response || currentResponse
+      agentModeCompleted = true
+
+      // Send agent completion event
+      safeEnqueue(controller, encodeStatusEvent(encoder, {
+        stage: 'agent_completed',
+        message: 'Agent completed task',
+        characterName: character.name,
+        characterId: character.id,
+      }))
+
+      logger.info('Agent mode completed via submit_final_response', {
+        chatId,
+        iterations: toolIterations,
+        responseLength: agentFinalResponse?.length,
+        summary: args.summary,
+        confidence: args.confidence,
+      })
+
+      // Use the final response as the full response
+      fullResponse = agentFinalResponse
+      break
+    }
+
     toolIterations++
+
+    // Send agent iteration event if in agent mode
+    if (agentMode.enabled) {
+      const toolNames = toolCalls.map(tc => tc.name)
+      const iterationSummary = generateIterationSummary(toolIterations, toolNames, currentResponse)
+
+      safeEnqueue(controller, encodeStatusEvent(encoder, {
+        stage: 'agent_iteration',
+        message: iterationSummary,
+        characterName: character.name,
+        characterId: character.id,
+      }))
+
+      // Update agent turn count in database
+      await repos.chats.update(chatId, { agentTurnCount: toolIterations })
+    }
 
     // Send tool executing status for each detected tool
     for (const toolCall of toolCalls) {
@@ -847,8 +954,74 @@ async function processMessage(
     }
   }
 
-  if (toolIterations >= MAX_TOOL_ITERATIONS) {
-    logger.warn('Max tool iterations reached', { iterations: toolIterations, chatId })
+  // Handle max iterations reached
+  if (toolIterations >= effectiveMaxTurns && !agentModeCompleted) {
+    if (agentMode.enabled) {
+      // Force final response in agent mode
+      logger.info('Agent mode max turns reached, forcing final response', {
+        chatId,
+        iterations: toolIterations,
+        maxTurns: effectiveMaxTurns,
+      })
+
+      // Send force final event
+      safeEnqueue(controller, encodeStatusEvent(encoder, {
+        stage: 'agent_force_final',
+        message: 'Requesting final response...',
+        characterName: character.name,
+        characterId: character.id,
+      }))
+
+      // Add force final message and make one more LLM call
+      const forceFinalMessage = buildForceFinalMessage()
+      currentMessages = [
+        ...currentMessages,
+        { role: 'assistant' as const, content: currentResponse, thoughtSignature, name: undefined },
+        { role: 'user' as const, content: forceFinalMessage, thoughtSignature: undefined, name: undefined }
+      ]
+
+      // Make one final call with force message
+      for await (const chunk of streamMessage({
+        messages: currentMessages,
+        connectionProfile,
+        apiKey,
+        modelParams,
+        tools: actualTools,
+        useNativeWebSearch,
+        userId,
+        messageId: preGeneratedAssistantMessageId,
+        chatId,
+      })) {
+        if (chunk.content) {
+          fullResponse += chunk.content
+          controller.enqueue(encodeContentChunk(encoder, chunk.content))
+        }
+
+        if (chunk.done) {
+          usage = chunk.usage || null
+          cacheUsage = chunk.cacheUsage || null
+          attachmentResults = chunk.attachmentResults || null
+          rawResponse = chunk.rawResponse
+          if (chunk.thoughtSignature) {
+            thoughtSignature = chunk.thoughtSignature
+          }
+
+          // Check if the final call includes submit_final_response
+          if (chunk.rawResponse) {
+            const finalToolCalls = detectToolCallsInResponse(chunk.rawResponse, connectionProfile.provider)
+            const submitCall = finalToolCalls.find(tc => tc.name === 'submit_final_response')
+            if (submitCall) {
+              const args = submitCall.arguments as { response?: string }
+              if (args.response) {
+                fullResponse = args.response
+              }
+            }
+          }
+        }
+      }
+    } else {
+      logger.warn('Max tool iterations reached', { iterations: toolIterations, chatId })
+    }
   }
 
   // Process XML tool calls (runs for ALL providers, regardless of pseudo-tool mode)

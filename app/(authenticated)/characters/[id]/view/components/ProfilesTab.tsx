@@ -15,9 +15,11 @@ interface ProfilesTabProps {
   savingConnectionProfile: boolean
   savingPartner: boolean
   savingImageProfile?: boolean
+  savingAgentMode?: boolean
   onConnectionProfileChange: (profileId: string) => void
   onPartnerChange: (partnerId: string) => void
   onImageProfileChange: (profileId: string | null) => void
+  onAgentModeChange: (enabled: boolean | null) => void
 }
 
 export function ProfilesTab({
@@ -30,9 +32,11 @@ export function ProfilesTab({
   savingConnectionProfile,
   savingPartner,
   savingImageProfile,
+  savingAgentMode,
   onConnectionProfileChange,
   onPartnerChange,
   onImageProfileChange,
+  onAgentModeChange,
 }: ProfilesTabProps) {
   // Check if this character is user-controlled (disable partner selection if so)
   const isUserControlled = character?.controlledBy === 'user'
@@ -140,6 +144,38 @@ export function ProfilesTab({
             />
           </div>
           {savingImageProfile && (
+            <div className="flex items-center gap-2 qt-text-small">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-r-transparent"></div>
+              Saving...
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Agent Mode Section */}
+      <div className="character-section-card rounded-lg border border-border bg-card p-6">
+        <h2 className="text-lg font-semibold text-foreground mb-2">
+          Agent Mode
+        </h2>
+        <p className="qt-text-small mb-4">
+          Control whether agent mode is enabled by default for chats with this character.
+          Agent mode allows the AI to iteratively use tools, verify results, and self-correct before delivering a final response.
+        </p>
+        <div className="flex items-center gap-3">
+          <select
+            value={character?.defaultAgentModeEnabled === null || character?.defaultAgentModeEnabled === undefined ? 'inherit' : character.defaultAgentModeEnabled ? 'enabled' : 'disabled'}
+            onChange={(e) => {
+              const value = e.target.value
+              onAgentModeChange(value === 'inherit' ? null : value === 'enabled')
+            }}
+            disabled={savingAgentMode}
+            className="flex-1 max-w-xs rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+          >
+            <option value="inherit">Inherit from global settings</option>
+            <option value="enabled">Enabled by default</option>
+            <option value="disabled">Disabled by default</option>
+          </select>
+          {savingAgentMode && (
             <div className="flex items-center gap-2 qt-text-small">
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-r-transparent"></div>
               Saving...

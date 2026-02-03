@@ -36,6 +36,7 @@ interface SettingsCardProps {
   onEditFormChange: (form: EditForm) => void
   onSave: () => void
   onToggleAllowAnyCharacter: () => void
+  onAgentModeChange: (enabled: boolean | null) => void
   expanded: boolean
   onToggle: () => void
   onProjectUpdate?: () => void
@@ -69,6 +70,7 @@ export function SettingsCard({
   onEditFormChange,
   onSave,
   onToggleAllowAnyCharacter,
+  onAgentModeChange,
   expanded,
   onToggle,
   onProjectUpdate,
@@ -320,6 +322,26 @@ export function SettingsCard({
                 }`}
               />
             </button>
+          </div>
+
+          {/* Agent Mode Setting */}
+          <div className="p-3 rounded-lg qt-border qt-bg-surface">
+            <h4 className="text-sm font-medium text-foreground mb-1">Agent Mode</h4>
+            <p className="qt-text-xs qt-text-secondary mb-2">
+              Default agent mode for chats in this project. Agent mode allows iterative tool use with self-correction.
+            </p>
+            <select
+              value={project.defaultAgentModeEnabled === null || project.defaultAgentModeEnabled === undefined ? 'inherit' : project.defaultAgentModeEnabled ? 'enabled' : 'disabled'}
+              onChange={(e) => {
+                const value = e.target.value
+                onAgentModeChange(value === 'inherit' ? null : value === 'enabled')
+              }}
+              className="qt-input w-full max-w-xs"
+            >
+              <option value="inherit">Inherit from global/character</option>
+              <option value="enabled">Enabled by default</option>
+              <option value="disabled">Disabled by default</option>
+            </select>
           </div>
 
           {/* Default Tool Settings */}

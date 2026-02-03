@@ -50,6 +50,11 @@ import {
   formatStateResults,
   type StateToolContext,
 } from '@/lib/tools/handlers/state-handler';
+import {
+  executeSubmitFinalResponseTool,
+  formatSubmitFinalResponseResults,
+  type SubmitFinalResponseToolContext,
+} from '@/lib/tools/handlers/submit-final-response-handler';
 
 export interface ToolCallRequest {
   name: string;
@@ -201,6 +206,7 @@ const BUILT_IN_TOOLS = new Set([
   'search_help',
   'rng',
   'state',
+  'submit_final_response',
 ]);
 
 export async function executeToolCallWithContext(
@@ -586,6 +592,31 @@ export async function executeToolCallWithContext(
           previousValue: result.previousValue,
         } : null,
         error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle submit_final_response (agent mode completion)
+    if (toolCall.name === 'submit_final_response') {
+      // Execute submit final response tool
+      const submitContext: SubmitFinalResponseToolContext = {
+        chatId,
+      };
+
+      const result = await executeSubmitFinalResponseTool(toolCall.arguments, submitContext);
+
+      // Format results for LLM consumption
+      const formattedResult = formatSubmitFinalResponseResults(result);
+
+      return {
+        toolName: 'submit_final_response',
+        success: result.success,
+        result: result.success ? {
+          formattedText: formattedResult,
+          finalResponse: result.finalResponse,
+          summary: result.summary,
+          confidence: result.confidence,
+        } : null,
+        error: result.success ? undefined : result.message,
       };
     }
 

@@ -18,6 +18,8 @@ import {
   DEFAULT_CONTEXT_COMPRESSION_SETTINGS,
   DEFAULT_LLM_LOGGING_SETTINGS,
   DEFAULT_AUTO_DETECT_RNG,
+  AgentModeSettings,
+  DEFAULT_AGENT_MODE_SETTINGS,
 } from '../types'
 
 interface UseChatSettingsReturn {
@@ -39,6 +41,8 @@ interface UseChatSettingsReturn {
   handleContextCompressionUpdate: (updates: Partial<ContextCompressionSettings>) => Promise<void>
   handleLLMLoggingChange: (key: keyof LLMLoggingSettings, value: boolean | number) => Promise<void>
   handleAutoDetectRngChange: (value: boolean) => Promise<void>
+  handleAgentModeDefaultEnabledChange: (value: boolean) => Promise<void>
+  handleAgentModeMaxTurnsChange: (value: number) => Promise<void>
 }
 
 export function useChatSettings(): UseChatSettingsReturn {
@@ -489,6 +493,86 @@ export function useChatSettings(): UseChatSettingsReturn {
     [settings, showSuccess]
   )
 
+  /**
+   * Update agent mode default enabled setting
+   */
+  const handleAgentModeDefaultEnabledChange = useCallback(
+    async (value: boolean) => {
+      if (!settings) return
+
+      try {
+        setSaving(true)
+        setError(null)
+        setSuccess(false)
+
+        const currentSettings = settings.agentModeSettings || DEFAULT_AGENT_MODE_SETTINGS
+        const res = await fetch('/api/v1/settings/chat', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            agentModeSettings: { ...currentSettings, defaultEnabled: value },
+          }),
+        })
+
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Failed to update agent mode settings')
+        }
+
+        const updatedSettings = await res.json()
+        setSettings(updatedSettings)
+        showSuccess()
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
+        console.error('Failed to update agent mode default enabled', { error: errorMsg })
+        setError(errorMsg)
+      } finally {
+        setSaving(false)
+      }
+    },
+    [settings, showSuccess]
+  )
+
+  /**
+   * Update agent mode max turns setting
+   */
+  const handleAgentModeMaxTurnsChange = useCallback(
+    async (value: number) => {
+      if (!settings) return
+
+      try {
+        setSaving(true)
+        setError(null)
+        setSuccess(false)
+
+        const currentSettings = settings.agentModeSettings || DEFAULT_AGENT_MODE_SETTINGS
+        const res = await fetch('/api/v1/settings/chat', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            agentModeSettings: { ...currentSettings, maxTurns: value },
+          }),
+        })
+
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Failed to update agent mode settings')
+        }
+
+        const updatedSettings = await res.json()
+        setSettings(updatedSettings)
+        showSuccess()
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
+        console.error('Failed to update agent mode max turns', { error: errorMsg })
+        setError(errorMsg)
+      } finally {
+        setSaving(false)
+      }
+    },
+    [settings, showSuccess]
+  )
+
   return {
     settings,
     loading,
@@ -508,5 +592,7 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleContextCompressionUpdate,
     handleLLMLoggingChange,
     handleAutoDetectRngChange,
+    handleAgentModeDefaultEnabledChange,
+    handleAgentModeMaxTurnsChange,
   }
 }

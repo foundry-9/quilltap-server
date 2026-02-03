@@ -49,6 +49,7 @@ const updateProjectSchema = z.object({
   characterRoster: z.array(z.uuid()).optional(),
   color: z.string().regex(/^#(?:[0-9a-fA-F]{3}){1,2}$/).nullable().optional(),
   icon: z.string().max(50).nullable().optional(),
+  defaultAgentModeEnabled: z.boolean().nullable().optional(),
 });
 
 const addCharacterSchema = z.object({

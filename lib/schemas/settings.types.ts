@@ -148,6 +148,19 @@ export const LLMLoggingSettingsSchema = z.object({
 export type LLMLoggingSettings = z.infer<typeof LLMLoggingSettingsSchema>;
 
 // ============================================================================
+// AGENT MODE SETTINGS
+// ============================================================================
+
+export const AgentModeSettingsSchema = z.object({
+  /** Maximum number of agent turns (iterations) before forcing final response (1-25, default: 10) */
+  maxTurns: z.number().min(1).max(25).default(10),
+  /** Whether agent mode is enabled by default for new chats (default: false) */
+  defaultEnabled: z.boolean().default(false),
+});
+
+export type AgentModeSettings = z.infer<typeof AgentModeSettingsSchema>;
+
+// ============================================================================
 // CHAT SETTINGS
 // ============================================================================
 
@@ -210,6 +223,11 @@ export const ChatSettingsSchema = z.object({
   }),
   /** Auto-detect RNG patterns (dice rolls, coin flips) in user messages and execute them automatically (default: true) */
   autoDetectRng: z.boolean().default(true),
+  /** Agent mode settings for iterative tool use with self-correction */
+  agentModeSettings: AgentModeSettingsSchema.default({
+    maxTurns: 10,
+    defaultEnabled: false,
+  }),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });

@@ -218,6 +218,10 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
             retentionDays: 30,
           },
           autoDetectRng: true,
+          agentModeSettings: {
+            maxTurns: 10,
+            defaultEnabled: false,
+          },
           defaultRoleplayTemplateId,
           ...data,
         };

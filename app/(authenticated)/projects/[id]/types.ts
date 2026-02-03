@@ -61,6 +61,7 @@ export interface Project {
   description?: string | null
   instructions?: string | null
   allowAnyCharacter: boolean
+  defaultAgentModeEnabled?: boolean | null
   color?: string | null
   icon?: string | null
   characterRoster: ProjectCharacter[]

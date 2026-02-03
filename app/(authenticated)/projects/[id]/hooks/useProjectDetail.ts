@@ -24,6 +24,7 @@ interface UseProjectDetailReturn {
   fetchProject: () => Promise<void>
   handleSave: () => Promise<void>
   handleToggleAllowAnyCharacter: () => Promise<void>
+  handleSaveAgentMode: (enabled: boolean | null) => Promise<void>
   handleRemoveCharacter: (characterId: string) => Promise<void>
 }
 
@@ -100,6 +101,30 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
     }
   }, [project, projectId])
 
+  const handleSaveAgentMode = useCallback(async (enabled: boolean | null) => {
+    try {
+      const res = await fetch(`/api/v1/projects/${projectId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ defaultAgentModeEnabled: enabled }),
+      })
+
+      if (!res.ok) throw new Error('Failed to update agent mode setting')
+      const data = await res.json()
+      setProject(data.project)
+      const message = enabled === null
+        ? 'Agent mode set to inherit from global/character'
+        : enabled
+          ? 'Agent mode enabled by default for project'
+          : 'Agent mode disabled by default for project'
+      showSuccessToast(message)
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to update agent mode'
+      console.error('useProjectDetail: save agent mode error', errorMsg)
+      showErrorToast(errorMsg)
+    }
+  }, [projectId])
+
   const handleRemoveCharacter = useCallback(async (characterId: string) => {
     try {
       const res = await fetch(`/api/v1/projects/${projectId}?action=remove-character`, {
@@ -129,6 +154,7 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
     fetchProject,
     handleSave,
     handleToggleAllowAnyCharacter,
+    handleSaveAgentMode,
     handleRemoveCharacter,
   }
 }

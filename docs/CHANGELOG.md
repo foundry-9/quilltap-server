@@ -4,6 +4,17 @@
 
 ### 2.10-dev
 
+- feat: Agent Mode - iterative tool use with self-correction
+  - LLMs can now use tools iteratively, verify results, and self-correct before delivering final response
+  - New `submit_final_response` tool signals completion of agent work
+  - Configurable max turns (1-25, default 10) with force-final safety limit
+  - Settings cascade: Global > Character > Project > Chat (each level can override)
+  - Global settings in Settings > Chat: default enabled toggle and max turns
+  - Per-chat toggle in tool palette (Agent button)
+  - New SSE events: `agent_iteration`, `agent_completed`, `agent_force_final`
+  - New help documentation: `/help/agent-mode`
+  - Migration automatically adds required database columns
+
 ### 2.9.0
 
 - docs: Comprehensive documentation updates for accuracy and completeness (2026-02-03)

@@ -31,6 +31,7 @@ interface UseCharacterViewReturn {
   togglingNpc: boolean
   togglingFavorite: boolean
   togglingControlledBy: boolean
+  savingAgentMode: boolean
   fetchCharacter: () => Promise<void>
   fetchTags: () => Promise<void>
   fetchProfiles: () => Promise<void>
@@ -45,6 +46,7 @@ interface UseCharacterViewReturn {
   handleSaveConnectionProfile: (profileId: string) => Promise<void>
   handleSaveDefaultPartner: (partnerId: string) => Promise<void>
   handleSaveImageProfile: (profileId: string | null) => Promise<void>
+  handleSaveAgentMode: (enabled: boolean | null) => Promise<void>
   handleToggleNpc: () => Promise<void>
   handleToggleFavorite: () => Promise<void>
   handleToggleControlledBy: () => Promise<void>
@@ -68,6 +70,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
   const [togglingNpc, setTogglingNpc] = useState(false)
   const [togglingFavorite, setTogglingFavorite] = useState(false)
   const [togglingControlledBy, setTogglingControlledBy] = useState(false)
+  const [savingAgentMode, setSavingAgentMode] = useState(false)
 
   // Get the default partner for template highlighting ({{user}} replacement)
   // This uses the new default conversation partner system instead of old personas
@@ -323,6 +326,35 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     }
   }
 
+  const handleSaveAgentMode = async (enabled: boolean | null) => {
+    setSavingAgentMode(true)
+    try {
+      const res = await fetch(`/api/v1/characters/${characterId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ defaultAgentModeEnabled: enabled }),
+      })
+      if (!res.ok) throw new Error('Failed to update agent mode setting')
+
+      // Update local state
+      if (character) {
+        setCharacter({ ...character, defaultAgentModeEnabled: enabled })
+      }
+      const message = enabled === null
+        ? 'Agent mode set to inherit from global'
+        : enabled
+          ? 'Agent mode enabled by default'
+          : 'Agent mode disabled by default'
+      showSuccessToast(message)
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to update agent mode')
+      console.error('Failed to save agent mode', { error: err instanceof Error ? err.message : String(err) })
+      await fetchCharacter() // Revert to server state
+    } finally {
+      setSavingAgentMode(false)
+    }
+  }
+
   const handleToggleNpc = async () => {
     if (!character) return
     setTogglingNpc(true)
@@ -403,6 +435,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     togglingNpc,
     togglingFavorite,
     togglingControlledBy,
+    savingAgentMode,
     fetchCharacter,
     fetchTags,
     fetchProfiles,
@@ -417,6 +450,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     handleSaveConnectionProfile,
     handleSaveDefaultPartner,
     handleSaveImageProfile,
+    handleSaveAgentMode,
     handleToggleNpc,
     handleToggleFavorite,
     handleToggleControlledBy,

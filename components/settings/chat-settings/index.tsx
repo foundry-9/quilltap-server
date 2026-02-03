@@ -9,6 +9,7 @@ import { TokenDisplaySettingsComponent } from './TokenDisplaySettings'
 import { ContextCompressionSettingsComponent } from './ContextCompressionSettings'
 import { LLMLoggingSettingsComponent } from './LLMLoggingSettings'
 import { AutomationSettings } from './AutomationSettings'
+import { AgentModeSettings } from './AgentModeSettings'
 
 /**
  * ChatSettingsTab Component
@@ -40,6 +41,8 @@ export default function ChatSettingsTab() {
     handleContextCompressionUpdate,
     handleLLMLoggingChange,
     handleAutoDetectRngChange,
+    handleAgentModeDefaultEnabledChange,
+    handleAgentModeMaxTurnsChange,
   } = useChatSettings()
 
   if (loading) {
@@ -125,6 +128,13 @@ export default function ChatSettingsTab() {
           settings={settings}
           saving={saving}
           onAutoDetectRngChange={handleAutoDetectRngChange}
+        />
+
+        <AgentModeSettings
+          settings={settings}
+          saving={saving}
+          onDefaultEnabledChange={handleAgentModeDefaultEnabledChange}
+          onMaxTurnsChange={handleAgentModeMaxTurnsChange}
         />
       </div>
     </div>
