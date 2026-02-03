@@ -91,6 +91,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
     // Apply text fields by creating synthetic events
     const fieldsToApply: Array<{ name: string; value: string }> = []
 
+    if (data.name) fieldsToApply.push({ name: 'name', value: data.name })
     if (data.title) fieldsToApply.push({ name: 'title', value: data.title })
     if (data.description) fieldsToApply.push({ name: 'description', value: data.description })
     if (data.personality) fieldsToApply.push({ name: 'personality', value: data.personality })

@@ -12,6 +12,7 @@ import { providerRegistry } from '@/lib/plugins/provider-registry';
 import { profileSupportsMimeType } from '@/lib/llm/connection-profile-utils';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
+import { extractFileContent } from '@/lib/services/file-content-extractor';
 import { logger } from '@/lib/logger';
 import type { ConnectionProfile, FileEntry } from '@/lib/schemas/types';
 import type { FileAttachment } from '@/lib/llm/base';
@@ -24,8 +25,9 @@ import type { RepositoryContainer } from '@/lib/repositories/factory';
 export interface WizardRequest {
   primaryProfileId: string;
   visionProfileId?: string;
-  sourceType: 'existing' | 'upload' | 'gallery' | 'skip';
+  sourceType: 'existing' | 'upload' | 'gallery' | 'document' | 'skip';
   imageId?: string;
+  documentId?: string;
   characterName: string;
   existingData?: {
     title?: string;
@@ -37,6 +39,7 @@ export interface WizardRequest {
   };
   background: string;
   fieldsToGenerate: (
+    | 'name'
     | 'title'
     | 'description'
     | 'personality'
@@ -63,11 +66,33 @@ export interface WizardResult {
   errors?: Record<string, string>;
 }
 
+// Progress event types for streaming
+export type WizardProgressEventType = 'start' | 'field_start' | 'field_complete' | 'field_error' | 'done';
+
+export interface WizardProgressEvent {
+  type: WizardProgressEventType;
+  field?: string;
+  snippet?: string;
+  fullContent?: Record<string, unknown>;
+  errors?: Record<string, string>;
+  error?: string;
+}
+
+export type WizardProgressCallback = (event: WizardProgressEvent) => void;
+
 // ============================================================================
 // Prompt Templates
 // ============================================================================
 
 const FIELD_PROMPTS: Record<string, string> = {
+  name: `Generate a unique, memorable name for this character that fits the world and background context provided.
+The name should be:
+- Appropriate to the setting (fantasy, modern, sci-fi, etc.)
+- Easy to pronounce and remember
+- Evocative of the character's nature or background
+
+Respond with ONLY the name, no quotes or explanation.`,
+
   title: `Generate a short, evocative title or epithet for this character (2-5 words).
 Examples: "The Wandering Scholar", "Knight of the Fallen Star", "Last of the Old Guard"
 
@@ -170,12 +195,21 @@ export function buildContextPrompt(
   characterName: string,
   background: string,
   existingData?: WizardRequest['existingData'],
-  imageDescription?: string
+  imageDescription?: string,
+  documentContent?: string
 ): string {
   let context = `You are a character creation assistant for a roleplay/chat application. You are helping create a character profile that will be used by an AI to roleplay as this character.
+`;
 
+  if (characterName.trim()) {
+    context += `
 Character Name: ${characterName}
 `;
+  } else {
+    context += `
+Note: The character does not yet have a name. You may be asked to generate one.
+`;
+  }
 
   if (background.trim()) {
     context += `
@@ -188,6 +222,13 @@ ${background}
     context += `
 Visual Reference (from image analysis):
 ${imageDescription}
+`;
+  }
+
+  if (documentContent) {
+    context += `
+Character Reference Document:
+${documentContent}
 `;
   }
 
@@ -517,19 +558,77 @@ export async function runCharacterWizard(
     );
   }
 
-  // Build context prompt
-  const contextPrompt = buildContextPrompt(
-    request.characterName,
-    request.background,
-    request.existingData,
-    imageDescription
-  );
+  // Handle document content extraction if needed
+  let documentContent: string | undefined;
+  if (request.sourceType === 'document' && request.documentId) {
+    const documentFile = await repos.files.findById(request.documentId);
+    if (!documentFile || documentFile.userId !== userId) {
+      throw new Error('Document not found');
+    }
+
+    const extractResult = await extractFileContent(documentFile);
+    if (!extractResult.success || !extractResult.content) {
+      throw new Error(extractResult.error || 'Failed to extract document content');
+    }
+
+    documentContent = extractResult.content;
+  }
 
   // Generate requested fields
   const generated: Record<string, unknown> = {};
   const errors: Record<string, string> = {};
 
+  // Track the effective character name (may be generated)
+  let effectiveCharacterName = request.characterName;
+
+  // If 'name' is in the fields to generate, generate it first
+  if (request.fieldsToGenerate.includes('name')) {
+    try {
+      // Build initial context without a name
+      const nameContextPrompt = buildContextPrompt(
+        '',
+        request.background,
+        request.existingData,
+        imageDescription,
+        documentContent
+      );
+
+      const namePrompt = FIELD_PROMPTS.name;
+      const generatedName = await generateField(
+        primaryProvider,
+        primaryApiKey,
+        primaryProfile.modelName,
+        nameContextPrompt,
+        namePrompt,
+        100,
+        userId,
+        request.characterId,
+        primaryProfile.provider
+      );
+      generated.name = generatedName;
+      effectiveCharacterName = generatedName;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Generation failed';
+      errors.name = errorMessage;
+      logger.error('[CharacterWizard] Failed to generate field: name', {
+        error: errorMessage,
+      });
+    }
+  }
+
+  // Build context prompt with the effective character name
+  const contextPrompt = buildContextPrompt(
+    effectiveCharacterName,
+    request.background,
+    request.existingData,
+    imageDescription,
+    documentContent
+  );
+
+  // Generate remaining fields (excluding 'name' which was already handled)
   for (const field of request.fieldsToGenerate) {
+    if (field === 'name') continue; // Already handled above
+
     try {
       if (field === 'physicalDescription') {
         generated.physicalDescription = await generatePhysicalDescriptions(
@@ -575,4 +674,238 @@ export async function runCharacterWizard(
     generated,
     errors: Object.keys(errors).length > 0 ? errors : undefined,
   };
+}
+
+/**
+ * Get a short snippet from generated content for progress display
+ */
+function getSnippet(content: unknown, maxLength: number = 100): string {
+  if (typeof content === 'string') {
+    return content.length > maxLength ? content.substring(0, maxLength) + '...' : content;
+  }
+  if (typeof content === 'object' && content !== null) {
+    // For physical description, use the short prompt
+    const pd = content as GeneratedPhysicalDescription;
+    if (pd.shortPrompt) {
+      return pd.shortPrompt.substring(0, maxLength) + (pd.shortPrompt.length > maxLength ? '...' : '');
+    }
+  }
+  return '';
+}
+
+/**
+ * Run the AI character wizard with streaming progress updates
+ */
+export async function runCharacterWizardStreaming(
+  request: WizardRequest,
+  userId: string,
+  repos: RepositoryContainer,
+  onProgress: WizardProgressCallback
+): Promise<void> {
+  logger.info('[CharacterWizard] Starting (streaming)', {
+    userId,
+    characterName: request.characterName,
+    fieldsToGenerate: request.fieldsToGenerate,
+    sourceType: request.sourceType,
+  });
+
+  // Send start event
+  onProgress({ type: 'start' });
+
+  try {
+    // Get primary profile
+    const primaryProfile = await repos.connections.findById(request.primaryProfileId);
+    if (!primaryProfile || primaryProfile.userId !== userId) {
+      throw new Error('Primary profile not found');
+    }
+
+    // Get primary profile API key
+    let primaryApiKey = '';
+    if (primaryProfile.apiKeyId) {
+      const apiKey = await repos.connections.findApiKeyByIdAndUserId(primaryProfile.apiKeyId, userId);
+      if (apiKey) {
+        primaryApiKey = decryptApiKey(apiKey.ciphertext, apiKey.iv, apiKey.authTag, userId);
+      }
+    }
+
+    // Ensure plugin system is initialized
+    if (!isPluginSystemInitialized() || !providerRegistry.isInitialized()) {
+      const initResult = await initializePlugins();
+      if (!initResult.success) {
+        throw new Error('Plugin system initialization failed');
+      }
+    }
+
+    // Create primary provider
+    const primaryProvider = await createLLMProvider(primaryProfile.provider, primaryProfile.baseUrl || undefined);
+
+    // Handle image description if needed
+    let imageDescription: string | undefined;
+    if ((request.sourceType === 'upload' || request.sourceType === 'gallery') && request.imageId) {
+      const imageFile = await repos.files.findById(request.imageId);
+      if (!imageFile || imageFile.userId !== userId) {
+        throw new Error('Image not found');
+      }
+
+      let visionProfile = primaryProfile;
+      let visionApiKey = primaryApiKey;
+
+      if (!profileSupportsMimeType(primaryProfile, imageFile.mimeType)) {
+        if (!request.visionProfileId) {
+          throw new Error('Vision profile required for image analysis');
+        }
+
+        const secondaryProfile = await repos.connections.findById(request.visionProfileId);
+        if (!secondaryProfile || secondaryProfile.userId !== userId) {
+          throw new Error('Vision profile not found');
+        }
+
+        if (secondaryProfile.apiKeyId) {
+          const apiKey = await repos.connections.findApiKeyByIdAndUserId(secondaryProfile.apiKeyId, userId);
+          if (apiKey) {
+            visionApiKey = decryptApiKey(apiKey.ciphertext, apiKey.iv, apiKey.authTag, userId);
+          }
+        }
+
+        visionProfile = secondaryProfile;
+      }
+
+      imageDescription = await generateImageDescription(
+        imageFile,
+        visionProfile,
+        visionApiKey,
+        userId,
+        request.characterId
+      );
+    }
+
+    // Handle document content extraction if needed
+    let documentContent: string | undefined;
+    if (request.sourceType === 'document' && request.documentId) {
+      const documentFile = await repos.files.findById(request.documentId);
+      if (!documentFile || documentFile.userId !== userId) {
+        throw new Error('Document not found');
+      }
+
+      const extractResult = await extractFileContent(documentFile);
+      if (!extractResult.success || !extractResult.content) {
+        throw new Error(extractResult.error || 'Failed to extract document content');
+      }
+
+      documentContent = extractResult.content;
+    }
+
+    // Generate requested fields
+    const generated: Record<string, unknown> = {};
+    const errors: Record<string, string> = {};
+
+    // Track the effective character name (may be generated)
+    let effectiveCharacterName = request.characterName;
+
+    // If 'name' is in the fields to generate, generate it first
+    if (request.fieldsToGenerate.includes('name')) {
+      onProgress({ type: 'field_start', field: 'name' });
+
+      try {
+        const nameContextPrompt = buildContextPrompt(
+          '',
+          request.background,
+          request.existingData,
+          imageDescription,
+          documentContent
+        );
+
+        const namePrompt = FIELD_PROMPTS.name;
+        const generatedName = await generateField(
+          primaryProvider,
+          primaryApiKey,
+          primaryProfile.modelName,
+          nameContextPrompt,
+          namePrompt,
+          100,
+          userId,
+          request.characterId,
+          primaryProfile.provider
+        );
+        generated.name = generatedName;
+        effectiveCharacterName = generatedName;
+
+        onProgress({ type: 'field_complete', field: 'name', snippet: getSnippet(generatedName) });
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Generation failed';
+        errors.name = errorMessage;
+        onProgress({ type: 'field_error', field: 'name', error: errorMessage });
+        logger.error('[CharacterWizard] Failed to generate field: name', { error: errorMessage });
+      }
+    }
+
+    // Build context prompt with the effective character name
+    const contextPrompt = buildContextPrompt(
+      effectiveCharacterName,
+      request.background,
+      request.existingData,
+      imageDescription,
+      documentContent
+    );
+
+    // Generate remaining fields (excluding 'name' which was already handled)
+    for (const field of request.fieldsToGenerate) {
+      if (field === 'name') continue;
+
+      onProgress({ type: 'field_start', field });
+
+      try {
+        if (field === 'physicalDescription') {
+          const physDesc = await generatePhysicalDescriptions(
+            primaryProvider,
+            primaryApiKey,
+            primaryProfile.modelName,
+            contextPrompt,
+            userId,
+            request.characterId,
+            primaryProfile.provider
+          );
+          generated.physicalDescription = physDesc;
+          onProgress({ type: 'field_complete', field, snippet: getSnippet(physDesc) });
+        } else {
+          const fieldPrompt = FIELD_PROMPTS[field];
+          const maxTokens = field === 'exampleDialogues' || field === 'systemPrompt' ? 1000 : 500;
+          const content = await generateField(
+            primaryProvider,
+            primaryApiKey,
+            primaryProfile.modelName,
+            contextPrompt,
+            fieldPrompt,
+            maxTokens,
+            userId,
+            request.characterId,
+            primaryProfile.provider
+          );
+          generated[field] = content;
+          onProgress({ type: 'field_complete', field, snippet: getSnippet(content) });
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Generation failed';
+        errors[field] = errorMessage;
+        onProgress({ type: 'field_error', field, error: errorMessage });
+        logger.error(`[CharacterWizard] Failed to generate field: ${field}`, { error: errorMessage });
+      }
+    }
+
+    logger.info('[CharacterWizard] Complete (streaming)', {
+      fieldsGenerated: Object.keys(generated),
+      fieldsWithErrors: Object.keys(errors),
+    });
+
+    // Send done event with full content
+    onProgress({
+      type: 'done',
+      fullContent: generated,
+      errors: Object.keys(errors).length > 0 ? errors : undefined,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Generation failed';
+    logger.error('[CharacterWizard] Streaming generation failed', { error: errorMessage });
+    onProgress({ type: 'done', error: errorMessage, fullContent: {}, errors: { _fatal: errorMessage } });
+  }
 }

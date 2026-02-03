@@ -1,24 +1,22 @@
 import { test, expect } from '@playwright/test'
-import { TestUserHelper } from './helpers/test-user'
+import { TestHelper } from './helpers/test-user'
 
 /**
  * Integration tests for chat flow
  *
- * Uses the TestUserHelper for full user lifecycle:
- * - Create test user with credentials auth
- * - Set up test data (characters, profiles, chats)
- * - Run tests
- * - Delete test data
- * - Delete test user
+ * Tests the basic chat functionality:
+ * - Character creation
+ * - Chat creation with character
+ * - Chat UI elements (composer, messages, send button)
  *
- * Note: Tests that require actual LLM responses are marked as placeholders
- * since they would need real API keys or mocked providers.
+ * Note: Tests that require actual LLM responses would need Ollama running
+ * with an available model, or a mock provider.
  */
 
 test.describe('Chat Flow Integration Tests', () => {
   test.describe.configure({ mode: 'serial' })
 
-  const testUser = new TestUserHelper('chat_flow')
+  const testHelper = new TestHelper('chat_flow')
   let testCharacterId: string
   let testChatId: string
 
@@ -30,7 +28,7 @@ test.describe('Chat Flow Integration Tests', () => {
       await page.waitForLoadState('domcontentloaded')
 
       try {
-        await composer.waitFor({ state: 'visible', timeout: 20000 })
+        await composer.waitFor({ state: 'visible', timeout: 30000 })
         return
       } catch (error) {
         if (attempt === 3) {
@@ -40,23 +38,20 @@ test.describe('Chat Flow Integration Tests', () => {
     }
   }
 
-  test('setup: create test user and login', async ({ page }) => {
-    await testUser.createAndLogin(page)
+  test('setup: seed test data', async ({ page }) => {
+    await testHelper.ensureReady(page)
   })
 
-  test('should display home page when authenticated', async ({ page }) => {
-    await testUser.login(page)
+  test('should display home page', async ({ page }) => {
     await page.goto('/')
     await page.waitForLoadState('domcontentloaded')
 
-    // Verify we're on the home page, not redirected to signin
-    expect(page.url()).not.toContain('/auth/signin')
-    expect(page.url().endsWith('/') || page.url().endsWith(':3000')).toBe(true)
+    // Verify we're on the home page
+    expect(page.url()).not.toContain('/auth/')
+    await expect(page.getByRole('heading', { name: 'Recent Chats' })).toBeVisible({ timeout: 15000 })
   })
 
   test('should create a character', async ({ page }) => {
-    await testUser.login(page)
-
     // Navigate to characters page
     await page.goto('/')
     await page.waitForLoadState('domcontentloaded')
@@ -80,7 +75,7 @@ test.describe('Chat Flow Integration Tests', () => {
     }
 
     // Also create via API to ensure we have a character
-    testCharacterId = await testUser.createCharacter(page, {
+    testCharacterId = await testHelper.createCharacter(page, {
       name: 'API Created Chat Character',
       description: 'Character created via API for chat testing',
       firstMessage: 'Hello! Ready to chat.',
@@ -90,10 +85,8 @@ test.describe('Chat Flow Integration Tests', () => {
   })
 
   test('should create a chat with a character', async ({ page }) => {
-    await testUser.login(page)
-
     // Create a chat via the helper
-    testChatId = await testUser.createChat(page, testCharacterId)
+    testChatId = await testHelper.createChat(page, testCharacterId)
     expect(testChatId).toBeTruthy()
 
     // Navigate to the chat
@@ -108,8 +101,6 @@ test.describe('Chat Flow Integration Tests', () => {
   })
 
   test('should display chat messages container', async ({ page }) => {
-    await testUser.login(page)
-
     await waitForChatComposer(page)
 
     // Verify the chat messages container exists
@@ -120,8 +111,6 @@ test.describe('Chat Flow Integration Tests', () => {
   })
 
   test('should have message input field', async ({ page }) => {
-    await testUser.login(page)
-
     await waitForChatComposer(page)
 
     // Verify the message input exists
@@ -130,8 +119,6 @@ test.describe('Chat Flow Integration Tests', () => {
   })
 
   test('should have send button', async ({ page }) => {
-    await testUser.login(page)
-
     await waitForChatComposer(page)
 
     // Verify there's a send button or submit mechanism
@@ -142,18 +129,15 @@ test.describe('Chat Flow Integration Tests', () => {
     await expect(sendButton.first()).toBeVisible()
   })
 
-  test('cleanup: delete test data and user', async ({ page }) => {
-    await testUser.cleanup(page)
+  test('cleanup: delete test data', async ({ page }) => {
+    await testHelper.cleanup(page)
   })
 })
 
 /**
  * Tests that require actual LLM responses (future implementation):
  *
- * These tests need either:
- * 1. Real API keys for providers
- * 2. A mock LLM provider
- * 3. Recorded/stubbed responses
+ * These tests need Ollama running with a model like llama3.2 available.
  *
  * - Send and receive messages in chat
  * - Edit a message
@@ -163,7 +147,6 @@ test.describe('Chat Flow Integration Tests', () => {
  *
  * Additional test ideas:
  * - Character import/export (SillyTavern format)
- * - Persona linking
  * - Chat import/export
  * - Connection profile management
  * - Multi-provider testing

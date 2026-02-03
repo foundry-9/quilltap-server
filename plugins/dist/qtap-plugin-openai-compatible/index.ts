@@ -12,7 +12,6 @@
 
 import type { LLMProviderPlugin } from './types';
 import { OpenAICompatibleProvider } from './provider';
-import { OpenAICompatibleIcon } from './icon';
 import {
   createPluginLogger,
   parseOpenAIToolCalls,
@@ -187,9 +186,6 @@ export const plugin: LLMProviderPlugin = {
   /**
    * Render the OpenAI-compatible icon
    */
-  renderIcon: (props) => {
-    return OpenAICompatibleIcon(props);
-  },
 
   /**
    * Format tools from OpenAI format to OpenAI format

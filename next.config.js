@@ -123,8 +123,30 @@ const nextConfig = {
     // Suppress warnings about dynamic requires in plugin loading code
     // These are intentional - plugins are loaded at runtime using require()
     config.ignoreWarnings = config.ignoreWarnings || [];
+    // Pattern for "Critical dependency" warnings from dynamic require usage
     config.ignoreWarnings.push({
       module: /lib\/startup\/plugin-initialization\.ts/,
+      message: /Critical dependency/,
+    });
+    config.ignoreWarnings.push({
+      module: /lib\/plugins\/provider-registry\.ts/,
+      message: /Critical dependency/,
+    });
+    config.ignoreWarnings.push({
+      module: /lib\/themes\/theme-registry\.ts/,
+      message: /Critical dependency/,
+    });
+    config.ignoreWarnings.push({
+      module: /migrations\/lib\/mongodb-utils\.ts/,
+      message: /Critical dependency/,
+    });
+    // Also catch "Can't resolve" patterns
+    config.ignoreWarnings.push({
+      module: /lib\/startup\/plugin-initialization\.ts/,
+      message: /Can't resolve/,
+    });
+    config.ignoreWarnings.push({
+      module: /lib\/plugins\/provider-registry\.ts/,
       message: /Can't resolve/,
     });
     config.ignoreWarnings.push({

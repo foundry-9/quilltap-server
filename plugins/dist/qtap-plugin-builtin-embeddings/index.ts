@@ -19,7 +19,6 @@
 
 import type { LLMProviderPlugin, EmbeddingModelInfo } from './types';
 import { BuiltinEmbeddingProvider, BUILTIN_MODEL_NAME } from './embedding-provider';
-import { BuiltinEmbeddingsIcon } from './icon';
 
 /**
  * Plugin metadata configuration
@@ -145,9 +144,6 @@ export const plugin: LLMProviderPlugin = {
   /**
    * Render the provider icon
    */
-  renderIcon: (props) => {
-    return BuiltinEmbeddingsIcon(props);
-  },
 
   // No tool support needed for embedding provider
   formatTools: undefined,

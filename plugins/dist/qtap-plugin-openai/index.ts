@@ -13,7 +13,7 @@
 import type { LLMProviderPlugin, EmbeddingModelInfo } from './types';
 import { OpenAIProvider } from './provider';
 import { OpenAIImageProvider } from './image-provider';
-import { OpenAIIcon } from './icon';
+import { OpenAIEmbeddingProvider } from './embedding-provider';
 import {
   createPluginLogger,
   parseOpenAIToolCalls,
@@ -120,6 +120,13 @@ export const plugin: LLMProviderPlugin = {
   },
 
   /**
+   * Factory method to create an OpenAI embedding provider instance
+   */
+  createEmbeddingProvider: (baseUrl?: string) => {
+    return new OpenAIEmbeddingProvider(baseUrl);
+  },
+
+  /**
    * Get list of available models from OpenAI API
    * Requires a valid API key
    */
@@ -214,13 +221,6 @@ export const plugin: LLMProviderPlugin = {
         description: 'Legacy model. Consider using text-embedding-3-small instead.',
       },
     ];
-  },
-
-  /**
-   * Render the OpenAI icon
-   */
-  renderIcon: (props) => {
-    return OpenAIIcon(props);
   },
 
   /**

@@ -1,0 +1,515 @@
+# Editing Characters
+
+> **[Open this page in Quilltap](/characters)**
+
+This guide covers how to modify and refine your existing characters in Quilltap.
+
+## Accessing Character Editing
+
+### Ways to Edit a Character
+
+**From Characters List:**
+
+1. Go to **Characters** page
+2. Find character in list
+3. Click character row or hover menu
+4. Click **Edit** button or pencil icon
+
+**From Character View:**
+
+1. Click character to view details
+2. Click **Edit** button at top
+3. Directed to edit interface
+
+**Quick Edit:** Some fields can be edited directly from the character list depending on your view settings.
+
+## Character Edit Interface
+
+The edit interface has multiple tabs for different aspects of character:
+
+### Edit Tabs Overview
+
+| Tab | Purpose | When to Use |
+|-----|---------|-----------|
+| **Details** | Name, description, personality, scenario, first message | Modify core character info |
+| **System Prompts** | AI instructions and behaviors | Fine-tune how character acts |
+| **Physical Descriptions** | Appearance details for images | Add visual information |
+| **Rename/Replace** | Bulk rename or replace content | Reorganize or rebrand character |
+
+## Editing Character Details
+
+The Details tab contains all basic character information.
+
+### Field-by-Field Editing
+
+**Name**
+
+- Click on name field
+- Rename character
+- Used everywhere system references character
+- Examples: "Alice" → "Older Alice", "Detective Jones" → "Detective Sarah Jones"
+
+**Title**
+
+- Subtitle or role
+- Optional field
+- Examples: "The Wanderer", "Head Chef", "Royal Advisor"
+
+**Description**
+
+- Main character narrative
+- Click to edit
+- Can be lengthy
+- Supports multiple paragraphs
+
+**Personality**
+
+- Character traits and characteristics
+- Edit to refine how they're perceived
+- Example: Add "Recently developed anxiety" to existing description
+
+**Scenario**
+
+- Current situation or setting
+- Update when context changes
+- Example: "Changed from tavern owner to traveling merchant"
+
+**First Message**
+
+- Opening greeting
+- Update for variety or different campaign
+- Keep consistent with character voice
+
+**Example Dialogues**
+
+- Sample conversations
+- Edit to add more examples
+- Remove ones that no longer fit
+- Improve examples that weren't clear
+
+### Making Bulk Changes
+
+Want to change multiple characters at once? Use Rename/Replace tab (see below).
+
+## Editing System Prompts
+
+System Prompts tab contains detailed AI instructions.
+
+### Understanding System Prompts
+
+System prompts tell the AI exactly how to behave:
+
+**Example:**
+
+```
+You are Captain Vex, a hardened pirate captain with a hidden code of honor. 
+You speak with a pirate dialect, dropping g's (talkin', fightin'). You're 
+strategic and cunning but never harm innocents. You're intensely loyal to 
+your crew. Respond always in character as Captain Vex, maintaining this 
+perspective and personality.
+```
+
+### Editing System Prompts
+
+1. Click **System Prompts** tab
+2. See current system prompt
+3. Click **Edit** or inline edit the text
+4. Modify prompt
+5. Click **Save**
+
+**Tips:**
+
+- Start with existing prompt
+- Enhance rather than replace
+- Keep focused on key behaviors
+- Be specific about communication style
+- Avoid contradictions
+
+### System Prompt Structure
+
+Well-organized system prompts have this structure:
+
+```
+1. Identity: You are [Character Name], [Basic Description]
+
+2. Personality: [Key traits, how they think and feel]
+
+3. Communication: You speak [in what style/accent/tone]
+
+4. Values/Priorities: [What matters to them, what drives them]
+
+5. Constraints: [What they wouldn't do, boundaries]
+
+6. Instructions: [How to respond, maintain character, etc.]
+```
+
+### Example System Prompt Refinements
+
+**Original (basic):**
+
+```
+You are a detective. Act like a detective.
+```
+
+**Refined (better):**
+
+```
+You are Detective Sarah Chen, a 15-year veteran homicide detective. 
+You're analytical and detail-oriented. You speak directly, no nonsense. 
+You care deeply about victims but hide it behind professionalism. 
+You have dark humor about your work. You ask probing questions and 
+notice small details others miss. Stay in character as Sarah always.
+```
+
+### Multiple System Prompts
+
+If your character has different modes:
+
+**Create prompt for each:**
+
+- Character mode A: "When speaking to allies..."
+- Character mode B: "When speaking to enemies..."
+- Character mode C: "When alone..."
+
+You can switch between prompts in chat settings.
+
+### When to Edit System Prompts
+
+- Character not behaving as expected
+- Want different personality for new campaign
+- Adding new dimensions to character
+- Fixing specific problematic behaviors
+- Improving response quality after testing
+
+## Editing Physical Descriptions
+
+The Physical Descriptions tab contains visual information about characters.
+
+### What Physical Descriptions Do
+
+Physical descriptions help:
+
+- AI understand character appearance
+- Image generation tools create accurate images
+- Consistency across conversations
+- Detailed descriptions in roleplay
+
+### Editing Physical Description
+
+1. Click **Physical Descriptions** tab
+2. See current descriptions (different lengths)
+3. Edit manually or use AI to regenerate
+
+### Physical Description Types
+
+**Short Description** (1 sentence)
+
+- Quick visual reference
+- Good for status bars
+- Example: "Tall woman with dark red hair and green eyes"
+
+**Medium Description** (2-3 sentences)
+
+- Balanced detail
+- Good for quick lookups
+- Example: "Tall woman with long dark red hair usually braided,
+sharp green eyes, pale skin. Wears practical leather clothing."
+
+**Long Description** (1 paragraph)
+
+- Detailed information
+- Good for image generation
+- Example: "Tall woman (5'9") with waist-length dark red hair
+usually worn in a complicated braid. Sharp green eyes, pale skin.
+Thin face with high cheekbones. Usually wears practical leather
+armor from her military days..."
+
+**Complete Description** (2-3 paragraphs)
+
+- Very detailed
+- Good for AI generating multiple variations
+- Includes mannerisms, clothing, accessories
+
+**Full Description** (extensive)
+
+- Maximum detail
+- Best for detailed image generation
+- Includes all visual elements, personality reflected in appearance
+
+### Regenerating Descriptions
+
+1. Click **Generate New Description**
+2. Select which image source to use for generation:
+   - From text (AI creates from character description)
+   - From image file (upload image, AI analyzes)
+   - From character image (use existing gallery image)
+3. Wait for generation
+4. Review generated descriptions
+5. Accept all, edit some, or reject
+
+### Uploading Images for Description
+
+1. Click **Upload Image**
+2. Select image file (JPG, PNG)
+3. AI analyzes image
+4. Generates descriptions based on appearance
+5. Review and save
+
+### Manual Physical Description
+
+If you prefer to write manually:
+
+1. Click **Edit** next to description
+2. Type your description
+3. Save
+
+**Good example:**
+
+```
+Sarah is a tall woman with an athletic build, suggesting years of 
+physical training. Her dark red hair is usually worn in a practical 
+braid down her back. Sharp green eyes and high cheekbones give her 
+a striking appearance. She has a small scar on her left eyebrow from 
+an old injury. She dresses practically in leather jackets and dark 
+jeans, with minimal jewelry except for a detective's badge on her belt.
+```
+
+## Using Rename/Replace Tab
+
+The Rename/Replace tab helps with bulk changes to character content.
+
+### Simple Rename
+
+If you want to rename the character and update all references:
+
+1. Click **Rename/Replace** tab
+2. Enter **New Name**
+3. Select **Replace in all content** option
+4. Click **Rename**
+5. Character renamed everywhere (description, prompts, etc.)
+
+### Find and Replace
+
+For bulk text replacement:
+
+1. Click **Rename/Replace** tab
+2. Enter **Find** text
+3. Enter **Replace** text
+4. Click **Preview** to see what will change
+5. Click **Replace All** to confirm
+6. All matching text updated
+
+**Examples:**
+
+- Find: "pirate ship" → Replace: "airship" (changing genre)
+- Find: "he" → Replace: "she" (changing gender)
+- Find: "London" → Replace: "New York" (changing setting)
+
+### Preview Changes
+
+Always use Preview before Replace All:
+
+1. Enter find/replace terms
+2. Click **Preview**
+3. See highlighted changes
+4. Review carefully
+5. Click **Replace All** if correct
+
+## Keyboard Shortcuts for Editing
+
+| Action | Shortcut |
+|--------|----------|
+| Save | Cmd+S or Ctrl+S |
+| Undo | Cmd+Z or Ctrl+Z |
+| Redo | Cmd+Shift+Z or Ctrl+Y |
+| Close edit | Esc or Click close |
+
+## Editing Workflow: Common Scenarios
+
+### Scenario 1: Character Acting Wrong in Chats
+
+**Problem:** Character not behaving as expected
+
+**Solution:**
+
+1. Identify specific behavior issue
+2. Edit System Prompts tab
+3. Add specific instruction:
+
+   ```
+   "Do NOT break character to explain yourself. Stay as [Character] always."
+   ```
+
+4. Save and test in new chat
+
+### Scenario 2: Updating Character for New Campaign
+
+**Problem:** Same character, different time period/setting
+
+**Solution:**
+
+1. Edit **Details** tab:
+   - Update Scenario field
+   - Update Description if time has passed
+2. Edit **System Prompts** tab:
+   - Add context about new time period
+   - Update relevant personality notes
+3. Optional: Update Physical Description if appearance changed
+4. Save and test
+
+### Scenario 3: Adding Relationship Information
+
+**Problem:** Want to note character relationships
+
+**Solution:**
+
+1. Edit **Details** tab
+2. Add to Personality or Description:
+
+   ```
+   "Close relationship with [Other Character Name]. Has tension with [Another Character]."
+   ```
+
+3. Save
+
+### Scenario 4: Fixing Accent/Speech Pattern
+
+**Problem:** Character not using intended speech pattern
+
+**Solution:**
+
+1. Edit **System Prompts** tab
+2. Add communication instruction:
+
+   ```
+   "You speak with a Southern accent. Drop g's from -ing words (talkin', 
+   fightin', walkin'). Use y'all and regional expressions naturally."
+   ```
+
+3. Add examples to Details > Example Dialogues showing accent in action
+4. Save and test
+
+### Scenario 5: Making Character Darker/Lighter
+
+**Problem:** Character tone isn't matching what you want
+
+**Solution:**
+
+1. Edit **Details** tab:
+   - Adjust Personality to shift tone
+   - Update First Message if needed
+   - Add Example Dialogues showing new tone
+2. Edit **System Prompts** tab:
+   - Add specific tone instruction:
+
+     ```
+     "Your responses have a dark, cynical tone tinged with dark humor."
+     ```
+
+3. Save and test
+
+## Advanced Editing Techniques
+
+### Layered System Prompts
+
+Create prompts that work in layers:
+
+```
+Core instruction: You are [Character]. You [core trait].
+
+When speaking to allies: [behavior A]
+When speaking to strangers: [behavior B]
+When alone: [behavior C]
+
+Always maintain: [core personality]
+```
+
+### Conflicting Traits
+
+If character has contradictions, explain them:
+
+```
+You are [Character], someone with seemingly contradictory traits:
+- Appears tough but is deeply empathetic
+- Speaks harshly but acts with kindness
+- Seems confident but battles internal doubt
+
+This contradiction is core to your character. Express both sides naturally.
+```
+
+### Prompt Testing
+
+After editing system prompts:
+
+1. Start new chat with character
+2. Try different conversation angles
+3. See if behavior matches intent
+4. Return to edit if needed
+5. Iterate until satisfied
+
+## Best Practices for Editing
+
+### Do's ✓
+
+- Keep edits consistent across tabs
+- Test changes in chats before finalizing
+- Maintain backup of old version if changing significantly
+- Use Physical Descriptions for visual reference
+- Keep System Prompts focused and clear
+- Update all character variants together
+
+### Don'ts ✗
+
+- Don't overwrite character details without review
+- Don't create contradictory instructions in System Prompt
+- Don't remove important personality traits accidentally
+- Don't change core character concept without confirmation
+- Don't ignore preview warnings before Replace All
+
+## Undoing Changes
+
+### If You Make a Mistake
+
+1. Immediately click **Undo** (Cmd+Z)
+2. This undoes recent edits
+3. Or close without saving to discard changes
+4. Character reverts to last saved state
+
+### Recovering Old Version
+
+If you saved unwanted changes:
+
+1. There's no version history feature
+2. Make note of changes you want to undo
+3. Edit manually back to previous state
+4. Or use Find/Replace to reverse changes
+
+**Tip:** If making major changes, copy character details to Notes app as backup before editing.
+
+## Performance Tips
+
+### For Complex Characters
+
+If your character has extensive details:
+
+- Keep System Prompt under 500 words
+- Break very long descriptions into multiple sections
+- Use shorter first message (1-2 sentences)
+- Keep example dialogues focused
+
+### Character with Multiple Aspects
+
+If character has different modes:
+
+- Create separate System Prompt for each mode
+- Add notes about when to use each
+- Test each variant thoroughly
+- Keep consistent core personality
+
+## Related Topics
+
+- [Character Creation](character-creation.md) — Creating new characters
+- [Character System Prompts](character-system-prompts.md) — Deep dive on prompts
+- [Organizing Characters](character-organization.md) — Tags and management
+- [Chats](chats.md) — Testing character in conversations
+- [Characters Overview](characters.md) — About characters

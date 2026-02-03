@@ -162,3 +162,6 @@ plugins/*
 # Ignore node_modules and package-lock.json everywhere under plugins, including under dist
 plugins/**/node_modules/
 plugins/**/package-lock.json
+
+# Help index JSON (generated from help/ Markdown files)
+help/help-index.json

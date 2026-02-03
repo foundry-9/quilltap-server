@@ -8,10 +8,13 @@
  */
 
 import AdmZip from 'adm-zip';
+import fs from 'fs';
+import path from 'path';
 import { logger } from '@/lib/logger';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
+import { getNpmPluginsDir } from '@/lib/paths';
 import { UuidRemapper } from './uuid-remapper';
 import type {
   BackupManifest,
@@ -36,6 +39,7 @@ import type {
   ProviderModel,
   Project,
   LLMLog,
+  PluginConfig,
 } from '@/lib/schemas/types';
 
 const moduleLogger = logger.child({ module: 'backup:restore-service' });
@@ -98,6 +102,8 @@ export function parseBackupZip(zipBuffer: Buffer): BackupData {
   const projects = readJsonOptional<Project[]>('data/projects.json', []);
   // LLM logs are optional for backwards compatibility with older backups
   const llmLogs = readJsonOptional<LLMLog[]>('data/llm-logs.json', []);
+  // Plugin configs are optional for backwards compatibility with older backups
+  const pluginConfigs = readJsonOptional<PluginConfig[]>('data/plugin-configs.json', []);
 
   moduleLogger.info('Parsed backup ZIP', {
     version: manifest.version,
@@ -120,6 +126,7 @@ export function parseBackupZip(zipBuffer: Buffer): BackupData {
     providerModels,
     projects,
     llmLogs,
+    pluginConfigs,
   };
 }
 
@@ -155,12 +162,48 @@ export function getFileFromZip(
 }
 
 /**
+ * Counts npm plugins in a backup ZIP
+ */
+function countNpmPluginsInZip(zipBuffer: Buffer): number {
+  const zip = new AdmZip(zipBuffer);
+  const entries = zip.getEntries();
+
+  // Find the root folder
+  let rootFolder = '';
+  for (const entry of entries) {
+    if (entry.entryName.includes('manifest.json')) {
+      rootFolder = entry.entryName.split('/')[0] + '/';
+      break;
+    }
+  }
+
+  if (!rootFolder) return 0;
+
+  // Count unique plugin directories in plugins/npm/
+  const pluginPrefix = `${rootFolder}plugins/npm/`;
+  const pluginNames = new Set<string>();
+
+  for (const entry of entries) {
+    if (entry.entryName.startsWith(pluginPrefix)) {
+      const relativePath = entry.entryName.substring(pluginPrefix.length);
+      const pluginName = relativePath.split('/')[0];
+      if (pluginName) {
+        pluginNames.add(pluginName);
+      }
+    }
+  }
+
+  return pluginNames.size;
+}
+
+/**
  * Previews what will be restored without actually restoring
  */
 export function previewRestore(zipBuffer: Buffer): RestoreSummary {
   const data = parseBackupZip(zipBuffer);
 
   const totalMessages = data.chats.reduce((sum, chat) => sum + chat.messages.length, 0);
+  const npmPluginCount = countNpmPluginsInZip(zipBuffer);
 
   return {
     characters: data.characters.length,
@@ -181,6 +224,8 @@ export function previewRestore(zipBuffer: Buffer): RestoreSummary {
     providerModels: data.providerModels.length,
     projects: data.projects.length,
     llmLogs: data.llmLogs.length,
+    pluginConfigs: data.pluginConfigs?.length || 0,
+    npmPlugins: npmPluginCount,
     warnings: [],
   };
 }
@@ -566,6 +611,12 @@ function remapBackupData(
     userId: targetUserId,
   })) as LLMLog[];
 
+  // Remap plugin configs
+  const remappedPluginConfigs = (data.pluginConfigs || []).map((config) => ({
+    ...remapper.remapFields(config, ['id']),
+    userId: targetUserId,
+  })) as PluginConfig[];
+
   return {
     manifest: data.manifest,
     characters: remappedCharacters,
@@ -581,6 +632,7 @@ function remapBackupData(
     providerModels: remappedProviderModels,
     projects: remappedProjects,
     llmLogs: remappedLLMLogs,
+    pluginConfigs: remappedPluginConfigs,
   };
 }
 
@@ -860,6 +912,84 @@ export async function restore(
     }
   }
 
+  // 15. Plugin Configs
+  let pluginConfigsRestored = 0;
+  for (const config of data.pluginConfigs || []) {
+    try {
+      const { id, createdAt, updatedAt, ...configData } = config;
+      // Use upsert to merge with existing configs or create new ones
+      await globalRepos.pluginConfigs.upsertForUserPlugin(
+        targetUserId,
+        configData.pluginName,
+        configData.config as Record<string, unknown>
+      );
+      pluginConfigsRestored++;
+    } catch (error) {
+      warnings.push(`Failed to restore plugin config for "${config.pluginName}": ${error instanceof Error ? error.message : String(error)}`);
+      moduleLogger.warn('Failed to restore plugin config', { pluginName: config.pluginName, error });
+    }
+  }
+
+  // 16. NPM Plugins (extract from ZIP to plugins/npm directory)
+  let npmPluginsRestored = 0;
+  const zip = new AdmZip(zipBuffer);
+  const zipEntries = zip.getEntries();
+
+  // Find the root folder
+  let rootFolder = '';
+  for (const entry of zipEntries) {
+    if (entry.entryName.includes('manifest.json')) {
+      rootFolder = entry.entryName.split('/')[0] + '/';
+      break;
+    }
+  }
+
+  if (rootFolder) {
+    const pluginPrefix = `${rootFolder}plugins/npm/`;
+    const npmPluginsDir = getNpmPluginsDir();
+    const restoredPluginNames = new Set<string>();
+
+    // Ensure the npm plugins directory exists
+    if (!fs.existsSync(npmPluginsDir)) {
+      fs.mkdirSync(npmPluginsDir, { recursive: true });
+    }
+
+    for (const entry of zipEntries) {
+      if (entry.entryName.startsWith(pluginPrefix) && !entry.isDirectory) {
+        try {
+          const relativePath = entry.entryName.substring(pluginPrefix.length);
+          const pluginName = relativePath.split('/')[0];
+
+          if (pluginName) {
+            const targetPath = path.join(npmPluginsDir, relativePath);
+            const targetDir = path.dirname(targetPath);
+
+            // Create directory if it doesn't exist
+            if (!fs.existsSync(targetDir)) {
+              fs.mkdirSync(targetDir, { recursive: true });
+            }
+
+            // Extract the file
+            const fileData = entry.getData();
+            fs.writeFileSync(targetPath, new Uint8Array(fileData));
+            restoredPluginNames.add(pluginName);
+          }
+        } catch (error) {
+          warnings.push(`Failed to restore npm plugin file "${entry.entryName}": ${error instanceof Error ? error.message : String(error)}`);
+          moduleLogger.warn('Failed to restore npm plugin file', { entryName: entry.entryName, error });
+        }
+      }
+    }
+
+    npmPluginsRestored = restoredPluginNames.size;
+    if (npmPluginsRestored > 0) {
+      moduleLogger.info('Restored npm plugins', {
+        count: npmPluginsRestored,
+        plugins: Array.from(restoredPluginNames),
+      });
+    }
+  }
+
   // ============================================================================
   // POST-RESTORE RECONCILIATION PHASE
   // ============================================================================
@@ -1076,6 +1206,8 @@ export async function restore(
     providerModels: providerModelsRestored,
     projects: projectsRestored,
     llmLogs: llmLogsRestored,
+    pluginConfigs: pluginConfigsRestored,
+    npmPlugins: npmPluginsRestored,
     warnings,
   };
 

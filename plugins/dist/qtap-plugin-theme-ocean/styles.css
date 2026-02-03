@@ -106,6 +106,16 @@
   --info-100: 195 85% 48%;
   --info-200: 195 80% 38%;
 
+  /* Theme Color Mappings - for qt-* utility classes */
+  --theme-success: hsl(var(--success-100));
+  --theme-success-foreground: hsl(var(--always-white));
+  --theme-warning: hsl(var(--warning-100));
+  --theme-warning-foreground: hsl(var(--always-black));
+  --theme-destructive: hsl(var(--danger-100));
+  --theme-destructive-foreground: hsl(var(--always-white));
+  --theme-info: hsl(var(--info-100));
+  --theme-info-foreground: hsl(var(--always-white));
+
   /* Always Colors */
   --always-white: 0 0% 100%;
   --always-black: 0 0% 0%;

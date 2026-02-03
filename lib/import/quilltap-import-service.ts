@@ -1052,6 +1052,20 @@ async function importMemories(
         newChatId = idMaps.chats.get(memory.chatId) || null;
       }
 
+      // Remap project ID if present
+      let newProjectId = memory.projectId;
+      if (memory.projectId) {
+        newProjectId = idMaps.projects.get(memory.projectId) || null;
+      }
+
+      // Remap tags if present
+      let newTags = memory.tags;
+      if (memory.tags && memory.tags.length > 0) {
+        newTags = memory.tags
+          .map((tagId) => idMaps.tags.get(tagId) || tagId)
+          .filter((id) => id !== null) as string[];
+      }
+
       const { id: _, createdAt, updatedAt, ...memoryData } = memory;
       await repos.memories.create({
         ...memoryData,
@@ -1059,6 +1073,8 @@ async function importMemories(
         personaId: null,
         aboutCharacterId: newAboutCharacterId,
         chatId: newChatId,
+        projectId: newProjectId,
+        tags: newTags,
       });
       imported++;
     } catch (error) {
@@ -1132,6 +1148,33 @@ async function reconcileRelationships(
         }
       }
 
+      // Remap defaultConnectionProfileId
+      if (character.defaultConnectionProfileId) {
+        const newConnProfileId = remapId(character.defaultConnectionProfileId, idMaps.connectionProfiles);
+        if (newConnProfileId) {
+          updates.defaultConnectionProfileId = newConnProfileId;
+          hasUpdates = true;
+        }
+      }
+
+      // Remap defaultImageProfileId
+      if (character.defaultImageProfileId) {
+        const newImgProfileId = remapId(character.defaultImageProfileId, idMaps.imageProfiles);
+        if (newImgProfileId) {
+          updates.defaultImageProfileId = newImgProfileId;
+          hasUpdates = true;
+        }
+      }
+
+      // Remap defaultRoleplayTemplateId (only if it's a UUID, not a plugin template)
+      if (character.defaultRoleplayTemplateId && !character.defaultRoleplayTemplateId.startsWith('plugin:')) {
+        const newTemplateId = remapId(character.defaultRoleplayTemplateId, idMaps.roleplayTemplates);
+        if (newTemplateId) {
+          updates.defaultRoleplayTemplateId = newTemplateId;
+          hasUpdates = true;
+        }
+      }
+
       if (hasUpdates) {
         await repos.characters.update(newId, updates);
       }
@@ -1182,6 +1225,15 @@ async function reconcileRelationships(
                 idMaps.imageProfiles
               );
               if (newImgProfId) remapped.imageProfileId = newImgProfId;
+            }
+
+            // Remap roleplayTemplateId (only if it's a UUID, not a plugin template)
+            if (participant.roleplayTemplateId && !participant.roleplayTemplateId.startsWith('plugin:')) {
+              const newTemplateId = remapId(
+                participant.roleplayTemplateId,
+                idMaps.roleplayTemplates
+              );
+              if (newTemplateId) remapped.roleplayTemplateId = newTemplateId;
             }
 
             return remapped;
@@ -1252,6 +1304,107 @@ async function reconcileRelationships(
       );
       moduleLogger.warn('Failed to reconcile project', {
         projectId: newId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  // Reconcile connection profiles (tags)
+  for (const [backupId, newId] of idMaps.connectionProfiles) {
+    try {
+      const profile = await repos.connections.findById(newId);
+      if (!profile) continue;
+
+      if (profile.tags && profile.tags.length > 0) {
+        const remappedTags = remapIdArray(profile.tags, idMaps.tags);
+        if (remappedTags.length > 0) {
+          await repos.connections.update(newId, { tags: remappedTags });
+        }
+      }
+    } catch (error) {
+      warnings.push(
+        `Failed to reconcile connection profile relationships: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      moduleLogger.warn('Failed to reconcile connection profile', {
+        profileId: newId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  // Reconcile image profiles (tags)
+  for (const [backupId, newId] of idMaps.imageProfiles) {
+    try {
+      const profile = await repos.imageProfiles.findById(newId);
+      if (!profile) continue;
+
+      if (profile.tags && profile.tags.length > 0) {
+        const remappedTags = remapIdArray(profile.tags, idMaps.tags);
+        if (remappedTags.length > 0) {
+          await repos.imageProfiles.update(newId, { tags: remappedTags });
+        }
+      }
+    } catch (error) {
+      warnings.push(
+        `Failed to reconcile image profile relationships: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      moduleLogger.warn('Failed to reconcile image profile', {
+        profileId: newId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  // Reconcile embedding profiles (tags)
+  for (const [backupId, newId] of idMaps.embeddingProfiles) {
+    try {
+      const profile = await repos.embeddingProfiles.findById(newId);
+      if (!profile) continue;
+
+      if (profile.tags && profile.tags.length > 0) {
+        const remappedTags = remapIdArray(profile.tags, idMaps.tags);
+        if (remappedTags.length > 0) {
+          await repos.embeddingProfiles.update(newId, { tags: remappedTags });
+        }
+      }
+    } catch (error) {
+      warnings.push(
+        `Failed to reconcile embedding profile relationships: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      moduleLogger.warn('Failed to reconcile embedding profile', {
+        profileId: newId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  // Reconcile roleplay templates (tags)
+  const globalRepos = getRepositories();
+  for (const [backupId, newId] of idMaps.roleplayTemplates) {
+    try {
+      const template = await globalRepos.roleplayTemplates.findById(newId);
+      if (!template) continue;
+
+      if (template.tags && template.tags.length > 0) {
+        const remappedTags = remapIdArray(template.tags, idMaps.tags);
+        if (remappedTags.length > 0) {
+          await globalRepos.roleplayTemplates.update(newId, { tags: remappedTags });
+        }
+      }
+    } catch (error) {
+      warnings.push(
+        `Failed to reconcile roleplay template relationships: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      moduleLogger.warn('Failed to reconcile roleplay template', {
+        templateId: newId,
         error: error instanceof Error ? error.message : String(error),
       });
     }

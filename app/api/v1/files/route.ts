@@ -2,7 +2,8 @@
  * Files API v1 - Collection Endpoint
  *
  * GET /api/v1/files - List files (filter by projectId, folderPath, or filter=general)
- * POST /api/v1/files?action=write - Write/create a file
+ * POST /api/v1/files?action=write - Write/create a file from text content
+ * POST /api/v1/files?action=upload - Upload a file (multipart/form-data)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -96,7 +97,12 @@ export const POST = createAuthenticatedHandler(async (request, { user, repos }) 
     return handleWriteFile(request, user, repos);
   }
 
-  return badRequest(`Unknown action: ${action}. Available actions: write`);
+  // Handle upload action
+  if (action === 'upload') {
+    return handleUploadFile(request, user, repos);
+  }
+
+  return badRequest(`Unknown action: ${action}. Available actions: write, upload`);
 });
 
 // ============================================================================
@@ -199,5 +205,134 @@ async function handleWriteFile(request: NextRequest, user: any, repos: any): Pro
 
     logger.error('[Files v1] Error writing file', { userId: (request as any).user?.id }, error instanceof Error ? error : undefined);
     return serverError('Failed to write file');
+  }
+}
+
+// ============================================================================
+// Helper: Upload File (multipart/form-data)
+// ============================================================================
+
+async function handleUploadFile(request: NextRequest, user: any, repos: any): Promise<NextResponse> {
+  try {
+    const contentType = request.headers.get('content-type') || '';
+
+    if (!contentType.includes('multipart/form-data')) {
+      return badRequest('Expected multipart/form-data content type');
+    }
+
+    const formData = await request.formData();
+    const file = formData.get('file') as File | null;
+    const tagsJson = formData.get('tags') as string | null;
+    const projectId = formData.get('projectId') as string | null;
+    const rawFolderPath = formData.get('folderPath') as string | null;
+
+    if (!file) {
+      return badRequest('No file provided');
+    }
+
+    const folderPath = normalizeFolderPath(rawFolderPath || '/');
+
+    // Validate folder path
+    const folderValidation = validateFolderPath(folderPath);
+    if (!folderValidation.isValid) {
+      return badRequest(folderValidation.error || 'Invalid folder path');
+    }
+
+    // Parse tags if provided
+    let tags: Array<{ tagType: string; tagId: string }> | undefined;
+    if (tagsJson) {
+      try {
+        tags = JSON.parse(tagsJson);
+      } catch {
+        return badRequest('Invalid tags JSON');
+      }
+    }
+
+    // Get file content as buffer
+    const arrayBuffer = await file.arrayBuffer();
+    const contentBuffer = Buffer.from(arrayBuffer);
+    const sha256 = createHash('sha256').update(new Uint8Array(contentBuffer)).digest('hex');
+    const fileId = repos.files['generateId']();
+
+    // Sanitize filename
+    const sanitizedFilename = file.name.replace(/[/\\:*?"<>|]/g, '_');
+
+    // Determine MIME type (prefer browser-provided, fallback to extension-based)
+    let mimeType = file.type || 'application/octet-stream';
+    if (mimeType === 'application/octet-stream') {
+      // Try to determine from extension
+      const ext = sanitizedFilename.toLowerCase().split('.').pop();
+      const mimeMap: Record<string, string> = {
+        'txt': 'text/plain',
+        'md': 'text/markdown',
+        'markdown': 'text/markdown',
+        'pdf': 'application/pdf',
+        'json': 'application/json',
+        'csv': 'text/csv',
+      };
+      mimeType = mimeMap[ext || ''] || 'application/octet-stream';
+    }
+
+    // Upload to file storage
+    const { storageKey, mountPointId } = await fileStorageManager.uploadFile({
+      userId: user.id,
+      fileId,
+      filename: sanitizedFilename,
+      content: contentBuffer,
+      contentType: mimeType,
+      projectId: projectId || null,
+      folderPath,
+    });
+
+    // Build linkedTo array from tags
+    const linkedTo = tags ? tags.map(t => t.tagId) : [];
+
+    // Create file metadata in repository
+    const fileEntry = await repos.files.create({
+      id: fileId,
+      userId: user.id,
+      originalFilename: sanitizedFilename,
+      mimeType,
+      size: contentBuffer.length,
+      sha256,
+      source: 'UPLOADED',
+      category: 'DOCUMENT',
+      storageKey,
+      mountPointId,
+      projectId: projectId || null,
+      folderPath,
+      linkedTo,
+      tags: linkedTo,
+    });
+
+    logger.info('[Files v1] File uploaded successfully', {
+      fileId,
+      filename: sanitizedFilename,
+      mimeType,
+      size: contentBuffer.length,
+      userId: user.id,
+    });
+
+    return successResponse(
+      {
+        data: {
+          id: fileEntry.id,
+          userId: fileEntry.userId,
+          filename: fileEntry.originalFilename,
+          filepath: getFilePath(fileEntry),
+          mimeType: fileEntry.mimeType,
+          size: fileEntry.size,
+          category: fileEntry.category,
+          projectId: fileEntry.projectId,
+          folderPath: fileEntry.folderPath,
+          createdAt: fileEntry.createdAt,
+          updatedAt: fileEntry.updatedAt,
+        },
+      },
+      201
+    );
+  } catch (error) {
+    logger.error('[Files v1] Error uploading file', { userId: user?.id }, error instanceof Error ? error : undefined);
+    return serverError('Failed to upload file');
   }
 }

@@ -20,6 +20,9 @@ interface DescriptionSourceStepProps {
   selectedGalleryImageId: string | null
   selectedGalleryImageUrl: string | null
   onGallerySelect: (imageId: string, imageUrl: string) => void
+  uploadedDocumentId: string | null
+  uploadedDocumentName: string | null
+  onDocumentUpload: (documentId: string, documentName: string) => void
   needsVisionProfile: boolean
   visionProfileId: string | null
   visionProfiles: ConnectionProfile[]
@@ -36,6 +39,9 @@ export function DescriptionSourceStep({
   selectedGalleryImageId,
   selectedGalleryImageUrl,
   onGallerySelect,
+  uploadedDocumentId,
+  uploadedDocumentName,
+  onDocumentUpload,
   needsVisionProfile,
   visionProfileId,
   visionProfiles,
@@ -44,8 +50,11 @@ export function DescriptionSourceStep({
 }: DescriptionSourceStepProps) {
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [uploadingDocument, setUploadingDocument] = useState(false)
+  const [documentUploadError, setDocumentUploadError] = useState<string | null>(null)
   const [showGallery, setShowGallery] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const documentInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -91,6 +100,45 @@ export function DescriptionSourceStep({
     setShowGallery(false)
   }
 
+  const handleDocumentFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploadingDocument(true)
+    setDocumentUploadError(null)
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      // Add character tag if available
+      if (characterId) {
+        formData.append('tags', JSON.stringify([{ tagType: 'CHARACTER', tagId: characterId }]))
+      }
+
+      const response = await fetch('/api/v1/files?action=upload', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to upload document')
+      }
+
+      onDocumentUpload(data.data.id, file.name)
+    } catch (err) {
+      setDocumentUploadError(err instanceof Error ? err.message : 'Failed to upload document')
+    } finally {
+      setUploadingDocument(false)
+      // Reset file input
+      if (documentInputRef.current) {
+        documentInputRef.current.value = ''
+      }
+    }
+  }
+
   const sourceOptions: { value: DescriptionSourceType; label: string; description: string }[] = [
     {
       value: 'existing',
@@ -106,6 +154,11 @@ export function DescriptionSourceStep({
       value: 'gallery',
       label: 'Select from gallery',
       description: 'Choose an existing image from the character\'s gallery',
+    },
+    {
+      value: 'document',
+      label: 'Upload a document',
+      description: 'Upload a text, Markdown, or PDF file with character details',
     },
     {
       value: 'skip',
@@ -282,6 +335,78 @@ export function DescriptionSourceStep({
                 </div>
               </div>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* Document Upload Section */}
+      {source === 'document' && (
+        <div className="p-4 rounded-lg border border-border bg-muted/20 space-y-4">
+          <h4 className="font-medium text-foreground">Upload Document</h4>
+
+          {uploadedDocumentName ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-background">
+                <svg className="w-8 h-8 text-muted-foreground flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-foreground truncate">{uploadedDocumentName}</div>
+                  <div className="text-sm text-muted-foreground">Document uploaded</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  onDocumentUpload('', '')
+                }}
+                className="text-sm text-destructive hover:underline"
+              >
+                Remove document
+              </button>
+            </div>
+          ) : (
+            <div>
+              <input
+                ref={documentInputRef}
+                type="file"
+                accept=".txt,.md,.markdown,.pdf,text/plain,text/markdown,application/pdf"
+                onChange={handleDocumentFileUpload}
+                disabled={uploadingDocument}
+                className="hidden"
+                id="wizard-document-upload"
+              />
+              <label
+                htmlFor="wizard-document-upload"
+                className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
+                  uploadingDocument
+                    ? 'border-muted bg-muted/50 cursor-not-allowed'
+                    : 'border-border hover:border-primary hover:bg-primary/5'
+                }`}
+              >
+                {uploadingDocument ? (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <span>Uploading...</span>
+                  </div>
+                ) : (
+                  <>
+                    <svg className="w-8 h-8 text-muted-foreground mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <span className="text-sm text-muted-foreground">Click to upload document</span>
+                    <span className="text-xs text-muted-foreground mt-1">Text, Markdown, or PDF</span>
+                  </>
+                )}
+              </label>
+            </div>
+          )}
+
+          {documentUploadError && (
+            <p className="text-sm text-destructive">{documentUploadError}</p>
           )}
         </div>
       )}

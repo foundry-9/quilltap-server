@@ -12,6 +12,7 @@ import {
   UUIDSchema,
   TimestampSchema,
   HexColorSchema,
+  JsonSchema,
 } from './common.types';
 
 // ============================================================================
@@ -43,6 +44,9 @@ export const ProjectSchema = z.object({
   defaultDisabledTools: z.array(z.string()).default([]),
   /** Default groups of tools that are disabled (e.g., "plugin:mcp") */
   defaultDisabledToolGroups: z.array(z.string()).default([]),
+
+  /** Persistent JSON state for games, inventory, session data, etc. */
+  state: JsonSchema.default({}),
 
   // Timestamps
   createdAt: TimestampSchema,

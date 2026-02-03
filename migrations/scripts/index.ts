@@ -51,6 +51,12 @@ import { addChatToolSettingsFieldsMigration } from './add-chat-tool-settings-fie
 import { addProjectToolSettingsFieldsMigration } from './add-project-tool-settings-fields';
 // Create embedding tables for built-in TF-IDF provider
 import { createEmbeddingTablesMigration } from './create-embedding-tables';
+// Add state fields to chats and projects
+import { addStateFieldsMigration } from './add-state-fields';
+// Add autoDetectRng field to chat_settings
+import { addAutoDetectRngFieldMigration } from './add-auto-detect-rng-field';
+// Add compressionCache field to chats
+import { addCompressionCacheFieldMigration } from './add-compression-cache-field';
 
 /**
  * All available migrations.
@@ -97,6 +103,12 @@ export const migrations: Migration[] = [
   addProjectToolSettingsFieldsMigration,
   // Create embedding tables for built-in TF-IDF provider
   createEmbeddingTablesMigration,
+  // Add state fields to chats and projects
+  addStateFieldsMigration,
+  // Add autoDetectRng field to chat_settings
+  addAutoDetectRngFieldMigration,
+  // Add compressionCache field to chats
+  addCompressionCacheFieldMigration,
 ];
 
 export {
@@ -138,4 +150,10 @@ export {
   addProjectToolSettingsFieldsMigration,
   // Create embedding tables for built-in TF-IDF provider
   createEmbeddingTablesMigration,
+  // Add state fields to chats and projects
+  addStateFieldsMigration,
+  // Add autoDetectRng field to chat_settings
+  addAutoDetectRngFieldMigration,
+  // Add compressionCache field to chats
+  addCompressionCacheFieldMigration,
 };

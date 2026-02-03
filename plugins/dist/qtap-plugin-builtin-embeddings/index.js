@@ -702,37 +702,6 @@ var BuiltinEmbeddingProvider = class {
   }
 };
 
-// icon.tsx
-var import_jsx_runtime = require("react/jsx-runtime");
-function BuiltinEmbeddingsIcon({ className = "h-5 w-5" }) {
-  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
-    "svg",
-    {
-      className,
-      viewBox: "0 0 24 24",
-      fill: "none",
-      stroke: "currentColor",
-      strokeWidth: "2",
-      strokeLinecap: "round",
-      strokeLinejoin: "round",
-      xmlns: "http://www.w3.org/2000/svg",
-      children: [
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("rect", { x: "3", y: "4", width: "8", height: "16", rx: "1" }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("line", { x1: "5", y1: "8", x2: "9", y2: "8" }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("line", { x1: "5", y1: "11", x2: "9", y2: "11" }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("line", { x1: "5", y1: "14", x2: "9", y2: "14" }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M11 12 L14 12" }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("polyline", { points: "13 10 15 12 13 14" }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { cx: "18", cy: "7", r: "1.5", fill: "currentColor", stroke: "none" }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { cx: "18", cy: "12", r: "1.5", fill: "currentColor", stroke: "none" }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { cx: "18", cy: "17", r: "1.5", fill: "currentColor", stroke: "none" }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { cx: "20", cy: "9.5", r: "1", fill: "currentColor", stroke: "none", opacity: "0.6" }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { cx: "20", cy: "14.5", r: "1", fill: "currentColor", stroke: "none", opacity: "0.6" })
-      ]
-    }
-  );
-}
-
 // index.ts
 var metadata = {
   providerName: "BUILTIN",
@@ -820,9 +789,6 @@ var plugin = {
   /**
    * Render the provider icon
    */
-  renderIcon: (props) => {
-    return BuiltinEmbeddingsIcon(props);
-  },
   // No tool support needed for embedding provider
   formatTools: void 0,
   parseToolCalls: void 0,

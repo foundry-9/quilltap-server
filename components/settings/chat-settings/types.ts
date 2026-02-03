@@ -62,6 +62,8 @@ export interface ChatSettings {
   tokenDisplaySettings?: TokenDisplaySettings
   contextCompressionSettings?: ContextCompressionSettings
   llmLoggingSettings?: LLMLoggingSettings
+  /** Auto-detect RNG patterns (dice rolls, coin flips) in user messages and execute them automatically */
+  autoDetectRng?: boolean
   createdAt: string
   updatedAt: string
 }
@@ -320,3 +322,20 @@ export const DEFAULT_LLM_LOGGING_SETTINGS: LLMLoggingSettings = {
   verboseMode: false,
   retentionDays: 30,
 }
+
+/**
+ * Automation Settings Options
+ * Defines the available automation toggles
+ */
+export const AUTOMATION_OPTIONS = [
+  {
+    key: 'autoDetectRng' as const,
+    label: 'Auto-Detect RNG Calls',
+    description: 'Automatically detect dice rolls (e.g., 2d6), coin flips, and "spin the bottle" in your messages and execute them',
+  },
+] as const
+
+/**
+ * Default automation settings
+ */
+export const DEFAULT_AUTO_DETECT_RNG = true

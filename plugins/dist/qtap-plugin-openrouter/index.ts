@@ -18,7 +18,6 @@ import type {
 } from './types';
 import { OpenRouterProvider } from './provider';
 import { OpenRouterEmbeddingProvider } from './embedding-provider';
-import { OpenRouterIcon } from './icon';
 import {
   createPluginLogger,
   parseOpenAIToolCalls,
@@ -318,9 +317,6 @@ export const plugin: LLMProviderPlugin = {
   /**
    * Render the OpenRouter icon
    */
-  renderIcon: (props) => {
-    return OpenRouterIcon(props);
-  },
 
   /**
    * Format tools from OpenAI format to OpenAI format

@@ -1,9 +1,8 @@
 /**
- * Authentication Middleware (Single-User Mode)
+ * Request Context Middleware
  *
- * Provides a reusable wrapper for API routes in single-user mode.
- * Since Quilltap operates in single-user mode only, authentication
- * always succeeds with the single user.
+ * Provides request context (user, repositories, session) to API route handlers.
+ * Ensures server readiness before processing requests.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -13,7 +12,7 @@ import { startupState } from '@/lib/startup/startup-state';
 import { logger } from '@/lib/logger';
 import type { User } from '@/lib/schemas/types';
 
-const authLogger = logger.child({ module: 'api-auth-middleware' });
+const contextLogger = logger.child({ module: 'api-context-middleware' });
 
 /**
  * Wait for server startup to complete before processing requests.
@@ -23,7 +22,7 @@ async function ensureServerReady(): Promise<void> {
   if (!startupState.isReady()) {
     const isReady = await startupState.waitForReady(30000);
     if (!isReady) {
-      authLogger.warn('Server startup not complete after 30s, proceeding anyway', {
+      contextLogger.warn('Server startup not complete after 30s, proceeding anyway', {
         currentPhase: startupState.getPhase(),
       });
     }
@@ -31,10 +30,10 @@ async function ensureServerReady(): Promise<void> {
 }
 
 /**
- * Context provided to authenticated route handlers
+ * Context provided to route handlers
  */
-export interface AuthenticatedContext {
-  /** The authenticated user entity from the database */
+export interface RequestContext {
+  /** The user entity from the database */
   user: User;
   /** Repository container for data access */
   repos: RepositoryContainer;
@@ -43,37 +42,34 @@ export interface AuthenticatedContext {
 }
 
 /**
- * Type for authenticated route handlers
+ * Type for route handlers with context
  */
-export type AuthenticatedHandler<T = NextResponse> = (
+export type ContextHandler<T = NextResponse> = (
   request: NextRequest,
-  context: AuthenticatedContext
+  context: RequestContext
 ) => Promise<T>;
 
 /**
- * Type for authenticated route handlers with route params
+ * Type for route handlers with context and route params
  */
-export type AuthenticatedParamsHandler<P = Record<string, string>, T = NextResponse> = (
+export type ContextParamsHandler<P = Record<string, string>, T = NextResponse> = (
   request: NextRequest,
-  context: AuthenticatedContext,
+  context: RequestContext,
   params: P
 ) => Promise<T>;
 
 /**
- * Wrap an API route handler with authentication
- *
- * In single-user mode, this always succeeds with the single user.
- * Handles server readiness and user lookup.
+ * Wrap an API route handler with context
  */
-export async function withAuth<T>(
-  handler: AuthenticatedHandler<T>
+export async function withContext<T>(
+  handler: ContextHandler<T>
 ): Promise<T | NextResponse> {
   await ensureServerReady();
 
   const session = await getServerSession();
 
   if (!session?.user?.id) {
-    authLogger.error('Failed to get single user session');
+    contextLogger.error('Failed to get user session');
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 
@@ -81,7 +77,7 @@ export async function withAuth<T>(
   const user = await repos.users.findById(session.user.id);
 
   if (!user) {
-    authLogger.warn('Single user not found, this should not happen', { userId: session.user.id });
+    contextLogger.warn('User not found', { userId: session.user.id });
     return NextResponse.json({ error: 'User not found' }, { status: 500 });
   }
 
@@ -89,21 +85,19 @@ export async function withAuth<T>(
 }
 
 /**
- * Wrap an API route handler with authentication and params
- *
- * In single-user mode, this always succeeds with the single user.
+ * Wrap an API route handler with context and params
  */
-export async function withAuthParams<P extends Record<string, string>, T>(
+export async function withContextParams<P extends Record<string, string>, T>(
   request: NextRequest,
   params: P,
-  handler: AuthenticatedParamsHandler<P, T>
+  handler: ContextParamsHandler<P, T>
 ): Promise<T | NextResponse> {
   await ensureServerReady();
 
   const session = await getServerSession();
 
   if (!session?.user?.id) {
-    authLogger.error('Failed to get single user session');
+    contextLogger.error('Failed to get user session');
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 
@@ -111,7 +105,7 @@ export async function withAuthParams<P extends Record<string, string>, T>(
   const user = await repos.users.findById(session.user.id);
 
   if (!user) {
-    authLogger.warn('Single user not found, this should not happen', { userId: session.user.id });
+    contextLogger.warn('User not found', { userId: session.user.id });
     return NextResponse.json({ error: 'User not found' }, { status: 500 });
   }
 
@@ -119,15 +113,14 @@ export async function withAuthParams<P extends Record<string, string>, T>(
 }
 
 /**
- * Higher-order function to create an authenticated route handler
+ * Higher-order function to create a route handler with context
  *
  * Creates a complete route handler that can be directly exported.
- * In single-user mode, always returns the single user context.
  */
-export function createAuthenticatedHandler(
+export function createContextHandler(
   handler: (
     request: NextRequest,
-    context: AuthenticatedContext
+    context: RequestContext
   ) => Promise<NextResponse>
 ): (request: NextRequest) => Promise<NextResponse> {
   return async (request: NextRequest) => {
@@ -136,7 +129,7 @@ export function createAuthenticatedHandler(
     const session = await getServerSession();
 
     if (!session?.user?.id) {
-      authLogger.error('Failed to get single user session');
+      contextLogger.error('Failed to get user session');
       return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 
@@ -144,7 +137,7 @@ export function createAuthenticatedHandler(
     const user = await repos.users.findById(session.user.id);
 
     if (!user) {
-      authLogger.warn('Single user not found, this should not happen', { userId: session.user.id });
+      contextLogger.warn('User not found', { userId: session.user.id });
       return NextResponse.json({ error: 'User not found' }, { status: 500 });
     }
 
@@ -153,15 +146,15 @@ export function createAuthenticatedHandler(
 }
 
 /**
- * Higher-order function to create an authenticated route handler with params
+ * Higher-order function to create a route handler with context and params
  *
  * Creates a complete route handler that can be directly exported for routes
  * with dynamic parameters like [id].
  */
-export function createAuthenticatedParamsHandler<P extends Record<string, string>>(
+export function createContextParamsHandler<P extends Record<string, string>>(
   handler: (
     request: NextRequest,
-    context: AuthenticatedContext,
+    context: RequestContext,
     params: P
   ) => Promise<NextResponse>
 ): (
@@ -175,7 +168,7 @@ export function createAuthenticatedParamsHandler<P extends Record<string, string
     const session = await getServerSession();
 
     if (!session?.user?.id) {
-      authLogger.error('Failed to get single user session');
+      contextLogger.error('Failed to get user session');
       return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 
@@ -183,7 +176,7 @@ export function createAuthenticatedParamsHandler<P extends Record<string, string
     const user = await repos.users.findById(session.user.id);
 
     if (!user) {
-      authLogger.warn('Single user not found, this should not happen', { userId: session.user.id });
+      contextLogger.warn('User not found', { userId: session.user.id });
       return NextResponse.json({ error: 'User not found' }, { status: 500 });
     }
 
@@ -192,13 +185,22 @@ export function createAuthenticatedParamsHandler<P extends Record<string, string
 }
 
 /**
- * Check ownership of a resource
- *
- * Common pattern for verifying a resource belongs to the current user.
+ * Check if a resource exists (type guard)
  */
-export function checkOwnership<T extends { userId?: string }>(
-  resource: T | null | undefined,
-  userId: string
-): resource is T {
-  return resource != null && resource.userId === userId;
+export function exists<T>(resource: T | null | undefined): resource is T {
+  return resource != null;
 }
+
+// Legacy aliases for backward compatibility during migration
+export const AuthenticatedContext = {} as RequestContext;
+export type AuthenticatedContext = RequestContext;
+export type AuthenticatedHandler<T = NextResponse> = ContextHandler<T>;
+export type AuthenticatedParamsHandler<P = Record<string, string>, T = NextResponse> = ContextParamsHandler<P, T>;
+export const withAuth = withContext;
+export const withAuthParams = withContextParams;
+export const createAuthenticatedHandler = createContextHandler;
+export const createAuthenticatedParamsHandler = createContextParamsHandler;
+export const checkOwnership = <T extends { userId?: string }>(
+  resource: T | null | undefined,
+  _userId: string
+): resource is T => exists(resource);

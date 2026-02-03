@@ -51,6 +51,8 @@ export function useAIWizard({
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null)
   const [selectedGalleryImageId, setSelectedGalleryImageId] = useState<string | null>(null)
   const [selectedGalleryImageUrl, setSelectedGalleryImageUrl] = useState<string | null>(null)
+  const [uploadedDocumentId, setUploadedDocumentId] = useState<string | null>(null)
+  const [uploadedDocumentName, setUploadedDocumentName] = useState<string | null>(null)
   const [visionProfileId, setVisionProfileId] = useState<string | null>(null)
   const [backgroundText, setBackgroundText] = useState('')
   const [selectedFields, setSelectedFields] = useState<Set<GeneratableField>>(new Set())
@@ -58,6 +60,7 @@ export function useAIWizard({
   const [generationProgress, setGenerationProgress] = useState({
     currentField: null as GeneratableField | null,
     completedFields: [] as GeneratableField[],
+    snippets: {} as Record<string, string>,
     errors: {} as Record<string, string>,
   })
   const [generatedData, setGeneratedData] = useState<GeneratedCharacterData | null>(null)
@@ -122,6 +125,8 @@ export function useAIWizard({
   const availableFields = useMemo((): GeneratableField[] => {
     const fields: GeneratableField[] = []
 
+    // Name is available if characterName is empty
+    if (!characterName.trim()) fields.push('name')
     if (!currentData.title?.trim()) fields.push('title')
     if (!currentData.description?.trim()) fields.push('description')
     if (!currentData.personality?.trim()) fields.push('personality')
@@ -135,7 +140,7 @@ export function useAIWizard({
     }
 
     return fields
-  }, [currentData, descriptionSource])
+  }, [characterName, currentData, descriptionSource])
 
   // Computed: Can proceed to next step?
   const canProceed = useMemo(() => {
@@ -156,6 +161,9 @@ export function useAIWizard({
           const hasVisionIfNeeded = !needsVisionProfile || !!visionProfileId
           return hasImage && hasVisionIfNeeded
         }
+        if (descriptionSource === 'document') {
+          return !!uploadedDocumentId
+        }
         return false
       case 3:
         return selectedFields.size > 0
@@ -170,6 +178,7 @@ export function useAIWizard({
     descriptionSource,
     uploadedImageId,
     selectedGalleryImageId,
+    uploadedDocumentId,
     needsVisionProfile,
     visionProfileId,
     selectedFields,
@@ -205,6 +214,11 @@ export function useAIWizard({
     setSelectedGalleryImageUrl(imageUrl)
   }, [])
 
+  const handleDocumentUpload = useCallback((documentId: string, documentName: string) => {
+    setUploadedDocumentId(documentId)
+    setUploadedDocumentName(documentName)
+  }, [])
+
   const toggleField = useCallback((field: GeneratableField) => {
     setSelectedFields((prev) => {
       const next = new Set(prev)
@@ -225,7 +239,7 @@ export function useAIWizard({
     setSelectedFields(new Set())
   }, [])
 
-  // Generate content
+  // Generate content using streaming API
   const startGeneration = useCallback(async () => {
     if (selectedFields.size === 0) {
       setError('Please select at least one field to generate')
@@ -237,6 +251,7 @@ export function useAIWizard({
     setGenerationProgress({
       currentField: null,
       completedFields: [],
+      snippets: {},
       errors: {},
     })
 
@@ -249,11 +264,18 @@ export function useAIWizard({
         imageId = selectedGalleryImageId
       }
 
+      // Determine document ID if using document source
+      let documentId: string | undefined
+      if (descriptionSource === 'document' && uploadedDocumentId) {
+        documentId = uploadedDocumentId
+      }
+
       const request: AIWizardRequest = {
         primaryProfileId,
         visionProfileId: needsVisionProfile ? visionProfileId ?? undefined : undefined,
         sourceType: descriptionSource,
         imageId,
+        documentId,
         characterName,
         existingData: currentData,
         background: backgroundText,
@@ -261,24 +283,91 @@ export function useAIWizard({
         characterId,
       }
 
-      const response = await fetch('/api/v1/characters?action=ai-wizard', {
+      // Use streaming endpoint
+      const response = await fetch('/api/v1/characters?action=ai-wizard-stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
       })
 
-      const result: AIWizardResponse = await response.json()
-
       if (!response.ok) {
-        throw new Error((result as { error?: string }).error || 'Generation failed')
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Generation failed')
       }
 
-      setGeneratedData(result.generated)
-      setGenerationProgress({
-        currentField: null,
-        completedFields: Array.from(selectedFields),
-        errors: result.errors || {},
-      })
+      // Parse SSE stream
+      const reader = response.body?.getReader()
+      if (!reader) {
+        throw new Error('No response stream')
+      }
+
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+
+        // Keep the last incomplete line in buffer
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const event = JSON.parse(line.slice(6))
+
+              switch (event.type) {
+                case 'field_start':
+                  setGenerationProgress((prev) => ({
+                    ...prev,
+                    currentField: event.field as GeneratableField,
+                  }))
+                  break
+
+                case 'field_complete':
+                  setGenerationProgress((prev) => ({
+                    ...prev,
+                    currentField: null,
+                    completedFields: [...prev.completedFields, event.field as GeneratableField],
+                    snippets: {
+                      ...prev.snippets,
+                      [event.field]: event.snippet || '',
+                    },
+                  }))
+                  break
+
+                case 'field_error':
+                  setGenerationProgress((prev) => ({
+                    ...prev,
+                    currentField: null,
+                    errors: {
+                      ...prev.errors,
+                      [event.field]: event.error || 'Generation failed',
+                    },
+                  }))
+                  break
+
+                case 'done':
+                  setGeneratedData(event.fullContent as GeneratedCharacterData)
+                  if (event.error) {
+                    setError(event.error)
+                  }
+                  setGenerationProgress((prev) => ({
+                    ...prev,
+                    currentField: null,
+                    errors: event.errors || prev.errors,
+                  }))
+                  break
+              }
+            } catch {
+              // Ignore parse errors for incomplete JSON
+            }
+          }
+        }
+      }
     } catch (err) {
       let errorMessage = 'Generation failed'
       if (err instanceof Error) {
@@ -297,6 +386,7 @@ export function useAIWizard({
     descriptionSource,
     uploadedImageId,
     selectedGalleryImageId,
+    uploadedDocumentId,
     primaryProfileId,
     needsVisionProfile,
     visionProfileId,
@@ -321,6 +411,8 @@ export function useAIWizard({
     setUploadedImageUrl(null)
     setSelectedGalleryImageId(null)
     setSelectedGalleryImageUrl(null)
+    setUploadedDocumentId(null)
+    setUploadedDocumentName(null)
     setVisionProfileId(null)
     setBackgroundText('')
     setSelectedFields(new Set())
@@ -328,6 +420,7 @@ export function useAIWizard({
     setGenerationProgress({
       currentField: null,
       completedFields: [],
+      snippets: {},
       errors: {},
     })
     setGeneratedData(null)
@@ -346,6 +439,8 @@ export function useAIWizard({
     uploadedImageUrl,
     selectedGalleryImageId,
     selectedGalleryImageUrl,
+    uploadedDocumentId,
+    uploadedDocumentName,
     visionProfileId,
     visionProfiles,
     needsVisionProfile,
@@ -367,6 +462,7 @@ export function useAIWizard({
     setDescriptionSource,
     handleImageUpload,
     handleGallerySelect,
+    handleDocumentUpload,
     setVisionProfileId,
     setBackgroundText,
     toggleField,

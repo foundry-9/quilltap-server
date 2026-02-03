@@ -273,43 +273,32 @@ export type {
 } from '../../../lib/plugins/interfaces/provider-plugin';
 ```
 
-### 5. Create the Icon Component
+### 5. Define the Icon (Optional)
 
-Create `icon.tsx`:
+Provider icons are now defined as SVG data in the plugin export, not as separate React components:
 
-```tsx
-'use client';
-
-interface IconProps {
-  className?: string;
+```typescript
+// In your index.ts plugin export
+icon: {
+  viewBox: '0 0 24 24',
+  circles: [{ cx: 12, cy: 12, r: 12, fill: 'currentColor' }],
+  text: {
+    content: 'MYP',
+    x: '50%',
+    y: '50%',
+    fontSize: '10',
+    fontWeight: 'bold',
+    fill: 'white',
+  },
 }
 
-export function MyProviderIcon({ className = 'h-5 w-5' }: IconProps) {
-  return (
-    <svg
-      className={`text-blue-600 ${className}`}
-      fill="currentColor"
-      viewBox="0 0 24 24"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <circle cx="12" cy="12" r="12" />
-      <text
-        x="50%"
-        y="50%"
-        textAnchor="middle"
-        dominantBaseline="middle"
-        fill="white"
-        fontSize="10"
-        fontWeight="bold"
-      >
-        MYP
-      </text>
-    </svg>
-  );
+// Or use a raw SVG string:
+icon: {
+  svg: '<svg viewBox="0 0 24 24"><path d="M12 2..." fill="currentColor"/></svg>'
 }
-
-export default MyProviderIcon;
 ```
+
+If no icon is provided, Quilltap generates a default icon using the provider's abbreviation.
 
 ### 6. Create the Plugin Entry Point
 
@@ -394,7 +383,12 @@ export const plugin: LLMProviderPlugin = {
     },
   ],
 
-  renderIcon: (props) => MyProviderIcon(props),
+  // Icon using SVG data (no React required)
+  icon: {
+    viewBox: '0 0 24 24',
+    circles: [{ cx: 12, cy: 12, r: 12, fill: 'currentColor' }],
+    text: { content: 'MYP', x: '50%', y: '50%', fontSize: '10', fontWeight: 'bold', fill: 'white' },
+  },
 };
 
 export default plugin;
@@ -410,8 +404,8 @@ export default plugin;
   "main": "index.js",
   "types": "index.ts",
   "license": "MIT",
-  "peerDependencies": {
-    "react": "^19.0.0"
+  "dependencies": {
+    "@quilltap/plugin-utils": "^1.2.0"
   }
 }
 ```
@@ -799,7 +793,6 @@ plugins/dist/qtap-plugin-myprovider/
 ├── index.js               # Transpiled entry (auto-generated)
 ├── provider.ts            # LLM provider class (required)
 ├── types.ts               # Type re-exports (required)
-├── icon.tsx               # React icon component (required)
 ├── image-provider.ts      # Image generation (optional)
 ├── embedding-provider.ts  # Embeddings (optional)
 └── README.md              # Documentation (recommended)
@@ -814,7 +807,7 @@ Before releasing your plugin:
 - [ ] Provider implements `sendMessage` and `streamMessage`
 - [ ] Provider implements `validateApiKey`
 - [ ] Provider implements `getAvailableModels`
-- [ ] Icon component renders correctly
+- [ ] Icon is defined (or abbreviation fallback is acceptable)
 - [ ] All API calls have error handling
 - [ ] Debug logging is comprehensive
 - [ ] README.md documents usage

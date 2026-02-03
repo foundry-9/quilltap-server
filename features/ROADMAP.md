@@ -24,18 +24,21 @@ This document tracks planned features and improvements for Quilltap.
 
 - [ ] Tool management UI - Settings interface to enable/disable individual tools per connection profile, project, chat
 - [ ] Finish file read/write tool calling support with permissions
-- [X] Option for built-in TF-IDF embedding if you don't need full semantic support (v2.8.1)
 - [ ] Refactor embedding service to use plugin architecture
   - Currently `lib/embedding/embedding-service.ts` has hardcoded handlers for each provider
   - Should delegate to plugins via `createEmbeddingProvider()` interface
   - Would make embedding providers consistent with LLM and image providers
 - [ ] More intelligent handling of empty messages from the LLM (usually some kind of error, but a plain blank often means you crossed a provider line - NSFW, content filtering)
 - [ ] Fully agentic capabilities (limits on how many turns it takes, trading information back and forth, etc.)
+- [ ] Add Google embeddings
+- [ ] Add prompt guidelines for all image generators that have them
+- [ ] Update image generators
+- [ ] Add ability to use Eternal AI LoRAs
 
 ### Content & Worldbuilding
 
 - [ ] Worldbook/Lore system
-- [ ] Complete AI wizard for characters or NPCs
+- [X] Complete AI wizard for characters or NPCs
 
 ### External Integrations
 
@@ -56,10 +59,13 @@ This document tracks planned features and improvements for Quilltap.
   - [ ] Has intimate knowledge of this application
   - [ ] Works well enough with simple, low-cost or local LLMs (e.g., Mistral or Qwen)
 - [ ] Application web page and useful help and videos hosted there
+- [ ] Built-in help able to be toggled so it works with every LLM with or without tools (a "help" conversation will be different, it will always search for what you say or what the conversation has been about recently and provide that data as part of the context for every message to the LLM)
 
 ## Completed in v2.9
 
-- [X] Option for built-in TF-IDF embedding if you don't need full semantic support (v2.9)
+## Completed in v2.8.1
+
+- [X] Option for built-in TF-IDF embedding if you don't need full semantic support (v2.8.1)
 
 ## Completed in v2.8
 

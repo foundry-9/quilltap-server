@@ -1,5 +1,8 @@
 FROM node:22-alpine AS base
 
+# Upgrade npm to latest version (fixes "Invalid Version" bug in npm 10.x)
+RUN npm install -g npm@latest
+
 # Install build dependencies for native modules (better-sqlite3)
 RUN apk add --no-cache python3 make g++
 
@@ -81,7 +84,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/plugins/dist ./plugins/dist
 COPY package.json package-lock.json ./
 
 # Install only production dependencies (including better-sqlite3)
-RUN npm ci --only=production
+RUN npm ci --omit=dev
 
 # Rebuild native modules for the current Alpine Linux platform
 RUN npm rebuild

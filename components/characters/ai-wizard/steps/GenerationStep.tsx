@@ -186,11 +186,12 @@ export function GenerationStep({
             const isCompleted = progress.completedFields.includes(field)
             const isCurrent = progress.currentField === field
             const hasError = !!progress.errors[field]
+            const snippet = progress.snippets?.[field]
 
             return (
               <div
                 key={field}
-                className={`flex items-center gap-3 p-3 rounded-lg border ${
+                className={`rounded-lg border transition-all ${
                   isCompleted
                     ? 'border-green-500/50 bg-green-500/10'
                     : hasError
@@ -200,27 +201,43 @@ export function GenerationStep({
                     : 'border-border bg-muted/20'
                 }`}
               >
-                {isCompleted ? (
-                  <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                ) : hasError ? (
-                  <svg className="w-5 h-5 text-destructive" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                ) : isCurrent ? (
-                  <svg className="w-5 h-5 text-primary animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                ) : (
-                  <svg className="w-5 h-5 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="10" strokeWidth={2} />
-                  </svg>
-                )}
-                <span className={isCompleted ? 'text-foreground' : 'text-muted-foreground'}>
-                  {FIELD_LABELS[field]}
-                </span>
+                <div className="flex items-center gap-3 p-3">
+                  {isCompleted ? (
+                    <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : hasError ? (
+                    <svg className="w-5 h-5 text-destructive flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  ) : isCurrent ? (
+                    <svg className="w-5 h-5 text-primary animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5 text-muted-foreground flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <circle cx="12" cy="12" r="10" strokeWidth={2} />
+                    </svg>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <span className={`font-medium ${isCompleted ? 'text-foreground' : 'text-muted-foreground'}`}>
+                      {FIELD_LABELS[field]}
+                    </span>
+                    {/* Show snippet for completed fields */}
+                    {isCompleted && snippet && (
+                      <p className="text-xs text-muted-foreground mt-1 truncate">
+                        {snippet}
+                      </p>
+                    )}
+                    {/* Show error message */}
+                    {hasError && (
+                      <p className="text-xs text-destructive mt-1">
+                        {progress.errors[field]}
+                      </p>
+                    )}
+                  </div>
+                </div>
               </div>
             )
           })}

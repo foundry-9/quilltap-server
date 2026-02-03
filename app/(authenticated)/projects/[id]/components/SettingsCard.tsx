@@ -11,6 +11,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import { fetchJson } from '@/lib/fetch-helpers'
 import type { Project, EditForm, MountPointInfo } from '../types'
 import { ProjectToolSettingsModal } from '@/components/tools/tool-settings'
+import StateEditorModal from '@/components/state/StateEditorModal'
 
 interface MountPointData {
   projectId: string
@@ -80,6 +81,7 @@ export function SettingsCard({
   const [showMigrationConfirm, setShowMigrationConfirm] = useState(false)
   const [pendingMountPointId, setPendingMountPointId] = useState<string | null>(null)
   const [showToolSettingsModal, setShowToolSettingsModal] = useState(false)
+  const [showStateEditorModal, setShowStateEditorModal] = useState(false)
   const [localDisabledTools, setLocalDisabledTools] = useState<string[]>(project.defaultDisabledTools || [])
   const [localDisabledToolGroups, setLocalDisabledToolGroups] = useState<string[]>(project.defaultDisabledToolGroups || [])
 
@@ -335,6 +337,22 @@ export function SettingsCard({
               Configure
             </button>
           </div>
+
+          {/* Project State */}
+          <div className="flex items-center justify-between p-3 rounded-lg qt-border qt-bg-surface">
+            <div>
+              <h4 className="text-sm font-medium text-foreground">Project State</h4>
+              <p className="qt-text-xs qt-text-secondary">
+                Persistent JSON data for games, inventory, and session tracking.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowStateEditorModal(true)}
+              className="qt-button qt-button-secondary qt-button-sm"
+            >
+              View/Edit
+            </button>
+          </div>
         </div>
       )}
 
@@ -346,6 +364,16 @@ export function SettingsCard({
         disabledTools={localDisabledTools}
         disabledToolGroups={localDisabledToolGroups}
         onSuccess={handleToolSettingsSuccess}
+      />
+
+      {/* State Editor Modal */}
+      <StateEditorModal
+        isOpen={showStateEditorModal}
+        onClose={() => setShowStateEditorModal(false)}
+        entityType="project"
+        entityId={project.id}
+        entityName={project.name}
+        onSuccess={onProjectUpdate}
       />
     </div>
   )

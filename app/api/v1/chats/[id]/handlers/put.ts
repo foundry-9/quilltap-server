@@ -2,15 +2,18 @@
  * Chats API v1 - PUT Handler
  *
  * PUT /api/v1/chats/[id] - Update a chat
+ * PUT /api/v1/chats/[id]?action=set-state - Set chat state
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { getActionParam } from '@/lib/api/middleware/actions';
 import { enrichParticipantDetail } from '@/lib/services/chat-enrichment.service';
 import { logger } from '@/lib/logger';
 import { notFound, badRequest, validationError, serverError } from '@/lib/api/responses';
 import { chatUpdateRequestSchema } from '../schemas';
 import { processChatUpdates } from '../helpers';
+import { handleSetState } from '../actions';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 
 /**
@@ -22,6 +25,12 @@ export async function handlePut(
   chatId: string
 ): Promise<NextResponse> {
   const { user, repos } = ctx;
+  const action = getActionParam(req);
+
+  // Handle set-state action
+  if (action === 'set-state') {
+    return handleSetState(req, chatId, ctx);
+  }
 
   try {
 

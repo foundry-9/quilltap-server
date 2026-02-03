@@ -57,6 +57,11 @@ export interface BuildMessageContextOptions {
   bypassCompression?: boolean
   /** Pre-computed compression result from async cache (avoids blocking on compression) */
   cachedCompressionResult?: ContextCompressionResult | null
+  /**
+   * Message count when the cached compression was computed.
+   * Used to calculate dynamic window size when using a fallback cache.
+   */
+  cachedCompressionMessageCount?: number
 }
 
 /**
@@ -186,10 +191,12 @@ export function buildConversationMessages(
         try {
           const toolData = JSON.parse(msg.content || '{}')
           const resultText = toolData.result || 'No result'
+          // Handle both LLM-initiated (toolName) and user-initiated (tool) field names
+          const toolName = toolData.toolName || toolData.tool || 'Unknown'
 
           return {
             role: 'USER' as const,
-            content: `[Tool Result: ${toolData.toolName}]\n${resultText}`,
+            content: `[Tool Result: ${toolName}]\n${resultText}`,
             id: msg.id,
           }
         } catch {
@@ -221,10 +228,12 @@ export function buildConversationMessages(
           try {
             const toolData = JSON.parse(msg.content || '{}')
             const resultText = toolData.result || 'No result'
+            // Handle both LLM-initiated (toolName) and user-initiated (tool) field names
+            const toolName = toolData.toolName || toolData.tool || 'Unknown'
 
             return {
               role: 'USER' as const,
-              content: `[Tool Result: ${toolData.toolName}]\n${resultText}`,
+              content: `[Tool Result: ${toolName}]\n${resultText}`,
               id: msg.id,
               createdAt: msg.createdAt,
               participantId: null,
@@ -275,6 +284,7 @@ export async function buildMessageContext(
     cheapLLMSelection,
     bypassCompression,
     cachedCompressionResult,
+    cachedCompressionMessageCount,
   } = options
 
   // Build conversation messages
@@ -322,6 +332,7 @@ export async function buildMessageContext(
     cheapLLMSelection,
     bypassCompression,
     cachedCompressionResult,
+    cachedCompressionMessageCount,
   })
 
   // Log context building results for debugging

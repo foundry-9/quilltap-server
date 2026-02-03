@@ -4,10 +4,67 @@
  * @module @quilltap/plugin-types/plugins/provider
  */
 
-import type { ReactNode } from 'react';
 import type { LLMProvider, ImageGenProvider } from '../llm/base';
 import type { ToolCallRequest, ToolFormatOptions } from '../llm/tools';
 import type { EmbeddingProvider, LocalEmbeddingProvider } from '../llm/embeddings';
+
+/**
+ * SVG icon data that can be provided by plugins without React dependency
+ *
+ * Plugins can provide icon data in one of two formats:
+ * 1. Raw SVG string: Complete `<svg>` element as a string
+ * 2. Structured data: viewBox with paths, circles, and/or text elements
+ *
+ * @example
+ * ```typescript
+ * // Option 1: Raw SVG string
+ * icon: {
+ *   svg: '<svg viewBox="0 0 24 24"><path d="M12 2..." fill="currentColor"/></svg>'
+ * }
+ *
+ * // Option 2: Structured data
+ * icon: {
+ *   viewBox: '0 0 24 24',
+ *   paths: [
+ *     { d: 'M12 2L2 7l10 5 10-5-10-5z', fill: 'currentColor' }
+ *   ]
+ * }
+ * ```
+ */
+export interface PluginIconData {
+  /** Raw SVG string (complete <svg> element) */
+  svg?: string;
+  /** SVG viewBox attribute (e.g., '0 0 24 24') */
+  viewBox?: string;
+  /** SVG path elements */
+  paths?: Array<{
+    d: string;
+    fill?: string;
+    stroke?: string;
+    strokeWidth?: string;
+    opacity?: string;
+    fillRule?: 'nonzero' | 'evenodd';
+  }>;
+  /** SVG circle elements */
+  circles?: Array<{
+    cx: string | number;
+    cy: string | number;
+    r: string | number;
+    fill?: string;
+    stroke?: string;
+    strokeWidth?: string;
+    opacity?: string;
+  }>;
+  /** SVG text element for abbreviation or label */
+  text?: {
+    content: string;
+    x?: string;
+    y?: string;
+    fontSize?: string;
+    fontWeight?: string;
+    fill?: string;
+  };
+}
 
 /**
  * Provider metadata for UI display and identification
@@ -150,6 +207,24 @@ export interface ImageGenerationModelInfo {
 }
 
 /**
+ * Information about a style or LoRA available for an image provider
+ */
+export interface ImageStyleInfo {
+  /** Human-readable name for the style */
+  name: string;
+  /** Internal LoRA/style identifier used in API calls */
+  loraId: string;
+  /** Description for UI display and LLM context */
+  description: string;
+  /**
+   * Trigger phrase to include in prompt when this style is active.
+   * The LLM should incorporate this phrase into the image prompt
+   * for optimal results with this style.
+   */
+  triggerPhrase?: string | null;
+}
+
+/**
  * Constraints for image generation
  */
 export interface ImageProviderConstraints {
@@ -163,6 +238,21 @@ export interface ImageProviderConstraints {
   supportedAspectRatios?: string[];
   /** Supported image sizes */
   supportedSizes?: string[];
+  /**
+   * Prompting guidance text that should be provided to the chat LLM
+   * when it's generating image prompts for this provider.
+   * This can include structure recommendations, best practices,
+   * and provider-specific tips for writing effective prompts.
+   */
+  promptingGuidance?: string;
+  /**
+   * Detailed information about available styles/LoRAs.
+   * Keys are the style identifiers (matching supportedStyles if defined).
+   * When a style is selected, the LLM can use the styleInfo to understand
+   * how to craft prompts that work well with that style, including
+   * incorporating any required trigger phrases.
+   */
+  styleInfo?: Record<string, ImageStyleInfo>;
 }
 
 /**
@@ -240,7 +330,10 @@ export type ToolFormatType = 'openai' | 'anthropic' | 'google';
  *   createProvider: () => new MyProvider(),
  *   getAvailableModels: async (apiKey) => [...],
  *   validateApiKey: async (apiKey) => {...},
- *   renderIcon: ({ className }) => <MyIcon className={className} />,
+ *   icon: {
+ *     viewBox: '0 0 24 24',
+ *     paths: [{ d: 'M12 2L2 7l10 5 10-5-10-5z', fill: 'currentColor' }]
+ *   },
  * };
  * ```
  */
@@ -308,10 +401,31 @@ export interface LLMProviderPlugin {
   validateApiKey: (apiKey: string, baseUrl?: string) => Promise<boolean>;
 
   /**
+   * Provider icon as SVG data (RECOMMENDED)
+   *
+   * Provides the icon as raw SVG data that Quilltap will render.
+   * This is the preferred approach as it doesn't require React in the plugin.
+   *
+   * If not provided, falls back to `renderIcon` (deprecated) or generates
+   * a default icon from the provider's abbreviation.
+   *
+   * @example
+   * ```typescript
+   * icon: {
+   *   viewBox: '0 0 24 24',
+   *   paths: [{ d: 'M12 2L2 7l10 5 10-5-10-5z', fill: 'currentColor' }]
+   * }
+   * ```
+   */
+  icon?: PluginIconData;
+
+  /**
    * Render the provider icon as a React component
+   * @deprecated Use the `icon` property instead, which doesn't require React.
+   * This is kept for backwards compatibility with existing external plugins.
    * @param props Icon component props
    */
-  renderIcon: (props: IconProps) => ReactNode;
+  renderIcon?: (props: IconProps) => unknown;
 
   /**
    * Convert universal tool format to provider-specific format (optional)

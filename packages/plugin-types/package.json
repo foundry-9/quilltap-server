@@ -1,6 +1,6 @@
 {
   "name": "@quilltap/plugin-types",
-  "version": "1.9.4",
+  "version": "1.12.0",
   "description": "Type definitions for Quilltap plugin development",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -38,17 +38,8 @@
     "prepublishOnly": "npm run clean && npm run build",
     "typecheck": "tsc --noEmit"
   },
-  "peerDependencies": {
-    "react": ">=18.0.0"
-  },
-  "peerDependenciesMeta": {
-    "react": {
-      "optional": true
-    }
-  },
   "devDependencies": {
     "@types/node": "^22.19.7",
-    "@types/react": "^18.2.0",
     "tsup": "^8.0.0",
     "typescript": "^5.3.0"
   },

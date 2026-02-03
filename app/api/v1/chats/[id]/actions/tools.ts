@@ -78,7 +78,7 @@ export async function handleUpdateToolSettings(
     const validated = updateToolSettingsSchema.parse(body);
 
     // Update the chat with new tool settings
-    // Set forceToolsOnNextMessage to true so tools are re-sent on next message
+    // Set forceToolsOnNextMessage flag to trigger tool change notification on next message
     await repos.chats.update(chatId, {
       disabledTools: validated.disabledTools,
       disabledToolGroups: validated.disabledToolGroups,

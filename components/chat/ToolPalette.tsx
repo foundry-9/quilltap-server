@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
 import { useClickOutside } from '@/hooks/useClickOutside'
+import RngDropdown, { type RngPendingResult } from './RngDropdown'
 
 interface ToolPaletteProps {
   isOpen: boolean
@@ -19,6 +20,7 @@ interface ToolPaletteProps {
   onSearchReplaceClick?: () => void // Search and replace in chat
   onBulkCharacterReplaceClick?: () => void // Bulk re-attribute messages between characters
   onToolSettingsClick?: () => void // Open LLM tool settings modal
+  onStateClick?: () => void // Open state editor modal
   chatPhotoCount: number
   hasImageProfile: boolean
   showAddCharacter?: boolean // Show "Add Character" button for single-character chats
@@ -31,6 +33,8 @@ interface ToolPaletteProps {
   showPreview?: boolean
   onTogglePreview?: () => void
   disabled?: boolean
+  // Pending tool result callback
+  onPendingToolResult?: (result: RngPendingResult) => void
 }
 
 export default function ToolPalette({
@@ -49,6 +53,7 @@ export default function ToolPalette({
   onSearchReplaceClick,
   onBulkCharacterReplaceClick,
   onToolSettingsClick,
+  onStateClick,
   chatPhotoCount,
   hasImageProfile,
   showAddCharacter = false,
@@ -61,6 +66,8 @@ export default function ToolPalette({
   showPreview = false,
   onTogglePreview,
   disabled = false,
+  // Pending tool result
+  onPendingToolResult,
 }: ToolPaletteProps) {
   const paletteRef = useRef<HTMLDivElement>(null)
 
@@ -141,6 +148,11 @@ export default function ToolPalette({
     onClose()
   }
 
+  const handleStateClick = () => {
+    onStateClick?.()
+    onClose()
+  }
+
   if (!isOpen) return null
 
   return (
@@ -199,6 +211,21 @@ export default function ToolPalette({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
             <span>Tools</span>
+          </button>
+        )}
+
+        {/* Chat State */}
+        {onStateClick && (
+          <button
+            type="button"
+            onClick={handleStateClick}
+            className="qt-tool-palette-button"
+            title="View/edit chat state"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+            </svg>
+            <span>State</span>
           </button>
         )}
 
@@ -319,6 +346,14 @@ export default function ToolPalette({
             <span>Bulk Replace</span>
           </button>
         )}
+
+        {/* RNG Dropdown */}
+        <RngDropdown
+          chatId={chatId}
+          onClose={onClose}
+          disabled={disabled}
+          onPendingResult={onPendingToolResult}
+        />
       </div>
 
       {/* Right section: Re-extract, Delete, Preview */}

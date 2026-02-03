@@ -3,14 +3,27 @@
 #
 # Usage: docker-compose up
 #
-# Data is stored in ${QUILLTAP_HOST_DATA_DIR:-~/.quilltap} on the host
-# To use a different location, set the QUILLTAP_HOST_DATA_DIR environment variable:
-#   QUILLTAP_HOST_DATA_DIR=/path/to/data docker-compose up
+# =============================================================================
+# DATA DIRECTORY CONFIGURATION
+# =============================================================================
 #
-# Platform-specific recommended paths:
-#   Linux:   ~/.quilltap (default)
-#   macOS:   ~/Library/Application Support/Quilltap
-#   Windows: %APPDATA%\Quilltap
+# QUILLTAP_HOST_DATA_DIR - Where your Quilltap data lives on the HOST machine.
+#   This is the directory on your computer that gets mounted into the container.
+#   Default: ~/.quilltap
+#
+#   To use a different location:
+#     QUILLTAP_HOST_DATA_DIR=/path/to/data docker-compose up
+#
+#   Platform-specific recommended paths:
+#     Linux:   ~/.quilltap (default)
+#     macOS:   ~/Library/Application Support/Quilltap
+#     Windows: %APPDATA%\Quilltap
+#
+# Note: Inside the container, the app always sees /app/quilltap - that's just
+# the mount point. Your actual data lives at QUILLTAP_HOST_DATA_DIR on the host.
+#
+# For non-Docker installations, use QUILLTAP_DATA_DIR instead (see lib/paths.ts).
+# =============================================================================
 
 services:
   app:

@@ -52,34 +52,3 @@ export function resolveConnectionProfile(
   });
   throw new Error(errorMessage);
 }
-
-/**
- * Check if a participant has a resolvable connection profile.
- *
- * Useful for validation without throwing errors.
- *
- * @param participant - The chat participant
- * @param character - The character entity (only needed for CHARACTER type)
- * @param chatDefaultProfileId - Optional chat-level fallback
- * @returns true if a profile can be resolved, false otherwise
- */
-export function hasResolvableConnectionProfile(
-  participant: ChatParticipantBase,
-  character: Character | null,
-  chatDefaultProfileId?: string
-): boolean {
-  // CHARACTER participants need a profile somewhere in the chain
-  if (participant.connectionProfileId) {
-    return true;
-  }
-
-  if (character?.defaultConnectionProfileId) {
-    return true;
-  }
-
-  if (chatDefaultProfileId) {
-    return true;
-  }
-
-  return false;
-}

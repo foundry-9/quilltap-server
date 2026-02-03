@@ -10,11 +10,7 @@ interface BackupDialogProps {
   onBackupComplete: () => void
 }
 
-type BackupDestination = 'download' | 's3'
-
 export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialogProps) {
-  const [destination, setDestination] = useState<BackupDestination>('download')
-  const [filename, setFilename] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -25,18 +21,10 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
     setLoading(true)
 
     try {
-      const body: Record<string, any> = {
-        destination,
-      }
-
-      if (destination === 's3' && filename) {
-        body.filename = filename
-      }
-
       const response = await fetch('/api/v1/system/backup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({}),
       })
 
       const data = await response.json()
@@ -45,7 +33,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
         throw new Error(data.error || 'Failed to create backup')
       }
 
-      if (destination === 'download' && data.backupId) {
+      if (data.backupId) {
         // Trigger download
         const downloadUrl = `/api/v1/system/backup/${data.backupId}`
         const link = document.createElement('a')
@@ -56,13 +44,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
         document.body.removeChild(link)
 
         showSuccessToast('Backup downloaded successfully')
-      } else if (destination === 's3') {
-        showSuccessToast('Backup saved to cloud storage')
       }
-
-      // Reset form
-      setDestination('download')
-      setFilename('')
 
       // Call completion callback
       onBackupComplete()
@@ -75,7 +57,6 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
       console.error('Backup creation failed', {
         error: errorMessage,
         errorType: err instanceof Error ? err.name : typeof err,
-        destination,
       })
       showErrorToast(errorMessage)
     } finally {
@@ -85,8 +66,6 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
 
   const handleClose = () => {
     setError(null)
-    setDestination('download')
-    setFilename('')
     onClose()
   }
 
@@ -118,88 +97,25 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
               </button>
             </div>
             <p className="qt-dialog-description qt-text-small">
-              Back up your data to restore it later
+              Create a complete backup of your Quilltap data
             </p>
           </div>
 
           {/* Body */}
-          <div className="qt-dialog-body space-y-6">
-            {/* Destination Selection */}
-            <div>
-              <label className="block text-sm qt-text-primary mb-3">
-                Backup Destination
-              </label>
-              <div className="space-y-3">
-                {/* Download Option */}
-                <label className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition-colors ${
-                    destination === 'download'
-                      ? 'border-primary bg-accent'
-                      : 'border-border bg-background'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="destination"
-                    value="download"
-                    checked={destination === 'download'}
-                    onChange={(e) => setDestination(e.target.value as BackupDestination)}
-                    className="w-4 h-4"
-                  />
-                  <div className="ml-3">
-                    <p className="text-sm qt-text-primary">
-                      Download to Computer
-                    </p>
-                    <p className="qt-text-xs mt-0.5">
-                      Save backup as a ZIP file to your device
-                    </p>
-                  </div>
-                </label>
-
-                {/* S3 Option */}
-                <label className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition-colors ${
-                  destination === 's3'
-                    ? 'border-primary bg-accent'
-                    : 'border-border bg-background'
-                }`}>
-                  <input
-                    type="radio"
-                    name="destination"
-                    value="s3"
-                    checked={destination === 's3'}
-                    onChange={(e) => setDestination(e.target.value as BackupDestination)}
-                    className="w-4 h-4"
-                  />
-                  <div className="ml-3">
-                    <p className="text-sm qt-text-primary">
-                      Save to Cloud Storage (S3)
-                    </p>
-                    <p className="qt-text-xs mt-0.5">
-                      Store backup in your configured cloud storage
-                    </p>
-                  </div>
-                </label>
-              </div>
+          <div className="qt-dialog-body space-y-4">
+            <div className="p-4 bg-muted/50 rounded-lg">
+              <p className="text-sm qt-text-primary mb-2">
+                Your backup will include:
+              </p>
+              <ul className="qt-text-small space-y-1 list-disc list-inside">
+                <li>All characters, chats, and messages</li>
+                <li>Memories and relationships</li>
+                <li>All uploaded files and images</li>
+                <li>Connection, image, and embedding profiles</li>
+                <li>Templates and projects</li>
+                <li>Plugin configurations and npm plugins</li>
+              </ul>
             </div>
-
-            {/* Filename Input (S3 only) */}
-            {destination === 's3' && (
-              <div>
-                <label htmlFor="filename" className="block text-sm qt-text-primary mb-2">
-                  Filename (optional)
-                </label>
-                <input
-                  id="filename"
-                  type="text"
-                  value={filename}
-                  onChange={(e) => setFilename(e.target.value)}
-                  placeholder={`backup-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`}
-                  className="qt-input"
-                />
-                <p className="mt-1 qt-text-xs">
-                  Leave empty to use default name with timestamp
-                </p>
-              </div>
-            )}
 
             {/* Error Display */}
             {error && (
@@ -229,7 +145,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
               )}
-              Create Backup
+              {loading ? 'Creating Backup...' : 'Download Backup'}
             </button>
           </div>
         </div>

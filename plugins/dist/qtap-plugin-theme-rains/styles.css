@@ -143,6 +143,16 @@
   --warning-200: 45 93% 47%;
   --warning-900: 45 94.8% 20%;
 
+  /* Theme Color Mappings - for qt-* utility classes */
+  --theme-success: hsl(var(--success-100));
+  --theme-success-foreground: hsl(var(--oncolor-100));
+  --theme-warning: hsl(var(--warning-100));
+  --theme-warning-foreground: hsl(var(--always-black));
+  --theme-destructive: hsl(var(--danger-100));
+  --theme-destructive-foreground: hsl(var(--oncolor-100));
+  --theme-info: hsl(var(--accent-secondary-100));
+  --theme-info-foreground: hsl(var(--oncolor-100));
+
   /* On-Color Text */
   --oncolor-100: 0 0% 100%;
   --oncolor-200: 0 0% 97%;
@@ -251,6 +261,16 @@
   --warning-100: 38 85% 45%;
   --warning-200: 38 80% 40%;
   --warning-900: 38 40% 95%;
+
+  /* Theme Color Mappings - for qt-* utility classes (light mode) */
+  --theme-success: hsl(var(--success-100));
+  --theme-success-foreground: hsl(var(--oncolor-100));
+  --theme-warning: hsl(var(--warning-100));
+  --theme-warning-foreground: hsl(var(--always-black));
+  --theme-destructive: hsl(var(--danger-100));
+  --theme-destructive-foreground: hsl(var(--oncolor-100));
+  --theme-info: hsl(var(--accent-secondary-100));
+  --theme-info-foreground: hsl(var(--oncolor-100));
 
   /* On-Color Text - Dark on light accents */
   --oncolor-100: 0 0% 100%;

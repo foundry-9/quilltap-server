@@ -19,7 +19,7 @@
  * // GET /api/v1/characters/[id]?action=export
  * // POST /api/v1/characters/[id]?action=avatar
  *
- * export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+ * export const POST = createContextParamsHandler<{ id: string }>(
  *   withActionDispatch({
  *     favorite: handleFavorite,
  *     avatar: handleAvatar,
@@ -30,7 +30,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
-import type { AuthenticatedContext } from './auth';
+import type { RequestContext } from './auth';
 
 const actionLogger = logger.child({ module: 'api-action-middleware' });
 
@@ -39,7 +39,7 @@ const actionLogger = logger.child({ module: 'api-action-middleware' });
  */
 export type ActionHandler<P extends Record<string, string> = Record<string, string>> = (
   request: NextRequest,
-  context: AuthenticatedContext,
+  context: RequestContext,
   params: P
 ) => Promise<NextResponse>;
 
@@ -74,7 +74,7 @@ export function getActionParam(request: NextRequest): string | null {
  * @example
  * ```ts
  * // For collection endpoints (no [id])
- * export const POST = createAuthenticatedHandler(
+ * export const POST = createContextHandler(
  *   withActionDispatch({
  *     'ai-wizard': handleAiWizard,
  *     'quick-create': handleQuickCreate,
@@ -87,7 +87,7 @@ export function withActionDispatch<P extends Record<string, string> = Record<str
   actions: ActionHandlerMap<P>,
   defaultHandler?: ActionHandler<P>
 ): ActionHandler<P> {
-  return async (request: NextRequest, context: AuthenticatedContext, params: P) => {
+  return async (request: NextRequest, context: RequestContext, params: P) => {
     const action = getActionParam(request);
 
     if (action) {
@@ -144,14 +144,14 @@ export function withActionDispatch<P extends Record<string, string> = Record<str
  *
  * @param actions - Map of action names to handlers
  * @param defaultHandler - Handler for requests without action param
- * @returns Handler function compatible with createAuthenticatedHandler
+ * @returns Handler function compatible with createContextHandler
  */
 export function withCollectionActionDispatch(
   actions: ActionHandlerMap<Record<string, never>>,
   defaultHandler?: ActionHandler<Record<string, never>>
-): (request: NextRequest, context: AuthenticatedContext) => Promise<NextResponse> {
+): (request: NextRequest, context: RequestContext) => Promise<NextResponse> {
   const dispatchHandler = withActionDispatch(actions, defaultHandler);
-  return (request: NextRequest, context: AuthenticatedContext) => {
+  return (request: NextRequest, context: RequestContext) => {
     return dispatchHandler(request, context, {} as Record<string, never>);
   };
 }

@@ -176,6 +176,38 @@
   }
 
   /* ==========================================================================
+     BORDER OPACITY VARIANTS
+     ========================================================================== */
+
+  /**
+   * Success border with 30% opacity
+   */
+  .qt-border-success\/30 {
+    border-color: color-mix(in srgb, var(--color-success) 30%, transparent);
+  }
+
+  /**
+   * Warning border with 30% opacity
+   */
+  .qt-border-warning\/30 {
+    border-color: color-mix(in srgb, var(--color-warning) 30%, transparent);
+  }
+
+  /**
+   * Destructive border with 30% opacity
+   */
+  .qt-border-destructive\/30 {
+    border-color: color-mix(in srgb, var(--color-destructive) 30%, transparent);
+  }
+
+  /**
+   * Info border with 30% opacity
+   */
+  .qt-border-info\/30 {
+    border-color: color-mix(in srgb, var(--color-info) 30%, transparent);
+  }
+
+  /* ==========================================================================
      TEXT COLOR UTILITIES
      ========================================================================== */
 
@@ -223,5 +255,33 @@
    */
   .hover\:qt-bg-surface-alt:hover {
     background-color: var(--color-muted);
+  }
+
+  /**
+   * Hover background for destructive/10
+   */
+  .hover\:qt-bg-destructive\/10:hover {
+    background-color: color-mix(in srgb, var(--color-destructive) 10%, transparent);
+  }
+
+  /**
+   * Hover background for success/10
+   */
+  .hover\:qt-bg-success\/10:hover {
+    background-color: color-mix(in srgb, var(--color-success) 10%, transparent);
+  }
+
+  /**
+   * Hover background for warning/10
+   */
+  .hover\:qt-bg-warning\/10:hover {
+    background-color: color-mix(in srgb, var(--color-warning) 10%, transparent);
+  }
+
+  /**
+   * Hover background for info/10
+   */
+  .hover\:qt-bg-info\/10:hover {
+    background-color: color-mix(in srgb, var(--color-info) 10%, transparent);
   }
 }

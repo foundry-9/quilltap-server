@@ -59,6 +59,18 @@ export interface MessageServiceContext {
 }
 
 /**
+ * Pending tool result from user-initiated tool calls (shown in composer before sending)
+ */
+export interface PendingToolResultInput {
+  tool: string
+  success: boolean
+  result: string
+  prompt: string
+  arguments: Record<string, unknown>
+  createdAt: string
+}
+
+/**
  * Options for sending a message
  */
 export interface SendMessageOptions {
@@ -70,6 +82,8 @@ export interface SendMessageOptions {
   continueMode?: boolean
   /** Specific participant to respond (for multi-character continue mode) */
   respondingParticipantId?: string
+  /** Pending tool results to be saved as TOOL messages before the user message */
+  pendingToolResults?: PendingToolResultInput[]
 }
 
 /**

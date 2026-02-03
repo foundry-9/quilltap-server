@@ -82,6 +82,52 @@ describe('lib/paths', () => {
     });
   });
 
+  describe('getBaseDataDirWithSource', () => {
+    it('should return environment source when QUILLTAP_DATA_DIR is set', async () => {
+      process.env.QUILLTAP_DATA_DIR = '/custom/path';
+
+      const { getBaseDataDirWithSource } = await import('@/lib/paths');
+      const result = getBaseDataDirWithSource();
+
+      expect(result.path).toBe('/custom/path');
+      expect(result.source).toBe('environment');
+      expect(result.sourceDescription).toContain('QUILLTAP_DATA_DIR');
+    });
+
+    it('should expand tilde in QUILLTAP_DATA_DIR', async () => {
+      process.env.QUILLTAP_DATA_DIR = '~/custom-quilltap';
+
+      const { getBaseDataDirWithSource } = await import('@/lib/paths');
+      const result = getBaseDataDirWithSource();
+
+      expect(result.path).toBe(path.join(os.homedir(), 'custom-quilltap'));
+      expect(result.source).toBe('environment');
+    });
+
+    it('should return platform-default source when no env override', async () => {
+      delete process.env.QUILLTAP_DATA_DIR;
+      delete process.env.DOCKER_CONTAINER;
+
+      const { getBaseDataDirWithSource } = await import('@/lib/paths');
+      const result = getBaseDataDirWithSource();
+
+      expect(result.source).toBe('platform-default');
+      expect(result.sourceDescription).toMatch(/(macOS|Linux|Windows|Docker) default/);
+    });
+
+    it('should return Docker default when in Docker', async () => {
+      delete process.env.QUILLTAP_DATA_DIR;
+      process.env.DOCKER_CONTAINER = 'true';
+
+      const { getBaseDataDirWithSource } = await import('@/lib/paths');
+      const result = getBaseDataDirWithSource();
+
+      expect(result.path).toBe('/app/quilltap');
+      expect(result.source).toBe('platform-default');
+      expect(result.sourceDescription).toContain('Docker');
+    });
+  });
+
   describe('getDataDir', () => {
     it('should return base/data path', async () => {
       const { getDataDir, getBaseDataDir } = await import('@/lib/paths');

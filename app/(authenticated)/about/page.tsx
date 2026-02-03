@@ -14,7 +14,7 @@ export default function AboutPage() {
       <div className="mb-8">
         <h1 className="qt-heading-1">About <BrandName /></h1>
         <p className="qt-text-muted mt-2">
-          AI-powered roleplay chat platform with a pluggable provider system
+          Self-hosted AI workspace for writers, worldbuilders, and roleplayers
         </p>
       </div>
 
@@ -39,13 +39,14 @@ export default function AboutPage() {
       <div className="qt-card p-6 mb-6">
         <h2 className="text-xl font-semibold mb-4">What is <BrandName />?</h2>
         <p className="qt-text-primary mb-4">
-          <BrandName /> is a modern, self-hosted chat platform for AI-powered roleplay. It combines a Next.js application
-          with a plugin architecture so you can mix-and-match LLM providers, theme packs, and authentication methods
-          while keeping your data under your control.
+          <BrandName /> is a self-hosted AI workspace for writers, worldbuilders, roleplayers, and anyone who wants an
+          AI assistant that actually knows what they&apos;re working on. Connect to any LLM provider, organize your work
+          into projects with persistent files and context, create characters with real personalities, and build a
+          private AI environment that learns and remembers.
         </p>
         <p className="qt-text-primary">
-          The platform ships with a multi-character chat system, a Tools workspace for backups and restores,
-          and a ThemeProvider runtime that lets you swap entire visual palettes at runtime.
+          The platform ships with project-based file organization, multi-character chat, long-term memory with
+          semantic search, and a plugin system for themes, providers, templates, and tools.
         </p>
       </div>
 
@@ -55,35 +56,35 @@ export default function AboutPage() {
         <ul className="space-y-2 qt-text-primary">
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Multi-provider plugins</strong> &ndash; OpenAI, Anthropic, Google Gemini, Grok, Ollama, OpenRouter, and OpenAI-compatible APIs</span>
+            <span><strong>Projects &amp; files</strong> &ndash; organize work into projects with folders, files, and custom instructions</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Cheap LLM + embedding automation</strong> &ndash; memories, summaries, and semantic search</span>
+            <span><strong>LLM file access</strong> &ndash; AI can read, search, and write your project files with permission</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Multi-character chats</strong> &ndash; SillyTavern import wizard, turn system, inter-character memory sharing</span>
+            <span><strong>Long-term memory</strong> &ndash; semantic recall across conversations, not just within them</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Theme plugin system</strong> &ndash; swap entire visual palettes at runtime</span>
+            <span><strong>Multi-provider support</strong> &ndash; Anthropic, OpenAI, Google Gemini, Grok, Ollama, OpenRouter, and OpenAI-compatible APIs</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Image generation</strong> &ndash; Google Gemini/Imagen 4, Grok, OpenAI, and OpenRouter profiles</span>
+            <span><strong>Multi-character chats</strong> &ndash; SillyTavern import, turn management, impersonation, swipes</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Secure by design</strong> &ndash; AES-256-GCM encrypted API keys, OAuth + local auth, optional TOTP 2FA</span>
+            <span><strong>LLM tools</strong> &ndash; web search, image generation, MCP connector, custom tool plugins</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Mobile-responsive</strong> &ndash; optimized dashboard and chat UI for phone portrait mode</span>
+            <span><strong>Plugin system</strong> &ndash; extend with themes, providers, templates, and tools via npm packages</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Left sidebar navigation</strong> &ndash; persistent sidebar with characters, chats, resizable width, and collapsible on desktop</span>
+            <span><strong>Secure by design</strong> &ndash; AES-256-GCM encrypted API keys, all data stays on your infrastructure</span>
           </li>
         </ul>
       </div>
@@ -105,10 +106,7 @@ export default function AboutPage() {
             <span className="font-medium">Database:</span> SQLite
           </div>
           <div>
-            <span className="font-medium">File Storage:</span> S3-compatible
-          </div>
-          <div>
-            <span className="font-medium">Auth:</span> Local + OAuth
+            <span className="font-medium">File Storage:</span> Local filesystem
           </div>
           <div>
             <span className="font-medium">Styling:</span> Tailwind CSS 4+
@@ -120,6 +118,17 @@ export default function AboutPage() {
       <div className="qt-card p-6 mb-6">
         <h2 className="text-xl font-semibold mb-4">Links</h2>
         <div className="flex flex-wrap gap-4">
+          <a
+            href="https://quilltap.ai"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="qt-button qt-button-secondary"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+            </svg>
+            Quilltap Website
+          </a>
           <a
             href="https://github.com/foundry-9/quilltap"
             target="_blank"

@@ -35,6 +35,21 @@ import {
   formatRequestFullContextResults,
   type RequestFullContextToolContext,
 } from '@/lib/tools/handlers/request-full-context-handler';
+import {
+  executeHelpSearchTool,
+  formatHelpSearchResults,
+  type HelpSearchToolContext,
+} from '@/lib/tools/handlers/help-search-handler';
+import {
+  executeRngTool,
+  formatRngResults,
+  type RngToolContext,
+} from '@/lib/tools/handlers/rng-handler';
+import {
+  executeStateTool,
+  formatStateResults,
+  type StateToolContext,
+} from '@/lib/tools/handlers/state-handler';
 
 export interface ToolCallRequest {
   name: string;
@@ -82,7 +97,12 @@ export interface ToolExecutionContext {
 }
 
 /**
- * Formatted tool result for inclusion in conversation context
+ * Formatted tool result for inclusion in conversation context.
+ *
+ * NOTE: This interface and formatToolResult() are currently unused.
+ * The chat system uses context-builder.service.ts and orchestrator.service.ts
+ * to format tool results as user messages with "[Tool Result: name]" prefix.
+ * Kept for potential future use if native tool result formats are needed.
  */
 export interface FormattedToolResult {
   role: 'user' | 'tool';
@@ -92,8 +112,13 @@ export interface FormattedToolResult {
 }
 
 /**
- * Format tool result for inclusion in conversation context
- * Different LLM providers may have different formats
+ * Format tool result for inclusion in conversation context.
+ * Different LLM providers may have different formats.
+ *
+ * NOTE: This function is currently unused in production code.
+ * Tool result formatting is handled by context-builder.service.ts which
+ * converts TOOL messages to user messages with "[Tool Result: name]" prefix.
+ * This function is preserved for potential future native format support.
  *
  * @param toolResult - The executed tool result
  * @param provider - The LLM provider name (GOOGLE, ANTHROPIC, OPENAI, etc.)
@@ -119,7 +144,7 @@ export function formatToolResult(
       };
 
     case 'ANTHROPIC':
-      // TODO: Anthropic should use tool_result content blocks
+      // Anthropic's native format uses tool_result content blocks
       // For now, use text-based format (works but not optimal)
       return {
         role: 'user',
@@ -129,7 +154,7 @@ export function formatToolResult(
     case 'OPENAI':
     case 'GROK':
     case 'OPENROUTER':
-      // TODO: OpenAI-compatible providers should use tool role with tool_call_id
+      // OpenAI-compatible providers' native format uses tool role with tool_call_id
       // For now, use text-based format (works but not optimal)
       return {
         role: 'user',
@@ -173,6 +198,9 @@ const BUILT_IN_TOOLS = new Set([
   'project_info',
   'file_management',
   'request_full_context',
+  'search_help',
+  'rng',
+  'state',
 ]);
 
 export async function executeToolCallWithContext(
@@ -475,6 +503,89 @@ export async function executeToolCallWithContext(
           formattedText: formattedResult,
         } : null,
         error: result.success ? undefined : result.message,
+      };
+    }
+
+    // Handle search_help (help documentation search)
+    if (toolCall.name === 'search_help') {
+      // Execute help search tool
+      const helpContext: HelpSearchToolContext = {
+        userId,
+      };
+
+      const result = await executeHelpSearchTool(toolCall.arguments, helpContext);
+
+      // Format results for LLM consumption
+      const formattedResult = result.success && result.results
+        ? formatHelpSearchResults(result.results)
+        : result.error || 'No help documentation found';
+
+      return {
+        toolName: 'search_help',
+        success: result.success,
+        result: result.success ? {
+          formattedText: formattedResult,
+          results: result.results,
+          totalFound: result.totalFound,
+          query: result.query,
+        } : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle rng (random number generator)
+    if (toolCall.name === 'rng') {
+      // Execute RNG tool
+      const rngContext: RngToolContext = {
+        userId,
+        chatId,
+      };
+
+      const result = await executeRngTool(toolCall.arguments, rngContext);
+
+      // Format results for LLM consumption
+      const formattedResult = formatRngResults(result);
+
+      return {
+        toolName: 'rng',
+        success: result.success,
+        result: result.success ? {
+          formattedText: formattedResult,
+          type: result.type,
+          rollCount: result.rollCount,
+          results: result.results,
+          sum: result.sum,
+        } : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle state (persistent state management)
+    if (toolCall.name === 'state') {
+      // Execute state tool
+      const stateContext: StateToolContext = {
+        userId,
+        chatId,
+        projectId: context.projectId,
+      };
+
+      const result = await executeStateTool(toolCall.arguments, stateContext);
+
+      // Format results for LLM consumption
+      const formattedResult = formatStateResults(result);
+
+      return {
+        toolName: 'state',
+        success: result.success,
+        result: result.success ? {
+          formattedText: formattedResult,
+          operation: result.operation,
+          context: result.context,
+          path: result.path,
+          value: result.value,
+          previousValue: result.previousValue,
+        } : null,
+        error: result.success ? undefined : result.error,
       };
     }
 

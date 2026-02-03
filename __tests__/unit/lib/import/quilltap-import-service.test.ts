@@ -13,6 +13,7 @@ import {
   createMockCharacter,
   createMockPersona,
   createMockChat,
+  createMockChatParticipant,
   createMockTag,
   createMockMemory,
   createMockConnectionProfile,
@@ -30,6 +31,8 @@ import {
   createMockConnectionProfilesExport,
   createMockExportManifest,
   createMockSanitizedConnectionProfile,
+  createMockSanitizedImageProfile,
+  createMockSanitizedEmbeddingProfile,
   generateId,
 } from '../fixtures/test-factories';
 import {
@@ -86,6 +89,7 @@ describe('quilltap-import-service', () => {
     configureCreate(mockUserRepos.connections.create);
     configureCreate(mockUserRepos.imageProfiles.create);
     configureCreate(mockUserRepos.embeddingProfiles.create);
+    configureCreate(mockUserRepos.projects.create);
     configureCreate(mockGlobalRepos.roleplayTemplates.create);
   });
 
@@ -889,6 +893,549 @@ describe('quilltap-import-service', () => {
       // The memory should be imported because the character was imported
       // and its new ID was mapped
       expect(result.imported.memories).toBe(1);
+    });
+  });
+
+  // ============================================================================
+  // executeImport() - Character Relationship Reconciliation Tests
+  // ============================================================================
+
+  describe('executeImport() - character relationship reconciliation', () => {
+    it('should remap defaultConnectionProfileId for characters', async () => {
+      const oldProfileId = generateId();
+      const newProfileId = generateId();
+      const character = createMockExportedCharacter({
+        defaultConnectionProfileId: oldProfileId,
+      });
+      const profile = createMockSanitizedConnectionProfile({ id: oldProfileId });
+      const exportData = {
+        manifest: createMockExportManifest({ exportType: 'characters' }),
+        data: {
+          characters: [character],
+          connectionProfiles: [profile],
+        },
+      };
+
+      // Mock creates to return new IDs
+      mockUserRepos.connections.create.mockImplementation(async (data) => ({
+        ...data,
+        id: newProfileId,
+      }) as any);
+      mockUserRepos.characters.create.mockImplementation(async (data) => ({
+        ...data,
+        id: character.id,
+      }) as any);
+      mockUserRepos.characters.findById.mockResolvedValue({
+        ...character,
+        defaultConnectionProfileId: oldProfileId,
+      } as any);
+
+      await executeImport(testUserId, exportData as any, {
+        conflictStrategy: 'skip',
+        includeMemories: false,
+        includeRelatedEntities: false,
+      });
+
+      // Should update with remapped profile ID
+      expect(mockUserRepos.characters.update).toHaveBeenCalledWith(
+        character.id,
+        expect.objectContaining({
+          defaultConnectionProfileId: newProfileId,
+        })
+      );
+    });
+
+    it('should remap defaultImageProfileId for characters', async () => {
+      const oldProfileId = generateId();
+      const newProfileId = generateId();
+      const character = createMockExportedCharacter({
+        defaultImageProfileId: oldProfileId,
+      });
+      const profile = createMockSanitizedImageProfile({ id: oldProfileId });
+      const exportData = {
+        manifest: createMockExportManifest({ exportType: 'characters' }),
+        data: {
+          characters: [character],
+          imageProfiles: [profile],
+        },
+      };
+
+      mockUserRepos.imageProfiles.create.mockImplementation(async (data) => ({
+        ...data,
+        id: newProfileId,
+      }) as any);
+      mockUserRepos.characters.create.mockImplementation(async (data) => ({
+        ...data,
+        id: character.id,
+      }) as any);
+      mockUserRepos.characters.findById.mockResolvedValue({
+        ...character,
+        defaultImageProfileId: oldProfileId,
+      } as any);
+
+      await executeImport(testUserId, exportData as any, {
+        conflictStrategy: 'skip',
+        includeMemories: false,
+        includeRelatedEntities: false,
+      });
+
+      expect(mockUserRepos.characters.update).toHaveBeenCalledWith(
+        character.id,
+        expect.objectContaining({
+          defaultImageProfileId: newProfileId,
+        })
+      );
+    });
+
+    it('should remap defaultRoleplayTemplateId for characters', async () => {
+      const oldTemplateId = generateId();
+      const newTemplateId = generateId();
+      const character = createMockExportedCharacter({
+        defaultRoleplayTemplateId: oldTemplateId,
+      });
+      const template = createMockRoleplayTemplate({
+        id: oldTemplateId,
+        userId: testUserId,
+        isBuiltIn: false,
+        pluginName: null,
+      });
+      const exportData = {
+        manifest: createMockExportManifest({ exportType: 'characters' }),
+        data: {
+          characters: [character],
+          roleplayTemplates: [template],
+        },
+      };
+
+      mockGlobalRepos.roleplayTemplates.create.mockImplementation(async (data) => ({
+        ...data,
+        id: newTemplateId,
+      }) as any);
+      mockUserRepos.characters.create.mockImplementation(async (data) => ({
+        ...data,
+        id: character.id,
+      }) as any);
+      mockUserRepos.characters.findById.mockResolvedValue({
+        ...character,
+        defaultRoleplayTemplateId: oldTemplateId,
+      } as any);
+
+      await executeImport(testUserId, exportData as any, {
+        conflictStrategy: 'skip',
+        includeMemories: false,
+        includeRelatedEntities: false,
+      });
+
+      expect(mockUserRepos.characters.update).toHaveBeenCalledWith(
+        character.id,
+        expect.objectContaining({
+          defaultRoleplayTemplateId: newTemplateId,
+        })
+      );
+    });
+
+    it('should not remap plugin template IDs for characters', async () => {
+      const pluginTemplateId = 'plugin:my-plugin:template-name';
+      const character = createMockExportedCharacter({
+        defaultRoleplayTemplateId: pluginTemplateId,
+      });
+      const exportData = createMockQuilltapExport({ characters: [character] });
+
+      mockUserRepos.characters.create.mockImplementation(async (data) => ({
+        ...data,
+        id: character.id,
+      }) as any);
+      mockUserRepos.characters.findById.mockResolvedValue({
+        ...character,
+        defaultRoleplayTemplateId: pluginTemplateId,
+      } as any);
+
+      await executeImport(testUserId, exportData, {
+        conflictStrategy: 'skip',
+        includeMemories: false,
+        includeRelatedEntities: false,
+      });
+
+      // Should NOT try to update the plugin template reference
+      const updateCalls = mockUserRepos.characters.update.mock.calls;
+      if (updateCalls.length > 0) {
+        expect(updateCalls[0][1]).not.toHaveProperty('defaultRoleplayTemplateId');
+      }
+    });
+  });
+
+  // ============================================================================
+  // executeImport() - Chat Participant Reconciliation Tests
+  // ============================================================================
+
+  describe('executeImport() - chat participant reconciliation', () => {
+    it('should remap roleplayTemplateId in chat participants', async () => {
+      const oldTemplateId = generateId();
+      const newTemplateId = generateId();
+      const chat = createMockExportedChat({
+        participants: [
+          createMockChatParticipant({
+            roleplayTemplateId: oldTemplateId,
+          }),
+        ],
+      });
+      const template = createMockRoleplayTemplate({
+        id: oldTemplateId,
+        userId: testUserId,
+        isBuiltIn: false,
+        pluginName: null,
+      });
+      const exportData = {
+        manifest: createMockExportManifest({ exportType: 'chats' }),
+        data: {
+          chats: [chat],
+          roleplayTemplates: [template],
+        },
+      };
+
+      mockGlobalRepos.roleplayTemplates.create.mockImplementation(async (data) => ({
+        ...data,
+        id: newTemplateId,
+      }) as any);
+      mockUserRepos.chats.create.mockImplementation(async (data) => ({
+        ...data,
+        id: chat.id,
+      }) as any);
+      mockUserRepos.chats.findById.mockResolvedValue({
+        ...chat,
+        participants: chat.participants,
+      } as any);
+
+      await executeImport(testUserId, exportData as any, {
+        conflictStrategy: 'skip',
+        includeMemories: false,
+        includeRelatedEntities: false,
+      });
+
+      // Check that participants were remapped
+      expect(mockUserRepos.chats.update).toHaveBeenCalled();
+      const updateCall = mockUserRepos.chats.update.mock.calls[0];
+      expect(updateCall[1].participants[0].roleplayTemplateId).toBe(newTemplateId);
+    });
+
+    it('should not remap plugin template IDs in chat participants', async () => {
+      const pluginTemplateId = 'plugin:my-plugin:template-name';
+      const chat = createMockExportedChat({
+        participants: [
+          createMockChatParticipant({
+            roleplayTemplateId: pluginTemplateId,
+          }),
+        ],
+      });
+      const exportData = createMockChatsExport({ chats: [chat] });
+
+      mockUserRepos.chats.create.mockImplementation(async (data) => ({
+        ...data,
+        id: chat.id,
+      }) as any);
+      mockUserRepos.chats.findById.mockResolvedValue({
+        ...chat,
+        participants: chat.participants,
+      } as any);
+
+      await executeImport(testUserId, exportData, {
+        conflictStrategy: 'skip',
+        includeMemories: false,
+        includeRelatedEntities: false,
+      });
+
+      // Plugin template ID should be preserved unchanged
+      const updateCall = mockUserRepos.chats.update.mock.calls[0];
+      expect(updateCall[1].participants[0].roleplayTemplateId).toBe(pluginTemplateId);
+    });
+  });
+
+  // ============================================================================
+  // executeImport() - Profile Tags Reconciliation Tests
+  // ============================================================================
+
+  describe('executeImport() - profile tags reconciliation', () => {
+    it('should remap tags in connection profiles', async () => {
+      const oldTagId = generateId();
+      const newTagId = generateId();
+      const tag = createMockTag({ id: oldTagId, name: 'ProfileTag' });
+      const profile = createMockSanitizedConnectionProfile({
+        tags: [oldTagId],
+      });
+      const exportData = {
+        manifest: createMockExportManifest({ exportType: 'connection-profiles' }),
+        data: {
+          connectionProfiles: [profile],
+          tags: [tag],
+        },
+      };
+
+      mockUserRepos.tags.create.mockImplementation(async (data) => ({
+        ...data,
+        id: newTagId,
+      }) as any);
+      mockUserRepos.connections.create.mockImplementation(async (data) => ({
+        ...data,
+        id: profile.id,
+      }) as any);
+      mockUserRepos.connections.findById.mockResolvedValue({
+        ...profile,
+        tags: [oldTagId],
+      } as any);
+
+      await executeImport(testUserId, exportData as any, {
+        conflictStrategy: 'skip',
+        includeMemories: false,
+        includeRelatedEntities: false,
+      });
+
+      expect(mockUserRepos.connections.update).toHaveBeenCalledWith(
+        profile.id,
+        expect.objectContaining({
+          tags: [newTagId],
+        })
+      );
+    });
+
+    it('should remap tags in image profiles', async () => {
+      const oldTagId = generateId();
+      const newTagId = generateId();
+      const tag = createMockTag({ id: oldTagId, name: 'ImageTag' });
+      const profile = createMockSanitizedImageProfile({
+        tags: [oldTagId],
+      });
+      const exportData = {
+        manifest: createMockExportManifest({ exportType: 'image-profiles' }),
+        data: {
+          imageProfiles: [profile],
+          tags: [tag],
+        },
+      };
+
+      mockUserRepos.tags.create.mockImplementation(async (data) => ({
+        ...data,
+        id: newTagId,
+      }) as any);
+      mockUserRepos.imageProfiles.create.mockImplementation(async (data) => ({
+        ...data,
+        id: profile.id,
+      }) as any);
+      mockUserRepos.imageProfiles.findById.mockResolvedValue({
+        ...profile,
+        tags: [oldTagId],
+      } as any);
+
+      await executeImport(testUserId, exportData as any, {
+        conflictStrategy: 'skip',
+        includeMemories: false,
+        includeRelatedEntities: false,
+      });
+
+      expect(mockUserRepos.imageProfiles.update).toHaveBeenCalledWith(
+        profile.id,
+        expect.objectContaining({
+          tags: [newTagId],
+        })
+      );
+    });
+
+    it('should remap tags in embedding profiles', async () => {
+      const oldTagId = generateId();
+      const newTagId = generateId();
+      const tag = createMockTag({ id: oldTagId, name: 'EmbedTag' });
+      const profile = createMockSanitizedEmbeddingProfile({
+        tags: [oldTagId],
+      });
+      const exportData = {
+        manifest: createMockExportManifest({ exportType: 'embedding-profiles' }),
+        data: {
+          embeddingProfiles: [profile],
+          tags: [tag],
+        },
+      };
+
+      mockUserRepos.tags.create.mockImplementation(async (data) => ({
+        ...data,
+        id: newTagId,
+      }) as any);
+      mockUserRepos.embeddingProfiles.create.mockImplementation(async (data) => ({
+        ...data,
+        id: profile.id,
+      }) as any);
+      mockUserRepos.embeddingProfiles.findById.mockResolvedValue({
+        ...profile,
+        tags: [oldTagId],
+      } as any);
+
+      await executeImport(testUserId, exportData as any, {
+        conflictStrategy: 'skip',
+        includeMemories: false,
+        includeRelatedEntities: false,
+      });
+
+      expect(mockUserRepos.embeddingProfiles.update).toHaveBeenCalledWith(
+        profile.id,
+        expect.objectContaining({
+          tags: [newTagId],
+        })
+      );
+    });
+  });
+
+  // ============================================================================
+  // executeImport() - Roleplay Template Tags Reconciliation Tests
+  // ============================================================================
+
+  describe('executeImport() - roleplay template tags reconciliation', () => {
+    it('should remap tags in roleplay templates', async () => {
+      const oldTagId = generateId();
+      const newTagId = generateId();
+      const tag = createMockTag({ id: oldTagId, name: 'TemplateTag' });
+      const template = createMockRoleplayTemplate({
+        userId: testUserId,
+        isBuiltIn: false,
+        pluginName: null,
+        tags: [oldTagId],
+      });
+      const exportData = {
+        manifest: createMockExportManifest({ exportType: 'roleplay-templates' }),
+        data: {
+          roleplayTemplates: [template],
+          tags: [tag],
+        },
+      };
+
+      mockUserRepos.tags.create.mockImplementation(async (data) => ({
+        ...data,
+        id: newTagId,
+      }) as any);
+      mockGlobalRepos.roleplayTemplates.create.mockImplementation(async (data) => ({
+        ...data,
+        id: template.id,
+      }) as any);
+      mockGlobalRepos.roleplayTemplates.findById.mockResolvedValue({
+        ...template,
+        tags: [oldTagId],
+      } as any);
+
+      await executeImport(testUserId, exportData as any, {
+        conflictStrategy: 'skip',
+        includeMemories: false,
+        includeRelatedEntities: false,
+      });
+
+      expect(mockGlobalRepos.roleplayTemplates.update).toHaveBeenCalledWith(
+        template.id,
+        expect.objectContaining({
+          tags: [newTagId],
+        })
+      );
+    });
+  });
+
+  // ============================================================================
+  // executeImport() - Memory Field Reconciliation Tests
+  // ============================================================================
+
+  describe('executeImport() - memory field reconciliation', () => {
+    it('should remap projectId in memories', async () => {
+      const oldProjectId = generateId();
+      const newProjectId = generateId();
+      const characterId = generateId();
+      const character = createMockExportedCharacter({ id: characterId });
+      const project = {
+        id: oldProjectId,
+        userId: testUserId,
+        name: 'Test Project',
+        description: null,
+        instructions: null,
+        allowAnyCharacter: false,
+        characterRoster: [],
+        color: null,
+        icon: null,
+        mountPointId: null,
+        defaultDisabledTools: [],
+        defaultDisabledToolGroups: [],
+        state: {},
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      const memory = createMockMemory({
+        characterId,
+        projectId: oldProjectId,
+      });
+      const exportData = {
+        manifest: createMockExportManifest({ exportType: 'characters' }),
+        data: {
+          characters: [character],
+          projects: [project],
+          memories: [memory],
+        },
+      };
+
+      mockUserRepos.projects.create.mockImplementation(async (data) => ({
+        ...data,
+        id: newProjectId,
+      }) as any);
+      mockUserRepos.characters.create.mockImplementation(async (data) => ({
+        ...data,
+        id: characterId,
+      }) as any);
+
+      await executeImport(testUserId, exportData as any, {
+        conflictStrategy: 'skip',
+        includeMemories: true,
+        includeRelatedEntities: false,
+      });
+
+      // Check that memory was created with remapped projectId
+      expect(mockUserRepos.memories.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectId: newProjectId,
+        })
+      );
+    });
+
+    it('should remap tags in memories', async () => {
+      const oldTagId = generateId();
+      const newTagId = generateId();
+      const characterId = generateId();
+      const character = createMockExportedCharacter({ id: characterId });
+      const tag = createMockTag({ id: oldTagId, name: 'MemoryTag' });
+      const memory = createMockMemory({
+        characterId,
+        tags: [oldTagId],
+      });
+      const exportData = {
+        manifest: createMockExportManifest({ exportType: 'characters' }),
+        data: {
+          characters: [character],
+          tags: [tag],
+          memories: [memory],
+        },
+      };
+
+      mockUserRepos.tags.create.mockImplementation(async (data) => ({
+        ...data,
+        id: newTagId,
+      }) as any);
+      mockUserRepos.characters.create.mockImplementation(async (data) => ({
+        ...data,
+        id: characterId,
+      }) as any);
+
+      await executeImport(testUserId, exportData as any, {
+        conflictStrategy: 'skip',
+        includeMemories: true,
+        includeRelatedEntities: false,
+      });
+
+      // Check that memory was created with remapped tags
+      expect(mockUserRepos.memories.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tags: [newTagId],
+        })
+      );
     });
   });
 });

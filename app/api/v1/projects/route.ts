@@ -88,6 +88,7 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, 
       icon: validatedData.icon || null,
       defaultDisabledTools: [],
       defaultDisabledToolGroups: [],
+      state: {},
     });
 
     logger.info('[Projects v1] Project created', {

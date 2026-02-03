@@ -436,12 +436,6 @@ ${characterLabel} says:
 
         const parsed = JSON.parse(cleanContent)
         // Ensure content is always a string (some LLMs return objects)
-        if (parsed.content && typeof parsed.content !== 'string') {
-          logger.debug('[Memory] LLM returned non-string content, coercing to string', {
-            taskType: 'memory-extraction-user',
-            contentType: typeof parsed.content,
-          })
-        }
         const memoryContent = typeof parsed.content === 'string'
           ? parsed.content
           : (parsed.content ? JSON.stringify(parsed.content) : undefined)
@@ -526,12 +520,6 @@ ${characterLabel} says:
 
         const parsed = JSON.parse(cleanContent)
         // Ensure content is always a string (some LLMs return objects)
-        if (parsed.content && typeof parsed.content !== 'string') {
-          logger.debug('[Memory] LLM returned non-string content, coercing to string', {
-            taskType: 'memory-extraction-character',
-            contentType: typeof parsed.content,
-          })
-        }
         const memoryContent = typeof parsed.content === 'string'
           ? parsed.content
           : (parsed.content ? JSON.stringify(parsed.content) : undefined)
@@ -636,12 +624,6 @@ ${characterBName}: ${characterBMessage}`,
 
         const parsed = JSON.parse(cleanContent)
         // Ensure content is always a string (some LLMs return objects)
-        if (parsed.content && typeof parsed.content !== 'string') {
-          logger.debug('[Memory] LLM returned non-string content, coercing to string', {
-            taskType: 'memory-extraction-inter-character',
-            contentType: typeof parsed.content,
-          })
-        }
         const memoryContent = typeof parsed.content === 'string'
           ? parsed.content
           : (parsed.content ? JSON.stringify(parsed.content) : undefined)
@@ -1127,15 +1109,8 @@ ${exchangesText}`,
           return []
         }
 
-        return parsed.map((item: Record<string, unknown>, index: number) => {
+        return parsed.map((item: Record<string, unknown>) => {
           // Ensure content is always a string (some LLMs return objects)
-          if (item.content && typeof item.content !== 'string') {
-            logger.debug('[Memory] LLM returned non-string content in batch extraction, coercing to string', {
-              taskType: 'batch-memory-extraction',
-              contentType: typeof item.content,
-              itemIndex: index,
-            })
-          }
           const content = typeof item.content === 'string'
             ? item.content
             : (item.content ? JSON.stringify(item.content) : undefined)
@@ -1168,11 +1143,13 @@ You will receive:
 - An original prompt describing a scene with {{placeholders}} for people
 - Physical descriptions for each person (in multiple detail levels: short, medium, long, complete)
 - A character limit for the final prompt
+- Optionally, a style trigger phrase that MUST be incorporated into the prompt
 
 Your task is to write a SINGLE COHERENT PARAGRAPH that:
 1. Describes the scene and what is happening
 2. Introduces each person naturally with their physical details woven into the narrative
 3. Maintains proper sentence structure and flow
+4. If a style trigger phrase is provided, incorporates it naturally (typically at the beginning of the prompt)
 
 CRITICAL WRITING GUIDELINES:
 - Write in a cinematic, descriptive style suitable for image generation
@@ -1182,9 +1159,15 @@ CRITICAL WRITING GUIDELINES:
 - Keep the scene context (location, mood, lighting) as a frame around the people descriptions
 - Each person must be clearly distinct and identifiable in the description
 
+STYLE TRIGGER PHRASE:
+- If provided, the style trigger phrase is REQUIRED for the image to render correctly with the selected style
+- Place it naturally, typically at the beginning (e.g., "DB4RZ Daubrez style painting of a young woman...")
+- Do NOT omit or modify the trigger phrase - use it exactly as provided
+
 STRUCTURE EXAMPLE:
 BAD (concatenated): "Woman with red hair, hazel eyes, fair skin. sitting on Man with gray hair, glasses, plaid shirt.'s lap on a bench"
 GOOD (coherent): "On a sunlit park bench, a young woman with flowing red-orange hair and warm hazel eyes sits comfortably on the lap of a middle-aged man wearing rectangular glasses and a cozy sweater vest. Dappled light filters through the leaves above them."
+GOOD (with trigger): "DB4RZ Daubrez style painting of a sunlit park bench scene, where a young woman with flowing red-orange hair..."
 
 For the descriptions:
 - Use the most detailed tier that fits within the limit
@@ -1217,6 +1200,16 @@ export interface ImagePromptExpansionContext {
   targetLength: number
   /** Target provider (for context) */
   provider: string
+  /**
+   * Style trigger phrase to incorporate into the prompt.
+   * When a style/LoRA is selected that has a trigger phrase,
+   * the LLM should naturally incorporate this phrase into the prompt.
+   */
+  styleTriggerPhrase?: string
+  /**
+   * Name of the selected style (for context in the prompt crafting)
+   */
+  styleName?: string
 }
 
 /**
@@ -1259,6 +1252,14 @@ export async function craftImagePrompt(
     })
     .join('\n\n');
 
+  // Build the style trigger section if provided
+  let styleTriggerSection = ''
+  if (expansionContext.styleTriggerPhrase) {
+    styleTriggerSection = `
+Style trigger phrase (MUST include exactly as shown): "${expansionContext.styleTriggerPhrase}"${expansionContext.styleName ? ` (for "${expansionContext.styleName}" style)` : ''}
+`
+  }
+
   const llmMessages: LLMMessage[] = [
     {
       role: 'system',
@@ -1270,7 +1271,7 @@ export async function craftImagePrompt(
 
 Available descriptions:
 ${placeholderDetails}
-
+${styleTriggerSection}
 Target length: ${expansionContext.targetLength} characters (for ${expansionContext.provider})
 
 Create the final image prompt (maximize detail while staying under the limit):`,

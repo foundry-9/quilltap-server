@@ -144,6 +144,68 @@ export {
   type RequestFullContextToolContext,
 } from './handlers/request-full-context-handler';
 
+// Help Search Tool
+export {
+  helpSearchToolDefinition,
+  anthropicHelpSearchToolDefinition,
+  getOpenAIHelpSearchTool,
+  getAnthropicHelpSearchTool,
+  getGoogleHelpSearchTool,
+  validateHelpSearchInput,
+  type HelpSearchToolInput,
+  type HelpSearchToolOutput,
+  type HelpSearchResult,
+} from './help-search-tool';
+
+export {
+  executeHelpSearchTool,
+  formatHelpSearchResults,
+  HelpSearchError,
+  type HelpSearchToolContext,
+} from './handlers/help-search-handler';
+
+// RNG (Random Number Generator) Tool
+export {
+  rngToolDefinition,
+  anthropicRngToolDefinition,
+  getOpenAIRngTool,
+  getAnthropicRngTool,
+  getGoogleRngTool,
+  validateRngInput,
+  type RngType,
+  type RngToolInput,
+  type RngToolOutput,
+  type RngResult,
+} from './rng-tool';
+
+export {
+  executeRngTool,
+  formatRngResults,
+  RngError,
+  type RngToolContext,
+} from './handlers/rng-handler';
+
+// State (Persistent State Management) Tool
+export {
+  stateToolDefinition,
+  anthropicStateToolDefinition,
+  getOpenAIStateTool,
+  getAnthropicStateTool,
+  getGoogleStateTool,
+  validateStateInput,
+  type StateOperation,
+  type StateContext,
+  type StateToolInput,
+  type StateToolOutput,
+} from './state-tool';
+
+export {
+  executeStateTool,
+  formatStateResults,
+  StateError,
+  type StateToolContext,
+} from './handlers/state-handler';
+
 // Plugin-Based Tool Builder (Phase 3)
 export {
   buildToolsForProvider,
