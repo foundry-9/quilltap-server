@@ -51,6 +51,16 @@ export const ProjectSchema = z.object({
   /** Persistent JSON state for games, inventory, session data, etc. */
   state: JsonSchema.default({}),
 
+  // Story backgrounds
+  /** Whether story backgrounds are enabled for this project (null = inherit from global, true/false = override) */
+  storyBackgroundsEnabled: z.boolean().nullable().optional(),
+  /** Static background image file ID (user-selected, not AI-generated) */
+  staticBackgroundImageId: UUIDSchema.nullable().optional(),
+  /** AI-generated story background image file ID for the project */
+  storyBackgroundImageId: UUIDSchema.nullable().optional(),
+  /** How to display backgrounds: 'latest_chat' = from most recent chat, 'project' = project-level generated, 'static' = user-uploaded, 'theme' = default theme */
+  backgroundDisplayMode: z.enum(['latest_chat', 'project', 'static', 'theme']).default('theme'),
+
   // Timestamps
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
@@ -60,6 +70,10 @@ export type Project = z.infer<typeof ProjectSchema>;
 
 // Input type for creating projects - makes fields with defaults optional
 export type ProjectInput = z.input<typeof ProjectSchema>;
+
+// Background display mode type
+export const BackgroundDisplayModeEnum = z.enum(['latest_chat', 'project', 'static', 'theme']);
+export type BackgroundDisplayMode = z.infer<typeof BackgroundDisplayModeEnum>;
 
 // ============================================================================
 // PROJECT CONTEXT (for system prompt injection)

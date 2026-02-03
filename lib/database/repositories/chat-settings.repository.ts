@@ -222,6 +222,10 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
             maxTurns: 10,
             defaultEnabled: false,
           },
+          storyBackgroundsSettings: {
+            enabled: false,
+            defaultImageProfileId: null,
+          },
           defaultRoleplayTemplateId,
           ...data,
         };

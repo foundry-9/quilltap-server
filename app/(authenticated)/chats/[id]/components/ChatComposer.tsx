@@ -79,6 +79,8 @@ interface ChatComposerProps {
   onBulkCharacterReplaceClick?: () => void
   onToolSettingsClick?: () => void
   onStateClick?: () => void
+  onRegenerateBackgroundClick?: () => void
+  storyBackgroundsEnabled?: boolean
   onStopStreaming: () => void
   /** Callback when a pending tool result is added */
   onPendingToolResult?: (result: Omit<PendingToolResult, 'id' | 'createdAt'>) => void
@@ -145,6 +147,8 @@ export function ChatComposer({
   onBulkCharacterReplaceClick,
   onToolSettingsClick,
   onStateClick,
+  onRegenerateBackgroundClick,
+  storyBackgroundsEnabled = false,
   onStopStreaming,
   onPendingToolResult,
 }: ChatComposerProps) {
@@ -465,10 +469,12 @@ export function ChatComposer({
           onBulkCharacterReplaceClick={onBulkCharacterReplaceClick}
           onToolSettingsClick={onToolSettingsClick}
           onStateClick={onStateClick}
+          onRegenerateBackgroundClick={onRegenerateBackgroundClick}
           chatPhotoCount={chatPhotoCount}
           showAddCharacter={isSingleCharacterChat}
           chatId={id}
           chatMemoryCount={chatMemoryCount}
+          storyBackgroundsEnabled={storyBackgroundsEnabled}
           disabled={sending || !hasActiveCharacters}
           agentModeEnabled={agentModeEnabled}
           onAgentModeToggle={onAgentModeToggle}

@@ -36,6 +36,7 @@ export default function ProjectDetailPage() {
     handleSave,
     handleToggleAllowAnyCharacter,
     handleSaveAgentMode,
+    handleSaveBackgroundDisplayMode,
     handleRemoveCharacter,
   } = useProjectDetail(projectId)
 
@@ -115,6 +116,7 @@ export default function ProjectDetailPage() {
           onSave={handleSave}
           onToggleAllowAnyCharacter={handleToggleAllowAnyCharacter}
           onAgentModeChange={handleSaveAgentMode}
+          onBackgroundDisplayModeChange={handleSaveBackgroundDisplayMode}
           expanded={cardState.settings}
           onToggle={() => toggleCard('settings')}
         />

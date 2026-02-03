@@ -161,6 +161,19 @@ export const AgentModeSettingsSchema = z.object({
 export type AgentModeSettings = z.infer<typeof AgentModeSettingsSchema>;
 
 // ============================================================================
+// STORY BACKGROUNDS SETTINGS
+// ============================================================================
+
+export const StoryBackgroundsSettingsSchema = z.object({
+  /** Whether story background generation is enabled (default: false) */
+  enabled: z.boolean().default(false),
+  /** Default image profile ID to use for background generation */
+  defaultImageProfileId: UUIDSchema.nullable().optional(),
+});
+
+export type StoryBackgroundsSettings = z.infer<typeof StoryBackgroundsSettingsSchema>;
+
+// ============================================================================
 // CHAT SETTINGS
 // ============================================================================
 
@@ -227,6 +240,11 @@ export const ChatSettingsSchema = z.object({
   agentModeSettings: AgentModeSettingsSchema.default({
     maxTurns: 10,
     defaultEnabled: false,
+  }),
+  /** Story backgrounds settings for AI-generated chat backgrounds */
+  storyBackgroundsSettings: StoryBackgroundsSettingsSchema.default({
+    enabled: false,
+    defaultImageProfileId: null,
   }),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

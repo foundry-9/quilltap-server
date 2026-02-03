@@ -59,6 +59,10 @@ import { addAutoDetectRngFieldMigration } from './add-auto-detect-rng-field';
 import { addCompressionCacheFieldMigration } from './add-compression-cache-field';
 // Add agent mode fields to chat_settings, characters, projects, and chats
 import { addAgentModeFieldsMigration } from './add-agent-mode-fields';
+// Add story backgrounds fields to chat_settings, chats, and projects
+import { addStoryBackgroundsFieldsMigration } from './add-story-backgrounds-fields';
+// Add imageProfileId field to chats (move from per-participant to per-chat)
+import { addChatImageProfileFieldMigration } from './add-chat-image-profile-field';
 
 /**
  * All available migrations.
@@ -113,6 +117,10 @@ export const migrations: Migration[] = [
   addCompressionCacheFieldMigration,
   // Add agent mode fields
   addAgentModeFieldsMigration,
+  // Add story backgrounds fields
+  addStoryBackgroundsFieldsMigration,
+  // Add imageProfileId field to chats (per-chat instead of per-participant)
+  addChatImageProfileFieldMigration,
 ];
 
 export {
@@ -162,4 +170,8 @@ export {
   addCompressionCacheFieldMigration,
   // Add agent mode fields
   addAgentModeFieldsMigration,
+  // Add story backgrounds fields
+  addStoryBackgroundsFieldsMigration,
+  // Add imageProfileId field to chats (per-chat instead of per-participant)
+  addChatImageProfileFieldMigration,
 };

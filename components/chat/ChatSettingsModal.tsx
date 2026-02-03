@@ -83,13 +83,13 @@ interface ChatSettingsModalProps {
   chatId: string
   participants: Participant[]
   roleplayTemplateId?: string | null
+  imageProfileId?: string | null
   onSuccess?: () => void
 }
 
 interface ParticipantEditorProps {
   participant: Participant
   connectionProfiles: ConnectionProfile[]
-  imageProfiles: ImageProfile[]
   apiKeys: ApiKey[]
   onUpdate: (participantId: string, updates: ParticipantUpdate) => void
   loading: boolean
@@ -97,7 +97,6 @@ interface ParticipantEditorProps {
 
 interface ParticipantUpdate {
   connectionProfileId?: string
-  imageProfileId?: string | null
   systemPromptOverride?: string | null
   selectedSystemPromptId?: string | null
   isActive?: boolean
@@ -107,7 +106,6 @@ interface ParticipantUpdate {
 function ParticipantEditor({
   participant,
   connectionProfiles,
-  imageProfiles,
   apiKeys,
   onUpdate,
   loading,
@@ -125,7 +123,6 @@ function ParticipantEditor({
 
   // Generate unique IDs for form controls
   const connectionProfileId = `connection-profile-${participant.id}`
-  const imageProfileId = `image-profile-${participant.id}`
   const systemPromptSelectId = `system-prompt-select-${participant.id}`
   const systemPromptId = `system-prompt-${participant.id}`
   const activeCheckboxId = `active-${participant.id}`
@@ -135,9 +132,6 @@ function ParticipantEditor({
     participant.controlledBy === 'user'
       ? USER_IMPERSONATION_VALUE
       : (participant.connectionProfile?.id || '')
-  )
-  const [selectedImageProfileId, setSelectedImageProfileId] = useState(
-    participant.imageProfile?.id || ''
   )
   const [selectedSystemPromptId, setSelectedSystemPromptId] = useState(
     participant.selectedSystemPromptId || ''
@@ -165,10 +159,6 @@ function ParticipantEditor({
         // Just changing LLM profile
         updates.connectionProfileId = selectedConnectionProfileId
       }
-    }
-
-    if (selectedImageProfileId !== (participant.imageProfile?.id || '')) {
-      updates.imageProfileId = selectedImageProfileId || null
     }
 
     if (isCharacter && participant.character?.systemPrompts) {
@@ -245,29 +235,6 @@ function ParticipantEditor({
             </select>
           </div>
 
-          <div className="mb-3">
-            <label htmlFor={imageProfileId} className="qt-label mb-1">
-              Image Provider (Optional)
-            </label>
-            <select
-              id={imageProfileId}
-              value={selectedImageProfileId}
-              onChange={(e) => setSelectedImageProfileId(e.target.value)}
-              disabled={loading}
-              className="qt-select text-sm"
-            >
-              <option value="">None</option>
-              {imageProfiles.map((profile) => {
-                const hasKey = profileHasApiKey(profile.apiKeyId)
-                return (
-                  <option key={profile.id} value={profile.id}>
-                    {profile.name} ({profile.provider}){!hasKey ? ' ⚠️ No API Key' : ''}
-                  </option>
-                )
-              })}
-            </select>
-          </div>
-
           {participant.character?.systemPrompts && participant.character.systemPrompts.length > 0 && (
             <div className="mb-3">
               <label htmlFor={systemPromptSelectId} className="qt-label mb-1">
@@ -327,6 +294,7 @@ export default function ChatSettingsModal({
   chatId,
   participants,
   roleplayTemplateId: initialRoleplayTemplateId,
+  imageProfileId: initialImageProfileId,
   onSuccess,
 }: Readonly<ChatSettingsModalProps>) {
   const [connectionProfiles, setConnectionProfiles] = useState<ConnectionProfile[]>([])
@@ -336,13 +304,21 @@ export default function ChatSettingsModal({
   const [selectedRoleplayTemplateId, setSelectedRoleplayTemplateId] = useState<string | null>(
     initialRoleplayTemplateId ?? null
   )
+  const [selectedImageProfileId, setSelectedImageProfileId] = useState<string | null>(
+    initialImageProfileId ?? null
+  )
   const [roleplayTemplateSaving, setRoleplayTemplateSaving] = useState(false)
+  const [imageProfileSaving, setImageProfileSaving] = useState(false)
   const [loading, setLoading] = useState(false)
 
   // Update local state when prop changes
   useEffect(() => {
     setSelectedRoleplayTemplateId(initialRoleplayTemplateId ?? null)
   }, [initialRoleplayTemplateId])
+
+  useEffect(() => {
+    setSelectedImageProfileId(initialImageProfileId ?? null)
+  }, [initialImageProfileId])
 
   useEffect(() => {
     if (isOpen) {
@@ -353,7 +329,7 @@ export default function ChatSettingsModal({
 
   // Disable click-outside detection while saving to prevent native select dropdown clicks
   // from closing the modal (browser renders select options in a separate layer)
-  const isSaving = loading || roleplayTemplateSaving
+  const isSaving = loading || roleplayTemplateSaving || imageProfileSaving
 
   const fetchProfiles = async () => {
     try {
@@ -434,6 +410,43 @@ export default function ChatSettingsModal({
       showErrorToast(errorMessage || 'Failed to update roleplay template')
     } finally {
       setRoleplayTemplateSaving(false)
+    }
+  }
+
+  const handleImageProfileChange = async (profileId: string | null) => {
+    try {
+      setImageProfileSaving(true)
+
+      const res = await fetch(`/api/v1/chats/${chatId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageProfileId: profileId }),
+      })
+
+      if (!res.ok) {
+        let errorMessage = 'Failed to update image profile'
+        try {
+          const errorData = await res.json()
+          errorMessage = errorData.error || errorMessage
+        } catch {
+          errorMessage = `HTTP ${res.status}: ${res.statusText}`
+        }
+        throw new Error(errorMessage)
+      }
+
+      setSelectedImageProfileId(profileId)
+      showSuccessToast('Image profile updated')
+      onSuccess?.()
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      console.error('Failed to update image profile', {
+        chatId,
+        profileId,
+        error: errorMessage,
+      })
+      showErrorToast(errorMessage || 'Failed to update image profile')
+    } finally {
+      setImageProfileSaving(false)
     }
   }
 
@@ -519,6 +532,39 @@ export default function ChatSettingsModal({
         </div>
       </div>
 
+      {/* Image Profile Section */}
+      <div className="mb-6">
+        <h3 className="qt-text-small font-medium mb-3">
+          Image Generation
+        </h3>
+        <div className="qt-card">
+          <label htmlFor="image-profile" className="qt-label mb-1">
+            Image Provider
+          </label>
+          <select
+            id="image-profile"
+            value={selectedImageProfileId || ''}
+            onChange={(e) => handleImageProfileChange(e.target.value || null)}
+            disabled={imageProfileSaving || loading}
+            className="qt-select text-sm"
+          >
+            <option value="">None (image generation disabled)</option>
+            {imageProfiles.map((profile) => {
+              const hasKey = apiKeys.some(key => key.id === profile.apiKeyId)
+              return (
+                <option key={profile.id} value={profile.id}>
+                  {profile.name} ({profile.provider}){!hasKey && profile.apiKeyId ? ' ⚠️ No API Key' : ''}
+                </option>
+              )
+            })}
+          </select>
+          <p className="qt-text-xs mt-2">
+            Used for generating images in this chat.
+            {imageProfileSaving && <span className="ml-2">Saving...</span>}
+          </p>
+        </div>
+      </div>
+
       <div className="mb-4">
         <h3 className="qt-text-small font-medium mb-3">
           Participants ({participants.length})
@@ -529,7 +575,6 @@ export default function ChatSettingsModal({
             key={participant.id}
             participant={participant}
             connectionProfiles={connectionProfiles}
-            imageProfiles={imageProfiles}
             apiKeys={apiKeys}
             onUpdate={handleParticipantUpdate}
             loading={loading}

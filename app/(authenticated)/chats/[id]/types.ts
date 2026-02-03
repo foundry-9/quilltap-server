@@ -128,6 +128,8 @@ export interface Chat {
   disabledTools?: string[]
   /** Groups of tools that are disabled for this chat */
   disabledToolGroups?: string[]
+  /** Image profile ID for generating images in this chat (shared by all participants) */
+  imageProfileId?: string | null
 }
 
 export type MemoryCascadeAction = 'DELETE_MEMORIES' | 'KEEP_MEMORIES' | 'REGENERATE_MEMORIES' | 'ASK_EVERY_TIME'
@@ -144,6 +146,11 @@ export interface TokenDisplaySettings {
   showSystemEvents: boolean
 }
 
+export interface StoryBackgroundsSettings {
+  enabled: boolean
+  defaultImageProfileId?: string | null
+}
+
 export interface ChatSettings {
   id: string
   userId: string
@@ -152,6 +159,7 @@ export interface ChatSettings {
   tagStyles?: Record<string, TagVisualStyle>
   memoryCascadePreferences?: MemoryCascadePreferences
   tokenDisplaySettings?: TokenDisplaySettings
+  storyBackgroundsSettings?: StoryBackgroundsSettings
   createdAt: string
   updatedAt: string
 }

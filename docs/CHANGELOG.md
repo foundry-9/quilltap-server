@@ -4,6 +4,39 @@
 
 ### 2.10-dev
 
+- refactor: Image profile moved from per-participant to per-chat level
+  - Each chat now has a single image profile (or none) shared by all participants
+  - Image profile selector moved to Chat Settings (below Roleplay Template)
+  - Removed per-character image profile selector from participant settings
+  - New chat creation page now has a single image profile dropdown
+  - Migration automatically populates chat's imageProfileId from first participant
+  - Story backgrounds now use chat-level image profile
+  - API: `imageProfileId` field added to chat create/update requests
+
+- feat: Story Backgrounds - AI-generated atmospheric background images for chats
+  - When enabled, generates landscape scene images featuring characters after chat title updates
+  - Background images use 45% opacity behind chat content for atmosphere
+  - Configure in Settings > Chat Settings > Story Backgrounds
+  - Select image profile for generation (defaults to user's default profile)
+  - API endpoints: `GET /api/v1/chats/[id]?action=get-background`, `GET /api/v1/projects/[id]?action=get-background`
+  - Projects support multiple display modes: theme, static, project, or latest chat background
+  - New database fields: `storyBackgroundImageId`, `lastBackgroundGeneratedAt` on chats
+  - New CSS: Story background ::before layer on `.qt-chat-layout`, semi-transparent content overlay
+  - Manual regeneration via "Regenerate Background" button in chat tool palette
+  - Background auto-updates after generation completes (polling mechanism)
+  - Chat header shows clickable thumbnail of story background (opens full-screen modal)
+  - Duplicate job prevention: skips if background generation already pending for chat
+  - Uses Image Prompt Expansion LLM setting for prompt crafting
+
+- fix: ImageModal now renders via React Portal to resolve z-index stacking context issues
+  - Modal buttons (download, tag, delete) now always visible above page header/sidebar
+  - Uses `createPortal` to render at document body level
+
+- fix: SQLite backend improvements for background job processing
+  - Added `$expr` operator support for field-to-field comparisons in query translator
+  - Fixed `findOneAndUpdate` to correctly return updated document by ID
+  - Resolves issues with job queue claiming and processing
+
 - perf: Server-side markdown pre-rendering for chat messages
   - Simple messages (no tools, no attachments) are now pre-rendered to HTML on the server
   - Pre-rendered HTML is returned in the API response and rendered directly without client-side processing

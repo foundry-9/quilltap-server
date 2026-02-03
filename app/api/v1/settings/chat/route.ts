@@ -10,7 +10,7 @@ import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api
 import { successResponse, serverError, badRequest } from '@/lib/api/responses'
 import { logger } from '@/lib/logger'
 import { TagStyleMapSchema, ThemePreferenceSchema } from '@/lib/schemas/common.types'
-import { TokenDisplaySettingsSchema, LLMLoggingSettingsSchema } from '@/lib/schemas/settings.types'
+import { TokenDisplaySettingsSchema, LLMLoggingSettingsSchema, AgentModeSettingsSchema, StoryBackgroundsSettingsSchema } from '@/lib/schemas/settings.types'
 import { type AvatarDisplayMode } from '@/lib/schemas/types'
 import { getErrorMessage } from '@/lib/errors'
 
@@ -31,7 +31,10 @@ async function updateChatSettings(
   tokenDisplaySettings?: unknown,
   memoryCascadePreferences?: unknown,
   llmLoggingSettings?: unknown,
-  autoDetectRng?: boolean
+  autoDetectRng?: boolean,
+  agentModeSettings?: unknown,
+  storyBackgroundsSettings?: unknown,
+  contextCompressionSettings?: unknown
 ) {
   // Validate avatarDisplayMode if provided
   if (avatarDisplayMode) {
@@ -124,6 +127,27 @@ async function updateChatSettings(
     }
     updateData.autoDetectRng = autoDetectRng
   }
+  if (typeof agentModeSettings !== 'undefined') {
+    const validatedAgentModeSettings = AgentModeSettingsSchema.parse(agentModeSettings)
+    updateData.agentModeSettings = validatedAgentModeSettings
+  }
+  if (typeof storyBackgroundsSettings !== 'undefined') {
+    const validatedStoryBackgroundsSettings = StoryBackgroundsSettingsSchema.parse(storyBackgroundsSettings)
+    updateData.storyBackgroundsSettings = validatedStoryBackgroundsSettings
+  }
+  if (typeof contextCompressionSettings !== 'undefined') {
+    // Basic validation - ensure it's an object with expected structure
+    if (contextCompressionSettings && typeof contextCompressionSettings === 'object') {
+      const settings = contextCompressionSettings as any
+      if (typeof settings.enabled !== 'boolean') {
+        throw new Error('Invalid contextCompressionSettings.enabled (must be boolean)')
+      }
+      if (typeof settings.windowSize !== 'number' || settings.windowSize < 1) {
+        throw new Error('Invalid contextCompressionSettings.windowSize (must be positive number)')
+      }
+    }
+    updateData.contextCompressionSettings = contextCompressionSettings
+  }
 
   return repos.chatSettings.updateForUser(userId, updateData)
 }
@@ -179,6 +203,9 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, r
       memoryCascadePreferences,
       llmLoggingSettings,
       autoDetectRng,
+      agentModeSettings,
+      storyBackgroundsSettings,
+      contextCompressionSettings,
     } = body
 
     const chatSettings = await updateChatSettings(
@@ -195,7 +222,10 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, r
       tokenDisplaySettings,
       memoryCascadePreferences,
       llmLoggingSettings,
-      autoDetectRng
+      autoDetectRng,
+      agentModeSettings,
+      storyBackgroundsSettings,
+      contextCompressionSettings
     )
 
     return successResponse(chatSettings)

@@ -42,6 +42,7 @@ import { ChatCostSummary } from '@/components/chat/ChatCostSummary'
 import { formatMessageTime } from '@/lib/format-time'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
+import { useStoryBackground } from '@/hooks/useStoryBackground'
 import Avatar, { getAvatarSrc } from '@/components/ui/Avatar'
 import { useChatContext } from '@/components/providers/chat-context'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
@@ -97,6 +98,19 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const { setChat, setMessages, setSwipeStates } = chatDataHook
   const { fetchChat, fetchChatSettings, fetchChatPhotoCount, fetchChatMemoryCount, persistTurnState } = chatDataHook
 
+  // Story background hook - fetches background image for chat/project
+  // Enables passive polling (every 30s) when story backgrounds are enabled
+  const {
+    backgroundUrl: storyBackgroundUrl,
+    backgroundFileId: storyBackgroundFileId,
+    backgroundFilename: storyBackgroundFilename,
+    startPolling: startBackgroundPolling,
+  } = useStoryBackground(
+    id,
+    chat?.projectId,
+    chatSettings?.storyBackgroundsSettings?.enabled ?? false
+  )
+
   // UI state
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -114,6 +128,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [toolPaletteOpen, setToolPaletteOpen] = useState(false)
   const [documentEditingMode, setDocumentEditingMode] = useState(false)
   const [agentModeEnabled, setAgentModeEnabled] = useState<boolean | null>(null)
+  const [storyBackgroundsEnabled, setStoryBackgroundsEnabled] = useState(false)
   const [chatSettingsModalOpen, setChatSettingsModalOpen] = useState(false)
   const [chatProjectModalOpen, setChatProjectModalOpen] = useState(false)
   const [renameModalOpen, setRenameModalOpen] = useState(false)
@@ -344,6 +359,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
   }, [chat?.id, chat?.agentModeEnabled])
 
+  // Sync storyBackgroundsEnabled state when chatSettings loads
+  useEffect(() => {
+    if (chatSettings) {
+      setStoryBackgroundsEnabled(chatSettings.storyBackgroundsSettings?.enabled ?? false)
+    }
+  }, [chatSettings?.storyBackgroundsSettings?.enabled])
+
   // Handle scroll-to-message from memory provenance navigation
   useEffect(() => {
     // Only check once messages are loaded
@@ -529,6 +551,24 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               </span>
             )
           })}
+          {storyBackgroundUrl && (
+            <button
+              type="button"
+              onClick={() => setModalImage({
+                src: storyBackgroundUrl,
+                filename: storyBackgroundFilename || 'story_background.png',
+                fileId: storyBackgroundFileId || undefined,
+              })}
+              className="flex-shrink-0 rounded overflow-hidden hover:ring-2 hover:ring-primary/50 transition-all"
+              title="View story background"
+            >
+              <img
+                src={storyBackgroundUrl}
+                alt="Story background"
+                className="w-8 h-5 object-cover"
+              />
+            </button>
+          )}
           <span className="qt-text-primary truncate" title={chat.title}>
             {chat.title}
           </span>
@@ -539,7 +579,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
     // Clear on unmount
     return () => setLeftContent(null)
-  }, [chat?.projectId, chat?.projectName, chat?.title, llmCharacters, setLeftContent])
+  }, [chat?.projectId, chat?.projectName, chat?.title, llmCharacters, setLeftContent, storyBackgroundUrl, storyBackgroundFileId, storyBackgroundFilename])
 
   // Set cost summary in toolbar right section
   useEffect(() => {
@@ -1530,6 +1570,27 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
   }, [id, agentModeEnabled])
 
+  const handleRegenerateBackground = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/v1/chats/${id}?action=regenerate-background`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.error || 'Failed to regenerate background')
+      }
+
+      showSuccessToast('Story background regeneration queued')
+
+      // Start polling for the new background
+      startBackgroundPolling()
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to regenerate background')
+    }
+  }, [id, startBackgroundPolling])
+
   // Initialization effects
   useEffect(() => {
     fetchChat()
@@ -2051,7 +2112,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const shouldShowParticipantSidebar = isMultiChar && showParticipantSidebar
 
   return (
-    <div className="qt-chat-layout">
+    <div
+      className="qt-chat-layout"
+      style={storyBackgroundUrl ? { '--story-background-url': `url('${storyBackgroundUrl}')` } as React.CSSProperties : undefined}
+    >
       <div className="qt-chat-main">
         <div className="qt-chat-messages" ref={messagesContainerRef}>
           <div className="qt-chat-messages-list">
@@ -2279,6 +2343,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onToggleDocumentEditingMode={handleToggleDocumentEditingMode}
           agentModeEnabled={agentModeEnabled}
           onAgentModeToggle={handleToggleAgentMode}
+          storyBackgroundsEnabled={storyBackgroundsEnabled}
+          onRegenerateBackgroundClick={handleRegenerateBackground}
           onSubmit={sendMessage}
           onFileSelect={handleFileSelect}
           onAttachFileClick={() => {
@@ -2360,6 +2426,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           chatId={id}
           participants={chat?.participants || []}
           roleplayTemplateId={chat?.roleplayTemplateId}
+          imageProfileId={chat?.imageProfileId}
           onSuccess={fetchChat}
         />
 
@@ -2391,7 +2458,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onClose={() => setGenerateImageDialogOpen(false)}
           chatId={id}
           participants={chat?.participants || []}
-          imageProfileId={chat?.participants.find(p => p.type === 'CHARACTER' && p.isActive)?.imageProfile?.id}
+          imageProfileId={chat?.imageProfileId || undefined}
           onImagesGenerated={(images, prompt) => {
             fetch(`/api/v1/chats/${id}?action=add-tool-result`, {
               method: 'POST',

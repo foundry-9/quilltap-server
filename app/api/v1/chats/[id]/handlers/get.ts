@@ -5,6 +5,7 @@
  * GET /api/v1/chats/[id]?action=export - Export chat (SillyTavern JSONL)
  * GET /api/v1/chats/[id]?action=cost - Get cost breakdown
  * GET /api/v1/chats/[id]?action=get-avatars - Get avatar overrides for chat
+ * GET /api/v1/chats/[id]?action=get-background - Get story background URL
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -97,6 +98,41 @@ export async function handleGet(
   // Handle get-state action
   if (action === 'get-state') {
     return handleGetState(chatId, ctx);
+  }
+
+  // Handle get-background action - returns story background URL for the chat
+  if (action === 'get-background') {
+    try {
+      const chat = await repos.chats.findById(chatId);
+      if (!chat || chat.userId !== user.id) {
+        return notFound('Chat');
+      }
+
+      // Check if the chat has a story background image
+      if (!chat.storyBackgroundImageId) {
+        return NextResponse.json({ backgroundUrl: null, fileId: null, filename: null });
+      }
+
+      // Get the file info to build the URL
+      const file = await repos.files.findById(chat.storyBackgroundImageId);
+      if (!file) {
+        logger.warn('[Chats v1] Story background file not found', {
+          chatId,
+          storyBackgroundImageId: chat.storyBackgroundImageId,
+        });
+        return NextResponse.json({ backgroundUrl: null, fileId: null, filename: null });
+      }
+
+      const backgroundUrl = getFilePath(file);
+      return NextResponse.json({
+        backgroundUrl,
+        fileId: file.id,
+        filename: file.originalFilename,
+      });
+    } catch (error) {
+      logger.error('[Chats v1] Failed to get story background', { chatId }, error instanceof Error ? error : undefined);
+      return serverError('Failed to get story background');
+    }
   }
 
   // Handle cost action

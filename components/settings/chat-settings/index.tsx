@@ -10,6 +10,7 @@ import { ContextCompressionSettingsComponent } from './ContextCompressionSetting
 import { LLMLoggingSettingsComponent } from './LLMLoggingSettings'
 import { AutomationSettings } from './AutomationSettings'
 import { AgentModeSettings } from './AgentModeSettings'
+import { StoryBackgroundsSettings } from './StoryBackgroundsSettings'
 
 /**
  * ChatSettingsTab Component
@@ -31,6 +32,7 @@ export default function ChatSettingsTab() {
     saving,
     connectionProfiles,
     embeddingProfiles,
+    imageProfiles,
     loadingProfiles,
     handleAvatarModeChange,
     handleAvatarStyleChange,
@@ -43,6 +45,8 @@ export default function ChatSettingsTab() {
     handleAutoDetectRngChange,
     handleAgentModeDefaultEnabledChange,
     handleAgentModeMaxTurnsChange,
+    handleStoryBackgroundsEnabledChange,
+    handleStoryBackgroundsProfileChange,
   } = useChatSettings()
 
   if (loading) {
@@ -135,6 +139,15 @@ export default function ChatSettingsTab() {
           saving={saving}
           onDefaultEnabledChange={handleAgentModeDefaultEnabledChange}
           onMaxTurnsChange={handleAgentModeMaxTurnsChange}
+        />
+
+        <StoryBackgroundsSettings
+          settings={settings}
+          saving={saving}
+          loadingProfiles={loadingProfiles}
+          imageProfiles={imageProfiles}
+          onEnabledChange={handleStoryBackgroundsEnabledChange}
+          onProfileChange={handleStoryBackgroundsProfileChange}
         />
       </div>
     </div>

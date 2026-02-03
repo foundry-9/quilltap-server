@@ -115,6 +115,22 @@ export interface EmbeddingReindexAllPayload {
 }
 
 /**
+ * Payload for story background generation job
+ */
+export interface StoryBackgroundGenerationPayload {
+  /** Chat ID to generate background for */
+  chatId: string;
+  /** Image profile ID to use for generation */
+  imageProfileId: string;
+  /** Character IDs participating in the chat */
+  characterIds: string[];
+  /** Optional scene context (e.g., chat title or summary) */
+  sceneContext?: string;
+  /** Optional project ID if the chat belongs to a project */
+  projectId?: string | null;
+}
+
+/**
  * Message pair for batch memory extraction
  */
 export interface MessagePair {
@@ -249,6 +265,38 @@ export async function enqueueEmbeddingReindexAll(
 ): Promise<string> {
   return enqueueJob(userId, 'EMBEDDING_REINDEX_ALL', payload as unknown as Record<string, unknown>, {
     // Reindex is lower priority
+    priority: options?.priority ?? -1,
+    ...options,
+  });
+}
+
+/**
+ * Enqueue a story background generation job
+ * Skips if there's already a pending/processing job for the same chat
+ */
+export async function enqueueStoryBackgroundGeneration(
+  userId: string,
+  payload: StoryBackgroundGenerationPayload,
+  options?: EnqueueJobOptions
+): Promise<string> {
+  const repos = getRepositories();
+
+  // Check for existing pending/processing story background jobs for this chat
+  const pendingJobs = await repos.backgroundJobs.findPendingForChat(payload.chatId);
+  const existingJob = pendingJobs.find(job => job.type === 'STORY_BACKGROUND_GENERATION');
+
+  if (existingJob) {
+    logger.info('[StoryBackground] Skipping - job already pending for chat', {
+      context: 'background-jobs.queue',
+      chatId: payload.chatId,
+      existingJobId: existingJob.id,
+      existingStatus: existingJob.status,
+    });
+    return existingJob.id;
+  }
+
+  return enqueueJob(userId, 'STORY_BACKGROUND_GENERATION', payload as unknown as Record<string, unknown>, {
+    // Lower priority than interactive tasks
     priority: options?.priority ?? -1,
     ...options,
   });

@@ -50,6 +50,15 @@ export interface MemoryCascadePreferences {
   onSwipeRegenerate: MemoryCascadeAction
 }
 
+/**
+ * Story Backgrounds Settings
+ * Controls AI-generated background images for chats
+ */
+export interface StoryBackgroundsSettings {
+  enabled: boolean
+  defaultImageProfileId?: string | null
+}
+
 export interface ChatSettings {
   id: string
   userId: string
@@ -66,6 +75,8 @@ export interface ChatSettings {
   autoDetectRng?: boolean
   /** Agent mode settings for iterative tool use with self-correction */
   agentModeSettings?: AgentModeSettings
+  /** Story backgrounds settings for AI-generated chat backgrounds */
+  storyBackgroundsSettings?: StoryBackgroundsSettings
   createdAt: string
   updatedAt: string
 }
@@ -89,6 +100,16 @@ export interface ConnectionProfile {
 }
 
 export interface EmbeddingProfile {
+  id: string
+  name: string
+  provider: string
+  modelName: string
+  isDefault: boolean
+  apiKeyId?: string
+  apiKey?: ApiKey | null
+}
+
+export interface ImageProfile {
   id: string
   name: string
   provider: string
@@ -359,4 +380,12 @@ export interface AgentModeSettings {
 export const DEFAULT_AGENT_MODE_SETTINGS: AgentModeSettings = {
   maxTurns: 10,
   defaultEnabled: false,
+}
+
+/**
+ * Default story backgrounds settings
+ */
+export const DEFAULT_STORY_BACKGROUNDS_SETTINGS: StoryBackgroundsSettings = {
+  enabled: false,
+  defaultImageProfileId: null,
 }

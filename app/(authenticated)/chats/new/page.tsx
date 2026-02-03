@@ -51,7 +51,6 @@ interface ImageProfile {
 interface SelectedCharacter {
   character: Character
   connectionProfileId: string
-  imageProfileId?: string | null
   selectedSystemPromptId?: string | null
   controlledBy: 'llm' | 'user'
 }
@@ -79,6 +78,7 @@ export default function NewChatPage() {
   const [userControlledCharacters, setUserControlledCharacters] = useState<Character[]>([])
   const [selectedCharacters, setSelectedCharacters] = useState<SelectedCharacter[]>([])
   const [selectedUserCharacterId, setSelectedUserCharacterId] = useState<string>('')
+  const [chatImageProfileId, setChatImageProfileId] = useState<string>('')
   const [scenario, setScenario] = useState('')
   const [timestampConfig, setTimestampConfig] = useState<TimestampConfig | null>(null)
   const [loading, setLoading] = useState(true)
@@ -208,7 +208,7 @@ export default function NewChatPage() {
       const selectedSystemPromptId = defaultPrompt?.id || null
       setSelectedCharacters((prev) => [
         ...prev,
-        { character, connectionProfileId, imageProfileId: null, selectedSystemPromptId, controlledBy: 'llm' },
+        { character, connectionProfileId, selectedSystemPromptId, controlledBy: 'llm' },
       ])
     }
   }
@@ -224,14 +224,6 @@ export default function NewChatPage() {
               controlledBy: isUserControlled ? 'user' : 'llm',
             }
           : sc
-      )
-    )
-  }
-
-  const handleImageProfileChange = (characterId: string, profileId: string | null) => {
-    setSelectedCharacters((prev) =>
-      prev.map((sc) =>
-        sc.character.id === characterId ? { ...sc, imageProfileId: profileId } : sc
       )
     )
   }
@@ -291,14 +283,12 @@ export default function NewChatPage() {
         type: 'CHARACTER'
         characterId: string
         connectionProfileId?: string
-        imageProfileId?: string
         selectedSystemPromptId?: string
         controlledBy?: 'llm' | 'user'
       }> = selectedCharacters.map((sc) => ({
         type: 'CHARACTER' as const,
         characterId: sc.character.id,
         connectionProfileId: sc.controlledBy === 'llm' ? sc.connectionProfileId : undefined,
-        imageProfileId: sc.imageProfileId || undefined,
         selectedSystemPromptId: sc.selectedSystemPromptId || undefined,
         controlledBy: sc.controlledBy,
       }))
@@ -315,6 +305,11 @@ export default function NewChatPage() {
       const requestBody: Record<string, unknown> = {
         title: generateTitle(),
         participants,
+      }
+
+      // Chat-level image profile (shared by all participants)
+      if (chatImageProfileId) {
+        requestBody.imageProfileId = chatImageProfileId
       }
 
       if (scenario) {
@@ -510,21 +505,6 @@ export default function NewChatPage() {
                                 ))}
                               </select>
                             </div>
-                            {imageProfiles.length > 0 && (
-                              <div className="mt-2">
-                                <label className="mb-1 block text-xs font-medium qt-text-xs">Image Profile (Optional)</label>
-                                <select
-                                  value={sc.imageProfileId || ''}
-                                  onChange={(e) => handleImageProfileChange(sc.character.id, e.target.value || null)}
-                                  className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                                >
-                                  <option value="">No image profile</option>
-                                  {imageProfiles.map((profile) => (
-                                    <option key={profile.id} value={profile.id}>{profile.name} ({profile.provider})</option>
-                                  ))}
-                                </select>
-                              </div>
-                            )}
                             {sc.character.systemPrompts && sc.character.systemPrompts.length > 0 && (
                               <div className="mt-2">
                                 <label className="mb-1 block text-xs font-medium qt-text-xs">System Prompt</label>
@@ -586,6 +566,25 @@ export default function NewChatPage() {
                 rows={4}
               />
             </div>
+
+            {imageProfiles.length > 0 && (
+              <div className="rounded-xl border border-border bg-card p-6">
+                <h2 className="mb-4 text-lg font-semibold">Image Generation (Optional)</h2>
+                <p className="mb-3 qt-text-small">Select an image profile to enable image generation in this chat.</p>
+                <select
+                  value={chatImageProfileId}
+                  onChange={(e) => setChatImageProfileId(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="">No image generation</option>
+                  {imageProfiles.map((profile) => (
+                    <option key={profile.id} value={profile.id}>
+                      {profile.name} ({profile.provider})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <TimestampConfigCard
               value={timestampConfig}

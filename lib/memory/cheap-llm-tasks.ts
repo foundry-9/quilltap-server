@@ -90,6 +90,7 @@ function mapTaskTypeToLogType(taskType?: string): LLMLogType {
     'craft-image-prompt': 'IMAGE_PROMPT_CRAFTING',
     'describe-attachment': 'IMAGE_DESCRIPTION',
     'batch-memory-extraction': 'MEMORY_EXTRACTION',
+    'craft-story-background-prompt': 'IMAGE_PROMPT_CRAFTING',
   }
   return mapping[taskType || ''] || 'SUMMARIZATION'
 }
@@ -1296,6 +1297,121 @@ Create the final image prompt (maximize detail while staying under the limit):`,
       return prompt
     },
     'craft-image-prompt'
+  )
+}
+
+// ============================================================================
+// STORY BACKGROUND PROMPT CRAFTING
+// ============================================================================
+
+/**
+ * Story background prompt crafting system prompt
+ * Creates atmospheric landscape scene prompts suitable for chat backgrounds
+ */
+const STORY_BACKGROUND_PROMPT = `You are a skilled visual artist and prompt engineer specializing in atmospheric landscape scenes for story backgrounds.
+
+You will receive:
+- A scene context (typically a chat title or summary describing the story)
+- A list of characters with their brief physical descriptions
+- The target image generation provider
+
+Your task is to create a SINGLE image generation prompt that:
+1. Depicts a scene suitable as a background
+2. Captures the mood and setting implied by the scene context
+3. Places characters as figures in the scene
+4. Uses cinematic composition with the characters positioned naturally in the scene, usually conversing
+
+CRITICAL GUIDELINES:
+- This is for a BACKGROUND image, not a portrait - the scene/environment is primary
+- Characters should be toward the left and right of the frame, not centered
+- Characters should be described briefly, focusing on visual traits (hair color, clothing style, notable features)
+- Focus on atmospheric qualities: lighting, weather, time of day, mood
+- Include environmental details: location type, architectural elements, nature
+- Avoid cluttered compositions - keep it visually calm for use as a background
+- Write in a flowing, descriptive style suitable for image generation
+
+GOOD EXAMPLE OUTPUT:
+"Close-up of two people talking to the left and right of the frame. The woman has green eyes and is smiling."
+
+BAD EXAMPLE OUTPUT:
+"A misty forest clearing at twilight, soft golden light filtering through ancient oak trees. Two small figures stand near a weathered stone bridge - a woman with flowing dark hair in a simple dress and a man in traveler's clothes. Fog rolls gently across the mossy ground, fireflies beginning to glow. Atmospheric, peaceful, fantasy ambience."
+
+Respond with ONLY the final prompt - no explanations, no markdown formatting, no quotes.`
+
+/**
+ * Context for story background prompt crafting
+ */
+export interface StoryBackgroundPromptContext {
+  /** Scene context from chat title or summary */
+  sceneContext: string
+  /** Characters to include in the scene */
+  characters: Array<{
+    name: string
+    description: string
+  }>
+  /** Target image provider for length constraints */
+  provider: string
+}
+
+/**
+ * Crafts a story background image prompt using the cheap LLM
+ *
+ * @param context - Context with scene and character information
+ * @param selection - The cheap LLM provider selection
+ * @param userId - The user ID for API key retrieval
+ * @returns The crafted background prompt
+ */
+export async function craftStoryBackgroundPrompt(
+  context: StoryBackgroundPromptContext,
+  selection: CheapLLMSelection,
+  userId: string
+): Promise<CheapLLMTaskResult<string>> {
+  // Build character descriptions section
+  const characterSection = context.characters.length > 0
+    ? `\nCharacters to include as figures in the scene:\n${context.characters.map(c => `- ${c.name}: ${c.description}`).join('\n')}`
+    : '\nNo specific characters to include - create an atmospheric scene matching the context.'
+
+  // Provider-specific length guidance
+  let lengthGuidance = 'Keep the prompt under 700 characters.'
+  if (context.provider === 'OPENAI') {
+    lengthGuidance = 'Keep the prompt under 1000 characters for optimal DALL-E 3 results.'
+  } else if (context.provider === 'GROK') {
+    lengthGuidance = 'Keep the prompt under 600 characters for Grok image generation.'
+  }
+
+  const llmMessages: LLMMessage[] = [
+    {
+      role: 'system',
+      content: STORY_BACKGROUND_PROMPT,
+    },
+    {
+      role: 'user',
+      content: `Scene context: ${context.sceneContext}
+${characterSection}
+
+Provider: ${context.provider}
+${lengthGuidance}
+
+Create the atmospheric background prompt:`,
+    },
+  ]
+
+  return executeCheapLLMTask(
+    selection,
+    llmMessages,
+    userId,
+    (content: string): string => {
+      let prompt = content.trim()
+
+      // Remove quotes if the LLM wrapped the response
+      prompt = prompt.replace(/^["']|["']$/g, '')
+
+      // Remove any markdown formatting
+      prompt = prompt.replace(/^```[a-z]*\s*/g, '').replace(/\s*```$/g, '')
+
+      return prompt
+    },
+    'craft-story-background-prompt'
   )
 }
 

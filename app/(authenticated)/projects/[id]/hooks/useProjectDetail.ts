@@ -11,7 +11,7 @@
 import { useCallback, useState } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { useSidebarData } from '@/components/providers/sidebar-data-provider'
-import type { Project, EditForm } from '../types'
+import type { Project, EditForm, BackgroundDisplayMode } from '../types'
 
 interface UseProjectDetailReturn {
   project: Project | null
@@ -25,6 +25,7 @@ interface UseProjectDetailReturn {
   handleSave: () => Promise<void>
   handleToggleAllowAnyCharacter: () => Promise<void>
   handleSaveAgentMode: (enabled: boolean | null) => Promise<void>
+  handleSaveBackgroundDisplayMode: (mode: BackgroundDisplayMode) => Promise<void>
   handleRemoveCharacter: (characterId: string) => Promise<void>
 }
 
@@ -125,6 +126,31 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
     }
   }, [projectId])
 
+  const handleSaveBackgroundDisplayMode = useCallback(async (mode: BackgroundDisplayMode) => {
+    try {
+      const res = await fetch(`/api/v1/projects/${projectId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ backgroundDisplayMode: mode }),
+      })
+
+      if (!res.ok) throw new Error('Failed to update background display mode')
+      const data = await res.json()
+      setProject(data.project)
+      const modeLabels: Record<BackgroundDisplayMode, string> = {
+        theme: 'theme background',
+        latest_chat: 'latest chat background',
+        project: 'project background',
+        static: 'static background',
+      }
+      showSuccessToast(`Background set to ${modeLabels[mode]}`)
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to update background mode'
+      console.error('useProjectDetail: save background mode error', errorMsg)
+      showErrorToast(errorMsg)
+    }
+  }, [projectId])
+
   const handleRemoveCharacter = useCallback(async (characterId: string) => {
     try {
       const res = await fetch(`/api/v1/projects/${projectId}?action=remove-character`, {
@@ -155,6 +181,7 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
     handleSave,
     handleToggleAllowAnyCharacter,
     handleSaveAgentMode,
+    handleSaveBackgroundDisplayMode,
     handleRemoveCharacter,
   }
 }

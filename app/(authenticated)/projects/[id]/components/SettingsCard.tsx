@@ -9,7 +9,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { fetchJson } from '@/lib/fetch-helpers'
-import type { Project, EditForm, MountPointInfo } from '../types'
+import type { Project, EditForm, MountPointInfo, BackgroundDisplayMode } from '../types'
 import { ProjectToolSettingsModal } from '@/components/tools/tool-settings'
 import StateEditorModal from '@/components/state/StateEditorModal'
 
@@ -37,6 +37,7 @@ interface SettingsCardProps {
   onSave: () => void
   onToggleAllowAnyCharacter: () => void
   onAgentModeChange: (enabled: boolean | null) => void
+  onBackgroundDisplayModeChange: (mode: BackgroundDisplayMode) => void
   expanded: boolean
   onToggle: () => void
   onProjectUpdate?: () => void
@@ -71,6 +72,7 @@ export function SettingsCard({
   onSave,
   onToggleAllowAnyCharacter,
   onAgentModeChange,
+  onBackgroundDisplayModeChange,
   expanded,
   onToggle,
   onProjectUpdate,
@@ -342,6 +344,30 @@ export function SettingsCard({
               <option value="enabled">Enabled by default</option>
               <option value="disabled">Disabled by default</option>
             </select>
+          </div>
+
+          {/* Story Backgrounds Setting */}
+          <div className="p-3 rounded-lg qt-border qt-bg-surface">
+            <h4 className="text-sm font-medium text-foreground mb-1">Story Backgrounds</h4>
+            <p className="qt-text-xs qt-text-secondary mb-2">
+              Choose how the project background is displayed. Backgrounds are generated from chat titles and characters.
+            </p>
+            <select
+              value={project.backgroundDisplayMode || 'theme'}
+              onChange={(e) => onBackgroundDisplayModeChange(e.target.value as BackgroundDisplayMode)}
+              className="qt-input w-full max-w-xs"
+            >
+              <option value="theme">Use theme background (no image)</option>
+              <option value="latest_chat">Latest chat background</option>
+              <option value="project">Project-generated background</option>
+              <option value="static">Static uploaded image</option>
+            </select>
+            <p className="qt-text-xs qt-text-secondary mt-2">
+              {project.backgroundDisplayMode === 'latest_chat' && 'Shows the most recent background from any chat in this project.'}
+              {project.backgroundDisplayMode === 'project' && 'Uses a background generated specifically for this project.'}
+              {project.backgroundDisplayMode === 'static' && 'Uses a manually uploaded background image.'}
+              {(!project.backgroundDisplayMode || project.backgroundDisplayMode === 'theme') && 'No background image, uses your theme colors.'}
+            </p>
           </div>
 
           {/* Default Tool Settings */}

@@ -6,6 +6,7 @@ import {
   ChatSettings,
   ConnectionProfile,
   EmbeddingProfile,
+  ImageProfile,
   AvatarDisplayMode,
   AvatarDisplayStyle,
   CheapLLMSettings,
@@ -13,6 +14,7 @@ import {
   TokenDisplaySettings,
   ContextCompressionSettings,
   LLMLoggingSettings,
+  StoryBackgroundsSettings,
   DEFAULT_MEMORY_CASCADE_PREFERENCES,
   DEFAULT_TOKEN_DISPLAY_SETTINGS,
   DEFAULT_CONTEXT_COMPRESSION_SETTINGS,
@@ -20,6 +22,7 @@ import {
   DEFAULT_AUTO_DETECT_RNG,
   AgentModeSettings,
   DEFAULT_AGENT_MODE_SETTINGS,
+  DEFAULT_STORY_BACKGROUNDS_SETTINGS,
 } from '../types'
 
 interface UseChatSettingsReturn {
@@ -30,6 +33,7 @@ interface UseChatSettingsReturn {
   success: boolean
   connectionProfiles: ConnectionProfile[]
   embeddingProfiles: EmbeddingProfile[]
+  imageProfiles: ImageProfile[]
   loadingProfiles: boolean
   fetchSettings: () => Promise<void>
   handleAvatarModeChange: (mode: AvatarDisplayMode) => Promise<void>
@@ -43,6 +47,8 @@ interface UseChatSettingsReturn {
   handleAutoDetectRngChange: (value: boolean) => Promise<void>
   handleAgentModeDefaultEnabledChange: (value: boolean) => Promise<void>
   handleAgentModeMaxTurnsChange: (value: number) => Promise<void>
+  handleStoryBackgroundsEnabledChange: (value: boolean) => Promise<void>
+  handleStoryBackgroundsProfileChange: (profileId: string | null) => Promise<void>
 }
 
 export function useChatSettings(): UseChatSettingsReturn {
@@ -53,6 +59,7 @@ export function useChatSettings(): UseChatSettingsReturn {
   const [success, setSuccess] = useState(false)
   const [connectionProfiles, setConnectionProfiles] = useState<ConnectionProfile[]>([])
   const [embeddingProfiles, setEmbeddingProfiles] = useState<EmbeddingProfile[]>([])
+  const [imageProfiles, setImageProfiles] = useState<ImageProfile[]>([])
   const [loadingProfiles, setLoadingProfiles] = useState(false)
 
   // Get the avatar display context updater to sync style changes globally
@@ -133,13 +140,32 @@ export function useChatSettings(): UseChatSettingsReturn {
   }, [])
 
   /**
+   * Fetch image profiles from the API
+   */
+  const fetchImageProfiles = useCallback(async () => {
+    try {
+      const res = await fetch('/api/v1/image-profiles')
+      if (!res.ok) throw new Error('Failed to fetch image profiles')
+      const data = await res.json()
+      const profiles = data.profiles || []
+      setImageProfiles(profiles)
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err)
+      console.error('Error loading image profiles', { error: errorMsg })
+      // Set empty array on error to prevent map errors
+      setImageProfiles([])
+    }
+  }, [])
+
+  /**
    * Initial load of all settings and profiles
    */
   useEffect(() => {
     fetchSettings()
     fetchConnectionProfiles()
     fetchEmbeddingProfiles()
-  }, [fetchSettings, fetchConnectionProfiles, fetchEmbeddingProfiles])
+    fetchImageProfiles()
+  }, [fetchSettings, fetchConnectionProfiles, fetchEmbeddingProfiles, fetchImageProfiles])
 
   /**
    * Helper function to show success message
@@ -573,6 +599,86 @@ export function useChatSettings(): UseChatSettingsReturn {
     [settings, showSuccess]
   )
 
+  /**
+   * Update story backgrounds enabled setting
+   */
+  const handleStoryBackgroundsEnabledChange = useCallback(
+    async (value: boolean) => {
+      if (!settings) return
+
+      try {
+        setSaving(true)
+        setError(null)
+        setSuccess(false)
+
+        const currentSettings = settings.storyBackgroundsSettings || DEFAULT_STORY_BACKGROUNDS_SETTINGS
+        const res = await fetch('/api/v1/settings/chat', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            storyBackgroundsSettings: { ...currentSettings, enabled: value },
+          }),
+        })
+
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Failed to update story backgrounds settings')
+        }
+
+        const updatedSettings = await res.json()
+        setSettings(updatedSettings)
+        showSuccess()
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
+        console.error('Failed to update story backgrounds enabled', { error: errorMsg })
+        setError(errorMsg)
+      } finally {
+        setSaving(false)
+      }
+    },
+    [settings, showSuccess]
+  )
+
+  /**
+   * Update story backgrounds image profile
+   */
+  const handleStoryBackgroundsProfileChange = useCallback(
+    async (profileId: string | null) => {
+      if (!settings) return
+
+      try {
+        setSaving(true)
+        setError(null)
+        setSuccess(false)
+
+        const currentSettings = settings.storyBackgroundsSettings || DEFAULT_STORY_BACKGROUNDS_SETTINGS
+        const res = await fetch('/api/v1/settings/chat', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            storyBackgroundsSettings: { ...currentSettings, defaultImageProfileId: profileId },
+          }),
+        })
+
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Failed to update story backgrounds settings')
+        }
+
+        const updatedSettings = await res.json()
+        setSettings(updatedSettings)
+        showSuccess()
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
+        console.error('Failed to update story backgrounds profile', { error: errorMsg })
+        setError(errorMsg)
+      } finally {
+        setSaving(false)
+      }
+    },
+    [settings, showSuccess]
+  )
+
   return {
     settings,
     loading,
@@ -581,6 +687,7 @@ export function useChatSettings(): UseChatSettingsReturn {
     success,
     connectionProfiles,
     embeddingProfiles,
+    imageProfiles,
     loadingProfiles,
     fetchSettings,
     handleAvatarModeChange,
@@ -594,5 +701,7 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleAutoDetectRngChange,
     handleAgentModeDefaultEnabledChange,
     handleAgentModeMaxTurnsChange,
+    handleStoryBackgroundsEnabledChange,
+    handleStoryBackgroundsProfileChange,
   }
 }

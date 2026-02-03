@@ -821,18 +821,48 @@
   .qt-chat-layout {
     @apply flex h-full;
     @apply overflow-hidden;
+    @apply relative;
     background: var(--qt-content-bg);
+  }
+
+  /**
+   * Story background image layer
+   * Renders behind all chat content using a ::before pseudo-element.
+   * Only visible when --story-background-url CSS variable is set.
+   * Uses fixed attachment for parallax effect while scrolling.
+   */
+  .qt-chat-layout::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--story-background-url) center/cover no-repeat fixed;
+    z-index: 0;
+    opacity: 0.45;
+    pointer-events: none;
+  }
+
+  /**
+   * Hide background layer when no story background URL is set
+   * Checks for absence of the CSS variable in the style attribute
+   */
+  .qt-chat-layout:not([style*="--story-background-url"])::before {
+    display: none;
   }
 
   /**
    * Chat main area
    * overflow-hidden ensures this container never scrolls;
    * scrolling happens in .qt-chat-messages instead.
+   * Uses semi-transparent background to let story background show through
+   * while maintaining readability.
    */
   .qt-chat-main {
     @apply flex-1 flex flex-col;
     @apply min-w-0;
     @apply overflow-hidden;
+    @apply relative;
+    z-index: 1;
+    background: color-mix(in srgb, var(--qt-content-bg) 85%, transparent);
   }
 
   .qt-chat-main-split {

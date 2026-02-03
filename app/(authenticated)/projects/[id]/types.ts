@@ -55,6 +55,8 @@ export interface ProjectFile {
   createdAt: string
 }
 
+export type BackgroundDisplayMode = 'latest_chat' | 'project' | 'static' | 'theme'
+
 export interface Project {
   id: string
   name: string
@@ -68,6 +70,11 @@ export interface Project {
   mountPointId?: string | null
   defaultDisabledTools?: string[]
   defaultDisabledToolGroups?: string[]
+  // Story backgrounds fields
+  storyBackgroundsEnabled?: boolean | null
+  staticBackgroundImageId?: string | null
+  storyBackgroundImageId?: string | null
+  backgroundDisplayMode?: BackgroundDisplayMode
   createdAt: string
   updatedAt: string
 }

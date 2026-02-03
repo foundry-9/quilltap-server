@@ -226,19 +226,25 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
     try {
       const returnAfter = options?.returnDocument !== 'before';
 
-      // Get the document before update if needed
-      const before = returnAfter ? null : await this.findOne(filter);
+      // Always find the document first to get its ID
+      // This is needed for returnDocument: 'after' since the filter may not match post-update
+      const before = await this.findOne(filter);
 
-      // Perform the update
-      const updateQuery = buildUpdateQuery(this.name, filter, update as UpdateSpec<unknown>, this.jsonColumns, this.arrayColumns);
-      const result = this.db.prepare(updateQuery.sql).run(...updateQuery.params);
-
-      if (result.changes === 0 && options?.upsert) {
-        // Document doesn't exist and upsert is requested
-        // This is a simplified implementation - full upsert would need more logic
-        logger.warn('Upsert not fully implemented for findOneAndUpdate');
+      if (!before) {
+        if (options?.upsert) {
+          // Document doesn't exist and upsert is requested
+          // This is a simplified implementation - full upsert would need more logic
+          logger.warn('Upsert not fully implemented for findOneAndUpdate');
+        }
         return null;
       }
+
+      const doc = before as Record<string, unknown>;
+      const docId = doc.id;
+
+      // Perform the update using the document's ID for precision
+      const updateQuery = buildUpdateQuery(this.name, { id: docId } as QueryFilter, update as UpdateSpec<unknown>, this.jsonColumns, this.arrayColumns);
+      const result = this.db.prepare(updateQuery.sql).run(...updateQuery.params);
 
       if (result.changes === 0) {
         return null;
@@ -246,7 +252,8 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
 
       // Return the appropriate document
       if (returnAfter) {
-        return await this.findOne(filter);
+        // Find by ID since the original filter may no longer match after update
+        return await this.findOne({ id: docId } as QueryFilter);
       }
 
       return before;

@@ -26,6 +26,7 @@ import {
   handleQueueMemories,
   handleRng,
   handleToggleAgentMode,
+  handleRegenerateBackground,
 } from '../actions';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 
@@ -101,9 +102,12 @@ export async function handlePost(
     case 'toggle-agent-mode':
       return handleToggleAgentMode(req, chatId, ctx);
 
+    case 'regenerate-background':
+      return handleRegenerateBackground(chatId, chat, ctx);
+
     default:
       return badRequest(
-        `Unknown action: ${action}. Available actions: regenerate-title, add-tag, remove-tag, impersonate, stop-impersonate, set-active-speaker, turn, add-participant, update-participant, remove-participant, bulk-reattribute, get-avatars, set-avatar, remove-avatar, add-tool-result, queue-memories, update-tool-settings, rng, toggle-agent-mode`
+        `Unknown action: ${action}. Available actions: regenerate-title, add-tag, remove-tag, impersonate, stop-impersonate, set-active-speaker, turn, add-participant, update-participant, remove-participant, bulk-reattribute, get-avatars, set-avatar, remove-avatar, add-tool-result, queue-memories, update-tool-settings, rng, toggle-agent-mode, regenerate-background`
       );
   }
 }

@@ -146,8 +146,8 @@ export async function resolveRespondingParticipant(
     }
   }
 
-  // Get image profile from the participant if set
-  const imageProfileId = characterParticipant.imageProfileId || null
+  // Get image profile from the chat level (shared by all participants)
+  const imageProfileId = chat.imageProfileId || null
 
   // Detect if this is a multi-character chat
   const isMultiCharacter = isMultiCharacterChat(chat.participants)

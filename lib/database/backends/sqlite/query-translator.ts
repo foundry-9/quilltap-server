@@ -247,6 +247,59 @@ function translateFieldFilter(
 }
 
 /**
+ * Parse a field reference from $expr format
+ * e.g., '$attempts' -> 'attempts', 'literal' -> null
+ */
+function parseFieldRef(value: unknown): string | null {
+  if (typeof value === 'string' && value.startsWith('$')) {
+    return value.slice(1);
+  }
+  return null;
+}
+
+/**
+ * Translate a MongoDB-style $expr to SQL
+ * Supports basic field-to-field comparisons like { $lt: ['$attempts', '$maxAttempts'] }
+ */
+function translateExpr(expr: Record<string, unknown>): string | null {
+  for (const [op, value] of Object.entries(expr)) {
+    if (!Array.isArray(value) || value.length !== 2) {
+      logger.warn('Unsupported $expr format', { operator: op, value });
+      continue;
+    }
+
+    const [left, right] = value;
+    const leftField = parseFieldRef(left);
+    const rightField = parseFieldRef(right);
+
+    // Both operands must be field references for field-to-field comparison
+    if (!leftField || !rightField) {
+      logger.warn('$expr requires field references (e.g., $fieldName)', { left, right });
+      continue;
+    }
+
+    switch (op) {
+      case '$lt':
+        return `"${leftField}" < "${rightField}"`;
+      case '$lte':
+        return `"${leftField}" <= "${rightField}"`;
+      case '$gt':
+        return `"${leftField}" > "${rightField}"`;
+      case '$gte':
+        return `"${leftField}" >= "${rightField}"`;
+      case '$eq':
+        return `"${leftField}" = "${rightField}"`;
+      case '$ne':
+        return `"${leftField}" != "${rightField}"`;
+      default:
+        logger.warn('Unsupported $expr operator', { operator: op });
+    }
+  }
+
+  return null;
+}
+
+/**
  * Translate a query filter to SQL WHERE clause
  */
 export function translateFilter(
@@ -289,6 +342,12 @@ export function translateFilter(
       const translated = translateFilter(value as QueryFilter, jsonColumns, arrayColumns);
       clauses.push(`NOT (${translated.sql})`);
       params.push(...translated.params);
+    } else if (key === '$expr' && typeof value === 'object' && !Array.isArray(value)) {
+      // Field-to-field comparison expressions (MongoDB $expr emulation)
+      const exprResult = translateExpr(value as Record<string, unknown>);
+      if (exprResult) {
+        clauses.push(exprResult);
+      }
     } else {
       // Regular field filter
       const translated = translateFieldFilter(key, value, jsonColumns, arrayColumns);

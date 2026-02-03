@@ -19,12 +19,14 @@ interface ToolPaletteProps {
   onBulkCharacterReplaceClick?: () => void
   onToolSettingsClick?: () => void
   onStateClick?: () => void
+  onRegenerateBackgroundClick?: () => void
   agentModeEnabled?: boolean | null
   onAgentModeToggle?: () => void
   chatPhotoCount: number
   showAddCharacter?: boolean
   chatId: string
   chatMemoryCount?: number
+  storyBackgroundsEnabled?: boolean
   disabled?: boolean
 }
 
@@ -56,12 +58,14 @@ export default function ToolPalette({
   onBulkCharacterReplaceClick,
   onToolSettingsClick,
   onStateClick,
+  onRegenerateBackgroundClick,
   agentModeEnabled = false,
   onAgentModeToggle,
   chatPhotoCount,
   showAddCharacter = false,
   chatId,
   chatMemoryCount = 0,
+  storyBackgroundsEnabled = false,
   disabled = false,
 }: ToolPaletteProps) {
   const paletteRef = useRef<HTMLDivElement>(null)
@@ -134,6 +138,11 @@ export default function ToolPalette({
 
   const handleAgentModeToggle = () => {
     onAgentModeToggle?.()
+    onClose()
+  }
+
+  const handleRegenerateBackgroundClick = () => {
+    onRegenerateBackgroundClick?.()
     onClose()
   }
 
@@ -213,6 +222,21 @@ export default function ToolPalette({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
               <span>{agentModeEnabled ? 'Agent On' : 'Agent Off'}</span>
+            </button>
+          )}
+
+          {/* Regenerate Story Background */}
+          {storyBackgroundsEnabled && onRegenerateBackgroundClick && (
+            <button
+              type="button"
+              onClick={handleRegenerateBackgroundClick}
+              className="qt-tool-palette-button"
+              title="Regenerate story background image"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span>Regen Background</span>
             </button>
           )}
         </div>

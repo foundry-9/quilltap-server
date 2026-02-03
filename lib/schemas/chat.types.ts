@@ -262,6 +262,14 @@ export const ChatMetadataSchema = z.object({
   /** Current agent turn count within the current message processing (resets on new user message) */
   agentTurnCount: z.number().default(0),
 
+  /** Story background image file ID (from file system) */
+  storyBackgroundImageId: UUIDSchema.nullable().optional(),
+  /** When the story background was last generated */
+  lastBackgroundGeneratedAt: TimestampSchema.nullable().optional(),
+
+  /** Image generation profile for this chat (shared by all participants) */
+  imageProfileId: UUIDSchema.nullable().optional(),
+
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 }).refine(
@@ -340,6 +348,14 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** Current agent turn count within the current message processing (resets on new user message) */
   agentTurnCount: z.number().default(0),
+
+  /** Story background image file ID (from file system) */
+  storyBackgroundImageId: UUIDSchema.nullable().optional(),
+  /** When the story background was last generated */
+  lastBackgroundGeneratedAt: TimestampSchema.nullable().optional(),
+
+  /** Image generation profile for this chat (shared by all participants) */
+  imageProfileId: UUIDSchema.nullable().optional(),
 
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
