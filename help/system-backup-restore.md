@@ -6,18 +6,34 @@ The Backup & Restore tool lets you create complete backups of your Quilltap syst
 
 ## What Gets Backed Up?
 
-A complete backup includes:
+A complete backup includes everything needed to recreate your Quilltap environment:
 
+**Your Content**
 - All characters and their configurations
 - All chat histories and messages
 - All memories and memory data
-- All files you've uploaded
-- All settings and profiles
-- Templates and prompts
-- API keys and connection profiles
+- All files you've uploaded (images, documents, attachments)
+- Projects and their settings
+
+**Profiles & Settings**
+- Connection profiles (API key references - keys need re-entry after restore)
+- Image generation profiles
+- Embedding profiles
+- Plugin configurations (per-plugin settings)
+
+**Templates & Organization**
+- Prompt templates (user-created)
+- Roleplay templates (user-created)
 - Tags and organizational data
 
-**Not included:** Running background jobs or temporary data.
+**Plugins**
+- npm-installed plugins from your `plugins/npm/` directory
+- Plugin-specific configurations
+
+**Logs & History**
+- LLM request/response logs
+
+**Not included:** Running background jobs, temporary data, or built-in plugins (they come with Quilltap).
 
 ## Creating a Backup
 
@@ -27,44 +43,29 @@ A complete backup includes:
 
 2. **Find the Backup & Restore card**
 
-3. **Click the "Create Backup" button** (usually blue/primary colored)
+3. **Click the "Create Backup" button**
 
-4. **Choose backup options:**
-   - **Include Images:** Whether to include uploaded images in the backup
-   - **Local or Cloud:** Where to store the backup
-
-5. **Wait for backup to complete**
-   - Backup progress may be displayed
+4. **Wait for the backup to be created**
+   - A progress indicator may be displayed
    - Time depends on amount of data
-   - You can continue working while backup runs
 
-6. **Confirmation message appears** when backup is complete
+5. **Download the backup file**
+   - Your browser will download a ZIP file
+   - The file contains all your data
+
+6. **Store the backup safely**
+   - Save it to a secure location on your computer
+   - Consider cloud storage (Google Drive, Dropbox, etc.) for redundancy
 
 **Backup sizes:**
 
 - Varies based on your data volume
 - Typically 10 MB - 1 GB depending on number of characters, chats, and files
-- Cloud backups are compressed to save space
-
-## Viewing Available Backups
-
-The Backup & Restore card shows a list of your backups:
-
-**For each backup, you see:**
-
-- **Filename** - The backup's name (usually includes date/time)
-- **Created At** - When the backup was made
-- **Size** - The file size of the backup
-
-**Actions available:**
-
-- **Restore** - Load this backup (see below)
-- **Download** - Save the backup file locally
-- **Delete** - Remove this backup (to save space)
+- Backups are compressed to save space
 
 ## Restoring from a Backup
 
-**Important:** Restoring a backup replaces your current data with the backup's data.
+**Important:** Restoring can either replace your current data or import alongside it.
 
 **Step-by-Step:**
 
@@ -72,25 +73,47 @@ The Backup & Restore card shows a list of your backups:
 
 2. **Find the Backup & Restore card**
 
-3. **Locate the backup** you want to restore in the list
+3. **Click "Restore from Backup"**
 
-4. **Click the "Restore" button** next to that backup
+4. **Select your backup file**
+   - Click to browse or drag and drop
+   - Supports .zip backup files
 
-5. **Review restore options:**
-   - Confirm which backup you're restoring
-   - Note the backup date/time
-   - Understand that current data will be replaced
+5. **Preview the backup contents**
+   - See what's included (characters, chats, files, etc.)
+   - Review the counts before proceeding
 
-6. **Click "Confirm Restore"** (usually after confirming)
+6. **Choose restore mode:**
+   - **Replace Existing Data:** Delete all current data and replace with backup
+   - **Import as New Data:** Keep existing data and import backup with new IDs
 
-7. **Wait for restore to complete**
+7. **Confirm and start restore**
+   - For "Replace" mode, you must confirm the deletion warning
+   - Click "Start Restore"
+
+8. **Wait for restore to complete**
    - System will show progress
-   - May take several minutes
    - Do not close the browser tab
 
-8. **Restore complete**
-   - Your system reloads with backup data
-   - All data is restored to the backup state
+9. **Restore complete**
+   - Your system reloads with the restored data
+   - npm plugins are extracted and ready to use
+
+## Restore Modes Explained
+
+**Replace Existing Data:**
+- Deletes ALL your current data
+- Replaces it entirely with the backup contents
+- Use when migrating to a new instance
+- Use when recovering from data corruption
+- Cannot be undone
+
+**Import as New Data:**
+- Keeps all your existing data
+- Imports backup contents with regenerated IDs
+- Use to merge data from another instance
+- Use to duplicate content for testing
+- Existing data remains untouched
 
 ## Understanding Backup Timing
 
@@ -102,47 +125,25 @@ The Backup & Restore card shows a list of your backups:
 - **Before deletion:** Before deleting large amounts of data
 - **Before migration:** Before moving to a different instance
 
-**When NOT to restore:**
+**When NOT to restore with "Replace" mode:**
 
-- Don't restore if you've made important changes since the backup was created
-- Don't restore repeatedly - each restore loses any data added after the backup
-
-## Backup Storage Locations
-
-**Local Backup:**
-
-- Stored on your Quilltap instance
-- Suitable for personal instances
-- Takes up disk space on your server
-- Fast to access and restore
-
-**Cloud Backup:**
-
-- Stored securely in cloud storage (usually S3 or similar)
-- Suitable for shared instances
-- Provides geographic redundancy
-- Accessible from anywhere
+- Don't replace if you've made important changes since the backup was created
+- Consider "Import" mode if you want to preserve current data
 
 ## Managing Your Backups
 
-**To download a backup locally:**
+**Storing backups:**
 
-1. In the backup list, click the "Download" button
-2. The backup file downloads to your computer
-3. Store it in a safe location
+- Save backups to your computer's documents folder
+- Use cloud storage (Google Drive, Dropbox, iCloud) for redundancy
+- Consider external hard drives for large backups
+- Name files clearly with dates (e.g., `quilltap-backup-2026-02-03.zip`)
 
-**To delete old backups:**
+**Backup organization tips:**
 
-1. In the backup list, locate the backup to delete
-2. Click the "Delete" button
-3. Confirm deletion
-4. Backup is removed (to free up space)
-
-**To organize backups:**
-
-- Backups are listed with creation dates
-- Most recent appear first
-- You can sort by date or size
+- Keep at least 2-3 recent backups
+- Delete old backups when they're no longer needed
+- Archive important milestone backups separately
 
 ## Troubleshooting
 
@@ -150,25 +151,25 @@ The Backup & Restore card shows a list of your backups:
 
 - Check that your system has enough disk space
 - Try again after stopping any running tasks
-- Contact support if issue persists
+- Check the browser console for error details
 
 **Restore failed**
 
 - Ensure the backup file is not corrupted
-- Try restoring an older backup
-- Contact support if multiple backups fail
-
-**Can't see my backups**
-
-- Refresh the page
-- Check if you're looking at the right backup location (local vs. cloud)
-- Some backups may have expired or been deleted
+- Try a different backup file
+- Check that the file is a valid Quilltap backup (.zip format)
 
 **Backup is very large**
 
-- You can exclude images from future backups (less space)
-- Or regularly delete old backups you don't need
-- Upload files are included in backups - consider archiving old files
+- Large file collections increase backup size
+- Consider archiving old files you don't need
+- Backups are compressed but can still be large with many images
+
+**API keys missing after restore**
+
+- API keys are not backed up for security reasons
+- Re-enter your API keys in connection profiles after restore
+- The connection profile settings are preserved, just not the keys
 
 ## Best Practices
 
@@ -182,19 +183,19 @@ The Backup & Restore card shows a list of your backups:
 
 - Don't keep backups forever - they take up space
 - Delete backups older than 3 months unless you have a specific need
-- Archive important backups locally on your computer
+- Archive important backups to cloud storage
 
 **Testing Restores:**
 
 - Periodically test that you can restore successfully
 - Verify your backup strategy works before you really need it
-- Document which backups are most important
+- Use "Import" mode to test without affecting current data
 
 **Secure Storage:**
 
-- If backing up locally, store in a safe place
-- For cloud backups, rely on your hosting provider's security
-- Keep your login credentials secure
+- Store backups in a secure location
+- Don't share backup files - they contain all your data
+- Consider encrypting sensitive backups
 
 ## Related Topics
 

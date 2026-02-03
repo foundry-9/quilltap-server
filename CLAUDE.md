@@ -69,7 +69,7 @@ Legacy routes outside `/api/v1/` were removed in v2.8. Only `/api/v1/` routes ar
 - **Roadmap for future development** is in the files in the `features/` directory, with completed development in `features/complete/`
 - **Documentation for Everything**
 
-  - [help/](help/) - User documentation for every page and every visible feature
+  - [help/](help/) - User documentation for every page and every visible feature - **IMPORTANT**: If anything in this directory is updated that we must run `npm run build:help` and add the changes from that process to the list of files to be committed
   - [.githooks/README.md](.githooks/README.md) — Documents the custom Git hook directory, especially the pre-commit script that lints, tests, bumps package versions, and how to configure/disable hooks — Grade: A (current dev workflow) — Last updated: 2025-11-18
   - [DEAD-CODE-REPORT.md](DEAD-CODE-REPORT.md) — Dead code analysis report with cleanup history, known false positives, and remaining low-priority items — Grade: A (reflects cleanup completed 2025-12-27) — Last updated: 2025-12-27
   - [DEVELOPMENT.md](DEVELOPMENT.md) — Contributor guide covering repo structure, prerequisites, running the app (Docker and local), testing, linting, logging, data storage, and plugin development pointers — Grade: A (primary contributor reference) — Last updated: 2026-01-01

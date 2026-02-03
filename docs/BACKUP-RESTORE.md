@@ -2,7 +2,7 @@
 
 ## Overview
 
-Quilltap stores application data in **SQLite** and files in **S3-compatible storage**. This guide covers backing up and restoring your Quilltap data safely.
+Quilltap stores application data in **SQLite** and files in **local or S3-compatible storage**. This guide covers backing up and restoring your Quilltap data safely.
 
 ## Built-in Backup & Restore (Recommended)
 
@@ -11,61 +11,62 @@ Quilltap includes a built-in backup and restore system accessible from the **Too
 ### Using the UI
 
 1. Navigate to **Tools** from the dashboard or sidebar
-2. Click **Create Backup** to export your data:
-   - **Download**: Creates a ZIP file downloaded to your computer
-   - **Save to Cloud**: Stores the backup in your S3 storage for later restoration
-3. Click **Restore from Backup** to import data:
-   - Upload a local ZIP file, or
-   - Select a cloud backup from the list
+2. Click **Create Backup** to export your data as a downloadable ZIP file
+3. Click **Restore from Backup** to import data from a previously downloaded ZIP file
 
 ### What's Included in Backups
 
 The backup creates a ZIP file containing:
 
+**Data (JSON files)**
 - All characters and their metadata (including user-controlled characters)
 - Chat history, messages, and impersonation state
 - Tags
 - Memories (including inter-character relationships)
-- Connection profiles (API keys remain encrypted)
+- Connection profiles (API key references preserved, but keys require re-entry)
 - Image profiles
 - Embedding profiles
+- Prompt templates (user-created)
+- Roleplay templates (user-created)
+- Projects and their configurations
 - LLM request/response logs
-- File metadata (actual files are referenced from S3)
+- Plugin configurations (per-plugin settings)
+- Provider model cache
 
-### Cloud Backups
+**Files**
+- All uploaded files (images, documents, attachments)
+- File metadata and folder organization
 
-Cloud backups are stored in your S3 bucket under `backups/{userId}/` and can be:
+**Plugins**
+- npm-installed plugins from the `plugins/npm/` directory
+- Plugin configuration settings
 
-- Listed and restored directly from the UI
-- Downloaded for offline storage
-- Restored even after account data is cleared
+This creates a complete portable backup that can recreate your entire Quilltap environment.
 
 ### API Endpoints
 
 For automation or scripting, you can use the backup API directly:
 
 ```bash
-# Create a backup (save to S3)
-curl -X POST https://your-quilltap/api/tools/backup/create \
-  -H "Content-Type: application/json" \
-  -H "Cookie: your-session-cookie" \
-  -d '{"destination": "s3"}'
-
-# List cloud backups
-curl https://your-quilltap/api/tools/backup/list \
+# Create a backup (returns backupId for download)
+curl -X POST https://your-quilltap/api/v1/system/backup \
   -H "Cookie: your-session-cookie"
 
-# Preview a backup before restoring
-curl -X POST https://your-quilltap/api/tools/backup/preview \
-  -H "Content-Type: application/json" \
+# Download the backup (use the backupId from the previous response)
+curl https://your-quilltap/api/v1/system/backup/{backupId} \
   -H "Cookie: your-session-cookie" \
-  -d '{"s3Key": "backups/user-id/backup-2024-01-15.zip"}'
+  -o quilltap-backup.zip
 
-# Restore from cloud backup
-curl -X POST https://your-quilltap/api/tools/backup/restore \
-  -H "Content-Type: application/json" \
+# Preview a backup before restoring
+curl -X POST "https://your-quilltap/api/v1/system/restore?action=preview" \
   -H "Cookie: your-session-cookie" \
-  -d '{"s3Key": "backups/user-id/backup-2024-01-15.zip"}'
+  -F "file=@quilltap-backup.zip"
+
+# Restore from backup
+curl -X POST https://your-quilltap/api/v1/system/restore \
+  -H "Cookie: your-session-cookie" \
+  -F "file=@quilltap-backup.zip" \
+  -F "mode=replace"
 ```
 
 ---
@@ -81,7 +82,7 @@ Since Quilltap uses SQLite, all data is contained in a single database file. The
 - `users` - User accounts and authentication data
 - `characters` - Character definitions and metadata (includes `controlledBy` for LLM/user control)
 - `chats` - Chat metadata, message history, and impersonation state
-- `files` - File metadata (actual files stored in S3)
+- `files` - File metadata (actual files stored locally or in S3)
 - `tags` - Tag definitions
 - `memories` - Character memory data with inter-character relationships
 - `connectionProfiles` - LLM connection configurations
@@ -89,9 +90,9 @@ Since Quilltap uses SQLite, all data is contained in a single database file. The
 - `imageProfiles` - Image generation configurations
 - `llm_logs` - LLM request/response logs for debugging and monitoring
 
-### S3 Storage
+### File Storage
 
-Files are stored in S3-compatible storage:
+Files are stored either locally or in S3-compatible storage:
 
 - `users/{userId}/files/` - User-uploaded files
 - `users/{userId}/images/` - Generated and uploaded images
@@ -100,7 +101,7 @@ Files are stored in S3-compatible storage:
 
 - `ENCRYPTION_MASTER_PEPPER` in `.env` - Master encryption key (required to decrypt API keys)
 - SQLite database file path configuration
-- S3 credentials and bucket configuration
+- File storage configuration (local path or S3 credentials)
 
 ## Regular Backups
 
@@ -113,6 +114,7 @@ For production environments, set up automated daily backups using cron:
 # Create backup script: backup-quilltap.sh
 BACKUP_DIR="/backups/quilltap"
 SQLITE_PATH="/app/quilltap/data/quilltap.db"
+FILES_PATH="/app/quilltap/files"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 
 mkdir -p "$BACKUP_DIR"
@@ -123,11 +125,12 @@ tar -czf "$BACKUP_DIR/quilltap_$TIMESTAMP.db.tar.gz" \
   -C "$BACKUP_DIR" "quilltap_$TIMESTAMP.db"
 rm "$BACKUP_DIR/quilltap_$TIMESTAMP.db"
 
-# Backup S3 files (using MinIO client or AWS CLI)
-# mc mirror myminio/quilltap-files "$BACKUP_DIR/s3_$TIMESTAMP"
+# Backup files (if using local storage)
+tar -czf "$BACKUP_DIR/files_$TIMESTAMP.tar.gz" "$FILES_PATH"
 
 # Keep only last 7 days of backups
 find "$BACKUP_DIR" -name "quilltap_*.db.tar.gz" -mtime +7 -delete
+find "$BACKUP_DIR" -name "files_*.tar.gz" -mtime +7 -delete
 ```
 
 Add to crontab:
@@ -153,13 +156,14 @@ tar -czf quilltap-$(date +%Y%m%d).db.tar.gz /path/to/quilltap.db
 cp /path/to/quilltap.db /backup/quilltap-$(date +%Y%m%d).db
 ```
 
-**S3/MinIO Backup:**
+**Local Files Backup:**
 
 ```bash
-# Using MinIO client
-mc mirror myminio/quilltap-files ./s3-backup-$(date +%Y%m%d)/
+# Backup local file storage
+tar -czf quilltap-files-$(date +%Y%m%d).tar.gz /path/to/quilltap/files/
 
-# Using AWS CLI
+# For S3 storage, use MinIO client or AWS CLI
+mc mirror myminio/quilltap-files ./s3-backup-$(date +%Y%m%d)/
 aws s3 sync s3://quilltap-files ./s3-backup-$(date +%Y%m%d)/ --endpoint-url http://localhost:9000
 ```
 
@@ -197,9 +201,6 @@ cp quilltap-backup-*.db /mnt/nas/quilltap-backups/
 
 # Cloud backup for SQLite database
 aws s3 cp quilltap-backup-*.db s3://my-backup-bucket/quilltap/
-
-# For S3 files, sync to another bucket
-aws s3 sync s3://quilltap-files s3://my-backup-bucket/quilltap-files/
 ```
 
 ### Encryption & Security
@@ -240,13 +241,14 @@ tar -xzf quilltap-backup-YYYYMMDD.db.tar.gz -C /path/to/
 cp quilltap.db /path/to/quilltap.db
 ```
 
-**Restore S3 files:**
+**Restore files:**
 
 ```bash
-# Using MinIO client
-mc mirror ./s3-backup-YYYYMMDD/ myminio/quilltap-files
+# Restore local files
+tar -xzf quilltap-files-YYYYMMDD.tar.gz -C /
 
-# Using AWS CLI
+# For S3 storage
+mc mirror ./s3-backup-YYYYMMDD/ myminio/quilltap-files
 aws s3 sync ./s3-backup-YYYYMMDD/ s3://quilltap-files/ --endpoint-url http://localhost:9000
 ```
 
@@ -292,9 +294,6 @@ aws s3 cp s3://my-backup-bucket/quilltap/quilltap-backup-YYYYMMDD.db .
 
 # Restore SQLite database
 cp quilltap-backup-YYYYMMDD.db /path/to/quilltap.db
-
-# Sync S3 files back
-aws s3 sync s3://my-backup-bucket/quilltap-files/ s3://quilltap-files/
 ```
 
 ## Verification
@@ -363,16 +362,16 @@ cp quilltap-backup-YYYYMMDD.db /path/to/quilltap.db
 docker-compose restart app
 ```
 
-### Lost S3 Files
+### Lost Files
 
-If S3 files are lost but metadata exists in the SQLite database:
+If files are lost but metadata exists in the SQLite database:
 
 ```bash
 # The application handles missing files gracefully
 # Users can re-upload avatars and files as needed
 
-# Or restore from S3 backup
-aws s3 sync s3://my-backup-bucket/quilltap-files/ s3://quilltap-files/
+# Or restore from file backup
+tar -xzf quilltap-files-YYYYMMDD.tar.gz -C /
 ```
 
 ## Monitoring Backups
@@ -447,9 +446,9 @@ echo "Latest backup is current: $AGE days old"
 ### Recovery Time Objective (RTO): 30 minutes
 
 1. **Detection** (5 min): Monitor alerts, confirm data loss
-2. **Access Backup** (5 min): Retrieve latest SQLite and S3 backups from secure location
-3. **Preparation** (10 min): Verify backup integrity, prepare SQLite and S3
-4. **Restore** (5 min): Restore SQLite and S3 data
+2. **Access Backup** (5 min): Retrieve latest SQLite and file backups from secure location
+3. **Preparation** (10 min): Verify backup integrity, prepare SQLite and files
+4. **Restore** (5 min): Restore SQLite and file data
 5. **Verification** (5 min): Check application starts and data is correct
 
 ### Recovery Point Objective (RPO): 24 hours
@@ -484,10 +483,10 @@ echo "Latest backup is current: $AGE days old"
    cp /backups/quilltap/quilltap_LATEST.db /app/quilltap/data/quilltap.db
    ```
 
-5. **Restore S3 files (if backed up):**
+5. **Restore files (if backed up separately):**
 
    ```bash
-   aws s3 sync /backups/quilltap/s3_LATEST/ s3://quilltap-files/
+   tar -xzf /backups/quilltap/files_LATEST.tar.gz -C /
    ```
 
 6. **Start application:**
@@ -567,8 +566,8 @@ sqlite3 /path/to/quilltap.db "PRAGMA integrity_check;"
 sqlite3 /path/to/quilltap.db "SELECT COUNT(*) FROM users;"
 sqlite3 /path/to/quilltap.db "SELECT COUNT(*) FROM characters;"
 
-# Check S3 connectivity
-aws s3 ls s3://quilltap-files/ --endpoint-url http://localhost:9000
+# Check file storage connectivity
+ls -la /path/to/quilltap/files/
 ```
 
 ## Further Reading

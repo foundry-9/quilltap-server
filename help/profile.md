@@ -6,7 +6,7 @@ Your profile page is your personal account hub where you can manage your account
 
 ## What's on Your Profile?
 
-Your profile page contains two main sections:
+Your profile page contains three main sections:
 
 ### Profile Settings (Editable)
 
@@ -18,12 +18,21 @@ The top section allows you to customize your personal information:
 
 ### Account Information (Read-Only)
 
-The bottom section shows system information about your account:
+The middle section shows system information about your account:
 
 - **User ID** - Your unique account identifier (with copy-to-clipboard button)
 - **Username** - Your login username
 - **Account Created** - The date and time your account was created
 - **Last Updated** - The date and time your profile was last modified
+
+### Data Directory
+
+The bottom section shows where Quilltap stores your data:
+
+- **Location** - The full path to your data directory (with copy-to-clipboard button)
+- **Configuration** - Shows whether the path is from an environment variable or platform default
+- **Platform** - Your operating system (macOS, Windows, Linux, or Docker)
+- **Open in File Browser** - Button to open the directory in your system's file browser (not available in Docker environments)
 
 ## Accessing Your Profile
 
@@ -44,3 +53,5 @@ For more details about editing your profile settings, see [Profile Settings](pro
 For information about viewing your account details, see [Account Information](account-information.md).
 
 For more information about avatars, see [Choosing a Profile Avatar](profile-avatar.md).
+
+For details about your data directory and storage, see [Data Directory](data-directory.md).

@@ -4,6 +4,31 @@
 
 ### 2.9-dev
 
+- refactor: Remove S3/cloud backup functionality from backup system (2026-02-03)
+  - Backup system now only supports local file download
+  - Removed S3 destination option from backup dialog
+  - Removed cloud backups list and selection from restore dialog
+  - Removed `downloadBackupFromS3`, `saveBackupToS3`, `listS3Backups`, `deleteBackupFromS3` functions
+  - Simplified restore API to only accept file uploads (no S3 key)
+  - Updated BACKUP-RESTORE.md documentation to reflect changes
+  - Users who need cloud backups can use external backup scripts with the downloaded ZIP
+- fix: Temporary backup download failing due to HMR invalidating in-memory storage (2026-02-03)
+  - Moved temporary backup storage to a dedicated module using globalThis
+  - Storage now survives Next.js hot module reloading in development
+  - Created `lib/backup/temporary-storage.ts` with singleton pattern
+- feat: Complete backup system now includes plugin configs and npm plugins (2026-02-03)
+  - Backup now includes plugin configurations from `plugin_configs` table
+  - Backup now includes npm-installed plugins from `plugins/npm/` directory
+  - Restore recreates plugin configs and extracts npm plugins
+  - Manifest counts now include `pluginConfigs` and `npmPlugins`
+  - Restore summary shows plugin restoration counts
+  - This enables full system recreation from a single backup file
+- feat: Add data directory section to profile page (2026-02-03)
+  - Shows data directory location, configuration source, and platform
+  - "Open in File Browser" button opens the directory in the native file explorer (macOS/Windows/Linux)
+  - Copy button to copy the path to clipboard
+  - Docker environments show helpful message about accessing data via host volume mounts
+  - New API endpoint: GET/POST /api/v1/system/data-dir
 - fix: Docker build failures from npm lockfile issues (2026-02-03)
   - Upgrade npm in Docker base image to fix "Invalid Version" bug in npm 10.x
   - Change @quilltap/plugin-types dependency from file: reference to npm package

@@ -20,6 +20,7 @@ import type {
   ProviderModel,
   Project,
   LLMLog,
+  PluginConfig,
 } from '@/lib/schemas/types';
 
 // ============================================================================
@@ -76,6 +77,10 @@ export interface BackupManifest {
     projects: number;
     /** Number of LLMLog entities */
     llmLogs: number;
+    /** Number of PluginConfig entities (user plugin configurations) */
+    pluginConfigs?: number;
+    /** Number of npm-installed plugins backed up */
+    npmPlugins?: number;
   };
 }
 
@@ -132,6 +137,9 @@ export interface BackupData {
 
   /** Array of LLMLog entities */
   llmLogs: LLMLog[];
+
+  /** Array of PluginConfig entities (user plugin configurations) */
+  pluginConfigs?: PluginConfig[];
 }
 
 // ============================================================================
@@ -227,6 +235,12 @@ export interface RestoreSummary {
 
   /** Number of LLMLog entities restored */
   llmLogs: number;
+
+  /** Number of PluginConfig entities restored */
+  pluginConfigs?: number;
+
+  /** Number of npm plugins restored */
+  npmPlugins?: number;
 
   /**
    * Array of warning messages for issues that occurred during restore

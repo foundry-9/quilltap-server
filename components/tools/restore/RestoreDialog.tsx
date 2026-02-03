@@ -33,7 +33,6 @@ export function RestoreDialog({
   isOpen,
   onClose,
   onRestoreComplete,
-  initialS3Key,
 }: RestoreDialogProps) {
   const { state, fileInputRef, actions } = useRestoreData(isOpen)
 
@@ -202,12 +201,8 @@ export function RestoreDialog({
             {state.step === 'source' && (
               <RestoreItemSelector
                 selectedFile={state.selectedFile}
-                selectedS3Key={state.selectedS3Key}
-                s3Backups={state.s3Backups}
-                loadingBackups={state.loadingBackups}
                 error={state.error}
                 onFileSelect={actions.handleFileSelect}
-                onS3Select={actions.handleS3Select}
               />
             )}
             {state.step === 'preview' && (
@@ -282,9 +277,7 @@ export function RestoreDialog({
                         onClick={actions.handleNext}
                         disabled={
                           state.loadingPreview ||
-                          (state.step === 'source' &&
-                            !state.selectedFile &&
-                            !state.selectedS3Key)
+                          (state.step === 'source' && !state.selectedFile)
                         }
                         className="qt-button qt-button-primary"
                       >
