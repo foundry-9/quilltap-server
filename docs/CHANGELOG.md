@@ -4,6 +4,14 @@
 
 ### 2.10-dev
 
+- feat: Agent Mode per-chat toggle in Tool Palette
+  - Agent Mode button now connected and fully functional in chat tool palette
+  - Clicking Agent button toggles agent mode on/off for the current chat
+  - Toggle status persists in database and is reflected across UI
+  - API endpoint: `POST /api/v1/chats/[id]?action=toggle-agent-mode`
+  - Logging for all agent mode toggle operations at info level
+  - State management synced from chat data when page loads
+
 - feat: Agent Mode - iterative tool use with self-correction
   - LLMs can now use tools iteratively, verify results, and self-correct before delivering final response
   - New `submit_final_response` tool signals completion of agent work

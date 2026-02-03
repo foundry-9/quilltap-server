@@ -25,7 +25,7 @@ This document tracks planned features and improvements for Quilltap.
 - [ ] Tool management UI - Settings interface to enable/disable individual tools per connection profile, project, chat
 - [ ] Finish file read/write tool calling support with permissions
 - [ ] More intelligent handling of empty messages from the LLM (usually some kind of error, but a plain blank often means you crossed a provider line - NSFW, content filtering)
-- [ ] Fully agentic capabilities (limits on how many turns it takes, trading information back and forth, etc.)
+- [X] Fully agentic capabilities (limits on how many turns it takes, trading information back and forth, etc.)
 - [ ] Add Google embeddings
 - [ ] Add prompt guidelines for all image generators that have them
 - [ ] Update image generators

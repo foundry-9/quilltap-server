@@ -55,6 +55,10 @@ interface ChatComposerProps {
   documentEditingMode: boolean
   /** Toggle document editing mode on/off */
   onToggleDocumentEditingMode: () => void
+  /** Whether agent mode is enabled for this chat */
+  agentModeEnabled?: boolean | null
+  /** Callback to toggle agent mode */
+  onAgentModeToggle?: () => void
 
   // Callbacks
   onSubmit: (e: React.FormEvent) => void
@@ -121,6 +125,8 @@ export function ChatComposer({
   roleplayTemplateId,
   documentEditingMode,
   onToggleDocumentEditingMode,
+  agentModeEnabled = false,
+  onAgentModeToggle,
   onSubmit,
   onFileSelect,
   onAttachFileClick,
@@ -470,6 +476,8 @@ export function ChatComposer({
           onTogglePreview={() => setShowPreview(!showPreview)}
           disabled={sending || !hasActiveCharacters}
           onPendingToolResult={onPendingToolResult}
+          agentModeEnabled={agentModeEnabled}
+          onAgentModeToggle={onAgentModeToggle}
         />
 
         {/* Formatting toolbar - shown above the form when document editing mode is enabled */}

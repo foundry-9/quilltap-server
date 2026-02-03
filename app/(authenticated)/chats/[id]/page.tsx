@@ -113,6 +113,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [galleryOpen, setGalleryOpen] = useState(false)
   const [toolPaletteOpen, setToolPaletteOpen] = useState(false)
   const [documentEditingMode, setDocumentEditingMode] = useState(false)
+  const [agentModeEnabled, setAgentModeEnabled] = useState<boolean | null>(null)
   const [chatSettingsModalOpen, setChatSettingsModalOpen] = useState(false)
   const [chatProjectModalOpen, setChatProjectModalOpen] = useState(false)
   const [renameModalOpen, setRenameModalOpen] = useState(false)
@@ -335,6 +336,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       }
     }
   }, [id])
+
+  // Sync agentModeEnabled state when chat loads
+  useEffect(() => {
+    if (chat) {
+      setAgentModeEnabled(chat.agentModeEnabled ?? null)
+    }
+  }, [chat?.id, chat?.agentModeEnabled])
 
   // Handle scroll-to-message from memory provenance navigation
   useEffect(() => {
@@ -1492,6 +1500,36 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
   }, [id, chat])
 
+  const handleToggleAgentMode = useCallback(async () => {
+    try {
+      const newEnabled = agentModeEnabled === null || !agentModeEnabled;
+      
+      const res = await fetch(`/api/v1/chats/${id}?action=toggle-agent-mode`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: newEnabled }),
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.error || 'Failed to toggle agent mode')
+      }
+
+      const data = await res.json()
+      setAgentModeEnabled(data.agentModeEnabled)
+
+      const status = data.agentModeEnabled === true 
+        ? 'enabled' 
+        : data.agentModeEnabled === false 
+        ? 'disabled' 
+        : 'set to inherit'
+      
+      showSuccessToast(`Agent mode ${status}`)
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to toggle agent mode')
+    }
+  }, [id, agentModeEnabled])
+
   // Initialization effects
   useEffect(() => {
     fetchChat()
@@ -2238,6 +2276,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           roleplayTemplateId={chat?.roleplayTemplateId}
           documentEditingMode={documentEditingMode}
           onToggleDocumentEditingMode={handleToggleDocumentEditingMode}
+          agentModeEnabled={agentModeEnabled}
+          onAgentModeToggle={handleToggleAgentMode}
           onSubmit={sendMessage}
           onFileSelect={handleFileSelect}
           onAttachFileClick={() => {

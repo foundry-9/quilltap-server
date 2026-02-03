@@ -114,6 +114,8 @@ export interface Chat {
   allLLMPauseTurnCount?: number
   /** Whether document editing mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
   documentEditingMode?: boolean
+  /** Whether agent mode is enabled for this chat */
+  agentModeEnabled?: boolean | null
   /** Project ID this chat belongs to (if any) */
   projectId?: string | null
   /** Project name for display purposes */

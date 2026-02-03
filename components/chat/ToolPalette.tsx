@@ -22,7 +22,7 @@ interface ToolPaletteProps {
   onToolSettingsClick?: () => void // Open LLM tool settings modal
   onStateClick?: () => void // Open state editor modal
   // Agent mode props
-  agentModeEnabled?: boolean
+  agentModeEnabled?: boolean | null
   onAgentModeToggle?: () => void // Toggle agent mode for this chat
   chatPhotoCount: number
   hasImageProfile: boolean
