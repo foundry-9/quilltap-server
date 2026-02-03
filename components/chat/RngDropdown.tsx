@@ -12,17 +12,19 @@ import { useClickOutside } from '@/hooks/useClickOutside'
 
 interface RngOption {
   label: string
-  type: number | 'flip_coin' | 'spin_the_bottle'
-  rolls: number
+  type: 'flip_coin' | 'spin_the_bottle'
 }
 
-const QUICK_OPTIONS: RngOption[] = [
-  { label: 'Roll d6', type: 6, rolls: 1 },
-  { label: 'Roll d20', type: 20, rolls: 1 },
-  { label: 'Roll 2d6', type: 6, rolls: 2 },
-  { label: 'Flip Coin', type: 'flip_coin', rolls: 1 },
-  { label: 'Spin the Bottle', type: 'spin_the_bottle', rolls: 1 },
+const OTHER_OPTIONS: RngOption[] = [
+  { label: 'Flip Coin', type: 'flip_coin' },
+  { label: 'Spin the Bottle', type: 'spin_the_bottle' },
 ]
+
+/** Dice types with adjustable roll counts */
+const DICE_TYPES = [
+  { sides: 6, label: 'd6' },
+  { sides: 20, label: 'd20' },
+] as const
 
 /** Pending tool result data returned from preview mode */
 export interface RngPendingResult {
@@ -63,6 +65,12 @@ export function RngDropdown({
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+
+  // Track number of dice for each die type
+  const [diceRolls, setDiceRolls] = useState<Record<number, number>>({
+    6: 1,
+    20: 1,
+  })
 
   useClickOutside(dropdownRef, () => {
     setIsOpen(false)
@@ -118,9 +126,22 @@ export function RngDropdown({
     }
   }
 
-  const handleQuickOption = (option: RngOption) => {
+  const handleDiceRoll = (sides: number) => {
     if (disabled || isLoading) return
-    executeRng(option.type, option.rolls)
+    executeRng(sides, diceRolls[sides] || 1)
+  }
+
+  const handleOtherOption = (option: RngOption) => {
+    if (disabled || isLoading) return
+    executeRng(option.type, 1)
+  }
+
+  const adjustDiceCount = (sides: number, delta: number) => {
+    setDiceRolls(prev => {
+      const current = prev[sides] || 1
+      const newValue = Math.max(1, Math.min(100, current + delta))
+      return { ...prev, [sides]: newValue }
+    })
   }
 
   const handleCustomRoll = () => {
@@ -188,12 +209,56 @@ export function RngDropdown({
           role="menu"
         >
           <div className="py-1">
-            {/* Quick options */}
-            {QUICK_OPTIONS.map(option => (
+            {/* Dice roll options with spinners */}
+            {DICE_TYPES.map(dice => (
+              <div
+                key={dice.sides}
+                className="flex items-center px-3 py-1.5 gap-2"
+              >
+                <button
+                  type="button"
+                  onClick={() => handleDiceRoll(dice.sides)}
+                  disabled={isLoading}
+                  className="flex-1 px-2 py-1.5 text-left text-sm hover:bg-muted transition-colors disabled:opacity-50 rounded"
+                  role="menuitem"
+                >
+                  Roll {diceRolls[dice.sides] || 1}{dice.label}
+                </button>
+                <div className="flex flex-col">
+                  <button
+                    type="button"
+                    onClick={() => adjustDiceCount(dice.sides, 1)}
+                    disabled={isLoading || (diceRolls[dice.sides] || 1) >= 100}
+                    className="px-1.5 py-0.5 text-xs hover:bg-muted transition-colors disabled:opacity-30 rounded-t border border-b-0"
+                    title="Increase dice count"
+                    aria-label={`Increase ${dice.label} count`}
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => adjustDiceCount(dice.sides, -1)}
+                    disabled={isLoading || (diceRolls[dice.sides] || 1) <= 1}
+                    className="px-1.5 py-0.5 text-xs hover:bg-muted transition-colors disabled:opacity-30 rounded-b border"
+                    title="Decrease dice count"
+                    aria-label={`Decrease ${dice.label} count`}
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {/* Other options */}
+            {OTHER_OPTIONS.map(option => (
               <button
                 key={option.label}
                 type="button"
-                onClick={() => handleQuickOption(option)}
+                onClick={() => handleOtherOption(option)}
                 disabled={isLoading}
                 className="w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors disabled:opacity-50"
                 role="menuitem"
