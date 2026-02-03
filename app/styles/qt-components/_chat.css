@@ -718,6 +718,7 @@
 
   .qt-chat-message-row-assistant {
     justify-content: flex-start;
+    margin-top: 1.5rem;
   }
 
   /**

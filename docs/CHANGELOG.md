@@ -4,14 +4,21 @@
 
 ### 2.10-dev
 
+- feat: RNG dropdown improvements
+  - Dice roll options (d6, d20) now have up/down spinner buttons to adjust count
+  - Removed redundant "Roll 2d6" option since count is now adjustable
+  - Dice counts persist within the dropdown session
+
 - feat: Tool message UI improvements
-  - Tool messages now embedded inside assistant message bubbles (at top)
+  - Tool messages now embedded inside message bubbles (assistant or user)
+  - User-initiated tools (RNG, etc.) embed in user messages, not assistant messages
+  - Character-initiated tools embed in assistant messages
   - Collapsed state shows truncated preview text for request/response
   - Text content now wraps properly instead of horizontal scrolling
   - Copy buttons added for tool request and response sections
   - Image copy to clipboard button for generated images
   - Compact embedded layout for better visual integration
-  - Standalone tool messages (user-initiated) still render separately
+  - Consistent vertical spacing between all messages
 
 - feat: Agent Mode per-chat toggle in Tool Palette
   - Agent Mode button now connected and fully functional in chat tool palette

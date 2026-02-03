@@ -181,8 +181,8 @@ function MessageRowInner({
             </div>
           ) : (
             <>
-              {/* Embedded tool calls - shown at top of assistant message */}
-              {message.role === 'ASSISTANT' && message.toolCalls && message.toolCalls.length > 0 && (
+              {/* Embedded tool calls - shown at top of message */}
+              {message.toolCalls && message.toolCalls.length > 0 && (
                 <div className="mb-3 space-y-2">
                   {message.toolCalls.map((toolMsg) => (
                     <ToolMessage
