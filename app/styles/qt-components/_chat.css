@@ -336,6 +336,45 @@
     background: color-mix(in srgb, var(--qt-status-danger-bg) 50%, transparent);
   }
 
+  /**
+   * Agent mode toggle badge styles
+   * Badge-like appearance for on/off states
+   */
+  .qt-tool-palette-badge {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full;
+    @apply transition-colors duration-150;
+    cursor: pointer;
+    border: 1px solid transparent;
+  }
+
+  .qt-tool-palette-badge:hover:not(:disabled) {
+    filter: brightness(0.95);
+  }
+
+  .qt-tool-palette-badge:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  .qt-tool-palette-badge-off {
+    background: var(--qt-badge-disabled-bg);
+    color: var(--qt-badge-disabled-fg);
+    border-color: var(--color-border);
+  }
+
+  .qt-tool-palette-badge-off:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--qt-badge-disabled-bg) 80%, var(--color-foreground) 5%);
+  }
+
+  .qt-tool-palette-badge-on {
+    background: var(--qt-badge-enabled-bg);
+    color: var(--qt-badge-enabled-fg);
+    border-color: color-mix(in srgb, var(--qt-badge-enabled-fg) 30%, transparent);
+  }
+
+  .qt-tool-palette-badge-on:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--qt-badge-enabled-bg) 120%, transparent);
+  }
+
   /* ==========================================================================
      FORMATTING TOOLBAR (Document Editing Mode)
      ========================================================================== */
