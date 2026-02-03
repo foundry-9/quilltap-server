@@ -4,6 +4,11 @@
 
 ### 2.9-dev
 
+- fix: Docker build failures from npm lockfile issues (2026-02-03)
+  - Upgrade npm in Docker base image to fix "Invalid Version" bug in npm 10.x
+  - Change @quilltap/plugin-types dependency from file: reference to npm package
+  - Regenerate package-lock.json in Linux container to fix malformed platform-specific entries
+  - Update deprecated --only=production to --omit=dev syntax
 - test: Update e2e tests for single-user mode and stability (2026-02-02)
   - Use production build for more stable e2e test runs
   - Create fresh temp data directory for each test run
