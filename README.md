@@ -7,7 +7,7 @@ Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, 
 No subscriptions. No data harvested. No forgetting everything between sessions.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.10.0--dev.0-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.10.0--dev.1-yellow.svg)](package.json)
 
 <p align="center">
   <img src="./website/images/welcome-to-quilltap-2-8.png" alt="Welcome to Quilltap" />
@@ -229,7 +229,7 @@ All Quilltap data (database, files, logs) is stored in a single directory:
 QUILLTAP_HOST_DATA_DIR=/mnt/data/quilltap docker-compose up
 ```
 
-**Non-Docker users:** Set `QUILTTAP_DATA_DIR` to override the default:
+**Non-Docker users:** Set `QUILLTAP_DATA_DIR` to override the default:
 
 ```bash
 QUILLTAP_DATA_DIR=/custom/path npm run dev

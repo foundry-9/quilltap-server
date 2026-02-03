@@ -1,11 +1,14 @@
 {
     "cSpell.words": [
         "bigints",
+        "DALL",
+        "embedder",
         "genai",
         "generatable",
         "IMAGEN",
         "metacharacters",
         "msgpack",
+        "Multimodal",
         "npcs",
         "Nunito",
         "Ollama",
@@ -16,6 +19,9 @@
         "Quilltap",
         "Reinject",
         "Roleplay",
+        "roleplayers",
+        "Sebold",
+        "Serper",
         "signup",
         "sillytavern",
         "tfidf",
@@ -24,6 +30,9 @@
         "Turbopack",
         "undecryptable",
         "upgrader",
-        "viewports"
+        "viewports",
+        "wikilink",
+        "worldbuilders",
+        "worldbuilding"
     ]
 }
