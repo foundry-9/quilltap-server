@@ -4,6 +4,14 @@
 
 ### 2.9-dev
 
+- test: Update e2e tests for single-user mode and stability (2026-02-02)
+  - Use production build for more stable e2e test runs
+  - Create fresh temp data directory for each test run
+  - Remove authentication code (single-user mode)
+  - Update API routes to /api/v1/ prefix
+  - Remove deprecated persona tests
+  - Add retry logic for flaky page loads
+  - Use Ollama with llama3.2 as default test provider
 - refactor: Embedding service now uses plugin architecture (2026-02-02)
   - Embedding providers now delegate to plugins via `createEmbeddingProvider()` factory method
   - Added `EmbeddingProvider` interface support to `LLMProviderPlugin`
