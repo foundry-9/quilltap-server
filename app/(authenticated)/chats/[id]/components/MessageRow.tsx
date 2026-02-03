@@ -3,9 +3,10 @@
 import { memo } from 'react'
 import Avatar, { getAvatarSrc } from '@/components/ui/Avatar'
 import LazyMessageContent from '@/components/chat/LazyMessageContent'
+import ToolMessage from '@/components/chat/ToolMessage'
 import { formatMessageTime } from '@/lib/format-time'
 import { TokenBadge } from '@/components/chat/TokenBadge'
-import type { Message, TokenDisplaySettings } from '../types'
+import type { Message, TokenDisplaySettings, CharacterData } from '../types'
 import type { TurnState } from '@/lib/chat/turn-manager'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
@@ -47,6 +48,8 @@ interface MessageRowProps {
   hasLLMLogs?: boolean
   /** Callback to view LLM logs */
   onViewLLMLogs?: (messageId: string) => void
+  /** Character data for tool messages */
+  character?: CharacterData
 
   // Callbacks
   onEditStart: (message: Message) => void
@@ -97,6 +100,7 @@ function MessageRowInner({
   tokenDisplaySettings,
   hasLLMLogs,
   onViewLLMLogs,
+  character,
   onEditStart,
   onEditSave,
   onEditCancel,
@@ -177,6 +181,20 @@ function MessageRowInner({
             </div>
           ) : (
             <>
+              {/* Embedded tool calls - shown at top of assistant message */}
+              {message.role === 'ASSISTANT' && message.toolCalls && message.toolCalls.length > 0 && (
+                <div className="mb-3 space-y-2">
+                  {message.toolCalls.map((toolMsg) => (
+                    <ToolMessage
+                      key={toolMsg.id}
+                      message={toolMsg}
+                      character={character}
+                      onImageClick={onImageClick}
+                      embedded
+                    />
+                  ))}
+                </div>
+              )}
               {viewSourceMessageIds.has(message.id) ? (
                 <div className="qt-code-block whitespace-pre-wrap break-words overflow-auto max-h-96">
                   {message.content}
@@ -561,6 +579,14 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
   const prevAttachments = prev.message.attachments || []
   const nextAttachments = next.message.attachments || []
   if (prevAttachments.length !== nextAttachments.length) return false
+
+  // Tool calls (check if array changed)
+  const prevToolCalls = prev.message.toolCalls || []
+  const nextToolCalls = next.message.toolCalls || []
+  if (prevToolCalls.length !== nextToolCalls.length) return false
+
+  // Character data
+  if (prev.character?.id !== next.character?.id) return false
 
   // Token display settings
   if (prev.tokenDisplaySettings?.showPerMessageTokens !== next.tokenDisplaySettings?.showPerMessageTokens) return false

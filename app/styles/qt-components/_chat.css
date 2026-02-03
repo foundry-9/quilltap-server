@@ -737,6 +737,14 @@
   }
 
   /**
+   * Embedded tool message - inside assistant message bubble
+   * Uses base sans-serif font to match avatar name/title styling
+   */
+  .qt-chat-tool-embedded {
+    font-family: var(--font-sans);
+  }
+
+  /**
    * Desktop avatar container
    * Ensures avatar with name/title doesn't overflow into adjacent rows
    */

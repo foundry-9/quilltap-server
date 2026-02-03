@@ -23,6 +23,8 @@ export interface Message {
   completionTokens?: number | null
   /** Total tokens (promptTokens + completionTokens) */
   tokenCount?: number | null
+  /** Embedded tool messages that belong to this assistant message */
+  toolCalls?: Message[]
 }
 
 export interface CharacterData {

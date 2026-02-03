@@ -4,6 +4,15 @@
 
 ### 2.10-dev
 
+- feat: Tool message UI improvements
+  - Tool messages now embedded inside assistant message bubbles (at top)
+  - Collapsed state shows truncated preview text for request/response
+  - Text content now wraps properly instead of horizontal scrolling
+  - Copy buttons added for tool request and response sections
+  - Image copy to clipboard button for generated images
+  - Compact embedded layout for better visual integration
+  - Standalone tool messages (user-initiated) still render separately
+
 - feat: Agent Mode per-chat toggle in Tool Palette
   - Agent Mode button now connected and fully functional in chat tool palette
   - Clicking Agent button toggles agent mode on/off for the current chat

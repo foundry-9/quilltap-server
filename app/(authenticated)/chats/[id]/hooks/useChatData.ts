@@ -9,6 +9,49 @@ export interface SwipeState {
   messages: Message[]
 }
 
+/**
+ * Groups consecutive TOOL messages with their associated ASSISTANT message.
+ * TOOL messages have timestamps AFTER the ASSISTANT message (due to save order),
+ * so we look for TOOL messages following each ASSISTANT and embed them.
+ */
+function groupToolsWithAssistant(messages: Message[]): Message[] {
+  const result: Message[] = []
+  const embeddedToolIds = new Set<string>()
+
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i]
+
+    if (msg.role === 'ASSISTANT') {
+      // Look ahead to collect any immediately following TOOL messages
+      const toolCalls: Message[] = []
+      let j = i + 1
+      while (j < messages.length && messages[j].role === 'TOOL') {
+        toolCalls.push(messages[j])
+        embeddedToolIds.add(messages[j].id)
+        j++
+      }
+
+      if (toolCalls.length > 0) {
+        result.push({
+          ...msg,
+          toolCalls,
+        })
+      } else {
+        result.push(msg)
+      }
+    } else if (msg.role === 'TOOL') {
+      // Only include standalone TOOL messages (not already embedded)
+      if (!embeddedToolIds.has(msg.id)) {
+        result.push(msg)
+      }
+    } else {
+      result.push(msg)
+    }
+  }
+
+  return result
+}
+
 export function useChatData(chatId: string) {
   const [chat, setChat] = useState<Chat | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
@@ -77,7 +120,10 @@ export function useChatData(chatId: string) {
       // Sort by creation time
       displayMessages.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
 
-      setMessages(displayMessages)
+      // Group TOOL messages with their associated ASSISTANT messages
+      const groupedMessages = groupToolsWithAssistant(displayMessages)
+
+      setMessages(groupedMessages)
       setSwipeStates(newSwipeStates)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')

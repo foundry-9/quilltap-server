@@ -2133,6 +2133,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                       isPaused={isPaused}
                       onTogglePause={togglePause}
                       tokenDisplaySettings={chatSettings?.tokenDisplaySettings}
+                      character={getFirstCharacter() ?? undefined}
                       onEditStart={messageActions.startEdit}
                       onEditSave={messageActions.saveEdit}
                       onEditCancel={messageActions.cancelEdit}
