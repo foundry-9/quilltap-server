@@ -105,13 +105,6 @@ async function generateApiEmbedding(
 ): Promise<EmbeddingResult> {
   const providerName = profile.provider
 
-  logger.debug('Generating embedding via plugin provider', {
-    context: 'embedding-service.generateApiEmbedding',
-    provider: providerName,
-    model: profile.modelName,
-    textLength: text.length,
-  })
-
   // Get the embedding provider from the registry
   const embeddingProvider = providerRegistry.createEmbeddingProvider(providerName, profile.baseUrl || undefined)
 
@@ -141,13 +134,6 @@ async function generateApiEmbedding(
     apiKey,
     { dimensions: profile.dimensions || undefined }
   )
-
-  logger.debug('Embedding generated successfully via plugin', {
-    context: 'embedding-service.generateApiEmbedding',
-    provider: providerName,
-    model: result.model,
-    dimensions: result.dimensions,
-  })
 
   return {
     embedding: result.embedding,
@@ -239,13 +225,6 @@ export async function generateEmbedding(
   profile: EmbeddingProfile,
   userId: string
 ): Promise<EmbeddingResult> {
-  logger.debug('Generating embedding', {
-    context: 'embedding-service.generateEmbedding',
-    provider: profile.provider,
-    model: profile.modelName,
-    profileId: profile.id,
-  })
-
   try {
     // Built-in provider has special handling for vocabulary state
     if (profile.provider === 'BUILTIN') {

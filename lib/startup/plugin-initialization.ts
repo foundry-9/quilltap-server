@@ -350,18 +350,8 @@ async function performInitialization(): Promise<PluginInitializationResult> {
 
           if (pluginModule?.plugin) {
             providers.push(pluginModule.plugin);
-            logger.debug('Loaded provider plugin', {
-              plugin: loadedPlugin.manifest.name,
-              capabilities: loadedPlugin.capabilities,
-              source: loadedPlugin.source,
-            });
           } else if (pluginModule?.default?.plugin) {
             providers.push(pluginModule.default.plugin);
-            logger.debug('Loaded provider plugin (default export)', {
-              plugin: loadedPlugin.manifest.name,
-              capabilities: loadedPlugin.capabilities,
-              source: loadedPlugin.source,
-            });
           } else {
             logger.warn('Provider plugin module does not export a plugin object', {
               plugin: loadedPlugin.manifest.name,
