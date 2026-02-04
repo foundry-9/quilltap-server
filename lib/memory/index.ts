@@ -15,10 +15,12 @@ export {
   describeAttachment,
   batchExtractMemories,
   considerTitleUpdate,
+  deriveSceneContext,
   type MemoryCandidate,
   type ChatMessage,
   type Attachment,
   type CheapLLMTaskResult,
+  type DeriveSceneContextInput,
 } from './cheap-llm-tasks'
 
 // Memory Processor (Sprint 3: Auto-Memory Formation)

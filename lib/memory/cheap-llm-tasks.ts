@@ -91,6 +91,7 @@ function mapTaskTypeToLogType(taskType?: string): LLMLogType {
     'describe-attachment': 'IMAGE_DESCRIPTION',
     'batch-memory-extraction': 'MEMORY_EXTRACTION',
     'craft-story-background-prompt': 'IMAGE_PROMPT_CRAFTING',
+    'derive-scene-context': 'SUMMARIZATION',
   }
   return mapping[taskType || ''] || 'SUMMARIZATION'
 }
@@ -1297,6 +1298,124 @@ Create the final image prompt (maximize detail while staying under the limit):`,
       return prompt
     },
     'craft-image-prompt'
+  )
+}
+
+// ============================================================================
+// SCENE CONTEXT DERIVATION
+// ============================================================================
+
+/**
+ * Scene context derivation system prompt
+ * Analyzes chat history to derive a rich scene description for image generation
+ */
+const SCENE_CONTEXT_DERIVATION_PROMPT = `You are a creative writer skilled at interpreting conversations and imagining vivid scenes.
+
+Your task is to analyze a conversation and derive a scene context that captures what the characters might be experiencing or witnessing together.
+
+GUIDELINES:
+- Consider what the characters are currently discussing or doing
+- Interpret the emotional tone and implied setting
+- Be imaginative: if they're discussing a book, story, or historical event, imagine them as observers or participants in that world
+- If the conversation is casual or abstract, capture the mood and implied environment
+- Focus on visual, atmospheric details that would translate well to an image
+- Keep your description concise (1-3 sentences)
+
+EXAMPLES:
+
+Conversation about the book of Exodus:
+"Two figures huddle together examining ancient scrolls by lamplight, the distant silhouette of pyramids visible through a tent opening, desert stars glittering overhead."
+
+Casual friendly conversation:
+"Friends share comfortable conversation in a cozy space, warm lighting casting gentle shadows as they lean toward each other with easy familiarity."
+
+Discussion about space exploration:
+"Two companions gaze up at a star-filled sky, the Milky Way stretching above them, their faces illuminated by the soft glow of a campfire."
+
+Respond with ONLY the scene description - no explanations, no quotes, no formatting.`
+
+/**
+ * Input for scene context derivation
+ */
+export interface DeriveSceneContextInput {
+  /** Chat title for basic context */
+  chatTitle: string
+  /** Existing context summary if available */
+  contextSummary?: string | null
+  /** Recent messages from the chat */
+  recentMessages: ChatMessage[]
+  /** Names of characters in the chat */
+  characterNames: string[]
+}
+
+/**
+ * Derives a rich scene context from chat history for story background generation
+ *
+ * This function analyzes the conversation to understand what characters are doing
+ * or discussing, and creates an imaginative scene description that captures the
+ * mood and setting implied by the conversation.
+ *
+ * @param input - Context including chat title, messages, and character names
+ * @param selection - The cheap LLM provider selection
+ * @param userId - The user ID for API key retrieval
+ * @returns A scene description suitable for image prompt generation
+ */
+export async function deriveSceneContext(
+  input: DeriveSceneContextInput,
+  selection: CheapLLMSelection,
+  userId: string
+): Promise<CheapLLMTaskResult<string>> {
+  // Format recent messages for the prompt
+  const messageText = input.recentMessages
+    .map(m => {
+      const speaker = m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Character' : 'System'
+      // Truncate long messages to keep context manageable
+      const content = m.content.length > 500 ? m.content.substring(0, 500) + '...' : m.content
+      return `${speaker}: ${content}`
+    })
+    .join('\n\n')
+
+  // Build the context section
+  let contextInfo = `Chat Title: "${input.chatTitle}"`
+  if (input.contextSummary) {
+    contextInfo += `\n\nExisting Summary:\n${input.contextSummary}`
+  }
+  if (input.characterNames.length > 0) {
+    contextInfo += `\n\nCharacters present: ${input.characterNames.join(', ')}`
+  }
+
+  const llmMessages: LLMMessage[] = [
+    {
+      role: 'system',
+      content: SCENE_CONTEXT_DERIVATION_PROMPT,
+    },
+    {
+      role: 'user',
+      content: `${contextInfo}
+
+Recent Conversation:
+${messageText}
+
+Based on this conversation, describe the scene these characters might be in:`,
+    },
+  ]
+
+  return executeCheapLLMTask(
+    selection,
+    llmMessages,
+    userId,
+    (content: string): string => {
+      let result = content.trim()
+
+      // Remove quotes if the LLM wrapped the response
+      result = result.replace(/^["']|["']$/g, '')
+
+      // Remove any markdown formatting
+      result = result.replace(/^```[a-z]*\s*/g, '').replace(/\s*```$/g, '')
+
+      return result
+    },
+    'derive-scene-context'
   )
 }
 

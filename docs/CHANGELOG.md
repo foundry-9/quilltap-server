@@ -4,6 +4,13 @@
 
 ### 2.10-dev
 
+- feat: Story backgrounds now derive scene context from chat history
+  - Added `deriveSceneContext` cheap LLM task that analyzes recent messages
+  - Generates imaginative scene descriptions based on conversation content
+  - If discussing a book or story, characters may be depicted as observers to that world
+  - Falls back to chat title if context derivation fails or no messages exist
+  - Logs derived context for debugging in background job handler
+
 - fix: Search and Replace now searches all memory fields (content, summary, keywords)
   - Memory search previously only searched content and summary fields
   - Now also searches and replaces text within the keywords array

@@ -11,7 +11,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { decryptApiKey } from '@/lib/encryption';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
-import { craftStoryBackgroundPrompt } from '@/lib/memory/cheap-llm-tasks';
+import { craftStoryBackgroundPrompt, deriveSceneContext, type ChatMessage } from '@/lib/memory/cheap-llm-tasks';
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig, type CheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/errors';
@@ -147,16 +147,77 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     };
   });
 
-  // 8. Craft the background prompt using cheap LLM
+  // 8. Derive scene context from chat history
+  logger.debug('[StoryBackground] Deriving scene context from chat history', {
+    context: 'background-jobs.story-background',
+    jobId: job.id,
+    chatTitle: chat.title,
+  });
+
+  let sceneContext = payload.sceneContext || chat.title;
+
+  // Fetch recent messages to derive context
+  const chatEvents = await repos.chats.getMessages(payload.chatId);
+  const recentMessages: ChatMessage[] = chatEvents
+    .filter((event): event is Extract<typeof event, { type: 'message' }> => event.type === 'message')
+    .filter(msg => msg.role === 'USER' || msg.role === 'ASSISTANT')
+    .slice(-20) // Last 20 messages for context
+    .map(msg => ({
+      role: msg.role === 'USER' ? 'user' as const : 'assistant' as const,
+      content: msg.content,
+    }));
+
+  if (recentMessages.length > 0) {
+    logger.debug('[StoryBackground] Found messages for context derivation', {
+      context: 'background-jobs.story-background',
+      jobId: job.id,
+      messageCount: recentMessages.length,
+    });
+
+    const derivedContext = await deriveSceneContext(
+      {
+        chatTitle: chat.title,
+        contextSummary: chat.contextSummary,
+        recentMessages,
+        characterNames: validCharacters.map(c => c!.name),
+      },
+      cheapLLMSelection,
+      job.userId
+    );
+
+    if (derivedContext.success && derivedContext.result) {
+      sceneContext = derivedContext.result;
+      logger.debug('[StoryBackground] Derived scene context successfully', {
+        context: 'background-jobs.story-background',
+        jobId: job.id,
+        derivedContext: sceneContext,
+      });
+    } else {
+      logger.warn('[StoryBackground] Failed to derive scene context, using fallback', {
+        context: 'background-jobs.story-background',
+        jobId: job.id,
+        error: derivedContext.error,
+        fallback: sceneContext,
+      });
+    }
+  } else {
+    logger.debug('[StoryBackground] No messages available for context derivation, using title', {
+      context: 'background-jobs.story-background',
+      jobId: job.id,
+      fallback: sceneContext,
+    });
+  }
+
+  // 9. Craft the background prompt using cheap LLM
   logger.debug('[StoryBackground] Crafting background prompt', {
     context: 'background-jobs.story-background',
     jobId: job.id,
-    sceneContext: payload.sceneContext,
+    sceneContext,
   });
 
   const craftResult = await craftStoryBackgroundPrompt(
     {
-      sceneContext: payload.sceneContext || chat.title,
+      sceneContext,
       characters: characterDescriptions,
       provider: imageProfile.provider,
     },
@@ -181,7 +242,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     promptLength: finalPrompt.length,
   });
 
-  // 9. Generate the image
+  // 10. Generate the image
   const provider = createImageProvider(imageProfile.provider);
 
   let decryptedKey: string;
@@ -221,7 +282,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     throw new Error(`Image generation failed: ${errorMessage}`);
   }
 
-  // 10. Save the generated image
+  // 11. Save the generated image
   if (!generationResponse.images || generationResponse.images.length === 0) {
     logger.warn('[StoryBackground] No images returned from provider', {
       context: 'background-jobs.story-background',
@@ -289,13 +350,13 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     throw new Error(`Failed to save generated image: ${getErrorMessage(error)}`);
   }
 
-  // 11. Update chat with the new background image ID
+  // 12. Update chat with the new background image ID
   await repos.chats.update(payload.chatId, {
     storyBackgroundImageId: fileId,
     lastBackgroundGeneratedAt: new Date().toISOString(),
   });
 
-  // 12. If chat belongs to a project with 'latest_chat' display mode, update project reference
+  // 13. If chat belongs to a project with 'latest_chat' display mode, update project reference
   if (payload.projectId) {
     const project = await repos.projects.findById(payload.projectId);
     if (project && project.backgroundDisplayMode === 'latest_chat') {
