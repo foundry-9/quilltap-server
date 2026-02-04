@@ -164,24 +164,35 @@ function escapeMarkdownInBrackets(content: string, patterns: RenderingPattern[])
 /**
  * Process roleplay syntax in HTML content and wrap matches with styled spans.
  * This is applied AFTER markdown conversion to handle the text nodes.
+ *
+ * IMPORTANT: This function splits HTML by tags and only applies patterns to
+ * text content, avoiding corruption of HTML attributes that contain quotes.
  */
 function applyRoleplayPatterns(html: string, compiledPatterns: CompiledPattern[]): string {
-  let result = html;
+  // Split by HTML tags to avoid matching inside them
+  // This regex captures HTML tags as separate array elements
+  const tagRegex = /(<[^>]*>)/g;
+  const parts = html.split(tagRegex);
 
-  // Apply each pattern, being careful not to match inside HTML tags or attributes
-  for (const pattern of compiledPatterns) {
-    // Create a new regex with global flag for replacement
-    const regex = new RegExp(pattern.regex.source, pattern.regex.flags.includes('g') ? pattern.regex.flags : pattern.regex.flags + 'g');
+  // Process only non-tag parts (text content between tags)
+  const processedParts = parts.map((part, index) => {
+    // Parts at odd indices are HTML tags (captured groups from split)
+    if (index % 2 === 1) {
+      return part; // Return HTML tags unchanged
+    }
 
-    // Replace matches outside of HTML tags
-    result = result.replace(regex, (match) => {
-      // Don't wrap if it looks like it's inside an HTML tag
-      // This is a simple check - we look backwards for < without > between
-      return `<span class="${pattern.className}">${match}</span>`;
-    });
-  }
+    // Apply patterns only to text content
+    let result = part;
+    for (const pattern of compiledPatterns) {
+      const regex = new RegExp(pattern.regex.source, pattern.regex.flags.includes('g') ? pattern.regex.flags : pattern.regex.flags + 'g');
+      result = result.replace(regex, (match) => {
+        return `<span class="${pattern.className}">${match}</span>`;
+      });
+    }
+    return result;
+  });
 
-  return result;
+  return processedParts.join('');
 }
 
 /**
@@ -236,9 +247,11 @@ function createMarkdownProcessor() {
     .use(remarkGfm)
     .use(remarkRehype, { allowDangerousHtml: true })
     .use(rehypeHighlight, {
-      // Use 'text' as default language for unlabeled code blocks
+      // Don't auto-detect language for unlabeled code blocks - causes incorrect
+      // highlighting (e.g., detecting VB.NET for plain text prompts).
+      // Code blocks with explicit language tags will still be highlighted.
       ignoreMissing: true,
-      detect: true,
+      detect: false,
     })
     .use(rehypeStringify, { allowDangerousHtml: true });
 }

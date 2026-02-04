@@ -108,6 +108,14 @@
     color: inherit;
   }
 
+  /* Paragraph spacing for both client and server-rendered content */
+  .qt-chat-message-content p {
+    @apply mb-2;
+  }
+  .qt-chat-message-content p:last-child {
+    @apply mb-0;
+  }
+
   /**
    * User message content - must use user foreground color, not global foreground
    * This overrides the generic .qt-chat-message-content color to ensure
