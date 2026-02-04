@@ -12,6 +12,8 @@ export interface RecentChat {
   title: string
   updatedAt: string
   lastMessageAt: string | null
+  /** Story background image URL - displayed instead of avatars when present */
+  storyBackgroundUrl?: string | null
   participants: Array<{
     id: string
     type: 'CHARACTER' | 'PERSONA'

@@ -34,7 +34,18 @@ export function RecentChatItem({ chat }: RecentChatItemProps) {
       href={`/chats/${chat.id}`}
       className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors"
     >
-      <AvatarStack entities={characters} size="sm" maxDisplay={2} />
+      {/* Story background thumbnail (preferred) or Avatar stack */}
+      {chat.storyBackgroundUrl ? (
+        <div className="flex-shrink-0 w-16 h-11 rounded-md overflow-hidden bg-muted -my-1">
+          <img
+            src={chat.storyBackgroundUrl}
+            alt=""
+            className="w-full h-full object-cover"
+          />
+        </div>
+      ) : (
+        <AvatarStack entities={characters} size="sm" maxDisplay={2} />
+      )}
       <div className="flex-1 min-w-0">
         <p className="qt-card-title truncate">
           {chat.title}
