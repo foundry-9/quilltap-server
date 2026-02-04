@@ -21,6 +21,13 @@ This document tracks planned features and improvements for Quilltap.
   - [X] Story background generation
   - [X] The thing that provides the context should not be the title of the chat
 - [ ] Image generation can not only select characters but also different physical descriptions if they have them
+- [ ] Almost everything needs a way to handle "dangerous" (largely uncensored) content
+  - [ ] Gatekeeper needs to determine if content is dangerous
+  - [ ] Needs to be LLM paths for dangerous content after the determination is made
+  - [ ] Some way of flagging such content needs to be surfaced in the system
+  - [ ] Based on flags, things are either not allowed, not displayed, or allowed and displayed
+  - [ ] Implies a new quick-hide just for dangerous content
+  - [ ] Further: user-determined danger paths (e.g., this talks about politics, I don't want to talk about politics) in addition to the general "most providers won't handle this" rails
 
 ### LLM Integration
 
