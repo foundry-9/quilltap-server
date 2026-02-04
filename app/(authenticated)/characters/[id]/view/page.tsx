@@ -24,6 +24,7 @@ import {
 } from './components'
 import { CHARACTER_TABS } from './constants'
 import { SearchReplaceModal } from '@/components/tools/search-replace'
+import type { SearchReplaceResult } from '@/components/tools/search-replace/types'
 
 export default function ViewCharacterPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -34,6 +35,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
 
   const [showChatDialog, setShowChatDialog] = useState(false)
   const [showSearchReplaceModal, setShowSearchReplaceModal] = useState(false)
+  const [dataRefreshKey, setDataRefreshKey] = useState(0)
   const [selectedProfileId, setSelectedProfileId] = useState<string>('')
   const [selectedUserCharacterId, setSelectedUserCharacterId] = useState<string>('')
   const [selectedImageProfileId, setSelectedImageProfileId] = useState<string | null>(null)
@@ -196,11 +198,12 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           <ConversationsTab
             characterId={id}
             characterName={character?.name || 'Character'}
+            refreshKey={dataRefreshKey}
           />
         )
 
       case 'memories':
-        return <MemoriesTab characterId={id} />
+        return <MemoriesTab characterId={id} refreshKey={dataRefreshKey} />
 
       case 'tags':
         return <TagsTab characterId={id} />
@@ -345,6 +348,12 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
         onClose={() => setShowSearchReplaceModal(false)}
         initialScope={{ type: 'character', characterId: id }}
         characterName={character?.name}
+        onComplete={(result: SearchReplaceResult) => {
+          // Refresh data if any changes were made
+          if (result.messagesUpdated > 0 || result.memoriesUpdated > 0) {
+            setDataRefreshKey(prev => prev + 1)
+          }
+        }}
       />
     </div>
   )

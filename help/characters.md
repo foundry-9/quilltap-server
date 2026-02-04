@@ -298,7 +298,7 @@ Replace text across:
 - All system prompts
 - Physical descriptions
 - All chat messages (optionally)
-- Associated memories
+- Associated memories (content, summary, and keywords)
 
 Useful for consistency and corrections.
 

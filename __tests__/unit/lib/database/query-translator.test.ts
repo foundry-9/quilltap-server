@@ -211,22 +211,26 @@ describe('SQLite Query Translator', () => {
     });
 
     describe('$regex operator', () => {
-      it('should convert basic regex pattern', () => {
+      it('should convert basic regex pattern with wildcards for substring matching', () => {
+        // $regex is used for substring matching, so % wildcards are added
         const result = translateFilter({ name: { $regex: '.*john' } });
         expect(result.sql).toBe('"name" LIKE ?');
-        expect(result.params).toEqual(['%john']);
+        // .* converts to %, and we add surrounding % for substring matching
+        expect(result.params).toEqual(['%%john%']);
       });
 
-      it('should convert dot to underscore', () => {
+      it('should convert dot to underscore with wildcards', () => {
         const result = translateFilter({ email: { $regex: 'test.com' } });
         expect(result.sql).toBe('"email" LIKE ?');
-        expect(result.params).toEqual(['test_com']);
+        // . converts to _, and we add surrounding % for substring matching
+        expect(result.params).toEqual(['%test_com%']);
       });
 
-      it('should handle simple string pattern', () => {
+      it('should handle simple string pattern with wildcards', () => {
         const result = translateFilter({ name: { $regex: 'test' } });
         expect(result.sql).toBe('"name" LIKE ?');
-        expect(result.params).toEqual(['test']);
+        // Surrounding % added for substring matching
+        expect(result.params).toEqual(['%test%']);
       });
     });
 

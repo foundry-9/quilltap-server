@@ -27,6 +27,7 @@ export function SearchReplaceModal({
   chatTitle,
   characterName,
   currentChatId,
+  onComplete,
 }: SearchReplaceModalProps) {
   const {
     currentStep,
@@ -56,6 +57,7 @@ export function SearchReplaceModal({
     reset,
   } = useSearchReplace({
     initialScope,
+    onComplete,
   });
 
   // Reset when modal closes

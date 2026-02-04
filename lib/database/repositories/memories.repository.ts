@@ -718,6 +718,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
 
   /**
    * Count memories containing specific text
+   * Searches in content, summary, and keywords fields
    * @param characterId Optional character ID filter
    * @param personaId Optional persona ID filter
    * @param chatId Optional chat ID filter
@@ -733,9 +734,13 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
     try {
       const regex = new RegExp(searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
 
-      // Build the query filter
+      // Build the query filter - search in content, summary, and keywords
       const filter: QueryFilter = {
-        $or: [{ content: { $regex: regex } }, { summary: { $regex: regex } }],
+        $or: [
+          { content: { $regex: regex } },
+          { summary: { $regex: regex } },
+          { keywords: { $regex: regex } },
+        ],
       };
 
       if (characterId) filter.characterId = characterId;
@@ -757,6 +762,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
 
   /**
    * Find memories containing specific text
+   * Searches in content, summary, and keywords fields
    * @param characterId Optional character ID filter
    * @param personaId Optional persona ID filter
    * @param chatId Optional chat ID filter
@@ -772,9 +778,13 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
     try {
       const regex = new RegExp(searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
 
-      // Build the query filter
+      // Build the query filter - search in content, summary, and keywords
       const filter: QueryFilter = {
-        $or: [{ content: { $regex: regex } }, { summary: { $regex: regex } }],
+        $or: [
+          { content: { $regex: regex } },
+          { summary: { $regex: regex } },
+          { keywords: { $regex: regex } },
+        ],
       };
 
       if (characterId) filter.characterId = characterId;
@@ -795,7 +805,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   }
 
   /**
-   * Replace text in memory content and summary for specific memories
+   * Replace text in memory content, summary, and keywords for specific memories
    * @param memoryIds Array of memory IDs to update
    * @param searchText Text to find
    * @param replaceText Text to replace with
@@ -823,6 +833,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
         let contentChanged = false;
         let newContent = memory.content;
         let newSummary = memory.summary;
+        let newKeywords = memory.keywords;
 
         // Replace in content
         if (memory.content.includes(searchText)) {
@@ -836,10 +847,23 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
           contentChanged = true;
         }
 
+        // Replace in keywords array
+        if (memory.keywords && memory.keywords.length > 0) {
+          const updatedKeywords = memory.keywords.map(keyword => {
+            if (keyword.includes(searchText)) {
+              contentChanged = true;
+              return keyword.split(searchText).join(replaceText);
+            }
+            return keyword;
+          });
+          newKeywords = updatedKeywords;
+        }
+
         if (contentChanged) {
           const updated = await this.update(memoryId, {
             content: newContent,
             summary: newSummary,
+            keywords: newKeywords,
           });
 
           if (updated) {

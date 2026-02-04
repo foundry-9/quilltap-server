@@ -68,7 +68,6 @@ async function handlePreview(
   request: NextRequest,
   ctx: AuthenticatedContext
 ): Promise<NextResponse> {
-
   // Parse and validate request body
   const body = await request.json();
   const parseResult = searchReplaceSchema.safeParse(body);
@@ -87,7 +86,6 @@ async function handlePreview(
     validatedRequest,
     ctx.user.id
   );
-
 
   return NextResponse.json(preview);
 }

@@ -76,6 +76,8 @@ export interface SearchReplaceModalProps {
   characterName?: string;
   /** Current chat ID if opened from chat context */
   currentChatId?: string;
+  /** Callback when search/replace completes with results */
+  onComplete?: (result: SearchReplaceResult) => void;
 }
 
 /**

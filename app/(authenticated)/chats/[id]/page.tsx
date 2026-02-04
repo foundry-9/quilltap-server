@@ -16,6 +16,7 @@ import BulkCharacterReplaceModal from '@/components/chat/BulkCharacterReplaceMod
 import ChatToolSettingsModal from '@/components/chat/ChatToolSettingsModal'
 import StateEditorModal from '@/components/state/StateEditorModal'
 import { SearchReplaceModal } from '@/components/tools/search-replace'
+import type { SearchReplaceResult } from '@/components/tools/search-replace/types'
 import AllLLMPauseModal from '@/components/chat/AllLLMPauseModal'
 import LLMLogViewerModal from '@/components/chat/LLMLogViewerModal'
 import FileWriteApprovalModal from '@/components/chat/FileWriteApprovalModal'
@@ -2518,6 +2519,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           initialScope={{ type: 'chat', chatId: id }}
           currentChatId={id}
           chatTitle={chat?.title}
+          onComplete={(result: SearchReplaceResult) => {
+            // Refresh chat data if any messages were updated
+            if (result.messagesUpdated > 0) {
+              fetchChat()
+            }
+          }}
         />
 
         {/* Bulk Character Replace Modal */}

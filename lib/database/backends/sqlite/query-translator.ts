@@ -6,7 +6,7 @@
  */
 
 import { QueryFilter, QueryOptions, SortSpec, UpdateSpec, UpdateOperators } from '../../interfaces';
-import { jsonExtract, jsonArrayContains, jsonArrayContainsAny, jsonArrayObjectMatch, jsonArrayObjectMatchAny, toJson } from './json-columns';
+import { jsonExtract, jsonArrayContains, jsonArrayContainsAny, jsonArrayContainsLike, jsonArrayObjectMatch, jsonArrayObjectMatchAny, toJson } from './json-columns';
 import { logger } from '@/lib/logger';
 
 // ============================================================================
@@ -212,15 +212,30 @@ function translateFieldFilter(
           }
           break;
 
-        case '$regex':
+        case '$regex': {
           // SQLite LIKE with pattern conversion (limited regex support)
-          // Convert basic regex patterns to LIKE
-          let pattern = String(opValue);
+          // Extract pattern source if it's a RegExp object, otherwise use as string
+          let pattern: string;
+          if (opValue instanceof RegExp) {
+            pattern = opValue.source;
+          } else {
+            pattern = String(opValue);
+          }
+          // Convert basic regex patterns to LIKE wildcards
           pattern = pattern.replace(/\.\*/g, '%');
           pattern = pattern.replace(/\./g, '_');
-          clauses.push(`${columnExpr} LIKE ?`);
-          params.push(pattern);
+
+          // Check if this is a JSON array column - use jsonArrayContainsLike
+          if (jsonColumns.has(field)) {
+            const { sql, params: p } = jsonArrayContainsLike(field, `%${pattern}%`);
+            clauses.push(sql);
+            params.push(...p);
+          } else {
+            clauses.push(`${columnExpr} LIKE ?`);
+            params.push(`%${pattern}%`);
+          }
           break;
+        }
 
         default:
           logger.warn('Unknown query operator', { operator: op, field });

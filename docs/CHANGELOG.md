@@ -4,6 +4,18 @@
 
 ### 2.10-dev
 
+- fix: Search and Replace now searches all memory fields (content, summary, keywords)
+  - Memory search previously only searched content and summary fields
+  - Now also searches and replaces text within the keywords array
+  - Added `jsonArrayContainsLike` utility for SQLite LIKE queries on JSON arrays
+  - Fixed RegExp to LIKE pattern conversion in SQLite query translator
+
+- feat: Search and Replace now refreshes data after completing
+  - Character view page refreshes Conversations and Memories tabs when changes are made
+  - Chat page refreshes messages when search-replace updates them
+  - Added `onComplete` callback to SearchReplaceModal
+  - Added `refreshKey` prop to MemoryList and CharacterConversationsTab components
+
 - feat: Unified ChatCard component for consistent chat list display
   - Created reusable ChatCard component used across /chats, /projects/[id], and /characters/[id]/view
   - Configurable via props: showAvatars, showProject, showPreview, useRelativeDates, actionType

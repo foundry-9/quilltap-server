@@ -49,6 +49,8 @@ interface Chat {
 interface CharacterConversationsTabProps {
   characterId: string
   characterName: string
+  /** Optional key to trigger data refresh when changed */
+  refreshKey?: number
 }
 
 const CHATS_PER_PAGE = 10
@@ -83,7 +85,7 @@ function transformChatToCardData(chat: Chat): ChatCardData {
   }
 }
 
-export function CharacterConversationsTab({ characterId, characterName }: CharacterConversationsTabProps) {
+export function CharacterConversationsTab({ characterId, characterName, refreshKey }: CharacterConversationsTabProps) {
   const [chats, setChats] = useState<Chat[]>([])
   const [loading, setLoading] = useState(true)
   const { shouldHideByIds } = useQuickHide()
@@ -137,11 +139,11 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
     }
   }, [characterId])
 
-  // Initial load
+  // Initial load and refresh when refreshKey changes
   useEffect(() => {
     setPage(0)
     fetchChats(0, searchQuery, false)
-  }, [fetchChats, searchQuery])
+  }, [fetchChats, searchQuery, refreshKey])
 
   // Set up infinite scroll observer
   useEffect(() => {

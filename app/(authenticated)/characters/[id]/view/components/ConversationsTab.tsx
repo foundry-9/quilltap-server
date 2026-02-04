@@ -5,16 +5,19 @@ import { CharacterConversationsTab } from '@/components/character/character-conv
 interface ConversationsTabProps {
   characterId: string
   characterName: string
+  refreshKey?: number
 }
 
 export function ConversationsTab({
   characterId,
   characterName,
+  refreshKey,
 }: ConversationsTabProps) {
   return (
     <CharacterConversationsTab
       characterId={characterId}
       characterName={characterName || 'Character'}
+      refreshKey={refreshKey}
     />
   )
 }
