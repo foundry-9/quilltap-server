@@ -44,6 +44,10 @@ export interface ProjectChat {
   participants: ProjectChatParticipant[]
   tags?: ProjectChatTag[]
   updatedAt: string
+  storyBackground?: {
+    id: string
+    filepath: string
+  } | null
 }
 
 export interface ProjectFile {

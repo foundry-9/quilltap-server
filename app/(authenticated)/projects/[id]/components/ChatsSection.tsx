@@ -4,7 +4,7 @@
  * Chats Section
  *
  * Infinite scrolling list of project chats.
- * Styled identically to the /chats page chat cards.
+ * Uses the unified ChatCard component for consistent display.
  * Supports quick-hide filtering and displays tags.
  */
 
@@ -12,8 +12,7 @@ import { useEffect, useRef, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { useContentWidthOptional } from '@/components/providers/content-width-provider'
-import { TagDisplay } from '@/components/tags/tag-display'
-import AvatarStack from '@/components/ui/AvatarStack'
+import { ChatCard, type ChatCardData } from '@/components/chat/ChatCard'
 import type { ProjectChat } from '../types'
 
 interface ChatsSectionProps {
@@ -27,12 +26,22 @@ interface ChatsSectionProps {
   onRemoveChat: (chatId: string) => void
 }
 
-function CloseIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-    </svg>
-  )
+/**
+ * Transform ProjectChat to ChatCardData format
+ */
+function transformProjectChatToCardData(chat: ProjectChat): ChatCardData {
+  return {
+    id: chat.id,
+    title: chat.title || null,
+    messageCount: chat.messageCount,
+    participants: chat.participants,
+    tags: chat.tags,
+    updatedAt: chat.updatedAt,
+    // Project is null since we're already in project context
+    project: null,
+    persona: null,
+    storyBackgroundUrl: chat.storyBackground?.filepath || null,
+  }
 }
 
 export function ChatsSection({
@@ -97,14 +106,6 @@ export function ChatsSection({
     }
   }, [setupObserver])
 
-  // Format participant names for display
-  const formatParticipantNames = (participants: ProjectChat['participants']): string => {
-    if (participants.length === 0) return 'Unknown'
-    if (participants.length === 1) return participants[0].name
-    if (participants.length === 2) return `${participants[0].name} + ${participants[1].name}`
-    return participants.map(p => p.name).join(' + ')
-  }
-
   if (loading) {
     return (
       <div className="mt-8">
@@ -151,60 +152,16 @@ export function ChatsSection({
         <>
           {/* Chat cards - 2 columns when full-width is on, otherwise 1 */}
           <div className={`grid gap-4 ${isWide ? 'grid-cols-1 xl:grid-cols-2' : 'grid-cols-1'}`}>
-            {visibleChats.map((chat) => {
-              // Participants already have the correct shape for AvatarStack
-              // (id, name, avatarUrl, defaultImage)
-              const avatarEntities = chat.participants
-
-              return (
-                <Link
-                  key={chat.id}
-                  href={`/chats/${chat.id}`}
-                  className="qt-entity-card relative block hover:shadow-lg transition-shadow"
-                >
-                  <div className="flex items-stretch justify-between gap-4">
-                    <div className="flex items-stretch flex-1 gap-4">
-                      <AvatarStack entities={avatarEntities} size="lg" />
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className="text-xl font-semibold text-foreground">
-                            {chat.title || 'Untitled Chat'}
-                          </h3>
-                          <span className="inline-flex items-center rounded-full qt-bg-primary/10 px-3 py-1 text-sm font-semibold qt-text-primary">
-                            {chat.messageCount}
-                          </span>
-                        </div>
-                        <p className="qt-text-small qt-text-secondary">
-                          {formatParticipantNames(chat.participants)}
-                          {' \u2022 '}
-                          {new Date(chat.updatedAt).toLocaleDateString()}
-                        </p>
-                        {chat.tags && chat.tags.length > 0 && (
-                          <div className="mt-2">
-                            <TagDisplay tags={chat.tags.map(ct => ct.tag)} />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Remove button */}
-                    <div className="flex items-center">
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          onRemoveChat(chat.id)
-                        }}
-                        className="inline-flex h-10 w-10 items-center justify-center rounded-lg qt-bg-muted qt-text-secondary shadow transition hover:qt-text-destructive hover:qt-bg-destructive/10"
-                        title="Remove from project"
-                      >
-                        <CloseIcon className="w-5 h-5" />
-                      </button>
-                    </div>
-                  </div>
-                </Link>
-              )
-            })}
+            {visibleChats.map((chat) => (
+              <ChatCard
+                key={chat.id}
+                chat={transformProjectChatToCardData(chat)}
+                showAvatars={true}
+                showProject={false}
+                actionType="remove"
+                onRemove={onRemoveChat}
+              />
+            ))}
           </div>
 
           {/* Load more indicator / trigger */}

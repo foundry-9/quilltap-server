@@ -12,6 +12,7 @@ import { useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { useProjectDetail, useProjectChats, useProjectFiles, useProjectCardState } from './hooks'
+import { useStoryBackground } from '@/hooks/useStoryBackground'
 import {
   ProjectDetailHeader,
   FilesCard,
@@ -55,6 +56,14 @@ export default function ProjectDetailPage() {
   // Card expansion state - all open on first visit, all closed on subsequent visits
   const { cardState, toggleCard } = useProjectCardState(projectId)
 
+  // Story background - fetch background image for project based on display mode
+  // Pass null for chatId since we're on the project page, not a specific chat
+  const { backgroundUrl: storyBackgroundUrl } = useStoryBackground(
+    null,
+    projectId,
+    project?.backgroundDisplayMode !== 'theme' // Enable passive polling when backgrounds are enabled
+  )
+
   useEffect(() => {
     fetchProject()
     fetchChats()
@@ -83,7 +92,10 @@ export default function ProjectDetailPage() {
   }
 
   return (
-    <div className="qt-page-container text-foreground">
+    <div
+      className="qt-page-container text-foreground"
+      style={storyBackgroundUrl ? { '--story-background-url': `url('${storyBackgroundUrl}')` } as React.CSSProperties : undefined}
+    >
       <ProjectDetailHeader
         project={project}
         isEditing={isEditing}

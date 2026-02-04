@@ -2,15 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { showConfirmation } from '@/lib/alert'
 import { showErrorToast } from '@/lib/toast'
-import { TagDisplay } from '@/components/tags/tag-display'
-import { useUserCharacterDisplayName } from '@/hooks/usePersonaDisplayName'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { useSidebarData } from '@/components/providers/sidebar-data-provider'
 import { ImportWizard } from '@/components/import/import-wizard'
-import AvatarStack from '@/components/ui/AvatarStack'
+import { ChatCard, type ChatCardData } from '@/components/chat/ChatCard'
 
 interface ChatParticipant {
   id: string
@@ -58,32 +55,52 @@ interface Chat {
     name: string
     color: string | null
   } | null
+  storyBackground: {
+    id: string
+    filepath: string
+  } | null
   _count: {
     messages: number
   }
 }
 
 /**
- * Folder icon for project indicator
+ * Transform API chat data to ChatCardData format
  */
-function FolderIcon({ className, color }: { className?: string; color?: string | null }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill={color || 'none'}
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-    </svg>
+function transformChatToCardData(chat: Chat): ChatCardData {
+  // Extract active character participants
+  const characters = chat.participants
+    .filter(p => p.type === 'CHARACTER' && p.isActive && p.character)
+    .sort((a, b) => a.displayOrder - b.displayOrder)
+    .map(p => ({
+      id: p.character!.id,
+      name: p.character!.name,
+      avatarUrl: p.character!.avatarUrl,
+      defaultImageId: p.character!.defaultImageId,
+      defaultImage: p.character!.defaultImage,
+      tags: p.character!.tags,
+    }))
+
+  // Extract first persona participant
+  const personaParticipant = chat.participants.find(
+    p => p.type === 'PERSONA' && p.isActive && p.persona
   )
+  const persona = personaParticipant?.persona || null
+
+  return {
+    id: chat.id,
+    title: chat.title,
+    messageCount: chat._count.messages,
+    participants: characters,
+    tags: chat.tags,
+    updatedAt: chat.updatedAt,
+    project: chat.project,
+    persona,
+    storyBackgroundUrl: chat.storyBackground?.filepath || null,
+  }
 }
 
 export default function ChatsPage() {
-  const router = useRouter()
   const [chats, setChats] = useState<Chat[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -93,7 +110,6 @@ export default function ChatsPage() {
   const [profiles, setProfiles] = useState<Array<{ id: string; name: string }>>([])
   const [highlightedChatId, setHighlightedChatId] = useState<string | null>(null)
   const importedChatRef = useRef<HTMLDivElement>(null)
-  const { formatCharacterName } = useUserCharacterDisplayName()
   const { shouldHideByIds } = useQuickHide()
   const { refreshSidebar } = useSidebarData()
 
@@ -136,31 +152,6 @@ export default function ChatsPage() {
       return () => clearTimeout(timer)
     }
   }, [highlightedChatId])
-
-  // Helper to get all active character participants
-  const getActiveCharacters = (chat: Chat) => {
-    return chat.participants
-      .filter(p => p.type === 'CHARACTER' && p.isActive && p.character)
-      .sort((a, b) => a.displayOrder - b.displayOrder)
-      .map(p => p.character!)
-  }
-
-  // Helper to get first persona participant
-  const getFirstPersona = (chat: Chat) => {
-    const personaParticipant = chat.participants.find(
-      p => p.type === 'PERSONA' && p.isActive && p.persona
-    )
-    return personaParticipant?.persona
-  }
-
-  // Helper to format character names for display
-  const formatCharacterNames = (characters: NonNullable<ChatParticipant['character']>[]): string => {
-    if (characters.length === 0) return 'Unknown'
-    if (characters.length === 1) return characters[0].name
-    if (characters.length === 2) return `${characters[0].name} + ${characters[1].name}`
-    // For 3+ characters, list all with " + "
-    return characters.map(c => c.name).join(' + ')
-  }
 
   const fetchChats = async () => {
     try {
@@ -261,23 +252,15 @@ export default function ChatsPage() {
 
   return (
     <div className="chat-page qt-page-container text-foreground">
+      {/* Highlight animation styles */}
       <style>{`
-        @keyframes arrowFlash {
-          0% {
-            opacity: 1;
-            transform: translateX(0);
-          }
-          50% {
-            opacity: 1;
-            transform: translateX(10px);
-          }
-          100% {
-            opacity: 0;
-            transform: translateX(10px);
-          }
+        @keyframes chatCardHighlight {
+          0% { opacity: 1; transform: translateX(0); }
+          50% { opacity: 1; transform: translateX(10px); }
+          100% { opacity: 0; transform: translateX(10px); }
         }
-        .arrow-highlight {
-          animation: arrowFlash 2.5s ease-out forwards;
+        .chat-card-highlight-arrow {
+          animation: chatCardHighlight 2.5s ease-out forwards;
         }
       `}</style>
 
@@ -311,85 +294,18 @@ export default function ChatsPage() {
         </div>
       ) : (
         <div className="chat-card-stack space-y-4">
-          {visibleChats.map((chat) => {
-            const characters = getActiveCharacters(chat)
-            const persona = getFirstPersona(chat)
-            const characterNames = formatCharacterNames(characters)
-
-            const handleCardClick = (e: React.MouseEvent) => {
-              // Don't navigate if clicking on delete button
-              if ((e.target as HTMLElement).closest('button')) {
-                return
-              }
-              router.push(`/chats/${chat.id}`)
-            }
-
-            return (
-              <div
-                key={chat.id}
-                ref={highlightedChatId === chat.id ? importedChatRef : null}
-                className="qt-entity-card chat-card relative cursor-pointer hover:bg-muted/50 transition-colors"
-                onClick={handleCardClick}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); router.push(`/chats/${chat.id}`) } }}
-              >
-                {highlightedChatId === chat.id && (
-                  <div className="absolute -right-12 top-1/2 transform -translate-y-1/2 arrow-highlight">
-                    <span className="text-6xl text-yellow-200 font-black" style={{ textShadow: '0 0 10px rgba(255, 255, 0, 0.8)' }}>←</span>
-                  </div>
-                )}
-                <div className="flex items-stretch justify-between gap-4">
-                  <div className="flex items-stretch flex-1 gap-4">
-                    <AvatarStack entities={characters} size="lg" />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h2 className="text-xl font-semibold text-foreground">{chat.title}</h2>
-                        <span className="chat-card__badge inline-flex items-center rounded-full bg-primary/15 px-3 py-1 text-sm font-semibold text-primary">
-                          {chat._count.messages}
-                        </span>
-                      </div>
-                      <p className="qt-text-small">
-                        {characterNames}
-                        {persona && ` with ${formatCharacterName(persona)}`}
-                        {' \u2022 '}
-                        {new Date(chat.updatedAt).toLocaleDateString()}
-                      </p>
-                      {(chat.project || chat.tags.length > 0) && (
-                        <div className="mt-2 flex items-center gap-2 flex-wrap">
-                          {chat.project && (
-                            <Link
-                              href={`/projects/${chat.project.id}`}
-                              className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-muted hover:bg-muted/80 transition-colors"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <FolderIcon className="w-3 h-3" color={chat.project.color} />
-                              <span>{chat.project.name}</span>
-                            </Link>
-                          )}
-                          {chat.tags.length > 0 && (
-                            <TagDisplay tags={chat.tags.map(ct => ct.tag)} />
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); deleteChat(chat.id) }}
-                      className="chat-card__action inline-flex h-10 w-10 items-center justify-center rounded-lg bg-destructive text-destructive-foreground shadow transition hover:bg-destructive/90"
-                      title="Delete chat"
-                    >
-                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )
-          })}
+          {visibleChats.map((chat) => (
+            <ChatCard
+              key={chat.id}
+              chat={transformChatToCardData(chat)}
+              showAvatars={true}
+              showProject={true}
+              actionType="delete"
+              onDelete={deleteChat}
+              highlighted={highlightedChatId === chat.id}
+              cardRef={highlightedChatId === chat.id ? importedChatRef : undefined}
+            />
+          ))}
         </div>
       )}
 

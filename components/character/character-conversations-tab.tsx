@@ -2,9 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import Link from 'next/link'
-import { TagDisplay } from '@/components/tags/tag-display'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
-import { useUserCharacterDisplayName } from '@/hooks/usePersonaDisplayName'
+import { ChatCard, type ChatCardData } from '@/components/chat/ChatCard'
 
 interface Message {
   id: string
@@ -31,6 +30,10 @@ interface Chat {
     id: string
     name: string
   } | null
+  storyBackground?: {
+    id: string
+    filepath: string
+  } | null
   messages: Message[]
   tags?: Array<{
     tag: {
@@ -50,11 +53,40 @@ interface CharacterConversationsTabProps {
 
 const CHATS_PER_PAGE = 10
 
+/**
+ * Get preview text from messages
+ */
+function getPreviewText(messages: Message[]): string | null {
+  const lastMessage = messages[messages.length - 1]
+  if (!lastMessage) return null
+  const content = lastMessage.content.replace(/\n/g, ' ').trim()
+  return content.length > 100 ? content.slice(0, 100) + '...' : content
+}
+
+/**
+ * Transform API chat data to ChatCardData format
+ */
+function transformChatToCardData(chat: Chat): ChatCardData {
+  return {
+    id: chat.id,
+    title: chat.title,
+    messageCount: chat._count?.messages ?? chat.messages.length,
+    // No participants for character view - avatars not shown
+    participants: [],
+    tags: chat.tags,
+    updatedAt: chat.updatedAt,
+    lastMessageAt: chat.lastMessageAt,
+    project: chat.project || null,
+    persona: chat.persona || null,
+    previewText: getPreviewText(chat.messages),
+    storyBackgroundUrl: chat.storyBackground?.filepath || null,
+  }
+}
+
 export function CharacterConversationsTab({ characterId, characterName }: CharacterConversationsTabProps) {
   const [chats, setChats] = useState<Chat[]>([])
   const [loading, setLoading] = useState(true)
   const { shouldHideByIds } = useQuickHide()
-  const { formatCharacterName } = useUserCharacterDisplayName()
   const visibleChats = useMemo(
     () => chats.filter(chat => !shouldHideByIds((chat.tags || []).map(ct => ct.tag.id))),
     [chats, shouldHideByIds]
@@ -66,7 +98,6 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
   const [page, setPage] = useState(0)
   const observerRef = useRef<IntersectionObserver | null>(null)
   const loadMoreRef = useRef<HTMLDivElement | null>(null)
-  const [deletingChatId, setDeletingChatId] = useState<string | null>(null)
 
   const fetchChats = useCallback(async (pageNum: number, search: string, append: boolean = false) => {
     if (pageNum === 0) {
@@ -145,47 +176,17 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
     setPage(0)
   }
 
-  const deleteChat = async (chatId: string, e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-
+  const deleteChat = async (chatId: string) => {
     const confirmed = confirm('Are you sure you want to delete this chat?')
     if (!confirmed) return
 
-    setDeletingChatId(chatId)
     try {
       const res = await fetch(`/api/v1/chats/${chatId}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Failed to delete chat')
       setChats(chats.filter(c => c.id !== chatId))
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to delete chat')
-    } finally {
-      setDeletingChatId(null)
     }
-  }
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    const now = new Date()
-    const diffMs = now.getTime() - date.getTime()
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-
-    if (diffDays === 0) {
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    } else if (diffDays === 1) {
-      return 'Yesterday'
-    } else if (diffDays < 7) {
-      return date.toLocaleDateString([], { weekday: 'long' })
-    } else {
-      return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined })
-    }
-  }
-
-  const getPreviewText = (messages: Message[]) => {
-    const lastMessage = messages[messages.length - 1]
-    if (!lastMessage) return 'No messages yet'
-    const content = lastMessage.content.replace(/\n/g, ' ').trim()
-    return content.length > 100 ? content.slice(0, 100) + '...' : content
   }
 
   if (loading && chats.length === 0) {
@@ -279,69 +280,17 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
       ) : (
         <div className="space-y-4">
           {visibleChats.map((chat) => (
-            <div
+            <ChatCard
               key={chat.id}
-              className="flex items-start justify-between gap-4 p-4 bg-background rounded-lg border border-border hover:shadow-sm transition-all"
-            >
-              <Link
-                href={`/chats/${chat.id}`}
-                className="flex-1 min-w-0 block"
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <h3 className="qt-text-primary truncate">
-                    {chat.title || `Chat with ${characterName}`}
-                  </h3>
-                  {chat.project && (
-                    <span className="qt-badge-project">
-                      {chat.project.name}
-                    </span>
-                  )}
-                  <span className="inline-block bg-blue-100 text-blue-800 text-sm font-semibold px-3 py-1 rounded-full flex-shrink-0">
-                    {chat._count?.messages ?? chat.messages.length}
-                  </span>
-                </div>
-                <p className="qt-text-small">
-                  {chat.persona && (
-                    <>
-                      with {formatCharacterName(chat.persona)}
-                      {' \u2022 '}
-                    </>
-                  )}
-                  {formatDate(chat.lastMessageAt || chat.updatedAt)}
-                </p>
-                <p className="qt-text-small line-clamp-1 mt-2">
-                  {getPreviewText(chat.messages)}
-                </p>
-                {chat.tags && chat.tags.length > 0 && (
-                  <div className="mt-2">
-                    <TagDisplay tags={chat.tags.map(ct => ct.tag)} />
-                  </div>
-                )}
-              </Link>
-
-              <div className="flex flex-col gap-2 flex-shrink-0">
-                <Link
-                  href={`/chats/${chat.id}`}
-                  className="w-10 h-10 flex items-center justify-center bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
-                  title="Open chat"
-                >
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5z" />
-                    <path d="M6 11l2 2 4-4" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </Link>
-                <button
-                  onClick={(e) => deleteChat(chat.id, e)}
-                  disabled={deletingChatId === chat.id}
-                  className="w-10 h-10 flex items-center justify-center bg-destructive text-white rounded hover:bg-red-700 disabled:opacity-50 transition-colors"
-                  title="Delete chat"
-                >
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                  </svg>
-                </button>
-              </div>
-            </div>
+              chat={transformChatToCardData(chat)}
+              showAvatars={false}
+              showProject={true}
+              showPreview={true}
+              useRelativeDates={true}
+              actionType="delete"
+              onDelete={deleteChat}
+              characterName={characterName}
+            />
           ))}
 
           {/* Load more trigger */}

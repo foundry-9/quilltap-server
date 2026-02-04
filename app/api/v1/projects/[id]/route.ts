@@ -276,12 +276,25 @@ async function handleListChats(req: NextRequest, context: AuthenticatedContext, 
           })
           .filter(Boolean);
 
+        // Get story background if available
+        let storyBackground = null;
+        if (chat.storyBackgroundImageId) {
+          const bgFile = await repos.files.findById(chat.storyBackgroundImageId);
+          if (bgFile) {
+            storyBackground = {
+              id: bgFile.id,
+              filepath: getFilePath(bgFile),
+            };
+          }
+        }
+
         return {
           id: chat.id,
           title: chat.title,
           messageCount: chat.messageCount,
           participants: participants.filter(Boolean),
           tags: chatTags,
+          storyBackground,
           updatedAt: chat.updatedAt,
           createdAt: chat.createdAt,
         };
@@ -364,6 +377,7 @@ async function handleGetBackground(req: NextRequest, context: AuthenticatedConte
 
     // Determine the background based on backgroundDisplayMode
     const displayMode = project.backgroundDisplayMode || 'theme';
+    logger.debug('[Projects v1] Getting project background', { projectId: id, displayMode });
 
     // If mode is 'theme', no background
     if (displayMode === 'theme') {
@@ -399,8 +413,20 @@ async function handleGetBackground(req: NextRequest, context: AuthenticatedConte
         .filter(c => c.projectId === id && c.storyBackgroundImageId)
         .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
+      logger.debug('[Projects v1] latest_chat mode - found chats with backgrounds', {
+        projectId: id,
+        chatsWithBackgrounds: projectChats.length,
+        firstChatId: projectChats[0]?.id,
+        firstChatBackgroundId: projectChats[0]?.storyBackgroundImageId,
+      });
+
       if (projectChats.length > 0 && projectChats[0].storyBackgroundImageId) {
         const file = await repos.files.findById(projectChats[0].storyBackgroundImageId);
+        logger.debug('[Projects v1] latest_chat mode - looked up file', {
+          fileId: projectChats[0].storyBackgroundImageId,
+          fileFound: !!file,
+          filePath: file ? getFilePath(file) : null,
+        });
         if (file) {
           return NextResponse.json({
             backgroundUrl: getFilePath(file),

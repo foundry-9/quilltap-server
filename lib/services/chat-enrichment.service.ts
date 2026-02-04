@@ -126,6 +126,14 @@ export interface EnrichedProject {
 }
 
 /**
+ * Story background info for enriched chats
+ */
+export interface EnrichedStoryBackground {
+  id: string
+  filepath: string
+}
+
+/**
  * Enriched chat for list view
  */
 export interface EnrichedChatSummary {
@@ -138,6 +146,7 @@ export interface EnrichedChatSummary {
   participants: EnrichedParticipantSummary[]
   tags: EnrichedTag[]
   project: EnrichedProject | null
+  storyBackground: EnrichedStoryBackground | null
   _count: { messages: number }
   _allTagIds: string[] // Internal field for filtering
 }
@@ -391,6 +400,18 @@ export async function enrichChatForList(
     }
   }
 
+  // Get story background if available
+  let storyBackground: EnrichedStoryBackground | null = null
+  if (chat.storyBackgroundImageId) {
+    const bgFile = await repos.files.findById(chat.storyBackgroundImageId)
+    if (bgFile) {
+      storyBackground = {
+        id: bgFile.id,
+        filepath: getFilePath(bgFile),
+      }
+    }
+  }
+
   // Collect all tag IDs from chat and characters for filtering
   const allTagIds: string[] = [...chat.tags]
   for (const participant of participants) {
@@ -409,6 +430,7 @@ export async function enrichChatForList(
     participants,
     tags,
     project,
+    storyBackground,
     _count: { messages: messageCount },
     _allTagIds: allTagIds,
   }

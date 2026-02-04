@@ -15,11 +15,44 @@
   /**
    * Page container that respects content width toggle
    * Replaces manual container + max-w-* classes in page components
+   * Supports story background via --story-background-url CSS variable
    */
   .qt-page-container {
-    @apply w-full mx-auto px-4 pt-8 pb-20;
+    @apply w-full mx-auto px-4 pt-8 pb-20 relative;
     max-width: var(--qt-page-max-width);
     transition: max-width 200ms ease-out;
+    min-height: 100vh;
+  }
+
+  /**
+   * Story background image layer for page containers
+   * Renders behind all page content using a ::before pseudo-element.
+   * Only visible when --story-background-url CSS variable is set.
+   * Uses fixed attachment for parallax effect while scrolling.
+   */
+  .qt-page-container::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: var(--story-background-url) center/cover no-repeat;
+    z-index: 0;
+    opacity: 0.35;
+    pointer-events: none;
+  }
+
+  /**
+   * Hide background layer when no story background URL is set
+   */
+  .qt-page-container:not([style*="--story-background-url"])::before {
+    display: none;
+  }
+
+  /**
+   * Ensure page content stays above the background
+   */
+  .qt-page-container > * {
+    position: relative;
+    z-index: 1;
   }
 
   /* ==========================================================================

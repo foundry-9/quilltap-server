@@ -236,6 +236,18 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
             // Get project info if chat belongs to a project
             const project = chat.projectId ? projectMap.get(chat.projectId) || null : null;
 
+            // Get story background if available
+            let storyBackground = null;
+            if (chat.storyBackgroundImageId) {
+              const bgFile = await repos.files.findById(chat.storyBackgroundImageId);
+              if (bgFile) {
+                storyBackground = {
+                  id: bgFile.id,
+                  filepath: getFilePath(bgFile),
+                };
+              }
+            }
+
             return {
               id: chat.id,
               title: chat.title,
@@ -247,6 +259,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
                 name: character.name,
               },
               project,
+              storyBackground,
               messages: recentMessages,
               tags: tagData.filter((tag): tag is { tag: { id: string; name: string } } => tag !== null),
               _count: {

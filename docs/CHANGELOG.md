@@ -4,6 +4,25 @@
 
 ### 2.10-dev
 
+- feat: Unified ChatCard component for consistent chat list display
+  - Created reusable ChatCard component used across /chats, /projects/[id], and /characters/[id]/view
+  - Configurable via props: showAvatars, showProject, showPreview, useRelativeDates, actionType
+  - Supports both delete (permanent) and remove (unlink from project) actions
+  - Includes highlight animation for newly imported chats
+  - Chat cards now display story background thumbnails instead of avatar stacks when available
+  - Story background thumbnails stretch to fill card height with cover fit
+
+- feat: Story background support on project detail pages
+  - Project pages now display story backgrounds based on backgroundDisplayMode setting
+  - Uses useStoryBackground hook to fetch and render background via CSS variable
+  - Added story background support to qt-page-container CSS class
+  - Background renders as semi-transparent fixed layer behind page content
+
+- feat: Story background thumbnails in chat enrichment
+  - Added storyBackground field to EnrichedChatSummary in chat enrichment service
+  - Project chats API now returns storyBackground for each chat
+  - Character chats API now returns storyBackground for each chat
+
 - fix: Race condition in plugin initialization causing "Provider not found" errors in Docker
   - Moved `initialized = true` flag to after all registries (provider, theme, tool) are initialized
   - Previously, the flag was set too early, causing concurrent calls to `initializePlugins()` to return before provider registry was ready
