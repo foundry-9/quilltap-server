@@ -205,7 +205,7 @@ async function queueStoryBackgroundIfEnabled(
 
 /**
  * Resolve the image profile to use for story background generation
- * Priority: Story backgrounds default > Chat image profile > User default
+ * Priority: Chat image profile > Story backgrounds default > User default
  */
 async function resolveImageProfileForChat(
   userId: string,
@@ -214,19 +214,19 @@ async function resolveImageProfileForChat(
 ): Promise<string | null> {
   const repos = getRepositories();
 
-  // First, check if story backgrounds settings has a default profile
-  const storyBackgroundsSettings = chatSettings.storyBackgroundsSettings;
-  if (storyBackgroundsSettings?.defaultImageProfileId) {
-    // Verify the profile exists and is valid
-    const profile = await repos.imageProfiles.findById(storyBackgroundsSettings.defaultImageProfileId);
+  // First, check the chat's image profile (most specific, chat-level)
+  if (chat.imageProfileId) {
+    const profile = await repos.imageProfiles.findById(chat.imageProfileId);
     if (profile && profile.userId === userId && profile.apiKeyId) {
       return profile.id;
     }
   }
 
-  // Second, check the chat's image profile (chat-level, not per-participant)
-  if (chat.imageProfileId) {
-    const profile = await repos.imageProfiles.findById(chat.imageProfileId);
+  // Second, check if story backgrounds settings has a default profile
+  const storyBackgroundsSettings = chatSettings.storyBackgroundsSettings;
+  if (storyBackgroundsSettings?.defaultImageProfileId) {
+    // Verify the profile exists and is valid
+    const profile = await repos.imageProfiles.findById(storyBackgroundsSettings.defaultImageProfileId);
     if (profile && profile.userId === userId && profile.apiKeyId) {
       return profile.id;
     }

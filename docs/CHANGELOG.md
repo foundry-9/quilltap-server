@@ -4,6 +4,11 @@
 
 ### 2.10-dev
 
+- fix: Story backgrounds now respect chat-specific image profile settings
+  - Changed priority order: Chat profile > Story backgrounds default > User default
+  - Previously, global story backgrounds default always took precedence over chat-specific settings
+  - Now, if a chat has an image profile configured, it will be used for that chat's backgrounds
+
 - fix: Chat image profile setting not loading in Chat Settings modal
   - GET /api/v1/chats/[id] was not returning imageProfileId in the response
   - Added imageProfileId to the chat response object

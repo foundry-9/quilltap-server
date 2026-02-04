@@ -19,7 +19,7 @@ This document tracks planned features and improvements for Quilltap.
 - [ ] Character checkpointing (backups of a character at a certain point in time)
 - [ ] "Visual Novel" options
   - [X] Story background generation
-  - [ ] The thing that provides the context should not be the title of the chat
+  - [X] The thing that provides the context should not be the title of the chat
 - [ ] Image generation can not only select characters but also different physical descriptions if they have them
 
 ### LLM Integration

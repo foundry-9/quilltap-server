@@ -13,7 +13,7 @@ import type { ChatMetadata, ChatSettings } from '@/lib/schemas/types';
 
 /**
  * Resolve the image profile to use for story background generation
- * Priority: Story backgrounds default > Chat image profile > User default
+ * Priority: Chat image profile > Story backgrounds default > User default
  */
 async function resolveImageProfileForChat(
   userId: string,
@@ -21,18 +21,18 @@ async function resolveImageProfileForChat(
   chatSettings: ChatSettings | null,
   repos: AuthenticatedContext['repos']
 ): Promise<string | null> {
-  // First, check if story backgrounds settings has a default profile
-  const storyBackgroundsSettings = chatSettings?.storyBackgroundsSettings;
-  if (storyBackgroundsSettings?.defaultImageProfileId) {
-    const profile = await repos.imageProfiles.findById(storyBackgroundsSettings.defaultImageProfileId);
+  // First, check the chat's image profile (most specific)
+  if (chat.imageProfileId) {
+    const profile = await repos.imageProfiles.findById(chat.imageProfileId);
     if (profile && profile.userId === userId && profile.apiKeyId) {
       return profile.id;
     }
   }
 
-  // Second, check the chat's image profile
-  if (chat.imageProfileId) {
-    const profile = await repos.imageProfiles.findById(chat.imageProfileId);
+  // Second, check if story backgrounds settings has a default profile
+  const storyBackgroundsSettings = chatSettings?.storyBackgroundsSettings;
+  if (storyBackgroundsSettings?.defaultImageProfileId) {
+    const profile = await repos.imageProfiles.findById(storyBackgroundsSettings.defaultImageProfileId);
     if (profile && profile.userId === userId && profile.apiKeyId) {
       return profile.id;
     }
