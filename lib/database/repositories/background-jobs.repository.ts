@@ -101,13 +101,15 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
 
   /**
    * Find pending jobs for a specific chat
+   * Only returns PENDING and PROCESSING jobs - FAILED jobs don't block new job creation
+   * since the user may have fixed the underlying issue (e.g., changed provider)
    */
   async findPendingForChat(chatId: string): Promise<BackgroundJob[]> {
     try {
       const results = await this.findByFilter(
         {
           'payload.chatId': chatId,
-          status: { $in: ['PENDING', 'PROCESSING', 'FAILED'] },
+          status: { $in: ['PENDING', 'PROCESSING'] },
         } as QueryFilter,
         {
           sort: { priority: -1 as any, createdAt: 1 as any },

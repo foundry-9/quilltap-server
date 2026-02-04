@@ -271,6 +271,14 @@ export async function enqueueEmbeddingReindexAll(
 }
 
 /**
+ * Result of enqueueing a story background job
+ */
+export interface StoryBackgroundEnqueueResult {
+  jobId: string;
+  isNew: boolean;
+}
+
+/**
  * Enqueue a story background generation job
  * Skips if there's already a pending/processing job for the same chat
  */
@@ -278,7 +286,7 @@ export async function enqueueStoryBackgroundGeneration(
   userId: string,
   payload: StoryBackgroundGenerationPayload,
   options?: EnqueueJobOptions
-): Promise<string> {
+): Promise<StoryBackgroundEnqueueResult> {
   const repos = getRepositories();
 
   // Check for existing pending/processing story background jobs for this chat
@@ -286,20 +294,21 @@ export async function enqueueStoryBackgroundGeneration(
   const existingJob = pendingJobs.find(job => job.type === 'STORY_BACKGROUND_GENERATION');
 
   if (existingJob) {
-    logger.info('[StoryBackground] Skipping - job already pending for chat', {
+    logger.info('[StoryBackground] Reusing existing pending job for chat', {
       context: 'background-jobs.queue',
       chatId: payload.chatId,
       existingJobId: existingJob.id,
       existingStatus: existingJob.status,
     });
-    return existingJob.id;
+    return { jobId: existingJob.id, isNew: false };
   }
 
-  return enqueueJob(userId, 'STORY_BACKGROUND_GENERATION', payload as unknown as Record<string, unknown>, {
+  const jobId = await enqueueJob(userId, 'STORY_BACKGROUND_GENERATION', payload as unknown as Record<string, unknown>, {
     // Lower priority than interactive tasks
     priority: options?.priority ?? -1,
     ...options,
   });
+  return { jobId, isNew: true };
 }
 
 /**

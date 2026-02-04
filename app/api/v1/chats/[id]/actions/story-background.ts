@@ -83,7 +83,7 @@ export async function handleRegenerateBackground(
     }
 
     // Queue the story background generation job
-    await enqueueStoryBackgroundGeneration(user.id, {
+    const { jobId, isNew } = await enqueueStoryBackgroundGeneration(user.id, {
       chatId: chat.id,
       imageProfileId,
       characterIds,
@@ -91,15 +91,25 @@ export async function handleRegenerateBackground(
       projectId: chat.projectId ?? null,
     });
 
-    logger.info('[Chats v1] Queued story background regeneration', {
-      chatId,
-      imageProfileId,
-      characterCount: characterIds.length,
-    });
+    if (isNew) {
+      logger.info('[Chats v1] Queued story background regeneration', {
+        chatId,
+        jobId,
+        imageProfileId,
+        characterCount: characterIds.length,
+      });
+    } else {
+      logger.info('[Chats v1] Story background generation already in progress', {
+        chatId,
+        jobId,
+        imageProfileId,
+      });
+    }
 
     return successResponse({
-      message: 'Story background regeneration queued',
+      message: isNew ? 'Story background regeneration queued' : 'Story background generation already in progress',
       queued: true,
+      jobId,
     });
   } catch (error) {
     logger.error('[Chats v1] Failed to queue story background regeneration', {

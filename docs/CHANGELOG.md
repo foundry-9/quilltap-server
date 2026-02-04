@@ -4,6 +4,21 @@
 
 ### 2.10-dev
 
+- fix: Chat image profile setting not loading in Chat Settings modal
+  - GET /api/v1/chats/[id] was not returning imageProfileId in the response
+  - Added imageProfileId to the chat response object
+
+- fix: Failed background jobs blocking new job creation for the same chat
+  - `findPendingForChat` no longer includes FAILED jobs in the "pending" check
+  - Users can now trigger new jobs after fixing underlying issues (e.g., changing provider)
+  - Improved logging to distinguish between new jobs and reused existing jobs
+  - `enqueueStoryBackgroundGeneration` now returns `{ jobId, isNew }` for better caller feedback
+
+- fix: Thumbnail cache misses logging as errors
+  - Changed thumbnail handler to use `fileExists` check before attempting download
+  - Prevents noisy error logs when thumbnails haven't been generated yet
+  - Thumbnails are still generated on-demand and cached for future requests
+
 - feat: Story backgrounds now derive scene context from chat history
   - Added `deriveSceneContext` cheap LLM task that analyzes recent messages
   - Generates imaginative scene descriptions based on conversation content

@@ -171,7 +171,7 @@ async function queueStoryBackgroundIfEnabled(
 
   // Queue the story background generation job
   try {
-    await enqueueStoryBackgroundGeneration(userId, {
+    const { jobId, isNew } = await enqueueStoryBackgroundGeneration(userId, {
       chatId: chat.id,
       imageProfileId,
       characterIds,
@@ -179,12 +179,21 @@ async function queueStoryBackgroundIfEnabled(
       projectId: chat.projectId ?? null,
     });
 
-    logger.info('[TitleUpdate] Queued story background generation', {
-      context: 'background-jobs.title-update',
-      chatId: chat.id,
-      imageProfileId,
-      characterCount: characterIds.length,
-    });
+    if (isNew) {
+      logger.info('[TitleUpdate] Queued story background generation', {
+        context: 'background-jobs.title-update',
+        chatId: chat.id,
+        jobId,
+        imageProfileId,
+        characterCount: characterIds.length,
+      });
+    } else {
+      logger.debug('[TitleUpdate] Story background generation already in progress', {
+        context: 'background-jobs.title-update',
+        chatId: chat.id,
+        jobId,
+      });
+    }
   } catch (error) {
     logger.warn('[TitleUpdate] Failed to queue story background generation', {
       context: 'background-jobs.title-update',

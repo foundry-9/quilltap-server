@@ -282,6 +282,7 @@ export async function handleGet(
       title: chatMetadata.title,
       contextSummary: chatMetadata.contextSummary,
       roleplayTemplateId: chatMetadata.roleplayTemplateId,
+      imageProfileId: chatMetadata.imageProfileId ?? null,
       lastTurnParticipantId: chatMetadata.lastTurnParticipantId ?? null,
       isPaused: chatMetadata.isPaused ?? false,
       isManuallyRenamed: chatMetadata.isManuallyRenamed ?? false,
