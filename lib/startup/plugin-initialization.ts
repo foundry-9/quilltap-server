@@ -285,21 +285,9 @@ async function performInitialization(): Promise<PluginInitializationResult> {
     // Note: Migrations are now run in instrumentation.ts BEFORE plugin initialization.
     // This ensures data compatibility before any plugins are loaded.
 
-    // Get final stats
+    // Get final stats (but don't mark as initialized yet - registries need to be initialized first)
     const stats = pluginRegistry.getStats();
     result.stats = stats;
-    result.success = true;
-    initialized = true;
-
-    const duration = Date.now() - startTime;
-    logger.info('Plugin system initialized', {
-      duration: `${duration}ms`,
-      total: stats.total,
-      enabled: stats.enabled,
-      disabled: stats.disabled,
-      errors: result.errors.length,
-      warnings: result.warnings.length,
-    });
 
     // Log enabled plugins
     const enabledPlugins = pluginRegistry.getEnabled();
@@ -500,6 +488,22 @@ async function performInitialization(): Promise<PluginInitializationResult> {
         warnings: [`File storage initialization failed: ${errorMsg}`],
       });
     }
+
+    // Mark as fully initialized AFTER all registries are set up
+    // This is critical for avoiding race conditions where a second call to initializePlugins()
+    // returns early before provider registry is initialized (Docker/production issue)
+    result.success = true;
+    initialized = true;
+
+    const duration = Date.now() - startTime;
+    logger.info('Plugin system initialized', {
+      duration: `${duration}ms`,
+      total: stats.total,
+      enabled: stats.enabled,
+      disabled: stats.disabled,
+      errors: result.errors.length,
+      warnings: result.warnings.length,
+    });
 
     return result;
   } catch (error) {

@@ -4,6 +4,11 @@
 
 ### 2.10-dev
 
+- fix: Race condition in plugin initialization causing "Provider not found" errors in Docker
+  - Moved `initialized = true` flag to after all registries (provider, theme, tool) are initialized
+  - Previously, the flag was set too early, causing concurrent calls to `initializePlugins()` to return before provider registry was ready
+  - Fixes story background generation failing with "Provider 'OPENROUTER' not found in registry" in production
+
 - refactor: Image profile moved from per-participant to per-chat level
   - Each chat now has a single image profile (or none) shared by all participants
   - Image profile selector moved to Chat Settings (below Roleplay Template)
