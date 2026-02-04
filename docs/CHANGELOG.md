@@ -4,6 +4,13 @@
 
 ### 2.10-dev
 
+- fix: Server-rendered code blocks overlapping and corrupted in chat messages
+  - Roleplay patterns (dialogue detection) were being applied inside code blocks, corrupting JSON strings
+  - Added code block depth tracking to skip pattern application inside `<code>` and `<pre>` elements
+  - Fixed missing `white-space: pre-wrap` and `line-height` on `.hljs` styled code blocks
+  - Added explicit styling for `pre:has(> code.hljs)` to properly style server-rendered code
+  - Removed redundant `overflow: hidden` that was clipping code block content
+
 - fix: Story backgrounds now respect chat-specific image profile settings
   - Changed priority order: Chat profile > Story backgrounds default > User default
   - Previously, global story backgrounds default always took precedence over chat-specific settings

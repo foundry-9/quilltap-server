@@ -354,12 +354,34 @@
    * Highlight.js code block container
    * Matches the client-side oneDark theme colors
    */
+  /**
+   * Server-rendered code blocks: <pre><code class="hljs">...</code></pre>
+   * Need to style both the pre wrapper and the code element
+   */
+  pre:has(> code.hljs) {
+    @apply my-3 rounded-lg overflow-x-auto;
+    background: var(--qt-code-bg);
+  }
+
   .hljs {
-    @apply p-4 overflow-x-auto;
+    @apply p-4 block;
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.5;
     border-radius: var(--qt-code-radius);
     background: var(--qt-code-bg);
     color: var(--qt-code-fg);
     font-family: var(--qt-code-font);
+  }
+
+  /* Reset prose styles on code inside pre for server-rendered blocks */
+  .prose pre code.hljs,
+  .qt-prose pre code.hljs {
+    @apply p-4 block;
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.5;
+    background: transparent;
   }
 
   /* Highlight.js syntax colors (oneDark-inspired) */

@@ -167,6 +167,7 @@ function escapeMarkdownInBrackets(content: string, patterns: RenderingPattern[])
  *
  * IMPORTANT: This function splits HTML by tags and only applies patterns to
  * text content, avoiding corruption of HTML attributes that contain quotes.
+ * It also skips content inside <code> and <pre> blocks to preserve code formatting.
  */
 function applyRoleplayPatterns(html: string, compiledPatterns: CompiledPattern[]): string {
   // Split by HTML tags to avoid matching inside them
@@ -174,14 +175,29 @@ function applyRoleplayPatterns(html: string, compiledPatterns: CompiledPattern[]
   const tagRegex = /(<[^>]*>)/g;
   const parts = html.split(tagRegex);
 
+  // Track whether we're inside a code block
+  let inCodeBlock = 0;
+
   // Process only non-tag parts (text content between tags)
   const processedParts = parts.map((part, index) => {
     // Parts at odd indices are HTML tags (captured groups from split)
     if (index % 2 === 1) {
+      // Track code block depth - check for opening/closing tags
+      const lowerPart = part.toLowerCase();
+      if (lowerPart.startsWith('<code') || lowerPart.startsWith('<pre')) {
+        inCodeBlock++;
+      } else if (lowerPart === '</code>' || lowerPart === '</pre>') {
+        inCodeBlock = Math.max(0, inCodeBlock - 1);
+      }
       return part; // Return HTML tags unchanged
     }
 
-    // Apply patterns only to text content
+    // Skip pattern application inside code blocks
+    if (inCodeBlock > 0) {
+      return part;
+    }
+
+    // Apply patterns only to text content outside code blocks
     let result = part;
     for (const pattern of compiledPatterns) {
       const regex = new RegExp(pattern.regex.source, pattern.regex.flags.includes('g') ? pattern.regex.flags : pattern.regex.flags + 'g');

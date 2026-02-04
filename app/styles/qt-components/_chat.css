@@ -93,7 +93,7 @@
    */
   .qt-chat-message-content {
     @apply max-w-none w-full;
-    overflow: hidden;
+    overflow-x: auto;
     /* Override Tailwind prose body color to use full foreground instead of muted gray */
     --tw-prose-body: var(--color-foreground);
     --tw-prose-invert-body: var(--color-foreground);

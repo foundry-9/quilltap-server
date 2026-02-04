@@ -91,7 +91,6 @@ function LazyMessageContentInner({
       <div
         ref={containerRef}
         className={`qt-chat-message-content qt-prose prose prose-sm dark:prose-invert ${className}`}
-        style={{ overflow: 'hidden' }}
         dangerouslySetInnerHTML={{ __html: renderedHtml }}
       />
     )
