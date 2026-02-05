@@ -4,6 +4,12 @@
 
 ### 2.10-dev
 
+- feat: Native tool execution rules injected into system prompt
+  - Models with native function calling now receive explicit instructions to invoke tools via tool_use blocks rather than narrating tool actions in prose
+  - Added character-voiced reinforcement after personality/scenario sections using template variables
+  - Renamed `pseudoToolInstructions` → `toolInstructions` throughout the pipeline since the parameter now carries either native or pseudo-tool instructions
+  - New `lib/tools/native-tool-prompt.ts` with `buildNativeToolInstructions()` function
+
 - fix: Story backgrounds settings race condition causing data loss
   - When quickly changing multiple story backgrounds settings (enable + profile), updates could overwrite each other
   - Added useRef to track latest settings state during concurrent API calls

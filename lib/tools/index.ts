@@ -242,7 +242,11 @@ export {
 export {
   buildPseudoToolInstructions,
   type PseudoToolOptions,
-} from './pseudo-tool-prompt';
+} from './pseudo-tool-prompt'
+
+export {
+  buildNativeToolInstructions,
+} from './native-tool-prompt';
 
 export {
   parsePseudoToolCalls,

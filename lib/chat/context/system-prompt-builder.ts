@@ -42,8 +42,8 @@ export function buildSystemPrompt(
   otherParticipants?: OtherParticipantInfo[],
   /** Roleplay template to prepend (formatting instructions) */
   roleplayTemplate?: { systemPrompt: string } | null,
-  /** Pseudo-tool instructions for models without native function calling */
-  pseudoToolInstructions?: string,
+  /** Tool instructions (native tool rules or pseudo-tool instructions) */
+  toolInstructions?: string,
   /** Selected system prompt ID from character's systemPrompts array */
   selectedSystemPromptId?: string | null,
   /** Timestamp configuration for injection */
@@ -86,11 +86,11 @@ export function buildSystemPrompt(
     parts.push(processedRoleplayPrompt)
   }
 
-  // Pseudo-tool instructions (for models without native function calling)
+  // Tool instructions (native tool rules or pseudo-tool instructions)
   // Added after roleplay template so tool usage instructions are seen early
   // Note: These typically don't contain {{char}}/{{user}} but process anyway for consistency
-  if (pseudoToolInstructions) {
-    const processedToolInstructions = processTemplate(pseudoToolInstructions, templateContext)
+  if (toolInstructions) {
+    const processedToolInstructions = processTemplate(toolInstructions, templateContext)
 
     parts.push(processedToolInstructions)
   }
@@ -165,6 +165,17 @@ export function buildSystemPrompt(
   if (character.exampleDialogues) {
     const processedDialogues = processTemplate(character.exampleDialogues, templateContext)
     parts.push(`\n## Example Dialogue Style\n${processedDialogues}`)
+  }
+
+  // Character-voiced tool reinforcement (only when tools are available)
+  // Placed after character personality/scenario/dialogues so the LLM has full
+  // character context before being reminded to actually invoke tools in-character.
+  if (toolInstructions) {
+    const toolReinforcement = processTemplate(
+      'When {{char}} uses his/her workspace tools, he/she CALLS them — he/she does not merely describe calling them. Every tool action produces a tool_use block, not prose.',
+      templateContext
+    )
+    parts.push(toolReinforcement)
   }
 
   // Persona information if provided (single-character mode)

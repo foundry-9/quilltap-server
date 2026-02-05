@@ -326,7 +326,7 @@ describe('Context Manager', () => {
     it('processes template variables across roleplay, override, and persona sections', () => {
       const persona = { name: 'Alex', description: 'A curious tester' }
       const roleplayTemplate = { systemPrompt: 'Stay in {{char}} mindset when talking to {{user}}.' }
-      const pseudoToolInstructions = 'Tools should mention {{char}} assisting {{user}}.'
+      const toolInstructions = 'Tools should mention {{char}} assisting {{user}}.'
       const prompt = buildSystemPrompt(
         {
           ...character,
@@ -338,7 +338,7 @@ describe('Context Manager', () => {
         '{{char}} override for {{user}}',
         undefined,
         roleplayTemplate,
-        pseudoToolInstructions
+        toolInstructions
       )
 
       expect(prompt).toContain('Stay in Test Character mindset when talking to Alex.')

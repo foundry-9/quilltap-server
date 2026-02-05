@@ -44,7 +44,7 @@ export interface BuildMessageContextOptions {
   participantCharacters?: Map<string, Character>
   roleplayTemplate: { systemPrompt: string } | null
   chatSettings: { cheapLLMSettings?: { embeddingProfileId?: string }; defaultTimestampConfig?: TimestampConfig | null } | null
-  pseudoToolInstructions?: string
+  toolInstructions?: string
   newUserMessage?: string
   isContinueMode: boolean
   /** Project context if chat is in a project */
@@ -277,7 +277,7 @@ export async function buildMessageContext(
     participantCharacters,
     roleplayTemplate,
     chatSettings,
-    pseudoToolInstructions,
+    toolInstructions,
     newUserMessage,
     projectContext,
     contextCompressionSettings,
@@ -320,8 +320,8 @@ export async function buildMessageContext(
     allParticipants: isMultiCharacter ? chat.participants : undefined,
     participantCharacters: isMultiCharacter ? participantCharacters : undefined,
     messagesWithParticipants: isMultiCharacter ? messagesWithParticipants : undefined,
-    // Pseudo-tool support
-    pseudoToolInstructions,
+    // Tool instructions (native tool rules or pseudo-tool instructions)
+    toolInstructions,
     // Timestamp injection
     timestampConfig,
     isInitialMessage,

@@ -207,11 +207,11 @@ export interface BuildContextOptions {
   messagesWithParticipants?: MessageWithParticipant[]
 
   // ============================================================================
-  // Pseudo-Tool Support (for models without native function calling)
+  // Tool Instructions (native tool rules or pseudo-tool instructions)
   // ============================================================================
 
-  /** Instructions for text-based pseudo-tools (when model doesn't support native tools) */
-  pseudoToolInstructions?: string
+  /** Tool instructions injected into system prompt (native tool rules or pseudo-tool instructions) */
+  toolInstructions?: string
 
   // ============================================================================
   // Timestamp Injection
@@ -296,8 +296,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     allParticipants,
     participantCharacters,
     messagesWithParticipants,
-    // Pseudo-tool support
-    pseudoToolInstructions,
+    // Tool instructions (native tool rules or pseudo-tool instructions)
+    toolInstructions,
     // Project context
     projectContext,
   } = options
@@ -333,7 +333,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     systemPromptOverride,
     otherParticipantsInfo,
     roleplayTemplate,
-    pseudoToolInstructions,
+    toolInstructions,
     selectedSystemPromptId,
     options.timestampConfig,
     options.isInitialMessage,

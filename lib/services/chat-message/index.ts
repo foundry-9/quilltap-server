@@ -71,10 +71,11 @@ export {
   type StreamChunkCallback,
 } from './streaming.service'
 
-// Pseudo-tools
+// Pseudo-tools and native tool instructions
 export {
   checkShouldUsePseudoTools,
   buildPseudoToolSystemInstructions,
+  buildNativeToolSystemInstructions,
   parsePseudoToolsFromResponse,
   stripPseudoToolMarkersFromResponse,
   determineEnabledToolOptions,

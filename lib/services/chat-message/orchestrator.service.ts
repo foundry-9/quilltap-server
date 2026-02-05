@@ -54,6 +54,7 @@ import {
 import {
   checkShouldUsePseudoTools,
   buildPseudoToolSystemInstructions,
+  buildNativeToolSystemInstructions,
   parsePseudoToolsFromResponse,
   stripPseudoToolMarkersFromResponse,
   determineEnabledToolOptions,
@@ -495,11 +496,13 @@ async function processMessage(
   const usePseudoTools = checkShouldUsePseudoTools(modelSupportsNativeTools)
   const actualTools = usePseudoTools ? [] : tools
 
-  // Build pseudo-tool instructions if needed
-  let pseudoToolInstructions: string | undefined
+  // Build tool instructions (pseudo-tool instructions or native tool rules)
+  let toolInstructions: string | undefined
   if (usePseudoTools) {
-    pseudoToolInstructions = buildPseudoToolSystemInstructions(enabledToolOptions)
+    toolInstructions = buildPseudoToolSystemInstructions(enabledToolOptions)
     logPseudoToolUsage(connectionProfile.provider, connectionProfile.modelName, enabledToolOptions)
+  } else if (actualTools.length > 0) {
+    toolInstructions = buildNativeToolSystemInstructions()
   }
 
   // Build message context
@@ -582,7 +585,7 @@ async function processMessage(
       participantCharacters,
       roleplayTemplate,
       chatSettings: contextChatSettings,
-      pseudoToolInstructions,
+      toolInstructions,
       newUserMessage: finalUserMessageContent,
       isContinueMode,
       // Project context (injected at configured interval)
