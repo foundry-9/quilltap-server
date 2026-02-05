@@ -4,6 +4,16 @@
 
 ### 2.10-dev
 
+- fix: Story backgrounds not generated on inline title updates
+  - Title updates triggered via `context-summary.ts` (the inline path after message exchanges) never queued story background generation
+  - Only the unused background job handler path had the `queueStoryBackgroundIfEnabled` call
+  - Exported `queueStoryBackgroundIfEnabled` from the title-update handler and call it from the inline title update path
+
+- fix: Agent mode toggle showing "off" after navigating back to chat
+  - GET `/api/v1/chats/[id]` was not returning `agentModeEnabled` in the response object
+  - Frontend sync effect always received `undefined`, defaulting to `false` in the tool palette
+  - Added `agentModeEnabled` to the chat GET response
+
 - feat: Native tool execution rules injected into system prompt
   - Models with native function calling now receive explicit instructions to invoke tools via tool_use blocks rather than narrating tool actions in prose
   - Added character-voiced reinforcement after personality/scenario sections using template variables

@@ -295,6 +295,7 @@ export async function handleGet(
       projectName,
       disabledTools: chatMetadata.disabledTools || [],
       disabledToolGroups: chatMetadata.disabledToolGroups || [],
+      agentModeEnabled: chatMetadata.agentModeEnabled ?? false,
     };
 
     return NextResponse.json({ chat });

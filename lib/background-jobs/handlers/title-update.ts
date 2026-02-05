@@ -129,7 +129,7 @@ export async function handleTitleUpdate(job: BackgroundJob): Promise<void> {
 /**
  * Queue a story background generation job if the feature is enabled
  */
-async function queueStoryBackgroundIfEnabled(
+export async function queueStoryBackgroundIfEnabled(
   userId: string,
   chat: ChatMetadata,
   chatSettings: ChatSettings,
@@ -207,7 +207,7 @@ async function queueStoryBackgroundIfEnabled(
  * Resolve the image profile to use for story background generation
  * Priority: Chat image profile > Story backgrounds default > User default
  */
-async function resolveImageProfileForChat(
+export async function resolveImageProfileForChat(
   userId: string,
   chat: ChatMetadata,
   chatSettings: ChatSettings
