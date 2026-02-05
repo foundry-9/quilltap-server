@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import {
   ChatSettings,
@@ -61,6 +61,15 @@ export function useChatSettings(): UseChatSettingsReturn {
   const [embeddingProfiles, setEmbeddingProfiles] = useState<EmbeddingProfile[]>([])
   const [imageProfiles, setImageProfiles] = useState<ImageProfile[]>([])
   const [loadingProfiles, setLoadingProfiles] = useState(false)
+
+  // Ref to track the latest settings for use in concurrent updates
+  // This prevents race conditions when multiple updates happen quickly
+  const settingsRef = useRef<ChatSettings | null>(null)
+
+  // Keep the ref in sync with state
+  useEffect(() => {
+    settingsRef.current = settings
+  }, [settings])
 
   // Get the avatar display context updater to sync style changes globally
   const { syncAvatarDisplayStyle } = useAvatarDisplay()
@@ -601,17 +610,20 @@ export function useChatSettings(): UseChatSettingsReturn {
 
   /**
    * Update story backgrounds enabled setting
+   * Uses settingsRef to prevent race conditions with concurrent updates
    */
   const handleStoryBackgroundsEnabledChange = useCallback(
     async (value: boolean) => {
-      if (!settings) return
+      // Use ref for latest state to prevent race conditions
+      const latestSettings = settingsRef.current
+      if (!latestSettings) return
 
       try {
         setSaving(true)
         setError(null)
         setSuccess(false)
 
-        const currentSettings = settings.storyBackgroundsSettings || DEFAULT_STORY_BACKGROUNDS_SETTINGS
+        const currentSettings = latestSettings.storyBackgroundsSettings || DEFAULT_STORY_BACKGROUNDS_SETTINGS
         const res = await fetch('/api/v1/settings/chat', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -636,22 +648,25 @@ export function useChatSettings(): UseChatSettingsReturn {
         setSaving(false)
       }
     },
-    [settings, showSuccess]
+    [showSuccess]
   )
 
   /**
    * Update story backgrounds image profile
+   * Uses settingsRef to prevent race conditions with concurrent updates
    */
   const handleStoryBackgroundsProfileChange = useCallback(
     async (profileId: string | null) => {
-      if (!settings) return
+      // Use ref for latest state to prevent race conditions
+      const latestSettings = settingsRef.current
+      if (!latestSettings) return
 
       try {
         setSaving(true)
         setError(null)
         setSuccess(false)
 
-        const currentSettings = settings.storyBackgroundsSettings || DEFAULT_STORY_BACKGROUNDS_SETTINGS
+        const currentSettings = latestSettings.storyBackgroundsSettings || DEFAULT_STORY_BACKGROUNDS_SETTINGS
         const res = await fetch('/api/v1/settings/chat', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -676,7 +691,7 @@ export function useChatSettings(): UseChatSettingsReturn {
         setSaving(false)
       }
     },
-    [settings, showSuccess]
+    [showSuccess]
   )
 
   return {

@@ -165,6 +165,14 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
    */
   async updateForUser(userId: string, data: Partial<ChatSettings>): Promise<ChatSettings | null> {
     try {
+      // Log incoming update for debugging settings persistence issues
+      if (data.storyBackgroundsSettings) {
+        logger.debug('[ChatSettings] Updating storyBackgroundsSettings', {
+          userId,
+          incoming: data.storyBackgroundsSettings,
+        });
+      }
+
       // Check if settings exist
       const existing = await this.findByUserId(userId);
 
@@ -233,7 +241,17 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
       }
 
       // Update existing settings
-      return await this.update(existing.id, data);
+      const result = await this.update(existing.id, data);
+
+      // Log result for debugging settings persistence
+      if (data.storyBackgroundsSettings && result) {
+        logger.debug('[ChatSettings] Updated storyBackgroundsSettings result', {
+          userId,
+          saved: result.storyBackgroundsSettings,
+        });
+      }
+
+      return result;
     } catch (error) {
       logger.error('Error updating chat settings for user', {
         userId,

@@ -108,12 +108,93 @@
     color: inherit;
   }
 
-  /* Paragraph spacing for both client and server-rendered content */
+  /* ==========================================================================
+     MARKDOWN ELEMENT SPACING
+     Since @tailwindcss/typography is not installed in v4, we define all
+     typography spacing manually for .qt-chat-message-content to ensure
+     consistent rendering between client-side ReactMarkdown components
+     and server-side pre-rendered HTML.
+     ========================================================================== */
+
+  /* Paragraph spacing */
   .qt-chat-message-content p {
     @apply mb-2;
   }
   .qt-chat-message-content p:last-child {
     @apply mb-0;
+  }
+
+  /* Heading spacing - matches MessageContent.tsx custom components */
+  .qt-chat-message-content h1 {
+    @apply text-2xl font-bold mb-2 mt-4;
+  }
+  .qt-chat-message-content h1:first-child {
+    @apply mt-0;
+  }
+  .qt-chat-message-content h2 {
+    @apply text-xl font-bold mb-2 mt-3;
+  }
+  .qt-chat-message-content h2:first-child {
+    @apply mt-0;
+  }
+  .qt-chat-message-content h3 {
+    @apply text-lg font-semibold mb-2 mt-3;
+  }
+  .qt-chat-message-content h3:first-child {
+    @apply mt-0;
+  }
+  .qt-chat-message-content h4 {
+    @apply text-base font-semibold mb-1 mt-2;
+  }
+  .qt-chat-message-content h4:first-child {
+    @apply mt-0;
+  }
+  .qt-chat-message-content h5 {
+    @apply text-sm font-semibold mb-1 mt-2;
+  }
+  .qt-chat-message-content h5:first-child {
+    @apply mt-0;
+  }
+  .qt-chat-message-content h6 {
+    @apply text-xs font-semibold mb-1 mt-2;
+  }
+  .qt-chat-message-content h6:first-child {
+    @apply mt-0;
+  }
+
+  /* List spacing */
+  .qt-chat-message-content ul {
+    @apply list-disc list-inside mb-2 ml-4;
+  }
+  .qt-chat-message-content ol {
+    @apply list-decimal list-inside mb-2 ml-4;
+  }
+  .qt-chat-message-content li {
+    @apply mb-1;
+  }
+
+  /* Blockquote spacing */
+  .qt-chat-message-content blockquote {
+    @apply border-l-4 border-border pl-4 py-1 my-2 italic;
+  }
+
+  /* Horizontal rule spacing */
+  .qt-chat-message-content hr {
+    @apply my-4 border-border;
+  }
+
+  /* Table styling */
+  .qt-chat-message-content table {
+    @apply min-w-full border-collapse border border-border my-2;
+  }
+  .qt-chat-message-content thead {
+    @apply bg-muted;
+  }
+  .qt-chat-message-content th {
+    @apply border border-border px-4 py-2 text-left font-semibold;
+  }
+  .qt-chat-message-content td {
+    @apply border border-border px-4 py-2;
   }
 
   /**

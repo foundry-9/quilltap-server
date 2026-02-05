@@ -4,6 +4,17 @@
 
 ### 2.10-dev
 
+- fix: Story backgrounds settings race condition causing data loss
+  - When quickly changing multiple story backgrounds settings (enable + profile), updates could overwrite each other
+  - Added useRef to track latest settings state during concurrent API calls
+  - Added debug logging to chat settings repository to help diagnose future persistence issues
+
+- fix: Markdown elements missing spacing in server-rendered chat messages
+  - Headings, lists, blockquotes, and horizontal rules had no vertical spacing
+  - Tailwind Typography plugin (`prose` classes) was not installed in v4
+  - Added comprehensive CSS rules for all markdown elements in `.qt-chat-message-content`
+  - Now both server-rendered HTML and client-rendered ReactMarkdown have consistent spacing
+
 - fix: Server-rendered code blocks overlapping and corrupted in chat messages
   - Roleplay patterns (dialogue detection) were being applied inside code blocks, corrupting JSON strings
   - Added code block depth tracking to skip pattern application inside `<code>` and `<pre>` elements
