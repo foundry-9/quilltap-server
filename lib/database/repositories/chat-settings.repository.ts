@@ -27,7 +27,9 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
     try {
       const result = await this._findById(id);
       if (result) {
+        logger.debug('[ChatSettings] Settings found by ID', { chatSettingsId: id });
       } else {
+        logger.debug('[ChatSettings] Settings not found by ID', { chatSettingsId: id });
       }
       return result;
     } catch (error) {
@@ -46,7 +48,9 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
     try {
       const result = await this.findOneByFilter({ userId } as QueryFilter);
       if (result) {
+        logger.debug('[ChatSettings] Settings found for user', { userId });
       } else {
+        logger.debug('[ChatSettings] Settings not found for user', { userId });
       }
       return result;
     } catch (error) {
@@ -109,6 +113,7 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
     try {
       const result = await this._update(id, data);
       if (result) {
+        logger.debug('[ChatSettings] Settings updated', { chatSettingsId: id });
       } else {
         logger.warn('Chat settings not found for update', { chatSettingsId: id });
       }
@@ -131,6 +136,7 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
     try {
       const result = await this._delete(id);
       if (result) {
+        logger.debug('[ChatSettings] Settings deleted', { chatSettingsId: id });
       } else {
         logger.warn('Chat settings not found for deletion', { chatSettingsId: id });
       }

@@ -168,7 +168,7 @@ export class EmbeddingProfilesRepository extends TaggableBaseRepository<Embeddin
    * Unset all embedding profiles for a user as default
    * Used when setting a new default profile
    */
-  async unsetAllDefaults(userId: string): Promise<boolean> {
+  async unsetAllDefaults(userId: string): Promise<number> {
     try {
       const count = await this.updateMany(
         { userId, isDefault: true } as QueryFilter,
@@ -180,7 +180,7 @@ export class EmbeddingProfilesRepository extends TaggableBaseRepository<Embeddin
         modifiedCount: count,
       });
 
-      return count > 0 || (await this.count({ userId } as QueryFilter)) === 0;
+      return count;
     } catch (error) {
       logger.error('Error unsetting all default embedding profiles', {
         userId,

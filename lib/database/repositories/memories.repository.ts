@@ -271,6 +271,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
       const memory = await this._update(id, data);
 
       if (memory) {
+        logger.debug('[Memories] Memory updated', { memoryId: id });
       }
 
       return memory;
@@ -328,6 +329,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
       const result = await this._delete(id);
 
       if (result) {
+        logger.debug('[Memories] Memory deleted', { memoryId: id });
       }
 
       return result;

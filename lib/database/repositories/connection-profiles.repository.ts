@@ -442,6 +442,7 @@ export class ConnectionProfilesRepository extends TaggableBaseRepository<Connect
       const result = await this.updateApiKey(id, { lastUsed: this.getCurrentTimestamp() });
 
       if (result) {
+        logger.debug('[ConnectionProfiles] API key usage recorded', { keyId: id });
       }
 
       return result;

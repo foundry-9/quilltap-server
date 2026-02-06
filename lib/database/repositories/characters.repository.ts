@@ -202,6 +202,7 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
       const result = await this._update(id, data);
 
       if (result) {
+        logger.debug('[Characters] Character updated', { characterId: id });
       }
 
       return result;
@@ -343,6 +344,7 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
       const result = await this.update(characterId, { isFavorite });
 
       if (result) {
+        logger.debug('[Characters] Favorite status set', { characterId, isFavorite });
       }
 
       return result;
@@ -367,6 +369,7 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
       const result = await this.update(characterId, { controlledBy });
 
       if (result) {
+        logger.debug('[Characters] ControlledBy status set', { characterId, controlledBy });
       }
 
       return result;

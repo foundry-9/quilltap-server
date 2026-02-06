@@ -261,7 +261,7 @@ function createMarkdownProcessor() {
   return unified()
     .use(remarkParse)
     .use(remarkGfm)
-    .use(remarkRehype, { allowDangerousHtml: true })
+    .use(remarkRehype)
     .use(rehypeHighlight, {
       // Don't auto-detect language for unlabeled code blocks - causes incorrect
       // highlighting (e.g., detecting VB.NET for plain text prompts).
@@ -269,10 +269,10 @@ function createMarkdownProcessor() {
       ignoreMissing: true,
       detect: false,
     })
-    .use(rehypeStringify, { allowDangerousHtml: true });
+    .use(rehypeStringify);
 }
 
-// Cached processor instance
+// Cached processor instance — reset to null when the pipeline changes
 let cachedProcessor: ReturnType<typeof createMarkdownProcessor> | null = null;
 
 function getProcessor() {

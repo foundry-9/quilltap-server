@@ -241,6 +241,7 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
       // Use base implementation for database lookup
       const result = await this._findById(id);
       if (result) {
+        logger.debug('[RoleplayTemplates] Template found by ID', { templateId: id });
       }
       return result;
     } catch (error) {

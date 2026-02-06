@@ -4,6 +4,22 @@
 
 ### 2.10-dev
 
+- security: Remove allowDangerousHtml from markdown renderer
+  - Raw HTML in messages (e.g. `<script>`, `<img onerror="">`) is now escaped as literal text
+  - Prevents XSS from imported chats containing malicious HTML
+  - Roleplay pattern processing (post-pipeline) is unaffected
+
+- refactor: Replace 19 empty if/else blocks across 10 repository files with debug logging
+  - Adds `logger.debug()` calls for find/update/delete operations in: image-profiles, chat-settings, llm-logs, plugin-config, files, prompt-templates, vector-indices, memories, characters, connection-profiles, and roleplay-templates repositories
+
+- fix: Standardize EmbeddingProfilesRepository.unsetAllDefaults return type
+  - Changed from `Promise<boolean>` (with confusing logic) to `Promise<number>` matching ImageProfilesRepository
+  - No callers used the return value; the enrichment middleware types it as `Promise<void>`
+
+- test: Add unit tests for markdown renderer canPreRenderMessage function
+  - 13 test cases covering USER, ASSISTANT, TOOL, SYSTEM roles and edge cases
+  - Added Jest mock configuration for ESM-only unified/remark/rehype libraries
+
 - fix: Story background images now pin to top of viewport instead of centering
   - Prevents faces and heads from being cropped above the header on square images
   - Applies to both chat layouts and project page containers

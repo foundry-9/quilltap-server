@@ -91,6 +91,7 @@ export class VectorIndicesRepository extends AbstractBaseRepository<VectorIndex>
       const result = await this._update(id, data);
 
       if (result) {
+        logger.debug('[VectorIndices] Index updated', { id });
       }
 
       return result;

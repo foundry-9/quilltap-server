@@ -89,6 +89,7 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
             category: sample.category,
           });
         } else {
+          logger.debug('[PromptTemplates] Sample prompt already exists, skipping', { name: sample.name });
         }
       }
     } catch (error) {
@@ -205,7 +206,9 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
       const template = await this.findOneByFilter({ userId, name } as QueryFilter);
 
       if (template) {
+        logger.debug('[PromptTemplates] Template found by name', { userId, name });
       } else {
+        logger.debug('[PromptTemplates] Template not found by name', { userId, name });
       }
 
       return template;
