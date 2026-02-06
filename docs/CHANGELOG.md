@@ -4,6 +4,11 @@
 
 ### 2.10-dev
 
+- chore: Upgrade @openrouter/sdk from 0.5.1 to 0.8.0
+  - Wrap `chat.send()` calls with `{ chatGenerationParams: ... }` (breaking change in SDK)
+  - Wrap `embeddings.generate()` calls with `{ requestBody: ... }` (breaking change in SDK)
+  - Bump qtap-plugin-openrouter to 1.0.16
+
 - security: Remove allowDangerousHtml from markdown renderer
   - Raw HTML in messages (e.g. `<script>`, `<img onerror="">`) is now escaped as literal text
   - Prevents XSS from imported chats containing malicious HTML

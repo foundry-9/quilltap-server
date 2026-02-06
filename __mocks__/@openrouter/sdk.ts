@@ -1,5 +1,5 @@
 /**
- * Mock for @openrouter/sdk v0.4.0
+ * Mock for @openrouter/sdk v0.8.0
  * Used in unit tests to avoid loading the actual ESM module
  */
 
