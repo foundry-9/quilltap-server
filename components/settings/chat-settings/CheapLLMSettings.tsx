@@ -121,37 +121,6 @@ export function CheapLLMSettings({
           </select>
         </div>
 
-        {/* Uncensored Image Prompt Expansion LLM Override */}
-        <div>
-          <label className="block qt-text-label mb-2">
-            Image Prompt Expansion LLM (Uncensored - Optional)
-          </label>
-          <p className="qt-text-xs mb-2">
-            When an image prompt is flagged as dangerous, this profile is used for prompt expansion instead of the standard cheap LLM. Select an uncensored-compatible model that can handle sensitive content.
-          </p>
-          <select
-            value={settings?.cheapLLMSettings.imagePromptProfileId || ''}
-            onChange={(e) => onUpdate({ imagePromptProfileId: e.target.value || null })}
-            disabled={saving || loadingProfiles}
-            className="qt-select"
-          >
-            <option value="">Use global cheap LLM</option>
-            {connectionProfiles.map((profile) => {
-              const hasApiKey = Boolean(profile.apiKey)
-              return (
-                <option key={profile.id} value={profile.id}>
-                  {profile.name} ({profile.provider} • {profile.modelName}){!hasApiKey ? ' ⚠️ No API Key' : ''}
-                </option>
-              )
-            })}
-          </select>
-          {connectionProfiles.length === 0 && !loadingProfiles && (
-            <p className="mt-1 qt-text-xs text-amber-600 dark:text-amber-400">
-              No connection profiles found. Create one in the Connection Profiles tab first.
-            </p>
-          )}
-        </div>
-
         {/* Fallback to Local */}
         <label className="flex items-center gap-3 p-3 border border-border rounded hover:bg-accent cursor-pointer transition-colors">
           <input

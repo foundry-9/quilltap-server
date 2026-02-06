@@ -10,6 +10,8 @@ export interface DangerousContentSettingsProps {
   imageProfiles: ImageProfile[]
   loadingProfiles: boolean
   onUpdate: (updates: Partial<DangerousContentSettingsType>) => Promise<void>
+  imagePromptProfileId?: string | null
+  onImagePromptProfileChange: (profileId: string | null) => Promise<void>
 }
 
 const MODE_OPTIONS = [
@@ -65,6 +67,8 @@ export function DangerousContentSettings({
   imageProfiles,
   loadingProfiles,
   onUpdate,
+  imagePromptProfileId,
+  onImagePromptProfileChange,
 }: DangerousContentSettingsProps) {
   const dangerSettings = settings.dangerousContentSettings ?? DEFAULT_SETTINGS
 
@@ -302,6 +306,37 @@ export function DangerousContentSettings({
               <p className="qt-text-small">
                 Additional instructions appended to the classification prompt. Use this to adjust sensitivity for your use case.
               </p>
+            </div>
+
+            {/* Image Prompt Expansion LLM (Uncensored) */}
+            <div className="space-y-2">
+              <label className="block font-medium text-foreground">
+                Image Prompt Expansion LLM (Uncensored - Optional)
+              </label>
+              <p className="qt-text-small">
+                When an image prompt is flagged as dangerous, this profile is used for prompt expansion instead of the standard cheap LLM. Select an uncensored-compatible model that can handle sensitive content.
+              </p>
+              <select
+                value={imagePromptProfileId || ''}
+                onChange={(e) => onImagePromptProfileChange(e.target.value || null)}
+                disabled={saving || loadingProfiles}
+                className="w-full max-w-md rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="">Use global cheap LLM</option>
+                {connectionProfiles.map((profile) => {
+                  const hasApiKey = Boolean(profile.apiKey)
+                  return (
+                    <option key={profile.id} value={profile.id}>
+                      {profile.name} ({profile.provider} • {profile.modelName}){!hasApiKey ? ' ⚠️ No API Key' : ''}
+                    </option>
+                  )
+                })}
+              </select>
+              {connectionProfiles.length === 0 && !loadingProfiles && (
+                <p className="mt-1 qt-text-small text-amber-600 dark:text-amber-400">
+                  No connection profiles found. Create one in the Connection Profiles tab first.
+                </p>
+              )}
             </div>
           </>
         )}

@@ -159,6 +159,8 @@ export default function ChatSettingsTab() {
           imageProfiles={imageProfiles}
           loadingProfiles={loadingProfiles}
           onUpdate={handleDangerousContentUpdate}
+          imagePromptProfileId={settings.cheapLLMSettings.imagePromptProfileId}
+          onImagePromptProfileChange={(id) => handleCheapLLMUpdate({ imagePromptProfileId: id })}
         />
       </div>
     </div>

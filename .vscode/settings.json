@@ -1,7 +1,12 @@
 {
     "cSpell.words": [
+        "agentic",
         "bigints",
+        "BYOK",
+        "checkpointing",
+        "cicd",
         "DALL",
+        "devssl",
         "embedder",
         "genai",
         "generatable",
@@ -14,9 +19,11 @@
         "Ollama",
         "OPENROUTER",
         "popout",
+        "prefs",
         "qrcode",
         "qtap",
         "Quilltap",
+        "Qwen",
         "Reinject",
         "Roleplay",
         "roleplayers",
@@ -32,6 +39,7 @@
         "upgrader",
         "viewports",
         "wikilink",
+        "Worldbook",
         "worldbuilders",
         "worldbuilding"
     ]

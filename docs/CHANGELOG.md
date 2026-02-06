@@ -4,6 +4,9 @@
 
 ### 2.11-dev
 
+- fix: Dangerous content settings not persisting (PUT route handler missing `dangerousContentSettings` field)
+- fix: Image description fallback crash (`repos.users.getChatSettings` → `repos.chatSettings.findByUserId`)
+- refactor: Move "Image Prompt Expansion LLM" setting from Cheap LLM card to Dangerous Content Handling card
 - feat: Dangerous content handling system
   - Gatekeeper service classifies user messages for sensitive content using the Cheap LLM
   - Three modes: Off (default), Detect Only (flag content), Auto-Route (reroute to uncensored providers)
