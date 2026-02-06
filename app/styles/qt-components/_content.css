@@ -34,7 +34,7 @@
     content: '';
     position: fixed;
     inset: 0;
-    background: var(--story-background-url) center/cover no-repeat;
+    background: var(--story-background-url) top center/cover no-repeat;
     z-index: 0;
     opacity: 0.35;
     pointer-events: none;

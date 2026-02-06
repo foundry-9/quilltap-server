@@ -4,6 +4,10 @@
 
 ### 2.10-dev
 
+- fix: Story background images now pin to top of viewport instead of centering
+  - Prevents faces and heads from being cropped above the header on square images
+  - Applies to both chat layouts and project page containers
+
 - fix: Danger classification re-queuing all chats on every server restart
   - System event created during classification incremented `messageCount`, but `dangerClassifiedAtMessageCount` was stored before the event — causing a permanent off-by-one that triggered re-classification of every chat on every startup
   - Reordered handler to create the system event first, then re-read the updated `messageCount` before storing the classification result

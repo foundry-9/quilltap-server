@@ -924,7 +924,7 @@
     content: '';
     position: absolute;
     inset: 0;
-    background: var(--story-background-url) center/cover no-repeat fixed;
+    background: var(--story-background-url) top center/cover no-repeat fixed;
     z-index: 0;
     opacity: 0.45;
     pointer-events: none;
