@@ -4,6 +4,15 @@
 
 ### 2.10-dev
 
+- fix: Danger classification re-queuing all chats on every server restart
+  - System event created during classification incremented `messageCount`, but `dangerClassifiedAtMessageCount` was stored before the event — causing a permanent off-by-one that triggered re-classification of every chat on every startup
+  - Reordered handler to create the system event first, then re-read the updated `messageCount` before storing the classification result
+
+- fix: Make safe danger classification sticky unless new messages are added
+  - Previously only dangerous classifications were sticky; safe chats were re-checked on every scan
+  - Now safe chats skip re-classification unless `messageCount` has increased since last classification
+  - Defense-in-depth: guards added in scheduled scan filter, memory trigger, and job handler
+
 - feat: Queue status badges in page toolbar
   - Compact badge group shows active job counts for memory, summarization, danger classification, and story background queues
   - Color-coded: blue (memory), green (summary), red (danger), dark gray (story background)

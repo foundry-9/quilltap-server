@@ -176,17 +176,10 @@ export async function handleChatDangerClassification(job: BackgroundJob): Promis
     payload.chatId
   );
 
-  // Update chat with classification results
-  const now = new Date().toISOString();
-  await repos.chats.update(payload.chatId, {
-    isDangerousChat: result.isDangerous,
-    dangerScore: result.score,
-    dangerCategories: result.categories.map(c => c.category),
-    dangerClassifiedAt: now,
-    dangerClassifiedAtMessageCount: chat.messageCount ?? 0,
-  });
-
-  // Create a system event for tracking
+  // Create a system event for tracking FIRST, since addMessage increments messageCount.
+  // We need to store dangerClassifiedAtMessageCount AFTER the system event so the
+  // count includes the classification event itself — otherwise the +1 from the system
+  // event triggers an infinite re-classification loop on every startup scan.
   if (result.usage) {
     await createSystemEvent(payload.chatId, {
       systemEventType: 'DANGER_CLASSIFICATION',
@@ -198,6 +191,20 @@ export async function handleChatDangerClassification(job: BackgroundJob): Promis
       modelName: cheapLLMSelection.modelName,
     });
   }
+
+  // Re-read chat to get the updated messageCount (after system event was added)
+  const updatedChat = await repos.chats.findById(payload.chatId);
+  const finalMessageCount = updatedChat?.messageCount ?? chat.messageCount ?? 0;
+
+  // Update chat with classification results
+  const now = new Date().toISOString();
+  await repos.chats.update(payload.chatId, {
+    isDangerousChat: result.isDangerous,
+    dangerScore: result.score,
+    dangerCategories: result.categories.map(c => c.category),
+    dangerClassifiedAt: now,
+    dangerClassifiedAtMessageCount: finalMessageCount,
+  });
 
   logger.info('[ChatDangerClassification] Chat classified', {
     jobId: job.id,
