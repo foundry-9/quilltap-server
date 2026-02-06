@@ -2,16 +2,20 @@
 
 ## Recent Changes
 
-### 2.11-dev
+### 2.10-dev
 
 - fix: Plugin loading fails in Turbopack production builds ("dynamic usage of require is not supported")
   - Replace `__non_webpack_require__` / bare `require` fallback with `createRequire` from `node:module` for Turbopack compatibility
   - Keep `__non_webpack_require__` as primary path for webpack (dev mode), `createRequire` as fallback for Turbopack/plain Node.js
   - Add `node:module` to webpack server externals and suppress `createRequire` parse warnings in `next.config.js`
   - Fixes: `plugin-initialization.ts`, `provider-registry.ts`, `next.config.js`
+  
 - fix: Dangerous content settings not persisting (PUT route handler missing `dangerousContentSettings` field)
+
 - fix: Image description fallback crash (`repos.users.getChatSettings` → `repos.chatSettings.findByUserId`)
+
 - refactor: Move "Image Prompt Expansion LLM" setting from Cheap LLM card to Dangerous Content Handling card
+
 - feat: Dangerous content handling system
   - Gatekeeper service classifies user messages for sensitive content using the Cheap LLM
   - Three modes: Off (default), Detect Only (flag content), Auto-Route (reroute to uncensored providers)
@@ -28,8 +32,6 @@
   - DANGER_CLASSIFICATION system event type for LLM log tracking
   - Fail-safe design: classification errors never block messages
   - Content hash caching for classification deduplication (200 entries, 5min TTL)
-
-### 2.10-dev
 
 - fix: Story backgrounds not generated on inline title updates
   - Title updates triggered via `context-summary.ts` (the inline path after message exchanges) never queued story background generation
