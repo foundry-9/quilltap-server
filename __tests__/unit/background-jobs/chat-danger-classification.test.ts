@@ -221,6 +221,45 @@ describe('handleChatDangerClassification', () => {
     expect(repositories.chats.update).not.toHaveBeenCalled();
   });
 
+  it('skips if chat already classified as safe and no new messages (sticky)', async () => {
+    repositories.chats.findById.mockResolvedValue({
+      ...baseChatMetadata,
+      isDangerousChat: false,
+      dangerScore: 0.1,
+      dangerClassifiedAt: '2026-01-01T00:00:00Z',
+      dangerClassifiedAtMessageCount: 10,
+      messageCount: 10,
+    });
+
+    await handleChatDangerClassification(buildJob());
+
+    expect(mockClassifyContent).not.toHaveBeenCalled();
+    expect(repositories.chats.update).not.toHaveBeenCalled();
+  });
+
+  it('re-classifies safe chat when new messages have been added', async () => {
+    repositories.chats.findById.mockResolvedValue({
+      ...baseChatMetadata,
+      isDangerousChat: false,
+      dangerScore: 0.1,
+      dangerClassifiedAt: '2026-01-01T00:00:00Z',
+      dangerClassifiedAtMessageCount: 8,
+      messageCount: 10,
+    });
+
+    mockClassifyContent.mockResolvedValue({
+      isDangerous: false,
+      score: 0.15,
+      categories: [],
+      usage: { promptTokens: 80, completionTokens: 30, totalTokens: 110 },
+    });
+
+    await handleChatDangerClassification(buildJob());
+
+    expect(mockClassifyContent).toHaveBeenCalled();
+    expect(repositories.chats.update).toHaveBeenCalled();
+  });
+
   it('uses concatenated messages when no context summary', async () => {
     repositories.chats.findById.mockResolvedValue({
       ...baseChatMetadata,

@@ -312,8 +312,8 @@ export async function triggerContextSummaryCheck(
  * Uses the compressed context summary to classify the entire chat.
  * Key behaviors:
  * - Bails if dangerous content mode is OFF
- * - Once classified as dangerous, stays dangerous (sticky)
- * - Re-checks when message count changes (new messages)
+ * - Once classified as dangerous, stays dangerous (sticky) — never re-checks
+ * - Once classified as safe, stays safe (sticky) unless new messages are added
  * - Skips if no context summary available yet
  */
 export async function triggerChatDangerClassification(

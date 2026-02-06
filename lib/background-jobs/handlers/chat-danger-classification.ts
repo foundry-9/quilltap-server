@@ -8,7 +8,7 @@
  * - Prefers compressed chat contextSummary as input
  * - Falls back to concatenated raw messages (truncated to 4000 chars) when no summary exists
  * - Once classified as dangerous, stays dangerous (sticky) — never re-checks
- * - If classified as NOT dangerous, re-checks when the chat changes
+ * - Once classified as safe, stays safe (sticky) unless new messages are added
  * - Bails if mode is OFF or no content available (no summary AND no messages)
  */
 
@@ -45,6 +45,19 @@ export async function handleChatDangerClassification(job: BackgroundJob): Promis
     logger.debug('[ChatDangerClassification] Chat already classified as dangerous (sticky), skipping', {
       jobId: job.id,
       chatId: payload.chatId,
+    });
+    return;
+  }
+
+  // Sticky: if already classified as safe and no new messages, skip re-check
+  if (chat.isDangerousChat === false &&
+      chat.dangerClassifiedAtMessageCount != null &&
+      (chat.messageCount ?? 0) <= chat.dangerClassifiedAtMessageCount) {
+    logger.debug('[ChatDangerClassification] Chat already classified as safe at current message count (sticky), skipping', {
+      jobId: job.id,
+      chatId: payload.chatId,
+      classifiedAtMessageCount: chat.dangerClassifiedAtMessageCount,
+      currentMessageCount: chat.messageCount,
     });
     return;
   }
