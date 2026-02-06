@@ -172,16 +172,34 @@ Tags are named when you create them. To change a tag's name:
 
 Consider your tag naming carefully before creating many tags!
 
-## Deleting Tags
+## Tag Management
 
-Tags are managed through their usage:
+Below the Tag Appearance section, you'll find the **Tag Management** section which lists every tag in your workspace.
 
-- Tags are created when you assign them to content
-- Tags are removed when no content uses them anymore
-- You can't manually delete tags in the customization interface
-- To remove a tag, simply remove it from all content
+### Viewing Tag Usage
 
-If you want to keep a tag but stop using it, you don't need to delete it—it will just appear in your Tags list but won't be used anywhere.
+Each tag row shows:
+
+- **Tag preview** — How the tag currently looks with its styling
+- **Usage count** — How many entities (characters, chats, profiles, files) use this tag
+- **Delete button** — Remove the tag entirely
+
+### Deleting Tags
+
+To delete a tag:
+
+1. Find the tag in the **Tag Management** list
+2. Click the **Delete** button on the tag's row
+3. A confirmation popover will appear showing how many items use the tag
+4. Click **Delete** to confirm, or **Cancel** to back out
+
+When you delete a tag:
+
+- The tag is removed from **all** entities that use it (characters, chats, connection profiles, image profiles, embedding profiles, and files)
+- The tag's visual style and quick-hide settings are permanently removed
+- This action cannot be undone
+
+Unused tags (showing "Unused") can be safely deleted without affecting any content.
 
 ## Organizing Your Tag System
 

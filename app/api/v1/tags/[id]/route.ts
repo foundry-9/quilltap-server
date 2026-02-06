@@ -36,14 +36,22 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
       return notFound('Tag');
     }
 
-    // Get usage counts
-    const allCharacters = await repos.characters.findAll();
-    const allChats = await repos.chats.findAll();
-    const allConnections = await repos.connections.findAll();
+    // Get usage counts across all taggable entity types
+    const [allCharacters, allChats, allConnections, allImageProfiles, allEmbeddingProfiles, allFiles] = await Promise.all([
+      repos.characters.findAll(),
+      repos.chats.findAll(),
+      repos.connections.findAll(),
+      repos.imageProfiles.findAll(),
+      repos.embeddingProfiles.findAll(),
+      repos.files.findAll(),
+    ]);
 
     const characterTags = allCharacters.filter(c => c.tags.includes(tag.id)).length;
     const chatTags = allChats.filter(c => c.tags.includes(tag.id)).length;
     const connectionProfileTags = allConnections.filter(c => c.tags.includes(tag.id)).length;
+    const imageProfileTags = allImageProfiles.filter(c => c.tags.includes(tag.id)).length;
+    const embeddingProfileTags = allEmbeddingProfiles.filter(c => c.tags.includes(tag.id)).length;
+    const fileTags = allFiles.filter(c => c.tags.includes(tag.id)).length;
 
     const enrichedTag = {
       ...tag,
@@ -51,7 +59,11 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
         characterTags,
         chatTags,
         connectionProfileTags,
+        imageProfileTags,
+        embeddingProfileTags,
+        fileTags,
       },
+      totalUsage: characterTags + chatTags + connectionProfileTags + imageProfileTags + embeddingProfileTags + fileTags,
     };
 
 
@@ -121,6 +133,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
       if (character.tags.includes(id)) {
         const updatedTags = character.tags.filter((t: string) => t !== id);
         await repos.characters.update(character.id, { tags: updatedTags });
+        logger.debug('[Tags v1] Removed tag from character', { tagId: id, characterId: character.id });
       }
     }
 
@@ -129,6 +142,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
       if (chat.tags.includes(id)) {
         const updatedTags = chat.tags.filter((t: string) => t !== id);
         await repos.chats.update(chat.id, { tags: updatedTags });
+        logger.debug('[Tags v1] Removed tag from chat', { tagId: id, chatId: chat.id });
       }
     }
 
@@ -137,6 +151,34 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
       if (connection.tags.includes(id)) {
         const updatedTags = connection.tags.filter((t: string) => t !== id);
         await repos.connections.update(connection.id, { tags: updatedTags });
+        logger.debug('[Tags v1] Removed tag from connection profile', { tagId: id, connectionId: connection.id });
+      }
+    }
+
+    const allImageProfiles = await repos.imageProfiles.findAll();
+    for (const profile of allImageProfiles) {
+      if (profile.tags.includes(id)) {
+        const updatedTags = profile.tags.filter((t: string) => t !== id);
+        await repos.imageProfiles.update(profile.id, { tags: updatedTags });
+        logger.debug('[Tags v1] Removed tag from image profile', { tagId: id, imageProfileId: profile.id });
+      }
+    }
+
+    const allEmbeddingProfiles = await repos.embeddingProfiles.findAll();
+    for (const profile of allEmbeddingProfiles) {
+      if (profile.tags.includes(id)) {
+        const updatedTags = profile.tags.filter((t: string) => t !== id);
+        await repos.embeddingProfiles.update(profile.id, { tags: updatedTags });
+        logger.debug('[Tags v1] Removed tag from embedding profile', { tagId: id, embeddingProfileId: profile.id });
+      }
+    }
+
+    const allFiles = await repos.files.findAll();
+    for (const file of allFiles) {
+      if (file.tags.includes(id)) {
+        const updatedTags = file.tags.filter((t: string) => t !== id);
+        await repos.files.update(file.id, { tags: updatedTags });
+        logger.debug('[Tags v1] Removed tag from file', { tagId: id, fileId: file.id });
       }
     }
 

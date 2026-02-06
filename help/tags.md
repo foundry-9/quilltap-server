@@ -157,6 +157,10 @@ In the Tags customization tab, you'll see:
 - **Quick-hide status** indicator for each tag
 - **Edit option** to customize each tag's appearance
 
+### Deleting Tags
+
+The **Tag Management** section at the bottom of the Tags tab lets you delete any tag. Each tag shows its usage count across all entity types. When deleted, the tag is automatically removed from all characters, chats, profiles, and files that use it. See the [Tag Customization](/help/tags-customization) page for full details.
+
 ### Organizing Your Tags
 
 Keep your tag system organized:

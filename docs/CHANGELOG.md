@@ -4,6 +4,20 @@
 
 ### 2.10-dev
 
+- feat: Tag deletion in Settings
+  - New "Tag Management" section in Settings > Tags tab lists all tags with usage counts
+  - Delete button with confirmation popover shows how many entities will be affected
+  - Deleting a tag cascades removal across all entity types
+
+- fix: Tag deletion cascade now covers all 6 entity types
+  - Previously only cascaded to characters, chats, and connection profiles
+  - Now also cascades to image profiles, embedding profiles, and files
+  - Added debug logging for each entity cleaned during cascade
+
+- fix: Tag usage counts now include all entity types
+  - GET endpoints for tags now count image profiles, embedding profiles, and files
+  - Added `totalUsage` computed field summing all 6 entity type counts
+
 - fix: Quick-hide dangerous chats toggle now works across entire app
   - Homepage Recent Chats, Character Conversations tab, and Project Chats sections now respect the toggle
   - Sidebar quick-hide button now appears when dangerous chats exist (previously required the toggle to already be on)

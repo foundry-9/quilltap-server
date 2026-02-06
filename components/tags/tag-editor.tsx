@@ -148,9 +148,10 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
     setLoading(true);
     try {
       const basePath = getApiBasePath();
-      const res = await fetch(`${basePath}?action=remove-tag&tagId=${tagId}`, {
+      const res = await fetch(`${basePath}?action=remove-tag`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tagId }),
       });
 
       if (!res.ok) {
