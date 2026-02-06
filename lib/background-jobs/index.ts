@@ -38,6 +38,7 @@ export {
   enqueueMemoryExtractionBatch,
   getJobStatus,
   getQueueStats,
+  getActiveCountsByType,
   cancelJob,
   getPendingJobsForChat,
   cleanupOldJobs,

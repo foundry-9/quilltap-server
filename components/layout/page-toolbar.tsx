@@ -11,6 +11,7 @@
 
 import { SearchBar } from '@/components/search/search-bar'
 import { NavContentWidthToggle } from '@/components/dashboard/nav-content-width-toggle'
+import { QueueStatusBadges } from '@/components/layout/queue-status-badges'
 import { usePageToolbarOptional } from '@/components/providers/page-toolbar-provider'
 
 export function PageToolbar() {
@@ -29,8 +30,9 @@ export function PageToolbar() {
         <SearchBar />
       </div>
 
-      {/* Right section: page-specific content + full-width toggle */}
+      {/* Right section: queue status + page-specific content + full-width toggle */}
       <div className="qt-page-toolbar-right">
+        <QueueStatusBadges />
         {pageToolbar?.rightContent}
         <NavContentWidthToggle />
       </div>

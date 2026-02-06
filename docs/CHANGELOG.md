@@ -4,6 +4,13 @@
 
 ### 2.10-dev
 
+- feat: Queue status badges in page toolbar
+  - Compact badge group shows active job counts for memory, summarization, danger classification, and story background queues
+  - Color-coded: blue (memory), green (summary), red (danger), dark gray (story background)
+  - Fully themeable via `qt-queue-badge-*` CSS variables
+  - Event-driven polling: starts on route change or job enqueue, stops when all counts reach zero
+  - New `activeByType` field in GET /api/v1/system/jobs response
+
 - feat: Tag deletion in Settings
   - New "Tag Management" section in Settings > Tags tab lists all tags with usage counts
   - Delete button with confirmation popover shows how many entities will be affected

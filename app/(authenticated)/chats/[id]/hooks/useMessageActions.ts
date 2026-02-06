@@ -3,6 +3,7 @@
 import { useCallback, useState } from 'react'
 import { showConfirmation } from '@/lib/alert'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import type { Message, MemoryCascadeAction, ChatSettings } from '../types'
 
 /** Info returned when delete requires memory cascade confirmation */
@@ -316,6 +317,7 @@ export function useMessageActions(
 
       await res.json()
       await fetchChat()
+      notifyQueueChange()
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to generate alternative response')
     }

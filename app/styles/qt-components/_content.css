@@ -167,6 +167,74 @@
   }
 
   /* ==========================================================================
+     QUEUE STATUS BADGE GROUP
+     ========================================================================== */
+
+  /**
+   * Queue status badge group container
+   * Displays tightly grouped badges showing active job counts per queue type
+   */
+  .qt-queue-badge-group {
+    @apply inline-flex items-center overflow-hidden flex-shrink-0;
+    gap: var(--qt-queue-badge-group-gap);
+    border-radius: var(--qt-queue-badge-group-radius);
+  }
+
+  /**
+   * Individual queue badge - shared base
+   */
+  .qt-queue-badge,
+  .qt-queue-badge-memory,
+  .qt-queue-badge-summary,
+  .qt-queue-badge-danger,
+  .qt-queue-badge-story {
+    @apply inline-flex items-center gap-1 flex-shrink-0 leading-none whitespace-nowrap;
+    padding: var(--qt-queue-badge-padding-y) var(--qt-queue-badge-padding-x);
+    font-size: var(--qt-queue-badge-font-size);
+    font-weight: var(--qt-queue-badge-font-weight);
+    transition: opacity 200ms ease;
+  }
+
+  /**
+   * Queue badge idle state (count is 0)
+   */
+  .qt-queue-badge-idle {
+    opacity: var(--qt-queue-badge-idle-opacity);
+  }
+
+  /**
+   * Memory queue badge (blue)
+   */
+  .qt-queue-badge-memory {
+    background: var(--qt-queue-badge-memory-bg);
+    color: var(--qt-queue-badge-memory-fg);
+  }
+
+  /**
+   * Summarization queue badge (green)
+   */
+  .qt-queue-badge-summary {
+    background: var(--qt-queue-badge-summary-bg);
+    color: var(--qt-queue-badge-summary-fg);
+  }
+
+  /**
+   * Danger classification queue badge (red)
+   */
+  .qt-queue-badge-danger {
+    background: var(--qt-queue-badge-danger-bg);
+    color: var(--qt-queue-badge-danger-fg);
+  }
+
+  /**
+   * Story background queue badge (dark gray)
+   */
+  .qt-queue-badge-story {
+    background: var(--qt-queue-badge-story-bg);
+    color: var(--qt-queue-badge-story-fg);
+  }
+
+  /* ==========================================================================
      TAG BADGES
      ========================================================================== */
 

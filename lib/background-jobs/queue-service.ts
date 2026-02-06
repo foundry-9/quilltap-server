@@ -435,6 +435,14 @@ export async function getQueueStats(userId?: string): Promise<QueueStats> {
 }
 
 /**
+ * Get active (PENDING + PROCESSING) job counts grouped by type
+ */
+export async function getActiveCountsByType(userId?: string): Promise<Record<string, number>> {
+  const repos = getRepositories();
+  return repos.backgroundJobs.getActiveCountsByType(userId);
+}
+
+/**
  * Cancel a pending job
  */
 export async function cancelJob(jobId: string): Promise<boolean> {

@@ -48,6 +48,7 @@ import Avatar, { getAvatarSrc } from '@/components/ui/Avatar'
 import { useChatContext } from '@/components/providers/chat-context'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { usePageToolbar } from '@/components/providers/page-toolbar-provider'
+import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
 import {
   type TurnState,
@@ -1546,6 +1547,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       if (res.ok) {
         const data = await res.json()
         showSuccessToast(`Queued ${data.jobCount} memory extraction jobs`)
+        notifyQueueChange()
       } else {
         const errorData = await res.json()
         showErrorToast(`Failed to queue memory extraction: ${errorData.error}`)
@@ -1598,6 +1600,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       }
 
       showSuccessToast('Story background regeneration queued')
+      notifyQueueChange()
 
       // Start polling for the new background
       startBackgroundPolling()
@@ -1942,6 +1945,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 scrollOnStreamComplete()
                 // Refresh chat to get tool messages
                 await fetchChat()
+                // Notify queue badges that jobs may have been enqueued
+                notifyQueueChange()
                 // Clear tool status after a short delay
                 setTimeout(() => {
                   setToolExecutionStatus(null)

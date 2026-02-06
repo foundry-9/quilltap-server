@@ -426,6 +426,36 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
   }
 
   /**
+   * Get active (PENDING + PROCESSING) job counts grouped by job type
+   */
+  async getActiveCountsByType(userId?: string): Promise<Record<string, number>> {
+    try {
+      const filter: QueryFilter = {
+        status: { $in: ['PENDING', 'PROCESSING'] },
+      };
+      if (userId) {
+        (filter as any).userId = userId;
+      }
+
+      const jobs = await this.findByFilter(filter);
+      const counts: Record<string, number> = {};
+
+      for (const job of jobs) {
+        counts[job.type] = (counts[job.type] || 0) + 1;
+      }
+
+      logger.debug('Got active job counts by type', { userId, counts });
+      return counts;
+    } catch (error) {
+      logger.error('Error getting active counts by type', {
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return {};
+    }
+  }
+
+  /**
    * Cleanup old completed jobs
    */
   async cleanupOldJobs(olderThan: Date): Promise<number> {
