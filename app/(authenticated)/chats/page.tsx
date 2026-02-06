@@ -59,6 +59,7 @@ interface Chat {
     id: string
     filepath: string
   } | null
+  isDangerousChat?: boolean
   _count: {
     messages: number
   }
@@ -97,6 +98,7 @@ function transformChatToCardData(chat: Chat): ChatCardData {
     project: chat.project,
     persona,
     storyBackgroundUrl: chat.storyBackground?.filepath || null,
+    isDangerousChat: chat.isDangerousChat === true,
   }
 }
 
@@ -132,7 +134,7 @@ export default function ChatsPage() {
       }
 
       // Check danger filter using full chat metadata
-      if (hideDangerousChats && (chat as any).isDangerousChat === true) {
+      if (hideDangerousChats && chat.isDangerousChat === true) {
         return false
       }
 

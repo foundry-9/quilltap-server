@@ -111,19 +111,33 @@ export async function handleChatDangerClassification(job: BackgroundJob): Promis
     return;
   }
 
-  // Get connection profile
-  const connectionProfile = await repos.connections.findById(payload.connectionProfileId);
+  // Get available profiles for cheap LLM selection
+  const availableProfiles = await repos.connections.findByUserId(job.userId);
+
+  // Get connection profile, falling back to first available if the original was deleted
+  let connectionProfile = await repos.connections.findById(payload.connectionProfileId);
   if (!connectionProfile) {
-    logger.warn('[ChatDangerClassification] Connection profile not found, skipping', {
+    logger.warn('[ChatDangerClassification] Connection profile not found, trying fallback', {
       jobId: job.id,
       chatId: payload.chatId,
       connectionProfileId: payload.connectionProfileId,
     });
-    return;
-  }
 
-  // Get available profiles for cheap LLM selection
-  const availableProfiles = await repos.connections.findByUserId(job.userId);
+    if (availableProfiles.length > 0) {
+      connectionProfile = availableProfiles[0];
+      logger.debug('[ChatDangerClassification] Using fallback connection profile', {
+        jobId: job.id,
+        chatId: payload.chatId,
+        fallbackProfileId: connectionProfile.id,
+      });
+    } else {
+      logger.warn('[ChatDangerClassification] No available connection profiles, skipping', {
+        jobId: job.id,
+        chatId: payload.chatId,
+      });
+      return;
+    }
+  }
 
   // Convert settings to config
   const cheapLLMConfig: CheapLLMConfig = {

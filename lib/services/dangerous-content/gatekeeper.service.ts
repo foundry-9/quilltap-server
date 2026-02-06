@@ -263,7 +263,7 @@ function parseClassificationResponse(
 
     const parsed = JSON.parse(cleanContent)
 
-    const score = typeof parsed.score === 'number' ? parsed.score : 0
+    const overallScore = typeof parsed.score === 'number' ? parsed.score : 0
     const categories = Array.isArray(parsed.categories)
       ? parsed.categories.map((c: Record<string, unknown>) => ({
           category: String(c.category || 'unknown'),
@@ -272,9 +272,19 @@ function parseClassificationResponse(
         }))
       : []
 
+    // Determine danger from multiple signals:
+    // 1. Overall score meets threshold
+    // 2. Any individual category score meets threshold
+    // 3. The LLM explicitly said isDangerous: true
+    const maxCategoryScore = categories.length > 0
+      ? Math.max(...categories.map((c: { score: number }) => c.score))
+      : 0
+    const effectiveScore = Math.max(overallScore, maxCategoryScore)
+    const llmSaysDangerous = parsed.isDangerous === true
+
     return {
-      isDangerous: score >= threshold,
-      score,
+      isDangerous: effectiveScore >= threshold || llmSaysDangerous,
+      score: effectiveScore,
       categories,
     }
   } catch {

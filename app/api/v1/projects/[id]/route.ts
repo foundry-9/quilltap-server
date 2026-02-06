@@ -221,8 +221,12 @@ async function handleListChats(req: NextRequest, context: AuthenticatedContext, 
     const allChats = await repos.chats.findAll();
     const projectChats = allChats.filter(c => c.projectId === id);
 
-    // Sort by updatedAt descending
-    projectChats.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    // Sort by lastMessageAt descending, falling back to updatedAt for chats without messages
+    projectChats.sort((a, b) => {
+      const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : new Date(a.updatedAt).getTime();
+      const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : new Date(b.updatedAt).getTime();
+      return bTime - aTime;
+    });
 
     // Get total count before pagination
     const total = projectChats.length;
@@ -295,6 +299,8 @@ async function handleListChats(req: NextRequest, context: AuthenticatedContext, 
           participants: participants.filter(Boolean),
           tags: chatTags,
           storyBackground,
+          isDangerousChat: chat.isDangerousChat === true,
+          lastMessageAt: chat.lastMessageAt ?? null,
           updatedAt: chat.updatedAt,
           createdAt: chat.createdAt,
         };

@@ -41,6 +41,7 @@ interface Chat {
       name: string
     }
   }>
+  isDangerousChat?: boolean
   _count?: {
     messages: number
   }
@@ -82,6 +83,7 @@ function transformChatToCardData(chat: Chat): ChatCardData {
     persona: chat.persona || null,
     previewText: getPreviewText(chat.messages),
     storyBackgroundUrl: chat.storyBackground?.filepath || null,
+    isDangerousChat: chat.isDangerousChat === true,
   }
 }
 

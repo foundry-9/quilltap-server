@@ -262,6 +262,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
               storyBackground,
               messages: recentMessages,
               tags: tagData.filter((tag): tag is { tag: { id: string; name: string } } => tag !== null),
+              isDangerousChat: chat.isDangerousChat === true,
               _count: {
                 messages: messageCount,
               },

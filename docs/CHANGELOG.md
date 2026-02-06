@@ -4,6 +4,30 @@
 
 ### 2.12-dev
 
+- feat: Danger indicator on all chat listings
+  - Subtle destructive-colored asterisk (*) shown next to message count on dangerous chats
+  - Displayed on ChatCard (chats page, project pages, character conversations), homepage recent chats, and both sidebar sections
+  - `isDangerousChat` field added to all chat list API responses (chats, project chats, character chats)
+  - Added to enrichment service, homepage types, and all transform functions
+
+- fix: Danger classification not processing chats with deleted connection profiles
+  - Scheduled scan now validates participant connection profile IDs against existing profiles
+  - Classification handler falls back to first available profile instead of silently skipping
+  - Safe chats are now re-checked when message count increases since last classification
+
+- fix: Danger classification scoring ignoring per-category scores
+  - Parser now uses the maximum of overall score and highest per-category score
+  - Also respects the LLM's explicit `isDangerous: true` response
+  - Any single category meeting the threshold is enough to flag the chat
+
+- fix: Project chats sorted by metadata activity instead of last message
+  - Project chats API now sorts by `lastMessageAt` instead of `updatedAt`
+  - Project chats API now returns `lastMessageAt` for correct date display on ChatCard
+
+- fix: Job queue processor can get permanently stuck on hanging LLM calls
+  - Per-job execution timeout (3 minutes) via Promise.race prevents indefinite hangs
+  - Periodic stuck job recovery runs every 5 minutes (previously only on startup)
+
 - fix: Chat timestamps now always reflect the last actual message sent or received
   - `addMessage()` and `addMessages()` no longer update `lastMessageAt` or `updatedAt` for system events
   - Base repository `_update()` respects explicit `updatedAt` from callers instead of always auto-setting

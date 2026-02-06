@@ -36,11 +36,13 @@ function transformProjectChatToCardData(chat: ProjectChat): ChatCardData {
     messageCount: chat.messageCount,
     participants: chat.participants,
     tags: chat.tags,
+    lastMessageAt: chat.lastMessageAt || undefined,
     updatedAt: chat.updatedAt,
     // Project is null since we're already in project context
     project: null,
     persona: null,
     storyBackgroundUrl: chat.storyBackground?.filepath || null,
+    isDangerousChat: chat.isDangerousChat === true,
   }
 }
 

@@ -59,7 +59,7 @@ export function RecentChatItem({ chat }: RecentChatItemProps) {
           {formatMessageTime(chat.lastMessageAt ?? chat.updatedAt)}
         </span>
         <span className="qt-meta text-primary">
-          {chat._count.messages} msgs
+          {chat._count.messages} msgs{chat.isDangerousChat && <span className="qt-text-destructive" title="Flagged as dangerous" aria-label="Flagged as dangerous">*</span>}
         </span>
       </div>
     </Link>

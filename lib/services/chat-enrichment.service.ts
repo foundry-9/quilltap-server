@@ -147,6 +147,7 @@ export interface EnrichedChatSummary {
   tags: EnrichedTag[]
   project: EnrichedProject | null
   storyBackground: EnrichedStoryBackground | null
+  isDangerousChat: boolean
   _count: { messages: number }
   _allTagIds: string[] // Internal field for filtering
 }
@@ -431,6 +432,7 @@ export async function enrichChatForList(
     tags,
     project,
     storyBackground,
+    isDangerousChat: chat.isDangerousChat === true,
     _count: { messages: messageCount },
     _allTagIds: allTagIds,
   }

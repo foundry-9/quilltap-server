@@ -125,10 +125,19 @@ export async function runScheduledDangerScan(): Promise<{ usersProcessed: number
       const chats = await repos.chats.findByUserId(settings.userId);
       totalChats += chats.length;
 
-      // Filter to unclassified chats (isDangerousChat is null or undefined)
-      const unclassified = chats.filter(
-        (chat) => chat.isDangerousChat == null
-      );
+      // Filter to chats needing classification:
+      // 1. Never classified (isDangerousChat is null/undefined)
+      // 2. Classified as safe but message count has changed since classification
+      //    (dangerous chats are sticky and never re-checked)
+      const unclassified = chats.filter((chat) => {
+        if (chat.isDangerousChat == null) return true;
+        if (chat.isDangerousChat === false &&
+            chat.dangerClassifiedAtMessageCount != null &&
+            (chat.messageCount ?? 0) > chat.dangerClassifiedAtMessageCount) {
+          return true;
+        }
+        return false;
+      });
 
       if (unclassified.length === 0) {
         usersProcessed++;
@@ -138,15 +147,18 @@ export async function runScheduledDangerScan(): Promise<{ usersProcessed: number
       // Get available connection profiles for this user
       const availableProfiles = await repos.connections.findByUserId(settings.userId);
 
+      // Build a set of valid profile IDs for quick lookup
+      const validProfileIds = new Set(availableProfiles.map((p) => p.id));
+
       for (const chat of unclassified) {
         // Find a connection profile ID:
-        // 1. First LLM-controlled participant with a connectionProfileId
+        // 1. First LLM-controlled participant with a connectionProfileId that still exists
         // 2. Fall back to first available profile from user's profiles
         let connectionProfileId: string | null = null;
 
         if (chat.participants && chat.participants.length > 0) {
           const llmParticipant = chat.participants.find(
-            (p) => p.controlledBy !== 'user' && p.connectionProfileId
+            (p) => p.controlledBy !== 'user' && p.connectionProfileId && validProfileIds.has(p.connectionProfileId)
           );
           if (llmParticipant?.connectionProfileId) {
             connectionProfileId = llmParticipant.connectionProfileId;

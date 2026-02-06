@@ -43,11 +43,13 @@ export interface ProjectChat {
   messageCount: number
   participants: ProjectChatParticipant[]
   tags?: ProjectChatTag[]
+  lastMessageAt?: string | null
   updatedAt: string
   storyBackground?: {
     id: string
     filepath: string
   } | null
+  isDangerousChat?: boolean
 }
 
 export interface ProjectFile {

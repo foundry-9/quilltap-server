@@ -294,8 +294,26 @@ describe('handleChatDangerClassification', () => {
     expect(repositories.chats.update).not.toHaveBeenCalled();
   });
 
-  it('skips if connection profile not found', async () => {
+  it('falls back to available profile when connection profile not found', async () => {
     repositories.connections.findById.mockResolvedValue(null);
+
+    mockClassifyContent.mockResolvedValue({
+      isDangerous: false,
+      score: 0.1,
+      categories: [],
+      usage: { promptTokens: 80, completionTokens: 30, totalTokens: 110 },
+    });
+
+    await handleChatDangerClassification(buildJob());
+
+    // Should still classify using the fallback profile from findByUserId
+    expect(mockClassifyContent).toHaveBeenCalled();
+    expect(repositories.chats.update).toHaveBeenCalled();
+  });
+
+  it('skips if connection profile not found and no available profiles', async () => {
+    repositories.connections.findById.mockResolvedValue(null);
+    repositories.connections.findByUserId.mockResolvedValue([]);
 
     await handleChatDangerClassification(buildJob());
 

@@ -68,6 +68,7 @@ export default async function Home() {
     title: chat.title,
     updatedAt: chat.updatedAt,
     lastMessageAt: chat.lastMessageAt,
+    isDangerousChat: chat.isDangerousChat,
     storyBackgroundUrl: chat.storyBackground?.filepath || null,
     participants: chat.participants.map(p => ({
       id: p.id,

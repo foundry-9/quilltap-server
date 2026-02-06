@@ -67,6 +67,8 @@ export interface ChatCardData {
   previewText?: string | null
   /** Story background image URL - displayed instead of avatars when present */
   storyBackgroundUrl?: string | null
+  /** Whether this chat has been classified as dangerous */
+  isDangerousChat?: boolean
 }
 
 export interface ChatCardProps {
@@ -262,6 +264,9 @@ export function ChatCard({
               <span className="chat-card__badge inline-flex items-center rounded-full bg-primary/15 px-3 py-1 text-sm font-semibold text-primary flex-shrink-0">
                 {chat.messageCount}
               </span>
+              {chat.isDangerousChat && (
+                <span className="qt-text-destructive text-sm flex-shrink-0" title="Flagged as dangerous" aria-label="Flagged as dangerous">*</span>
+              )}
             </div>
 
             {/* Metadata row */}

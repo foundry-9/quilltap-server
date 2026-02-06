@@ -112,6 +112,9 @@ function ChatItem({
               {messageCount > 999 ? '999+' : messageCount}
             </span>
           )}
+          {chat.isDangerous && (
+            <span className="qt-text-destructive text-xs flex-shrink-0" title="Flagged as dangerous" aria-label="Flagged as dangerous">*</span>
+          )}
         </>
       )}
     </Link>
