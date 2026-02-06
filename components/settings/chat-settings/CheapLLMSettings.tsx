@@ -121,13 +121,13 @@ export function CheapLLMSettings({
           </select>
         </div>
 
-        {/* Image Prompt Expansion LLM Override */}
+        {/* Uncensored Image Prompt Expansion LLM Override */}
         <div>
           <label className="block qt-text-label mb-2">
-            Image Prompt Expansion LLM (Optional)
+            Image Prompt Expansion LLM (Uncensored - Optional)
           </label>
           <p className="qt-text-xs mb-2">
-            Override the cheap LLM specifically for image prompt crafting. A more capable model may produce better image generation prompts with richer descriptions.
+            When an image prompt is flagged as dangerous, this profile is used for prompt expansion instead of the standard cheap LLM. Select an uncensored-compatible model that can handle sensitive content.
           </p>
           <select
             value={settings?.cheapLLMSettings.imagePromptProfileId || ''}

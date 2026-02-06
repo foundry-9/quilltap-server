@@ -2,6 +2,25 @@
 
 ## Recent Changes
 
+### 2.11-dev
+
+- feat: Dangerous content handling system
+  - Gatekeeper service classifies user messages for sensitive content using the Cheap LLM
+  - Three modes: Off (default), Detect Only (flag content), Auto-Route (reroute to uncensored providers)
+  - Provider routing service resolves uncensored-compatible profiles for flagged content
+  - Settings resolver follows existing cascade pattern (global only for v1)
+  - Orchestrator integration with streaming status events (classifying, rerouting)
+  - Settings UI with mode selector, threshold slider, scan toggles, profile dropdowns, display options
+  - Connection profiles and image profiles gain "Uncensored-Compatible" checkbox
+  - Message display with DangerFlagBadge (category badges, rerouted indicator, override button)
+  - DangerContentWrapper with Show/Blur/Collapse display modes
+  - Override API endpoint to mark danger flags as user-overridden
+  - Database migration adds `dangerousContentSettings` to chat_settings, `isDangerousCompatible` to profiles
+  - Image generation handler integration: classifies user image prompts and expanded prompts, reroutes to uncensored image providers
+  - DANGER_CLASSIFICATION system event type for LLM log tracking
+  - Fail-safe design: classification errors never block messages
+  - Content hash caching for classification deduplication (200 entries, 5min TTL)
+
 ### 2.10-dev
 
 - fix: Story backgrounds not generated on inline title updates

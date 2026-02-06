@@ -63,6 +63,8 @@ import { addAgentModeFieldsMigration } from './add-agent-mode-fields';
 import { addStoryBackgroundsFieldsMigration } from './add-story-backgrounds-fields';
 // Add imageProfileId field to chats (move from per-participant to per-chat)
 import { addChatImageProfileFieldMigration } from './add-chat-image-profile-field';
+// Add dangerous content handling fields
+import { addDangerousContentFieldsMigration } from './add-dangerous-content-fields';
 
 /**
  * All available migrations.
@@ -121,6 +123,8 @@ export const migrations: Migration[] = [
   addStoryBackgroundsFieldsMigration,
   // Add imageProfileId field to chats (per-chat instead of per-participant)
   addChatImageProfileFieldMigration,
+  // Add dangerous content handling fields
+  addDangerousContentFieldsMigration,
 ];
 
 export {
@@ -174,4 +178,6 @@ export {
   addStoryBackgroundsFieldsMigration,
   // Add imageProfileId field to chats (per-chat instead of per-participant)
   addChatImageProfileFieldMigration,
+  // Add dangerous content handling fields
+  addDangerousContentFieldsMigration,
 };

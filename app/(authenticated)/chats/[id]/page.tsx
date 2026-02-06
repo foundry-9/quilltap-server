@@ -1223,6 +1223,20 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
   }, [fetchChat, reattributeDialogState?.messageId])
 
+  const handleOverrideDangerFlag = useCallback(async (messageId: string) => {
+    if (!chat) return
+    try {
+      const res = await fetch(`/api/v1/chats/${chat.id}/messages/${messageId}?action=override-danger-flag`, {
+        method: 'POST',
+      })
+      if (res.ok) {
+        await fetchChat()
+      }
+    } catch (err) {
+      console.error('Failed to override danger flag', err)
+    }
+  }, [chat, fetchChat])
+
   const handleRemoveCharacter = useCallback(async (participantId: string) => {
     const participant = participantData.find(p => p.id === participantId)
     const characterName = participant?.character?.name || 'This character'
@@ -2198,6 +2212,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                       isPaused={isPaused}
                       onTogglePause={togglePause}
                       tokenDisplaySettings={chatSettings?.tokenDisplaySettings}
+                      dangerousContentSettings={chatSettings?.dangerousContentSettings}
+                      onOverrideDangerFlag={handleOverrideDangerFlag}
                       character={getFirstCharacter() ?? undefined}
                       onEditStart={messageActions.startEdit}
                       onEditSave={messageActions.saveEdit}

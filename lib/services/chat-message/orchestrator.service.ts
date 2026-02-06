@@ -96,6 +96,16 @@ import {
   generateIterationSummary,
   type ResolvedAgentMode,
 } from './agent-mode-resolver.service'
+import {
+  resolveDangerousContentSettings,
+} from '@/lib/services/dangerous-content/resolver.service'
+import {
+  classifyContent as classifyDangerousContent,
+} from '@/lib/services/dangerous-content/gatekeeper.service'
+import {
+  resolveProviderForDangerousContent,
+} from '@/lib/services/dangerous-content/provider-routing.service'
+import type { DangerFlag } from '@/lib/schemas/chat.types'
 
 const logger = createServiceLogger('ChatMessageOrchestrator')
 
@@ -297,6 +307,121 @@ async function processMessage(
   // Determine if compression is actually enabled for this request
   const compressionEnabled = !!(contextCompressionSettings.enabled && cheapLLMSelection && !bypassCompression)
 
+  // ============================================================================
+  // Dangerous Content Classification & Routing
+  // ============================================================================
+
+  let dangerFlags: DangerFlag[] | undefined
+  // Effective profile/key - may be overridden by dangerous content routing
+  let effectiveProfile = connectionProfile
+  let effectiveApiKey = apiKey
+
+  const dangerousContentResolved = resolveDangerousContentSettings(chatSettings)
+  const dangerSettings = dangerousContentResolved.settings
+
+  if (dangerSettings.mode !== 'OFF' && dangerSettings.scanTextChat && !isContinueMode && options.content && cheapLLMSelection) {
+    try {
+      // Send classification status
+      safeEnqueue(controller, encodeStatusEvent(encoder, {
+        stage: 'classifying',
+        message: 'Checking content...',
+        characterName: character.name,
+        characterId: character.id,
+      }))
+
+      const classificationResult = await classifyDangerousContent(
+        options.content,
+        cheapLLMSelection,
+        userId,
+        dangerSettings,
+        chatId
+      )
+
+      if (classificationResult.isDangerous) {
+        // Build danger flags for the message
+        dangerFlags = classificationResult.categories.map(cat => ({
+          category: cat.category,
+          score: cat.score,
+          userOverridden: false,
+          wasRerouted: false,
+        }))
+
+        logger.info('[DangerousContent] User message classified as dangerous', {
+          chatId,
+          score: classificationResult.score,
+          categories: classificationResult.categories.map(c => c.category),
+          mode: dangerSettings.mode,
+        })
+
+        // If AUTO_ROUTE, try to reroute to uncensored provider
+        if (dangerSettings.mode === 'AUTO_ROUTE') {
+          safeEnqueue(controller, encodeStatusEvent(encoder, {
+            stage: 'rerouting',
+            message: 'Routing to uncensored provider...',
+            characterName: character.name,
+            characterId: character.id,
+          }))
+
+          const routeResult = await resolveProviderForDangerousContent(
+            effectiveProfile,
+            effectiveApiKey,
+            dangerSettings,
+            userId
+          )
+
+          if (routeResult.rerouted) {
+            effectiveProfile = routeResult.connectionProfile
+            effectiveApiKey = routeResult.apiKey
+
+            // Update danger flags with routing info
+            dangerFlags = dangerFlags.map(flag => ({
+              ...flag,
+              wasRerouted: true,
+              reroutedProvider: routeResult.connectionProfile.provider,
+              reroutedModel: routeResult.connectionProfile.modelName,
+            }))
+
+            logger.info('[DangerousContent] Rerouted to uncensored provider', {
+              chatId,
+              originalProfile: connectionProfile.name,
+              uncensoredProfile: routeResult.connectionProfile.name,
+              reason: routeResult.reason,
+            })
+          } else {
+            logger.warn('[DangerousContent] No uncensored provider available, using original', {
+              chatId,
+              reason: routeResult.reason,
+            })
+          }
+        }
+
+        // Save DANGER_CLASSIFICATION system event for token tracking
+        if (classificationResult.usage) {
+          const classificationEvent = {
+            id: crypto.randomUUID(),
+            type: 'system' as const,
+            systemEventType: 'DANGER_CLASSIFICATION' as const,
+            description: `Content classified: score ${classificationResult.score.toFixed(2)}, categories: ${classificationResult.categories.map(c => c.category).join(', ')}`,
+            promptTokens: classificationResult.usage.promptTokens,
+            completionTokens: classificationResult.usage.completionTokens,
+            totalTokens: classificationResult.usage.totalTokens,
+            provider: cheapLLMSelection.provider,
+            modelName: cheapLLMSelection.modelName,
+            createdAt: new Date().toISOString(),
+          }
+          await repos.chats.addMessage(chatId, classificationEvent)
+        }
+
+      }
+    } catch (error) {
+      // Fail safe - never block on classification errors
+      logger.error('[DangerousContent] Classification failed, continuing with original provider', {
+        chatId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
   // Get roleplay template
   const roleplayTemplate = await getRoleplayTemplate(repos, chat, chatSettings ? { defaultRoleplayTemplateId: chatSettings.defaultRoleplayTemplateId ?? undefined } : null)
 
@@ -452,6 +577,19 @@ async function processMessage(
     for (const file of fileProcessing.attachedFiles) {
       await repos.files.addLink(file.id, userMessageId)
     }
+
+    // Attach dangerFlags to the saved user message
+    if (dangerFlags && dangerFlags.length > 0) {
+      try {
+        await repos.chats.updateMessage(chatId, userMessageId, { dangerFlags })
+      } catch (updateError) {
+        logger.warn('[DangerousContent] Failed to attach dangerFlags to user message', {
+          chatId,
+          messageId: userMessageId,
+          error: updateError instanceof Error ? updateError.message : String(updateError),
+        })
+      }
+    }
   }
 
   // Build final user message content
@@ -475,13 +613,13 @@ async function processMessage(
   // Check for pseudo-tools
   const enabledToolOptions = determineEnabledToolOptions(
     imageProfileId,
-    connectionProfile.allowWebSearch
+    effectiveProfile.allowWebSearch
   )
 
   // Build tools (include request_full_context when compression is enabled, submit_final_response when agent mode is enabled)
   // Always pass disabledTools and disabledToolGroups for filtering
   const { tools, modelSupportsNativeTools, useNativeWebSearch } = await buildTools(
-    connectionProfile,
+    effectiveProfile,
     imageProfileId,
     imageProfile,
     userId,
@@ -500,13 +638,13 @@ async function processMessage(
   let toolInstructions: string | undefined
   if (usePseudoTools) {
     toolInstructions = buildPseudoToolSystemInstructions(enabledToolOptions)
-    logPseudoToolUsage(connectionProfile.provider, connectionProfile.modelName, enabledToolOptions)
+    logPseudoToolUsage(effectiveProfile.provider, effectiveProfile.modelName, enabledToolOptions)
   } else if (actualTools.length > 0) {
     toolInstructions = buildNativeToolSystemInstructions()
   }
 
   // Build message context
-  const modelParams = connectionProfile.parameters as Record<string, unknown>
+  const modelParams = effectiveProfile.parameters as Record<string, unknown>
   const contextChatSettings = chatSettings ? {
     cheapLLMSettings: chatSettings.cheapLLMSettings ? {
       embeddingProfileId: chatSettings.cheapLLMSettings.embeddingProfileId ?? undefined,
@@ -579,7 +717,7 @@ async function processMessage(
       chat,
       character,
       characterParticipant,
-      connectionProfile,
+      connectionProfile: effectiveProfile,
       persona,
       isMultiCharacter,
       participantCharacters,
@@ -697,7 +835,7 @@ async function processMessage(
   // Send debug info
   controller.enqueue(encodeDebugInfo(encoder, {
     builtContext,
-    connectionProfile,
+    connectionProfile: effectiveProfile,
     modelParams,
     messages: formattedMessages.map(m => ({
       role: m.role,
@@ -739,8 +877,8 @@ async function processMessage(
   try {
     for await (const chunk of streamMessage({
       messages: formattedMessages,
-      connectionProfile,
-      apiKey,
+      connectionProfile: effectiveProfile,
+      apiKey: effectiveApiKey,
       modelParams,
       tools: actualTools,
       useNativeWebSearch,
@@ -779,8 +917,8 @@ async function processMessage(
     if (isRecoverableRequestError(streamingError)) {
       logger.info('Recoverable request error detected, attempting recovery', {
         chatId,
-        provider: connectionProfile.provider,
-        model: connectionProfile.modelName,
+        provider: effectiveProfile.provider,
+        model: effectiveProfile.modelName,
         attachmentCount: fileProcessing.attachedFiles.length,
         error: streamingError instanceof Error ? streamingError.message : String(streamingError),
       })
@@ -789,8 +927,8 @@ async function processMessage(
         controller,
         encoder,
         character,
-        connectionProfile,
-        apiKey,
+        connectionProfile: effectiveProfile,
+        apiKey: effectiveApiKey,
         attachedFiles: fileProcessing.attachedFiles,
         originalMessage: options.content,
         error: streamingError,
@@ -833,7 +971,7 @@ async function processMessage(
 
   // Tool call loop
   while (currentRawResponse && toolIterations < effectiveMaxTurns) {
-    const toolCalls = detectToolCallsInResponse(currentRawResponse, connectionProfile.provider)
+    const toolCalls = detectToolCallsInResponse(currentRawResponse, effectiveProfile.provider)
 
     if (toolCalls.length === 0) break
 
@@ -929,8 +1067,8 @@ async function processMessage(
 
     for await (const chunk of streamMessage({
       messages: currentMessages,
-      connectionProfile,
-      apiKey,
+      connectionProfile: effectiveProfile,
+      apiKey: effectiveApiKey,
       modelParams,
       tools: actualTools,
       useNativeWebSearch,
@@ -986,8 +1124,8 @@ async function processMessage(
       // Make one final call with force message
       for await (const chunk of streamMessage({
         messages: currentMessages,
-        connectionProfile,
-        apiKey,
+        connectionProfile: effectiveProfile,
+        apiKey: effectiveApiKey,
         modelParams,
         tools: actualTools,
         useNativeWebSearch,
@@ -1011,7 +1149,7 @@ async function processMessage(
 
           // Check if the final call includes submit_final_response
           if (chunk.rawResponse) {
-            const finalToolCalls = detectToolCallsInResponse(chunk.rawResponse, connectionProfile.provider)
+            const finalToolCalls = detectToolCallsInResponse(chunk.rawResponse, effectiveProfile.provider)
             const submitCall = finalToolCalls.find(tc => tc.name === 'submit_final_response')
             if (submitCall) {
               const args = submitCall.arguments as { response?: string }
@@ -1082,8 +1220,8 @@ async function processMessage(
       let continuationResponse = ''
       for await (const chunk of streamMessage({
         messages: currentMessages,
-        connectionProfile,
-        apiKey,
+        connectionProfile: effectiveProfile,
+        apiKey: effectiveApiKey,
         modelParams,
         tools: actualTools,
         useNativeWebSearch,
@@ -1158,8 +1296,8 @@ async function processMessage(
       let continuationResponse = ''
       for await (const chunk of streamMessage({
         messages: currentMessages,
-        connectionProfile,
-        apiKey,
+        connectionProfile: effectiveProfile,
+        apiKey: effectiveApiKey,
         modelParams,
         tools: [],
         useNativeWebSearch: useNativeWebSearch && !usePseudoTools,
@@ -1261,13 +1399,13 @@ async function processMessage(
     if (usage && (usage.promptTokens || usage.completionTokens)) {
       // Estimate cost using available pricing data
       const costResult = await estimateMessageCost(
-        connectionProfile.provider,
-        connectionProfile.modelName,
+        effectiveProfile.provider,
+        effectiveProfile.modelName,
         usage.promptTokens || 0,
         usage.completionTokens || 0,
         userId
       )
-      await trackMessageTokenUsage(chatId, connectionProfile.id, usage, costResult.cost, costResult.source)
+      await trackMessageTokenUsage(chatId, effectiveProfile.id, usage, costResult.cost, costResult.source)
     }
 
     // ============================================================================

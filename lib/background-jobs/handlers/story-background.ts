@@ -91,38 +91,10 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     return;
   }
 
+  // Always use the standard cheap LLM for story backgrounds
+  // (imagePromptProfileId is reserved for uncensored dangerous content expansion)
   let cheapLLMSelection: CheapLLMSelection | null = null;
-
-  // Check if user has a specific image prompt profile override
-  if (chatSettings?.cheapLLMSettings?.imagePromptProfileId) {
-    const imagePromptProfile = allProfiles.find(p => p.id === chatSettings.cheapLLMSettings!.imagePromptProfileId);
-    if (imagePromptProfile) {
-      // Create a direct selection from the override profile
-      const isLocal = imagePromptProfile.provider === 'OLLAMA';
-      cheapLLMSelection = {
-        provider: imagePromptProfile.provider,
-        modelName: imagePromptProfile.modelName,
-        connectionProfileId: imagePromptProfile.id,
-        baseUrl: isLocal ? (imagePromptProfile.baseUrl || 'http://localhost:11434') : undefined,
-        isLocal,
-      };
-      logger.debug('[StoryBackground] Using Image Prompt Expansion LLM override', {
-        context: 'background-jobs.story-background',
-        jobId: job.id,
-        provider: imagePromptProfile.provider,
-        model: imagePromptProfile.modelName,
-      });
-    } else {
-      logger.warn('[StoryBackground] Image prompt profile not found, falling back to global cheap LLM', {
-        context: 'background-jobs.story-background',
-        jobId: job.id,
-        configuredProfileId: chatSettings.cheapLLMSettings.imagePromptProfileId,
-      });
-    }
-  }
-
-  // If no override selection, use the standard cheap LLM logic
-  if (!cheapLLMSelection) {
+  {
     const cheapLLMConfig: CheapLLMConfig = chatSettings?.cheapLLMSettings ? {
       strategy: chatSettings.cheapLLMSettings.strategy,
       userDefinedProfileId: chatSettings.cheapLLMSettings.userDefinedProfileId ?? undefined,

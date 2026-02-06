@@ -342,6 +342,7 @@ export const POST = createAuthenticatedHandler(async (req, context) => {
       modelName,
       parameters = {},
       isDefault = false,
+      isDangerousCompatible = false,
     } = body;
 
 
@@ -400,6 +401,7 @@ export const POST = createAuthenticatedHandler(async (req, context) => {
       modelName: modelName.trim(),
       parameters: parameters,
       isDefault,
+      isDangerousCompatible,
       tags: [],
     });
 

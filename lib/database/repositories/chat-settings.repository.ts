@@ -234,6 +234,15 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
             enabled: false,
             defaultImageProfileId: null,
           },
+          dangerousContentSettings: {
+            mode: 'OFF',
+            threshold: 0.7,
+            scanTextChat: true,
+            scanImagePrompts: true,
+            scanImageGeneration: false,
+            displayMode: 'SHOW',
+            showWarningBadges: true,
+          },
           defaultRoleplayTemplateId,
           ...data,
         };

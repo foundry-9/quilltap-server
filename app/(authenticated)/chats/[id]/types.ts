@@ -27,6 +27,15 @@ export interface Message {
   toolCalls?: Message[]
   /** Server-side pre-rendered HTML for simple messages (no tools, no attachments) */
   renderedHtml?: string | null
+  /** Danger flags from content classification */
+  dangerFlags?: Array<{
+    category: string
+    score: number
+    userOverridden: boolean
+    wasRerouted: boolean
+    reroutedProvider?: string | null
+    reroutedModel?: string | null
+  }>
 }
 
 export interface CharacterData {
@@ -151,6 +160,16 @@ export interface StoryBackgroundsSettings {
   defaultImageProfileId?: string | null
 }
 
+export interface DangerousContentSettings {
+  mode: 'OFF' | 'DETECT_ONLY' | 'AUTO_ROUTE'
+  threshold: number
+  scanTextChat: boolean
+  scanImagePrompts: boolean
+  scanImageGeneration: boolean
+  displayMode: 'SHOW' | 'BLUR' | 'COLLAPSE'
+  showWarningBadges: boolean
+}
+
 export interface ChatSettings {
   id: string
   userId: string
@@ -160,6 +179,7 @@ export interface ChatSettings {
   memoryCascadePreferences?: MemoryCascadePreferences
   tokenDisplaySettings?: TokenDisplaySettings
   storyBackgroundsSettings?: StoryBackgroundsSettings
+  dangerousContentSettings?: DangerousContentSettings
   createdAt: string
   updatedAt: string
 }

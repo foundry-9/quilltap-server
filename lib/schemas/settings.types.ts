@@ -148,6 +148,41 @@ export const LLMLoggingSettingsSchema = z.object({
 export type LLMLoggingSettings = z.infer<typeof LLMLoggingSettingsSchema>;
 
 // ============================================================================
+// DANGEROUS CONTENT SETTINGS
+// ============================================================================
+
+export const DangerousContentModeEnum = z.enum(['OFF', 'DETECT_ONLY', 'AUTO_ROUTE']);
+export type DangerousContentMode = z.infer<typeof DangerousContentModeEnum>;
+
+export const DangerousContentDisplayModeEnum = z.enum(['SHOW', 'BLUR', 'COLLAPSE']);
+export type DangerousContentDisplayMode = z.infer<typeof DangerousContentDisplayModeEnum>;
+
+export const DangerousContentSettingsSchema = z.object({
+  /** Operating mode: OFF disables all scanning, DETECT_ONLY flags but doesn't reroute, AUTO_ROUTE flags and reroutes to uncensored provider */
+  mode: DangerousContentModeEnum.default('OFF'),
+  /** Classification threshold (0-1): content scoring above this is flagged as dangerous */
+  threshold: z.number().min(0).max(1).default(0.7),
+  /** Whether to scan user text messages for dangerous content */
+  scanTextChat: z.boolean().default(true),
+  /** Whether to scan user image prompts for dangerous content */
+  scanImagePrompts: z.boolean().default(true),
+  /** Whether to scan expanded prompts before image generation */
+  scanImageGeneration: z.boolean().default(false),
+  /** Connection profile ID for uncensored text LLM (must have isDangerousCompatible=true) */
+  uncensoredTextProfileId: UUIDSchema.nullable().optional(),
+  /** Image profile ID for uncensored image generation (must have isDangerousCompatible=true) */
+  uncensoredImageProfileId: UUIDSchema.nullable().optional(),
+  /** How flagged messages are displayed in the UI */
+  displayMode: DangerousContentDisplayModeEnum.default('SHOW'),
+  /** Whether to show warning badges on flagged messages */
+  showWarningBadges: z.boolean().default(true),
+  /** Custom classification prompt to append to the default classification system prompt */
+  customClassificationPrompt: z.string().nullable().optional(),
+});
+
+export type DangerousContentSettings = z.infer<typeof DangerousContentSettingsSchema>;
+
+// ============================================================================
 // AGENT MODE SETTINGS
 // ============================================================================
 
@@ -245,6 +280,16 @@ export const ChatSettingsSchema = z.object({
   storyBackgroundsSettings: StoryBackgroundsSettingsSchema.default({
     enabled: false,
     defaultImageProfileId: null,
+  }),
+  /** Dangerous content detection and routing settings */
+  dangerousContentSettings: DangerousContentSettingsSchema.default({
+    mode: 'OFF',
+    threshold: 0.7,
+    scanTextChat: true,
+    scanImagePrompts: true,
+    scanImageGeneration: false,
+    displayMode: 'SHOW',
+    showWarningBadges: true,
   }),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

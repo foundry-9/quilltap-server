@@ -518,6 +518,18 @@ export function ProfileModal({
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
+                  id="isDangerousCompatible"
+                  checked={form.formData.isDangerousCompatible}
+                  onChange={(e) => form.setField('isDangerousCompatible', e.target.checked)}
+                  className="w-4 h-4 rounded"
+                />
+                <label htmlFor="isDangerousCompatible" className="text-sm">
+                  Uncensored-compatible (suitable for dangerous/sensitive content routing)
+                </label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
                   id="allowWebSearch"
                   checked={form.formData.allowWebSearch}
                   onChange={(e) => form.setField('allowWebSearch', e.target.checked)}

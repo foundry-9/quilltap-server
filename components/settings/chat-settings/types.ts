@@ -3,7 +3,7 @@
  * Defines all TypeScript types and interfaces used in the chat settings module
  */
 
-import type { LLMLoggingSettings as LLMLoggingSettingsType } from '@/lib/schemas/settings.types'
+import type { LLMLoggingSettings as LLMLoggingSettingsType, DangerousContentSettings as DangerousContentSettingsType } from '@/lib/schemas/settings.types'
 
 export type AvatarDisplayMode = 'ALWAYS' | 'GROUP_ONLY' | 'NEVER'
 export type AvatarDisplayStyle = 'CIRCULAR' | 'RECTANGULAR'
@@ -77,6 +77,8 @@ export interface ChatSettings {
   agentModeSettings?: AgentModeSettings
   /** Story backgrounds settings for AI-generated chat backgrounds */
   storyBackgroundsSettings?: StoryBackgroundsSettings
+  /** Dangerous content handling settings */
+  dangerousContentSettings?: DangerousContentSettings
   createdAt: string
   updatedAt: string
 }
@@ -95,6 +97,7 @@ export interface ConnectionProfile {
   modelName: string
   isDefault: boolean
   isCheap?: boolean
+  isDangerousCompatible?: boolean
   apiKeyId?: string
   apiKey?: ApiKey | null
 }
@@ -115,6 +118,7 @@ export interface ImageProfile {
   provider: string
   modelName: string
   isDefault: boolean
+  isDangerousCompatible?: boolean
   apiKeyId?: string
   apiKey?: ApiKey | null
 }
@@ -388,4 +392,23 @@ export const DEFAULT_AGENT_MODE_SETTINGS: AgentModeSettings = {
 export const DEFAULT_STORY_BACKGROUNDS_SETTINGS: StoryBackgroundsSettings = {
   enabled: false,
   defaultImageProfileId: null,
+}
+
+/**
+ * Dangerous Content Settings
+ * Re-exported from schema types for use in chat settings components
+ */
+export type DangerousContentSettings = DangerousContentSettingsType
+
+/**
+ * Default dangerous content settings
+ */
+export const DEFAULT_DANGEROUS_CONTENT_SETTINGS: DangerousContentSettings = {
+  mode: 'OFF',
+  threshold: 0.7,
+  scanTextChat: true,
+  scanImagePrompts: true,
+  scanImageGeneration: false,
+  displayMode: 'SHOW',
+  showWarningBadges: true,
 }

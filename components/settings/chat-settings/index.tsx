@@ -11,6 +11,7 @@ import { LLMLoggingSettingsComponent } from './LLMLoggingSettings'
 import { AutomationSettings } from './AutomationSettings'
 import { AgentModeSettings } from './AgentModeSettings'
 import { StoryBackgroundsSettings } from './StoryBackgroundsSettings'
+import { DangerousContentSettings } from './DangerousContentSettings'
 
 /**
  * ChatSettingsTab Component
@@ -47,6 +48,7 @@ export default function ChatSettingsTab() {
     handleAgentModeMaxTurnsChange,
     handleStoryBackgroundsEnabledChange,
     handleStoryBackgroundsProfileChange,
+    handleDangerousContentUpdate,
   } = useChatSettings()
 
   if (loading) {
@@ -148,6 +150,15 @@ export default function ChatSettingsTab() {
           imageProfiles={imageProfiles}
           onEnabledChange={handleStoryBackgroundsEnabledChange}
           onProfileChange={handleStoryBackgroundsProfileChange}
+        />
+
+        <DangerousContentSettings
+          settings={settings}
+          saving={saving}
+          connectionProfiles={connectionProfiles}
+          imageProfiles={imageProfiles}
+          loadingProfiles={loadingProfiles}
+          onUpdate={handleDangerousContentUpdate}
         />
       </div>
     </div>

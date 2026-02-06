@@ -23,6 +23,8 @@ import {
   AgentModeSettings,
   DEFAULT_AGENT_MODE_SETTINGS,
   DEFAULT_STORY_BACKGROUNDS_SETTINGS,
+  DangerousContentSettings,
+  DEFAULT_DANGEROUS_CONTENT_SETTINGS,
 } from '../types'
 
 interface UseChatSettingsReturn {
@@ -49,6 +51,7 @@ interface UseChatSettingsReturn {
   handleAgentModeMaxTurnsChange: (value: number) => Promise<void>
   handleStoryBackgroundsEnabledChange: (value: boolean) => Promise<void>
   handleStoryBackgroundsProfileChange: (profileId: string | null) => Promise<void>
+  handleDangerousContentUpdate: (updates: Partial<DangerousContentSettings>) => Promise<void>
 }
 
 export function useChatSettings(): UseChatSettingsReturn {
@@ -694,6 +697,49 @@ export function useChatSettings(): UseChatSettingsReturn {
     [showSuccess]
   )
 
+  /**
+   * Update dangerous content settings
+   * Uses settingsRef to prevent race conditions with concurrent updates
+   */
+  const handleDangerousContentUpdate = useCallback(
+    async (updates: Partial<DangerousContentSettings>) => {
+      // Use ref for latest state to prevent race conditions
+      const latestSettings = settingsRef.current
+      if (!latestSettings) return
+
+      try {
+        setSaving(true)
+        setError(null)
+        setSuccess(false)
+
+        const currentSettings = latestSettings.dangerousContentSettings || DEFAULT_DANGEROUS_CONTENT_SETTINGS
+        const res = await fetch('/api/v1/settings/chat', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            dangerousContentSettings: { ...currentSettings, ...updates },
+          }),
+        })
+
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Failed to update dangerous content settings')
+        }
+
+        const updatedSettings = await res.json()
+        setSettings(updatedSettings)
+        showSuccess()
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
+        console.error('Failed to update dangerous content settings', { error: errorMsg })
+        setError(errorMsg)
+      } finally {
+        setSaving(false)
+      }
+    },
+    [showSuccess]
+  )
+
   return {
     settings,
     loading,
@@ -718,5 +764,6 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleAgentModeMaxTurnsChange,
     handleStoryBackgroundsEnabledChange,
     handleStoryBackgroundsProfileChange,
+    handleDangerousContentUpdate,
   }
 }

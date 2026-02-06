@@ -6,7 +6,9 @@ import LazyMessageContent from '@/components/chat/LazyMessageContent'
 import ToolMessage from '@/components/chat/ToolMessage'
 import { formatMessageTime } from '@/lib/format-time'
 import { TokenBadge } from '@/components/chat/TokenBadge'
-import type { Message, TokenDisplaySettings, CharacterData } from '../types'
+import { DangerFlagBadge } from '@/components/chat/DangerFlagBadge'
+import { DangerContentWrapper } from '@/components/chat/DangerContentWrapper'
+import type { Message, TokenDisplaySettings, DangerousContentSettings, CharacterData } from '../types'
 import type { TurnState } from '@/lib/chat/turn-manager'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
@@ -44,6 +46,10 @@ interface MessageRowProps {
   onTogglePause?: () => void
   /** Token display settings */
   tokenDisplaySettings?: TokenDisplaySettings
+  /** Dangerous content display settings */
+  dangerousContentSettings?: DangerousContentSettings
+  /** Callback to override danger flags on a message */
+  onOverrideDangerFlag?: (messageId: string) => void
   /** Whether this message has LLM logs available */
   hasLLMLogs?: boolean
   /** Callback to view LLM logs */
@@ -98,6 +104,8 @@ function MessageRowInner({
   isPaused = false,
   onTogglePause,
   tokenDisplaySettings,
+  dangerousContentSettings,
+  onOverrideDangerFlag,
   hasLLMLogs,
   onViewLLMLogs,
   character,
@@ -126,6 +134,12 @@ function MessageRowInner({
   } else {
     messageRowClasses.push('qt-chat-message-row-assistant')
   }
+
+  const hasDangerFlags = message.dangerFlags && message.dangerFlags.length > 0
+  const dangerDisplayMode = hasDangerFlags && dangerousContentSettings?.displayMode
+    ? dangerousContentSettings.displayMode
+    : 'SHOW'
+  const showDangerBadges = hasDangerFlags && dangerousContentSettings?.showWarningBadges !== false
 
   return (
     <div
@@ -195,12 +209,21 @@ function MessageRowInner({
                   ))}
                 </div>
               )}
-              {viewSourceMessageIds.has(message.id) ? (
-                <div className="qt-code-block whitespace-pre-wrap break-words overflow-auto max-h-96">
-                  {message.content}
-                </div>
-              ) : (
-                <LazyMessageContent content={message.content} renderingPatterns={renderingPatterns} dialogueDetection={dialogueDetection} forceRender={forceRender} renderedHtml={message.renderedHtml} />
+              <DangerContentWrapper displayMode={dangerDisplayMode}>
+                {viewSourceMessageIds.has(message.id) ? (
+                  <div className="qt-code-block whitespace-pre-wrap break-words overflow-auto max-h-96">
+                    {message.content}
+                  </div>
+                ) : (
+                  <LazyMessageContent content={message.content} renderingPatterns={renderingPatterns} dialogueDetection={dialogueDetection} forceRender={forceRender} renderedHtml={message.renderedHtml} />
+                )}
+              </DangerContentWrapper>
+              {/* Danger flag badges */}
+              {showDangerBadges && message.dangerFlags && (
+                <DangerFlagBadge
+                  dangerFlags={message.dangerFlags}
+                  onOverride={onOverrideDangerFlag ? () => onOverrideDangerFlag(message.id) : undefined}
+                />
               )}
               {/* Image attachment thumbnails */}
               {getImageAttachments(message).length > 0 && (
@@ -603,6 +626,13 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
 
   // LLM logs availability
   if (prev.hasLLMLogs !== next.hasLLMLogs) return false
+
+  // Danger flags
+  const prevDangerFlags = prev.message.dangerFlags || []
+  const nextDangerFlags = next.message.dangerFlags || []
+  if (prevDangerFlags.length !== nextDangerFlags.length) return false
+  if (prev.dangerousContentSettings?.displayMode !== next.dangerousContentSettings?.displayMode) return false
+  if (prev.dangerousContentSettings?.showWarningBadges !== next.dangerousContentSettings?.showWarningBadges) return false
 
   // Props are equal, skip re-render
   return true

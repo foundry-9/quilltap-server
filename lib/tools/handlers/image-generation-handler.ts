@@ -23,6 +23,15 @@ import type { CheapLLMSettings } from '@/lib/schemas/settings.types';
 import { logger } from '@/lib/logger';
 import { getInheritedTags } from '@/lib/files/tag-inheritance';
 import { getErrorMessage } from '@/lib/errors';
+import {
+  resolveDangerousContentSettings,
+} from '@/lib/services/dangerous-content/resolver.service';
+import {
+  classifyContent as classifyDangerousContent,
+} from '@/lib/services/dangerous-content/gatekeeper.service';
+import {
+  resolveImageProviderForDangerousContent,
+} from '@/lib/services/dangerous-content/provider-routing.service';
 
 /**
  * Execution context for image generation tool
@@ -322,7 +331,8 @@ async function expandPromptWithDescriptions(
   chatId?: string,
   callingParticipantId?: string,
   cheapLLMSettings?: CheapLLMSettings,
-  styleOptions?: PromptExpansionOptions
+  styleOptions?: PromptExpansionOptions,
+  isDangerous?: boolean
 ): Promise<{ expandedPrompt: string; wasExpanded: boolean }> {
   try {
     // Map ImageProvider string to the enum type
@@ -349,12 +359,12 @@ async function expandPromptWithDescriptions(
     const repos = getRepositories();
     const allProfiles = await repos.connections.findByUserId(userId);
 
-    // Check if user has a specific image prompt profile override
+    // Use the uncensored image prompt profile only when the prompt was flagged as dangerous
     let cheapLLMSelection: CheapLLMSelection | null = null;
-    if (cheapLLMSettings?.imagePromptProfileId) {
+    if (isDangerous && cheapLLMSettings?.imagePromptProfileId) {
       const imagePromptProfile = allProfiles.find(p => p.id === cheapLLMSettings.imagePromptProfileId);
       if (imagePromptProfile) {
-        // Create a direct selection from the override profile
+        // Create a direct selection from the uncensored override profile
         const isLocal = imagePromptProfile.provider === 'OLLAMA';
         cheapLLMSelection = {
           provider: imagePromptProfile.provider,
@@ -363,8 +373,13 @@ async function expandPromptWithDescriptions(
           baseUrl: isLocal ? (imagePromptProfile.baseUrl || 'http://localhost:11434') : undefined,
           isLocal,
         };
+        logger.info('[Image Generation] Using uncensored image prompt profile for dangerous content', {
+          context: 'llm-api',
+          profileId: imagePromptProfile.id,
+          profileName: imagePromptProfile.name,
+        });
       } else {
-        logger.warn('[Image Generation] Image prompt profile not found, falling back to global cheap LLM', {
+        logger.warn('[Image Generation] Uncensored image prompt profile not found, falling back to global cheap LLM', {
           context: 'llm-api',
           configuredProfileId: cheapLLMSettings.imagePromptProfileId,
         });
@@ -502,6 +517,42 @@ export async function executeImageGenerationTool(
       });
     }
 
+    // 4b. Resolve dangerous content settings
+    const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null);
+    const dangerSettings = dangerousContentResolved.settings;
+
+    // 4c. Build cheap LLM selection for dangerous content classification
+    let cheapLLMSelection: CheapLLMSelection | null = null;
+    if (dangerSettings.mode !== 'OFF' && (dangerSettings.scanImagePrompts || dangerSettings.scanImageGeneration)) {
+      try {
+        const allProfiles = await repos.connections.findByUserId(context.userId);
+        const cheapLLMConfig: CheapLLMConfig = chatSettings?.cheapLLMSettings ? {
+          strategy: chatSettings.cheapLLMSettings.strategy,
+          userDefinedProfileId: chatSettings.cheapLLMSettings.userDefinedProfileId ?? undefined,
+          defaultCheapProfileId: chatSettings.cheapLLMSettings.defaultCheapProfileId ?? undefined,
+          fallbackToLocal: chatSettings.cheapLLMSettings.fallbackToLocal,
+        } : DEFAULT_CHEAP_LLM_CONFIG;
+
+        const defaultProfile = allProfiles.find(p => p.isDefault) || allProfiles[0];
+        if (defaultProfile) {
+          cheapLLMSelection = getCheapLLMProvider(
+            defaultProfile,
+            cheapLLMConfig,
+            allProfiles,
+            false
+          );
+        }
+      } catch (error) {
+        logger.warn('[Image Generation] Failed to build cheap LLM selection for danger classification', {
+          errorMessage: getErrorMessage(error),
+        });
+      }
+    }
+
+    // Track whether image prompt was flagged as dangerous (for metadata)
+    let imagePromptDangerous = false;
+    let effectiveImageProfile = imageProfile;
+
     // 5. Get style trigger phrase if available
     let styleOptions: PromptExpansionOptions | undefined;
     const constraints = getImageProviderConstraints(imageProfile.provider);
@@ -523,17 +574,83 @@ export async function executeImageGenerationTool(
       }
     }
 
+    // 5b. Classify user's image prompt before expansion (scanImagePrompts)
+    if (dangerSettings.mode !== 'OFF' && dangerSettings.scanImagePrompts && cheapLLMSelection) {
+      try {
+        const promptClassification = await classifyDangerousContent(
+          toolInput.prompt,
+          cheapLLMSelection,
+          context.userId,
+          dangerSettings,
+          context.chatId
+        );
+
+        if (promptClassification.isDangerous) {
+          imagePromptDangerous = true;
+          logger.info('[Image Generation] User image prompt classified as dangerous', {
+            chatId: context.chatId,
+            score: promptClassification.score,
+            categories: promptClassification.categories.map(c => c.category),
+            mode: dangerSettings.mode,
+          });
+
+          // If AUTO_ROUTE, reroute the image provider
+          if (dangerSettings.mode === 'AUTO_ROUTE') {
+            const decryptedKey = decryptApiKey(
+              imageProfile.apiKey.ciphertext,
+              imageProfile.apiKey.iv,
+              imageProfile.apiKey.authTag,
+              imageProfile.userId
+            );
+            const routeResult = await resolveImageProviderForDangerousContent(
+              imageProfile,
+              decryptedKey,
+              dangerSettings,
+              context.userId
+            );
+
+            if (routeResult.rerouted) {
+              effectiveImageProfile = { ...routeResult.imageProfile, apiKey: imageProfile.apiKey };
+              // Reload the full profile with API key for the rerouted provider
+              const reroutedProfileResult = await loadAndValidateProfile(routeResult.imageProfile.id, context.userId);
+              if (reroutedProfileResult.success && reroutedProfileResult.profile) {
+                effectiveImageProfile = reroutedProfileResult.profile;
+              }
+              logger.info('[Image Generation] Rerouted to uncensored image provider', {
+                chatId: context.chatId,
+                originalProfile: imageProfile.name,
+                uncensoredProfile: routeResult.imageProfile.name,
+                reason: routeResult.reason,
+              });
+            } else {
+              logger.warn('[Image Generation] No uncensored image provider available, using original', {
+                chatId: context.chatId,
+                reason: routeResult.reason,
+              });
+            }
+          }
+        }
+      } catch (error) {
+        // Fail safe - never block on classification errors
+        logger.error('[Image Generation] Image prompt classification failed, continuing normally', {
+          chatId: context.chatId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
     // 6. Expand prompt with character/persona descriptions if needed
     let expandedPrompt = toolInput.prompt;
     try {
       const expandResult = await expandPromptWithDescriptions(
         toolInput.prompt,
         context.userId,
-        imageProfile.provider,
+        effectiveImageProfile.provider,
         context.chatId,
         context.callingParticipantId,
         chatSettings?.cheapLLMSettings,
-        styleOptions
+        styleOptions,
+        imagePromptDangerous
       );
       expandedPrompt = expandResult.expandedPrompt;
     } catch (error) {
@@ -542,16 +659,72 @@ export async function executeImageGenerationTool(
       expandedPrompt = toolInput.prompt;
     }
 
+    // 6b. Classify expanded prompt before image generation (scanImageGeneration)
+    if (dangerSettings.mode !== 'OFF' && dangerSettings.scanImageGeneration && cheapLLMSelection && expandedPrompt !== toolInput.prompt) {
+      try {
+        const expandedClassification = await classifyDangerousContent(
+          expandedPrompt,
+          cheapLLMSelection,
+          context.userId,
+          dangerSettings,
+          context.chatId
+        );
+
+        if (expandedClassification.isDangerous && !imagePromptDangerous) {
+          // The expanded prompt is dangerous but original wasn't - still try to reroute
+          logger.info('[Image Generation] Expanded prompt classified as dangerous', {
+            chatId: context.chatId,
+            score: expandedClassification.score,
+            categories: expandedClassification.categories.map(c => c.category),
+            mode: dangerSettings.mode,
+          });
+
+          if (dangerSettings.mode === 'AUTO_ROUTE' && effectiveImageProfile === imageProfile) {
+            const decryptedKey = decryptApiKey(
+              imageProfile.apiKey.ciphertext,
+              imageProfile.apiKey.iv,
+              imageProfile.apiKey.authTag,
+              imageProfile.userId
+            );
+            const routeResult = await resolveImageProviderForDangerousContent(
+              imageProfile,
+              decryptedKey,
+              dangerSettings,
+              context.userId
+            );
+
+            if (routeResult.rerouted) {
+              const reroutedProfileResult = await loadAndValidateProfile(routeResult.imageProfile.id, context.userId);
+              if (reroutedProfileResult.success && reroutedProfileResult.profile) {
+                effectiveImageProfile = reroutedProfileResult.profile;
+              }
+              logger.info('[Image Generation] Rerouted to uncensored image provider (expanded prompt)', {
+                chatId: context.chatId,
+                originalProfile: imageProfile.name,
+                uncensoredProfile: routeResult.imageProfile.name,
+              });
+            }
+          }
+        }
+      } catch (error) {
+        // Fail safe
+        logger.error('[Image Generation] Expanded prompt classification failed, continuing normally', {
+          chatId: context.chatId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
     // Update the tool input with the expanded prompt
     const finalInput = {
       ...toolInput,
       prompt: expandedPrompt,
     };
 
-    // 7. Generate images
+    // 7. Generate images (using effective profile which may have been rerouted)
     const savedImages = await generateImagesWithProvider(
       finalInput,
-      imageProfile,
+      effectiveImageProfile,
       context.userId,
       context.chatId
     );
@@ -560,9 +733,9 @@ export async function executeImageGenerationTool(
     return {
       success: true,
       images: savedImages,
-      message: `Successfully generated ${savedImages.length} image(s) using ${imageProfile.modelName}`,
-      provider: imageProfile.provider,
-      model: imageProfile.modelName,
+      message: `Successfully generated ${savedImages.length} image(s) using ${effectiveImageProfile.modelName}`,
+      provider: effectiveImageProfile.provider,
+      model: effectiveImageProfile.modelName,
       expandedPrompt: expandedPrompt,
     };
   } catch (error) {

@@ -412,6 +412,19 @@ export function ProfileForm({
               Mark as cheap LLM (suitable for cost-effective tasks like memory extraction)
             </label>
           </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="isDangerousCompatible"
+              name="isDangerousCompatible"
+              checked={formData.isDangerousCompatible}
+              onChange={(e) => onFormChange('isDangerousCompatible', e.target.checked)}
+              className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600"
+            />
+            <label htmlFor="isDangerousCompatible" className="text-sm">
+              Uncensored-compatible (suitable for dangerous/sensitive content routing)
+            </label>
+          </div>
           {/* Web Search Tool - available for all providers with tool support */}
           <div className="flex items-center gap-2">
             <input

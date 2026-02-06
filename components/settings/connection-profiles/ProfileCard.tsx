@@ -44,6 +44,9 @@ export function ProfileCard({
   } else if (profile.isCheap) {
     badges.push({ text: 'Cheap', variant: 'cheap' })
   }
+  if (profile.isDangerousCompatible) {
+    badges.push({ text: 'Uncensored', variant: 'destructive' })
+  }
 
   return (
     <BaseProfileCard

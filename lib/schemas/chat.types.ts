@@ -18,6 +18,27 @@ import { TimestampConfigSchema } from './settings.types';
 import { ControlledByEnum } from './character.types';
 
 // ============================================================================
+// DANGER FLAGS
+// ============================================================================
+
+export const DangerFlagSchema = z.object({
+  /** Category of dangerous content detected (e.g., 'nsfw', 'violence', 'hate_speech') */
+  category: z.string(),
+  /** Confidence score from 0 to 1 */
+  score: z.number().min(0).max(1),
+  /** Whether the user has manually overridden this flag (marked as not dangerous) */
+  userOverridden: z.boolean().default(false),
+  /** Whether the message was rerouted to an uncensored provider */
+  wasRerouted: z.boolean().default(false),
+  /** Provider name if rerouted */
+  reroutedProvider: z.string().nullable().optional(),
+  /** Model name if rerouted */
+  reroutedModel: z.string().nullable().optional(),
+});
+
+export type DangerFlag = z.infer<typeof DangerFlagSchema>;
+
+// ============================================================================
 // MESSAGE EVENTS
 // ============================================================================
 
@@ -52,6 +73,8 @@ export const MessageEventSchema = z.object({
   // Server-side pre-rendered HTML for simple messages (no tools, no attachments)
   // Used to avoid client-side markdown processing overhead on chat load
   renderedHtml: z.string().nullable().optional(),
+  // Danger content flags from gatekeeper classification
+  dangerFlags: z.array(DangerFlagSchema).optional(),
 });
 
 export type MessageEvent = z.infer<typeof MessageEventSchema>;
@@ -76,6 +99,7 @@ export const SystemEventTypeEnum = z.enum([
   'CONTEXT_SUMMARY',
   'IMAGE_PROMPT_CRAFTING',
   'CONTEXT_COMPRESSION',
+  'DANGER_CLASSIFICATION',
 ]);
 
 export type SystemEventType = z.infer<typeof SystemEventTypeEnum>;
