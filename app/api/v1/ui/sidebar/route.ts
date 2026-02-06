@@ -245,6 +245,7 @@ async function handleChats(repos: any, userId: string) {
       projectId: chat.projectId || null,
       projectName: project?.name || null,
       projectColor: project?.color || null,
+      isDangerous: chat.isDangerousChat === true,
     };
   });return successResponse({ chats: enrichedChats });
 }

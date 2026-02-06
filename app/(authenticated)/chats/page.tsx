@@ -110,7 +110,7 @@ export default function ChatsPage() {
   const [profiles, setProfiles] = useState<Array<{ id: string; name: string }>>([])
   const [highlightedChatId, setHighlightedChatId] = useState<string | null>(null)
   const importedChatRef = useRef<HTMLDivElement>(null)
-  const { shouldHideByIds } = useQuickHide()
+  const { shouldHideByIds, hideDangerousChats } = useQuickHide()
   const { refreshSidebar } = useSidebarData()
 
   const visibleChats = useMemo(
@@ -127,9 +127,18 @@ export default function ChatsPage() {
         }
       }
 
-      return !shouldHideByIds(allTagIds)
+      if (shouldHideByIds(allTagIds)) {
+        return false
+      }
+
+      // Check danger filter using full chat metadata
+      if (hideDangerousChats && (chat as any).isDangerousChat === true) {
+        return false
+      }
+
+      return true
     }),
-    [chats, shouldHideByIds]
+    [chats, shouldHideByIds, hideDangerousChats]
   )
 
   useEffect(() => {

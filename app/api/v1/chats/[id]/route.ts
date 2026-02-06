@@ -28,6 +28,7 @@
  * POST /api/v1/chats/[id]?action=queue-memories - Queue memory extraction jobs
  * POST /api/v1/chats/[id]?action=rng - Execute random number generator (dice, coin, bottle)
  * POST /api/v1/chats/[id]?action=toggle-agent-mode - Toggle agent mode for this chat
+ * POST /api/v1/chats/[id]?action=reclassify-danger - Reset and re-queue danger classification
  * PATCH /api/v1/chats/[id]?action=turn - Persist turn state (lastTurnParticipantId)
  */
 

@@ -212,12 +212,12 @@ function ProjectItem({
 export function ProjectsSection() {
   const { isCollapsed, sectionCollapsed, toggleSectionCollapsed } = useSidebar()
   const { projects, chats, loading } = useSidebarData()
-  const { shouldHideByIds } = useQuickHide()
+  const { shouldHideChat } = useQuickHide()
 
-  // Filter chats by project and apply quick-hide filter
+  // Filter chats by project and apply quick-hide filter (tags + danger)
   const getProjectChats = (projectId: string): SidebarChat[] => {
     return chats.filter(
-      chat => chat.projectId === projectId && !shouldHideByIds(chat.characterTags)
+      chat => chat.projectId === projectId && !shouldHideChat(chat)
     )
   }
 

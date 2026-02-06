@@ -309,6 +309,26 @@ export async function register() {
       }
 
       // ================================================================
+      // PHASE 3.5: Start Background Schedulers (non-critical)
+      // ================================================================
+      try {
+        const { scheduleCleanup } = await import('./lib/background-jobs/scheduled-cleanup');
+        scheduleCleanup();
+
+        const { scheduleDangerScan } = await import('./lib/background-jobs/scheduled-danger-scan');
+        await scheduleDangerScan();
+
+        logger.info('Background schedulers started', {
+          context: 'instrumentation.register',
+        });
+      } catch (schedulerError) {
+        logger.warn('Error starting background schedulers, continuing startup', {
+          context: 'instrumentation.register',
+          error: schedulerError instanceof Error ? schedulerError.message : String(schedulerError),
+        });
+      }
+
+      // ================================================================
       // PHASE 4: Mark startup complete
       // ================================================================
       startupState.setPhase('complete');

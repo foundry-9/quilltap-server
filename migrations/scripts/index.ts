@@ -65,6 +65,10 @@ import { addStoryBackgroundsFieldsMigration } from './add-story-backgrounds-fiel
 import { addChatImageProfileFieldMigration } from './add-chat-image-profile-field';
 // Add dangerous content handling fields
 import { addDangerousContentFieldsMigration } from './add-dangerous-content-fields';
+// Add chat-level danger classification fields
+import { addChatDangerClassificationFieldsMigration } from './add-chat-danger-classification-fields';
+// Fix chat updatedAt timestamps polluted by background jobs
+import { fixChatUpdatedAtTimestampsMigration } from './fix-chat-updated-at-timestamps';
 
 /**
  * All available migrations.
@@ -125,6 +129,10 @@ export const migrations: Migration[] = [
   addChatImageProfileFieldMigration,
   // Add dangerous content handling fields
   addDangerousContentFieldsMigration,
+  // Add chat-level danger classification fields
+  addChatDangerClassificationFieldsMigration,
+  // Fix chat updatedAt timestamps polluted by background jobs
+  fixChatUpdatedAtTimestampsMigration,
 ];
 
 export {
@@ -180,4 +188,8 @@ export {
   addChatImageProfileFieldMigration,
   // Add dangerous content handling fields
   addDangerousContentFieldsMigration,
+  // Add chat-level danger classification fields
+  addChatDangerClassificationFieldsMigration,
+  // Fix chat updatedAt timestamps polluted by background jobs
+  fixChatUpdatedAtTimestampsMigration,
 };

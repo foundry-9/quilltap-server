@@ -223,10 +223,19 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
 
   /**
    * Update chat metadata
-   * Note: updatedAt is NOT automatically set. Only new messages should update updatedAt.
+   * updatedAt is NOT automatically set — only new messages should update it.
    * To update updatedAt, explicitly include it in the data parameter.
+   * Background jobs (danger classification, title update, etc.) must NOT
+   * pass updatedAt so the chat's modified timestamp reflects the last message.
    */
   async update(id: string, data: Partial<ChatMetadata>): Promise<ChatMetadata | null> {
+    // Preserve existing updatedAt unless the caller explicitly provides it
+    if (!('updatedAt' in data)) {
+      const existing = await this.findById(id);
+      if (existing) {
+        return this._update(id, { ...data, updatedAt: existing.updatedAt });
+      }
+    }
     return this._update(id, data);
   }
 
@@ -735,15 +744,19 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
         );
       }
 
-      // Update chat metadata with message count, last message timestamp, and updatedAt
+      // Update chat metadata — only update lastMessageAt and updatedAt for actual messages
       const chat = await this.findById(chatId);
       if (chat) {
-        const messages = await this.getMessages(chatId);
-        await this.update(chatId, {
-          messageCount: messages.length,
-          lastMessageAt: now,
-          updatedAt: now,
-        });
+        const allMessages = await this.getMessages(chatId);
+        const isActualMessage = validated.type === 'message';
+        const updateData: Record<string, unknown> = {
+          messageCount: allMessages.length,
+        };
+        if (isActualMessage) {
+          updateData.lastMessageAt = now;
+          updateData.updatedAt = now;
+        }
+        await this.update(chatId, updateData as Partial<ChatMetadata>);
       }
       return validated;
     } catch (error) {
@@ -780,15 +793,19 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
         );
       }
 
-      // Update chat metadata with message count, last message timestamp, and updatedAt
+      // Update chat metadata — only update lastMessageAt and updatedAt if batch contains actual messages
       const chat = await this.findById(chatId);
       if (chat) {
         const allMessages = await this.getMessages(chatId);
-        await this.update(chatId, {
+        const hasActualMessages = validated.some(m => m.type === 'message');
+        const updateData: Record<string, unknown> = {
           messageCount: allMessages.length,
-          lastMessageAt: now,
-          updatedAt: now,
-        });
+        };
+        if (hasActualMessages) {
+          updateData.lastMessageAt = now;
+          updateData.updatedAt = now;
+        }
+        await this.update(chatId, updateData as Partial<ChatMetadata>);
       }
       return validated;
     } catch (error) {

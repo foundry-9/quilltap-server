@@ -11,6 +11,8 @@ import { updateContextSummary, ChatMessage } from '@/lib/memory/cheap-llm-tasks'
 import { getCheapLLMProvider, CheapLLMConfig } from '@/lib/llm/cheap-llm';
 import { logger } from '@/lib/logger';
 import { createContextSummaryEvent } from '@/lib/services/system-events.service';
+import { enqueueChatDangerClassification } from '../queue-service';
+import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import type { ContextSummaryPayload } from '../queue-service';
 
 /**
@@ -117,4 +119,36 @@ export async function handleContextSummary(job: BackgroundJob): Promise<void> {
     summaryLength: result.result?.length || 0,
     messagesProcessed: newMessages.length,
   });
+
+  // Chain: enqueue danger classification after successful summary update
+  try {
+    const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings);
+    if (dangerSettings.mode !== 'OFF') {
+      const chainResult = await enqueueChatDangerClassification(
+        job.userId,
+        {
+          chatId: payload.chatId,
+          connectionProfileId: payload.connectionProfileId,
+        },
+        { priority: -2 }
+      );
+      logger.debug('[ContextSummary] Chained danger classification job', {
+        jobId: job.id,
+        chatId: payload.chatId,
+        chainedJobId: chainResult.jobId,
+        isNew: chainResult.isNew,
+      });
+    } else {
+      logger.debug('[ContextSummary] Skipping danger classification chain — mode is OFF', {
+        jobId: job.id,
+        chatId: payload.chatId,
+      });
+    }
+  } catch (chainError) {
+    logger.warn('[ContextSummary] Failed to chain danger classification job', {
+      jobId: job.id,
+      chatId: payload.chatId,
+      error: chainError instanceof Error ? chainError.message : String(chainError),
+    });
+  }
 }

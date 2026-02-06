@@ -23,3 +23,4 @@ export { handleRng } from './rng';
 export { handleGetState, handleSetState, handleResetState } from './state';
 export { handleToggleAgentMode } from './agent-mode';
 export { handleRegenerateBackground } from './story-background';
+export { handleReclassifyDanger } from './danger-classification';

@@ -315,7 +315,7 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
         ...data,
         id: existing.id, // Preserve ID
         createdAt: existing.createdAt, // Preserve creation timestamp
-        updatedAt: now,
+        updatedAt: ('updatedAt' in data) ? (data as Record<string, unknown>).updatedAt : now,
       } as T;
 
       const validated = this.validate(updated);

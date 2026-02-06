@@ -59,12 +59,32 @@ As a Quilltap user (especially roleplayers or "AI companion" fans):
   - Expand gatekeeper to multi-label classification: Train or prompt for user-specified tags.
   - Privacy: Store prefs on-device/encrypted; never send to providers unless needed for routing.
 
+- [x] **Chat-Level Danger Classification** (Implemented v2.12)
+  - Background job classifies chat-level danger from compressed context summary
+  - `CHAT_DANGER_CLASSIFICATION` job type with deduplication
+  - Sticky classification: once dangerous, stays dangerous (never re-checks)
+  - Re-checks safe chats when message count changes (new messages added)
+  - Classification triggered automatically after context summary generation
+  - Fields: `isDangerousChat`, `dangerScore`, `dangerCategories`, `dangerClassifiedAt`, `dangerClassifiedAtMessageCount`
+  - `POST /api/v1/chats/[id]?action=reclassify-danger` manual reset endpoint
+
+- [x] **Quick-Hide Sidebar Integration for Dangerous Content** (Implemented v2.12)
+  - "Content Filters" section in quick-hide menu with "Dangerous Chats" toggle
+  - `shouldHideChat()` combines tag-based and danger-based filtering
+  - Sidebar, projects section, and all-chats page all use combined filter
+  - Persisted in localStorage (`quilltap.quickHide.hideDangerous`)
+
+- [x] **Legacy Chat Scanning** (Implemented v2.12)
+  - Scheduled danger scan runs on startup and every 10 minutes
+  - Finds all unclassified chats and enqueues classification jobs
+  - Decision tree: summary available → classify directly; long chats → generate summary first (chaining handles classification); short chats → classify from raw messages
+  - Context summary → danger classification chaining: summary completion auto-triggers classification
+  - Raw message fallback for chats without a context summary (concatenated, truncated to 4000 chars)
+  - Batch priority (-2) ensures interactive work takes precedence
+
 - [ ] **Future Enhancements**
   - Per-chat and per-project settings cascade (resolver pattern is ready)
   - Attachment/image content scanning (vision model classification)
-  - Chat-level summary of flagged messages
-  - Quick-hide sidebar integration for dangerous content filtering
-  - Legacy chat scanning (opt-in re-classification of existing messages)
 
 ### Technical Implementation Notes
 

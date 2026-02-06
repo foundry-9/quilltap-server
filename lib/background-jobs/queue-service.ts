@@ -131,6 +131,55 @@ export interface StoryBackgroundGenerationPayload {
 }
 
 /**
+ * Payload for chat danger classification job
+ */
+export interface ChatDangerClassificationPayload {
+  chatId: string;
+  connectionProfileId: string;
+}
+
+/**
+ * Result of enqueueing a chat danger classification job
+ */
+export interface ChatDangerClassificationEnqueueResult {
+  jobId: string;
+  isNew: boolean;
+}
+
+/**
+ * Enqueue a chat danger classification job
+ * Skips if there's already a pending/processing job for the same chat
+ */
+export async function enqueueChatDangerClassification(
+  userId: string,
+  payload: ChatDangerClassificationPayload,
+  options?: EnqueueJobOptions
+): Promise<ChatDangerClassificationEnqueueResult> {
+  const repos = getRepositories();
+
+  // Check for existing pending/processing classification jobs for this chat
+  const pendingJobs = await repos.backgroundJobs.findPendingForChat(payload.chatId);
+  const existingJob = pendingJobs.find(job => job.type === 'CHAT_DANGER_CLASSIFICATION');
+
+  if (existingJob) {
+    logger.info('[ChatDangerClassification] Reusing existing pending job for chat', {
+      context: 'background-jobs.queue',
+      chatId: payload.chatId,
+      existingJobId: existingJob.id,
+      existingStatus: existingJob.status,
+    });
+    return { jobId: existingJob.id, isNew: false };
+  }
+
+  const jobId = await enqueueJob(userId, 'CHAT_DANGER_CLASSIFICATION', payload as unknown as Record<string, unknown>, {
+    // Lower priority than interactive tasks
+    priority: options?.priority ?? -1,
+    ...options,
+  });
+  return { jobId, isNew: true };
+}
+
+/**
  * Message pair for batch memory extraction
  */
 export interface MessagePair {

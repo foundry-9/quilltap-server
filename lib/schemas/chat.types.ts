@@ -294,6 +294,17 @@ export const ChatMetadataSchema = z.object({
   /** Image generation profile for this chat (shared by all participants) */
   imageProfileId: UUIDSchema.nullable().optional(),
 
+  /** Whether this chat has been classified as dangerous (null = not yet classified) */
+  isDangerousChat: z.boolean().nullable().optional(),
+  /** Overall danger score for this chat (0-1), null = not yet classified */
+  dangerScore: z.number().min(0).max(1).nullable().optional(),
+  /** Categories of dangerous content detected at chat level (JSON array of strings) */
+  dangerCategories: z.array(z.string()).default([]),
+  /** When the chat danger classification last ran */
+  dangerClassifiedAt: TimestampSchema.nullable().optional(),
+  /** Message count at which danger was last classified (to detect changes for re-check) */
+  dangerClassifiedAtMessageCount: z.number().nullable().optional(),
+
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 }).refine(
@@ -380,6 +391,17 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** Image generation profile for this chat (shared by all participants) */
   imageProfileId: UUIDSchema.nullable().optional(),
+
+  /** Whether this chat has been classified as dangerous (null = not yet classified) */
+  isDangerousChat: z.boolean().nullable().optional(),
+  /** Overall danger score for this chat (0-1), null = not yet classified */
+  dangerScore: z.number().min(0).max(1).nullable().optional(),
+  /** Categories of dangerous content detected at chat level (JSON array of strings) */
+  dangerCategories: z.array(z.string()).default([]),
+  /** When the chat danger classification last ran */
+  dangerClassifiedAt: TimestampSchema.nullable().optional(),
+  /** Message count at which danger was last classified (to detect changes for re-check) */
+  dangerClassifiedAtMessageCount: z.number().nullable().optional(),
 
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

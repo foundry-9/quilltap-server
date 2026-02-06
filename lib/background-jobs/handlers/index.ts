@@ -14,6 +14,7 @@ import { handleEmbeddingGenerate } from './embedding-generate';
 import { handleEmbeddingRefit } from './embedding-refit';
 import { handleEmbeddingReindexAll } from './embedding-reindex';
 import { handleStoryBackgroundGeneration } from './story-background';
+import { handleChatDangerClassification } from './chat-danger-classification';
 
 /**
  * Job handler function type
@@ -33,6 +34,7 @@ const handlers: Record<BackgroundJobType, JobHandler> = {
   EMBEDDING_REFIT: handleEmbeddingRefit,
   EMBEDDING_REINDEX_ALL: handleEmbeddingReindexAll,
   STORY_BACKGROUND_GENERATION: handleStoryBackgroundGeneration,
+  CHAT_DANGER_CLASSIFICATION: handleChatDangerClassification,
 };
 
 /**
@@ -56,3 +58,4 @@ export { handleEmbeddingGenerate };
 export { handleEmbeddingRefit };
 export { handleEmbeddingReindexAll };
 export { handleStoryBackgroundGeneration };
+export { handleChatDangerClassification };

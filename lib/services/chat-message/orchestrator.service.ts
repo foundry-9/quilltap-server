@@ -71,6 +71,7 @@ import {
   triggerInterCharacterMemory,
   triggerUserControlledCharacterMemory,
   triggerContextSummaryCheck,
+  triggerChatDangerClassification,
 } from './memory-trigger.service'
 import { trackMessageTokenUsage } from '@/lib/services/token-tracking.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
@@ -1565,6 +1566,14 @@ async function processMessage(
         chatId,
         provider: connectionProfile.provider,
         modelName: connectionProfile.modelName,
+        userId,
+        connectionProfile,
+        chatSettings: memoryChatSettings,
+      })
+
+      // Trigger chat-level danger classification (runs after context summary in job queue)
+      await triggerChatDangerClassification(repos, {
+        chatId,
         userId,
         connectionProfile,
         chatSettings: memoryChatSettings,

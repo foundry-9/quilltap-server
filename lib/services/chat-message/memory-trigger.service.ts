@@ -10,6 +10,8 @@ import { processMessageForMemoryAsync, processInterCharacterMemoryAsync } from '
 import { checkAndGenerateSummaryIfNeeded } from '@/lib/chat/context-summary'
 import { createMemoryExtractionEvent } from '@/lib/services/system-events.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
+import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
+import { enqueueChatDangerClassification } from '@/lib/background-jobs/queue-service'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { Character, ConnectionProfile, ChatParticipantBase, MessageEvent, CheapLLMSettings } from '@/lib/schemas/types'
 
@@ -301,5 +303,80 @@ export async function triggerContextSummaryCheck(
     )
   } catch (error) {
     logger.error('Failed to trigger context summary check', {}, error as Error)
+  }
+}
+
+/**
+ * Trigger chat-level danger classification if needed
+ *
+ * Uses the compressed context summary to classify the entire chat.
+ * Key behaviors:
+ * - Bails if dangerous content mode is OFF
+ * - Once classified as dangerous, stays dangerous (sticky)
+ * - Re-checks when message count changes (new messages)
+ * - Skips if no context summary available yet
+ */
+export async function triggerChatDangerClassification(
+  repos: ReturnType<typeof getRepositories>,
+  options: {
+    chatId: string
+    userId: string
+    connectionProfile: ConnectionProfile
+    chatSettings: MemoryChatSettings
+  }
+): Promise<void> {
+  try {
+    // Resolve danger settings — bail if mode is OFF
+    const chatSettings = await repos.chatSettings.findByUserId(options.userId)
+    const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings)
+    if (dangerSettings.mode === 'OFF') {
+      return
+    }
+
+    // Get the chat
+    const chat = await repos.chats.findById(options.chatId)
+    if (!chat) {
+      return
+    }
+
+    // Sticky: if already classified as dangerous, never re-check
+    if (chat.isDangerousChat === true) {
+      logger.debug('Chat already classified as dangerous (sticky), skipping', {
+        chatId: options.chatId,
+      })
+      return
+    }
+
+    // If already classified at this message count, skip (no new messages)
+    if (
+      chat.dangerClassifiedAt &&
+      chat.dangerClassifiedAtMessageCount === chat.messageCount
+    ) {
+      logger.debug('Chat already classified at current message count, skipping', {
+        chatId: options.chatId,
+        messageCount: chat.messageCount,
+      })
+      return
+    }
+
+    // No context summary → nothing to classify yet
+    if (!chat.contextSummary) {
+      return
+    }
+
+    // Enqueue the classification job
+    const result = await enqueueChatDangerClassification(options.userId, {
+      chatId: options.chatId,
+      connectionProfileId: options.connectionProfile.id,
+    })
+
+    if (result.isNew) {
+      logger.debug('Enqueued chat danger classification job', {
+        chatId: options.chatId,
+        jobId: result.jobId,
+      })
+    }
+  } catch (error) {
+    logger.error('Failed to trigger chat danger classification', {}, error as Error)
   }
 }

@@ -107,10 +107,50 @@ Overriding a message's danger flags marks all flags as user-overridden and remov
 
 When an image prompt is flagged as dangerous, the system can use a separate uncensored LLM for prompt expansion (the step where character placeholders are resolved into visual descriptions). Configure this in **Settings > Chat Settings > Cheap LLM Settings** under "Image Prompt Expansion LLM (Uncensored - Optional)." If not set, the standard cheap LLM is always used for prompt expansion.
 
+## Chat-Level Classification
+
+In addition to per-message scanning, Quilltap can classify entire chats as dangerous based on the compressed context summary. This happens automatically in the background after messages are exchanged and a context summary has been generated.
+
+### How It Works
+
+1. After a new context summary is generated for a chat, a background job is queued
+2. The context summary is sent to the Cheap LLM gatekeeper for classification
+3. The chat is marked as dangerous or safe based on the threshold
+
+### Sticky Classification
+
+Once a chat is classified as dangerous, it stays marked as dangerous permanently. This prevents the classification from flip-flopping as conversations evolve. Safe chats are re-checked whenever new messages are added (message count changes).
+
+### Manual Reclassification
+
+If a chat was incorrectly classified as dangerous, you can reset its classification. This can be done via the API (`POST /api/v1/chats/[id]?action=reclassify-danger`), which clears the classification and re-queues it for evaluation.
+
+## Quick-Hide Integration
+
+Chats classified as dangerous can be hidden from the sidebar using the quick-hide system.
+
+### Hiding Dangerous Chats
+
+1. Click the **eye icon** in the sidebar footer (or look for it under the Settings/Tools area)
+2. In the **Content Filters** section, toggle **"Dangerous Chats"** to hide them
+3. Dangerous chats will be hidden from the sidebar, projects section, and all-chats page
+
+The toggle is persisted in your browser's local storage, so your preference is remembered across sessions.
+
+## Automatic Background Classification
+
+When dangerous content handling is enabled, Quilltap automatically classifies all existing chats in the background. This runs on startup and periodically every 10 minutes, ensuring legacy chats created before the feature was enabled also get classified.
+
+- Chats with a context summary are classified directly from the summary
+- Longer chats without a summary first have a summary generated, which then triggers classification
+- Shorter chats without a summary are classified from the raw message history
+- Background classification runs at a lower priority than interactive tasks, so it won't slow down your active conversations
+
 ## Important Notes
 
 - Classification uses your Cheap LLM, adding a small token cost per scanned message
-- Only user messages are scanned, not assistant responses
+- Only user messages are scanned per-message, not assistant responses
+- Chat-level classification uses the compressed context summary (covers the whole conversation)
 - The system never blocks messages - if anything fails, your message goes through normally
 - If no uncensored provider is available in Auto-Route mode, the message is sent to your regular provider with a warning
 - Classification accuracy depends on the Cheap LLM model's capabilities

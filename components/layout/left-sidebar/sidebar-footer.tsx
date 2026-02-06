@@ -111,9 +111,9 @@ export function SidebarFooter() {
     }
   }, [openPopout])
 
-  // Check if there are any quick-hide tags
-  const hasQuickHideTags = mounted && quickHide.quickHideTags.length > 0
-  const hasAnyHidden = mounted && quickHide.hiddenTagIds.size > 0
+  // Show quick-hide button if there are tags OR content filters are available
+  const hasQuickHideFeatures = mounted && (quickHide.quickHideTags.length > 0 || quickHide.hideDangerousChats)
+  const hasAnyHidden = mounted && (quickHide.hiddenTagIds.size > 0 || quickHide.hideDangerousChats)
   // Check if theme selector should be shown in nav
   const showThemes = mounted && theme.showNavThemeSelector
 
@@ -169,7 +169,7 @@ export function SidebarFooter() {
           </div>
         )}
 
-        {hasQuickHideTags && (
+        {hasQuickHideFeatures && (
           <div ref={quickHideRef} className="relative">
             <button
               type="button"

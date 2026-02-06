@@ -2,6 +2,37 @@
 
 ## Recent Changes
 
+### 2.12-dev
+
+- fix: Chat timestamps now always reflect the last actual message sent or received
+  - `addMessage()` and `addMessages()` no longer update `lastMessageAt` or `updatedAt` for system events
+  - Base repository `_update()` respects explicit `updatedAt` from callers instead of always auto-setting
+  - Chats repository preserves existing `updatedAt` unless caller explicitly provides it
+  - Migration `fix-chat-updated-at-timestamps-v2` resets both `updatedAt` and `lastMessageAt` on all chats to the last actual message timestamp
+
+- feat: Startup danger classification scan and context summary chaining
+  - Scheduled danger scan runs on startup and every 10 minutes to classify legacy/unclassified chats
+  - Context summary → danger classification chaining: completing a summary automatically triggers classification
+  - Raw message fallback: chats without a context summary are classified using concatenated messages (truncated to 4000 chars)
+  - Decision tree: chats with summary → classify directly; long chats (>50 messages) without summary → generate summary first; short chats → classify from raw messages
+  - Batch jobs use priority -2 (lower than interactive priority -1)
+  - Background schedulers (cleanup + danger scan) wired into startup sequence
+  - Graceful error handling: scan failures never block startup or other processing
+
+- feat: Chat-level danger classification with quick-hide integration
+  - Background job classifies entire chats as dangerous using compressed context summary
+  - Uses existing Cheap LLM gatekeeper service for classification
+  - Sticky behavior: once classified as dangerous, stays dangerous (never re-checks)
+  - Re-checks when new messages are added (message count changes)
+  - New database fields: `isDangerousChat`, `dangerScore`, `dangerCategories`, `dangerClassifiedAt`, `dangerClassifiedAtMessageCount`
+  - Database migration: `add-chat-danger-classification-fields-v1`
+  - Quick-hide sidebar integration: "Content Filters" section with "Dangerous Chats" toggle
+  - Sidebar API exposes `isDangerous` on chat objects
+  - Sidebar and all-chats page filter dangerous chats when toggle is active
+  - `POST /api/v1/chats/[id]?action=reclassify-danger` endpoint to reset and re-queue classification
+  - DANGER_CLASSIFICATION system event for token tracking
+  - Automatically triggered after context summary generation in message orchestrator
+
 ### 2.10-dev
 
 - fix: Plugin loading fails in Turbopack production builds ("dynamic usage of require is not supported")
