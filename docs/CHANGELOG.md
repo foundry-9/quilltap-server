@@ -2,7 +2,11 @@
 
 ## Recent Changes
 
-### 2.12-dev
+### 2.10-dev
+
+- fix: Quick-hide dangerous chats toggle now works across entire app
+  - Homepage Recent Chats, Character Conversations tab, and Project Chats sections now respect the toggle
+  - Sidebar quick-hide button now appears when dangerous chats exist (previously required the toggle to already be on)
 
 - feat: Danger indicator on all chat listings
   - Subtle destructive-colored asterisk (*) shown next to message count on dangerous chats
@@ -56,8 +60,6 @@
   - `POST /api/v1/chats/[id]?action=reclassify-danger` endpoint to reset and re-queue classification
   - DANGER_CLASSIFICATION system event for token tracking
   - Automatically triggered after context summary generation in message orchestrator
-
-### 2.10-dev
 
 - fix: Plugin loading fails in Turbopack production builds ("dynamic usage of require is not supported")
   - Replace `__non_webpack_require__` / bare `require` fallback with `createRequire` from `node:module` for Turbopack compatibility

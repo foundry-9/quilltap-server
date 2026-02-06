@@ -13,12 +13,17 @@ import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import type { RecentChatsSectionProps } from './types'
 
 export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
-  const { shouldHideByIds } = useQuickHide()
+  const { shouldHideByIds, hideDangerousChats } = useQuickHide()
 
   // Filter chats using quick-hide (same logic as chats page)
   // CSS overflow:hidden will hide chats that don't fit in the card
   const visibleChats = useMemo(() => {
     return chats.filter(chat => {
+      // Hide dangerous chats when filter is active
+      if (hideDangerousChats && chat.isDangerousChat) {
+        return false
+      }
+
       // Collect all tag IDs from character participants
       const allTagIds: string[] = []
 
@@ -30,7 +35,7 @@ export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
 
       return !shouldHideByIds(allTagIds)
     })
-  }, [chats, shouldHideByIds])
+  }, [chats, shouldHideByIds, hideDangerousChats])
 
   return (
     <div className="qt-homepage-section">

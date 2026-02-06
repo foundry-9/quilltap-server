@@ -58,13 +58,18 @@ export function ChatsSection({
 }: ChatsSectionProps) {
   const observerRef = useRef<IntersectionObserver | null>(null)
   const loadMoreRef = useRef<HTMLDivElement>(null)
-  const { shouldHideByIds } = useQuickHide()
+  const { shouldHideByIds, hideDangerousChats } = useQuickHide()
   const contentWidth = useContentWidthOptional()
   const isWide = contentWidth?.isWide ?? false
 
   // Filter chats based on quick-hide rules
   const visibleChats = useMemo(() => {
     return chats.filter(chat => {
+      // Hide dangerous chats when filter is active
+      if (hideDangerousChats && chat.isDangerousChat) {
+        return false
+      }
+
       // Collect all tag IDs: chat tags + all participant character tags
       const allTagIds: string[] = (chat.tags || []).map(ct => ct.tag.id)
 
@@ -76,7 +81,7 @@ export function ChatsSection({
 
       return !shouldHideByIds(allTagIds)
     })
-  }, [chats, shouldHideByIds])
+  }, [chats, shouldHideByIds, hideDangerousChats])
 
 
   // Set up intersection observer for infinite scroll

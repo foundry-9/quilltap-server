@@ -13,6 +13,7 @@ import { useState, useRef, useCallback } from 'react'
 import { useEffect } from 'react'
 import { useSidebar } from '@/components/providers/sidebar-provider'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
+import { useSidebarData } from '@/components/providers/sidebar-data-provider'
 import { useTheme } from '@/components/providers/theme-provider'
 import { ProfileMenu } from './profile-menu'
 import { NavUserMenuThemeContent } from '@/components/dashboard/nav-user-menu-theme'
@@ -85,6 +86,7 @@ type PopoutMenu = 'themes' | 'quickHide' | null
 export function SidebarFooter() {
   const { isCollapsed } = useSidebar()
   const quickHide = useQuickHide()
+  const { chats } = useSidebarData()
   const theme = useTheme()
   const [openPopout, setOpenPopout] = useState<PopoutMenu>(null)
   const themesRef = useRef<HTMLDivElement>(null)
@@ -111,8 +113,9 @@ export function SidebarFooter() {
     }
   }, [openPopout])
 
-  // Show quick-hide button if there are tags OR content filters are available
-  const hasQuickHideFeatures = mounted && (quickHide.quickHideTags.length > 0 || quickHide.hideDangerousChats)
+  // Show quick-hide button if there are tags, dangerous chats exist, or danger filter is active
+  const hasDangerousChats = chats.some(chat => chat.isDangerous)
+  const hasQuickHideFeatures = mounted && (quickHide.quickHideTags.length > 0 || quickHide.hideDangerousChats || hasDangerousChats)
   const hasAnyHidden = mounted && (quickHide.hiddenTagIds.size > 0 || quickHide.hideDangerousChats)
   // Check if theme selector should be shown in nav
   const showThemes = mounted && theme.showNavThemeSelector

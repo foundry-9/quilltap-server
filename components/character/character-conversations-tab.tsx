@@ -90,10 +90,13 @@ function transformChatToCardData(chat: Chat): ChatCardData {
 export function CharacterConversationsTab({ characterId, characterName, refreshKey }: CharacterConversationsTabProps) {
   const [chats, setChats] = useState<Chat[]>([])
   const [loading, setLoading] = useState(true)
-  const { shouldHideByIds } = useQuickHide()
+  const { shouldHideByIds, hideDangerousChats } = useQuickHide()
   const visibleChats = useMemo(
-    () => chats.filter(chat => !shouldHideByIds((chat.tags || []).map(ct => ct.tag.id))),
-    [chats, shouldHideByIds]
+    () => chats.filter(chat => {
+      if (hideDangerousChats && chat.isDangerousChat) return false
+      return !shouldHideByIds((chat.tags || []).map(ct => ct.tag.id))
+    }),
+    [chats, shouldHideByIds, hideDangerousChats]
   )
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
