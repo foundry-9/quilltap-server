@@ -23,25 +23,31 @@ import packageJson from '@/package.json';
 import { resolve, join } from 'node:path';
 import { existsSync } from 'node:fs';
 
-// Use __non_webpack_require__ to bypass bundler static analysis for dynamic plugin loading
-// This magic global is provided by webpack/Turbopack for native Node.js require access
-const dynamicRequire: NodeRequire = typeof __non_webpack_require__ !== 'undefined'
-  ? __non_webpack_require__
-  : require;
-
-// Get the Module object dynamically to avoid Next.js bundler issues
-// Using explicit interface instead of `typeof import('module')` to avoid bundler tracing
+// Dynamic plugin loading requires native Node.js require, not the bundler's.
+// - Webpack (dev): provides __non_webpack_require__ for native require access
+// - Turbopack (Next.js 16+ production) / plain Node.js: use createRequire from node:module
+//   accessed via require('node:module') so webpack sees it as dead code
 interface NodeModuleParent {
   filename?: string;
   paths?: string[];
 }
-interface NodeModule {
+interface NodeModuleInternal {
   _resolveFilename: (request: string, parent: NodeModuleParent | null, isMain: boolean, options?: object) => string;
   _nodeModulePaths: (from: string) => string[];
 }
-const Module: NodeModule = typeof __non_webpack_require__ !== 'undefined'
-  ? __non_webpack_require__('module')
-  : require('module');
+
+let dynamicRequire: NodeRequire;
+let Module: NodeModuleInternal;
+
+if (typeof __non_webpack_require__ !== 'undefined') {
+  dynamicRequire = __non_webpack_require__;
+  Module = __non_webpack_require__('module') as unknown as NodeModuleInternal;
+} else {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const nodeModule = require('node:module');
+  dynamicRequire = nodeModule.createRequire(process.cwd() + '/') as NodeRequire;
+  Module = nodeModule as unknown as NodeModuleInternal;
+}
 
 // Get the app's node_modules path for peer dependency resolution
 const appNodeModules = join(process.cwd(), 'node_modules');
@@ -99,7 +105,7 @@ function loadExternalPluginModule(modulePath: string): unknown {
 
   try {
     // Clear the module from cache to ensure fresh load with our patched resolver
-    delete require.cache[require.resolve(modulePath)];
+    delete dynamicRequire.cache[dynamicRequire.resolve(modulePath)];
   } catch {
     // Module not in cache, that's fine
   }

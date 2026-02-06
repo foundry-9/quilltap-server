@@ -4,6 +4,11 @@
 
 ### 2.11-dev
 
+- fix: Plugin loading fails in Turbopack production builds ("dynamic usage of require is not supported")
+  - Replace `__non_webpack_require__` / bare `require` fallback with `createRequire` from `node:module` for Turbopack compatibility
+  - Keep `__non_webpack_require__` as primary path for webpack (dev mode), `createRequire` as fallback for Turbopack/plain Node.js
+  - Add `node:module` to webpack server externals and suppress `createRequire` parse warnings in `next.config.js`
+  - Fixes: `plugin-initialization.ts`, `provider-registry.ts`, `next.config.js`
 - fix: Dangerous content settings not persisting (PUT route handler missing `dangerousContentSettings` field)
 - fix: Image description fallback crash (`repos.users.getChatSettings` → `repos.chatSettings.findByUserId`)
 - refactor: Move "Image Prompt Expansion LLM" setting from Cheap LLM card to Dangerous Content Handling card
