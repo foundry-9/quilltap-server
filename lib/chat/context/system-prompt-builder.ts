@@ -17,6 +17,7 @@ import { processTemplate, type TemplateContext } from '@/lib/templates/processor
 export interface OtherParticipantInfo {
   name: string
   aliases?: string[]
+  pronouns?: { subject: string; object: string; possessive: string }
   description?: string
   type: 'CHARACTER'
 }
@@ -161,6 +162,11 @@ export function buildSystemPrompt(
     parts.push(`\n## Character Aliases\nThis character also goes by: ${character.aliases.join(', ')}\nOther characters and the user may refer to them by any of these names.`)
   }
 
+  // Character pronouns - let the LLM know what pronouns to use
+  if (character.pronouns) {
+    parts.push(`\n## Character Pronouns\nThis character's pronouns are: ${character.pronouns.subject}/${character.pronouns.object}/${character.pronouns.possessive}. Always use these pronouns when referring to this character.`)
+  }
+
   // Scenario/setting - process templates
   if (character.scenario) {
     const processedScenario = processTemplate(character.scenario, templateContext)
@@ -233,6 +239,7 @@ export function buildOtherParticipantsInfo(
         otherParticipants.push({
           name: character.name,
           aliases: character.aliases && character.aliases.length > 0 ? character.aliases : undefined,
+          pronouns: character.pronouns || undefined,
           description: character.title || character.description || undefined,
           type: 'CHARACTER',
         })

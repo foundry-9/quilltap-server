@@ -14,6 +14,7 @@ import {
 const INITIAL_FORM_DATA: CharacterFormData = {
   name: '',
   aliases: [],
+  pronouns: null,
   title: '',
   description: '',
   personality: '',
@@ -66,6 +67,7 @@ export function useCharacterEdit(id: string) {
         const initialFormData: CharacterFormData = {
           name: char.name,
           aliases: char.aliases || [],
+          pronouns: char.pronouns || null,
           title: char.title || '',
           description: char.description || '',
           personality: char.personality || '',
@@ -126,6 +128,16 @@ export function useCharacterEdit(id: string) {
     setState((prev) => ({
       ...prev,
       formData: { ...prev.formData, aliases },
+    }))
+  }
+
+  /**
+   * Handle pronouns changes
+   */
+  const handlePronounsChange = (pronouns: { subject: string; object: string; possessive: string } | null) => {
+    setState((prev) => ({
+      ...prev,
+      formData: { ...prev.formData, pronouns },
     }))
   }
 
@@ -301,6 +313,7 @@ export function useCharacterEdit(id: string) {
     // Methods
     handleChange,
     handleAliasesChange,
+    handlePronounsChange,
     handleSubmit,
     handleCancel,
     setCharacterAvatar,

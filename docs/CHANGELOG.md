@@ -4,6 +4,15 @@
 
 ### 2.10-dev
 
+- feat: Character pronouns
+  - Characters can now have pronouns (subject/object/possessive) like he/him/his or they/them/their
+  - Dropdown selector with common presets (He/Him/His, She/Her/Her, They/Them/Their, It/It/Its) plus custom option
+  - Pronouns included in character's own system prompt so the LLM uses them correctly
+  - Other participants' pronouns shown in multi-character chat context
+  - User-controlled characters' pronouns included in "You are talking to..." line
+  - Pronouns displayed inline on character view page next to name and aliases
+  - New database migration adds `pronouns` column to characters table
+
 - feat: Character aliases
   - Characters can now have alternate names (aliases) like "Liz" for "Elizabeth"
   - Aliases are included in the character's own system prompt so the LLM knows about them
@@ -13,6 +22,11 @@
   - Chip-style editor in the character edit form for managing aliases
   - Aliases displayed inline on character view page next to the name
   - New database migration adds `aliases` column to characters table
+
+- fix: Retry story background prompt crafting with uncensored provider on empty response
+  - Detect when the cheap LLM returns an empty result (silent content safety refusal) during story background prompt crafting
+  - Retry with the uncensored `imagePromptProfileId` provider if configured, matching the existing pattern in image generation
+  - If no uncensored profile is configured, behavior is unchanged (warn and return)
 
 - fix: BaseModal z-index stacking issue on project pages
   - Modal dialogs (e.g., "Browse All Files") could appear behind chat cards

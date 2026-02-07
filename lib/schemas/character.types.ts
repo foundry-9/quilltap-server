@@ -50,6 +50,18 @@ export const PhysicalDescriptionSchema = z.object({
 export type PhysicalDescription = z.infer<typeof PhysicalDescriptionSchema>;
 
 // ============================================================================
+// CHARACTER PRONOUNS
+// ============================================================================
+
+export const PronounsSchema = z.object({
+  subject: z.string().min(1).max(20),
+  object: z.string().min(1).max(20),
+  possessive: z.string().min(1).max(20),
+});
+
+export type Pronouns = z.infer<typeof PronounsSchema>;
+
+// ============================================================================
 // CHARACTER
 // ============================================================================
 
@@ -89,6 +101,7 @@ export const CharacterSchema = z.object({
     isDefault: z.boolean(),
   })).default([]),
   aliases: z.array(z.string()).default([]),
+  pronouns: PronounsSchema.nullable().optional(),
   tags: z.array(UUIDSchema).default([]),
   avatarOverrides: z.array(z.object({
     chatId: UUIDSchema,

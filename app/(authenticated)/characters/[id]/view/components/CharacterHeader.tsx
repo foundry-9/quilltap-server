@@ -73,6 +73,9 @@ export function CharacterHeader({
               {character?.aliases && character.aliases.length > 0 && (
                 <span className="text-lg font-normal text-muted-foreground ml-2">({character.aliases.join(' / ')})</span>
               )}
+              {character?.pronouns && (
+                <span className="text-lg font-normal text-muted-foreground ml-2">({character.pronouns.subject}/{character.pronouns.object}/{character.pronouns.possessive})</span>
+              )}
             </h1>
             <button
               onClick={onToggleFavorite}

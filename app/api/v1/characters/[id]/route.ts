@@ -30,6 +30,7 @@ import { executeCascadeDelete, getCascadeDeletePreview } from '@/lib/cascade-del
 import { exportSTCharacter, createSTCharacterPNG } from '@/lib/sillytavern/character';
 import { readImageBuffer } from '@/lib/images-v2';
 import { z } from 'zod';
+import { PronounsSchema } from '@/lib/schemas/character.types';
 import { logger } from '@/lib/logger';
 import { notFound, forbidden, badRequest, serverError, validationError } from '@/lib/api/responses';
 
@@ -60,6 +61,7 @@ const updateCharacterSchema = z.object({
     )
     .nullable(),
   aliases: z.array(z.string()).optional(),
+  pronouns: PronounsSchema.nullable().optional(),
   controlledBy: z.enum(['llm', 'user']).optional(),
   npc: z.boolean().optional(),
   defaultAgentModeEnabled: z.boolean().nullable().optional(),

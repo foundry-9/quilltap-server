@@ -73,6 +73,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
     avatarRefreshKey,
     handleChange,
     handleAliasesChange,
+    handlePronounsChange,
     handleSubmit,
     handleCancel,
     setCharacterAvatar,
@@ -224,7 +225,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
           {(activeTab: string) => {
             switch (activeTab) {
               case 'details':
-                return <CharacterBasicInfo characterId={id} formData={formData} onChange={handleChange} onAliasesChange={handleAliasesChange} />
+                return <CharacterBasicInfo characterId={id} formData={formData} onChange={handleChange} onAliasesChange={handleAliasesChange} onPronounsChange={handlePronounsChange} />
 
               case 'system-prompts':
                 return (

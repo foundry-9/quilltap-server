@@ -17,6 +17,7 @@ export interface Character {
   defaultConnectionProfileId?: string
   npc?: boolean
   aliases?: string[]
+  pronouns?: { subject: string; object: string; possessive: string } | null
   defaultImage?: {
     id: string
     filepath: string
@@ -27,6 +28,7 @@ export interface Character {
 export interface CharacterFormData {
   name: string
   aliases: string[]
+  pronouns: { subject: string; object: string; possessive: string } | null
   title: string
   description: string
   personality: string

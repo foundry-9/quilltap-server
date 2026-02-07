@@ -166,6 +166,7 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
         ...data,
         tags: data.tags ?? [],
         aliases: data.aliases ?? [],
+        pronouns: data.pronouns ?? null,
         isFavorite: data.isFavorite ?? false,
         personaLinks: data.personaLinks ?? [],
         avatarOverrides: data.avatarOverrides ?? [],

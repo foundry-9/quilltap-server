@@ -51,6 +51,7 @@ export interface Character {
   npc?: boolean
   defaultAgentModeEnabled?: boolean | null
   aliases?: string[]
+  pronouns?: { subject: string; object: string; possessive: string } | null
   defaultImage?: {
     id: string
     filepath: string

@@ -33,6 +33,7 @@ interface UserCharacter {
   id: string
   name: string
   aliases?: string[]
+  pronouns?: { subject: string; object: string; possessive: string }
   description?: string | null
   personality?: string | null
 }
@@ -75,6 +76,7 @@ export async function buildChatContext(
         id: uc.id,
         name: uc.name,
         aliases: uc.aliases && uc.aliases.length > 0 ? uc.aliases : undefined,
+        pronouns: uc.pronouns || undefined,
         description: uc.description,
         personality: uc.personality,
       }
@@ -88,6 +90,7 @@ export async function buildChatContext(
         id: defaultPartner.id,
         name: defaultPartner.name,
         aliases: defaultPartner.aliases && defaultPartner.aliases.length > 0 ? defaultPartner.aliases : undefined,
+        pronouns: defaultPartner.pronouns || undefined,
         description: defaultPartner.description,
         personality: defaultPartner.personality,
       }
@@ -178,7 +181,10 @@ function buildSystemPrompt({
     const aliasNote = userCharacter.aliases && userCharacter.aliases.length > 0
       ? ` (also known as: ${userCharacter.aliases.join(', ')})`
       : ''
-    prompt += `\n\nYou are talking to ${userCharacter.name}${aliasNote}.`
+    const pronounNote = userCharacter.pronouns
+      ? ` (pronouns: ${userCharacter.pronouns.subject}/${userCharacter.pronouns.object}/${userCharacter.pronouns.possessive})`
+      : ''
+    prompt += `\n\nYou are talking to ${userCharacter.name}${aliasNote}${pronounNote}.`
     if (userCharacter.description) {
       const processedUserDesc = processTemplate(userCharacter.description, {
         char: userCharacter.name,

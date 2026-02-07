@@ -1259,7 +1259,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
     try {
       const res = await fetch(`/api/v1/chats/${id}?action=remove-participant`, {
-        method: 'DELETE',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participantId }),
       })

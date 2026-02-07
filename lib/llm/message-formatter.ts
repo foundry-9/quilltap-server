@@ -198,7 +198,7 @@ export function formatMessagesForProvider(
  * @returns String to append to system prompt
  */
 export function buildMultiCharacterContextSection(
-  otherParticipants: Array<{ name: string; aliases?: string[]; description?: string; type: 'CHARACTER' }>,
+  otherParticipants: Array<{ name: string; aliases?: string[]; pronouns?: { subject: string; object: string; possessive: string }; description?: string; type: 'CHARACTER' }>,
   respondingCharacterName: string
 ): string {
   if (otherParticipants.length === 0) {
@@ -216,8 +216,11 @@ export function buildMultiCharacterContextSection(
     const aliasNote = participant.aliases && participant.aliases.length > 0
       ? ` (also known as: ${participant.aliases.join(', ')})`
       : ''
+    const pronounNote = participant.pronouns
+      ? ` (pronouns: ${participant.pronouns.subject}/${participant.pronouns.object}/${participant.pronouns.possessive})`
+      : ''
     const description = participant.description ? ` - ${participant.description}` : ''
-    lines.push(`- **${participant.name}**${aliasNote} ${typeLabel}${description}`)
+    lines.push(`- **${participant.name}**${aliasNote}${pronounNote} ${typeLabel}${description}`)
   }
 
   lines.push('')

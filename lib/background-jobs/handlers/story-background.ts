@@ -91,8 +91,8 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     return;
   }
 
-  // Always use the standard cheap LLM for story backgrounds
-  // (imagePromptProfileId is reserved for uncensored dangerous content expansion)
+  // Use the standard cheap LLM for the initial attempt at story backgrounds
+  // (imagePromptProfileId is used as a retry fallback if the safe provider returns empty)
   let cheapLLMSelection: CheapLLMSelection | null = null;
   {
     const cheapLLMConfig: CheapLLMConfig = chatSettings?.cheapLLMSettings ? {
@@ -197,7 +197,10 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     job.userId
   );
 
-  if (!craftResult.success || !craftResult.result) {
+  let finalPrompt: string | undefined = craftResult.result;
+
+  if (!craftResult.success) {
+    // Actual error from the cheap LLM
     logger.warn('[StoryBackground] Failed to craft background prompt', {
       context: 'background-jobs.story-background',
       jobId: job.id,
@@ -206,7 +209,75 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     return;
   }
 
-  const finalPrompt = craftResult.result;
+  if (!finalPrompt) {
+    // Success but empty result — treat as a silent content refusal
+    logger.warn('[StoryBackground] Empty response from safe provider, treating as content refusal', {
+      context: 'background-jobs.story-background',
+      jobId: job.id,
+      sceneContext,
+    });
+
+    const uncensoredProfileId = chatSettings?.cheapLLMSettings?.imagePromptProfileId;
+    if (uncensoredProfileId) {
+      const uncensoredProfile = allProfiles.find(p => p.id === uncensoredProfileId);
+      if (uncensoredProfile) {
+        const isLocal = uncensoredProfile.provider === 'OLLAMA';
+        const uncensoredSelection: CheapLLMSelection = {
+          provider: uncensoredProfile.provider,
+          modelName: uncensoredProfile.modelName,
+          connectionProfileId: uncensoredProfile.id,
+          baseUrl: isLocal ? (uncensoredProfile.baseUrl || 'http://localhost:11434') : undefined,
+          isLocal,
+        };
+
+        logger.info('[StoryBackground] Retrying with uncensored image prompt profile', {
+          context: 'background-jobs.story-background',
+          jobId: job.id,
+          profileId: uncensoredProfile.id,
+          profileName: uncensoredProfile.name,
+        });
+
+        const retryResult = await craftStoryBackgroundPrompt(
+          {
+            sceneContext,
+            characters: characterDescriptions,
+            provider: imageProfile.provider,
+          },
+          uncensoredSelection,
+          job.userId
+        );
+
+        if (retryResult.success && retryResult.result) {
+          finalPrompt = retryResult.result;
+          logger.info('[StoryBackground] Retry with uncensored profile succeeded', {
+            context: 'background-jobs.story-background',
+            jobId: job.id,
+            promptLength: finalPrompt.length,
+          });
+        } else {
+          logger.warn('[StoryBackground] Retry with uncensored profile also failed', {
+            context: 'background-jobs.story-background',
+            jobId: job.id,
+            error: retryResult.error,
+          });
+          return;
+        }
+      } else {
+        logger.warn('[StoryBackground] Uncensored image prompt profile not found, cannot retry', {
+          context: 'background-jobs.story-background',
+          jobId: job.id,
+          configuredProfileId: uncensoredProfileId,
+        });
+        return;
+      }
+    } else {
+      logger.warn('[StoryBackground] No uncensored image prompt profile configured, cannot retry', {
+        context: 'background-jobs.story-background',
+        jobId: job.id,
+      });
+      return;
+    }
+  }
 
   logger.debug('[StoryBackground] Crafted prompt', {
     context: 'background-jobs.story-background',

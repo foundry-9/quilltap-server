@@ -71,6 +71,8 @@ import { addChatDangerClassificationFieldsMigration } from './add-chat-danger-cl
 import { fixChatUpdatedAtTimestampsMigration } from './fix-chat-updated-at-timestamps';
 // Add aliases field to characters
 import { addCharacterAliasesFieldMigration } from './add-character-aliases-field';
+// Add pronouns field to characters
+import { addCharacterPronounsFieldMigration } from './add-character-pronouns-field';
 
 /**
  * All available migrations.
@@ -137,6 +139,8 @@ export const migrations: Migration[] = [
   fixChatUpdatedAtTimestampsMigration,
   // Add aliases field to characters
   addCharacterAliasesFieldMigration,
+  // Add pronouns field to characters
+  addCharacterPronounsFieldMigration,
 ];
 
 export {
@@ -198,4 +202,6 @@ export {
   fixChatUpdatedAtTimestampsMigration,
   // Add aliases field to characters
   addCharacterAliasesFieldMigration,
+  // Add pronouns field to characters
+  addCharacterPronounsFieldMigration,
 };

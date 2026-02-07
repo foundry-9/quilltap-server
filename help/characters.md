@@ -107,6 +107,7 @@ Characters are sorted by:
 
 - **Name** — What the character is called
 - **Aliases** — Optional alternate names the character goes by (e.g., "Liz", "Lizzy" for "Elizabeth")
+- **Pronouns** — Optional pronouns for the character (e.g., he/him/his, she/her/her, they/them/their). Choose from presets or enter custom pronouns. When set, pronouns are included in system prompts so the LLM uses them correctly, and displayed on the character's view page.
 - **Title** — Optional subtitle or role (e.g., "Bounty Hunter")
 - **Description** — Long-form narrative about character
 - **Personality** — Key traits and characteristics
@@ -271,7 +272,7 @@ View detailed appearance:
 
 Editable fields:
 
-- Name, aliases, title, description
+- Name, aliases, pronouns, title, description
 - Personality and scenario
 - First message and examples
 - Avatar and images

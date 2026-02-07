@@ -63,6 +63,15 @@ export const POST = createContextHandler<{ id: string }>(
 
 Legacy routes outside `/api/v1/` were removed in v2.8. Only `/api/v1/` routes are supported. A few non-v1 routes remain for specific purposes: `/api/health` (health check), `/api/plugin-routes/[...path]` (plugin dispatcher), and `/api/themes/*` (asset serving).
 
+## Feature Names
+
+- **Dangermouse** - that's our name for the dangerous content tracking/rerouting/hiding system
+- **Commonplace Book** - that's our name for the memory system that characters have, a self-managed RAG
+- **The Lantern** - that's the story backgrounds subsystem, that can send context to image providers and put them up as backgrounds for chats or projects
+- **Prospero** - that's the agentic and tool-using systems
+- **Aurora** - that's the complex character model and how it interacts with the prompts
+- **The Foundry** - that's the architecture underneath, plugins and packages and services
+
 ## Current State
 
 - **Details for things already implemented** are in [the README](README.md)

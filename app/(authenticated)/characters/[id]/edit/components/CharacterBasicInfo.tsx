@@ -9,6 +9,7 @@ interface CharacterBasicInfoProps {
   formData: CharacterFormData
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void
   onAliasesChange: (aliases: string[]) => void
+  onPronounsChange: (pronouns: { subject: string; object: string; possessive: string } | null) => void
 }
 
 /**
@@ -41,7 +42,29 @@ function AliasInput({ onAdd }: { onAdd: (alias: string) => void }) {
   )
 }
 
-export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesChange }: CharacterBasicInfoProps) {
+const PRONOUN_PRESETS = [
+  { label: 'Not set', value: null },
+  { label: 'He/Him/His', value: { subject: 'he', object: 'him', possessive: 'his' } },
+  { label: 'She/Her/Her', value: { subject: 'she', object: 'her', possessive: 'her' } },
+  { label: 'They/Them/Their', value: { subject: 'they', object: 'them', possessive: 'their' } },
+  { label: 'It/It/Its', value: { subject: 'it', object: 'it', possessive: 'its' } },
+  { label: 'Custom', value: 'custom' as const },
+] as const
+
+function getPronounPreset(pronouns: { subject: string; object: string; possessive: string } | null): string {
+  if (!pronouns) return 'Not set'
+  for (const preset of PRONOUN_PRESETS) {
+    if (preset.value && preset.value !== 'custom' &&
+        preset.value.subject === pronouns.subject &&
+        preset.value.object === pronouns.object &&
+        preset.value.possessive === pronouns.possessive) {
+      return preset.label
+    }
+  }
+  return 'Custom'
+}
+
+export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesChange, onPronounsChange }: CharacterBasicInfoProps) {
   return (
     <div className="space-y-6">
       {/* Name Field */}
@@ -90,6 +113,71 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
             onAliasesChange([...formData.aliases, alias])
           }
         }} />
+      </div>
+
+      {/* Pronouns Field */}
+      <div>
+        <label className="block text-sm font-medium mb-2 text-foreground">
+          Pronouns (Optional)
+        </label>
+        <p className="text-xs text-muted-foreground mb-2">
+          The character&apos;s pronouns, included in system prompts so the LLM uses them correctly.
+        </p>
+        <select
+          value={getPronounPreset(formData.pronouns)}
+          onChange={(e) => {
+            const selected = PRONOUN_PRESETS.find((p) => p.label === e.target.value)
+            if (!selected) return
+            if (selected.value === null) {
+              onPronounsChange(null)
+            } else if (selected.value === 'custom') {
+              onPronounsChange(formData.pronouns || { subject: '', object: '', possessive: '' })
+            } else {
+              onPronounsChange({ ...selected.value })
+            }
+          }}
+          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+        >
+          {PRONOUN_PRESETS.map((preset) => (
+            <option key={preset.label} value={preset.label}>
+              {preset.label}
+            </option>
+          ))}
+        </select>
+        {formData.pronouns && getPronounPreset(formData.pronouns) === 'Custom' && (
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">Subject</label>
+              <input
+                type="text"
+                value={formData.pronouns.subject}
+                onChange={(e) => onPronounsChange({ ...formData.pronouns!, subject: e.target.value })}
+                placeholder="e.g., they"
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">Object</label>
+              <input
+                type="text"
+                value={formData.pronouns.object}
+                onChange={(e) => onPronounsChange({ ...formData.pronouns!, object: e.target.value })}
+                placeholder="e.g., them"
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">Possessive</label>
+              <input
+                type="text"
+                value={formData.pronouns.possessive}
+                onChange={(e) => onPronounsChange({ ...formData.pronouns!, possessive: e.target.value })}
+                placeholder="e.g., their"
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Title Field */}
