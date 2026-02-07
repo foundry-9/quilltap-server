@@ -15,7 +15,7 @@
  */
 
 import { useMemo, useState, useCallback } from 'react'
-import { ParticipantCard, type ParticipantData } from './ParticipantCard'
+import { ParticipantCard, type ParticipantData, type ConnectionProfileOption } from './ParticipantCard'
 import { Avatar } from '@/components/ui/Avatar'
 import type { TurnState, TurnSelectionResult } from '@/lib/chat/turn-manager'
 import { getQueuePosition } from '@/lib/chat/turn-manager'
@@ -51,6 +51,10 @@ interface ParticipantSidebarProps {
   activeTypingParticipantId?: string | null // Which impersonated character is currently "active" for typing
   onImpersonate?: (participantId: string) => void // Start impersonating a character
   onStopImpersonate?: (participantId: string) => void // Stop impersonating a character
+  // Connection profile controls (passed to cards)
+  connectionProfiles?: ConnectionProfileOption[]
+  onConnectionProfileChange?: (participantId: string, profileId: string | null, controlledBy: 'llm' | 'user') => void
+  onParticipantSettingsChange?: (participantId: string, updates: { systemPromptOverride?: string | null; isActive?: boolean }) => void
   className?: string
 }
 
@@ -75,6 +79,9 @@ export function ParticipantSidebar({
   activeTypingParticipantId,
   onImpersonate,
   onStopImpersonate,
+  connectionProfiles,
+  onConnectionProfileChange,
+  onParticipantSettingsChange,
   className = '',
 }: ParticipantSidebarProps) {
   // Collapsed state with localStorage persistence (default: collapsed)
@@ -351,6 +358,14 @@ export function ParticipantSidebar({
               isActiveTyping={isActiveTyping}
               onImpersonate={onImpersonate}
               onStopImpersonate={onStopImpersonate}
+              connectionProfiles={connectionProfiles}
+              onConnectionProfileChange={onConnectionProfileChange}
+              onSystemPromptOverrideChange={onParticipantSettingsChange
+                ? (pId, override) => onParticipantSettingsChange(pId, { systemPromptOverride: override })
+                : undefined}
+              onActiveChange={onParticipantSettingsChange
+                ? (pId, active) => onParticipantSettingsChange(pId, { isActive: active })
+                : undefined}
             />
           )
         })}

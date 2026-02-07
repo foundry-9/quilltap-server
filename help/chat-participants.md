@@ -97,12 +97,18 @@ Each character in the sidebar has a card with:
 - "Persona" for user personas
 - "NPC" for on-the-fly characters
 
-### Status Indicators
+### Connection Profile Dropdown
 
-**Connection Profile Badge:**
-- Shows which LLM service/model the character uses
-- Provider icon (OpenAI, Anthropic, etc.)
-- Model name if space permits
+Each character card includes a **connection profile dropdown** that lets you change which LLM service and model the character uses, directly from the sidebar:
+
+- **Dropdown selector** shows the current model (e.g., "gpt-4-turbo", "claude-3-opus")
+- **"User (you type)"** option switches the character to user control (impersonation)
+- **Change immediately** — selecting a different profile saves automatically
+- Only shown for CHARACTER participants, not personas
+
+This makes switching models the fastest possible action — no need to open a settings modal.
+
+### Status Indicators
 
 **Control Mode:**
 - LLM icon if AI-controlled
@@ -139,6 +145,20 @@ Each character in the sidebar has a card with:
 **Remove Button:**
 - Remove this character from the chat
 - Only available if more than one character present
+
+### Settings Toggle (Gear Icon)
+
+Each participant card has a **gear icon** button that expands an inline settings section:
+
+**System Prompt Override:**
+- Compact text area for adding custom context or scenario instructions for this participant
+- Overrides the character's default system prompt for this chat only
+- Changes auto-save after a short delay
+
+**Active in Chat:**
+- Checkbox to enable/disable this participant
+- Inactive participants don't take turns or generate responses
+- Useful for temporarily silencing a character without removing them
 
 ## Header Information
 

@@ -9,6 +9,8 @@
  * - Nudge action functionality
  * - Different states (active, inactive, speaking)
  * - Accessibility attributes
+ * - Connection profile dropdown
+ * - Expandable settings section
  */
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals'
@@ -704,6 +706,201 @@ describe('ParticipantCard', () => {
       fireEvent.click(queueButton)
 
       expect(onQueue).toHaveBeenCalledWith('participant-persona-1')
+    })
+  })
+
+  describe('Connection profile dropdown', () => {
+    const mockProfiles = [
+      { id: 'profile-1', name: 'GPT-4', provider: 'openai', modelName: 'gpt-4-turbo' },
+      { id: 'profile-2', name: 'Claude', provider: 'anthropic', modelName: 'claude-3-opus' },
+    ]
+
+    it('renders dropdown when connectionProfiles and callback provided for character', () => {
+      const props = createDefaultProps({
+        connectionProfiles: mockProfiles,
+        onConnectionProfileChange: jest.fn(),
+      })
+      render(<ParticipantCard {...props} />)
+
+      const select = screen.getByLabelText('Connection profile for Echo')
+      expect(select).toBeInTheDocument()
+      expect(select.tagName).toBe('SELECT')
+    })
+
+    it('does not render dropdown for persona participant', () => {
+      const props = createDefaultProps({
+        participant: createPersonaParticipant(),
+        isUserParticipant: true,
+        connectionProfiles: mockProfiles,
+        onConnectionProfileChange: jest.fn(),
+      })
+      render(<ParticipantCard {...props} />)
+
+      expect(screen.queryByLabelText('Connection profile for User')).not.toBeInTheDocument()
+    })
+
+    it('does not render dropdown when connectionProfiles not provided', () => {
+      const props = createDefaultProps({
+        onConnectionProfileChange: jest.fn(),
+      })
+      render(<ParticipantCard {...props} />)
+
+      expect(screen.queryByLabelText(/connection profile/i)).not.toBeInTheDocument()
+    })
+
+    it('shows profile options in dropdown', () => {
+      const props = createDefaultProps({
+        connectionProfiles: mockProfiles,
+        onConnectionProfileChange: jest.fn(),
+      })
+      render(<ParticipantCard {...props} />)
+
+      const select = screen.getByLabelText('Connection profile for Echo')
+      const options = select.querySelectorAll('option')
+      // "Select a provider...", "User (you type)", + 2 profiles = 4
+      expect(options).toHaveLength(4)
+    })
+
+    it('selects current connection profile', () => {
+      const props = createDefaultProps({
+        connectionProfiles: mockProfiles,
+        onConnectionProfileChange: jest.fn(),
+      })
+      render(<ParticipantCard {...props} />)
+
+      const select = screen.getByLabelText('Connection profile for Echo') as HTMLSelectElement
+      expect(select.value).toBe('profile-1')
+    })
+
+    it('selects user option when controlledBy is user', () => {
+      const props = createDefaultProps({
+        participant: createCharacterParticipant({ controlledBy: 'user' }),
+        connectionProfiles: mockProfiles,
+        onConnectionProfileChange: jest.fn(),
+      })
+      render(<ParticipantCard {...props} />)
+
+      const select = screen.getByLabelText('Connection profile for Echo') as HTMLSelectElement
+      expect(select.value).toBe('__user__')
+    })
+
+    it('calls onConnectionProfileChange with llm when selecting a profile', () => {
+      const onChange = jest.fn()
+      const props = createDefaultProps({
+        connectionProfiles: mockProfiles,
+        onConnectionProfileChange: onChange,
+      })
+      render(<ParticipantCard {...props} />)
+
+      const select = screen.getByLabelText('Connection profile for Echo')
+      fireEvent.change(select, { target: { value: 'profile-2' } })
+
+      expect(onChange).toHaveBeenCalledWith('participant-char-1', 'profile-2', 'llm')
+    })
+
+    it('calls onConnectionProfileChange with user when selecting user option', () => {
+      const onChange = jest.fn()
+      const props = createDefaultProps({
+        connectionProfiles: mockProfiles,
+        onConnectionProfileChange: onChange,
+      })
+      render(<ParticipantCard {...props} />)
+
+      const select = screen.getByLabelText('Connection profile for Echo')
+      fireEvent.change(select, { target: { value: '__user__' } })
+
+      expect(onChange).toHaveBeenCalledWith('participant-char-1', null, 'user')
+    })
+
+    it('falls back to plain-text indicator when no dropdown props', () => {
+      const props = createDefaultProps()
+      render(<ParticipantCard {...props} />)
+
+      // Should show plain text model name, not a select
+      expect(screen.getByText('gpt-4-turbo')).toBeInTheDocument()
+      expect(screen.queryByLabelText(/connection profile/i)).not.toBeInTheDocument()
+    })
+  })
+
+  describe('Expandable settings section', () => {
+    it('shows settings toggle when onSystemPromptOverrideChange provided', () => {
+      const props = createDefaultProps({
+        onSystemPromptOverrideChange: jest.fn(),
+      })
+      render(<ParticipantCard {...props} />)
+
+      expect(screen.getByLabelText('Show participant settings')).toBeInTheDocument()
+    })
+
+    it('shows settings toggle when onActiveChange provided', () => {
+      const props = createDefaultProps({
+        onActiveChange: jest.fn(),
+      })
+      render(<ParticipantCard {...props} />)
+
+      expect(screen.getByLabelText('Show participant settings')).toBeInTheDocument()
+    })
+
+    it('does not show settings toggle when neither callback provided', () => {
+      const props = createDefaultProps()
+      render(<ParticipantCard {...props} />)
+
+      expect(screen.queryByLabelText(/participant settings/i)).not.toBeInTheDocument()
+    })
+
+    it('expands settings section when toggle clicked', () => {
+      const props = createDefaultProps({
+        onSystemPromptOverrideChange: jest.fn(),
+        onActiveChange: jest.fn(),
+      })
+      render(<ParticipantCard {...props} />)
+
+      fireEvent.click(screen.getByLabelText('Show participant settings'))
+
+      expect(screen.getByText('System Prompt Override')).toBeInTheDocument()
+      expect(screen.getByText('Active in chat')).toBeInTheDocument()
+      expect(screen.getByLabelText('Hide participant settings')).toBeInTheDocument()
+    })
+
+    it('collapses settings section when toggle clicked again', () => {
+      const props = createDefaultProps({
+        onSystemPromptOverrideChange: jest.fn(),
+      })
+      render(<ParticipantCard {...props} />)
+
+      fireEvent.click(screen.getByLabelText('Show participant settings'))
+      expect(screen.getByText('System Prompt Override')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByLabelText('Hide participant settings'))
+      expect(screen.queryByText('System Prompt Override')).not.toBeInTheDocument()
+    })
+
+    it('shows active checkbox reflecting participant.isActive', () => {
+      const props = createDefaultProps({
+        onActiveChange: jest.fn(),
+        participant: createCharacterParticipant({ isActive: true }),
+      })
+      render(<ParticipantCard {...props} />)
+
+      fireEvent.click(screen.getByLabelText('Show participant settings'))
+
+      const checkbox = screen.getByRole('checkbox')
+      expect(checkbox).toBeChecked()
+    })
+
+    it('calls onActiveChange when checkbox toggled', () => {
+      const onActiveChange = jest.fn()
+      const props = createDefaultProps({
+        onActiveChange,
+      })
+      render(<ParticipantCard {...props} />)
+
+      fireEvent.click(screen.getByLabelText('Show participant settings'))
+
+      const checkbox = screen.getByRole('checkbox')
+      fireEvent.click(checkbox)
+
+      expect(onActiveChange).toHaveBeenCalledWith('participant-char-1', false)
     })
   })
 })

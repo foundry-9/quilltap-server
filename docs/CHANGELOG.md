@@ -4,6 +4,18 @@
 
 ### 2.10-dev
 
+- feat: Simplify chat settings modal and add connection profile dropdown to participant cards
+  - Chat settings modal now only contains roleplay template and image generation settings
+  - Per-participant settings (connection profile, system prompt override, active toggle) moved to participant sidebar cards
+  - Each character card in the sidebar now has a connection profile dropdown for instant model switching
+  - "User (you type)" option in dropdown allows switching characters to user control without a separate dialog
+  - Gear icon on each card reveals expandable settings: system prompt override textarea and active toggle
+  - System prompt override auto-saves with debounce; active toggle saves immediately
+  - Connection profiles fetched once on page load for sidebar dropdowns
+
+- fix: Update SelectLLMProfileDialog to use v1 API endpoint
+  - Changed `/api/settings/connection-profiles` to `/api/v1/connection-profiles`
+
 - feat: Proactive memory recall for chat responses
   - Characters now analyze recent conversation to recall relevant memories before responding
   - New cheap LLM task extracts search keywords from messages since the character last spoke

@@ -12,7 +12,7 @@ import type { TurnState, TurnSelectionResult } from '@/lib/chat/turn-manager'
 
 // Mock the ParticipantCard component to simplify testing the sidebar
 jest.mock('@/components/chat/ParticipantCard', () => ({
-  ParticipantCard: ({ participant, isCurrentTurn, queuePosition, onNudge, onQueue, onDequeue, onRemove, canRemove }: {
+  ParticipantCard: ({ participant, isCurrentTurn, queuePosition, onNudge, onQueue, onDequeue, onRemove, canRemove, connectionProfiles, onConnectionProfileChange, onSystemPromptOverrideChange, onActiveChange }: {
     participant: ParticipantData
     isCurrentTurn: boolean
     queuePosition: number
@@ -21,6 +21,10 @@ jest.mock('@/components/chat/ParticipantCard', () => ({
     onDequeue: (id: string) => void
     onRemove?: (id: string) => void
     canRemove?: boolean
+    connectionProfiles?: Array<{ id: string; name: string }>
+    onConnectionProfileChange?: (id: string, profileId: string | null, controlledBy: 'llm' | 'user') => void
+    onSystemPromptOverrideChange?: (id: string, override: string | null) => void
+    onActiveChange?: (id: string, isActive: boolean) => void
   }) => (
     <div
       data-testid={`participant-${participant.id}`}
@@ -29,6 +33,10 @@ jest.mock('@/components/chat/ParticipantCard', () => ({
       data-queue-position={queuePosition}
       data-type={participant.type}
       data-display-order={participant.displayOrder}
+      data-has-profiles={connectionProfiles ? 'true' : 'false'}
+      data-has-profile-change={onConnectionProfileChange ? 'true' : 'false'}
+      data-has-settings-change={onSystemPromptOverrideChange ? 'true' : 'false'}
+      data-has-active-change={onActiveChange ? 'true' : 'false'}
     >
       <span className="participant-name">
         {participant.type === 'CHARACTER' ? participant.character?.name : participant.persona?.name}
@@ -1105,6 +1113,101 @@ describe('ParticipantSidebar', () => {
 
       // In expanded state, should render ParticipantCard
       expect(screen.getByTestId('participant-char-1')).toBeInTheDocument()
+    })
+  })
+
+  describe('Connection profile and settings props', () => {
+    it('passes connectionProfiles to participant cards', () => {
+      const participants = [
+        createCharacterParticipant('char-1', 'Alice', 1),
+      ]
+      const profiles = [{ id: 'p1', name: 'GPT-4' }]
+
+      render(
+        <ParticipantSidebar
+          {...createDefaultProps()}
+          participants={participants}
+          connectionProfiles={profiles}
+          onConnectionProfileChange={jest.fn()}
+          onParticipantSettingsChange={jest.fn()}
+        />
+      )
+
+      const card = screen.getByTestId('participant-char-1')
+      expect(card).toHaveAttribute('data-has-profiles', 'true')
+      expect(card).toHaveAttribute('data-has-profile-change', 'true')
+      expect(card).toHaveAttribute('data-has-settings-change', 'true')
+      expect(card).toHaveAttribute('data-has-active-change', 'true')
+    })
+
+    it('does not pass profile props when not provided', () => {
+      const participants = [
+        createCharacterParticipant('char-1', 'Alice', 1),
+      ]
+
+      render(
+        <ParticipantSidebar
+          {...createDefaultProps()}
+          participants={participants}
+        />
+      )
+
+      const card = screen.getByTestId('participant-char-1')
+      expect(card).toHaveAttribute('data-has-profiles', 'false')
+      expect(card).toHaveAttribute('data-has-profile-change', 'false')
+    })
+
+    it('does not pass settings callbacks when onParticipantSettingsChange is not provided', () => {
+      const participants = [
+        createCharacterParticipant('char-1', 'Alice', 1),
+      ]
+
+      render(
+        <ParticipantSidebar
+          {...createDefaultProps()}
+          participants={participants}
+          connectionProfiles={[{ id: 'p1', name: 'GPT-4' }]}
+        />
+      )
+
+      const card = screen.getByTestId('participant-char-1')
+      expect(card).toHaveAttribute('data-has-profiles', 'true')
+      expect(card).toHaveAttribute('data-has-settings-change', 'false')
+      expect(card).toHaveAttribute('data-has-active-change', 'false')
+    })
+
+    it('passes profile and settings props to all participant cards', () => {
+      const participants = [
+        createCharacterParticipant('char-1', 'Alice', 1),
+        createCharacterParticipant('char-2', 'Bob', 2),
+      ]
+      const profiles = [
+        { id: 'p1', name: 'GPT-4' },
+        { id: 'p2', name: 'Claude' },
+      ]
+
+      render(
+        <ParticipantSidebar
+          {...createDefaultProps()}
+          participants={participants}
+          connectionProfiles={profiles}
+          onConnectionProfileChange={jest.fn()}
+          onParticipantSettingsChange={jest.fn()}
+        />
+      )
+
+      const card1 = screen.getByTestId('participant-char-1')
+      const card2 = screen.getByTestId('participant-char-2')
+
+      expect(card1).toHaveAttribute('data-has-profiles', 'true')
+      expect(card1).toHaveAttribute('data-has-profile-change', 'true')
+      expect(card1).toHaveAttribute('data-has-settings-change', 'true')
+      expect(card1).toHaveAttribute('data-has-active-change', 'true')
+
+      expect(card2).toHaveAttribute('data-has-profiles', 'true')
+      expect(card2).toHaveAttribute('data-has-profile-change', 'true')
+      expect(card2).toHaveAttribute('data-has-settings-change', 'true')
+      expect(card2).toHaveAttribute('data-has-active-change', 'true')
     })
   })
 })

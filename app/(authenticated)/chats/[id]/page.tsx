@@ -162,6 +162,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     characterId?: string
   } | null>(null)
 
+  // Connection profiles for participant sidebar
+  const [connectionProfiles, setConnectionProfiles] = useState<Array<{ id: string; name: string; provider?: string; modelName?: string }>>([])
+
   // Impersonation state (Characters Not Personas)
   const [impersonatingParticipantIds, setImpersonatingParticipantIds] = useState<string[]>([])
   const [activeTypingParticipantId, setActiveTypingParticipantId] = useState<string | null>(null)
@@ -369,6 +372,27 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       setStoryBackgroundsEnabled(storyBackgroundsSettingsEnabled ?? false)
     }
   }, [chatSettings, storyBackgroundsSettingsEnabled])
+
+  // Fetch connection profiles for participant sidebar dropdowns
+  useEffect(() => {
+    const fetchConnectionProfiles = async () => {
+      try {
+        const res = await fetch('/api/v1/connection-profiles')
+        if (res.ok) {
+          const data = await res.json()
+          setConnectionProfiles((data.profiles || []).map((p: { id: string; name: string; provider?: string; modelName?: string }) => ({
+            id: p.id,
+            name: p.name,
+            provider: p.provider,
+            modelName: p.modelName,
+          })))
+        }
+      } catch (error) {
+        console.error('Failed to fetch connection profiles for sidebar', { error: error instanceof Error ? error.message : String(error) })
+      }
+    }
+    fetchConnectionProfiles()
+  }, [])
 
   // Handle scroll-to-message from memory provenance navigation
   useEffect(() => {
@@ -630,6 +654,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       controlledBy: p.controlledBy ?? (p.type === 'PERSONA' ? 'user' : 'llm'),
       displayOrder: p.displayOrder,
       isActive: p.isActive,
+      systemPromptOverride: p.systemPromptOverride ?? null,
       character: p.character ? {
         id: p.character.id,
         name: p.character.name,
@@ -1290,6 +1315,65 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       showErrorToast(err instanceof Error ? err.message : 'Failed to remove character')
     }
   }, [id, participantData, fetchChat, streaming, waitingForResponse, turnState.lastSpeakerId, participantsAsBase])
+
+  // Handle connection profile change from participant sidebar
+  const handleConnectionProfileChange = useCallback(async (
+    participantId: string,
+    profileId: string | null,
+    controlledBy: 'llm' | 'user'
+  ) => {
+    try {
+      const res = await fetch(`/api/v1/chats/${id}?action=update-participant`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          updateParticipant: {
+            participantId,
+            connectionProfileId: controlledBy === 'user' ? undefined : profileId,
+            controlledBy,
+          },
+        }),
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.error || 'Failed to update connection profile')
+      }
+
+      showSuccessToast('Connection profile updated')
+      await fetchChat()
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to update connection profile')
+    }
+  }, [id, fetchChat])
+
+  // Handle participant settings change (system prompt override, active toggle) from sidebar
+  const handleParticipantSettingsChange = useCallback(async (
+    participantId: string,
+    updates: { systemPromptOverride?: string | null; isActive?: boolean }
+  ) => {
+    try {
+      const res = await fetch(`/api/v1/chats/${id}?action=update-participant`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          updateParticipant: {
+            participantId,
+            ...updates,
+          },
+        }),
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.error || 'Failed to update participant settings')
+      }
+
+      await fetchChat()
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to update participant settings')
+    }
+  }, [id, fetchChat])
 
   // Impersonation handlers
   const handleStartImpersonation = useCallback(async (participantId: string) => {
@@ -2448,7 +2532,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           isOpen={chatSettingsModalOpen}
           onClose={() => setChatSettingsModalOpen(false)}
           chatId={id}
-          participants={chat?.participants || []}
           roleplayTemplateId={chat?.roleplayTemplateId}
           imageProfileId={chat?.imageProfileId}
           onSuccess={fetchChat}
@@ -2716,6 +2799,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           activeTypingParticipantId={activeTypingParticipantId}
           onImpersonate={handleStartImpersonation}
           onStopImpersonate={handleStopImpersonation}
+          connectionProfiles={connectionProfiles}
+          onConnectionProfileChange={handleConnectionProfileChange}
+          onParticipantSettingsChange={handleParticipantSettingsChange}
         />
       )}
     </div>

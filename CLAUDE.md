@@ -65,12 +65,13 @@ Legacy routes outside `/api/v1/` were removed in v2.8. Only `/api/v1/` routes ar
 
 ## Feature Names
 
-- **Dangermouse** - that's our name for the dangerous content tracking/rerouting/hiding system
-- **Commonplace Book** - that's our name for the memory system that characters have, a self-managed RAG
-- **The Lantern** - that's the story backgrounds subsystem, that can send context to image providers and put them up as backgrounds for chats or projects
-- **Prospero** - that's the agentic and tool-using systems
-- **Aurora** - that's the complex character model and how it interacts with the prompts
-- **The Foundry** - that's the architecture underneath, plugins and packages and services
+- **Dangermouse** - the dangerous content tracking/rerouting/hiding system
+- **Commonplace Book** - the memory system that characters have, a self-managed RAG
+- **The Lantern** - the story backgrounds subsystem, that can send context to image providers and put them up as backgrounds for chats or projects
+- **Prospero** - the agentic and tool-using systems
+- **Aurora** - the complex character model and how it interacts with the prompts
+- **Calliope** - the UX/UI and themes systems
+- **The Foundry** - the architecture underneath, plugins and packages and services
 
 ## Current State
 

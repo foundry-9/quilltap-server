@@ -7,14 +7,18 @@
  * Displays a single participant in the chat sidebar with:
  * - Avatar and name
  * - Turn indicator (glowing border when it's their turn)
+ * - Connection profile dropdown (for characters)
  * - Talkativeness slider (for characters)
- * - LLM backend indicator (for characters)
  * - Queue position badge (when queued)
  * - Nudge/Queue button
+ * - Expandable settings section (system prompt override, active toggle)
  */
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import Avatar from '@/components/ui/Avatar'
+
+// Special constant for user impersonation selection
+const USER_IMPERSONATION_VALUE = '__user__'
 
 export interface ParticipantData {
   id: string
@@ -22,6 +26,7 @@ export interface ParticipantData {
   controlledBy?: 'llm' | 'user'
   displayOrder: number
   isActive: boolean
+  systemPromptOverride?: string | null
   character?: {
     id: string
     name: string
@@ -53,6 +58,13 @@ export interface ParticipantData {
   } | null
 }
 
+export interface ConnectionProfileOption {
+  id: string
+  name: string
+  provider?: string
+  modelName?: string
+}
+
 interface ParticipantCardProps {
   participant: ParticipantData
   isCurrentTurn: boolean
@@ -72,6 +84,12 @@ interface ParticipantCardProps {
   isActiveTyping?: boolean // True if this is the active typing participant (when impersonating multiple)
   onImpersonate?: (participantId: string) => void // Start impersonating
   onStopImpersonate?: (participantId: string) => void // Stop impersonating
+  // Connection profile controls
+  connectionProfiles?: ConnectionProfileOption[]
+  onConnectionProfileChange?: (participantId: string, profileId: string | null, controlledBy: 'llm' | 'user') => void
+  // Inline settings controls
+  onSystemPromptOverrideChange?: (participantId: string, override: string | null) => void
+  onActiveChange?: (participantId: string, isActive: boolean) => void
 }
 
 export function ParticipantCard({
@@ -92,10 +110,19 @@ export function ParticipantCard({
   isActiveTyping = false,
   onImpersonate,
   onStopImpersonate,
+  connectionProfiles,
+  onConnectionProfileChange,
+  onSystemPromptOverrideChange,
+  onActiveChange,
 }: ParticipantCardProps) {
   const [localTalkativeness, setLocalTalkativeness] = useState(
     participant.character?.talkativeness ?? 0.5
   )
+  const [settingsExpanded, setSettingsExpanded] = useState(false)
+  const [localSystemPrompt, setLocalSystemPrompt] = useState(
+    participant.systemPromptOverride || ''
+  )
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const isCharacter = participant.type === 'CHARACTER'
   const entity = isCharacter ? participant.character : participant.persona
@@ -139,6 +166,37 @@ export function ParticipantCard({
       onTalkativenessChange(participant.id, value)
     }
   }
+
+  // Handle connection profile change
+  const handleProfileChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    if (!onConnectionProfileChange) return
+    const value = e.target.value
+    if (value === USER_IMPERSONATION_VALUE) {
+      onConnectionProfileChange(participant.id, null, 'user')
+    } else {
+      onConnectionProfileChange(participant.id, value || null, 'llm')
+    }
+  }
+
+  // Handle system prompt override with debounce
+  const handleSystemPromptChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value
+    setLocalSystemPrompt(value)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      onSystemPromptOverrideChange?.(participant.id, value || null)
+    }, 600)
+  }
+
+  // Handle active toggle
+  const handleActiveToggle = (e: React.ChangeEvent<HTMLInputElement>) => {
+    onActiveChange?.(participant.id, e.target.checked)
+  }
+
+  // Determine the current connection profile select value
+  const connectionProfileValue = participant.controlledBy === 'user'
+    ? USER_IMPERSONATION_VALUE
+    : (participant.connectionProfile?.id || '')
 
   // Determine button label
   const getActionButtonLabel = () => {
@@ -210,11 +268,32 @@ export function ParticipantCard({
             </div>
           )}
 
-          {/* LLM indicator for characters */}
-          {isCharacter && participant.connectionProfile && (
-            <div className="qt-participant-card-status mt-1 truncate" title={`${participant.connectionProfile.provider}: ${participant.connectionProfile.modelName}`}>
-              {participant.connectionProfile.modelName || participant.connectionProfile.name}
+          {/* Connection profile dropdown for characters */}
+          {isCharacter && connectionProfiles && onConnectionProfileChange ? (
+            <div className="mt-1">
+              <select
+                value={connectionProfileValue}
+                onChange={handleProfileChange}
+                className="qt-select qt-select-sm w-full"
+                title="Connection profile"
+                aria-label={`Connection profile for ${name}`}
+              >
+                <option value="">Select a provider...</option>
+                <option value={USER_IMPERSONATION_VALUE}>User (you type)</option>
+                {connectionProfiles.map((profile) => (
+                  <option key={profile.id} value={profile.id}>
+                    {profile.modelName || profile.name}
+                  </option>
+                ))}
+              </select>
             </div>
+          ) : (
+            /* Fallback: plain-text LLM indicator when no dropdown */
+            isCharacter && participant.connectionProfile && (
+              <div className="qt-participant-card-status mt-1 truncate" title={`${participant.connectionProfile.provider}: ${participant.connectionProfile.modelName}`}>
+                {participant.connectionProfile.modelName || participant.connectionProfile.name}
+              </div>
+            )
           )}
 
           {/* Talkativeness slider for characters */}
@@ -352,7 +431,51 @@ export function ParticipantCard({
             )}
           </button>
         )}
+
+        {/* Settings toggle button */}
+        {(onSystemPromptOverrideChange || onActiveChange) && (
+          <button
+            onClick={() => setSettingsExpanded(!settingsExpanded)}
+            className={`qt-button qt-button-sm py-1.5 px-2 ${settingsExpanded ? 'qt-button-primary' : 'qt-button-secondary'}`}
+            title={settingsExpanded ? 'Hide settings' : 'Show settings'}
+            aria-label={settingsExpanded ? 'Hide participant settings' : 'Show participant settings'}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </button>
+        )}
       </div>
+
+      {/* Expandable settings section */}
+      {settingsExpanded && (
+        <div className="mt-2 pt-2 border-t border-border space-y-2">
+          {onSystemPromptOverrideChange && (
+            <div>
+              <label className="qt-text-xs block mb-1">System Prompt Override</label>
+              <textarea
+                value={localSystemPrompt}
+                onChange={handleSystemPromptChange}
+                placeholder="Custom scenario or context..."
+                rows={2}
+                className="qt-textarea qt-text-xs w-full"
+              />
+            </div>
+          )}
+          {onActiveChange && (
+            <label className="flex items-center gap-2 qt-text-xs cursor-pointer">
+              <input
+                type="checkbox"
+                checked={participant.isActive}
+                onChange={handleActiveToggle}
+                className="rounded border-input"
+              />
+              Active in chat
+            </label>
+          )}
+        </div>
+      )}
     </div>
   )
 }

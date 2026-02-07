@@ -190,6 +190,13 @@
     padding-right: 2.5rem;
   }
 
+  .qt-select-sm {
+    @apply py-1 px-2 text-xs;
+    background-size: 1em 1em;
+    background-position: right 0.25rem center;
+    padding-right: 1.5rem;
+  }
+
   /**
    * Input with error state (additive modifier)
    */

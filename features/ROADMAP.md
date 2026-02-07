@@ -6,20 +6,17 @@ This document tracks planned features and improvements for Quilltap.
 
 ## Planned Features
 
-### Plugin architecture
+### Plugin architecture (The Foundry)
 
 - [ ] Ability to have simplified architecture for:
   - [ ] connection profiles/images/embedding
   - [ ] themes
   - [ ] API
 
-### Chat & Conversation
+### Chat & Conversation (The Salon)
 
-- [X] Server-side Markdown render of historical chat messages to speed up delivery
 - [ ] Character checkpointing (backups of a character at a certain point in time)
 - [ ] "Visual Novel" options
-  - [X] Story background generation
-  - [X] The thing that provides the context should not be the title of the chat
 - [ ] Image generation can not only select characters but also different physical descriptions if they have them
 - [X] Almost everything needs a way to handle "dangerous" (largely uncensored) content
   - [X] Gatekeeper needs to determine if content is dangerous
@@ -32,42 +29,48 @@ This document tracks planned features and improvements for Quilltap.
 - [ ] Pull chat settings into the participants sidebar, make it the chat sidebar
   - [ ] Every participant should be able to be taken over ad-hoc
   - [ ] Every participant should be able to be silenced or phased out of the current conversation
-  - [ ] Every participant should be able to be either pulled it immediately, interrupt, or queue up
-  - [ ] Every participant should have an option to be switched to a different LLM provider
-- [X] Memory search every time
-  - [X] The cheap/fast LLM should take whatever has happened since the last time they spoke
-  - [X] Reduce that to keywords
-  - [X] Search the memories for those keywords
-  - [X] Preload the prompt with things that spring to mind because of the keywords
+  - [ ] Every participant should be able to be either pulled in immediately, interrupt, or queue up
+  - [X] Every participant should have an option to be switched to a different LLM provider
 
-### LLM Integration
+### LLM Integration (The Foundry)
 
-- [ ] Tool management UI - Settings interface to enable/disable individual tools per connection profile, project, chat
+- [ ] Tool management UI - Settings interface to enable/disable individual tools
+  - [ ] per connection profile
+  - [ ] per project
+  - [ ] per chat
 - [ ] Finish file read/write tool calling support with permissions
 - [ ] More intelligent handling of empty messages from the LLM (usually some kind of error, but a plain blank often means you crossed a provider line - NSFW, content filtering)
+  - [X] Image prompt generation
+  - [ ] Memory generation
+  - [ ] Context compression
+  - [ ] LLM chat message generation
 - [X] Fully agentic capabilities (limits on how many turns it takes, trading information back and forth, etc.)
 - [ ] Add Google embeddings
 - [ ] Add prompt guidelines for all image generators that have them
 - [ ] Update image generators
 - [ ] Add ability to use Eternal AI LoRAs
 
-### Content & Worldbuilding
+### Content & Worldbuilding (Commonplace Book)
 
 - [ ] Worldbook/Lore system
-- [X] Complete AI wizard for characters or NPCs
 
 ### External Integrations
 
+#### Prospero
+
 - [ ] General SSE-based MCP support improvements
 - [ ] Python script support
+
+#### The Lantern
+
 - [ ] ComfyUI + LORA support for local installations (see [feature request](./comfy_ui_local_image.md))
 
-### Themes & UI
+### Calliope: Themes & UI
 
 - [ ] Arcadia "art deco" theme to show off what the theme system can really do
 - [ ] Get theme-storybook to match the app for everything
 
-### Setup & Onboarding
+### Virgil: Setup & Onboarding
 
 - [ ] Setup wizard
   - [ ] Default assistant, editable
@@ -79,6 +82,16 @@ This document tracks planned features and improvements for Quilltap.
 
 ## Completed in v2.9
 
+- [X] Server-side Markdown render of historical chat messages to speed up delivery
+- [X] The Lantern (story backgrounds)
+  - [X] Story background generation
+  - [X] The thing that provides the context should not be the title of the chat
+- [X] Memory search every time
+  - [X] The cheap/fast LLM should take whatever has happened since the last time they spoke
+  - [X] Reduce that to keywords
+  - [X] Search the memories for those keywords
+  - [X] Preload the prompt with things that spring to mind because of the keywords
+- [X] Complete AI wizard for characters or NPCs
 - [X] Refactor embedding service to use plugin architecture
   - Currently `lib/embedding/embedding-service.ts` has hardcoded handlers for each provider
   - Should delegate to plugins via `createEmbeddingProvider()` interface
