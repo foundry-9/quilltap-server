@@ -4,6 +4,21 @@
 
 ### 2.10-dev
 
+- feat: Character aliases
+  - Characters can now have alternate names (aliases) like "Liz" for "Elizabeth"
+  - Aliases are included in the character's own system prompt so the LLM knows about them
+  - Other participants' aliases are included when telling the LLM who else is in the chat
+  - Image prompt placeholders (e.g., `{{Liz}}`) resolve aliases to the correct character
+  - Alias-based name prefixes are stripped from LLM responses
+  - Chip-style editor in the character edit form for managing aliases
+  - Aliases displayed inline on character view page next to the name
+  - New database migration adds `aliases` column to characters table
+
+- fix: BaseModal z-index stacking issue on project pages
+  - Modal dialogs (e.g., "Browse All Files") could appear behind chat cards
+  - Root cause: `qt-page-container > *` creates stacking contexts that trapped modals
+  - Fix: BaseModal now uses React portal to render at document body level
+
 - chore: Upgrade @openrouter/sdk from 0.5.1 to 0.8.0
   - Wrap `chat.send()` calls with `{ chatGenerationParams: ... }` (breaking change in SDK)
   - Wrap `embeddings.generate()` calls with `{ requestBody: ... }` (breaking change in SDK)

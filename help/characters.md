@@ -106,6 +106,7 @@ Characters are sorted by:
 ### Identity
 
 - **Name** — What the character is called
+- **Aliases** — Optional alternate names the character goes by (e.g., "Liz", "Lizzy" for "Elizabeth")
 - **Title** — Optional subtitle or role (e.g., "Bounty Hunter")
 - **Description** — Long-form narrative about character
 - **Personality** — Key traits and characteristics
@@ -270,7 +271,7 @@ View detailed appearance:
 
 Editable fields:
 
-- Name, title, description
+- Name, aliases, title, description
 - Personality and scenario
 - First message and examples
 - Avatar and images

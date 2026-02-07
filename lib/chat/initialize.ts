@@ -32,6 +32,7 @@ interface Character {
 interface UserCharacter {
   id: string
   name: string
+  aliases?: string[]
   description?: string | null
   personality?: string | null
 }
@@ -73,6 +74,7 @@ export async function buildChatContext(
       userCharacter = {
         id: uc.id,
         name: uc.name,
+        aliases: uc.aliases && uc.aliases.length > 0 ? uc.aliases : undefined,
         description: uc.description,
         personality: uc.personality,
       }
@@ -85,6 +87,7 @@ export async function buildChatContext(
       userCharacter = {
         id: defaultPartner.id,
         name: defaultPartner.name,
+        aliases: defaultPartner.aliases && defaultPartner.aliases.length > 0 ? defaultPartner.aliases : undefined,
         description: defaultPartner.description,
         personality: defaultPartner.personality,
       }
@@ -172,7 +175,10 @@ function buildSystemPrompt({
   // Process templates in the user character's description/personality with their own context
   // ({{char}} in user character's description refers to that character, not the AI character)
   if (userCharacter) {
-    prompt += `\n\nYou are talking to ${userCharacter.name}.`
+    const aliasNote = userCharacter.aliases && userCharacter.aliases.length > 0
+      ? ` (also known as: ${userCharacter.aliases.join(', ')})`
+      : ''
+    prompt += `\n\nYou are talking to ${userCharacter.name}${aliasNote}.`
     if (userCharacter.description) {
       const processedUserDesc = processTemplate(userCharacter.description, {
         char: userCharacter.name,

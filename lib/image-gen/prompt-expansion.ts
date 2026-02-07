@@ -188,9 +188,12 @@ export async function resolvePlaceholders(
       continue;
     }
 
-    // Try to find a character by name (includes former personas which are now characters with controlledBy: 'user')
+    // Try to find a character by name or alias (includes former personas which are now characters with controlledBy: 'user')
     const characters = await repos.characters.findByUserId(userId);
-    const character = characters.find(c => c.name.toLowerCase() === lowerName);
+    const character = characters.find(c =>
+      c.name.toLowerCase() === lowerName ||
+      (c.aliases && c.aliases.some(alias => alias.toLowerCase() === lowerName))
+    );
 
     if (character) {
       resolved.push({

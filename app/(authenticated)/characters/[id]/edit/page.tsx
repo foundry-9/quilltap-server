@@ -72,6 +72,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
     showUploadDialog,
     avatarRefreshKey,
     handleChange,
+    handleAliasesChange,
     handleSubmit,
     handleCancel,
     setCharacterAvatar,
@@ -223,7 +224,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
           {(activeTab: string) => {
             switch (activeTab) {
               case 'details':
-                return <CharacterBasicInfo characterId={id} formData={formData} onChange={handleChange} />
+                return <CharacterBasicInfo characterId={id} formData={formData} onChange={handleChange} onAliasesChange={handleAliasesChange} />
 
               case 'system-prompts':
                 return (

@@ -16,6 +16,7 @@ import { processTemplate, type TemplateContext } from '@/lib/templates/processor
  */
 export interface OtherParticipantInfo {
   name: string
+  aliases?: string[]
   description?: string
   type: 'CHARACTER'
 }
@@ -155,6 +156,11 @@ export function buildSystemPrompt(
     parts.push(`\n## Character Personality\n${processedPersonality}`)
   }
 
+  // Character aliases - let the LLM know about alternate names
+  if (character.aliases && character.aliases.length > 0) {
+    parts.push(`\n## Character Aliases\nThis character also goes by: ${character.aliases.join(', ')}\nOther characters and the user may refer to them by any of these names.`)
+  }
+
   // Scenario/setting - process templates
   if (character.scenario) {
     const processedScenario = processTemplate(character.scenario, templateContext)
@@ -226,6 +232,7 @@ export function buildOtherParticipantsInfo(
       if (character) {
         otherParticipants.push({
           name: character.name,
+          aliases: character.aliases && character.aliases.length > 0 ? character.aliases : undefined,
           description: character.title || character.description || undefined,
           type: 'CHARACTER',
         })

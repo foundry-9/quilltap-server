@@ -70,6 +70,9 @@ export function CharacterHeader({
           <div className="flex items-center gap-2">
             <h1 className="text-3xl font-semibold">
               {character?.name || 'Loading...'}
+              {character?.aliases && character.aliases.length > 0 && (
+                <span className="text-lg font-normal text-muted-foreground ml-2">({character.aliases.join(' / ')})</span>
+              )}
             </h1>
             <button
               onClick={onToggleFavorite}

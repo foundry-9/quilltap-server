@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useClickOutside } from '@/hooks/useClickOutside'
 
 /**
@@ -91,9 +92,11 @@ export function BaseModal({
     onEscape: closeOnEscape ? onClose : undefined,
   })
 
-  if (!isOpen) return null
+  if (!isOpen || typeof document === 'undefined') return null
 
-  return (
+  // Use portal to render at document body level, avoiding stacking context issues
+  // (e.g., qt-page-container > * { z-index: 1 } trapping modals inside grid cells)
+  return createPortal(
     <div className="qt-dialog-overlay">
       <div
         ref={modalRef}
@@ -129,7 +132,8 @@ export function BaseModal({
 
         {footer && <div className="qt-dialog-footer">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 

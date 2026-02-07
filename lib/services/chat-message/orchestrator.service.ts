@@ -1336,7 +1336,7 @@ async function processMessage(
 
     // Strip any character name prefixes that the LLM might have echoed back
     // This handles cases where LLMs mimic the [Name] prefix format from the input
-    const cleanedResponse = stripCharacterNamePrefix(normalizedResponse, character.name)
+    const cleanedResponse = stripCharacterNamePrefix(normalizedResponse, character.name, character.aliases)
 
     assistantMessageId = await saveAssistantMessage(
       repos,

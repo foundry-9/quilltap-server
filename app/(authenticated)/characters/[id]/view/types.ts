@@ -50,6 +50,7 @@ export interface Character {
   isFavorite?: boolean
   npc?: boolean
   defaultAgentModeEnabled?: boolean | null
+  aliases?: string[]
   defaultImage?: {
     id: string
     filepath: string

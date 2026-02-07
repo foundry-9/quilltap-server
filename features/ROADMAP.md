@@ -26,9 +26,9 @@ This document tracks planned features and improvements for Quilltap.
   - [X] Needs to be LLM paths for dangerous content after the determination is made
   - [X] Some way of flagging such content needs to be surfaced in the system
   - [X] Based on flags, things are either not allowed, not displayed, or allowed and displayed
-  - [ ] Implies a new quick-hide just for dangerous content
+  - [X] Implies a new quick-hide just for dangerous content
   - [ ] Further: user-determined danger paths (e.g., this talks about politics, I don't want to talk about politics) in addition to the general "most providers won't handle this" rails
-  - [ ] Testing
+  - [X] Testing
 
 ### LLM Integration
 

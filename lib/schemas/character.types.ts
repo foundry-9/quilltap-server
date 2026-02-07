@@ -88,6 +88,7 @@ export const CharacterSchema = z.object({
     personaId: UUIDSchema,
     isDefault: z.boolean(),
   })).default([]),
+  aliases: z.array(z.string()).default([]),
   tags: z.array(UUIDSchema).default([]),
   avatarOverrides: z.array(z.object({
     chatId: UUIDSchema,

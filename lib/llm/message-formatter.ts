@@ -198,7 +198,7 @@ export function formatMessagesForProvider(
  * @returns String to append to system prompt
  */
 export function buildMultiCharacterContextSection(
-  otherParticipants: Array<{ name: string; description?: string; type: 'CHARACTER' }>,
+  otherParticipants: Array<{ name: string; aliases?: string[]; description?: string; type: 'CHARACTER' }>,
   respondingCharacterName: string
 ): string {
   if (otherParticipants.length === 0) {
@@ -213,8 +213,11 @@ export function buildMultiCharacterContextSection(
 
   for (const participant of otherParticipants) {
     const typeLabel = participant.type === 'CHARACTER' && participant.name.includes('User') ? '(the user)' : ''
+    const aliasNote = participant.aliases && participant.aliases.length > 0
+      ? ` (also known as: ${participant.aliases.join(', ')})`
+      : ''
     const description = participant.description ? ` - ${participant.description}` : ''
-    lines.push(`- **${participant.name}** ${typeLabel}${description}`)
+    lines.push(`- **${participant.name}**${aliasNote} ${typeLabel}${description}`)
   }
 
   lines.push('')
@@ -289,7 +292,7 @@ export function normalizeContentBlockFormat(content: string): string {
  * @param characterName The responding character's name (to specifically target)
  * @returns Cleaned content without leading name prefixes
  */
-export function stripCharacterNamePrefix(content: string, characterName?: string): string {
+export function stripCharacterNamePrefix(content: string, characterName?: string, aliases?: string[]): string {
   if (!content) return content
 
   // If we know the specific character name, build a specific pattern
@@ -333,6 +336,18 @@ export function stripCharacterNamePrefix(content: string, characterName?: string
 
     // No more prefixes found
     break
+  }
+
+  // Also strip alias-based prefixes
+  if (aliases && aliases.length > 0) {
+    for (const alias of aliases) {
+      const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const aliasPattern = new RegExp(`^\\s*\\[${escapedAlias}\\]\\s*`, 'i')
+      while (aliasPattern.test(result) && iterations < MAX_ITERATIONS) {
+        result = result.replace(aliasPattern, '')
+        iterations++
+      }
+    }
   }
 
   if (iterations > 1) {

@@ -16,6 +16,7 @@ export interface Character {
   defaultImageId?: string
   defaultConnectionProfileId?: string
   npc?: boolean
+  aliases?: string[]
   defaultImage?: {
     id: string
     filepath: string
@@ -25,6 +26,7 @@ export interface Character {
 
 export interface CharacterFormData {
   name: string
+  aliases: string[]
   title: string
   description: string
   personality: string

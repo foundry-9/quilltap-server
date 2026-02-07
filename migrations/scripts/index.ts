@@ -69,6 +69,8 @@ import { addDangerousContentFieldsMigration } from './add-dangerous-content-fiel
 import { addChatDangerClassificationFieldsMigration } from './add-chat-danger-classification-fields';
 // Fix chat updatedAt timestamps polluted by background jobs
 import { fixChatUpdatedAtTimestampsMigration } from './fix-chat-updated-at-timestamps';
+// Add aliases field to characters
+import { addCharacterAliasesFieldMigration } from './add-character-aliases-field';
 
 /**
  * All available migrations.
@@ -133,6 +135,8 @@ export const migrations: Migration[] = [
   addChatDangerClassificationFieldsMigration,
   // Fix chat updatedAt timestamps polluted by background jobs
   fixChatUpdatedAtTimestampsMigration,
+  // Add aliases field to characters
+  addCharacterAliasesFieldMigration,
 ];
 
 export {
@@ -192,4 +196,6 @@ export {
   addChatDangerClassificationFieldsMigration,
   // Fix chat updatedAt timestamps polluted by background jobs
   fixChatUpdatedAtTimestampsMigration,
+  // Add aliases field to characters
+  addCharacterAliasesFieldMigration,
 };

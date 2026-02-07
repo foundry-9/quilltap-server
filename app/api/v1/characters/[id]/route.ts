@@ -59,6 +59,7 @@ const updateCharacterSchema = z.object({
       z.literal('').transform(() => undefined)
     )
     .nullable(),
+  aliases: z.array(z.string()).optional(),
   controlledBy: z.enum(['llm', 'user']).optional(),
   npc: z.boolean().optional(),
   defaultAgentModeEnabled: z.boolean().nullable().optional(),

@@ -13,6 +13,7 @@ import {
 
 const INITIAL_FORM_DATA: CharacterFormData = {
   name: '',
+  aliases: [],
   title: '',
   description: '',
   personality: '',
@@ -64,6 +65,7 @@ export function useCharacterEdit(id: string) {
         const hasImageChanged = prev.character?.defaultImageId !== char.defaultImageId
         const initialFormData: CharacterFormData = {
           name: char.name,
+          aliases: char.aliases || [],
           title: char.title || '',
           description: char.description || '',
           personality: char.personality || '',
@@ -114,6 +116,16 @@ export function useCharacterEdit(id: string) {
     setState((prev) => ({
       ...prev,
       formData: { ...prev.formData, [e.target.name]: e.target.value },
+    }))
+  }
+
+  /**
+   * Handle aliases array changes
+   */
+  const handleAliasesChange = (aliases: string[]) => {
+    setState((prev) => ({
+      ...prev,
+      formData: { ...prev.formData, aliases },
     }))
   }
 
@@ -288,6 +300,7 @@ export function useCharacterEdit(id: string) {
 
     // Methods
     handleChange,
+    handleAliasesChange,
     handleSubmit,
     handleCancel,
     setCharacterAvatar,

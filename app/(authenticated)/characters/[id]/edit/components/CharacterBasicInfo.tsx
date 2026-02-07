@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { TagEditor } from '@/components/tags/tag-editor'
 import { CharacterFormData } from '../types'
 
@@ -7,13 +8,40 @@ interface CharacterBasicInfoProps {
   characterId: string
   formData: CharacterFormData
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void
+  onAliasesChange: (aliases: string[]) => void
 }
 
 /**
  * Component for editing basic character information
  * Includes name, title, description, personality, scenario, first message, and example dialogues
  */
-export function CharacterBasicInfo({ characterId, formData, onChange }: CharacterBasicInfoProps) {
+function AliasInput({ onAdd }: { onAdd: (alias: string) => void }) {
+  const [value, setValue] = useState('')
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      const trimmed = value.trim()
+      if (trimmed) {
+        onAdd(trimmed)
+        setValue('')
+      }
+    }
+  }
+
+  return (
+    <input
+      type="text"
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onKeyDown={handleKeyDown}
+      className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+      placeholder="Type an alias and press Enter"
+    />
+  )
+}
+
+export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesChange }: CharacterBasicInfoProps) {
   return (
     <div className="space-y-6">
       {/* Name Field */}
@@ -30,6 +58,38 @@ export function CharacterBasicInfo({ characterId, formData, onChange }: Characte
           required
           className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
         />
+      </div>
+
+      {/* Aliases Field */}
+      <div>
+        <label className="block text-sm font-medium mb-2 text-foreground">
+          Aliases (Optional)
+        </label>
+        <p className="text-xs text-muted-foreground mb-2">
+          Alternate names this character goes by. Press Enter to add.
+        </p>
+        <div className="flex flex-wrap gap-2 mb-2">
+          {formData.aliases.map((alias, index) => (
+            <span
+              key={index}
+              className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-sm text-foreground"
+            >
+              {alias}
+              <button
+                type="button"
+                onClick={() => onAliasesChange(formData.aliases.filter((_, i) => i !== index))}
+                className="ml-1 text-muted-foreground hover:text-foreground"
+              >
+                &times;
+              </button>
+            </span>
+          ))}
+        </div>
+        <AliasInput onAdd={(alias) => {
+          if (alias && !formData.aliases.includes(alias)) {
+            onAliasesChange([...formData.aliases, alias])
+          }
+        }} />
       </div>
 
       {/* Title Field */}
