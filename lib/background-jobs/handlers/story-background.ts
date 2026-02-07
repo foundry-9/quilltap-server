@@ -113,9 +113,14 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   // 7. Build character context for prompt crafting
   const characterDescriptions = validCharacters.map(char => {
     const primary = char!.physicalDescriptions?.[0];
+    const primaryOutfit = char!.clothingRecords?.[0];
+    const descParts = [primary?.mediumPrompt || primary?.shortPrompt || char!.name];
+    if (primaryOutfit?.description) {
+      descParts.push(`Wearing: ${primaryOutfit.description}`);
+    }
     return {
       name: char!.name,
-      description: primary?.mediumPrompt || primary?.shortPrompt || char!.name,
+      description: descParts.join('. '),
     };
   });
 

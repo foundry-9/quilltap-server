@@ -6,7 +6,7 @@
  * Handles CRUD operations and advanced queries for Character entities.
  */
 
-import { Character, CharacterInput, CharacterSchema, PhysicalDescription, CharacterSystemPrompt } from '@/lib/schemas/types';
+import { Character, CharacterInput, CharacterSchema, PhysicalDescription, ClothingRecord, CharacterSystemPrompt } from '@/lib/schemas/types';
 import { TaggableBaseRepository, CreateOptions } from './base.repository';
 import { logger } from '@/lib/logger';
 import { QueryFilter } from '../interfaces';
@@ -555,6 +555,183 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
       return descriptions;
     } catch (error) {
       logger.error('Error getting physical descriptions', {
+        characterId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
+
+  // ============================================================================
+  // CLOTHING RECORD OPERATIONS
+  // ============================================================================
+
+  /**
+   * Add a clothing record to a character
+   * @param characterId The character ID
+   * @param data The clothing record data (without id, createdAt, updatedAt)
+   * @returns Promise<ClothingRecord | null> The added record if successful, null if character not found
+   */
+  async addClothingRecord(
+    characterId: string,
+    data: Omit<ClothingRecord, 'id' | 'createdAt' | 'updatedAt'>
+  ): Promise<ClothingRecord | null> {
+    try {
+      const character = await this.findById(characterId);
+      if (!character) {
+        logger.warn('Character not found for clothing record addition', { characterId });
+        return null;
+      }
+
+      const now = this.getCurrentTimestamp();
+      const record: ClothingRecord = {
+        ...data,
+        id: this.generateId(),
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      character.clothingRecords = character.clothingRecords || [];
+      character.clothingRecords.push(record);
+
+      await this.update(characterId, { clothingRecords: character.clothingRecords });
+      return record;
+    } catch (error) {
+      logger.error('Error adding clothing record', {
+        characterId,
+        recordName: data.name,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Update a clothing record
+   * @param characterId The character ID
+   * @param recordId The clothing record ID
+   * @param data Partial clothing record data to update
+   * @returns Promise<ClothingRecord | null> The updated record if found, null otherwise
+   */
+  async updateClothingRecord(
+    characterId: string,
+    recordId: string,
+    data: Partial<Omit<ClothingRecord, 'id' | 'createdAt' | 'updatedAt'>>
+  ): Promise<ClothingRecord | null> {
+    try {
+      const character = await this.findById(characterId);
+      if (!character) {
+        logger.warn('Character not found for clothing record update', { characterId });
+        return null;
+      }
+
+      const records = character.clothingRecords || [];
+      const index = records.findIndex((r) => r.id === recordId);
+      if (index === -1) {
+        logger.warn('Clothing record not found', { characterId, recordId });
+        return null;
+      }
+
+      const now = this.getCurrentTimestamp();
+      const updated: ClothingRecord = {
+        ...records[index],
+        ...data,
+        id: records[index].id,
+        createdAt: records[index].createdAt,
+        updatedAt: now,
+      };
+
+      records[index] = updated;
+      await this.update(characterId, { clothingRecords: records });
+      return updated;
+    } catch (error) {
+      logger.error('Error updating clothing record', {
+        characterId,
+        recordId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Remove a clothing record from a character
+   * @param characterId The character ID
+   * @param recordId The clothing record ID
+   * @returns Promise<boolean> True if record was deleted, false if not found
+   */
+  async removeClothingRecord(characterId: string, recordId: string): Promise<boolean> {
+    try {
+      const character = await this.findById(characterId);
+      if (!character) {
+        logger.warn('Character not found for clothing record removal', { characterId });
+        return false;
+      }
+
+      const records = character.clothingRecords || [];
+      const filtered = records.filter((r) => r.id !== recordId);
+
+      if (filtered.length === records.length) {
+        logger.warn('Clothing record not found for removal', { characterId, recordId });
+        return false;
+      }
+
+      await this.update(characterId, { clothingRecords: filtered });
+      return true;
+    } catch (error) {
+      logger.error('Error removing clothing record', {
+        characterId,
+        recordId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get a single clothing record by ID
+   * @param characterId The character ID
+   * @param recordId The clothing record ID
+   * @returns Promise<ClothingRecord | null> The record if found, null otherwise
+   */
+  async getClothingRecord(characterId: string, recordId: string): Promise<ClothingRecord | null> {
+    try {
+      const character = await this.findById(characterId);
+      if (!character) {
+        logger.warn('Character not found for clothing record retrieval', { characterId });
+        return null;
+      }
+
+      const records = character.clothingRecords || [];
+      const record = records.find((r) => r.id === recordId) || null;
+      return record;
+    } catch (error) {
+      logger.error('Error getting clothing record', {
+        characterId,
+        recordId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get all clothing records for a character
+   * @param characterId The character ID
+   * @returns Promise<ClothingRecord[]> Array of all clothing records for the character
+   */
+  async getClothingRecords(characterId: string): Promise<ClothingRecord[]> {
+    try {
+      const character = await this.findById(characterId);
+      if (!character) {
+        logger.warn('Character not found for clothing records retrieval', { characterId });
+        return [];
+      }
+
+      const records = character.clothingRecords || [];
+      return records;
+    } catch (error) {
+      logger.error('Error getting clothing records', {
         characterId,
         error: error instanceof Error ? error.message : String(error),
       });

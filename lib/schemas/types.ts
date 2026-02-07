@@ -124,12 +124,14 @@ export type {
 export {
   CharacterSystemPromptSchema,
   PhysicalDescriptionSchema,
+  ClothingRecordSchema,
   CharacterSchema,
 } from './character.types';
 
 export type {
   CharacterSystemPrompt,
   PhysicalDescription,
+  ClothingRecord,
   Character,
   CharacterInput,
 } from './character.types';

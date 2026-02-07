@@ -39,7 +39,7 @@ export const CHARACTER_TABS: Tab[] = [
   },
   {
     id: 'descriptions',
-    label: 'Physical Descriptions',
+    label: 'Appearance',
     icon: TabIcons.descriptions,
   },
 ]

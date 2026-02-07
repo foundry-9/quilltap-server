@@ -1201,6 +1201,11 @@ export interface ImagePromptExpansionContext {
       long?: string
       complete?: string
     }
+    clothing?: Array<{
+      name: string
+      usageContext?: string | null
+      description?: string | null
+    }>
   }>
   /** Target maximum length */
   targetLength: number
@@ -1251,6 +1256,16 @@ export async function craftImagePrompt(
       }
       if (p.tiers.short) {
         parts.push(`  Short: "${p.tiers.short}"`);
+      }
+
+      // Include clothing/outfit details if available
+      if (p.clothing && p.clothing.length > 0) {
+        parts.push(`  Clothing/Outfits:`);
+        for (const outfit of p.clothing) {
+          const contextHint = outfit.usageContext ? ` (when: ${outfit.usageContext})` : '';
+          const desc = outfit.description ? `: ${outfit.description}` : '';
+          parts.push(`    - "${outfit.name}"${contextHint}${desc}`);
+        }
       }
 
       if (parts.length === 1) {

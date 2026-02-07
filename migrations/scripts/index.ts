@@ -73,6 +73,8 @@ import { fixChatUpdatedAtTimestampsMigration } from './fix-chat-updated-at-times
 import { addCharacterAliasesFieldMigration } from './add-character-aliases-field';
 // Add pronouns field to characters
 import { addCharacterPronounsFieldMigration } from './add-character-pronouns-field';
+// Add clothingRecords field to characters
+import { addCharacterClothingRecordsFieldMigration } from './add-character-clothing-records-field';
 
 /**
  * All available migrations.
@@ -141,6 +143,8 @@ export const migrations: Migration[] = [
   addCharacterAliasesFieldMigration,
   // Add pronouns field to characters
   addCharacterPronounsFieldMigration,
+  // Add clothingRecords field to characters
+  addCharacterClothingRecordsFieldMigration,
 ];
 
 export {
@@ -204,4 +208,6 @@ export {
   addCharacterAliasesFieldMigration,
   // Add pronouns field to characters
   addCharacterPronounsFieldMigration,
+  // Add clothingRecords field to characters
+  addCharacterClothingRecordsFieldMigration,
 };

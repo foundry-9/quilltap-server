@@ -187,6 +187,23 @@ export function buildSystemPrompt(
     }
   }
 
+  // Clothing records - outfit context for the LLM
+  if (character.clothingRecords && character.clothingRecords.length > 0) {
+    const clothingLines = character.clothingRecords.map(record => {
+      const contextNote = record.usageContext ? ` (when: ${record.usageContext})` : '';
+      const descText = record.description || '';
+      if (!descText) return `- "${record.name}"${contextNote}`;
+      return `- "${record.name}"${contextNote}: ${descText}`;
+    });
+
+    logger.debug('[SystemPrompt] Injecting clothing records', {
+      characterId: character.id,
+      characterName: character.name,
+      clothingCount: clothingLines.length,
+    });
+    parts.push(`\n## Clothing / Outfits\n${clothingLines.join('\n')}`);
+  }
+
   // Scenario/setting - process templates
   if (character.scenario) {
     const processedScenario = processTemplate(character.scenario, templateContext)

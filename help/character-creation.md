@@ -487,7 +487,7 @@ Physical descriptions help:
    - AI generates description
    - Accept or edit
 
-2. **After creation:** Edit > Physical Descriptions tab
+2. **After creation:** Edit > Appearance tab
    - Generate new description
    - Edit manually
    - Save different length versions
@@ -501,6 +501,28 @@ Generated descriptions include multiple length options:
 - **Long** (paragraph) — Detailed description
 - **Complete** (2-3 paragraphs) — Very detailed
 - **Full** (extensive) — Maximum detail for images
+
+## Advanced: Clothing Records
+
+### Why Clothing Records Matter
+
+Clothing records describe what your character wears in different situations. They help:
+
+- The LLM know what the character is currently wearing
+- Image generators pick the right outfit for the scene
+- Maintain consistency across conversations
+
+### Adding Clothing Records
+
+1. **Edit character** > **Appearance** tab > **Clothing & Outfits** section
+2. Click **Add Outfit**
+3. Fill in:
+   - **Name** (required) — Display label, e.g. "Battle Armor", "Formal Gown"
+   - **Usage Context** — When this outfit is worn, e.g. "in combat", "at formal events"
+   - **Description** — Markdown description of the outfit details
+4. Click **Create**
+
+Clothing records appear in the system prompt as a `## Clothing / Outfits` section and are included in image generation context.
 
 ## Related Topics
 

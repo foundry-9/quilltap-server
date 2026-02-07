@@ -51,6 +51,22 @@ export const PhysicalDescriptionSchema = z.object({
 export type PhysicalDescription = z.infer<typeof PhysicalDescriptionSchema>;
 
 // ============================================================================
+// CLOTHING RECORDS
+// ============================================================================
+
+// Clothing Record for outfit descriptions
+export const ClothingRecordSchema = z.object({
+  id: UUIDSchema,
+  name: z.string().min(1),
+  usageContext: z.string().max(200).nullable().optional(),
+  description: z.string().nullable().optional(),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type ClothingRecord = z.infer<typeof ClothingRecordSchema>;
+
+// ============================================================================
 // CHARACTER PRONOUNS
 // ============================================================================
 
@@ -109,6 +125,7 @@ export const CharacterSchema = z.object({
     imageId: UUIDSchema,
   })).default([]),
   physicalDescriptions: z.array(PhysicalDescriptionSchema).default([]),
+  clothingRecords: z.array(ClothingRecordSchema).default([]),
 
   // Timestamps
   createdAt: TimestampSchema,

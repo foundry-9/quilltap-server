@@ -4,6 +4,17 @@
 
 ### 2.10-dev
 
+- feat: Add clothing records to characters
+  - New `clothingRecords` embedded JSON array on characters (name, usageContext, markdown description)
+  - Full CRUD API at `/api/v1/characters/[id]/clothing` and `/api/v1/characters/[id]/clothing/[recordId]`
+  - New UI components: expandable card, modal editor with markdown preview, list with empty state
+  - "Physical Descriptions" tab renamed to "Appearance" and now shows both physical descriptions and clothing records
+  - Clothing records injected into system prompts as `## Clothing / Outfits` block after physical appearance
+  - Clothing data included in image generation prompt expansion context for scene-appropriate outfit selection
+  - Story background generation includes primary outfit in character descriptions
+  - Backup/restore handles UUID remapping for clothing records
+  - Migration adds `clothingRecords` column to existing databases
+
 - feat: Add `usageContext` field to physical descriptions
   - New optional free-text field (up to 200 chars) describes when each appearance is most appropriate
   - Physical descriptions are now injected into chat system prompts (previously only used for image generation)

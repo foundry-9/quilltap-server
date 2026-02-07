@@ -6,7 +6,7 @@
  */
 
 import { getRepositories } from '@/lib/repositories/factory';
-import { PhysicalDescription, ImageProvider } from '@/lib/schemas/types';
+import { PhysicalDescription, ClothingRecord, ImageProvider } from '@/lib/schemas/types';
 
 /**
  * Placeholder information extracted from a prompt
@@ -22,6 +22,8 @@ export interface PlaceholderInfo {
   entityId?: string;
   /** All available physical descriptions for this entity */
   descriptions?: PhysicalDescription[];
+  /** All available clothing records for this entity */
+  clothingRecords?: ClothingRecord[];
 }
 
 /**
@@ -85,6 +87,7 @@ export async function resolvePlaceholders(
     // {{me}}, {{I}}, or {{char}} = the caller (character when assistant calls, user-controlled character when user calls)
     if (lowerName === 'me' || lowerName === 'i' || lowerName === 'char') {
       let descriptions: PhysicalDescription[] = [];
+      let clothing: ClothingRecord[] = [];
       let entityId: string | undefined;
       let entityType: 'character' | 'user' = 'user';
       let resolvedName = name;
@@ -99,6 +102,7 @@ export async function resolvePlaceholders(
             const character = await repos.characters.findById(characterId);
             if (character) {
               descriptions = character.physicalDescriptions || [];
+              clothing = character.clothingRecords || [];
               entityId = character.id;
               entityType = 'character';
               resolvedName = character.name;
@@ -112,6 +116,7 @@ export async function resolvePlaceholders(
           const character = await repos.characters.findById(characterParticipant.characterId);
           if (character) {
             descriptions = character.physicalDescriptions || [];
+            clothing = character.clothingRecords || [];
             entityId = character.id;
             entityType = 'character';
             resolvedName = character.name;
@@ -125,6 +130,7 @@ export async function resolvePlaceholders(
         type: entityType,
         entityId,
         descriptions,
+        clothingRecords: clothing,
       });
       continue;
     }
@@ -132,6 +138,7 @@ export async function resolvePlaceholders(
     // {{user}} = the OTHER participant (user-controlled character when LLM calls, LLM character when user calls)
     if (lowerName === 'user') {
       let descriptions: PhysicalDescription[] = [];
+      let clothing: ClothingRecord[] = [];
       let entityId: string | undefined;
       let entityType: 'character' | 'user' = 'character';
       let resolvedName = name;
@@ -170,6 +177,7 @@ export async function resolvePlaceholders(
             const character = await repos.characters.findById(characterId);
             if (character) {
               descriptions = character.physicalDescriptions || [];
+              clothing = character.clothingRecords || [];
               entityId = character.id;
               entityType = 'character';
               resolvedName = character.name;
@@ -184,6 +192,7 @@ export async function resolvePlaceholders(
         type: entityType,
         entityId,
         descriptions,
+        clothingRecords: clothing,
       });
       continue;
     }
@@ -202,6 +211,7 @@ export async function resolvePlaceholders(
         type: 'character',
         entityId: character.id,
         descriptions: character.physicalDescriptions || [],
+        clothingRecords: character.clothingRecords || [],
       });
       continue;
     }
@@ -212,6 +222,7 @@ export async function resolvePlaceholders(
       name,
       type: 'character', // Default to character type
       descriptions: [],
+      clothingRecords: [],
     });
   }
 
@@ -307,12 +318,22 @@ export function buildExpansionContext(
       long?: string;
       complete?: string;
     };
+    clothing?: Array<{
+      name: string;
+      usageContext?: string | null;
+      description?: string | null;
+    }>;
   }>;
   targetLength: number;
   provider: string;
 } {
   const placeholderData = resolvedPlaceholders.map(placeholder => {
     const tiers = getAllDescriptionTiers(placeholder.descriptions || []);
+    const clothing = (placeholder.clothingRecords || []).map(r => ({
+      name: r.name,
+      usageContext: r.usageContext,
+      description: r.description,
+    }));
 
     return {
       placeholder: placeholder.placeholder,
@@ -324,6 +345,7 @@ export function buildExpansionContext(
         long: tiers?.long,
         complete: tiers?.complete,
       },
+      ...(clothing.length > 0 ? { clothing } : {}),
     };
   });
 

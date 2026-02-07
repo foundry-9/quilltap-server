@@ -5,6 +5,7 @@ import { AvatarSelector } from '@/components/images/avatar-selector'
 import { ImageUploadDialog } from '@/components/images/image-upload-dialog'
 import { EntityTabs, Tab } from '@/components/tabs'
 import { PhysicalDescriptionList } from '@/components/physical-descriptions'
+import { ClothingRecordList } from '@/components/clothing-records'
 import { RenameReplaceTab } from '@/components/characters/RenameReplaceTab'
 import { SystemPromptsEditor } from '@/components/characters/SystemPromptsEditor'
 import { AIWizardModal, type GeneratedCharacterData } from '@/components/characters/ai-wizard'
@@ -37,7 +38,7 @@ const EDIT_CHARACTER_TABS: Tab[] = [
   },
   {
     id: 'descriptions',
-    label: 'Physical Descriptions',
+    label: 'Appearance',
     icon: (
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -238,11 +239,16 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
 
               case 'descriptions':
                 return (
-                  <PhysicalDescriptionList
-                    entityType="character"
-                    entityId={id}
-                    refreshKey={physicalDescriptionsRefreshKey}
-                  />
+                  <div className="space-y-8">
+                    <PhysicalDescriptionList
+                      entityType="character"
+                      entityId={id}
+                      refreshKey={physicalDescriptionsRefreshKey}
+                    />
+                    <ClothingRecordList
+                      entityId={id}
+                    />
+                  </div>
                 )
 
               case 'rename':

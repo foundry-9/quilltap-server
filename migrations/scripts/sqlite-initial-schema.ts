@@ -73,6 +73,7 @@ export const SQLITE_TABLES = [
       "tags" TEXT DEFAULT '[]',
       "avatarOverrides" TEXT DEFAULT '[]',
       "physicalDescriptions" TEXT DEFAULT '[]',
+      "clothingRecords" TEXT DEFAULT '[]',
       "createdAt" TEXT NOT NULL,
       "updatedAt" TEXT NOT NULL
     )`,

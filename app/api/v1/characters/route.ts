@@ -61,6 +61,18 @@ const createCharacterSchema = z.object({
       })
     )
     .optional(),
+  clothingRecords: z
+    .array(
+      z.object({
+        id: z.uuid(),
+        name: z.string().min(1),
+        usageContext: z.string().max(200).nullable().optional(),
+        description: z.string().nullable().optional(),
+        createdAt: z.string(),
+        updatedAt: z.string(),
+      })
+    )
+    .optional(),
 });
 
 const quickCreateSchema = z.object({
@@ -217,6 +229,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       avatarOverrides: [] as { chatId: string; imageId: string }[],
       defaultImageId: null,
       physicalDescriptions: validatedData.physicalDescriptions || [],
+      clothingRecords: validatedData.clothingRecords || [],
       systemPrompts: validatedData.systemPrompts || [],
     });
 
@@ -266,6 +279,7 @@ async function handleQuickCreate(req: NextRequest, context: AuthenticatedContext
       avatarOverrides: [] as { chatId: string; imageId: string }[],
       defaultImageId: null,
       physicalDescriptions: [],
+      clothingRecords: [],
     });
 
     logger.info('[Characters v1] Quick create completed', {
@@ -340,6 +354,7 @@ async function handleImport(req: NextRequest, context: AuthenticatedContext) {
       avatarOverrides: [] as { chatId: string; imageId: string }[],
       defaultImageId: null,
       physicalDescriptions: [],
+      clothingRecords: [],
     });
 
     const chats = await repos.chats.findByCharacterId(character.id);

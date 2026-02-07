@@ -1,6 +1,7 @@
 'use client'
 
 import { PhysicalDescriptionList } from '@/components/physical-descriptions'
+import { ClothingRecordList } from '@/components/clothing-records'
 
 interface DescriptionsTabProps {
   characterId: string
@@ -8,9 +9,14 @@ interface DescriptionsTabProps {
 
 export function DescriptionsTab({ characterId }: DescriptionsTabProps) {
   return (
-    <PhysicalDescriptionList
-      entityType="character"
-      entityId={characterId}
-    />
+    <div className="space-y-8">
+      <PhysicalDescriptionList
+        entityType="character"
+        entityId={characterId}
+      />
+      <ClothingRecordList
+        entityId={characterId}
+      />
+    </div>
   )
 }

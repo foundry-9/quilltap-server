@@ -253,13 +253,12 @@ Browse character images:
 - Upload new images
 - Set as default avatar
 
-### Physical Descriptions Tab
+### Appearance Tab
 
-View detailed appearance:
+View detailed appearance and outfits:
 
-- Various description lengths (short/medium/long/complete/full)
-- Useful for AI context and image generation
-- View or regenerate descriptions
+- **Physical Descriptions** — Various description lengths (short/medium/long/complete/full) for AI context and image generation
+- **Clothing & Outfits** — Named outfit records with usage context and markdown descriptions, used in system prompts and image generation
 
 ## Editing Characters
 
