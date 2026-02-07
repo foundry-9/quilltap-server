@@ -249,3 +249,50 @@ export function buildOtherParticipantsInfo(
 
   return otherParticipants
 }
+
+/**
+ * Build an identity reinforcement block to append at the very end of the system prompt.
+ * This reminds the LLM which character it is playing and who it must NOT write for,
+ * placed as close to the generation boundary as possible for maximum compliance.
+ */
+export function buildIdentityReinforcement(
+  characterName: string,
+  userName: string = 'User',
+  otherParticipantNames?: string[]
+): string {
+  const hasOtherParticipants = otherParticipantNames && otherParticipantNames.length > 0
+
+  // Build the "do not write for" list
+  let doNotWriteFor: string
+  if (hasOtherParticipants) {
+    // Multi-character: explicitly name other participants plus the user
+    const allOthers = [...otherParticipantNames, userName]
+    if (allOthers.length === 1) {
+      doNotWriteFor = allOthers[0]
+    } else {
+      const last = allOthers[allOthers.length - 1]
+      const rest = allOthers.slice(0, -1)
+      doNotWriteFor = `${rest.join(', ')}, ${last}, or any other character`
+    }
+  } else {
+    doNotWriteFor = `{{user}} or any other character`
+  }
+
+  const template = hasOtherParticipants
+    ? `## Identity Reminder\nYou are {{char}}. Respond only as {{char}}. Do not write dialogue, actions, or thoughts for ${doNotWriteFor}. Your response must contain only {{char}}'s own speech, actions, and inner thoughts, following the response format described above.`
+    : `## Identity Reminder\nYou are {{char}}. Respond only as {{char}}. Do not write dialogue, actions, or thoughts for ${doNotWriteFor}. Your response must contain only {{char}}'s own speech, actions, and inner thoughts, following the response format described above.`
+
+  const result = processTemplate(template, {
+    char: characterName,
+    user: userName,
+  })
+
+  logger.debug('[SystemPromptBuilder] Building identity reinforcement', {
+    characterName,
+    userName,
+    otherParticipantCount: otherParticipantNames?.length ?? 0,
+    isMultiCharacter: hasOtherParticipants,
+  })
+
+  return result
+}

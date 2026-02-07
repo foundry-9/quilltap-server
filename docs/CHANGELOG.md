@@ -4,6 +4,12 @@
 
 ### 2.10-dev
 
+- feat: Character identity reinforcement reminder appended to end of system prompt
+  - Adds a short `## Identity Reminder` block as the very last content before conversation messages
+  - Reminds the LLM which character it is and who it must not write for
+  - Multi-character variant explicitly names all other participants
+  - Placed after memories and summaries for maximum compliance near the generation boundary
+
 - feat: Turn-order-based participant sidebar with stop button and active toggle
   - Participant sidebar now sorts participants by predicted turn order instead of static display order
   - Numbered position badges on all participants show who's speaking (#1), who's next (#2), and predicted order

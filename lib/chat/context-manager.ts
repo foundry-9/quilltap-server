@@ -25,6 +25,7 @@ import { logger } from '@/lib/logger'
 import {
   buildSystemPrompt,
   buildOtherParticipantsInfo,
+  buildIdentityReinforcement,
   type OtherParticipantInfo,
   type ProjectContext,
 } from './context/system-prompt-builder'
@@ -66,6 +67,7 @@ export type { ContextCompressionOptions, ContextCompressionResult } from './cont
 export {
   buildSystemPrompt,
   buildOtherParticipantsInfo,
+  buildIdentityReinforcement,
   formatMemoriesForContext,
   formatInterCharacterMemoriesForContext,
   formatSummaryForContext,
@@ -734,6 +736,21 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   if (summaryContent) {
     fullSystemContent += '\n\n' + summaryContent
   }
+
+  // Identity reinforcement: append as the very last content in system prompt
+  // so it's the closest instruction to where the LLM begins generating
+  const otherParticipantNames = otherParticipantsInfo?.map(p => p.name)
+  const identityReminder = buildIdentityReinforcement(
+    character.name,
+    persona?.name || 'User',
+    isMultiCharacter ? otherParticipantNames : undefined,
+  )
+  fullSystemContent += '\n\n' + identityReminder
+  logger.debug('[ContextManager] Identity reinforcement appended', {
+    characterName: character.name,
+    isMultiCharacter,
+    otherParticipantCount: otherParticipantNames?.length ?? 0,
+  })
 
   contextMessages.push({
     role: 'system',
