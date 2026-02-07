@@ -29,6 +29,16 @@ This document tracks planned features and improvements for Quilltap.
   - [X] Implies a new quick-hide just for dangerous content
   - [ ] Further: user-determined danger paths (e.g., this talks about politics, I don't want to talk about politics) in addition to the general "most providers won't handle this" rails
   - [X] Testing
+- [ ] Pull chat settings into the participants sidebar, make it the chat sidebar
+  - [ ] Every participant should be able to be taken over ad-hoc
+  - [ ] Every participant should be able to be silenced or phased out of the current conversation
+  - [ ] Every participant should be able to be either pulled it immediately, interrupt, or queue up
+  - [ ] Every participant should have an option to be switched to a different LLM provider
+- [ ] Memory search every time
+  - [ ] The cheap/fast LLM should take whatever has happened since the last time they spoke
+  - [ ] Reduce that to keywords
+  - [ ] Search the memories for those keywords
+  - [ ] Preload the prompt with things that spring to mind because of the keywords
 
 ### LLM Integration
 
