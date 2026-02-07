@@ -121,7 +121,7 @@ export function ProfilesTab({
         </div>
         {!isUserControlled && userControlledCharacters.filter(c => c.id !== characterId).length === 0 && (
           <p className="mt-2 text-sm text-warning">
-            No user-controlled characters available. <Link href="/characters/new" className="underline hover:no-underline">Create one</Link> or set an existing character to &quot;User Acts As Character&quot;.
+            No user-controlled characters available. <Link href="/aurora/new" className="underline hover:no-underline">Create one</Link> or set an existing character to &quot;User Acts As Character&quot;.
           </p>
         )}
       </div>

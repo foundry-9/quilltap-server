@@ -1,6 +1,6 @@
 # Managing Tasks
 
-> **[Open this page in Quilltap](/tools)**
+> **[Open this page in Quilltap](/foundry)**
 
 The Tasks Queue shows all background jobs running in your Quilltap system. These include memory extraction, imports, exports, and other long-running operations.
 

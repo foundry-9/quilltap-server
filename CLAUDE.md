@@ -68,10 +68,13 @@ Legacy routes outside `/api/v1/` were removed in v2.8. Only `/api/v1/` routes ar
 - **Dangermouse** - the dangerous content tracking/rerouting/hiding system
 - **Commonplace Book** - the memory system that characters have, a self-managed RAG
 - **The Lantern** - the story backgrounds subsystem, that can send context to image providers and put them up as backgrounds for chats or projects
-- **Prospero** - the agentic and tool-using systems, and the way LLMs work
-- **Aurora** - the complex character model and how it interacts with the prompts
+- **Prospero** - the agentic and tool-using systems, and the way LLMs work — UI route: `/prospero` (was `/projects`)
+- **Aurora** - the complex character model and how it interacts with the prompts — UI route: `/aurora` (was `/characters`)
 - **Calliope** - the UX/UI and themes systems
-- **The Foundry** - the architecture underneath, plugins and packages and services
+- **The Foundry** - the architecture underneath, plugins and packages and services — UI route: `/foundry` (was `/tools`)
+- **The Salon** - the chat interface — UI route: `/salon` (was `/chats`)
+
+Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/chats`, `/api/v1/projects`). Old UI routes redirect to new ones.
 
 ## Current State
 

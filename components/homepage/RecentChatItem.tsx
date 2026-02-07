@@ -31,7 +31,7 @@ export function RecentChatItem({ chat }: RecentChatItemProps) {
 
   return (
     <Link
-      href={`/chats/${chat.id}`}
+      href={`/salon/${chat.id}`}
       className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors"
     >
       {/* Story background thumbnail (preferred) or Avatar stack */}

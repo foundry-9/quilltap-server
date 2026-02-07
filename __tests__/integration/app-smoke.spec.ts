@@ -66,7 +66,7 @@ test.describe('App Smoke Tests', () => {
   })
 
   test('characters pages load and show seeded character', async ({ page }) => {
-    await page.goto('/characters')
+    await page.goto('/aurora')
     await page.waitForLoadState('domcontentloaded')
     // Use main content to avoid matching sidebar
     const mainContent = page.getByRole('main')
@@ -74,31 +74,31 @@ test.describe('App Smoke Tests', () => {
     await page.waitForSelector('.character-card', { timeout: 20000 })
     await expect(page.locator('.character-card').filter({ hasText: characterName }).first()).toBeVisible({ timeout: 15000 })
 
-    await page.goto(`/characters/${testCharacterId}/view`)
-    await expect(page).toHaveURL(/\/characters\/.+\/view/)
+    await page.goto(`/aurora/${testCharacterId}/view`)
+    await expect(page).toHaveURL(/\/aurora\/.+\/view/)
     await expect(page.getByRole('heading', { name: characterName })).toBeVisible({ timeout: 20000 })
     await expect(page.getByRole('button', { name: 'Start Chat' })).toBeVisible()
 
-    await page.goto(`/characters/${testCharacterId}/edit`)
+    await page.goto(`/aurora/${testCharacterId}/edit`)
     await page.waitForLoadState('domcontentloaded')
     await expect(page.getByRole('button', { name: 'Save Character' })).toBeVisible({ timeout: 20000 })
 
-    await page.goto('/characters/new')
+    await page.goto('/aurora/new')
     await expect(page.getByRole('heading', { name: 'Create Character' })).toBeVisible()
     await expect(page.locator('input[name="name"]')).toBeVisible()
   })
 
   test('chat pages load and show seeded chat', async ({ page }) => {
-    await page.goto('/chats')
+    await page.goto('/salon')
     await page.waitForLoadState('domcontentloaded')
-    await expect(page).toHaveURL(/\/chats(\?|$)/)
+    await expect(page).toHaveURL(/\/salon(\?|$)/)
     await expect(page.getByRole('link', { name: 'New Chat' })).toBeVisible({ timeout: 15000 })
     await page.waitForSelector('.chat-card, .chat-empty-state', { timeout: 20000 })
-    await expect(page.locator(`a[href="/chats/${testChatId}"]`)).toBeVisible()
+    await expect(page.locator(`a[href="/salon/${testChatId}"]`)).toBeVisible()
 
     // Navigate to specific chat with retry (chat page can be slow to initialize)
     for (let attempt = 1; attempt <= 3; attempt += 1) {
-      await page.goto(`/chats/${testChatId}`)
+      await page.goto(`/salon/${testChatId}`)
       await page.waitForLoadState('networkidle')
       try {
         await expect(page.locator('.qt-chat-composer')).toBeVisible({ timeout: 15000 })
@@ -109,7 +109,7 @@ test.describe('App Smoke Tests', () => {
       }
     }
 
-    await page.goto('/chats/new')
+    await page.goto('/salon/new')
     await expect(page.getByRole('heading', { name: 'New Chat' })).toBeVisible()
     await expect(page.getByPlaceholder('Search characters...')).toBeVisible()
   })
@@ -166,7 +166,7 @@ test.describe('App Smoke Tests', () => {
   })
 
   test('tools page shows utility cards', async ({ page }) => {
-    await page.goto('/tools')
+    await page.goto('/foundry')
     await expect(page.getByRole('heading', { name: 'Tools' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Backup & Restore' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Import / Export' })).toBeVisible()

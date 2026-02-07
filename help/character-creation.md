@@ -1,6 +1,6 @@
 # Creating Characters
 
-> **[Open this page in Quilltap](/characters)**
+> **[Open this page in Quilltap](/aurora)**
 
 This guide walks you through creating new characters in Quilltap, from simple characters to fully detailed personas.
 

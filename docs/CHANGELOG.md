@@ -4,6 +4,15 @@
 
 ### 2.10-dev
 
+- feat: Rename UI routes to align with internal feature naming conventions
+  - `/characters` → `/aurora` (Aurora - the character model system)
+  - `/chats` → `/salon` (Salon - the chat interface)
+  - `/projects` → `/prospero` (Prospero - the agentic and tool-using systems)
+  - `/tools` → `/foundry` (The Foundry - architecture, plugins, and services)
+  - Old routes redirect to new ones to preserve bookmarks
+  - API routes (`/api/v1/*`) remain unchanged
+  - Updated all internal navigation, tests, help files, and documentation
+
 - feat: Character identity reinforcement reminder appended to end of system prompt
   - Adds a short `## Identity Reminder` block as the very last content before conversation messages
   - Reminds the LLM which character it is and who it must not write for

@@ -391,7 +391,7 @@ You're ready to chat! Quilltap comes with a starter character, or you can create
 
 1. **Go to Characters**
    - Click **Characters** in the left sidebar
-   - Or go to: [Characters](/characters)
+   - Or go to: [Characters](/aurora)
 
 2. **Find a Character**
    - You should see at least one character (often named "Ben" or similar)
@@ -412,7 +412,7 @@ You're ready to chat! Quilltap comes with a starter character, or you can create
 
 ### Create Your Own Character
 
-1. Go to: [Characters](/characters)
+1. Go to: [Characters](/aurora)
 2. Click **Create Character** or **+ New Character**
 3. Fill in at least:
    - **Name** — What to call the character
@@ -505,7 +505,7 @@ You're ready to chat! Quilltap comes with a starter character, or you can create
 - Check that an embedding profile is configured and set as default
 - Verify the cheap LLM is configured (for memory extraction)
 - Wait a moment — memory extraction happens in the background
-- Check the Tasks Queue in [Tools](/tools) for any errors
+- Check the Tasks Queue in [Tools](/foundry) for any errors
 
 ---
 
@@ -530,8 +530,8 @@ Now that you're set up, explore more of Quilltap:
 | Create Connection Profiles | [Settings > Connection Profiles](/settings?tab=profiles) |
 | Configure Embeddings | [Settings > Embedding Profiles](/settings?tab=embedding-profiles) |
 | Set Up Cheap LLM | [Settings > Chat Settings](/settings?tab=chat) |
-| Manage Characters | [Characters](/characters) |
-| View Background Tasks | [Tools](/tools) |
+| Manage Characters | [Characters](/aurora) |
+| View Background Tasks | [Tools](/foundry) |
 | Customize Appearance | [Settings > Appearance](/settings?tab=appearance) |
 
 ---
@@ -541,7 +541,7 @@ Now that you're set up, explore more of Quilltap:
 If you run into issues:
 
 1. Check the help documentation for the specific feature
-2. Look at the [Tools](/tools) page for error messages in the Tasks Queue
+2. Look at the [Tools](/foundry) page for error messages in the Tasks Queue
 3. Review your API provider's status page for outages
 4. For Quilltap-specific issues, check the project's GitHub
 

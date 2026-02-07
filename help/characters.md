@@ -1,6 +1,6 @@
 # Characters Overview
 
-> **[Open this page in Quilltap](/characters)**
+> **[Open this page in Quilltap](/aurora)**
 
 Characters are the core of roleplaying in Quilltap. They represent personas that you can chat with, each with their own personality, background, and conversation style.
 

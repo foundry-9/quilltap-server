@@ -1,6 +1,6 @@
 # Editing Characters
 
-> **[Open this page in Quilltap](/characters)**
+> **[Open this page in Quilltap](/aurora)**
 
 This guide covers how to modify and refine your existing characters in Quilltap.
 

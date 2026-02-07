@@ -243,7 +243,7 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
           </svg>
         </div>
         <Link
-          href={`/characters/${characterId}/view?action=chat`}
+          href={`/aurora/${characterId}/view?action=chat`}
           className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium text-sm whitespace-nowrap"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -277,7 +277,7 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
           </p>
           {!searchQuery && (
             <Link
-              href={`/characters/${characterId}/view?action=chat`}
+              href={`/aurora/${characterId}/view?action=chat`}
               className="mt-4 inline-flex items-center gap-2 text-primary hover:underline"
             >
               Start your first conversation

@@ -52,7 +52,7 @@ function CharacterItem({
 
   return (
     <Link
-      href={`/characters/${character.id}`}
+      href={`/aurora/${character.id}`}
       className={`qt-left-sidebar-item ${isCollapsed ? 'justify-center px-0' : ''}`}
       title={isCollapsed ? character.name : undefined}
     >
@@ -101,7 +101,7 @@ export function CharactersSection() {
         <div className="px-2 py-1 text-xs text-muted-foreground">
           {!isCollapsed && 'No characters yet'}
         </div>
-        <ViewAllLink href="/characters" label="Create one" />
+        <ViewAllLink href="/aurora" label="Create one" />
       </SidebarSection>
     )
   }
@@ -115,7 +115,7 @@ export function CharactersSection() {
           isCollapsed={isCollapsed}
         />
       ))}
-      <ViewAllLink href="/characters" />
+      <ViewAllLink href="/aurora" />
     </SidebarSection>
   )
 }

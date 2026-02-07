@@ -1,6 +1,6 @@
 # Backup & Restore
 
-> **[Open this page in Quilltap](/tools)**
+> **[Open this page in Quilltap](/foundry)**
 
 The Backup & Restore tool lets you create complete backups of your Quilltap system and restore from previous backups.
 

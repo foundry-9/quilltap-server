@@ -145,7 +145,7 @@ export function SidebarFooter() {
         </Link>
 
         <Link
-          href="/tools"
+          href="/foundry"
           className={`qt-left-sidebar-item ${isCollapsed ? 'justify-center px-0' : ''}`}
           title={isCollapsed ? 'Tools' : undefined}
         >

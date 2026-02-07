@@ -203,7 +203,7 @@ export function ChatCard({
     if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('a[href]')) {
       return
     }
-    router.push(`/chats/${chat.id}`)
+    router.push(`/salon/${chat.id}`)
   }
 
   const handleAction = (e: React.MouseEvent) => {
@@ -219,7 +219,7 @@ export function ChatCard({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
-      router.push(`/chats/${chat.id}`)
+      router.push(`/salon/${chat.id}`)
     }
   }
 
@@ -295,7 +295,7 @@ export function ChatCard({
               <div className="mt-2 flex items-center gap-2 flex-wrap">
                 {showProject && chat.project && (
                   <Link
-                    href={`/projects/${chat.project.id}`}
+                    href={`/prospero/${chat.project.id}`}
                     className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-muted hover:bg-muted/80 transition-colors"
                     onClick={(e) => e.stopPropagation()}
                   >

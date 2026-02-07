@@ -1,6 +1,6 @@
 # Using Templates in Chats
 
-> **[Open this page in Quilltap](/chats)**
+> **[Open this page in Quilltap](/salon)**
 
 This guide explains how to select and use roleplay templates in your individual chats. Each chat can have its own template, or it can use the default template from your settings.
 

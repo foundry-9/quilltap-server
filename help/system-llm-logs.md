@@ -1,6 +1,6 @@
 # LLM Logs
 
-> **[Open this page in Quilltap](/tools)**
+> **[Open this page in Quilltap](/foundry)**
 
 The LLM Logs tool shows detailed records of all AI model interactions and API calls in your Quilltap system.
 

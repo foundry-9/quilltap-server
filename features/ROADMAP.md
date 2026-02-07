@@ -26,11 +26,6 @@ This document tracks planned features and improvements for Quilltap.
   - [X] Implies a new quick-hide just for dangerous content
   - [ ] Further: user-determined danger paths (e.g., this talks about politics, I don't want to talk about politics) in addition to the general "most providers won't handle this" rails
   - [X] Testing
-- [ ] Pull chat settings into the participants sidebar, make it the chat sidebar
-  - [ ] Every participant should be able to be taken over ad-hoc
-  - [ ] Every participant should be able to be silenced or phased out of the current conversation
-  - [ ] Every participant should be able to be either pulled in immediately, interrupt, or queue up
-  - [X] Every participant should have an option to be switched to a different LLM provider
 
 ### LLM Integration (The Foundry)
 
@@ -80,8 +75,13 @@ This document tracks planned features and improvements for Quilltap.
 - [ ] Application web page and useful help and videos hosted there
 - [ ] Built-in help able to be toggled so it works with every LLM with or without tools (a "help" conversation will be different, it will always search for what you say or what the conversation has been about recently and provide that data as part of the context for every message to the LLM)
 
-## Completed in v2.9
+## Completed in v2.10
 
+- [X] Pull chat settings into the participants sidebar, make it the chat sidebar
+  - [X] Every participant should be able to be taken over ad-hoc
+  - [X] Every participant should be able to be silenced or phased out of the current conversation
+  - [X] Every participant should be able to be either pulled in immediately, interrupt, or queue up
+  - [X] Every participant should have an option to be switched to a different LLM provider
 - [X] Server-side Markdown render of historical chat messages to speed up delivery
 - [X] The Lantern (story backgrounds)
   - [X] Story background generation
@@ -91,6 +91,9 @@ This document tracks planned features and improvements for Quilltap.
   - [X] Reduce that to keywords
   - [X] Search the memories for those keywords
   - [X] Preload the prompt with things that spring to mind because of the keywords
+
+## Completed in v2.9.0
+
 - [X] Complete AI wizard for characters or NPCs
 - [X] Refactor embedding service to use plugin architecture
   - Currently `lib/embedding/embedding-service.ts` has hardcoded handlers for each provider

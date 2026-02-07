@@ -1,12 +1,12 @@
 # System Tools
 
-> **[Open this page in Quilltap](/tools)**
+> **[Open this page in Quilltap](/foundry)**
 
-The Tools page (`/tools`) is your command center for managing and maintaining your Quilltap system. It provides utilities for backing up your data, importing/exporting, monitoring tasks, and managing your system's capabilities.
+The Tools page (`/foundry`) is your command center for managing and maintaining your Quilltap system. It provides utilities for backing up your data, importing/exporting, monitoring tasks, and managing your system's capabilities.
 
 ## Accessing the Tools Page
 
-Navigate to the **Tools** page in Quilltap at `/tools` or through your app's navigation menu. The page displays several utility cards, each providing different system management features.
+Navigate to the **Tools** page in Quilltap at `/foundry` or through your app's navigation menu. The page displays several utility cards, each providing different system management features.
 
 ## Available Tools
 

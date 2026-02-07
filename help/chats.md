@@ -1,6 +1,6 @@
 # Chats Overview
 
-> **[Open this page in Quilltap](/chats)**
+> **[Open this page in Quilltap](/salon)**
 
 Chats are the core of Quilltap. They're where you have conversations with AI characters, explore stories, collaborate on creative work, and interact with your configured AI assistants.
 

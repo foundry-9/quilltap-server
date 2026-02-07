@@ -1,6 +1,6 @@
 # Participants Sidebar
 
-> **[Open this page in Quilltap](/chats)**
+> **[Open this page in Quilltap](/salon)**
 
 The Participants Sidebar is your control center for managing characters in multi-character chats. It shows who's in the conversation, whose turn it is, and provides controls for managing participation.
 

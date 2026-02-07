@@ -1,6 +1,6 @@
 # Tags
 
-> **[Open this page in Quilltap](/characters)**
+> **[Open this page in Quilltap](/aurora)**
 
 Tags are labels you create to organize and categorize your characters, connection profiles, and image profiles throughout Quilltap. They're powerful tools for filtering, searching, and managing your content efficiently.
 

@@ -81,7 +81,7 @@ function ChatItem({
 
   return (
     <Link
-      href={`/chats/${chat.id}`}
+      href={`/salon/${chat.id}`}
       className={`qt-left-sidebar-item ${isCollapsed ? 'justify-center px-0' : ''}`}
       title={isCollapsed ? `${displayName}${chat.projectName ? ` (${chat.projectName})` : ''} (${messageCount} messages)` : undefined}
     >
@@ -149,7 +149,7 @@ export function ChatsSection() {
         <div className="px-2 py-1 text-xs text-muted-foreground">
           {!isCollapsed && 'No chats yet'}
         </div>
-        <ViewAllLink href="/chats" label="Start one" />
+        <ViewAllLink href="/salon" label="Start one" />
       </SidebarSection>
     )
   }
@@ -163,7 +163,7 @@ export function ChatsSection() {
           isCollapsed={isCollapsed}
         />
       ))}
-      <ViewAllLink href="/chats" />
+      <ViewAllLink href="/salon" />
     </SidebarSection>
   )
 }

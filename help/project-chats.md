@@ -1,6 +1,6 @@
 # Project Chats
 
-> **[Open this page in Quilltap](/projects)**
+> **[Open this page in Quilltap](/prospero)**
 
 Project chats are conversations associated with a specific project. They automatically receive project context, including instructions and access to project files, making them ideal for focused creative work.
 

@@ -135,7 +135,7 @@ export function ChatsSection({
           )}
         </h2>
         <Link
-          href={`/chats/new?projectId=${projectId}`}
+          href={`/salon/new?projectId=${projectId}`}
           className="qt-button qt-button-primary"
         >
           New Chat
@@ -149,7 +149,7 @@ export function ChatsSection({
             {chats.length === 0 ? 'No chats in this project yet.' : 'No visible chats (some may be hidden).'}
           </p>
           <Link
-            href={`/chats/new?projectId=${projectId}`}
+            href={`/salon/new?projectId=${projectId}`}
             className="font-medium qt-text-primary hover:opacity-80"
           >
             Start a new chat

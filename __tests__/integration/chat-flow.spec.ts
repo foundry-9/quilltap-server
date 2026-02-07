@@ -24,7 +24,7 @@ test.describe('Chat Flow Integration Tests', () => {
     const composer = page.locator('.qt-chat-composer')
 
     for (let attempt = 1; attempt <= 3; attempt += 1) {
-      await page.goto(`/chats/${testChatId}`)
+      await page.goto(`/salon/${testChatId}`)
       await page.waitForLoadState('domcontentloaded')
 
       try {
@@ -57,10 +57,10 @@ test.describe('Chat Flow Integration Tests', () => {
     await page.waitForLoadState('domcontentloaded')
 
     // Click the "+" button to create a new character
-    const createButton = page.locator('a[href="/characters/new"]')
+    const createButton = page.locator('a[href="/aurora/new"]')
     if (await createButton.isVisible()) {
       await createButton.click()
-      await page.waitForURL(/\/characters\/new/)
+      await page.waitForURL(/\/aurora\/new/)
 
       // Fill out the character form
       await page.fill('input[name="name"]', 'Chat Flow Test Character')
@@ -90,11 +90,11 @@ test.describe('Chat Flow Integration Tests', () => {
     expect(testChatId).toBeTruthy()
 
     // Navigate to the chat
-    await page.goto(`/chats/${testChatId}`)
+    await page.goto(`/salon/${testChatId}`)
     await page.waitForLoadState('domcontentloaded')
 
     // Verify we're on the chat page
-    expect(page.url()).toContain(`/chats/${testChatId}`)
+    expect(page.url()).toContain(`/salon/${testChatId}`)
 
     // Verify the composer is present
     await expect(page.locator('.qt-chat-composer')).toBeVisible({ timeout: 10000 })

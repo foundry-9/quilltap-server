@@ -6,7 +6,7 @@ Quilltap stores application data in **SQLite** and files in **local or S3-compat
 
 ## Built-in Backup & Restore (Recommended)
 
-Quilltap includes a built-in backup and restore system accessible from the **Tools** page (`/tools`).
+Quilltap includes a built-in backup and restore system accessible from the **Tools** page (`/foundry`).
 
 ### Using the UI
 

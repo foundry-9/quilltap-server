@@ -1,6 +1,6 @@
 # Quick-Hide Feature
 
-> **[Open this page in Quilltap](/characters)**
+> **[Open this page in Quilltap](/aurora)**
 
 The quick-hide feature is a powerful organizational tool that lets you temporarily hide content tagged with specific tags. It helps you focus on your current work by reducing clutter and showing only what's relevant.
 

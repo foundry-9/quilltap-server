@@ -21,7 +21,7 @@ export function navigateToMessage(chatId: string, messageId: string): void {
   sessionStorage.setItem(HIGHLIGHT_MESSAGE_KEY, messageId)
 
   // Navigate to chat
-  window.location.href = `/chats/${chatId}`
+  window.location.href = `/salon/${chatId}`
 }
 
 /**

@@ -47,7 +47,7 @@ export function ProjectDetailHeader({
   return (
     <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border/60 pb-6">
       <div className="flex items-center gap-4">
-        <Link href="/projects" className="qt-text-primary hover:underline text-sm">
+        <Link href="/prospero" className="qt-text-primary hover:underline text-sm">
           &larr; Projects
         </Link>
         <div
@@ -82,7 +82,7 @@ export function ProjectDetailHeader({
       </div>
       <div className="flex gap-2">
         <Link
-          href={`/chats/new?projectId=${project.id}`}
+          href={`/salon/new?projectId=${project.id}`}
           className="inline-flex items-center gap-2 rounded-lg bg-success px-4 py-2 text-sm font-semibold text-success-foreground shadow hover:bg-success/90"
         >
           <PlusIcon className="w-4 h-4" />

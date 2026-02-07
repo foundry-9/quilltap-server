@@ -1,6 +1,6 @@
 # Message Actions
 
-> **[Open this page in Quilltap](/chats)**
+> **[Open this page in Quilltap](/salon)**
 
 Message actions are the tools available for managing individual messages in your chats. They let you edit, regenerate, delete, and otherwise modify messages to shape your conversations.
 

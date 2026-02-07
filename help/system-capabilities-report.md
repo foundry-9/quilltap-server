@@ -1,6 +1,6 @@
 # Capabilities Report
 
-> **[Open this page in Quilltap](/tools)**
+> **[Open this page in Quilltap](/foundry)**
 
 The Capabilities Report tool generates detailed documentation of your Quilltap system's configuration, installed providers, and capabilities.
 

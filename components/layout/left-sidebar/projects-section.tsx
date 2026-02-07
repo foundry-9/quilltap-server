@@ -101,7 +101,7 @@ function ProjectChatItem({
 
   return (
     <Link
-      href={`/chats/${chat.id}`}
+      href={`/salon/${chat.id}`}
       className="qt-left-sidebar-item pl-6"
     >
       {avatarSrc ? (
@@ -166,7 +166,7 @@ function ProjectItem({
         {/* Spacer when no expand button */}
         {!isCollapsed && !hasChats && <span className="w-4 flex-shrink-0" />}
         <Link
-          href={`/projects/${project.id}`}
+          href={`/prospero/${project.id}`}
           className="flex items-center gap-2 flex-1 min-w-0"
           title={isCollapsed ? `${project.name} (${totalCount} items)` : undefined}
         >
@@ -200,7 +200,7 @@ function ProjectItem({
           ))}
           {projectChats.length > 5 && (
             <Link
-              href={`/projects/${project.id}`}
+              href={`/prospero/${project.id}`}
               className="qt-left-sidebar-item pl-6 text-xs text-muted-foreground hover:text-foreground"
             >
               +{projectChats.length - 5} more...
@@ -254,7 +254,7 @@ export function ProjectsSection() {
         <div className="px-2 py-1 text-xs text-muted-foreground">
           {!isCollapsed && 'No projects yet'}
         </div>
-        <ViewAllLink href="/projects" label="Create one" />
+        <ViewAllLink href="/prospero" label="Create one" />
       </SidebarSection>
     )
   }
@@ -271,7 +271,7 @@ export function ProjectsSection() {
           projectChats={getProjectChats(project.id)}
         />
       ))}
-      {projects.length > 5 && <ViewAllLink href="/projects" />}
+      {projects.length > 5 && <ViewAllLink href="/prospero" />}
     </SidebarSection>
   )
 }

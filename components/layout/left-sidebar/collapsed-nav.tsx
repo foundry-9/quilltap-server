@@ -101,10 +101,10 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { id: 'projects', label: 'Projects', tooltip: 'View all projects', href: '/projects', icon: FolderIcon },
+  { id: 'projects', label: 'Projects', tooltip: 'View all projects', href: '/prospero', icon: FolderIcon },
   { id: 'files', label: 'Files', tooltip: 'View all files', href: '/files', icon: FileIcon },
-  { id: 'characters', label: 'Characters', tooltip: 'View all characters', href: '/characters', icon: CharacterIcon },
-  { id: 'chats', label: 'Chats', tooltip: 'View all chats', href: '/chats', icon: ChatIcon },
+  { id: 'characters', label: 'Characters', tooltip: 'View all characters', href: '/aurora', icon: CharacterIcon },
+  { id: 'chats', label: 'Chats', tooltip: 'View all chats', href: '/salon', icon: ChatIcon },
 ]
 
 export function CollapsedNav() {

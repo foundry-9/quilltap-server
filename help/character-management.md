@@ -1,6 +1,6 @@
 # Managing Characters
 
-> **[Open this page in Quilltap](/characters)**
+> **[Open this page in Quilltap](/aurora)**
 
 This guide covers character deletion, relationships, partnerships, NPCs, and other management tasks.
 

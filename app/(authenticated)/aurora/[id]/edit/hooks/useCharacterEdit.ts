@@ -168,7 +168,7 @@ export function useCharacterEdit(id: string) {
       // Refresh sidebar to reflect character changes
       sidebarData?.refreshCharacters()
 
-      router.push(`/characters/${id}/view`)
+      router.push(`/aurora/${id}/view`)
       return true
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'An error occurred'
@@ -209,7 +209,7 @@ export function useCharacterEdit(id: string) {
     if (state.character?.npc) {
       router.push('/settings?tab=npcs')
     } else {
-      router.push(`/characters/${id}/view`)
+      router.push(`/aurora/${id}/view`)
     }
   }
 

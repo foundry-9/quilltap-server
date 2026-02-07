@@ -24,7 +24,7 @@ export function ProjectsGrid({ projects, onCreateClick, onDeleteClick }: Project
     if (target.closest('button') || target.closest('a')) {
       return
     }
-    router.push(`/projects/${projectId}`)
+    router.push(`/prospero/${projectId}`)
   }
 
   if (projects.length === 0) {

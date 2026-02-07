@@ -1,6 +1,6 @@
 # Turn Manager
 
-> **[Open this page in Quilltap](/chats)**
+> **[Open this page in Quilltap](/salon)**
 
 The Turn Manager controls who speaks next in multi-character chats. It ensures conversations flow naturally, with each character getting opportunities to contribute while preventing any single character from dominating.
 

@@ -94,7 +94,7 @@ jest.mock('@/components/dashboard/QuickChatDialog', () => ({
 }))
 
 // Mock CreateProjectDialog
-jest.mock('@/app/(authenticated)/projects/components', () => ({
+jest.mock('@/app/(authenticated)/prospero/components', () => ({
   CreateProjectDialog: function MockCreateProjectDialog({
     open,
     onClose,
@@ -246,14 +246,14 @@ describe('QuickActionsRow', () => {
     render(<QuickActionsRow lastChatId={null} />)
     const startChatLink = screen.getByRole('link', { name: /chat/i })
     expect(startChatLink).toBeInTheDocument()
-    expect(startChatLink).toHaveAttribute('href', '/chats/new')
+    expect(startChatLink).toHaveAttribute('href', '/salon/new')
   })
 
   it('renders continue last button when lastChatId is provided', () => {
     render(<QuickActionsRow lastChatId="chat-123" />)
     const continueLink = screen.getByRole('link', { name: /continue/i })
     expect(continueLink).toBeInTheDocument()
-    expect(continueLink).toHaveAttribute('href', '/chats/chat-123')
+    expect(continueLink).toHaveAttribute('href', '/salon/chat-123')
   })
 
   it('renders disabled continue button when no lastChatId', () => {
@@ -449,7 +449,7 @@ describe('RecentChatItem', () => {
     const chat = createMockRecentChat({ id: 'chat-123' })
     render(<RecentChatItem chat={chat} />)
     const link = screen.getByRole('link')
-    expect(link).toHaveAttribute('href', '/chats/chat-123')
+    expect(link).toHaveAttribute('href', '/salon/chat-123')
   })
 
   it('renders avatar stack component', () => {
@@ -523,7 +523,7 @@ describe('RecentChatsSection', () => {
     const chats = [createMockRecentChat()]
     render(<RecentChatsSection chats={chats} />)
     const link = screen.getByRole('link', { name: /View all/ })
-    expect(link).toHaveAttribute('href', '/chats')
+    expect(link).toHaveAttribute('href', '/salon')
   })
 
   it('renders all chats', () => {
@@ -544,7 +544,7 @@ describe('RecentChatsSection', () => {
   it('renders empty state link to start chat', () => {
     render(<RecentChatsSection chats={[]} />)
     const link = screen.getByRole('link', { name: /Start your first chat/ })
-    expect(link).toHaveAttribute('href', '/chats/new')
+    expect(link).toHaveAttribute('href', '/salon/new')
   })
 
   it('does not render empty state when chats exist', () => {
@@ -739,7 +739,7 @@ describe('ProjectItem', () => {
     const project = createMockProject({ id: 'proj-123' })
     render(<ProjectItem project={project} />)
     const link = screen.getByRole('link')
-    expect(link).toHaveAttribute('href', '/projects/proj-123')
+    expect(link).toHaveAttribute('href', '/prospero/proj-123')
   })
 
   it('renders formatted time', () => {
@@ -801,7 +801,7 @@ describe('ProjectsSection', () => {
     const projects = [createMockProject()]
     render(<ProjectsSection projects={projects} />)
     const link = screen.getByRole('link', { name: /View all/ })
-    expect(link).toHaveAttribute('href', '/projects')
+    expect(link).toHaveAttribute('href', '/prospero')
   })
 
   it('renders all projects', () => {
@@ -884,7 +884,7 @@ describe('CharacterCard', () => {
     const character = createMockCharacter({ id: 'char-123' })
     render(<CharacterCard character={character} />)
     const link = screen.getByRole('link', { name: /Test Character/i })
-    expect(link).toHaveAttribute('href', '/characters/char-123/view')
+    expect(link).toHaveAttribute('href', '/aurora/char-123/view')
   })
 
   it('renders chat button', () => {
@@ -998,7 +998,7 @@ describe('CharactersSection', () => {
     const characters = [createMockCharacter()]
     render(<CharactersSection characters={characters} />)
     const link = screen.getByRole('link', { name: /View all/ })
-    expect(link).toHaveAttribute('href', '/characters')
+    expect(link).toHaveAttribute('href', '/aurora')
   })
 
   it('renders characters based on container size', () => {
@@ -1039,7 +1039,7 @@ describe('CharactersSection', () => {
   it('renders empty state link to mark favorites', () => {
     render(<CharactersSection characters={[]} />)
     const link = screen.getByRole('link', { name: /Mark some as favorites/ })
-    expect(link).toHaveAttribute('href', '/characters')
+    expect(link).toHaveAttribute('href', '/aurora')
   })
 
   it('does not render empty state when characters exist', () => {
