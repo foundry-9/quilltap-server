@@ -4,6 +4,13 @@
 
 ### 2.10-dev
 
+- feat: Add `usageContext` field to physical descriptions
+  - New optional free-text field (up to 200 chars) describes when each appearance is most appropriate
+  - Physical descriptions are now injected into chat system prompts (previously only used for image generation)
+  - Usage context passed through to image generation prompt expansion for scene-appropriate appearance selection
+  - Updated editor form with character counter and helper text
+  - Updated card display to show usage context inline
+
 - feat: Rename UI routes to align with internal feature naming conventions
   - `/characters` → `/aurora` (Aurora - the character model system)
   - `/chats` → `/salon` (Salon - the chat interface)

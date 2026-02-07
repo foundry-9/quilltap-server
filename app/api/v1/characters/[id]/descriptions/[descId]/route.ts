@@ -14,6 +14,7 @@ import { notFound, serverError, validationError } from '@/lib/api/responses';
 
 const updateDescriptionSchema = z.object({
   name: z.string().min(1).optional(),
+  usageContext: z.string().max(200).nullable().optional(),
   shortPrompt: z.string().max(350).nullable().optional(),
   mediumPrompt: z.string().max(500).nullable().optional(),
   longPrompt: z.string().max(750).nullable().optional(),

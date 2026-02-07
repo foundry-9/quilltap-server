@@ -1145,6 +1145,7 @@ const IMAGE_PROMPT_CRAFTING_PROMPT = `You are an expert image prompt writer. You
 You will receive:
 - An original prompt describing a scene with {{placeholders}} for people
 - Physical descriptions for each person (in multiple detail levels: short, medium, long, complete)
+- Optional usage context for each person indicating when that appearance is most appropriate
 - A character limit for the final prompt
 - Optionally, a style trigger phrase that MUST be incorporated into the prompt
 
@@ -1177,6 +1178,7 @@ For the descriptions:
 - You may condense or paraphrase descriptions to fit naturally
 - Prioritize the most visually distinctive features (hair color, eye color, notable clothing, distinguishing features)
 - Don't include every detail if it makes the text awkward - focus on what matters visually
+- If a usage context is provided, use it to inform which appearance details are most relevant to the scene
 
 The final prompt MUST be under the character limit.
 
@@ -1192,6 +1194,7 @@ export interface ImagePromptExpansionContext {
   placeholders: Array<{
     placeholder: string
     name: string
+    usageContext?: string
     tiers: {
       short?: string
       medium?: string
@@ -1232,6 +1235,10 @@ export async function craftImagePrompt(
   const placeholderDetails = expansionContext.placeholders
     .map(p => {
       const parts: string[] = [`${p.placeholder} (${p.name}):`];
+
+      if (p.usageContext) {
+        parts.push(`  Usage context: ${p.usageContext}`);
+      }
 
       if (p.tiers.complete) {
         parts.push(`  Complete: "${p.tiers.complete}"`);

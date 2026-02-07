@@ -167,6 +167,26 @@ export function buildSystemPrompt(
     parts.push(`\n## Character Pronouns\nThis character's pronouns are: ${character.pronouns.subject}/${character.pronouns.object}/${character.pronouns.possessive}. Always use these pronouns when referring to this character.`)
   }
 
+  // Physical descriptions - appearance context for the LLM
+  if (character.physicalDescriptions && character.physicalDescriptions.length > 0) {
+    const descriptionLines = character.physicalDescriptions.map(desc => {
+      const contextNote = desc.usageContext ? ` (best used: ${desc.usageContext})` : '';
+      const descText = desc.shortPrompt || desc.mediumPrompt || desc.longPrompt
+        || desc.completePrompt || desc.fullDescription || '';
+      if (!descText) return null;
+      return `- "${desc.name}"${contextNote}: ${descText}`;
+    }).filter(Boolean);
+
+    if (descriptionLines.length > 0) {
+      logger.debug('[SystemPrompt] Injecting physical descriptions', {
+        characterId: character.id,
+        characterName: character.name,
+        descriptionCount: descriptionLines.length,
+      });
+      parts.push(`\n## Physical Appearance\n${descriptionLines.join('\n')}`);
+    }
+  }
+
   // Scenario/setting - process templates
   if (character.scenario) {
     const processedScenario = processTemplate(character.scenario, templateContext)

@@ -236,6 +236,24 @@ armor from her military days..."
 - Best for detailed image generation
 - Includes all visual elements, personality reflected in appearance
 
+### Usage Context
+
+Each physical description can have an optional **Usage Context** field — a short note (up to 200 characters) describing when this particular appearance is most appropriate.
+
+**Examples of good values:**
+
+- "at work in a professional capacity"
+- "relaxing at the pool"
+- "attending a formal gala"
+- "in combat gear on a mission"
+
+**How it affects AI behavior:**
+
+- **In chat:** Physical descriptions are included in the system prompt sent to the AI. When multiple descriptions exist, the AI uses the usage context to decide which appearance best fits the current scene.
+- **In image generation:** The usage context is passed to the image prompt crafting system, helping it select the most scene-appropriate visual details.
+
+If no usage context is set, the AI will use the description based on its name and contents alone.
+
 ### Regenerating Descriptions
 
 1. Click **Generate New Description**

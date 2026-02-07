@@ -11,6 +11,7 @@ import MessageContent from '@/components/chat/MessageContent'
 export interface PhysicalDescription {
   id: string
   name: string
+  usageContext?: string | null
   shortPrompt?: string | null
   mediumPrompt?: string | null
   longPrompt?: string | null
@@ -40,6 +41,7 @@ export function PhysicalDescriptionEditor({
 
   const { formData, handleChange } = useFormState({
     name: description?.name || '',
+    usageContext: description?.usageContext || '',
     shortPrompt: description?.shortPrompt || '',
     mediumPrompt: description?.mediumPrompt || '',
     longPrompt: description?.longPrompt || '',
@@ -56,6 +58,7 @@ export function PhysicalDescriptionEditor({
     await executeSave(async () => {
       const payload = {
         name: formData.name,
+        usageContext: formData.usageContext || null,
         shortPrompt: formData.shortPrompt || null,
         mediumPrompt: formData.mediumPrompt || null,
         longPrompt: formData.longPrompt || null,
@@ -145,6 +148,31 @@ export function PhysicalDescriptionEditor({
               placeholder="e.g., Base Appearance, Formal Attire"
               className="qt-input"
             />
+          </div>
+
+          {/* Usage Context */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label htmlFor="usageContext" className="qt-label">
+                Usage Context
+              </label>
+              <span className={`text-xs ${charCountClass(formData.usageContext.length, 200)}`}>
+                {formData.usageContext.length}/200
+              </span>
+            </div>
+            <input
+              type="text"
+              id="usageContext"
+              name="usageContext"
+              value={formData.usageContext}
+              onChange={handleChange}
+              maxLength={200}
+              placeholder="e.g., at work in a professional capacity, relaxing at the pool"
+              className="qt-input"
+            />
+            <p className="mt-1 text-xs qt-text-small">
+              Describes when this appearance is most appropriate
+            </p>
           </div>
 
           {/* Short Prompt */}

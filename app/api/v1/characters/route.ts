@@ -50,6 +50,7 @@ const createCharacterSchema = z.object({
       z.object({
         id: z.uuid(),
         name: z.string().min(1),
+        usageContext: z.string().max(200).nullable().optional(),
         shortPrompt: z.string().max(350).nullable().optional(),
         mediumPrompt: z.string().max(500).nullable().optional(),
         longPrompt: z.string().max(750).nullable().optional(),

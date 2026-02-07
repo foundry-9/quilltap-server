@@ -232,6 +232,7 @@ export function getAllDescriptionTiers(
   long?: string;
   complete?: string;
   entityName?: string;
+  usageContext?: string;
 } | null {
   if (!descriptions || descriptions.length === 0) {
     return null;
@@ -246,6 +247,7 @@ export function getAllDescriptionTiers(
     long: primary.longPrompt || undefined,
     complete: primary.completePrompt || undefined,
     entityName: primary.name,
+    usageContext: primary.usageContext || undefined,
   };
 }
 
@@ -298,6 +300,7 @@ export function buildExpansionContext(
   placeholders: Array<{
     placeholder: string;
     name: string;
+    usageContext?: string;
     tiers: {
       short?: string;
       medium?: string;
@@ -314,6 +317,7 @@ export function buildExpansionContext(
     return {
       placeholder: placeholder.placeholder,
       name: placeholder.name,
+      usageContext: tiers?.usageContext,
       tiers: {
         short: tiers?.short,
         medium: tiers?.medium,

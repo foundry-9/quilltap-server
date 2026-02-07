@@ -6,6 +6,7 @@ import MessageContent from '@/components/chat/MessageContent'
 export interface PhysicalDescription {
   id: string
   name: string
+  usageContext?: string | null
   shortPrompt?: string | null
   mediumPrompt?: string | null
   longPrompt?: string | null
@@ -52,6 +53,12 @@ export function PhysicalDescriptionCard({
               <>
                 <span>•</span>
                 <span>Full description</span>
+              </>
+            )}
+            {description.usageContext && (
+              <>
+                <span>•</span>
+                <span className="italic">{description.usageContext}</span>
               </>
             )}
           </div>
