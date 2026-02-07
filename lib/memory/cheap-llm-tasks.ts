@@ -92,6 +92,7 @@ function mapTaskTypeToLogType(taskType?: string): LLMLogType {
     'batch-memory-extraction': 'MEMORY_EXTRACTION',
     'craft-story-background-prompt': 'IMAGE_PROMPT_CRAFTING',
     'derive-scene-context': 'SUMMARIZATION',
+    'memory-keyword-extraction': 'MEMORY_EXTRACTION',
   }
   return mapping[taskType || ''] || 'SUMMARIZATION'
 }
@@ -1416,6 +1417,107 @@ Based on this conversation, describe the scene these characters might be in:`,
       return result
     },
     'derive-scene-context'
+  )
+}
+
+// ============================================================================
+// MEMORY KEYWORD EXTRACTION
+// ============================================================================
+
+/**
+ * Prompt for extracting memory search keywords from recent conversation
+ */
+const MEMORY_KEYWORD_EXTRACTION_PROMPT = `You are analyzing recent conversation messages to extract search keywords for a character's memory system.
+
+Your task: Given recent messages from a conversation, produce a list of keywords and short phrases that capture what is being discussed. These keywords will be used to search a character's stored memories for relevant context.
+
+Focus on:
+- People, places, and events mentioned
+- Topics and themes being discussed
+- Emotions and relationship dynamics
+- Decisions, preferences, or plans
+- Anything the character might have memories about
+
+Do NOT include:
+- Generic conversational filler ("hello", "okay", "thanks")
+- The character's own name (they already know who they are)
+- Overly broad terms that would match everything
+
+Respond with a JSON array of keyword strings (3-10 keywords):
+["keyword1", "keyword phrase 2", "keyword3"]
+
+JSON only - no other text.`
+
+/**
+ * Extracts memory search keywords from recent conversation messages
+ *
+ * Used for proactive memory recall: analyzes messages since the character last
+ * spoke to find keywords for searching the character's memory store.
+ *
+ * @param recentMessages - Messages since the character last spoke
+ * @param characterName - The name of the character whose memories will be searched
+ * @param selection - The cheap LLM provider selection
+ * @param userId - The user ID for API key retrieval
+ * @param chatId - Optional chat ID for logging
+ * @returns Array of keyword strings for memory search
+ */
+export async function extractMemorySearchKeywords(
+  recentMessages: ChatMessage[],
+  characterName: string,
+  selection: CheapLLMSelection,
+  userId: string,
+  chatId?: string
+): Promise<CheapLLMTaskResult<string[]>> {
+  // Truncate messages to keep cheap LLM call fast
+  const cappedMessages = recentMessages.slice(-20)
+  const conversationText = cappedMessages
+    .map(m => {
+      const speaker = m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Character' : 'System'
+      const content = m.content.length > 500 ? m.content.substring(0, 500) + '...' : m.content
+      return `${speaker}: ${content}`
+    })
+    .join('\n\n')
+
+  const messages: LLMMessage[] = [
+    {
+      role: 'system',
+      content: MEMORY_KEYWORD_EXTRACTION_PROMPT,
+    },
+    {
+      role: 'user',
+      content: `Character: ${characterName}\n\nRecent conversation:\n${conversationText}\n\nExtract keywords for searching ${characterName}'s memories:`,
+    },
+  ]
+
+  return executeCheapLLMTask(
+    selection,
+    messages,
+    userId,
+    (content: string): string[] => {
+      try {
+        // Clean the response - remove markdown code blocks if present
+        let cleanContent = content.trim()
+        if (cleanContent.startsWith('```json')) {
+          cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
+        } else if (cleanContent.startsWith('```')) {
+          cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
+        }
+
+        const parsed = JSON.parse(cleanContent)
+        if (!Array.isArray(parsed)) {
+          return []
+        }
+
+        // Filter to only string values and limit to 10
+        return parsed
+          .filter((item: unknown): item is string => typeof item === 'string' && item.trim().length > 0)
+          .slice(0, 10)
+      } catch {
+        return []
+      }
+    },
+    'memory-keyword-extraction',
+    chatId
   )
 }
 

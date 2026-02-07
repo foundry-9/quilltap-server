@@ -7,6 +7,7 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { buildContext, type MessageWithParticipant, type BuiltContext, type ProjectContext, type ContextCompressionResult } from '@/lib/chat/context-manager'
+import type { SemanticSearchResult } from '@/lib/memory/memory-service'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
@@ -62,6 +63,8 @@ export interface BuildMessageContextOptions {
    * Used to calculate dynamic window size when using a fallback cache.
    */
   cachedCompressionMessageCount?: number
+  /** Pre-searched memories from proactive recall (skips internal memory search when provided) */
+  preSearchedMemories?: SemanticSearchResult[]
 }
 
 /**
@@ -285,6 +288,7 @@ export async function buildMessageContext(
     bypassCompression,
     cachedCompressionResult,
     cachedCompressionMessageCount,
+    preSearchedMemories,
   } = options
 
   // Build conversation messages
@@ -333,6 +337,8 @@ export async function buildMessageContext(
     bypassCompression,
     cachedCompressionResult,
     cachedCompressionMessageCount,
+    // Proactive memory recall
+    preSearchedMemories,
   })
 
   // Log context building results for debugging

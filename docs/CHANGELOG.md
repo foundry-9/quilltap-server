@@ -4,6 +4,20 @@
 
 ### 2.10-dev
 
+- feat: Proactive memory recall for chat responses
+  - Characters now analyze recent conversation to recall relevant memories before responding
+  - New cheap LLM task extracts search keywords from messages since the character last spoke
+  - Keywords are used to search the character's memory store for contextually relevant memories
+  - Pre-searched memories are passed to context builder, skipping the default single-message search
+  - Works naturally in multi-character chats: each character recalls based on their own conversation gap
+  - Runs in parallel with the compression cache check to minimize added latency
+  - Status indicators shown in chat UI: "Analyzing recent conversation..." and "Searching {name}'s memories..."
+  - Graceful fallback to existing behavior when cheap LLM is unavailable or keyword extraction fails
+
+- refactor: Lift cheap LLM selection out of compression guard
+  - Cheap LLM provider resolution now happens unconditionally instead of only when compression is enabled
+  - Fixes implicit dependency where danger classification required compression to be enabled for cheap LLM access
+
 - feat: Character pronouns
   - Characters can now have pronouns (subject/object/possessive) like he/him/his or they/them/their
   - Dropdown selector with common presets (He/Him/His, She/Her/Her, They/Them/Their, It/It/Its) plus custom option

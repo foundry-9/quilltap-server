@@ -78,6 +78,8 @@ import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { isRecoverableRequestError } from '@/lib/llm/errors'
 import { attemptRequestLimitRecovery } from './recovery.service'
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG } from '@/lib/llm/cheap-llm'
+import { extractMemorySearchKeywords } from '@/lib/memory/cheap-llm-tasks'
+import { searchMemoriesSemantic, type SemanticSearchResult } from '@/lib/memory/memory-service'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 import {
   getCachedCompression,
@@ -276,33 +278,31 @@ async function processMessage(
     projectContextReinjectInterval: 5,
   }
 
-  // Get cheap LLM selection for compression
+  // Get cheap LLM selection (used for compression, danger classification, and proactive memory recall)
   let cheapLLMSelection = null
-  if (contextCompressionSettings.enabled && !bypassCompression) {
-    try {
-      // Get all connection profiles for cheap LLM selection
-      const allProfiles = await repos.connections.findByUserId(userId)
-      const cheapLLMConfig = chatSettings?.cheapLLMSettings || DEFAULT_CHEAP_LLM_CONFIG
+  try {
+    // Get all connection profiles for cheap LLM selection
+    const allProfiles = await repos.connections.findByUserId(userId)
+    const cheapLLMConfig = chatSettings?.cheapLLMSettings || DEFAULT_CHEAP_LLM_CONFIG
 
-      // Convert null values to undefined for CheapLLMConfig compatibility
-      const compatibleConfig = {
-        ...cheapLLMConfig,
-        userDefinedProfileId: cheapLLMConfig.userDefinedProfileId ?? undefined,
-        defaultCheapProfileId: cheapLLMConfig.defaultCheapProfileId ?? undefined,
-      }
-
-      cheapLLMSelection = getCheapLLMProvider(
-        connectionProfile,
-        compatibleConfig,
-        allProfiles,
-        false // Ollama availability - could be checked but keeping simple for now
-      )
-
-    } catch (error) {
-      logger.warn('Failed to get cheap LLM for compression, compression will be skipped', {
-        error: error instanceof Error ? error.message : String(error),
-      })
+    // Convert null values to undefined for CheapLLMConfig compatibility
+    const compatibleConfig = {
+      ...cheapLLMConfig,
+      userDefinedProfileId: cheapLLMConfig.userDefinedProfileId ?? undefined,
+      defaultCheapProfileId: cheapLLMConfig.defaultCheapProfileId ?? undefined,
     }
+
+    cheapLLMSelection = getCheapLLMProvider(
+      connectionProfile,
+      compatibleConfig,
+      allProfiles,
+      false // Ollama availability - could be checked but keeping simple for now
+    )
+
+  } catch (error) {
+    logger.warn('Failed to get cheap LLM provider, features requiring it will be skipped', {
+      error: error instanceof Error ? error.message : String(error),
+    })
   }
 
   // Determine if compression is actually enabled for this request
@@ -654,38 +654,167 @@ async function processMessage(
   } : null
 
   // ============================================================================
-  // Async Pre-Compression: Get cached compression result if available
+  // Async Pre-Compression + Proactive Memory Recall (run in parallel)
   // ============================================================================
-  let cachedCompressionResponse: CachedCompressionResponse | undefined = undefined
-  if (compressionEnabled && !bypassCompression) {
-    // Send status update for compression check
+
+  // Compression check task
+  const compressionTask = async (): Promise<CachedCompressionResponse | undefined> => {
+    if (compressionEnabled && !bypassCompression) {
+      safeEnqueue(controller, encodeStatusEvent(encoder, {
+        stage: 'compressing',
+        message: 'Checking context cache...',
+        characterName: character.name,
+        characterId: character.id,
+      }))
+
+      const actualMessageCount = existingMessages.filter(m => m.type === 'message').length
+      const result = await getCachedCompression(chatId, actualMessageCount)
+      if (result) {
+        logger.info('Using cached compression from async pre-computation', {
+          chatId,
+          messageCount: actualMessageCount,
+          cachedMessageCount: result.cachedMessageCount,
+          isFallback: result.isFallback,
+          savings: result.result.compressionDetails?.totalSavings,
+        })
+      }
+      return result
+    } else if (bypassCompression) {
+      invalidateCompressionCache(chatId)
+    }
+    return undefined
+  }
+
+  // Proactive memory recall task
+  const proactiveRecallTask = async (): Promise<SemanticSearchResult[] | undefined> => {
+    if (!cheapLLMSelection || !character.id) return undefined
+
+    // Filter to actual message events with proper type narrowing
+    const messageEvents = existingMessages
+      .filter((m): m is MessageEvent => m.type === 'message' && 'role' in m && 'content' in m)
+
+    // Find messages since this character last spoke
+    const characterMessages = messageEvents.filter(
+      m => m.role === 'ASSISTANT' && m.participantId === characterParticipant.id
+    )
+
+    if (characterMessages.length === 0) {
+      logger.debug('Proactive memory recall: character has not spoken yet (first message), skipping', {
+        chatId,
+        characterId: character.id,
+      })
+      return undefined
+    }
+
+    // Character has spoken before - find all messages after the last one
+    const lastCharacterMessage = characterMessages[characterMessages.length - 1]
+    const lastCharacterMessageIndex = messageEvents.lastIndexOf(lastCharacterMessage)
+    const messagesSinceLastSpoke = messageEvents
+      .slice(lastCharacterMessageIndex + 1)
+      .filter(m => m.role === 'USER' || m.role === 'ASSISTANT')
+
+    // Include the new user message that was just saved but isn't in the existingMessages snapshot
+    if (!isContinueMode && content) {
+      messagesSinceLastSpoke.push({
+        role: 'USER',
+        content,
+      } as MessageEvent)
+    }
+
+    if (messagesSinceLastSpoke.length === 0) {
+      logger.debug('Proactive memory recall: no messages since character last spoke, skipping', {
+        chatId,
+        characterId: character.id,
+      })
+      return undefined
+    }
+
+    logger.debug('Proactive memory recall: analyzing messages since character last spoke', {
+      chatId,
+      characterId: character.id,
+      messagesSinceLastSpoke: messagesSinceLastSpoke.length,
+    })
+
+    // Status: analyzing conversation for keywords
     safeEnqueue(controller, encodeStatusEvent(encoder, {
-      stage: 'compressing',
-      message: 'Checking context cache...',
+      stage: 'recalling_keywords',
+      message: 'Analyzing recent conversation...',
       characterName: character.name,
       characterId: character.id,
     }))
 
-    // Try to get cached compression from previous async pre-computation
-    // This returns immediately without waiting for in-flight compression,
-    // falling back to previous cache if async isn't ready yet
-    // IMPORTANT: Use filtered message count (only type === 'message') to match
-    // how messages are counted when persisting the cache
-    const actualMessageCount = existingMessages.filter(m => m.type === 'message').length
-    cachedCompressionResponse = await getCachedCompression(chatId, actualMessageCount)
-    if (cachedCompressionResponse) {
-      logger.info('Using cached compression from async pre-computation', {
+    // Extract keywords via cheap LLM
+    const keywordResult = await extractMemorySearchKeywords(
+      messagesSinceLastSpoke.map(m => ({
+        role: m.role.toLowerCase() as 'user' | 'assistant' | 'system',
+        content: m.content || '',
+      })),
+      character.name,
+      cheapLLMSelection,
+      userId,
+      chatId
+    )
+
+    if (!keywordResult.success || !keywordResult.result || keywordResult.result.length === 0) {
+      logger.debug('Proactive memory recall: keyword extraction returned no results, falling back to default', {
         chatId,
-        messageCount: actualMessageCount,
-        cachedMessageCount: cachedCompressionResponse.cachedMessageCount,
-        isFallback: cachedCompressionResponse.isFallback,
-        savings: cachedCompressionResponse.result.compressionDetails?.totalSavings,
+        characterId: character.id,
+        error: keywordResult.error,
+      })
+      return undefined
+    }
+
+    // Status: searching memories
+    safeEnqueue(controller, encodeStatusEvent(encoder, {
+      stage: 'recalling_memories',
+      message: `Searching ${character.name}'s memories...`,
+      characterName: character.name,
+      characterId: character.id,
+    }))
+
+    // Search memories using extracted keywords
+    const searchQuery = keywordResult.result.join(' ')
+    const embeddingProfileId = chatSettings?.cheapLLMSettings?.embeddingProfileId ?? undefined
+
+    try {
+      const memoryResults = await searchMemoriesSemantic(
+        character.id,
+        searchQuery,
+        {
+          userId,
+          embeddingProfileId,
+          limit: 20,
+          minImportance: 0.3,
+        }
+      )
+
+      if (memoryResults.length > 0) {
+        const results = memoryResults.slice(0, 10)
+        logger.debug('Proactive memory recall found memories', {
+          chatId,
+          characterId: character.id,
+          keywordsExtracted: keywordResult.result.length,
+          keywords: keywordResult.result,
+          memoriesFound: results.length,
+        })
+        return results
+      }
+    } catch (error) {
+      logger.warn('Proactive memory recall: memory search failed, falling back to default', {
+        chatId,
+        characterId: character.id,
+        error: error instanceof Error ? error.message : String(error),
       })
     }
-  } else if (bypassCompression) {
-    // Invalidate cache when bypass is requested
-    invalidateCompressionCache(chatId)
+
+    return undefined
   }
+
+  // Run compression check and proactive recall in parallel
+  const [cachedCompressionResponse, preSearchedMemories] = await Promise.all([
+    compressionTask(),
+    proactiveRecallTask(),
+  ])
 
   // Start keep-alive pings during context building (especially important during compression)
   // This prevents proxy/load balancer timeouts during long compression operations
@@ -736,6 +865,8 @@ async function processMessage(
       // Pass cached compression result and message count for dynamic window calculation
       cachedCompressionResult: cachedCompressionResponse?.result,
       cachedCompressionMessageCount: cachedCompressionResponse?.cachedMessageCount,
+      // Proactive memory recall results
+      preSearchedMemories,
     },
     existingMessages,
     fileProcessing.attachmentsToSend

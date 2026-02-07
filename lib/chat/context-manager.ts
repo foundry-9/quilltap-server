@@ -16,7 +16,7 @@
 import { Provider, Character, ChatParticipantBase, ChatMetadataBase, TimestampConfig } from '@/lib/schemas/types'
 import { estimateTokens, countMessagesTokens, truncateToTokenLimit } from '@/lib/tokens/token-counter'
 import { getModelContextLimit, getRecommendedContextAllocation, shouldSummarizeConversation } from '@/lib/llm/model-context-data'
-import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
+import { searchMemoriesSemantic, type SemanticSearchResult } from '@/lib/memory/memory-service'
 import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
@@ -249,6 +249,13 @@ export interface BuildContextOptions {
    * the compression point.
    */
   cachedCompressionMessageCount?: number
+
+  // ============================================================================
+  // Proactive Memory Recall
+  // ============================================================================
+
+  /** Pre-searched memories from proactive recall (skips internal memory search when provided) */
+  preSearchedMemories?: SemanticSearchResult[]
 }
 
 /**
@@ -517,32 +524,55 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   const memorySearchQuery = newUserMessage ||
     (existingMessages.length > 0 ? existingMessages[existingMessages.length - 1].content : '')
 
-  if (!skipMemories && character.id && memorySearchQuery) {
-    try {
-      // Search for memories relevant to the message (or last message in continue mode)
-      const memoryResults = await searchMemoriesSemantic(
-        character.id,
-        memorySearchQuery,
-        {
-          userId,
-          embeddingProfileId,
-          limit: maxMemories * 2, // Get more to filter
-          minImportance: minMemoryImportance,
-        }
-      )
+  if (!skipMemories && character.id) {
+    if (options.preSearchedMemories && options.preSearchedMemories.length > 0) {
+      // Use proactively recalled memories (skips internal search)
+      try {
+        const formatted = formatMemoriesForContext(
+          options.preSearchedMemories,
+          budget.memoryBudget,
+          provider
+        )
 
-      const formatted = formatMemoriesForContext(
-        memoryResults.slice(0, maxMemories),
-        budget.memoryBudget,
-        provider
-      )
+        memoryContent = formatted.content
+        memoryTokens = formatted.tokenCount
+        memoriesIncluded = formatted.memoriesUsed
+        debugMemories = formatted.debugMemories
 
-      memoryContent = formatted.content
-      memoryTokens = formatted.tokenCount
-      memoriesIncluded = formatted.memoriesUsed
-      debugMemories = formatted.debugMemories
-    } catch (error) {
-      warnings.push(`Failed to retrieve memories: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        logger.debug('[ContextManager] Using pre-searched memories from proactive recall', {
+          memoriesProvided: options.preSearchedMemories.length,
+          memoriesIncluded,
+        })
+      } catch (error) {
+        warnings.push(`Failed to format pre-searched memories: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
+    } else if (memorySearchQuery) {
+      // Default: search using user message (or last message in continue mode)
+      try {
+        const memoryResults = await searchMemoriesSemantic(
+          character.id,
+          memorySearchQuery,
+          {
+            userId,
+            embeddingProfileId,
+            limit: maxMemories * 2, // Get more to filter
+            minImportance: minMemoryImportance,
+          }
+        )
+
+        const formatted = formatMemoriesForContext(
+          memoryResults.slice(0, maxMemories),
+          budget.memoryBudget,
+          provider
+        )
+
+        memoryContent = formatted.content
+        memoryTokens = formatted.tokenCount
+        memoriesIncluded = formatted.memoriesUsed
+        debugMemories = formatted.debugMemories
+      } catch (error) {
+        warnings.push(`Failed to retrieve memories: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
     }
   }
 

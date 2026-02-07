@@ -34,11 +34,11 @@ This document tracks planned features and improvements for Quilltap.
   - [ ] Every participant should be able to be silenced or phased out of the current conversation
   - [ ] Every participant should be able to be either pulled it immediately, interrupt, or queue up
   - [ ] Every participant should have an option to be switched to a different LLM provider
-- [ ] Memory search every time
-  - [ ] The cheap/fast LLM should take whatever has happened since the last time they spoke
-  - [ ] Reduce that to keywords
-  - [ ] Search the memories for those keywords
-  - [ ] Preload the prompt with things that spring to mind because of the keywords
+- [X] Memory search every time
+  - [X] The cheap/fast LLM should take whatever has happened since the last time they spoke
+  - [X] Reduce that to keywords
+  - [X] Search the memories for those keywords
+  - [X] Preload the prompt with things that spring to mind because of the keywords
 
 ### LLM Integration
 
