@@ -148,27 +148,53 @@ The selection formula considers all eligible characters' weights. A character wi
 
 ## Turn Indicators
 
+### Turn Order Display
+
+The participant sidebar shows a **predicted turn order** for all participants. Each participant has a numbered position badge indicating when they're expected to speak:
+
+**Position Badges:**
+
+1. **Generating (green, pulsing)** — Currently generating a response (#1 during generation)
+2. **Next (green, static)** — Selected as the next speaker
+3. **Queued (blue)** — Manually queued to speak
+4. **Eligible (neutral)** — Available to speak this cycle, sorted by talkativeness
+5. **Your Turn (amber)** — Indicates the user's position in the cycle
+6. **Spoken (dimmed)** — Already spoke this cycle
+7. **Inactive (no badge)** — Not participating, shown at the bottom of the list
+
+Participants are automatically sorted in the sidebar by their predicted turn position, so you can see at a glance who's speaking, who's next, and who has already spoken.
+
+### Interrupt/Stop Button
+
+When a character is generating a response, their card shows a **Stop** button instead of the usual Nudge/Queue button. Click it to interrupt the current generation. In multi-character chats, the stop button appears on the generating character's card in the sidebar rather than in the chat composer.
+
 ### Visual Feedback
 
 The UI shows turn status in several ways:
 
 **Current Speaker:**
 - Glowing/animated avatar border
-- "Generating..." or typing indicator
+- Green pulsing position badge (#1)
+- Stop button on their card
 - Active highlight on their card
 
 **Your Turn:**
 - Header shows "Your turn to speak"
-- No character has an active indicator
+- Amber position badge on your persona card
 - Input field may have focus indicator
 
 **Queued Characters:**
-- Number badge on their avatar (1, 2, 3...)
-- Queue position visible in expanded sidebar
+- Blue position badge with queue position
+- Queue position visible in both expanded and collapsed sidebar
 
-**Waiting Characters:**
-- Normal appearance
-- Ready to be selected when eligible
+**Eligible Characters:**
+- Neutral position badge with predicted position
+- Sorted by talkativeness (higher talkativeness = earlier position)
+
+**Inactive Characters:**
+- Dimmed/greyed appearance
+- No position badge
+- Shown at the bottom of the participant list
 
 ### Turn Status Messages
 

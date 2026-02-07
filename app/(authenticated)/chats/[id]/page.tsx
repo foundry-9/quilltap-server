@@ -2483,6 +2483,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onToolSettingsClick={() => setToolSettingsModalOpen(true)}
           onStateClick={() => setStateEditorModalOpen(true)}
           onStopStreaming={stopStreaming}
+          hideStopButton={shouldShowParticipantSidebar}
           onPendingToolResult={handleAddPendingToolResult}
         />
 
@@ -2791,6 +2792,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onQueue={turnManagement.handleQueue}
           onDequeue={turnManagement.handleDequeue}
           onSkip={turnManagement.handleContinue}
+          onStopStreaming={stopStreaming}
           onTalkativenessChange={(pId, value) => {
           }}
           onAddCharacter={handleAddCharacter}

@@ -82,6 +82,8 @@ interface ChatComposerProps {
   onRegenerateBackgroundClick?: () => void
   storyBackgroundsEnabled?: boolean
   onStopStreaming: () => void
+  /** Hide the stop button (when sidebar has its own stop button) */
+  hideStopButton?: boolean
   /** Callback when a pending tool result is added */
   onPendingToolResult?: (result: Omit<PendingToolResult, 'id' | 'createdAt'>) => void
 }
@@ -150,6 +152,7 @@ export function ChatComposer({
   onRegenerateBackgroundClick,
   storyBackgroundsEnabled = false,
   onStopStreaming,
+  hideStopButton = false,
   onPendingToolResult,
 }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -579,8 +582,8 @@ export function ChatComposer({
           )}
 
           {/* Right side buttons */}
-          {(streaming || waitingForResponse) ? (
-            /* Stop button - shown during streaming/waiting */
+          {(streaming || waitingForResponse) && !hideStopButton ? (
+            /* Stop button - shown during streaming/waiting (hidden when sidebar has its own) */
             <button
               type="button"
               onClick={(e) => {
@@ -595,12 +598,12 @@ export function ChatComposer({
               </svg>
             </button>
           ) : (
-            /* Send button - right side */
+            /* Send button - disabled while generating when stop is in sidebar */
             <button
               type="submit"
-              disabled={sending || (!input.trim() && attachedFiles.length === 0 && pendingToolResults.length === 0) || !hasActiveCharacters}
+              disabled={sending || (streaming || waitingForResponse) || (!input.trim() && attachedFiles.length === 0 && pendingToolResults.length === 0) || !hasActiveCharacters}
               className="qt-chat-composer-send"
-              title={!hasActiveCharacters ? "Add a character to start chatting" : "Send message"}
+              title={!hasActiveCharacters ? "Add a character to start chatting" : (streaming || waitingForResponse) ? "Generating..." : "Send message"}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />

@@ -4,6 +4,17 @@
 
 ### 2.10-dev
 
+- feat: Turn-order-based participant sidebar with stop button and active toggle
+  - Participant sidebar now sorts participants by predicted turn order instead of static display order
+  - Numbered position badges on all participants show who's speaking (#1), who's next (#2), and predicted order
+  - Badge colors indicate status: green pulsing (generating), green (next), blue (queued), neutral (eligible), amber (user turn), dimmed (spoken)
+  - Inactive participants now shown at the bottom of the sidebar with dimmed/greyed appearance instead of being hidden
+  - Stop/interrupt button on the generating character's card replaces the composer stop button in multi-character chats
+  - Active/inactive toggle pulled from hidden settings into a visible eye icon button on each card
+  - Settings gear now only controls system prompt override
+  - Collapsed sidebar avatars sorted by turn order with color-coded position badges
+  - New `computePredictedTurnOrder` display-only utility (no turn algorithm changes)
+
 - feat: Simplify chat settings modal and add connection profile dropdown to participant cards
   - Chat settings modal now only contains roleplay template and image generation settings
   - Per-participant settings (connection profile, system prompt override, active toggle) moved to participant sidebar cards

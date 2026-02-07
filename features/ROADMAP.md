@@ -36,8 +36,8 @@ This document tracks planned features and improvements for Quilltap.
 
 - [ ] Tool management UI - Settings interface to enable/disable individual tools
   - [ ] per connection profile
-  - [ ] per project
-  - [ ] per chat
+  - [X] per project
+  - [X] per chat
 - [ ] Finish file read/write tool calling support with permissions
 - [ ] More intelligent handling of empty messages from the LLM (usually some kind of error, but a plain blank often means you crossed a provider line - NSFW, content filtering)
   - [X] Image prompt generation

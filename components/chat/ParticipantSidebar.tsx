@@ -7,18 +7,21 @@
  * Right-side panel showing all participants in a multi-character chat.
  * Features:
  * - Collapsed/expanded state with localStorage persistence
- * - List of participant cards with turn indicators
+ * - List of participant cards sorted by predicted turn order
+ * - Inactive participants shown at bottom (dimmed)
+ * - Turn position badges on all participants
+ * - Stop streaming button on generating participant
  * - Queue management
  * - Nudge functionality
  * - Talkativeness controls
- * - Add character button (placeholder for Phase 6)
  */
 
 import { useMemo, useState, useCallback } from 'react'
 import { ParticipantCard, type ParticipantData, type ConnectionProfileOption } from './ParticipantCard'
 import { Avatar } from '@/components/ui/Avatar'
 import type { TurnState, TurnSelectionResult } from '@/lib/chat/turn-manager'
-import { getQueuePosition } from '@/lib/chat/turn-manager'
+import { getQueuePosition, computePredictedTurnOrder } from '@/lib/chat/turn-manager'
+import type { TurnOrderEntry, TurnOrderStatus } from '@/lib/chat/turn-manager'
 
 const STORAGE_KEY = 'quilltap.participant-sidebar.collapsed'
 
@@ -46,6 +49,7 @@ interface ParticipantSidebarProps {
   onTalkativenessChange?: (participantId: string, value: number) => void
   onAddCharacter?: () => void
   onRemoveCharacter?: (participantId: string) => void // Phase 6: Remove character from chat
+  onStopStreaming?: () => void // Stop/interrupt current generation
   // Impersonation support (Characters Not Personas)
   impersonatingParticipantIds?: string[] // Participant IDs the user is impersonating
   activeTypingParticipantId?: string | null // Which impersonated character is currently "active" for typing
@@ -75,6 +79,7 @@ export function ParticipantSidebar({
   onTalkativenessChange,
   onAddCharacter,
   onRemoveCharacter,
+  onStopStreaming,
   impersonatingParticipantIds = [],
   activeTypingParticipantId,
   onImpersonate,
@@ -102,24 +107,44 @@ export function ParticipantSidebar({
     localStorage.setItem(STORAGE_KEY, 'false')
   }, [])
 
-  // Sort participants: personas first (the user), then characters by displayOrder
+  // Compute predicted turn order (includes inactive participants at the end)
+  const turnOrderEntries = useMemo(() => {
+    return computePredictedTurnOrder({
+      participants,
+      turnState,
+      turnSelectionResult,
+      isGenerating,
+      respondingParticipantId,
+      userParticipantId,
+    })
+  }, [participants, turnState, turnSelectionResult, isGenerating, respondingParticipantId, userParticipantId])
+
+  // Build a map from participant ID to turn order entry for quick lookup
+  const turnOrderMap = useMemo(() => {
+    const map = new Map<string, TurnOrderEntry>()
+    for (const entry of turnOrderEntries) {
+      map.set(entry.participantId, entry)
+    }
+    return map
+  }, [turnOrderEntries])
+
+  // Sort participants by turn order (matching the computed entries order)
   const sortedParticipants = useMemo(() => {
-    return [...participants]
-      .filter(p => p.isActive)
-      .sort((a, b) => {
-        // Personas (user) first
-        if (a.type === 'PERSONA' && b.type !== 'PERSONA') return -1
-        if (b.type === 'PERSONA' && a.type !== 'PERSONA') return 1
-        // Then by displayOrder
-        return a.displayOrder - b.displayOrder
-      })
-  }, [participants])
+    const orderIndex = new Map<string, number>()
+    turnOrderEntries.forEach((entry, index) => {
+      orderIndex.set(entry.participantId, index)
+    })
+    return [...participants].sort((a, b) => {
+      const aIdx = orderIndex.get(a.id) ?? 999
+      const bIdx = orderIndex.get(b.id) ?? 999
+      return aIdx - bIdx
+    })
+  }, [participants, turnOrderEntries])
 
   // Get the current speaker (either from selection result or currently generating)
   const currentSpeakerId = useMemo(() => {
     if (isGenerating) {
       // If generating, use the responding participant ID (set before streaming starts)
-      // This is more accurate than lastSpeakerId which is calculated from persisted messages
       if (respondingParticipantId) {
         return respondingParticipantId
       }
@@ -179,26 +204,32 @@ export function ParticipantSidebar({
           </button>
         )}
 
-        {/* Vertical list of mini avatars */}
+        {/* Vertical list of mini avatars - sorted by turn order */}
         <div className="qt-chat-sidebar-collapsed-avatars">
           {sortedParticipants.map((participant) => {
             const isUserParticipant = participant.id === userParticipantId
+            const turnEntry = turnOrderMap.get(participant.id)
+            const isInactive = turnEntry?.status === 'inactive'
             // It's this participant's turn if they're the selected next speaker,
             // OR if it's the user's turn (nextSpeakerId is null) and this is the user's avatar
             const isUserTurn = turnSelectionResult?.nextSpeakerId === null && !isGenerating
             const isCurrentTurn = currentSpeakerId === participant.id || (isUserParticipant && isUserTurn)
             // Show pulsating animation during both waiting-for-response AND streaming phases
             const isActivelyGenerating = currentSpeakerId === participant.id && isGenerating
-            const queuePos = getQueuePosition(turnState, participant.id)
 
             // Get participant name and avatar from character or persona
             const name = participant.character?.name || participant.persona?.name || 'Unknown'
             const avatarUrl = participant.character?.avatarUrl || participant.persona?.avatarUrl || null
             const defaultImage = participant.character?.defaultImage || participant.persona?.defaultImage || null
 
+            // Get position badge class for collapsed view
+            const positionBadgeClass = turnEntry ? getCollapsedPositionBadgeClass(turnEntry.status) : ''
+
             // Build avatar wrapper classes
             const avatarClasses = ['qt-chat-sidebar-collapsed-avatar']
-            if (isCurrentTurn || isActivelyGenerating) {
+            if (isInactive) {
+              avatarClasses.push('qt-chat-sidebar-collapsed-avatar-inactive')
+            } else if (isCurrentTurn || isActivelyGenerating) {
               avatarClasses.push('qt-chat-sidebar-collapsed-avatar-active')
             }
             if (isActivelyGenerating) {
@@ -210,7 +241,7 @@ export function ParticipantSidebar({
                 key={participant.id}
                 onClick={expandSidebar}
                 className={avatarClasses.join(' ')}
-                title={`${name}${isCurrentTurn ? ' (current turn)' : ''}${queuePos ? ` (queue #${queuePos})` : ''}`}
+                title={`${name}${isCurrentTurn ? ' (current turn)' : ''}${turnEntry?.position ? ` (#${turnEntry.position})` : ''}`}
                 aria-label={`${name} - click to expand sidebar`}
               >
                 <Avatar
@@ -218,10 +249,10 @@ export function ParticipantSidebar({
                   src={avatarUrl ? { avatarUrl } : defaultImage ? { defaultImage } : undefined}
                   size="sm"
                 />
-                {/* Queue position badge */}
-                {queuePos > 0 && (
-                  <span className="qt-chat-sidebar-collapsed-queue-badge">
-                    {queuePos}
+                {/* Position badge - shows turn order position instead of just queue */}
+                {turnEntry && turnEntry.position != null && turnEntry.position > 0 && (
+                  <span className={`qt-chat-sidebar-collapsed-position-badge ${positionBadgeClass}`}>
+                    {turnEntry.position}
                   </span>
                 )}
               </button>
@@ -313,7 +344,7 @@ export function ParticipantSidebar({
 
       {/* Participant list */}
       <div className="qt-chat-sidebar-list">
-        {/* Phase 7: Edge Case - Empty participant list */}
+        {/* Phase 7: Edge Case - Empty participant list (no active and no inactive) */}
         {sortedParticipants.length === 0 && (
           <div className="qt-empty-state py-8">
             <svg className="qt-empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -338,6 +369,9 @@ export function ParticipantSidebar({
           // (all-LLM chats are supported with pause logic)
           const canRemove = activeCharacterCount > 1
 
+          // Get turn order info for this participant
+          const turnEntry = turnOrderMap.get(participant.id)
+
           return (
             <ParticipantCard
               key={participant.id}
@@ -346,6 +380,9 @@ export function ParticipantSidebar({
               queuePosition={queuePos}
               isGenerating={isGenerating && isCurrentTurn}
               isUserParticipant={isUserParticipant}
+              turnPosition={turnEntry?.position ?? null}
+              turnStatus={turnEntry?.status}
+              onStopStreaming={turnEntry?.status === 'generating' ? onStopStreaming : undefined}
               onNudge={onNudge}
               onQueue={onQueue}
               onDequeue={onDequeue}
@@ -403,6 +440,19 @@ export function ParticipantSidebar({
       )}
     </div>
   )
+}
+
+/** Get the CSS class for a collapsed position badge based on status */
+function getCollapsedPositionBadgeClass(status: TurnOrderStatus): string {
+  switch (status) {
+    case 'generating': return 'qt-participant-position-generating'
+    case 'next': return 'qt-participant-position-next'
+    case 'queued': return 'qt-participant-position-queued'
+    case 'eligible': return 'qt-participant-position-eligible'
+    case 'user-turn': return 'qt-participant-position-user-turn'
+    case 'spoken': return 'qt-participant-position-spoken'
+    default: return ''
+  }
 }
 
 export default ParticipantSidebar

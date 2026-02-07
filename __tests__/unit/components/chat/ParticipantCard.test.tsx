@@ -11,6 +11,10 @@
  * - Accessibility attributes
  * - Connection profile dropdown
  * - Expandable settings section
+ * - Turn position badge (turnPosition + turnStatus)
+ * - Stop button (turnStatus generating + onStopStreaming)
+ * - Active toggle button (visible eye icon)
+ * - Inactive card styling
  */
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals'
@@ -832,13 +836,13 @@ describe('ParticipantCard', () => {
       expect(screen.getByLabelText('Show participant settings')).toBeInTheDocument()
     })
 
-    it('shows settings toggle when onActiveChange provided', () => {
+    it('does not show settings toggle when only onActiveChange provided', () => {
       const props = createDefaultProps({
         onActiveChange: jest.fn(),
       })
       render(<ParticipantCard {...props} />)
 
-      expect(screen.getByLabelText('Show participant settings')).toBeInTheDocument()
+      expect(screen.queryByLabelText(/participant settings/i)).not.toBeInTheDocument()
     })
 
     it('does not show settings toggle when neither callback provided', () => {
@@ -851,14 +855,12 @@ describe('ParticipantCard', () => {
     it('expands settings section when toggle clicked', () => {
       const props = createDefaultProps({
         onSystemPromptOverrideChange: jest.fn(),
-        onActiveChange: jest.fn(),
       })
       render(<ParticipantCard {...props} />)
 
       fireEvent.click(screen.getByLabelText('Show participant settings'))
 
       expect(screen.getByText('System Prompt Override')).toBeInTheDocument()
-      expect(screen.getByText('Active in chat')).toBeInTheDocument()
       expect(screen.getByLabelText('Hide participant settings')).toBeInTheDocument()
     })
 
@@ -874,33 +876,242 @@ describe('ParticipantCard', () => {
       fireEvent.click(screen.getByLabelText('Hide participant settings'))
       expect(screen.queryByText('System Prompt Override')).not.toBeInTheDocument()
     })
+  })
 
-    it('shows active checkbox reflecting participant.isActive', () => {
+  describe('Turn position badge', () => {
+    it('shows position badge when turnPosition is provided', () => {
+      const props = createDefaultProps({
+        turnPosition: 3,
+        turnStatus: 'eligible',
+      })
+      render(<ParticipantCard {...props} />)
+
+      const badge = screen.getByTestId('position-badge')
+      expect(badge).toBeInTheDocument()
+      expect(badge).toHaveTextContent('3')
+    })
+
+    it('applies generating badge class', () => {
+      const props = createDefaultProps({
+        turnPosition: 1,
+        turnStatus: 'generating',
+      })
+      render(<ParticipantCard {...props} />)
+
+      const badge = screen.getByTestId('position-badge')
+      expect(badge).toHaveClass('qt-participant-position-generating')
+    })
+
+    it('applies next badge class', () => {
+      const props = createDefaultProps({
+        turnPosition: 1,
+        turnStatus: 'next',
+      })
+      render(<ParticipantCard {...props} />)
+
+      const badge = screen.getByTestId('position-badge')
+      expect(badge).toHaveClass('qt-participant-position-next')
+    })
+
+    it('applies queued badge class', () => {
+      const props = createDefaultProps({
+        turnPosition: 3,
+        turnStatus: 'queued',
+      })
+      render(<ParticipantCard {...props} />)
+
+      const badge = screen.getByTestId('position-badge')
+      expect(badge).toHaveClass('qt-participant-position-queued')
+    })
+
+    it('applies user-turn badge class', () => {
+      const props = createDefaultProps({
+        turnPosition: 4,
+        turnStatus: 'user-turn',
+      })
+      render(<ParticipantCard {...props} />)
+
+      const badge = screen.getByTestId('position-badge')
+      expect(badge).toHaveClass('qt-participant-position-user-turn')
+    })
+
+    it('applies spoken badge class', () => {
+      const props = createDefaultProps({
+        turnPosition: 5,
+        turnStatus: 'spoken',
+      })
+      render(<ParticipantCard {...props} />)
+
+      const badge = screen.getByTestId('position-badge')
+      expect(badge).toHaveClass('qt-participant-position-spoken')
+    })
+
+    it('does not show position badge when turnPosition is null', () => {
+      const props = createDefaultProps({
+        turnPosition: null,
+        turnStatus: 'inactive',
+      })
+      render(<ParticipantCard {...props} />)
+
+      expect(screen.queryByTestId('position-badge')).not.toBeInTheDocument()
+    })
+
+    it('falls back to queue badge when turnPosition not provided', () => {
+      const props = createDefaultProps({
+        queuePosition: 2,
+        // No turnPosition
+      })
+      const { container } = render(<ParticipantCard {...props} />)
+
+      expect(screen.queryByTestId('position-badge')).not.toBeInTheDocument()
+      const badge = container.querySelector('.qt-participant-queue-badge')
+      expect(badge).toBeInTheDocument()
+      expect(badge).toHaveTextContent('2')
+    })
+  })
+
+  describe('Stop button', () => {
+    it('shows stop button when turnStatus is generating and onStopStreaming provided', () => {
+      const onStopStreaming = jest.fn()
+      const props = createDefaultProps({
+        turnStatus: 'generating',
+        onStopStreaming,
+        isGenerating: true,
+        isCurrentTurn: true,
+      })
+      render(<ParticipantCard {...props} />)
+
+      const stopButton = screen.getByRole('button', { name: /stop generating/i })
+      expect(stopButton).toBeInTheDocument()
+      expect(stopButton).toHaveTextContent('Stop')
+    })
+
+    it('calls onStopStreaming when stop button is clicked', () => {
+      const onStopStreaming = jest.fn()
+      const props = createDefaultProps({
+        turnStatus: 'generating',
+        onStopStreaming,
+        isGenerating: true,
+        isCurrentTurn: true,
+      })
+      render(<ParticipantCard {...props} />)
+
+      fireEvent.click(screen.getByRole('button', { name: /stop generating/i }))
+      expect(onStopStreaming).toHaveBeenCalled()
+    })
+
+    it('shows Speaking button when generating but no onStopStreaming', () => {
+      const props = createDefaultProps({
+        isGenerating: true,
+        isCurrentTurn: true,
+        queuePosition: 0,
+        // No onStopStreaming, no turnStatus
+      })
+      render(<ParticipantCard {...props} />)
+
+      expect(screen.getByRole('button', { name: /speaking\.\.\./i })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /stop generating/i })).not.toBeInTheDocument()
+    })
+
+    it('does not show stop button when turnStatus is not generating', () => {
+      const onStopStreaming = jest.fn()
+      const props = createDefaultProps({
+        turnStatus: 'next',
+        onStopStreaming,
+        isGenerating: false,
+      })
+      render(<ParticipantCard {...props} />)
+
+      expect(screen.queryByRole('button', { name: /stop generating/i })).not.toBeInTheDocument()
+    })
+  })
+
+  describe('Active toggle button', () => {
+    it('shows eye icon button when onActiveChange provided', () => {
+      const props = createDefaultProps({
+        onActiveChange: jest.fn(),
+      })
+      render(<ParticipantCard {...props} />)
+
+      const button = screen.getByTitle('Deactivate Echo')
+      expect(button).toBeInTheDocument()
+      expect(button).toHaveAttribute('data-active', 'true')
+    })
+
+    it('shows deactivate title when participant is active', () => {
       const props = createDefaultProps({
         onActiveChange: jest.fn(),
         participant: createCharacterParticipant({ isActive: true }),
       })
       render(<ParticipantCard {...props} />)
 
-      fireEvent.click(screen.getByLabelText('Show participant settings'))
-
-      const checkbox = screen.getByRole('checkbox')
-      expect(checkbox).toBeChecked()
+      expect(screen.getByTitle('Deactivate Echo')).toBeInTheDocument()
     })
 
-    it('calls onActiveChange when checkbox toggled', () => {
-      const onActiveChange = jest.fn()
+    it('shows activate title when participant is inactive', () => {
       const props = createDefaultProps({
-        onActiveChange,
+        onActiveChange: jest.fn(),
+        participant: createCharacterParticipant({ isActive: false }),
       })
       render(<ParticipantCard {...props} />)
 
-      fireEvent.click(screen.getByLabelText('Show participant settings'))
+      expect(screen.getByTitle('Activate Echo')).toBeInTheDocument()
+      expect(screen.getByTitle('Activate Echo')).toHaveAttribute('data-active', 'false')
+    })
 
-      const checkbox = screen.getByRole('checkbox')
-      fireEvent.click(checkbox)
+    it('calls onActiveChange when clicked to deactivate', () => {
+      const onActiveChange = jest.fn()
+      const props = createDefaultProps({
+        onActiveChange,
+        participant: createCharacterParticipant({ isActive: true }),
+      })
+      render(<ParticipantCard {...props} />)
 
+      fireEvent.click(screen.getByTitle('Deactivate Echo'))
       expect(onActiveChange).toHaveBeenCalledWith('participant-char-1', false)
+    })
+
+    it('calls onActiveChange when clicked to activate', () => {
+      const onActiveChange = jest.fn()
+      const props = createDefaultProps({
+        onActiveChange,
+        participant: createCharacterParticipant({ isActive: false }),
+      })
+      render(<ParticipantCard {...props} />)
+
+      fireEvent.click(screen.getByTitle('Activate Echo'))
+      expect(onActiveChange).toHaveBeenCalledWith('participant-char-1', true)
+    })
+
+    it('does not show active toggle when onActiveChange not provided', () => {
+      const props = createDefaultProps()
+      render(<ParticipantCard {...props} />)
+
+      expect(screen.queryByTitle(/activate echo/i)).not.toBeInTheDocument()
+      expect(screen.queryByTitle(/deactivate echo/i)).not.toBeInTheDocument()
+    })
+  })
+
+  describe('Inactive card styling', () => {
+    it('applies inactive class when turnStatus is inactive', () => {
+      const props = createDefaultProps({
+        turnStatus: 'inactive',
+        turnPosition: null,
+      })
+      const { container } = render(<ParticipantCard {...props} />)
+
+      const card = container.querySelector('.qt-participant-card-inactive')
+      expect(card).toBeInTheDocument()
+    })
+
+    it('does not apply inactive class when turnStatus is not inactive', () => {
+      const props = createDefaultProps({
+        turnStatus: 'eligible',
+        turnPosition: 3,
+      })
+      const { container } = render(<ParticipantCard {...props} />)
+
+      expect(container.querySelector('.qt-participant-card-inactive')).not.toBeInTheDocument()
     })
   })
 })

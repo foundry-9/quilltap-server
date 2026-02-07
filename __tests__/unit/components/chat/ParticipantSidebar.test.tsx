@@ -12,14 +12,17 @@ import type { TurnState, TurnSelectionResult } from '@/lib/chat/turn-manager'
 
 // Mock the ParticipantCard component to simplify testing the sidebar
 jest.mock('@/components/chat/ParticipantCard', () => ({
-  ParticipantCard: ({ participant, isCurrentTurn, queuePosition, onNudge, onQueue, onDequeue, onRemove, canRemove, connectionProfiles, onConnectionProfileChange, onSystemPromptOverrideChange, onActiveChange }: {
+  ParticipantCard: ({ participant, isCurrentTurn, queuePosition, turnPosition, turnStatus, onNudge, onQueue, onDequeue, onRemove, onStopStreaming, canRemove, connectionProfiles, onConnectionProfileChange, onSystemPromptOverrideChange, onActiveChange }: {
     participant: ParticipantData
     isCurrentTurn: boolean
     queuePosition: number
+    turnPosition?: number | null
+    turnStatus?: string
     onNudge: (id: string) => void
     onQueue: (id: string) => void
     onDequeue: (id: string) => void
     onRemove?: (id: string) => void
+    onStopStreaming?: () => void
     canRemove?: boolean
     connectionProfiles?: Array<{ id: string; name: string }>
     onConnectionProfileChange?: (id: string, profileId: string | null, controlledBy: 'llm' | 'user') => void
@@ -31,12 +34,16 @@ jest.mock('@/components/chat/ParticipantCard', () => ({
       className="participant-card-mock"
       data-current-turn={isCurrentTurn ? 'true' : 'false'}
       data-queue-position={queuePosition}
+      data-turn-position={turnPosition != null ? String(turnPosition) : ''}
+      data-turn-status={turnStatus || ''}
       data-type={participant.type}
       data-display-order={participant.displayOrder}
+      data-is-active={participant.isActive ? 'true' : 'false'}
       data-has-profiles={connectionProfiles ? 'true' : 'false'}
       data-has-profile-change={onConnectionProfileChange ? 'true' : 'false'}
       data-has-settings-change={onSystemPromptOverrideChange ? 'true' : 'false'}
       data-has-active-change={onActiveChange ? 'true' : 'false'}
+      data-has-stop-streaming={onStopStreaming ? 'true' : 'false'}
     >
       <span className="participant-name">
         {participant.type === 'CHARACTER' ? participant.character?.name : participant.persona?.name}
@@ -67,6 +74,14 @@ jest.mock('@/components/chat/ParticipantCard', () => ({
           Remove
         </button>
       )}
+      {onStopStreaming && (
+        <button
+          data-testid={`stop-${participant.id}`}
+          onClick={() => onStopStreaming()}
+        >
+          Stop
+        </button>
+      )}
     </div>
   ),
 }))
@@ -82,16 +97,17 @@ jest.mock('@/components/ui/Avatar', () => ({
 }))
 
 // Helper to create test participants
-function createCharacterParticipant(id: string, name: string, displayOrder: number, isActive = true): ParticipantData {
+function createCharacterParticipant(id: string, name: string, displayOrder: number, isActive = true, talkativeness = 0.5): ParticipantData {
   return {
     id,
     type: 'CHARACTER',
+    controlledBy: 'llm',
     displayOrder,
     isActive,
     character: {
       id: `char-${id}`,
       name,
-      talkativeness: 0.5,
+      talkativeness,
     },
   }
 }
@@ -100,6 +116,7 @@ function createPersonaParticipant(id: string, name: string, displayOrder: number
   return {
     id,
     type: 'PERSONA',
+    controlledBy: 'user',
     displayOrder,
     isActive,
     persona: {
@@ -239,7 +256,7 @@ describe('ParticipantSidebar', () => {
       expect(screen.getByText('2 characters')).toBeInTheDocument()
     })
 
-    it('filters out inactive participants from display', () => {
+    it('shows inactive participants at the bottom', () => {
       const participants = [
         createCharacterParticipant('char-1', 'Alice', 1, true),
         createCharacterParticipant('char-2', 'Bob', 2, false), // inactive
@@ -253,9 +270,13 @@ describe('ParticipantSidebar', () => {
         />
       )
 
+      // All participants should be rendered
       expect(screen.getByTestId('participant-char-1')).toBeInTheDocument()
-      expect(screen.queryByTestId('participant-char-2')).not.toBeInTheDocument()
+      expect(screen.getByTestId('participant-char-2')).toBeInTheDocument()
       expect(screen.getByTestId('participant-char-3')).toBeInTheDocument()
+
+      // Bob should have inactive status
+      expect(screen.getByTestId('participant-char-2')).toHaveAttribute('data-is-active', 'false')
     })
   })
 
@@ -573,7 +594,7 @@ describe('ParticipantSidebar', () => {
       expect(screen.getByText('All characters have been removed')).toBeInTheDocument()
     })
 
-    it('shows empty state when all participants are inactive', () => {
+    it('shows inactive participants instead of empty state when all participants are inactive', () => {
       const participants = [
         createCharacterParticipant('char-1', 'Alice', 1, false),
         createCharacterParticipant('char-2', 'Bob', 2, false),
@@ -586,7 +607,10 @@ describe('ParticipantSidebar', () => {
         />
       )
 
-      expect(screen.getByText('No participants')).toBeInTheDocument()
+      // Should show the inactive participants, not empty state
+      expect(screen.queryByText('No participants')).not.toBeInTheDocument()
+      expect(screen.getByTestId('participant-char-1')).toBeInTheDocument()
+      expect(screen.getByTestId('participant-char-2')).toBeInTheDocument()
     })
 
     it('shows "No characters available" when no active characters', () => {
@@ -611,34 +635,34 @@ describe('ParticipantSidebar', () => {
   })
 
   describe('Participant ordering', () => {
-    it('orders personas before characters', () => {
+    it('orders participants by predicted turn order', () => {
       const participants = [
-        createCharacterParticipant('char-1', 'Alice', 1),
-        createPersonaParticipant('persona-1', 'User', 0),
-        createCharacterParticipant('char-2', 'Bob', 2),
+        createCharacterParticipant('char-1', 'Alice', 1, true, 0.3),
+        createCharacterParticipant('char-2', 'Bob', 2, true, 0.9),
+        createCharacterParticipant('char-3', 'Charlie', 3, true, 0.6),
       ]
 
       const { container } = render(
         <ParticipantSidebar
           {...createDefaultProps()}
           participants={participants}
-          userParticipantId="persona-1"
         />
       )
 
-      // Use the mock class to select only the top-level participant card elements
+      // With no selection result, all are eligible, sorted by talkativeness descending
       const participantElements = container.querySelectorAll('.participant-card-mock')
       expect(participantElements).toHaveLength(3)
-      expect(participantElements[0]).toHaveAttribute('data-testid', 'participant-persona-1')
-      expect(participantElements[1]).toHaveAttribute('data-testid', 'participant-char-1')
-      expect(participantElements[2]).toHaveAttribute('data-testid', 'participant-char-2')
+      // Bob (0.9) first, Charlie (0.6) second, Alice (0.3) third
+      expect(participantElements[0]).toHaveAttribute('data-testid', 'participant-char-2')
+      expect(participantElements[1]).toHaveAttribute('data-testid', 'participant-char-3')
+      expect(participantElements[2]).toHaveAttribute('data-testid', 'participant-char-1')
     })
 
-    it('orders characters by displayOrder', () => {
+    it('places inactive participants at the end', () => {
       const participants = [
-        createCharacterParticipant('char-3', 'Charlie', 3),
-        createCharacterParticipant('char-1', 'Alice', 1),
-        createCharacterParticipant('char-2', 'Bob', 2),
+        createCharacterParticipant('char-1', 'Alice', 1, false), // inactive
+        createCharacterParticipant('char-2', 'Bob', 2, true),
+        createCharacterParticipant('char-3', 'Charlie', 3, true),
       ]
 
       const { container } = render(
@@ -648,12 +672,11 @@ describe('ParticipantSidebar', () => {
         />
       )
 
-      // Use the mock class to select only the top-level participant card elements
       const participantElements = container.querySelectorAll('.participant-card-mock')
       expect(participantElements).toHaveLength(3)
-      expect(participantElements[0]).toHaveAttribute('data-display-order', '1')
-      expect(participantElements[1]).toHaveAttribute('data-display-order', '2')
-      expect(participantElements[2]).toHaveAttribute('data-display-order', '3')
+      // Alice (inactive) should be last
+      expect(participantElements[2]).toHaveAttribute('data-testid', 'participant-char-1')
+      expect(participantElements[2]).toHaveAttribute('data-turn-status', 'inactive')
     })
   })
 
@@ -1051,7 +1074,7 @@ describe('ParticipantSidebar', () => {
       expect(aliceButton).toHaveClass('qt-chat-sidebar-collapsed-avatar-active')
     })
 
-    it('shows queue badge on avatar in collapsed state', () => {
+    it('shows position badge on avatar in collapsed state', () => {
       const participants = [
         createCharacterParticipant('char-1', 'Alice', 1),
         createCharacterParticipant('char-2', 'Bob', 2),
@@ -1072,12 +1095,12 @@ describe('ParticipantSidebar', () => {
         />
       )
 
-      // Bob is in queue, should show badge with position 1
+      // Bob is in queue, should show position badge
       const bobButton = screen.getByRole('button', { name: /bob.*click to expand/i })
       expect(bobButton).toBeInTheDocument()
-      // Check title includes queue position
-      expect(bobButton).toHaveAttribute('title', 'Bob (queue #1)')
-      expect(bobButton.querySelector('.qt-chat-sidebar-collapsed-queue-badge')).toHaveTextContent('1')
+      // Check title includes position number (new format: "#position")
+      expect(bobButton).toHaveAttribute('title', 'Bob (#1)')
+      expect(bobButton.querySelector('.qt-chat-sidebar-collapsed-position-badge')).toHaveTextContent('1')
     })
 
     it('does not show participant cards in collapsed state', () => {
@@ -1208,6 +1231,80 @@ describe('ParticipantSidebar', () => {
       expect(card2).toHaveAttribute('data-has-profile-change', 'true')
       expect(card2).toHaveAttribute('data-has-settings-change', 'true')
       expect(card2).toHaveAttribute('data-has-active-change', 'true')
+    })
+  })
+
+  describe('Turn order integration', () => {
+    it('passes turnPosition and turnStatus to participant cards', () => {
+      const participants = [
+        createCharacterParticipant('char-1', 'Alice', 1, true, 0.9),
+        createCharacterParticipant('char-2', 'Bob', 2, true, 0.3),
+      ]
+
+      render(
+        <ParticipantSidebar
+          {...createDefaultProps()}
+          participants={participants}
+        />
+      )
+
+      // Both should have turn positions assigned
+      const card1 = screen.getByTestId('participant-char-1')
+      const card2 = screen.getByTestId('participant-char-2')
+
+      expect(card1).toHaveAttribute('data-turn-position')
+      expect(card2).toHaveAttribute('data-turn-position')
+      expect(card1).toHaveAttribute('data-turn-status', 'eligible')
+      expect(card2).toHaveAttribute('data-turn-status', 'eligible')
+    })
+
+    it('passes onStopStreaming only to generating participant', () => {
+      const participants = [
+        createCharacterParticipant('char-1', 'Alice', 1),
+        createCharacterParticipant('char-2', 'Bob', 2),
+      ]
+
+      const turnSelectionResult: TurnSelectionResult = {
+        nextSpeakerId: 'char-2',
+        reason: 'weighted_selection',
+        cycleComplete: false,
+      }
+
+      render(
+        <ParticipantSidebar
+          {...createDefaultProps()}
+          participants={participants}
+          turnSelectionResult={turnSelectionResult}
+          isGenerating={true}
+          respondingParticipantId="char-1"
+          onStopStreaming={jest.fn()}
+        />
+      )
+
+      const card1 = screen.getByTestId('participant-char-1')
+      const card2 = screen.getByTestId('participant-char-2')
+
+      // Only generating participant (char-1) should have stop streaming
+      expect(card1).toHaveAttribute('data-has-stop-streaming', 'true')
+      expect(card2).toHaveAttribute('data-has-stop-streaming', 'false')
+    })
+
+    it('assigns inactive status to inactive participants', () => {
+      const participants = [
+        createCharacterParticipant('char-1', 'Alice', 1, true),
+        createCharacterParticipant('char-2', 'Bob', 2, false),
+      ]
+
+      render(
+        <ParticipantSidebar
+          {...createDefaultProps()}
+          participants={participants}
+        />
+      )
+
+      const card2 = screen.getByTestId('participant-char-2')
+      expect(card2).toHaveAttribute('data-turn-status', 'inactive')
+      expect(card2).toHaveAttribute('data-turn-position', '')
     })
   })
 })

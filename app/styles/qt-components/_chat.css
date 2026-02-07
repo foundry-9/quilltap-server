@@ -1273,6 +1273,143 @@
   }
 
   /* ==========================================================================
+     PARTICIPANT POSITION BADGES & TURN ORDER UI
+     ========================================================================== */
+
+  /**
+   * Base position number badge - shown on all active participants
+   */
+  .qt-participant-position-badge {
+    @apply absolute -top-2 -right-2 w-6 h-6 shadow-md;
+    @apply inline-flex items-center justify-center;
+    @apply text-xs font-bold rounded-full;
+    z-index: 10;
+  }
+
+  /**
+   * Generating position badge - green pulsing (#1 during generation)
+   */
+  .qt-participant-position-generating {
+    background: var(--qt-status-success-bg);
+    color: var(--qt-status-success-fg);
+    border: 1px solid var(--qt-status-success-border);
+    animation: qt-position-pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes qt-position-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.8; transform: scale(1.1); }
+  }
+
+  /**
+   * Next speaker position badge - green static
+   */
+  .qt-participant-position-next {
+    background: var(--qt-status-success-bg);
+    color: var(--qt-status-success-fg);
+    border: 1px solid var(--qt-status-success-border);
+  }
+
+  /**
+   * Queued position badge - blue (info color)
+   */
+  .qt-participant-position-queued {
+    background: var(--qt-status-info-bg);
+    color: var(--qt-status-info-fg);
+    border: 1px solid var(--qt-status-info-border);
+  }
+
+  /**
+   * Eligible position badge - neutral/muted
+   */
+  .qt-participant-position-eligible {
+    background: var(--color-muted);
+    color: var(--color-muted-foreground);
+    border: 1px solid var(--color-border);
+  }
+
+  /**
+   * User turn position badge - amber/warning
+   */
+  .qt-participant-position-user-turn {
+    background: var(--qt-status-warning-bg);
+    color: var(--qt-status-warning-fg);
+    border: 1px solid var(--qt-status-warning-border);
+  }
+
+  /**
+   * Spoken position badge - dimmed
+   */
+  .qt-participant-position-spoken {
+    background: var(--color-muted);
+    color: var(--color-muted-foreground);
+    border: 1px solid var(--color-border);
+    opacity: 0.5;
+  }
+
+  /**
+   * Inactive participant card styling - dimmed/greyed
+   */
+  .qt-participant-card-inactive {
+    @apply relative p-3;
+    @apply transition-all duration-200;
+    border-radius: var(--qt-participant-card-radius);
+    background: var(--qt-participant-card-bg);
+    border: 1px solid var(--qt-participant-card-border);
+    opacity: 0.5;
+    filter: grayscale(0.3);
+  }
+
+  /**
+   * Stop button on participant card - danger colors
+   */
+  .qt-participant-stop-button {
+    background: var(--qt-status-danger-bg);
+    color: var(--qt-status-danger-fg);
+    border: 1px solid var(--qt-status-danger-border);
+    @apply transition-colors;
+  }
+
+  .qt-participant-stop-button:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--qt-status-danger-bg) 70%, black);
+  }
+
+  /**
+   * Active toggle button on participant card
+   */
+  .qt-participant-active-toggle {
+    @apply transition-colors;
+  }
+
+  .qt-participant-active-toggle[data-active="true"] {
+    color: var(--qt-status-success-fg);
+  }
+
+  .qt-participant-active-toggle[data-active="false"] {
+    color: var(--color-muted-foreground);
+    opacity: 0.6;
+  }
+
+  /**
+   * Position badge for collapsed sidebar avatars
+   */
+  .qt-chat-sidebar-collapsed-position-badge {
+    @apply absolute -top-1 -right-1;
+    @apply w-5 h-5 text-xs font-bold;
+    @apply flex items-center justify-center;
+    @apply rounded-full;
+    z-index: 10;
+  }
+
+  /**
+   * Dimmed collapsed avatar for inactive participants
+   */
+  .qt-chat-sidebar-collapsed-avatar-inactive {
+    opacity: 0.4;
+    filter: grayscale(0.3);
+  }
+
+  /* ==========================================================================
      COLLAPSED SIDEBAR STYLES
      ========================================================================== */
 
