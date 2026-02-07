@@ -355,18 +355,20 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   }, [id])
 
   // Sync agentModeEnabled state when chat loads
+  const chatAgentModeEnabled = chat?.agentModeEnabled
   useEffect(() => {
     if (chat) {
-      setAgentModeEnabled(chat.agentModeEnabled ?? null)
+      setAgentModeEnabled(chatAgentModeEnabled ?? null)
     }
-  }, [chat?.id, chat?.agentModeEnabled])
+  }, [chat, chatAgentModeEnabled])
 
   // Sync storyBackgroundsEnabled state when chatSettings loads
+  const storyBackgroundsSettingsEnabled = chatSettings?.storyBackgroundsSettings?.enabled
   useEffect(() => {
     if (chatSettings) {
-      setStoryBackgroundsEnabled(chatSettings.storyBackgroundsSettings?.enabled ?? false)
+      setStoryBackgroundsEnabled(storyBackgroundsSettingsEnabled ?? false)
     }
-  }, [chatSettings?.storyBackgroundsSettings?.enabled])
+  }, [chatSettings, storyBackgroundsSettingsEnabled])
 
   // Handle scroll-to-message from memory provenance navigation
   useEffect(() => {

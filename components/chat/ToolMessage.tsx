@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { formatMessageTime } from '@/lib/format-time'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import DeletedImagePlaceholder from '@/components/images/DeletedImagePlaceholder'
@@ -124,22 +124,23 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
   const [showResponse, setShowResponse] = useState(false)
   const [missingImages, setMissingImages] = useState<Set<string>>(new Set())
 
-  let toolData: ToolResult = {
-    toolName: 'unknown',
-    success: false,
-    result: 'Unable to parse tool result',
-  }
-
-  try {
-    const parsed = JSON.parse(message.content)
-    // Handle both old format (toolName) and new format (tool)
-    toolData = {
-      ...parsed,
-      toolName: parsed.toolName || parsed.tool || 'unknown',
+  const toolData: ToolResult = useMemo(() => {
+    try {
+      const parsed = JSON.parse(message.content)
+      // Handle both old format (toolName) and new format (tool)
+      return {
+        ...parsed,
+        toolName: parsed.toolName || parsed.tool || 'unknown',
+      }
+    } catch {
+      // If parsing fails, use defaults
+      return {
+        toolName: 'unknown',
+        success: false,
+        result: 'Unable to parse tool result',
+      }
     }
-  } catch {
-    // If parsing fails, use defaults
-  }
+  }, [message.content])
 
   // Determine if character initiated this or user did
   const showCharacterName = toolData.initiatedBy !== 'user' && character

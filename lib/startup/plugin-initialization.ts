@@ -43,7 +43,6 @@ if (typeof __non_webpack_require__ !== 'undefined') {
   dynamicRequire = __non_webpack_require__;
   Module = __non_webpack_require__('module') as unknown as NodeModuleInternal;
 } else {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const nodeModule = require('node:module');
   dynamicRequire = nodeModule.createRequire(process.cwd() + '/') as NodeRequire;
   Module = nodeModule as unknown as NodeModuleInternal;
