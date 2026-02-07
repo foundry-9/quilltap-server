@@ -93,6 +93,8 @@ function mapTaskTypeToLogType(taskType?: string): LLMLogType {
     'craft-story-background-prompt': 'IMAGE_PROMPT_CRAFTING',
     'derive-scene-context': 'SUMMARIZATION',
     'memory-keyword-extraction': 'MEMORY_EXTRACTION',
+    'resolve-character-appearances': 'APPEARANCE_RESOLUTION',
+    'sanitize-appearance': 'APPEARANCE_RESOLUTION',
   }
   return mapping[taskType || ''] || 'SUMMARIZATION'
 }
@@ -1847,5 +1849,266 @@ export async function compressSystemPrompt(
       }
     },
     'compress-system-prompt'
+  )
+}
+
+// ============================================================================
+// CHARACTER APPEARANCE RESOLUTION
+// ============================================================================
+
+/**
+ * Result of resolving a single character's appearance from context
+ */
+export interface AppearanceResolutionItem {
+  characterId: string
+  /** ID of the selected physical description, or null to use the first/default */
+  selectedDescriptionId: string | null
+  /** What the character is currently wearing */
+  clothingDescription: string
+  /** How clothing was determined */
+  clothingSource: 'narrative' | 'stored' | 'default'
+}
+
+/**
+ * Input describing a character's available appearances
+ */
+export interface CharacterAppearanceInput {
+  characterId: string
+  characterName: string
+  physicalDescriptions: Array<{
+    id: string
+    name: string
+    usageContext?: string | null
+    shortPrompt?: string | null
+    mediumPrompt?: string | null
+  }>
+  clothingRecords: Array<{
+    id: string
+    name: string
+    usageContext?: string | null
+    description?: string | null
+  }>
+}
+
+/**
+ * Appearance resolution system prompt
+ * Analyzes chat context to determine what each character currently looks like
+ */
+const APPEARANCE_RESOLUTION_PROMPT = `You are analyzing a conversation to determine what each character currently looks like and is wearing.
+
+You will receive:
+- Recent conversation messages
+- An image prompt that is about to be used for image generation
+- For each character: their available physical descriptions (with usage contexts) and stored clothing/outfit records
+
+Your task is to determine for each character:
+1. Which physical description best matches the current scene context (by usage context)
+2. What the character is currently wearing
+
+CLOTHING PRIORITY (highest to lowest):
+1. NARRATIVE: If the conversation explicitly describes what a character changed into or is currently wearing, use that description verbatim. This overrides everything.
+2. IMAGE PROMPT: If the image prompt specifies clothing for a character, use that.
+3. STORED: If neither narrative nor prompt specifies clothing, select the best matching stored clothing record based on its usage context and the current scene.
+4. DEFAULT: If no stored records match, use the first stored clothing record. If none exist, respond with an empty string.
+
+Respond with a JSON array, one entry per character:
+[
+  {
+    "characterId": "uuid-here",
+    "selectedDescriptionId": "uuid-of-best-matching-description-or-null",
+    "clothingDescription": "what they are wearing right now",
+    "clothingSource": "narrative" | "stored" | "default"
+  }
+]
+
+IMPORTANT:
+- For selectedDescriptionId, pick the description whose usageContext best fits the current scene. Use null to indicate the first/default.
+- For clothingDescription, write a concise visual description suitable for image generation.
+- clothingSource must be "narrative" if from conversation, "stored" if from a stored record, "default" if using first/fallback.
+
+JSON only - no other text.`
+
+/**
+ * Resolves character appearances based on chat context using a cheap LLM
+ *
+ * @param characters - Characters with their available descriptions and clothing
+ * @param recentMessages - Recent chat messages for context
+ * @param imagePrompt - The image prompt being generated
+ * @param selection - The cheap LLM provider selection
+ * @param userId - The user ID for API key retrieval
+ * @param chatId - Optional chat ID for logging
+ * @returns Array of resolved appearance items
+ */
+export async function resolveAppearance(
+  characters: CharacterAppearanceInput[],
+  recentMessages: ChatMessage[],
+  imagePrompt: string,
+  selection: CheapLLMSelection,
+  userId: string,
+  chatId?: string
+): Promise<CheapLLMTaskResult<AppearanceResolutionItem[]>> {
+  // Build character data section
+  const characterSection = characters.map(char => {
+    const descParts = char.physicalDescriptions.map(d => {
+      const context = d.usageContext ? ` (context: ${d.usageContext})` : ''
+      const preview = d.mediumPrompt || d.shortPrompt || '(no description text)'
+      return `    - ID: ${d.id}, Name: "${d.name}"${context}: ${preview}`
+    })
+
+    const clothingParts = char.clothingRecords.map(c => {
+      const context = c.usageContext ? ` (context: ${c.usageContext})` : ''
+      const desc = c.description || '(no description)'
+      return `    - ID: ${c.id}, Name: "${c.name}"${context}: ${desc}`
+    })
+
+    return `  Character: ${char.characterName} (ID: ${char.characterId})
+  Physical Descriptions:
+${descParts.length > 0 ? descParts.join('\n') : '    (none)'}
+  Clothing Records:
+${clothingParts.length > 0 ? clothingParts.join('\n') : '    (none)'}`
+  }).join('\n\n')
+
+  // Format recent messages
+  const messageText = recentMessages
+    .slice(-20)
+    .map(m => {
+      const speaker = m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Character' : 'System'
+      const content = m.content.length > 500 ? m.content.substring(0, 500) + '...' : m.content
+      return `${speaker}: ${content}`
+    })
+    .join('\n\n')
+
+  const messages: LLMMessage[] = [
+    {
+      role: 'system',
+      content: APPEARANCE_RESOLUTION_PROMPT,
+    },
+    {
+      role: 'user',
+      content: `Image prompt: ${imagePrompt}
+
+Characters:
+${characterSection}
+
+Recent Conversation:
+${messageText || '(no messages yet)'}
+
+Determine what each character currently looks like and is wearing:`,
+    },
+  ]
+
+  return executeCheapLLMTask(
+    selection,
+    messages,
+    userId,
+    (content: string): AppearanceResolutionItem[] => {
+      try {
+        let cleanContent = content.trim()
+        if (cleanContent.startsWith('```json')) {
+          cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
+        } else if (cleanContent.startsWith('```')) {
+          cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
+        }
+
+        const parsed = JSON.parse(cleanContent)
+        if (!Array.isArray(parsed)) {
+          return []
+        }
+
+        return parsed.map((item: Record<string, unknown>) => ({
+          characterId: String(item.characterId || ''),
+          selectedDescriptionId: item.selectedDescriptionId ? String(item.selectedDescriptionId) : null,
+          clothingDescription: String(item.clothingDescription || ''),
+          clothingSource: (['narrative', 'stored', 'default'].includes(String(item.clothingSource))
+            ? String(item.clothingSource)
+            : 'default') as 'narrative' | 'stored' | 'default',
+        }))
+      } catch {
+        return []
+      }
+    },
+    'resolve-character-appearances',
+    chatId
+  )
+}
+
+// ============================================================================
+// APPEARANCE SANITIZATION
+// ============================================================================
+
+/**
+ * Appearance sanitization system prompt
+ * Rewrites explicit/dangerous appearance descriptions into safe alternatives
+ */
+const APPEARANCE_SANITIZATION_PROMPT = `You are a content safety filter for image generation prompts. You will receive character appearance descriptions that have been flagged as potentially explicit or inappropriate for a standard image generation provider.
+
+Your task is to rewrite ONLY the problematic parts to make them safe for image generation while preserving as much visual detail as possible.
+
+GUIDELINES:
+- Replace explicit clothing descriptions with neutral alternatives (e.g., "wearing nothing" → "wearing casual clothes", "lingerie" → "comfortable loungewear")
+- Keep hair color, eye color, body type, and other non-explicit physical traits unchanged
+- Preserve the character's overall aesthetic and style where possible
+- Keep descriptions concise and suitable for image generation
+- Do NOT add new details that weren't implied by the original
+
+You will receive a JSON array of objects with characterId and appearanceText.
+Respond with the SAME JSON array but with sanitized appearanceText values.
+
+JSON only - no other text.`
+
+/**
+ * Sanitizes appearance descriptions that contain dangerous content
+ *
+ * @param appearances - Array of character appearances to sanitize
+ * @param selection - The cheap LLM provider selection
+ * @param userId - The user ID for API key retrieval
+ * @param chatId - Optional chat ID for logging
+ * @returns Array of sanitized appearance texts keyed by characterId
+ */
+export async function sanitizeAppearance(
+  appearances: Array<{ characterId: string; appearanceText: string }>,
+  selection: CheapLLMSelection,
+  userId: string,
+  chatId?: string
+): Promise<CheapLLMTaskResult<Array<{ characterId: string; appearanceText: string }>>> {
+  const messages: LLMMessage[] = [
+    {
+      role: 'system',
+      content: APPEARANCE_SANITIZATION_PROMPT,
+    },
+    {
+      role: 'user',
+      content: JSON.stringify(appearances),
+    },
+  ]
+
+  return executeCheapLLMTask(
+    selection,
+    messages,
+    userId,
+    (content: string): Array<{ characterId: string; appearanceText: string }> => {
+      try {
+        let cleanContent = content.trim()
+        if (cleanContent.startsWith('```json')) {
+          cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
+        } else if (cleanContent.startsWith('```')) {
+          cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
+        }
+
+        const parsed = JSON.parse(cleanContent)
+        if (!Array.isArray(parsed)) {
+          return appearances // Return originals if parsing fails
+        }
+
+        return parsed.map((item: Record<string, unknown>) => ({
+          characterId: String(item.characterId || ''),
+          appearanceText: String(item.appearanceText || ''),
+        }))
+      } catch {
+        return appearances // Return originals on error
+      }
+    },
+    'sanitize-appearance',
+    chatId
   )
 }

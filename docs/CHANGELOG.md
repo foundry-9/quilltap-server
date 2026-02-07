@@ -4,6 +4,18 @@
 
 ### 2.10-dev
 
+- feat: Context-aware character appearance resolution for image generation
+  - New `resolveCharacterAppearances()` cheap LLM task analyzes chat context to determine what each character currently looks like
+  - Clothing priority: narrative context (highest) > image prompt > stored records by usageContext > default
+  - Physical descriptions selected by best-matching usageContext for current scene
+  - Dangermouse integration: appearance text classified and sanitized when no uncensored provider available
+  - Chat image generation (`generate_image` tool) now fetches recent messages and resolves context-aware appearances
+  - Story background generation runs scene context derivation and appearance resolution in parallel
+  - Front page image generator now has Dangermouse prompt classification and AUTO_ROUTE provider rerouting
+  - New `APPEARANCE_RESOLUTION` LLM log type for tracking appearance resolution LLM calls
+  - Skip optimization: bypasses LLM call when characters have trivial data and no chat context
+  - Fail-safe: all resolution and sanitization errors fall back gracefully to existing behavior
+
 - feat: Add clothing records to characters
   - New `clothingRecords` embedded JSON array on characters (name, usageContext, markdown description)
   - Full CRUD API at `/api/v1/characters/[id]/clothing` and `/api/v1/characters/[id]/clothing/[recordId]`

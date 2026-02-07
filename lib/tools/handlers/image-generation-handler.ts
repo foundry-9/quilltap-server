@@ -16,10 +16,16 @@ import {
   GeneratedImageResult,
   validateImageGenerationInput,
 } from '@/lib/tools/image-generation-tool';
-import { preparePromptExpansion } from '@/lib/image-gen/prompt-expansion';
-import { craftImagePrompt } from '@/lib/memory/cheap-llm-tasks';
+import { preparePromptExpansion, buildExpansionContext, parsePlaceholders, resolvePlaceholders } from '@/lib/image-gen/prompt-expansion';
+import { craftImagePrompt, type ChatMessage } from '@/lib/memory/cheap-llm-tasks';
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig, type CheapLLMSelection } from '@/lib/llm/cheap-llm';
 import type { CheapLLMSettings } from '@/lib/schemas/settings.types';
+import {
+  resolveCharacterAppearances,
+  sanitizeAppearancesIfNeeded,
+  type AppearanceResolutionInput,
+  type ResolvedCharacterAppearance,
+} from '@/lib/image-gen/appearance-resolution';
 import { logger } from '@/lib/logger';
 import { getInheritedTags } from '@/lib/files/tag-inheritance';
 import { getErrorMessage } from '@/lib/errors';
@@ -332,28 +338,36 @@ async function expandPromptWithDescriptions(
   callingParticipantId?: string,
   cheapLLMSettings?: CheapLLMSettings,
   styleOptions?: PromptExpansionOptions,
-  isDangerous?: boolean
+  isDangerous?: boolean,
+  resolvedAppearances?: ResolvedCharacterAppearance[]
 ): Promise<{ expandedPrompt: string; wasExpanded: boolean }> {
   try {
     // Map ImageProvider string to the enum type
     const imageProvider = provider as 'OPENAI' | 'GROK' | 'GOOGLE_IMAGEN';
 
-    // Prepare expansion context
-    const expansionContext = await preparePromptExpansion(
-      originalPrompt,
-      userId,
-      imageProvider,
-      chatId,
-      callingParticipantId
-    );
-
-    // If no placeholders found, return original
-    if (!expansionContext.hasPlaceholders || !expansionContext.placeholders) {
+    // Parse and resolve placeholders
+    const rawPlaceholders = parsePlaceholders(originalPrompt);
+    if (rawPlaceholders.length === 0) {
       return {
         expandedPrompt: originalPrompt,
         wasExpanded: false,
       };
     }
+
+    const resolvedPlaceholders = await resolvePlaceholders(
+      rawPlaceholders,
+      userId,
+      chatId,
+      callingParticipantId
+    );
+
+    // Build expansion context, injecting resolved appearances if available
+    const expansionContext = buildExpansionContext(
+      originalPrompt,
+      resolvedPlaceholders,
+      imageProvider,
+      resolvedAppearances
+    );
 
     // Get cheap LLM selection
     const repos = getRepositories();
@@ -396,8 +410,6 @@ async function expandPromptWithDescriptions(
         fallbackToLocal: cheapLLMSettings.fallbackToLocal,
       } : DEFAULT_CHEAP_LLM_CONFIG;
 
-      // For now, use a simple default profile selection
-      // In production, you might want to pass the current connection profile
       const defaultProfile = allProfiles.find(p => p.isDefault) || allProfiles[0];
 
       if (!defaultProfile) {
@@ -639,6 +651,128 @@ export async function executeImageGenerationTool(
       }
     }
 
+    // 5c. Fetch recent chat messages for appearance resolution (if chatId)
+    let recentChatMessages: ChatMessage[] = [];
+    let isDangerousChat = false;
+    if (context.chatId) {
+      try {
+        const chat = await repos.chats.findById(context.chatId);
+        isDangerousChat = chat?.isDangerousChat === true;
+
+        const chatEvents = await repos.chats.getMessages(context.chatId);
+        recentChatMessages = chatEvents
+          .filter((event: any): event is Extract<typeof event, { type: 'message' }> => event.type === 'message')
+          .filter((msg: any) => msg.role === 'USER' || msg.role === 'ASSISTANT')
+          .slice(-20)
+          .map((msg: any) => ({
+            role: msg.role === 'USER' ? 'user' as const : 'assistant' as const,
+            content: msg.content,
+          }));
+
+        logger.debug('[Image Generation] Fetched chat messages for appearance resolution', {
+          context: 'image-gen',
+          chatId: context.chatId,
+          messageCount: recentChatMessages.length,
+          isDangerousChat,
+        });
+      } catch (error) {
+        logger.warn('[Image Generation] Failed to fetch chat messages, skipping appearance resolution', {
+          chatId: context.chatId,
+          errorMessage: getErrorMessage(error),
+        });
+      }
+    }
+
+    // 5d. Resolve character appearances (context-aware)
+    let resolvedAppearances: ResolvedCharacterAppearance[] | undefined;
+    if (parsePlaceholders(toolInput.prompt).length > 0) {
+      try {
+        // Build a cheap LLM selection for appearance resolution
+        let appearanceLLMSelection = cheapLLMSelection;
+        if (!appearanceLLMSelection) {
+          const allProfiles = await repos.connections.findByUserId(context.userId);
+          const cheapLLMConfig: CheapLLMConfig = chatSettings?.cheapLLMSettings ? {
+            strategy: chatSettings.cheapLLMSettings.strategy,
+            userDefinedProfileId: chatSettings.cheapLLMSettings.userDefinedProfileId ?? undefined,
+            defaultCheapProfileId: chatSettings.cheapLLMSettings.defaultCheapProfileId ?? undefined,
+            fallbackToLocal: chatSettings.cheapLLMSettings.fallbackToLocal,
+          } : DEFAULT_CHEAP_LLM_CONFIG;
+
+          const defaultProfile = allProfiles.find(p => p.isDefault) || allProfiles[0];
+          if (defaultProfile) {
+            appearanceLLMSelection = getCheapLLMProvider(
+              defaultProfile,
+              cheapLLMConfig,
+              allProfiles,
+              false
+            );
+          }
+        }
+
+        if (appearanceLLMSelection) {
+          // Resolve placeholders to get character data
+          const rawPlaceholders = parsePlaceholders(toolInput.prompt);
+          const resolvedPlaceholders = await resolvePlaceholders(
+            rawPlaceholders,
+            context.userId,
+            context.chatId,
+            context.callingParticipantId
+          );
+
+          // Build appearance inputs from resolved placeholders
+          const appearanceInputs: AppearanceResolutionInput[] = resolvedPlaceholders
+            .filter(p => p.entityId && (p.descriptions?.length || p.clothingRecords?.length))
+            .map(p => ({
+              characterId: p.entityId!,
+              characterName: p.name,
+              physicalDescriptions: p.descriptions || [],
+              clothingRecords: p.clothingRecords || [],
+            }));
+
+          if (appearanceInputs.length > 0) {
+            resolvedAppearances = await resolveCharacterAppearances(
+              appearanceInputs,
+              recentChatMessages,
+              toolInput.prompt,
+              appearanceLLMSelection,
+              context.userId,
+              context.chatId
+            );
+
+            // Determine if uncensored image provider is available
+            const hasUncensoredImageProvider = Boolean(
+              dangerSettings.uncensoredImageProfileId
+            );
+
+            // Sanitize appearances through Dangermouse
+            resolvedAppearances = await sanitizeAppearancesIfNeeded(
+              resolvedAppearances,
+              dangerSettings,
+              isDangerousChat,
+              hasUncensoredImageProvider,
+              appearanceLLMSelection,
+              context.userId,
+              context.chatId
+            );
+
+            logger.debug('[Image Generation] Appearance resolution complete', {
+              context: 'image-gen',
+              chatId: context.chatId,
+              resolvedCount: resolvedAppearances.length,
+              sanitized: resolvedAppearances.some(a => a.wasSanitized),
+            });
+          }
+        }
+      } catch (error) {
+        // Fail safe — fall back to current behavior
+        logger.warn('[Image Generation] Appearance resolution failed, using raw descriptions', {
+          chatId: context.chatId,
+          errorMessage: getErrorMessage(error),
+        });
+        resolvedAppearances = undefined;
+      }
+    }
+
     // 6. Expand prompt with character/persona descriptions if needed
     let expandedPrompt = toolInput.prompt;
     try {
@@ -650,7 +784,8 @@ export async function executeImageGenerationTool(
         context.callingParticipantId,
         chatSettings?.cheapLLMSettings,
         styleOptions,
-        imagePromptDangerous
+        imagePromptDangerous,
+        resolvedAppearances
       );
       expandedPrompt = expandResult.expandedPrompt;
     } catch (error) {

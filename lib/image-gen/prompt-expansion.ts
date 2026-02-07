@@ -7,6 +7,7 @@
 
 import { getRepositories } from '@/lib/repositories/factory';
 import { PhysicalDescription, ClothingRecord, ImageProvider } from '@/lib/schemas/types';
+import type { ResolvedCharacterAppearance } from '@/lib/image-gen/appearance-resolution';
 
 /**
  * Placeholder information extracted from a prompt
@@ -300,12 +301,14 @@ export function calculateAvailableSpace(
  * @param originalPrompt - Original prompt with placeholders
  * @param resolvedPlaceholders - Resolved placeholder information
  * @param provider - Target image generation provider
+ * @param resolvedAppearances - Optional context-aware resolved appearances that override raw descriptions
  * @returns Context object for cheap LLM
  */
 export function buildExpansionContext(
   originalPrompt: string,
   resolvedPlaceholders: PlaceholderInfo[],
-  provider: ImageProvider
+  provider: ImageProvider,
+  resolvedAppearances?: ResolvedCharacterAppearance[]
 ): {
   originalPrompt: string;
   placeholders: Array<{
@@ -328,6 +331,33 @@ export function buildExpansionContext(
   provider: string;
 } {
   const placeholderData = resolvedPlaceholders.map(placeholder => {
+    // Check if we have a resolved appearance for this character
+    const resolved = resolvedAppearances?.find(
+      a => a.characterId === placeholder.entityId
+    );
+
+    if (resolved) {
+      // Use the single resolved appearance instead of all tiers/clothing
+      return {
+        placeholder: placeholder.placeholder,
+        name: placeholder.name,
+        usageContext: resolved.physicalDescriptionName,
+        tiers: {
+          // Put the resolved description in the 'complete' tier so the
+          // prompt crafter uses it directly
+          complete: resolved.physicalDescription,
+        },
+        ...(resolved.clothingDescription ? {
+          clothing: [{
+            name: resolved.clothingSource === 'narrative' ? 'Current outfit (from story)' : 'Current outfit',
+            usageContext: null as string | null,
+            description: resolved.clothingDescription as string | null,
+          }],
+        } : {}),
+      };
+    }
+
+    // No resolved appearance — fall back to raw data (original behavior)
     const tiers = getAllDescriptionTiers(placeholder.descriptions || []);
     const clothing = (placeholder.clothingRecords || []).map(r => ({
       name: r.name,

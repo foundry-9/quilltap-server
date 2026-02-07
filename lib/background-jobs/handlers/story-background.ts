@@ -17,6 +17,14 @@ import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/errors';
 import type { StoryBackgroundGenerationPayload } from '../queue-service';
 import type { FileCategory, FileSource } from '@/lib/schemas/types';
+import {
+  resolveCharacterAppearances,
+  sanitizeAppearancesIfNeeded,
+  type AppearanceResolutionInput,
+} from '@/lib/image-gen/appearance-resolution';
+import {
+  resolveDangerousContentSettings,
+} from '@/lib/services/dangerous-content/resolver.service';
 
 /**
  * Handle a story background generation job
@@ -110,8 +118,133 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     );
   }
 
-  // 7. Build character context for prompt crafting
+  // 7. Fetch recent messages (needed for both scene context and appearance resolution)
+  const chatEvents = await repos.chats.getMessages(payload.chatId);
+  const recentMessages: ChatMessage[] = chatEvents
+    .filter((event): event is Extract<typeof event, { type: 'message' }> => event.type === 'message')
+    .filter(msg => msg.role === 'USER' || msg.role === 'ASSISTANT')
+    .slice(-20) // Last 20 messages for context
+    .map(msg => ({
+      role: msg.role === 'USER' ? 'user' as const : 'assistant' as const,
+      content: msg.content,
+    }));
+
+  logger.debug('[StoryBackground] Fetched messages for context', {
+    context: 'background-jobs.story-background',
+    jobId: job.id,
+    messageCount: recentMessages.length,
+  });
+
+  // 7b. Resolve Dangermouse settings
+  const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null);
+  const dangerSettings = dangerousContentResolved.settings;
+  const isDangerousChat = chat.isDangerousChat === true;
+  const hasUncensoredImageProvider = Boolean(dangerSettings.uncensoredImageProfileId);
+
+  // 8. Derive scene context AND resolve character appearances in parallel
+  let sceneContext = payload.sceneContext || chat.title;
+
+  // Build appearance inputs from loaded characters
+  const appearanceInputs: AppearanceResolutionInput[] = validCharacters.map(char => ({
+    characterId: char!.id,
+    characterName: char!.name,
+    physicalDescriptions: char!.physicalDescriptions || [],
+    clothingRecords: char!.clothingRecords || [],
+  }));
+
+  // Scene context prompt for appearance resolution
+  const scenePromptForAppearance = payload.sceneContext || chat.title;
+
+  // Run scene context derivation and appearance resolution in parallel
+  const [sceneResult, appearanceResult] = await Promise.all([
+    // Scene context derivation
+    recentMessages.length > 0
+      ? deriveSceneContext(
+          {
+            chatTitle: chat.title,
+            contextSummary: chat.contextSummary,
+            recentMessages,
+            characterNames: validCharacters.map(c => c!.name),
+          },
+          cheapLLMSelection,
+          job.userId
+        )
+      : Promise.resolve(null),
+    // Appearance resolution
+    appearanceInputs.length > 0
+      ? resolveCharacterAppearances(
+          appearanceInputs,
+          recentMessages,
+          scenePromptForAppearance,
+          cheapLLMSelection,
+          job.userId,
+          payload.chatId
+        ).catch(error => {
+          logger.warn('[StoryBackground] Appearance resolution failed, using defaults', {
+            context: 'background-jobs.story-background',
+            jobId: job.id,
+            error: getErrorMessage(error),
+          });
+          return null;
+        })
+      : Promise.resolve(null),
+  ]);
+
+  // Process scene context result
+  if (sceneResult?.success && sceneResult.result) {
+    sceneContext = sceneResult.result;
+    logger.debug('[StoryBackground] Derived scene context successfully', {
+      context: 'background-jobs.story-background',
+      jobId: job.id,
+      derivedContext: sceneContext,
+    });
+  } else if (recentMessages.length > 0) {
+    logger.warn('[StoryBackground] Failed to derive scene context, using fallback', {
+      context: 'background-jobs.story-background',
+      jobId: job.id,
+      error: sceneResult?.error,
+      fallback: sceneContext,
+    });
+  }
+
+  // Process appearance resolution result and apply Dangermouse sanitization
+  let resolvedAppearances = appearanceResult;
+  if (resolvedAppearances && resolvedAppearances.length > 0) {
+    try {
+      resolvedAppearances = await sanitizeAppearancesIfNeeded(
+        resolvedAppearances,
+        dangerSettings,
+        isDangerousChat,
+        hasUncensoredImageProvider,
+        cheapLLMSelection,
+        job.userId,
+        payload.chatId
+      );
+    } catch (error) {
+      logger.warn('[StoryBackground] Appearance sanitization failed, using unsanitized', {
+        context: 'background-jobs.story-background',
+        jobId: job.id,
+        error: getErrorMessage(error),
+      });
+    }
+  }
+
+  // Build character descriptions from resolved appearances (or fall back to simple logic)
   const characterDescriptions = validCharacters.map(char => {
+    const resolved = resolvedAppearances?.find(a => a.characterId === char!.id);
+
+    if (resolved) {
+      const descParts = [resolved.physicalDescription];
+      if (resolved.clothingDescription) {
+        descParts.push(`Wearing: ${resolved.clothingDescription}`);
+      }
+      return {
+        name: char!.name,
+        description: descParts.join('. '),
+      };
+    }
+
+    // Fallback: simple first-description logic
     const primary = char!.physicalDescriptions?.[0];
     const primaryOutfit = char!.clothingRecords?.[0];
     const descParts = [primary?.mediumPrompt || primary?.shortPrompt || char!.name];
@@ -124,66 +257,12 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     };
   });
 
-  // 8. Derive scene context from chat history
-  logger.debug('[StoryBackground] Deriving scene context from chat history', {
+  logger.debug('[StoryBackground] Built character descriptions', {
     context: 'background-jobs.story-background',
     jobId: job.id,
-    chatTitle: chat.title,
+    usedResolvedAppearances: resolvedAppearances !== null && resolvedAppearances !== undefined,
+    characterCount: characterDescriptions.length,
   });
-
-  let sceneContext = payload.sceneContext || chat.title;
-
-  // Fetch recent messages to derive context
-  const chatEvents = await repos.chats.getMessages(payload.chatId);
-  const recentMessages: ChatMessage[] = chatEvents
-    .filter((event): event is Extract<typeof event, { type: 'message' }> => event.type === 'message')
-    .filter(msg => msg.role === 'USER' || msg.role === 'ASSISTANT')
-    .slice(-20) // Last 20 messages for context
-    .map(msg => ({
-      role: msg.role === 'USER' ? 'user' as const : 'assistant' as const,
-      content: msg.content,
-    }));
-
-  if (recentMessages.length > 0) {
-    logger.debug('[StoryBackground] Found messages for context derivation', {
-      context: 'background-jobs.story-background',
-      jobId: job.id,
-      messageCount: recentMessages.length,
-    });
-
-    const derivedContext = await deriveSceneContext(
-      {
-        chatTitle: chat.title,
-        contextSummary: chat.contextSummary,
-        recentMessages,
-        characterNames: validCharacters.map(c => c!.name),
-      },
-      cheapLLMSelection,
-      job.userId
-    );
-
-    if (derivedContext.success && derivedContext.result) {
-      sceneContext = derivedContext.result;
-      logger.debug('[StoryBackground] Derived scene context successfully', {
-        context: 'background-jobs.story-background',
-        jobId: job.id,
-        derivedContext: sceneContext,
-      });
-    } else {
-      logger.warn('[StoryBackground] Failed to derive scene context, using fallback', {
-        context: 'background-jobs.story-background',
-        jobId: job.id,
-        error: derivedContext.error,
-        fallback: sceneContext,
-      });
-    }
-  } else {
-    logger.debug('[StoryBackground] No messages available for context derivation, using title', {
-      context: 'background-jobs.story-background',
-      jobId: job.id,
-      fallback: sceneContext,
-    });
-  }
 
   // 9. Craft the background prompt using cheap LLM
   logger.debug('[StoryBackground] Crafting background prompt', {
