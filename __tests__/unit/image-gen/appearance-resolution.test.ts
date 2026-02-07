@@ -38,6 +38,7 @@ import {
   sanitizeAppearancesIfNeeded,
   type ResolvedCharacterAppearance,
   type AppearanceResolutionInput,
+  type AppearanceResolutionResult,
 } from '@/lib/image-gen/appearance-resolution'
 
 // Import prompt expansion for integration testing
@@ -185,9 +186,10 @@ describe('Appearance Resolution Module', () => {
         // Should not call mockResolveAppearance
         expect(mockResolveAppearance).not.toHaveBeenCalled()
 
-        // Should return default appearances
-        expect(result).toHaveLength(1)
-        expect(result[0]).toEqual({
+        // Should return default appearances with llmResolved=true (skip is intentional, not a failure)
+        expect(result.llmResolved).toBe(true)
+        expect(result.appearances).toHaveLength(1)
+        expect(result.appearances[0]).toEqual({
           characterId: 'char-1',
           characterName: 'Alice',
           physicalDescription: 'A young woman with long flowing red hair, vibrant green eyes, fair skin, wearing casual clothes',
@@ -297,8 +299,9 @@ describe('Appearance Resolution Module', () => {
           testChatId
         )
 
-        expect(result).toHaveLength(1)
-        expect(result[0]).toEqual({
+        expect(result.llmResolved).toBe(true)
+        expect(result.appearances).toHaveLength(1)
+        expect(result.appearances[0]).toEqual({
           characterId: 'char-2',
           characterName: 'Bob',
           // Should use the selected description (desc-2b)
@@ -336,8 +339,9 @@ describe('Appearance Resolution Module', () => {
           testChatId
         )
 
-        expect(result[0].clothingSource).toBe('narrative')
-        expect(result[0].clothingDescription).toBe('A flowing summer dress mentioned in conversation')
+        expect(result.llmResolved).toBe(true)
+        expect(result.appearances[0].clothingSource).toBe('narrative')
+        expect(result.appearances[0].clothingDescription).toBe('A flowing summer dress mentioned in conversation')
       })
 
       it('should fall back to first description when selectedDescriptionId is null', async () => {
@@ -367,10 +371,10 @@ describe('Appearance Resolution Module', () => {
         )
 
         // Should use first description (desc-2a)
-        expect(result[0].physicalDescription).toBe(
+        expect(result.appearances[0].physicalDescription).toBe(
           'A middle-aged professional man with short gray hair, rectangular glasses, wearing a formal navy suit with a red tie'
         )
-        expect(result[0].physicalDescriptionName).toBe('Work appearance')
+        expect(result.appearances[0].physicalDescriptionName).toBe('Work appearance')
       })
 
       it('should handle invalid selectedDescriptionId by falling back to first', async () => {
@@ -400,12 +404,12 @@ describe('Appearance Resolution Module', () => {
         )
 
         // Should fall back to first description
-        expect(result[0].physicalDescriptionName).toBe('Work appearance')
+        expect(result.appearances[0].physicalDescriptionName).toBe('Work appearance')
       })
     })
 
     describe('Fallback on LLM failure', () => {
-      it('should return defaults when mockResolveAppearance fails', async () => {
+      it('should return defaults with llmResolved=false when mockResolveAppearance fails', async () => {
         const characters: AppearanceResolutionInput[] = [sampleCharacter1]
 
         mockResolveAppearance.mockResolvedValue({
@@ -422,8 +426,9 @@ describe('Appearance Resolution Module', () => {
           testChatId
         )
 
-        expect(result).toHaveLength(1)
-        expect(result[0]).toEqual({
+        expect(result.llmResolved).toBe(false)
+        expect(result.appearances).toHaveLength(1)
+        expect(result.appearances[0]).toEqual({
           characterId: 'char-1',
           characterName: 'Alice',
           physicalDescription: 'A young woman with long flowing red hair, vibrant green eyes, fair skin, wearing casual clothes',
@@ -434,12 +439,12 @@ describe('Appearance Resolution Module', () => {
         })
       })
 
-      it('should return defaults when mockResolveAppearance returns empty result', async () => {
+      it('should return defaults with llmResolved=false when mockResolveAppearance returns empty result', async () => {
         const characters: AppearanceResolutionInput[] = [sampleCharacter1]
 
         mockResolveAppearance.mockResolvedValue({
           success: true,
-          result: [], // Empty
+          result: [], // Empty — likely content refusal
         })
 
         const result = await resolveCharacterAppearances(
@@ -451,11 +456,12 @@ describe('Appearance Resolution Module', () => {
           testChatId
         )
 
-        expect(result).toHaveLength(1)
-        expect(result[0].physicalDescriptionName).toBe('Default')
+        expect(result.llmResolved).toBe(false)
+        expect(result.appearances).toHaveLength(1)
+        expect(result.appearances[0].physicalDescriptionName).toBe('Default')
       })
 
-      it('should return defaults when mockResolveAppearance result is undefined', async () => {
+      it('should return defaults with llmResolved=false when mockResolveAppearance result is undefined', async () => {
         const characters: AppearanceResolutionInput[] = [sampleCharacter1]
 
         mockResolveAppearance.mockResolvedValue({
@@ -472,13 +478,14 @@ describe('Appearance Resolution Module', () => {
           testChatId
         )
 
-        expect(result).toHaveLength(1)
-        expect(result[0].physicalDescriptionName).toBe('Default')
+        expect(result.llmResolved).toBe(false)
+        expect(result.appearances).toHaveLength(1)
+        expect(result.appearances[0].physicalDescriptionName).toBe('Default')
       })
     })
 
     describe('Empty characters array', () => {
-      it('should return empty array without calling LLM', async () => {
+      it('should return empty result without calling LLM', async () => {
         const result = await resolveCharacterAppearances(
           [],
           sampleMessages,
@@ -489,7 +496,8 @@ describe('Appearance Resolution Module', () => {
         )
 
         expect(mockResolveAppearance).not.toHaveBeenCalled()
-        expect(result).toEqual([])
+        expect(result.llmResolved).toBe(true)
+        expect(result.appearances).toEqual([])
       })
     })
 
@@ -511,9 +519,9 @@ describe('Appearance Resolution Module', () => {
           testChatId
         )
 
-        expect(result[0].physicalDescription).toBe('Charlie')
-        expect(result[0].physicalDescriptionName).toBe('default')
-        expect(result[0].clothingDescription).toBe('')
+        expect(result.appearances[0].physicalDescription).toBe('Charlie')
+        expect(result.appearances[0].physicalDescriptionName).toBe('default')
+        expect(result.appearances[0].clothingDescription).toBe('')
       })
     })
 
@@ -527,7 +535,7 @@ describe('Appearance Resolution Module', () => {
           testUserId
         )
 
-        expect(result[0].physicalDescription).toBe(
+        expect(result.appearances[0].physicalDescription).toBe(
           'A young woman with long flowing red hair, vibrant green eyes, fair skin, wearing casual clothes'
         )
       })
@@ -561,7 +569,7 @@ describe('Appearance Resolution Module', () => {
           testUserId
         )
 
-        expect(result[0].physicalDescription).toBe('A person')
+        expect(result.appearances[0].physicalDescription).toBe('A person')
       })
     })
   })

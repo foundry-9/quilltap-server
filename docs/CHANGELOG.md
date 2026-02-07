@@ -4,6 +4,12 @@
 
 ### 2.10-dev
 
+- fix: Route appearance resolution through uncensored provider for dangerous chats
+  - When a chat is already flagged dangerous, appearance resolution now goes directly to the uncensored cheap LLM, avoiding content refusals from safe providers
+  - When the safe provider returns empty (content refusal), retries with the uncensored image prompt profile as fallback
+  - `resolveCharacterAppearances()` now returns `AppearanceResolutionResult` with `llmResolved` flag to indicate whether the LLM succeeded or fell back to defaults
+  - Uncensored LLM selection built once upfront in story background handler and reused for both appearance resolution and prompt crafting retries
+
 - feat: Context-aware character appearance resolution for image generation
   - New `resolveCharacterAppearances()` cheap LLM task analyzes chat context to determine what each character currently looks like
   - Clothing priority: narrative context (highest) > image prompt > stored records by usageContext > default

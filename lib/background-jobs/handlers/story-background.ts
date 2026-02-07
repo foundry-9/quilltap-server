@@ -21,6 +21,7 @@ import {
   resolveCharacterAppearances,
   sanitizeAppearancesIfNeeded,
   type AppearanceResolutionInput,
+  type AppearanceResolutionResult,
 } from '@/lib/image-gen/appearance-resolution';
 import {
   resolveDangerousContentSettings,
@@ -155,8 +156,38 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   // Scene context prompt for appearance resolution
   const scenePromptForAppearance = payload.sceneContext || chat.title;
 
+  // Build uncensored LLM selection once (used for appearance resolution and prompt crafting)
+  let uncensoredLLMSelection: CheapLLMSelection | null = null;
+  const uncensoredProfileId = chatSettings?.cheapLLMSettings?.imagePromptProfileId;
+  if (uncensoredProfileId) {
+    const uncensoredProfile = allProfiles.find(p => p.id === uncensoredProfileId);
+    if (uncensoredProfile) {
+      const isLocal = uncensoredProfile.provider === 'OLLAMA';
+      uncensoredLLMSelection = {
+        provider: uncensoredProfile.provider,
+        modelName: uncensoredProfile.modelName,
+        connectionProfileId: uncensoredProfile.id,
+        baseUrl: isLocal ? (uncensoredProfile.baseUrl || 'http://localhost:11434') : undefined,
+        isLocal,
+      };
+    }
+  }
+
+  // For appearance resolution: if the chat is already marked dangerous and we have an
+  // uncensored provider, skip the safe provider entirely (it'll likely refuse anyway)
+  const appearanceLLMSelection = (isDangerousChat && uncensoredLLMSelection)
+    ? uncensoredLLMSelection
+    : cheapLLMSelection;
+
+  if (isDangerousChat && uncensoredLLMSelection) {
+    logger.debug('[StoryBackground] Using uncensored provider for appearance resolution (chat is dangerous)', {
+      context: 'background-jobs.story-background',
+      jobId: job.id,
+    });
+  }
+
   // Run scene context derivation and appearance resolution in parallel
-  const [sceneResult, appearanceResult] = await Promise.all([
+  const [sceneResult, appearanceResolutionResult] = await Promise.all([
     // Scene context derivation
     recentMessages.length > 0
       ? deriveSceneContext(
@@ -176,7 +207,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
           appearanceInputs,
           recentMessages,
           scenePromptForAppearance,
-          cheapLLMSelection,
+          appearanceLLMSelection,
           job.userId,
           payload.chatId
         ).catch(error => {
@@ -207,8 +238,58 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     });
   }
 
-  // Process appearance resolution result and apply Dangermouse sanitization
-  let resolvedAppearances = appearanceResult;
+  // Process appearance resolution result
+  // If the safe LLM failed/refused (likely content refusal) and we haven't already
+  // used the uncensored provider, retry with it
+  let appearanceResult = appearanceResolutionResult;
+
+  if (appearanceResult && !appearanceResult.llmResolved
+      && appearanceInputs.length > 0
+      && appearanceLLMSelection === cheapLLMSelection  // Only retry if we used the safe provider
+      && uncensoredLLMSelection) {
+    logger.info('[StoryBackground] Appearance resolution fell back to defaults (likely content refusal), retrying with uncensored profile', {
+      context: 'background-jobs.story-background',
+      jobId: job.id,
+    });
+
+    try {
+      const retryResult = await resolveCharacterAppearances(
+        appearanceInputs,
+        recentMessages,
+        scenePromptForAppearance,
+        uncensoredLLMSelection,
+        job.userId,
+        payload.chatId
+      );
+
+      if (retryResult.llmResolved) {
+        appearanceResult = retryResult;
+        logger.info('[StoryBackground] Appearance resolution retry with uncensored profile succeeded', {
+          context: 'background-jobs.story-background',
+          jobId: job.id,
+        });
+      } else {
+        logger.warn('[StoryBackground] Appearance resolution retry also fell back to defaults', {
+          context: 'background-jobs.story-background',
+          jobId: job.id,
+        });
+      }
+    } catch (error) {
+      logger.warn('[StoryBackground] Appearance resolution retry with uncensored profile failed', {
+        context: 'background-jobs.story-background',
+        jobId: job.id,
+        error: getErrorMessage(error),
+      });
+    }
+  } else if (appearanceResult && !appearanceResult.llmResolved && !uncensoredLLMSelection) {
+    logger.debug('[StoryBackground] Appearance resolution fell back to defaults, no uncensored profile configured for retry', {
+      context: 'background-jobs.story-background',
+      jobId: job.id,
+    });
+  }
+
+  // Extract appearances and apply Dangermouse sanitization
+  let resolvedAppearances = appearanceResult?.appearances ?? null;
   if (resolvedAppearances && resolvedAppearances.length > 0) {
     try {
       resolvedAppearances = await sanitizeAppearancesIfNeeded(
@@ -301,56 +382,34 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       sceneContext,
     });
 
-    const uncensoredProfileId = chatSettings?.cheapLLMSettings?.imagePromptProfileId;
-    if (uncensoredProfileId) {
-      const uncensoredProfile = allProfiles.find(p => p.id === uncensoredProfileId);
-      if (uncensoredProfile) {
-        const isLocal = uncensoredProfile.provider === 'OLLAMA';
-        const uncensoredSelection: CheapLLMSelection = {
-          provider: uncensoredProfile.provider,
-          modelName: uncensoredProfile.modelName,
-          connectionProfileId: uncensoredProfile.id,
-          baseUrl: isLocal ? (uncensoredProfile.baseUrl || 'http://localhost:11434') : undefined,
-          isLocal,
-        };
+    if (uncensoredLLMSelection) {
+      logger.info('[StoryBackground] Retrying prompt crafting with uncensored profile', {
+        context: 'background-jobs.story-background',
+        jobId: job.id,
+      });
 
-        logger.info('[StoryBackground] Retrying with uncensored image prompt profile', {
+      const retryResult = await craftStoryBackgroundPrompt(
+        {
+          sceneContext,
+          characters: characterDescriptions,
+          provider: imageProfile.provider,
+        },
+        uncensoredLLMSelection,
+        job.userId
+      );
+
+      if (retryResult.success && retryResult.result) {
+        finalPrompt = retryResult.result;
+        logger.info('[StoryBackground] Retry with uncensored profile succeeded', {
           context: 'background-jobs.story-background',
           jobId: job.id,
-          profileId: uncensoredProfile.id,
-          profileName: uncensoredProfile.name,
+          promptLength: finalPrompt.length,
         });
-
-        const retryResult = await craftStoryBackgroundPrompt(
-          {
-            sceneContext,
-            characters: characterDescriptions,
-            provider: imageProfile.provider,
-          },
-          uncensoredSelection,
-          job.userId
-        );
-
-        if (retryResult.success && retryResult.result) {
-          finalPrompt = retryResult.result;
-          logger.info('[StoryBackground] Retry with uncensored profile succeeded', {
-            context: 'background-jobs.story-background',
-            jobId: job.id,
-            promptLength: finalPrompt.length,
-          });
-        } else {
-          logger.warn('[StoryBackground] Retry with uncensored profile also failed', {
-            context: 'background-jobs.story-background',
-            jobId: job.id,
-            error: retryResult.error,
-          });
-          return;
-        }
       } else {
-        logger.warn('[StoryBackground] Uncensored image prompt profile not found, cannot retry', {
+        logger.warn('[StoryBackground] Retry with uncensored profile also failed', {
           context: 'background-jobs.story-background',
           jobId: job.id,
-          configuredProfileId: uncensoredProfileId,
+          error: retryResult.error,
         });
         return;
       }

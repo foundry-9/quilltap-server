@@ -730,7 +730,7 @@ export async function executeImageGenerationTool(
             }));
 
           if (appearanceInputs.length > 0) {
-            resolvedAppearances = await resolveCharacterAppearances(
+            const resolutionResult = await resolveCharacterAppearances(
               appearanceInputs,
               recentChatMessages,
               toolInput.prompt,
@@ -738,6 +738,7 @@ export async function executeImageGenerationTool(
               context.userId,
               context.chatId
             );
+            resolvedAppearances = resolutionResult.appearances;
 
             // Determine if uncensored image provider is available
             const hasUncensoredImageProvider = Boolean(
@@ -759,6 +760,7 @@ export async function executeImageGenerationTool(
               context: 'image-gen',
               chatId: context.chatId,
               resolvedCount: resolvedAppearances.length,
+              llmResolved: resolutionResult.llmResolved,
               sanitized: resolvedAppearances.some(a => a.wasSanitized),
             });
           }

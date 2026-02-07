@@ -28,6 +28,16 @@ import { logger } from '@/lib/logger'
 // ============================================================================
 
 /**
+ * Result of the appearance resolution pipeline, indicating whether the LLM
+ * successfully resolved appearances or fell back to defaults
+ */
+export interface AppearanceResolutionResult {
+  appearances: ResolvedCharacterAppearance[]
+  /** Whether the LLM successfully resolved appearances (false = used defaults due to failure/content refusal) */
+  llmResolved: boolean
+}
+
+/**
  * A fully resolved character appearance ready for image generation
  */
 export interface ResolvedCharacterAppearance {
@@ -160,7 +170,7 @@ function mapResolutionResults(
  * @param cheapLLMSelection - The cheap LLM provider to use
  * @param userId - Current user ID
  * @param chatId - Optional chat ID for logging
- * @returns Array of resolved character appearances
+ * @returns Resolution result with appearances and whether the LLM succeeded
  */
 export async function resolveCharacterAppearances(
   characters: AppearanceResolutionInput[],
@@ -169,9 +179,9 @@ export async function resolveCharacterAppearances(
   cheapLLMSelection: CheapLLMSelection,
   userId: string,
   chatId?: string
-): Promise<ResolvedCharacterAppearance[]> {
+): Promise<AppearanceResolutionResult> {
   if (characters.length === 0) {
-    return []
+    return { appearances: [], llmResolved: true }
   }
 
   // Skip optimization: no LLM call needed when context is trivial
@@ -180,7 +190,7 @@ export async function resolveCharacterAppearances(
       context: 'image-gen.appearance-resolution',
       characterCount: characters.length,
     })
-    return buildDefaultAppearances(characters)
+    return { appearances: buildDefaultAppearances(characters), llmResolved: true }
   }
 
   // Build the LLM input
@@ -219,12 +229,13 @@ export async function resolveCharacterAppearances(
   )
 
   if (!result.success || !result.result || result.result.length === 0) {
-    logger.warn('[AppearanceResolution] LLM resolution failed, falling back to defaults', {
+    logger.warn('[AppearanceResolution] LLM resolution failed or returned empty, falling back to defaults', {
       context: 'image-gen.appearance-resolution',
       error: result.error,
+      emptyResult: result.success && (!result.result || result.result.length === 0),
       chatId,
     })
-    return buildDefaultAppearances(characters)
+    return { appearances: buildDefaultAppearances(characters), llmResolved: false }
   }
 
   const resolved = mapResolutionResults(characters, result.result)
@@ -240,7 +251,7 @@ export async function resolveCharacterAppearances(
     })),
   })
 
-  return resolved
+  return { appearances: resolved, llmResolved: true }
 }
 
 // ============================================================================

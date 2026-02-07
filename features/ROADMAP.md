@@ -59,6 +59,7 @@ This document tracks planned features and improvements for Quilltap.
 #### The Lantern
 
 - [ ] ComfyUI + LORA support for local installations (see [feature request](./comfy_ui_local_image.md))
+- [ ] Determination of what people are wearing in an image is iffy at best - needs help
 
 ### Calliope: Themes & UI
 
