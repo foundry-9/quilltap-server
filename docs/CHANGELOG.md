@@ -4,6 +4,12 @@
 
 ### 2.10-dev
 
+- feat: Add "Old School" theme plugin preserving the original default appearance
+  - Captures the warm slate-blue (hue 220) color palette for light and dark modes
+  - Bundles Inter (400/600/700) and EB Garamond (400/600/700) fonts
+  - Includes all default qt-* component variable definitions
+  - Distributed with the app in `plugins/dist/qtap-plugin-theme-old-school/`
+
 - feat: Foundry Hub restructure — unified settings and tools into `/foundry`
   - New `/foundry` landing page with 8 subsystem navigation cards (Aurora, The Forge, The Salon, The Commonplace Book, Prospero, Dangermouse, Calliope, The Lantern)
   - 8 new sub-routes (`/foundry/aurora`, `/foundry/forge`, `/foundry/salon`, `/foundry/commonplace-book`, `/foundry/prospero`, `/foundry/dangermouse`, `/foundry/calliope`, `/foundry/lantern`)
