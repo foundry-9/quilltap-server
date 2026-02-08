@@ -4,6 +4,17 @@
 
 ### 2.10-dev
 
+- feat: Memory Deduplication tool in Foundry
+  - New tool card on `/foundry` page for finding and merging duplicate memories across all characters
+  - Uses cosine similarity with configurable threshold (0.70–0.95, default 0.80) to cluster duplicates
+  - Union-Find clustering identifies transitive duplicate groups
+  - Best survivor selected by importance, content length, and specificity scoring
+  - Novel details from discarded memories preserved as `[+]` footnotes in survivors (matching memory-gate format)
+  - Groups memories by embedding dimension to handle mixed-dimension vectors safely
+  - Preview mode shows per-character analysis before any changes
+  - Cleans up vector store entries for removed memories
+  - API: `GET /api/v1/system/tools?action=memory-dedup-preview`, `POST /api/v1/system/tools?action=memory-dedup`
+
 - feat: Memory Gate — pre-write similarity check replaces binary duplicate detection
   - Three-tier decision at write time: REINFORCE near-duplicates (>= 0.80 similarity), LINK related-but-distinct memories (0.70–0.80), or INSERT genuinely new ones
   - Reinforced memories track observation count (`reinforcementCount`), last reinforcement time, and boosted importance (`reinforcedImportance = min(1.0, importance + log2(count+1) * 0.05)`)

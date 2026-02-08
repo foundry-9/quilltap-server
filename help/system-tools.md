@@ -50,7 +50,33 @@ For detailed instructions, see [Backup & Restore](system-backup-restore.md).
 
 For detailed instructions, see [Import & Export Data](system-import-export.md).
 
-### 3. Tasks Queue
+### 3. Memory Deduplication
+
+**Purpose:** Find and merge semantically duplicate memories across all your characters.
+
+**What it does:**
+
+- Analyzes all character memories using cosine similarity on their embeddings
+- Clusters duplicate memories and selects the best version to keep
+- Extracts unique details from duplicates and preserves them as footnotes in surviving memories
+- Removes duplicate memories and cleans up the vector store
+- Provides a preview before making any changes
+
+**How to use it:**
+
+1. Adjust the **Similarity Threshold** slider (default 0.80). Lower values are more aggressive (find more duplicates), higher values are more conservative.
+2. Click **Analyze Memories** to see a preview of what would be deduplicated.
+3. Review the per-character results table showing clusters found, removable memories, and details to merge.
+4. Click **Run Deduplication** to execute the cleanup, or **Cancel** to abort.
+
+**When to use it:**
+
+- After importing large character exports that may contain duplicates
+- Periodically to keep memory databases clean and efficient
+- When characters have accumulated many similar memories over time
+- After changing embedding providers (which may cause duplicate entries)
+
+### 4. Tasks Queue
 
 **Purpose:** Monitor and manage background jobs (memory extraction, analysis, processing).
 
@@ -71,7 +97,7 @@ For detailed instructions, see [Import & Export Data](system-import-export.md).
 
 For detailed instructions, see [Managing Tasks](system-tasks-queue.md).
 
-### 4. Capabilities Report
+### 5. Capabilities Report
 
 **Purpose:** Generate detailed reports about your system's capabilities and configuration.
 
@@ -92,7 +118,7 @@ For detailed instructions, see [Managing Tasks](system-tasks-queue.md).
 
 For detailed instructions, see [Capabilities Report](system-capabilities-report.md).
 
-### 5. LLM Logs
+### 6. LLM Logs
 
 **Purpose:** View detailed logs of all AI interactions and model calls.
 
@@ -113,7 +139,7 @@ For detailed instructions, see [Capabilities Report](system-capabilities-report.
 
 For detailed instructions, see [LLM Logs](system-llm-logs.md).
 
-### 6. Delete All Data
+### 7. Delete All Data
 
 **Purpose:** Permanently delete your entire Quilltap account and all associated data.
 

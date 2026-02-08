@@ -15,6 +15,8 @@
  * GET /api/v1/system/tools?action=capabilities-report-list - List saved reports
  * GET /api/v1/system/tools?action=capabilities-report-get - Get a specific report
  * POST /api/v1/system/tools?action=capabilities-report-delete - Delete a specific report
+ * GET /api/v1/system/tools?action=memory-dedup-preview - Preview memory deduplication
+ * POST /api/v1/system/tools?action=memory-dedup - Execute memory deduplication
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -28,6 +30,7 @@ import { startProcessor, stopProcessor, getProcessorStatus } from '@/lib/backgro
 import { createExport, previewExport } from '@/lib/export/quilltap-export-service';
 import { previewImport, executeImport, type QuilltapExport, type ConflictStrategy } from '@/lib/import/quilltap-import-service';
 import { generateAndSaveReport } from '@/lib/tools/capabilities-report';
+import { deduplicateAllMemories } from '@/lib/tools/memory-dedup';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { getUserRepositories, getRepositories } from '@/lib/repositories/factory';
 import type { ExportEntityType } from '@/lib/export/types';
@@ -843,6 +846,75 @@ async function handleCapabilitiesReportDelete(req: NextRequest, context: any) {
   }
 }
 
+async function handleMemoryDedupPreview(req: NextRequest, context: any) {
+  const { user } = context;
+
+  try {
+    const { searchParams } = new URL(req.url);
+    const thresholdParam = searchParams.get('threshold');
+    const threshold = thresholdParam ? parseFloat(thresholdParam) : 0.80;
+
+    if (isNaN(threshold) || threshold < 0.5 || threshold > 1.0) {
+      return badRequest('Invalid threshold. Must be a number between 0.5 and 1.0');
+    }
+
+    logger.info('[System Tools v1] Memory dedup preview', { userId: user.id, threshold });
+
+    const result = await deduplicateAllMemories(user.id, threshold, true);
+
+    logger.info('[System Tools v1] Memory dedup preview complete', {
+      userId: user.id,
+      totalOriginal: result.totalOriginal,
+      totalRemoved: result.totalRemoved,
+      totalMergedDetails: result.totalMergedDetails,
+    });
+
+    return NextResponse.json({ success: true, result });
+  } catch (error) {
+    logger.error(
+      '[System Tools v1] Memory dedup preview failed',
+      { userId: user.id },
+      error instanceof Error ? error : undefined
+    );
+    return serverError('Failed to preview memory deduplication');
+  }
+}
+
+async function handleMemoryDedup(req: NextRequest, context: any) {
+  const { user } = context;
+
+  try {
+    const body = await req.json();
+    const { threshold: thresholdParam } = body;
+    const threshold = typeof thresholdParam === 'number' ? thresholdParam : 0.80;
+
+    if (isNaN(threshold) || threshold < 0.5 || threshold > 1.0) {
+      return badRequest('Invalid threshold. Must be a number between 0.5 and 1.0');
+    }
+
+    logger.info('[System Tools v1] Starting memory deduplication', { userId: user.id, threshold });
+
+    const result = await deduplicateAllMemories(user.id, threshold, false);
+
+    logger.info('[System Tools v1] Memory deduplication complete', {
+      userId: user.id,
+      totalOriginal: result.totalOriginal,
+      totalRemoved: result.totalRemoved,
+      totalMergedDetails: result.totalMergedDetails,
+      totalFinal: result.totalFinal,
+    });
+
+    return NextResponse.json({ success: true, result });
+  } catch (error) {
+    logger.error(
+      '[System Tools v1] Memory deduplication failed',
+      { userId: user.id },
+      error instanceof Error ? error : undefined
+    );
+    return serverError('Failed to deduplicate memories');
+  }
+}
+
 // ============================================================================
 // Request Handlers
 // ============================================================================
@@ -867,9 +939,11 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, context) 
       return handleCapabilitiesReportList(req, context);
     case 'capabilities-report-get':
       return handleCapabilitiesReportGet(req, context);
+    case 'memory-dedup-preview':
+      return handleMemoryDedupPreview(req, context);
     default:
       return badRequest(
-        `Unknown action: ${action}. Available GET actions: tasks-queue, delete-data-preview, export-entities, export-preview, capabilities-report, capabilities-report-list, capabilities-report-get`
+        `Unknown action: ${action}. Available GET actions: tasks-queue, delete-data-preview, export-entities, export-preview, capabilities-report, capabilities-report-list, capabilities-report-get, memory-dedup-preview`
       );
   }
 });
@@ -894,9 +968,11 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, context)
       return handleCapabilitiesReportGenerate(req, context);
     case 'capabilities-report-delete':
       return handleCapabilitiesReportDelete(req, context);
+    case 'memory-dedup':
+      return handleMemoryDedup(req, context);
     default:
       return badRequest(
-        `Unknown action: ${action}. Available POST actions: delete-data, tasks-queue, export, import-preview, import-execute, capabilities-report-generate, capabilities-report-delete`
+        `Unknown action: ${action}. Available POST actions: delete-data, tasks-queue, export, import-preview, import-execute, capabilities-report-generate, capabilities-report-delete, memory-dedup`
       );
   }
 });

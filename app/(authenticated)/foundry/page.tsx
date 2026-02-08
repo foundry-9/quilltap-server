@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import BackupRestoreCard from '@/components/tools/backup-restore-card'
 import { ImportExportCard } from '@/components/tools/import-export-card'
+import { MemoryDedupCard } from '@/components/tools/memory-dedup-card'
 import { DeleteDataCard } from '@/components/tools/delete-data-card'
 import { CapabilitiesReportCard } from '@/components/tools/capabilities-report-card'
 import { TasksQueueCard } from '@/components/tools/tasks-queue-card'
@@ -22,6 +23,7 @@ export default function ToolsPage() {
       <div className="grid gap-6 md:grid-cols-2">
         <BackupRestoreCard />
         <ImportExportCard />
+        <MemoryDedupCard />
         <CapabilitiesReportCard />
         <TasksQueueCard />
         <LLMLogsCard />
