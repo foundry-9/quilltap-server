@@ -7,7 +7,7 @@ import { MemoryDedupCard } from '@/components/tools/memory-dedup-card'
 
 export default function CommonplaceBookPage() {
   return (
-    <div className="qt-page-container">
+    <div className="qt-page-container" style={{ '--story-background-url': 'url(/images/commonplace_book.png)' } as React.CSSProperties}>
       <div className="mb-2">
         <nav className="qt-text-small qt-text-muted">
           <Link href="/foundry" className="qt-link">The Foundry</Link>

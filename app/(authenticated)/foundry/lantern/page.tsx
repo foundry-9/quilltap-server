@@ -7,7 +7,7 @@ import { StandaloneStoryBackgrounds } from '@/components/settings/chat-settings/
 
 export default function LanternPage() {
   return (
-    <div className="qt-page-container">
+    <div className="qt-page-container" style={{ '--story-background-url': 'url(/images/lantern.png)' } as React.CSSProperties}>
       <div className="mb-2">
         <nav className="qt-text-small qt-text-muted">
           <Link href="/foundry" className="qt-link">The Foundry</Link>

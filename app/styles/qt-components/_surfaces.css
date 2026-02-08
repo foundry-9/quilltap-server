@@ -105,6 +105,49 @@
   }
 
   /* ==========================================================================
+     FOUNDRY CARDS - Image-backed subsystem cards
+     ========================================================================== */
+
+  /**
+   * Foundry card - horizontal card with background image on the left
+   * that fades into the card background color on the right.
+   * Overrides default card padding since layout is handled internally.
+   */
+  .qt-foundry-card {
+    padding: 0 !important;
+    overflow: hidden;
+    min-height: 10rem;
+  }
+
+  /**
+   * Foundry card image container - absolutely positioned with CSS mask
+   * to create a smooth left-to-right fade into the card background.
+   */
+  .qt-foundry-card-image {
+    -webkit-mask-image: linear-gradient(to right,
+      black 0%,
+      black 20%,
+      rgba(0,0,0,0.5) 42%,
+      rgba(0,0,0,0.08) 58%,
+      transparent 68%
+    );
+    mask-image: linear-gradient(to right,
+      black 0%,
+      black 20%,
+      rgba(0,0,0,0.5) 42%,
+      rgba(0,0,0,0.08) 58%,
+      transparent 68%
+    );
+  }
+
+  /**
+   * Foundry card content - right-side text area with internal padding.
+   */
+  .qt-foundry-card-content {
+    padding: var(--qt-card-padding);
+  }
+
+  /* ==========================================================================
      PANELS - Shared base styles
      ========================================================================== */
 

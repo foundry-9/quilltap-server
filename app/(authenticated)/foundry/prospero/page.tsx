@@ -8,7 +8,7 @@ import LLMLogsCard from '@/components/tools/llm-logs-card'
 
 export default function ProsperoPage() {
   return (
-    <div className="qt-page-container">
+    <div className="qt-page-container" style={{ '--story-background-url': 'url(/images/prospero.png)' } as React.CSSProperties}>
       <div className="mb-2">
         <nav className="qt-text-small qt-text-muted">
           <Link href="/foundry" className="qt-link">The Foundry</Link>

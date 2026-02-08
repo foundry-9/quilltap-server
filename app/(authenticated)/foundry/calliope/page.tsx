@@ -7,7 +7,7 @@ import TagsTab from '@/components/settings/tags-tab'
 
 export default function CalliopePage() {
   return (
-    <div className="qt-page-container">
+    <div className="qt-page-container" style={{ '--story-background-url': 'url(/images/calliope.png)' } as React.CSSProperties}>
       <div className="mb-2">
         <nav className="qt-text-small qt-text-muted">
           <Link href="/foundry" className="qt-link">The Foundry</Link>

@@ -6,7 +6,7 @@ import { StandaloneDangerousContent } from '@/components/settings/chat-settings/
 
 export default function DangermousePage() {
   return (
-    <div className="qt-page-container">
+    <div className="qt-page-container" style={{ '--story-background-url': 'url(/images/dangermouse.png)' } as React.CSSProperties}>
       <div className="mb-2">
         <nav className="qt-text-small qt-text-muted">
           <Link href="/foundry" className="qt-link">The Foundry</Link>

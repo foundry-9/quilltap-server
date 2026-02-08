@@ -52,7 +52,7 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div className="qt-page-container text-foreground">
+    <div className="qt-page-container text-foreground" style={{ '--story-background-url': 'url(/images/prospero.png)' } as React.CSSProperties}>
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/60 pb-6">
         <h1 className="text-3xl font-semibold leading-tight">Projects</h1>
         <button

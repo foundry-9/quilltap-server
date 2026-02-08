@@ -262,7 +262,7 @@ export default function ChatsPage() {
   }
 
   return (
-    <div className="chat-page qt-page-container text-foreground">
+    <div className="chat-page qt-page-container text-foreground" style={{ '--story-background-url': 'url(/images/salon.png)' } as React.CSSProperties}>
       {/* Highlight animation styles */}
       <style>{`
         @keyframes chatCardHighlight {

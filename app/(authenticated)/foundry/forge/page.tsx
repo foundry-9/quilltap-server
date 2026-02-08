@@ -12,7 +12,7 @@ import { DeleteDataCard } from '@/components/tools/delete-data-card'
 
 export default function ForgePage() {
   return (
-    <div className="qt-page-container">
+    <div className="qt-page-container" style={{ '--story-background-url': 'url(/images/foundry.png)' } as React.CSSProperties}>
       <div className="mb-2">
         <nav className="qt-text-small qt-text-muted">
           <Link href="/foundry" className="qt-link">The Foundry</Link>

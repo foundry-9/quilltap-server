@@ -36,9 +36,11 @@ export default function SalonPage() {
     handleAgentModeMaxTurnsChange,
   } = useChatSettings()
 
+  const bgStyle = { '--story-background-url': 'url(/images/salon.png)' } as React.CSSProperties
+
   if (loading) {
     return (
-      <div className="qt-page-container">
+      <div className="qt-page-container" style={bgStyle}>
         <div className="flex items-center justify-center py-8">
           <div className="text-muted-foreground">Loading settings...</div>
         </div>
@@ -48,14 +50,14 @@ export default function SalonPage() {
 
   if (!settings) {
     return (
-      <div className="qt-page-container">
+      <div className="qt-page-container" style={bgStyle}>
         <div className="qt-alert-error py-8">Failed to load chat settings</div>
       </div>
     )
   }
 
   return (
-    <div className="qt-page-container">
+    <div className="qt-page-container" style={bgStyle}>
       <div className="mb-2">
         <nav className="qt-text-small qt-text-muted">
           <Link href="/foundry" className="qt-link">The Foundry</Link>
