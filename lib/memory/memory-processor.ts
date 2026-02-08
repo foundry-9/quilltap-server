@@ -7,9 +7,10 @@
  */
 
 import { getRepositories } from '@/lib/repositories/factory'
-import { extractMemoryFromMessage, extractCharacterMemoryFromMessage, extractInterCharacterMemoryFromMessage, MemoryCandidate } from './cheap-llm-tasks'
+import { extractMemoryFromMessage, extractCharacterMemoryFromMessage, extractInterCharacterMemoryFromMessage, MemoryCandidate, UncensoredFallbackOptions } from './cheap-llm-tasks'
 import { getCheapLLMProvider, CheapLLMConfig, CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { ConnectionProfile, CheapLLMSettings, Memory } from '@/lib/schemas/types'
+import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
 import { createMemoryWithEmbedding, findSimilarMemories } from './memory-service'
 import { logger } from '@/lib/logger'
 
@@ -43,6 +44,8 @@ export interface MemoryExtractionContext {
   cheapLLMSettings: CheapLLMSettings
   /** Available connection profiles for user-defined strategy */
   availableProfiles?: ConnectionProfile[]
+  /** Dangerous content settings for uncensored fallback */
+  dangerSettings?: DangerousContentSettings
 }
 
 /**
@@ -73,6 +76,8 @@ export interface InterCharacterMemoryContext {
   cheapLLMSettings: CheapLLMSettings
   /** Available connection profiles for user-defined strategy */
   availableProfiles?: ConnectionProfile[]
+  /** Dangerous content settings for uncensored fallback */
+  dangerSettings?: DangerousContentSettings
 }
 
 /**
@@ -307,6 +312,12 @@ export async function processMessageForMemory(
     // Build context for extraction
     const extractionContext = buildExtractionContext(ctx)
 
+    // Build uncensored fallback options if danger settings are provided
+    const uncensoredFallback: UncensoredFallbackOptions | undefined =
+      ctx.dangerSettings && ctx.availableProfiles
+        ? { dangerSettings: ctx.dangerSettings, availableProfiles: ctx.availableProfiles }
+        : undefined
+
     // Extract memories for both user and character
     const [userMemoryResult, characterMemoryResult] = await Promise.all([
       extractMemoryFromMessage(
@@ -316,7 +327,8 @@ export async function processMessageForMemory(
         ctx.characterName,
         ctx.personaName,
         selection,
-        ctx.userId
+        ctx.userId,
+        uncensoredFallback
       ),
       extractCharacterMemoryFromMessage(
         ctx.userMessage,
@@ -325,7 +337,8 @@ export async function processMessageForMemory(
         ctx.characterName,
         ctx.personaName,
         selection,
-        ctx.userId
+        ctx.userId,
+        uncensoredFallback
       ),
     ])
 
@@ -613,6 +626,12 @@ export async function processInterCharacterMemory(
       false
     )
 
+    // Build uncensored fallback options if danger settings are provided
+    const uncensoredFallback: UncensoredFallbackOptions | undefined =
+      ctx.dangerSettings && ctx.availableProfiles
+        ? { dangerSettings: ctx.dangerSettings, availableProfiles: ctx.availableProfiles }
+        : undefined
+
     // Extract memory that observer has about subject
     const memoryResult = await extractInterCharacterMemoryFromMessage(
       ctx.observerCharacterName,
@@ -620,7 +639,8 @@ export async function processInterCharacterMemory(
       ctx.subjectCharacterName,
       ctx.subjectMessage,
       selection,
-      ctx.userId
+      ctx.userId,
+      uncensoredFallback
     )
 
     let memoryCreated = false

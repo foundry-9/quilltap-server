@@ -4,6 +4,14 @@
 
 ### 2.10-dev
 
+- feat: Uncensored fallback for empty LLM responses across all cheap LLM subsystems
+  - When an LLM silently refuses content (returns empty), retries with uncensored provider in AUTO_ROUTE mode
+  - Covers memory extraction (user, character, inter-character), context compression, and chat streaming
+  - Extracted `sendToProvider()` in cheap-llm-tasks.ts, eliminating triple code duplication
+  - New `UncensoredFallbackOptions` type and `shouldAttemptUncensoredFallback()` helper
+  - Chat streaming: re-streams with uncensored provider and shows "Retrying with uncensored provider..." status
+  - Empty response error message is now context-aware (distinguishes single vs double-empty failures)
+
 - fix: Route appearance resolution through uncensored provider for dangerous chats
   - When a chat is already flagged dangerous, appearance resolution now goes directly to the uncensored cheap LLM, avoiding content refusals from safe providers
   - When the safe provider returns empty (content refusal), retries with the uncensored image prompt profile as fallback

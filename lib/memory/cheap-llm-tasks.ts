@@ -16,6 +16,8 @@ import { getErrorMessage } from '@/lib/errors'
 import { logger } from '@/lib/logger'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
 import type { LLMLogType } from '@/lib/schemas/llm-log.types'
+import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
+import type { ConnectionProfile } from '@/lib/schemas/types'
 
 /**
  * Candidate memory extracted from a conversation
@@ -60,6 +62,27 @@ export interface CheapLLMTaskResult<T> {
   result?: T
   error?: string
   /** Token usage for cost tracking */
+  usage?: {
+    promptTokens: number
+    completionTokens: number
+    totalTokens: number
+  }
+}
+
+/**
+ * Options for uncensored provider fallback when empty responses are detected
+ * Only used when Dangermouse is in AUTO_ROUTE mode with an uncensored text profile configured
+ */
+export interface UncensoredFallbackOptions {
+  dangerSettings: DangerousContentSettings
+  availableProfiles: ConnectionProfile[]
+}
+
+/**
+ * Internal type for provider response
+ */
+interface ProviderResponse {
+  content: string
   usage?: {
     promptTokens: number
     completionTokens: number
@@ -130,6 +153,130 @@ async function getApiKeyForSelection(
 }
 
 /**
+ * Sends messages to a cheap LLM provider with temperature handling and logging
+ * Extracted from executeCheapLLMTask to avoid tripling the code for each temperature path
+ */
+async function sendToProvider(
+  selection: CheapLLMSelection,
+  messages: LLMMessage[],
+  userId: string,
+  taskType?: string,
+  chatId?: string,
+  messageId?: string
+): Promise<ProviderResponse> {
+  const apiKey = await getApiKeyForSelection(selection, userId)
+  if (apiKey === null) {
+    throw new Error('No API key available for cheap LLM provider')
+  }
+
+  const provider = await createLLMProvider(
+    selection.provider,
+    selection.baseUrl
+  )
+
+  const profileKey = `${selection.provider}:${selection.modelName}`
+
+  const logCall = (response: LLMResponse, temperature?: number) => {
+    logLLMCall({
+      userId,
+      type: mapTaskTypeToLogType(taskType),
+      chatId,
+      messageId,
+      provider: selection.provider,
+      modelName: selection.modelName,
+      request: {
+        messages: messages.map(m => ({ role: m.role, content: m.content })),
+        ...(temperature !== undefined ? { temperature } : {}),
+        maxTokens: 1000,
+      },
+      response: {
+        content: response.content,
+      },
+      usage: response.usage,
+    }).catch(err => {
+      logger.warn('Failed to log cheap LLM call', {
+        error: err instanceof Error ? err.message : String(err)
+      })
+    })
+  }
+
+  // Check if we already know this profile doesn't support custom temperature
+  if (profilesWithoutCustomTemp.has(profileKey)) {
+    const response: LLMResponse = await provider.sendMessage(
+      { messages, model: selection.modelName, maxTokens: 1000 },
+      apiKey
+    )
+    logCall(response)
+    return { content: response.content, usage: response.usage }
+  }
+
+  // Try with lower temperature for more consistent outputs
+  try {
+    const response: LLMResponse = await provider.sendMessage(
+      { messages, model: selection.modelName, temperature: 0.3, maxTokens: 1000 },
+      apiKey
+    )
+    logCall(response, 0.3)
+    return { content: response.content, usage: response.usage }
+  } catch (error) {
+    // If temperature is not supported, cache it and retry with default temperature
+    const errorMessage = getErrorMessage(error, '')
+    if (errorMessage.includes('temperature') || errorMessage.includes('does not support')) {
+      profilesWithoutCustomTemp.add(profileKey)
+
+      const response: LLMResponse = await provider.sendMessage(
+        { messages, model: selection.modelName, maxTokens: 1000 },
+        apiKey
+      )
+      logCall(response)
+      return { content: response.content, usage: response.usage }
+    }
+    throw error
+  }
+}
+
+/**
+ * Checks if an uncensored fallback should be attempted for an empty response
+ * Returns a CheapLLMSelection for the uncensored provider, or null if fallback should not be attempted
+ */
+function shouldAttemptUncensoredFallback(
+  responseContent: string,
+  currentSelection: CheapLLMSelection,
+  uncensoredFallback?: UncensoredFallbackOptions
+): CheapLLMSelection | null {
+  // No fallback if response is not empty
+  if (responseContent.trim() !== '') return null
+
+  // No fallback options provided
+  if (!uncensoredFallback) return null
+
+  const { dangerSettings, availableProfiles } = uncensoredFallback
+
+  // Only attempt in AUTO_ROUTE mode
+  if (dangerSettings.mode !== 'AUTO_ROUTE') return null
+
+  // Need an uncensored text profile configured
+  if (!dangerSettings.uncensoredTextProfileId) return null
+
+  // Check if current profile is already dangerous-compatible (no need to fallback)
+  const currentProfile = availableProfiles.find(p => p.id === currentSelection.connectionProfileId)
+  if (currentProfile?.isDangerousCompatible) return null
+
+  // Find the uncensored profile
+  const uncensoredProfile = availableProfiles.find(p => p.id === dangerSettings.uncensoredTextProfileId)
+  if (!uncensoredProfile) return null
+
+  // Build a CheapLLMSelection for the uncensored profile
+  return {
+    provider: uncensoredProfile.provider,
+    modelName: uncensoredProfile.modelName,
+    baseUrl: uncensoredProfile.baseUrl || undefined,
+    connectionProfileId: uncensoredProfile.id,
+    isLocal: false,
+  }
+}
+
+/**
  * Executes a cheap LLM task with the given messages
  */
 async function executeCheapLLMTask<T>(
@@ -139,161 +286,47 @@ async function executeCheapLLMTask<T>(
   parseResponse: (content: string) => T,
   taskType?: string,
   chatId?: string,
-  messageId?: string
+  messageId?: string,
+  uncensoredFallback?: UncensoredFallbackOptions
 ): Promise<CheapLLMTaskResult<T>> {
   try {
-    const apiKey = await getApiKeyForSelection(selection, userId)
-    if (apiKey === null) {
-      return {
-        success: false,
-        error: 'No API key available for cheap LLM provider',
-      }
-    }
+    let response = await sendToProvider(selection, messages, userId, taskType, chatId, messageId)
 
-    const provider = await createLLMProvider(
-      selection.provider,
-      selection.baseUrl
-    )
-
-    // Create a key for this profile to cache temperature support
-    const profileKey = `${selection.provider}:${selection.modelName}`
-
-    // Check if we already know this profile doesn't support custom temperature
-    if (profilesWithoutCustomTemp.has(profileKey)) {
-      const response: LLMResponse = await provider.sendMessage(
-        {
-          messages,
-          model: selection.modelName,
-          maxTokens: 1000,
-        },
-        apiKey
-      )
-
-      // Debug log: Cheap LLM response
-
-      const result = parseResponse(response.content)
-
-      // Log the cheap LLM call (fire and forget)
-      logLLMCall({
-        userId,
-        type: mapTaskTypeToLogType(taskType),
+    // Check if we should retry with an uncensored provider
+    const uncensoredSelection = shouldAttemptUncensoredFallback(response.content, selection, uncensoredFallback)
+    if (uncensoredSelection) {
+      logger.warn('[CheapLLM] Empty response detected, retrying with uncensored provider', {
+        taskType,
         chatId,
-        messageId,
-        provider: selection.provider,
-        modelName: selection.modelName,
-        request: {
-          messages: messages.map(m => ({ role: m.role, content: m.content })),
-          maxTokens: 1000,
-        },
-        response: {
-          content: response.content,
-        },
-        usage: response.usage,
-      }).catch(err => {
-        logger.warn('Failed to log cheap LLM call', {
-          error: err instanceof Error ? err.message : String(err)
-        })
+        originalProvider: selection.provider,
+        originalModel: selection.modelName,
+        uncensoredProvider: uncensoredSelection.provider,
+        uncensoredModel: uncensoredSelection.modelName,
       })
 
-      return {
-        success: true,
-        result,
-        usage: response.usage,
+      const retryResponse = await sendToProvider(uncensoredSelection, messages, userId, taskType, chatId, messageId)
+
+      if (retryResponse.content.trim() === '') {
+        throw new Error(`Empty response from both safe provider (${selection.provider}/${selection.modelName}) and uncensored provider (${uncensoredSelection.provider}/${uncensoredSelection.modelName})`)
       }
-    }
 
-    // Try with lower temperature for more consistent outputs
-    try {
-      const response: LLMResponse = await provider.sendMessage(
-        {
-          messages,
-          model: selection.modelName,
-          temperature: 0.3, // Lower temperature for more consistent outputs
-          maxTokens: 1000,
-        },
-        apiKey
-      )
-
-      // Debug log: Cheap LLM response
-
-      const result = parseResponse(response.content)
-
-      // Log the cheap LLM call (fire and forget)
-      logLLMCall({
-        userId,
-        type: mapTaskTypeToLogType(taskType),
+      logger.info('[CheapLLM] Uncensored fallback succeeded', {
+        taskType,
         chatId,
-        messageId,
-        provider: selection.provider,
-        modelName: selection.modelName,
-        request: {
-          messages: messages.map(m => ({ role: m.role, content: m.content })),
-          temperature: 0.3,
-          maxTokens: 1000,
-        },
-        response: {
-          content: response.content,
-        },
-        usage: response.usage,
-      }).catch(err => {
-        logger.warn('Failed to log cheap LLM call', {
-          error: err instanceof Error ? err.message : String(err)
-        })
+        uncensoredProvider: uncensoredSelection.provider,
+        uncensoredModel: uncensoredSelection.modelName,
+        responseLength: retryResponse.content.length,
       })
 
-      return {
-        success: true,
-        result,
-        usage: response.usage,
-      }
-    } catch (error) {
-      // If temperature is not supported, cache it and retry with default temperature
-      const errorMessage = getErrorMessage(error, '')
-      if (errorMessage.includes('temperature') || errorMessage.includes('does not support')) {
-        profilesWithoutCustomTemp.add(profileKey)
+      response = retryResponse
+    }
 
-        const response: LLMResponse = await provider.sendMessage(
-          {
-            messages,
-            model: selection.modelName,
-            maxTokens: 1000,
-          },
-          apiKey
-        )
+    const result = parseResponse(response.content)
 
-        // Debug log: Cheap LLM response (retry)
-
-        const result = parseResponse(response.content)
-
-        // Log the cheap LLM call (fire and forget)
-        logLLMCall({
-          userId,
-          type: mapTaskTypeToLogType(taskType),
-          chatId,
-          messageId,
-          provider: selection.provider,
-          modelName: selection.modelName,
-          request: {
-            messages: messages.map(m => ({ role: m.role, content: m.content })),
-            maxTokens: 1000,
-          },
-          response: {
-            content: response.content,
-          },
-          usage: response.usage,
-        }).catch(err => {
-          logger.warn('Failed to log cheap LLM call', {
-            error: err instanceof Error ? err.message : String(err)
-          })
-        })
-
-        return {
-          success: true,
-          result,
-          usage: response.usage,
-        }
-      }
-      throw error
+    return {
+      success: true,
+      result,
+      usage: response.usage,
     }
   } catch (error) {
 
@@ -400,7 +433,8 @@ export async function extractMemoryFromMessage(
   characterName: string,
   personaName: string | undefined,
   selection: CheapLLMSelection,
-  userId: string
+  userId: string,
+  uncensoredFallback?: UncensoredFallbackOptions
 ): Promise<CheapLLMTaskResult<MemoryCandidate>> {
   // Use clear "X says:" format to help the model distinguish speakers
   const userLabel = personaName ? `${personaName} (the user)` : 'The user'
@@ -459,7 +493,10 @@ ${characterLabel} says:
         return { significant: false }
       }
     },
-    'memory-extraction-user'
+    'memory-extraction-user',
+    undefined,
+    undefined,
+    uncensoredFallback
   )
 }
 
@@ -482,7 +519,8 @@ export async function extractCharacterMemoryFromMessage(
   characterName: string,
   personaName: string | undefined,
   selection: CheapLLMSelection,
-  userId: string
+  userId: string,
+  uncensoredFallback?: UncensoredFallbackOptions
 ): Promise<CheapLLMTaskResult<MemoryCandidate>> {
   // Use clear "X says:" format to help the model distinguish speakers
   const userLabel = personaName ? `${personaName} (the user)` : 'The user'
@@ -543,7 +581,10 @@ ${characterLabel} says:
         return { significant: false }
       }
     },
-    'memory-extraction-character'
+    'memory-extraction-character',
+    undefined,
+    undefined,
+    uncensoredFallback
   )
 }
 
@@ -594,7 +635,8 @@ export async function extractInterCharacterMemoryFromMessage(
   characterBName: string,
   characterBMessage: string,
   selection: CheapLLMSelection,
-  userId: string
+  userId: string,
+  uncensoredFallback?: UncensoredFallbackOptions
 ): Promise<CheapLLMTaskResult<MemoryCandidate>> {
   const messages: LLMMessage[] = [
     {
@@ -647,7 +689,10 @@ ${characterBName}: ${characterBMessage}`,
         return { significant: false }
       }
     },
-    'memory-extraction-inter-character'
+    'memory-extraction-inter-character',
+    undefined,
+    undefined,
+    uncensoredFallback
   )
 }
 
@@ -1753,7 +1798,8 @@ export async function compressConversationHistory(
   userName: string,
   targetTokens: number,
   selection: CheapLLMSelection,
-  userId: string
+  userId: string,
+  uncensoredFallback?: UncensoredFallbackOptions
 ): Promise<CheapLLMTaskResult<CompressionResult>> {
   // Format messages for compression
   const conversationText = messages
@@ -1797,7 +1843,10 @@ export async function compressConversationHistory(
         compressedTokens,
       }
     },
-    'compress-conversation-history'
+    'compress-conversation-history',
+    undefined,
+    undefined,
+    uncensoredFallback
   )
 }
 
@@ -1814,7 +1863,8 @@ export async function compressSystemPrompt(
   systemPrompt: string,
   targetTokens: number,
   selection: CheapLLMSelection,
-  userId: string
+  userId: string,
+  uncensoredFallback?: UncensoredFallbackOptions
 ): Promise<CheapLLMTaskResult<CompressionResult>> {
   // Estimate original token count
   const originalTokens = Math.ceil(systemPrompt.length / 4)
@@ -1848,7 +1898,10 @@ export async function compressSystemPrompt(
         compressedTokens,
       }
     },
-    'compress-system-prompt'
+    'compress-system-prompt',
+    undefined,
+    undefined,
+    uncensoredFallback
   )
 }
 

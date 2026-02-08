@@ -280,9 +280,10 @@ async function processMessage(
 
   // Get cheap LLM selection (used for compression, danger classification, and proactive memory recall)
   let cheapLLMSelection = null
+  let allProfiles: ConnectionProfile[] = []
   try {
     // Get all connection profiles for cheap LLM selection
-    const allProfiles = await repos.connections.findByUserId(userId)
+    allProfiles = await repos.connections.findByUserId(userId)
     const cheapLLMConfig = chatSettings?.cheapLLMSettings || DEFAULT_CHEAP_LLM_CONFIG
 
     // Convert null values to undefined for CheapLLMConfig compatibility
@@ -1457,6 +1458,108 @@ async function processMessage(
     }
   }
 
+  // ============================================================================
+  // Uncensored Retry for Empty Responses
+  // ============================================================================
+  // If the response is empty and no tool calls were made, this may be a silent
+  // content refusal. Attempt to re-stream with the uncensored provider if
+  // Dangermouse is in AUTO_ROUTE mode.
+  let uncensoredRetryAttempted = false
+  if (
+    fullResponse.trim().length === 0 &&
+    toolMessages.length === 0 &&
+    dangerSettings.mode === 'AUTO_ROUTE' &&
+    !effectiveProfile.isDangerousCompatible &&
+    dangerSettings.uncensoredTextProfileId
+  ) {
+    uncensoredRetryAttempted = true
+    logger.warn('[DangerousContent] Empty response detected, attempting uncensored retry', {
+      chatId,
+      originalProvider: effectiveProfile.provider,
+      originalModel: effectiveProfile.modelName,
+    })
+
+    try {
+      const routeResult = await resolveProviderForDangerousContent(
+        effectiveProfile,
+        effectiveApiKey,
+        dangerSettings,
+        userId
+      )
+
+      if (routeResult.rerouted) {
+        safeEnqueue(controller, encodeStatusEvent(encoder, {
+          stage: 'rerouting',
+          message: 'Retrying with uncensored provider...',
+          characterName: character.name,
+          characterId: character.id,
+        }))
+
+        // Re-stream with uncensored provider
+        for await (const chunk of streamMessage({
+          messages: formattedMessages,
+          connectionProfile: routeResult.connectionProfile,
+          apiKey: routeResult.apiKey,
+          modelParams,
+          tools: actualTools,
+          useNativeWebSearch,
+          userId,
+          messageId: preGeneratedAssistantMessageId,
+          chatId,
+        })) {
+          if (chunk.content) {
+            if (!hasStartedStreaming) {
+              safeEnqueue(controller, encodeStatusEvent(encoder, {
+                stage: 'streaming',
+                message: `${character.name} is responding...`,
+                characterName: character.name,
+                characterId: character.id,
+              }))
+              hasStartedStreaming = true
+            }
+            fullResponse += chunk.content
+            controller.enqueue(encodeContentChunk(encoder, chunk.content))
+          }
+
+          if (chunk.done) {
+            usage = chunk.usage || null
+            cacheUsage = chunk.cacheUsage || null
+            attachmentResults = chunk.attachmentResults || null
+            rawResponse = chunk.rawResponse
+            if (chunk.thoughtSignature) {
+              thoughtSignature = chunk.thoughtSignature
+            }
+          }
+        }
+
+        if (fullResponse.trim().length > 0) {
+          effectiveProfile = routeResult.connectionProfile
+          effectiveApiKey = routeResult.apiKey
+
+          logger.info('[DangerousContent] Uncensored retry succeeded', {
+            chatId,
+            uncensoredProvider: routeResult.connectionProfile.provider,
+            uncensoredModel: routeResult.connectionProfile.modelName,
+            responseLength: fullResponse.length,
+          })
+        } else {
+          logger.error('[DangerousContent] Both safe and uncensored providers returned empty', {
+            chatId,
+            safeProvider: connectionProfile.provider,
+            safeModel: connectionProfile.modelName,
+            uncensoredProvider: routeResult.connectionProfile.provider,
+            uncensoredModel: routeResult.connectionProfile.modelName,
+          })
+        }
+      }
+    } catch (retryError) {
+      logger.error('[DangerousContent] Uncensored retry failed', {
+        chatId,
+        error: retryError instanceof Error ? retryError.message : String(retryError),
+      })
+    }
+  }
+
   // Save assistant message
   let assistantMessageId: string | null = null
 
@@ -1523,6 +1626,8 @@ async function processMessage(
           userId,
           characterName: character.name,
           userName: 'User',
+          dangerSettings,
+          availableProfiles: allProfiles,
         },
       })
     }
@@ -1619,6 +1724,7 @@ async function processMessage(
     if (chatSettings) {
       const memoryChatSettings: MemoryChatSettings = {
         cheapLLMSettings: chatSettings.cheapLLMSettings,
+        dangerSettings,
       }
 
       // Note: personaName is undefined since we only support CHARACTER type participants now
@@ -1731,8 +1837,15 @@ async function processMessage(
       toolsExecuted: true,
     }))
   } else {
-    // Empty response - known Gemini issue
-    logger.warn(`Empty response for chat ${chatId} - this is a known Gemini API issue`)
+    // Empty response
+    const emptyReason = uncensoredRetryAttempted
+      ? 'The AI model returned an empty response, and retrying with an uncensored provider also returned empty. This may indicate the content was filtered by both providers.'
+      : 'The AI model returned an empty response. This is a known issue with some providers. Please try resending your message.'
+    logger.warn(`Empty response for chat ${chatId}`, {
+      uncensoredRetryAttempted,
+      provider: effectiveProfile.provider,
+      model: effectiveProfile.modelName,
+    })
     controller.enqueue(encodeDoneEvent(encoder, {
       messageId: null,
       usage,
@@ -1740,7 +1853,7 @@ async function processMessage(
       attachmentResults,
       toolsExecuted: false,
       emptyResponse: true,
-      emptyResponseReason: 'The AI model returned an empty response. This is a known issue with some Gemini models. Please try resending your message.',
+      emptyResponseReason: emptyReason,
     }))
   }
 
