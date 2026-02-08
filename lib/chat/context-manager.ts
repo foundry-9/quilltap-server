@@ -20,6 +20,7 @@ import { searchMemoriesSemantic, type SemanticSearchResult } from '@/lib/memory/
 import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
+import { extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks'
 
 // Import from extracted modules
 import {
@@ -423,10 +424,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       // Apply compression
       try {
         compressionResult = await applyContextCompression(
-          existingMessages.map(m => ({
-            role: m.role as 'user' | 'assistant' | 'system',
-            content: m.content,
-          })),
+          extractVisibleConversation(existingMessages),
           finalSystemPrompt,
           {
             enabled: contextCompressionSettings.enabled,
@@ -496,16 +494,27 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     }
 
     // Only keep window messages (the ones that weren't compressed)
+    const visibleMessages = extractVisibleConversation(existingMessages)
     const { windowMessages } = splitMessagesForCompression(
-      existingMessages.map(m => ({
-        role: m.role as 'user' | 'assistant' | 'system',
-        content: m.content,
-      })),
+      visibleMessages,
       effectiveWindowSize
     )
 
     // Map back to the original format with all metadata
-    const windowStartIndex = existingMessages.length - windowMessages.length
+    // We need to find the corresponding existingMessages for the window
+    // Walk backwards through existingMessages to find the last N visible messages
+    const windowCount = windowMessages.length
+    let found = 0
+    let windowStartIndex = existingMessages.length
+    for (let i = existingMessages.length - 1; i >= 0 && found < windowCount; i--) {
+      const msg = existingMessages[i]
+      const role = (msg.role || '').toUpperCase()
+      const isVisible = (msg as { type?: string }).type === undefined || (msg as { type?: string }).type === 'message'
+      if (isVisible && (role === 'USER' || role === 'ASSISTANT')) {
+        found++
+        windowStartIndex = i
+      }
+    }
     effectiveMessages = existingMessages.slice(windowStartIndex)
 
   }

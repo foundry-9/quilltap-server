@@ -5,9 +5,9 @@
  * context summary for a chat conversation.
  */
 
-import { BackgroundJob, MessageEvent } from '@/lib/schemas/types';
+import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
-import { updateContextSummary, ChatMessage } from '@/lib/memory/cheap-llm-tasks';
+import { updateContextSummary, extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks';
 import { getCheapLLMProvider, CheapLLMConfig } from '@/lib/llm/cheap-llm';
 import { logger } from '@/lib/logger';
 import { createContextSummaryEvent } from '@/lib/services/system-events.service';
@@ -57,19 +57,9 @@ export async function handleContextSummary(job: BackgroundJob): Promise<void> {
     cheapLLMConfig,
     availableProfiles
   );
-  // Get all chat messages
+  // Get all chat messages and extract only visible conversation (USER/ASSISTANT, tool artifacts stripped)
   const allMessages = await repos.chats.getMessages(payload.chatId);
-
-  // Filter to only messages (not system events)
-  const messageEvents = allMessages.filter(
-    (m): m is MessageEvent => m.type === 'message'
-  );
-
-  // Convert to ChatMessage format for the LLM task
-  const chatMessages: ChatMessage[] = messageEvents.map((m) => ({
-    role: m.role as 'user' | 'assistant' | 'system',
-    content: m.content,
-  }));
+  const chatMessages = extractVisibleConversation(allMessages);
 
   // Get current context summary from chat
   const currentSummary = chat.contextSummary || '';

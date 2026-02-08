@@ -11,7 +11,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { decryptApiKey } from '@/lib/encryption';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
-import { craftStoryBackgroundPrompt, deriveSceneContext, type ChatMessage } from '@/lib/memory/cheap-llm-tasks';
+import { craftStoryBackgroundPrompt, deriveSceneContext, extractVisibleConversation, type ChatMessage } from '@/lib/memory/cheap-llm-tasks';
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig, type CheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/errors';
@@ -121,14 +121,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
 
   // 7. Fetch recent messages (needed for both scene context and appearance resolution)
   const chatEvents = await repos.chats.getMessages(payload.chatId);
-  const recentMessages: ChatMessage[] = chatEvents
-    .filter((event): event is Extract<typeof event, { type: 'message' }> => event.type === 'message')
-    .filter(msg => msg.role === 'USER' || msg.role === 'ASSISTANT')
-    .slice(-20) // Last 20 messages for context
-    .map(msg => ({
-      role: msg.role === 'USER' ? 'user' as const : 'assistant' as const,
-      content: msg.content,
-    }));
+  const recentMessages: ChatMessage[] = extractVisibleConversation(chatEvents).slice(-20);
 
   logger.debug('[StoryBackground] Fetched messages for context', {
     context: 'background-jobs.story-background',

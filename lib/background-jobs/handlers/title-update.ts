@@ -5,10 +5,10 @@
  * needs a new title based on recent conversation content.
  */
 
-import { BackgroundJob, MessageEvent, ChatSettings } from '@/lib/schemas/types';
+import { BackgroundJob, ChatSettings } from '@/lib/schemas/types';
 import type { ChatMetadata } from '@/lib/schemas/chat.types';
 import { getRepositories } from '@/lib/repositories/factory';
-import { considerTitleUpdate, ChatMessage } from '@/lib/memory/cheap-llm-tasks';
+import { considerTitleUpdate, extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks';
 import { getCheapLLMProvider, CheapLLMConfig } from '@/lib/llm/cheap-llm';
 import { logger } from '@/lib/logger';
 import type { TitleUpdatePayload } from '../queue-service';
@@ -59,16 +59,16 @@ export async function handleTitleUpdate(job: BackgroundJob): Promise<void> {
   // Get chat messages
   const allMessages = await repos.chats.getMessages(payload.chatId);
 
-  // Filter to only messages (not system events)
-  const messageEvents = allMessages.filter(
-    (m): m is MessageEvent => m.type === 'message'
-  );
+  // Extract only visible conversational messages (USER/ASSISTANT, tool artifacts stripped)
+  const totalCount = allMessages.length;
+  const chatMessages = extractVisibleConversation(allMessages);
 
-  // Convert to ChatMessage format for the LLM task
-  const chatMessages: ChatMessage[] = messageEvents.map((m) => ({
-    role: m.role as 'user' | 'assistant' | 'system',
-    content: m.content,
-  }));
+  logger.debug('[TitleUpdate] Filtered messages for title evaluation', {
+    context: 'background-jobs.title-update',
+    chatId: payload.chatId,
+    totalMessages: totalCount,
+    visibleMessages: chatMessages.length,
+  });
 
   // Use last 5 messages or fewer if the chat is shorter
   const recentMessages = chatMessages.slice(-5);

@@ -78,7 +78,7 @@ import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { isRecoverableRequestError } from '@/lib/llm/errors'
 import { attemptRequestLimitRecovery } from './recovery.service'
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG } from '@/lib/llm/cheap-llm'
-import { extractMemorySearchKeywords } from '@/lib/memory/cheap-llm-tasks'
+import { extractMemorySearchKeywords, stripToolArtifacts, extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks'
 import { searchMemoriesSemantic, type SemanticSearchResult } from '@/lib/memory/memory-service'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 import {
@@ -744,12 +744,18 @@ async function processMessage(
       characterId: character.id,
     }))
 
-    // Extract keywords via cheap LLM
+    // Extract keywords via cheap LLM, stripping tool artifacts from assistant messages
     const keywordResult = await extractMemorySearchKeywords(
-      messagesSinceLastSpoke.map(m => ({
-        role: m.role.toLowerCase() as 'user' | 'assistant' | 'system',
-        content: m.content || '',
-      })),
+      messagesSinceLastSpoke.reduce<Array<{ role: 'user' | 'assistant' | 'system'; content: string }>>((acc, m) => {
+        const role = m.role.toLowerCase() as 'user' | 'assistant' | 'system'
+        if (role === 'assistant') {
+          const cleaned = stripToolArtifacts(m.content || '')
+          if (cleaned) acc.push({ role, content: cleaned })
+        } else {
+          acc.push({ role, content: m.content || '' })
+        }
+        return acc
+      }, []),
       character.name,
       cheapLLMSelection,
       userId,
@@ -1594,12 +1600,8 @@ async function processMessage(
     // before the user sends their next message.
     if (compressionEnabled && cheapLLMSelection && builtContext.originalSystemPrompt) {
       const updatedMessages = [
-        ...existingMessages
-          .filter((m): m is MessageEvent => m.type === 'message' && 'role' in m && 'content' in m)
-          .map(m => ({
-            role: m.role.toLowerCase() as 'user' | 'assistant' | 'system',
-            content: m.content || '',
-          })),
+        // Extract only visible conversation (USER/ASSISTANT, tool artifacts stripped)
+        ...extractVisibleConversation(existingMessages),
         // Add the user message we just sent (if not continue mode)
         ...(content && !isContinueMode ? [{
           role: 'user' as const,

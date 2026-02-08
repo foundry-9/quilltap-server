@@ -26,7 +26,7 @@ This document tracks planned features and improvements for Quilltap.
   - [X] Implies a new quick-hide just for dangerous content
   - [ ] Further: user-determined danger paths (e.g., this talks about politics, I don't want to talk about politics) in addition to the general "most providers won't handle this" rails
   - [X] Testing
-- [ ] Title generation needs better guidelines (every NSFW option shouldn't preach about consent and boundaries, for example)
+- [X] Title generation needs better guidelines (every NSFW option shouldn't preach about consent and boundaries, for example)
 
 ### LLM Integration (The Foundry)
 

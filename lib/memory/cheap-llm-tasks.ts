@@ -743,25 +743,140 @@ export async function summarizeChat(
 }
 
 /**
+ * Strips tool call artifacts from assistant message content so that title
+ * generation focuses on the actual conversation, not tool machinery.
+ *
+ * Handles patterns like:
+ * - `[Tool call made]` markers
+ * - `[Tool Result: toolName ...]` blocks with embedded JSON
+ * - Leading/trailing raw JSON fragments from tool responses
+ *
+ * @returns Cleaned content, or null if no meaningful conversational text remains
+ */
+export function stripToolArtifacts(content: string): string | null {
+  // Quick exit: if no tool markers or leading JSON, return as-is
+  if (
+    !content.includes('[Tool') &&
+    !content.includes('"toolName"') &&
+    !/^\s*[{[\],}]/.test(content)
+  ) {
+    return content
+  }
+
+  const originalLength = content.length
+  let cleaned = content
+
+  // Remove [Tool call made] markers
+  cleaned = cleaned.replace(/\[Tool call made\]/g, '')
+
+  // Remove [Tool Result: ...] blocks (tool name + JSON content within brackets)
+  cleaned = cleaned.replace(/\[Tool Result:[^\]]*\]/g, '')
+
+  // Filter out lines that look like JSON rather than conversation
+  const lines = cleaned.split('\n')
+  const conversationalLines = lines.filter(line => {
+    const t = line.trim()
+    if (!t) return false
+    // Skip lines that start with JSON structural characters
+    if (/^[{}\[\],:]/.test(t)) return false
+    // Skip lines that look like JSON key-value pairs
+    if (/^"[^"]*"\s*:/.test(t)) return false
+    return true
+  })
+
+  cleaned = conversationalLines.join('\n').trim()
+
+  // If very little conversational text remains, skip this message entirely
+  if (cleaned.length < 20) {
+    logger.debug('[stripToolArtifacts] Discarded message with no conversational content', {
+      context: 'cheap-llm-tasks.strip-tool-artifacts',
+      originalLength,
+      remainingLength: cleaned.length,
+    })
+    return null
+  }
+
+  if (cleaned.length < originalLength) {
+    logger.debug('[stripToolArtifacts] Stripped tool artifacts from assistant message', {
+      context: 'cheap-llm-tasks.strip-tool-artifacts',
+      originalLength,
+      cleanedLength: cleaned.length,
+    })
+  }
+
+  return cleaned
+}
+
+/**
+ * Extracts only the visible conversational messages (what appears in chat bubbles)
+ * from a message-like array. This is the standard filter for any cheap LLM task
+ * that judges content (titles, summaries, backgrounds, compression, etc.).
+ *
+ * Filters:
+ * - If `type` field present, skips non-'message' entries (system events, context-summaries)
+ * - Skips any role that isn't USER or ASSISTANT (filters TOOL and SYSTEM messages)
+ * - Applies `stripToolArtifacts()` to assistant messages; skips if null returned
+ * - Case-insensitive role matching (handles both 'USER' and 'user')
+ *
+ * @param messages - Any message-like array (ChatEvents, MessageEvents, etc.)
+ * @returns Clean ChatMessage[] with only user/assistant conversational text
+ */
+export function extractVisibleConversation(
+  messages: Array<{ type?: string; role?: string; content?: string }>
+): ChatMessage[] {
+  const result: ChatMessage[] = []
+
+  for (const m of messages) {
+    // Skip non-message entries (system events, context-summary events, etc.)
+    if (m.type !== undefined && m.type !== 'message') continue
+
+    // Skip entries without content (e.g., context-summary events)
+    if (!m.content) continue
+
+    // Only include USER and ASSISTANT roles
+    const role = (m.role || '').toUpperCase()
+    if (role !== 'USER' && role !== 'ASSISTANT') continue
+
+    const lowerRole = role.toLowerCase() as 'user' | 'assistant'
+
+    if (lowerRole === 'assistant') {
+      const cleaned = stripToolArtifacts(m.content)
+      if (!cleaned) continue
+      result.push({ role: lowerRole, content: cleaned })
+    } else {
+      result.push({ role: lowerRole, content: m.content })
+    }
+  }
+
+  return result
+}
+
+/**
  * Chat title prompt template
  */
-const CHAT_TITLE_PROMPT = `Generate a short, descriptive title for this conversation.
+const CHAT_TITLE_PROMPT = `Generate a literary title for this conversation, like titling a short story.
 The title should:
-- Be 3-6 words maximum
-- Capture the main topic or theme
-- Be engaging but not clickbait
+- Be 3-8 words maximum
+- Reflect where the conversation ultimately went, not just how it started — weight the later messages more heavily
+- Focus on the unique narrative flair, quirky elements, or evocative mood
+- Be poetic and distinctive — unless the conversation is really about technical details, in which case mention the kind of technical work being discussed
+- Avoid moralistic, ethical, or sterile phrasing — no mentions of consent, boundaries, or lessons
+- Unless the conversation is really about one specific character, avoid titling it by character name
+
+The conversation is shown with early messages truncated and recent messages in full. Title based on the overall arc, especially the recent discussion.
 
 Respond with only the title, no quotes or additional text.`
 
 /**
  * Chat title from summary prompt template
  */
-const CHAT_TITLE_FROM_SUMMARY_PROMPT = `Generate a short, descriptive title for this conversation based on the summary provided.
+const CHAT_TITLE_FROM_SUMMARY_PROMPT = `Generate a literary title for this conversation based on the summary provided, like titling a short story.
 The title should:
-- Be under 60 characters
-- Capture the main topic or theme of the conversation
-- Be engaging but not clickbait
-- Be concise and clear
+- Be 3-8 words maximum and under 60 characters
+- Focus on the unique narrative flair, quirky elements, or evocative mood
+- Be poetic and distinctive — unless the conversation is really about technical details, in which case mention the kind of technical work being discussed
+- Avoid moralistic, ethical, or sterile phrasing — no mentions of consent, boundaries, or lessons
+- Unless the conversation is really about one specific character, avoid titling it by character name
 
 Respond with only the title, no quotes or additional text.`
 
@@ -780,10 +895,21 @@ export async function titleChat(
   selection: CheapLLMSelection,
   userId: string
 ): Promise<CheapLLMTaskResult<string>> {
-  // Take only first few messages for title generation
-  const relevantMessages = messages.slice(0, 6)
-  const conversationText = relevantMessages
-    .map(m => `${m.role.toUpperCase()}: ${m.content}`)
+  // Use up to 100 messages, weighted toward the end of the conversation.
+  // Older messages are truncated aggressively; recent messages get full text.
+  const capped = messages.slice(-100)
+  const recentThreshold = Math.max(0, capped.length - 10)
+  const conversationText = capped
+    .map((m, i) => {
+      const label = m.role.toUpperCase()
+      // Last 10 messages: full text (up to 500 chars)
+      // Older messages: truncated to 150 chars
+      const limit = i >= recentThreshold ? 500 : 150
+      const text = m.content.length > limit
+        ? m.content.substring(0, limit) + '...'
+        : m.content
+      return `${label}: ${text}`
+    })
     .join('\n\n')
 
   let prompt = CHAT_TITLE_PROMPT
@@ -873,9 +999,11 @@ const CHAT_TITLE_CONSIDERATION_PROMPT = `You are a chat title evaluator. You wil
 3. Recent messages from the chat
 
 Determine if the chat needs a new title. Consider:
-- If the current title is generic (like "Chat with [Name]" or "New Chat"), it SHOULD be replaced with a descriptive title based on what the conversation is actually about
+- If the current title is generic (like "Chat with [Name]" or "New Chat"), it SHOULD be replaced with a literary title based on what the conversation is actually about
 - If the title is already descriptive, only suggest a change if the main topic has shifted significantly
-- A good title captures the essence of the conversation in a few words
+- A good title is like titling a short story: it captures the unique narrative flair, quirky elements, or evocative mood in a few words
+- Titles should be poetic and distinctive, not moralistic or sterile — avoid mentions of consent, boundaries, or lessons. Exception: if the conversation is really about technical details, the title should mention the kind of technical work being discussed
+- Unless the conversation is really about one specific character, avoid titling it by character name
 
 Respond with a JSON object:
 {
@@ -884,7 +1012,7 @@ Respond with a JSON object:
   "suggestedTitle": "new title if needsNewTitle is true, otherwise null"
 }
 
-Keep suggested titles under 60 characters, descriptive, and engaging.`
+Keep suggested titles 3-8 words, under 60 characters, poetic and distinctive (or technically descriptive if the conversation is about technical work).`
 
 /**
  * Evaluates whether a chat needs a new title based on recent messages

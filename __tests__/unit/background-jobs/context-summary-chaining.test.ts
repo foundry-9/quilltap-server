@@ -22,6 +22,7 @@ jest.mock('@/lib/repositories/factory', () => ({
 
 jest.mock('@/lib/memory/cheap-llm-tasks', () => ({
   updateContextSummary: jest.fn(),
+  extractVisibleConversation: jest.requireActual('@/lib/memory/cheap-llm-tasks').extractVisibleConversation,
 }));
 
 jest.mock('@/lib/llm/cheap-llm', () => ({

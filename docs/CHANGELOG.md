@@ -4,6 +4,12 @@
 
 ### 2.10-dev
 
+- fix: Extract visible conversation only for all cheap LLM content-judging tasks
+  - New `extractVisibleConversation()` utility filters to USER/ASSISTANT messages and strips tool artifacts (JSON, `[Tool call made]`, `[Tool Result: ...]` markers)
+  - Applied to title generation, context summaries, story backgrounds, context compression, and proactive memory keyword extraction
+  - Prevents tool call artifacts (vault folder listings, JSON tool results) from influencing titles, summaries, and backgrounds
+  - Title generation (`titleChat`) now uses up to 100 messages weighted toward the end of the conversation instead of just the first 6, producing titles that reflect where the discussion went rather than just how it started
+
 - feat: Uncensored fallback for empty LLM responses across all cheap LLM subsystems
   - When an LLM silently refuses content (returns empty), retries with uncensored provider in AUTO_ROUTE mode
   - Covers memory extraction (user, character, inter-character), context compression, and chat streaming
