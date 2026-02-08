@@ -75,6 +75,8 @@ import { addCharacterAliasesFieldMigration } from './add-character-aliases-field
 import { addCharacterPronounsFieldMigration } from './add-character-pronouns-field';
 // Add clothingRecords field to characters
 import { addCharacterClothingRecordsFieldMigration } from './add-character-clothing-records-field';
+// Fix chat messageCount to only count visible message bubbles
+import { fixChatMessageCountsMigration } from './fix-chat-message-counts';
 
 /**
  * All available migrations.
@@ -145,6 +147,8 @@ export const migrations: Migration[] = [
   addCharacterPronounsFieldMigration,
   // Add clothingRecords field to characters
   addCharacterClothingRecordsFieldMigration,
+  // Fix chat messageCount to only count visible message bubbles
+  fixChatMessageCountsMigration,
 ];
 
 export {
@@ -210,4 +214,6 @@ export {
   addCharacterPronounsFieldMigration,
   // Add clothingRecords field to characters
   addCharacterClothingRecordsFieldMigration,
+  // Fix chat messageCount to only count visible message bubbles
+  fixChatMessageCountsMigration,
 };

@@ -221,8 +221,8 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
               })
             );
 
-            // Get all messages and count them for badge
-            const messageCount = messages.filter((msg) => msg.type === 'message').length;
+            // Get all messages and count only visible bubbles (USER/ASSISTANT) for badge
+            const messageCount = messages.filter((msg) => msg.type === 'message' && msg.role !== 'SYSTEM' && msg.role !== 'TOOL').length;
 
             // Get last 3 messages for preview
             const recentMessages = messages

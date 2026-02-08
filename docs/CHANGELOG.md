@@ -4,6 +4,12 @@
 
 ### 2.10-dev
 
+- fix: Chat messageCount now only counts visible message bubbles (USER/ASSISTANT)
+  - System events, SYSTEM role messages, TOOL role messages, and context summaries no longer inflate the count
+  - Added `countVisibleMessages()` helper in chats repository
+  - Fixed characters API endpoint to use the same visible-only filter
+  - Migration recalculates all existing chat message counts
+
 - fix: Extract visible conversation only for all cheap LLM content-judging tasks
   - New `extractVisibleConversation()` utility filters to USER/ASSISTANT messages and strips tool artifacts (JSON, `[Tool call made]`, `[Tool Result: ...]` markers)
   - Applied to title generation, context summaries, story backgrounds, context compression, and proactive memory keyword extraction

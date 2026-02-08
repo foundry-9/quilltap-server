@@ -722,6 +722,14 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
   }
 
   /**
+   * Count only messages that appear as visible bubbles in the UI
+   * (type === 'message' with USER or ASSISTANT role, excluding SYSTEM and TOOL)
+   */
+  private countVisibleMessages(messages: ChatEvent[]): number {
+    return messages.filter(m => m.type === 'message' && m.role !== 'SYSTEM' && m.role !== 'TOOL').length;
+  }
+
+  /**
    * Add a message to a chat
    */
   async addMessage(chatId: string, message: ChatEvent): Promise<ChatEvent> {
@@ -750,7 +758,7 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
         const allMessages = await this.getMessages(chatId);
         const isActualMessage = validated.type === 'message';
         const updateData: Record<string, unknown> = {
-          messageCount: allMessages.length,
+          messageCount: this.countVisibleMessages(allMessages),
         };
         if (isActualMessage) {
           updateData.lastMessageAt = now;
@@ -799,7 +807,7 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
         const allMessages = await this.getMessages(chatId);
         const hasActualMessages = validated.some(m => m.type === 'message');
         const updateData: Record<string, unknown> = {
-          messageCount: allMessages.length,
+          messageCount: this.countVisibleMessages(allMessages),
         };
         if (hasActualMessages) {
           updateData.lastMessageAt = now;
