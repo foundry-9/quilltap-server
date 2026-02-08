@@ -11,6 +11,14 @@ import { Memory } from '@/lib/schemas/types'
 import { generateEmbeddingForUser, EmbeddingError, cosineSimilarity } from '@/lib/embedding/embedding-service'
 import { getCharacterVectorStore, getVectorStoreManager } from '@/lib/embedding/vector-store'
 import { logger } from '@/lib/logger'
+import {
+  runMemoryGate,
+  reinforceMemory,
+  linkRelatedMemories,
+  calculateReinforcedImportance,
+} from './memory-gate'
+import type { MemoryGateOutcome } from './memory-gate'
+export type { MemoryGateOutcome } from './memory-gate'
 
 /**
  * Options for memory creation
@@ -50,6 +58,8 @@ export interface MemoryServiceOptions {
   embeddingProfileId?: string
   /** Skip embedding generation (for batch operations or testing) */
   skipEmbedding?: boolean
+  /** Skip the Memory Gate check (force-insert without similarity check) */
+  skipGate?: boolean
 }
 
 /**
@@ -68,54 +78,141 @@ export interface SemanticSearchResult {
  * Create a memory with optional embedding generation
  *
  * This is the primary function for creating memories. It:
- * 1. Creates the memory in the repository
- * 2. Generates an embedding if a profile is configured
- * 3. Adds the embedding to the vector store
- * 4. Updates the memory with the embedding
+ * 1. Runs the Memory Gate to check for duplicates/related memories (unless skipGate)
+ * 2. Based on gate decision: REINFORCE, INSERT_RELATED, or INSERT
+ * 3. Generates embedding and adds to vector store
+ *
+ * Return type unchanged for backward compatibility.
  */
 export async function createMemoryWithEmbedding(
   data: CreateMemoryOptions,
   options: MemoryServiceOptions
 ): Promise<Memory> {
+  const outcome = await createMemoryWithGate(data, options)
+  return outcome.memory
+}
+
+/**
+ * Create a memory with gate decision info.
+ *
+ * Returns full gate outcome (action taken, novel details, related IDs)
+ * for callers that need gate action info (e.g., memory-processor).
+ */
+export async function createMemoryWithGate(
+  data: CreateMemoryOptions,
+  options: MemoryServiceOptions
+): Promise<MemoryGateOutcome> {
   const repos = getRepositories()
 
-  // Create the memory first (without embedding)
+  // If gate or embedding is skipped, use the direct creation flow
+  if (options.skipGate || options.skipEmbedding) {
+    const memory = await createMemoryDirect(data, options)
+    return { memory, action: 'SKIP_GATE' }
+  }
+
+  // Run the Memory Gate — generate embedding first, then decide
+  const gateResult = await runMemoryGate(
+    data.characterId,
+    data.content,
+    data.summary,
+    data.keywords || [],
+    options.userId,
+    options.embeddingProfileId
+  )
+
+  for (const info of gateResult.debugInfo) {
+    logger.debug(info, { characterId: data.characterId })
+  }
+
+  const { decision, embedding } = gateResult
+
+  switch (decision.action) {
+    case 'REINFORCE': {
+      // Boost the existing memory instead of creating a new row
+      const { memory: reinforced, novelDetails } = await reinforceMemory(
+        decision.existingMemory,
+        data.content,
+        data.summary,
+        options.userId,
+        options.embeddingProfileId
+      )
+      return {
+        memory: reinforced,
+        action: 'REINFORCE',
+        novelDetails,
+      }
+    }
+
+    case 'INSERT_RELATED': {
+      // Create new memory, then bidirectionally link
+      const memory = await createMemoryDirectWithEmbedding(data, options, embedding)
+      const linkedIds = await linkRelatedMemories(
+        memory.id,
+        data.characterId,
+        decision.relatedMemories
+      )
+      return {
+        memory,
+        action: 'INSERT_RELATED',
+        relatedMemoryIds: linkedIds,
+      }
+    }
+
+    case 'INSERT':
+    default: {
+      // Straightforward insert with pre-computed embedding
+      const memory = await createMemoryDirectWithEmbedding(data, options, embedding)
+      return { memory, action: 'INSERT' }
+    }
+  }
+}
+
+/**
+ * Direct memory creation without gate (original flow).
+ * Used when skipGate or skipEmbedding is true.
+ */
+async function createMemoryDirect(
+  data: CreateMemoryOptions,
+  options: MemoryServiceOptions
+): Promise<Memory> {
+  const repos = getRepositories()
+  const importance = data.importance ?? 0.5
+
   const memory = await repos.memories.create({
     characterId: data.characterId,
     content: data.content,
     summary: data.summary,
     keywords: data.keywords || [],
     tags: data.tags || [],
-    importance: data.importance ?? 0.5,
+    importance,
     personaId: data.personaId || null,
     aboutCharacterId: data.aboutCharacterId || null,
     chatId: data.chatId || null,
     source: data.source || 'MANUAL',
     sourceMessageId: data.sourceMessageId || null,
+    reinforcementCount: 1,
+    relatedMemoryIds: [],
+    reinforcedImportance: importance,
   })
 
-  // Skip embedding if requested
   if (options.skipEmbedding) {
     return memory
   }
 
-  // Try to generate and store embedding
+  // Generate embedding
   try {
     const embeddingResult = await generateEmbeddingForUser(
-      // Use summary + content for a more complete embedding
       `${data.summary}\n\n${data.content}`,
       options.userId,
       options.embeddingProfileId
     )
 
-    // Update memory with embedding
     const updatedMemory = await repos.memories.updateForCharacter(
       data.characterId,
       memory.id,
       { embedding: embeddingResult.embedding }
     )
 
-    // Add to vector store
     const vectorStore = await getCharacterVectorStore(data.characterId)
     await vectorStore.addVector(memory.id, embeddingResult.embedding, {
       memoryId: memory.id,
@@ -126,7 +223,6 @@ export async function createMemoryWithEmbedding(
 
     return updatedMemory || memory
   } catch (error) {
-    // Log but don't fail - memory is still created, just without embedding
     if (error instanceof EmbeddingError) {
       logger.warn(`[Memory] Embedding generation failed for memory ${memory.id}: ${error.message}`, { characterId: data.characterId, userId: options.userId })
     } else {
@@ -134,6 +230,57 @@ export async function createMemoryWithEmbedding(
     }
     return memory
   }
+}
+
+/**
+ * Create a memory and store a pre-computed embedding (from gate).
+ * Avoids regenerating the embedding when the gate already computed it.
+ */
+async function createMemoryDirectWithEmbedding(
+  data: CreateMemoryOptions,
+  options: MemoryServiceOptions,
+  embedding: number[] | null
+): Promise<Memory> {
+  const repos = getRepositories()
+  const importance = data.importance ?? 0.5
+
+  const memory = await repos.memories.create({
+    characterId: data.characterId,
+    content: data.content,
+    summary: data.summary,
+    keywords: data.keywords || [],
+    tags: data.tags || [],
+    importance,
+    personaId: data.personaId || null,
+    aboutCharacterId: data.aboutCharacterId || null,
+    chatId: data.chatId || null,
+    source: data.source || 'MANUAL',
+    sourceMessageId: data.sourceMessageId || null,
+    reinforcementCount: 1,
+    relatedMemoryIds: [],
+    reinforcedImportance: importance,
+  })
+
+  if (embedding) {
+    // Use the pre-computed embedding from the gate
+    const updatedMemory = await repos.memories.updateForCharacter(
+      data.characterId,
+      memory.id,
+      { embedding }
+    )
+
+    const vectorStore = await getCharacterVectorStore(data.characterId)
+    await vectorStore.addVector(memory.id, embedding, {
+      memoryId: memory.id,
+      characterId: data.characterId,
+      content: data.summary,
+    })
+    await vectorStore.save()
+
+    return updatedMemory || memory
+  }
+
+  return memory
 }
 
 /**
@@ -393,6 +540,44 @@ export async function findSimilarMemories(
       .filter(r => r.memory)
   } catch (error) {
     logger.warn(`[Memory] Semantic similarity check failed`, { characterId, threshold: options.threshold, userId: options.userId, error: String(error) })
+    return []
+  }
+}
+
+/**
+ * Find semantically similar memories using a pre-computed embedding vector.
+ *
+ * Avoids redundant embedding generation when the caller already has the vector
+ * (e.g., the memory gate).
+ */
+export async function findSimilarMemoriesWithEmbedding(
+  characterId: string,
+  embedding: number[],
+  options: {
+    threshold?: number
+    limit?: number
+  } = {}
+): Promise<{ memory: Memory; similarity: number }[]> {
+  const threshold = options.threshold || 0.85
+  const limit = options.limit || 10
+
+  try {
+    const vectorStore = await getCharacterVectorStore(characterId)
+    const results = vectorStore.search(embedding, limit)
+
+    const repos = getRepositories()
+    const memories = await repos.memories.findByCharacterId(characterId)
+    const memoryMap = new Map(memories.map(m => [m.id, m]))
+
+    return results
+      .filter(r => r.score >= threshold)
+      .map(r => ({
+        memory: memoryMap.get(r.id)!,
+        similarity: r.score,
+      }))
+      .filter(r => r.memory)
+  } catch (error) {
+    logger.warn('[Memory] Similarity search with embedding failed', { characterId, error: String(error) })
     return []
   }
 }

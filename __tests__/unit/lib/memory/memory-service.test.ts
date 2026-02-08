@@ -193,7 +193,7 @@ describe('Memory Service', () => {
         embedding: [0.1, 0.2, 0.3],
       })
 
-      const result = await createMemoryWithEmbedding(memoryData, options)
+      const result = await createMemoryWithEmbedding(memoryData, { ...options, skipGate: true })
 
       expect(mockMemoriesRepo.create).toHaveBeenCalled()
       expect(mockGenerateEmbedding).toHaveBeenCalled()
@@ -221,7 +221,7 @@ describe('Memory Service', () => {
       mockMemoriesRepo.create.mockResolvedValue(createdMemory)
       mockGenerateEmbedding.mockRejectedValue(new Error('Embedding failed'))
 
-      const result = await createMemoryWithEmbedding(memoryData, options)
+      const result = await createMemoryWithEmbedding(memoryData, { ...options, skipGate: true })
 
       expect(mockMemoriesRepo.create).toHaveBeenCalled()
       expect(result.id).toBe('new-memory')

@@ -4,6 +4,17 @@
 
 ### 2.10-dev
 
+- feat: Memory Gate — pre-write similarity check replaces binary duplicate detection
+  - Three-tier decision at write time: REINFORCE near-duplicates (>= 0.80 similarity), LINK related-but-distinct memories (0.70–0.80), or INSERT genuinely new ones
+  - Reinforced memories track observation count (`reinforcementCount`), last reinforcement time, and boosted importance (`reinforcedImportance = min(1.0, importance + log2(count+1) * 0.05)`)
+  - Related memories are bidirectionally linked via `relatedMemoryIds` for thematic graph discovery
+  - Novel detail extraction appends new facts as `[+]` footnotes when reinforcing existing memories
+  - Housekeeping now uses `reinforcedImportance` for protection/scoring, with memories reinforced 5+ times always protected
+  - Hard-cap scoring rebalanced: importance 0.4, recency 0.2, access 0.2, reinforcement 0.2
+  - API supports `skipGate` option for force-insert and `relatedMemoryIds` for manual link management
+  - Falls back to keyword-based gate when embeddings unavailable
+  - Database migration adds 4 columns to memories table with automatic backfill
+
 - fix: Chat messageCount now only counts visible message bubbles (USER/ASSISTANT)
   - System events, SYSTEM role messages, TOOL role messages, and context summaries no longer inflate the count
   - Added `countVisibleMessages()` helper in chats repository

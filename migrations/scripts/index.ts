@@ -77,6 +77,8 @@ import { addCharacterPronounsFieldMigration } from './add-character-pronouns-fie
 import { addCharacterClothingRecordsFieldMigration } from './add-character-clothing-records-field';
 // Fix chat messageCount to only count visible message bubbles
 import { fixChatMessageCountsMigration } from './fix-chat-message-counts';
+// Add memory gate fields (reinforcement tracking, related links)
+import { addMemoryGateFieldsMigration } from './add-memory-gate-fields';
 
 /**
  * All available migrations.
@@ -149,6 +151,8 @@ export const migrations: Migration[] = [
   addCharacterClothingRecordsFieldMigration,
   // Fix chat messageCount to only count visible message bubbles
   fixChatMessageCountsMigration,
+  // Add memory gate fields (reinforcement tracking, related links)
+  addMemoryGateFieldsMigration,
 ];
 
 export {
@@ -216,4 +220,6 @@ export {
   addCharacterClothingRecordsFieldMigration,
   // Fix chat messageCount to only count visible message bubbles
   fixChatMessageCountsMigration,
+  // Add memory gate fields (reinforcement tracking, related links)
+  addMemoryGateFieldsMigration,
 };

@@ -46,6 +46,7 @@ const createMemorySchema = z.object({
   chatId: z.uuid().nullable().optional(),
   source: z.enum(['AUTO', 'MANUAL']).prefault('MANUAL'),
   sourceMessageId: z.uuid().nullable().optional(),
+  skipGate: z.boolean().optional(),
 });
 
 const searchMemorySchema = z.object({
@@ -390,7 +391,7 @@ async function handleCreateMemory(
       source: validatedData.source,
       sourceMessageId: validatedData.sourceMessageId,
     },
-    { userId: user.id }
+    { userId: user.id, skipGate: validatedData.skipGate }
   );
 
   // Schedule vocabulary refit for BUILTIN profiles (debounced)

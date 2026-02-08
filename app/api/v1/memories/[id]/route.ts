@@ -23,6 +23,7 @@ const updateMemorySchema = z.object({
   aboutCharacterId: z.uuid().nullable().optional(),
   personaId: z.uuid().nullable().optional(), // Legacy support
   chatId: z.uuid().nullable().optional(),
+  relatedMemoryIds: z.array(z.uuid()).optional(),
 });
 
 /**

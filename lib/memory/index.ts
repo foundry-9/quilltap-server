@@ -44,3 +44,17 @@ export {
   type HousekeepingResult,
   type HousekeepingDetail,
 } from './housekeeping'
+
+// Memory Gate (Pre-Write Similarity Check)
+export {
+  runMemoryGate,
+  reinforceMemory,
+  linkRelatedMemories,
+  extractNovelDetails,
+  calculateReinforcedImportance,
+  MERGE_THRESHOLD,
+  RELATED_THRESHOLD,
+  type GateDecision,
+  type GateResult,
+  type MemoryGateOutcome,
+} from './memory-gate'

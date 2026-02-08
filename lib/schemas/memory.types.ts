@@ -53,6 +53,11 @@ export const MemorySchema = z.object({
   source: MemorySourceEnum.default('MANUAL'),       // How it was created
   sourceMessageId: UUIDSchema.nullable().optional(), // If auto-created, which message triggered it
   lastAccessedAt: TimestampSchema.nullable().optional(), // For housekeeping decisions
+  // Memory Gate fields — reinforcement tracking
+  reinforcementCount: z.number().int().min(1).default(1),  // How many times this memory has been observed
+  lastReinforcedAt: TimestampSchema.nullable().optional(),  // Null until first reinforcement
+  relatedMemoryIds: z.array(UUIDSchema).default([]),       // Bidirectional links to related memories
+  reinforcedImportance: z.number().min(0).max(1).default(0.5), // importance + log2(count+1)*0.05, capped at 1.0
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });

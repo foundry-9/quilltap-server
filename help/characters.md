@@ -224,6 +224,8 @@ View associated memories:
 - Memories about this character
 - Memory details and dates
 - Search and filter
+- **Reinforcement count** — shows how many times a memory has been observed (e.g., "x3" badge means the same fact was seen in 3 separate exchanges). Frequently reinforced memories are considered stable knowledge and are better protected from housekeeping cleanup
+- **Related memories** — memories that are thematically linked are connected together. When a new memory is similar but distinct from an existing one, both are linked for context
 
 ### Tags Tab
 
