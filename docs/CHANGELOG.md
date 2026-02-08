@@ -4,6 +4,19 @@
 
 ### 2.10-dev
 
+- feat: Foundry Hub restructure — unified settings and tools into `/foundry`
+  - New `/foundry` landing page with 8 subsystem navigation cards (Aurora, The Forge, The Salon, The Commonplace Book, Prospero, Dangermouse, Calliope, The Lantern)
+  - 8 new sub-routes (`/foundry/aurora`, `/foundry/forge`, `/foundry/salon`, `/foundry/commonplace-book`, `/foundry/prospero`, `/foundry/dangermouse`, `/foundry/calliope`, `/foundry/lantern`)
+  - New `CollapsibleCard` component with `qt-collapsible-card-*` CSS classes for all subsystem pages
+  - Standalone wrappers for `DangerousContentSettings` and `StoryBackgroundsSettings` (self-contained with `useChatSettings()`)
+  - Sidebar permanently collapsed: removed expand/collapse toggle, resize handle, and width persistence
+  - Sidebar nav items now use direct `<Link>` navigation instead of button + expand pattern
+  - Sidebar footer: merged Settings + Tools into single "Foundry" link
+  - `/settings` now redirects to `/foundry` for backward compatibility
+  - Removed `SidebarWidthControl` from Appearance settings
+  - Updated all `/settings` and `/tools` references in character edit, profiles, and salon pages
+  - Updated all help documentation to reference new Foundry routes
+
 - feat: Memory Deduplication tool in Foundry
   - New tool card on `/foundry` page for finding and merging duplicate memories across all characters
   - Uses cosine similarity with configurable threshold (0.70–0.95, default 0.80) to cluster duplicates

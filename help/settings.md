@@ -1,104 +1,120 @@
-# Settings Overview
+# The Foundry
 
-> **[Open this page in Quilltap](/settings)**
+> **[Open this page in Quilltap](/foundry)**
 
-The Settings page is the central hub for managing all aspects of how Quilltap works, including AI providers, file storage, appearance, and more.
+The Foundry is the central hub for managing all aspects of how Quilltap works. It unifies settings, tools, and system management into a single location organized by subsystem. Each subsystem groups related configuration and utilities together so you can find everything in one place.
 
-## Accessing Settings
+## Accessing The Foundry
 
-1. Click the **Settings** icon (gear) in the left sidebar
-2. You'll see multiple tabs across the top of the settings page
-3. Click any tab to view and manage those specific settings
+1. Click the **Foundry** icon in the left sidebar footer
+2. You'll see the Foundry hub with 8 subsystem pages listed
+3. Click any subsystem to view and manage its settings and tools
 
-## Understanding the Settings Tabs
+## Understanding the Subsystems
 
-Quilltap organizes settings into the following categories:
+The Foundry organizes everything into 8 subsystem pages, each named after the Quilltap feature area it supports:
 
-### **API Keys**
+### **Aurora** --- Roleplay & Prompts
 
-Manage authentication credentials for LLM providers and services. This is where you store API keys securely before using them in connection profiles.
+Manage roleplay templates and reusable prompt templates that shape how characters behave and communicate.
 
-→ See [API Keys Settings](api-keys-settings.md) for full details
+- **Roleplay Templates** --- Define conversation patterns, system prompts, and character behaviors
+- **Prompts** --- Create and manage reusable prompt templates across characters and conversations
 
-### **Connection Profiles**
+> See [Roleplay Templates Settings](roleplay-templates-settings.md) and [Prompts](prompts.md) for full details
 
-Configure LLM (Large Language Model) connections for AI chat. Connection profiles link your API keys to specific providers and models, allowing Quilltap to communicate with AI services.
+### **The Forge** --- Infrastructure & Data
 
-→ See [Connection Profiles](connection-profiles.md) for full details
+Configure the core infrastructure that powers Quilltap, including provider credentials, plugins, storage, and data management.
 
-### **Chat Settings**
+- **API Keys** --- Store authentication credentials for LLM providers and services
+- **Connection Profiles** --- Link API keys to specific providers and models for AI chat
+- **Plugins** --- Install, update, and configure plugins from the registry
+- **File Storage** --- Configure where Quilltap stores files and images
+- **Backup & Restore** --- Create and restore full system backups
+- **Import/Export** --- Transfer data in and out of Quilltap in native format
+- **Delete All Data** --- Permanently remove all data (use with extreme caution)
 
-Configure global chat behavior including avatar display, memory management, token tracking, and which services are used for specific features like image description and embedding.
+> See [API Keys Settings](api-keys-settings.md), [Connection Profiles](connection-profiles.md), [Plugins](plugins.md), [File Storage Settings](file-storage-settings.md), [Backup & Restore](system-backup-restore.md), [Import & Export Data](system-import-export.md), and [Deleting Your Data](system-delete-data.md) for full details
 
-→ See [Chat Settings](chat-settings.md) for full details
+### **The Salon** --- Chat Settings
 
-### **Appearance**
+Configure global chat behavior and how the AI interacts during conversations.
 
-Customize how Quilltap looks including theme selection, color mode (light/dark), sidebar width, and access to the theme quick-switcher.
+- **Avatar** --- Chat avatar display settings
+- **CheapLLM** --- Configure which lightweight model handles background tasks
+- **Image Description** --- How AI describes images in chat
+- **Memory Cascade** --- Control how memories flow into conversations
+- **Context Compression** --- Manage context window compression settings
+- **LLM Logging** --- Toggle detailed logging of AI interactions
+- **Token Display** --- Show or hide token usage in chat
+- **Automation** --- Configure automated chat behaviors
+- **Agent Mode** --- Enable or configure agentic tool-use behaviors
 
-→ See [Appearance Settings](appearance-settings.md) for full details
+> See [Chat Settings](chat-settings.md) for full details
 
-### **Image Profiles**
+### **The Commonplace Book** --- Memory & Embeddings
 
-Set up image generation services so Quilltap can generate images during conversations. Image profiles configure which provider and model to use for image generation.
+Manage the memory systems that let characters remember and recall information.
 
-→ See [Image Generation Profiles](image-generation-profiles.md) for full details
+- **Embedding Profiles** --- Configure text embedding services for semantic memory search
+- **Memory Deduplication** --- Find and merge duplicate memories across characters
 
-### **Embedding Profiles**
+> See [Embedding Provider Profiles](embedding-profiles.md) and [System Tools](system-tools.md) for full details
 
-Configure text embedding services used for semantic search of memories and other AI-powered search features in Quilltap.
+### **Prospero** --- System Monitoring
 
-→ See [Embedding Provider Profiles](embedding-profiles.md) for full details
+Monitor system activity and review operational data about your Quilltap instance.
 
-### **Plugins**
+- **Tasks Queue** --- View and manage background jobs (memory extraction, imports, analysis)
+- **Capabilities Report** --- Generate reports documenting your system's configuration
+- **LLM Logs** --- Review detailed records of all AI model interactions and API calls
 
-Manage installed plugins, browse new plugins from the registry, check for updates, and configure individual plugin settings.
+> See [Managing Tasks](system-tasks-queue.md), [Capabilities Report](system-capabilities-report.md), and [LLM Logs](system-llm-logs.md) for full details
 
-→ See [Plugins](plugins.md) for full details
+### **Dangermouse** --- Content Safety
 
-### **File Storage**
+Configure how Quilltap handles sensitive or potentially policy-violating content, including classification and routing to compatible providers.
 
-Configure where Quilltap stores files and images, including local storage paths and cloud storage backends.
+> See [Dangerous Content Handling](dangerous-content.md) for full details
 
-→ See [File Storage Settings](file-storage-settings.md) for full details
+### **Calliope** --- Appearance & Organization
 
-### **Tags**
+Customize how Quilltap looks and how you organize your content.
 
-Customize how tags look throughout the application, including colors, icons, and which tags to hide quickly.
+- **Appearance** --- Theme selection, color mode (light/dark), and display options
+- **Tags** --- Customize tag colors, icons, and visibility throughout the application
 
-→ See [Tags Customization](tags-customization.md) for full details
+> See [Appearance Settings](appearance-settings.md) and [Tags Customization](tags-customization.md) for full details
 
-### **RP Templates**
+### **The Lantern** --- Visual & Backgrounds
 
-Create and manage roleplay templates for characters. Templates let you define conversation patterns and character behaviors.
+Configure image generation and the atmospheric background system for chats.
 
-→ See [Roleplay Templates Settings](roleplay-templates-settings.md) for full details
+- **Image Profiles** --- Set up image generation providers and models
+- **Story Backgrounds** --- Configure automatic atmospheric background images for chats and projects
 
-### **Prompts**
-
-Create and manage reusable prompt templates that you can use across characters and conversations.
-
-→ See [Prompts](prompts.md) for full details
+> See [Image Generation Profiles](image-generation-profiles.md) and [Story Backgrounds](story-backgrounds.md) for full details
 
 ## Quick Configuration Workflow
 
 ### Setting up Quilltap for the first time
 
-1. **Add API Keys** (API Keys tab) — Store your credentials for AI providers
-2. **Create Connection Profiles** (Connection Profiles tab) — Link API keys to LLM providers
-3. **Set Chat Preferences** (Chat Settings tab) — Configure default behaviors
-4. **Optional: Image Generation** (Image Profiles tab) — If you want image generation capabilities
-5. **Optional: Embedding Search** (Embedding Profiles tab) — If you want semantic memory search
+1. **Add API Keys** (The Forge) --- Store your credentials for AI providers
+2. **Create Connection Profiles** (The Forge) --- Link API keys to LLM providers
+3. **Set Chat Preferences** (The Salon) --- Configure default chat behaviors
+4. **Optional: Image Generation** (The Lantern) --- If you want image generation capabilities
+5. **Optional: Embedding Search** (The Commonplace Book) --- If you want semantic memory search
 
 ### Installing new capabilities
 
-1. **Browse Plugins** (Plugins tab) — Find and install new functionality
-2. **Configure Plugin Settings** — Each plugin may have its own configuration
-3. **Set up related profiles** — Some plugins may require new Connection, Image, or Embedding profiles
+1. **Browse Plugins** (The Forge) --- Find and install new functionality
+2. **Configure Plugin Settings** --- Each plugin may have its own configuration
+3. **Set up related profiles** --- Some plugins may require new Connection, Image, or Embedding profiles
 
 ## Settings Persistence
 
-All changes in Settings are saved automatically. You don't need to click a "Save" button — most settings update as you make changes.
+All changes in The Foundry are saved automatically. You don't need to click a "Save" button --- most settings update as you make changes.
 
 ### When changes take effect
 
@@ -113,13 +129,14 @@ All changes in Settings are saved automatically. You don't need to click a "Save
 - **Plugin installation:** Some plugins may require specific configuration before they work
 - **Storage configuration:** File storage settings should be configured early in your setup
 
-## Troubleshooting Settings
+## Troubleshooting The Foundry
 
-### Can't see a setting I need?
+### Can't find a setting I need?
 
+- Settings are organized by subsystem. Think about which feature area the setting relates to and navigate to that subsystem page.
 - Some settings may only appear if their dependencies are configured (e.g., Image Profiles requires an API key first)
 - Check if you need to install a plugin that provides additional settings
-- See the specific tab's documentation for requirements
+- See the specific subsystem's documentation for requirements
 
 ### Changes aren't taking effect
 
@@ -129,6 +146,6 @@ All changes in Settings are saved automatically. You don't need to click a "Save
 
 ### Getting help
 
-- Each tab has detailed documentation in the help menu
+- Each subsystem has detailed documentation in the help menu
 - Hover over question marks (?) in settings for additional information
-- Check specific settings documentation linked at the top of this page
+- Check specific subsystem documentation linked at the top of this page

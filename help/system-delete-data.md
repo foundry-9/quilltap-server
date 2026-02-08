@@ -89,7 +89,7 @@ A complete data deletion removes:
 
 ### Step-by-Step
 
-1. **Go to the Tools page** (`/tools`)
+1. **Go to The Forge** (`/foundry/forge`)
 
 2. **Find the Delete All Data card**
 

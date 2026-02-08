@@ -1,6 +1,6 @@
 # Configuring Chat Tools
 
-> **[Open this page in Quilltap](/settings?tab=plugins)**
+> **[Open this page in Quilltap](/foundry/forge)**
 
 This guide explains how to enable and disable AI tools for individual chats in Quilltap.
 

@@ -68,7 +68,7 @@ A capabilities report includes:
 
 **Step-by-Step:**
 
-1. **Go to the Tools page** (`/tools`)
+1. **Go to Prospero** (`/foundry/prospero`)
 
 2. **Find the Capabilities Report card**
 

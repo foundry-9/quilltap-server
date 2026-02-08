@@ -277,7 +277,7 @@ See [Using Tools](tools-usage.md) for tool details.
 **Solutions:**
 
 - Check character's connection profile in settings
-- Verify API key in Settings > API Keys
+- Verify API key in The Forge > API Keys
 - Wait and try again if rate limited
 - Check internet connection
 

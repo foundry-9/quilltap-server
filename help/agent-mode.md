@@ -39,7 +39,7 @@ Each level can override the previous if explicitly set.
 
 ## Configuration
 
-### Global Settings (Settings > Chat)
+### Global Settings (The Salon)
 
 - **Enable Agent Mode by Default**: When enabled, new chats will use agent mode
 - **Maximum Agent Turns**: The maximum number of tool iterations (1-25, default: 10)

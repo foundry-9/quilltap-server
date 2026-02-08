@@ -1,6 +1,6 @@
 # Tag Customization
 
-> **[Open this page in Quilltap](/settings?tab=tags)**
+> **[Open this page in Quilltap](/foundry/calliope)**
 
 The Tags customization tab in your Settings is where you control how tags look and function throughout Quilltap. Here you can customize every aspect of your tags' appearance and set up which tags are available for quick-hide.
 

@@ -3,7 +3,8 @@
 /**
  * Sidebar Footer
  *
- * Footer area with settings, tools, themes, quick-hide, and profile.
+ * Footer area with Foundry link, themes, quick-hide, and profile.
+ * Sidebar is always collapsed — all items use centered icon styling.
  *
  * @module components/layout/left-sidebar/sidebar-footer
  */
@@ -11,7 +12,6 @@
 import Link from 'next/link'
 import { useState, useRef, useCallback } from 'react'
 import { useEffect } from 'react'
-import { useSidebar } from '@/components/providers/sidebar-provider'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { useSidebarData } from '@/components/providers/sidebar-data-provider'
 import { useTheme } from '@/components/providers/theme-provider'
@@ -20,29 +20,9 @@ import { NavUserMenuThemeContent } from '@/components/dashboard/nav-user-menu-th
 import { NavUserMenuQuickHideContent, QuickHideIcon } from '@/components/dashboard/nav-user-menu-quick-hide'
 
 /**
- * Settings icon (cog)
+ * Foundry icon (anvil/wrench)
  */
-function SettingsIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-    </svg>
-  )
-}
-
-/**
- * Tools icon (wrench)
- */
-function ToolsIcon({ className }: { className?: string }) {
+function FoundryIcon({ className }: { className?: string }) {
   return (
     <svg
       className={className}
@@ -84,7 +64,6 @@ function PaletteIcon({ className }: { className?: string }) {
 type PopoutMenu = 'themes' | 'quickHide' | null
 
 export function SidebarFooter() {
-  const { isCollapsed } = useSidebar()
   const quickHide = useQuickHide()
   const { chats } = useSidebarData()
   const theme = useTheme()
@@ -136,21 +115,11 @@ export function SidebarFooter() {
     <div className="qt-left-sidebar-footer">
       <div className="qt-left-sidebar-footer-actions">
         <Link
-          href="/settings"
-          className={`qt-left-sidebar-item ${isCollapsed ? 'justify-center px-0' : ''}`}
-          title={isCollapsed ? 'Settings' : undefined}
-        >
-          <SettingsIcon className="qt-left-sidebar-item-icon w-5 h-5" />
-          {!isCollapsed && <span className="qt-left-sidebar-item-label">Settings</span>}
-        </Link>
-
-        <Link
           href="/foundry"
-          className={`qt-left-sidebar-item ${isCollapsed ? 'justify-center px-0' : ''}`}
-          title={isCollapsed ? 'Tools' : undefined}
+          className="qt-left-sidebar-item justify-center px-0"
+          title="Foundry"
         >
-          <ToolsIcon className="qt-left-sidebar-item-icon w-5 h-5" />
-          {!isCollapsed && <span className="qt-left-sidebar-item-label">Tools</span>}
+          <FoundryIcon className="qt-left-sidebar-item-icon w-5 h-5" />
         </Link>
 
         {showThemes && (
@@ -158,11 +127,10 @@ export function SidebarFooter() {
             <button
               type="button"
               onClick={handleThemeClick}
-              className={`qt-left-sidebar-item w-full ${isCollapsed ? 'justify-center px-0' : ''} ${openPopout === 'themes' ? 'bg-accent' : ''}`}
-              title={isCollapsed ? 'Themes' : undefined}
+              className={`qt-left-sidebar-item w-full justify-center px-0 ${openPopout === 'themes' ? 'bg-accent' : ''}`}
+              title="Themes"
             >
               <PaletteIcon className="qt-left-sidebar-item-icon w-5 h-5" />
-              {!isCollapsed && <span className="qt-left-sidebar-item-label">Themes</span>}
             </button>
             {openPopout === 'themes' && (
               <div className="absolute bottom-full left-0 mb-1 w-56 bg-popover border border-border rounded-lg shadow-lg z-50">
@@ -177,11 +145,10 @@ export function SidebarFooter() {
             <button
               type="button"
               onClick={handleQuickHideClick}
-              className={`qt-left-sidebar-item w-full ${isCollapsed ? 'justify-center px-0' : ''} ${openPopout === 'quickHide' ? 'bg-accent' : ''}`}
-              title={isCollapsed ? (hasAnyHidden ? 'Show' : 'Hide') : undefined}
+              className={`qt-left-sidebar-item w-full justify-center px-0 ${openPopout === 'quickHide' ? 'bg-accent' : ''}`}
+              title={hasAnyHidden ? 'Show' : 'Hide'}
             >
               <QuickHideIcon hasHidden={hasAnyHidden} className="qt-left-sidebar-item-icon w-5 h-5" />
-              {!isCollapsed && <span className="qt-left-sidebar-item-label">{hasAnyHidden ? 'Show' : 'Hide'}</span>}
             </button>
             {openPopout === 'quickHide' && (
               <div className="absolute bottom-full left-0 mb-1 w-56 bg-popover border border-border rounded-lg shadow-lg z-50">

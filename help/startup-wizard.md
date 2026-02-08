@@ -187,7 +187,7 @@ Now that you have an API key (or Ollama installed), let's add it to Quilltap.
 
 1. **Open Settings**
    - Click **Settings** (gear icon) in the left sidebar
-   - Or go to: [Settings > API Keys](/settings?tab=keys)
+   - Or go to: [The Forge](/foundry/forge)
 
 2. **Add a New API Key**
    - Click **Add API Key** or **+ New Key**
@@ -242,8 +242,7 @@ Ollama doesn't require an API key, but you need Ollama running:
 A connection profile tells Quilltap which AI to use and how to use it. This is where you choose your model and configure settings.
 
 1. **Open Connection Profiles**
-   - Go to: [Settings > Connection Profiles](/settings?tab=profiles)
-   - Or: Settings → Connection Profiles tab
+   - Go to: [The Forge](/foundry/forge)
 
 2. **Create a New Profile**
    - Click **Add Profile** or **+ New Profile**
@@ -303,7 +302,7 @@ Quilltap includes a built-in embedding system that works without any external se
 
 **Check if it's working:**
 
-1. Go to: [Settings > Embedding Profiles](/settings?tab=embedding-profiles)
+1. Go to: [The Commonplace Book](/foundry/commonplace-book)
 2. Look for a profile named "Built-in TF-IDF" or similar
 3. It should show as the default (star icon)
 
@@ -329,7 +328,7 @@ For more sophisticated semantic search, you can use external embedding services.
 
 **Using OpenAI Embeddings:**
 
-1. Go to: [Settings > Embedding Profiles](/settings?tab=embedding-profiles)
+1. Go to: [The Commonplace Book](/foundry/commonplace-book)
 2. Click **Add Profile**
 3. Select **OpenAI** as the provider
 4. Select your OpenAI API key
@@ -362,7 +361,7 @@ These don't need your most powerful (expensive) model. Setting up a "cheap LLM" 
 ### To Set Up a Cheap LLM:
 
 1. **Create a Second Connection Profile**
-   - Go to: [Settings > Connection Profiles](/settings?tab=profiles)
+   - Go to: [The Forge](/foundry/forge)
    - Create a new profile with a cheaper model:
      - OpenAI: `gpt-4o-mini` is much cheaper than `gpt-4o`
      - Anthropic: `claude-3-5-haiku` is cheaper than `claude-3-5-sonnet`
@@ -370,7 +369,7 @@ These don't need your most powerful (expensive) model. Setting up a "cheap LLM" 
    - Name it something like "Cheap - GPT-4o-mini"
 
 2. **Configure Chat Settings**
-   - Go to: [Settings > Chat Settings](/settings?tab=chat)
+   - Go to: [The Salon](/foundry/salon)
    - Find the **Cheap LLM** section
    - Toggle **Enable Cheap LLM** on
    - Select your cheaper profile from the dropdown
@@ -526,13 +525,13 @@ Now that you're set up, explore more of Quilltap:
 
 | What You Need | Where to Find It |
 |---------------|------------------|
-| Add API Keys | [Settings > API Keys](/settings?tab=keys) |
-| Create Connection Profiles | [Settings > Connection Profiles](/settings?tab=profiles) |
-| Configure Embeddings | [Settings > Embedding Profiles](/settings?tab=embedding-profiles) |
-| Set Up Cheap LLM | [Settings > Chat Settings](/settings?tab=chat) |
+| Add API Keys | [The Forge](/foundry/forge) |
+| Create Connection Profiles | [The Forge](/foundry/forge) |
+| Configure Embeddings | [The Commonplace Book](/foundry/commonplace-book) |
+| Set Up Cheap LLM | [The Salon](/foundry/salon) |
 | Manage Characters | [Characters](/aurora) |
-| View Background Tasks | [Tools](/foundry) |
-| Customize Appearance | [Settings > Appearance](/settings?tab=appearance) |
+| View Background Tasks | [Prospero](/foundry/prospero) |
+| Customize Appearance | [Calliope](/foundry/calliope) |
 
 ---
 

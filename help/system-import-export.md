@@ -28,7 +28,7 @@ Export lets you save characters, chats, memories, and templates to files in Quil
 
 **Step-by-Step:**
 
-1. **Go to the Tools page** (`/tools`)
+1. **Go to The Forge** (`/foundry/forge`)
 
 2. **Find the Import / Export card**
 
@@ -85,7 +85,7 @@ Import lets you load exported data from `.quilltap` files back into your system.
 
 **Step-by-Step:**
 
-1. **Go to the Tools page** (`/tools`)
+1. **Go to The Forge** (`/foundry/forge`)
 
 2. **Find the Import / Export card**
 

@@ -1,8 +1,8 @@
 # Dead Code Analysis Report
 
-**Last Updated**: 2026-02-02
+**Last Updated**: 2026-02-08
 **Tool Used**: knip
-**Codebase**: Quilltap v2.9.0-dev
+**Codebase**: Quilltap v2.10.0-dev
 
 ---
 
@@ -16,6 +16,19 @@ Dead code analysis is performed periodically using knip. A knip configuration fi
 | Migration Scripts | Deleted (migrations complete) |
 | Unused Dependencies | bcrypt, qrcode, ts-jest removed 2026-01-30 |
 | Unused Exports | Low priority, ~620 remaining (mostly barrel re-exports) |
+
+---
+
+## Flagged as Dead Code (2026-02-08)
+
+### Sidebar Collapse/Resize (Foundry Hub Restructure)
+
+| Location | Item | Reason |
+|----------|------|--------|
+| `hooks/useSidebarResize.ts` | Entire file | Sidebar is now permanently collapsed; resize functionality removed |
+| `components/settings/appearance/SidebarWidthControl.tsx` | Entire file | Sidebar width control removed from Appearance settings |
+
+**Note:** These files are no longer imported anywhere but are preserved pending confirmation that no external references remain.
 
 ---
 

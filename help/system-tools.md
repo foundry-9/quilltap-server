@@ -2,11 +2,11 @@
 
 > **[Open this page in Quilltap](/foundry)**
 
-The Tools page (`/foundry`) is your command center for managing and maintaining your Quilltap system. It provides utilities for backing up your data, importing/exporting, monitoring tasks, and managing your system's capabilities.
+The Foundry (`/foundry`) is your command center for managing and maintaining your Quilltap system. It provides utilities for backing up your data, importing/exporting, monitoring tasks, and managing your system's capabilities.
 
-## Accessing the Tools Page
+## Accessing The Foundry
 
-Navigate to the **Tools** page in Quilltap at `/foundry` or through your app's navigation menu. The page displays several utility cards, each providing different system management features.
+Navigate to **The Foundry** in Quilltap at `/foundry` or through your app's navigation menu. The page displays several utility cards, each providing different system management features.
 
 ## Available Tools
 
@@ -164,19 +164,19 @@ For detailed instructions, see [Deleting Your Data](system-delete-data.md).
 
 **For data safety:**
 
-1. Go to Tools page
+1. Go to The Foundry (`/foundry`)
 2. Click **Backup & Restore**
 3. Create a backup
 
 **To transfer data:**
 
-1. Go to Tools page
+1. Go to The Foundry (`/foundry`)
 2. Click **Import / Export**
 3. Choose Export to save your data
 
 **To monitor system:**
 
-1. Go to Tools page
+1. Go to The Foundry (`/foundry`)
 2. Check **Tasks Queue** for active jobs
 3. View **LLM Logs** for recent activity
 

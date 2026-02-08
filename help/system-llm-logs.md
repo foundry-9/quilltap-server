@@ -30,7 +30,7 @@ LLM Logs record every interaction with Large Language Models (AI providers like 
 
 ## Accessing LLM Logs
 
-**Go to the Tools page** (`/tools`) and find the **LLM Logs** card.
+**Go to Prospero** (`/foundry/prospero`) and expand the **LLM Logs** card.
 
 The card shows:
 

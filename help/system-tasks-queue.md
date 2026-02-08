@@ -23,7 +23,7 @@ The Tasks Queue shows all background jobs running in your Quilltap system. These
 
 ## Viewing the Tasks Queue
 
-**Go to Tools page** (`/tools`) and look for the **Tasks Queue** card.
+**Go to Prospero** (`/foundry/prospero`) and expand the **Tasks Queue** card.
 
 The Tasks Queue displays:
 

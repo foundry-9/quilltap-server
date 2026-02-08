@@ -279,4 +279,71 @@
     background: var(--color-foreground);
     color: var(--color-background);
   }
+
+  /* ==========================================================================
+     COLLAPSIBLE CARDS
+     ========================================================================== */
+
+  /**
+   * Collapsible card container
+   */
+  .qt-collapsible-card {
+    @apply transition-all duration-200;
+    border-radius: var(--qt-card-radius);
+    background: var(--qt-card-bg);
+    color: var(--qt-card-fg);
+    border: 1px solid color-mix(in srgb, var(--qt-card-border) calc(var(--qt-card-border-opacity) * 100%), transparent);
+    box-shadow: var(--qt-card-shadow);
+  }
+
+  /**
+   * Collapsible card header - clickable toggle area
+   */
+  .qt-collapsible-card-header {
+    @apply flex items-center justify-between w-full cursor-pointer;
+    @apply text-left;
+    padding: var(--qt-card-padding);
+    background: transparent;
+    border: none;
+    color: inherit;
+  }
+
+  .qt-collapsible-card-header:hover {
+    @apply bg-muted/50;
+    border-radius: var(--qt-card-radius);
+  }
+
+  /**
+   * Collapsible card icon slot
+   */
+  .qt-collapsible-card-icon {
+    @apply flex-shrink-0 text-muted-foreground;
+  }
+
+  /**
+   * Collapsible card chevron indicator
+   */
+  .qt-collapsible-card-chevron {
+    @apply w-5 h-5 flex-shrink-0 text-muted-foreground;
+    @apply transition-transform duration-200;
+  }
+
+  .qt-collapsible-card-chevron-open {
+    @apply rotate-180;
+  }
+
+  /**
+   * Collapsible card divider between header and body
+   */
+  .qt-collapsible-card-divider {
+    @apply mx-4;
+    border-top: 1px solid var(--qt-card-border);
+  }
+
+  /**
+   * Collapsible card body - content area shown when expanded
+   */
+  .qt-collapsible-card-body {
+    padding: var(--qt-card-padding);
+  }
 }

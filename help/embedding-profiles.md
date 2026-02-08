@@ -1,6 +1,6 @@
 # Embedding Provider Profiles
 
-> **[Open this page in Quilltap](/settings?tab=embedding-profiles)**
+> **[Open this page in Quilltap](/foundry/commonplace-book)**
 
 Embedding Provider Profiles configure services that transform text into numerical representations (embeddings) for semantic search. Embeddings enable Quilltap to intelligently search through memories and find relevant context based on meaning, not just keywords.
 
@@ -80,7 +80,7 @@ The profiles list shows:
 
 For cloud providers only:
 
-1. Go to Settings → **API Keys** tab
+1. Go to **The Forge** (`/foundry/forge`) and expand **API Keys**
 2. Click **Add API Key**
 3. Select "OpenAI" (or relevant provider)
 4. Enter your API key

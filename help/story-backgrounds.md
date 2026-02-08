@@ -17,8 +17,8 @@ When enabled, Quilltap generates a landscape scene image featuring your characte
 
 ## Enabling Story Backgrounds
 
-1. Go to **Settings** > **Chat**
-2. Find the **Story Backgrounds** section
+1. Go to **The Lantern** (`/foundry/lantern`)
+2. Expand the **Story Backgrounds** card
 3. Toggle **Enable Story Backgrounds** on
 4. (Optional) Select a specific **Image Generation Profile** to use
 
@@ -62,7 +62,7 @@ Projects can display backgrounds in different ways:
 ## Troubleshooting
 
 **Background not appearing:**
-- Check that Story Backgrounds is enabled in Settings > Chat
+- Check that Story Backgrounds is enabled in The Lantern (`/foundry/lantern`)
 - Verify your image profile has a valid API key
 - Check the Tasks Queue for any failed generation jobs
 

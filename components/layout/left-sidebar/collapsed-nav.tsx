@@ -3,16 +3,14 @@
 /**
  * Collapsed Navigation
  *
- * Navigation buttons shown when the sidebar is collapsed.
- * Clicking a button expands the sidebar and navigates to the view-all page.
+ * Navigation links shown in the always-collapsed sidebar.
+ * Each item is a direct Link to the corresponding view-all page.
  *
  * @module components/layout/left-sidebar/collapsed-nav
  */
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { useRouter } from 'next/navigation'
-import { useSidebar } from '@/components/providers/sidebar-provider'
 
 /**
  * Folder icon (for Projects)
@@ -108,17 +106,6 @@ const navItems: NavItem[] = [
 ]
 
 export function CollapsedNav() {
-  const { setCollapsed } = useSidebar()
-  const router = useRouter()
-
-  const handleNavClick = (item: NavItem) => {
-    // Expand the sidebar
-    setCollapsed(false)
-
-    // Navigate to the view-all page
-    router.push(item.href)
-  }
-
   return (
     <nav className="qt-collapsed-nav" aria-label="Quick navigation">
       {/* Home button with Quilltap quill icon */}
@@ -139,16 +126,15 @@ export function CollapsedNav() {
       {navItems.map((item) => {
         const Icon = item.icon
         return (
-          <button
+          <Link
             key={item.id}
-            type="button"
-            onClick={() => handleNavClick(item)}
+            href={item.href}
             className="qt-collapsed-nav-button"
             title={item.tooltip}
             aria-label={item.tooltip}
           >
             <Icon className="w-5 h-5" />
-          </button>
+          </Link>
         )
       })}
     </nav>

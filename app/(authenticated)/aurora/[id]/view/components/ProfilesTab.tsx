@@ -81,7 +81,7 @@ export function ProfilesTab({
         </div>
         {profiles.length === 0 && (
           <p className="mt-2 text-sm text-warning">
-            No connection profiles available. <Link href="/settings" className="underline hover:no-underline">Create one in Settings</Link>.
+            No connection profiles available. <Link href="/foundry/forge" className="underline hover:no-underline">Create one in The Forge</Link>.
           </p>
         )}
       </div>

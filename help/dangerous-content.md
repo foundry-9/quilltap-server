@@ -27,7 +27,7 @@ Messages are scanned, and flagged content is automatically rerouted to an uncens
 
 ## Configuration
 
-Navigate to **Settings > Chat Settings > Dangerous Content Handling** to configure:
+Navigate to **The Salon** (`/foundry/salon`) and expand **Dangerous Content Handling** to configure:
 
 ### Detection Threshold
 
@@ -64,7 +64,7 @@ Additional instructions appended to the content classifier's system prompt. Use 
 
 To use Auto-Route mode, you need at least one connection profile marked as uncensored-compatible:
 
-1. Go to **Settings > Connection Profiles**
+1. Go to **The Forge** (`/foundry/forge`) and expand **Connection Profiles**
 2. Edit or create a profile that connects to an uncensored-compatible model
 3. Check the **"Uncensored-compatible"** checkbox
 4. Save the profile
@@ -105,7 +105,7 @@ Overriding a message's danger flags marks all flags as user-overridden and remov
 
 ## Image Prompt Expansion
 
-When an image prompt is flagged as dangerous, the system can use a separate uncensored LLM for prompt expansion (the step where character placeholders are resolved into visual descriptions). Configure this in **Settings > Chat Settings > Cheap LLM Settings** under "Image Prompt Expansion LLM (Uncensored - Optional)." If not set, the standard cheap LLM is always used for prompt expansion.
+When an image prompt is flagged as dangerous, the system can use a separate uncensored LLM for prompt expansion (the step where character placeholders are resolved into visual descriptions). Configure this in **The Salon** (`/foundry/salon`) under **Cheap LLM Settings** > "Image Prompt Expansion LLM (Uncensored - Optional)." If not set, the standard cheap LLM is always used for prompt expansion.
 
 ## Chat-Level Classification
 
@@ -131,7 +131,7 @@ Chats classified as dangerous can be hidden from the sidebar using the quick-hid
 
 ### Hiding Dangerous Chats
 
-1. Click the **eye icon** in the sidebar footer (or look for it under the Settings/Tools area)
+1. Click the **eye icon** in the sidebar footer
 2. In the **Content Filters** section, toggle **"Dangerous Chats"** to hide them
 3. Dangerous chats will be hidden from the sidebar, projects section, and all-chats page
 

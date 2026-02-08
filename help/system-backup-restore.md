@@ -39,7 +39,7 @@ A complete backup includes everything needed to recreate your Quilltap environme
 
 **Step-by-Step:**
 
-1. **Go to the Tools page** (`/tools`)
+1. **Go to The Forge** (`/foundry/forge`)
 
 2. **Find the Backup & Restore card**
 
@@ -69,7 +69,7 @@ A complete backup includes everything needed to recreate your Quilltap environme
 
 **Step-by-Step:**
 
-1. **Go to the Tools page** (`/tools`)
+1. **Go to The Forge** (`/foundry/forge`)
 
 2. **Find the Backup & Restore card**
 

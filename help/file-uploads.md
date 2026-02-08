@@ -326,7 +326,7 @@ Add descriptions when available:
 
 - Quilltap stores safely
 - Download periodically for backup
-- Use Settings > File Storage to backup entire library
+- Use The Forge > File Storage to backup entire library
 
 ## Uploading from Different Locations
 
@@ -500,4 +500,4 @@ If accessing Quilltap on mobile:
 - [Projects](projects.md) — Organize files by project
 - [Characters](characters.md) — Upload character profile pictures
 - [Chats](chats.md) — Attach files to messages
-- [Settings > File Storage](file-storage-settings.md) — Configure storage location
+- [The Forge > File Storage](file-storage-settings.md) — Configure storage location

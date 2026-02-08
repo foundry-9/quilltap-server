@@ -46,7 +46,7 @@ This document tracks planned features and improvements for Quilltap.
 - [ ] Update image generators
 - [ ] Add ability to use Eternal AI LoRAs
 
-### Content & Worldbuilding (Commonplace Book)
+### Content & Worldbuilding (The Commonplace Book)
 
 - [ ] Worldbook/Lore system
 
