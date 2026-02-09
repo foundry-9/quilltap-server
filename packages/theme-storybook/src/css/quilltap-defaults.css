@@ -166,6 +166,19 @@
   --font-brand: var(--theme-font-brand);
   --font-chat-user: var(--theme-font-chat-user);
 
+  /* Sidebar Variables */
+  --qt-sidebar-width: 15rem;
+  --qt-sidebar-bg: var(--color-background);
+  --qt-sidebar-border: var(--color-border);
+  --qt-sidebar-fg: var(--color-foreground);
+  --qt-sidebar-muted: var(--color-muted-foreground);
+  --qt-sidebar-item-padding-x: 0.625rem;
+  --qt-sidebar-item-padding-y: 0.375rem;
+  --qt-sidebar-item-radius: var(--radius-md);
+  --qt-sidebar-item-hover-bg: var(--color-accent);
+  --qt-sidebar-item-active-bg: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  --qt-sidebar-item-active-border: var(--color-primary);
+
   /* Left Sidebar Variables */
   --qt-left-sidebar-width: 15rem;
   --qt-left-sidebar-collapsed-width: 3.5rem;

@@ -48,7 +48,7 @@ export const Dialogs: React.FC = () => {
                 </svg>
               </button>
             </div>
-            <div className="qt-dialog-content">
+            <div className="qt-dialog-body">
               <p>This is a basic dialog with some content. Dialogs are used to show important information or gather user input.</p>
             </div>
             <div className="qt-dialog-footer">
@@ -72,7 +72,7 @@ export const Dialogs: React.FC = () => {
                 </svg>
               </button>
             </div>
-            <div className="qt-dialog-content">
+            <div className="qt-dialog-body">
               <p>Are you sure you want to delete this item? This action cannot be undone.</p>
             </div>
             <div className="qt-dialog-footer">
@@ -99,7 +99,7 @@ export const Dialogs: React.FC = () => {
                 </svg>
               </button>
             </div>
-            <div className="qt-dialog-content">
+            <div className="qt-dialog-body">
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <div>
                   <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem', fontWeight: 500 }}>
@@ -153,7 +153,7 @@ export const Dialogs: React.FC = () => {
                 </svg>
               </button>
             </div>
-            <div className="qt-dialog-content">
+            <div className="qt-dialog-body">
               <p>Dialog content area. This can contain text, forms, or any other content.</p>
             </div>
             <div className="qt-dialog-footer">
@@ -173,11 +173,11 @@ export const Dialogs: React.FC = () => {
           <div>
             <span style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-muted-foreground)' }}>Small (max-width: 24rem)</span>
             <div style={{ backgroundColor: 'var(--color-muted)', padding: '1rem', borderRadius: 'var(--radius-lg)', marginTop: '0.5rem' }}>
-              <div className="qt-dialog qt-dialog-sm" style={{ position: 'relative', transform: 'none', margin: 0, maxWidth: '24rem' }}>
+              <div className="qt-dialog" style={{ position: 'relative', transform: 'none', margin: 0, maxWidth: '24rem' }}>
                 <div className="qt-dialog-header">
                   <h3 className="qt-dialog-title">Small Dialog</h3>
                 </div>
-                <div className="qt-dialog-content">
+                <div className="qt-dialog-body">
                   <p>Compact dialog for simple confirmations.</p>
                 </div>
               </div>
@@ -186,11 +186,11 @@ export const Dialogs: React.FC = () => {
           <div>
             <span style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-muted-foreground)' }}>Large (max-width: 42rem)</span>
             <div style={{ backgroundColor: 'var(--color-muted)', padding: '1rem', borderRadius: 'var(--radius-lg)', marginTop: '0.5rem' }}>
-              <div className="qt-dialog qt-dialog-lg" style={{ position: 'relative', transform: 'none', margin: 0, maxWidth: '42rem' }}>
+              <div className="qt-dialog qt-dialog-wide" style={{ position: 'relative', transform: 'none', margin: 0, maxWidth: '42rem' }}>
                 <div className="qt-dialog-header">
                   <h3 className="qt-dialog-title">Large Dialog</h3>
                 </div>
-                <div className="qt-dialog-content">
+                <div className="qt-dialog-body">
                   <p>Larger dialog for complex forms or detailed content that needs more space.</p>
                 </div>
               </div>

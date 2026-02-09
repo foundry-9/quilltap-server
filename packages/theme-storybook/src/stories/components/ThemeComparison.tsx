@@ -65,16 +65,16 @@ const ThemePanel: React.FC<ThemePanelProps> = ({ title, description }) => {
 
       {/* Sample Chat */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-        <div className="qt-chat-message qt-chat-message-assistant" style={{ maxWidth: '100%' }}>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
           <div className="qt-avatar qt-avatar-sm">
             <div className="qt-avatar-fallback">AI</div>
           </div>
-          <div className="qt-chat-bubble qt-chat-bubble-assistant">
+          <div className="qt-chat-message qt-chat-message-assistant" style={{ maxWidth: '100%' }}>
             <p style={{ fontSize: '0.875rem' }}>Hello! This is a chat message.</p>
           </div>
         </div>
-        <div className="qt-chat-message qt-chat-message-user" style={{ maxWidth: '100%' }}>
-          <div className="qt-chat-bubble qt-chat-bubble-user">
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <div className="qt-chat-message qt-chat-message-user" style={{ maxWidth: '100%' }}>
             <p style={{ fontSize: '0.875rem' }}>Great, thanks!</p>
           </div>
         </div>

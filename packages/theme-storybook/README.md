@@ -275,19 +275,19 @@ All Quilltap components use `qt-*` prefixed classes. Your theme CSS can override
 
 ### Chat
 - `.qt-chat-message` - Message container
-- `.qt-chat-bubble` - Message bubble
-- `.qt-chat-bubble-user`, `.qt-chat-bubble-assistant` - Role variants
+- `.qt-chat-message` - Chat message container
+- `.qt-chat-message-user`, `.qt-chat-message-assistant` - Role variants
 - `.qt-chat-input` - Chat input field
 - `.qt-typing-indicator` - Typing animation
 
 ### Dialogs
 - `.qt-dialog-overlay` - Modal backdrop
 - `.qt-dialog` - Dialog container
-- `.qt-dialog-header`, `.qt-dialog-content`, `.qt-dialog-footer` - Sections
+- `.qt-dialog-header`, `.qt-dialog-body`, `.qt-dialog-footer` - Sections
 
 ### Navigation
-- `.qt-tabs`, `.qt-tab` - Tab components
-- `.qt-navbar`, `.qt-nav-link` - Navigation bar
+- `.qt-tab-group`, `.qt-tab` - Tab components
+- `.qt-navbar`, `.qt-navbar-link` - Navigation bar
 
 ## Development Workflow
 

@@ -4,6 +4,19 @@
 
 ### 2.10-dev
 
+- fix: Sync qt-* theme utility classes across npm packages for theme developers
+  - **@quilltap/theme-storybook** (1.0.18 → 1.0.19):
+    - Add ~120 missing CSS variables to `qt-components.css` (navbar, sidebar, content, typography, panel, popover, chat composer/toolbar/attachment/sidebar, response status, participant, roleplay, queue badges, entity card, code, link, footer, brand, auth, page layout, tab extras)
+    - Add ~15 missing class definitions (`.qt-bg-surface`, `.qt-bg-surface-alt`, `.qt-bg-primary/*`, `.qt-border-default`, `.qt-shadow-sm`, `.qt-shadow-md`, `.qt-tab-group`, `.qt-tab-divider`, `.qt-dialog-overlay`, `.qt-navbar`, `.qt-navbar-link`, `.qt-navbar-link-active`)
+    - Rename `.qt-tabs` → `.qt-tab-group` to match app
+    - Add sidebar variables to `quilltap-defaults.css`
+    - Fix phantom class names in story components: `qt-chat-bubble*` → `qt-chat-message*`, `qt-chat-name` → `qt-chat-message-author`, `qt-chat-input*` → `qt-chat-composer*`, `qt-dialog-content` → `qt-dialog-body`, `qt-dialog-sm` removed, `qt-dialog-lg` → `qt-dialog-wide`, `qt-tab-panel` → `qt-tab-content`, `qt-nav-link*` → `qt-navbar-link*`
+    - Remove phantom Pill Tabs, Vertical Tabs, Chat List sections from stories
+    - Remove phantom `qt-avatar-xs` and Avatar with Status sections
+  - **create-quilltap-theme** (1.0.5 → 1.0.6):
+    - Fix `qt-chat-bubble-*` → `qt-chat-message-*` in `styles.css.template`
+    - Fix Available Component Classes table and Component Variable Reference in docs template
+
 - refactor: Comprehensive codebase audit and cleanup
   - **Dead code removal**: Delete unused `useSidebarResize` hook, `SidebarWidthControl` component, MongoDB `mongodb-utils.ts` stub, `DatabaseMigrationService` stub class and barrel file, and associated test file; remove stale webpack warning suppressions from `next.config.js`
   - **API conformance**: Refactor `/api/v1/session` and `/api/v1/system/data-dir` routes to use standard `createContextHandler` middleware, `withCollectionActionDispatch`, and response helpers from `@/lib/api/responses`
