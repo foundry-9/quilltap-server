@@ -3,7 +3,7 @@
   "name": "qtap-plugin-theme-earl-grey",
   "title": "Earl Grey",
   "description": "A high-contrast dark theme inspired by modern AI chat interfaces, with pure black sidebar, charcoal main area, and clean minimal styling",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "author": {
     "name": "Foundry-9 LLC",
     "email": "charles.sebold@foundry-9.com",

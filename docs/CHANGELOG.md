@@ -4,6 +4,15 @@
 
 ### 2.10-dev
 
+- fix: Add missing Old School default qt-* variables to Rains and Earl Grey themes
+  - Both themes previously inherited ~120 unset qt-* CSS variables from Old School
+    when it was the default theme; after the default changed to Professional Neutral,
+    those variables picked up different values and broke the intended look
+  - Copied all Old School values for missing variables into both themes so they are
+    fully self-contained (alerts, badges, buttons, cards, inputs, left sidebar,
+    response status, queue badges, filter chips, tabs, and more)
+  - Rains bumped to 1.3.5, Earl Grey bumped to 1.3.3/1.3.2
+
 - fix: Improve Art Deco assistant message readability with heavier font weight
   - Add `--qt-chat-assistant-font-weight` variable to qt-* component system (default: inherit)
   - Art Deco theme sets Cormorant Garamond to weight 500 (Medium) for chat messages
