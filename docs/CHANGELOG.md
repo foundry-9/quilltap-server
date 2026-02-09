@@ -4,6 +4,28 @@
 
 ### 2.10-dev
 
+- feat: Add "The Great Estate" theme plugin with warm gold-and-mahogany palette
+  - Manor house library aesthetic — mahogany (hue 20) and gold (hue 43) palette
+  - Full-page background image with carbon-fibre texture overlay for tactile depth
+  - Playfair Display serif headings with Inter sans-serif body text
+  - Gold left border on assistant messages, brown right border on user messages
+  - Black input backgrounds in dark mode, gold focus glow, uppercase buttons
+  - Full light/dark mode support
+  - Distributed with the app in `plugins/dist/qtap-plugin-theme-great-estate/`
+
+- fix: Overhaul Art Deco theme — darker palette, background images, sidebar fix
+  - Darken light mode palette (background 99% → 78%, cards → 75%, muted → 72%)
+  - Add background images: ivory-and-gold arches (light), geometric gold-on-navy (dark)
+  - Dark mode background dimmed via CSS gradient overlay for readability
+  - Left sidebar uses warm ivory in light mode (was dark navy — icons were invisible)
+  - Sidebar hover/active colors adjusted per mode for proper contrast
+
+- fix: Theme background images yield to story backgrounds (Ocean, Great Estate, Art Deco)
+  - When a story background (`--story-background-url`) is active, the theme's body
+    background image is hidden and solid theme colors are restored on containers
+  - Uses CSS `:has()` selector to detect story background presence
+  - Great Estate also hides its carbon-fibre texture overlay when story bg is active
+
 - feat: Add "Old School" theme plugin preserving the original default appearance
   - Captures the warm slate-blue (hue 220) color palette for light and dark modes
   - Bundles Inter (400/600/700) and EB Garamond (400/600/700) fonts

@@ -650,6 +650,37 @@
 }
 
 /* ============================================================================
+   STORY BACKGROUND OVERRIDE
+   When a built-in story background is active, yield to it:
+   drop the theme background image, restore solid theme colors on containers,
+   and let the story background's ::before pseudo-element dominate.
+   ============================================================================ */
+[data-theme="ocean"] body:has([style*="--story-background-url"]) {
+  background-image: none;
+  background-color: var(--color-background);
+}
+
+[data-theme="ocean"] body:has([style*="--story-background-url"]) .bg-background {
+  background: var(--color-background) !important;
+}
+
+[data-theme="ocean"] body:has([style*="--story-background-url"]) .qt-app-layout {
+  background: var(--color-background);
+}
+
+[data-theme="ocean"] body:has([style*="--story-background-url"]) .qt-app-main {
+  background: var(--color-background);
+}
+
+[data-theme="ocean"] body:has([style*="--story-background-url"]) .qt-content {
+  background: var(--qt-content-bg);
+}
+
+[data-theme="ocean"] body:has([style*="--story-background-url"]) .qt-content-scroll {
+  background: var(--qt-content-scroll-bg);
+}
+
+/* ============================================================================
    TEXT READABILITY - Shadows for text over background image
    ============================================================================ */
 

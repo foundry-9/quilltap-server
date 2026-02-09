@@ -49,7 +49,7 @@
   --deco-gold-dark: hsl(43 80% 42%);
   --deco-navy: hsl(222 47% 11%);
   --deco-navy-mid: hsl(222 35% 22%);
-  --deco-ivory: hsl(45 20% 96%);
+  --deco-ivory: hsl(45 28% 75%);
   --deco-corner-size: 12px;
   --deco-line-thin: 1px;
   --deco-line-medium: 2px;
@@ -198,8 +198,8 @@
   --qt-sidebar-item-padding-x: 0.75rem;
   --qt-sidebar-item-padding-y: 0.5rem;
   --qt-sidebar-item-radius: var(--radius-md);
-  --qt-sidebar-item-hover-bg: hsl(43 85% 55% / 0.08);
-  --qt-sidebar-item-active-bg: hsl(43 85% 55% / 0.12);
+  --qt-sidebar-item-hover-bg: hsl(222 30% 20% / 0.1);
+  --qt-sidebar-item-active-bg: hsl(222 30% 20% / 0.15);
   --qt-sidebar-item-active-border: var(--deco-gold);
 
   /* ==========================================================================
@@ -210,7 +210,7 @@
   --qt-left-sidebar-max-width: 32rem;
   --qt-left-sidebar-collapsed-width: 4rem;
   --qt-left-sidebar-resize-handle-width: 4px;
-  --qt-left-sidebar-bg: var(--deco-navy);
+  --qt-left-sidebar-bg: hsl(45 25% 72%);
   --qt-left-sidebar-border: var(--deco-gold-dark);
   --qt-left-sidebar-transition: width 200ms ease, transform 300ms ease;
 
@@ -219,7 +219,7 @@
 
   --qt-left-sidebar-section-padding: 0.75rem;
   --qt-left-sidebar-section-gap: 0.25rem;
-  --qt-left-sidebar-section-title-fg: var(--deco-gold-light);
+  --qt-left-sidebar-section-title-fg: hsl(222 40% 18%);
 
   --qt-left-sidebar-item-gap: 0.5rem;
   --qt-left-sidebar-item-icon-size: 1.25rem;
@@ -557,6 +557,9 @@
   /* Sidebar — darkest navy with gold accents */
   --qt-left-sidebar-bg: hsl(222 50% 5%);
   --qt-left-sidebar-border: hsl(43 75% 30%);
+  --qt-left-sidebar-section-title-fg: var(--deco-gold-light);
+  --qt-sidebar-item-hover-bg: hsl(43 85% 55% / 0.08);
+  --qt-sidebar-item-active-bg: hsl(43 85% 55% / 0.12);
 
   /* Alert tokens — brighter for dark backgrounds */
   --qt-alert-success-bg: hsl(142 76% 36% / 0.2);
@@ -643,6 +646,89 @@
    ART DECO DECORATIVE STYLES
    These are visual enhancements applied on top of the token system.
    ============================================================================ */
+
+/* ============================================================================
+   BODY BACKGROUND - Geometric Gold Motifs (per-mode images)
+   ============================================================================ */
+[data-theme="art-deco"] body {
+  position: relative;
+  min-height: 100vh;
+  background-image: url('/api/themes/assets/qtap-plugin-theme-art-deco/textures/background-light.png');
+  background-size: cover;
+  background-position: center center;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+}
+
+[data-theme="art-deco"].dark body {
+  background-image:
+    linear-gradient(hsl(222 47% 7% / 0.55), hsl(222 47% 7% / 0.55)),
+    url('/api/themes/assets/qtap-plugin-theme-art-deco/textures/background-dark.png');
+}
+
+/* Ensure background shows through main containers */
+[data-theme="art-deco"] .bg-background {
+  background: transparent !important;
+}
+
+[data-theme="art-deco"] .qt-app-layout {
+  background: transparent;
+}
+
+[data-theme="art-deco"] .qt-app-main {
+  background: transparent;
+}
+
+[data-theme="art-deco"] .qt-page,
+[data-theme="art-deco"] .qt-page-with-navbar {
+  background: transparent;
+}
+
+[data-theme="art-deco"] .qt-content {
+  background: transparent;
+}
+
+[data-theme="art-deco"] .qt-content-scroll {
+  background: transparent;
+}
+
+[data-theme="art-deco"] .qt-auth-page {
+  background: transparent;
+}
+
+[data-theme="art-deco"] .qt-page-container {
+  background: transparent;
+}
+
+/* ============================================================================
+   STORY BACKGROUND OVERRIDE
+   When a built-in story background is active, yield to it:
+   drop the theme background image, restore solid theme colors on containers.
+   ============================================================================ */
+[data-theme="art-deco"] body:has([style*="--story-background-url"]) {
+  background-image: none;
+  background-color: var(--color-background);
+}
+
+[data-theme="art-deco"] body:has([style*="--story-background-url"]) .bg-background {
+  background: var(--color-background) !important;
+}
+
+[data-theme="art-deco"] body:has([style*="--story-background-url"]) .qt-app-layout {
+  background: var(--color-background);
+}
+
+[data-theme="art-deco"] body:has([style*="--story-background-url"]) .qt-app-main {
+  background: var(--color-background);
+}
+
+[data-theme="art-deco"] body:has([style*="--story-background-url"]) .qt-content {
+  background: var(--qt-content-bg);
+}
+
+[data-theme="art-deco"] body:has([style*="--story-background-url"]) .qt-content-scroll {
+  background: var(--qt-content-scroll-bg);
+}
 
 /* --- Heading typography: geometric uppercase showcase --- */
 [data-theme="art-deco"] h1,
