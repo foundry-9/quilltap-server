@@ -13,6 +13,7 @@ import {
 } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { ChatOpsContext } from './chats-ops-context';
+import { safeQuery } from './safe-query';
 
 export class ChatParticipantsOps {
   constructor(private readonly ctx: ChatOpsContext) {}
@@ -26,7 +27,7 @@ export class ChatParticipantsOps {
     chatId: string,
     participant: Omit<ChatParticipantBaseInput, 'id' | 'createdAt' | 'updatedAt'>
   ): Promise<ChatMetadata | null> {
-    try {
+    return safeQuery(async () => {
       const chat = await this.ctx.findById(chatId);
       if (!chat) {
         return null;
@@ -61,13 +62,7 @@ export class ChatParticipantsOps {
       }
 
       return await this.ctx.update(chatId, updateData);
-    } catch (error) {
-      logger.error('Failed to add participant to chat', {
-        chatId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    }, 'Failed to add participant to chat', { chatId });
   }
 
   /**
@@ -78,7 +73,7 @@ export class ChatParticipantsOps {
     participantId: string,
     data: Partial<Omit<ChatParticipantBase, 'id' | 'createdAt'>>
   ): Promise<ChatMetadata | null> {
-    try {
+    return safeQuery(async () => {
       const chat = await this.ctx.findById(chatId);
       if (!chat) {
         return null;
@@ -106,21 +101,14 @@ export class ChatParticipantsOps {
       participants[participantIndex] = updatedParticipant;
 
       return await this.ctx.update(chatId, { participants });
-    } catch (error) {
-      logger.error('Failed to update participant in chat', {
-        chatId,
-        participantId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    }, 'Failed to update participant in chat', { chatId, participantId });
   }
 
   /**
    * Remove a participant from a chat
    */
   async removeParticipant(chatId: string, participantId: string): Promise<ChatMetadata | null> {
-    try {
+    return safeQuery(async () => {
       const chat = await this.ctx.findById(chatId);
       if (!chat) {
         return null;
@@ -136,14 +124,7 @@ export class ChatParticipantsOps {
       }
 
       return await this.ctx.update(chatId, { participants });
-    } catch (error) {
-      logger.error('Failed to remove participant from chat', {
-        chatId,
-        participantId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    }, 'Failed to remove participant from chat', { chatId, participantId });
   }
 
   /**

@@ -112,19 +112,17 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
    * Get the messages collection
    */
   private async getMessagesCollection(): Promise<DatabaseCollection> {
-    try {
-      // Ensure collection is initialized with proper schema for JSON column detection
-      await this.ensureMessagesCollectionInitialized();
+    return this.safeQuery(
+      async () => {
+        // Ensure collection is initialized with proper schema for JSON column detection
+        await this.ensureMessagesCollectionInitialized();
 
-      const db = await getDatabaseAsync();
-      return db.getCollection(this.messagesCollectionName);
-    } catch (error) {
-      logger.error('Failed to get chat messages collection', {
-        collection: this.messagesCollectionName,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        const db = await getDatabaseAsync();
+        return db.getCollection(this.messagesCollectionName);
+      },
+      'Failed to get chat messages collection',
+      { messagesCollection: this.messagesCollectionName }
+    );
   }
 
   // ============================================================================
@@ -156,18 +154,16 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
    * Find chats that include a specific character as a participant
    */
   async findByCharacterId(characterId: string): Promise<ChatMetadata[]> {
-    try {
-      const chats = await this.findByFilter({
-        'participants.characterId': characterId,
-      } as QueryFilter);
-      return chats;
-    } catch (error) {
-      logger.error('Failed to find chats by character ID', {
-        characterId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      async () => {
+        const chats = await this.findByFilter({
+          'participants.characterId': characterId,
+        } as QueryFilter);
+        return chats;
+      },
+      'Failed to find chats by character ID',
+      { characterId }
+    );
   }
 
   /**
@@ -179,53 +175,52 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
     data: Omit<ChatMetadataInput, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions
   ): Promise<ChatMetadata> {
-    try {
-      // Ensure required defaults for ChatMetadata from ChatMetadataInput
-      const chatData = {
-        ...data,
-        tags: data.tags ?? [],
-        participants: data.participants ?? [],
-        impersonatingParticipantIds: data.impersonatingParticipantIds ?? [],
-      } as Omit<ChatMetadata, 'id' | 'createdAt' | 'updatedAt'>;
+    return this.safeQuery(
+      async () => {
+        // Ensure required defaults for ChatMetadata from ChatMetadataInput
+        const chatData = {
+          ...data,
+          tags: data.tags ?? [],
+          participants: data.participants ?? [],
+          impersonatingParticipantIds: data.impersonatingParticipantIds ?? [],
+        } as Omit<ChatMetadata, 'id' | 'createdAt' | 'updatedAt'>;
 
-      const chat = await this._create(chatData, options);
+        const chat = await this._create(chatData, options);
 
-      // Legacy data compatibility: Create empty messages document for backward compat (not needed for SQLite - messages are individual rows)
-      if (!this.isSQLiteBackend()) {
-        try {
-          const messagesCollection = await this.getMessagesCollection();
-          const now = this.getCurrentTimestamp();
+        // Legacy data compatibility: Create empty messages document for backward compat (not needed for SQLite - messages are individual rows)
+        if (!this.isSQLiteBackend()) {
+          try {
+            const messagesCollection = await this.getMessagesCollection();
+            const now = this.getCurrentTimestamp();
 
-          const messagesDoc = {
-            chatId: chat.id,
-            messages: [],
-            createdAt: now,
-            updatedAt: now,
-          };
+            const messagesDoc = {
+              chatId: chat.id,
+              messages: [],
+              createdAt: now,
+              updatedAt: now,
+            };
 
-          await messagesCollection.insertOne(messagesDoc as any);
-        } catch (error) {
-          logger.warn('Failed to create chat messages collection', {
-            chatId: chat.id,
-            error: error instanceof Error ? error.message : String(error),
-          });
-          // Don't fail the chat creation if messages collection creation fails
+            await messagesCollection.insertOne(messagesDoc as any);
+          } catch (error) {
+            logger.warn('Failed to create chat messages collection', {
+              chatId: chat.id,
+              error: error instanceof Error ? error.message : String(error),
+            });
+            // Don't fail the chat creation if messages collection creation fails
+          }
         }
-      }
 
-      logger.info('Chat created successfully', {
-        chatId: chat.id,
-        userId: data.userId,
-        title: data.title,
-      });
+        logger.info('Chat created successfully', {
+          chatId: chat.id,
+          userId: data.userId,
+          title: data.title,
+        });
 
-      return chat;
-    } catch (error) {
-      logger.error('Failed to create chat', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return chat;
+      },
+      'Failed to create chat',
+      {}
+    );
   }
 
   /**
@@ -250,39 +245,37 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
    * Delete a chat (removes both metadata and messages)
    */
   async delete(id: string): Promise<boolean> {
-    try {
-      const result = await this._delete(id);
+    return this.safeQuery(
+      async () => {
+        const result = await this._delete(id);
 
-      if (!result) {
-        return false;
-      }
-
-      // Delete messages
-      try {
-        const messagesCollection = await this.getMessagesCollection();
-        if (this.isSQLiteBackend()) {
-          // SQLite: Delete all message rows for this chat
-          await messagesCollection.deleteMany({ chatId: id } as QueryFilter);
-        } else {
-          // Legacy data compatibility: Delete the single messages document
-          await messagesCollection.deleteOne({ chatId: id } as QueryFilter);
+        if (!result) {
+          return false;
         }
-      } catch (error) {
-        logger.warn('Failed to delete chat messages', {
-          chatId: id,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
 
-      logger.info('Chat deleted', { chatId: id });
-      return true;
-    } catch (error) {
-      logger.error('Failed to delete chat', {
-        chatId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        // Delete messages
+        try {
+          const messagesCollection = await this.getMessagesCollection();
+          if (this.isSQLiteBackend()) {
+            // SQLite: Delete all message rows for this chat
+            await messagesCollection.deleteMany({ chatId: id } as QueryFilter);
+          } else {
+            // Legacy data compatibility: Delete the single messages document
+            await messagesCollection.deleteOne({ chatId: id } as QueryFilter);
+          }
+        } catch (error) {
+          logger.warn('Failed to delete chat messages', {
+            chatId: id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+
+        logger.info('Chat deleted', { chatId: id });
+        return true;
+      },
+      'Failed to delete chat',
+      { chatId: id }
+    );
   }
 
   // ============================================================================

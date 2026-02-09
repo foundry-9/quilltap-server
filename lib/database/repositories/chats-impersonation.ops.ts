@@ -9,6 +9,7 @@
 import { ChatMetadata } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { ChatOpsContext } from './chats-ops-context';
+import { safeQuery } from './safe-query';
 
 export class ChatImpersonationOps {
   constructor(private readonly ctx: ChatOpsContext) {}
@@ -20,7 +21,7 @@ export class ChatImpersonationOps {
    * @returns Updated chat metadata
    */
   async addImpersonation(chatId: string, participantId: string): Promise<ChatMetadata | null> {
-    try {
+    return safeQuery(async () => {
       const chat = await this.ctx.findById(chatId);
       if (!chat) {
         return null;
@@ -45,14 +46,7 @@ export class ChatImpersonationOps {
         impersonatingParticipantIds: impersonatingIds,
         activeTypingParticipantId: activeTyping,
       });
-    } catch (error) {
-      logger.error('Failed to add impersonation', {
-        chatId,
-        participantId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    }, 'Failed to add impersonation', { chatId, participantId });
   }
 
   /**
@@ -62,7 +56,7 @@ export class ChatImpersonationOps {
    * @returns Updated chat metadata
    */
   async removeImpersonation(chatId: string, participantId: string): Promise<ChatMetadata | null> {
-    try {
+    return safeQuery(async () => {
       const chat = await this.ctx.findById(chatId);
       if (!chat) {
         return null;
@@ -81,14 +75,7 @@ export class ChatImpersonationOps {
         impersonatingParticipantIds: impersonatingIds,
         activeTypingParticipantId: activeTyping,
       });
-    } catch (error) {
-      logger.error('Failed to remove impersonation', {
-        chatId,
-        participantId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    }, 'Failed to remove impersonation', { chatId, participantId });
   }
 
   /**
@@ -97,20 +84,14 @@ export class ChatImpersonationOps {
    * @returns Array of participant IDs being impersonated
    */
   async getImpersonatedParticipantIds(chatId: string): Promise<string[]> {
-    try {
+    return safeQuery(async () => {
       const chat = await this.ctx.findById(chatId);
       if (!chat) {
         return [];
       }
 
       return chat.impersonatingParticipantIds || [];
-    } catch (error) {
-      logger.error('Failed to get impersonated participant IDs', {
-        chatId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+    }, 'Failed to get impersonated participant IDs', { chatId }, []);
   }
 
   /**
@@ -120,7 +101,7 @@ export class ChatImpersonationOps {
    * @returns Updated chat metadata
    */
   async setActiveTypingParticipant(chatId: string, participantId: string | null): Promise<ChatMetadata | null> {
-    try {
+    return safeQuery(async () => {
       const chat = await this.ctx.findById(chatId);
       if (!chat) {
         return null;
@@ -138,14 +119,7 @@ export class ChatImpersonationOps {
       return await this.ctx.update(chatId, {
         activeTypingParticipantId: participantId,
       });
-    } catch (error) {
-      logger.error('Failed to set active typing participant', {
-        chatId,
-        participantId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    }, 'Failed to set active typing participant', { chatId, participantId });
   }
 
   /**
@@ -155,17 +129,8 @@ export class ChatImpersonationOps {
    * @returns Updated chat metadata
    */
   async updateAllLLMPauseTurnCount(chatId: string, count: number): Promise<ChatMetadata | null> {
-    try {
-      return await this.ctx.update(chatId, {
-        allLLMPauseTurnCount: count,
-      });
-    } catch (error) {
-      logger.error('Failed to update all-LLM pause turn count', {
-        chatId,
-        count,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return safeQuery(() => this.ctx.update(chatId, {
+      allLLMPauseTurnCount: count,
+    }), 'Failed to update all-LLM pause turn count', { chatId, count });
   }
 }

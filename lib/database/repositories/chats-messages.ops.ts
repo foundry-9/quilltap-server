@@ -16,6 +16,7 @@ import { UUIDSchema, TimestampSchema, JsonSchema, RoleEnum } from '@/lib/schemas
 import { QueryFilter, SortSpec } from '../interfaces';
 import { logger } from '@/lib/logger';
 import { ChatOpsContext } from './chats-ops-context';
+import { safeQuery } from './safe-query';
 
 /**
  * Schema for individual chat message rows in SQLite
@@ -66,7 +67,7 @@ export class ChatMessagesOps {
    * Get all messages for a chat
    */
   async getMessages(chatId: string): Promise<ChatEvent[]> {
-    try {
+    return safeQuery(async () => {
       const messagesCollection = await this.ctx.getMessagesCollection();
 
       if (this.ctx.isSQLiteBackend()) {
@@ -87,20 +88,14 @@ export class ChatMessagesOps {
         const messages = (messagesDoc as any).messages || [];
         return messages.map((msg: any) => ChatEventSchema.parse(msg));
       }
-    } catch (error) {
-      logger.error('Failed to get messages for chat', {
-        chatId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+    }, 'Failed to get messages for chat', { chatId }, []);
   }
 
   /**
    * Add a message to a chat
    */
   async addMessage(chatId: string, message: ChatEvent): Promise<ChatEvent> {
-    try {
+    return safeQuery(async () => {
       const validated = ChatEventSchema.parse(message);
       const messagesCollection = await this.ctx.getMessagesCollection();
       const now = this.ctx.getCurrentTimestamp();
@@ -134,20 +129,14 @@ export class ChatMessagesOps {
         await this.ctx.update(chatId, updateData as Partial<ChatMetadata>);
       }
       return validated;
-    } catch (error) {
-      logger.error('Failed to add message to chat', {
-        chatId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    }, 'Failed to add message to chat', { chatId });
   }
 
   /**
    * Add multiple messages to a chat
    */
   async addMessages(chatId: string, messages: ChatEvent[]): Promise<ChatEvent[]> {
-    try {
+    return safeQuery(async () => {
       const validated = messages.map(msg => ChatEventSchema.parse(msg));
       const messagesCollection = await this.ctx.getMessagesCollection();
       const now = this.ctx.getCurrentTimestamp();
@@ -183,20 +172,14 @@ export class ChatMessagesOps {
         await this.ctx.update(chatId, updateData as Partial<ChatMetadata>);
       }
       return validated;
-    } catch (error) {
-      logger.error('Failed to add messages to chat', {
-        chatId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    }, 'Failed to add messages to chat', { chatId });
   }
 
   /**
    * Update a specific message in a chat
    */
   async updateMessage(chatId: string, messageId: string, updates: Partial<ChatEvent>): Promise<ChatEvent | null> {
-    try {
+    return safeQuery(async () => {
       const messagesCollection = await this.ctx.getMessagesCollection();
       const now = this.ctx.getCurrentTimestamp();
 
@@ -243,37 +226,24 @@ export class ChatMessagesOps {
         );
         return validated;
       }
-    } catch (error) {
-      logger.error('Failed to update message in chat', {
-        chatId,
-        messageId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    }
+    }, 'Failed to update message in chat', { chatId, messageId }, null);
   }
 
   /**
    * Get message count for a chat
    */
   async getMessageCount(chatId: string): Promise<number> {
-    try {
+    return safeQuery(async () => {
       const messages = await this.getMessages(chatId);
       return messages.length;
-    } catch (error) {
-      logger.error('Failed to get message count for chat', {
-        chatId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return 0;
-    }
+    }, 'Failed to get message count for chat', { chatId }, 0);
   }
 
   /**
    * Clear all messages from a chat
    */
   async clearMessages(chatId: string): Promise<boolean> {
-    try {
+    return safeQuery(async () => {
       const messagesCollection = await this.ctx.getMessagesCollection();
       const now = this.ctx.getCurrentTimestamp();
 
@@ -304,12 +274,6 @@ export class ChatMessagesOps {
 
       logger.info('Messages cleared for chat', { chatId });
       return true;
-    } catch (error) {
-      logger.error('Failed to clear messages for chat', {
-        chatId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return false;
-    }
+    }, 'Failed to clear messages for chat', { chatId }, false);
   }
 }

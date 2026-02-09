@@ -48,25 +48,22 @@ export class MountPointsRepository extends AbstractBaseRepository<MountPoint> {
     data: Omit<MountPoint, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions
   ): Promise<MountPoint> {
-    try {
-      const mountPoint = await this._create(data, options);
+    return this.safeQuery(
+      async () => {
+        const mountPoint = await this._create(data, options);
 
-      logger.info('Mount point created', {
-        mountPointId: mountPoint.id,
-        name: data.name,
-        backendType: data.backendType,
-        scope: data.scope,
-      });
+        logger.info('Mount point created', {
+          mountPointId: mountPoint.id,
+          name: data.name,
+          backendType: data.backendType,
+          scope: data.scope,
+        });
 
-      return mountPoint;
-    } catch (error) {
-      logger.error('Error creating mount point', {
-        name: data.name,
-        backendType: data.backendType,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return mountPoint;
+      },
+      'Error creating mount point',
+      { name: data.name, backendType: data.backendType }
+    );
   }
 
   /**
@@ -76,21 +73,19 @@ export class MountPointsRepository extends AbstractBaseRepository<MountPoint> {
    * @returns The updated mount point or null if not found
    */
   async update(id: string, data: Partial<MountPoint>): Promise<MountPoint | null> {
-    try {
-      const mountPoint = await this._update(id, data);
+    return this.safeQuery(
+      async () => {
+        const mountPoint = await this._update(id, data);
 
-      if (mountPoint) {
-        logger.info('Mount point updated', { mountPointId: id });
-      }
+        if (mountPoint) {
+          logger.info('Mount point updated', { mountPointId: id });
+        }
 
-      return mountPoint;
-    } catch (error) {
-      logger.error('Error updating mount point', {
-        mountPointId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return mountPoint;
+      },
+      'Error updating mount point',
+      { mountPointId: id }
+    );
   }
 
   /**
@@ -99,21 +94,19 @@ export class MountPointsRepository extends AbstractBaseRepository<MountPoint> {
    * @returns true if deleted, false if not found
    */
   async delete(id: string): Promise<boolean> {
-    try {
-      const result = await this._delete(id);
+    return this.safeQuery(
+      async () => {
+        const result = await this._delete(id);
 
-      if (result) {
-        logger.info('Mount point deleted', { mountPointId: id });
-      }
+        if (result) {
+          logger.info('Mount point deleted', { mountPointId: id });
+        }
 
-      return result;
-    } catch (error) {
-      logger.error('Error deleting mount point', {
-        mountPointId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return result;
+      },
+      'Error deleting mount point',
+      { mountPointId: id }
+    );
   }
 
   // =========================================================================
@@ -125,19 +118,18 @@ export class MountPointsRepository extends AbstractBaseRepository<MountPoint> {
    * @returns The default mount point or null if none set
    */
   async findDefault(): Promise<MountPoint | null> {
-    try {
-      const mountPoint = await this.findOneByFilter({ isDefault: true } as QueryFilter);
+    return this.safeQuery(
+      async () => {
+        const mountPoint = await this.findOneByFilter({ isDefault: true } as QueryFilter);
 
-      if (mountPoint) {
-        return mountPoint;
-      }
-      return null;
-    } catch (error) {
-      logger.error('Error finding default mount point', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        if (mountPoint) {
+          return mountPoint;
+        }
+        return null;
+      },
+      'Error finding default mount point',
+      {}
+    );
   }
 
   /**
@@ -147,23 +139,20 @@ export class MountPointsRepository extends AbstractBaseRepository<MountPoint> {
    * @returns Array of mount points matching the scope
    */
   async findByScope(scope: 'system' | 'user', userId?: string): Promise<MountPoint[]> {
-    try {
-      const query: Record<string, unknown> = { scope };
+    return this.safeQuery(
+      async () => {
+        const query: Record<string, unknown> = { scope };
 
-      if (scope === 'user' && userId) {
-        query.userId = userId;
-      }
+        if (scope === 'user' && userId) {
+          query.userId = userId;
+        }
 
-      const mountPoints = await this.findByFilter(query as QueryFilter);
-      return mountPoints;
-    } catch (error) {
-      logger.error('Error finding mount points by scope', {
-        scope,
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        const mountPoints = await this.findByFilter(query as QueryFilter);
+        return mountPoints;
+      },
+      'Error finding mount points by scope',
+      { scope, userId }
+    );
   }
 
   /**
@@ -171,15 +160,11 @@ export class MountPointsRepository extends AbstractBaseRepository<MountPoint> {
    * @returns Array of enabled mount points
    */
   async findEnabled(): Promise<MountPoint[]> {
-    try {
-      const mountPoints = await this.findByFilter({ enabled: true } as QueryFilter);
-      return mountPoints;
-    } catch (error) {
-      logger.error('Error finding enabled mount points', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      () => this.findByFilter({ enabled: true } as QueryFilter),
+      'Error finding enabled mount points',
+      {}
+    );
   }
 
   /**
@@ -188,16 +173,11 @@ export class MountPointsRepository extends AbstractBaseRepository<MountPoint> {
    * @returns Array of mount points with the specified backend type
    */
   async findByBackendType(backendType: string): Promise<MountPoint[]> {
-    try {
-      const mountPoints = await this.findByFilter({ backendType } as QueryFilter);
-      return mountPoints;
-    } catch (error) {
-      logger.error('Error finding mount points by backend type', {
-        backendType,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      () => this.findByFilter({ backendType } as QueryFilter),
+      'Error finding mount points by backend type',
+      { backendType }
+    );
   }
 
   // =========================================================================
@@ -209,27 +189,25 @@ export class MountPointsRepository extends AbstractBaseRepository<MountPoint> {
    * @param id The mount point ID to set as default
    */
   async setDefault(id: string): Promise<void> {
-    try {
-      // Clear isDefault from all other mount points
-      await this.updateMany(
-        { id: { $ne: id } } as QueryFilter,
-        { isDefault: false } as Partial<MountPoint>
-      );
+    return this.safeQuery(
+      async () => {
+        // Clear isDefault from all other mount points
+        await this.updateMany(
+          { id: { $ne: id } } as QueryFilter,
+          { isDefault: false } as Partial<MountPoint>
+        );
 
-      // Set this mount point as default
-      await this.updateMany(
-        { id } as QueryFilter,
-        { isDefault: true } as Partial<MountPoint>
-      );
+        // Set this mount point as default
+        await this.updateMany(
+          { id } as QueryFilter,
+          { isDefault: true } as Partial<MountPoint>
+        );
 
-      logger.info('Mount point set as default', { mountPointId: id });
-    } catch (error) {
-      logger.error('Error setting default mount point', {
-        mountPointId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        logger.info('Mount point set as default', { mountPointId: id });
+      },
+      'Error setting default mount point',
+      { mountPointId: id }
+    );
   }
 
   /**
@@ -238,25 +216,23 @@ export class MountPointsRepository extends AbstractBaseRepository<MountPoint> {
    * @param status The health status ('healthy', 'degraded', 'unhealthy', 'unknown')
    */
   async updateHealth(id: string, status: HealthStatus): Promise<void> {
-    try {
-      const now = this.getCurrentTimestamp();
+    return this.safeQuery(
+      async () => {
+        const now = this.getCurrentTimestamp();
 
-      const result = await this.update(id, {
-        healthStatus: status,
-        lastHealthCheck: now,
-      } as Partial<MountPoint>);
+        const result = await this.update(id, {
+          healthStatus: status,
+          lastHealthCheck: now,
+        } as Partial<MountPoint>);
 
-      if (!result) {
-        logger.warn('Mount point not found for health update', { mountPointId: id });
-        return;
-      }
-    } catch (error) {
-      logger.error('Error updating mount point health', {
-        mountPointId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        if (!result) {
+          logger.warn('Mount point not found for health update', { mountPointId: id });
+          return;
+        }
+      },
+      'Error updating mount point health',
+      { mountPointId: id }
+    );
   }
 
   /**
@@ -264,16 +240,15 @@ export class MountPointsRepository extends AbstractBaseRepository<MountPoint> {
    * This is a maintenance operation to clean up inconsistent state
    */
   async clearOrphanedDefaults(): Promise<void> {
-    try {
-      // Update any mount point with isDefault that no longer exists
-      // This is handled by clearing defaults from specific non-existent IDs if needed
-      // For now, this is a no-op maintenance method that could be expanded
-    } catch (error) {
-      logger.error('Error clearing orphaned defaults', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      async () => {
+        // Update any mount point with isDefault that no longer exists
+        // This is handled by clearing defaults from specific non-existent IDs if needed
+        // For now, this is a no-op maintenance method that could be expanded
+      },
+      'Error clearing orphaned defaults',
+      {}
+    );
   }
 }
 

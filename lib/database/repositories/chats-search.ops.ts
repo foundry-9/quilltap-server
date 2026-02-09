@@ -10,6 +10,7 @@ import { QueryFilter } from '../interfaces';
 import { logger } from '@/lib/logger';
 import { ChatOpsContext } from './chats-ops-context';
 import { ChatMessagesOps } from './chats-messages.ops';
+import { safeQuery } from './safe-query';
 
 /** Maximum allowed search query length to prevent excessive memory usage */
 export const MAX_SEARCH_QUERY_LENGTH = 1000;
@@ -27,7 +28,7 @@ export class ChatSearchReplaceOps {
    * @returns Number of messages containing the text
    */
   async countMessagesWithText(chatId: string, searchText: string): Promise<number> {
-    try {
+    return safeQuery(async () => {
       if (searchText.length > MAX_SEARCH_QUERY_LENGTH) {
         logger.warn('Search text exceeds maximum length', {
           chatId,
@@ -45,13 +46,7 @@ export class ChatSearchReplaceOps {
         }
       }
       return count;
-    } catch (error) {
-      logger.error('Failed to count messages with text', {
-        chatId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return 0;
-    }
+    }, 'Failed to count messages with text', { chatId }, 0);
   }
 
   /**
@@ -64,7 +59,7 @@ export class ChatSearchReplaceOps {
     chatId: string,
     searchText: string
   ): Promise<Array<{ messageId: string; content: string; chatId: string }>> {
-    try {
+    return safeQuery(async () => {
       if (searchText.length > MAX_SEARCH_QUERY_LENGTH) {
         logger.warn('Search text exceeds maximum length', {
           chatId,
@@ -86,13 +81,7 @@ export class ChatSearchReplaceOps {
         }
       }
       return matches;
-    } catch (error) {
-      logger.error('Failed to find messages with text', {
-        chatId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+    }, 'Failed to find messages with text', { chatId }, []);
   }
 
   /**
@@ -107,7 +96,7 @@ export class ChatSearchReplaceOps {
     searchText: string,
     replaceText: string
   ): Promise<number> {
-    try {
+    return safeQuery(async () => {
       const messages = await this.messagesOps.getMessages(chatId);
       let updatedCount = 0;
       const messagesCollection = await this.ctx.getMessagesCollection();
@@ -167,12 +156,6 @@ export class ChatSearchReplaceOps {
 
       logger.info('Replaced text in messages', { chatId, updatedCount });
       return updatedCount;
-    } catch (error) {
-      logger.error('Failed to replace text in messages', {
-        chatId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    }, 'Failed to replace text in messages', { chatId });
   }
 }

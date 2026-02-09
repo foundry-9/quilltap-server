@@ -37,41 +37,28 @@ export class ImageProfilesRepository extends TaggableBaseRepository<ImageProfile
    * Find image profiles by name for a user
    */
   async findByName(userId: string, name: string): Promise<ImageProfile | null> {
-    try {
-      const profile = await this.findOneByFilter({
+    return this.safeQuery(
+      () => this.findOneByFilter({
         userId,
         name,
-      } as QueryFilter);
-
-      return profile;
-    } catch (error) {
-      logger.error('Error finding image profile by name', {
-        userId,
-        name,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+      } as QueryFilter),
+      'Error finding image profile by name',
+      { userId, name }
+    );
   }
 
   /**
    * Find the default image profile for a user
    */
   async findDefault(userId: string): Promise<ImageProfile | null> {
-    try {
-      const profile = await this.findOneByFilter({
+    return this.safeQuery(
+      () => this.findOneByFilter({
         userId,
         isDefault: true,
-      } as QueryFilter);
-
-      return profile;
-    } catch (error) {
-      logger.error('Error finding default image profile', {
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+      } as QueryFilter),
+      'Error finding default image profile',
+      { userId }
+    );
   }
 
   /**
@@ -83,77 +70,69 @@ export class ImageProfilesRepository extends TaggableBaseRepository<ImageProfile
     data: Omit<ImageProfile, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions
   ): Promise<ImageProfile> {
-    try {
-      const profile = await this._create(data, options);
+    return this.safeQuery(
+      async () => {
+        const profile = await this._create(data, options);
 
-      logger.info('Image profile created successfully', {
-        profileId: profile.id,
-        userId: data.userId,
-        name: data.name,
-        provider: data.provider,
-      });
+        logger.info('Image profile created successfully', {
+          profileId: profile.id,
+          userId: data.userId,
+          name: data.name,
+          provider: data.provider,
+        });
 
-      return profile;
-    } catch (error) {
-      logger.error('Error creating image profile', {
-        userId: data.userId,
-        name: data.name,
-        provider: data.provider,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return profile;
+      },
+      'Error creating image profile',
+      { userId: data.userId, name: data.name, provider: data.provider }
+    );
   }
 
   /**
    * Update an image profile
    */
   async update(id: string, data: Partial<ImageProfile>): Promise<ImageProfile | null> {
-    try {
-      // Remove id and createdAt to prevent accidental overwrites
-      const updateData = { ...data };
-      delete updateData.id;
-      delete updateData.createdAt;
+    return this.safeQuery(
+      async () => {
+        // Remove id and createdAt to prevent accidental overwrites
+        const updateData = { ...data };
+        delete updateData.id;
+        delete updateData.createdAt;
 
-      const profile = await this._update(id, updateData);
+        const profile = await this._update(id, updateData);
 
-      if (profile) {
-        logger.info('Image profile updated successfully', {
-          profileId: id,
-        });
-      }
+        if (profile) {
+          logger.info('Image profile updated successfully', {
+            profileId: id,
+          });
+        }
 
-      return profile;
-    } catch (error) {
-      logger.error('Error updating image profile', {
-        profileId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return profile;
+      },
+      'Error updating image profile',
+      { profileId: id }
+    );
   }
 
   /**
    * Delete an image profile
    */
   async delete(id: string): Promise<boolean> {
-    try {
-      const result = await this._delete(id);
+    return this.safeQuery(
+      async () => {
+        const result = await this._delete(id);
 
-      if (result) {
-        logger.info('Image profile deleted successfully', {
-          profileId: id,
-        });
-      }
+        if (result) {
+          logger.info('Image profile deleted successfully', {
+            profileId: id,
+          });
+        }
 
-      return result;
-    } catch (error) {
-      logger.error('Error deleting image profile', {
-        profileId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return result;
+      },
+      'Error deleting image profile',
+      { profileId: id }
+    );
   }
 
   /**
@@ -161,24 +140,22 @@ export class ImageProfilesRepository extends TaggableBaseRepository<ImageProfile
    * Used to ensure only one default profile per user
    */
   async unsetAllDefaults(userId: string): Promise<number> {
-    try {
-      const count = await this.updateMany(
-        { userId, isDefault: true } as QueryFilter,
-        { isDefault: false } as Partial<ImageProfile>
-      );
+    return this.safeQuery(
+      async () => {
+        const count = await this.updateMany(
+          { userId, isDefault: true } as QueryFilter,
+          { isDefault: false } as Partial<ImageProfile>
+        );
 
-      logger.info('All default image profiles unset for user', {
-        userId,
-        modifiedCount: count,
-      });
+        logger.info('All default image profiles unset for user', {
+          userId,
+          modifiedCount: count,
+        });
 
-      return count;
-    } catch (error) {
-      logger.error('Error unsetting all default image profiles', {
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return count;
+      },
+      'Error unsetting all default image profiles',
+      { userId }
+    );
   }
 }

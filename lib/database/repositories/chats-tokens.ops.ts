@@ -9,6 +9,7 @@ import { ChatMetadata } from '@/lib/schemas/types';
 import { QueryFilter } from '../interfaces';
 import { logger } from '@/lib/logger';
 import { ChatOpsContext } from './chats-ops-context';
+import { safeQuery } from './safe-query';
 
 export class ChatTokenTrackingOps {
   constructor(private readonly ctx: ChatOpsContext) {}
@@ -24,7 +25,7 @@ export class ChatTokenTrackingOps {
     estimatedCost: number | null,
     priceSource?: string
   ): Promise<void> {
-    try {
+    await safeQuery(async () => {
       const collection = await this.ctx.getCollection();
       const now = this.ctx.getCurrentTimestamp();
 
@@ -61,33 +62,21 @@ export class ChatTokenTrackingOps {
         logger.warn('Chat not found for token aggregates increment', { chatId });
         return;
       }
-    } catch (error) {
-      logger.error('Error incrementing token aggregates', {
-        chatId,
-        promptTokens,
-        completionTokens,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      // Don't throw - token tracking failures shouldn't break message flow
-    }
+    }, 'Error incrementing token aggregates', {
+      chatId,
+      promptTokens,
+      completionTokens,
+    }, undefined);
   }
 
   /**
    * Reset token aggregate counters for a chat
    */
   async resetTokenAggregates(chatId: string): Promise<ChatMetadata | null> {
-    try {
-      return await this.ctx.update(chatId, {
-        totalPromptTokens: 0,
-        totalCompletionTokens: 0,
-        estimatedCostUSD: null,
-      });
-    } catch (error) {
-      logger.error('Error resetting token aggregates', {
-        chatId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return safeQuery(() => this.ctx.update(chatId, {
+      totalPromptTokens: 0,
+      totalCompletionTokens: 0,
+      estimatedCostUSD: null,
+    }), 'Error resetting token aggregates', { chatId });
   }
 }

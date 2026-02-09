@@ -33,34 +33,30 @@ export class EmbeddingStatusRepository extends AbstractBaseRepository<EmbeddingS
    * Find status by ID
    */
   async findById(id: string): Promise<EmbeddingStatus | null> {
-    try {
-      const collection = await this.getCollection();
-      const result = await collection.findOne({ id } as QueryFilter);
-      return result;
-    } catch (error) {
-      logger.error('Error finding embedding status by ID', {
-        context: 'EmbeddingStatusRepository.findById',
-        id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    }
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        return await collection.findOne({ id } as QueryFilter);
+      },
+      'Error finding embedding status by ID',
+      { id },
+      null
+    );
   }
 
   /**
    * Find all status records
    */
   async findAll(): Promise<EmbeddingStatus[]> {
-    try {
-      const collection = await this.getCollection();
-      return await collection.find({});
-    } catch (error) {
-      logger.error('Error finding all embedding statuses', {
-        context: 'EmbeddingStatusRepository.findAll',
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        return await collection.find({});
+      },
+      'Error finding all embedding statuses',
+      {},
+      []
+    );
   }
 
   /**
@@ -71,95 +67,82 @@ export class EmbeddingStatusRepository extends AbstractBaseRepository<EmbeddingS
     entityId: string,
     profileId: string
   ): Promise<EmbeddingStatus | null> {
-    try {
-      const collection = await this.getCollection();
-      const result = await collection.findOne({
-        entityType,
-        entityId,
-        profileId,
-      } as QueryFilter);
-      return result;
-    } catch (error) {
-      logger.error('Error finding embedding status by entity', {
-        context: 'EmbeddingStatusRepository.findByEntity',
-        entityType,
-        entityId,
-        profileId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    }
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        return await collection.findOne({
+          entityType,
+          entityId,
+          profileId,
+        } as QueryFilter);
+      },
+      'Error finding embedding status by entity',
+      { entityType, entityId, profileId },
+      null
+    );
   }
 
   /**
    * Find all statuses for a user
    */
   async findByUserId(userId: string): Promise<EmbeddingStatus[]> {
-    try {
-      const collection = await this.getCollection();
-      return await collection.find({ userId } as QueryFilter);
-    } catch (error) {
-      logger.error('Error finding embedding statuses by user ID', {
-        context: 'EmbeddingStatusRepository.findByUserId',
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        return await collection.find({ userId } as QueryFilter);
+      },
+      'Error finding embedding statuses by user ID',
+      { userId },
+      []
+    );
   }
 
   /**
    * Find all statuses for a profile
    */
   async findByProfileId(profileId: string): Promise<EmbeddingStatus[]> {
-    try {
-      const collection = await this.getCollection();
-      return await collection.find({ profileId } as QueryFilter);
-    } catch (error) {
-      logger.error('Error finding embedding statuses by profile ID', {
-        context: 'EmbeddingStatusRepository.findByProfileId',
-        profileId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        return await collection.find({ profileId } as QueryFilter);
+      },
+      'Error finding embedding statuses by profile ID',
+      { profileId },
+      []
+    );
   }
 
   /**
    * Find all pending statuses for a profile
    */
   async findPendingByProfileId(profileId: string): Promise<EmbeddingStatus[]> {
-    try {
-      const collection = await this.getCollection();
-      return await collection.find({
-        profileId,
-        status: 'PENDING',
-      } as QueryFilter);
-    } catch (error) {
-      logger.error('Error finding pending embedding statuses', {
-        context: 'EmbeddingStatusRepository.findPendingByProfileId',
-        profileId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        return await collection.find({
+          profileId,
+          status: 'PENDING',
+        } as QueryFilter);
+      },
+      'Error finding pending embedding statuses',
+      { profileId },
+      []
+    );
   }
 
   /**
    * Find all statuses with a specific status value
    */
   async findByStatus(status: EmbeddingStatusValue): Promise<EmbeddingStatus[]> {
-    try {
-      const collection = await this.getCollection();
-      return await collection.find({ status } as QueryFilter);
-    } catch (error) {
-      logger.error('Error finding embedding statuses by status', {
-        context: 'EmbeddingStatusRepository.findByStatus',
-        status,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        return await collection.find({ status } as QueryFilter);
+      },
+      'Error finding embedding statuses by status',
+      { status },
+      []
+    );
   }
 
   /**
@@ -169,64 +152,56 @@ export class EmbeddingStatusRepository extends AbstractBaseRepository<EmbeddingS
     data: Omit<EmbeddingStatus, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions
   ): Promise<EmbeddingStatus> {
-    try {
-      const collection = await this.getCollection();
-      const now = this.getCurrentTimestamp();
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        const now = this.getCurrentTimestamp();
 
-      const status: EmbeddingStatus = {
-        id: options?.id || this.generateId(),
-        ...data,
-        createdAt: options?.createdAt || now,
-        updatedAt: now,
-      };
+        const status: EmbeddingStatus = {
+          id: options?.id || this.generateId(),
+          ...data,
+          createdAt: options?.createdAt || now,
+          updatedAt: now,
+        };
 
-      const validated = this.validate(status);
-      await collection.insertOne(validated);
+        const validated = this.validate(status);
+        await collection.insertOne(validated);
 
-      return validated;
-    } catch (error) {
-      logger.error('Error creating embedding status', {
-        context: 'EmbeddingStatusRepository.create',
-        entityType: data.entityType,
-        entityId: data.entityId,
-        profileId: data.profileId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return validated;
+      },
+      'Error creating embedding status',
+      { entityType: data.entityType, entityId: data.entityId, profileId: data.profileId }
+    );
   }
 
   /**
    * Update a status record
    */
   async update(id: string, data: Partial<EmbeddingStatus>): Promise<EmbeddingStatus | null> {
-    try {
-      const collection = await this.getCollection();
-      const now = this.getCurrentTimestamp();
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        const now = this.getCurrentTimestamp();
 
-      // Remove immutable fields
-      const updateData = { ...data };
-      delete updateData.id;
-      delete updateData.createdAt;
+        // Remove immutable fields
+        const updateData = { ...data };
+        delete updateData.id;
+        delete updateData.createdAt;
 
-      const result = await collection.updateOne(
-        { id } as QueryFilter,
-        { $set: { ...updateData, updatedAt: now } }
-      );
+        const result = await collection.updateOne(
+          { id } as QueryFilter,
+          { $set: { ...updateData, updatedAt: now } }
+        );
 
-      if (result.modifiedCount === 0) {
-        return null;
-      }
+        if (result.modifiedCount === 0) {
+          return null;
+        }
 
-      return this.findById(id);
-    } catch (error) {
-      logger.error('Error updating embedding status', {
-        context: 'EmbeddingStatusRepository.update',
-        id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return this.findById(id);
+      },
+      'Error updating embedding status',
+      { id }
+    );
   }
 
   /**
@@ -303,60 +278,54 @@ export class EmbeddingStatusRepository extends AbstractBaseRepository<EmbeddingS
    * Mark all entities as pending for a profile (for re-embedding)
    */
   async markAllPendingByProfileId(profileId: string): Promise<number> {
-    try {
-      const collection = await this.getCollection();
-      const now = this.getCurrentTimestamp();
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        const now = this.getCurrentTimestamp();
 
-      const result = await collection.updateMany(
-        { profileId } as QueryFilter,
-        {
-          $set: {
-            status: 'PENDING',
-            embeddedAt: null,
-            error: null,
-            updatedAt: now,
-          },
-        }
-      );
+        const result = await collection.updateMany(
+          { profileId } as QueryFilter,
+          {
+            $set: {
+              status: 'PENDING',
+              embeddedAt: null,
+              error: null,
+              updatedAt: now,
+            },
+          }
+        );
 
-      logger.info('Marked all embeddings as pending for profile', {
-        context: 'EmbeddingStatusRepository.markAllPendingByProfileId',
-        profileId,
-        modifiedCount: result.modifiedCount,
-      });
+        logger.info('Marked all embeddings as pending for profile', {
+          context: 'EmbeddingStatusRepository.markAllPendingByProfileId',
+          profileId,
+          modifiedCount: result.modifiedCount,
+        });
 
-      return result.modifiedCount;
-    } catch (error) {
-      logger.error('Error marking all embeddings as pending', {
-        context: 'EmbeddingStatusRepository.markAllPendingByProfileId',
-        profileId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return result.modifiedCount;
+      },
+      'Error marking all embeddings as pending',
+      { profileId }
+    );
   }
 
   /**
    * Delete a status record
    */
   async delete(id: string): Promise<boolean> {
-    try {
-      const collection = await this.getCollection();
-      const result = await collection.deleteOne({ id } as QueryFilter);
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        const result = await collection.deleteOne({ id } as QueryFilter);
 
-      if (result.deletedCount > 0) {
-        return true;
-      }
+        if (result.deletedCount > 0) {
+          return true;
+        }
 
-      return false;
-    } catch (error) {
-      logger.error('Error deleting embedding status', {
-        context: 'EmbeddingStatusRepository.delete',
-        id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return false;
+      },
+      'Error deleting embedding status',
+      { id }
+    );
   }
 
   /**
@@ -366,50 +335,43 @@ export class EmbeddingStatusRepository extends AbstractBaseRepository<EmbeddingS
     entityType: EmbeddableEntityType,
     entityId: string
   ): Promise<number> {
-    try {
-      const collection = await this.getCollection();
-      const result = await collection.deleteMany({
-        entityType,
-        entityId,
-      } as QueryFilter);
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        const result = await collection.deleteMany({
+          entityType,
+          entityId,
+        } as QueryFilter);
 
-      return result.deletedCount;
-    } catch (error) {
-      logger.error('Error deleting embedding status by entity', {
-        context: 'EmbeddingStatusRepository.deleteByEntity',
-        entityType,
-        entityId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return result.deletedCount;
+      },
+      'Error deleting embedding status by entity',
+      { entityType, entityId }
+    );
   }
 
   /**
    * Delete all statuses for a profile
    */
   async deleteByProfileId(profileId: string): Promise<number> {
-    try {
-      const collection = await this.getCollection();
-      const result = await collection.deleteMany({ profileId } as QueryFilter);
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        const result = await collection.deleteMany({ profileId } as QueryFilter);
 
-      if (result.deletedCount > 0) {
-        logger.info('Embedding statuses deleted by profile ID', {
-          context: 'EmbeddingStatusRepository.deleteByProfileId',
-          profileId,
-          deletedCount: result.deletedCount,
-        });
-      }
+        if (result.deletedCount > 0) {
+          logger.info('Embedding statuses deleted by profile ID', {
+            context: 'EmbeddingStatusRepository.deleteByProfileId',
+            profileId,
+            deletedCount: result.deletedCount,
+          });
+        }
 
-      return result.deletedCount;
-    } catch (error) {
-      logger.error('Error deleting embedding statuses by profile ID', {
-        context: 'EmbeddingStatusRepository.deleteByProfileId',
-        profileId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return result.deletedCount;
+      },
+      'Error deleting embedding statuses by profile ID',
+      { profileId }
+    );
   }
 
   /**
@@ -421,38 +383,36 @@ export class EmbeddingStatusRepository extends AbstractBaseRepository<EmbeddingS
     embedded: number;
     failed: number;
   }> {
-    try {
-      const statuses = await this.findByProfileId(profileId);
+    return this.safeQuery(
+      async () => {
+        const statuses = await this.findByProfileId(profileId);
 
-      const stats = {
-        total: statuses.length,
-        pending: 0,
-        embedded: 0,
-        failed: 0,
-      };
+        const stats = {
+          total: statuses.length,
+          pending: 0,
+          embedded: 0,
+          failed: 0,
+        };
 
-      for (const status of statuses) {
-        switch (status.status) {
-          case 'PENDING':
-            stats.pending++;
-            break;
-          case 'EMBEDDED':
-            stats.embedded++;
-            break;
-          case 'FAILED':
-            stats.failed++;
-            break;
+        for (const status of statuses) {
+          switch (status.status) {
+            case 'PENDING':
+              stats.pending++;
+              break;
+            case 'EMBEDDED':
+              stats.embedded++;
+              break;
+            case 'FAILED':
+              stats.failed++;
+              break;
+          }
         }
-      }
 
-      return stats;
-    } catch (error) {
-      logger.error('Error getting embedding stats', {
-        context: 'EmbeddingStatusRepository.getStatsByProfileId',
-        profileId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return { total: 0, pending: 0, embedded: 0, failed: 0 };
-    }
+        return stats;
+      },
+      'Error getting embedding stats',
+      { profileId },
+      { total: 0, pending: 0, embedded: 0, failed: 0 }
+    );
   }
 }

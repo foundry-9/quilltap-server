@@ -30,69 +30,60 @@ export class TfidfVocabularyRepository extends AbstractBaseRepository<TfidfVocab
    * Find a vocabulary by ID
    */
   async findById(id: string): Promise<TfidfVocabulary | null> {
-    try {
-      const collection = await this.getCollection();
-      const result = await collection.findOne({ id } as QueryFilter);
-      return result;
-    } catch (error) {
-      logger.error('Error finding TF-IDF vocabulary by ID', {
-        context: 'TfidfVocabularyRepository.findById',
-        id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    }
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        return await collection.findOne({ id } as QueryFilter);
+      },
+      'Error finding TF-IDF vocabulary by ID',
+      { context: 'TfidfVocabularyRepository.findById', id },
+      null
+    );
   }
 
   /**
    * Find all vocabularies
    */
   async findAll(): Promise<TfidfVocabulary[]> {
-    try {
-      const collection = await this.getCollection();
-      return await collection.find({});
-    } catch (error) {
-      logger.error('Error finding all TF-IDF vocabularies', {
-        context: 'TfidfVocabularyRepository.findAll',
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        return await collection.find({});
+      },
+      'Error finding all TF-IDF vocabularies',
+      { context: 'TfidfVocabularyRepository.findAll' },
+      []
+    );
   }
 
   /**
    * Find vocabulary by embedding profile ID
    */
   async findByProfileId(profileId: string): Promise<TfidfVocabulary | null> {
-    try {
-      const collection = await this.getCollection();
-      const result = await collection.findOne({ profileId } as QueryFilter);
-      return result;
-    } catch (error) {
-      logger.error('Error finding TF-IDF vocabulary by profile ID', {
-        context: 'TfidfVocabularyRepository.findByProfileId',
-        profileId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    }
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        return await collection.findOne({ profileId } as QueryFilter);
+      },
+      'Error finding TF-IDF vocabulary by profile ID',
+      { context: 'TfidfVocabularyRepository.findByProfileId', profileId },
+      null
+    );
   }
 
   /**
    * Find vocabulary by user ID
    */
   async findByUserId(userId: string): Promise<TfidfVocabulary[]> {
-    try {
-      const collection = await this.getCollection();
-      return await collection.find({ userId } as QueryFilter);
-    } catch (error) {
-      logger.error('Error finding TF-IDF vocabularies by user ID', {
-        context: 'TfidfVocabularyRepository.findByUserId',
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        return await collection.find({ userId } as QueryFilter);
+      },
+      'Error finding TF-IDF vocabularies by user ID',
+      { context: 'TfidfVocabularyRepository.findByUserId', userId },
+      []
+    );
   }
 
   /**
@@ -102,77 +93,70 @@ export class TfidfVocabularyRepository extends AbstractBaseRepository<TfidfVocab
     data: Omit<TfidfVocabulary, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions
   ): Promise<TfidfVocabulary> {
-    try {
-      const collection = await this.getCollection();
-      const now = this.getCurrentTimestamp();
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        const now = this.getCurrentTimestamp();
 
-      const vocabulary: TfidfVocabulary = {
-        id: options?.id || this.generateId(),
-        ...data,
-        createdAt: options?.createdAt || now,
-        updatedAt: now,
-      };
+        const vocabulary: TfidfVocabulary = {
+          id: options?.id || this.generateId(),
+          ...data,
+          createdAt: options?.createdAt || now,
+          updatedAt: now,
+        };
 
-      const validated = this.validate(vocabulary);
-      await collection.insertOne(validated);
+        const validated = this.validate(vocabulary);
+        await collection.insertOne(validated);
 
-      logger.info('TF-IDF vocabulary created', {
-        context: 'TfidfVocabularyRepository.create',
-        id: validated.id,
-        profileId: data.profileId,
-        userId: data.userId,
-        vocabularySize: data.vocabularySize,
-      });
+        logger.info('TF-IDF vocabulary created', {
+          context: 'TfidfVocabularyRepository.create',
+          id: validated.id,
+          profileId: data.profileId,
+          userId: data.userId,
+          vocabularySize: data.vocabularySize,
+        });
 
-      return validated;
-    } catch (error) {
-      logger.error('Error creating TF-IDF vocabulary', {
-        context: 'TfidfVocabularyRepository.create',
-        profileId: data.profileId,
-        userId: data.userId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return validated;
+      },
+      'Error creating TF-IDF vocabulary',
+      { context: 'TfidfVocabularyRepository.create', profileId: data.profileId, userId: data.userId }
+    );
   }
 
   /**
    * Update a vocabulary record
    */
   async update(id: string, data: Partial<TfidfVocabulary>): Promise<TfidfVocabulary | null> {
-    try {
-      const collection = await this.getCollection();
-      const now = this.getCurrentTimestamp();
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        const now = this.getCurrentTimestamp();
 
-      // Remove immutable fields
-      const updateData = { ...data };
-      delete updateData.id;
-      delete updateData.createdAt;
+        // Remove immutable fields
+        const updateData = { ...data };
+        delete updateData.id;
+        delete updateData.createdAt;
 
-      const result = await collection.updateOne(
-        { id } as QueryFilter,
-        { $set: { ...updateData, updatedAt: now } }
-      );
+        const result = await collection.updateOne(
+          { id } as QueryFilter,
+          { $set: { ...updateData, updatedAt: now } }
+        );
 
-      if (result.modifiedCount === 0) {
-        return null;
-      }
+        if (result.modifiedCount === 0) {
+          return null;
+        }
 
-      logger.info('TF-IDF vocabulary updated', {
-        context: 'TfidfVocabularyRepository.update',
-        id,
-        updatedFields: Object.keys(updateData),
-      });
+        logger.info('TF-IDF vocabulary updated', {
+          context: 'TfidfVocabularyRepository.update',
+          id,
+          updatedFields: Object.keys(updateData),
+        });
 
-      return this.findById(id);
-    } catch (error) {
-      logger.error('Error updating TF-IDF vocabulary', {
-        context: 'TfidfVocabularyRepository.update',
-        id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return this.findById(id);
+      },
+      'Error updating TF-IDF vocabulary',
+      { context: 'TfidfVocabularyRepository.update', id }
+    );
   }
 
   /**
@@ -199,54 +183,48 @@ export class TfidfVocabularyRepository extends AbstractBaseRepository<TfidfVocab
    * Delete a vocabulary record
    */
   async delete(id: string): Promise<boolean> {
-    try {
-      const collection = await this.getCollection();
-      const result = await collection.deleteOne({ id } as QueryFilter);
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        const result = await collection.deleteOne({ id } as QueryFilter);
 
-      if (result.deletedCount > 0) {
-        logger.info('TF-IDF vocabulary deleted', {
-          context: 'TfidfVocabularyRepository.delete',
-          id,
-        });
-        return true;
-      }
+        if (result.deletedCount > 0) {
+          logger.info('TF-IDF vocabulary deleted', {
+            context: 'TfidfVocabularyRepository.delete',
+            id,
+          });
+          return true;
+        }
 
-      return false;
-    } catch (error) {
-      logger.error('Error deleting TF-IDF vocabulary', {
-        context: 'TfidfVocabularyRepository.delete',
-        id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return false;
+      },
+      'Error deleting TF-IDF vocabulary',
+      { context: 'TfidfVocabularyRepository.delete', id }
+    );
   }
 
   /**
    * Delete vocabulary by profile ID
    */
   async deleteByProfileId(profileId: string): Promise<boolean> {
-    try {
-      const collection = await this.getCollection();
-      const result = await collection.deleteMany({ profileId } as QueryFilter);
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        const result = await collection.deleteMany({ profileId } as QueryFilter);
 
-      if (result.deletedCount > 0) {
-        logger.info('TF-IDF vocabulary deleted by profile ID', {
-          context: 'TfidfVocabularyRepository.deleteByProfileId',
-          profileId,
-          deletedCount: result.deletedCount,
-        });
-        return true;
-      }
+        if (result.deletedCount > 0) {
+          logger.info('TF-IDF vocabulary deleted by profile ID', {
+            context: 'TfidfVocabularyRepository.deleteByProfileId',
+            profileId,
+            deletedCount: result.deletedCount,
+          });
+          return true;
+        }
 
-      return false;
-    } catch (error) {
-      logger.error('Error deleting TF-IDF vocabulary by profile ID', {
-        context: 'TfidfVocabularyRepository.deleteByProfileId',
-        profileId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return false;
+      },
+      'Error deleting TF-IDF vocabulary by profile ID',
+      { context: 'TfidfVocabularyRepository.deleteByProfileId', profileId }
+    );
   }
 }

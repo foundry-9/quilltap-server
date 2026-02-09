@@ -36,21 +36,15 @@ export class PluginConfigRepository extends UserOwnedBaseRepository<PluginConfig
    * @returns Promise<PluginConfig | null> The config if found, null otherwise
    */
   async findByUserAndPlugin(userId: string, pluginName: string): Promise<PluginConfig | null> {
-    try {
-      const config = await this.findOneByFilter({
+    return this.safeQuery(
+      () => this.findOneByFilter({
         userId,
         pluginName,
-      } as QueryFilter);
-
-      return config;
-    } catch (error) {
-      logger.error('Error finding plugin config by user and plugin', {
-        userId,
-        pluginName,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    }
+      } as QueryFilter),
+      'Error finding plugin config by user and plugin',
+      { userId, pluginName },
+      null
+    );
   }
 
   /**
@@ -82,24 +76,21 @@ export class PluginConfigRepository extends UserOwnedBaseRepository<PluginConfig
     data: Omit<PluginConfig, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions
   ): Promise<PluginConfig> {
-    try {
-      const config = await this._create(data, options);
+    return this.safeQuery(
+      async () => {
+        const config = await this._create(data, options);
 
-      logger.info('Plugin config created successfully', {
-        pluginConfigId: config.id,
-        userId: data.userId,
-        pluginName: data.pluginName,
-      });
+        logger.info('Plugin config created successfully', {
+          pluginConfigId: config.id,
+          userId: data.userId,
+          pluginName: data.pluginName,
+        });
 
-      return config;
-    } catch (error) {
-      logger.error('Error creating plugin config', {
-        userId: data.userId,
-        pluginName: data.pluginName,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return config;
+      },
+      'Error creating plugin config',
+      { userId: data.userId, pluginName: data.pluginName }
+    );
   }
 
   /**
@@ -109,21 +100,19 @@ export class PluginConfigRepository extends UserOwnedBaseRepository<PluginConfig
    * @returns Promise<PluginConfig | null> The updated config if found, null otherwise
    */
   async update(id: string, data: Partial<PluginConfig>): Promise<PluginConfig | null> {
-    try {
-      const config = await this._update(id, data);
+    return this.safeQuery(
+      async () => {
+        const config = await this._update(id, data);
 
-      if (config) {
-        logger.info('Plugin config updated successfully', { pluginConfigId: id });
-      }
+        if (config) {
+          logger.info('Plugin config updated successfully', { pluginConfigId: id });
+        }
 
-      return config;
-    } catch (error) {
-      logger.error('Error updating plugin config', {
-        pluginConfigId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return config;
+      },
+      'Error updating plugin config',
+      { pluginConfigId: id }
+    );
   }
 
   /**
@@ -132,21 +121,19 @@ export class PluginConfigRepository extends UserOwnedBaseRepository<PluginConfig
    * @returns Promise<boolean> True if config was deleted, false if not found
    */
   async delete(id: string): Promise<boolean> {
-    try {
-      const result = await this._delete(id);
+    return this.safeQuery(
+      async () => {
+        const result = await this._delete(id);
 
-      if (result) {
-        logger.info('Plugin config deleted successfully', { pluginConfigId: id });
-      }
+        if (result) {
+          logger.info('Plugin config deleted successfully', { pluginConfigId: id });
+        }
 
-      return result;
-    } catch (error) {
-      logger.error('Error deleting plugin config', {
-        pluginConfigId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return result;
+      },
+      'Error deleting plugin config',
+      { pluginConfigId: id }
+    );
   }
 
   /**
@@ -211,15 +198,10 @@ export class PluginConfigRepository extends UserOwnedBaseRepository<PluginConfig
    * @returns Promise<number> Number of configs deleted
    */
   async deleteByPlugin(pluginName: string): Promise<number> {
-    try {
-      const count = await this.deleteMany({ pluginName } as QueryFilter);
-      return count;
-    } catch (error) {
-      logger.error('Error deleting plugin configs', {
-        pluginName,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      () => this.deleteMany({ pluginName } as QueryFilter),
+      'Error deleting plugin configs',
+      { pluginName }
+    );
   }
 }

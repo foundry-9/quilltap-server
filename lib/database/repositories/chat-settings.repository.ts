@@ -24,47 +24,36 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
    * Find chat settings by ID
    */
   async findById(id: string): Promise<ChatSettings | null> {
-    try {
-      const result = await this._findById(id);
-      return result;
-    } catch (error) {
-      logger.error('Error finding chat settings by ID', {
-        chatSettingsId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    }
+    return this.safeQuery(
+      () => this._findById(id),
+      'Error finding chat settings by ID',
+      { chatSettingsId: id },
+      null
+    );
   }
 
   /**
    * Find chat settings by user ID
    */
   async findByUserId(userId: string): Promise<ChatSettings | null> {
-    try {
-      const result = await this.findOneByFilter({ userId } as QueryFilter);
-      return result;
-    } catch (error) {
-      logger.error('Error finding chat settings by user ID', {
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    }
+    return this.safeQuery(
+      () => this.findOneByFilter({ userId } as QueryFilter),
+      'Error finding chat settings by user ID',
+      { userId },
+      null
+    );
   }
 
   /**
    * Find all chat settings
    */
   async findAll(): Promise<ChatSettings[]> {
-    try {
-      const results = await this._findAll();
-      return results;
-    } catch (error) {
-      logger.error('Error finding all chat settings', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+    return this.safeQuery(
+      () => this._findAll(),
+      'Error finding all chat settings',
+      {},
+      []
+    );
   }
 
   /**
@@ -77,20 +66,18 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
     data: Omit<ChatSettings, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions
   ): Promise<ChatSettings> {
-    try {
-      const result = await this._create(data, options);
-      logger.info('Chat settings created successfully', {
-        chatSettingsId: result.id,
-        userId: data.userId,
-      });
-      return result;
-    } catch (error) {
-      logger.error('Error creating chat settings', {
-        userId: data.userId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      async () => {
+        const result = await this._create(data, options);
+        logger.info('Chat settings created successfully', {
+          chatSettingsId: result.id,
+          userId: data.userId,
+        });
+        return result;
+      },
+      'Error creating chat settings',
+      { userId: data.userId }
+    );
   }
 
   /**
@@ -100,19 +87,17 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
    * @returns Promise<ChatSettings | null> The updated chat settings if found, null otherwise
    */
   async update(id: string, data: Partial<ChatSettings>): Promise<ChatSettings | null> {
-    try {
-      const result = await this._update(id, data);
-      if (!result) {
-        logger.warn('Chat settings not found for update', { chatSettingsId: id });
-      }
-      return result;
-    } catch (error) {
-      logger.error('Error updating chat settings', {
-        chatSettingsId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      async () => {
+        const result = await this._update(id, data);
+        if (!result) {
+          logger.warn('Chat settings not found for update', { chatSettingsId: id });
+        }
+        return result;
+      },
+      'Error updating chat settings',
+      { chatSettingsId: id }
+    );
   }
 
   /**
@@ -121,19 +106,17 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
    * @returns Promise<boolean> True if chat settings were deleted, false if not found
    */
   async delete(id: string): Promise<boolean> {
-    try {
-      const result = await this._delete(id);
-      if (!result) {
-        logger.warn('Chat settings not found for deletion', { chatSettingsId: id });
-      }
-      return result;
-    } catch (error) {
-      logger.error('Error deleting chat settings', {
-        chatSettingsId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      async () => {
+        const result = await this._delete(id);
+        if (!result) {
+          logger.warn('Chat settings not found for deletion', { chatSettingsId: id });
+        }
+        return result;
+      },
+      'Error deleting chat settings',
+      { chatSettingsId: id }
+    );
   }
 
   /**
@@ -156,93 +139,91 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
    * @returns Promise<ChatSettings | null> The updated/created chat settings
    */
   async updateForUser(userId: string, data: Partial<ChatSettings>): Promise<ChatSettings | null> {
-    try {
-      // Check if settings exist
-      const existing = await this.findByUserId(userId);
+    return this.safeQuery(
+      async () => {
+        // Check if settings exist
+        const existing = await this.findByUserId(userId);
 
-      if (!existing) {
-        // Create new settings with defaults
-        // Default roleplay template will be set by the user or by the first access flow
-        // We don't query for templates here to avoid circular dependencies
-        const defaultRoleplayTemplateId: string | null = null;
+        if (!existing) {
+          // Create new settings with defaults
+          // Default roleplay template will be set by the user or by the first access flow
+          // We don't query for templates here to avoid circular dependencies
+          const defaultRoleplayTemplateId: string | null = null;
 
-        const defaultSettings: Omit<ChatSettings, 'id' | 'createdAt' | 'updatedAt'> = {
-          userId,
-          avatarDisplayMode: 'ALWAYS',
-          avatarDisplayStyle: 'CIRCULAR',
-          tagStyles: {},
-          cheapLLMSettings: {
-            strategy: 'PROVIDER_CHEAPEST',
-            fallbackToLocal: true,
-            embeddingProvider: 'OPENAI',
-          },
-          themePreference: {
-            activeThemeId: null,
-            colorMode: 'system',
-            showNavThemeSelector: false,
-          },
-          defaultTimestampConfig: {
-            mode: 'NONE',
-            format: 'FRIENDLY',
-            useFictionalTime: false,
-            autoPrepend: true,
-          },
-          memoryCascadePreferences: {
-            onMessageDelete: 'ASK_EVERY_TIME',
-            onSwipeRegenerate: 'DELETE_MEMORIES',
-          },
-          tokenDisplaySettings: {
-            showPerMessageTokens: false,
-            showPerMessageCost: false,
-            showChatTotals: false,
-            showSystemEvents: false,
-          },
-          contextCompressionSettings: {
-            enabled: true,
-            windowSize: 5,
-            compressionTargetTokens: 800,
-            systemPromptTargetTokens: 1500,
-            projectContextReinjectInterval: 5,
-          },
-          llmLoggingSettings: {
-            enabled: true,
-            verboseMode: false,
-            retentionDays: 30,
-          },
-          autoDetectRng: true,
-          agentModeSettings: {
-            maxTurns: 10,
-            defaultEnabled: false,
-          },
-          storyBackgroundsSettings: {
-            enabled: false,
-            defaultImageProfileId: null,
-          },
-          dangerousContentSettings: {
-            mode: 'OFF',
-            threshold: 0.7,
-            scanTextChat: true,
-            scanImagePrompts: true,
-            scanImageGeneration: false,
-            displayMode: 'SHOW',
-            showWarningBadges: true,
-          },
-          defaultRoleplayTemplateId,
-          ...data,
-        };
-        return await this.create(defaultSettings);
-      }
+          const defaultSettings: Omit<ChatSettings, 'id' | 'createdAt' | 'updatedAt'> = {
+            userId,
+            avatarDisplayMode: 'ALWAYS',
+            avatarDisplayStyle: 'CIRCULAR',
+            tagStyles: {},
+            cheapLLMSettings: {
+              strategy: 'PROVIDER_CHEAPEST',
+              fallbackToLocal: true,
+              embeddingProvider: 'OPENAI',
+            },
+            themePreference: {
+              activeThemeId: null,
+              colorMode: 'system',
+              showNavThemeSelector: false,
+            },
+            defaultTimestampConfig: {
+              mode: 'NONE',
+              format: 'FRIENDLY',
+              useFictionalTime: false,
+              autoPrepend: true,
+            },
+            memoryCascadePreferences: {
+              onMessageDelete: 'ASK_EVERY_TIME',
+              onSwipeRegenerate: 'DELETE_MEMORIES',
+            },
+            tokenDisplaySettings: {
+              showPerMessageTokens: false,
+              showPerMessageCost: false,
+              showChatTotals: false,
+              showSystemEvents: false,
+            },
+            contextCompressionSettings: {
+              enabled: true,
+              windowSize: 5,
+              compressionTargetTokens: 800,
+              systemPromptTargetTokens: 1500,
+              projectContextReinjectInterval: 5,
+            },
+            llmLoggingSettings: {
+              enabled: true,
+              verboseMode: false,
+              retentionDays: 30,
+            },
+            autoDetectRng: true,
+            agentModeSettings: {
+              maxTurns: 10,
+              defaultEnabled: false,
+            },
+            storyBackgroundsSettings: {
+              enabled: false,
+              defaultImageProfileId: null,
+            },
+            dangerousContentSettings: {
+              mode: 'OFF',
+              threshold: 0.7,
+              scanTextChat: true,
+              scanImagePrompts: true,
+              scanImageGeneration: false,
+              displayMode: 'SHOW',
+              showWarningBadges: true,
+            },
+            defaultRoleplayTemplateId,
+            ...data,
+          };
+          return await this.create(defaultSettings);
+        }
 
-      // Update existing settings
-      const result = await this.update(existing.id, data);
+        // Update existing settings
+        const result = await this.update(existing.id, data);
 
-      return result;
-    } catch (error) {
-      logger.error('Error updating chat settings for user', {
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return result;
+      },
+      'Error updating chat settings for user',
+      { userId }
+    );
   }
 }

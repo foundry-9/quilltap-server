@@ -61,8 +61,8 @@ You must adhere to the following standard roleplay syntax for all outputs.
     ],
     // Paragraph-level dialogue detection (handles dialogue with formatting inside)
     dialogueDetection: {
-      openingChars: ['"', '"'],
-      closingChars: ['"', '"'],
+      openingChars: ['"', '\u201c'],
+      closingChars: ['"', '\u201d'],
       className: 'qt-chat-dialogue',
     },
   },
@@ -164,59 +164,59 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
   }
 
   private async _doSeedBuiltInTemplates(): Promise<void> {
-    try {
-      const collection = await this.getCollection();
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
 
-      for (const template of BUILT_IN_TEMPLATES) {
-        // Check if template already exists by name and isBuiltIn
-        const existing = await collection.findOne({
-          name: template.name,
-          isBuiltIn: true,
-        } as QueryFilter);
+        for (const template of BUILT_IN_TEMPLATES) {
+          // Check if template already exists by name and isBuiltIn
+          const existing = await collection.findOne({
+            name: template.name,
+            isBuiltIn: true,
+          } as QueryFilter);
 
-        if (!existing) {
-          const id = this.generateId();
-          const now = this.getCurrentTimestamp();
+          if (!existing) {
+            const id = this.generateId();
+            const now = this.getCurrentTimestamp();
 
-          const newTemplate: RoleplayTemplate = {
-            ...template,
-            id,
-            createdAt: now,
-            updatedAt: now,
-          };
+            const newTemplate: RoleplayTemplate = {
+              ...template,
+              id,
+              createdAt: now,
+              updatedAt: now,
+            };
 
-          const validated = this.validate(newTemplate);
-          await collection.insertOne(validated);
+            const validated = this.validate(newTemplate);
+            await collection.insertOne(validated);
 
-          logger.info('Built-in roleplay template seeded', {
-            templateId: id,
-            templateName: template.name,
-          });
-        } else {
-          // Update existing built-in template with new fields (e.g., annotationButtons, renderingPatterns)
-          // This ensures built-in templates stay in sync with code changes
-          const now = this.getCurrentTimestamp();
-          const updateData: Partial<RoleplayTemplate> = {
-            systemPrompt: template.systemPrompt,
-            description: template.description,
-            annotationButtons: template.annotationButtons,
-            renderingPatterns: template.renderingPatterns,
-            dialogueDetection: template.dialogueDetection,
-            updatedAt: now,
-          };
+            logger.info('Built-in roleplay template seeded', {
+              templateId: id,
+              templateName: template.name,
+            });
+          } else {
+            // Update existing built-in template with new fields (e.g., annotationButtons, renderingPatterns)
+            // This ensures built-in templates stay in sync with code changes
+            const now = this.getCurrentTimestamp();
+            const updateData: Partial<RoleplayTemplate> = {
+              systemPrompt: template.systemPrompt,
+              description: template.description,
+              annotationButtons: template.annotationButtons,
+              renderingPatterns: template.renderingPatterns,
+              dialogueDetection: template.dialogueDetection,
+              updatedAt: now,
+            };
 
-          await collection.updateOne(
-            { id: existing.id },
-            { $set: updateData }
-          );
+            await collection.updateOne(
+              { id: existing.id },
+              { $set: updateData }
+            );
+          }
         }
-      }
-    } catch (error) {
-      logger.error('Error seeding built-in roleplay templates', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      // Don't throw - seeding failure shouldn't break the app
-    }
+      },
+      'Error seeding built-in roleplay templates',
+      {},
+      undefined
+    );
   }
 
   // ============================================================================
@@ -228,136 +228,128 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
    * Checks plugin templates first, then database templates
    */
   async findById(id: string): Promise<RoleplayTemplate | null> {
-    try {
-      // Check if this is a plugin template
-      const pluginTemplate = this.getPluginTemplateById(id);
-      if (pluginTemplate) {
-        return pluginTemplate;
-      }
+    return this.safeQuery(
+      async () => {
+        // Check if this is a plugin template
+        const pluginTemplate = this.getPluginTemplateById(id);
+        if (pluginTemplate) {
+          return pluginTemplate;
+        }
 
-      // Ensure built-in templates are seeded
-      await this.seedBuiltInTemplates();
+        // Ensure built-in templates are seeded
+        await this.seedBuiltInTemplates();
 
-      // Use base implementation for database lookup
-      const result = await this._findById(id);
-      return result;
-    } catch (error) {
-      logger.error('Error finding roleplay template by ID', {
-        templateId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    }
+        // Use base implementation for database lookup
+        const result = await this._findById(id);
+        return result;
+      },
+      'Error finding roleplay template by ID',
+      { templateId: id },
+      null
+    );
   }
 
   /**
    * Find all roleplay templates (database + plugin templates)
    */
   async findAll(): Promise<RoleplayTemplate[]> {
-    try {
-      // Ensure built-in templates are seeded
-      await this.seedBuiltInTemplates();
+    return this.safeQuery(
+      async () => {
+        // Ensure built-in templates are seeded
+        await this.seedBuiltInTemplates();
 
-      // Use base implementation for database lookup
-      const dbTemplates = await this._findAll();
-      // Also include plugin templates
-      const pluginTemplates = this.getPluginTemplates();
+        // Use base implementation for database lookup
+        const dbTemplates = await this._findAll();
+        // Also include plugin templates
+        const pluginTemplates = this.getPluginTemplates();
 
-      const allTemplates = [...dbTemplates, ...pluginTemplates];
-      return allTemplates;
-    } catch (error) {
-      logger.error('Error finding all roleplay templates', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+        const allTemplates = [...dbTemplates, ...pluginTemplates];
+        return allTemplates;
+      },
+      'Error finding all roleplay templates',
+      {},
+      []
+    );
   }
 
   /**
    * Find roleplay templates by user ID (user-created templates only)
    */
   async findByUserId(userId: string): Promise<RoleplayTemplate[]> {
-    try {
-      const templates = await this.findByFilter({ userId } as QueryFilter);
-      return templates;
-    } catch (error) {
-      logger.error('Error finding roleplay templates by user ID', {
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+    return this.safeQuery(
+      () => this.findByFilter({ userId } as QueryFilter),
+      'Error finding roleplay templates by user ID',
+      { userId },
+      []
+    );
   }
 
   /**
    * Find all built-in roleplay templates (database + plugin templates)
    */
   async findBuiltIn(): Promise<RoleplayTemplate[]> {
-    try {
-      // Ensure built-in templates are seeded
-      await this.seedBuiltInTemplates();
+    return this.safeQuery(
+      async () => {
+        // Ensure built-in templates are seeded
+        await this.seedBuiltInTemplates();
 
-      const dbTemplates = await this.findByFilter({ isBuiltIn: true } as QueryFilter);
-      // Also include plugin templates (they are all built-in)
-      const pluginTemplates = this.getPluginTemplates();
+        const dbTemplates = await this.findByFilter({ isBuiltIn: true } as QueryFilter);
+        // Also include plugin templates (they are all built-in)
+        const pluginTemplates = this.getPluginTemplates();
 
-      const allBuiltIn = [...dbTemplates, ...pluginTemplates];
-      return allBuiltIn;
-    } catch (error) {
-      logger.error('Error finding built-in roleplay templates', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+        const allBuiltIn = [...dbTemplates, ...pluginTemplates];
+        return allBuiltIn;
+      },
+      'Error finding built-in roleplay templates',
+      {},
+      []
+    );
   }
 
   /**
    * Find all templates available to a user (built-in + plugin + user's own templates)
    */
   async findAllForUser(userId: string): Promise<RoleplayTemplate[]> {
-    try {
-      // Ensure built-in templates are seeded
-      await this.seedBuiltInTemplates();
+    return this.safeQuery(
+      async () => {
+        // Ensure built-in templates are seeded
+        await this.seedBuiltInTemplates();
 
-      const dbTemplates = await this.findByFilter({
-        $or: [
-          { isBuiltIn: true },
-          { userId },
-        ],
-      } as QueryFilter);
-      // Also include plugin templates
-      const pluginTemplates = this.getPluginTemplates();
+        const dbTemplates = await this.findByFilter({
+          $or: [
+            { isBuiltIn: true },
+            { userId },
+          ],
+        } as QueryFilter);
+        // Also include plugin templates
+        const pluginTemplates = this.getPluginTemplates();
 
-      const allTemplates = [...dbTemplates, ...pluginTemplates];
-      return allTemplates;
-    } catch (error) {
-      logger.error('Error finding all roleplay templates for user', {
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+        const allTemplates = [...dbTemplates, ...pluginTemplates];
+        return allTemplates;
+      },
+      'Error finding all roleplay templates for user',
+      { userId },
+      []
+    );
   }
 
   /**
    * Find roleplay template by name for a specific user
    */
   async findByName(userId: string, name: string): Promise<RoleplayTemplate | null> {
-    try {
-      const template = await this.findOneByFilter({ userId, name } as QueryFilter);
+    return this.safeQuery(
+      async () => {
+        const template = await this.findOneByFilter({ userId, name } as QueryFilter);
 
-      if (!template) {
-        return null;
-      }
-      return template;
-    } catch (error) {
-      logger.error('Error finding roleplay template by name', {
-        userId,
-        name,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    }
+        if (!template) {
+          return null;
+        }
+        return template;
+      },
+      'Error finding roleplay template by name',
+      { userId, name },
+      null
+    );
   }
 
   /**
@@ -369,25 +361,22 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
     data: Omit<RoleplayTemplate, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions
   ): Promise<RoleplayTemplate> {
-    try {
-      const template = await this._create(data, options);
+    return this.safeQuery(
+      async () => {
+        const template = await this._create(data, options);
 
-      logger.info('Roleplay template created successfully', {
-        templateId: template.id,
-        userId: data.userId,
-        name: data.name,
-        isBuiltIn: data.isBuiltIn,
-      });
+        logger.info('Roleplay template created successfully', {
+          templateId: template.id,
+          userId: data.userId,
+          name: data.name,
+          isBuiltIn: data.isBuiltIn,
+        });
 
-      return template;
-    } catch (error) {
-      logger.error('Error creating roleplay template', {
-        userId: data.userId,
-        name: data.name,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return template;
+      },
+      'Error creating roleplay template',
+      { userId: data.userId, name: data.name }
+    );
   }
 
   /**
@@ -395,33 +384,31 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
    * Note: Built-in templates cannot be updated
    */
   async update(id: string, data: Partial<RoleplayTemplate>): Promise<RoleplayTemplate | null> {
-    try {
-      const existing = await this.findById(id);
-      if (!existing) {
-        logger.warn('Roleplay template not found for update', { templateId: id });
-        return null;
-      }
+    return this.safeQuery(
+      async () => {
+        const existing = await this.findById(id);
+        if (!existing) {
+          logger.warn('Roleplay template not found for update', { templateId: id });
+          return null;
+        }
 
-      // Prevent updating built-in templates
-      if (existing.isBuiltIn) {
-        logger.warn('Cannot update built-in roleplay template', { templateId: id });
-        return null;
-      }
+        // Prevent updating built-in templates
+        if (existing.isBuiltIn) {
+          logger.warn('Cannot update built-in roleplay template', { templateId: id });
+          return null;
+        }
 
-      const updated = await this._update(id, data);
+        const updated = await this._update(id, data);
 
-      if (updated) {
-        logger.info('Roleplay template updated successfully', { templateId: id });
-      }
+        if (updated) {
+          logger.info('Roleplay template updated successfully', { templateId: id });
+        }
 
-      return updated;
-    } catch (error) {
-      logger.error('Error updating roleplay template', {
-        templateId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return updated;
+      },
+      'Error updating roleplay template',
+      { templateId: id }
+    );
   }
 
   /**
@@ -429,33 +416,31 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
    * Note: Built-in templates cannot be deleted
    */
   async delete(id: string): Promise<boolean> {
-    try {
-      const existing = await this.findById(id);
-      if (!existing) {
-        logger.warn('Roleplay template not found for deletion', { templateId: id });
-        return false;
-      }
+    return this.safeQuery(
+      async () => {
+        const existing = await this.findById(id);
+        if (!existing) {
+          logger.warn('Roleplay template not found for deletion', { templateId: id });
+          return false;
+        }
 
-      // Prevent deleting built-in templates
-      if (existing.isBuiltIn) {
-        logger.warn('Cannot delete built-in roleplay template', { templateId: id });
-        return false;
-      }
+        // Prevent deleting built-in templates
+        if (existing.isBuiltIn) {
+          logger.warn('Cannot delete built-in roleplay template', { templateId: id });
+          return false;
+        }
 
-      const result = await this._delete(id);
+        const result = await this._delete(id);
 
-      if (result) {
-        logger.info('Roleplay template deleted successfully', { templateId: id });
-      }
+        if (result) {
+          logger.info('Roleplay template deleted successfully', { templateId: id });
+        }
 
-      return result;
-    } catch (error) {
-      logger.error('Error deleting roleplay template', {
-        templateId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return result;
+      },
+      'Error deleting roleplay template',
+      { templateId: id }
+    );
   }
 
   /**
@@ -463,32 +448,29 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
    * Note: Built-in templates cannot be modified
    */
   async addTag(templateId: string, tagId: string): Promise<RoleplayTemplate | null> {
-    try {
-      const template = await this.findById(templateId);
-      if (!template) {
-        logger.warn('Roleplay template not found for tag addition', { templateId });
-        return null;
-      }
+    return this.safeQuery(
+      async () => {
+        const template = await this.findById(templateId);
+        if (!template) {
+          logger.warn('Roleplay template not found for tag addition', { templateId });
+          return null;
+        }
 
-      // Prevent modifying built-in templates
-      if (template.isBuiltIn) {
-        logger.warn('Cannot add tag to built-in roleplay template', { templateId });
-        return null;
-      }
+        // Prevent modifying built-in templates
+        if (template.isBuiltIn) {
+          logger.warn('Cannot add tag to built-in roleplay template', { templateId });
+          return null;
+        }
 
-      if (!template.tags.includes(tagId)) {
-        template.tags.push(tagId);
-        return await this.update(templateId, { tags: template.tags });
-      }
-      return template;
-    } catch (error) {
-      logger.error('Error adding tag to roleplay template', {
-        templateId,
-        tagId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        if (!template.tags.includes(tagId)) {
+          template.tags.push(tagId);
+          return await this.update(templateId, { tags: template.tags });
+        }
+        return template;
+      },
+      'Error adding tag to roleplay template',
+      { templateId, tagId }
+    );
   }
 
   /**
@@ -496,33 +478,30 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
    * Note: Built-in templates cannot be modified
    */
   async removeTag(templateId: string, tagId: string): Promise<RoleplayTemplate | null> {
-    try {
-      const template = await this.findById(templateId);
-      if (!template) {
-        logger.warn('Roleplay template not found for tag removal', { templateId });
-        return null;
-      }
+    return this.safeQuery(
+      async () => {
+        const template = await this.findById(templateId);
+        if (!template) {
+          logger.warn('Roleplay template not found for tag removal', { templateId });
+          return null;
+        }
 
-      // Prevent modifying built-in templates
-      if (template.isBuiltIn) {
-        logger.warn('Cannot remove tag from built-in roleplay template', { templateId });
-        return null;
-      }
+        // Prevent modifying built-in templates
+        if (template.isBuiltIn) {
+          logger.warn('Cannot remove tag from built-in roleplay template', { templateId });
+          return null;
+        }
 
-      const initialLength = template.tags.length;
-      template.tags = template.tags.filter((id) => id !== tagId);
+        const initialLength = template.tags.length;
+        template.tags = template.tags.filter((id) => id !== tagId);
 
-      if (template.tags.length < initialLength) {
-        return await this.update(templateId, { tags: template.tags });
-      }
-      return template;
-    } catch (error) {
-      logger.error('Error removing tag from roleplay template', {
-        templateId,
-        tagId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        if (template.tags.length < initialLength) {
+          return await this.update(templateId, { tags: template.tags });
+        }
+        return template;
+      },
+      'Error removing tag from roleplay template',
+      { templateId, tagId }
+    );
   }
 }

@@ -43,16 +43,11 @@ export class TagsRepository extends UserOwnedBaseRepository<Tag> {
       return [];
     }
 
-    try {
-      const tags = await this.findByFilter({ id: { $in: ids } } as QueryFilter);
-      return tags;
-    } catch (error) {
-      logger.error('Error finding tags by IDs', {
-        idCount: ids.length,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      () => this.findByFilter({ id: { $in: ids } } as QueryFilter),
+      'Error finding tags by IDs',
+      { idCount: ids.length }
+    );
   }
 
   /**
@@ -61,21 +56,14 @@ export class TagsRepository extends UserOwnedBaseRepository<Tag> {
   async findByName(userId: string, name: string): Promise<Tag | null> {
     const nameLower = name.toLowerCase();
 
-    try {
-      const tag = await this.findOneByFilter({
+    return this.safeQuery(
+      () => this.findOneByFilter({
         userId,
         nameLower,
-      } as QueryFilter);
-
-      return tag;
-    } catch (error) {
-      logger.error('Error finding tag by name', {
-        userId,
-        name,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+      } as QueryFilter),
+      'Error finding tag by name',
+      { userId, name }
+    );
   }
 
   /**
@@ -87,85 +75,78 @@ export class TagsRepository extends UserOwnedBaseRepository<Tag> {
     data: Omit<Tag, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions
   ): Promise<Tag> {
-    try {
-      // Auto-generate nameLower from name if not provided
-      const nameLower = (data.nameLower || data.name).toLowerCase();
-      const quickHide = typeof data.quickHide === 'boolean' ? data.quickHide : false;
+    return this.safeQuery(
+      async () => {
+        // Auto-generate nameLower from name if not provided
+        const nameLower = (data.nameLower || data.name).toLowerCase();
+        const quickHide = typeof data.quickHide === 'boolean' ? data.quickHide : false;
 
-      const tagData = {
-        ...data,
-        nameLower,
-        quickHide,
-      };
+        const tagData = {
+          ...data,
+          nameLower,
+          quickHide,
+        };
 
-      const tag = await this._create(tagData, options);
+        const tag = await this._create(tagData, options);
 
-      logger.info('Tag created successfully', {
-        tagId: tag.id,
-        userId: data.userId,
-        name: data.name,
-      });
+        logger.info('Tag created successfully', {
+          tagId: tag.id,
+          userId: data.userId,
+          name: data.name,
+        });
 
-      return tag;
-    } catch (error) {
-      logger.error('Error creating tag', {
-        userId: data.userId,
-        name: data.name,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return tag;
+      },
+      'Error creating tag',
+      { userId: data.userId, name: data.name }
+    );
   }
 
   /**
    * Update a tag
    */
   async update(id: string, data: Partial<Tag>): Promise<Tag | null> {
-    try {
-      // If name is being updated, update nameLower as well
-      const updateData = { ...data };
-      if (data.name) {
-        updateData.nameLower = data.name.toLowerCase();
-      }
+    return this.safeQuery(
+      async () => {
+        // If name is being updated, update nameLower as well
+        const updateData = { ...data };
+        if (data.name) {
+          updateData.nameLower = data.name.toLowerCase();
+        }
 
-      // Remove id and createdAt to prevent accidental overwrites
-      delete updateData.id;
-      delete updateData.createdAt;
+        // Remove id and createdAt to prevent accidental overwrites
+        delete updateData.id;
+        delete updateData.createdAt;
 
-      const tag = await this._update(id, updateData);
+        const tag = await this._update(id, updateData);
 
-      if (tag) {
-        logger.info('Tag updated successfully', { tagId: id });
-      }
+        if (tag) {
+          logger.info('Tag updated successfully', { tagId: id });
+        }
 
-      return tag;
-    } catch (error) {
-      logger.error('Error updating tag', {
-        tagId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return tag;
+      },
+      'Error updating tag',
+      { tagId: id }
+    );
   }
 
   /**
    * Delete a tag
    */
   async delete(id: string): Promise<boolean> {
-    try {
-      const result = await this._delete(id);
+    return this.safeQuery(
+      async () => {
+        const result = await this._delete(id);
 
-      if (result) {
-        logger.info('Tag deleted successfully', { tagId: id });
-      }
+        if (result) {
+          logger.info('Tag deleted successfully', { tagId: id });
+        }
 
-      return result;
-    } catch (error) {
-      logger.error('Error deleting tag', {
-        tagId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return result;
+      },
+      'Error deleting tag',
+      { tagId: id }
+    );
   }
 }

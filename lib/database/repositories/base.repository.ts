@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { DatabaseCollection, QueryFilter, QueryOptions, UpdateSpec, BaseEntity } from '../interfaces';
 import { getDatabaseAsync, ensureCollection } from '../manager';
 import { logger } from '@/lib/logger';
+import { safeQuery as standaloneSafeQuery, extractErrorMessage } from './safe-query';
 
 // ============================================================================
 // Types
@@ -53,21 +54,56 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
   }
 
   /**
+   * Execute an async operation with standardized error handling.
+   * Auto-injects `collection: this.collectionName` into the context.
+   *
+   * @overload Rethrow mode — no fallback argument; logs then re-throws.
+   */
+  protected async safeQuery<R>(
+    operation: () => Promise<R>,
+    errorMessage: string,
+    context?: Record<string, unknown>
+  ): Promise<R>;
+
+  /**
+   * @overload Fallback mode — returns `fallback` on error instead of throwing.
+   */
+  protected async safeQuery<R>(
+    operation: () => Promise<R>,
+    errorMessage: string,
+    context: Record<string, unknown>,
+    fallback: R
+  ): Promise<R>;
+
+  /**
+   * Implementation — delegates to standalone safeQuery with collection injected.
+   */
+  protected async safeQuery<R>(
+    operation: () => Promise<R>,
+    errorMessage: string,
+    context: Record<string, unknown> = {},
+    ...rest: [] | [R]
+  ): Promise<R> {
+    const enrichedContext = { collection: this.collectionName, ...context };
+    if (rest.length > 0) {
+      return standaloneSafeQuery(operation, errorMessage, enrichedContext, rest[0] as R);
+    }
+    return standaloneSafeQuery(operation, errorMessage, enrichedContext);
+  }
+
+  /**
    * Get the collection instance
    */
   protected async getCollection(): Promise<DatabaseCollection<T>> {
     // Ensure collection exists on first access
     if (!this.collectionInitialized) {
-      try {
-        await ensureCollection(this.collectionName, this.schema);
-        this.collectionInitialized = true;
-      } catch (error) {
-        logger.error('Failed to ensure collection exists', {
-          collection: this.collectionName,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        throw error;
-      }
+      await this.safeQuery(
+        async () => {
+          await ensureCollection(this.collectionName, this.schema);
+          this.collectionInitialized = true;
+        },
+        'Failed to ensure collection exists',
+      );
     }
 
     const db = await getDatabaseAsync();
@@ -84,7 +120,7 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
     } catch (error) {
       logger.error('Data validation failed', {
         collection: this.collectionName,
-        error: error instanceof Error ? error.message : String(error),
+        error: extractErrorMessage(error),
       });
       throw error;
     }
@@ -183,7 +219,7 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
    * Find entity by ID (default implementation)
    */
   protected async _findById(id: string): Promise<T | null> {
-    try {
+    return this.safeQuery(async () => {
       const collection = await this.getCollection();
       const result = await collection.findOne({ id } as QueryFilter);
 
@@ -192,21 +228,14 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
       }
 
       return this.validate(result);
-    } catch (error) {
-      logger.error('Error finding entity by ID', {
-        collection: this.collectionName,
-        id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    }
+    }, 'Error finding entity by ID', { id }, null);
   }
 
   /**
    * Find all entities (default implementation)
    */
   protected async _findAll(): Promise<T[]> {
-    try {
+    return this.safeQuery(async () => {
       const collection = await this.getCollection();
       const results = await collection.find({});
 
@@ -219,20 +248,14 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
           return null;
         })
         .filter((item): item is T => item !== null);
-    } catch (error) {
-      logger.error('Error finding all entities', {
-        collection: this.collectionName,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+    }, 'Error finding all entities', {}, []);
   }
 
   /**
    * Find entities by filter
    */
   protected async findByFilter(filter: QueryFilter, options?: QueryOptions): Promise<T[]> {
-    try {
+    return this.safeQuery(async () => {
       const collection = await this.getCollection();
       const results = await collection.find(filter, options);
 
@@ -245,20 +268,14 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
           return null;
         })
         .filter((item): item is T => item !== null);
-    } catch (error) {
-      logger.error('Error finding entities by filter', {
-        collection: this.collectionName,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+    }, 'Error finding entities by filter', {}, []);
   }
 
   /**
    * Find single entity by filter
    */
   protected async findOneByFilter(filter: QueryFilter): Promise<T | null> {
-    try {
+    return this.safeQuery(async () => {
       const collection = await this.getCollection();
       const result = await collection.findOne(filter);
 
@@ -267,13 +284,7 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
       }
 
       return this.validate(result);
-    } catch (error) {
-      logger.error('Error finding entity by filter', {
-        collection: this.collectionName,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    }
+    }, 'Error finding entity by filter', {}, null);
   }
 
   /**
@@ -283,7 +294,7 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
     data: Omit<T, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions
   ): Promise<T> {
-    try {
+    return this.safeQuery(async () => {
       const id = options?.id || this.generateId();
       const now = this.getCurrentTimestamp();
       const createdAt = options?.createdAt || now;
@@ -305,20 +316,14 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
       });
 
       return validated;
-    } catch (error) {
-      logger.error('Error creating entity', {
-        collection: this.collectionName,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    }, 'Error creating entity');
   }
 
   /**
    * Update entity (default implementation)
    */
   protected async _update(id: string, data: Partial<T>): Promise<T | null> {
-    try {
+    return this.safeQuery(async () => {
       const existing = await this.findById(id);
       if (!existing) {
         logger.warn('Entity not found for update', {
@@ -345,21 +350,14 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
         { $set: validated } as UpdateSpec<T>
       );
       return validated;
-    } catch (error) {
-      logger.error('Error updating entity', {
-        collection: this.collectionName,
-        id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    }, 'Error updating entity', { id });
   }
 
   /**
    * Delete entity (default implementation)
    */
   protected async _delete(id: string): Promise<boolean> {
-    try {
+    return this.safeQuery(async () => {
       const collection = await this.getCollection();
       const result = await collection.deleteOne({ id } as QueryFilter);
 
@@ -377,14 +375,7 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
       });
 
       return true;
-    } catch (error) {
-      logger.error('Error deleting entity', {
-        collection: this.collectionName,
-        id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    }, 'Error deleting entity', { id });
   }
 
   /**
@@ -411,40 +402,37 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
    * Count entities matching a filter
    */
   async count(filter?: QueryFilter): Promise<number> {
-    try {
-      const collection = await this.getCollection();
-      return collection.countDocuments(filter);
-    } catch (error) {
-      logger.error('Error counting entities', {
-        collection: this.collectionName,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return 0;
-    }
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        return collection.countDocuments(filter);
+      },
+      'Error counting entities',
+      {},
+      0,
+    );
   }
 
   /**
    * Check if an entity exists
    */
   async exists(id: string): Promise<boolean> {
-    try {
-      const collection = await this.getCollection();
-      return collection.exists({ id } as QueryFilter);
-    } catch (error) {
-      logger.error('Error checking entity existence', {
-        collection: this.collectionName,
-        id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return false;
-    }
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        return collection.exists({ id } as QueryFilter);
+      },
+      'Error checking entity existence',
+      { id },
+      false,
+    );
   }
 
   /**
    * Delete multiple entities matching a filter
    */
   protected async deleteMany(filter: QueryFilter): Promise<number> {
-    try {
+    return this.safeQuery(async () => {
       const collection = await this.getCollection();
       const result = await collection.deleteMany(filter);
 
@@ -454,20 +442,14 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
       });
 
       return result.deletedCount;
-    } catch (error) {
-      logger.error('Error deleting entities', {
-        collection: this.collectionName,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    }, 'Error deleting entities');
   }
 
   /**
    * Update multiple entities matching a filter
    */
   protected async updateMany(filter: QueryFilter, update: Partial<T>): Promise<number> {
-    try {
+    return this.safeQuery(async () => {
       const collection = await this.getCollection();
       const result = await collection.updateMany(
         filter,
@@ -479,13 +461,7 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
         } as UpdateSpec<T>
       );
       return result.modifiedCount;
-    } catch (error) {
-      logger.error('Error updating entities', {
-        collection: this.collectionName,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    }, 'Error updating entities');
   }
 }
 
@@ -539,7 +515,7 @@ export abstract class TaggableBaseRepository<T extends TaggableEntity> extends U
    * Add a tag to an entity
    */
   async addTag(entityId: string, tagId: string): Promise<T | null> {
-    try {
+    return this.safeQuery(async () => {
       const entity = await this.findById(entityId);
       if (!entity) {
         logger.warn('Entity not found for tag addition', {
@@ -554,22 +530,14 @@ export abstract class TaggableBaseRepository<T extends TaggableEntity> extends U
         return await this.update(entityId, { tags: entity.tags } as Partial<T>);
       }
       return entity;
-    } catch (error) {
-      logger.error('Error adding tag to entity', {
-        collection: this.collectionName,
-        entityId,
-        tagId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    }, 'Error adding tag to entity', { entityId, tagId });
   }
 
   /**
    * Remove a tag from an entity
    */
   async removeTag(entityId: string, tagId: string): Promise<T | null> {
-    try {
+    return this.safeQuery(async () => {
       const entity = await this.findById(entityId);
       if (!entity) {
         logger.warn('Entity not found for tag removal', {
@@ -587,14 +555,6 @@ export abstract class TaggableBaseRepository<T extends TaggableEntity> extends U
         return await this.update(entityId, { tags: entity.tags } as Partial<T>);
       }
       return entity;
-    } catch (error) {
-      logger.error('Error removing tag from entity', {
-        collection: this.collectionName,
-        entityId,
-        tagId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    }, 'Error removing tag from entity', { entityId, tagId });
   }
 }

@@ -46,66 +46,59 @@ export class ProviderModelsRepository extends AbstractBaseRepository<ProviderMod
     data: Omit<ProviderModel, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions
   ): Promise<ProviderModel> {
-    try {
-      const model = await this._create(data, options);
+    return this.safeQuery(
+      async () => {
+        const model = await this._create(data, options);
 
-      logger.info('Provider model created successfully', {
-        id: model.id,
-        provider: data.provider,
-        modelId: data.modelId,
-      });
+        logger.info('Provider model created successfully', {
+          id: model.id,
+          provider: data.provider,
+          modelId: data.modelId,
+        });
 
-      return model;
-    } catch (error) {
-      logger.error('Error creating provider model', {
-        provider: data.provider,
-        modelId: data.modelId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return model;
+      },
+      'Error creating provider model',
+      { provider: data.provider, modelId: data.modelId }
+    );
   }
 
   /**
    * Update a provider model
    */
   async update(id: string, data: Partial<ProviderModel>): Promise<ProviderModel | null> {
-    try {
-      const model = await this._update(id, data);
+    return this.safeQuery(
+      async () => {
+        const model = await this._update(id, data);
 
-      if (model) {
-        logger.info('Provider model updated successfully', { modelId: id });
-      }
+        if (model) {
+          logger.info('Provider model updated successfully', { modelId: id });
+        }
 
-      return model;
-    } catch (error) {
-      logger.error('Error updating provider model', {
-        modelId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return model;
+      },
+      'Error updating provider model',
+      { modelId: id }
+    );
   }
 
   /**
    * Delete a provider model
    */
   async delete(id: string): Promise<boolean> {
-    try {
-      const result = await this._delete(id);
+    return this.safeQuery(
+      async () => {
+        const result = await this._delete(id);
 
-      if (result) {
-        logger.info('Provider model deleted successfully', { modelId: id });
-      }
+        if (result) {
+          logger.info('Provider model deleted successfully', { modelId: id });
+        }
 
-      return result;
-    } catch (error) {
-      logger.error('Error deleting provider model', {
-        modelId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return result;
+      },
+      'Error deleting provider model',
+      { modelId: id }
+    );
   }
 
   // ============================================================================
@@ -116,38 +109,31 @@ export class ProviderModelsRepository extends AbstractBaseRepository<ProviderMod
    * Find all models for a specific provider (optionally filtered by model type)
    */
   async findByProvider(provider: string, modelType?: ModelType): Promise<ProviderModel[]> {
-    try {
-      const query: Record<string, unknown> = { provider };
-      if (modelType) {
-        query.modelType = modelType;
-      }
+    return this.safeQuery(
+      async () => {
+        const query: Record<string, unknown> = { provider };
+        if (modelType) {
+          query.modelType = modelType;
+        }
 
-      const models = await this.findByFilter(query as QueryFilter);
-      return models;
-    } catch (error) {
-      logger.error('Error finding provider models by provider', {
-        provider,
-        modelType,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+        return await this.findByFilter(query as QueryFilter);
+      },
+      'Error finding provider models by provider',
+      { provider, modelType },
+      []
+    );
   }
 
   /**
    * Find all models by model type (e.g., all chat models, all image models)
    */
   async findByModelType(modelType: ModelType): Promise<ProviderModel[]> {
-    try {
-      const models = await this.findByFilter({ modelType } as QueryFilter);
-      return models;
-    } catch (error) {
-      logger.error('Error finding provider models by model type', {
-        modelType,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+    return this.safeQuery(
+      () => this.findByFilter({ modelType } as QueryFilter),
+      'Error finding provider models by model type',
+      { modelType },
+      []
+    );
   }
 
   /**
@@ -159,28 +145,24 @@ export class ProviderModelsRepository extends AbstractBaseRepository<ProviderMod
     modelType: ModelType = 'chat',
     baseUrl?: string
   ): Promise<ProviderModel | null> {
-    try {
-      const query: Record<string, unknown> = { provider, modelId, modelType };
-      if (baseUrl) {
-        query.baseUrl = baseUrl;
-      }
+    return this.safeQuery(
+      async () => {
+        const query: Record<string, unknown> = { provider, modelId, modelType };
+        if (baseUrl) {
+          query.baseUrl = baseUrl;
+        }
 
-      const model = await this.findOneByFilter(query as QueryFilter);
+        const model = await this.findOneByFilter(query as QueryFilter);
 
-      if (!model) {
-        return null;
-      }
-      return model;
-    } catch (error) {
-      logger.error('Error finding provider model by provider and modelId', {
-        provider,
-        modelId,
-        modelType,
-        baseUrl,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    }
+        if (!model) {
+          return null;
+        }
+        return model;
+      },
+      'Error finding provider model by provider and modelId',
+      { provider, modelId, modelType, baseUrl },
+      null
+    );
   }
 
   /**
@@ -189,36 +171,31 @@ export class ProviderModelsRepository extends AbstractBaseRepository<ProviderMod
   async upsertModel(
     data: Omit<ProviderModel, 'id' | 'createdAt' | 'updatedAt'>
   ): Promise<ProviderModel> {
-    try {
-      // Check if model exists
-      // Convert null to undefined for the baseUrl parameter
-      const existing = await this.findByProviderAndModelId(
-        data.provider,
-        data.modelId,
-        data.modelType ?? 'chat',
-        data.baseUrl ?? undefined
-      );
+    return this.safeQuery(
+      async () => {
+        // Check if model exists
+        // Convert null to undefined for the baseUrl parameter
+        const existing = await this.findByProviderAndModelId(
+          data.provider,
+          data.modelId,
+          data.modelType ?? 'chat',
+          data.baseUrl ?? undefined
+        );
 
-      if (existing) {
-        const updated = await this.update(existing.id, data);
-        if (!updated) {
-          throw new Error('Failed to update existing provider model');
+        if (existing) {
+          const updated = await this.update(existing.id, data);
+          if (!updated) {
+            throw new Error('Failed to update existing provider model');
+          }
+          return updated;
         }
-        return updated;
-      }
 
-      // Create new model
-      return await this.create(data);
-    } catch (error) {
-      logger.error('Error upserting provider model', {
-        provider: data.provider,
-        modelId: data.modelId,
-        modelType: data.modelType,
-        baseUrl: data.baseUrl,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        // Create new model
+        return await this.create(data);
+      },
+      'Error upserting provider model',
+      { provider: data.provider, modelId: data.modelId, modelType: data.modelType, baseUrl: data.baseUrl }
+    );
   }
 
   /**
@@ -237,100 +214,91 @@ export class ProviderModelsRepository extends AbstractBaseRepository<ProviderMod
     modelType: ModelType = 'chat',
     baseUrl?: string
   ): Promise<{ created: number; updated: number }> {
-    try {
-      let created = 0;
-      let updated = 0;
+    return this.safeQuery(
+      async () => {
+        let created = 0;
+        let updated = 0;
 
-      for (const modelData of models) {
-        try {
-          const existingBefore = await this.findByProviderAndModelId(
-            provider,
-            modelData.modelId,
-            modelType,
-            baseUrl
-          );
+        for (const modelData of models) {
+          try {
+            const existingBefore = await this.findByProviderAndModelId(
+              provider,
+              modelData.modelId,
+              modelType,
+              baseUrl
+            );
 
-          await this.upsertModel({
-            provider,
-            modelId: modelData.modelId,
-            modelType,
-            displayName: modelData.displayName || modelData.modelId,
-            baseUrl: baseUrl || null,
-            contextWindow: modelData.contextWindow || null,
-            maxOutputTokens: modelData.maxOutputTokens || null,
-            deprecated: modelData.deprecated || false,
-            experimental: modelData.experimental || false,
-          });
+            await this.upsertModel({
+              provider,
+              modelId: modelData.modelId,
+              modelType,
+              displayName: modelData.displayName || modelData.modelId,
+              baseUrl: baseUrl || null,
+              contextWindow: modelData.contextWindow || null,
+              maxOutputTokens: modelData.maxOutputTokens || null,
+              deprecated: modelData.deprecated || false,
+              experimental: modelData.experimental || false,
+            });
 
-          // Determine if it was created or updated
-          if (existingBefore) {
-            updated++;
-          } else {
-            created++;
+            // Determine if it was created or updated
+            if (existingBefore) {
+              updated++;
+            } else {
+              created++;
+            }
+          } catch (modelError) {
+            logger.warn('Failed to upsert individual model', {
+              provider,
+              modelId: modelData.modelId,
+              modelType,
+              error: modelError instanceof Error ? modelError.message : String(modelError),
+            });
           }
-        } catch (modelError) {
-          logger.warn('Failed to upsert individual model', {
-            provider,
-            modelId: modelData.modelId,
-            modelType,
-            error: modelError instanceof Error ? modelError.message : String(modelError),
-          });
         }
-      }
 
-      logger.info('Bulk upsert completed for provider', {
-        provider,
-        modelType,
-        baseUrl,
-        totalModels: models.length,
-        created,
-        updated,
-      });
+        logger.info('Bulk upsert completed for provider', {
+          provider,
+          modelType,
+          baseUrl,
+          totalModels: models.length,
+          created,
+          updated,
+        });
 
-      return { created, updated };
-    } catch (error) {
-      logger.error('Error bulk upserting models for provider', {
-        provider,
-        modelType,
-        baseUrl,
-        modelCount: models.length,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return { created, updated };
+      },
+      'Error bulk upserting models for provider',
+      { provider, modelType, baseUrl, modelCount: models.length }
+    );
   }
 
   /**
    * Delete all models for a provider (optionally filtered by model type)
    */
   async deleteByProvider(provider: string, modelType?: ModelType, baseUrl?: string): Promise<number> {
-    try {
-      const query: Record<string, unknown> = { provider };
-      if (modelType) {
-        query.modelType = modelType;
-      }
-      if (baseUrl) {
-        query.baseUrl = baseUrl;
-      }
+    return this.safeQuery(
+      async () => {
+        const query: Record<string, unknown> = { provider };
+        if (modelType) {
+          query.modelType = modelType;
+        }
+        if (baseUrl) {
+          query.baseUrl = baseUrl;
+        }
 
-      const count = await this.deleteMany(query as QueryFilter);
+        const count = await this.deleteMany(query as QueryFilter);
 
-      logger.info('Provider models deleted successfully', {
-        provider,
-        modelType,
-        baseUrl,
-        deletedCount: count,
-      });
+        logger.info('Provider models deleted successfully', {
+          provider,
+          modelType,
+          baseUrl,
+          deletedCount: count,
+        });
 
-      return count;
-    } catch (error) {
-      logger.error('Error deleting provider models by provider', {
-        provider,
-        modelType,
-        baseUrl,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return count;
+      },
+      'Error deleting provider models by provider',
+      { provider, modelType, baseUrl }
+    );
   }
 }

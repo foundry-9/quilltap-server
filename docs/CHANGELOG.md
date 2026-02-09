@@ -4,6 +4,14 @@
 
 ### 2.10-dev
 
+- refactor: Add `safeQuery()` helper to eliminate redundant try-catch boilerplate
+  - Create standalone `safeQuery()` function and `extractErrorMessage()` utility in `safe-query.ts`
+  - Add `this.safeQuery()` protected method on `AbstractBaseRepository` with auto-injected `collection` context
+  - Convert ~315 catch blocks across 29 files (1 base class, 5 ops modules, 23 child repositories)
+  - Three failure modes preserved: rethrow (writes), fallback (reads), silent (non-critical)
+  - Inner try-catches and synchronous validation preserved as-is
+  - Resolves identified technical debt: redundant try-catch wrappers in repository methods
+
 - refactor: Split ChatsRepository into facade + 5 focused operations modules
   - Extract `ChatParticipantsOps` (add/update/remove participant, query helpers)
   - Extract `ChatImpersonationOps` (add/remove impersonation, active typing, LLM pause)
@@ -37,7 +45,7 @@
 
 - **Known Technical Debt** (identified in audit, deferred):
   - ~~`ChatsRepository` SRP split~~ (resolved — see refactor above)
-  - Redundant try-catch wrappers in 50+ repository methods that could use a `safeQuery()` helper in `AbstractBaseRepository`
+  - ~~Redundant try-catch wrappers in 50+ repository methods that could use a `safeQuery()` helper in `AbstractBaseRepository`~~ (resolved — see refactor above)
   - `UsersRepository.migrateUserId` bypasses database abstraction with direct `(db as any).db` SQLite access
   - ~45 remaining component files with 1-8 raw Tailwind violations each (colors, shadows, typography)
   - `QueryFilter` is loosely typed across all repositories — a typed query builder would prevent runtime errors
