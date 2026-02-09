@@ -5,7 +5,7 @@
  * POST /api/v1/system/data-dir?action=open - Opens the data directory in the system file browser
  */
 
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { successResponse, errorResponse, badRequest } from '@/lib/api/responses';
 import {
@@ -16,7 +16,7 @@ import {
 } from '@/lib/paths';
 import { logger } from '@/lib/logger';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 /**
  * Response shape for data directory info
@@ -83,27 +83,23 @@ export async function POST(request: Request) {
   const dirPath = dirInfo.path;
 
   try {
-    let command: string;
-
     switch (platform) {
       case 'darwin':
         // macOS: use open command
-        command = `open "${dirPath}"`;
+        await execFileAsync('open', [dirPath]);
         break;
 
       case 'win32':
         // Windows: use explorer command
-        command = `explorer "${dirPath}"`;
+        await execFileAsync('explorer', [dirPath]);
         break;
 
       case 'linux':
       default:
         // Linux: try xdg-open (standard), fallback to common file managers
-        command = `xdg-open "${dirPath}" 2>/dev/null || nautilus "${dirPath}" 2>/dev/null || dolphin "${dirPath}" 2>/dev/null || thunar "${dirPath}" 2>/dev/null`;
+        await openLinuxFileBrowser(dirPath);
         break;
     }
-
-    await execAsync(command);
 
     logger.info('Opened data directory in file browser', { platform, path: dirPath });
 
@@ -120,4 +116,24 @@ export async function POST(request: Request) {
       500
     );
   }
+}
+
+/**
+ * Try to open a file browser on Linux using common file manager commands.
+ * Uses execFile with sequential fallbacks (no shell chaining).
+ */
+async function openLinuxFileBrowser(dirPath: string): Promise<void> {
+  const commands = ['xdg-open', 'nautilus', 'dolphin', 'thunar'];
+
+  for (const cmd of commands) {
+    try {
+      await execFileAsync(cmd, [dirPath]);
+      return;
+    } catch {
+      // Try the next file manager
+      logger.debug(`File manager '${cmd}' not available, trying next`, { dirPath });
+    }
+  }
+
+  throw new Error('No supported file manager found. Tried: ' + commands.join(', '));
 }

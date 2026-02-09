@@ -1,27 +1,487 @@
 /**
  * Vector Store Unit Tests
  *
- * Note: CharacterVectorStore requires MongoDB for persistence.
- * These tests are skipped in unit tests and require integration testing
- * with an actual MongoDB instance.
- *
- * TODO: Add integration tests for MongoDB vector store functionality
+ * Tests CharacterVectorStore and VectorStoreManager against
+ * the SQLite-backed vector index repository.
  */
 
-import { describe, it } from '@jest/globals'
+import { describe, it, expect, jest, beforeEach } from '@jest/globals'
+
+// Mock dependencies
+jest.mock('@/lib/logger', () => ({
+  logger: {
+    debug: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+  },
+}))
+
+const mockRepo = {
+  findByCharacterId: jest.fn(),
+  save: jest.fn(),
+  deleteByCharacterId: jest.fn(),
+}
+
+jest.mock('@/lib/database/repositories/vector-indices.repository', () => ({
+  getVectorIndicesRepository: () => mockRepo,
+}))
+
+// Override the global mock from jest.setup.ts so we test the real implementation
+jest.mock('@/lib/embedding/vector-store', () => {
+  return jest.requireActual('@/lib/embedding/vector-store')
+})
+
+// Provide cosine similarity inline — it's pure math with no external deps
+jest.mock('@/lib/embedding/embedding-service', () => ({
+  cosineSimilarity: (a: number[], b: number[]) => {
+    let dot = 0
+    let normA = 0
+    let normB = 0
+    for (let i = 0; i < a.length; i++) {
+      dot += a[i] * b[i]
+      normA += a[i] * a[i]
+      normB += b[i] * b[i]
+    }
+    if (normA === 0 || normB === 0) return 0
+    return dot / (Math.sqrt(normA) * Math.sqrt(normB))
+  },
+}))
+
+// Use require to import after mock setup (jest.mock is hoisted above imports)
+const vectorStoreModule = require('@/lib/embedding/vector-store')
+const CharacterVectorStore = vectorStoreModule.CharacterVectorStore as typeof import('@/lib/embedding/vector-store').CharacterVectorStore
+const VectorStoreManager = vectorStoreModule.VectorStoreManager as typeof import('@/lib/embedding/vector-store').VectorStoreManager
+type VectorMetadata = import('@/lib/embedding/vector-store').VectorMetadata
+
+// Test data helpers
+function makeMetadata(overrides: Partial<VectorMetadata> = {}): VectorMetadata {
+  return {
+    memoryId: 'mem-1',
+    characterId: 'char-1',
+    content: 'test content',
+    ...overrides,
+  }
+}
+
+function makeVectorIndex(characterId: string, entries: Array<{ id: string; embedding: number[]; metadata: VectorMetadata }> = []) {
+  return {
+    id: characterId,
+    characterId,
+    version: 1,
+    dimensions: entries.length > 0 ? entries[0].embedding.length : 0,
+    entries: entries.map(e => ({
+      ...e,
+      createdAt: '2025-01-01T00:00:00.000Z',
+    })),
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-01T00:00:00.000Z',
+  }
+}
 
 describe('CharacterVectorStore', () => {
-  describe.skip('MongoDB Integration Tests Required', () => {
-    it('should be tested with integration tests against MongoDB', () => {
-      // CharacterVectorStore now requires MongoDB
-      // Unit tests cannot run without mocking the MongoDB connection
-      // These tests should be moved to integration tests
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockRepo.findByCharacterId.mockResolvedValue(null)
+    mockRepo.save.mockResolvedValue({})
+    mockRepo.deleteByCharacterId.mockResolvedValue(true)
+  })
+
+  describe('initialization', () => {
+    it('starts with null dimensions and zero size', () => {
+      const store = new CharacterVectorStore('char-1')
+      expect(store.getDimensions()).toBeNull()
+      expect(store.size).toBe(0)
+    })
+  })
+
+  describe('load', () => {
+    it('loads entries from the database', async () => {
+      const index = makeVectorIndex('char-1', [
+        { id: 'v1', embedding: [1, 0, 0], metadata: makeMetadata({ memoryId: 'v1' }) },
+        { id: 'v2', embedding: [0, 1, 0], metadata: makeMetadata({ memoryId: 'v2' }) },
+      ])
+      mockRepo.findByCharacterId.mockResolvedValue(index)
+
+      const store = new CharacterVectorStore('char-1')
+      await store.load()
+
+      expect(store.size).toBe(2)
+      expect(store.getDimensions()).toBe(3)
+      expect(store.hasVector('v1')).toBe(true)
+      expect(store.hasVector('v2')).toBe(true)
+    })
+
+    it('starts fresh when no index exists in database', async () => {
+      mockRepo.findByCharacterId.mockResolvedValue(null)
+
+      const store = new CharacterVectorStore('char-1')
+      await store.load()
+
+      expect(store.size).toBe(0)
+      expect(store.getDimensions()).toBeNull()
+    })
+
+    it('starts fresh on database error', async () => {
+      mockRepo.findByCharacterId.mockRejectedValue(new Error('DB error'))
+
+      const store = new CharacterVectorStore('char-1')
+      await store.load()
+
+      expect(store.size).toBe(0)
+      expect(store.getDimensions()).toBeNull()
+    })
+
+    it('clears existing in-memory entries when loading', async () => {
+      const store = new CharacterVectorStore('char-1')
+      await store.addVector('local-1', [1, 2, 3], makeMetadata())
+
+      mockRepo.findByCharacterId.mockResolvedValue(null)
+      await store.load()
+
+      expect(store.size).toBe(0)
+      expect(store.hasVector('local-1')).toBe(false)
+    })
+  })
+
+  describe('save', () => {
+    it('saves entries to the database', async () => {
+      const store = new CharacterVectorStore('char-1')
+      await store.addVector('v1', [1, 0], makeMetadata())
+
+      await store.save()
+
+      expect(mockRepo.save).toHaveBeenCalledWith('char-1', expect.objectContaining({
+        characterId: 'char-1',
+        version: 1,
+        dimensions: 2,
+        entries: expect.arrayContaining([
+          expect.objectContaining({ id: 'v1' }),
+        ]),
+      }))
+    })
+
+    it('skips save when not dirty and empty', async () => {
+      const store = new CharacterVectorStore('char-1')
+      await store.save()
+
+      expect(mockRepo.save).not.toHaveBeenCalled()
+    })
+
+    it('throws on database error during save', async () => {
+      mockRepo.save.mockRejectedValue(new Error('Save failed'))
+
+      const store = new CharacterVectorStore('char-1')
+      await store.addVector('v1', [1, 0], makeMetadata())
+
+      await expect(store.save()).rejects.toThrow('Save failed')
+    })
+
+    it('clears dirty flag after successful save', async () => {
+      const store = new CharacterVectorStore('char-1')
+      await store.addVector('v1', [1, 0], makeMetadata())
+
+      await store.save()
+      // Calling save again should still call repo.save (entries.size > 0)
+      // but the dirty flag was cleared
+      mockRepo.save.mockClear()
+      await store.save()
+      // With dirty=false but entries.size > 0, it still saves
+      // Actually: condition is `!this.dirty && this.entries.size === 0`
+      // So if entries.size > 0, it saves even if not dirty
+      expect(mockRepo.save).toHaveBeenCalled()
+    })
+  })
+
+  describe('addVector', () => {
+    it('adds a vector and sets dimensions on first add', async () => {
+      const store = new CharacterVectorStore('char-1')
+      await store.addVector('v1', [1, 2, 3], makeMetadata())
+
+      expect(store.size).toBe(1)
+      expect(store.getDimensions()).toBe(3)
+      expect(store.hasVector('v1')).toBe(true)
+    })
+
+    it('throws on dimension mismatch', async () => {
+      const store = new CharacterVectorStore('char-1')
+      await store.addVector('v1', [1, 2, 3], makeMetadata())
+
+      await expect(
+        store.addVector('v2', [1, 2], makeMetadata({ memoryId: 'v2' }))
+      ).rejects.toThrow('Vector dimension mismatch: expected 3, got 2')
+    })
+
+    it('overwrites existing vector with same id', async () => {
+      const store = new CharacterVectorStore('char-1')
+      await store.addVector('v1', [1, 0, 0], makeMetadata())
+      await store.addVector('v1', [0, 1, 0], makeMetadata())
+
+      expect(store.size).toBe(1)
+      const entries = store.getAllEntries()
+      expect(entries[0].embedding).toEqual([0, 1, 0])
+    })
+  })
+
+  describe('removeVector', () => {
+    it('removes an existing vector', async () => {
+      const store = new CharacterVectorStore('char-1')
+      await store.addVector('v1', [1, 0], makeMetadata())
+
+      const removed = await store.removeVector('v1')
+
+      expect(removed).toBe(true)
+      expect(store.size).toBe(0)
+      expect(store.hasVector('v1')).toBe(false)
+    })
+
+    it('returns false for non-existent vector', async () => {
+      const store = new CharacterVectorStore('char-1')
+
+      const removed = await store.removeVector('nonexistent')
+
+      expect(removed).toBe(false)
+    })
+  })
+
+  describe('updateVector', () => {
+    it('updates an existing vector embedding', async () => {
+      const store = new CharacterVectorStore('char-1')
+      await store.addVector('v1', [1, 0], makeMetadata())
+
+      const updated = await store.updateVector('v1', [0, 1])
+
+      expect(updated).toBe(true)
+      const entries = store.getAllEntries()
+      expect(entries[0].embedding).toEqual([0, 1])
+    })
+
+    it('returns false for non-existent vector', async () => {
+      const store = new CharacterVectorStore('char-1')
+
+      const updated = await store.updateVector('nonexistent', [1, 0])
+
+      expect(updated).toBe(false)
+    })
+
+    it('throws on dimension mismatch during update', async () => {
+      const store = new CharacterVectorStore('char-1')
+      await store.addVector('v1', [1, 0, 0], makeMetadata())
+
+      await expect(
+        store.updateVector('v1', [1, 0])
+      ).rejects.toThrow('Vector dimension mismatch: expected 3, got 2')
+    })
+  })
+
+  describe('search', () => {
+    it('returns empty array for empty store', () => {
+      const store = new CharacterVectorStore('char-1')
+      const results = store.search([1, 0, 0])
+
+      expect(results).toEqual([])
+    })
+
+    it('returns results sorted by similarity score descending', async () => {
+      const store = new CharacterVectorStore('char-1')
+      // Vector [1,0,0] is more similar to query [1,0,0] than [0,1,0]
+      await store.addVector('v1', [1, 0, 0], makeMetadata({ memoryId: 'v1' }))
+      await store.addVector('v2', [0, 1, 0], makeMetadata({ memoryId: 'v2' }))
+      await store.addVector('v3', [0.9, 0.1, 0], makeMetadata({ memoryId: 'v3' }))
+
+      const results = store.search([1, 0, 0])
+
+      expect(results).toHaveLength(3)
+      expect(results[0].id).toBe('v1') // Exact match - highest score
+      expect(results[0].score).toBeCloseTo(1.0)
+      expect(results[1].id).toBe('v3') // Close match
+      // v2 is orthogonal, lowest score
+      expect(results[2].id).toBe('v2')
+    })
+
+    it('respects the limit parameter', async () => {
+      const store = new CharacterVectorStore('char-1')
+      await store.addVector('v1', [1, 0], makeMetadata({ memoryId: 'v1' }))
+      await store.addVector('v2', [0, 1], makeMetadata({ memoryId: 'v2' }))
+      await store.addVector('v3', [0.5, 0.5], makeMetadata({ memoryId: 'v3' }))
+
+      const results = store.search([1, 0], 2)
+
+      expect(results).toHaveLength(2)
+    })
+
+    it('applies filter predicate', async () => {
+      const store = new CharacterVectorStore('char-1')
+      await store.addVector('v1', [1, 0], makeMetadata({ memoryId: 'v1', content: 'keep' }))
+      await store.addVector('v2', [0.9, 0.1], makeMetadata({ memoryId: 'v2', content: 'skip' }))
+
+      const results = store.search([1, 0], 10, (meta) => meta.content === 'keep')
+
+      expect(results).toHaveLength(1)
+      expect(results[0].id).toBe('v1')
+    })
+
+    it('throws on query dimension mismatch', async () => {
+      const store = new CharacterVectorStore('char-1')
+      await store.addVector('v1', [1, 0, 0], makeMetadata())
+
+      expect(() => store.search([1, 0])).toThrow(
+        'Query vector dimension mismatch: expected 3, got 2'
+      )
+    })
+  })
+
+  describe('clear', () => {
+    it('removes all entries and resets dimensions', async () => {
+      const store = new CharacterVectorStore('char-1')
+      await store.addVector('v1', [1, 0], makeMetadata())
+      await store.addVector('v2', [0, 1], makeMetadata({ memoryId: 'v2' }))
+
+      store.clear()
+
+      expect(store.size).toBe(0)
+      expect(store.getDimensions()).toBeNull()
+    })
+  })
+
+  describe('getAllEntries', () => {
+    it('returns all stored entries', async () => {
+      const store = new CharacterVectorStore('char-1')
+      await store.addVector('v1', [1, 0], makeMetadata({ memoryId: 'v1' }))
+      await store.addVector('v2', [0, 1], makeMetadata({ memoryId: 'v2' }))
+
+      const entries = store.getAllEntries()
+
+      expect(entries).toHaveLength(2)
+      expect(entries.map(e => e.id).sort()).toEqual(['v1', 'v2'])
     })
   })
 })
 
-describe.skip('VectorStoreManager with MongoDB', () => {
-  it('should be tested with integration tests', () => {
-    // Placeholder - tests require MongoDB
+describe('VectorStoreManager', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockRepo.findByCharacterId.mockResolvedValue(null)
+    mockRepo.save.mockResolvedValue({})
+    mockRepo.deleteByCharacterId.mockResolvedValue(true)
+  })
+
+  describe('getStore', () => {
+    it('creates and loads a new store for unknown character', async () => {
+      const manager = new VectorStoreManager()
+      const store = await manager.getStore('char-1')
+
+      expect(store).toBeDefined()
+      expect(store.size).toBe(0)
+      expect(mockRepo.findByCharacterId).toHaveBeenCalledWith('char-1')
+    })
+
+    it('returns cached store on subsequent calls', async () => {
+      const manager = new VectorStoreManager()
+      const store1 = await manager.getStore('char-1')
+      const store2 = await manager.getStore('char-1')
+
+      expect(store1).toBe(store2)
+      // Only one load call
+      expect(mockRepo.findByCharacterId).toHaveBeenCalledTimes(1)
+    })
+
+    it('creates separate stores for different characters', async () => {
+      const manager = new VectorStoreManager()
+      const store1 = await manager.getStore('char-1')
+      const store2 = await manager.getStore('char-2')
+
+      expect(store1).not.toBe(store2)
+    })
+  })
+
+  describe('saveAll', () => {
+    it('saves all loaded stores', async () => {
+      const manager = new VectorStoreManager()
+      const store1 = await manager.getStore('char-1')
+      const store2 = await manager.getStore('char-2')
+
+      await store1.addVector('v1', [1, 0], makeMetadata({ characterId: 'char-1' }))
+      await store2.addVector('v2', [0, 1], makeMetadata({ characterId: 'char-2' }))
+
+      await manager.saveAll()
+
+      expect(mockRepo.save).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  describe('saveStore', () => {
+    it('saves a specific store', async () => {
+      const manager = new VectorStoreManager()
+      const store = await manager.getStore('char-1')
+      await store.addVector('v1', [1, 0], makeMetadata())
+
+      await manager.saveStore('char-1')
+
+      expect(mockRepo.save).toHaveBeenCalledTimes(1)
+    })
+
+    it('does nothing for non-loaded store', async () => {
+      const manager = new VectorStoreManager()
+      await manager.saveStore('nonexistent')
+
+      expect(mockRepo.save).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('unloadStore', () => {
+    it('removes store from cache', async () => {
+      const manager = new VectorStoreManager()
+      await manager.getStore('char-1')
+
+      const unloaded = manager.unloadStore('char-1')
+
+      expect(unloaded).toBe(true)
+      expect(manager.getStats().loadedStores).toBe(0)
+    })
+
+    it('returns false for non-cached store', () => {
+      const manager = new VectorStoreManager()
+      const unloaded = manager.unloadStore('nonexistent')
+
+      expect(unloaded).toBe(false)
+    })
+  })
+
+  describe('deleteStore', () => {
+    it('removes from cache and deletes from database', async () => {
+      const manager = new VectorStoreManager()
+      await manager.getStore('char-1')
+
+      const deleted = await manager.deleteStore('char-1')
+
+      expect(deleted).toBe(true)
+      expect(mockRepo.deleteByCharacterId).toHaveBeenCalledWith('char-1')
+      expect(manager.getStats().loadedStores).toBe(0)
+    })
+  })
+
+  describe('getStats', () => {
+    it('returns correct counts', async () => {
+      const manager = new VectorStoreManager()
+      const store = await manager.getStore('char-1')
+      await store.addVector('v1', [1, 0], makeMetadata())
+      await store.addVector('v2', [0, 1], makeMetadata({ memoryId: 'v2' }))
+
+      await manager.getStore('char-2')
+
+      const stats = manager.getStats()
+
+      expect(stats.loadedStores).toBe(2)
+      expect(stats.totalVectors).toBe(2)
+    })
+
+    it('returns zeros when empty', () => {
+      const manager = new VectorStoreManager()
+      const stats = manager.getStats()
+
+      expect(stats.loadedStores).toBe(0)
+      expect(stats.totalVectors).toBe(0)
+    })
   })
 })

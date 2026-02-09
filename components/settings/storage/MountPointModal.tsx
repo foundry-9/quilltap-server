@@ -88,9 +88,9 @@ export function MountPointModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="qt-dialog-overlay">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="absolute inset-0" onClick={onClose} />
 
       {/* Modal */}
       <div className="relative qt-card w-full max-w-lg max-h-[90vh] overflow-y-auto mx-4 p-6">

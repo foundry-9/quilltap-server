@@ -111,10 +111,10 @@ export function OrphanScanModal({
   const allSelected = orphans.length > 0 && selectedKeys.size === orphans.length
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="qt-dialog-overlay">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/50"
+        className="absolute inset-0"
         onClick={!scanning && !adopting ? onClose : undefined}
       />
 
@@ -146,14 +146,14 @@ export function OrphanScanModal({
         <div className="flex-1 overflow-y-auto p-6">
           {/* Error display */}
           {error && (
-            <div className="mb-4 p-3 rounded bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-sm">
+            <div className="mb-4 qt-alert-error">
               {error}
             </div>
           )}
 
           {/* Success message for adoption */}
           {adoptResult && adoptResult.adopted > 0 && (
-            <div className="mb-4 p-3 rounded bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 text-sm">
+            <div className="mb-4 qt-alert-success">
               Successfully adopted {adoptResult.adopted} file{adoptResult.adopted !== 1 ? 's' : ''}.
               {adoptResult.failed.length > 0 && (
                 <span className="text-yellow-600 dark:text-yellow-400 ml-2">
@@ -285,7 +285,7 @@ export function OrphanScanModal({
 
               {/* Scan errors */}
               {scanResult.errors.length > 0 && (
-                <div className="mt-4 p-3 rounded bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300 text-sm">
+                <div className="mt-4 qt-alert-warning">
                   <p className="font-medium mb-1">Scan warnings:</p>
                   <ul className="list-disc list-inside">
                     {scanResult.errors.slice(0, 5).map((err, i) => (

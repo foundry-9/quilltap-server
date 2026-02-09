@@ -4,6 +4,14 @@
 
 ### 2.10-dev
 
+- refactor: Codebase cleanup and technical debt reduction
+  - **Security**: Replace `exec()` with `execFile()` in data-dir route to eliminate command injection vulnerability; Linux fallback uses sequential `execFile` calls instead of shell chaining
+  - **Deprecated code removal**: Remove deprecated tool-registry backwards-compatibility wrappers (`hasTool`, `hasMultiToolPlugins`, `getMultiToolPluginNames`, `registerTool`, `getTool`, `getAllTools`, `getToolNames`, `getToolMetadata`, `getAllToolMetadata`, `getToolDefinitions`, `unregisterToolsByPrefix`, `getPluginNameForTool`, `isMultiToolPlugin`); update `tool-executor.ts` to use non-deprecated `hasPlugin`, `getAllPlugins`, `getPluginNames`; rename convenience function exports to match
+  - **Theme compliance**: Replace raw Tailwind classes with qt-* theme utility classes across settings components — `bg-black/50` → `qt-dialog-overlay` in 5 modal overlays; hardcoded red/yellow/blue/green alert colors → `qt-alert-error`/`qt-alert-warning`/`qt-alert-info`/`qt-alert-success` in 5 components; toggle knob `bg-white` → `bg-background`; checkbox `border-gray-300` → `border-input` in 6 chat-settings files; provider buttons → `qt-button-success`/`qt-button-primary` in ProfileForm
+  - **Dead code**: Rewrite vector-store test file with 35 real tests for `CharacterVectorStore` and `VectorStoreManager` against SQLite backend, replacing skipped MongoDB placeholder tests
+  - **Input validation**: Add range checking for `parseInt`/`parseFloat` query params in memories housekeeping endpoint (`maxMemories` 1-100000, `maxAgeMonths` 1-1200, `minImportance` 0-1)
+  - **Code cleanup**: Inline `CHEAPEST_MODEL_MAP` reference to use `LEGACY_CHEAPEST_MODEL_MAP` directly in `cheap-llm.ts`
+
 - feat: Theme-overridable subsystem names and Foundry card images
   - Centralized all 9 subsystem definitions (name, description, thumbnail, background) in `lib/foundry/subsystem-defaults.ts`
   - Added `SubsystemOverrides` interface and optional `subsystems` field to `ThemePlugin` in `@quilltap/plugin-types` (1.13.0)

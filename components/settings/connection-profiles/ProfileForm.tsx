@@ -198,7 +198,7 @@ export function ProfileForm({
               type="button"
               onClick={onConnect}
               disabled={isConnecting}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
+              className="qt-button-success disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
             >
               {isConnecting ? 'Connecting...' : 'Connect'}
             </button>
@@ -224,7 +224,7 @@ export function ProfileForm({
               type="button"
               onClick={onTestMessage}
               disabled={!isConnected || isTestingMessage || !formData.modelName}
-              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
+              className="qt-button-primary disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
             >
               {isTestingMessage ? 'Testing...' : 'Test Message'}
             </button>
@@ -393,7 +393,7 @@ export function ProfileForm({
               name="isDefault"
               checked={formData.isDefault}
               onChange={(e) => onFormChange('isDefault', e.target.checked)}
-              className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600"
+              className="w-4 h-4 rounded border-input"
             />
             <label htmlFor="isDefault" className="text-sm">
               Set as default profile
@@ -406,7 +406,7 @@ export function ProfileForm({
               name="isCheap"
               checked={formData.isCheap}
               onChange={(e) => onFormChange('isCheap', e.target.checked)}
-              className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600"
+              className="w-4 h-4 rounded border-input"
             />
             <label htmlFor="isCheap" className="text-sm">
               Mark as cheap LLM (suitable for cost-effective tasks like memory extraction)
@@ -419,7 +419,7 @@ export function ProfileForm({
               name="isDangerousCompatible"
               checked={formData.isDangerousCompatible}
               onChange={(e) => onFormChange('isDangerousCompatible', e.target.checked)}
-              className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600"
+              className="w-4 h-4 rounded border-input"
             />
             <label htmlFor="isDangerousCompatible" className="text-sm">
               Uncensored-compatible (suitable for dangerous/sensitive content routing)
@@ -433,7 +433,7 @@ export function ProfileForm({
               name="allowWebSearch"
               checked={formData.allowWebSearch}
               onChange={(e) => onFormChange('allowWebSearch', e.target.checked)}
-              className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600"
+              className="w-4 h-4 rounded border-input"
             />
             <label htmlFor="allowWebSearch" className="text-sm">
               Allow web search tool
@@ -451,7 +451,7 @@ export function ProfileForm({
                   name="useNativeWebSearch"
                   checked={formData.useNativeWebSearch}
                   onChange={(e) => onFormChange('useNativeWebSearch', e.target.checked)}
-                  className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600"
+                  className="w-4 h-4 rounded border-input"
                 />
                 <label htmlFor="useNativeWebSearch" className="text-sm">
                   Use provider native web search
@@ -523,7 +523,7 @@ function OpenRouterOptions({
           id="enableZDR"
           checked={formData.enableZDR}
           onChange={(e) => onSetField('enableZDR', e.target.checked)}
-          className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600"
+          className="w-4 h-4 rounded border-input"
         />
         <div className="flex flex-col gap-1">
           <label htmlFor="enableZDR" className="text-sm">
@@ -542,7 +542,7 @@ function OpenRouterOptions({
           id="useCustomModel"
           checked={formData.useCustomModel}
           onChange={(e) => onSetField('useCustomModel', e.target.checked)}
-          className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600"
+          className="w-4 h-4 rounded border-input"
         />
         <div className="flex flex-col gap-1">
           <label htmlFor="useCustomModel" className="text-sm">
@@ -730,7 +730,7 @@ function AnthropicOptions({
           id="enableCacheBreakpoints"
           checked={formData.enableCacheBreakpoints}
           onChange={(e) => onSetField('enableCacheBreakpoints', e.target.checked)}
-          className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600"
+          className="w-4 h-4 rounded border-input"
         />
         <label htmlFor="enableCacheBreakpoints" className="text-sm">
           Enable Prompt Caching

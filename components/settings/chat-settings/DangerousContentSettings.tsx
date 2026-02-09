@@ -144,7 +144,7 @@ export function DangerousContentSettings({
                   checked={dangerSettings.scanTextChat}
                   onChange={(e) => onUpdate({ scanTextChat: e.target.checked })}
                   disabled={saving}
-                  className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                  className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-primary"
                 />
                 <div className="flex-1">
                   <div className="text-sm text-foreground">Text Chat Messages</div>
@@ -158,7 +158,7 @@ export function DangerousContentSettings({
                   checked={dangerSettings.scanImagePrompts}
                   onChange={(e) => onUpdate({ scanImagePrompts: e.target.checked })}
                   disabled={saving}
-                  className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                  className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-primary"
                 />
                 <div className="flex-1">
                   <div className="text-sm text-foreground">Image Prompts</div>
@@ -172,7 +172,7 @@ export function DangerousContentSettings({
                   checked={dangerSettings.scanImageGeneration}
                   onChange={(e) => onUpdate({ scanImageGeneration: e.target.checked })}
                   disabled={saving}
-                  className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                  className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-primary"
                 />
                 <div className="flex-1">
                   <div className="text-sm text-foreground">Image Generation</div>
@@ -281,7 +281,7 @@ export function DangerousContentSettings({
                   checked={dangerSettings.showWarningBadges}
                   onChange={(e) => onUpdate({ showWarningBadges: e.target.checked })}
                   disabled={saving}
-                  className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                  className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-primary"
                 />
                 <div className="flex-1">
                   <div className="text-sm text-foreground">Show Warning Badges</div>

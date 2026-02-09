@@ -74,12 +74,12 @@ export function ModelSelector({
   const getWarningClasses = (level: 'info' | 'warning' | 'error') => {
     switch (level) {
       case 'error':
-        return 'bg-destructive/10 border-destructive/30 text-destructive'
+        return 'qt-alert-error'
       case 'warning':
-        return 'bg-yellow-50 border-yellow-200 text-yellow-700 dark:bg-yellow-900/20 dark:border-yellow-800 dark:text-yellow-300'
+        return 'qt-alert-warning'
       case 'info':
       default:
-        return 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300'
+        return 'qt-alert-info'
     }
   }
   const useSearchMode = models.length > 10
@@ -136,7 +136,7 @@ export function ModelSelector({
         {selectedModelInfo.warnings.map((warning) => (
           <div
             key={`${warning.level}-${warning.message.substring(0, 20)}`}
-            className={`px-3 py-2 text-sm rounded-lg border ${getWarningClasses(warning.level)}`}
+            className={getWarningClasses(warning.level)}
           >
             <span className="mr-2">{getWarningIcon(warning.level)}</span>
             {warning.message}

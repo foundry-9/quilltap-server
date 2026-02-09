@@ -97,7 +97,7 @@ export default function PromptsTab() {
       )}
 
       {prompts.success && (
-        <div className="bg-green-50 border border-green-200 rounded p-4 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-200">
+        <div className="qt-alert-success">
           {prompts.success}
         </div>
       )}

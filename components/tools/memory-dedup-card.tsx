@@ -163,7 +163,7 @@ export function MemoryDedupCard() {
         <>
           {/* Overlay */}
           <button
-            className="fixed inset-0 bg-black/50 z-40 cursor-default border-none p-0"
+            className="qt-dialog-overlay z-40 cursor-default border-none p-0"
             onClick={handleClose}
             aria-label="Close dialog"
             type="button"

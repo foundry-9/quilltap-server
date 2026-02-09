@@ -520,107 +520,6 @@ class ToolRegistry {
     };
   }
 
-  // ============================================================================
-  // BACKWARDS COMPATIBILITY
-  // ============================================================================
-  // These methods maintain backwards compatibility with code that uses the old
-  // registry API. They delegate to the new unified plugin handling.
-
-  /**
-   * @deprecated Use registerPlugin instead
-   */
-  registerTool(plugin: ToolPlugin): void {
-    this.registerPlugin(plugin);
-  }
-
-  /**
-   * @deprecated Use registerPlugin instead
-   */
-  registerMultiToolPlugin(plugin: ToolPlugin): void {
-    this.registerPlugin(plugin);
-  }
-
-  /**
-   * @deprecated Use getPlugin instead
-   */
-  getTool(name: string): ToolPlugin | null {
-    return this.getPlugin(name);
-  }
-
-  /**
-   * @deprecated Use getAllPlugins instead
-   */
-  getAllTools(): ToolPlugin[] {
-    return this.getAllPlugins();
-  }
-
-  /**
-   * @deprecated Use hasPlugin instead
-   */
-  hasTool(name: string): boolean {
-    return this.hasPlugin(name);
-  }
-
-  /**
-   * @deprecated All plugins now use the multi-tool pattern
-   */
-  hasMultiToolPlugins(): boolean {
-    return this.state.plugins.size > 0;
-  }
-
-  /**
-   * @deprecated Use getPluginNames instead
-   */
-  getMultiToolPluginNames(): string[] {
-    return this.getPluginNames();
-  }
-
-  /**
-   * @deprecated Use getPluginNames instead
-   */
-  getToolNames(): string[] {
-    return this.getPluginNames();
-  }
-
-  /**
-   * @deprecated Use getPluginMetadata instead
-   */
-  getToolMetadata(name: string): ToolMetadata | null {
-    return this.getPluginMetadata(name);
-  }
-
-  /**
-   * @deprecated Use getAllPluginMetadata instead
-   */
-  getAllToolMetadata(): ToolMetadata[] {
-    return this.getAllPluginMetadata();
-  }
-
-  /**
-   * @deprecated Use getConfiguredToolDefinitions instead
-   */
-  getToolDefinitions(): UniversalTool[] {
-    // This synchronous method can't work with async getToolDefinitions
-    // Return empty and log warning
-    this.logger.warn('getToolDefinitions() is deprecated - use getConfiguredToolDefinitions() instead');
-    return [];
-  }
-
-  /**
-   * @deprecated No longer needed - all plugins use unified pattern
-   */
-  unregisterToolsByPrefix(_toolPrefix: string): number {
-    this.logger.warn('unregisterToolsByPrefix() is deprecated and no longer has any effect');
-    return 0;
-  }
-
-  /**
-   * @deprecated No longer needed - all plugins use unified pattern
-   */
-  getPluginNameForTool(_toolName: string): string | null {
-    this.logger.warn('getPluginNameForTool() is deprecated - use findPluginForTool() internally');
-    return null;
-  }
 }
 
 // ============================================================================
@@ -641,7 +540,7 @@ export const toolRegistry = new ToolRegistry();
  *
  * @param plugin The tool plugin to register
  */
-export function registerTool(plugin: ToolPlugin): void {
+export function registerPlugin(plugin: ToolPlugin): void {
   toolRegistry.registerPlugin(plugin);
 }
 
@@ -651,7 +550,7 @@ export function registerTool(plugin: ToolPlugin): void {
  * @param name The plugin name
  * @returns The plugin or null
  */
-export function getTool(name: string): ToolPlugin | null {
+export function getPlugin(name: string): ToolPlugin | null {
   return toolRegistry.getPlugin(name);
 }
 
@@ -660,7 +559,7 @@ export function getTool(name: string): ToolPlugin | null {
  *
  * @returns Array of all registered plugins
  */
-export function getAllTools(): ToolPlugin[] {
+export function getAllPlugins(): ToolPlugin[] {
   return toolRegistry.getAllPlugins();
 }
 
@@ -670,26 +569,8 @@ export function getAllTools(): ToolPlugin[] {
  * @param name The plugin name
  * @returns true if plugin exists
  */
-export function hasTool(name: string): boolean {
+export function hasPlugin(name: string): boolean {
   return toolRegistry.hasPlugin(name);
-}
-
-/**
- * Check if any plugins are registered
- *
- * @returns true if any plugins exist
- */
-export function hasMultiToolPlugins(): boolean {
-  return toolRegistry.hasMultiToolPlugins();
-}
-
-/**
- * Get names of all registered plugins
- *
- * @returns Array of plugin names
- */
-export function getMultiToolPluginNames(): string[] {
-  return toolRegistry.getPluginNames();
 }
 
 /**
@@ -697,7 +578,7 @@ export function getMultiToolPluginNames(): string[] {
  *
  * @returns Array of plugin names
  */
-export function getToolNames(): string[] {
+export function getPluginNames(): string[] {
   return toolRegistry.getPluginNames();
 }
 
@@ -707,7 +588,7 @@ export function getToolNames(): string[] {
  * @param name The plugin name
  * @returns Plugin metadata or null
  */
-export function getToolMetadata(name: string): ToolMetadata | null {
+export function getPluginMetadata(name: string): ToolMetadata | null {
   return toolRegistry.getPluginMetadata(name);
 }
 
@@ -716,15 +597,8 @@ export function getToolMetadata(name: string): ToolMetadata | null {
  *
  * @returns Array of metadata for all plugins
  */
-export function getAllToolMetadata(): ToolMetadata[] {
+export function getAllPluginMetadata(): ToolMetadata[] {
   return toolRegistry.getAllPluginMetadata();
-}
-
-/**
- * @deprecated Use getConfiguredToolDefinitions instead
- */
-export function getToolDefinitions(): UniversalTool[] {
-  return toolRegistry.getToolDefinitions();
 }
 
 /**
@@ -813,29 +687,4 @@ export function getToolRegistryErrors() {
  */
 export function isToolRegistryInitialized(): boolean {
   return toolRegistry.isInitialized();
-}
-
-/**
- * @deprecated Use registerTool instead
- */
-export function registerMultiToolPlugin(plugin: ToolPlugin): void {
-  toolRegistry.registerPlugin(plugin);
-}
-
-/**
- * @deprecated No longer needed
- */
-export function unregisterToolsByPrefix(toolPrefix: string): number {
-  return toolRegistry.unregisterToolsByPrefix(toolPrefix);
-}
-
-/**
- * Check if a plugin uses the multi-tool pattern
- *
- * @param plugin The plugin to check
- * @returns true (all plugins now use multi-tool pattern)
- * @deprecated All plugins use multi-tool pattern now
- */
-export function isMultiToolPlugin(_plugin: ToolPlugin): boolean {
-  return true;
 }

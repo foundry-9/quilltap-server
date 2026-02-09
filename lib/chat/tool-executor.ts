@@ -221,9 +221,9 @@ export async function executeToolCallWithContext(
 
     // Check tool registry for plugin-provided tools (static or multi-tool)
     // Only route to plugins if this is NOT a built-in tool
-    // hasTool checks if plugin with that name exists, hasMultiToolPlugins checks if any plugins exist
-    const isStaticTool = !isBuiltInTool && toolRegistry.hasTool(toolCall.name);
-    const isMultiToolPluginTool = !isBuiltInTool && !isStaticTool && toolRegistry.hasMultiToolPlugins();
+    // hasPlugin checks if plugin with that name exists, getAllPlugins checks if any plugins exist
+    const isStaticTool = !isBuiltInTool && toolRegistry.hasPlugin(toolCall.name);
+    const isMultiToolPluginTool = !isBuiltInTool && !isStaticTool && toolRegistry.getAllPlugins().length > 0;
 
     if (isStaticTool || isMultiToolPluginTool) {
       // Fetch user's tool configuration from database
@@ -243,7 +243,7 @@ export async function executeToolCallWithContext(
         } else {
           // For multi-tool plugins (like MCP), we need to load configs for all multi-tool plugins
           // The tool registry's executeTool will find the right plugin
-          const multiToolPluginNames = toolRegistry.getMultiToolPluginNames();
+          const multiToolPluginNames = toolRegistry.getPluginNames();
           for (const pluginName of multiToolPluginNames) {
             const fullPluginName = `qtap-plugin-${pluginName}`;
             const userConfig = await repos.pluginConfigs.findByUserAndPlugin(userId, fullPluginName);
