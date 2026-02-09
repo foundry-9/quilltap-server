@@ -4,6 +4,10 @@
 
 ### 2.10-dev
 
+- chore: Remove Ocean theme plugin
+  - Deleted `plugins/dist/qtap-plugin-theme-ocean/` directory and all contents
+  - Removed Ocean from Storybook theme selector, help docs, tests, and code comments
+
 - fix: Add missing Old School default qt-* variables to Rains and Earl Grey themes
   - Both themes previously inherited ~120 unset qt-* CSS variables from Old School
     when it was the default theme; after the default changed to Professional Neutral,

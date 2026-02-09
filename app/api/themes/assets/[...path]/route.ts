@@ -4,7 +4,7 @@
  * Serves static asset files (images, etc.) from theme plugins.
  * Path format: /api/themes/assets/{pluginName}/{assetPath}
  *
- * Example: /api/themes/assets/qtap-plugin-theme-ocean/ocean-bg-1.png
+ * Example: /api/themes/assets/qtap-plugin-theme-great-estate/great-estate-bg.webp
  *
  * Security: Only serves files from registered theme plugins within their directory.
  */

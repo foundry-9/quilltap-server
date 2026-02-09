@@ -8,7 +8,7 @@
  * Usage:
  *   tsx scripts/convert-theme-to-module.ts <plugin-name>
  *   tsx scripts/convert-theme-to-module.ts --all
- *   tsx scripts/convert-theme-to-module.ts qtap-plugin-theme-ocean
+ *   tsx scripts/convert-theme-to-module.ts qtap-plugin-theme-great-estate
  *
  * Options:
  *   --all         Convert all theme plugins

@@ -249,8 +249,8 @@ The combination works as:
 
 For example:
 
-- Ocean theme + Light mode = Ocean theme's light color palette
-- Ocean theme + Dark mode = Ocean theme's dark color palette
+- Earl Grey theme + Light mode = Earl Grey theme's light color palette
+- Earl Grey theme + Dark mode = Earl Grey theme's dark color palette
 - Same theme, different modes = Different appearance
 
 ### Quick-Switcher + Settings

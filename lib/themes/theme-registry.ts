@@ -209,7 +209,7 @@ class ThemeRegistry {
 
   /**
    * Extract theme ID from plugin name
-   * qtap-plugin-theme-ocean -> ocean
+   * qtap-plugin-theme-great-estate -> great-estate
    */
   private extractThemeId(pluginName: string): string {
     const prefix = 'qtap-plugin-theme-';
