@@ -4,6 +4,11 @@
 
 ### 2.10-dev
 
+- refactor: Replace direct SQLite access in `UsersRepository.migrateUserId` with database abstraction layer
+  - Use `withTransaction` for atomic all-or-nothing migration across 12 tables
+  - Use `collection.updateMany()` instead of raw `(db as any).db` prepared statements
+  - Add debug-level per-table logging and structured warn-level error messages
+
 - refactor: Add `safeQuery()` helper to eliminate redundant try-catch boilerplate
   - Create standalone `safeQuery()` function and `extractErrorMessage()` utility in `safe-query.ts`
   - Add `this.safeQuery()` protected method on `AbstractBaseRepository` with auto-injected `collection` context

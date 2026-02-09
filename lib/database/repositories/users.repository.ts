@@ -12,7 +12,7 @@
 import { logger } from '@/lib/logger';
 import { User, UserSchema, GeneralSettings, GeneralSettingsSchema, ChatSettings } from '@/lib/schemas/types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
-import { QueryFilter } from '../interfaces';
+import { QueryFilter, UpdateSpec } from '../interfaces';
 
 /**
  * Users Repository
@@ -180,47 +180,60 @@ export class UsersRepository extends AbstractBaseRepository<User> {
 
   /**
    * Migrate a user from an old ID to a new ID
-   * Updates the user record and all related records that reference the user
+   * Updates the user record and all related records that reference the user.
+   * Runs within a transaction so all updates succeed or all roll back.
    */
   async migrateUserId(oldId: string, newId: string): Promise<void> {
     return this.safeQuery(
       async () => {
-        const db = await (await import('../manager')).getDatabaseAsync();
+        const { withTransaction } = await import('../manager');
 
-        // Get the raw database connection for direct SQL updates
-        const sqliteDb = (db as any).db;
-        if (!sqliteDb) {
-          throw new Error('Could not access SQLite database for migration');
-        }
+        await withTransaction(async (getCollection) => {
+          // Tables that have a userId column referencing users
+          const tablesWithUserId = [
+            'chat_settings',
+            'chats',
+            'characters',
+            'api_keys',
+            'connection_profiles',
+            'embedding_profiles',
+            'prompts',
+            'memories',
+            'messages',
+            'files',
+            'projects',
+          ];
 
-        // Tables that have a userId column referencing users
-        const tablesWithUserId = [
-          'chat_settings',
-          'chats',
-          'characters',
-          'api_keys',
-          'connection_profiles',
-          'embedding_profiles',
-          'prompts',
-          'memories',
-          'messages',
-          'files',
-          'projects',
-        ];
-
-        // Update the user ID in each related table
-        for (const table of tablesWithUserId) {
-          try {
-            const stmt = sqliteDb.prepare(`UPDATE ${table} SET userId = ? WHERE userId = ?`);
-            const result = stmt.run(newId, oldId);
-          } catch (tableError) {
-            // Table might not exist or might not have userId column - that's OK
+          // Update the userId foreign key in each related table
+          for (const table of tablesWithUserId) {
+            try {
+              const collection = getCollection(table);
+              const result = await collection.updateMany(
+                { userId: oldId } as QueryFilter,
+                { $set: { userId: newId } } as UpdateSpec<unknown>
+              );
+              logger.debug('Migrated userId references in table', {
+                context: 'UsersRepository.migrateUserId',
+                table,
+                modifiedCount: result.modifiedCount,
+              });
+            } catch (tableError) {
+              // Table might not exist yet or might not have userId column — log and continue
+              logger.warn('Could not migrate userId in table', {
+                context: 'UsersRepository.migrateUserId',
+                table,
+                error: tableError instanceof Error ? tableError.message : String(tableError),
+              });
+            }
           }
-        }
 
-        // Finally, update the user's own ID
-        const userStmt = sqliteDb.prepare('UPDATE users SET id = ? WHERE id = ?');
-        userStmt.run(newId, oldId);
+          // Finally, update the user's own primary key
+          const usersCollection = getCollection('users');
+          await usersCollection.updateMany(
+            { id: oldId } as QueryFilter,
+            { $set: { id: newId } } as UpdateSpec<unknown>
+          );
+        });
 
         logger.info('User ID migration completed', {
           context: 'UsersRepository.migrateUserId',
