@@ -86,7 +86,7 @@ export function AIWizardModal({
   const canGoBack = wizard.currentStep > 1 && !wizard.generating
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={handleClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center qt-dialog-overlay" onClick={handleClose}>
       <div
         className="qt-dialog w-full max-w-2xl max-h-[90vh] m-4 flex flex-col"
         onClick={(e) => e.stopPropagation()}

@@ -94,9 +94,9 @@ export function PhysicalDescriptionEditor({
   }
 
   const charCountClass = (current: number, max: number) => {
-    if (current > max) return 'text-red-600 dark:text-red-400'
-    if (current > max * 0.9) return 'text-yellow-600 dark:text-yellow-400'
-    return 'text-gray-500 dark:text-gray-400'
+    if (current > max) return 'text-destructive'
+    if (current > max * 0.9) return 'text-warning'
+    return 'text-muted-foreground'
   }
 
   return (
