@@ -42,12 +42,6 @@ export class PluginConfigRepository extends UserOwnedBaseRepository<PluginConfig
         pluginName,
       } as QueryFilter);
 
-      if (config) {
-        logger.debug('[PluginConfig] Config found', { userId, pluginName });
-      } else {
-        logger.debug('[PluginConfig] Config not found', { userId, pluginName });
-      }
-
       return config;
     } catch (error) {
       logger.error('Error finding plugin config by user and plugin', {

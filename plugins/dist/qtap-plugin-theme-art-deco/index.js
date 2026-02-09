@@ -28,7 +28,6 @@ module.exports = __toCommonJS(index_exports);
 var import_plugin_utils = require("@quilltap/plugin-utils");
 var logger = (0, import_plugin_utils.createPluginLogger)("qtap-plugin-theme-art-deco");
 function initialize() {
-  logger.debug("Art Deco theme loaded");
 }
 var metadata = {
   name: "qtap-plugin-theme-art-deco",

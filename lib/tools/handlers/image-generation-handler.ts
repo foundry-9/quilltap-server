@@ -669,12 +669,6 @@ export async function executeImageGenerationTool(
             content: msg.content,
           }));
 
-        logger.debug('[Image Generation] Fetched chat messages for appearance resolution', {
-          context: 'image-gen',
-          chatId: context.chatId,
-          messageCount: recentChatMessages.length,
-          isDangerousChat,
-        });
       } catch (error) {
         logger.warn('[Image Generation] Failed to fetch chat messages, skipping appearance resolution', {
           chatId: context.chatId,
@@ -756,13 +750,6 @@ export async function executeImageGenerationTool(
               context.chatId
             );
 
-            logger.debug('[Image Generation] Appearance resolution complete', {
-              context: 'image-gen',
-              chatId: context.chatId,
-              resolvedCount: resolvedAppearances.length,
-              llmResolved: resolutionResult.llmResolved,
-              sanitized: resolvedAppearances.some(a => a.wasSanitized),
-            });
           }
         }
       } catch (error) {

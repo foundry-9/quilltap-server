@@ -42,10 +42,6 @@ export async function handleChatDangerClassification(job: BackgroundJob): Promis
 
   // Sticky: if already classified as dangerous, never re-check
   if (chat.isDangerousChat === true) {
-    logger.debug('[ChatDangerClassification] Chat already classified as dangerous (sticky), skipping', {
-      jobId: job.id,
-      chatId: payload.chatId,
-    });
     return;
   }
 
@@ -53,12 +49,6 @@ export async function handleChatDangerClassification(job: BackgroundJob): Promis
   if (chat.isDangerousChat === false &&
       chat.dangerClassifiedAtMessageCount != null &&
       (chat.messageCount ?? 0) <= chat.dangerClassifiedAtMessageCount) {
-    logger.debug('[ChatDangerClassification] Chat already classified as safe at current message count (sticky), skipping', {
-      jobId: job.id,
-      chatId: payload.chatId,
-      classifiedAtMessageCount: chat.dangerClassifiedAtMessageCount,
-      currentMessageCount: chat.messageCount,
-    });
     return;
   }
 
@@ -69,11 +59,6 @@ export async function handleChatDangerClassification(job: BackgroundJob): Promis
   if (chat.contextSummary) {
     classificationInput = chat.contextSummary;
     inputSource = 'summary';
-    logger.debug('[ChatDangerClassification] Using context summary for classification', {
-      jobId: job.id,
-      chatId: payload.chatId,
-      summaryLength: chat.contextSummary.length,
-    });
   } else {
     // No context summary — fall back to concatenated raw messages
     const allMessages = await repos.chats.getMessages(payload.chatId);
@@ -82,10 +67,6 @@ export async function handleChatDangerClassification(job: BackgroundJob): Promis
     );
 
     if (messageEvents.length === 0) {
-      logger.debug('[ChatDangerClassification] No context summary and no messages, skipping', {
-        jobId: job.id,
-        chatId: payload.chatId,
-      });
       return;
     }
 
@@ -103,12 +84,6 @@ export async function handleChatDangerClassification(job: BackgroundJob): Promis
 
     classificationInput = concatenated;
     inputSource = 'messages';
-    logger.debug('[ChatDangerClassification] Using concatenated raw messages for classification', {
-      jobId: job.id,
-      chatId: payload.chatId,
-      messageCount: messageEvents.length,
-      inputLength: classificationInput.length,
-    });
   }
 
   // Get user's chat settings for danger mode check
@@ -117,10 +92,6 @@ export async function handleChatDangerClassification(job: BackgroundJob): Promis
   // Resolve danger settings — bail if mode is OFF
   const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings);
   if (dangerSettings.mode === 'OFF') {
-    logger.debug('[ChatDangerClassification] Dangerous content mode is OFF, skipping', {
-      jobId: job.id,
-      chatId: payload.chatId,
-    });
     return;
   }
 
@@ -138,11 +109,6 @@ export async function handleChatDangerClassification(job: BackgroundJob): Promis
 
     if (availableProfiles.length > 0) {
       connectionProfile = availableProfiles[0];
-      logger.debug('[ChatDangerClassification] Using fallback connection profile', {
-        jobId: job.id,
-        chatId: payload.chatId,
-        fallbackProfileId: connectionProfile.id,
-      });
     } else {
       logger.warn('[ChatDangerClassification] No available connection profiles, skipping', {
         jobId: job.id,

@@ -25,6 +25,12 @@
   - Background images and thumbnails suppressed via `"none"` overrides
   - Old School bumped to 1.0.6
 
+- chore: Remove all debug log statements from application source code
+  - Removed ~160 `logger.debug()` and `console.debug()` call sites across 53 files
+  - Covers API routes, background jobs, services, database repositories, chat/memory/tools subsystems, image generation, and plugins
+  - Cleaned up orphaned logger imports left behind after removal
+  - Logger infrastructure and `.debug()` method remain available for development use
+
 - chore: Remove Ocean theme plugin
   - Deleted `plugins/dist/qtap-plugin-theme-ocean/` directory and all contents
   - Removed Ocean from Storybook theme selector, help docs, tests, and code comments

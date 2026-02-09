@@ -8,8 +8,6 @@
  * distributed cache for shared state.
  */
 
-import { logger } from '@/lib/logger';
-
 interface TemporaryBackup {
   buffer: Buffer;
   createdAt: Date;
@@ -33,7 +31,6 @@ const CLEANUP_INTERVAL_MS = 60 * 1000; // 1 minute
 function getStorage(): Map<string, TemporaryBackup> {
   if (!globalForBackups.temporaryBackups) {
     globalForBackups.temporaryBackups = new Map();
-    logger.debug('[Temporary Backup Storage] Initialized new storage Map');
   }
   return globalForBackups.temporaryBackups;
 }
@@ -57,16 +54,7 @@ function ensureCleanupRunning(): void {
         expiredCount++;
       }
     }
-
-    if (expiredCount > 0) {
-      logger.debug('[Temporary Backup Storage] Cleaned up expired backups', {
-        expiredCount,
-        remaining: storage.size,
-      });
-    }
   }, CLEANUP_INTERVAL_MS);
-
-  logger.debug('[Temporary Backup Storage] Started cleanup interval');
 }
 
 /**
@@ -85,13 +73,6 @@ export function storeTemporaryBackup(backupId: string, buffer: Buffer, userId: s
     createdAt: new Date(),
     userId,
   });
-
-  logger.debug('[Temporary Backup Storage] Stored backup', {
-    backupId,
-    userId,
-    size: buffer.length,
-    totalStored: storage.size,
-  });
 }
 
 /**
@@ -105,21 +86,11 @@ export function retrieveTemporaryBackup(backupId: string): TemporaryBackup | nul
   const data = storage.get(backupId);
 
   if (!data) {
-    logger.debug('[Temporary Backup Storage] Backup not found', {
-      backupId,
-      totalStored: storage.size,
-      storedIds: Array.from(storage.keys()),
-    });
     return null;
   }
 
   // Remove from storage after retrieval (one-time download)
   storage.delete(backupId);
-
-  logger.debug('[Temporary Backup Storage] Retrieved and removed backup', {
-    backupId,
-    remainingStored: storage.size,
-  });
 
   return data;
 }

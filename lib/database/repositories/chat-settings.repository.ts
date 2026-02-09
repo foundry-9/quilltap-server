@@ -26,11 +26,6 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
   async findById(id: string): Promise<ChatSettings | null> {
     try {
       const result = await this._findById(id);
-      if (result) {
-        logger.debug('[ChatSettings] Settings found by ID', { chatSettingsId: id });
-      } else {
-        logger.debug('[ChatSettings] Settings not found by ID', { chatSettingsId: id });
-      }
       return result;
     } catch (error) {
       logger.error('Error finding chat settings by ID', {
@@ -47,11 +42,6 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
   async findByUserId(userId: string): Promise<ChatSettings | null> {
     try {
       const result = await this.findOneByFilter({ userId } as QueryFilter);
-      if (result) {
-        logger.debug('[ChatSettings] Settings found for user', { userId });
-      } else {
-        logger.debug('[ChatSettings] Settings not found for user', { userId });
-      }
       return result;
     } catch (error) {
       logger.error('Error finding chat settings by user ID', {
@@ -112,9 +102,7 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
   async update(id: string, data: Partial<ChatSettings>): Promise<ChatSettings | null> {
     try {
       const result = await this._update(id, data);
-      if (result) {
-        logger.debug('[ChatSettings] Settings updated', { chatSettingsId: id });
-      } else {
+      if (!result) {
         logger.warn('Chat settings not found for update', { chatSettingsId: id });
       }
       return result;
@@ -135,9 +123,7 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
   async delete(id: string): Promise<boolean> {
     try {
       const result = await this._delete(id);
-      if (result) {
-        logger.debug('[ChatSettings] Settings deleted', { chatSettingsId: id });
-      } else {
+      if (!result) {
         logger.warn('Chat settings not found for deletion', { chatSettingsId: id });
       }
       return result;
@@ -171,14 +157,6 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
    */
   async updateForUser(userId: string, data: Partial<ChatSettings>): Promise<ChatSettings | null> {
     try {
-      // Log incoming update for debugging settings persistence issues
-      if (data.storyBackgroundsSettings) {
-        logger.debug('[ChatSettings] Updating storyBackgroundsSettings', {
-          userId,
-          incoming: data.storyBackgroundsSettings,
-        });
-      }
-
       // Check if settings exist
       const existing = await this.findByUserId(userId);
 
@@ -257,14 +235,6 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
 
       // Update existing settings
       const result = await this.update(existing.id, data);
-
-      // Log result for debugging settings persistence
-      if (data.storyBackgroundsSettings && result) {
-        logger.debug('[ChatSettings] Updated storyBackgroundsSettings result', {
-          userId,
-          saved: result.storyBackgroundsSettings,
-        });
-      }
 
       return result;
     } catch (error) {

@@ -157,10 +157,6 @@ export async function classifyContent(
     const contentHash = createHash('sha256').update(content).digest('hex').substring(0, 16)
     const cached = getCachedResult(contentHash)
     if (cached) {
-      logger.debug('[Gatekeeper] Cache hit for content classification', {
-        contentHash,
-        isDangerous: cached.isDangerous,
-      })
       return cached
     }
 

@@ -18,7 +18,6 @@ const logger = createPluginLogger('qtap-plugin-theme-great-estate');
  * statically by the theme registry from tokens.json and styles.css.
  */
 export function initialize(): void {
-  logger.debug('The Great Estate theme loaded');
 }
 
 /**

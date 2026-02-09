@@ -325,15 +325,6 @@ export async function reinforceMemory(
     }
   }
 
-  logger.debug('[MemoryGate] Memory reinforced', {
-    memoryId: existingMemory.id,
-    characterId: existingMemory.characterId,
-    reinforcementCount: newCount,
-    reinforcedImportance: newReinforcedImportance,
-    novelDetailsCount: novelDetails.length,
-    contentChanged,
-  })
-
   return { memory: updatedMemory, novelDetails }
 }
 
@@ -373,12 +364,6 @@ export async function linkRelatedMemories(
       { relatedMemoryIds: linkedIds }
     )
   }
-
-  logger.debug('[MemoryGate] Linked related memories', {
-    newMemoryId,
-    linkedCount: linkedIds.length,
-    linkedIds,
-  })
 
   return linkedIds
 }

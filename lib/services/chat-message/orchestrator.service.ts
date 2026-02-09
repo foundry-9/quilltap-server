@@ -700,10 +700,6 @@ async function processMessage(
     )
 
     if (characterMessages.length === 0) {
-      logger.debug('Proactive memory recall: character has not spoken yet (first message), skipping', {
-        chatId,
-        characterId: character.id,
-      })
       return undefined
     }
 
@@ -723,18 +719,8 @@ async function processMessage(
     }
 
     if (messagesSinceLastSpoke.length === 0) {
-      logger.debug('Proactive memory recall: no messages since character last spoke, skipping', {
-        chatId,
-        characterId: character.id,
-      })
       return undefined
     }
-
-    logger.debug('Proactive memory recall: analyzing messages since character last spoke', {
-      chatId,
-      characterId: character.id,
-      messagesSinceLastSpoke: messagesSinceLastSpoke.length,
-    })
 
     // Status: analyzing conversation for keywords
     safeEnqueue(controller, encodeStatusEvent(encoder, {
@@ -763,11 +749,6 @@ async function processMessage(
     )
 
     if (!keywordResult.success || !keywordResult.result || keywordResult.result.length === 0) {
-      logger.debug('Proactive memory recall: keyword extraction returned no results, falling back to default', {
-        chatId,
-        characterId: character.id,
-        error: keywordResult.error,
-      })
       return undefined
     }
 
@@ -797,13 +778,6 @@ async function processMessage(
 
       if (memoryResults.length > 0) {
         const results = memoryResults.slice(0, 10)
-        logger.debug('Proactive memory recall found memories', {
-          chatId,
-          characterId: character.id,
-          keywordsExtracted: keywordResult.result.length,
-          keywords: keywordResult.result,
-          memoriesFound: results.length,
-        })
         return results
       }
     } catch (error) {

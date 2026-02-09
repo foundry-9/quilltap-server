@@ -57,42 +57,22 @@ export function resolveAgentModeSetting(
   let enabledSource: 'global' | 'character' | 'project' | 'chat' = 'global'
   const maxTurns = agentModeSettings.maxTurns
 
-  logger.debug('[AgentMode] Resolving agent mode setting', {
-    globalDefault: agentModeSettings.defaultEnabled,
-    globalMaxTurns: maxTurns,
-    characterSetting: character?.defaultAgentModeEnabled,
-    projectSetting: project?.defaultAgentModeEnabled,
-    chatSetting: chat?.agentModeEnabled,
-  })
-
   // Character level override (if explicitly set)
   if (character?.defaultAgentModeEnabled !== null && character?.defaultAgentModeEnabled !== undefined) {
     enabled = character.defaultAgentModeEnabled
     enabledSource = 'character'
-    logger.debug('[AgentMode] Character override applied', {
-      characterId: character.id,
-      enabled,
-    })
   }
 
   // Project level override (if explicitly set)
   if (project?.defaultAgentModeEnabled !== null && project?.defaultAgentModeEnabled !== undefined) {
     enabled = project.defaultAgentModeEnabled
     enabledSource = 'project'
-    logger.debug('[AgentMode] Project override applied', {
-      projectId: project.id,
-      enabled,
-    })
   }
 
   // Chat level override (if explicitly set)
   if (chat?.agentModeEnabled !== null && chat?.agentModeEnabled !== undefined) {
     enabled = chat.agentModeEnabled
     enabledSource = 'chat'
-    logger.debug('[AgentMode] Chat override applied', {
-      chatId: chat.id,
-      enabled,
-    })
   }
 
   const result: ResolvedAgentMode = {

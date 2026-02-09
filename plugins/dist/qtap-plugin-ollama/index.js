@@ -7164,12 +7164,6 @@ var OllamaEmbeddingProvider = class {
    * @returns The embedding result
    */
   async generateEmbedding(text, model, apiKey) {
-    logger2.debug("Generating Ollama embedding", {
-      context: "OllamaEmbeddingProvider.generateEmbedding",
-      model,
-      textLength: text.length,
-      baseUrl: this.baseUrl
-    });
     const requestPayload = {
       model,
       prompt: text
@@ -7196,11 +7190,6 @@ var OllamaEmbeddingProvider = class {
     if (!embedding) {
       throw new Error("No embedding returned from Ollama");
     }
-    logger2.debug("Ollama embedding generated successfully", {
-      context: "OllamaEmbeddingProvider.generateEmbedding",
-      model,
-      dimensions: embedding.length
-    });
     return {
       embedding,
       model,
@@ -7218,21 +7207,11 @@ var OllamaEmbeddingProvider = class {
    * @returns Array of embedding results
    */
   async generateBatchEmbeddings(texts, model, apiKey) {
-    logger2.debug("Generating batch Ollama embeddings", {
-      context: "OllamaEmbeddingProvider.generateBatchEmbeddings",
-      model,
-      count: texts.length
-    });
     const results = [];
     for (const text of texts) {
       const result = await this.generateEmbedding(text, model, apiKey);
       results.push(result);
     }
-    logger2.debug("Ollama batch embeddings generated successfully", {
-      context: "OllamaEmbeddingProvider.generateBatchEmbeddings",
-      model,
-      count: results.length
-    });
     return results;
   }
   /**

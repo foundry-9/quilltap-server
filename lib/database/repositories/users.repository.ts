@@ -230,19 +230,8 @@ export class UsersRepository extends AbstractBaseRepository<User> {
         try {
           const stmt = sqliteDb.prepare(`UPDATE ${table} SET userId = ? WHERE userId = ?`);
           const result = stmt.run(newId, oldId);
-          if (result.changes > 0) {
-            logger.debug(`Migrated ${result.changes} records in ${table}`, {
-              context: 'UsersRepository.migrateUserId',
-              oldId,
-              newId,
-            });
-          }
         } catch (tableError) {
           // Table might not exist or might not have userId column - that's OK
-          logger.debug(`Skipping table ${table} during user ID migration`, {
-            context: 'UsersRepository.migrateUserId',
-            error: tableError instanceof Error ? tableError.message : String(tableError),
-          });
         }
       }
 

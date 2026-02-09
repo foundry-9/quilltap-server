@@ -7299,12 +7299,6 @@ var OpenAIEmbeddingProvider = class {
    * @returns The embedding result
    */
   async generateEmbedding(text, model, apiKey, options) {
-    logger3.debug("Generating OpenAI embedding", {
-      context: "OpenAIEmbeddingProvider.generateEmbedding",
-      model,
-      textLength: text.length,
-      dimensions: options?.dimensions
-    });
     const requestPayload = {
       model,
       input: text
@@ -7332,11 +7326,6 @@ var OpenAIEmbeddingProvider = class {
     }
     const data = await response.json();
     const embedding = data.data[0].embedding;
-    logger3.debug("OpenAI embedding generated successfully", {
-      context: "OpenAIEmbeddingProvider.generateEmbedding",
-      model,
-      dimensions: embedding.length
-    });
     return {
       embedding,
       model,
@@ -7357,12 +7346,6 @@ var OpenAIEmbeddingProvider = class {
    * @returns Array of embedding results
    */
   async generateBatchEmbeddings(texts, model, apiKey, options) {
-    logger3.debug("Generating batch OpenAI embeddings", {
-      context: "OpenAIEmbeddingProvider.generateBatchEmbeddings",
-      model,
-      count: texts.length,
-      dimensions: options?.dimensions
-    });
     const requestPayload = {
       model,
       input: texts
@@ -7401,11 +7384,6 @@ var OpenAIEmbeddingProvider = class {
         } : void 0
       });
     }
-    logger3.debug("OpenAI batch embeddings generated successfully", {
-      context: "OpenAIEmbeddingProvider.generateBatchEmbeddings",
-      model,
-      count: results.length
-    });
     return results;
   }
   /**

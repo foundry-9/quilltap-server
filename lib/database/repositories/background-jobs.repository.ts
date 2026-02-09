@@ -444,7 +444,6 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
         counts[job.type] = (counts[job.type] || 0) + 1;
       }
 
-      logger.debug('Got active job counts by type', { userId, counts });
       return counts;
     } catch (error) {
       logger.error('Error getting active counts by type', {

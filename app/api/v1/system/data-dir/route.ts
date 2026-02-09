@@ -55,8 +55,6 @@ export async function GET() {
     canOpen: !isDocker,
   };
 
-  logger.debug('Data directory info requested', { response });
-
   return successResponse(response);
 }
 
@@ -74,7 +72,6 @@ export async function POST(request: Request) {
 
   const isDocker = isDockerEnvironment();
   if (isDocker) {
-    logger.debug('Cannot open file browser in Docker environment');
     return errorResponse(
       'Cannot open file browser in Docker environment. Access the data directory through your host system or container volume mounts.',
       400
@@ -84,8 +81,6 @@ export async function POST(request: Request) {
   const dirInfo = getBaseDataDirWithSource();
   const platform = getPlatform();
   const dirPath = dirInfo.path;
-
-  logger.debug('Attempting to open data directory', { platform, path: dirPath });
 
   try {
     let command: string;

@@ -270,10 +270,6 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
     try {
       const memory = await this._update(id, data);
 
-      if (memory) {
-        logger.debug('[Memories] Memory updated', { memoryId: id });
-      }
-
       return memory;
     } catch (error) {
       logger.error('Error updating memory', {
@@ -327,10 +323,6 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   async delete(id: string): Promise<boolean> {
     try {
       const result = await this._delete(id);
-
-      if (result) {
-        logger.debug('[Memories] Memory deleted', { memoryId: id });
-      }
 
       return result;
     } catch (error) {

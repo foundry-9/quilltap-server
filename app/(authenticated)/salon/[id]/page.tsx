@@ -218,9 +218,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
     }
-    console.debug('[Chat] Adding pending tool result:', { tool: result.tool, id: newResult.id })
     setPendingToolResults(prev => {
-      console.debug('[Chat] Pending tool results updated:', { previousCount: prev.length, newCount: prev.length + 1 })
       return [...prev, newResult]
     })
   }, [])
@@ -1799,10 +1797,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }))
     // Capture pending tool results before clearing
     const toolResultsToSend = [...pendingToolResults]
-    console.debug('[Chat] Sending message with tool results:', {
-      toolResultCount: toolResultsToSend.length,
-      tools: toolResultsToSend.map(r => ({ tool: r.tool, id: r.id })),
-    })
     setInput('')
     clearDraft()
     setAttachedFiles([])

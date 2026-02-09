@@ -28,7 +28,6 @@ module.exports = __toCommonJS(index_exports);
 var import_plugin_utils = require("@quilltap/plugin-utils");
 var logger = (0, import_plugin_utils.createPluginLogger)("qtap-plugin-theme-great-estate");
 function initialize() {
-  logger.debug("The Great Estate theme loaded");
 }
 var metadata = {
   name: "qtap-plugin-theme-great-estate",

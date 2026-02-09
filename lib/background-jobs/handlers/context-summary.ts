@@ -122,17 +122,7 @@ export async function handleContextSummary(job: BackgroundJob): Promise<void> {
         },
         { priority: -2 }
       );
-      logger.debug('[ContextSummary] Chained danger classification job', {
-        jobId: job.id,
-        chatId: payload.chatId,
-        chainedJobId: chainResult.jobId,
-        isNew: chainResult.isNew,
-      });
     } else {
-      logger.debug('[ContextSummary] Skipping danger classification chain — mode is OFF', {
-        jobId: job.id,
-        chatId: payload.chatId,
-      });
     }
   } catch (chainError) {
     logger.warn('[ContextSummary] Failed to chain danger classification job', {

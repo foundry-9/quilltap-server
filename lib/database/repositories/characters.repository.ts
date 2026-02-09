@@ -203,10 +203,6 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
     try {
       const result = await this._update(id, data);
 
-      if (result) {
-        logger.debug('[Characters] Character updated', { characterId: id });
-      }
-
       return result;
     } catch (error) {
       logger.error('Error updating character', {
@@ -345,10 +341,6 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
     try {
       const result = await this.update(characterId, { isFavorite });
 
-      if (result) {
-        logger.debug('[Characters] Favorite status set', { characterId, isFavorite });
-      }
-
       return result;
     } catch (error) {
       logger.error('Error setting favorite status', {
@@ -369,10 +361,6 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   async setControlledBy(characterId: string, controlledBy: 'llm' | 'user'): Promise<Character | null> {
     try {
       const result = await this.update(characterId, { controlledBy });
-
-      if (result) {
-        logger.debug('[Characters] ControlledBy status set', { characterId, controlledBy });
-      }
 
       return result;
     } catch (error) {

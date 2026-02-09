@@ -788,20 +788,7 @@ export function stripToolArtifacts(content: string): string | null {
 
   // If very little conversational text remains, skip this message entirely
   if (cleaned.length < 20) {
-    logger.debug('[stripToolArtifacts] Discarded message with no conversational content', {
-      context: 'cheap-llm-tasks.strip-tool-artifacts',
-      originalLength,
-      remainingLength: cleaned.length,
-    })
     return null
-  }
-
-  if (cleaned.length < originalLength) {
-    logger.debug('[stripToolArtifacts] Stripped tool artifacts from assistant message', {
-      context: 'cheap-llm-tasks.strip-tool-artifacts',
-      originalLength,
-      cleanedLength: cleaned.length,
-    })
   }
 
   return cleaned

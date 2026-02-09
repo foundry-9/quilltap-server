@@ -36,7 +36,6 @@ export async function handleToggleAgentMode(
     // Fetch the chat to verify it exists and user has access
     const chat = await repos.chats.findById(chatId);
     if (!chat) {
-      logger.debug('[Chats v1] Chat not found for agent mode toggle', { chatId });
       return notFound('Chat');
     }
 
@@ -67,7 +66,6 @@ export async function handleToggleAgentMode(
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      logger.debug('[Chats v1] Validation error toggling agent mode', { chatId });
       return validationError(error);
     }
     logger.error('[Chats v1] Error toggling agent mode', { chatId }, error instanceof Error ? error : undefined);

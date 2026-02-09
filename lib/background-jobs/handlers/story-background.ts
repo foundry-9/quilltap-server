@@ -78,11 +78,6 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   );
   const validCharacters = characters.filter(c => c !== null);
 
-  logger.debug('[StoryBackground] Loaded characters', {
-    context: 'background-jobs.story-background',
-    jobId: job.id,
-    characterNames: validCharacters.map(c => c!.name),
-  });
 
   // 5. Get user's chat settings for cheap LLM configuration
   const chatSettings = await repos.chatSettings.findByUserId(job.userId);
@@ -123,11 +118,6 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   const chatEvents = await repos.chats.getMessages(payload.chatId);
   const recentMessages: ChatMessage[] = extractVisibleConversation(chatEvents).slice(-20);
 
-  logger.debug('[StoryBackground] Fetched messages for context', {
-    context: 'background-jobs.story-background',
-    jobId: job.id,
-    messageCount: recentMessages.length,
-  });
 
   // 7b. Resolve Dangermouse settings
   const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null);
@@ -173,10 +163,6 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     : cheapLLMSelection;
 
   if (isDangerousChat && uncensoredLLMSelection) {
-    logger.debug('[StoryBackground] Using uncensored provider for appearance resolution (chat is dangerous)', {
-      context: 'background-jobs.story-background',
-      jobId: job.id,
-    });
   }
 
   // Run scene context derivation and appearance resolution in parallel
@@ -217,11 +203,6 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   // Process scene context result
   if (sceneResult?.success && sceneResult.result) {
     sceneContext = sceneResult.result;
-    logger.debug('[StoryBackground] Derived scene context successfully', {
-      context: 'background-jobs.story-background',
-      jobId: job.id,
-      derivedContext: sceneContext,
-    });
   } else if (recentMessages.length > 0) {
     logger.warn('[StoryBackground] Failed to derive scene context, using fallback', {
       context: 'background-jobs.story-background',
@@ -275,10 +256,6 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       });
     }
   } else if (appearanceResult && !appearanceResult.llmResolved && !uncensoredLLMSelection) {
-    logger.debug('[StoryBackground] Appearance resolution fell back to defaults, no uncensored profile configured for retry', {
-      context: 'background-jobs.story-background',
-      jobId: job.id,
-    });
   }
 
   // Extract appearances and apply Dangermouse sanitization
@@ -331,19 +308,8 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     };
   });
 
-  logger.debug('[StoryBackground] Built character descriptions', {
-    context: 'background-jobs.story-background',
-    jobId: job.id,
-    usedResolvedAppearances: resolvedAppearances !== null && resolvedAppearances !== undefined,
-    characterCount: characterDescriptions.length,
-  });
 
   // 9. Craft the background prompt using cheap LLM
-  logger.debug('[StoryBackground] Crafting background prompt', {
-    context: 'background-jobs.story-background',
-    jobId: job.id,
-    sceneContext,
-  });
 
   const craftResult = await craftStoryBackgroundPrompt(
     {
@@ -415,11 +381,6 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     }
   }
 
-  logger.debug('[StoryBackground] Crafted prompt', {
-    context: 'background-jobs.story-background',
-    jobId: job.id,
-    promptLength: finalPrompt.length,
-  });
 
   // 10. Generate the image
   const provider = createImageProvider(imageProfile.provider);
@@ -543,11 +504,6 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
         storyBackgroundImageId: fileId,
       });
 
-      logger.debug('[StoryBackground] Updated project with latest chat background', {
-        context: 'background-jobs.story-background',
-        jobId: job.id,
-        projectId: payload.projectId,
-      });
     }
   }
 

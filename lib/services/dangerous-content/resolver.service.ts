@@ -7,11 +7,8 @@
  * Follows the same resolver pattern as agent-mode-resolver.service.ts.
  */
 
-import { createServiceLogger } from '@/lib/logging/create-logger'
 import type { ChatSettings } from '@/lib/schemas/types'
 import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
-
-const logger = createServiceLogger('DangerousContentResolverService')
 
 /**
  * Resolved dangerous content settings
@@ -49,18 +46,11 @@ export function resolveDangerousContentSettings(
   globalSettings: ChatSettings | null
 ): ResolvedDangerousContentSettings {
   if (globalSettings?.dangerousContentSettings) {
-    logger.debug('[DangerousContent] Resolved settings from global chat settings', {
-      mode: globalSettings.dangerousContentSettings.mode,
-      threshold: globalSettings.dangerousContentSettings.threshold,
-    })
-
     return {
       settings: globalSettings.dangerousContentSettings,
       source: 'global',
     }
   }
-
-  logger.debug('[DangerousContent] Using default settings (OFF)')
 
   return {
     settings: DEFAULT_DANGEROUS_CONTENT_SETTINGS,

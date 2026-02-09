@@ -219,12 +219,6 @@ export function getCheapLLMProvider(
   // For Ollama, always use the current profile's model - all local models are "free"
   // and we can't assume what models the user has installed
   if (currentProfile.provider === 'OLLAMA') {
-    logger.debug('[CheapLLM] Using current Ollama profile model (all local models are free)', {
-      context: 'getCheapLLMProvider',
-      provider: currentProfile.provider,
-      modelName: currentProfile.modelName,
-    })
-
     return {
       provider: currentProfile.provider,
       modelName: currentProfile.modelName,

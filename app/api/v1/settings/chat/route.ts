@@ -150,7 +150,6 @@ async function updateChatSettings(
     updateData.contextCompressionSettings = contextCompressionSettings
   }
   if (typeof dangerousContentSettings !== 'undefined') {
-    logger.debug('[Settings v1] Validating dangerousContentSettings update', { userId })
     const validatedDangerousContentSettings = DangerousContentSettingsSchema.parse(dangerousContentSettings)
     updateData.dangerousContentSettings = validatedDangerousContentSettings
   }

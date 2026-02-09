@@ -90,10 +90,6 @@ export class VectorIndicesRepository extends AbstractBaseRepository<VectorIndex>
     try {
       const result = await this._update(id, data);
 
-      if (result) {
-        logger.debug('[VectorIndices] Index updated', { id });
-      }
-
       return result;
     } catch (error) {
       logger.error('Error updating vector index', {

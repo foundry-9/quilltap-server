@@ -8,7 +8,6 @@
 import type { Character, ChatParticipantBase, TimestampConfig } from '@/lib/schemas/types'
 import { calculateCurrentTimestamp, shouldInjectTimestamp, formatTimestampForSystemPrompt } from '@/lib/chat/timestamp-utils'
 import { buildMultiCharacterContextSection } from '@/lib/llm/message-formatter'
-import { logger } from '@/lib/logger'
 import { processTemplate, type TemplateContext } from '@/lib/templates/processor'
 
 /**
@@ -178,11 +177,6 @@ export function buildSystemPrompt(
     }).filter(Boolean);
 
     if (descriptionLines.length > 0) {
-      logger.debug('[SystemPrompt] Injecting physical descriptions', {
-        characterId: character.id,
-        characterName: character.name,
-        descriptionCount: descriptionLines.length,
-      });
       parts.push(`\n## Physical Appearance\n${descriptionLines.join('\n')}`);
     }
   }
@@ -196,11 +190,6 @@ export function buildSystemPrompt(
       return `- "${record.name}"${contextNote}: ${descText}`;
     });
 
-    logger.debug('[SystemPrompt] Injecting clothing records', {
-      characterId: character.id,
-      characterName: character.name,
-      clothingCount: clothingLines.length,
-    });
     parts.push(`\n## Clothing / Outfits\n${clothingLines.join('\n')}`);
   }
 
@@ -322,13 +311,6 @@ export function buildIdentityReinforcement(
   const result = processTemplate(template, {
     char: characterName,
     user: userName,
-  })
-
-  logger.debug('[SystemPromptBuilder] Building identity reinforcement', {
-    characterName,
-    userName,
-    otherParticipantCount: otherParticipantNames?.length ?? 0,
-    isMultiCharacter: hasOtherParticipants,
   })
 
   return result

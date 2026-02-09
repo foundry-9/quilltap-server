@@ -346,9 +346,6 @@ export async function triggerChatDangerClassification(
 
     // Sticky: if already classified as dangerous, never re-check
     if (chat.isDangerousChat === true) {
-      logger.debug('Chat already classified as dangerous (sticky), skipping', {
-        chatId: options.chatId,
-      })
       return
     }
 
@@ -357,10 +354,6 @@ export async function triggerChatDangerClassification(
       chat.dangerClassifiedAt &&
       chat.dangerClassifiedAtMessageCount === chat.messageCount
     ) {
-      logger.debug('Chat already classified at current message count, skipping', {
-        chatId: options.chatId,
-        messageCount: chat.messageCount,
-      })
       return
     }
 
@@ -375,12 +368,6 @@ export async function triggerChatDangerClassification(
       connectionProfileId: options.connectionProfile.id,
     })
 
-    if (result.isNew) {
-      logger.debug('Enqueued chat danger classification job', {
-        chatId: options.chatId,
-        jobId: result.jobId,
-      })
-    }
   } catch (error) {
     logger.error('Failed to trigger chat danger classification', {}, error as Error)
   }

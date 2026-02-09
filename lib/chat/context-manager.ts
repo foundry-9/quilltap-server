@@ -550,10 +550,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
         memoriesIncluded = formatted.memoriesUsed
         debugMemories = formatted.debugMemories
 
-        logger.debug('[ContextManager] Using pre-searched memories from proactive recall', {
-          memoriesProvided: options.preSearchedMemories.length,
-          memoriesIncluded,
-        })
       } catch (error) {
         warnings.push(`Failed to format pre-searched memories: ${error instanceof Error ? error.message : 'Unknown error'}`)
       }
@@ -755,11 +751,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     isMultiCharacter ? otherParticipantNames : undefined,
   )
   fullSystemContent += '\n\n' + identityReminder
-  logger.debug('[ContextManager] Identity reinforcement appended', {
-    characterName: character.name,
-    isMultiCharacter,
-    otherParticipantCount: otherParticipantNames?.length ?? 0,
-  })
 
   contextMessages.push({
     role: 'system',

@@ -120,9 +120,6 @@ export async function createMemoryWithGate(
     options.embeddingProfileId
   )
 
-  for (const info of gateResult.debugInfo) {
-    logger.debug(info, { characterId: data.characterId })
-  }
 
   const { decision, embedding } = gateResult
 

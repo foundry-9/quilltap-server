@@ -252,9 +252,7 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
     try {
       const log = await this._update(id, data);
 
-      if (log) {
-        logger.debug('[LLMLogs] Log updated', { logId: id });
-      } else {
+      if (!log) {
         logger.warn('LLM log not found for update', { logId: id });
       }
 
@@ -277,9 +275,7 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
     try {
       const result = await this._delete(id);
 
-      if (result) {
-        logger.debug('[LLMLogs] Log deleted', { logId: id });
-      } else {
+      if (!result) {
         logger.warn('LLM log not found for deletion', { logId: id });
       }
 

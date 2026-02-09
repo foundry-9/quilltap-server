@@ -133,7 +133,6 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
       if (character.tags.includes(id)) {
         const updatedTags = character.tags.filter((t: string) => t !== id);
         await repos.characters.update(character.id, { tags: updatedTags });
-        logger.debug('[Tags v1] Removed tag from character', { tagId: id, characterId: character.id });
       }
     }
 
@@ -142,7 +141,6 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
       if (chat.tags.includes(id)) {
         const updatedTags = chat.tags.filter((t: string) => t !== id);
         await repos.chats.update(chat.id, { tags: updatedTags });
-        logger.debug('[Tags v1] Removed tag from chat', { tagId: id, chatId: chat.id });
       }
     }
 
@@ -151,7 +149,6 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
       if (connection.tags.includes(id)) {
         const updatedTags = connection.tags.filter((t: string) => t !== id);
         await repos.connections.update(connection.id, { tags: updatedTags });
-        logger.debug('[Tags v1] Removed tag from connection profile', { tagId: id, connectionId: connection.id });
       }
     }
 
@@ -160,7 +157,6 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
       if (profile.tags.includes(id)) {
         const updatedTags = profile.tags.filter((t: string) => t !== id);
         await repos.imageProfiles.update(profile.id, { tags: updatedTags });
-        logger.debug('[Tags v1] Removed tag from image profile', { tagId: id, imageProfileId: profile.id });
       }
     }
 
@@ -169,7 +165,6 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
       if (profile.tags.includes(id)) {
         const updatedTags = profile.tags.filter((t: string) => t !== id);
         await repos.embeddingProfiles.update(profile.id, { tags: updatedTags });
-        logger.debug('[Tags v1] Removed tag from embedding profile', { tagId: id, embeddingProfileId: profile.id });
       }
     }
 
@@ -178,7 +173,6 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
       if (file.tags.includes(id)) {
         const updatedTags = file.tags.filter((t: string) => t !== id);
         await repos.files.update(file.id, { tags: updatedTags });
-        logger.debug('[Tags v1] Removed tag from file', { tagId: id, fileId: file.id });
       }
     }
 

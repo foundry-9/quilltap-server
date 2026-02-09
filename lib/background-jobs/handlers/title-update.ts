@@ -63,13 +63,6 @@ export async function handleTitleUpdate(job: BackgroundJob): Promise<void> {
   const totalCount = allMessages.length;
   const chatMessages = extractVisibleConversation(allMessages);
 
-  logger.debug('[TitleUpdate] Filtered messages for title evaluation', {
-    context: 'background-jobs.title-update',
-    chatId: payload.chatId,
-    totalMessages: totalCount,
-    visibleMessages: chatMessages.length,
-  });
-
   // Use last 5 messages or fewer if the chat is shorter
   const recentMessages = chatMessages.slice(-5);
 
@@ -139,20 +132,12 @@ export async function queueStoryBackgroundIfEnabled(
   // Check if story backgrounds are enabled
   const storyBackgroundsSettings = chatSettings.storyBackgroundsSettings;
   if (!storyBackgroundsSettings?.enabled) {
-    logger.debug('[TitleUpdate] Story backgrounds not enabled, skipping', {
-      context: 'background-jobs.title-update',
-      chatId: chat.id,
-    });
     return;
   }
 
   // Determine the image profile to use
   const imageProfileId = await resolveImageProfileForChat(userId, chat, chatSettings);
   if (!imageProfileId) {
-    logger.debug('[TitleUpdate] No image profile available for story background', {
-      context: 'background-jobs.title-update',
-      chatId: chat.id,
-    });
     return;
   }
 
@@ -162,10 +147,6 @@ export async function queueStoryBackgroundIfEnabled(
     .map(p => p.characterId!);
 
   if (characterIds.length === 0) {
-    logger.debug('[TitleUpdate] No characters in chat, skipping story background', {
-      context: 'background-jobs.title-update',
-      chatId: chat.id,
-    });
     return;
   }
 
@@ -186,12 +167,6 @@ export async function queueStoryBackgroundIfEnabled(
         jobId,
         imageProfileId,
         characterCount: characterIds.length,
-      });
-    } else {
-      logger.debug('[TitleUpdate] Story background generation already in progress', {
-        context: 'background-jobs.title-update',
-        chatId: chat.id,
-        jobId,
       });
     }
   } catch (error) {

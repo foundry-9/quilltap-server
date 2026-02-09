@@ -114,10 +114,6 @@ async function seedEmbeddingProfiles(
 
     if (existingProfiles.length > 0) {
       // Embedding profiles already exist, no need to seed
-      logger.debug('Embedding profiles already exist, skipping seed', {
-        context,
-        existingCount: existingProfiles.length,
-      });
       return;
     }
 

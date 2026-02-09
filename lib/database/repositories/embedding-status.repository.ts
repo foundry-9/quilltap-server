@@ -183,15 +183,6 @@ export class EmbeddingStatusRepository extends AbstractBaseRepository<EmbeddingS
       const validated = this.validate(status);
       await collection.insertOne(validated);
 
-      logger.debug('Embedding status created', {
-        context: 'EmbeddingStatusRepository.create',
-        id: validated.id,
-        entityType: data.entityType,
-        entityId: data.entityId,
-        profileId: data.profileId,
-        status: data.status,
-      });
-
       return validated;
     } catch (error) {
       logger.error('Error creating embedding status', {
@@ -226,12 +217,6 @@ export class EmbeddingStatusRepository extends AbstractBaseRepository<EmbeddingS
       if (result.modifiedCount === 0) {
         return null;
       }
-
-      logger.debug('Embedding status updated', {
-        context: 'EmbeddingStatusRepository.update',
-        id,
-        updatedFields: Object.keys(updateData),
-      });
 
       return this.findById(id);
     } catch (error) {
@@ -360,10 +345,6 @@ export class EmbeddingStatusRepository extends AbstractBaseRepository<EmbeddingS
       const result = await collection.deleteOne({ id } as QueryFilter);
 
       if (result.deletedCount > 0) {
-        logger.debug('Embedding status deleted', {
-          context: 'EmbeddingStatusRepository.delete',
-          id,
-        });
         return true;
       }
 
@@ -391,15 +372,6 @@ export class EmbeddingStatusRepository extends AbstractBaseRepository<EmbeddingS
         entityType,
         entityId,
       } as QueryFilter);
-
-      if (result.deletedCount > 0) {
-        logger.debug('Embedding statuses deleted by entity', {
-          context: 'EmbeddingStatusRepository.deleteByEntity',
-          entityType,
-          entityId,
-          deletedCount: result.deletedCount,
-        });
-      }
 
       return result.deletedCount;
     } catch (error) {

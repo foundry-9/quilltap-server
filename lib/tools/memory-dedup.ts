@@ -157,25 +157,12 @@ export async function deduplicateCharacterMemories(
 ): Promise<CharacterDedupResult> {
   const repos = getRepositories()
 
-  logger.debug('[MemoryDedup] Starting deduplication for character', {
-    context: 'memory-dedup.deduplicateCharacterMemories',
-    characterId,
-    characterName,
-    threshold,
-    dryRun,
-  })
 
   // Fetch all memories
   const allMemories = await repos.memories.findByCharacterId(characterId)
   const originalCount = allMemories.length
 
   if (originalCount < 2) {
-    logger.debug('[MemoryDedup] Not enough memories to deduplicate', {
-      context: 'memory-dedup.deduplicateCharacterMemories',
-      characterId,
-      characterName,
-      originalCount,
-    })
     return {
       characterId,
       characterName,
@@ -195,12 +182,6 @@ export async function deduplicateCharacterMemories(
   const withEmbeddings = allMemories.filter(m => m.embedding && m.embedding.length > 0)
   const withoutEmbeddings = allMemories.filter(m => !m.embedding || m.embedding.length === 0)
 
-  logger.debug('[MemoryDedup] Memory breakdown', {
-    context: 'memory-dedup.deduplicateCharacterMemories',
-    characterId,
-    withEmbeddings: withEmbeddings.length,
-    withoutEmbeddings: withoutEmbeddings.length,
-  })
 
   if (withEmbeddings.length < 2) {
     return {
@@ -228,11 +209,6 @@ export async function deduplicateCharacterMemories(
     dimensionGroups.get(dimLen)!.push(memory)
   }
 
-  logger.debug('[MemoryDedup] Dimension groups', {
-    context: 'memory-dedup.deduplicateCharacterMemories',
-    characterId,
-    groups: Array.from(dimensionGroups.entries()).map(([dim, mems]) => ({ dim, count: mems.length })),
-  })
 
   // Process each dimension group
   const allClusters: DedupClusterResult[] = []
@@ -242,14 +218,6 @@ export async function deduplicateCharacterMemories(
 
   for (const [dim, memories] of dimensionGroups) {
     if (memories.length < 2) continue
-
-    logger.debug('[MemoryDedup] Processing dimension group', {
-      context: 'memory-dedup.deduplicateCharacterMemories',
-      characterId,
-      dimension: dim,
-      memoryCount: memories.length,
-    })
-
     // Pairwise cosine similarity + Union-Find clustering
     const uf = new UnionFind(memories.length)
 
@@ -334,18 +302,6 @@ export async function deduplicateCharacterMemories(
   const removedCount = allRemoveIds.length
   const finalCount = originalCount - removedCount
 
-  logger.info('[MemoryDedup] Character deduplication results', {
-    context: 'memory-dedup.deduplicateCharacterMemories',
-    characterId,
-    characterName,
-    originalCount,
-    clustersFound: allClusters.length,
-    removedCount,
-    mergedDetailCount: totalMergedDetails,
-    finalCount,
-    dryRun,
-  })
-
   // Apply changes if not dry run
   if (!dryRun && (allSurvivorUpdates.length > 0 || allRemoveIds.length > 0)) {
     // Update survivors with merged content
@@ -354,11 +310,6 @@ export async function deduplicateCharacterMemories(
       await repos.memories.updateForCharacter(characterId, update.memoryId, {
         content: update.newContent,
         updatedAt: now,
-      })
-      logger.debug('[MemoryDedup] Updated survivor memory', {
-        context: 'memory-dedup.deduplicateCharacterMemories',
-        characterId,
-        memoryId: update.memoryId,
       })
     }
 
@@ -379,11 +330,6 @@ export async function deduplicateCharacterMemories(
           await vectorStore.removeVector(id)
         }
         await vectorStore.save()
-        logger.debug('[MemoryDedup] Cleaned up vector store', {
-          context: 'memory-dedup.deduplicateCharacterMemories',
-          characterId,
-          removedVectors: allRemoveIds.length,
-        })
       } catch (error) {
         logger.warn('[MemoryDedup] Failed to clean up vector store', {
           context: 'memory-dedup.deduplicateCharacterMemories',
@@ -430,12 +376,6 @@ export async function deduplicateAllMemories(
 
   const userRepos = getUserRepositories(userId)
   const characters = await userRepos.characters.findAll()
-
-  logger.debug('[MemoryDedup] Found characters', {
-    context: 'memory-dedup.deduplicateAllMemories',
-    userId,
-    characterCount: characters.length,
-  })
 
   const characterResults: CharacterDedupResult[] = []
   let totalOriginal = 0

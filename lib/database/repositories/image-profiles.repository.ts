@@ -43,12 +43,6 @@ export class ImageProfilesRepository extends TaggableBaseRepository<ImageProfile
         name,
       } as QueryFilter);
 
-      if (profile) {
-        logger.debug('[ImageProfiles] Profile found by name', { userId, name });
-      } else {
-        logger.debug('[ImageProfiles] Profile not found by name', { userId, name });
-      }
-
       return profile;
     } catch (error) {
       logger.error('Error finding image profile by name', {
@@ -69,12 +63,6 @@ export class ImageProfilesRepository extends TaggableBaseRepository<ImageProfile
         userId,
         isDefault: true,
       } as QueryFilter);
-
-      if (profile) {
-        logger.debug('[ImageProfiles] Default profile found', { userId });
-      } else {
-        logger.debug('[ImageProfiles] No default profile found', { userId });
-      }
 
       return profile;
     } catch (error) {

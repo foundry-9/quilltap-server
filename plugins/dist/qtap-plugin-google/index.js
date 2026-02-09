@@ -46685,11 +46685,6 @@ var GoogleImagenProvider = class {
     const baseUrl = "https://generativelanguage.googleapis.com/v1beta";
     const apiModelId = IMAGEN_MODEL_MAP[model] || model;
     const endpoint = `${baseUrl}/models/${apiModelId}:predict`;
-    logger2.debug("Calling Imagen API", {
-      context: "GoogleImagenProvider.generateWithImagen",
-      userModel: model,
-      apiModel: apiModelId
-    });
     const requestBody = {
       instances: [
         {

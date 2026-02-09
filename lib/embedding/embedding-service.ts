@@ -152,11 +152,6 @@ async function generateBuiltinEmbedding(
 ): Promise<EmbeddingResult> {
   const repos = getRepositories()
 
-  logger.debug('Generating built-in TF-IDF embedding', {
-    context: 'embedding-service.generateBuiltinEmbedding',
-    profileId: profile.id,
-    textLength: text.length,
-  })
 
   // Get the stored vocabulary for this profile
   const vocabulary = await repos.tfidfVocabularies.findByProfileId(profile.id)
@@ -193,11 +188,6 @@ async function generateBuiltinEmbedding(
     // Generate the embedding
     const result = embeddingProvider.generateEmbedding(text)
 
-    logger.debug('Built-in embedding generated successfully', {
-      context: 'embedding-service.generateBuiltinEmbedding',
-      model: result.model,
-      dimensions: result.dimensions,
-    })
 
     return {
       embedding: result.embedding,

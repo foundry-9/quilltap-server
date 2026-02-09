@@ -186,10 +186,6 @@ export async function resolveCharacterAppearances(
 
   // Skip optimization: no LLM call needed when context is trivial
   if (canSkipResolution(characters, recentMessages)) {
-    logger.debug('[AppearanceResolution] Skipping LLM call — trivial character data with no chat context', {
-      context: 'image-gen.appearance-resolution',
-      characterCount: characters.length,
-    })
     return { appearances: buildDefaultAppearances(characters), llmResolved: true }
   }
 
@@ -212,13 +208,6 @@ export async function resolveCharacterAppearances(
     })),
   }))
 
-  logger.debug('[AppearanceResolution] Resolving character appearances via cheap LLM', {
-    context: 'image-gen.appearance-resolution',
-    characterCount: characters.length,
-    messageCount: recentMessages.length,
-    chatId,
-  })
-
   const result = await resolveAppearance(
     llmInput,
     recentMessages,
@@ -239,17 +228,6 @@ export async function resolveCharacterAppearances(
   }
 
   const resolved = mapResolutionResults(characters, result.result)
-
-  logger.debug('[AppearanceResolution] Resolved appearances', {
-    context: 'image-gen.appearance-resolution',
-    chatId,
-    results: resolved.map(r => ({
-      name: r.characterName,
-      descriptionName: r.physicalDescriptionName,
-      clothingSource: r.clothingSource,
-      hasClothing: r.clothingDescription.length > 0,
-    })),
-  })
 
   return { appearances: resolved, llmResolved: true }
 }
@@ -293,10 +271,6 @@ export async function sanitizeAppearancesIfNeeded(
 
   // 2. Dangerous chat with uncensored provider → accurate appearances are fine
   if (isDangerousChat && hasUncensoredImageProvider) {
-    logger.debug('[AppearanceResolution] Skipping sanitization — dangerous chat with uncensored provider', {
-      context: 'image-gen.appearance-resolution',
-      chatId,
-    })
     return appearances
   }
 
@@ -326,11 +300,6 @@ export async function sanitizeAppearancesIfNeeded(
 
   // Not dangerous → pass through
   if (!classification.isDangerous) {
-    logger.debug('[AppearanceResolution] Appearance text classified as safe', {
-      context: 'image-gen.appearance-resolution',
-      chatId,
-      score: classification.score,
-    })
     return appearances
   }
 
@@ -344,10 +313,6 @@ export async function sanitizeAppearancesIfNeeded(
 
   // 4. Dangerous but uncensored provider available → will be routed there
   if (hasUncensoredImageProvider) {
-    logger.debug('[AppearanceResolution] Skipping sanitization — uncensored image provider available', {
-      context: 'image-gen.appearance-resolution',
-      chatId,
-    })
     return appearances
   }
 
@@ -385,11 +350,6 @@ export async function sanitizeAppearancesIfNeeded(
       s => s.characterId === appearance.characterId
     )
     if (sanitized && sanitized.appearanceText !== `${appearance.physicalDescription}. ${appearance.clothingDescription}`.trim()) {
-      logger.debug('[AppearanceResolution] Sanitized appearance for character', {
-        context: 'image-gen.appearance-resolution',
-        chatId,
-        characterName: appearance.characterName,
-      })
       return {
         ...appearance,
         // Use sanitized text as both physical + clothing combined

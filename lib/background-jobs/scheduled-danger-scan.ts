@@ -115,9 +115,6 @@ export async function runScheduledDangerScan(): Promise<{ usersProcessed: number
       // Check if danger mode is enabled for this user
       const { settings: dangerSettings } = resolveDangerousContentSettings(settings);
       if (dangerSettings.mode === 'OFF') {
-        logger.debug('Skipping user — danger mode is OFF', {
-          userId: settings.userId,
-        });
         continue;
       }
 
@@ -170,10 +167,6 @@ export async function runScheduledDangerScan(): Promise<{ usersProcessed: number
         }
 
         if (!connectionProfileId) {
-          logger.debug('Skipping chat — no available connection profile', {
-            chatId: chat.id,
-            userId: settings.userId,
-          });
           continue;
         }
 

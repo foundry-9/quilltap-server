@@ -15,7 +15,7 @@ export const turnManagerLogger = {
     if (isClient) {
       // Debug logs are silent on the client side (too noisy for console)
     } else {
-      import('@/lib/logger').then(mod => mod.logger.debug(message, data));
+      // Debug logging disabled
     }
   },
   warn: (message: string, data?: Record<string, unknown>) => {

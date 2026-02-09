@@ -11,7 +11,6 @@
 
 import type { TurnState, TurnSelectionResult } from './types';
 import type { ParticipantData } from '@/components/chat/ParticipantCard';
-import { turnManagerLogger as logger } from './logger';
 
 /**
  * Status values for turn order entries.
@@ -174,13 +173,6 @@ export function computePredictedTurnOrder(options: ComputeTurnOrderOptions): Tur
       });
     }
   }
-
-  logger.debug('[Turn Order] Computed predicted turn order', {
-    entryCount: entries.length,
-    generatingId: respondingParticipantId,
-    nextId: turnSelectionResult?.nextSpeakerId,
-    queueLength: turnState.queue.length,
-  });
 
   return entries;
 }

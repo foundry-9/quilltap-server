@@ -88,8 +88,6 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
             modelHint: sample.modelHint,
             category: sample.category,
           });
-        } else {
-          logger.debug('[PromptTemplates] Sample prompt already exists, skipping', { name: sample.name });
         }
       }
     } catch (error) {
@@ -204,12 +202,6 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
   async findByName(userId: string, name: string): Promise<PromptTemplate | null> {
     try {
       const template = await this.findOneByFilter({ userId, name } as QueryFilter);
-
-      if (template) {
-        logger.debug('[PromptTemplates] Template found by name', { userId, name });
-      } else {
-        logger.debug('[PromptTemplates] Template not found by name', { userId, name });
-      }
 
       return template;
     } catch (error) {

@@ -487,12 +487,6 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
     try {
       const file = await this.findOneByFilter({ storageKey } as QueryFilter);
 
-      if (file) {
-        logger.debug('[Files] File found by storage key', { storageKey });
-      } else {
-        logger.debug('[Files] File not found by storage key', { storageKey });
-      }
-
       return file;
     } catch (error) {
       logger.error('Error finding file by storage key', {

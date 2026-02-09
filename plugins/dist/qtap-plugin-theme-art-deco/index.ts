@@ -18,7 +18,6 @@ const logger = createPluginLogger('qtap-plugin-theme-art-deco');
  * statically by the theme registry from tokens.json and styles.css.
  */
 export function initialize(): void {
-  logger.debug('Art Deco theme loaded');
 }
 
 /**
