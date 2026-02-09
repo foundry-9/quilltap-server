@@ -314,7 +314,7 @@ export function ProfileModal({
                   type="button"
                   onClick={handleConnectClick}
                   disabled={operations.connectLoading}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
+                  className="qt-button-primary disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
                 >
                   {operations.connectLoading ? 'Connecting...' : 'Connect'}
                 </button>
@@ -337,7 +337,7 @@ export function ProfileModal({
                   type="button"
                   onClick={handleTestMessageClick}
                   disabled={!isConnected || operations.testMessageLoading || !form.formData.modelName}
-                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
+                  className="qt-button-primary disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
                 >
                   {operations.testMessageLoading ? 'Testing...' : 'Test Message'}
                 </button>
@@ -345,25 +345,25 @@ export function ProfileModal({
 
               {/* Status messages */}
               {connectionMessage && (
-                <div className="text-sm text-green-700 bg-green-50/50 border border-green-200/70 rounded px-3 py-2 mb-2">
+                <div className="text-sm qt-alert-success">
                   ✓ {connectionMessage}
                 </div>
               )}
 
               {operations.connectError && (
-                <div className="text-sm text-red-700 bg-red-50/50 border border-red-200/70 rounded px-3 py-2 mb-2">
+                <div className="text-sm qt-alert-destructive">
                   ✗ {operations.connectError}
                 </div>
               )}
 
               {modelsMessage && (
-                <div className="text-sm text-blue-700 bg-blue-50/50 border border-blue-200/70 rounded px-3 py-2 mb-2">
+                <div className="text-sm qt-alert-info">
                   ✓ {modelsMessage}
                 </div>
               )}
 
               {testMessageResult && (
-                <div className="text-sm text-purple-700 bg-purple-50/50 border border-purple-200/70 rounded px-3 py-2 mb-2">
+                <div className="text-sm qt-alert-info">
                   ✓ {testMessageResult}
                 </div>
               )}

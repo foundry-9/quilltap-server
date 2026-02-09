@@ -216,12 +216,12 @@ export function ProfileList({
                   <div className="qt-text-xs text-muted-foreground">
                     Embedded: {profile.embeddingStats.embedded}/{profile.embeddingStats.total}
                     {profile.embeddingStats.pending > 0 && (
-                      <span className="text-amber-600 dark:text-amber-400 ml-2">
+                      <span className="text-warning ml-2">
                         ({profile.embeddingStats.pending} pending)
                       </span>
                     )}
                     {profile.embeddingStats.failed > 0 && (
-                      <span className="text-red-600 dark:text-red-400 ml-2">
+                      <span className="text-destructive ml-2">
                         ({profile.embeddingStats.failed} failed)
                       </span>
                     )}

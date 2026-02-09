@@ -1093,6 +1093,10 @@
   background-color: color-mix(in srgb, var(--color-info) 10%, transparent);
 }
 
+.hover\:qt-bg-primary\/10:hover {
+  background-color: color-mix(in srgb, var(--color-primary) 10%, transparent);
+}
+
 /* ==========================================================================
    LEFT SIDEBAR COMPONENTS
    ========================================================================== */
@@ -1639,6 +1643,10 @@
 
 .qt-shadow-md {
   box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+}
+
+.qt-shadow-lg {
+  box-shadow: var(--qt-dialog-shadow, 0 10px 25px hsl(225 18% 10% / 0.15), 0 4px 10px hsl(225 18% 10% / 0.08));
 }
 
 .hover\:qt-bg-surface-alt:hover {

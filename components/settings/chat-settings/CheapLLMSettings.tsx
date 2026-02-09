@@ -88,7 +88,7 @@ export function CheapLLMSettings({
               })}
             </select>
             {connectionProfiles.length === 0 && !loadingProfiles && (
-              <p className="mt-1 qt-text-xs text-amber-600 dark:text-amber-400">
+              <p className="mt-1 qt-text-xs text-warning">
                 No connection profiles found. Create one in the Connection Profiles tab first.
               </p>
             )}
@@ -200,7 +200,7 @@ export function CheapLLMSettings({
             })}
           </select>
           {embeddingProfiles.length === 0 && (
-            <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+            <p className="mt-1 text-xs text-warning">
               No embedding profiles found. Create one in the Embedding Profiles tab.
             </p>
           )}

@@ -19,9 +19,9 @@ export function WizardCompleteStep({
   return (
     <div className="space-y-4">
       <div className="flex flex-col items-center justify-center py-6">
-        <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mb-4">
+        <div className="w-12 h-12 rounded-full qt-bg-success/10 flex items-center justify-center mb-4">
           <svg
-            className="w-6 h-6 text-green-600 dark:text-green-400"
+            className="w-6 h-6 text-success"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"

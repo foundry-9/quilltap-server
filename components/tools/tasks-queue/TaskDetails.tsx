@@ -24,13 +24,13 @@ export function TaskDetails({
   const getStatusColor = (status: string): string => {
     switch (status) {
       case 'PROCESSING':
-        return 'text-blue-600 dark:text-blue-400'
+        return 'text-info'
       case 'PENDING':
-        return 'text-yellow-600 dark:text-yellow-400'
+        return 'text-warning'
       case 'FAILED':
-        return 'text-red-600 dark:text-red-400'
+        return 'text-destructive'
       case 'PAUSED':
-        return 'text-orange-600 dark:text-orange-400'
+        return 'text-warning'
       default:
         return 'text-muted-foreground'
     }
@@ -42,7 +42,7 @@ export function TaskDetails({
       onClick={onClose}
     >
       <div
-        className="bg-background rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden"
+        className="bg-background rounded-lg qt-shadow-lg max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Dialog Header */}
@@ -95,7 +95,7 @@ export function TaskDetails({
           {job.lastError && (
             <div className="mb-4">
               <span className="qt-text-xs">Last Error</span>
-              <div className="text-sm text-red-500 bg-red-50 dark:bg-red-900/20 p-2 rounded mt-1">
+              <div className="text-sm text-destructive qt-bg-destructive/10 p-2 rounded mt-1">
                 {job.lastError}
               </div>
             </div>
@@ -122,7 +122,7 @@ export function TaskDetails({
             <button
               onClick={onDelete}
               disabled={jobActionLoading === job.id}
-              className="qt-button bg-red-600 hover:bg-red-700 text-white"
+              className="qt-button qt-button-destructive"
             >
               {jobActionLoading === job.id ? (
                 <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">

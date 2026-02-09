@@ -119,7 +119,7 @@ export function ImportPreviewStep({
                       {entity.name || entity.title}
                     </span>
                     {entity.exists && (
-                      <span className="text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 px-2 py-1 rounded">
+                      <span className="text-xs qt-bg-warning/10 text-warning px-2 py-1 rounded">
                         Exists
                       </span>
                     )}

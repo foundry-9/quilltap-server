@@ -4,6 +4,12 @@
 
 ### 2.10-dev
 
+- refactor: Migrate ~65 component files from raw Tailwind to qt-* theme utility classes
+  - Convert hardcoded color/border/shadow classes to semantic equivalents across settings, characters, images, tools, chat, search, layout, and other components
+  - Add `qt-shadow-lg` and `hover:qt-bg-primary/10` utility classes to `_utilities.css`
+  - **@quilltap/theme-storybook** (1.0.19 → 1.0.20): Add `qt-shadow-lg` and `hover:qt-bg-primary/10` to `qt-components.css`
+  - Resolves identified technical debt: ~45 remaining component files with raw Tailwind violations
+
 - refactor: Replace direct SQLite access in `UsersRepository.migrateUserId` with database abstraction layer
   - Use `withTransaction` for atomic all-or-nothing migration across 12 tables
   - Use `collection.updateMany()` instead of raw `(db as any).db` prepared statements
@@ -51,8 +57,8 @@
 - **Known Technical Debt** (identified in audit, deferred):
   - ~~`ChatsRepository` SRP split~~ (resolved — see refactor above)
   - ~~Redundant try-catch wrappers in 50+ repository methods that could use a `safeQuery()` helper in `AbstractBaseRepository`~~ (resolved — see refactor above)
-  - `UsersRepository.migrateUserId` bypasses database abstraction with direct `(db as any).db` SQLite access
-  - ~45 remaining component files with 1-8 raw Tailwind violations each (colors, shadows, typography)
+  - ~~`UsersRepository.migrateUserId` bypasses database abstraction with direct `(db as any).db` SQLite access~~
+  - ~~\~45 remaining component files with 1-8 raw Tailwind violations each (colors, shadows, typography)~~ (resolved — see refactor above)
   - `QueryFilter` is loosely typed across all repositories — a typed query builder would prevent runtime errors
   - Inconsistent error handling: some repositories throw, some return null, some return empty arrays
   - Duplicated search/replace logic between `MemoriesRepository` and `ChatsRepository` (could share a `SearchableRepository` mixin)

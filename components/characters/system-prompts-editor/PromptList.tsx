@@ -121,7 +121,7 @@ export function PromptList({
                   </svg>
                 </button>
                 {deleteConfirm === prompt.id && (
-                  <div className="absolute right-0 top-full mt-1 p-3 bg-card border border-border rounded-lg shadow-lg z-10 min-w-[180px]">
+                  <div className="absolute right-0 top-full mt-1 p-3 bg-card border border-border rounded-lg qt-shadow-lg z-10 min-w-[180px]">
                     <p className="text-sm text-foreground mb-2">Delete this prompt?</p>
                     <div className="flex gap-2">
                       <button

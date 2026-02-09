@@ -61,7 +61,7 @@ export default function ChatSettingsTab() {
 
   if (!settings) {
     return (
-      <div className="text-red-600 dark:text-red-400 py-8">
+      <div className="text-destructive py-8">
         Failed to load chat settings
       </div>
     )

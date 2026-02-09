@@ -156,7 +156,7 @@ export default function RoleplayTemplatesTab() {
       {/* Create/Edit Modal */}
       {isModalOpen && (
         <div className="qt-dialog-overlay">
-          <div className="bg-background border border-border rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto mx-4">
+          <div className="bg-background border border-border rounded-lg qt-shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto mx-4">
             <div className="p-6">
               <h2 className="text-xl font-semibold mb-4">
                 {editingTemplate ? 'Edit Template' : 'Create Template'}
@@ -241,7 +241,7 @@ export default function RoleplayTemplatesTab() {
       {/* Preview Modal */}
       {previewTemplate && (
         <div className="qt-dialog-overlay">
-          <div className="bg-background border border-border rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto mx-4">
+          <div className="bg-background border border-border rounded-lg qt-shadow-lg w-full max-w-3xl max-h-[90vh] overflow-y-auto mx-4">
             <div className="p-6">
               <div className="flex items-start justify-between mb-4">
                 <div>

@@ -119,7 +119,7 @@ export function ChatCostSummary({
             <span>{formatCostForDisplay(costData.estimatedCostUSD)}</span>
             {costData.priceSource === 'openrouter-estimate' && (
               <span
-                className="text-amber-500 cursor-help"
+                className="text-warning cursor-help"
                 title="Cost estimated using OpenRouter pricing data. Actual cost may vary."
               >
                 <EstimateWarningIcon />
@@ -159,7 +159,7 @@ export function ChatCostSummary({
           <span>{formatCostForDisplay(costData.estimatedCostUSD)}</span>
           {costData.priceSource === 'openrouter-estimate' && (
             <span
-              className="text-amber-500 cursor-help"
+              className="text-warning cursor-help"
               title="Cost estimated using OpenRouter pricing data. Actual cost may vary."
             >
               <EstimateWarningIcon />

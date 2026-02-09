@@ -197,7 +197,7 @@ export function DangerousContentSettings({
                     value={dangerSettings.uncensoredTextProfileId || ''}
                     onChange={(e) => onUpdate({ uncensoredTextProfileId: e.target.value || null })}
                     disabled={saving || loadingProfiles}
-                    className="w-full max-w-md rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="qt-select"
                   >
                     <option value="">Auto-detect (scan all profiles)</option>
                     {dangerousCompatibleProfiles.length > 0 ? (
@@ -226,7 +226,7 @@ export function DangerousContentSettings({
                     value={dangerSettings.uncensoredImageProfileId || ''}
                     onChange={(e) => onUpdate({ uncensoredImageProfileId: e.target.value || null })}
                     disabled={saving || loadingProfiles}
-                    className="w-full max-w-md rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="qt-select"
                   >
                     <option value="">Auto-detect (scan all profiles)</option>
                     {dangerousCompatibleImageProfiles.length > 0 ? (
@@ -262,7 +262,7 @@ export function DangerousContentSettings({
                   value={dangerSettings.displayMode}
                   onChange={(e) => onUpdate({ displayMode: e.target.value as DangerousContentSettingsType['displayMode'] })}
                   disabled={saving}
-                  className="w-full max-w-xs rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="qt-select"
                 >
                   {DISPLAY_MODE_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -301,7 +301,7 @@ export function DangerousContentSettings({
                 disabled={saving}
                 rows={3}
                 placeholder="Additional instructions for the content classifier..."
-                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary text-sm"
+                className="qt-input"
               />
               <p className="qt-text-small">
                 Additional instructions appended to the classification prompt. Use this to adjust sensitivity for your use case.
@@ -333,7 +333,7 @@ export function DangerousContentSettings({
                 })}
               </select>
               {connectionProfiles.length === 0 && !loadingProfiles && (
-                <p className="mt-1 qt-text-small text-amber-600 dark:text-amber-400">
+                <p className="mt-1 qt-text-small text-warning">
                   No connection profiles found. Create one in the Connection Profiles tab first.
                 </p>
               )}
@@ -342,7 +342,7 @@ export function DangerousContentSettings({
         )}
 
         {/* Warning Box */}
-        <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/30 p-4">
+        <div className="qt-alert-warning p-4">
           <h4 className="font-medium text-foreground mb-2">Important Notes</h4>
           <ul className="qt-text-small space-y-1 list-disc list-inside">
             <li>Content classification uses your configured Cheap LLM, adding a small cost per message</li>

@@ -256,7 +256,7 @@ export function ParticipantCard({
 
       {/* Queue position badge - fallback when no turnPosition provided */}
       {turnPosition == null && queuePosition > 0 && (
-        <div className="qt-participant-queue-badge absolute -top-2 -right-2 w-6 h-6 shadow-md">
+        <div className="qt-participant-queue-badge absolute -top-2 -right-2 w-6 h-6 qt-shadow-md">
           {queuePosition}
         </div>
       )}

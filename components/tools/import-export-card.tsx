@@ -12,9 +12,9 @@ export function ImportExportCard() {
     <div className="qt-card p-6">
       {/* Header */}
       <div className="flex items-start gap-4 mb-6">
-        <div className="p-3 rounded-lg bg-blue-100 dark:bg-blue-900/30">
+        <div className="p-3 rounded-lg qt-bg-info/10">
           <svg
-            className="h-8 w-8 text-blue-600 dark:text-blue-400"
+            className="h-8 w-8 text-info"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"

@@ -38,7 +38,7 @@ export function DangerFlagBadge({ dangerFlags, onOverride }: DangerFlagBadgeProp
           className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium ${
             flag.userOverridden
               ? 'bg-muted text-muted-foreground line-through'
-              : 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200'
+              : 'qt-bg-warning/10 text-warning'
           }`}
           title={`Score: ${flag.score.toFixed(2)}${flag.wasRerouted ? ' (rerouted)' : ''}`}
         >
@@ -48,7 +48,7 @@ export function DangerFlagBadge({ dangerFlags, onOverride }: DangerFlagBadgeProp
 
       {wasRerouted && reroutedInfo && (
         <span
-          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200"
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs qt-bg-info/10 text-info"
           title={`Rerouted to ${reroutedInfo.reroutedProvider}/${reroutedInfo.reroutedModel}`}
         >
           Rerouted

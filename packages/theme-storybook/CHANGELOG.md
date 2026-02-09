@@ -2,6 +2,12 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.20] - 2026-02-09
+
+### Added
+- `qt-shadow-lg` utility class for elevated surfaces (dropdowns, modals)
+- `hover:qt-bg-primary/10` hover background utility class
+
 ## [1.0.18] - 2026-02-08
 
 ### Changed

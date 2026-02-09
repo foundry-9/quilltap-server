@@ -23,7 +23,7 @@ export function DangerContentWrapper({ displayMode, children }: DangerContentWra
         <div className="absolute inset-0 flex items-center justify-center">
           <button
             onClick={() => setRevealed(true)}
-            className="px-3 py-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200 text-sm font-medium hover:bg-amber-200 dark:hover:bg-amber-900/80 shadow-sm"
+            className="px-3 py-1.5 rounded-lg qt-bg-warning/10 text-warning text-sm font-medium hover:qt-bg-warning/20 qt-shadow-sm"
           >
             Click to reveal flagged content
           </button>
@@ -34,10 +34,10 @@ export function DangerContentWrapper({ displayMode, children }: DangerContentWra
 
   // COLLAPSE mode
   return (
-    <div className="border border-amber-300 dark:border-amber-700 rounded-lg p-3 bg-amber-50/50 dark:bg-amber-950/30">
+    <div className="border border-warning/30 rounded-lg p-3 qt-bg-warning/10">
       <button
         onClick={() => setRevealed(true)}
-        className="text-sm text-amber-800 dark:text-amber-200 hover:underline"
+        className="text-sm text-warning hover:underline"
       >
         [Flagged Content - Click to reveal]
       </button>

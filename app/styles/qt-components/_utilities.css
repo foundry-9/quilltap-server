@@ -264,6 +264,13 @@
     box-shadow: var(--qt-card-shadow-hover, 0 4px 12px hsl(225 18% 10% / 0.1), 0 2px 4px hsl(225 18% 10% / 0.05));
   }
 
+  /**
+   * Large shadow - elevated surfaces like dropdowns, modals
+   */
+  .qt-shadow-lg {
+    box-shadow: var(--qt-dialog-shadow, 0 10px 25px hsl(225 18% 10% / 0.15), 0 4px 10px hsl(225 18% 10% / 0.08));
+  }
+
   /* ==========================================================================
      HOVER VARIANTS
      ========================================================================== */
@@ -301,5 +308,12 @@
    */
   .hover\:qt-bg-info\/10:hover {
     background-color: color-mix(in srgb, var(--color-info) 10%, transparent);
+  }
+
+  /**
+   * Hover background for primary/10
+   */
+  .hover\:qt-bg-primary\/10:hover {
+    background-color: color-mix(in srgb, var(--color-primary) 10%, transparent);
   }
 }

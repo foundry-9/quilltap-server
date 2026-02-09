@@ -133,6 +133,13 @@ Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/
   - [plugins/dist/qtap-plugin-mcp/README.md](plugins/dist/qtap-plugin-mcp/README.md) — Documentation for the MCP Server Connector plugin: configuration, authentication, tool naming, security, and troubleshooting — Grade: A (plugin documentation) — Last updated: 2026-01-13
   - [migrations/README.md](migrations/README.md) — Documentation for the migration system: architecture, adding new migrations, running migrations, and troubleshooting — Grade: A (migration system docs) — Last updated: 2026-01-22
 
+## qt-\* CSS tokens and semantic classes for themes
+
+- Themes and styling should depend primarily on the `qt-*` semantic utility classes that we have defined. When possible, use those and update those with Tailwind and other things. That way the themes will always be able to override changes. **IMPORTANT:** If you add new Tailwind classes, then almost certainly you should be adding them to the `qt-*` utility classes instead, and then apply those classes to the components you want to change.
+- qt-* significant changes need to be appropriately reflected in the stylebook, the theme-stylebook package, and maybe in the create-quilltap-theme package, as well as updating the bundled themes as necessary.
+  - **packages**: find in `packages/`
+  - **plugins**: bundled theme plugins are in `plugins/dist/qtap-plugin-theme-*`
+
 ## Claude-specific instructions
 
 - If you have access to Opus and agents, then plan work in Opus for a change of any significant size and delegate it to agents running Haiku with specific instructions. If you can't use Opus then use Sonnet to plan. Feel free to aggressively agentize the work.
@@ -160,7 +167,6 @@ Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/
 - Every time we change a plugin, let's go ahead and bump the release number (the last of the three numbers in semver) on its package.json, and manifest.json if required, and re-run `npm run build:plugins` before we add things to the commit.
 - Check for Typescript errors by running "npx tsc" rather than "npm run build"
 - When committing, record basic changes in `docs/CHANGELOG.md` in reverse chronological order
-- Themes and styling should depend primarily on the `qt-*` utility classes that we have defined. When possible, use those and update those with Tailwind and other things. That way the themes will always be able to override changes. **IMPORTANT:** If you add new Tailwind classes, then almost certainly you should be adding them to the `qt-*` utility classes instead, and then apply those classes to the components you want to change.
 - Keep the documentation above up to date, and update this file if you add more documentation, in the same format.
 - Any change to data, particularly the schemas used to read or write data either to files or to the database, should be checked to see if they need to be reflected in exports, backups, and/or the migrations/ directory.
 - Any files that exist in the app source code only because they are necessary for migrations should move to the `migrations/` directory.

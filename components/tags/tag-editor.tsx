@@ -233,7 +233,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
               onKeyDown={handleKeyDown}
               placeholder="Add a tag..."
               disabled={loading}
-              className="px-3 py-1 text-sm border border-input rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent bg-background text-foreground disabled:opacity-50"
+              className="px-3 py-1 text-sm border border-input rounded-md qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent bg-background text-foreground disabled:opacity-50"
             />
             <button
               type="button"
@@ -259,7 +259,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
             {showSuggestions && (filteredSuggestions.length > 0 || inputValue.trim()) && (
               <div
                 ref={suggestionsRef}
-                className="absolute z-10 top-full left-0 mt-1 bg-card border border-input rounded-md shadow-lg max-h-60 overflow-y-auto"
+                className="absolute z-10 top-full left-0 mt-1 bg-card border border-input rounded-md qt-shadow-lg max-h-60 overflow-y-auto"
               >
                 {filteredSuggestions.length > 0 ? (
                   <ul className="py-1">

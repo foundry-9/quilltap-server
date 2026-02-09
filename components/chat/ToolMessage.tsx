@@ -369,7 +369,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                               </button>
                               <button
                                 onClick={() => handleCopyImage(attachment.filepath)}
-                                className="absolute -top-1 -right-1 p-1 bg-background border border-border rounded shadow-sm opacity-0 group-hover/thumb:opacity-100 transition-opacity"
+                                className="absolute -top-1 -right-1 p-1 bg-background border border-border rounded qt-shadow-sm opacity-0 group-hover/thumb:opacity-100 transition-opacity"
                                 title="Copy image"
                                 type="button"
                               >
@@ -565,7 +565,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                               </button>
                               <button
                                 onClick={() => handleCopyImage(attachment.filepath)}
-                                className="absolute -top-1 -right-1 p-1 bg-background border border-border rounded shadow-sm opacity-0 group-hover/thumb:opacity-100 transition-opacity z-10"
+                                className="absolute -top-1 -right-1 p-1 bg-background border border-border rounded qt-shadow-sm opacity-0 group-hover/thumb:opacity-100 transition-opacity z-10"
                                 title="Copy image"
                                 type="button"
                               >

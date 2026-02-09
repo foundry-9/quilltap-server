@@ -66,7 +66,7 @@ function CharacterItem({
         <>
           <span className="qt-left-sidebar-item-label flex-1">{character.name}</span>
           {character.isFavorite && (
-            <StarIcon className="w-3 h-3 text-yellow-500 flex-shrink-0" />
+            <StarIcon className="w-3 h-3 text-warning flex-shrink-0" />
           )}
         </>
       )}

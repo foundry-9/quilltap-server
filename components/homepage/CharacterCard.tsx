@@ -22,7 +22,7 @@ export function CharacterCard({ character }: CharacterCardProps) {
 
   return (
     <>
-      <div className="flex flex-col items-center p-3 rounded-lg border border-border bg-card hover:border-primary hover:shadow-md transition-all">
+      <div className="flex flex-col items-center p-3 rounded-lg border border-border bg-card hover:border-primary hover:qt-shadow-md transition-all">
         <Link
           href={`/aurora/${character.id}/view`}
           className="flex flex-col items-center gap-2 hover:opacity-80 transition-opacity"

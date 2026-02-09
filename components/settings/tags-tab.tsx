@@ -313,7 +313,7 @@ export default function TagsTab() {
                 const isSaving = tagSaving === tag.id
 
                 return (
-                  <div key={tag.id} className="border border-border rounded-lg p-4 bg-card shadow-sm flex flex-col">
+                  <div key={tag.id} className="border border-border rounded-lg p-4 bg-card qt-shadow-sm flex flex-col">
                     <div className="flex-1">
                       <div className="qt-text-primary">{label}</div>
                       <div className="qt-text-xs mt-2">Preview:</div>

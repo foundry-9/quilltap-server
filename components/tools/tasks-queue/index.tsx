@@ -118,7 +118,7 @@ export function TasksQueueCard() {
             <div className="qt-text-xs">Est. Tokens</div>
           </div>
           <div className="qt-card p-3 text-center">
-            <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+            <div className="text-2xl font-bold text-success">
               {data.stats.completed}
             </div>
             <div className="qt-text-xs">Completed</div>
@@ -130,26 +130,26 @@ export function TasksQueueCard() {
       {data && (
         <div className="flex flex-wrap gap-4 qt-text-small mb-4">
           <span>
-            <span className="text-blue-600 dark:text-blue-400 font-medium">
+            <span className="text-info font-medium">
               {data.stats.processing}
             </span>{' '}
             processing
           </span>
           <span>
-            <span className="text-yellow-600 dark:text-yellow-400 font-medium">
+            <span className="text-warning font-medium">
               {data.stats.pending}
             </span>{' '}
             pending
           </span>
           <span>
-            <span className="text-red-600 dark:text-red-400 font-medium">
+            <span className="text-destructive font-medium">
               {data.stats.failed}
             </span>{' '}
             failed
           </span>
           {data.stats.paused > 0 && (
             <span>
-              <span className="text-orange-600 dark:text-orange-400 font-medium">
+              <span className="text-warning font-medium">
                 {data.stats.paused}
               </span>{' '}
               paused
@@ -157,7 +157,7 @@ export function TasksQueueCard() {
           )}
           {data.stats.dead > 0 && (
             <span>
-              <span className="text-gray-500 font-medium">{data.stats.dead}</span> dead
+              <span className="text-muted-foreground font-medium">{data.stats.dead}</span> dead
             </span>
           )}
         </div>
