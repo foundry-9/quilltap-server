@@ -2,6 +2,290 @@
 
 ## Historical Changes
 
+### 2.9.0
+
+- docs: Comprehensive documentation updates for accuracy and completeness (2026-02-03)
+  - Updated About page to match README: new tagline, expanded description, reorganized features list
+  - Removed authentication references from About page (OAuth, TOTP 2FA removed)
+  - Added quilltap.ai link to About page
+  - Changed file storage description from "S3-compatible" to "Local filesystem" (default)
+  - Updated API.md version from v2.8 to v2.9
+  - Added 6 new API documentation sections: Chat Settings, Models, Files (v1), System Backup & Restore, System Data Directory, System Mount Points
+  - Marked legacy endpoints (Files & Images, Tools & Backup) in Table of Contents
+  - Updated DEVELOPMENT.md: MinIO now optional, local filesystem is default
+  - Clarified auth as "single-user mode" in DEVELOPMENT.md project structure
+  - Updated plugin types list in DEVELOPMENT.md (removed Auth Providers, added Storage Backends, Roleplay Templates, Tool Providers)
+- fix: Complete relationship remapping in native import/export system (2026-02-03)
+  - Character fields now remapped: `defaultConnectionProfileId`, `defaultImageProfileId`, `defaultRoleplayTemplateId`
+  - Chat participant `roleplayTemplateId` now remapped (preserves plugin template references)
+  - Profile tags now reconciled: connection profiles, image profiles, embedding profiles
+  - Roleplay template tags now reconciled on import
+  - Memory fields now remapped: `projectId`, `tags`
+  - Added comprehensive test coverage for all new remapping functionality
+- refactor: Remove S3/cloud backup functionality from backup system (2026-02-03)
+  - Backup system now only supports local file download
+  - Removed S3 destination option from backup dialog
+  - Removed cloud backups list and selection from restore dialog
+  - Removed `downloadBackupFromS3`, `saveBackupToS3`, `listS3Backups`, `deleteBackupFromS3` functions
+  - Simplified restore API to only accept file uploads (no S3 key)
+  - Updated BACKUP-RESTORE.md documentation to reflect changes
+  - Users who need cloud backups can use external backup scripts with the downloaded ZIP
+- fix: Temporary backup download failing due to HMR invalidating in-memory storage (2026-02-03)
+  - Moved temporary backup storage to a dedicated module using globalThis
+  - Storage now survives Next.js hot module reloading in development
+  - Created `lib/backup/temporary-storage.ts` with singleton pattern
+- feat: Complete backup system now includes plugin configs and npm plugins (2026-02-03)
+  - Backup now includes plugin configurations from `plugin_configs` table
+  - Backup now includes npm-installed plugins from `plugins/npm/` directory
+  - Restore recreates plugin configs and extracts npm plugins
+  - Manifest counts now include `pluginConfigs` and `npmPlugins`
+  - Restore summary shows plugin restoration counts
+  - This enables full system recreation from a single backup file
+- feat: Add data directory section to profile page (2026-02-03)
+  - Shows data directory location, configuration source, and platform
+  - "Open in File Browser" button opens the directory in the native file explorer (macOS/Windows/Linux)
+  - Copy button to copy the path to clipboard
+  - Docker environments show helpful message about accessing data via host volume mounts
+  - New API endpoint: GET/POST /api/v1/system/data-dir
+- fix: Docker build failures from npm lockfile issues (2026-02-03)
+  - Upgrade npm in Docker base image to fix "Invalid Version" bug in npm 10.x
+  - Change @quilltap/plugin-types dependency from file: reference to npm package
+  - Regenerate package-lock.json in Linux container to fix malformed platform-specific entries
+  - Update deprecated --only=production to --omit=dev syntax
+- test: Update e2e tests for single-user mode and stability (2026-02-02)
+  - Use production build for more stable e2e test runs
+  - Create fresh temp data directory for each test run
+  - Remove authentication code (single-user mode)
+  - Update API routes to /api/v1/ prefix
+  - Remove deprecated persona tests
+  - Add retry logic for flaky page loads
+  - Use Ollama with llama3.2 as default test provider
+- refactor: Embedding service now uses plugin architecture (2026-02-02)
+  - Embedding providers now delegate to plugins via `createEmbeddingProvider()` factory method
+  - Added `EmbeddingProvider` interface support to `LLMProviderPlugin`
+  - Created `OpenAIEmbeddingProvider` class in qtap-plugin-openai
+  - Created `OllamaEmbeddingProvider` class in qtap-plugin-ollama
+  - OpenRouter already had `OpenRouterEmbeddingProvider`, verified working
+  - Built-in TF-IDF provider already implemented as `LocalEmbeddingProvider`
+  - Registry now has `createEmbeddingProvider()` method matching `createImageProvider()` pattern
+  - Plugin factory exports `createEmbeddingProvider()` and `getAllAvailableEmbeddingProviders()`
+  - Removed hardcoded provider handlers from embedding-service.ts
+  - Updated plugin versions: openai 1.0.16, ollama 1.0.10
+- feat: Grok plugin migrated to xAI Responses API (2026-02-02)
+  - Migrated from deprecated Chat Completions API to Responses API (`/v1/responses`)
+  - Uses direct HTTP (fetch) instead of OpenAI SDK for chat (SDK doesn't support Responses API)
+  - Added new models: grok-4, grok-4-1-fast (2M context), grok-3, grok-3-mini, grok-2-1212, grok-code-fast-1
+  - Web search now uses server-side tools (web_search, x_search) instead of deprecated Live Search API
+  - Image format changed from `image_url` to `input_image` for Responses API compatibility
+  - Always uses `store: false` for stateless operation (Quilltap manages history locally)
+  - Updated cheapModels to use grok-3-mini as default
+  - Image generation model updated to grok-2-image
+  - Plugin version bumped to 1.0.14
+- refactor: Dead code removal and qt-* theme class standardization (2026-02-02)
+  - Removed unused functions from lib/avatar-styles.ts: getAvatarAspectRatioStyle, getAvatarMarginClass
+  - Removed unused function from lib/chat/connection-resolver.ts: hasResolvableConnectionProfile
+  - Removed unused exports from lib/chat-files-v2.ts: deleteChatFileById, getChatFileById, readChatFileBuffer, getSupportedMimeTypes
+  - Documented that formatToolResult() in tool-executor.ts is unused (actual formatting in context-builder.service.ts)
+  - Converted hard-coded Tailwind colors to qt-* utility classes in roleplay-templates, housekeeping-dialog, AvatarStack, tags-tab
+  - Added qt-border-*\/30 opacity variants for status colors (success, warning, destructive, info)
+  - Added hover:qt-bg-*\/10 variants for status colors
+  - Theme plugins now properly control all status colors via CSS variables
+- fix: Compression cache invalidated incorrectly in multi-character chats (2026-02-02)
+  - Cache validation was comparing filtered message count (only `type === 'message'`) against raw event count (includes tool results, system events)
+  - This caused cache to appear "too stale" with 100+ message difference when there were only a few new messages
+  - Now uses consistent message counting (filtered to `type === 'message'`) for both persisting and validating cache
+  - Multi-turn conversations with tool calls (RNG, state, MCP) now properly benefit from compression caching
+- perf: Compression cache fallback for faster responses when async not ready (2026-02-02)
+  - When async pre-compression isn't ready, falls back to previous cache instead of waiting
+  - Dynamic window calculation ensures no messages are lost when using older cache
+  - Trade-off: slightly more tokens (larger window) for faster response time
+  - New `CachedCompressionResponse` type with metadata for fallback detection
+  - Returns `cachedMessageCount` and `isFallback` for debugging and dynamic window sizing
+  - Context manager calculates effective window size when cache is behind current message count
+- feat: Chat response status indicator showing processing stages (2026-02-02)
+  - Visual indicator in chat composer shows current stage during AI response generation
+  - Stages: compressing (blue), gathering (purple), building (amber), sending (blue), streaming (green), tool_executing (purple)
+  - Uses QuillAnimation component for streaming stage, pulsing icon for other stages
+  - Stage-specific colors for light and dark modes via CSS custom properties
+  - Accessible with role="status" and aria-live="polite" for screen readers
+  - Respects prefers-reduced-motion for users who prefer less animation
+  - Status clears automatically on completion, error, or abort
+- perf: Fix compression cache timing issue causing slow message responses (2026-02-02)
+  - Pre-compression now triggers immediately after assistant message is saved, not after all async work
+  - Previously, pre-compression started after memory extraction and context summary checks (68+ seconds delay)
+  - Now runs in parallel with memory extraction, giving maximum time to complete before next message
+  - Added system prompt hash validation to cache retrieval for better cache validity checks
+  - Added debug logging for cache hit/miss reasons (message count mismatch, hash mismatch)
+  - Compression cache now persists to database, surviving server restarts
+  - New `compressionCache` column added to chats table via migration
+  - Cache lookup order: in-memory (fastest) -> database (survives restarts) -> sync compression (fallback)
+  - Relaxed cache validation: allows up to 50 new messages (was strict count match)
+  - Chats with many tool calls (RNG, state) now benefit from caching between turns
+- style: Add more spacing above user messages in chat (2026-02-02)
+  - User message rows now have 1.5rem top margin for better visual separation from previous messages
+- feat: Chat State for persistent JSON storage (2026-02-02)
+  - New `state` field on chats and projects for storing persistent JSON data
+  - Database migration adds state column to chats and projects tables
+  - New built-in LLM tool `state` for fetch/set/delete operations
+  - Path syntax supports dot notation and array indexing (e.g., "player.health", "inventory[0].name")
+  - Inheritance model: chat state overrides project state for chats in projects
+  - Underscore-prefixed keys (e.g., `_notes`) are protected from AI modification
+  - New StateEditorModal component for viewing/editing state in UI
+  - State button added to chat ToolPalette (database icon)
+  - Project State section added to project settings card
+  - API endpoints: GET/PUT/DELETE ?action=get-state/set-state/reset-state for both chats and projects
+  - Added help documentation (help/chat-state.md)
+- feat: Auto-detect RNG patterns in user and assistant messages (2026-02-02)
+  - Dice notation (e.g., "2d6", "d20", "3d10") is detected and executed automatically
+  - Coin flip phrases (e.g., "flip a coin") trigger automatic coin flips
+  - "Spin the bottle" phrases randomly select a chat participant
+  - Works on both user messages (results appear before message) and assistant responses (results appear after)
+  - When a character says "I roll 2d6", the dice actually get rolled
+  - New `autoDetectRng` chat setting (default: true) in Settings > Chat Settings > Automation
+  - Can be disabled for users who prefer manual tool invocation
+  - Updated help documentation for RNG tool and chat settings
+- fix: User-initiated tool results not sent to LLM (2026-02-02)
+  - Tool results from RNG and other user-run tools were saved to DB but not included in LLM context
+  - Root cause 1: Field name mismatch - user tools stored `tool` but context builder read `toolName`
+  - Root cause 2: `existingMessages` was loaded before tool results were saved, so they weren't included
+  - Fix: Context builder now checks both `toolName` and `tool` fields
+  - Fix: Orchestrator now adds saved tool messages to `existingMessages` array
+  - Added debug logging for tool result handling in context builder and chat page
+- fix: Virtualizer positioning bug when messages are replaced (2026-02-02)
+  - Messages would appear in wrong positions (overlapping) after sending
+  - Root cause: virtualizer used indices as keys, so measurement cache became stale when `fetchChat()` replaced the messages array
+  - Fix: Added `getItemKey` to virtualizer to use message IDs instead of indices
+  - Now measurements properly track items across array replacements
+- fix: Pending tool results not persisting to database (2026-02-02)
+  - Tool messages shown in composer would disappear after chat refresh
+  - Root cause: API route parsed `pendingToolResults` but didn't pass it to orchestrator
+  - Fix: Added missing `pendingToolResults` parameter in messages API route
+- feat: Pending tool results shown in composer before sending (2026-02-02)
+  - User-initiated tool calls (like RNG) now show results as chips in the composer
+  - Results can be removed before sending using the X button
+  - Full result details shown in tooltip on hover
+  - RNG API updated with `preview` mode to return results without creating messages
+  - Tool messages are created when the user sends their message
+  - Distinct visual styling for tool result chips vs file attachment chips
+- style: Tool message spacing and styling (2026-02-02)
+  - Added `qt-chat-message-row-tool` CSS class for tool messages
+  - Tool messages now have vertical margin (1rem top and bottom) for visual separation
+- feat: RNG (Random Number Generator) tool for dice rolls, coin flips, and spin the bottle (2026-02-02)
+  - New built-in LLM tool `rng` for generating random results in chats
+  - Supports dice rolls with any number of sides (2-1000), coin flips, and random participant selection
+  - Results are permanent chat messages visible to all characters
+  - Manual invocation via RngDropdown in ToolPalette with quick options (d6, d20, 2d6, coin, bottle)
+  - Custom roll interface for arbitrary dice configurations
+  - Uses cryptographically secure random numbers
+  - Added help documentation (help/rng-tool.md)
+  - Added POST /api/v1/chats/[id]?action=rng API endpoint
+- refactor: Tools are now sent with every LLM prompt (2026-02-02)
+  - Removed periodic tool re-injection logic that only sent tools every N messages
+  - Tools are now always included in every LLM request for consistent availability
+  - `forceToolsOnNextMessage` flag is retained only to trigger tool change notifications
+- feat: Image provider prompting guidance and style trigger phrases (2026-02-01)
+  - Added `promptingGuidance` field to `ImageProviderConstraints` for provider-specific prompting tips
+  - Added `styleInfo` field with `ImageStyleInfo` interface for style/LoRA details and trigger phrases
+  - Chat LLM now receives provider-specific guidance in the image generation tool description
+  - Cheap LLM prompt crafting now incorporates style trigger phrases when generating expanded prompts
+  - Updated `@quilltap/plugin-types` to v1.12.0 with new interfaces
+  - Removed React peer dependency from plugin-types (deprecated `renderIcon` now returns `unknown`)
+  - Updated PROVIDER_PLUGIN_DEVELOPMENT.md with documentation for new features
+- chore: Update plugin dependencies (2026-02-01)
+  - Updated @anthropic-ai/sdk to ^0.72.1
+  - Rebuilt bundled plugins with latest dependencies
+- chore: Add ESLint rule to catch "Quilttap" misspellings (2026-02-01)
+  - Custom ESLint rule flags "Quilttap" (with double-t) as an error
+  - Helps prevent common misspelling of project name throughout codebase
+  - Rule checks string literals and template strings across all source and markdown files
+- refactor: Plugin icon system redesigned to remove React dependency (2026-02-01)
+  - Plugins now provide SVG data via `icon` property instead of React components via `renderIcon`
+  - Added `PluginIconData` interface to `@quilltap/plugin-types` v1.10.0
+  - `renderIcon` is now optional and deprecated (kept for backwards compatibility)
+  - Removed `react` peer dependency from all bundled provider plugins
+  - ProviderIcon component renders SVG data from plugins with fallback to abbreviation
+  - External plugins no longer need React just for icons
+- fix: "Import from Template" modal now shows templates correctly (2026-02-01)
+  - Fixed prompt-templates response handling to extract `.templates` array
+  - Added `?all=true` parameter to sample-prompts API for flattened prompt list
+  - Sample prompts now return correct structure (content, modelHint, category, filename)
+- fix: Normalize LLM responses wrapped in content block format (2026-02-01)
+  - Some LLM providers return responses wrapped in `[{'type': 'text', 'text': "..."}]` format
+  - Added `normalizeContentBlockFormat()` utility to extract the actual text content
+  - Applied normalization in streaming service and orchestrator
+  - Handles both Python-style single quotes and JSON double quotes
+- feat: AI Wizard shows real-time generation progress (2026-02-01)
+  - Each field now shows a checkmark and snippet as it completes
+  - Progress updates stream in real-time via Server-Sent Events
+  - Shows current field being generated with spinner
+  - Displays error messages inline for failed fields
+  - Added `POST /api/v1/characters?action=ai-wizard-stream` streaming endpoint
+- feat: AI Wizard can upload documents as character source (2026-02-01)
+  - New "Upload a document" option in Physical Description Source step
+  - Supports text (.txt), Markdown (.md), and PDF files
+  - Document content is extracted and used as context for character generation
+  - Uses existing file-content-extractor service for text/PDF parsing
+  - Added `/api/v1/files?action=upload` endpoint for multipart file uploads
+  - Updated help documentation with new option
+- feat: AI Wizard can now generate character names (2026-02-01)
+  - AI Wizard button on character creation page no longer requires a name first
+  - Added "Name" as a generatable field in the AI Wizard (appears at top of field list)
+  - Enables creating completely random characters with AI-generated names
+  - Name is generated first and used as context for subsequent field generation
+  - Updated help documentation for character creation wizard workflow
+- fix: Include help-bundle.msgpack.gz in repository for CI tests (2026-02-01)
+  - Removed from .gitignore so the pre-built bundle is available in GitHub Actions
+  - Fixes test failures in help-search-handler.test.ts that depend on the bundle file
+- feat: Built-in search_help LLM tool (2026-01-31)
+  - New tool allows LLMs to search Quilltap help documentation during conversations
+  - Uses semantic search when OPENAI_API_KEY is available, keyword fallback otherwise
+  - Always enabled by default - helps users understand Quilltap features
+  - Loads pre-computed embeddings from help-bundle.msgpack.gz
+  - Added to BUILT_IN_TOOLS in tool-executor.ts, plugin-utils, and tools API route
+  - Visible in chat tool settings UI under "Built-in" category
+- docs: Comprehensive startup wizard guide (2026-01-31)
+  - Complete rewrite of `help/startup-wizard.md` with step-by-step setup instructions
+  - Covers choosing AI providers: Ollama, OpenRouter, OpenAI, Anthropic, and OpenAI-compatible
+  - Step-by-step instructions for getting API keys from each provider
+  - Guide to adding API keys and creating connection profiles
+  - Embedding setup: built-in TF-IDF vs external providers
+  - Cheap LLM configuration for background tasks
+  - First chat walkthrough with troubleshooting section
+  - Quick reference table with direct links to all settings pages
+- docs: Add page links to all help files (2026-01-31)
+  - Every help file now includes a prominent link to the corresponding app page
+  - Format: `> **[Open this page in Quilltap](/path)**` after the main heading
+  - Settings pages include `?tab=` parameter to navigate directly to the correct tab
+  - Tab mappings: keys, profiles, chat, appearance, image-profiles, embedding-profiles, plugins, storage, tags, templates, prompts
+- docs: Comprehensive projects functionality user documentation (2026-01-31)
+  - Added `help/projects.md` - Main projects overview with creation, organization, and best practices
+  - Added `help/project-files.md` - File management, supported types, AI access, and organization
+  - Added `help/project-chats.md` - Chat association, context injection, and project tools
+  - Added `help/project-characters.md` - Character roster, access modes, and cast management
+  - Added `help/project-settings.md` - Instructions, storage, tools, and configuration options
+  - Covers project instructions, file semantic search, roster mode, and mount point configuration
+- docs: Comprehensive chat functionality user documentation (2026-01-31)
+  - Added `help/chats.md` - Main chat overview with basic operations and navigation
+  - Added `help/chat-multi-character.md` - Multi-character chat setup and management
+  - Added `help/chat-turn-manager.md` - Turn system, speaker selection, and queue management
+  - Added `help/chat-participants.md` - Participants sidebar controls and features
+  - Added `help/chat-message-actions.md` - Message editing, swipes, deletion, and bulk actions
+  - Covers impersonation, talkativeness, nudge/queue, all-LLM auto-pause, and memory cascade
+- refactor: Replace JSON help embeddings with gzipped MessagePack bundle (2026-01-31)
+  - New build script `npm run build:help` generates `public/help-bundle.msgpack.gz`
+  - Bundle uses whole-document embeddings (1 per file) instead of heading-based chunks
+  - Reduced bundle size from ~24MB JSON to ~3-4MB compressed MessagePack
+  - Added `lib/help-search.ts` runtime loader with semantic search via cosine similarity
+  - Removed old `scripts/embed_help_files.ts` script
+- refactor: Rename auth middleware to context middleware (2026-01-30)
+  - Renamed `createAuthenticatedHandler` → `createContextHandler`
+  - Renamed `createAuthenticatedParamsHandler` → `createContextParamsHandler`
+  - Renamed `AuthenticatedContext` → `RequestContext`
+  - Renamed `withAuth` → `withContext`, `withAuthParams` → `withContextParams`
+  - Replaced `checkOwnership` with simpler `exists` type guard (ownership check meaningless in single-user mode)
+  - Legacy aliases maintained for backward compatibility
+  - Updated tests and documentation
+
 ### 2.8.1
 
 - fix: Memory extraction handles LLM returning object instead of string (2026-01-31)
