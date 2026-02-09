@@ -34,22 +34,32 @@ export interface ComparisonCondition {
   $in?: unknown[];
   $nin?: unknown[];
   $exists?: boolean;
+  $regex?: RegExp | string;
 }
 
 /**
- * Field-level filter: either a direct value or a comparison condition
+ * Type-safe query filter that maps entity field names to filter conditions.
+ * When parameterized with an entity type T, only allows fields that exist on T.
+ * Supports nested field access with dot notation via explicit cast for
+ * fields not directly on T (e.g., 'participants.characterId').
+ *
+ * The default parameter (Record<string, unknown>) provides backward compatibility
+ * so that unparameterized `QueryFilter` accepts any field name.
  */
-export type FieldFilter = unknown | ComparisonCondition;
+export type TypedQueryFilter<T = Record<string, unknown>> = {
+  [K in keyof T]?: T[K] | ComparisonCondition | null;
+} & {
+  $and?: TypedQueryFilter<T>[];
+  $or?: TypedQueryFilter<T>[];
+  $not?: TypedQueryFilter<T>;
+  $expr?: Record<string, unknown>;
+};
 
 /**
- * Query filter object - maps field names to filter conditions
- * Supports nested field access with dot notation (e.g., 'avatarOverrides.imageId')
+ * Unparameterized query filter — backward-compatible alias.
+ * Equivalent to TypedQueryFilter<Record<string, unknown>>, accepts any field name.
  */
-export interface QueryFilter {
-  [field: string]: FieldFilter | QueryFilter[] | undefined;
-  $and?: QueryFilter[];
-  $or?: QueryFilter[];
-}
+export type QueryFilter = TypedQueryFilter;
 
 /**
  * Sort direction
@@ -231,12 +241,12 @@ export interface DatabaseCollection<T = unknown> {
   /**
    * Find a single document by filter
    */
-  findOne(filter: QueryFilter, options?: QueryOptions): Promise<T | null>;
+  findOne(filter: TypedQueryFilter<T>, options?: QueryOptions): Promise<T | null>;
 
   /**
    * Find multiple documents by filter
    */
-  find(filter: QueryFilter, options?: QueryOptions): Promise<T[]>;
+  find(filter: TypedQueryFilter<T>, options?: QueryOptions): Promise<T[]>;
 
   /**
    * Insert a single document
@@ -251,18 +261,18 @@ export interface DatabaseCollection<T = unknown> {
   /**
    * Update a single document
    */
-  updateOne(filter: QueryFilter, update: UpdateSpec<T>): Promise<UpdateResult>;
+  updateOne(filter: TypedQueryFilter<T>, update: UpdateSpec<T>): Promise<UpdateResult>;
 
   /**
    * Update multiple documents
    */
-  updateMany(filter: QueryFilter, update: UpdateSpec<T>): Promise<UpdateResult>;
+  updateMany(filter: TypedQueryFilter<T>, update: UpdateSpec<T>): Promise<UpdateResult>;
 
   /**
    * Find and update a document, returning the result
    */
   findOneAndUpdate(
-    filter: QueryFilter,
+    filter: TypedQueryFilter<T>,
     update: UpdateSpec<T>,
     options?: { returnDocument?: 'before' | 'after'; upsert?: boolean }
   ): Promise<T | null>;
@@ -270,22 +280,22 @@ export interface DatabaseCollection<T = unknown> {
   /**
    * Delete a single document
    */
-  deleteOne(filter: QueryFilter): Promise<DeleteResult>;
+  deleteOne(filter: TypedQueryFilter<T>): Promise<DeleteResult>;
 
   /**
    * Delete multiple documents
    */
-  deleteMany(filter: QueryFilter): Promise<DeleteResult>;
+  deleteMany(filter: TypedQueryFilter<T>): Promise<DeleteResult>;
 
   /**
    * Count documents matching filter
    */
-  countDocuments(filter?: QueryFilter): Promise<number>;
+  countDocuments(filter?: TypedQueryFilter<T>): Promise<number>;
 
   /**
    * Check if any documents match filter
    */
-  exists(filter: QueryFilter): Promise<boolean>;
+  exists(filter: TypedQueryFilter<T>): Promise<boolean>;
 }
 
 // ============================================================================

@@ -10,7 +10,7 @@
 import { logger } from '@/lib/logger';
 import { ProviderModelSchema, type ProviderModel, type ModelType } from '@/lib/schemas/types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
-import { QueryFilter } from '../interfaces';
+import { TypedQueryFilter } from '../interfaces';
 
 /**
  * Provider Models Repository
@@ -116,7 +116,7 @@ export class ProviderModelsRepository extends AbstractBaseRepository<ProviderMod
           query.modelType = modelType;
         }
 
-        return await this.findByFilter(query as QueryFilter);
+        return await this.findByFilter(query as TypedQueryFilter<ProviderModel>);
       },
       'Error finding provider models by provider',
       { provider, modelType },
@@ -129,7 +129,7 @@ export class ProviderModelsRepository extends AbstractBaseRepository<ProviderMod
    */
   async findByModelType(modelType: ModelType): Promise<ProviderModel[]> {
     return this.safeQuery(
-      () => this.findByFilter({ modelType } as QueryFilter),
+      () => this.findByFilter({ modelType }),
       'Error finding provider models by model type',
       { modelType },
       []
@@ -152,7 +152,7 @@ export class ProviderModelsRepository extends AbstractBaseRepository<ProviderMod
           query.baseUrl = baseUrl;
         }
 
-        const model = await this.findOneByFilter(query as QueryFilter);
+        const model = await this.findOneByFilter(query as TypedQueryFilter<ProviderModel>);
 
         if (!model) {
           return null;
@@ -286,7 +286,7 @@ export class ProviderModelsRepository extends AbstractBaseRepository<ProviderMod
           query.baseUrl = baseUrl;
         }
 
-        const count = await this.deleteMany(query as QueryFilter);
+        const count = await this.deleteMany(query as TypedQueryFilter<ProviderModel>);
 
         logger.info('Provider models deleted successfully', {
           provider,

@@ -9,7 +9,7 @@
 import { Folder, FolderInput, FolderSchema } from '@/lib/schemas/types';
 import { UserOwnedBaseRepository, CreateOptions } from './base.repository';
 import { logger } from '@/lib/logger';
-import { QueryFilter, QueryOptions } from '../interfaces';
+import { TypedQueryFilter, QueryOptions } from '../interfaces';
 
 /**
  * Folders Repository
@@ -134,7 +134,7 @@ export class FoldersRepository extends UserOwnedBaseRepository<Folder> {
   ): Promise<Folder | null> {
     return this.safeQuery(
       async () => {
-        const query: QueryFilter = {
+        const query: TypedQueryFilter<Folder> = {
           userId,
           path,
           ...this.createNullableFilter('projectId', projectId),
@@ -168,7 +168,7 @@ export class FoldersRepository extends UserOwnedBaseRepository<Folder> {
   ): Promise<Folder[]> {
     return this.safeQuery(
       async () => {
-        const query: QueryFilter = {
+        const query: TypedQueryFilter<Folder> = {
           userId,
           parentFolderId,
           ...this.createNullableFilter('projectId', projectId),
@@ -195,7 +195,7 @@ export class FoldersRepository extends UserOwnedBaseRepository<Folder> {
   async findAllInProject(userId: string, projectId: string | null): Promise<Folder[]> {
     return this.safeQuery(
       async () => {
-        const query: QueryFilter = {
+        const query: TypedQueryFilter<Folder> = {
           userId,
           ...this.createNullableFilter('projectId', projectId),
         };
@@ -227,7 +227,7 @@ export class FoldersRepository extends UserOwnedBaseRepository<Folder> {
     return this.safeQuery(
       async () => {
         // Use regex to find paths that start with parentPath but are not the parentPath itself
-        const query: QueryFilter = {
+        const query: TypedQueryFilter<Folder> = {
           userId,
           path: {
             $regex: `^${this.escapeRegex(parentPath)}`,
@@ -299,7 +299,7 @@ export class FoldersRepository extends UserOwnedBaseRepository<Folder> {
     return this.safeQuery(
       async () => {
         // Find all folders with paths starting with the old prefix
-        const matchQuery: QueryFilter = {
+        const matchQuery: TypedQueryFilter<Folder> = {
           userId,
           path: { $regex: `^${this.escapeRegex(oldPathPrefix)}` },
           ...this.createNullableFilter('projectId', projectId),
@@ -338,7 +338,7 @@ export class FoldersRepository extends UserOwnedBaseRepository<Folder> {
   async hasChildren(folderId: string): Promise<boolean> {
     return this.safeQuery(
       async () => {
-        const count = await this.count({ parentFolderId: folderId } as QueryFilter);
+        const count = await this.count({ parentFolderId: folderId });
         return count > 0;
       },
       'Error checking for child folders',

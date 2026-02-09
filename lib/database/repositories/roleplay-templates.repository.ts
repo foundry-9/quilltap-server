@@ -13,7 +13,7 @@ import {
 import { logger } from '@/lib/logger';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
 import { roleplayTemplateRegistry, type LoadedRoleplayTemplate } from '@/lib/plugins/roleplay-template-registry';
-import { QueryFilter } from '../interfaces';
+import { TypedQueryFilter } from '../interfaces';
 
 /**
  * Built-in roleplay templates that are seeded on first access
@@ -173,7 +173,7 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
           const existing = await collection.findOne({
             name: template.name,
             isBuiltIn: true,
-          } as QueryFilter);
+          });
 
           if (!existing) {
             const id = this.generateId();
@@ -277,7 +277,7 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
    */
   async findByUserId(userId: string): Promise<RoleplayTemplate[]> {
     return this.safeQuery(
-      () => this.findByFilter({ userId } as QueryFilter),
+      () => this.findByFilter({ userId }),
       'Error finding roleplay templates by user ID',
       { userId },
       []
@@ -293,7 +293,7 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
         // Ensure built-in templates are seeded
         await this.seedBuiltInTemplates();
 
-        const dbTemplates = await this.findByFilter({ isBuiltIn: true } as QueryFilter);
+        const dbTemplates = await this.findByFilter({ isBuiltIn: true });
         // Also include plugin templates (they are all built-in)
         const pluginTemplates = this.getPluginTemplates();
 
@@ -320,7 +320,7 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
             { isBuiltIn: true },
             { userId },
           ],
-        } as QueryFilter);
+        } as TypedQueryFilter<RoleplayTemplate>);
         // Also include plugin templates
         const pluginTemplates = this.getPluginTemplates();
 
@@ -339,7 +339,7 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
   async findByName(userId: string, name: string): Promise<RoleplayTemplate | null> {
     return this.safeQuery(
       async () => {
-        const template = await this.findOneByFilter({ userId, name } as QueryFilter);
+        const template = await this.findOneByFilter({ userId, name });
 
         if (!template) {
           return null;

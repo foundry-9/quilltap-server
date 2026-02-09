@@ -31,7 +31,7 @@ import {
   ChatParticipantBaseInput,
 } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
-import { QueryFilter, DatabaseCollection } from '../interfaces';
+import { TypedQueryFilter, QueryFilter, DatabaseCollection } from '../interfaces';
 import { getDatabaseAsync, getBackendType, ensureCollection } from '../manager';
 import { ChatOpsContext } from './chats-ops-context';
 import { ChatParticipantsOps } from './chats-participants.ops';
@@ -147,7 +147,7 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
    * Find chats by user ID
    */
   async findByUserId(userId: string): Promise<ChatMetadata[]> {
-    return this.findByFilter({ userId } as QueryFilter);
+    return this.findByFilter({ userId });
   }
 
   /**
@@ -158,7 +158,7 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
       async () => {
         const chats = await this.findByFilter({
           'participants.characterId': characterId,
-        } as QueryFilter);
+        } as TypedQueryFilter<ChatMetadata>);
         return chats;
       },
       'Failed to find chats by character ID',

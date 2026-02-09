@@ -9,7 +9,7 @@
 import { logger } from '@/lib/logger';
 import { LLMLog, LLMLogSchema, LLMLogType } from '@/lib/schemas/types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
-import { QueryFilter, QueryOptions } from '../interfaces';
+import { TypedQueryFilter, QueryOptions } from '../interfaces';
 
 /**
  * LLM Logs Repository
@@ -55,7 +55,7 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
           limit,
         };
 
-        const logs = await this.findByFilter({ userId } as QueryFilter, options);
+        const logs = await this.findByFilter({ userId }, options);
         return logs;
       },
       'Error finding LLM logs by user ID',
@@ -76,7 +76,7 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
           sort: { createdAt: -1 },
         };
 
-        const logs = await this.findByFilter({ messageId } as QueryFilter, options);
+        const logs = await this.findByFilter({ messageId }, options);
         return logs;
       },
       'Error finding LLM logs by message ID',
@@ -97,7 +97,7 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
           sort: { createdAt: -1 },
         };
 
-        const logs = await this.findByFilter({ chatId } as QueryFilter, options);
+        const logs = await this.findByFilter({ chatId }, options);
         return logs;
       },
       'Error finding LLM logs by chat ID',
@@ -118,7 +118,7 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
           sort: { createdAt: -1 },
         };
 
-        const logs = await this.findByFilter({ characterId } as QueryFilter, options);
+        const logs = await this.findByFilter({ characterId }, options);
         return logs;
       },
       'Error finding LLM logs by character ID',
@@ -136,7 +136,7 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
   async findStandalone(userId: string, limit: number = 50): Promise<LLMLog[]> {
     return this.safeQuery(
       async () => {
-        const filter: QueryFilter = {
+        const filter: TypedQueryFilter<LLMLog> = {
           userId,
           messageId: { $eq: null },
           chatId: { $eq: null },
@@ -167,7 +167,7 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
   async findByType(userId: string, type: LLMLogType, limit: number = 50): Promise<LLMLog[]> {
     return this.safeQuery(
       async () => {
-        const filter: QueryFilter = { userId, type };
+        const filter: TypedQueryFilter<LLMLog> = { userId, type };
         const options: QueryOptions = {
           sort: { createdAt: -1 },
           limit,
@@ -196,7 +196,7 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
           limit,
         };
 
-        const logs = await this.findByFilter({ userId } as QueryFilter, options);
+        const logs = await this.findByFilter({ userId }, options);
         return logs;
       },
       'Error finding recent LLM logs',
@@ -277,7 +277,7 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
   async deleteByUserId(userId: string): Promise<number> {
     return this.safeQuery(
       async () => {
-        const count = await this.deleteMany({ userId } as QueryFilter);
+        const count = await this.deleteMany({ userId });
         return count;
       },
       'Error deleting LLM logs by user ID',
@@ -302,7 +302,7 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
         const cutoffDate = new Date();
         cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
 
-        const filter: QueryFilter = {
+        const filter: TypedQueryFilter<LLMLog> = {
           userId,
           createdAt: { $lt: cutoffDate.toISOString() },
         };
@@ -330,7 +330,7 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
   async countByUserId(userId: string): Promise<number> {
     return this.safeQuery(
       async () => {
-        const count = await this.count({ userId } as QueryFilter);
+        const count = await this.count({ userId });
         return count;
       },
       'Error counting LLM logs for user',
@@ -348,7 +348,7 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
   async countByType(userId: string, type: LLMLogType): Promise<number> {
     return this.safeQuery(
       async () => {
-        const count = await this.count({ userId, type } as QueryFilter);
+        const count = await this.count({ userId, type });
         return count;
       },
       'Error counting LLM logs by type',
@@ -368,7 +368,7 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
   ): Promise<{ promptTokens: number; completionTokens: number; totalTokens: number }> {
     return this.safeQuery(
       async () => {
-        const filter: QueryFilter = {
+        const filter: TypedQueryFilter<LLMLog> = {
           userId,
           usage: { $exists: true, $ne: null },
         };
@@ -402,7 +402,7 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
   async countByMessageId(messageId: string): Promise<number> {
     return this.safeQuery(
       async () => {
-        const count = await this.count({ messageId } as QueryFilter);
+        const count = await this.count({ messageId });
         return count;
       },
       'Error counting LLM logs for message',
@@ -419,7 +419,7 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
   async deleteByMessageId(messageId: string): Promise<number> {
     return this.safeQuery(
       async () => {
-        const count = await this.deleteMany({ messageId } as QueryFilter);
+        const count = await this.deleteMany({ messageId });
         return count;
       },
       'Error deleting LLM logs by message ID',
@@ -435,7 +435,7 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
   async deleteByChatId(chatId: string): Promise<number> {
     return this.safeQuery(
       async () => {
-        const count = await this.deleteMany({ chatId } as QueryFilter);
+        const count = await this.deleteMany({ chatId });
         return count;
       },
       'Error deleting LLM logs by chat ID',
@@ -451,7 +451,7 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
   async deleteByCharacterId(characterId: string): Promise<number> {
     return this.safeQuery(
       async () => {
-        const count = await this.deleteMany({ characterId } as QueryFilter);
+        const count = await this.deleteMany({ characterId });
         return count;
       },
       'Error deleting LLM logs by character ID',

@@ -14,7 +14,7 @@ import {
   ApiKeySchema,
 } from '@/lib/schemas/types';
 import { TaggableBaseRepository, CreateOptions } from './base.repository';
-import { QueryFilter, UpdateSpec } from '../interfaces';
+import { TypedQueryFilter, UpdateSpec } from '../interfaces';
 import { getCollection, ensureCollection } from '../manager';
 
 /**
@@ -60,7 +60,7 @@ export class ConnectionProfilesRepository extends TaggableBaseRepository<Connect
         const profile = await this.findOneByFilter({
           userId,
           isDefault: true,
-        } as QueryFilter);
+        });
 
         if (!profile) {
           return null;
@@ -170,7 +170,7 @@ export class ConnectionProfilesRepository extends TaggableBaseRepository<Connect
         const now = this.getCurrentTimestamp();
 
         const result = await collection.updateOne(
-          { id: profileId } as QueryFilter,
+          { id: profileId },
           {
             $inc: {
               totalTokens: promptTokens + completionTokens,
@@ -236,7 +236,7 @@ export class ConnectionProfilesRepository extends TaggableBaseRepository<Connect
     return this.safeQuery(
       async () => {
         const collection = await this.getApiKeysCollection();
-        const docs = await collection.find({ userId } as QueryFilter);
+        const docs = await collection.find({ userId });
         const validated = docs
           .map((doc) => {
             const result = ApiKeySchema.safeParse(doc);
@@ -266,7 +266,7 @@ export class ConnectionProfilesRepository extends TaggableBaseRepository<Connect
     return this.safeQuery(
       async () => {
         const collection = await this.getApiKeysCollection();
-        const doc = await collection.findOne({ id } as QueryFilter);
+        const doc = await collection.findOne({ id });
 
         if (!doc) {
           return null;
@@ -288,7 +288,7 @@ export class ConnectionProfilesRepository extends TaggableBaseRepository<Connect
     return this.safeQuery(
       async () => {
         const collection = await this.getApiKeysCollection();
-        const doc = await collection.findOne({ id, userId } as QueryFilter);
+        const doc = await collection.findOne({ id, userId });
 
         if (!doc) {
           return null;
@@ -362,7 +362,7 @@ export class ConnectionProfilesRepository extends TaggableBaseRepository<Connect
 
         const collection = await this.getApiKeysCollection();
         const result = await collection.updateOne(
-          { id } as QueryFilter,
+          { id },
           { $set: validated } as UpdateSpec<ApiKey>
         );
 
@@ -386,7 +386,7 @@ export class ConnectionProfilesRepository extends TaggableBaseRepository<Connect
     return this.safeQuery(
       async () => {
         const collection = await this.getApiKeysCollection();
-        const result = await collection.deleteOne({ id } as QueryFilter);
+        const result = await collection.deleteOne({ id });
 
         if (result.deletedCount === 0) {
           logger.warn('API key not found for deletion', { keyId: id });

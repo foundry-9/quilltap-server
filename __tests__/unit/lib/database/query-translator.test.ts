@@ -17,7 +17,7 @@ import {
   TranslatedQuery,
   TranslatedUpdate,
 } from '@/lib/database/backends/sqlite/query-translator';
-import { QueryFilter, QueryOptions, UpdateSpec } from '@/lib/database/interfaces';
+import { TypedQueryFilter, QueryFilter, QueryOptions, UpdateSpec } from '@/lib/database/interfaces';
 
 // Mock the logger
 jest.mock('@/lib/logger', () => ({
@@ -969,6 +969,73 @@ describe('SQLite Query Translator', () => {
       expect(result.sql).toBe('"active" = ?');
       // Booleans are converted to 1/0 for SQLite
       expect(result.params).toEqual([0]);
+    });
+  });
+
+  describe('TypedQueryFilter compile-time type safety', () => {
+    // These tests verify that TypedQueryFilter provides compile-time safety
+    // by catching invalid field names and ensuring backward compatibility
+
+    interface TestEntity {
+      id: string;
+      name: string;
+      age: number;
+      active: boolean;
+      tags: string[];
+      createdAt: string;
+    }
+
+    it('should accept valid entity fields', () => {
+      const filter: TypedQueryFilter<TestEntity> = { name: 'test', age: 25 };
+      const result = translateFilter(filter as QueryFilter);
+      expect(result.sql).toContain('"name" = ?');
+      expect(result.sql).toContain('"age" = ?');
+    });
+
+    it('should accept comparison operators on entity fields', () => {
+      const filter: TypedQueryFilter<TestEntity> = {
+        age: { $gte: 18, $lte: 65 },
+        active: true,
+      };
+      const result = translateFilter(filter as QueryFilter);
+      expect(result.sql).toContain('"age" >= ?');
+      expect(result.sql).toContain('"age" <= ?');
+    });
+
+    it('should accept $and/$or with typed sub-filters', () => {
+      const filter: TypedQueryFilter<TestEntity> = {
+        $and: [
+          { name: 'test' },
+          { $or: [{ active: true }, { age: { $gt: 18 } }] },
+        ],
+      };
+      const result = translateFilter(filter as QueryFilter);
+      expect(result.sql).toContain('AND');
+      expect(result.sql).toContain('OR');
+    });
+
+    it('should accept null values on entity fields', () => {
+      const filter: TypedQueryFilter<TestEntity> = { name: null };
+      const result = translateFilter(filter as QueryFilter);
+      expect(result.sql).toBe('"name" IS NULL');
+    });
+
+    it('should reject unknown fields at compile time', () => {
+      // @ts-expect-error - 'nonExistentField' is not a key of TestEntity
+      const _bad: TypedQueryFilter<TestEntity> = { nonExistentField: 'abc' };
+
+      // @ts-expect-error - 'typoName' is not a key of TestEntity
+      const _typo: TypedQueryFilter<TestEntity> = { typoName: 'test' };
+
+      // Ensure the test doesn't actually run these filters
+      expect(true).toBe(true);
+    });
+
+    it('should remain backward-compatible via unparameterized QueryFilter', () => {
+      // Unparameterized QueryFilter accepts any field (backward compat)
+      const filter: QueryFilter = { anyField: 'works', anotherField: 42 };
+      const result = translateFilter(filter);
+      expect(result.sql).toContain('"anyField" = ?');
     });
   });
 

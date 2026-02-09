@@ -8,7 +8,7 @@
 import { logger } from '@/lib/logger';
 import { Tag, TagSchema } from '@/lib/schemas/types';
 import { UserOwnedBaseRepository, CreateOptions } from './base.repository';
-import { QueryFilter } from '../interfaces';
+import { TypedQueryFilter } from '../interfaces';
 
 /**
  * Tags Repository
@@ -44,7 +44,7 @@ export class TagsRepository extends UserOwnedBaseRepository<Tag> {
     }
 
     return this.safeQuery(
-      () => this.findByFilter({ id: { $in: ids } } as QueryFilter),
+      () => this.findByFilter({ id: { $in: ids } } as TypedQueryFilter<Tag>),
       'Error finding tags by IDs',
       { idCount: ids.length }
     );
@@ -60,7 +60,7 @@ export class TagsRepository extends UserOwnedBaseRepository<Tag> {
       () => this.findOneByFilter({
         userId,
         nameLower,
-      } as QueryFilter),
+      }),
       'Error finding tag by name',
       { userId, name }
     );

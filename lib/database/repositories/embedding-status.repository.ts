@@ -13,7 +13,7 @@ import {
   EmbeddableEntityType,
 } from '@/lib/schemas/types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
-import { QueryFilter } from '../interfaces';
+import { TypedQueryFilter } from '../interfaces';
 
 /**
  * Embedding Status Repository
@@ -36,7 +36,7 @@ export class EmbeddingStatusRepository extends AbstractBaseRepository<EmbeddingS
     return this.safeQuery(
       async () => {
         const collection = await this.getCollection();
-        return await collection.findOne({ id } as QueryFilter);
+        return await collection.findOne({ id });
       },
       'Error finding embedding status by ID',
       { id },
@@ -74,7 +74,7 @@ export class EmbeddingStatusRepository extends AbstractBaseRepository<EmbeddingS
           entityType,
           entityId,
           profileId,
-        } as QueryFilter);
+        });
       },
       'Error finding embedding status by entity',
       { entityType, entityId, profileId },
@@ -89,7 +89,7 @@ export class EmbeddingStatusRepository extends AbstractBaseRepository<EmbeddingS
     return this.safeQuery(
       async () => {
         const collection = await this.getCollection();
-        return await collection.find({ userId } as QueryFilter);
+        return await collection.find({ userId });
       },
       'Error finding embedding statuses by user ID',
       { userId },
@@ -104,7 +104,7 @@ export class EmbeddingStatusRepository extends AbstractBaseRepository<EmbeddingS
     return this.safeQuery(
       async () => {
         const collection = await this.getCollection();
-        return await collection.find({ profileId } as QueryFilter);
+        return await collection.find({ profileId });
       },
       'Error finding embedding statuses by profile ID',
       { profileId },
@@ -122,7 +122,7 @@ export class EmbeddingStatusRepository extends AbstractBaseRepository<EmbeddingS
         return await collection.find({
           profileId,
           status: 'PENDING',
-        } as QueryFilter);
+        });
       },
       'Error finding pending embedding statuses',
       { profileId },
@@ -137,7 +137,7 @@ export class EmbeddingStatusRepository extends AbstractBaseRepository<EmbeddingS
     return this.safeQuery(
       async () => {
         const collection = await this.getCollection();
-        return await collection.find({ status } as QueryFilter);
+        return await collection.find({ status });
       },
       'Error finding embedding statuses by status',
       { status },
@@ -189,7 +189,7 @@ export class EmbeddingStatusRepository extends AbstractBaseRepository<EmbeddingS
         delete updateData.createdAt;
 
         const result = await collection.updateOne(
-          { id } as QueryFilter,
+          { id },
           { $set: { ...updateData, updatedAt: now } }
         );
 
@@ -284,7 +284,7 @@ export class EmbeddingStatusRepository extends AbstractBaseRepository<EmbeddingS
         const now = this.getCurrentTimestamp();
 
         const result = await collection.updateMany(
-          { profileId } as QueryFilter,
+          { profileId },
           {
             $set: {
               status: 'PENDING',
@@ -315,7 +315,7 @@ export class EmbeddingStatusRepository extends AbstractBaseRepository<EmbeddingS
     return this.safeQuery(
       async () => {
         const collection = await this.getCollection();
-        const result = await collection.deleteOne({ id } as QueryFilter);
+        const result = await collection.deleteOne({ id });
 
         if (result.deletedCount > 0) {
           return true;
@@ -341,7 +341,7 @@ export class EmbeddingStatusRepository extends AbstractBaseRepository<EmbeddingS
         const result = await collection.deleteMany({
           entityType,
           entityId,
-        } as QueryFilter);
+        });
 
         return result.deletedCount;
       },
@@ -357,7 +357,7 @@ export class EmbeddingStatusRepository extends AbstractBaseRepository<EmbeddingS
     return this.safeQuery(
       async () => {
         const collection = await this.getCollection();
-        const result = await collection.deleteMany({ profileId } as QueryFilter);
+        const result = await collection.deleteMany({ profileId });
 
         if (result.deletedCount > 0) {
           logger.info('Embedding statuses deleted by profile ID', {

@@ -9,7 +9,7 @@
 import { logger } from '@/lib/logger';
 import { PromptTemplate, PromptTemplateSchema } from '@/lib/schemas/types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
-import { QueryFilter } from '../interfaces';
+import { TypedQueryFilter } from '../interfaces';
 import { loadSamplePrompts } from '@/lib/prompts/sample-prompts-loader';
 
 /**
@@ -60,7 +60,7 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
           const existing = await collection.findOne({
             name: sample.name,
             isBuiltIn: true,
-          } as QueryFilter);
+          });
 
           if (!existing) {
             const id = this.generateId();
@@ -142,7 +142,7 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
    */
   async findByUserId(userId: string): Promise<PromptTemplate[]> {
     return this.safeQuery(
-      () => this.findByFilter({ userId } as QueryFilter),
+      () => this.findByFilter({ userId }),
       'Error finding prompt templates by user ID',
       { userId },
       []
@@ -158,7 +158,7 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
         // Ensure built-in templates are seeded
         await this.seedSamplePrompts();
 
-        const templates = await this.findByFilter({ isBuiltIn: true } as QueryFilter);
+        const templates = await this.findByFilter({ isBuiltIn: true });
         return templates;
       },
       'Error finding built-in prompt templates',
@@ -181,7 +181,7 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
             { isBuiltIn: true },
             { userId },
           ],
-        } as QueryFilter);
+        } as TypedQueryFilter<PromptTemplate>);
         return templates;
       },
       'Error finding all prompt templates for user',
@@ -195,7 +195,7 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
    */
   async findByName(userId: string, name: string): Promise<PromptTemplate | null> {
     return this.safeQuery(
-      () => this.findOneByFilter({ userId, name } as QueryFilter),
+      () => this.findOneByFilter({ userId, name }),
       'Error finding prompt template by name',
       { userId, name },
       null

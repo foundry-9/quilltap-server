@@ -8,7 +8,7 @@
 import { logger } from '@/lib/logger';
 import { EmbeddingProfile, EmbeddingProfileSchema } from '@/lib/schemas/types';
 import { TaggableBaseRepository, CreateOptions } from './base.repository';
-import { QueryFilter } from '../interfaces';
+import { TypedQueryFilter } from '../interfaces';
 
 /**
  * Embedding Profiles Repository
@@ -46,7 +46,7 @@ export class EmbeddingProfilesRepository extends TaggableBaseRepository<Embeddin
         const profile = await this.findOneByFilter({
           userId,
           name,
-        } as QueryFilter);
+        });
 
         if (!profile) {
           return null;
@@ -68,7 +68,7 @@ export class EmbeddingProfilesRepository extends TaggableBaseRepository<Embeddin
         const profile = await this.findOneByFilter({
           userId,
           isDefault: true,
-        } as QueryFilter);
+        });
 
         if (!profile) {
           return null;
@@ -161,7 +161,7 @@ export class EmbeddingProfilesRepository extends TaggableBaseRepository<Embeddin
     return this.safeQuery(
       async () => {
         const count = await this.updateMany(
-          { userId, isDefault: true } as QueryFilter,
+          { userId, isDefault: true },
           { isDefault: false } as Partial<EmbeddingProfile>
         );
 

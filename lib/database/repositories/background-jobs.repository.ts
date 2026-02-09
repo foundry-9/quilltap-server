@@ -9,7 +9,7 @@
 
 import { BackgroundJob, BackgroundJobSchema, BackgroundJobType, BackgroundJobStatus } from '@/lib/schemas/types';
 import { UserOwnedBaseRepository, CreateOptions } from './base.repository';
-import { QueryFilter } from '../interfaces';
+import { TypedQueryFilter } from '../interfaces';
 import { logger } from '@/lib/logger';
 
 /**
@@ -81,7 +81,7 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
   async findByUserId(userId: string, status?: BackgroundJobStatus): Promise<BackgroundJob[]> {
     return this.safeQuery(
       async () => {
-        const query: QueryFilter = { userId };
+        const query: TypedQueryFilter<BackgroundJob> = { userId };
         if (status) {
           query.status = status;
         }
@@ -110,7 +110,7 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
           {
             'payload.chatId': chatId,
             status: { $in: ['PENDING', 'PROCESSING'] },
-          } as QueryFilter,
+          } as TypedQueryFilter<BackgroundJob>,
           {
             sort: { priority: -1 as any, createdAt: 1 as any },
           }
@@ -138,7 +138,7 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
             status: { $in: ['PENDING', 'FAILED'] },
             scheduledAt: { $lte: now },
             $expr: { $lt: ['$attempts', '$maxAttempts'] },
-          } as QueryFilter,
+          } as TypedQueryFilter<BackgroundJob>,
           {
             $set: {
               status: 'PROCESSING',
@@ -259,7 +259,7 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
         }
 
         const updated = await collection.findOneAndUpdate(
-          { id } as QueryFilter,
+          { id },
           { $set: updateData } as any,
           { returnDocument: 'after' }
         );
@@ -303,7 +303,7 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
         const newStatus = currentJob.attempts >= currentJob.maxAttempts ? 'DEAD' : 'FAILED';
 
         const updated = await collection.findOneAndUpdate(
-          { id } as QueryFilter,
+          { id },
           {
             $set: {
               status: newStatus,
@@ -367,7 +367,7 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
       async () => {
         // Since the abstraction layer may not support full aggregation pipelines,
         // we fetch all items and aggregate in JavaScript
-        const filter = userId ? ({ userId } as QueryFilter) : {};
+        const filter = userId ? ({ userId } as TypedQueryFilter<BackgroundJob>) : {};
         const jobs = await this.findByFilter(filter);
 
         const stats: QueueStats = {
@@ -415,7 +415,7 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
   async getActiveCountsByType(userId?: string): Promise<Record<string, number>> {
     return this.safeQuery(
       async () => {
-        const filter: QueryFilter = {
+        const filter: TypedQueryFilter<BackgroundJob> = {
           status: { $in: ['PENDING', 'PROCESSING'] },
         };
         if (userId) {
@@ -446,7 +446,7 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
         const deletedCount = await this.deleteMany({
           status: { $in: ['COMPLETED', 'DEAD'] },
           completedAt: { $lt: olderThan.toISOString() },
-        } as QueryFilter);
+        });
 
         logger.info('Cleaned up old background jobs', { deletedCount });
         return deletedCount;
@@ -465,7 +465,7 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
       async () => {
         const collection = await this.getCollection();
         const result = await collection.updateOne(
-          { id, status: { $in: ['PENDING', 'FAILED'] } } as QueryFilter,
+          { id, status: { $in: ['PENDING', 'FAILED'] } } as TypedQueryFilter<BackgroundJob>,
           {
             $set: {
               status: 'DEAD',
@@ -499,7 +499,7 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
         const now = this.getCurrentTimestamp();
 
         const result = await collection.findOneAndUpdate(
-          { id, status: { $in: ['PENDING', 'FAILED'] } } as QueryFilter,
+          { id, status: { $in: ['PENDING', 'FAILED'] } } as TypedQueryFilter<BackgroundJob>,
           {
             $set: {
               status: 'PAUSED',
@@ -533,7 +533,7 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
         const now = this.getCurrentTimestamp();
 
         const result = await collection.findOneAndUpdate(
-          { id, status: 'PAUSED' } as QueryFilter,
+          { id, status: 'PAUSED' },
           {
             $set: {
               status: 'PENDING',
@@ -573,7 +573,7 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
           {
             status: 'PROCESSING',
             startedAt: { $lt: cutoff },
-          } as QueryFilter,
+          },
           {
             $set: {
               status: 'FAILED',

@@ -8,7 +8,7 @@
 import { logger } from '@/lib/logger';
 import { ChatSettings, ChatSettingsSchema } from '@/lib/schemas/types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
-import { QueryFilter } from '../interfaces';
+import { TypedQueryFilter } from '../interfaces';
 
 /**
  * Chat Settings Repository
@@ -37,7 +37,7 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
    */
   async findByUserId(userId: string): Promise<ChatSettings | null> {
     return this.safeQuery(
-      () => this.findOneByFilter({ userId } as QueryFilter),
+      () => this.findOneByFilter({ userId }),
       'Error finding chat settings by user ID',
       { userId },
       null

@@ -8,7 +8,7 @@
 import { logger } from '@/lib/logger';
 import { ImageProfile, ImageProfileSchema } from '@/lib/schemas/types';
 import { TaggableBaseRepository, CreateOptions } from './base.repository';
-import { QueryFilter } from '../interfaces';
+import { TypedQueryFilter } from '../interfaces';
 
 /**
  * Image Profiles Repository
@@ -41,7 +41,7 @@ export class ImageProfilesRepository extends TaggableBaseRepository<ImageProfile
       () => this.findOneByFilter({
         userId,
         name,
-      } as QueryFilter),
+      }),
       'Error finding image profile by name',
       { userId, name }
     );
@@ -55,7 +55,7 @@ export class ImageProfilesRepository extends TaggableBaseRepository<ImageProfile
       () => this.findOneByFilter({
         userId,
         isDefault: true,
-      } as QueryFilter),
+      }),
       'Error finding default image profile',
       { userId }
     );
@@ -143,7 +143,7 @@ export class ImageProfilesRepository extends TaggableBaseRepository<ImageProfile
     return this.safeQuery(
       async () => {
         const count = await this.updateMany(
-          { userId, isDefault: true } as QueryFilter,
+          { userId, isDefault: true },
           { isDefault: false } as Partial<ImageProfile>
         );
 

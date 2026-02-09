@@ -20,6 +20,7 @@
 // Core interfaces - types
 export type {
   // Query types
+  TypedQueryFilter,
   QueryFilter,
   QueryOptions,
   SortSpec,
@@ -27,7 +28,6 @@ export type {
   ComparisonCondition,
   ComparisonOperator,
   LogicalOperator,
-  FieldFilter,
 
   // Update types
   UpdateSpec,

@@ -10,7 +10,7 @@
 
 import { Project, ProjectSchema } from '@/lib/schemas/types';
 import { UserOwnedBaseRepository, CreateOptions } from './base.repository';
-import { QueryFilter } from '../interfaces';
+import { TypedQueryFilter } from '../interfaces';
 import { logger } from '@/lib/logger';
 
 /**
@@ -126,7 +126,7 @@ export class ProjectsRepository extends UserOwnedBaseRepository<Project> {
     return this.safeQuery(
       () => this.findByFilter({
         characterRoster: { $in: [characterId] },
-      } as QueryFilter),
+      } as TypedQueryFilter<Project>),
       'Error finding projects by character ID',
       { characterId },
       []
@@ -289,7 +289,7 @@ export class ProjectsRepository extends UserOwnedBaseRepository<Project> {
    */
   async findByMountPointId(mountPointId: string): Promise<Project[]> {
     return this.safeQuery(
-      () => this.findByFilter({ mountPointId } as QueryFilter),
+      () => this.findByFilter({ mountPointId }),
       'Error finding projects by mount point',
       { mountPointId },
       []

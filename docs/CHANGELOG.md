@@ -4,6 +4,16 @@
 
 ### 2.10-dev
 
+- refactor: Add type-safe `TypedQueryFilter<T>` to database abstraction layer
+  - Introduce `TypedQueryFilter<T>` mapped type that constrains filter fields to `keyof T` at compile time
+  - `QueryFilter` becomes a backward-compatible alias (`TypedQueryFilter<Record<string, unknown>>`)
+  - Add `$regex?: RegExp | string` to `ComparisonCondition` (already used at runtime, now typed)
+  - Update `DatabaseCollection<T>`, `AbstractBaseRepository<T>`, and `SQLiteCollection<T>` method signatures
+  - Remove 138 unnecessary `as QueryFilter` casts across 26 repository files (14 remain for untyped message collections)
+  - Add 6 compile-time type assertion tests to query-translator test suite
+  - Remove unused `FieldFilter` type (subsumed by the mapped type)
+  - Zero runtime changes — purely compile-time typing improvement
+
 - refactor: Migrate ~65 component files from raw Tailwind to qt-* theme utility classes
   - Convert hardcoded color/border/shadow classes to semantic equivalents across settings, characters, images, tools, chat, search, layout, and other components
   - Add `qt-shadow-lg` and `hover:qt-bg-primary/10` utility classes to `_utilities.css`
@@ -59,7 +69,7 @@
   - ~~Redundant try-catch wrappers in 50+ repository methods that could use a `safeQuery()` helper in `AbstractBaseRepository`~~ (resolved — see refactor above)
   - ~~`UsersRepository.migrateUserId` bypasses database abstraction with direct `(db as any).db` SQLite access~~
   - ~~\~45 remaining component files with 1-8 raw Tailwind violations each (colors, shadows, typography)~~ (resolved — see refactor above)
-  - `QueryFilter` is loosely typed across all repositories — a typed query builder would prevent runtime errors
+  - ~~`QueryFilter` is loosely typed across all repositories — a typed query builder would prevent runtime errors~~
   - Inconsistent error handling: some repositories throw, some return null, some return empty arrays
   - Duplicated search/replace logic between `MemoriesRepository` and `ChatsRepository` (could share a `SearchableRepository` mixin)
 

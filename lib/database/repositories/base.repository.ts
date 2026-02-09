@@ -6,7 +6,7 @@
  */
 
 import { z } from 'zod';
-import { DatabaseCollection, QueryFilter, QueryOptions, UpdateSpec, BaseEntity } from '../interfaces';
+import { DatabaseCollection, TypedQueryFilter, QueryOptions, UpdateSpec, BaseEntity } from '../interfaces';
 import { getDatabaseAsync, ensureCollection } from '../manager';
 import { logger } from '@/lib/logger';
 import { safeQuery as standaloneSafeQuery, extractErrorMessage } from './safe-query';
@@ -172,11 +172,11 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
    * When value is non-null, filters by exact match.
    * When value is null, matches records where the field is null or does not exist.
    */
-  protected createNullableFilter(field: string, value: string | null): QueryFilter {
+  protected createNullableFilter<K extends string & keyof T>(field: K, value: string | null): TypedQueryFilter<T> {
     if (value !== null) {
-      return { [field]: value } as QueryFilter;
+      return { [field]: value } as TypedQueryFilter<T>;
     }
-    return { $or: [{ [field]: null }, { [field]: { $exists: false } }] } as QueryFilter;
+    return { $or: [{ [field]: null } as TypedQueryFilter<T>, { [field]: { $exists: false } } as TypedQueryFilter<T>] } as TypedQueryFilter<T>;
   }
 
   // ============================================================================
@@ -221,7 +221,7 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
   protected async _findById(id: string): Promise<T | null> {
     return this.safeQuery(async () => {
       const collection = await this.getCollection();
-      const result = await collection.findOne({ id } as QueryFilter);
+      const result = await collection.findOne({ id } as TypedQueryFilter<T>);
 
       if (!result) {
         return null;
@@ -254,7 +254,7 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
   /**
    * Find entities by filter
    */
-  protected async findByFilter(filter: QueryFilter, options?: QueryOptions): Promise<T[]> {
+  protected async findByFilter(filter: TypedQueryFilter<T>, options?: QueryOptions): Promise<T[]> {
     return this.safeQuery(async () => {
       const collection = await this.getCollection();
       const results = await collection.find(filter, options);
@@ -274,7 +274,7 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
   /**
    * Find single entity by filter
    */
-  protected async findOneByFilter(filter: QueryFilter): Promise<T | null> {
+  protected async findOneByFilter(filter: TypedQueryFilter<T>): Promise<T | null> {
     return this.safeQuery(async () => {
       const collection = await this.getCollection();
       const result = await collection.findOne(filter);
@@ -346,7 +346,7 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
       const collection = await this.getCollection();
 
       await collection.updateOne(
-        { id } as QueryFilter,
+        { id } as TypedQueryFilter<T>,
         { $set: validated } as UpdateSpec<T>
       );
       return validated;
@@ -359,7 +359,7 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
   protected async _delete(id: string): Promise<boolean> {
     return this.safeQuery(async () => {
       const collection = await this.getCollection();
-      const result = await collection.deleteOne({ id } as QueryFilter);
+      const result = await collection.deleteOne({ id } as TypedQueryFilter<T>);
 
       if (result.deletedCount === 0) {
         logger.warn('Entity not found for deletion', {
@@ -401,7 +401,7 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
   /**
    * Count entities matching a filter
    */
-  async count(filter?: QueryFilter): Promise<number> {
+  async count(filter?: TypedQueryFilter<T>): Promise<number> {
     return this.safeQuery(
       async () => {
         const collection = await this.getCollection();
@@ -420,7 +420,7 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
     return this.safeQuery(
       async () => {
         const collection = await this.getCollection();
-        return collection.exists({ id } as QueryFilter);
+        return collection.exists({ id } as TypedQueryFilter<T>);
       },
       'Error checking entity existence',
       { id },
@@ -431,7 +431,7 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
   /**
    * Delete multiple entities matching a filter
    */
-  protected async deleteMany(filter: QueryFilter): Promise<number> {
+  protected async deleteMany(filter: TypedQueryFilter<T>): Promise<number> {
     return this.safeQuery(async () => {
       const collection = await this.getCollection();
       const result = await collection.deleteMany(filter);
@@ -448,7 +448,7 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
   /**
    * Update multiple entities matching a filter
    */
-  protected async updateMany(filter: QueryFilter, update: Partial<T>): Promise<number> {
+  protected async updateMany(filter: TypedQueryFilter<T>, update: Partial<T>): Promise<number> {
     return this.safeQuery(async () => {
       const collection = await this.getCollection();
       const result = await collection.updateMany(
@@ -479,7 +479,7 @@ export abstract class UserOwnedBaseRepository<T extends UserOwnedEntity> extends
    * Find entities by user ID
    */
   async findByUserId(userId: string): Promise<T[]> {
-    return this.findByFilter({ userId } as QueryFilter);
+    return this.findByFilter({ userId } as TypedQueryFilter<T>);
   }
 
   /**
@@ -490,7 +490,7 @@ export abstract class UserOwnedBaseRepository<T extends UserOwnedEntity> extends
       return [];
     }
 
-    return this.findByFilter({ id: { $in: ids } } as QueryFilter);
+    return this.findByFilter({ id: { $in: ids } } as TypedQueryFilter<T>);
   }
 }
 
@@ -508,7 +508,7 @@ export abstract class TaggableBaseRepository<T extends TaggableEntity> extends U
    * Find entities by tag ID
    */
   async findByTag(tagId: string): Promise<T[]> {
-    return this.findByFilter({ tags: { $in: [tagId] } } as QueryFilter);
+    return this.findByFilter({ tags: { $in: [tagId] } } as TypedQueryFilter<T>);
   }
 
   /**

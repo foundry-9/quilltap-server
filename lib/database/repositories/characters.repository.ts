@@ -9,7 +9,7 @@
 import { Character, CharacterInput, CharacterSchema, PhysicalDescription, ClothingRecord, CharacterSystemPrompt } from '@/lib/schemas/types';
 import { TaggableBaseRepository, CreateOptions } from './base.repository';
 import { logger } from '@/lib/logger';
-import { QueryFilter } from '../interfaces';
+import { TypedQueryFilter } from '../interfaces';
 
 /**
  * Characters Repository
@@ -57,7 +57,7 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
         const results = await this.findByFilter({
           userId,
           controlledBy: 'user',
-        } as QueryFilter);
+        });
         return results;
       },
       'Error finding user-controlled characters',
@@ -81,7 +81,7 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
             { controlledBy: 'llm' },
             { controlledBy: { $exists: false } },
           ],
-        } as QueryFilter);
+        } as TypedQueryFilter<Character>);
         return results;
       },
       'Error finding LLM-controlled characters',
@@ -109,7 +109,7 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
       async () => {
         const results = await this.findByFilter({
           defaultImageId: imageId,
-        } as QueryFilter);
+        });
         return results;
       },
       'Error finding characters by default image ID',
@@ -128,7 +128,7 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
       async () => {
         const results = await this.findByFilter({
           'avatarOverrides.imageId': imageId,
-        } as QueryFilter);
+        } as TypedQueryFilter<Character>);
         return results;
       },
       'Error finding characters by avatar override image ID',

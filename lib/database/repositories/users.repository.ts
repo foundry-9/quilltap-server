@@ -12,7 +12,7 @@
 import { logger } from '@/lib/logger';
 import { User, UserSchema, GeneralSettings, GeneralSettingsSchema, ChatSettings } from '@/lib/schemas/types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
-import { QueryFilter, UpdateSpec } from '../interfaces';
+import { TypedQueryFilter, UpdateSpec } from '../interfaces';
 
 /**
  * Users Repository
@@ -59,7 +59,7 @@ export class UsersRepository extends AbstractBaseRepository<User> {
   async findByEmail(email: string): Promise<User | null> {
     return this.safeQuery(
       async () => {
-        const user = await this.findOneByFilter({ email } as QueryFilter);
+        const user = await this.findOneByFilter({ email });
 
         if (!user) {
           return null;
@@ -77,7 +77,7 @@ export class UsersRepository extends AbstractBaseRepository<User> {
   async findByUsername(username: string): Promise<User | null> {
     return this.safeQuery(
       async () => {
-        const user = await this.findOneByFilter({ username } as QueryFilter);
+        const user = await this.findOneByFilter({ username });
 
         if (!user) {
           return null;
@@ -209,7 +209,7 @@ export class UsersRepository extends AbstractBaseRepository<User> {
             try {
               const collection = getCollection(table);
               const result = await collection.updateMany(
-                { userId: oldId } as QueryFilter,
+                { userId: oldId } as TypedQueryFilter<any>,
                 { $set: { userId: newId } } as UpdateSpec<unknown>
               );
               logger.debug('Migrated userId references in table', {
@@ -230,7 +230,7 @@ export class UsersRepository extends AbstractBaseRepository<User> {
           // Finally, update the user's own primary key
           const usersCollection = getCollection('users');
           await usersCollection.updateMany(
-            { id: oldId } as QueryFilter,
+            { id: oldId } as TypedQueryFilter<User>,
             { $set: { id: newId } } as UpdateSpec<unknown>
           );
         });
@@ -264,7 +264,7 @@ export class UsersRepository extends AbstractBaseRepository<User> {
         // Fetch user and chat settings in parallel
         const [user, chatSettingsDocs] = await Promise.all([
           this.findById(userId),
-          chatSettingsCollection.find({ userId } as QueryFilter),
+          chatSettingsCollection.find({ userId } as TypedQueryFilter<ChatSettings>),
         ]);
 
         if (!user) {
@@ -320,7 +320,7 @@ export class UsersRepository extends AbstractBaseRepository<User> {
       async () => {
         // Get the chat settings repository from the database manager
         const db = await (await import('../manager')).getDatabaseAsync();
-        const chatSettingsCollection = db.getCollection('chatSettings');
+        const chatSettingsCollection = db.getCollection<ChatSettings>('chatSettings');
 
         // Update user if provided
         if (data.user) {
@@ -336,7 +336,7 @@ export class UsersRepository extends AbstractBaseRepository<User> {
         // Update chat settings if provided
         if (data.chatSettings) {
           const result = await chatSettingsCollection.updateMany(
-            { userId } as QueryFilter,
+            { userId } as TypedQueryFilter<ChatSettings>,
             {
               $set: {
                 ...data.chatSettings,

@@ -14,7 +14,7 @@ import {
   FileWritePermissionSchema,
   FileWritePermissionScope,
 } from '@/lib/schemas/file-permissions.types';
-import { QueryFilter } from '../interfaces';
+import { TypedQueryFilter } from '../interfaces';
 
 /**
  * File Write Permissions Repository
@@ -96,7 +96,7 @@ export class FilePermissionsRepository extends UserOwnedBaseRepository<FileWrite
           userId,
           scope: 'PROJECT',
           projectId,
-        } as QueryFilter);
+        });
 
         if (permission) {
           return permission;
@@ -117,7 +117,7 @@ export class FilePermissionsRepository extends UserOwnedBaseRepository<FileWrite
         const permission = await this.findOneByFilter({
           userId,
           scope: 'GENERAL',
-        } as QueryFilter);
+        });
 
         const hasPermission = permission !== null;
         return hasPermission;
@@ -137,7 +137,7 @@ export class FilePermissionsRepository extends UserOwnedBaseRepository<FileWrite
           userId,
           scope: 'SINGLE_FILE',
           fileId,
-        } as QueryFilter);
+        });
 
         const hasPermission = permission !== null;
         return hasPermission;
@@ -196,7 +196,7 @@ export class FilePermissionsRepository extends UserOwnedBaseRepository<FileWrite
 
         const permission = await this.findOneByFilter({
           $or: conditions,
-        } as QueryFilter);
+        } as TypedQueryFilter<FileWritePermission>);
 
         const canWrite = permission !== null;
         return canWrite;
@@ -266,7 +266,7 @@ export class FilePermissionsRepository extends UserOwnedBaseRepository<FileWrite
   async revokeAllForUser(userId: string): Promise<number> {
     return this.safeQuery(
       async () => {
-        const count = await this.deleteMany({ userId } as QueryFilter);
+        const count = await this.deleteMany({ userId });
 
         logger.info('All file write permissions revoked for user', {
           context: 'file-permissions-repository',
@@ -290,7 +290,7 @@ export class FilePermissionsRepository extends UserOwnedBaseRepository<FileWrite
         const count = await this.deleteMany({
           scope: 'PROJECT',
           projectId,
-        } as QueryFilter);
+        });
 
         logger.info('All file write permissions revoked for project', {
           context: 'file-permissions-repository',
@@ -314,7 +314,7 @@ export class FilePermissionsRepository extends UserOwnedBaseRepository<FileWrite
         const count = await this.deleteMany({
           scope: 'SINGLE_FILE',
           fileId,
-        } as QueryFilter);
+        });
 
         if (count > 0) {
           logger.info('File write permissions revoked for deleted file', {

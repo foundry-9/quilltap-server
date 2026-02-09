@@ -10,7 +10,7 @@
 import { logger } from '@/lib/logger';
 import { MountPoint, MountPointSchema, HealthStatus } from '@/lib/file-storage/mount-point.types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
-import { QueryFilter } from '../interfaces';
+import { TypedQueryFilter } from '../interfaces';
 
 /**
  * Mount Points Repository
@@ -120,7 +120,7 @@ export class MountPointsRepository extends AbstractBaseRepository<MountPoint> {
   async findDefault(): Promise<MountPoint | null> {
     return this.safeQuery(
       async () => {
-        const mountPoint = await this.findOneByFilter({ isDefault: true } as QueryFilter);
+        const mountPoint = await this.findOneByFilter({ isDefault: true });
 
         if (mountPoint) {
           return mountPoint;
@@ -147,7 +147,7 @@ export class MountPointsRepository extends AbstractBaseRepository<MountPoint> {
           query.userId = userId;
         }
 
-        const mountPoints = await this.findByFilter(query as QueryFilter);
+        const mountPoints = await this.findByFilter(query as TypedQueryFilter<MountPoint>);
         return mountPoints;
       },
       'Error finding mount points by scope',
@@ -161,7 +161,7 @@ export class MountPointsRepository extends AbstractBaseRepository<MountPoint> {
    */
   async findEnabled(): Promise<MountPoint[]> {
     return this.safeQuery(
-      () => this.findByFilter({ enabled: true } as QueryFilter),
+      () => this.findByFilter({ enabled: true }),
       'Error finding enabled mount points',
       {}
     );
@@ -174,7 +174,7 @@ export class MountPointsRepository extends AbstractBaseRepository<MountPoint> {
    */
   async findByBackendType(backendType: string): Promise<MountPoint[]> {
     return this.safeQuery(
-      () => this.findByFilter({ backendType } as QueryFilter),
+      () => this.findByFilter({ backendType }),
       'Error finding mount points by backend type',
       { backendType }
     );
@@ -193,13 +193,13 @@ export class MountPointsRepository extends AbstractBaseRepository<MountPoint> {
       async () => {
         // Clear isDefault from all other mount points
         await this.updateMany(
-          { id: { $ne: id } } as QueryFilter,
+          { id: { $ne: id } } as TypedQueryFilter<MountPoint>,
           { isDefault: false } as Partial<MountPoint>
         );
 
         // Set this mount point as default
         await this.updateMany(
-          { id } as QueryFilter,
+          { id },
           { isDefault: true } as Partial<MountPoint>
         );
 

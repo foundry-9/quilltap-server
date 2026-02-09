@@ -10,7 +10,7 @@
 import { logger } from '@/lib/logger';
 import { TfidfVocabulary, TfidfVocabularySchema } from '@/lib/schemas/types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
-import { QueryFilter } from '../interfaces';
+import { TypedQueryFilter } from '../interfaces';
 
 /**
  * TF-IDF Vocabulary Repository
@@ -33,7 +33,7 @@ export class TfidfVocabularyRepository extends AbstractBaseRepository<TfidfVocab
     return this.safeQuery(
       async () => {
         const collection = await this.getCollection();
-        return await collection.findOne({ id } as QueryFilter);
+        return await collection.findOne({ id });
       },
       'Error finding TF-IDF vocabulary by ID',
       { context: 'TfidfVocabularyRepository.findById', id },
@@ -63,7 +63,7 @@ export class TfidfVocabularyRepository extends AbstractBaseRepository<TfidfVocab
     return this.safeQuery(
       async () => {
         const collection = await this.getCollection();
-        return await collection.findOne({ profileId } as QueryFilter);
+        return await collection.findOne({ profileId });
       },
       'Error finding TF-IDF vocabulary by profile ID',
       { context: 'TfidfVocabularyRepository.findByProfileId', profileId },
@@ -78,7 +78,7 @@ export class TfidfVocabularyRepository extends AbstractBaseRepository<TfidfVocab
     return this.safeQuery(
       async () => {
         const collection = await this.getCollection();
-        return await collection.find({ userId } as QueryFilter);
+        return await collection.find({ userId });
       },
       'Error finding TF-IDF vocabularies by user ID',
       { context: 'TfidfVocabularyRepository.findByUserId', userId },
@@ -138,7 +138,7 @@ export class TfidfVocabularyRepository extends AbstractBaseRepository<TfidfVocab
         delete updateData.createdAt;
 
         const result = await collection.updateOne(
-          { id } as QueryFilter,
+          { id },
           { $set: { ...updateData, updatedAt: now } }
         );
 
@@ -186,7 +186,7 @@ export class TfidfVocabularyRepository extends AbstractBaseRepository<TfidfVocab
     return this.safeQuery(
       async () => {
         const collection = await this.getCollection();
-        const result = await collection.deleteOne({ id } as QueryFilter);
+        const result = await collection.deleteOne({ id });
 
         if (result.deletedCount > 0) {
           logger.info('TF-IDF vocabulary deleted', {
@@ -210,7 +210,7 @@ export class TfidfVocabularyRepository extends AbstractBaseRepository<TfidfVocab
     return this.safeQuery(
       async () => {
         const collection = await this.getCollection();
-        const result = await collection.deleteMany({ profileId } as QueryFilter);
+        const result = await collection.deleteMany({ profileId });
 
         if (result.deletedCount > 0) {
           logger.info('TF-IDF vocabulary deleted by profile ID', {

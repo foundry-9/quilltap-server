@@ -8,7 +8,7 @@
 import { logger } from '@/lib/logger';
 import { FileEntry, FileEntrySchema, FileCategory, FileSource } from '@/lib/schemas/types';
 import { TaggableBaseRepository, CreateOptions } from './base.repository';
-import { QueryFilter } from '../interfaces';
+import { TypedQueryFilter } from '../interfaces';
 
 /**
  * Files Repository
@@ -45,7 +45,7 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
 
     return this.safeQuery(
       async () => {
-        const files = await this.findByFilter({ id: { $in: ids } } as QueryFilter);
+        const files = await this.findByFilter({ id: { $in: ids } });
         return files;
       },
       'Error finding files by IDs',
@@ -59,7 +59,7 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
   async findBySha256(sha256: string): Promise<FileEntry[]> {
     return this.safeQuery(
       async () => {
-        const files = await this.findByFilter({ sha256 } as QueryFilter);
+        const files = await this.findByFilter({ sha256 });
         return files;
       },
       'Error finding files by SHA256',
@@ -73,7 +73,7 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
   async findByCategory(category: FileCategory): Promise<FileEntry[]> {
     return this.safeQuery(
       async () => {
-        const files = await this.findByFilter({ category } as QueryFilter);
+        const files = await this.findByFilter({ category });
         return files;
       },
       'Error finding files by category',
@@ -87,7 +87,7 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
   async findBySource(source: FileSource): Promise<FileEntry[]> {
     return this.safeQuery(
       async () => {
-        const files = await this.findByFilter({ source } as QueryFilter);
+        const files = await this.findByFilter({ source });
         return files;
       },
       'Error finding files by source',
@@ -101,7 +101,7 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
   async findByLinkedTo(entityId: string): Promise<FileEntry[]> {
     return this.safeQuery(
       async () => {
-        const files = await this.findByFilter({ linkedTo: { $in: [entityId] } } as QueryFilter);
+        const files = await this.findByFilter({ linkedTo: { $in: [entityId] } });
         return files;
       },
       'Error finding files linked to entity',
@@ -115,7 +115,7 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
   async findByUserId(userId: string): Promise<FileEntry[]> {
     return this.safeQuery(
       async () => {
-        const files = await this.findByFilter({ userId } as QueryFilter);
+        const files = await this.findByFilter({ userId });
         return files;
       },
       'Error finding files by user ID',
@@ -288,7 +288,7 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
           ...this.createNullableFilter('projectId', projectId),
         };
 
-        const files = await this.findByFilter(query as QueryFilter);
+        const files = await this.findByFilter(query as TypedQueryFilter<FileEntry>);
         return files;
       },
       'Error finding files in folder',
@@ -321,7 +321,7 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
 
         Object.assign(query, this.createNullableFilter('projectId', projectId));
 
-        const files = await this.findByFilter(query as QueryFilter);
+        const files = await this.findByFilter(query as TypedQueryFilter<FileEntry>);
         return files;
       },
       'Error finding files in folder (recursive)',
@@ -345,7 +345,7 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
           ...this.createNullableFilter('projectId', projectId),
         };
 
-        const files = await this.findByFilter(query as QueryFilter);
+        const files = await this.findByFilter(query as TypedQueryFilter<FileEntry>);
 
         // Extract unique folder paths and sort
         const folderSet = new Set<string>();
@@ -376,7 +376,7 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
   async findByProjectId(userId: string, projectId: string): Promise<FileEntry[]> {
     return this.safeQuery(
       async () => {
-        const files = await this.findByFilter({ userId, projectId } as QueryFilter);
+        const files = await this.findByFilter({ userId, projectId });
         return files;
       },
       'Error finding files by project ID',
@@ -402,7 +402,7 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
           userId,
           projectId,
           originalFilename: filename,
-        } as QueryFilter);
+        });
         return files;
       },
       'Error finding files by filename in project',
@@ -418,7 +418,7 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
   async findByStorageKey(storageKey: string): Promise<FileEntry | null> {
     return this.safeQuery(
       async () => {
-        const file = await this.findOneByFilter({ storageKey } as QueryFilter);
+        const file = await this.findOneByFilter({ storageKey });
         return file;
       },
       'Error finding file by storage key',
@@ -434,7 +434,7 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
   async findByMountPointId(mountPointId: string): Promise<FileEntry[]> {
     return this.safeQuery(
       async () => {
-        const files = await this.findByFilter({ mountPointId } as QueryFilter);
+        const files = await this.findByFilter({ mountPointId });
         return files;
       },
       'Error finding files by mount point',
@@ -452,7 +452,7 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
         const files = await this.findByFilter({
           userId,
           $or: [{ projectId: null }, { projectId: { $exists: false } }],
-        } as QueryFilter);
+        });
         return files;
       },
       'Error finding general files',

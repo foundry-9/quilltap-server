@@ -11,7 +11,7 @@
 import { Memory, MemorySchema } from '@/lib/schemas/types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
 import { logger } from '@/lib/logger';
-import { QueryFilter } from '../interfaces';
+import { TypedQueryFilter } from '../interfaces';
 
 /** Maximum allowed search query length to prevent ReDoS and excessive memory usage */
 const MAX_SEARCH_QUERY_LENGTH = 1000;
@@ -54,7 +54,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
         const memory = await this.findOneByFilter({
           id: memoryId,
           characterId,
-        } as QueryFilter);
+        });
 
         return memory;
       },
@@ -72,7 +72,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   async findByCharacterId(characterId: string): Promise<Memory[]> {
     return this.safeQuery(
       async () => {
-        const memories = await this.findByFilter({ characterId } as QueryFilter);
+        const memories = await this.findByFilter({ characterId });
         return memories;
       },
       'Error finding memories by character ID',
@@ -97,7 +97,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
         const memories = await this.findByFilter({
           characterId,
           keywords: { $in: keywords },
-        } as QueryFilter);
+        });
         return memories;
       },
       'Error finding memories by keywords',
@@ -130,7 +130,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
         const memories = await this.findByFilter({
           characterId,
           $or: [{ content: { $regex: regex } }, { summary: { $regex: regex } }],
-        } as QueryFilter);
+        });
         return memories;
       },
       'Error searching memories by content',
@@ -156,7 +156,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
         const memories = await this.findByFilter({
           characterId,
           importance: { $gte: minImportance },
-        } as QueryFilter);
+        });
         return memories;
       },
       'Error finding memories by importance',
@@ -177,7 +177,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
         const memories = await this.findByFilter({
           characterId,
           source,
-        } as QueryFilter);
+        });
         return memories;
       },
       'Error finding memories by source',
@@ -196,7 +196,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
     return this.safeQuery(
       async () => {
         const memories = await this.findByFilter(
-          { characterId } as QueryFilter,
+          { characterId },
           {
             sort: { createdAt: -1 },
             limit,
@@ -220,7 +220,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
     return this.safeQuery(
       async () => {
         const memories = await this.findByFilter(
-          { characterId } as QueryFilter,
+          { characterId },
           {
             sort: { importance: -1 },
             limit,
@@ -362,7 +362,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
         const deletedCount = await this.deleteMany({
           characterId,
           id: { $in: memoryIds },
-        } as QueryFilter);
+        });
         return deletedCount;
       },
       'Error bulk deleting memories for character',
@@ -406,7 +406,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   async countByCharacterId(characterId: string): Promise<number> {
     return this.safeQuery(
       async () => {
-        const count = await this.count({ characterId } as QueryFilter);
+        const count = await this.count({ characterId });
         return count;
       },
       'Error counting memories for character',
@@ -428,7 +428,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
     return this.safeQuery(
       async () => {
         const memories = await this.findByFilter(
-          { characterId, aboutCharacterId } as QueryFilter,
+          { characterId, aboutCharacterId },
           {
             sort: { importance: -1, createdAt: -1 },
           }
@@ -461,7 +461,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
           {
             characterId,
             aboutCharacterId: { $in: aboutCharacterIds },
-          } as QueryFilter,
+          },
           {
             sort: { importance: -1, createdAt: -1 },
           }
@@ -482,7 +482,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   async findByChatId(chatId: string): Promise<Memory[]> {
     return this.safeQuery(
       async () => {
-        const memories = await this.findByFilter({ chatId } as QueryFilter);
+        const memories = await this.findByFilter({ chatId });
         return memories;
       },
       'Error finding memories by chat ID',
@@ -499,7 +499,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   async findBySourceMessageId(sourceMessageId: string): Promise<Memory[]> {
     return this.safeQuery(
       async () => {
-        const memories = await this.findByFilter({ sourceMessageId } as QueryFilter);
+        const memories = await this.findByFilter({ sourceMessageId });
         return memories;
       },
       'Error finding memories by source message ID',
@@ -516,7 +516,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   async deleteBySourceMessageId(sourceMessageId: string): Promise<number> {
     return this.safeQuery(
       async () => {
-        const deletedCount = await this.deleteMany({ sourceMessageId } as QueryFilter);
+        const deletedCount = await this.deleteMany({ sourceMessageId });
         return deletedCount;
       },
       'Error deleting memories by source message ID',
@@ -538,7 +538,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
 
         const deletedCount = await this.deleteMany({
           sourceMessageId: { $in: sourceMessageIds },
-        } as QueryFilter);
+        });
         return deletedCount;
       },
       'Error deleting memories by source message IDs',
@@ -554,7 +554,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   async countBySourceMessageId(sourceMessageId: string): Promise<number> {
     return this.safeQuery(
       async () => {
-        const count = await this.count({ sourceMessageId } as QueryFilter);
+        const count = await this.count({ sourceMessageId });
         return count;
       },
       'Error counting memories for source message',
@@ -577,7 +577,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
 
         const count = await this.count({
           sourceMessageId: { $in: sourceMessageIds },
-        } as QueryFilter);
+        });
         return count;
       },
       'Error counting memories for source messages',
@@ -594,7 +594,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   async deleteByChatId(chatId: string): Promise<number> {
     return this.safeQuery(
       async () => {
-        const deletedCount = await this.deleteMany({ chatId } as QueryFilter);
+        const deletedCount = await this.deleteMany({ chatId });
         return deletedCount;
       },
       'Error deleting memories by chat ID',
@@ -610,7 +610,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   async countByChatId(chatId: string): Promise<number> {
     return this.safeQuery(
       async () => {
-        const count = await this.count({ chatId } as QueryFilter);
+        const count = await this.count({ chatId });
         return count;
       },
       'Error counting memories for chat',
@@ -633,7 +633,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   async findByPersonaId(personaId: string): Promise<Memory[]> {
     return this.safeQuery(
       async () => {
-        const memories = await this.findByFilter({ personaId } as QueryFilter);
+        const memories = await this.findByFilter({ personaId });
         return memories;
       },
       'Error finding memories by persona ID',
@@ -659,7 +659,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
             { aboutCharacterId },
             { personaId: aboutCharacterId }, // Legacy support during migration
           ],
-        } as QueryFilter);
+        });
         return memories;
       },
       'Error finding memories by aboutCharacterId',
@@ -696,7 +696,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
         const regex = new RegExp(this.escapeRegex(searchText), 'i');
 
         // Build the query filter - search in content, summary, and keywords
-        const filter: QueryFilter = {
+        const filter: TypedQueryFilter<Memory> = {
           $or: [
             { content: { $regex: regex } },
             { summary: { $regex: regex } },
@@ -745,7 +745,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
         const regex = new RegExp(this.escapeRegex(searchText), 'i');
 
         // Build the query filter - search in content, summary, and keywords
-        const filter: QueryFilter = {
+        const filter: TypedQueryFilter<Memory> = {
           $or: [
             { content: { $regex: regex } },
             { summary: { $regex: regex } },
@@ -865,7 +865,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
           characterId,
           aboutCharacterId,
           $or: [{ content: { $regex: regex } }, { summary: { $regex: regex } }],
-        } as QueryFilter);
+        });
         return memories;
       },
       'Error searching memories about character by content',

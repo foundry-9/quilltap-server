@@ -11,7 +11,7 @@
 import { logger } from '@/lib/logger';
 import { VectorIndex, VectorIndexSchema } from '@/lib/schemas/types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
-import { QueryFilter } from '../interfaces';
+import { TypedQueryFilter } from '../interfaces';
 
 /**
  * Vector Indices Repository
@@ -42,7 +42,7 @@ export class VectorIndicesRepository extends AbstractBaseRepository<VectorIndex>
   async findByCharacterId(characterId: string): Promise<VectorIndex | null> {
     return this.safeQuery(
       async () => {
-        const index = await this.findOneByFilter({ characterId } as QueryFilter);
+        const index = await this.findOneByFilter({ characterId });
 
         if (!index) {
           return null;

@@ -8,7 +8,7 @@
 
 import { PluginConfig, PluginConfigSchema } from '@/lib/schemas/types';
 import { UserOwnedBaseRepository, CreateOptions } from './base.repository';
-import { QueryFilter } from '../interfaces';
+import { TypedQueryFilter } from '../interfaces';
 import { logger } from '@/lib/logger';
 
 /**
@@ -40,7 +40,7 @@ export class PluginConfigRepository extends UserOwnedBaseRepository<PluginConfig
       () => this.findOneByFilter({
         userId,
         pluginName,
-      } as QueryFilter),
+      }),
       'Error finding plugin config by user and plugin',
       { userId, pluginName },
       null
@@ -53,7 +53,7 @@ export class PluginConfigRepository extends UserOwnedBaseRepository<PluginConfig
    * @returns Promise<PluginConfig[]> Array of plugin configs for the user
    */
   async findByUserId(userId: string): Promise<PluginConfig[]> {
-    const configs = await this.findByFilter({ userId } as QueryFilter);
+    const configs = await this.findByFilter({ userId });
     return configs;
   }
 
@@ -199,7 +199,7 @@ export class PluginConfigRepository extends UserOwnedBaseRepository<PluginConfig
    */
   async deleteByPlugin(pluginName: string): Promise<number> {
     return this.safeQuery(
-      () => this.deleteMany({ pluginName } as QueryFilter),
+      () => this.deleteMany({ pluginName }),
       'Error deleting plugin configs',
       { pluginName }
     );
