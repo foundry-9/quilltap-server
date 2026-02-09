@@ -4,6 +4,15 @@
 
 ### 2.10-dev
 
+- refactor: Split ChatsRepository into facade + 5 focused operations modules
+  - Extract `ChatParticipantsOps` (add/update/remove participant, query helpers)
+  - Extract `ChatImpersonationOps` (add/remove impersonation, active typing, LLM pause)
+  - Extract `ChatTokenTrackingOps` (increment/reset token aggregates)
+  - Extract `ChatMessagesOps` (get/add/update/clear messages, message count)
+  - Extract `ChatSearchReplaceOps` (count/find/replace text in messages)
+  - Shared dependency injection via `ChatOpsContext` interface — zero changes to callers
+  - Resolves identified technical debt: ChatsRepository SRP split (1,115 → 422 lines in facade)
+
 - fix: Sync qt-* theme utility classes across npm packages for theme developers
   - **@quilltap/theme-storybook** (1.0.18 → 1.0.19):
     - Add ~120 missing CSS variables to `qt-components.css` (navbar, sidebar, content, typography, panel, popover, chat composer/toolbar/attachment/sidebar, response status, participant, roleplay, queue badges, entity card, code, link, footer, brand, auth, page layout, tab extras)
@@ -27,7 +36,7 @@
   - **Documentation**: Update `DEAD-CODE-REPORT.md`, `migrations/README.md` (remove stale MongoDB examples, update to SQLite patterns), `components/settings/appearance/README.md`
 
 - **Known Technical Debt** (identified in audit, deferred):
-  - `ChatsRepository` SRP split (1,093 lines handling 6 distinct concerns: chat metadata, participants, impersonation, token tracking, messages, search/replace)
+  - ~~`ChatsRepository` SRP split~~ (resolved — see refactor above)
   - Redundant try-catch wrappers in 50+ repository methods that could use a `safeQuery()` helper in `AbstractBaseRepository`
   - `UsersRepository.migrateUserId` bypasses database abstraction with direct `(db as any).db` SQLite access
   - ~45 remaining component files with 1-8 raw Tailwind violations each (colors, shadows, typography)
