@@ -8,7 +8,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { CreateProjectDialog } from '@/app/(authenticated)/projects/components'
+import { CreateProjectDialog } from '@/app/(authenticated)/prospero/components'
 import type { QuickActionsRowProps } from './types'
 
 // Chat icon
@@ -77,7 +77,7 @@ export function QuickActionsRow({ lastChatId }: QuickActionsRowProps) {
       <div className="qt-quick-actions mb-8">
         {/* Start a Chat */}
         <Link
-          href="/chats/new"
+          href="/salon/new"
           className="qt-button qt-button-primary gap-2"
         >
           <ChatIcon className="w-4 h-4" />
@@ -88,7 +88,7 @@ export function QuickActionsRow({ lastChatId }: QuickActionsRowProps) {
         {/* Continue Last Chat */}
         {lastChatId ? (
           <Link
-            href={`/chats/${lastChatId}`}
+            href={`/salon/${lastChatId}`}
             className="qt-button qt-button-secondary gap-2"
           >
             <ContinueIcon className="w-4 h-4" />

@@ -110,7 +110,7 @@ export function ProfileList({
           <div className="flex items-center justify-between gap-4">
             <p className="text-sm font-medium flex-1">{refitSuccess}</p>
             <div className="flex items-center gap-2 flex-shrink-0">
-              <Link href="/tools?tab=tasks" className="qt-button-ghost qt-button-sm">
+              <Link href="/foundry?tab=tasks" className="qt-button-ghost qt-button-sm">
                 View Tasks Queue
               </Link>
               <button
@@ -216,12 +216,12 @@ export function ProfileList({
                   <div className="qt-text-xs text-muted-foreground">
                     Embedded: {profile.embeddingStats.embedded}/{profile.embeddingStats.total}
                     {profile.embeddingStats.pending > 0 && (
-                      <span className="text-amber-600 dark:text-amber-400 ml-2">
+                      <span className="text-warning ml-2">
                         ({profile.embeddingStats.pending} pending)
                       </span>
                     )}
                     {profile.embeddingStats.failed > 0 && (
-                      <span className="text-red-600 dark:text-red-400 ml-2">
+                      <span className="text-destructive ml-2">
                         ({profile.embeddingStats.failed} failed)
                       </span>
                     )}

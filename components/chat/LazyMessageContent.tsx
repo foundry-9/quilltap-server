@@ -11,6 +11,8 @@ interface LazyMessageContentProps {
   dialogueDetection?: DialogueDetection | null
   /** Force immediate rendering (skip lazy loading) - useful for streaming content */
   forceRender?: boolean
+  /** Server-side pre-rendered HTML for simple messages */
+  renderedHtml?: string | null
 }
 
 /** Delay before rendering full content - prevents rapid scroll from triggering all renders */
@@ -31,14 +33,18 @@ function LazyMessageContentInner({
   renderingPatterns,
   dialogueDetection,
   forceRender = false,
+  renderedHtml,
 }: LazyMessageContentProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [hasBeenVisible, setHasBeenVisible] = useState(forceRender)
   const visibilityTimerRef = useRef<NodeJS.Timeout | null>(null)
 
+  // If we have pre-rendered HTML, we can skip lazy loading entirely
+  const hasPreRenderedHtml = !!renderedHtml
+
   useEffect(() => {
-    // Skip observer if already visible or force rendering
-    if (hasBeenVisible || forceRender) return
+    // Skip observer if already visible, force rendering, or we have pre-rendered HTML
+    if (hasBeenVisible || forceRender || hasPreRenderedHtml) return
 
     const element = containerRef.current
     if (!element) return
@@ -76,7 +82,19 @@ function LazyMessageContentInner({
         clearTimeout(visibilityTimerRef.current)
       }
     }
-  }, [hasBeenVisible, forceRender])
+  }, [hasBeenVisible, forceRender, hasPreRenderedHtml])
+
+  // If we have pre-rendered HTML, render it directly without lazy loading
+  // This is the fast path for simple messages loaded from the server
+  if (hasPreRenderedHtml) {
+    return (
+      <div
+        ref={containerRef}
+        className={`qt-chat-message-content qt-prose prose prose-sm dark:prose-invert ${className}`}
+        dangerouslySetInnerHTML={{ __html: renderedHtml }}
+      />
+    )
+  }
 
   // If forceRender becomes true, treat as visible immediately
   // We check this in render rather than an effect to avoid cascading renders
@@ -124,7 +142,8 @@ const LazyMessageContent = memo(LazyMessageContentInner, (prev, next) => {
     prev.className === next.className &&
     prev.forceRender === next.forceRender &&
     prev.renderingPatterns === next.renderingPatterns &&
-    prev.dialogueDetection === next.dialogueDetection
+    prev.dialogueDetection === next.dialogueDetection &&
+    prev.renderedHtml === next.renderedHtml
   )
 })
 

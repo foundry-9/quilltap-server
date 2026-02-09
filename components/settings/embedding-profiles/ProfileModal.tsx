@@ -176,7 +176,7 @@ export function ProfileModal({
                 ))}
               </select>
               {currentProviderInfo?.description && (
-                <p className="mt-1 qt-text-xs text-muted-foreground">
+                <p className="mt-1 qt-text-xs text-warning">
                   {currentProviderInfo.description}
                 </p>
               )}
@@ -202,7 +202,7 @@ export function ProfileModal({
                   ))}
                 </select>
                 {filteredApiKeys.length === 0 && (
-                  <p className="mt-1 qt-text-xs text-amber-600">
+                  <p className="mt-1 qt-text-xs text-muted-foreground">
                     No {form.formData.provider} API keys found. Add one in the API Keys tab first.
                   </p>
                 )}

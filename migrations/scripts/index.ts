@@ -57,6 +57,28 @@ import { addStateFieldsMigration } from './add-state-fields';
 import { addAutoDetectRngFieldMigration } from './add-auto-detect-rng-field';
 // Add compressionCache field to chats
 import { addCompressionCacheFieldMigration } from './add-compression-cache-field';
+// Add agent mode fields to chat_settings, characters, projects, and chats
+import { addAgentModeFieldsMigration } from './add-agent-mode-fields';
+// Add story backgrounds fields to chat_settings, chats, and projects
+import { addStoryBackgroundsFieldsMigration } from './add-story-backgrounds-fields';
+// Add imageProfileId field to chats (move from per-participant to per-chat)
+import { addChatImageProfileFieldMigration } from './add-chat-image-profile-field';
+// Add dangerous content handling fields
+import { addDangerousContentFieldsMigration } from './add-dangerous-content-fields';
+// Add chat-level danger classification fields
+import { addChatDangerClassificationFieldsMigration } from './add-chat-danger-classification-fields';
+// Fix chat updatedAt timestamps polluted by background jobs
+import { fixChatUpdatedAtTimestampsMigration } from './fix-chat-updated-at-timestamps';
+// Add aliases field to characters
+import { addCharacterAliasesFieldMigration } from './add-character-aliases-field';
+// Add pronouns field to characters
+import { addCharacterPronounsFieldMigration } from './add-character-pronouns-field';
+// Add clothingRecords field to characters
+import { addCharacterClothingRecordsFieldMigration } from './add-character-clothing-records-field';
+// Fix chat messageCount to only count visible message bubbles
+import { fixChatMessageCountsMigration } from './fix-chat-message-counts';
+// Add memory gate fields (reinforcement tracking, related links)
+import { addMemoryGateFieldsMigration } from './add-memory-gate-fields';
 
 /**
  * All available migrations.
@@ -109,6 +131,28 @@ export const migrations: Migration[] = [
   addAutoDetectRngFieldMigration,
   // Add compressionCache field to chats
   addCompressionCacheFieldMigration,
+  // Add agent mode fields
+  addAgentModeFieldsMigration,
+  // Add story backgrounds fields
+  addStoryBackgroundsFieldsMigration,
+  // Add imageProfileId field to chats (per-chat instead of per-participant)
+  addChatImageProfileFieldMigration,
+  // Add dangerous content handling fields
+  addDangerousContentFieldsMigration,
+  // Add chat-level danger classification fields
+  addChatDangerClassificationFieldsMigration,
+  // Fix chat updatedAt timestamps polluted by background jobs
+  fixChatUpdatedAtTimestampsMigration,
+  // Add aliases field to characters
+  addCharacterAliasesFieldMigration,
+  // Add pronouns field to characters
+  addCharacterPronounsFieldMigration,
+  // Add clothingRecords field to characters
+  addCharacterClothingRecordsFieldMigration,
+  // Fix chat messageCount to only count visible message bubbles
+  fixChatMessageCountsMigration,
+  // Add memory gate fields (reinforcement tracking, related links)
+  addMemoryGateFieldsMigration,
 ];
 
 export {
@@ -156,4 +200,26 @@ export {
   addAutoDetectRngFieldMigration,
   // Add compressionCache field to chats
   addCompressionCacheFieldMigration,
+  // Add agent mode fields
+  addAgentModeFieldsMigration,
+  // Add story backgrounds fields
+  addStoryBackgroundsFieldsMigration,
+  // Add imageProfileId field to chats (per-chat instead of per-participant)
+  addChatImageProfileFieldMigration,
+  // Add dangerous content handling fields
+  addDangerousContentFieldsMigration,
+  // Add chat-level danger classification fields
+  addChatDangerClassificationFieldsMigration,
+  // Fix chat updatedAt timestamps polluted by background jobs
+  fixChatUpdatedAtTimestampsMigration,
+  // Add aliases field to characters
+  addCharacterAliasesFieldMigration,
+  // Add pronouns field to characters
+  addCharacterPronounsFieldMigration,
+  // Add clothingRecords field to characters
+  addCharacterClothingRecordsFieldMigration,
+  // Fix chat messageCount to only count visible message bubbles
+  fixChatMessageCountsMigration,
+  // Add memory gate fields (reinforcement tracking, related links)
+  addMemoryGateFieldsMigration,
 };

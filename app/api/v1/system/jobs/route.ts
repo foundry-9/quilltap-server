@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api/middleware';
-import { getQueueStats, enqueueJob, ensureProcessorRunning, getProcessorStatus } from '@/lib/background-jobs';
+import { getQueueStats, getActiveCountsByType, enqueueJob, ensureProcessorRunning, getProcessorStatus } from '@/lib/background-jobs';
 import { BackgroundJobTypeEnum } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/errors';
@@ -29,10 +29,12 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
 
     // Get stats
     const stats = await getQueueStats(user.id);
+    const activeByType = await getActiveCountsByType(user.id);
     const processorStatus = getProcessorStatus();
 
     const response: Record<string, unknown> = {
       stats,
+      activeByType,
       processor: processorStatus,
     };
 

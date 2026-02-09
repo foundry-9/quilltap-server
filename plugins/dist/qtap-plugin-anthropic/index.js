@@ -220,7 +220,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // node_modules/@anthropic-ai/sdk/version.mjs
-var VERSION = "0.72.1";
+var VERSION = "0.74.0";
 
 // node_modules/@anthropic-ai/sdk/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -883,6 +883,10 @@ async function defaultParseResponse(client, props) {
     const mediaType = contentType?.split(";")[0]?.trim();
     const isJSON = mediaType?.includes("application/json") || mediaType?.endsWith("+json");
     if (isJSON) {
+      const contentLength = response.headers.get("content-length");
+      if (contentLength === "0") {
+        return void 0;
+      }
       const json = await response.json();
       return addRequestID(json, response);
     }
@@ -2278,6 +2282,12 @@ var BetaMessageStream = class _BetaMessageStream {
             }
             break;
           }
+          case "compaction_delta": {
+            if (content.type === "compaction" && content.content) {
+              this._emit("compaction", content.content);
+            }
+            break;
+          }
           default:
             checkNever(event.delta);
         }
@@ -2342,6 +2352,9 @@ var BetaMessageStream = class _BetaMessageStream {
         if (event.usage.server_tool_use != null) {
           snapshot.usage.server_tool_use = event.usage.server_tool_use;
         }
+        if (event.usage.iterations != null) {
+          snapshot.usage.iterations = event.usage.iterations;
+        }
         return snapshot;
       case "content_block_start":
         snapshot.content.push(event.content_block);
@@ -2403,6 +2416,15 @@ var BetaMessageStream = class _BetaMessageStream {
               snapshot.content[event.index] = {
                 ...snapshotContent,
                 signature: event.delta.signature
+              };
+            }
+            break;
+          }
+          case "compaction_delta": {
+            if (snapshotContent?.type === "compaction") {
+              snapshot.content[event.index] = {
+                ...snapshotContent,
+                content: (snapshotContent.content || "") + event.delta.content
               };
             }
             break;
@@ -2904,7 +2926,7 @@ var Batches = class extends APIResource {
    *           messages: [
    *             { content: 'Hello, world', role: 'user' },
    *           ],
-   *           model: 'claude-sonnet-4-5-20250929',
+   *           model: 'claude-opus-4-6',
    *         },
    *       },
    *     ],
@@ -3086,6 +3108,7 @@ var DEPRECATED_MODELS = {
   "claude-3-7-sonnet-latest": "February 19th, 2026",
   "claude-3-7-sonnet-20250219": "February 19th, 2026"
 };
+var MODELS_TO_WARN_WITH_THINKING_ENABLED = ["claude-opus-4-6"];
 var Messages = class extends APIResource {
   constructor() {
     super(...arguments);
@@ -3097,6 +3120,9 @@ var Messages = class extends APIResource {
     if (body.model in DEPRECATED_MODELS) {
       console.warn(`The model '${body.model}' is deprecated and will reach end-of-life on ${DEPRECATED_MODELS[body.model]}
 Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resources/model-deprecations for more information.`);
+    }
+    if (body.model in MODELS_TO_WARN_WITH_THINKING_ENABLED && body.thinking && body.thinking.type === "enabled") {
+      console.warn(`Using Claude with ${body.model} and 'thinking.type=enabled' is deprecated. Use 'thinking.type=adaptive' instead which results in better model performance in our testing: https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking`);
     }
     let timeout = this._client._options.timeout;
     if (!body.stream && timeout == null) {
@@ -3162,7 +3188,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
    * const betaMessageTokensCount =
    *   await client.beta.messages.countTokens({
    *     messages: [{ content: 'string', role: 'user' }],
-   *     model: 'claude-opus-4-5-20251101',
+   *     model: 'claude-opus-4-6',
    *   });
    * ```
    */
@@ -4085,7 +4111,7 @@ var Batches2 = class extends APIResource {
    *         messages: [
    *           { content: 'Hello, world', role: 'user' },
    *         ],
-   *         model: 'claude-sonnet-4-5-20250929',
+   *         model: 'claude-opus-4-6',
    *       },
    *     },
    *   ],
@@ -4214,6 +4240,9 @@ var Messages2 = class extends APIResource {
       console.warn(`The model '${body.model}' is deprecated and will reach end-of-life on ${DEPRECATED_MODELS2[body.model]}
 Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resources/model-deprecations for more information.`);
     }
+    if (body.model in MODELS_TO_WARN_WITH_THINKING_ENABLED2 && body.thinking && body.thinking.type === "enabled") {
+      console.warn(`Using Claude with ${body.model} and 'thinking.type=enabled' is deprecated. Use 'thinking.type=adaptive' instead which results in better model performance in our testing: https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking`);
+    }
     let timeout = this._client._options.timeout;
     if (!body.stream && timeout == null) {
       const maxNonstreamingTokens = MODEL_NONSTREAMING_TOKENS[body.model] ?? void 0;
@@ -4287,7 +4316,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
    * const messageTokensCount =
    *   await client.messages.countTokens({
    *     messages: [{ content: 'string', role: 'user' }],
-   *     model: 'claude-opus-4-5-20251101',
+   *     model: 'claude-opus-4-6',
    *   });
    * ```
    */
@@ -4310,6 +4339,7 @@ var DEPRECATED_MODELS2 = {
   "claude-3-5-haiku-latest": "February 19th, 2026",
   "claude-3-5-haiku-20241022": "February 19th, 2026"
 };
+var MODELS_TO_WARN_WITH_THINKING_ENABLED2 = ["claude-opus-4-6"];
 Messages2.Batches = Batches2;
 
 // node_modules/@anthropic-ai/sdk/resources/models.mjs
@@ -4641,7 +4671,7 @@ var BaseAnthropic = class {
     return { response, options, controller, requestLogID, retryOfRequestLogID, startTime };
   }
   getAPIList(path3, Page3, opts) {
-    return this.requestAPIList(Page3, { method: "get", path: path3, ...opts });
+    return this.requestAPIList(Page3, opts && "then" in opts ? opts.then((opts2) => ({ method: "get", path: path3, ...opts2 })) : { method: "get", path: path3, ...opts });
   }
   requestAPIList(Page3, options) {
     const request = this.makeRequest(options, null, void 0);
@@ -4649,9 +4679,10 @@ var BaseAnthropic = class {
   }
   async fetchWithTimeout(url, init, ms, controller) {
     const { signal, method, ...options } = init || {};
+    const abort = this._makeAbort(controller);
     if (signal)
-      signal.addEventListener("abort", () => controller.abort());
-    const timeout = setTimeout(() => controller.abort(), ms);
+      signal.addEventListener("abort", abort, { once: true });
+    const timeout = setTimeout(abort, ms);
     const isReadableBody = globalThis.ReadableStream && options.body instanceof globalThis.ReadableStream || typeof options.body === "object" && options.body !== null && Symbol.asyncIterator in options.body;
     const fetchOptions = {
       signal: controller.signal,
@@ -4771,6 +4802,9 @@ var BaseAnthropic = class {
     ]);
     this.validateHeaders(headers);
     return headers.values;
+  }
+  _makeAbort(controller) {
+    return () => controller.abort();
   }
   buildBody({ options: { body, headers: rawHeaders } }) {
     if (!body) {
@@ -5046,7 +5080,7 @@ var safeJSON2 = (text) => {
 var sleep2 = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ../../../node_modules/openai/version.mjs
-var VERSION2 = "6.17.0";
+var VERSION2 = "6.18.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser2 = () => {
@@ -6084,6 +6118,10 @@ async function defaultParseResponse2(client, props) {
     const mediaType = contentType?.split(";")[0]?.trim();
     const isJSON = mediaType?.includes("application/json") || mediaType?.endsWith("+json");
     if (isJSON) {
+      const contentLength = response.headers.get("content-length");
+      if (contentLength === "0") {
+        return void 0;
+      }
       const json = await response.json();
       return addRequestID2(json, response);
     }
@@ -11430,7 +11468,7 @@ var OpenAI = class {
     return { response, options, controller, requestLogID, retryOfRequestLogID, startTime };
   }
   getAPIList(path3, Page3, opts) {
-    return this.requestAPIList(Page3, { method: "get", path: path3, ...opts });
+    return this.requestAPIList(Page3, opts && "then" in opts ? opts.then((opts2) => ({ method: "get", path: path3, ...opts2 })) : { method: "get", path: path3, ...opts });
   }
   requestAPIList(Page3, options) {
     const request = this.makeRequest(options, null, void 0);
@@ -11438,9 +11476,10 @@ var OpenAI = class {
   }
   async fetchWithTimeout(url, init, ms, controller) {
     const { signal, method, ...options } = init || {};
+    const abort = this._makeAbort(controller);
     if (signal)
-      signal.addEventListener("abort", () => controller.abort());
-    const timeout = setTimeout(() => controller.abort(), ms);
+      signal.addEventListener("abort", abort, { once: true });
+    const timeout = setTimeout(abort, ms);
     const isReadableBody = globalThis.ReadableStream && options.body instanceof globalThis.ReadableStream || typeof options.body === "object" && options.body !== null && Symbol.asyncIterator in options.body;
     const fetchOptions = {
       signal: controller.signal,
@@ -11551,6 +11590,9 @@ var OpenAI = class {
     ]);
     this.validateHeaders(headers);
     return headers.values;
+  }
+  _makeAbort(controller) {
+    return () => controller.abort();
   }
   buildBody({ options: { body, headers: rawHeaders } }) {
     if (!body) {

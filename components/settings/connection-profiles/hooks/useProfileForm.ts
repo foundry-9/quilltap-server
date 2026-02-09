@@ -49,6 +49,7 @@ export function useProfileForm(providers: ProviderConfig[]) {
         topP: profile.parameters?.top_p ?? 1,
         isDefault: profile.isDefault,
         isCheap: profile.isCheap ?? false,
+        isDangerousCompatible: profile.isDangerousCompatible ?? false,
         allowWebSearch: profile.allowWebSearch ?? false,
         useNativeWebSearch: profile.useNativeWebSearch ?? false,
         // OpenRouter-specific fields
@@ -108,6 +109,7 @@ export function useProfileForm(providers: ProviderConfig[]) {
       modelName: form.formData.modelName,
       isDefault: form.formData.isDefault,
       isCheap: form.formData.isCheap,
+      isDangerousCompatible: form.formData.isDangerousCompatible,
       allowWebSearch: form.formData.allowWebSearch,
       useNativeWebSearch: form.formData.useNativeWebSearch,
       parameters,

@@ -54,6 +54,7 @@
     color: var(--qt-chat-assistant-fg);
     border: 1px solid var(--qt-chat-assistant-border);
     font-family: var(--qt-chat-assistant-font);
+    font-weight: var(--qt-chat-assistant-font-weight);
   }
 
   /**
@@ -93,7 +94,7 @@
    */
   .qt-chat-message-content {
     @apply max-w-none w-full;
-    overflow: hidden;
+    overflow-x: auto;
     /* Override Tailwind prose body color to use full foreground instead of muted gray */
     --tw-prose-body: var(--color-foreground);
     --tw-prose-invert-body: var(--color-foreground);
@@ -106,6 +107,95 @@
   .qt-chat-message-content li,
   .qt-chat-message-content blockquote {
     color: inherit;
+  }
+
+  /* ==========================================================================
+     MARKDOWN ELEMENT SPACING
+     Since @tailwindcss/typography is not installed in v4, we define all
+     typography spacing manually for .qt-chat-message-content to ensure
+     consistent rendering between client-side ReactMarkdown components
+     and server-side pre-rendered HTML.
+     ========================================================================== */
+
+  /* Paragraph spacing */
+  .qt-chat-message-content p {
+    @apply mb-2;
+  }
+  .qt-chat-message-content p:last-child {
+    @apply mb-0;
+  }
+
+  /* Heading spacing - matches MessageContent.tsx custom components */
+  .qt-chat-message-content h1 {
+    @apply text-2xl font-bold mb-2 mt-4;
+  }
+  .qt-chat-message-content h1:first-child {
+    @apply mt-0;
+  }
+  .qt-chat-message-content h2 {
+    @apply text-xl font-bold mb-2 mt-3;
+  }
+  .qt-chat-message-content h2:first-child {
+    @apply mt-0;
+  }
+  .qt-chat-message-content h3 {
+    @apply text-lg font-semibold mb-2 mt-3;
+  }
+  .qt-chat-message-content h3:first-child {
+    @apply mt-0;
+  }
+  .qt-chat-message-content h4 {
+    @apply text-base font-semibold mb-1 mt-2;
+  }
+  .qt-chat-message-content h4:first-child {
+    @apply mt-0;
+  }
+  .qt-chat-message-content h5 {
+    @apply text-sm font-semibold mb-1 mt-2;
+  }
+  .qt-chat-message-content h5:first-child {
+    @apply mt-0;
+  }
+  .qt-chat-message-content h6 {
+    @apply text-xs font-semibold mb-1 mt-2;
+  }
+  .qt-chat-message-content h6:first-child {
+    @apply mt-0;
+  }
+
+  /* List spacing */
+  .qt-chat-message-content ul {
+    @apply list-disc list-inside mb-2 ml-4;
+  }
+  .qt-chat-message-content ol {
+    @apply list-decimal list-inside mb-2 ml-4;
+  }
+  .qt-chat-message-content li {
+    @apply mb-1;
+  }
+
+  /* Blockquote spacing */
+  .qt-chat-message-content blockquote {
+    @apply border-l-4 border-border pl-4 py-1 my-2 italic;
+  }
+
+  /* Horizontal rule spacing */
+  .qt-chat-message-content hr {
+    @apply my-4 border-border;
+  }
+
+  /* Table styling */
+  .qt-chat-message-content table {
+    @apply min-w-full border-collapse border border-border my-2;
+  }
+  .qt-chat-message-content thead {
+    @apply bg-muted;
+  }
+  .qt-chat-message-content th {
+    @apply border border-border px-4 py-2 text-left font-semibold;
+  }
+  .qt-chat-message-content td {
+    @apply border border-border px-4 py-2;
   }
 
   /**
@@ -162,6 +252,15 @@
   .qt-chat-composer-content {
     @apply mx-auto space-y-4;
     max-width: var(--qt-chat-message-row-max-width);
+  }
+
+  /**
+   * Horizontal toolbar row - contains gutter tools and main toolbar
+   * Arranges items horizontally with the main toolbar buttons closest to textarea
+   */
+  .qt-chat-toolbar-row {
+    @apply flex items-end;
+    gap: 0.75rem;
   }
 
   /**
@@ -280,23 +379,114 @@
   }
 
   /* ==========================================================================
-     DESKTOP TOOL PALETTE BAR
+     COMPOSER GUTTER TOOLS
      ========================================================================== */
 
   /**
-   * Tool palette bar - full-width bar above the composer textarea
-   * Positioned absolutely above the composer inner form
+   * Container for gutter tools (Attach, Generate, RNG)
+   * Displays icons horizontally with consistent spacing
    */
+  .qt-composer-gutter-tools {
+    @apply flex items-center;
+    gap: 0.5rem;
+  }
+
+  /**
+   * Gutter button - icon-only variant for quick access tools
+   * Smaller and subtler than toolbar buttons
+   */
+  .qt-composer-gutter-button {
+    @apply inline-flex items-center justify-center;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+    @apply disabled:pointer-events-none disabled:opacity-50;
+    @apply transition-colors duration-150;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border-radius: var(--radius-md);
+    border: none;
+    background: transparent;
+    color: var(--color-muted-foreground);
+    cursor: pointer;
+  }
+
+  .qt-composer-gutter-button:hover:not(:disabled) {
+    color: var(--color-foreground);
+    background: color-mix(in srgb, var(--color-muted) 50%, transparent);
+  }
+
+  .qt-composer-gutter-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /**
+   * Container for RNG dropdown in gutter - needed for proper positioning
+   */
+  .qt-composer-gutter-rng {
+    @apply relative;
+  }
+
+  /* ==========================================================================
+     DESKTOP TOOL PALETTE POPOVER
+     ========================================================================== */
+
+  /**
+   * Tool palette popover - sectioned menu above the composer
+   * Replaces the old flat bar with organized sections
+   * Left margin aligns with hamburger button (past the gutter tools)
+   */
+  .qt-tool-palette-popover {
+    @apply flex flex-col;
+    padding: 0.5rem 0;
+    background: var(--qt-chat-composer-bg);
+    border: 1px solid var(--qt-chat-composer-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--qt-card-shadow);
+    animation: qt-slide-up 150ms ease-out;
+    /* Offset to align with hamburger button (3 gutter buttons @ 2rem + gaps) */
+    margin-left: calc(6rem + 1.75rem);
+  }
+
+  /**
+   * Tool palette section - groups related tools together
+   */
+  .qt-tool-palette-section {
+    @apply flex flex-col;
+  }
+
+  .qt-tool-palette-section + .qt-tool-palette-section {
+    border-top: 1px solid var(--color-border);
+    margin-top: 0.25rem;
+    padding-top: 0.25rem;
+  }
+
+  /**
+   * Section header with icon and title
+   */
+  .qt-tool-palette-section-header {
+    @apply flex items-center gap-2;
+    @apply text-xs font-medium uppercase tracking-wide;
+    padding: 0.5rem 0.75rem 0.25rem;
+    color: var(--color-muted-foreground);
+  }
+
+  /**
+   * Section content - horizontal flow of buttons
+   */
+  .qt-tool-palette-section-content {
+    @apply flex flex-wrap items-center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.75rem 0.5rem;
+  }
+
+  /* Legacy support - keep old bar class working */
   .qt-tool-palette-bar {
     @apply flex items-center justify-center gap-2;
     padding: 0.5rem 0.75rem;
     background: var(--qt-chat-composer-bg);
     border-bottom: 1px solid var(--qt-chat-composer-border);
     animation: qt-slide-up 150ms ease-out;
-  }
-
-  .qt-tool-palette-section {
-    @apply flex items-center gap-1.5;
   }
 
   .qt-tool-palette-section-left {
@@ -334,6 +524,45 @@
 
   .qt-tool-palette-button-danger:hover:not(:disabled) {
     background: color-mix(in srgb, var(--qt-status-danger-bg) 50%, transparent);
+  }
+
+  /**
+   * Agent mode toggle badge styles
+   * Badge-like appearance for on/off states
+   */
+  .qt-tool-palette-badge {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full;
+    @apply transition-colors duration-150;
+    cursor: pointer;
+    border: 1px solid transparent;
+  }
+
+  .qt-tool-palette-badge:hover:not(:disabled) {
+    filter: brightness(0.95);
+  }
+
+  .qt-tool-palette-badge:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  .qt-tool-palette-badge-off {
+    background: var(--qt-badge-disabled-bg);
+    color: var(--qt-badge-disabled-fg);
+    border-color: var(--color-border);
+  }
+
+  .qt-tool-palette-badge-off:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--qt-badge-disabled-bg) 80%, var(--color-foreground) 5%);
+  }
+
+  .qt-tool-palette-badge-on {
+    background: var(--qt-badge-enabled-bg);
+    color: var(--qt-badge-enabled-fg);
+    border-color: color-mix(in srgb, var(--qt-badge-enabled-fg) 30%, transparent);
+  }
+
+  .qt-tool-palette-badge-on:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--qt-badge-enabled-bg) 120%, transparent);
   }
 
   /* ==========================================================================
@@ -405,6 +634,30 @@
    */
   .qt-formatting-button-italic {
     font-style: italic;
+  }
+
+  /**
+   * Preview button - toggle for preview mode in formatting toolbar
+   */
+  .qt-formatting-button-preview {
+    @apply flex items-center justify-center;
+    min-width: 1.75rem;
+    height: 1.75rem;
+    padding: 0 0.375rem;
+  }
+
+  /**
+   * Preview button active state - highlighted when preview is on
+   */
+  .qt-formatting-button-preview-active {
+    background: var(--color-primary);
+    color: var(--color-primary-foreground);
+    border-color: var(--color-primary);
+  }
+
+  .qt-formatting-button-preview-active:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-primary) 85%, black);
+    border-color: color-mix(in srgb, var(--color-primary) 85%, black);
   }
 
   /**
@@ -658,18 +911,48 @@
   .qt-chat-layout {
     @apply flex h-full;
     @apply overflow-hidden;
+    @apply relative;
     background: var(--qt-content-bg);
+  }
+
+  /**
+   * Story background image layer
+   * Renders behind all chat content using a ::before pseudo-element.
+   * Only visible when --story-background-url CSS variable is set.
+   * Uses fixed attachment for parallax effect while scrolling.
+   */
+  .qt-chat-layout::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--story-background-url) top center/cover no-repeat fixed;
+    z-index: 0;
+    opacity: 0.45;
+    pointer-events: none;
+  }
+
+  /**
+   * Hide background layer when no story background URL is set
+   * Checks for absence of the CSS variable in the style attribute
+   */
+  .qt-chat-layout:not([style*="--story-background-url"])::before {
+    display: none;
   }
 
   /**
    * Chat main area
    * overflow-hidden ensures this container never scrolls;
    * scrolling happens in .qt-chat-messages instead.
+   * Uses semi-transparent background to let story background show through
+   * while maintaining readability.
    */
   .qt-chat-main {
     @apply flex-1 flex flex-col;
     @apply min-w-0;
     @apply overflow-hidden;
+    @apply relative;
+    z-index: 1;
+    background: color-mix(in srgb, var(--qt-content-bg) 85%, transparent);
   }
 
   .qt-chat-main-split {
@@ -718,6 +1001,7 @@
 
   .qt-chat-message-row-assistant {
     justify-content: flex-start;
+    margin-top: 1.5rem;
   }
 
   /**
@@ -734,6 +1018,14 @@
     justify-content: flex-start;
     margin-top: 1rem;
     margin-bottom: 1rem;
+  }
+
+  /**
+   * Embedded tool message - inside assistant message bubble
+   * Uses base sans-serif font to match avatar name/title styling
+   */
+  .qt-chat-tool-embedded {
+    font-family: var(--font-sans);
   }
 
   /**
@@ -979,6 +1271,143 @@
     padding: 1rem;
     color: var(--qt-chat-sidebar-muted);
     @apply text-xs;
+  }
+
+  /* ==========================================================================
+     PARTICIPANT POSITION BADGES & TURN ORDER UI
+     ========================================================================== */
+
+  /**
+   * Base position number badge - shown on all active participants
+   */
+  .qt-participant-position-badge {
+    @apply absolute -top-2 -right-2 w-6 h-6 shadow-md;
+    @apply inline-flex items-center justify-center;
+    @apply text-xs font-bold rounded-full;
+    z-index: 10;
+  }
+
+  /**
+   * Generating position badge - green pulsing (#1 during generation)
+   */
+  .qt-participant-position-generating {
+    background: var(--qt-status-success-bg);
+    color: var(--qt-status-success-fg);
+    border: 1px solid var(--qt-status-success-border);
+    animation: qt-position-pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes qt-position-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.8; transform: scale(1.1); }
+  }
+
+  /**
+   * Next speaker position badge - green static
+   */
+  .qt-participant-position-next {
+    background: var(--qt-status-success-bg);
+    color: var(--qt-status-success-fg);
+    border: 1px solid var(--qt-status-success-border);
+  }
+
+  /**
+   * Queued position badge - blue (info color)
+   */
+  .qt-participant-position-queued {
+    background: var(--qt-status-info-bg);
+    color: var(--qt-status-info-fg);
+    border: 1px solid var(--qt-status-info-border);
+  }
+
+  /**
+   * Eligible position badge - neutral/muted
+   */
+  .qt-participant-position-eligible {
+    background: var(--color-muted);
+    color: var(--color-muted-foreground);
+    border: 1px solid var(--color-border);
+  }
+
+  /**
+   * User turn position badge - amber/warning
+   */
+  .qt-participant-position-user-turn {
+    background: var(--qt-status-warning-bg);
+    color: var(--qt-status-warning-fg);
+    border: 1px solid var(--qt-status-warning-border);
+  }
+
+  /**
+   * Spoken position badge - dimmed
+   */
+  .qt-participant-position-spoken {
+    background: var(--color-muted);
+    color: var(--color-muted-foreground);
+    border: 1px solid var(--color-border);
+    opacity: 0.5;
+  }
+
+  /**
+   * Inactive participant card styling - dimmed/greyed
+   */
+  .qt-participant-card-inactive {
+    @apply relative p-3;
+    @apply transition-all duration-200;
+    border-radius: var(--qt-participant-card-radius);
+    background: var(--qt-participant-card-bg);
+    border: 1px solid var(--qt-participant-card-border);
+    opacity: 0.5;
+    filter: grayscale(0.3);
+  }
+
+  /**
+   * Stop button on participant card - danger colors
+   */
+  .qt-participant-stop-button {
+    background: var(--qt-status-danger-bg);
+    color: var(--qt-status-danger-fg);
+    border: 1px solid var(--qt-status-danger-border);
+    @apply transition-colors;
+  }
+
+  .qt-participant-stop-button:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--qt-status-danger-bg) 70%, black);
+  }
+
+  /**
+   * Active toggle button on participant card
+   */
+  .qt-participant-active-toggle {
+    @apply transition-colors;
+  }
+
+  .qt-participant-active-toggle[data-active="true"] {
+    color: var(--qt-status-success-fg);
+  }
+
+  .qt-participant-active-toggle[data-active="false"] {
+    color: var(--color-muted-foreground);
+    opacity: 0.6;
+  }
+
+  /**
+   * Position badge for collapsed sidebar avatars
+   */
+  .qt-chat-sidebar-collapsed-position-badge {
+    @apply absolute -top-1 -right-1;
+    @apply w-5 h-5 text-xs font-bold;
+    @apply flex items-center justify-center;
+    @apply rounded-full;
+    z-index: 10;
+  }
+
+  /**
+   * Dimmed collapsed avatar for inactive participants
+   */
+  .qt-chat-sidebar-collapsed-avatar-inactive {
+    opacity: 0.4;
+    filter: grayscale(0.3);
   }
 
   /* ==========================================================================
@@ -1274,4 +1703,12 @@
 .qt-chat-composer {
   padding-top: 0.625rem;
   padding-bottom: 1.25rem;
+}
+
+/* Full-width mode: popover margin stays the same (gutter tools width) */
+/* but the composer-content max-width is 100%, allowing textarea to expand */
+:root[data-full-width="true"] .qt-chat-composer-content {
+  max-width: 100%;
+  padding-left: 1rem;
+  padding-right: 1rem;
 }

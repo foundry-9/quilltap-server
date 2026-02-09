@@ -94,6 +94,7 @@ export function createMockCharacter(overrides: Partial<Character> = {}): Charact
     tags: [],
     avatarOverrides: [],
     physicalDescriptions: [],
+    clothingRecords: [],
     createdAt: now,
     updatedAt: now,
     ...overrides,

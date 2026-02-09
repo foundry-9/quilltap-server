@@ -1,6 +1,6 @@
 # Deleting Your Data
 
-> **[Open this page in Quilltap](/tools)**
+> **[Open this page in Quilltap](/foundry)**
 
 The Delete All Data tool permanently removes your entire Quilltap account and all associated data.
 
@@ -89,7 +89,7 @@ A complete data deletion removes:
 
 ### Step-by-Step
 
-1. **Go to the Tools page** (`/tools`)
+1. **Go to The Forge** (`/foundry/forge`)
 
 2. **Find the Delete All Data card**
 

@@ -8,7 +8,6 @@
 import type { Character, ChatParticipantBase, TimestampConfig } from '@/lib/schemas/types'
 import { calculateCurrentTimestamp, shouldInjectTimestamp, formatTimestampForSystemPrompt } from '@/lib/chat/timestamp-utils'
 import { buildMultiCharacterContextSection } from '@/lib/llm/message-formatter'
-import { logger } from '@/lib/logger'
 import { processTemplate, type TemplateContext } from '@/lib/templates/processor'
 
 /**
@@ -16,6 +15,8 @@ import { processTemplate, type TemplateContext } from '@/lib/templates/processor
  */
 export interface OtherParticipantInfo {
   name: string
+  aliases?: string[]
+  pronouns?: { subject: string; object: string; possessive: string }
   description?: string
   type: 'CHARACTER'
 }
@@ -42,8 +43,8 @@ export function buildSystemPrompt(
   otherParticipants?: OtherParticipantInfo[],
   /** Roleplay template to prepend (formatting instructions) */
   roleplayTemplate?: { systemPrompt: string } | null,
-  /** Pseudo-tool instructions for models without native function calling */
-  pseudoToolInstructions?: string,
+  /** Tool instructions (native tool rules or pseudo-tool instructions) */
+  toolInstructions?: string,
   /** Selected system prompt ID from character's systemPrompts array */
   selectedSystemPromptId?: string | null,
   /** Timestamp configuration for injection */
@@ -86,11 +87,11 @@ export function buildSystemPrompt(
     parts.push(processedRoleplayPrompt)
   }
 
-  // Pseudo-tool instructions (for models without native function calling)
+  // Tool instructions (native tool rules or pseudo-tool instructions)
   // Added after roleplay template so tool usage instructions are seen early
   // Note: These typically don't contain {{char}}/{{user}} but process anyway for consistency
-  if (pseudoToolInstructions) {
-    const processedToolInstructions = processTemplate(pseudoToolInstructions, templateContext)
+  if (toolInstructions) {
+    const processedToolInstructions = processTemplate(toolInstructions, templateContext)
 
     parts.push(processedToolInstructions)
   }
@@ -155,6 +156,43 @@ export function buildSystemPrompt(
     parts.push(`\n## Character Personality\n${processedPersonality}`)
   }
 
+  // Character aliases - let the LLM know about alternate names
+  if (character.aliases && character.aliases.length > 0) {
+    parts.push(`\n## Character Aliases\nThis character also goes by: ${character.aliases.join(', ')}\nOther characters and the user may refer to them by any of these names.`)
+  }
+
+  // Character pronouns - let the LLM know what pronouns to use
+  if (character.pronouns) {
+    parts.push(`\n## Character Pronouns\nThis character's pronouns are: ${character.pronouns.subject}/${character.pronouns.object}/${character.pronouns.possessive}. Always use these pronouns when referring to this character.`)
+  }
+
+  // Physical descriptions - appearance context for the LLM
+  if (character.physicalDescriptions && character.physicalDescriptions.length > 0) {
+    const descriptionLines = character.physicalDescriptions.map(desc => {
+      const contextNote = desc.usageContext ? ` (best used: ${desc.usageContext})` : '';
+      const descText = desc.shortPrompt || desc.mediumPrompt || desc.longPrompt
+        || desc.completePrompt || desc.fullDescription || '';
+      if (!descText) return null;
+      return `- "${desc.name}"${contextNote}: ${descText}`;
+    }).filter(Boolean);
+
+    if (descriptionLines.length > 0) {
+      parts.push(`\n## Physical Appearance\n${descriptionLines.join('\n')}`);
+    }
+  }
+
+  // Clothing records - outfit context for the LLM
+  if (character.clothingRecords && character.clothingRecords.length > 0) {
+    const clothingLines = character.clothingRecords.map(record => {
+      const contextNote = record.usageContext ? ` (when: ${record.usageContext})` : '';
+      const descText = record.description || '';
+      if (!descText) return `- "${record.name}"${contextNote}`;
+      return `- "${record.name}"${contextNote}: ${descText}`;
+    });
+
+    parts.push(`\n## Clothing / Outfits\n${clothingLines.join('\n')}`);
+  }
+
   // Scenario/setting - process templates
   if (character.scenario) {
     const processedScenario = processTemplate(character.scenario, templateContext)
@@ -165,6 +203,17 @@ export function buildSystemPrompt(
   if (character.exampleDialogues) {
     const processedDialogues = processTemplate(character.exampleDialogues, templateContext)
     parts.push(`\n## Example Dialogue Style\n${processedDialogues}`)
+  }
+
+  // Character-voiced tool reinforcement (only when tools are available)
+  // Placed after character personality/scenario/dialogues so the LLM has full
+  // character context before being reminded to actually invoke tools in-character.
+  if (toolInstructions) {
+    const toolReinforcement = processTemplate(
+      'When {{char}} uses his/her workspace tools, he/she CALLS them — he/she does not merely describe calling them. Every tool action produces a tool_use block, not prose.',
+      templateContext
+    )
+    parts.push(toolReinforcement)
   }
 
   // Persona information if provided (single-character mode)
@@ -215,6 +264,8 @@ export function buildOtherParticipantsInfo(
       if (character) {
         otherParticipants.push({
           name: character.name,
+          aliases: character.aliases && character.aliases.length > 0 ? character.aliases : undefined,
+          pronouns: character.pronouns || undefined,
           description: character.title || character.description || undefined,
           type: 'CHARACTER',
         })
@@ -223,4 +274,44 @@ export function buildOtherParticipantsInfo(
   }
 
   return otherParticipants
+}
+
+/**
+ * Build an identity reinforcement block to append at the very end of the system prompt.
+ * This reminds the LLM which character it is playing and who it must NOT write for,
+ * placed as close to the generation boundary as possible for maximum compliance.
+ */
+export function buildIdentityReinforcement(
+  characterName: string,
+  userName: string = 'User',
+  otherParticipantNames?: string[]
+): string {
+  const hasOtherParticipants = otherParticipantNames && otherParticipantNames.length > 0
+
+  // Build the "do not write for" list
+  let doNotWriteFor: string
+  if (hasOtherParticipants) {
+    // Multi-character: explicitly name other participants plus the user
+    const allOthers = [...otherParticipantNames, userName]
+    if (allOthers.length === 1) {
+      doNotWriteFor = allOthers[0]
+    } else {
+      const last = allOthers[allOthers.length - 1]
+      const rest = allOthers.slice(0, -1)
+      doNotWriteFor = `${rest.join(', ')}, ${last}, or any other character`
+    }
+  } else {
+    doNotWriteFor = `{{user}} or any other character`
+  }
+
+  const template = hasOtherParticipants
+    ? `## Identity Reminder\nYou are {{char}}. Respond only as {{char}}. Do not write dialogue, actions, or thoughts for ${doNotWriteFor}. Your response must contain only {{char}}'s own speech, actions, and inner thoughts, following the response format described above.`
+    : `## Identity Reminder\nYou are {{char}}. Respond only as {{char}}. Do not write dialogue, actions, or thoughts for ${doNotWriteFor}. Your response must contain only {{char}}'s own speech, actions, and inner thoughts, following the response format described above.`
+
+  const result = processTemplate(template, {
+    char: characterName,
+    user: userName,
+  })
+
+  return result
 }

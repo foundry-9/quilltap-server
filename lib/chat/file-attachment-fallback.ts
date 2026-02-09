@@ -21,7 +21,7 @@ async function getImageDescriptionProfile(
   userId: string
 ): Promise<ConnectionProfile | null> {
   // Get chat settings
-  const chatSettings = await repos.users.getChatSettings(userId)
+  const chatSettings = await repos.chatSettings.findByUserId(userId)
   const imageDescriptionProfileId = chatSettings?.imageDescriptionProfileId
 
   // If a specific image description profile is configured, use it

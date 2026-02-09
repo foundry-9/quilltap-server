@@ -1,6 +1,6 @@
 # Project Files
 
-> **[Open this page in Quilltap](/projects)**
+> **[Open this page in Quilltap](/prospero)**
 
 Project files are documents, images, and other materials associated with a specific project. They provide context that the AI can access during conversations, enabling richer, more informed interactions.
 

@@ -7,9 +7,9 @@ interface HiddenPlaceholderProps {
 export function HiddenPlaceholder({ label }: HiddenPlaceholderProps) {
   return (
     <div className="flex items-center justify-center min-h-[200px]">
-      <div className="flex flex-col items-center gap-3 rounded-lg border-2 border-dashed border-gray-300 bg-white/80 px-6 py-8 text-center dark:border-slate-700 dark:bg-slate-900/50">
+      <div className="flex flex-col items-center gap-3 rounded-lg border-2 border-dashed border-border bg-muted/30 px-6 py-8 text-center">
         <svg
-          className="h-12 w-12 text-gray-400 dark:text-gray-500"
+          className="h-12 w-12 text-muted-foreground"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -22,9 +22,9 @@ export function HiddenPlaceholder({ label }: HiddenPlaceholderProps) {
           />
         </svg>
         <div>
-          <p className="text-lg font-semibold text-gray-700 dark:text-gray-200">Hidden</p>
+          <p className="text-lg font-semibold text-foreground">Hidden</p>
           {label && (
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <p className="text-sm text-muted-foreground">
               {label}
             </p>
           )}

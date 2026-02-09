@@ -145,7 +145,7 @@ export function ProfileMenu() {
 
       {/* Dropdown menu */}
       {isOpen && (
-        <div className={`absolute bottom-full mb-2 bg-popover border border-border rounded-lg shadow-lg overflow-hidden z-50 ${isCollapsed ? 'left-0 w-48' : 'left-0 right-0'}`}>
+        <div className={`absolute bottom-full mb-2 bg-popover border border-border rounded-lg qt-shadow-lg overflow-hidden z-50 ${isCollapsed ? 'left-0 w-48' : 'left-0 right-0'}`}>
           <div className="p-2 space-y-1">
             {/* Profile link */}
             <button

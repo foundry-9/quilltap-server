@@ -7,12 +7,24 @@ import type { TagVisualStyle } from '@/lib/schemas/types'
 import { TagBadge } from '@/components/tags/tag-badge'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { DeleteConfirmPopover } from '@/components/ui/DeleteConfirmPopover'
+
+interface TagUsageCount {
+  characterTags: number
+  chatTags: number
+  connectionProfileTags: number
+  imageProfileTags: number
+  embeddingProfileTags: number
+  fileTags: number
+}
 
 interface TagOption {
   id: string
   name: string
   quickHide?: boolean
   visualStyle?: TagVisualStyle | null
+  _count?: TagUsageCount
+  totalUsage?: number
 }
 
 export default function TagsTab() {
@@ -21,6 +33,8 @@ export default function TagsTab() {
   const [tagOptions, setTagOptions] = useState<TagOption[]>([])
   const [selectedTagId, setSelectedTagId] = useState('')
   const [quickHideSavingId, setQuickHideSavingId] = useState<string | null>(null)
+  const [deleteConfirming, setDeleteConfirming] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const { refresh: refreshTagStyles } = useTagStyles()
   const { refresh: refreshQuickHideTags } = useQuickHide()
   const tagFetchIdRef = useRef(0)
@@ -41,6 +55,8 @@ export default function TagsTab() {
           name: tag.name,
           quickHide: Boolean(tag.quickHide),
           visualStyle: tag.visualStyle ?? null,
+          _count: tag._count,
+          totalUsage: tag.totalUsage ?? 0,
         })))
       }
     } catch (err) {
@@ -197,6 +213,31 @@ export default function TagsTab() {
     [refreshQuickHideTags]
   )
 
+  const handleDeleteTag = useCallback(async (tagId: string) => {
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/v1/tags/${tagId}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'Failed to delete tag')
+      }
+
+      showSuccessToast('Tag deleted')
+      setDeleteConfirming(null)
+
+      // Refresh everything
+      await Promise.all([
+        fetchTags(),
+        refreshTagStyles(),
+        refreshQuickHideTags(),
+      ])
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to delete tag')
+    } finally {
+      setDeleting(false)
+    }
+  }, [fetchTags, refreshTagStyles, refreshQuickHideTags])
+
   const tagLabelLookup = useMemo(() => {
     const entries = new Map<string, string>()
     for (const tag of tagOptions) {
@@ -257,7 +298,7 @@ export default function TagsTab() {
               type="button"
               onClick={handleAddTagStyle}
               disabled={!selectedTagId || tagSaving !== null}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
+              className="qt-button-primary"
             >
               Add Style
             </button>
@@ -272,7 +313,7 @@ export default function TagsTab() {
                 const isSaving = tagSaving === tag.id
 
                 return (
-                  <div key={tag.id} className="border border-border rounded-lg p-4 bg-card shadow-sm flex flex-col">
+                  <div key={tag.id} className="border border-border rounded-lg p-4 bg-card qt-shadow-sm flex flex-col">
                     <div className="flex-1">
                       <div className="qt-text-primary">{label}</div>
                       <div className="qt-text-xs mt-2">Preview:</div>
@@ -398,6 +439,56 @@ export default function TagsTab() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Tag Management Section */}
+      <div>
+        <h2 className="text-xl font-semibold mb-4">Tag Management</h2>
+        <p className="text-muted-foreground mb-4">
+          View all tags and their usage across your workspace. Delete tags you no longer need — they will be removed from all entities that use them.
+        </p>
+
+        {tagOptions.length > 0 ? (
+          <div className="border border-border rounded-lg divide-y divide-border">
+            {[...tagOptions].sort((a, b) => a.name.localeCompare(b.name)).map((tag) => {
+              const usage = tag.totalUsage ?? 0
+
+              return (
+                <div key={tag.id} className="flex items-center justify-between px-4 py-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <TagBadge tag={{ id: tag.id, name: tag.name }} />
+                    <span className="text-sm text-muted-foreground whitespace-nowrap">
+                      {usage > 0 ? `Used ${usage} time${usage !== 1 ? 's' : ''}` : 'Unused'}
+                    </span>
+                  </div>
+                  <div className="relative flex-shrink-0 ml-3">
+                    <button
+                      type="button"
+                      onClick={() => setDeleteConfirming(deleteConfirming === tag.id ? null : tag.id)}
+                      disabled={deleting}
+                      className="px-3 py-1.5 text-sm rounded-md qt-text-destructive border qt-border-destructive/30 hover:qt-bg-destructive/10 disabled:opacity-50"
+                    >
+                      Delete
+                    </button>
+                    <DeleteConfirmPopover
+                      isOpen={deleteConfirming === tag.id}
+                      onCancel={() => setDeleteConfirming(null)}
+                      onConfirm={() => handleDeleteTag(tag.id)}
+                      message={usage > 0
+                        ? `Delete "${tag.name}"? It will be removed from ${usage} item${usage !== 1 ? 's' : ''}.`
+                        : `Delete "${tag.name}"?`}
+                      isDeleting={deleting}
+                    />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="qt-text-small border border-dashed border-border rounded-lg p-4">
+            No tags exist yet. Tags are created when you assign them to characters, profiles, or other content.
+          </div>
+        )}
       </div>
     </div>
   )

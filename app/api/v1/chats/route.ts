@@ -44,7 +44,7 @@ const createParticipantSchema = z.object({
   type: z.literal('CHARACTER'),
   characterId: z.uuid(),
   connectionProfileId: z.uuid().optional(),
-  imageProfileId: z.uuid().optional(),
+  imageProfileId: z.uuid().optional(), // Legacy: kept for backwards compatibility but ignored
   systemPromptOverride: z.string().optional(),
   controlledBy: z.enum(['llm', 'user']).optional(),
 });
@@ -55,6 +55,7 @@ const createChatSchema = z.object({
   scenario: z.string().optional(),
   timestampConfig: TimestampConfigSchema.optional(),
   projectId: z.uuid().optional(),
+  imageProfileId: z.uuid().optional(), // Chat-level image profile (shared by all participants)
 });
 
 // ============================================================================
@@ -73,6 +74,7 @@ type BuildParticipantsResult =
       participants: Omit<ChatParticipantBaseInput, 'id' | 'createdAt' | 'updatedAt'>[];
       tags: Set<string>;
       firstCharacter: { characterId: string; userCharacterId?: string };
+      firstImageProfileId: string | null;
     }
   | { error: string };
 
@@ -141,6 +143,7 @@ async function buildAllParticipants(
   const allTagIds = new Set<string>();
   let firstLLMCharacter: { characterId: string; userCharacterId?: string } | null = null;
   let firstUserCharacterId: string | null = null;
+  let firstImageProfileId: string | null = null;
 
   for (let i = 0; i < participantsData.length; i++) {
     const participantData = participantsData[i];
@@ -153,6 +156,11 @@ async function buildAllParticipants(
     builtParticipants.push(result.participant);
     for (const tag of result.tags) {
       allTagIds.add(tag);
+    }
+
+    // Collect first imageProfileId from participants (legacy support)
+    if (!firstImageProfileId && participantData.imageProfileId) {
+      firstImageProfileId = participantData.imageProfileId;
     }
 
     const isUserControlled = result.participant.controlledBy === 'user';
@@ -171,7 +179,7 @@ async function buildAllParticipants(
 
   firstLLMCharacter.userCharacterId = firstUserCharacterId || undefined;
 
-  return { participants: builtParticipants, tags: allTagIds, firstCharacter: firstLLMCharacter };
+  return { participants: builtParticipants, tags: allTagIds, firstCharacter: firstLLMCharacter, firstImageProfileId };
 }
 
 async function createInitialMessages(
@@ -434,6 +442,9 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       }
     }
 
+    // Use chat-level imageProfileId if provided, otherwise use first from participants (legacy support)
+    const chatImageProfileId = validatedData.imageProfileId || buildResult.firstImageProfileId || null;
+
     const chat = await repos.chats.create({
       userId: user.id,
       participants: participantsWithTimestamps,
@@ -448,6 +459,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       projectId: validatedData.projectId || null,
       disabledTools: projectToolDefaults.disabledTools,
       disabledToolGroups: projectToolDefaults.disabledToolGroups,
+      imageProfileId: chatImageProfileId,
     });
 
     await createInitialMessages(

@@ -115,6 +115,10 @@ const nextConfig = {
           if (request === 'better-sqlite3') {
             return callback(null, `commonjs ${request}`);
           }
+          // Preserve node:module so createRequire works at runtime for dynamic plugin loading
+          if (request === 'node:module') {
+            return callback(null, `commonjs ${request}`);
+          }
           callback();
         });
       }
@@ -136,9 +140,14 @@ const nextConfig = {
       module: /lib\/themes\/theme-registry\.ts/,
       message: /Critical dependency/,
     });
+    // createRequire with dynamic argument (process.cwd()) — webpack can't parse it but it works at runtime
     config.ignoreWarnings.push({
-      module: /migrations\/lib\/mongodb-utils\.ts/,
-      message: /Critical dependency/,
+      module: /lib\/startup\/plugin-initialization\.ts/,
+      message: /module\.createRequire failed parsing argument/,
+    });
+    config.ignoreWarnings.push({
+      module: /lib\/plugins\/provider-registry\.ts/,
+      message: /module\.createRequire failed parsing argument/,
     });
     // Also catch "Can't resolve" patterns
     config.ignoreWarnings.push({
@@ -151,10 +160,6 @@ const nextConfig = {
     });
     config.ignoreWarnings.push({
       module: /lib\/themes\/theme-registry\.ts/,
-      message: /Can't resolve/,
-    });
-    config.ignoreWarnings.push({
-      module: /migrations\/lib\/mongodb-utils\.ts/,
       message: /Can't resolve/,
     });
 

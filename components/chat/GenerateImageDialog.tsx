@@ -256,7 +256,7 @@ export default function GenerateImageDialog({
                 </button>
 
                 {isDropdownOpen && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-background border border-border rounded-lg shadow-lg max-h-64 overflow-hidden flex flex-col z-10">
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-background border border-border rounded-lg qt-shadow-lg max-h-64 overflow-hidden flex flex-col z-10">
                     <div className="p-2 border-b border-border">
                       <input
                         type="text"

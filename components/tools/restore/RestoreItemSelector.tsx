@@ -45,7 +45,7 @@ export function RestoreItemSelector({
             Supports .zip backup files
           </p>
           {selectedFile && (
-            <p className="text-sm text-green-600 mt-2">
+            <p className="text-sm text-success mt-2">
               Selected: {selectedFile.name}
             </p>
           )}

@@ -959,6 +959,44 @@ Accessible via:
 
 ---
 
+### Context-Aware Appearance Resolution
+
+When generating images involving characters (via `{{CharacterName}}` placeholders), Quilltap now analyzes chat context to determine what each character currently looks like and is wearing, rather than always using the first stored description.
+
+#### How It Works
+
+1. **Placeholder Detection**: When an image prompt contains `{{CharacterName}}` placeholders, the system loads all physical descriptions and clothing records for each character.
+
+2. **Appearance Resolution** (`resolveCharacterAppearances()`): A cheap LLM call analyzes recent chat messages and the image prompt to determine:
+   - Which physical description best matches the current scene (by usageContext)
+   - What the character is currently wearing
+
+3. **Clothing Priority** (highest to lowest):
+   - **Narrative**: If the conversation explicitly describes what a character changed into, that takes priority
+   - **Image prompt**: If the image prompt specifies clothing, that is used
+   - **Stored record**: The best-matching clothing record by usageContext
+   - **Default**: The first stored clothing record, or empty if none exist
+
+4. **Dangermouse Sanitization** (`sanitizeAppearancesIfNeeded()`): Resolved appearances are classified for safety. If dangerous and no uncensored image provider is available, a cheap LLM rewrites the appearance descriptions to be safe for standard providers.
+
+5. **Prompt Crafting**: The resolved (and possibly sanitized) appearances are injected into the expansion context, giving the prompt crafter focused, context-accurate data instead of raw dumps of all descriptions and clothing.
+
+#### Skip Optimization
+
+If all characters have at most 1 physical description and 0-1 clothing records, AND there is no chat context, the LLM call is skipped and defaults are used directly.
+
+#### Integration Points
+
+- **Chat image generation** (`generate_image` tool): Fetches last 20 chat messages, resolves appearances, sanitizes, then expands prompt
+- **Story backgrounds**: Runs appearance resolution in parallel with scene context derivation
+- **Front page**: No appearance resolution (no chat context), but now includes Dangermouse prompt classification and AUTO_ROUTE provider rerouting
+
+#### Fail-Safe Behavior
+
+All appearance resolution and sanitization calls are wrapped in try/catch blocks. If any step fails, the system falls back to the previous behavior (all descriptions/clothing passed raw to the prompt crafter). Image generation is never blocked by resolution errors.
+
+---
+
 ## Troubleshooting
 
 ### Setup Issues

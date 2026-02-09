@@ -93,8 +93,16 @@ const DEFAULT_OPTIONS: Required<Omit<HousekeepingOptions, 'userId' | 'embeddingP
  * - Accessed within the last 3 months
  */
 function isProtectedMemory(memory: Memory, now: Date): boolean {
+  // Use reinforcedImportance (falling back to importance) for the threshold
+  const effectiveImportance = memory.reinforcedImportance ?? memory.importance
+
   // High importance memories are always protected
-  if (memory.importance >= 0.7) {
+  if (effectiveImportance >= 0.7) {
+    return true
+  }
+
+  // Memories with high reinforcement count are stable knowledge — always protected
+  if ((memory.reinforcementCount ?? 1) >= 5) {
     return true
   }
 
@@ -128,8 +136,9 @@ function shouldDeleteMemory(
     return { shouldDelete: false, reason: 'protected' }
   }
 
-  // Check importance threshold
-  if (memory.importance < options.minImportance) {
+  // Use reinforcedImportance for threshold checks (falls back to importance for old memories)
+  const effectiveImportance = memory.reinforcedImportance ?? memory.importance
+  if (effectiveImportance < options.minImportance) {
     const createdAt = new Date(memory.createdAt)
     const ageMonths = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24 * 30)
 
@@ -310,7 +319,10 @@ export async function runHousekeeping(
       const accessFactor = m.lastAccessedAt
         ? Math.max(0.1, 1 - ((now.getTime() - new Date(m.lastAccessedAt).getTime()) / (1000 * 60 * 60 * 24 * 90))) // 3 months
         : 0.5
-      const score = m.importance * 0.5 + recencyFactor * 0.25 + accessFactor * 0.25
+      // Use reinforcedImportance and add reinforcement factor
+      const effectiveImportance = m.reinforcedImportance ?? m.importance
+      const reinforcementFactor = Math.min(1.0, Math.log2(((m.reinforcementCount ?? 1)) + 1) * 0.15)
+      const score = effectiveImportance * 0.4 + recencyFactor * 0.2 + accessFactor * 0.2 + reinforcementFactor * 0.2
       return { memory: m, score }
     })
 

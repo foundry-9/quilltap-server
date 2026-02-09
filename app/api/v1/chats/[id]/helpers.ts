@@ -279,6 +279,21 @@ export async function processChatUpdates(
     if (result) updatedChat = result;
   }
 
+  // Handle imageProfileId shortcut (same as chat.imageProfileId)
+  if (typeof validatedData.imageProfileId !== 'undefined') {
+    if (validatedData.imageProfileId !== null) {
+      const profile = await repos.imageProfiles.findById(validatedData.imageProfileId);
+      if (!profile || profile.userId !== userId) {
+        return { error: 'Image profile not found', status: 404 };
+      }
+    }
+
+    const result = await repos.chats.update(chatId, {
+      imageProfileId: validatedData.imageProfileId,
+    });
+    if (result) updatedChat = result;
+  }
+
   if (validatedData.chat) {
     if (validatedData.chat.roleplayTemplateId !== undefined && validatedData.chat.roleplayTemplateId !== null) {
       const template = await repos.roleplayTemplates.findById(validatedData.chat.roleplayTemplateId);

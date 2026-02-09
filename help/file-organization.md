@@ -538,4 +538,4 @@ Gets confusing and hard to navigate
 - [Uploading Files](file-uploads.md) — Add files to folders
 - [File Search](search.md) — Find files by name or content
 - [Projects](projects.md) — Organize files by project
-- [Settings > File Storage](file-storage-settings.md) — Configure storage location
+- [The Forge > File Storage](file-storage-settings.md) — Configure storage location

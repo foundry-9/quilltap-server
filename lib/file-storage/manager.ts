@@ -186,13 +186,6 @@ class FileStorageManager {
         }
       }
 
-      // Ensure at least one backend is available
-      if (this.backends.size === 0 && this.mountPoints.size > 0) {
-        logger.warn(
-          'No backends instantiated despite mount points being available'
-        );
-      }
-
       this.initialized = true;
     } catch (error) {
       const errorMsg =

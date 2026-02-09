@@ -163,13 +163,14 @@ async function handleGetThumbnail(request: NextRequest, repos: any, fileId: stri
     }
 
     const thumbnailKey = buildThumbnailStorageKey(fileEntry.userId, fileId, size);
+    const thumbnailFileEntry = { ...fileEntry, storageKey: thumbnailKey };
 
-    // Try to get cached thumbnail from storage
-    try {
-      const cachedBuffer = await fileStorageManager.downloadFile({
-        ...fileEntry,
-        storageKey: thumbnailKey,
-      });
+    // Check if cached thumbnail exists (avoids error logging for cache misses)
+    const thumbnailExists = await fileStorageManager.fileExists(thumbnailFileEntry);
+
+    if (thumbnailExists) {
+      // Return cached thumbnail
+      const cachedBuffer = await fileStorageManager.downloadFile(thumbnailFileEntry);
 
       return new NextResponse(new Uint8Array(cachedBuffer), {
         headers: {
@@ -178,9 +179,9 @@ async function handleGetThumbnail(request: NextRequest, repos: any, fileId: stri
           'Cache-Control': 'public, max-age=31536000, immutable',
         },
       });
-    } catch {
-      // Cached thumbnail not found, generate it
     }
+
+    // Cached thumbnail not found, generate it
 
     // Download original image
     const imageBuffer = await fileStorageManager.downloadFile(fileEntry);

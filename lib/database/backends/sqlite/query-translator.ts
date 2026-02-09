@@ -6,7 +6,7 @@
  */
 
 import { QueryFilter, QueryOptions, SortSpec, UpdateSpec, UpdateOperators } from '../../interfaces';
-import { jsonExtract, jsonArrayContains, jsonArrayContainsAny, jsonArrayObjectMatch, jsonArrayObjectMatchAny, toJson } from './json-columns';
+import { jsonExtract, jsonArrayContains, jsonArrayContainsAny, jsonArrayContainsLike, jsonArrayObjectMatch, jsonArrayObjectMatchAny, toJson } from './json-columns';
 import { logger } from '@/lib/logger';
 
 // ============================================================================
@@ -212,15 +212,30 @@ function translateFieldFilter(
           }
           break;
 
-        case '$regex':
+        case '$regex': {
           // SQLite LIKE with pattern conversion (limited regex support)
-          // Convert basic regex patterns to LIKE
-          let pattern = String(opValue);
+          // Extract pattern source if it's a RegExp object, otherwise use as string
+          let pattern: string;
+          if (opValue instanceof RegExp) {
+            pattern = opValue.source;
+          } else {
+            pattern = String(opValue);
+          }
+          // Convert basic regex patterns to LIKE wildcards
           pattern = pattern.replace(/\.\*/g, '%');
           pattern = pattern.replace(/\./g, '_');
-          clauses.push(`${columnExpr} LIKE ?`);
-          params.push(pattern);
+
+          // Check if this is a JSON array column - use jsonArrayContainsLike
+          if (jsonColumns.has(field)) {
+            const { sql, params: p } = jsonArrayContainsLike(field, `%${pattern}%`);
+            clauses.push(sql);
+            params.push(...p);
+          } else {
+            clauses.push(`${columnExpr} LIKE ?`);
+            params.push(`%${pattern}%`);
+          }
           break;
+        }
 
         default:
           logger.warn('Unknown query operator', { operator: op, field });
@@ -244,6 +259,59 @@ function translateFieldFilter(
     sql: clauses.length > 0 ? clauses.join(' AND ') : '1',
     params,
   };
+}
+
+/**
+ * Parse a field reference from $expr format
+ * e.g., '$attempts' -> 'attempts', 'literal' -> null
+ */
+function parseFieldRef(value: unknown): string | null {
+  if (typeof value === 'string' && value.startsWith('$')) {
+    return value.slice(1);
+  }
+  return null;
+}
+
+/**
+ * Translate a MongoDB-style $expr to SQL
+ * Supports basic field-to-field comparisons like { $lt: ['$attempts', '$maxAttempts'] }
+ */
+function translateExpr(expr: Record<string, unknown>): string | null {
+  for (const [op, value] of Object.entries(expr)) {
+    if (!Array.isArray(value) || value.length !== 2) {
+      logger.warn('Unsupported $expr format', { operator: op, value });
+      continue;
+    }
+
+    const [left, right] = value;
+    const leftField = parseFieldRef(left);
+    const rightField = parseFieldRef(right);
+
+    // Both operands must be field references for field-to-field comparison
+    if (!leftField || !rightField) {
+      logger.warn('$expr requires field references (e.g., $fieldName)', { left, right });
+      continue;
+    }
+
+    switch (op) {
+      case '$lt':
+        return `"${leftField}" < "${rightField}"`;
+      case '$lte':
+        return `"${leftField}" <= "${rightField}"`;
+      case '$gt':
+        return `"${leftField}" > "${rightField}"`;
+      case '$gte':
+        return `"${leftField}" >= "${rightField}"`;
+      case '$eq':
+        return `"${leftField}" = "${rightField}"`;
+      case '$ne':
+        return `"${leftField}" != "${rightField}"`;
+      default:
+        logger.warn('Unsupported $expr operator', { operator: op });
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -289,6 +357,12 @@ export function translateFilter(
       const translated = translateFilter(value as QueryFilter, jsonColumns, arrayColumns);
       clauses.push(`NOT (${translated.sql})`);
       params.push(...translated.params);
+    } else if (key === '$expr' && typeof value === 'object' && !Array.isArray(value)) {
+      // Field-to-field comparison expressions (MongoDB $expr emulation)
+      const exprResult = translateExpr(value as Record<string, unknown>);
+      if (exprResult) {
+        clauses.push(exprResult);
+      }
     } else {
       // Regular field filter
       const translated = translateFieldFilter(key, value, jsonColumns, arrayColumns);

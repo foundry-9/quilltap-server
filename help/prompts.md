@@ -1,6 +1,6 @@
 # Prompts
 
-> **[Open this page in Quilltap](/settings?tab=prompts)**
+> **[Open this page in Quilltap](/foundry/aurora)**
 
 The Prompts tab lets you create and manage reusable prompt templates. These templates can be used with characters and in chats to provide consistent instructions to the AI.
 

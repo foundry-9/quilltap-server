@@ -1,6 +1,6 @@
 # Using Templates in Chats
 
-> **[Open this page in Quilltap](/chats)**
+> **[Open this page in Quilltap](/salon)**
 
 This guide explains how to select and use roleplay templates in your individual chats. Each chat can have its own template, or it can use the default template from your settings.
 
@@ -271,7 +271,7 @@ Some templates include:
 **Solutions:**
 
 - Refresh Chat Settings
-- Go to Settings → Roleplay Templates to verify it was created
+- Go to Aurora (`/foundry/aurora`) → Roleplay Templates to verify it was created
 - Make sure you're looking in the right section
 - Try closing and reopening Chat Settings
 - Refresh the entire page

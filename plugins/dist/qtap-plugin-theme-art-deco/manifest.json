@@ -1,0 +1,130 @@
+{
+  "$schema": "../qtap-plugin-template/schemas/plugin-manifest.schema.json",
+  "name": "qtap-plugin-theme-art-deco",
+  "title": "Art Deco",
+  "description": "The geometry of elegance, the precision of grandeur. Navy-and-gold palette evoking the Chrysler Building lobby at dusk \u2014 opulent but disciplined. Geometric sans-serif headings with wide tracking, elegant serif body text, and gold accents throughout. Light mode is ivory and gold leaf; dark mode is midnight and burnished brass.",
+  "version": "1.0.5",
+  "author": {
+    "name": "Foundry-9 LLC",
+    "email": "charles.sebold@foundry-9.com",
+    "url": "https://foundry-9.com"
+  },
+  "license": "MIT",
+  "main": "index.js",
+  "compatibility": {
+    "quilltapVersion": ">=2.2.0",
+    "nodeVersion": ">=18.0.0"
+  },
+  "capabilities": [
+    "THEME"
+  ],
+  "category": "THEME",
+  "typescript": true,
+  "frontend": "NONE",
+  "styling": "CSS_MODULES",
+  "enabledByDefault": true,
+  "status": "STABLE",
+  "keywords": [
+    "theme",
+    "art-deco",
+    "gold",
+    "navy",
+    "geometric",
+    "elegant",
+    "1920s",
+    "gatsby",
+    "chrysler"
+  ],
+  "themeConfig": {
+    "tokensPath": "tokens.json",
+    "stylesPath": "styles.css",
+    "supportsDarkMode": true,
+    "tags": [
+      "art-deco",
+      "gold",
+      "navy",
+      "geometric",
+      "elegant",
+      "opulent"
+    ],
+    "fonts": [
+      {
+        "family": "Raleway",
+        "src": "fonts/Raleway-Light.woff2",
+        "weight": "300",
+        "style": "normal",
+        "display": "swap"
+      },
+      {
+        "family": "Raleway",
+        "src": "fonts/Raleway-Regular.woff2",
+        "weight": "400",
+        "style": "normal",
+        "display": "swap"
+      },
+      {
+        "family": "Raleway",
+        "src": "fonts/Raleway-Medium.woff2",
+        "weight": "500",
+        "style": "normal",
+        "display": "swap"
+      },
+      {
+        "family": "Raleway",
+        "src": "fonts/Raleway-SemiBold.woff2",
+        "weight": "600",
+        "style": "normal",
+        "display": "swap"
+      },
+      {
+        "family": "Raleway",
+        "src": "fonts/Raleway-Bold.woff2",
+        "weight": "700",
+        "style": "normal",
+        "display": "swap"
+      },
+      {
+        "family": "Cormorant Garamond",
+        "src": "fonts/CormorantGaramond-Regular.woff2",
+        "weight": "400",
+        "style": "normal",
+        "display": "swap"
+      },
+      {
+        "family": "Cormorant Garamond",
+        "src": "fonts/CormorantGaramond-Italic.woff2",
+        "weight": "400",
+        "style": "italic",
+        "display": "swap"
+      },
+      {
+        "family": "Cormorant Garamond",
+        "src": "fonts/CormorantGaramond-Medium.woff2",
+        "weight": "500",
+        "style": "normal",
+        "display": "swap"
+      },
+      {
+        "family": "Cormorant Garamond",
+        "src": "fonts/CormorantGaramond-MediumItalic.woff2",
+        "weight": "500",
+        "style": "italic",
+        "display": "swap"
+      },
+      {
+        "family": "Cormorant Garamond",
+        "src": "fonts/CormorantGaramond-SemiBold.woff2",
+        "weight": "600",
+        "style": "normal",
+        "display": "swap"
+      }
+    ],
+    "useModule": true
+  },
+  "permissions": {
+    "fileSystem": [],
+    "network": [],
+    "database": false,
+    "userData": false
+  }
+}

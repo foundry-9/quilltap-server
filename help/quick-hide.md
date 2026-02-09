@@ -1,6 +1,6 @@
 # Quick-Hide Feature
 
-> **[Open this page in Quilltap](/characters)**
+> **[Open this page in Quilltap](/aurora)**
 
 The quick-hide feature is a powerful organizational tool that lets you temporarily hide content tagged with specific tags. It helps you focus on your current work by reducing clutter and showing only what's relevant.
 
@@ -133,6 +133,20 @@ The quick-hide menu only shows tags that you've explicitly marked as quick-hide 
 - Create tags like "daily", "weekly", "occasional"
 - When you have limited time, show only "daily" characters
 - Focus your energy on characters you interact with most
+
+## Content Filters
+
+In addition to tag-based hiding, the quick-hide menu includes a **Content Filters** section:
+
+### Dangerous Chats
+
+When dangerous content handling is enabled (Detect Only or Auto-Route mode), chats can be classified as dangerous based on their content. The "Dangerous Chats" toggle lets you hide these chats from your sidebar, projects, and all-chats page.
+
+- Toggle is available in the quick-hide menu under "Content Filters"
+- Works independently of tag-based hiding
+- Your preference is saved across sessions
+
+See [Dangerous Content Handling](/help/dangerous-content) for more information about how chats are classified.
 
 ## Quick-Hide vs. Other Features
 

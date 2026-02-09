@@ -261,8 +261,6 @@ In development, logs are written to `logs/combined.log` and `logs/error.log`. Us
 git checkout release
 # This brings in all the changes without the history
 git merge --squash --strategy-option=theirs main
-# This then makes sure that the history is linked, in case we need to look back
-git merge -s ours main
 # Remove the detritus after the release
 sed -i '' -E 's/("version": "[^"]*)-[^"]*"/\1"/' package.json
 # Update package-lock.json to be up-to-date
@@ -281,7 +279,7 @@ git tag -s -m "$NEWRELEASE" $NEWRELEASE
 NEWDEVVERSION=$(echo "$NEWRELEASE" | awk -F. '{print $1"."$2+1".0"}')
 git checkout main
 # Should just bring over the one updated commit for the release itself
-git merge release
+git merge --strategy-option=theirs release
 # Make this the new first dev version
 sed -i '' -E 's/("version": ")[^"]*"/\1'"$NEWDEVVERSION"'-dev.0"/' package.json
 # Update package-lock.json again
@@ -292,7 +290,7 @@ sed -i '' -E 's/(badge\/version-)[^-]*-[a-z]+/\1'"$NEWDEVVERSION"'--dev.0-yellow
 git add package.json package-lock.json README.md
 git commit --no-verify -m "dev: started $NEWDEVVERSION development"
 # We'll tag this one too
-git tag -s -m "$NEWDEVVERSION" $NEWDEVVERSION
+git tag -s -m "$NEWDEVVERSION-dev" $NEWDEVVERSION-dev
 
 # Let's set up the bugfix version too
 git checkout bugfix
@@ -315,6 +313,14 @@ git push
 git checkout release
 git push
 git push --tags
+
+# Time to push to Docker
+docker login
+docker build -t csebold/quilltap:$NEWRELEASE .
+docker push csebold/quilltap:$NEWRELEASE
+docker tag csebold/quilltap:$NEWRELEASE csebold/quilltap:latest
+docker push csebold/quilltap:latest
+
 # Now let's get back to work!
 git checkout main
 ```

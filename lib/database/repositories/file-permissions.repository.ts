@@ -14,7 +14,7 @@ import {
   FileWritePermissionSchema,
   FileWritePermissionScope,
 } from '@/lib/schemas/file-permissions.types';
-import { QueryFilter } from '../interfaces';
+import { TypedQueryFilter } from '../interfaces';
 
 /**
  * File Write Permissions Repository
@@ -56,30 +56,27 @@ export class FilePermissionsRepository extends UserOwnedBaseRepository<FileWrite
     id: string,
     data: Partial<Omit<FileWritePermission, 'id' | 'createdAt'>>
   ): Promise<FileWritePermission | null> {
-    try {
-      const permission = await this._update(id, data as Partial<FileWritePermission>);
+    return this.safeQuery(
+      async () => {
+        const permission = await this._update(id, data as Partial<FileWritePermission>);
 
-      if (permission) {
-        logger.info('File write permission updated', {
-          context: 'file-permissions-repository',
-          permissionId: id,
-        });
-      } else {
-        logger.warn('File write permission not found for update', {
-          context: 'file-permissions-repository',
-          permissionId: id,
-        });
-      }
+        if (permission) {
+          logger.info('File write permission updated', {
+            context: 'file-permissions-repository',
+            permissionId: id,
+          });
+        } else {
+          logger.warn('File write permission not found for update', {
+            context: 'file-permissions-repository',
+            permissionId: id,
+          });
+        }
 
-      return permission;
-    } catch (error) {
-      logger.error('Error updating file write permission', {
-        context: 'file-permissions-repository',
-        permissionId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return permission;
+      },
+      'Error updating file write permission',
+      { context: 'file-permissions-repository', permissionId: id }
+    );
   }
 
   /**
@@ -93,72 +90,61 @@ export class FilePermissionsRepository extends UserOwnedBaseRepository<FileWrite
    * Find project-level permission for a user
    */
   async findByProjectId(userId: string, projectId: string): Promise<FileWritePermission | null> {
-    try {
-      const permission = await this.findOneByFilter({
-        userId,
-        scope: 'PROJECT',
-        projectId,
-      } as QueryFilter);
+    return this.safeQuery(
+      async () => {
+        const permission = await this.findOneByFilter({
+          userId,
+          scope: 'PROJECT',
+          projectId,
+        });
 
-      if (permission) {
-        return permission;
-      }
-      return null;
-    } catch (error) {
-      logger.error('Error finding project file write permission', {
-        context: 'file-permissions-repository',
-        userId,
-        projectId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        if (permission) {
+          return permission;
+        }
+        return null;
+      },
+      'Error finding project file write permission',
+      { context: 'file-permissions-repository', userId, projectId }
+    );
   }
 
   /**
    * Check if user has general (non-project) file write permission
    */
   async hasGeneralPermission(userId: string): Promise<boolean> {
-    try {
-      const permission = await this.findOneByFilter({
-        userId,
-        scope: 'GENERAL',
-      } as QueryFilter);
+    return this.safeQuery(
+      async () => {
+        const permission = await this.findOneByFilter({
+          userId,
+          scope: 'GENERAL',
+        });
 
-      const hasPermission = permission !== null;
-      return hasPermission;
-    } catch (error) {
-      logger.error('Error checking general file write permission', {
-        context: 'file-permissions-repository',
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        const hasPermission = permission !== null;
+        return hasPermission;
+      },
+      'Error checking general file write permission',
+      { context: 'file-permissions-repository', userId }
+    );
   }
 
   /**
    * Check if user has single-file write permission
    */
   async hasFilePermission(userId: string, fileId: string): Promise<boolean> {
-    try {
-      const permission = await this.findOneByFilter({
-        userId,
-        scope: 'SINGLE_FILE',
-        fileId,
-      } as QueryFilter);
+    return this.safeQuery(
+      async () => {
+        const permission = await this.findOneByFilter({
+          userId,
+          scope: 'SINGLE_FILE',
+          fileId,
+        });
 
-      const hasPermission = permission !== null;
-      return hasPermission;
-    } catch (error) {
-      logger.error('Error checking single-file write permission', {
-        context: 'file-permissions-repository',
-        userId,
-        fileId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        const hasPermission = permission !== null;
+        return hasPermission;
+      },
+      'Error checking single-file write permission',
+      { context: 'file-permissions-repository', userId, fileId }
+    );
   }
 
   /**
@@ -179,50 +165,45 @@ export class FilePermissionsRepository extends UserOwnedBaseRepository<FileWrite
     projectId: string | null,
     fileId?: string
   ): Promise<boolean> {
-    try {
-      // Build query to check all applicable permission levels
-      const conditions: Record<string, unknown>[] = [];
+    return this.safeQuery(
+      async () => {
+        // Build query to check all applicable permission levels
+        const conditions: Record<string, unknown>[] = [];
 
-      // Check single-file permission (if fileId provided)
-      if (fileId) {
-        conditions.push({
-          userId,
-          scope: 'SINGLE_FILE',
-          fileId,
-        });
-      }
+        // Check single-file permission (if fileId provided)
+        if (fileId) {
+          conditions.push({
+            userId,
+            scope: 'SINGLE_FILE',
+            fileId,
+          });
+        }
 
-      // Check project permission (if projectId provided)
-      if (projectId) {
-        conditions.push({
-          userId,
-          scope: 'PROJECT',
-          projectId,
-        });
-      } else {
-        // Check general permission (for non-project files)
-        conditions.push({
-          userId,
-          scope: 'GENERAL',
-        });
-      }
+        // Check project permission (if projectId provided)
+        if (projectId) {
+          conditions.push({
+            userId,
+            scope: 'PROJECT',
+            projectId,
+          });
+        } else {
+          // Check general permission (for non-project files)
+          conditions.push({
+            userId,
+            scope: 'GENERAL',
+          });
+        }
 
-      const permission = await this.findOneByFilter({
-        $or: conditions,
-      } as QueryFilter);
+        const permission = await this.findOneByFilter({
+          $or: conditions,
+        } as TypedQueryFilter<FileWritePermission>);
 
-      const canWrite = permission !== null;
-      return canWrite;
-    } catch (error) {
-      logger.error('Error checking file write permission', {
-        context: 'file-permissions-repository',
-        userId,
-        projectId,
-        fileId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        const canWrite = permission !== null;
+        return canWrite;
+      },
+      'Error checking file write permission',
+      { context: 'file-permissions-repository', userId, projectId, fileId }
+    );
   }
 
   /**
@@ -232,138 +213,122 @@ export class FilePermissionsRepository extends UserOwnedBaseRepository<FileWrite
     data: Omit<FileWritePermission, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions
   ): Promise<FileWritePermission> {
-    try {
-      const permission = await this._create(data, options);
+    return this.safeQuery(
+      async () => {
+        const permission = await this._create(data, options);
 
-      logger.info('File write permission granted', {
-        context: 'file-permissions-repository',
-        permissionId: permission.id,
-        userId: data.userId,
-        scope: data.scope,
-        projectId: data.projectId,
-        fileId: data.fileId,
-      });
+        logger.info('File write permission granted', {
+          context: 'file-permissions-repository',
+          permissionId: permission.id,
+          userId: data.userId,
+          scope: data.scope,
+          projectId: data.projectId,
+          fileId: data.fileId,
+        });
 
-      return permission;
-    } catch (error) {
-      logger.error('Error granting file write permission', {
-        context: 'file-permissions-repository',
-        userId: data.userId,
-        scope: data.scope,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return permission;
+      },
+      'Error granting file write permission',
+      { context: 'file-permissions-repository', userId: data.userId, scope: data.scope }
+    );
   }
 
   /**
    * Revoke a file write permission
    */
   async revokePermission(id: string): Promise<boolean> {
-    try {
-      const result = await this._delete(id);
+    return this.safeQuery(
+      async () => {
+        const result = await this._delete(id);
 
-      if (result) {
-        logger.info('File write permission revoked', {
-          context: 'file-permissions-repository',
-          permissionId: id,
-        });
-      } else {
-        logger.warn('File write permission not found for revocation', {
-          context: 'file-permissions-repository',
-          permissionId: id,
-        });
-      }
+        if (result) {
+          logger.info('File write permission revoked', {
+            context: 'file-permissions-repository',
+            permissionId: id,
+          });
+        } else {
+          logger.warn('File write permission not found for revocation', {
+            context: 'file-permissions-repository',
+            permissionId: id,
+          });
+        }
 
-      return result;
-    } catch (error) {
-      logger.error('Error revoking file write permission', {
-        context: 'file-permissions-repository',
-        permissionId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return result;
+      },
+      'Error revoking file write permission',
+      { context: 'file-permissions-repository', permissionId: id }
+    );
   }
 
   /**
    * Revoke all permissions for a user
    */
   async revokeAllForUser(userId: string): Promise<number> {
-    try {
-      const count = await this.deleteMany({ userId } as QueryFilter);
+    return this.safeQuery(
+      async () => {
+        const count = await this.deleteMany({ userId });
 
-      logger.info('All file write permissions revoked for user', {
-        context: 'file-permissions-repository',
-        userId,
-        count,
-      });
+        logger.info('All file write permissions revoked for user', {
+          context: 'file-permissions-repository',
+          userId,
+          count,
+        });
 
-      return count;
-    } catch (error) {
-      logger.error('Error revoking all file write permissions for user', {
-        context: 'file-permissions-repository',
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return count;
+      },
+      'Error revoking all file write permissions for user',
+      { context: 'file-permissions-repository', userId }
+    );
   }
 
   /**
    * Revoke all permissions for a project
    */
   async revokeAllForProject(projectId: string): Promise<number> {
-    try {
-      const count = await this.deleteMany({
-        scope: 'PROJECT',
-        projectId,
-      } as QueryFilter);
+    return this.safeQuery(
+      async () => {
+        const count = await this.deleteMany({
+          scope: 'PROJECT',
+          projectId,
+        });
 
-      logger.info('All file write permissions revoked for project', {
-        context: 'file-permissions-repository',
-        projectId,
-        count,
-      });
+        logger.info('All file write permissions revoked for project', {
+          context: 'file-permissions-repository',
+          projectId,
+          count,
+        });
 
-      return count;
-    } catch (error) {
-      logger.error('Error revoking all file write permissions for project', {
-        context: 'file-permissions-repository',
-        projectId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return count;
+      },
+      'Error revoking all file write permissions for project',
+      { context: 'file-permissions-repository', projectId }
+    );
   }
 
   /**
    * Revoke single-file permission when file is deleted
    */
   async revokeForFile(fileId: string): Promise<number> {
-    try {
-      const count = await this.deleteMany({
-        scope: 'SINGLE_FILE',
-        fileId,
-      } as QueryFilter);
-
-      if (count > 0) {
-        logger.info('File write permissions revoked for deleted file', {
-          context: 'file-permissions-repository',
+    return this.safeQuery(
+      async () => {
+        const count = await this.deleteMany({
+          scope: 'SINGLE_FILE',
           fileId,
-          count,
         });
-      }
 
-      return count;
-    } catch (error) {
-      logger.error('Error revoking file write permissions for file', {
-        context: 'file-permissions-repository',
-        fileId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        if (count > 0) {
+          logger.info('File write permissions revoked for deleted file', {
+            context: 'file-permissions-repository',
+            fileId,
+            count,
+          });
+        }
+
+        return count;
+      },
+      'Error revoking file write permissions for file',
+      { context: 'file-permissions-repository', fileId }
+    );
   }
 }
 

@@ -66,6 +66,9 @@ export {
   TimestampFormatEnum,
   TimestampConfigSchema,
   TokenDisplaySettingsSchema,
+  DangerousContentModeEnum,
+  DangerousContentDisplayModeEnum,
+  DangerousContentSettingsSchema,
   ChatSettingsSchema,
   GeneralSettingsSchema,
 } from './settings.types';
@@ -78,6 +81,9 @@ export type {
   TimestampFormat,
   TimestampConfig,
   TokenDisplaySettings,
+  DangerousContentMode,
+  DangerousContentDisplayMode,
+  DangerousContentSettings,
   ChatSettings,
   GeneralSettings,
 } from './settings.types';
@@ -118,12 +124,14 @@ export type {
 export {
   CharacterSystemPromptSchema,
   PhysicalDescriptionSchema,
+  ClothingRecordSchema,
   CharacterSchema,
 } from './character.types';
 
 export type {
   CharacterSystemPrompt,
   PhysicalDescription,
+  ClothingRecord,
   Character,
   CharacterInput,
 } from './character.types';
@@ -132,6 +140,7 @@ export type {
 // CHAT TYPES
 // ============================================================================
 export {
+  DangerFlagSchema,
   MessageEventSchema,
   ContextSummaryEventSchema,
   SystemEventTypeEnum,
@@ -146,6 +155,7 @@ export {
 } from './chat.types';
 
 export type {
+  DangerFlag,
   MessageEvent,
   ContextSummaryEvent,
   SystemEventType,

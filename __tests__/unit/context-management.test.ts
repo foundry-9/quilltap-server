@@ -34,6 +34,7 @@ import {
   getParticipantName,
   attributeMessagesForCharacter,
   buildOtherParticipantsInfo,
+  buildIdentityReinforcement,
   formatInterCharacterMemoriesForContext,
   buildContext,
   type MessageWithParticipant,
@@ -326,7 +327,7 @@ describe('Context Manager', () => {
     it('processes template variables across roleplay, override, and persona sections', () => {
       const persona = { name: 'Alex', description: 'A curious tester' }
       const roleplayTemplate = { systemPrompt: 'Stay in {{char}} mindset when talking to {{user}}.' }
-      const pseudoToolInstructions = 'Tools should mention {{char}} assisting {{user}}.'
+      const toolInstructions = 'Tools should mention {{char}} assisting {{user}}.'
       const prompt = buildSystemPrompt(
         {
           ...character,
@@ -338,7 +339,7 @@ describe('Context Manager', () => {
         '{{char}} override for {{user}}',
         undefined,
         roleplayTemplate,
-        pseudoToolInstructions
+        toolInstructions
       )
 
       expect(prompt).toContain('Stay in Test Character mindset when talking to Alex.')
@@ -914,6 +915,38 @@ describe('Context Manager', () => {
 
       expect(repoMock.memories.findByCharacterAboutCharacters).toHaveBeenCalledWith('char-a', expect.arrayContaining(['char-b', 'char-user']))
       expect(result.messages[0].content).toContain('## Memories About Other Characters')
+    })
+  })
+
+  describe('buildIdentityReinforcement', () => {
+    it('produces a single-character reminder with character and user names', () => {
+      const result = buildIdentityReinforcement('Artemis', 'Alex')
+      expect(result).toContain('## Identity Reminder')
+      expect(result).toContain('You are Artemis.')
+      expect(result).toContain('Respond only as Artemis.')
+      expect(result).toContain('Alex or any other character')
+      expect(result).not.toContain('{{char}}')
+      expect(result).not.toContain('{{user}}')
+    })
+
+    it('defaults user name to "User" when not provided', () => {
+      const result = buildIdentityReinforcement('Artemis')
+      expect(result).toContain('User or any other character')
+    })
+
+    it('lists other participant names in multi-character mode', () => {
+      const result = buildIdentityReinforcement('Artemis', 'Alex', ['Luna', 'Orion'])
+      expect(result).toContain('Luna')
+      expect(result).toContain('Orion')
+      expect(result).toContain('Alex')
+      expect(result).toContain('You are Artemis.')
+    })
+
+    it('uses single-character format when otherParticipantNames is empty', () => {
+      const result = buildIdentityReinforcement('Artemis', 'Alex', [])
+      expect(result).toContain('Alex or any other character')
+      // Should not contain any participant name listing (no "Luna", "Orion", etc.)
+      expect(result).toContain('Do not write dialogue, actions, or thoughts for Alex or any other character.')
     })
   })
 })

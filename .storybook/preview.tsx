@@ -36,7 +36,6 @@ const preview: Preview = {
         icon: 'paintbrush',
         items: [
           { value: 'default', title: 'Default' },
-          { value: 'ocean', title: 'Ocean' },
           { value: 'earl-grey', title: 'Earl Grey' },
           { value: 'rains', title: 'Rains' },
         ],

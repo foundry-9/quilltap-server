@@ -1,6 +1,6 @@
 # Tags
 
-> **[Open this page in Quilltap](/characters)**
+> **[Open this page in Quilltap](/aurora)**
 
 Tags are labels you create to organize and categorize your characters, connection profiles, and image profiles throughout Quilltap. They're powerful tools for filtering, searching, and managing your content efficiently.
 
@@ -156,6 +156,10 @@ In the Tags customization tab, you'll see:
 - **Tag preview** showing how each tag appears with its customization
 - **Quick-hide status** indicator for each tag
 - **Edit option** to customize each tag's appearance
+
+### Deleting Tags
+
+The **Tag Management** section at the bottom of the Tags tab lets you delete any tag. Each tag shows its usage count across all entity types. When deleted, the tag is automatically removed from all characters, chats, profiles, and files that use it. See the [Tag Customization](/help/tags-customization) page for full details.
 
 ### Organizing Your Tags
 

@@ -46,6 +46,7 @@ const createMemorySchema = z.object({
   chatId: z.uuid().nullable().optional(),
   source: z.enum(['AUTO', 'MANUAL']).prefault('MANUAL'),
   sourceMessageId: z.uuid().nullable().optional(),
+  skipGate: z.boolean().optional(),
 });
 
 const searchMemorySchema = z.object({
@@ -390,7 +391,7 @@ async function handleCreateMemory(
       source: validatedData.source,
       sourceMessageId: validatedData.sourceMessageId,
     },
-    { userId: user.id }
+    { userId: user.id, skipGate: validatedData.skipGate }
   );
 
   // Schedule vocabulary refit for BUILTIN profiles (debounced)
@@ -529,13 +530,25 @@ async function handleHousekeepPreview(
   const options: HousekeepingOptions = { userId: user.id };
 
   if (url.searchParams.has('maxMemories')) {
-    options.maxMemories = parseInt(url.searchParams.get('maxMemories')!, 10);
+    const val = parseInt(url.searchParams.get('maxMemories')!, 10);
+    if (isNaN(val) || val < 1 || val > 100000) {
+      return badRequest('maxMemories must be an integer between 1 and 100000');
+    }
+    options.maxMemories = val;
   }
   if (url.searchParams.has('maxAgeMonths')) {
-    options.maxAgeMonths = parseInt(url.searchParams.get('maxAgeMonths')!, 10);
+    const val = parseInt(url.searchParams.get('maxAgeMonths')!, 10);
+    if (isNaN(val) || val < 1 || val > 1200) {
+      return badRequest('maxAgeMonths must be an integer between 1 and 1200');
+    }
+    options.maxAgeMonths = val;
   }
   if (url.searchParams.has('minImportance')) {
-    options.minImportance = parseFloat(url.searchParams.get('minImportance')!);
+    const val = parseFloat(url.searchParams.get('minImportance')!);
+    if (isNaN(val) || val < 0 || val > 1) {
+      return badRequest('minImportance must be a number between 0 and 1');
+    }
+    options.minImportance = val;
   }
   if (url.searchParams.has('mergeSimilar')) {
     options.mergeSimilar = url.searchParams.get('mergeSimilar') === 'true';

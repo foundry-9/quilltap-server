@@ -42,15 +42,23 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
     // Sort by name
     tags.sort((a, b) => a.name.localeCompare(b.name));
 
-    // Get usage counts for each tag
-    const allCharacters = await repos.characters.findAll();
-    const allChats = await repos.chats.findAll();
-    const allConnections = await repos.connections.findAll();
+    // Get usage counts for each tag across all taggable entity types
+    const [allCharacters, allChats, allConnections, allImageProfiles, allEmbeddingProfiles, allFiles] = await Promise.all([
+      repos.characters.findAll(),
+      repos.chats.findAll(),
+      repos.connections.findAll(),
+      repos.imageProfiles.findAll(),
+      repos.embeddingProfiles.findAll(),
+      repos.files.findAll(),
+    ]);
 
     const tagsWithCounts = tags.map(tag => {
       const characterTags = allCharacters.filter(c => c.tags.includes(tag.id)).length;
       const chatTags = allChats.filter(c => c.tags.includes(tag.id)).length;
       const connectionProfileTags = allConnections.filter(c => c.tags.includes(tag.id)).length;
+      const imageProfileTags = allImageProfiles.filter(c => c.tags.includes(tag.id)).length;
+      const embeddingProfileTags = allEmbeddingProfiles.filter(c => c.tags.includes(tag.id)).length;
+      const fileTags = allFiles.filter(c => c.tags.includes(tag.id)).length;
 
       return {
         id: tag.id,
@@ -63,7 +71,11 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
           characterTags,
           chatTags,
           connectionProfileTags,
+          imageProfileTags,
+          embeddingProfileTags,
+          fileTags,
         },
+        totalUsage: characterTags + chatTags + connectionProfileTags + imageProfileTags + embeddingProfileTags + fileTags,
       };
     });
 

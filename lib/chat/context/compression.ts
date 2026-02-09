@@ -8,14 +8,15 @@
  * 3. Keeping recent messages in full to preserve conversational continuity
  */
 
-import { Provider } from '@/lib/schemas/types'
-import { ContextCompressionSettings } from '@/lib/schemas/settings.types'
+import { Provider, ConnectionProfile } from '@/lib/schemas/types'
+import { ContextCompressionSettings, DangerousContentSettings } from '@/lib/schemas/settings.types'
 import { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import {
   compressConversationHistory,
   compressSystemPrompt,
   type ChatMessage,
   type CompressionResult,
+  type UncensoredFallbackOptions,
 } from '@/lib/memory/cheap-llm-tasks'
 import { logger } from '@/lib/logger'
 
@@ -39,6 +40,10 @@ export interface ContextCompressionOptions {
   characterName: string
   /** User/persona name for compression prompt */
   userName: string
+  /** Dangerous content settings for uncensored fallback */
+  dangerSettings?: DangerousContentSettings
+  /** Available connection profiles for uncensored fallback */
+  availableProfiles?: ConnectionProfile[]
 }
 
 /**
@@ -186,6 +191,12 @@ export async function applyContextCompression(
     content: m.content,
   }))
 
+  // Build uncensored fallback options if danger settings are provided
+  const uncensoredFallback: UncensoredFallbackOptions | undefined =
+    options.dangerSettings && options.availableProfiles
+      ? { dangerSettings: options.dangerSettings, availableProfiles: options.availableProfiles }
+      : undefined
+
   let compressedHistory: string | undefined
   let historyCompressionResult: CompressionResult | undefined
 
@@ -197,7 +208,8 @@ export async function applyContextCompression(
       options.userName,
       options.compressionTargetTokens,
       options.selection,
-      options.userId
+      options.userId,
+      uncensoredFallback
     )
 
     if (historyResult.success && historyResult.result) {
@@ -233,7 +245,8 @@ export async function applyContextCompression(
       systemPrompt,
       options.systemPromptTargetTokens,
       options.selection,
-      options.userId
+      options.userId,
+      uncensoredFallback
     )
 
     if (systemResult.success && systemResult.result) {

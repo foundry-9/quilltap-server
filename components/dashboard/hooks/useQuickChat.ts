@@ -165,7 +165,7 @@ export function useQuickChat(): UseQuickChatReturn {
 
       const data = await res.json()
       showSuccessToast('Chat created successfully')
-      router.push(`/chats/${data.chat.id}`)
+      router.push(`/salon/${data.chat.id}`)
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to start chat'
       showErrorToast(errorMsg)

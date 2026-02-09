@@ -16,15 +16,17 @@
 import { Provider, Character, ChatParticipantBase, ChatMetadataBase, TimestampConfig } from '@/lib/schemas/types'
 import { estimateTokens, countMessagesTokens, truncateToTokenLimit } from '@/lib/tokens/token-counter'
 import { getModelContextLimit, getRecommendedContextAllocation, shouldSummarizeConversation } from '@/lib/llm/model-context-data'
-import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
+import { searchMemoriesSemantic, type SemanticSearchResult } from '@/lib/memory/memory-service'
 import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
+import { extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks'
 
 // Import from extracted modules
 import {
   buildSystemPrompt,
   buildOtherParticipantsInfo,
+  buildIdentityReinforcement,
   type OtherParticipantInfo,
   type ProjectContext,
 } from './context/system-prompt-builder'
@@ -66,6 +68,7 @@ export type { ContextCompressionOptions, ContextCompressionResult } from './cont
 export {
   buildSystemPrompt,
   buildOtherParticipantsInfo,
+  buildIdentityReinforcement,
   formatMemoriesForContext,
   formatInterCharacterMemoriesForContext,
   formatSummaryForContext,
@@ -207,11 +210,11 @@ export interface BuildContextOptions {
   messagesWithParticipants?: MessageWithParticipant[]
 
   // ============================================================================
-  // Pseudo-Tool Support (for models without native function calling)
+  // Tool Instructions (native tool rules or pseudo-tool instructions)
   // ============================================================================
 
-  /** Instructions for text-based pseudo-tools (when model doesn't support native tools) */
-  pseudoToolInstructions?: string
+  /** Tool instructions injected into system prompt (native tool rules or pseudo-tool instructions) */
+  toolInstructions?: string
 
   // ============================================================================
   // Timestamp Injection
@@ -249,6 +252,13 @@ export interface BuildContextOptions {
    * the compression point.
    */
   cachedCompressionMessageCount?: number
+
+  // ============================================================================
+  // Proactive Memory Recall
+  // ============================================================================
+
+  /** Pre-searched memories from proactive recall (skips internal memory search when provided) */
+  preSearchedMemories?: SemanticSearchResult[]
 }
 
 /**
@@ -296,8 +306,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     allParticipants,
     participantCharacters,
     messagesWithParticipants,
-    // Pseudo-tool support
-    pseudoToolInstructions,
+    // Tool instructions (native tool rules or pseudo-tool instructions)
+    toolInstructions,
     // Project context
     projectContext,
   } = options
@@ -333,7 +343,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     systemPromptOverride,
     otherParticipantsInfo,
     roleplayTemplate,
-    pseudoToolInstructions,
+    toolInstructions,
     selectedSystemPromptId,
     options.timestampConfig,
     options.isInitialMessage,
@@ -414,10 +424,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       // Apply compression
       try {
         compressionResult = await applyContextCompression(
-          existingMessages.map(m => ({
-            role: m.role as 'user' | 'assistant' | 'system',
-            content: m.content,
-          })),
+          extractVisibleConversation(existingMessages),
           finalSystemPrompt,
           {
             enabled: contextCompressionSettings.enabled,
@@ -487,16 +494,27 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     }
 
     // Only keep window messages (the ones that weren't compressed)
+    const visibleMessages = extractVisibleConversation(existingMessages)
     const { windowMessages } = splitMessagesForCompression(
-      existingMessages.map(m => ({
-        role: m.role as 'user' | 'assistant' | 'system',
-        content: m.content,
-      })),
+      visibleMessages,
       effectiveWindowSize
     )
 
     // Map back to the original format with all metadata
-    const windowStartIndex = existingMessages.length - windowMessages.length
+    // We need to find the corresponding existingMessages for the window
+    // Walk backwards through existingMessages to find the last N visible messages
+    const windowCount = windowMessages.length
+    let found = 0
+    let windowStartIndex = existingMessages.length
+    for (let i = existingMessages.length - 1; i >= 0 && found < windowCount; i--) {
+      const msg = existingMessages[i]
+      const role = (msg.role || '').toUpperCase()
+      const isVisible = (msg as { type?: string }).type === undefined || (msg as { type?: string }).type === 'message'
+      if (isVisible && (role === 'USER' || role === 'ASSISTANT')) {
+        found++
+        windowStartIndex = i
+      }
+    }
     effectiveMessages = existingMessages.slice(windowStartIndex)
 
   }
@@ -517,32 +535,51 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   const memorySearchQuery = newUserMessage ||
     (existingMessages.length > 0 ? existingMessages[existingMessages.length - 1].content : '')
 
-  if (!skipMemories && character.id && memorySearchQuery) {
-    try {
-      // Search for memories relevant to the message (or last message in continue mode)
-      const memoryResults = await searchMemoriesSemantic(
-        character.id,
-        memorySearchQuery,
-        {
-          userId,
-          embeddingProfileId,
-          limit: maxMemories * 2, // Get more to filter
-          minImportance: minMemoryImportance,
-        }
-      )
+  if (!skipMemories && character.id) {
+    if (options.preSearchedMemories && options.preSearchedMemories.length > 0) {
+      // Use proactively recalled memories (skips internal search)
+      try {
+        const formatted = formatMemoriesForContext(
+          options.preSearchedMemories,
+          budget.memoryBudget,
+          provider
+        )
 
-      const formatted = formatMemoriesForContext(
-        memoryResults.slice(0, maxMemories),
-        budget.memoryBudget,
-        provider
-      )
+        memoryContent = formatted.content
+        memoryTokens = formatted.tokenCount
+        memoriesIncluded = formatted.memoriesUsed
+        debugMemories = formatted.debugMemories
 
-      memoryContent = formatted.content
-      memoryTokens = formatted.tokenCount
-      memoriesIncluded = formatted.memoriesUsed
-      debugMemories = formatted.debugMemories
-    } catch (error) {
-      warnings.push(`Failed to retrieve memories: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      } catch (error) {
+        warnings.push(`Failed to format pre-searched memories: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
+    } else if (memorySearchQuery) {
+      // Default: search using user message (or last message in continue mode)
+      try {
+        const memoryResults = await searchMemoriesSemantic(
+          character.id,
+          memorySearchQuery,
+          {
+            userId,
+            embeddingProfileId,
+            limit: maxMemories * 2, // Get more to filter
+            minImportance: minMemoryImportance,
+          }
+        )
+
+        const formatted = formatMemoriesForContext(
+          memoryResults.slice(0, maxMemories),
+          budget.memoryBudget,
+          provider
+        )
+
+        memoryContent = formatted.content
+        memoryTokens = formatted.tokenCount
+        memoriesIncluded = formatted.memoriesUsed
+        debugMemories = formatted.debugMemories
+      } catch (error) {
+        warnings.push(`Failed to retrieve memories: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
     }
   }
 
@@ -704,6 +741,16 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   if (summaryContent) {
     fullSystemContent += '\n\n' + summaryContent
   }
+
+  // Identity reinforcement: append as the very last content in system prompt
+  // so it's the closest instruction to where the LLM begins generating
+  const otherParticipantNames = otherParticipantsInfo?.map(p => p.name)
+  const identityReminder = buildIdentityReinforcement(
+    character.name,
+    persona?.name || 'User',
+    isMultiCharacter ? otherParticipantNames : undefined,
+  )
+  fullSystemContent += '\n\n' + identityReminder
 
   contextMessages.push({
     role: 'system',

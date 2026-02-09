@@ -177,7 +177,7 @@ export function SearchBar() {
 
         {/* Dropdown results */}
         {showDropdown && (query.length >= 2 || hasSearched) && (
-          <div className="absolute top-full left-0 mt-2 w-96 bg-background rounded-lg shadow-xl border border-border overflow-hidden z-50">
+          <div className="absolute top-full left-0 mt-2 w-96 bg-background rounded-lg qt-shadow-lg border border-border overflow-hidden z-50">
             <div className="max-h-96 overflow-y-auto">
               {hasSearched ? (
                 <SearchResults

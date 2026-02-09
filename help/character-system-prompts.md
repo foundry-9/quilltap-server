@@ -1,6 +1,6 @@
 # Character System Prompts
 
-> **[Open this page in Quilltap](/characters)**
+> **[Open this page in Quilltap](/aurora)**
 
 This guide covers system prompts, templates, and prompt engineering for characters.
 

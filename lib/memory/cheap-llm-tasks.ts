@@ -16,6 +16,8 @@ import { getErrorMessage } from '@/lib/errors'
 import { logger } from '@/lib/logger'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
 import type { LLMLogType } from '@/lib/schemas/llm-log.types'
+import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
+import type { ConnectionProfile } from '@/lib/schemas/types'
 
 /**
  * Candidate memory extracted from a conversation
@@ -68,6 +70,27 @@ export interface CheapLLMTaskResult<T> {
 }
 
 /**
+ * Options for uncensored provider fallback when empty responses are detected
+ * Only used when Dangermouse is in AUTO_ROUTE mode with an uncensored text profile configured
+ */
+export interface UncensoredFallbackOptions {
+  dangerSettings: DangerousContentSettings
+  availableProfiles: ConnectionProfile[]
+}
+
+/**
+ * Internal type for provider response
+ */
+interface ProviderResponse {
+  content: string
+  usage?: {
+    promptTokens: number
+    completionTokens: number
+    totalTokens: number
+  }
+}
+
+/**
  * Session-level cache for profiles that don't support custom temperature
  */
 const profilesWithoutCustomTemp = new Set<string>()
@@ -90,6 +113,11 @@ function mapTaskTypeToLogType(taskType?: string): LLMLogType {
     'craft-image-prompt': 'IMAGE_PROMPT_CRAFTING',
     'describe-attachment': 'IMAGE_DESCRIPTION',
     'batch-memory-extraction': 'MEMORY_EXTRACTION',
+    'craft-story-background-prompt': 'IMAGE_PROMPT_CRAFTING',
+    'derive-scene-context': 'SUMMARIZATION',
+    'memory-keyword-extraction': 'MEMORY_EXTRACTION',
+    'resolve-character-appearances': 'APPEARANCE_RESOLUTION',
+    'sanitize-appearance': 'APPEARANCE_RESOLUTION',
   }
   return mapping[taskType || ''] || 'SUMMARIZATION'
 }
@@ -125,6 +153,130 @@ async function getApiKeyForSelection(
 }
 
 /**
+ * Sends messages to a cheap LLM provider with temperature handling and logging
+ * Extracted from executeCheapLLMTask to avoid tripling the code for each temperature path
+ */
+async function sendToProvider(
+  selection: CheapLLMSelection,
+  messages: LLMMessage[],
+  userId: string,
+  taskType?: string,
+  chatId?: string,
+  messageId?: string
+): Promise<ProviderResponse> {
+  const apiKey = await getApiKeyForSelection(selection, userId)
+  if (apiKey === null) {
+    throw new Error('No API key available for cheap LLM provider')
+  }
+
+  const provider = await createLLMProvider(
+    selection.provider,
+    selection.baseUrl
+  )
+
+  const profileKey = `${selection.provider}:${selection.modelName}`
+
+  const logCall = (response: LLMResponse, temperature?: number) => {
+    logLLMCall({
+      userId,
+      type: mapTaskTypeToLogType(taskType),
+      chatId,
+      messageId,
+      provider: selection.provider,
+      modelName: selection.modelName,
+      request: {
+        messages: messages.map(m => ({ role: m.role, content: m.content })),
+        ...(temperature !== undefined ? { temperature } : {}),
+        maxTokens: 1000,
+      },
+      response: {
+        content: response.content,
+      },
+      usage: response.usage,
+    }).catch(err => {
+      logger.warn('Failed to log cheap LLM call', {
+        error: err instanceof Error ? err.message : String(err)
+      })
+    })
+  }
+
+  // Check if we already know this profile doesn't support custom temperature
+  if (profilesWithoutCustomTemp.has(profileKey)) {
+    const response: LLMResponse = await provider.sendMessage(
+      { messages, model: selection.modelName, maxTokens: 1000 },
+      apiKey
+    )
+    logCall(response)
+    return { content: response.content, usage: response.usage }
+  }
+
+  // Try with lower temperature for more consistent outputs
+  try {
+    const response: LLMResponse = await provider.sendMessage(
+      { messages, model: selection.modelName, temperature: 0.3, maxTokens: 1000 },
+      apiKey
+    )
+    logCall(response, 0.3)
+    return { content: response.content, usage: response.usage }
+  } catch (error) {
+    // If temperature is not supported, cache it and retry with default temperature
+    const errorMessage = getErrorMessage(error, '')
+    if (errorMessage.includes('temperature') || errorMessage.includes('does not support')) {
+      profilesWithoutCustomTemp.add(profileKey)
+
+      const response: LLMResponse = await provider.sendMessage(
+        { messages, model: selection.modelName, maxTokens: 1000 },
+        apiKey
+      )
+      logCall(response)
+      return { content: response.content, usage: response.usage }
+    }
+    throw error
+  }
+}
+
+/**
+ * Checks if an uncensored fallback should be attempted for an empty response
+ * Returns a CheapLLMSelection for the uncensored provider, or null if fallback should not be attempted
+ */
+function shouldAttemptUncensoredFallback(
+  responseContent: string,
+  currentSelection: CheapLLMSelection,
+  uncensoredFallback?: UncensoredFallbackOptions
+): CheapLLMSelection | null {
+  // No fallback if response is not empty
+  if (responseContent.trim() !== '') return null
+
+  // No fallback options provided
+  if (!uncensoredFallback) return null
+
+  const { dangerSettings, availableProfiles } = uncensoredFallback
+
+  // Only attempt in AUTO_ROUTE mode
+  if (dangerSettings.mode !== 'AUTO_ROUTE') return null
+
+  // Need an uncensored text profile configured
+  if (!dangerSettings.uncensoredTextProfileId) return null
+
+  // Check if current profile is already dangerous-compatible (no need to fallback)
+  const currentProfile = availableProfiles.find(p => p.id === currentSelection.connectionProfileId)
+  if (currentProfile?.isDangerousCompatible) return null
+
+  // Find the uncensored profile
+  const uncensoredProfile = availableProfiles.find(p => p.id === dangerSettings.uncensoredTextProfileId)
+  if (!uncensoredProfile) return null
+
+  // Build a CheapLLMSelection for the uncensored profile
+  return {
+    provider: uncensoredProfile.provider,
+    modelName: uncensoredProfile.modelName,
+    baseUrl: uncensoredProfile.baseUrl || undefined,
+    connectionProfileId: uncensoredProfile.id,
+    isLocal: false,
+  }
+}
+
+/**
  * Executes a cheap LLM task with the given messages
  */
 async function executeCheapLLMTask<T>(
@@ -134,161 +286,47 @@ async function executeCheapLLMTask<T>(
   parseResponse: (content: string) => T,
   taskType?: string,
   chatId?: string,
-  messageId?: string
+  messageId?: string,
+  uncensoredFallback?: UncensoredFallbackOptions
 ): Promise<CheapLLMTaskResult<T>> {
   try {
-    const apiKey = await getApiKeyForSelection(selection, userId)
-    if (apiKey === null) {
-      return {
-        success: false,
-        error: 'No API key available for cheap LLM provider',
-      }
-    }
+    let response = await sendToProvider(selection, messages, userId, taskType, chatId, messageId)
 
-    const provider = await createLLMProvider(
-      selection.provider,
-      selection.baseUrl
-    )
-
-    // Create a key for this profile to cache temperature support
-    const profileKey = `${selection.provider}:${selection.modelName}`
-
-    // Check if we already know this profile doesn't support custom temperature
-    if (profilesWithoutCustomTemp.has(profileKey)) {
-      const response: LLMResponse = await provider.sendMessage(
-        {
-          messages,
-          model: selection.modelName,
-          maxTokens: 1000,
-        },
-        apiKey
-      )
-
-      // Debug log: Cheap LLM response
-
-      const result = parseResponse(response.content)
-
-      // Log the cheap LLM call (fire and forget)
-      logLLMCall({
-        userId,
-        type: mapTaskTypeToLogType(taskType),
+    // Check if we should retry with an uncensored provider
+    const uncensoredSelection = shouldAttemptUncensoredFallback(response.content, selection, uncensoredFallback)
+    if (uncensoredSelection) {
+      logger.warn('[CheapLLM] Empty response detected, retrying with uncensored provider', {
+        taskType,
         chatId,
-        messageId,
-        provider: selection.provider,
-        modelName: selection.modelName,
-        request: {
-          messages: messages.map(m => ({ role: m.role, content: m.content })),
-          maxTokens: 1000,
-        },
-        response: {
-          content: response.content,
-        },
-        usage: response.usage,
-      }).catch(err => {
-        logger.warn('Failed to log cheap LLM call', {
-          error: err instanceof Error ? err.message : String(err)
-        })
+        originalProvider: selection.provider,
+        originalModel: selection.modelName,
+        uncensoredProvider: uncensoredSelection.provider,
+        uncensoredModel: uncensoredSelection.modelName,
       })
 
-      return {
-        success: true,
-        result,
-        usage: response.usage,
+      const retryResponse = await sendToProvider(uncensoredSelection, messages, userId, taskType, chatId, messageId)
+
+      if (retryResponse.content.trim() === '') {
+        throw new Error(`Empty response from both safe provider (${selection.provider}/${selection.modelName}) and uncensored provider (${uncensoredSelection.provider}/${uncensoredSelection.modelName})`)
       }
-    }
 
-    // Try with lower temperature for more consistent outputs
-    try {
-      const response: LLMResponse = await provider.sendMessage(
-        {
-          messages,
-          model: selection.modelName,
-          temperature: 0.3, // Lower temperature for more consistent outputs
-          maxTokens: 1000,
-        },
-        apiKey
-      )
-
-      // Debug log: Cheap LLM response
-
-      const result = parseResponse(response.content)
-
-      // Log the cheap LLM call (fire and forget)
-      logLLMCall({
-        userId,
-        type: mapTaskTypeToLogType(taskType),
+      logger.info('[CheapLLM] Uncensored fallback succeeded', {
+        taskType,
         chatId,
-        messageId,
-        provider: selection.provider,
-        modelName: selection.modelName,
-        request: {
-          messages: messages.map(m => ({ role: m.role, content: m.content })),
-          temperature: 0.3,
-          maxTokens: 1000,
-        },
-        response: {
-          content: response.content,
-        },
-        usage: response.usage,
-      }).catch(err => {
-        logger.warn('Failed to log cheap LLM call', {
-          error: err instanceof Error ? err.message : String(err)
-        })
+        uncensoredProvider: uncensoredSelection.provider,
+        uncensoredModel: uncensoredSelection.modelName,
+        responseLength: retryResponse.content.length,
       })
 
-      return {
-        success: true,
-        result,
-        usage: response.usage,
-      }
-    } catch (error) {
-      // If temperature is not supported, cache it and retry with default temperature
-      const errorMessage = getErrorMessage(error, '')
-      if (errorMessage.includes('temperature') || errorMessage.includes('does not support')) {
-        profilesWithoutCustomTemp.add(profileKey)
+      response = retryResponse
+    }
 
-        const response: LLMResponse = await provider.sendMessage(
-          {
-            messages,
-            model: selection.modelName,
-            maxTokens: 1000,
-          },
-          apiKey
-        )
+    const result = parseResponse(response.content)
 
-        // Debug log: Cheap LLM response (retry)
-
-        const result = parseResponse(response.content)
-
-        // Log the cheap LLM call (fire and forget)
-        logLLMCall({
-          userId,
-          type: mapTaskTypeToLogType(taskType),
-          chatId,
-          messageId,
-          provider: selection.provider,
-          modelName: selection.modelName,
-          request: {
-            messages: messages.map(m => ({ role: m.role, content: m.content })),
-            maxTokens: 1000,
-          },
-          response: {
-            content: response.content,
-          },
-          usage: response.usage,
-        }).catch(err => {
-          logger.warn('Failed to log cheap LLM call', {
-            error: err instanceof Error ? err.message : String(err)
-          })
-        })
-
-        return {
-          success: true,
-          result,
-          usage: response.usage,
-        }
-      }
-      throw error
+    return {
+      success: true,
+      result,
+      usage: response.usage,
     }
   } catch (error) {
 
@@ -395,7 +433,8 @@ export async function extractMemoryFromMessage(
   characterName: string,
   personaName: string | undefined,
   selection: CheapLLMSelection,
-  userId: string
+  userId: string,
+  uncensoredFallback?: UncensoredFallbackOptions
 ): Promise<CheapLLMTaskResult<MemoryCandidate>> {
   // Use clear "X says:" format to help the model distinguish speakers
   const userLabel = personaName ? `${personaName} (the user)` : 'The user'
@@ -454,7 +493,10 @@ ${characterLabel} says:
         return { significant: false }
       }
     },
-    'memory-extraction-user'
+    'memory-extraction-user',
+    undefined,
+    undefined,
+    uncensoredFallback
   )
 }
 
@@ -477,7 +519,8 @@ export async function extractCharacterMemoryFromMessage(
   characterName: string,
   personaName: string | undefined,
   selection: CheapLLMSelection,
-  userId: string
+  userId: string,
+  uncensoredFallback?: UncensoredFallbackOptions
 ): Promise<CheapLLMTaskResult<MemoryCandidate>> {
   // Use clear "X says:" format to help the model distinguish speakers
   const userLabel = personaName ? `${personaName} (the user)` : 'The user'
@@ -538,7 +581,10 @@ ${characterLabel} says:
         return { significant: false }
       }
     },
-    'memory-extraction-character'
+    'memory-extraction-character',
+    undefined,
+    undefined,
+    uncensoredFallback
   )
 }
 
@@ -589,7 +635,8 @@ export async function extractInterCharacterMemoryFromMessage(
   characterBName: string,
   characterBMessage: string,
   selection: CheapLLMSelection,
-  userId: string
+  userId: string,
+  uncensoredFallback?: UncensoredFallbackOptions
 ): Promise<CheapLLMTaskResult<MemoryCandidate>> {
   const messages: LLMMessage[] = [
     {
@@ -642,7 +689,10 @@ ${characterBName}: ${characterBMessage}`,
         return { significant: false }
       }
     },
-    'memory-extraction-inter-character'
+    'memory-extraction-inter-character',
+    undefined,
+    undefined,
+    uncensoredFallback
   )
 }
 
@@ -693,25 +743,127 @@ export async function summarizeChat(
 }
 
 /**
+ * Strips tool call artifacts from assistant message content so that title
+ * generation focuses on the actual conversation, not tool machinery.
+ *
+ * Handles patterns like:
+ * - `[Tool call made]` markers
+ * - `[Tool Result: toolName ...]` blocks with embedded JSON
+ * - Leading/trailing raw JSON fragments from tool responses
+ *
+ * @returns Cleaned content, or null if no meaningful conversational text remains
+ */
+export function stripToolArtifacts(content: string): string | null {
+  // Quick exit: if no tool markers or leading JSON, return as-is
+  if (
+    !content.includes('[Tool') &&
+    !content.includes('"toolName"') &&
+    !/^\s*[{[\],}]/.test(content)
+  ) {
+    return content
+  }
+
+  const originalLength = content.length
+  let cleaned = content
+
+  // Remove [Tool call made] markers
+  cleaned = cleaned.replace(/\[Tool call made\]/g, '')
+
+  // Remove [Tool Result: ...] blocks (tool name + JSON content within brackets)
+  cleaned = cleaned.replace(/\[Tool Result:[^\]]*\]/g, '')
+
+  // Filter out lines that look like JSON rather than conversation
+  const lines = cleaned.split('\n')
+  const conversationalLines = lines.filter(line => {
+    const t = line.trim()
+    if (!t) return false
+    // Skip lines that start with JSON structural characters
+    if (/^[{}\[\],:]/.test(t)) return false
+    // Skip lines that look like JSON key-value pairs
+    if (/^"[^"]*"\s*:/.test(t)) return false
+    return true
+  })
+
+  cleaned = conversationalLines.join('\n').trim()
+
+  // If very little conversational text remains, skip this message entirely
+  if (cleaned.length < 20) {
+    return null
+  }
+
+  return cleaned
+}
+
+/**
+ * Extracts only the visible conversational messages (what appears in chat bubbles)
+ * from a message-like array. This is the standard filter for any cheap LLM task
+ * that judges content (titles, summaries, backgrounds, compression, etc.).
+ *
+ * Filters:
+ * - If `type` field present, skips non-'message' entries (system events, context-summaries)
+ * - Skips any role that isn't USER or ASSISTANT (filters TOOL and SYSTEM messages)
+ * - Applies `stripToolArtifacts()` to assistant messages; skips if null returned
+ * - Case-insensitive role matching (handles both 'USER' and 'user')
+ *
+ * @param messages - Any message-like array (ChatEvents, MessageEvents, etc.)
+ * @returns Clean ChatMessage[] with only user/assistant conversational text
+ */
+export function extractVisibleConversation(
+  messages: Array<{ type?: string; role?: string; content?: string }>
+): ChatMessage[] {
+  const result: ChatMessage[] = []
+
+  for (const m of messages) {
+    // Skip non-message entries (system events, context-summary events, etc.)
+    if (m.type !== undefined && m.type !== 'message') continue
+
+    // Skip entries without content (e.g., context-summary events)
+    if (!m.content) continue
+
+    // Only include USER and ASSISTANT roles
+    const role = (m.role || '').toUpperCase()
+    if (role !== 'USER' && role !== 'ASSISTANT') continue
+
+    const lowerRole = role.toLowerCase() as 'user' | 'assistant'
+
+    if (lowerRole === 'assistant') {
+      const cleaned = stripToolArtifacts(m.content)
+      if (!cleaned) continue
+      result.push({ role: lowerRole, content: cleaned })
+    } else {
+      result.push({ role: lowerRole, content: m.content })
+    }
+  }
+
+  return result
+}
+
+/**
  * Chat title prompt template
  */
-const CHAT_TITLE_PROMPT = `Generate a short, descriptive title for this conversation.
+const CHAT_TITLE_PROMPT = `Generate a literary title for this conversation, like titling a short story.
 The title should:
-- Be 3-6 words maximum
-- Capture the main topic or theme
-- Be engaging but not clickbait
+- Be 3-8 words maximum
+- Reflect where the conversation ultimately went, not just how it started — weight the later messages more heavily
+- Focus on the unique narrative flair, quirky elements, or evocative mood
+- Be poetic and distinctive — unless the conversation is really about technical details, in which case mention the kind of technical work being discussed
+- Avoid moralistic, ethical, or sterile phrasing — no mentions of consent, boundaries, or lessons
+- Unless the conversation is really about one specific character, avoid titling it by character name
+
+The conversation is shown with early messages truncated and recent messages in full. Title based on the overall arc, especially the recent discussion.
 
 Respond with only the title, no quotes or additional text.`
 
 /**
  * Chat title from summary prompt template
  */
-const CHAT_TITLE_FROM_SUMMARY_PROMPT = `Generate a short, descriptive title for this conversation based on the summary provided.
+const CHAT_TITLE_FROM_SUMMARY_PROMPT = `Generate a literary title for this conversation based on the summary provided, like titling a short story.
 The title should:
-- Be under 60 characters
-- Capture the main topic or theme of the conversation
-- Be engaging but not clickbait
-- Be concise and clear
+- Be 3-8 words maximum and under 60 characters
+- Focus on the unique narrative flair, quirky elements, or evocative mood
+- Be poetic and distinctive — unless the conversation is really about technical details, in which case mention the kind of technical work being discussed
+- Avoid moralistic, ethical, or sterile phrasing — no mentions of consent, boundaries, or lessons
+- Unless the conversation is really about one specific character, avoid titling it by character name
 
 Respond with only the title, no quotes or additional text.`
 
@@ -730,10 +882,21 @@ export async function titleChat(
   selection: CheapLLMSelection,
   userId: string
 ): Promise<CheapLLMTaskResult<string>> {
-  // Take only first few messages for title generation
-  const relevantMessages = messages.slice(0, 6)
-  const conversationText = relevantMessages
-    .map(m => `${m.role.toUpperCase()}: ${m.content}`)
+  // Use up to 100 messages, weighted toward the end of the conversation.
+  // Older messages are truncated aggressively; recent messages get full text.
+  const capped = messages.slice(-100)
+  const recentThreshold = Math.max(0, capped.length - 10)
+  const conversationText = capped
+    .map((m, i) => {
+      const label = m.role.toUpperCase()
+      // Last 10 messages: full text (up to 500 chars)
+      // Older messages: truncated to 150 chars
+      const limit = i >= recentThreshold ? 500 : 150
+      const text = m.content.length > limit
+        ? m.content.substring(0, limit) + '...'
+        : m.content
+      return `${label}: ${text}`
+    })
     .join('\n\n')
 
   let prompt = CHAT_TITLE_PROMPT
@@ -823,9 +986,11 @@ const CHAT_TITLE_CONSIDERATION_PROMPT = `You are a chat title evaluator. You wil
 3. Recent messages from the chat
 
 Determine if the chat needs a new title. Consider:
-- If the current title is generic (like "Chat with [Name]" or "New Chat"), it SHOULD be replaced with a descriptive title based on what the conversation is actually about
+- If the current title is generic (like "Chat with [Name]" or "New Chat"), it SHOULD be replaced with a literary title based on what the conversation is actually about
 - If the title is already descriptive, only suggest a change if the main topic has shifted significantly
-- A good title captures the essence of the conversation in a few words
+- A good title is like titling a short story: it captures the unique narrative flair, quirky elements, or evocative mood in a few words
+- Titles should be poetic and distinctive, not moralistic or sterile — avoid mentions of consent, boundaries, or lessons. Exception: if the conversation is really about technical details, the title should mention the kind of technical work being discussed
+- Unless the conversation is really about one specific character, avoid titling it by character name
 
 Respond with a JSON object:
 {
@@ -834,7 +999,7 @@ Respond with a JSON object:
   "suggestedTitle": "new title if needsNewTitle is true, otherwise null"
 }
 
-Keep suggested titles under 60 characters, descriptive, and engaging.`
+Keep suggested titles 3-8 words, under 60 characters, poetic and distinctive (or technically descriptive if the conversation is about technical work).`
 
 /**
  * Evaluates whether a chat needs a new title based on recent messages
@@ -1142,6 +1307,7 @@ const IMAGE_PROMPT_CRAFTING_PROMPT = `You are an expert image prompt writer. You
 You will receive:
 - An original prompt describing a scene with {{placeholders}} for people
 - Physical descriptions for each person (in multiple detail levels: short, medium, long, complete)
+- Optional usage context for each person indicating when that appearance is most appropriate
 - A character limit for the final prompt
 - Optionally, a style trigger phrase that MUST be incorporated into the prompt
 
@@ -1174,6 +1340,7 @@ For the descriptions:
 - You may condense or paraphrase descriptions to fit naturally
 - Prioritize the most visually distinctive features (hair color, eye color, notable clothing, distinguishing features)
 - Don't include every detail if it makes the text awkward - focus on what matters visually
+- If a usage context is provided, use it to inform which appearance details are most relevant to the scene
 
 The final prompt MUST be under the character limit.
 
@@ -1189,12 +1356,18 @@ export interface ImagePromptExpansionContext {
   placeholders: Array<{
     placeholder: string
     name: string
+    usageContext?: string
     tiers: {
       short?: string
       medium?: string
       long?: string
       complete?: string
     }
+    clothing?: Array<{
+      name: string
+      usageContext?: string | null
+      description?: string | null
+    }>
   }>
   /** Target maximum length */
   targetLength: number
@@ -1230,6 +1403,10 @@ export async function craftImagePrompt(
     .map(p => {
       const parts: string[] = [`${p.placeholder} (${p.name}):`];
 
+      if (p.usageContext) {
+        parts.push(`  Usage context: ${p.usageContext}`);
+      }
+
       if (p.tiers.complete) {
         parts.push(`  Complete: "${p.tiers.complete}"`);
       }
@@ -1241,6 +1418,16 @@ export async function craftImagePrompt(
       }
       if (p.tiers.short) {
         parts.push(`  Short: "${p.tiers.short}"`);
+      }
+
+      // Include clothing/outfit details if available
+      if (p.clothing && p.clothing.length > 0) {
+        parts.push(`  Clothing/Outfits:`);
+        for (const outfit of p.clothing) {
+          const contextHint = outfit.usageContext ? ` (when: ${outfit.usageContext})` : '';
+          const desc = outfit.description ? `: ${outfit.description}` : '';
+          parts.push(`    - "${outfit.name}"${contextHint}${desc}`);
+        }
       }
 
       if (parts.length === 1) {
@@ -1296,6 +1483,340 @@ Create the final image prompt (maximize detail while staying under the limit):`,
       return prompt
     },
     'craft-image-prompt'
+  )
+}
+
+// ============================================================================
+// SCENE CONTEXT DERIVATION
+// ============================================================================
+
+/**
+ * Scene context derivation system prompt
+ * Analyzes chat history to derive a rich scene description for image generation
+ */
+const SCENE_CONTEXT_DERIVATION_PROMPT = `You are a creative writer skilled at interpreting conversations and imagining vivid scenes.
+
+Your task is to analyze a conversation and derive a scene context that captures what the characters might be experiencing or witnessing together.
+
+GUIDELINES:
+- Consider what the characters are currently discussing or doing
+- Interpret the emotional tone and implied setting
+- Be imaginative: if they're discussing a book, story, or historical event, imagine them as observers or participants in that world
+- If the conversation is casual or abstract, capture the mood and implied environment
+- Focus on visual, atmospheric details that would translate well to an image
+- Keep your description concise (1-3 sentences)
+
+EXAMPLES:
+
+Conversation about the book of Exodus:
+"Two figures huddle together examining ancient scrolls by lamplight, the distant silhouette of pyramids visible through a tent opening, desert stars glittering overhead."
+
+Casual friendly conversation:
+"Friends share comfortable conversation in a cozy space, warm lighting casting gentle shadows as they lean toward each other with easy familiarity."
+
+Discussion about space exploration:
+"Two companions gaze up at a star-filled sky, the Milky Way stretching above them, their faces illuminated by the soft glow of a campfire."
+
+Respond with ONLY the scene description - no explanations, no quotes, no formatting.`
+
+/**
+ * Input for scene context derivation
+ */
+export interface DeriveSceneContextInput {
+  /** Chat title for basic context */
+  chatTitle: string
+  /** Existing context summary if available */
+  contextSummary?: string | null
+  /** Recent messages from the chat */
+  recentMessages: ChatMessage[]
+  /** Names of characters in the chat */
+  characterNames: string[]
+}
+
+/**
+ * Derives a rich scene context from chat history for story background generation
+ *
+ * This function analyzes the conversation to understand what characters are doing
+ * or discussing, and creates an imaginative scene description that captures the
+ * mood and setting implied by the conversation.
+ *
+ * @param input - Context including chat title, messages, and character names
+ * @param selection - The cheap LLM provider selection
+ * @param userId - The user ID for API key retrieval
+ * @returns A scene description suitable for image prompt generation
+ */
+export async function deriveSceneContext(
+  input: DeriveSceneContextInput,
+  selection: CheapLLMSelection,
+  userId: string
+): Promise<CheapLLMTaskResult<string>> {
+  // Format recent messages for the prompt
+  const messageText = input.recentMessages
+    .map(m => {
+      const speaker = m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Character' : 'System'
+      // Truncate long messages to keep context manageable
+      const content = m.content.length > 500 ? m.content.substring(0, 500) + '...' : m.content
+      return `${speaker}: ${content}`
+    })
+    .join('\n\n')
+
+  // Build the context section
+  let contextInfo = `Chat Title: "${input.chatTitle}"`
+  if (input.contextSummary) {
+    contextInfo += `\n\nExisting Summary:\n${input.contextSummary}`
+  }
+  if (input.characterNames.length > 0) {
+    contextInfo += `\n\nCharacters present: ${input.characterNames.join(', ')}`
+  }
+
+  const llmMessages: LLMMessage[] = [
+    {
+      role: 'system',
+      content: SCENE_CONTEXT_DERIVATION_PROMPT,
+    },
+    {
+      role: 'user',
+      content: `${contextInfo}
+
+Recent Conversation:
+${messageText}
+
+Based on this conversation, describe the scene these characters might be in:`,
+    },
+  ]
+
+  return executeCheapLLMTask(
+    selection,
+    llmMessages,
+    userId,
+    (content: string): string => {
+      let result = content.trim()
+
+      // Remove quotes if the LLM wrapped the response
+      result = result.replace(/^["']|["']$/g, '')
+
+      // Remove any markdown formatting
+      result = result.replace(/^```[a-z]*\s*/g, '').replace(/\s*```$/g, '')
+
+      return result
+    },
+    'derive-scene-context'
+  )
+}
+
+// ============================================================================
+// MEMORY KEYWORD EXTRACTION
+// ============================================================================
+
+/**
+ * Prompt for extracting memory search keywords from recent conversation
+ */
+const MEMORY_KEYWORD_EXTRACTION_PROMPT = `You are analyzing recent conversation messages to extract search keywords for a character's memory system.
+
+Your task: Given recent messages from a conversation, produce a list of keywords and short phrases that capture what is being discussed. These keywords will be used to search a character's stored memories for relevant context.
+
+Focus on:
+- People, places, and events mentioned
+- Topics and themes being discussed
+- Emotions and relationship dynamics
+- Decisions, preferences, or plans
+- Anything the character might have memories about
+
+Do NOT include:
+- Generic conversational filler ("hello", "okay", "thanks")
+- The character's own name (they already know who they are)
+- Overly broad terms that would match everything
+
+Respond with a JSON array of keyword strings (3-10 keywords):
+["keyword1", "keyword phrase 2", "keyword3"]
+
+JSON only - no other text.`
+
+/**
+ * Extracts memory search keywords from recent conversation messages
+ *
+ * Used for proactive memory recall: analyzes messages since the character last
+ * spoke to find keywords for searching the character's memory store.
+ *
+ * @param recentMessages - Messages since the character last spoke
+ * @param characterName - The name of the character whose memories will be searched
+ * @param selection - The cheap LLM provider selection
+ * @param userId - The user ID for API key retrieval
+ * @param chatId - Optional chat ID for logging
+ * @returns Array of keyword strings for memory search
+ */
+export async function extractMemorySearchKeywords(
+  recentMessages: ChatMessage[],
+  characterName: string,
+  selection: CheapLLMSelection,
+  userId: string,
+  chatId?: string
+): Promise<CheapLLMTaskResult<string[]>> {
+  // Truncate messages to keep cheap LLM call fast
+  const cappedMessages = recentMessages.slice(-20)
+  const conversationText = cappedMessages
+    .map(m => {
+      const speaker = m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Character' : 'System'
+      const content = m.content.length > 500 ? m.content.substring(0, 500) + '...' : m.content
+      return `${speaker}: ${content}`
+    })
+    .join('\n\n')
+
+  const messages: LLMMessage[] = [
+    {
+      role: 'system',
+      content: MEMORY_KEYWORD_EXTRACTION_PROMPT,
+    },
+    {
+      role: 'user',
+      content: `Character: ${characterName}\n\nRecent conversation:\n${conversationText}\n\nExtract keywords for searching ${characterName}'s memories:`,
+    },
+  ]
+
+  return executeCheapLLMTask(
+    selection,
+    messages,
+    userId,
+    (content: string): string[] => {
+      try {
+        // Clean the response - remove markdown code blocks if present
+        let cleanContent = content.trim()
+        if (cleanContent.startsWith('```json')) {
+          cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
+        } else if (cleanContent.startsWith('```')) {
+          cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
+        }
+
+        const parsed = JSON.parse(cleanContent)
+        if (!Array.isArray(parsed)) {
+          return []
+        }
+
+        // Filter to only string values and limit to 10
+        return parsed
+          .filter((item: unknown): item is string => typeof item === 'string' && item.trim().length > 0)
+          .slice(0, 10)
+      } catch {
+        return []
+      }
+    },
+    'memory-keyword-extraction',
+    chatId
+  )
+}
+
+// ============================================================================
+// STORY BACKGROUND PROMPT CRAFTING
+// ============================================================================
+
+/**
+ * Story background prompt crafting system prompt
+ * Creates atmospheric landscape scene prompts suitable for chat backgrounds
+ */
+const STORY_BACKGROUND_PROMPT = `You are a skilled visual artist and prompt engineer specializing in atmospheric landscape scenes for story backgrounds.
+
+You will receive:
+- A scene context (typically a chat title or summary describing the story)
+- A list of characters with their brief physical descriptions
+- The target image generation provider
+
+Your task is to create a SINGLE image generation prompt that:
+1. Depicts a scene suitable as a background
+2. Captures the mood and setting implied by the scene context
+3. Places characters as figures in the scene
+4. Uses cinematic composition with the characters positioned naturally in the scene, usually conversing
+
+CRITICAL GUIDELINES:
+- This is for a BACKGROUND image, not a portrait - the scene/environment is primary
+- Characters should be toward the left and right of the frame, not centered
+- Characters should be described briefly, focusing on visual traits (hair color, clothing style, notable features)
+- Focus on atmospheric qualities: lighting, weather, time of day, mood
+- Include environmental details: location type, architectural elements, nature
+- Avoid cluttered compositions - keep it visually calm for use as a background
+- Write in a flowing, descriptive style suitable for image generation
+
+GOOD EXAMPLE OUTPUT:
+"Close-up of two people talking to the left and right of the frame. The woman has green eyes and is smiling."
+
+BAD EXAMPLE OUTPUT:
+"A misty forest clearing at twilight, soft golden light filtering through ancient oak trees. Two small figures stand near a weathered stone bridge - a woman with flowing dark hair in a simple dress and a man in traveler's clothes. Fog rolls gently across the mossy ground, fireflies beginning to glow. Atmospheric, peaceful, fantasy ambience."
+
+Respond with ONLY the final prompt - no explanations, no markdown formatting, no quotes.`
+
+/**
+ * Context for story background prompt crafting
+ */
+export interface StoryBackgroundPromptContext {
+  /** Scene context from chat title or summary */
+  sceneContext: string
+  /** Characters to include in the scene */
+  characters: Array<{
+    name: string
+    description: string
+  }>
+  /** Target image provider for length constraints */
+  provider: string
+}
+
+/**
+ * Crafts a story background image prompt using the cheap LLM
+ *
+ * @param context - Context with scene and character information
+ * @param selection - The cheap LLM provider selection
+ * @param userId - The user ID for API key retrieval
+ * @returns The crafted background prompt
+ */
+export async function craftStoryBackgroundPrompt(
+  context: StoryBackgroundPromptContext,
+  selection: CheapLLMSelection,
+  userId: string
+): Promise<CheapLLMTaskResult<string>> {
+  // Build character descriptions section
+  const characterSection = context.characters.length > 0
+    ? `\nCharacters to include as figures in the scene:\n${context.characters.map(c => `- ${c.name}: ${c.description}`).join('\n')}`
+    : '\nNo specific characters to include - create an atmospheric scene matching the context.'
+
+  // Provider-specific length guidance
+  let lengthGuidance = 'Keep the prompt under 700 characters.'
+  if (context.provider === 'OPENAI') {
+    lengthGuidance = 'Keep the prompt under 1000 characters for optimal DALL-E 3 results.'
+  } else if (context.provider === 'GROK') {
+    lengthGuidance = 'Keep the prompt under 600 characters for Grok image generation.'
+  }
+
+  const llmMessages: LLMMessage[] = [
+    {
+      role: 'system',
+      content: STORY_BACKGROUND_PROMPT,
+    },
+    {
+      role: 'user',
+      content: `Scene context: ${context.sceneContext}
+${characterSection}
+
+Provider: ${context.provider}
+${lengthGuidance}
+
+Create the atmospheric background prompt:`,
+    },
+  ]
+
+  return executeCheapLLMTask(
+    selection,
+    llmMessages,
+    userId,
+    (content: string): string => {
+      let prompt = content.trim()
+
+      // Remove quotes if the LLM wrapped the response
+      prompt = prompt.replace(/^["']|["']$/g, '')
+
+      // Remove any markdown formatting
+      prompt = prompt.replace(/^```[a-z]*\s*/g, '').replace(/\s*```$/g, '')
+
+      return prompt
+    },
+    'craft-story-background-prompt'
   )
 }
 
@@ -1392,7 +1913,8 @@ export async function compressConversationHistory(
   userName: string,
   targetTokens: number,
   selection: CheapLLMSelection,
-  userId: string
+  userId: string,
+  uncensoredFallback?: UncensoredFallbackOptions
 ): Promise<CheapLLMTaskResult<CompressionResult>> {
   // Format messages for compression
   const conversationText = messages
@@ -1436,7 +1958,10 @@ export async function compressConversationHistory(
         compressedTokens,
       }
     },
-    'compress-conversation-history'
+    'compress-conversation-history',
+    undefined,
+    undefined,
+    uncensoredFallback
   )
 }
 
@@ -1453,7 +1978,8 @@ export async function compressSystemPrompt(
   systemPrompt: string,
   targetTokens: number,
   selection: CheapLLMSelection,
-  userId: string
+  userId: string,
+  uncensoredFallback?: UncensoredFallbackOptions
 ): Promise<CheapLLMTaskResult<CompressionResult>> {
   // Estimate original token count
   const originalTokens = Math.ceil(systemPrompt.length / 4)
@@ -1487,6 +2013,270 @@ export async function compressSystemPrompt(
         compressedTokens,
       }
     },
-    'compress-system-prompt'
+    'compress-system-prompt',
+    undefined,
+    undefined,
+    uncensoredFallback
+  )
+}
+
+// ============================================================================
+// CHARACTER APPEARANCE RESOLUTION
+// ============================================================================
+
+/**
+ * Result of resolving a single character's appearance from context
+ */
+export interface AppearanceResolutionItem {
+  characterId: string
+  /** ID of the selected physical description, or null to use the first/default */
+  selectedDescriptionId: string | null
+  /** What the character is currently wearing */
+  clothingDescription: string
+  /** How clothing was determined */
+  clothingSource: 'narrative' | 'stored' | 'default'
+}
+
+/**
+ * Input describing a character's available appearances
+ */
+export interface CharacterAppearanceInput {
+  characterId: string
+  characterName: string
+  physicalDescriptions: Array<{
+    id: string
+    name: string
+    usageContext?: string | null
+    shortPrompt?: string | null
+    mediumPrompt?: string | null
+  }>
+  clothingRecords: Array<{
+    id: string
+    name: string
+    usageContext?: string | null
+    description?: string | null
+  }>
+}
+
+/**
+ * Appearance resolution system prompt
+ * Analyzes chat context to determine what each character currently looks like
+ */
+const APPEARANCE_RESOLUTION_PROMPT = `You are analyzing a conversation to determine what each character currently looks like and is wearing.
+
+You will receive:
+- Recent conversation messages
+- An image prompt that is about to be used for image generation
+- For each character: their available physical descriptions (with usage contexts) and stored clothing/outfit records
+
+Your task is to determine for each character:
+1. Which physical description best matches the current scene context (by usage context)
+2. What the character is currently wearing
+
+CLOTHING PRIORITY (highest to lowest):
+1. NARRATIVE: If the conversation explicitly describes what a character changed into or is currently wearing, use that description verbatim. This overrides everything.
+2. IMAGE PROMPT: If the image prompt specifies clothing for a character, use that.
+3. STORED: If neither narrative nor prompt specifies clothing, select the best matching stored clothing record based on its usage context and the current scene.
+4. DEFAULT: If no stored records match, use the first stored clothing record. If none exist, respond with an empty string.
+
+Respond with a JSON array, one entry per character:
+[
+  {
+    "characterId": "uuid-here",
+    "selectedDescriptionId": "uuid-of-best-matching-description-or-null",
+    "clothingDescription": "what they are wearing right now",
+    "clothingSource": "narrative" | "stored" | "default"
+  }
+]
+
+IMPORTANT:
+- For selectedDescriptionId, pick the description whose usageContext best fits the current scene. Use null to indicate the first/default.
+- For clothingDescription, write a concise visual description suitable for image generation.
+- clothingSource must be "narrative" if from conversation, "stored" if from a stored record, "default" if using first/fallback.
+
+JSON only - no other text.`
+
+/**
+ * Resolves character appearances based on chat context using a cheap LLM
+ *
+ * @param characters - Characters with their available descriptions and clothing
+ * @param recentMessages - Recent chat messages for context
+ * @param imagePrompt - The image prompt being generated
+ * @param selection - The cheap LLM provider selection
+ * @param userId - The user ID for API key retrieval
+ * @param chatId - Optional chat ID for logging
+ * @returns Array of resolved appearance items
+ */
+export async function resolveAppearance(
+  characters: CharacterAppearanceInput[],
+  recentMessages: ChatMessage[],
+  imagePrompt: string,
+  selection: CheapLLMSelection,
+  userId: string,
+  chatId?: string
+): Promise<CheapLLMTaskResult<AppearanceResolutionItem[]>> {
+  // Build character data section
+  const characterSection = characters.map(char => {
+    const descParts = char.physicalDescriptions.map(d => {
+      const context = d.usageContext ? ` (context: ${d.usageContext})` : ''
+      const preview = d.mediumPrompt || d.shortPrompt || '(no description text)'
+      return `    - ID: ${d.id}, Name: "${d.name}"${context}: ${preview}`
+    })
+
+    const clothingParts = char.clothingRecords.map(c => {
+      const context = c.usageContext ? ` (context: ${c.usageContext})` : ''
+      const desc = c.description || '(no description)'
+      return `    - ID: ${c.id}, Name: "${c.name}"${context}: ${desc}`
+    })
+
+    return `  Character: ${char.characterName} (ID: ${char.characterId})
+  Physical Descriptions:
+${descParts.length > 0 ? descParts.join('\n') : '    (none)'}
+  Clothing Records:
+${clothingParts.length > 0 ? clothingParts.join('\n') : '    (none)'}`
+  }).join('\n\n')
+
+  // Format recent messages
+  const messageText = recentMessages
+    .slice(-20)
+    .map(m => {
+      const speaker = m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Character' : 'System'
+      const content = m.content.length > 500 ? m.content.substring(0, 500) + '...' : m.content
+      return `${speaker}: ${content}`
+    })
+    .join('\n\n')
+
+  const messages: LLMMessage[] = [
+    {
+      role: 'system',
+      content: APPEARANCE_RESOLUTION_PROMPT,
+    },
+    {
+      role: 'user',
+      content: `Image prompt: ${imagePrompt}
+
+Characters:
+${characterSection}
+
+Recent Conversation:
+${messageText || '(no messages yet)'}
+
+Determine what each character currently looks like and is wearing:`,
+    },
+  ]
+
+  return executeCheapLLMTask(
+    selection,
+    messages,
+    userId,
+    (content: string): AppearanceResolutionItem[] => {
+      try {
+        let cleanContent = content.trim()
+        if (cleanContent.startsWith('```json')) {
+          cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
+        } else if (cleanContent.startsWith('```')) {
+          cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
+        }
+
+        const parsed = JSON.parse(cleanContent)
+        if (!Array.isArray(parsed)) {
+          return []
+        }
+
+        return parsed.map((item: Record<string, unknown>) => ({
+          characterId: String(item.characterId || ''),
+          selectedDescriptionId: item.selectedDescriptionId ? String(item.selectedDescriptionId) : null,
+          clothingDescription: String(item.clothingDescription || ''),
+          clothingSource: (['narrative', 'stored', 'default'].includes(String(item.clothingSource))
+            ? String(item.clothingSource)
+            : 'default') as 'narrative' | 'stored' | 'default',
+        }))
+      } catch {
+        return []
+      }
+    },
+    'resolve-character-appearances',
+    chatId
+  )
+}
+
+// ============================================================================
+// APPEARANCE SANITIZATION
+// ============================================================================
+
+/**
+ * Appearance sanitization system prompt
+ * Rewrites explicit/dangerous appearance descriptions into safe alternatives
+ */
+const APPEARANCE_SANITIZATION_PROMPT = `You are a content safety filter for image generation prompts. You will receive character appearance descriptions that have been flagged as potentially explicit or inappropriate for a standard image generation provider.
+
+Your task is to rewrite ONLY the problematic parts to make them safe for image generation while preserving as much visual detail as possible.
+
+GUIDELINES:
+- Replace explicit clothing descriptions with neutral alternatives (e.g., "wearing nothing" → "wearing casual clothes", "lingerie" → "comfortable loungewear")
+- Keep hair color, eye color, body type, and other non-explicit physical traits unchanged
+- Preserve the character's overall aesthetic and style where possible
+- Keep descriptions concise and suitable for image generation
+- Do NOT add new details that weren't implied by the original
+
+You will receive a JSON array of objects with characterId and appearanceText.
+Respond with the SAME JSON array but with sanitized appearanceText values.
+
+JSON only - no other text.`
+
+/**
+ * Sanitizes appearance descriptions that contain dangerous content
+ *
+ * @param appearances - Array of character appearances to sanitize
+ * @param selection - The cheap LLM provider selection
+ * @param userId - The user ID for API key retrieval
+ * @param chatId - Optional chat ID for logging
+ * @returns Array of sanitized appearance texts keyed by characterId
+ */
+export async function sanitizeAppearance(
+  appearances: Array<{ characterId: string; appearanceText: string }>,
+  selection: CheapLLMSelection,
+  userId: string,
+  chatId?: string
+): Promise<CheapLLMTaskResult<Array<{ characterId: string; appearanceText: string }>>> {
+  const messages: LLMMessage[] = [
+    {
+      role: 'system',
+      content: APPEARANCE_SANITIZATION_PROMPT,
+    },
+    {
+      role: 'user',
+      content: JSON.stringify(appearances),
+    },
+  ]
+
+  return executeCheapLLMTask(
+    selection,
+    messages,
+    userId,
+    (content: string): Array<{ characterId: string; appearanceText: string }> => {
+      try {
+        let cleanContent = content.trim()
+        if (cleanContent.startsWith('```json')) {
+          cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
+        } else if (cleanContent.startsWith('```')) {
+          cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
+        }
+
+        const parsed = JSON.parse(cleanContent)
+        if (!Array.isArray(parsed)) {
+          return appearances // Return originals if parsing fails
+        }
+
+        return parsed.map((item: Record<string, unknown>) => ({
+          characterId: String(item.characterId || ''),
+          appearanceText: String(item.appearanceText || ''),
+        }))
+      } catch {
+        return appearances // Return originals on error
+      }
+    },
+    'sanitize-appearance',
+    chatId
   )
 }

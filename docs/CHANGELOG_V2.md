@@ -2,6 +2,1000 @@
 
 ## Historical Changes
 
+### 2.9.0
+
+- docs: Comprehensive documentation updates for accuracy and completeness (2026-02-03)
+  - Updated About page to match README: new tagline, expanded description, reorganized features list
+  - Removed authentication references from About page (OAuth, TOTP 2FA removed)
+  - Added quilltap.ai link to About page
+  - Changed file storage description from "S3-compatible" to "Local filesystem" (default)
+  - Updated API.md version from v2.8 to v2.9
+  - Added 6 new API documentation sections: Chat Settings, Models, Files (v1), System Backup & Restore, System Data Directory, System Mount Points
+  - Marked legacy endpoints (Files & Images, Tools & Backup) in Table of Contents
+  - Updated DEVELOPMENT.md: MinIO now optional, local filesystem is default
+  - Clarified auth as "single-user mode" in DEVELOPMENT.md project structure
+  - Updated plugin types list in DEVELOPMENT.md (removed Auth Providers, added Storage Backends, Roleplay Templates, Tool Providers)
+- fix: Complete relationship remapping in native import/export system (2026-02-03)
+  - Character fields now remapped: `defaultConnectionProfileId`, `defaultImageProfileId`, `defaultRoleplayTemplateId`
+  - Chat participant `roleplayTemplateId` now remapped (preserves plugin template references)
+  - Profile tags now reconciled: connection profiles, image profiles, embedding profiles
+  - Roleplay template tags now reconciled on import
+  - Memory fields now remapped: `projectId`, `tags`
+  - Added comprehensive test coverage for all new remapping functionality
+- refactor: Remove S3/cloud backup functionality from backup system (2026-02-03)
+  - Backup system now only supports local file download
+  - Removed S3 destination option from backup dialog
+  - Removed cloud backups list and selection from restore dialog
+  - Removed `downloadBackupFromS3`, `saveBackupToS3`, `listS3Backups`, `deleteBackupFromS3` functions
+  - Simplified restore API to only accept file uploads (no S3 key)
+  - Updated BACKUP-RESTORE.md documentation to reflect changes
+  - Users who need cloud backups can use external backup scripts with the downloaded ZIP
+- fix: Temporary backup download failing due to HMR invalidating in-memory storage (2026-02-03)
+  - Moved temporary backup storage to a dedicated module using globalThis
+  - Storage now survives Next.js hot module reloading in development
+  - Created `lib/backup/temporary-storage.ts` with singleton pattern
+- feat: Complete backup system now includes plugin configs and npm plugins (2026-02-03)
+  - Backup now includes plugin configurations from `plugin_configs` table
+  - Backup now includes npm-installed plugins from `plugins/npm/` directory
+  - Restore recreates plugin configs and extracts npm plugins
+  - Manifest counts now include `pluginConfigs` and `npmPlugins`
+  - Restore summary shows plugin restoration counts
+  - This enables full system recreation from a single backup file
+- feat: Add data directory section to profile page (2026-02-03)
+  - Shows data directory location, configuration source, and platform
+  - "Open in File Browser" button opens the directory in the native file explorer (macOS/Windows/Linux)
+  - Copy button to copy the path to clipboard
+  - Docker environments show helpful message about accessing data via host volume mounts
+  - New API endpoint: GET/POST /api/v1/system/data-dir
+- fix: Docker build failures from npm lockfile issues (2026-02-03)
+  - Upgrade npm in Docker base image to fix "Invalid Version" bug in npm 10.x
+  - Change @quilltap/plugin-types dependency from file: reference to npm package
+  - Regenerate package-lock.json in Linux container to fix malformed platform-specific entries
+  - Update deprecated --only=production to --omit=dev syntax
+- test: Update e2e tests for single-user mode and stability (2026-02-02)
+  - Use production build for more stable e2e test runs
+  - Create fresh temp data directory for each test run
+  - Remove authentication code (single-user mode)
+  - Update API routes to /api/v1/ prefix
+  - Remove deprecated persona tests
+  - Add retry logic for flaky page loads
+  - Use Ollama with llama3.2 as default test provider
+- refactor: Embedding service now uses plugin architecture (2026-02-02)
+  - Embedding providers now delegate to plugins via `createEmbeddingProvider()` factory method
+  - Added `EmbeddingProvider` interface support to `LLMProviderPlugin`
+  - Created `OpenAIEmbeddingProvider` class in qtap-plugin-openai
+  - Created `OllamaEmbeddingProvider` class in qtap-plugin-ollama
+  - OpenRouter already had `OpenRouterEmbeddingProvider`, verified working
+  - Built-in TF-IDF provider already implemented as `LocalEmbeddingProvider`
+  - Registry now has `createEmbeddingProvider()` method matching `createImageProvider()` pattern
+  - Plugin factory exports `createEmbeddingProvider()` and `getAllAvailableEmbeddingProviders()`
+  - Removed hardcoded provider handlers from embedding-service.ts
+  - Updated plugin versions: openai 1.0.16, ollama 1.0.10
+- feat: Grok plugin migrated to xAI Responses API (2026-02-02)
+  - Migrated from deprecated Chat Completions API to Responses API (`/v1/responses`)
+  - Uses direct HTTP (fetch) instead of OpenAI SDK for chat (SDK doesn't support Responses API)
+  - Added new models: grok-4, grok-4-1-fast (2M context), grok-3, grok-3-mini, grok-2-1212, grok-code-fast-1
+  - Web search now uses server-side tools (web_search, x_search) instead of deprecated Live Search API
+  - Image format changed from `image_url` to `input_image` for Responses API compatibility
+  - Always uses `store: false` for stateless operation (Quilltap manages history locally)
+  - Updated cheapModels to use grok-3-mini as default
+  - Image generation model updated to grok-2-image
+  - Plugin version bumped to 1.0.14
+- refactor: Dead code removal and qt-* theme class standardization (2026-02-02)
+  - Removed unused functions from lib/avatar-styles.ts: getAvatarAspectRatioStyle, getAvatarMarginClass
+  - Removed unused function from lib/chat/connection-resolver.ts: hasResolvableConnectionProfile
+  - Removed unused exports from lib/chat-files-v2.ts: deleteChatFileById, getChatFileById, readChatFileBuffer, getSupportedMimeTypes
+  - Documented that formatToolResult() in tool-executor.ts is unused (actual formatting in context-builder.service.ts)
+  - Converted hard-coded Tailwind colors to qt-* utility classes in roleplay-templates, housekeeping-dialog, AvatarStack, tags-tab
+  - Added qt-border-*\/30 opacity variants for status colors (success, warning, destructive, info)
+  - Added hover:qt-bg-*\/10 variants for status colors
+  - Theme plugins now properly control all status colors via CSS variables
+- fix: Compression cache invalidated incorrectly in multi-character chats (2026-02-02)
+  - Cache validation was comparing filtered message count (only `type === 'message'`) against raw event count (includes tool results, system events)
+  - This caused cache to appear "too stale" with 100+ message difference when there were only a few new messages
+  - Now uses consistent message counting (filtered to `type === 'message'`) for both persisting and validating cache
+  - Multi-turn conversations with tool calls (RNG, state, MCP) now properly benefit from compression caching
+- perf: Compression cache fallback for faster responses when async not ready (2026-02-02)
+  - When async pre-compression isn't ready, falls back to previous cache instead of waiting
+  - Dynamic window calculation ensures no messages are lost when using older cache
+  - Trade-off: slightly more tokens (larger window) for faster response time
+  - New `CachedCompressionResponse` type with metadata for fallback detection
+  - Returns `cachedMessageCount` and `isFallback` for debugging and dynamic window sizing
+  - Context manager calculates effective window size when cache is behind current message count
+- feat: Chat response status indicator showing processing stages (2026-02-02)
+  - Visual indicator in chat composer shows current stage during AI response generation
+  - Stages: compressing (blue), gathering (purple), building (amber), sending (blue), streaming (green), tool_executing (purple)
+  - Uses QuillAnimation component for streaming stage, pulsing icon for other stages
+  - Stage-specific colors for light and dark modes via CSS custom properties
+  - Accessible with role="status" and aria-live="polite" for screen readers
+  - Respects prefers-reduced-motion for users who prefer less animation
+  - Status clears automatically on completion, error, or abort
+- perf: Fix compression cache timing issue causing slow message responses (2026-02-02)
+  - Pre-compression now triggers immediately after assistant message is saved, not after all async work
+  - Previously, pre-compression started after memory extraction and context summary checks (68+ seconds delay)
+  - Now runs in parallel with memory extraction, giving maximum time to complete before next message
+  - Added system prompt hash validation to cache retrieval for better cache validity checks
+  - Added debug logging for cache hit/miss reasons (message count mismatch, hash mismatch)
+  - Compression cache now persists to database, surviving server restarts
+  - New `compressionCache` column added to chats table via migration
+  - Cache lookup order: in-memory (fastest) -> database (survives restarts) -> sync compression (fallback)
+  - Relaxed cache validation: allows up to 50 new messages (was strict count match)
+  - Chats with many tool calls (RNG, state) now benefit from caching between turns
+- style: Add more spacing above user messages in chat (2026-02-02)
+  - User message rows now have 1.5rem top margin for better visual separation from previous messages
+- feat: Chat State for persistent JSON storage (2026-02-02)
+  - New `state` field on chats and projects for storing persistent JSON data
+  - Database migration adds state column to chats and projects tables
+  - New built-in LLM tool `state` for fetch/set/delete operations
+  - Path syntax supports dot notation and array indexing (e.g., "player.health", "inventory[0].name")
+  - Inheritance model: chat state overrides project state for chats in projects
+  - Underscore-prefixed keys (e.g., `_notes`) are protected from AI modification
+  - New StateEditorModal component for viewing/editing state in UI
+  - State button added to chat ToolPalette (database icon)
+  - Project State section added to project settings card
+  - API endpoints: GET/PUT/DELETE ?action=get-state/set-state/reset-state for both chats and projects
+  - Added help documentation (help/chat-state.md)
+- feat: Auto-detect RNG patterns in user and assistant messages (2026-02-02)
+  - Dice notation (e.g., "2d6", "d20", "3d10") is detected and executed automatically
+  - Coin flip phrases (e.g., "flip a coin") trigger automatic coin flips
+  - "Spin the bottle" phrases randomly select a chat participant
+  - Works on both user messages (results appear before message) and assistant responses (results appear after)
+  - When a character says "I roll 2d6", the dice actually get rolled
+  - New `autoDetectRng` chat setting (default: true) in Settings > Chat Settings > Automation
+  - Can be disabled for users who prefer manual tool invocation
+  - Updated help documentation for RNG tool and chat settings
+- fix: User-initiated tool results not sent to LLM (2026-02-02)
+  - Tool results from RNG and other user-run tools were saved to DB but not included in LLM context
+  - Root cause 1: Field name mismatch - user tools stored `tool` but context builder read `toolName`
+  - Root cause 2: `existingMessages` was loaded before tool results were saved, so they weren't included
+  - Fix: Context builder now checks both `toolName` and `tool` fields
+  - Fix: Orchestrator now adds saved tool messages to `existingMessages` array
+  - Added debug logging for tool result handling in context builder and chat page
+- fix: Virtualizer positioning bug when messages are replaced (2026-02-02)
+  - Messages would appear in wrong positions (overlapping) after sending
+  - Root cause: virtualizer used indices as keys, so measurement cache became stale when `fetchChat()` replaced the messages array
+  - Fix: Added `getItemKey` to virtualizer to use message IDs instead of indices
+  - Now measurements properly track items across array replacements
+- fix: Pending tool results not persisting to database (2026-02-02)
+  - Tool messages shown in composer would disappear after chat refresh
+  - Root cause: API route parsed `pendingToolResults` but didn't pass it to orchestrator
+  - Fix: Added missing `pendingToolResults` parameter in messages API route
+- feat: Pending tool results shown in composer before sending (2026-02-02)
+  - User-initiated tool calls (like RNG) now show results as chips in the composer
+  - Results can be removed before sending using the X button
+  - Full result details shown in tooltip on hover
+  - RNG API updated with `preview` mode to return results without creating messages
+  - Tool messages are created when the user sends their message
+  - Distinct visual styling for tool result chips vs file attachment chips
+- style: Tool message spacing and styling (2026-02-02)
+  - Added `qt-chat-message-row-tool` CSS class for tool messages
+  - Tool messages now have vertical margin (1rem top and bottom) for visual separation
+- feat: RNG (Random Number Generator) tool for dice rolls, coin flips, and spin the bottle (2026-02-02)
+  - New built-in LLM tool `rng` for generating random results in chats
+  - Supports dice rolls with any number of sides (2-1000), coin flips, and random participant selection
+  - Results are permanent chat messages visible to all characters
+  - Manual invocation via RngDropdown in ToolPalette with quick options (d6, d20, 2d6, coin, bottle)
+  - Custom roll interface for arbitrary dice configurations
+  - Uses cryptographically secure random numbers
+  - Added help documentation (help/rng-tool.md)
+  - Added POST /api/v1/chats/[id]?action=rng API endpoint
+- refactor: Tools are now sent with every LLM prompt (2026-02-02)
+  - Removed periodic tool re-injection logic that only sent tools every N messages
+  - Tools are now always included in every LLM request for consistent availability
+  - `forceToolsOnNextMessage` flag is retained only to trigger tool change notifications
+- feat: Image provider prompting guidance and style trigger phrases (2026-02-01)
+  - Added `promptingGuidance` field to `ImageProviderConstraints` for provider-specific prompting tips
+  - Added `styleInfo` field with `ImageStyleInfo` interface for style/LoRA details and trigger phrases
+  - Chat LLM now receives provider-specific guidance in the image generation tool description
+  - Cheap LLM prompt crafting now incorporates style trigger phrases when generating expanded prompts
+  - Updated `@quilltap/plugin-types` to v1.12.0 with new interfaces
+  - Removed React peer dependency from plugin-types (deprecated `renderIcon` now returns `unknown`)
+  - Updated PROVIDER_PLUGIN_DEVELOPMENT.md with documentation for new features
+- chore: Update plugin dependencies (2026-02-01)
+  - Updated @anthropic-ai/sdk to ^0.72.1
+  - Rebuilt bundled plugins with latest dependencies
+- chore: Add ESLint rule to catch "Quilttap" misspellings (2026-02-01)
+  - Custom ESLint rule flags "Quilttap" (with double-t) as an error
+  - Helps prevent common misspelling of project name throughout codebase
+  - Rule checks string literals and template strings across all source and markdown files
+- refactor: Plugin icon system redesigned to remove React dependency (2026-02-01)
+  - Plugins now provide SVG data via `icon` property instead of React components via `renderIcon`
+  - Added `PluginIconData` interface to `@quilltap/plugin-types` v1.10.0
+  - `renderIcon` is now optional and deprecated (kept for backwards compatibility)
+  - Removed `react` peer dependency from all bundled provider plugins
+  - ProviderIcon component renders SVG data from plugins with fallback to abbreviation
+  - External plugins no longer need React just for icons
+- fix: "Import from Template" modal now shows templates correctly (2026-02-01)
+  - Fixed prompt-templates response handling to extract `.templates` array
+  - Added `?all=true` parameter to sample-prompts API for flattened prompt list
+  - Sample prompts now return correct structure (content, modelHint, category, filename)
+- fix: Normalize LLM responses wrapped in content block format (2026-02-01)
+  - Some LLM providers return responses wrapped in `[{'type': 'text', 'text': "..."}]` format
+  - Added `normalizeContentBlockFormat()` utility to extract the actual text content
+  - Applied normalization in streaming service and orchestrator
+  - Handles both Python-style single quotes and JSON double quotes
+- feat: AI Wizard shows real-time generation progress (2026-02-01)
+  - Each field now shows a checkmark and snippet as it completes
+  - Progress updates stream in real-time via Server-Sent Events
+  - Shows current field being generated with spinner
+  - Displays error messages inline for failed fields
+  - Added `POST /api/v1/characters?action=ai-wizard-stream` streaming endpoint
+- feat: AI Wizard can upload documents as character source (2026-02-01)
+  - New "Upload a document" option in Physical Description Source step
+  - Supports text (.txt), Markdown (.md), and PDF files
+  - Document content is extracted and used as context for character generation
+  - Uses existing file-content-extractor service for text/PDF parsing
+  - Added `/api/v1/files?action=upload` endpoint for multipart file uploads
+  - Updated help documentation with new option
+- feat: AI Wizard can now generate character names (2026-02-01)
+  - AI Wizard button on character creation page no longer requires a name first
+  - Added "Name" as a generatable field in the AI Wizard (appears at top of field list)
+  - Enables creating completely random characters with AI-generated names
+  - Name is generated first and used as context for subsequent field generation
+  - Updated help documentation for character creation wizard workflow
+- fix: Include help-bundle.msgpack.gz in repository for CI tests (2026-02-01)
+  - Removed from .gitignore so the pre-built bundle is available in GitHub Actions
+  - Fixes test failures in help-search-handler.test.ts that depend on the bundle file
+- feat: Built-in search_help LLM tool (2026-01-31)
+  - New tool allows LLMs to search Quilltap help documentation during conversations
+  - Uses semantic search when OPENAI_API_KEY is available, keyword fallback otherwise
+  - Always enabled by default - helps users understand Quilltap features
+  - Loads pre-computed embeddings from help-bundle.msgpack.gz
+  - Added to BUILT_IN_TOOLS in tool-executor.ts, plugin-utils, and tools API route
+  - Visible in chat tool settings UI under "Built-in" category
+- docs: Comprehensive startup wizard guide (2026-01-31)
+  - Complete rewrite of `help/startup-wizard.md` with step-by-step setup instructions
+  - Covers choosing AI providers: Ollama, OpenRouter, OpenAI, Anthropic, and OpenAI-compatible
+  - Step-by-step instructions for getting API keys from each provider
+  - Guide to adding API keys and creating connection profiles
+  - Embedding setup: built-in TF-IDF vs external providers
+  - Cheap LLM configuration for background tasks
+  - First chat walkthrough with troubleshooting section
+  - Quick reference table with direct links to all settings pages
+- docs: Add page links to all help files (2026-01-31)
+  - Every help file now includes a prominent link to the corresponding app page
+  - Format: `> **[Open this page in Quilltap](/path)**` after the main heading
+  - Settings pages include `?tab=` parameter to navigate directly to the correct tab
+  - Tab mappings: keys, profiles, chat, appearance, image-profiles, embedding-profiles, plugins, storage, tags, templates, prompts
+- docs: Comprehensive projects functionality user documentation (2026-01-31)
+  - Added `help/projects.md` - Main projects overview with creation, organization, and best practices
+  - Added `help/project-files.md` - File management, supported types, AI access, and organization
+  - Added `help/project-chats.md` - Chat association, context injection, and project tools
+  - Added `help/project-characters.md` - Character roster, access modes, and cast management
+  - Added `help/project-settings.md` - Instructions, storage, tools, and configuration options
+  - Covers project instructions, file semantic search, roster mode, and mount point configuration
+- docs: Comprehensive chat functionality user documentation (2026-01-31)
+  - Added `help/chats.md` - Main chat overview with basic operations and navigation
+  - Added `help/chat-multi-character.md` - Multi-character chat setup and management
+  - Added `help/chat-turn-manager.md` - Turn system, speaker selection, and queue management
+  - Added `help/chat-participants.md` - Participants sidebar controls and features
+  - Added `help/chat-message-actions.md` - Message editing, swipes, deletion, and bulk actions
+  - Covers impersonation, talkativeness, nudge/queue, all-LLM auto-pause, and memory cascade
+- refactor: Replace JSON help embeddings with gzipped MessagePack bundle (2026-01-31)
+  - New build script `npm run build:help` generates `public/help-bundle.msgpack.gz`
+  - Bundle uses whole-document embeddings (1 per file) instead of heading-based chunks
+  - Reduced bundle size from ~24MB JSON to ~3-4MB compressed MessagePack
+  - Added `lib/help-search.ts` runtime loader with semantic search via cosine similarity
+  - Removed old `scripts/embed_help_files.ts` script
+- refactor: Rename auth middleware to context middleware (2026-01-30)
+  - Renamed `createAuthenticatedHandler` → `createContextHandler`
+  - Renamed `createAuthenticatedParamsHandler` → `createContextParamsHandler`
+  - Renamed `AuthenticatedContext` → `RequestContext`
+  - Renamed `withAuth` → `withContext`, `withAuthParams` → `withContextParams`
+  - Replaced `checkOwnership` with simpler `exists` type guard (ownership check meaningless in single-user mode)
+  - Legacy aliases maintained for backward compatibility
+  - Updated tests and documentation
+
+### 2.8.1
+
+- fix: Memory extraction handles LLM returning object instead of string (2026-01-31)
+  - Some LLMs return `content` as an object instead of a string in memory extraction
+  - Added type coercion to stringify non-string content/summary fields
+  - Prevents Zod validation error "expected string, received object"
+  - Added debug logging to track which task types encounter this issue
+- feat: First-startup character seeding (2026-01-31)
+  - Seeds default character "Ben" on first startup when database is empty
+  - Created `first-startup/` directory with seed character data
+  - Added `lib/startup/seed-initial-data.ts` for seeding logic
+  - Seeding runs after migrations in `instrumentation.ts` as phase 1.25
+  - Added 'seeding' phase to startup state tracking
+  - Safe to call multiple times - only seeds when no characters exist
+- feat: First-startup TF-IDF embedding profile seeding (2026-01-31)
+  - Seeds default "Built-in TF-IDF" embedding profile on first startup
+  - Enables semantic memory search without requiring any API keys
+  - Profile is set as default so memories use it immediately
+  - Added embedding profile seed data to `first-startup/` module
+- feat: Built-in TF-IDF embedding provider plugin (2026-01-30)
+  - New `qtap-plugin-builtin-embeddings` plugin provides zero-dependency, offline embedding
+  - Uses TF-IDF with BM25 enhancement and Porter stemming for semantic search
+  - Supports bigrams for better phrase matching
+  - Vocabulary automatically fits to user's memory corpus
+  - Added 'BUILTIN' to embedding profile providers (alongside OPENAI, OLLAMA, OPENROUTER)
+  - New database tables: `tfidf_vocabularies` for vocabulary storage, `embedding_status` for tracking
+  - Background jobs: EMBEDDING_GENERATE, EMBEDDING_REFIT, EMBEDDING_REINDEX_ALL
+  - Debounced vocabulary refitting when memories change (5-second debounce)
+  - API endpoints: POST `?action=refit` and `?action=reindex` on embedding profiles
+  - UI: Vocabulary stats display, manual refit button, embedding progress indicators
+  - Added qt-badge-provider-* CSS classes for theme-aware provider badges
+- fix: Connection profile test errors now display in UI (2026-01-31)
+  - Added `connectError` prop to ProfileModal
+  - Displays error message in red box when connection test fails
+  - Improved error logging in useAsyncOperation to show message directly
+- feat: Auto-fill profile name when selecting model (2026-01-31)
+  - When creating a new profile, selecting a model auto-fills name with `PROVIDER/MODEL_NAME`
+  - Only triggers if name field is empty
+  - Works with ModelSelector dropdown and manual text input
+- fix: Auto-fill base URL when selecting provider with default (2026-01-31)
+  - Selecting Ollama now pre-fills base URL with `http://localhost:11434`
+  - Works for any provider that has `baseUrlDefault` in config
+  - Updated ProviderConfig type to include baseUrlLabel and baseUrlDefault
+- fix: Ollama 405 error on test message (2026-01-31)
+  - Fixed trailing slash in base URL causing double-slash in API paths
+  - OllamaProvider now strips trailing slashes from base URL
+  - Updated qtap-plugin-ollama to v1.0.8
+- fix: Embedding-only providers not appearing in provider dropdown (2026-01-31)
+  - Extended plugin initialization to register EMBEDDING_PROVIDER plugins to provider registry
+  - Previously only LLM_PROVIDER plugins were registered, excluding embedding-only providers
+  - Fixed hotLoadProviderPlugin to also handle EMBEDDING_PROVIDER capability
+  - BUILTIN provider now correctly appears in embedding profile settings
+- fix: Ollama cheap LLM fallback uses current model instead of hardcoded one (2026-01-31)
+  - Previously fell back to hardcoded `llama3.2:3b` which may not exist
+  - Now uses the current profile's model since all Ollama models are free/local
+- fix: Memory search regex error when semantic search unavailable (2026-01-31)
+  - `searchByContent` and `searchByContentAboutCharacter` now escape regex metacharacters
+  - Previously, chat messages with `*`, `?`, `()` etc. would crash the fallback search
+  - Matches existing behavior in `countMemoriesWithText` and `findMemoriesWithText`
+
+- feat: Log data directory configuration at startup (2026-01-31)
+  - Added `getBaseDataDirWithSource()` function to `lib/paths.ts`
+  - Startup now logs the base directory path, source (environment or platform-default), and human-readable description
+  - Helps users understand where Quilltap stores data and whether it's using an override or default location
+  - Clarified that `QUILLTAP_DATA_DIR` is ignored in Docker (container must use /app/quilltap to match volume mounts)
+  - Clarified documentation: `QUILLTAP_HOST_DATA_DIR` is used by docker-compose.yml (not the application)
+- feat: Built-in TF-IDF embedding provider plugin (2026-01-30)
+  - New `qtap-plugin-builtin-embeddings` plugin provides zero-dependency, offline embedding
+  - Uses TF-IDF with BM25 enhancement and Porter stemming for semantic search
+  - Supports bigrams for better phrase matching
+  - Vocabulary automatically fits to user's memory corpus
+  - Added 'BUILTIN' to embedding profile providers (alongside OPENAI, OLLAMA, OPENROUTER)
+  - New database tables: `tfidf_vocabularies` for vocabulary storage, `embedding_status` for tracking
+  - Background jobs: EMBEDDING_GENERATE, EMBEDDING_REFIT, EMBEDDING_REINDEX_ALL
+  - Debounced vocabulary refitting when memories change (5-second debounce)
+  - API endpoints: POST `?action=refit` and `?action=reindex` on embedding profiles
+  - UI: Vocabulary stats display, manual refit button, embedding progress indicators
+  - Added qt-badge-provider-* CSS classes for theme-aware provider badges
+- fix: Embedding-only providers not appearing in provider dropdown (2026-01-31)
+  - Extended plugin initialization to register EMBEDDING_PROVIDER plugins to provider registry
+  - Previously only LLM_PROVIDER plugins were registered, excluding embedding-only providers
+  - Fixed hotLoadProviderPlugin to also handle EMBEDDING_PROVIDER capability
+  - BUILTIN provider now correctly appears in embedding profile settings
+- refactor: Rename auth middleware to context middleware (2026-01-30)
+  - Renamed `createAuthenticatedHandler` → `createContextHandler`
+  - Renamed `createAuthenticatedParamsHandler` → `createContextParamsHandler`
+  - Renamed `AuthenticatedContext` → `RequestContext`
+  - Renamed `withAuth` → `withContext`, `withAuthParams` → `withContextParams`
+  - Replaced `checkOwnership` with simpler `exists` type guard (ownership check meaningless in single-user mode)
+  - Legacy aliases maintained for backward compatibility
+  - Updated tests and documentation
+
+### 2.8.0
+
+- refactor: Remove legacy API routes (2026-01-30)
+  - Deleted 157 deprecated API route stubs that were returning 410 Gone
+  - All API access now exclusively through `/api/v1/` endpoints
+  - Removed `movedToV1()` helper function (no longer needed)
+  - Deleted 16 test files that were testing stub behavior
+  - Non-v1 routes retained: `/api/health`, `/api/plugin-routes/[...path]`, `/api/themes/*`
+- feat: Google plugin native tool support and Gemini 3 improvements (2026-01-30)
+  - Implemented native `functionResponse` tool result format (previously used text-based fallback)
+  - Added `thinkingBudget: 4096` configuration for Gemini 3 thinking models to prevent empty responses
+  - Recognized `gemini-pro-latest` as Gemini 3 (a thinking model requiring special handling)
+  - Added model metadata warnings for gemini-pro-latest, gemini-1.5 models, and Gemini 2.0 deprecation
+  - Updated tool-executor.ts to return native tool format for Google provider
+  - Updated qtap-plugin-google to v1.1.3
+- feat: Migrate Google plugin to new @google/genai SDK (2026-01-30)
+  - **BREAKING**: Replaced deprecated `@google/generative-ai` SDK with new `@google/genai` v1.37.0
+  - The old SDK lost support on August 31, 2025; new SDK is actively maintained by Google DeepMind
+  - New SDK uses `ai.models.generateContent()` and `ai.models.generateContentStream()` API pattern
+  - Implemented dynamic model listing via `ai.models.list()` API instead of hardcoded list
+  - Updated configuration structure to use `config` object for tools, safety settings, system instructions
+  - Fixed Gemini 3 Thinking models returning empty content by properly extracting text from response parts
+  - Added proper handling for thought summaries (parts with `thought: true`)
+  - Updated model list to include current models: gemini-3-flash-preview, gemini-3-pro-preview, gemini-2.5-flash, etc.
+  - Added deprecation warning for Gemini 2.0 models (retiring March 3, 2026)
+  - Added `sanitizeSchemaForGoogle()` to filter unsupported JSON Schema fields (e.g., `propertyNames`) from tool parameters
+  - Convert SDK response class instances to plain objects for Zod validation compatibility
+  - Updated qtap-plugin-google to v1.1.0
+- fix: Rains theme font loading on nested routes (2026-01-30)
+  - Removed duplicate @font-face rules with relative URLs from styles.css
+  - Fonts are properly declared in manifest.json and loaded by the theme system
+  - Fixed 404 errors for fonts when viewing pages like /chats/[id]
+  - Updated qtap-plugin-theme-rains to v1.3.3
+- refactor: Code quality improvements and qt-* class migration (2026-01-30)
+  - Removed dead code: empty if blocks in `background-jobs.repository.ts` (update/delete methods)
+  - Removed dead code: empty if block in `app/api/v1/chats/route.ts` (redundant excludeTagIds check)
+  - Removed dead code: unused `collection` variable in `getStats()` method
+  - Converted settings page to use qt-* semantic classes (qt-heading-1, qt-text-muted, qt-link)
+  - Converted tools page to use qt-* semantic classes
+  - Converted about page to use qt-* semantic classes
+  - Converted profile page heading to qt-heading-1
+  - Converted character edit/new pages to use qt-heading-1
+  - Converted WelcomeSection heading to qt-heading-1
+  - Converted RenameReplaceTab to use qt-text-muted instead of raw Tailwind color classes
+  - Converted CreateProjectDialog to use `qt-*` classes (qt-dialog-overlay, qt-dialog, qt-input, qt-textarea, qt-button-*)
+  - Updated API.md: removed "PNG not yet implemented" note (PNG export is implemented)
+  - Updated homepage-components.test.tsx to expect qt-heading-1 class
+- test: Add unit tests for new features and API routes (2026-01-30)
+  - **llm-logging.service.test.ts** (12 tests): LLM logging service behavior, settings checks, error handling
+  - **llm-logs-api.test.ts** (13 tests): LLM logs API routes, filtering, pagination, ownership checks
+  - **tools-api.test.ts** (2 tests): Tools API with built-in tools list and chat-specific availability
+  - **session-api.test.ts** (2 tests): Session API for single-user mode authentication
+  - Extended mock repository container with llmLogs and pluginConfigs support
+  - All tests use relative imports to avoid TypeScript path resolution issues in test environment
+- refactor: Dead code cleanup via knip analysis (2026-01-30)
+  - Deleted 21 unused files including old nav components, search service, and obsolete utilities
+  - Removed unused dependencies: bcrypt, qrcode, @types/bcrypt, @types/qrcode, ts-jest
+  - Added missing dependencies: pdfjs-dist, @testing-library/user-event, jsdom
+  - Deleted obsolete MongoDB scripts (debug-files.ts, consolidate-duplicate-tags.ts)
+  - Added knip.json configuration for ongoing dead code detection
+  - Updated jest.config.ts and next.config.js to remove MongoDB/bcrypt references
+- refactor: Remove excessive logging from codebase (2026-01-30)
+  - Removed all `logger.debug()` calls added since v2.7.0 (31 calls across 12 files)
+  - Removed noisy info-level logs for routine operations that work as expected
+  - API routes: removed success logs for file/image list retrieval, plugin init requests
+  - File storage: removed logs for download success, mount point setup, initialization
+  - Database: removed "Ensured collection exists" that fired 450+ times per session
+  - Plugin system: removed redundant registry init logs (kept top-level summary only)
+  - Plugin updates: removed routine check start/complete logs
+  - Kept all error/warning logs and the final "Plugin system initialized" summary
+  - Significantly reduces log noise in production and development
+- test: Add comprehensive unit tests for 2.8-dev features (2026-01-30)
+  - Created 6 new test files with 146+ unit tests covering new features since 2.7.0
+  - **sillytavern-png-placeholder.test.ts** (21 tests): PNG placeholder generation for character exports
+  - **plugin-upgrader.test.ts** (19 tests): Plugin upgrade system with version comparison logic
+  - **builtin-tools.test.ts** (27 tests): Built-in tool collision detection for MCP plugin
+  - **tool-settings.test.ts** (20 tests): Per-chat and per-project tool settings hierarchies
+  - **theme-system.test.ts** (25 tests): Theme selection with heading fonts and preview generation
+  - **single-user-migration.test.ts** (34 tests): Single-user migration from multi-user mode
+  - All tests passing with comprehensive coverage of business logic and edge cases
+- feat: Implement PNG placeholder generation for SillyTavern character exports (2026-01-30)
+  - Characters can now be exported as PNG even without an avatar image
+  - Generates colored placeholder PNG based on character name hash
+  - Updated `/api/v1/characters/[id]?action=export&format=png` to use new functionality
+  - Removed 501 "Not Implemented" error for PNG exports
+- refactor: Remove legacy `lib/images.ts` in favor of `lib/images-v2.ts` (2026-01-30)
+  - Deleted `lib/images.ts` (legacy file-based image storage)
+  - Removed outdated `__tests__/unit/images.test.ts` that tested legacy implementation
+  - `lib/images-v2.ts` uses repository pattern and file storage manager
+- test: Add comprehensive unit tests for prompt templates API (2026-01-30)
+  - Created `__tests__/unit/prompt-templates-api.test.ts` with 14 tests
+  - Removed broken integration tests that were skipped since v1 API migration
+  - Tests cover GET, POST, PUT, DELETE operations and authentication
+- feat: MCP plugin now avoids shadowing built-in Quilltap tools (2026-01-30)
+  - Added `getBuiltinToolNames()` to `@quilltap/plugin-utils` v1.3.0
+  - MCP plugin passes built-in tool names to collision detection
+  - Tools from MCP servers that would shadow built-in tools get prefixed
+  - Updated qtap-plugin-mcp to v1.1.7
+- chore: Add script to upgrade dependencies in packages and plugins (2026-01-30)
+  - New `scripts/upgrade-dependencies.sh` runs `npm upgrade` in all packages/ and plugins/dist/
+  - Added `npm run update:npm` convenience script in package.json
+- refactor: Physical description editor now uses wide dialog (2026-01-30)
+  - New `qt-dialog-wide` class matches page container width (respects full-width mode)
+  - Dialog expands to `--qt-page-max-width` instead of fixed 672px
+  - Updated `@quilltap/theme-storybook` to v1.0.16 with matching class
+- feat: Theme selector shows each theme name in its heading font (2026-01-30)
+  - Theme popout menu lazy-loads custom fonts when opened
+  - Each theme name displays in that theme's heading font for preview
+  - Added `headingFont` property to `ThemeSummary` type (family + optional URL)
+  - `getThemeList()` now includes heading font from custom fonts or fontSerif
+  - System fonts (Georgia, Inter, etc.) work immediately; custom fonts load on-demand
+  - Helps users understand each theme represents more than just a color change
+- refactor: Expand homepage character card descriptions to two lines (2026-01-30)
+  - Changed character description from single-line truncate to 2-line with ellipsis
+  - Added `min-h-[2.5rem]` for consistent card heights even with short descriptions
+  - Updated `CARD_HEIGHT_ESTIMATE` from 165px to 185px for grid calculations
+- fix: npm-installed plugins not persisting in Docker (2026-01-29)
+  - docker-compose.yml: Added missing volume mount for `/app/plugins/site`
+  - docker-compose.prod.yml: Changed from named volume to host-mounted path
+  - Both now mount `${QUILLTAP_HOST_DATA_DIR:-~/.quilltap}/plugins/site:/app/plugins/site`
+  - Dockerfile: Creates `/app/plugins/site` directory with proper permissions
+  - Fixed duplicate USER/EXPOSE/CMD lines at end of Dockerfile
+  - Updated docs/DEPLOYMENT.md with new Plugin Management section
+  - Updated features/complete/plugin_installation.md Docker Configuration section
+- refactor: Redesign image modal character tagging UI (2026-01-29)
+  - Split UI into two sections: tagged characters list and add-character dropdown
+  - Tagged characters show name, Avatar badge (if current image), Set Avatar button, and remove (×) button
+  - Untagged characters appear in dropdown for easy tagging
+  - Fixed avatar detection bug: was comparing `character.defaultImageId === character.id` instead of `=== imageId`
+  - Fixed state management: ImageDetailModal now uses hook's `taggedCharacterIds` state instead of duplicate state
+  - Fixed API calls in useImageActions to use v1 action dispatch pattern (`?action=add-tag`, `?action=remove-tag`)
+- fix: Avatar set/clear using wrong HTTP method (2026-01-29)
+  - Changed `PATCH` to `POST` for avatar actions in multiple files
+  - Fixed `useGalleryData.ts` (handleSetAvatar, handleClearAvatar, handleDeleteImage)
+  - Fixed `CreateNPCDialog.tsx` (avatar set after NPC creation)
+  - Fixed `useCharacterEdit.ts` (setCharacterAvatar, clearAvatar)
+  - API expects `POST /api/v1/characters/[id]?action=avatar`, not PATCH
+- refactor: Move NPCs from Settings to Characters page (2026-01-29)
+  - Removed NPCs tab from Settings page
+  - Deleted `components/settings/npcs-tab.tsx` and `components/settings/npcs/` directory
+  - NPCs now display on `/characters` page, sorted last (after non-NPC characters)
+  - Fixed character view breadcrumb to always link to `/characters` (was linking to Settings for NPCs)
+- feat: Add Upgrades tab to plugin settings for manual upgrade of breaking changes (2026-01-29)
+  - New "Upgrades" tab in Settings > Plugins between Installed and Browse npm
+  - Shows plugins with available updates (breaking changes that weren't auto-upgraded)
+  - Cards display version transition, breaking/non-breaking badges, and external links
+  - Links to repository, changelog (GitHub releases), and npm package page
+  - Non-breaking upgrades apply directly; breaking upgrades require confirmation modal
+  - "Check for Updates" button with last checked timestamp
+  - New API: `GET /api/v1/plugins?action=check-upgrades` returns enhanced upgrade metadata
+  - New backend function: `checkForUpdatesWithMetadata()` enriches update info with URLs
+  - New component: `UpgradeConfirmModal` for breaking change confirmation
+- feat: Auto-upgrade npm-installed plugins at startup (2026-01-29)
+  - Plugins installed via npm are automatically checked for updates during server startup
+  - Non-breaking updates (minor/patch per semver) are applied automatically
+  - Breaking updates (major version changes) are skipped and logged
+  - Sequential toast notifications inform users of upgrades after app loads
+  - New startup phase "plugin-updates" between migrations and plugin initialization
+  - Environment variable `PLUGIN_AUTO_UPDATE=false` to disable feature
+  - New API endpoint: `GET/POST /api/v1/system/plugins/upgrades` for notification state
+  - New components: `PluginUpgradeNotifier`, version-checker, upgrader modules
+  - Unit tests for version comparison and upgrade sequencing logic
+- chore: Upgrade @openrouter/sdk from 0.4.0 to 0.5.1 (2026-01-29)
+  - Updated in main app and qtap-plugin-openrouter
+  - Plugin bumped to v1.0.14
+  - No code changes required (minor release with Speakeasy CLI updates)
+- refactor: Rains theme revision - Claude-inspired aesthetic (2026-01-29)
+  - Dark mode: Clean charcoal with subtle warmth (hue 40), replacing muddy orange-brown
+  - Light mode: Refined warm parchment/cream backgrounds
+  - Accent color shifted from terracotta (hue 15) to orange-amber (hue 28)
+  - Higher contrast text colors for improved readability
+  - Added Nunito Sans (weight 400) for user messages - clean, delicate strokes at regular weight
+  - User message foreground brightened to near-white (`hsl(40 6% 98%)`)
+  - Added `--qt-card-*` tokens for consistent card styling
+  - Updated comments from "ChatGPT-inspired" to "Claude-inspired"
+  - Plugin bumped to v1.3.2
+- feat: Earl Grey theme card tokens (2026-01-29)
+  - Added `--qt-card-shadow`, `--qt-card-shadow-hover`, `--qt-card-border-opacity` tokens
+  - Dark mode: layered shadows with faint white edge for definition
+  - Light mode: subtle neutral gray shadows
+  - Plugin bumped to v1.3.1
+- fix: Remove duplicate avatar in streaming message indicator (2026-01-29)
+  - Removed leftover mobile header code from StreamingMessage component
+  - Mobile header rendered a second avatar above the quill animation
+  - Cleaned up unused onStopClick prop (stop button exists in ChatComposer)
+- feat: Project-level default tool settings (2026-01-29)
+  - Projects can now configure default tool settings that apply to new chats
+  - New `defaultDisabledTools` and `defaultDisabledToolGroups` fields on projects
+  - Settings Card in project view has new "Default Tool Settings" section with Configure button
+  - ProjectToolSettingsModal allows configuring which tools are enabled by default
+  - New chats in the project inherit these default settings (existing chats unaffected)
+  - API: `POST /api/v1/projects/[id]?action=update-tool-settings` for programmatic access
+  - Tool settings components modularized for reuse (ToolSettingsContent, shared types/utils)
+  - ChatToolSettingsModal refactored to use shared ToolSettingsContent component
+  - Migration `add-project-tool-settings-fields-v1` adds columns to projects table
+- refactor: Remove mobile/phone UI support (2026-01-29)
+  - App now targets tablet and desktop viewports only (minimum 768px)
+  - Deleted: MobileToolPalette.tsx, MobileParticipantDropdown.tsx
+  - Removed: isMobile, openMobile, closeMobile, isMobileOpen from sidebar-provider
+  - Removed: hamburger menu from app-header and page-toolbar
+  - Removed: mobile sidebar overlay and off-canvas behavior
+  - Removed: @media (max-width: 768px) and related mobile CSS
+  - Removed: mobile-specific CSS variables and utility classes (qt-mobile-*, qt-desktop-only)
+  - Removed: mobile message header, mobile participant bar/dropdown/controls
+  - ParticipantSidebar always visible (no longer hidden on mobile)
+  - Updated feature documentation in features/complete/new_ui_layout.md
+- feat: Hierarchical tool management for per-chat tool settings (2026-01-29)
+  - Added plugin-level toggling: enable/disable all tools from a plugin at once
+  - Added subgroup-level toggling: for MCP plugin, enable/disable all tools from a specific server
+  - Individual tool toggling preserved from previous implementation
+  - New `getToolHierarchy` method in ToolPlugin interface for plugins to expose subgroup metadata
+  - MCP plugin now reports tool hierarchy via `connectionManager.getToolHierarchy()`
+  - `/api/v1/tools` response extended with `subgroupId` and `subgroupDisplayName` fields
+  - `/api/v1/tools?chatId=xxx` returns availability info for context-dependent tools
+  - Unavailable tools (e.g., generate_image without image profile) shown grayed out with explanation
+  - Tool counts show enabled/available format (e.g., "4/5") excluding unavailable tools
+  - New `disabledToolGroups` field on chat metadata for group-level disabling
+  - Group patterns: `plugin:{name}` for plugin-level, `plugin:{name}:subgroup:{id}` for subgroup-level
+  - ChatToolSettingsModal rewritten with collapsible hierarchy, tri-state checkboxes
+  - Tool filtering logic updated to check both individual and group disables
+  - System message injected when tool settings change to notify LLM of available tools
+  - Chat GET endpoint now returns `disabledTools` and `disabledToolGroups` for proper state persistence
+  - Migration `add-chat-tool-settings-fields-v1` adds required columns to chats table
+  - @quilltap/plugin-types bumped to 1.9.3, qtap-plugin-mcp bumped to 1.1.6
+- feat: Per-chat tool settings and tool re-injection optimization (2026-01-29)
+  - Added per-chat tool settings allowing users to enable/disable specific LLM tools
+  - New "Tools" button in Tool Palette opens ChatToolSettingsModal
+  - Shows both built-in tools (image generation, memory search, web search, etc.) and plugin tools
+  - `request_full_context` tool is never user-toggleable (safety valve for context compression)
+  - Tool re-injection optimization: tools are only sent to LLM every N messages (matching sliding window)
+  - `forceToolsOnNextMessage` flag ensures tools are re-sent when settings change
+  - New API endpoints: `POST /api/v1/chats/[id]?action=update-tool-settings`, `GET /api/v1/tools`
+  - Schema additions: `disabledTools` and `forceToolsOnNextMessage` fields on chat metadata
+- feat: Add project context re-injection for long conversations (2026-01-29)
+  - Project instructions are now periodically re-injected into the system prompt during conversations
+  - New setting `projectContextReinjectInterval` in Context Compression settings (default: 5 messages)
+  - Ensures project context survives context compression by refreshing it before older messages are compressed
+  - UI slider in Settings → Chat → Context Compression card
+  - Minimum interval is always >= sliding window size (no benefit to injecting more often)
+  - Only applies to chats in projects with non-empty instructions or descriptions
+- fix: Filter out NPCs and user-controlled characters from homepage character list (2026-01-29)
+  - Homepage now only shows AI-controlled, non-NPC characters
+  - User-controlled characters (controlledBy: 'user') and ad-hoc NPCs are excluded
+  - Full character list still available on /characters page
+- refactor: Add semantic typography system and improve card visibility (2026-01-28)
+  - New `_typography.css` with semantic classes: `qt-page-title`, `qt-section-title`, `qt-card-title`, `qt-card-subtitle`, `qt-meta`, `qt-label`, `qt-helper`, `qt-body`, `qt-link`, `qt-action`
+  - Updated card shadows for better visibility in both light and dark modes
+  - Homepage section cards now use proper shadow and border opacity from card system
+  - Updated homepage components (RecentChatItem, ProjectItem, CharacterCard) to use new typography classes
+  - Improved muted foreground contrast in light mode (45% → 40% lightness)
+- feat: Add light/dark/system mode toggle to themes menu in sidebar (2026-01-28)
+  - Color mode options displayed as vertical list below theme options
+  - Each option shows icon, label, and checkmark for active selection
+- fix: Chat user message text and action icons now visible on blue background (2026-01-28)
+  - User message content was using global foreground color instead of white
+  - Added CSS override for `.qt-chat-message-user .qt-chat-message-content` to use user foreground
+  - Action bar icons in user messages now use semi-transparent white with proper hover states
+  - Danger icon hover state uses light red visible on blue background
+- refactor: Update default theme to warm slate-blue palette (2026-01-28)
+  - Light mode: background shifted from pure white to warm off-white (`hsl(220 20% 97%)`)
+  - Dark mode: visible surface hierarchy - page (8%) → card (12%) → popover (15%)
+  - Secondary, muted, and accent tokens now have distinct values instead of being identical
+  - Added sidebar-specific theme tokens (`--theme-sidebar-*`) for visual separation
+  - Updated `lib/themes/default-tokens.ts` to match new globals.css values
+  - Card shadows tuned for warm slate-blue theme
+- refactor: Migrate Appearance Settings tab to use SettingsCard components (2026-01-28)
+  - Quick Theme Access, Color Mode, and Sidebar Width sections now wrapped in SettingsCard
+  - Added `qt-card-grid-auto` wrapper for responsive grid layout
+  - Theme section remains full-width for expandable preview functionality
+  - Color Mode selector redesigned as compact horizontal button group (Light/Dark/System)
+- refactor: Migrate Chat Settings tab to use SettingsCard components (2026-01-28)
+  - All 8 sections now wrapped in SettingsCard: Message Avatar Display, Avatar Display Style, Cheap LLM Settings, Image Description Profile, Memory Cascade Behavior, Context Compression, LLM Request Logging, Token & Cost Display
+  - Added `qt-card-grid-auto` wrapper for responsive grid layout (2 cards per row on wide screens)
+  - Removed manual `border-t` dividers between sections
+- refactor: Create SettingsCard component for consistent settings tab styling (2026-01-28)
+  - New `SettingsCard` component in `/components/ui/SettingsCard.tsx` with support for badges, metadata grids, inline/footer actions, status messages, and delete confirmation
+  - Updated `qt-card-title` CSS class to use `var(--qt-heading-font)` for theme-appropriate typography
+  - Uses explicit `border border-border` for visible borders across all themes
+  - ProfileCard is now a backward-compatible alias for SettingsCard
+  - Migrated `image-profiles-tab.tsx` to use SettingsCard directly
+  - Migrated `plugins-tab.tsx` (both installed and browse tabs) to use SettingsCard
+  - Refactored `MountPointCard.tsx` to use SettingsCard with footer actions and status messages
+  - Migrated `PromptCard.tsx` and `TemplateCard.tsx` (Prompts and RP Templates) to use SettingsCard
+  - Existing ProfileCard consumers (API keys, connection profiles, embedding profiles) automatically get new styling
+- refactor: Remove all sync functionality (2026-01-28)
+  - Removed sync UI components from Tools page
+  - Removed `/api/v1/sync/` API routes
+  - Removed `lib/sync/` library (sync service, delta detector, conflict resolver, remote client)
+  - Removed sync repositories (sync_instances, sync_mappings, sync_operations, user_sync_api_keys)
+  - Removed `SYNC_PROTOCOL_VERSION` constant
+  - Added `drop-sync-tables-v1` migration to clean up existing databases
+  - Removed sync-related tables from initial SQLite schema
+  - Removed sync documentation and tests
+- feat: Enhanced theme previews in Appearance settings (2026-01-27)
+  - Theme cards now have a "Preview" button that expands to show rich, interactive previews
+  - Preview panels render actual UI elements (buttons, inputs, badges, cards) with the theme's styling
+  - Shows both light and dark mode previews side-by-side for themes that support dark mode
+  - Preview CSS is scoped to prevent affecting page styling
+  - Theme fonts are loaded and displayed in previews
+  - Added `generateScopedThemeCSS` utility function for creating isolated theme CSS
+  - Added `useThemePreview` hook for lazy-loading theme tokens
+  - Created `ThemePreviewPanel` and `ThemePreviewElements` components
+- **BREAKING**: Remove per-user plugin installation - all plugins are now site-wide only (2026-01-27)
+  - Removed `PluginScope` type and all user-scoped plugin installation code
+  - Plugins install to `plugins/site/` directory only
+  - Removed `plugins/users/` directory support
+  - Simplified plugin API - no more `scope` parameter on install/uninstall
+  - UI no longer shows "Install" vs "Install Site-wide" options
+  - Added `migrate-user-plugins-to-site-v1` migration to move existing user plugins to site directory
+  - Updated documentation in `features/complete/plugin_installation.md`
+- fix: Google API keys now appear in image profile form when selecting Google Gemini provider (2026-01-26)
+  - Added `legacyNames` field to ProviderMetadata interface for backward compatibility
+  - Plugins can now declare legacy provider names that should be treated as aliases
+  - Google plugin declares `GOOGLE_IMAGEN` as a legacy name for `GOOGLE`
+  - Image profile form dynamically builds legacy name mapping from provider data
+  - Existing image profiles with `GOOGLE_IMAGEN` provider are automatically normalized to `GOOGLE`
+- fix: Character's default Image Generation Profile now saves to database (2026-01-26)
+  - Added `defaultImageProfileId` column to characters table via migration
+  - Updated Character schema and API validation to include the field
+  - Image profile selection on character profiles tab now persists across page loads
+- fix: API key creation modal now properly closes and refreshes list after successful creation (2026-01-26)
+  - API response was not wrapped in `{ apiKey: ... }` as the client expected
+  - Modal would hang after clicking Create because response parsing failed silently
+- fix: Server startup no longer fails due to env validation during Turbopack compilation (2026-01-26)
+  - Migration logger was importing `@/lib/env` which validates at import time
+  - Created standalone logger for migrations that doesn't trigger env validation
+  - Server now starts correctly with pending migrations
+- fix: API key re-encryption migration no longer crashes server on undecryptable keys (2026-01-26)
+  - Migration now succeeds with a warning when keys can't be decrypted
+  - Users are informed they need to re-enter affected API keys manually
+  - Prevents server from failing to start after single-user migration
+- feat: Add `reencrypt-api-keys-v1` migration for handling API keys after single-user migration (2026-01-26)
+  - Detects API keys encrypted with old user IDs by scanning files directory
+  - Attempts to re-encrypt keys with the new single-user ID
+  - Includes CLI runner for manual execution with `--old-user-id` flag
+- feat: `migrate-to-single-user.ts` now re-encrypts API keys during migration (2026-01-26)
+  - API keys are encrypted with user-specific derived keys
+  - Migration now properly re-encrypts keys with the new user ID
+  - Prevents "Failed to decrypt API key" errors after migration
+- **BREAKING**: Remove all authentication code - Quilltap now operates in single-user mode only (2026-01-26)
+  - Removed OAuth/Arctic authentication infrastructure
+  - Removed local email/password login
+  - Removed TOTP 2FA (two-factor authentication)
+  - Removed trusted devices management
+  - Removed all `/api/v1/auth/` endpoints
+  - Removed `/app/auth/` pages (signin, signup, error)
+  - Removed `TwoFactorSection` and `TrustedDevicesSection` from profile page
+  - Removed sign out functionality from user menu
+  - Added `/api/v1/session` endpoint for client session info
+  - Added startup check: if `AUTH_DISABLED=false`, server fails with migration instructions
+  - Added migration `remove-auth-tables-v1` to drop unused `accounts` and `sessions` tables
+  - Removed npm packages: `arctic`, `jose`, `speakeasy`
+  - Updated documentation to reflect single-user mode
+  - Existing multi-user installations must run `npx ts-node scripts/migrate-to-single-user.ts` before upgrading
+- fix: Mount point path migration now correctly handles tilde-prefixed paths (2026-01-26)
+  - The centralized data directory migration was not updating mount points with `~/.quilltap/files` paths
+  - Migration now correctly detects both expanded paths (`/Users/name/.quilltap/files`) and tilde-prefixed paths (`~/.quilltap/files`)
+  - Fixes broken file serving after migrating from old Linux-style paths to platform-specific paths on macOS/Windows
+- feat: Add migrate-to-single-user CLI script for converting multi-user installations to single-user mode (2026-01-26)
+  - New script: `npx ts-node scripts/migrate-to-single-user.ts` migrates an existing user's data to the unauthenticated user
+  - Supports interactive mode (lists users for selection) and non-interactive mode (`--user-id <uuid>`)
+  - Includes `--dry-run` flag to preview changes without modifying data
+  - Migrates all user-owned data: characters, chats, files, settings, connection profiles, etc.
+  - Moves physical files from source user directory to unauthenticated user directory
+  - Updates storageKey references in database to match new file locations
+  - Automatically sets `AUTH_DISABLED="true"` and preserves user's display name in .env.local
+  - Cleans up source user's sessions, OAuth accounts, and user record after migration
+  - New migration `clear-auth-on-disabled-v1` automatically cleans up stale auth data on startup when `AUTH_DISABLED=true`
+- fix: User-controlled characters now correctly show "Queue" button instead of "Nudge" (2026-01-25)
+  - User-controlled characters (controlledBy: 'user') were incorrectly treated as LLM characters
+  - Clicking their action button tried to generate an LLM response, causing "no connection profile" errors
+  - Now user-controlled characters show "Queue" and add themselves to the turn queue
+  - Added safety checks in turn management to prevent LLM response generation for user-controlled characters
+- fix: Recent chats on homepage now sorted by last message time, not metadata modification time (2026-01-25)
+  - Chats were sorted by `updatedAt` which changes when metadata (title, tags, participants) is modified
+  - Now sorts by `lastMessageAt` with fallback to `updatedAt` for chats without messages
+  - Homepage now fetches 12 chats instead of 4 to account for quick-hide filtering
+  - Display is limited to 4 chats after filtering, ensuring the card is always full if possible
+- feat: Homepage cards now extend to fill available viewport height (2026-01-25)
+  - Added `qt-homepage-container` CSS class that creates a flex-fill layout
+  - Homepage grid now fills remaining space after welcome section and action buttons
+  - Section cards extend to bottom of visible area (above footer)
+  - Content overflow is hidden - cards display as many items as fit without scrolling
+  - All sections (chats, projects, characters) now fetch 12 items to allow for more display
+  - Mobile view retains stacked cards with auto height for scrolling
+- fix: Active Projects now sorted by most recent activity across files, chats, and metadata (2026-01-25)
+  - Projects now sorted by the maximum of: file updatedAt, chat lastMessageAt, or project updatedAt
+  - Chat activity now uses `lastMessageAt` (actual message time) instead of `updatedAt` (metadata changes)
+  - File activity tracked per project to include file uploads/changes in recency calculation
+- feat: Homepage Characters section now shows all characters sorted like /characters page (2026-01-25)
+  - Changed from favorites-only to all non-NPC characters
+  - Sort order matches /characters page: favorites first, then by chat count, then alphabetically
+  - Added `isFavorite`, `npc`, and `chatCount` to HomepageCharacter type for sorting
+  - Renamed section header from "Your Characters" to "Characters"
+- feat: Homepage grid uses 30/30/40 column widths in full-width mode (2026-01-25)
+  - Added `data-full-width` attribute to document root when full-width mode is active
+  - When in full-width mode on desktop (> 1100px), columns are: Recent Chats 30%, Active Projects 30%, Characters 40%
+  - Standard width still uses equal thirds for balanced layout
+- feat: Characters section only displays cards that fit completely (2026-01-25)
+  - Uses ResizeObserver to calculate how many character cards fit within the visible area
+  - Calculates both columns and rows based on container dimensions
+  - In full-width mode, shows 3-4 characters per row (auto-fill grid)
+  - In standard mode, shows 2 characters per row with fixed card widths
+  - Homepage now fetches 24 characters to fill larger full-width layouts
+  - Prevents partial cards from showing at the bottom of the section
+  - Fixed border clipping on character cards in overflow:hidden container
+- refactor: Remove legacy migrations (pre-v2.7.0) and MongoDB support from migrations (2026-01-25)
+  - Deleted 17 pre-2.7.0 migration files: convert-openrouter-profiles, enable-provider-plugins, validate-mongodb-config, validate-s3-config, migrate-json-to-mongodb, migrate-files-to-s3, ensure-user-usernames, inherit-file-tags, migrate-character-system-prompts, migrate-tag-styles-to-tags, remove-quilltap-rp-builtin, add-multi-character-fields, add-inter-character-memory-fields, add-token-tracking-fields, migrate-personas-to-characters, populate-memory-about-character-ids, restructure-s3-keys
+  - Removed MongoDB support from v2.7.0+ migrations (add-use-native-web-search-field, cleanup-orphan-file-records, fix-missing-storage-keys, fix-orphan-persona-participants, add-llm-logs-collection, per-project-mount-points, create-folder-entities)
+  - Converted MongoDB-only v2.7.0+ migrations to no-ops (schema is handled by sqlite-initial-schema migration)
+  - Updated create-mount-points migration to SQLite-only
+  - Updated migrate-to-centralized-data-dir to SQLite-only
+  - Minimum supported upgrade path is now v2.7.0 → v2.8+ (previously v2.0.0 → v2.8+)
+  - Deployments running v2.6.x or earlier must upgrade to v2.7.0 first before upgrading to newer versions
+  - Updated migrations/scripts/index.ts to only include v2.7.0+ migrations
+  - Updated migrations/README.md to document v2.7.0+ migrations only
+  - Removed mongodb package from dependencies
+
+- refactor: Remove MongoDB support, SQLite is now the only database backend (2026-01-25)
+  - Deleted `/lib/database/backends/mongodb/` directory (MongoDB backend implementation)
+  - Deleted `/lib/mongodb/` directory (MongoDB client, config, indexes, and 27 repository files)
+  - Updated database abstraction layer to only support SQLite
+  - Simplified environment configuration (removed MONGODB_* variables)
+  - Updated startup sequence to remove MongoDB initialization phase
+  - Simplified health check and system tools endpoints
+  - Updated Docker configuration for SQLite-only deployments
+  - Removed MongoDB-specific docker-compose files (dev-mongo, prod, prod-cloud)
+  - Updated all documentation to reflect SQLite-only support
+  - Moved `mongodb` package to optionalDependencies (only needed for migration tool)
+  - Preserved migration tool (available as `npx @quilltap/mongodb-to-sqlite` npm package) for migrating existing MongoDB data
+  - All tests updated and passing (3719 tests)
+- refactor: Replace in-app migration UI with standalone CLI tool (2026-01-25)
+  - Removed `DatabaseMigrationDialog` component and migration-related API endpoints
+  - Removed `migration-readiness`, `migration-progress`, `start-migration`, `switch-backend` API actions
+  - Simplified `DatabaseCard` component to show status only, with CLI migration instructions
+  - New migration tool available as `npx @quilltap/mongodb-to-sqlite` npm package for migrating MongoDB databases to SQLite
+  - Completely standalone - requires only `mongodb` and `better-sqlite3` npm packages
+  - Usage: `npx @quilltap/mongodb-to-sqlite -m "mongodb://localhost:27017" -o ./output.db`
+  - Supports `--dry-run` mode to preview record counts without migrating
+  - Handles special transformations: chat_messages (embedded array to rows), migrations_state
+  - Auto-serializes object/array fields to JSON for SQLite compatibility
+  - All 31 tables and 57 indexes hardcoded from Quilltap schema
+  - Updated `docs/DATABASE_ABSTRACTION.md` with CLI tool documentation
+- feat: Centralized data directory with platform-specific defaults (2026-01-25)
+  - New `lib/paths.ts` module providing single source of truth for all data paths
+  - Platform-specific default directories:
+    - Linux: `~/.quilltap` (unchanged)
+    - macOS: `~/Library/Application Support/Quilltap`
+    - Windows: `%APPDATA%\Quilltap`
+    - Docker: `/app/quilltap` (mounted from host's platform-specific location)
+  - Directory structure: `<base>/data`, `<base>/files`, `<base>/logs`
+  - `QUILLTAP_DATA_DIR` environment variable to override the base directory
+  - `QUILLTAP_HOST_DATA_DIR` environment variable for Docker to specify host mount location
+  - Migration script to move legacy data from `./data/`, `./logs/`, `~/.quilltap/` to new locations
+  - Marker files (`.MIGRATED`) prevent re-migration on subsequent startups
+  - Updated `lib/database/config.ts`, `lib/logger.ts`, `lib/file-storage/manager.ts` to use centralized paths
+  - Updated `migrations/scripts/create-mount-points.ts` to support both SQLite and MongoDB backends
+  - Data directories are created at server startup before migrations run
+  - Docker data persists on host filesystem by default (no more data loss when containers are recreated)
+- fix: Character favorite toggle returning 405 error (2026-01-25)
+  - Frontend was using PATCH method but API only supports POST for favorite action
+  - Fixed in characters page and character view hook
+- refactor: Remove all debug-level logging calls from codebase (2026-01-25)
+  - Removed ~11,300 lines of `logger.debug()`, `log.debug()`, and `console.debug()` calls
+  - Affected 350+ files across lib/, app/api/, plugins/dist/, migrations/, and components/
+  - Logger interfaces preserved (packages/plugin-types, packages/plugin-utils) for future debug logging
+  - Test files preserved for logger testing
+  - Reduces log noise in production; debug logging can be re-added for new features as needed
+- fix: Sidebar chats list showing too few non-project chats (2026-01-25)
+  - API was truncating to top 15 chats before filtering out project chats
+  - Now separates non-project and project chats before truncating
+  - Returns up to 15 non-project chats (for Recent Chats section) and 25 project chats (for Projects section)
+  - Ensures sidebar always shows available non-project chats
+- feat: Enhanced conversation display and navigation in character pages and chat header (2026-01-25)
+  - Character conversations tab now shows project badge (teal) for chats that belong to a project
+  - Conversations are now sorted by last message timestamp instead of chat metadata updatedAt
+  - Timestamp display shows when the last message was sent, not when chat was last modified
+  - Chat header breadcrumb now shows LLM-controlled characters with small avatar and name links
+  - Character links in chat header navigate to that character's conversations tab
+  - Added `qt-badge-project` styling to qt-components (teal color scheme)
+  - Updated theme plugins (earl-grey, ocean, rains) with theme-appropriate project badge colors
+  - Bumped @quilltap/theme-storybook to 1.0.14 with project badge variables
+- fix: Implement missing v1 mount-point actions for project settings (2026-01-25)
+  - Added `get-mount-point`, `set-mount-point`, `clear-mount-point` actions to `/api/v1/projects/[id]`
+  - Updated SettingsCard.tsx to use v1 endpoints instead of deprecated `/api/projects/[id]/mount-point`
+  - Fixes 410 errors when accessing project storage settings
+- fix: Multiple UI data display issues and hot reload state persistence (2026-01-25)
+  - Projects page: Fixed chat/file counts not showing on project cards (mapped API's `_count` to `chatCount`/`fileCount`)
+  - Homepage: Fixed Active Projects card showing 0 chats, now displays actual counts and sorts by most recent chat activity
+  - Backups: Exclude old backup files from new backups (filter out category='BACKUP' and folderPath='/backups')
+  - SQLite: Fixed boolean values in WHERE clauses not being converted to 0/1 (caused "can only bind" errors)
+  - Hot reload: All registries now use global state to persist across Next.js module reloads:
+    - Plugin registry (`global.__quilltapPluginRegistryState`)
+    - Roleplay template registry (`global.__quilltapRoleplayTemplateRegistryState`)
+    - Tool registry (`global.__quilltapToolRegistryState`)
+    - Provider registry (`global.__quilltapProviderRegistryState`)
+    - Theme registry (`global.__quilltapThemeRegistryState`)
+    - Database manager (`global.__quilltapDatabaseBackend`, etc.)
+  - This fixes plugins/templates/themes not appearing in settings after code changes in development
+- fix: Multiple bug fixes for SQLite, OpenRouter tools, chat UI, and API endpoints (2026-01-25)
+  - SQLite: Handle undefined values in query-translator by converting to null (fixes "can only bind numbers, strings, bigints, buffers, and null" error)
+  - OpenRouter plugin: Bypass SDK's callModel when tools are present since SDK expects Zod schemas for inputSchema but Quilltap provides JSON Schema in parameters
+  - Chat UI: Fix message row overlap by adding isolation:isolate and proper z-index to message rows and avatar containers
+  - API: Update deprecated /api/files/ endpoints to /api/v1/files/ in AI Wizard gallery, file storage proxy URLs, and test mocks
+- fix: SQLite query for nested fields within JSON arrays (2026-01-25)
+  - Fixed queries like `participants.characterId` where participants is an array of objects
+  - Added `jsonArrayObjectMatch()` and `jsonArrayObjectMatchAny()` helpers for array-of-objects queries
+  - SQLite backend now tracks array columns separately from object columns
+  - Query translator generates proper `EXISTS (SELECT 1 FROM json_each(...))` SQL for array queries
+  - Fixes character conversations tab showing empty when conversations exist
+- fix: SQLite data hydration issues after MongoDB migration (2026-01-25)
+  - Added boolean column tracking to SQLite backend alongside JSON columns
+  - Fixed hydrateRow() to properly convert null→undefined for optional JSON/boolean fields
+  - Added ZodRecord support to schema translator for z.record() JSON column detection
+  - Changed UserSchema TOTP fields from .optional() to .nullish() for SQLite compatibility
+  - Added ChatMessageRowSchema to chats repository for proper JSON column detection
+  - Fixed FileBrowser project files URL to use action dispatch pattern
+- refactor: Consolidate DATA_BACKEND to DATABASE_BACKEND (2026-01-25)
+  - Unified `DATA_BACKEND` and `DATABASE_BACKEND` env vars into single `DATABASE_BACKEND`
+  - Valid values: `sqlite` (default for new installations) or `mongodb`
+  - Legacy `DATA_BACKEND` is deprecated but supported for backward compatibility
+  - `DATA_BACKEND=mongodb` is treated as `DATABASE_BACKEND=mongodb` with deprecation warning
+  - Removed support for legacy `json` and `dual` values
+  - Updated Docker compose files, migration scripts, and documentation
+- fix: Comprehensive SQLite schema update to match Zod schemas (2026-01-25)
+  - Updated all SQLite table definitions to match actual Zod schemas for proper migration
+  - **characters**: Added title, firstMessage, exampleDialogues, avatarUrl, defaultConnectionProfileId,
+    defaultPartnerId, defaultRoleplayTemplateId, sillyTavernData, npc fields
+  - **chats**: Complete rewrite with participants, contextSummary, timestampConfig, impersonation state,
+    token tracking (totalPromptTokens, totalCompletionTokens, estimatedCostUSD), projectId
+  - **chat_messages**: Normalized to one row per message (MongoDB stores as embedded array).
+    Migration service transforms `{ chatId, messages: [...] }` to individual rows with chatId FK.
+    ChatsRepository updated with backend detection to use proper queries for each backend.
+    Includes all MessageEvent fields: promptTokens, completionTokens, swipeGroupId, swipeIndex,
+    thoughtSignature, participantId, recoveryType, systemEventType.
+    Content column is nullable since ChatEventSchema is a union (MessageEvent has content,
+    ContextSummaryEvent has context, SystemEvent has description)
+  - **memories**: Added chatId, projectId, aboutCharacterId, summary, keywords, embedding, sourceMessageId
+  - **connection_profiles**: Added apiKeyId, modelName, parameters, isCheap, allowWebSearch, token tracking
+  - **image_profiles**: Added apiKeyId, modelName, parameters (removed old width/height/steps)
+  - **embedding_profiles**: Added apiKeyId, modelName
+  - **files**: Rewritten for FileEntry schema with originalFilename, linkedTo, storage abstraction fields
+  - **roleplay_templates**: Added pluginName, annotationButtons, renderingPatterns, dialogueDetection
+  - **prompt_templates**: Added description, isBuiltIn, modelHint
+  - **background_jobs**: Added payload, priority, attempts, maxAttempts, scheduledAt
+  - **llm_logs**: Rewritten for LLMLog schema with request/response summaries, usage, cacheUsage
+  - **tags**: Added visualStyle
+  - **users**: Added username, name, image, totp, backupCodes, totpAttempts, trustedDevices
+  - Added new tables: api_keys, migrations_state, migrations_metadata
+  - Migration service now creates tables before migrating data
+  - migrations_state is now migrated to preserve which migrations have already run
+  - Migration service transforms documents for schema compatibility (ensures updatedAt is set)
+  - Fixed progress tracking to count individual messages in chat_messages (not documents)
+  - Added special handling for migrations_state migration (MongoDB stores single document with
+    completedMigrations array, SQLite stores one row per migration)
+- feat: MongoDB to SQLite migration tool (2026-01-25)
+  - Added Database card to Tools page for managing database backend
+  - Migration wizard with pre-flight checks, progress tracking, and verification
+  - Support for switching preferred backend via UI (stored in SQLite meta table)
+  - Backend preference checked at startup before env vars
+  - Migration service copies all collections with dependency ordering
+  - Switch-back to MongoDB with data loss warning and confirmation
+  - API endpoints: `database-status`, `migration-readiness`, `migration-progress`, `start-migration`, `switch-backend`
+  - Unit tests for meta table and migration service modules
+  - See `docs/DATABASE_ABSTRACTION.md` for usage instructions
+- feat: Upgrade Zod from v3 to v4 (2026-01-24)
+  - Updated zod from ^3.23.0 to ^4.0.0 (installed 4.3.6)
+  - Removed zod-to-json-schema dependency (now using native z.toJSONSchema())
+  - Updated ZodError.errors → ZodError.issues across ~20 files
+  - Rewrote schema-translator.ts for Zod v4 internal API changes
+  - Updated generate-plugin-manifest-schema.ts to use Zod v4's native JSON Schema generation
+  - MCP plugin remains bundled with its own Zod v3 for SDK compatibility
+- feat: Upgrade OpenRouter plugin to SDK v0.4.0 with new streaming API (2026-01-24)
+  - Updated @openrouter/sdk from 0.3.15 to 0.4.0
+  - Refactored streaming to use `callModel()` with `getTextStream()` for cleaner text delta streaming
+  - Uses `fromChatMessages()` helper to convert chat format to OpenResponses input format
+  - Better handling of tool calls and usage data via `getResponse()`
+  - Maintains backward compatibility with existing streaming interface
+- feat: Database abstraction layer with SQLite support (2026-01-24)
+  - Added database abstraction layer (`lib/database/`) supporting multiple backends
+  - Implemented SQLite backend using better-sqlite3 with WAL mode
+  - MongoDB backend wrapper for interface compatibility
+  - Auto-detection: uses MongoDB if MONGODB_URI set, otherwise SQLite
+  - Query translation from MongoDB-style filters to SQL
+  - JSON column support for arrays/objects in SQLite
+  - Zod schema introspection for SQLite DDL generation
+  - Migration system support for both backends
+  - SQLite initial schema migration creates all required tables
+  - Docker configurations: `docker-compose.sqlite.yml` and `docker-compose.prod-sqlite.yml`
+  - Updated Dockerfile with build tools for better-sqlite3 native compilation
+  - SQLite data persists at `/app/data/quilltap.db` (Docker) or `~/.quilltap/data/quilltap.db` (local)
+  - Migrated all 25 repositories to database abstraction layer (`lib/database/repositories/`)
+  - Wired up repository factory to use abstract repositories (`lib/repositories/factory.ts`)
+  - Updated all direct MongoDB imports to use factory (backup, sync, search-replace services)
+  - No application code now directly imports MongoDB repositories
+  - Added 239 unit tests for database abstraction layer (config, query-translator, schema-translator)
+  - Fixed duplicate event listener warnings in MongoDB/SQLite shutdown handlers
+  - See `docs/DATABASE_ABSTRACTION.md` for full documentation
+- feat: LLM request/response logging system (2026-01-23)
+  - Store all LLM API calls in MongoDB for debugging and monitoring
+  - View logs per message via button in chat message action bar
+  - Configure logging settings (enabled, verbose mode, retention days) in Chat Settings
+  - View recent logs on Tools page
+  - View character wizard logs on character edit page
+  - Automatic cleanup of old logs based on retention settings
+  - Logs included in backup/restore operations
+  - Added LLM_LOG_CLEANUP background job type for scheduled log deletion
+  - Use `enqueueLLMLogCleanup()` to trigger manual cleanup or `scheduleCleanup()` for automatic daily runs
+  - Respects user retention preferences - only deletes logs older than configured days
+- fix: LLM logs now correctly linked to assistant messages (2026-01-23)
+  - Pre-generate assistant message ID before streaming starts
+  - Logs are now associated with the correct message ID in the database
+  - Fixes issue where "View LLM Logs" button wasn't appearing on messages
+- change: LLM logs now always store full content (2026-01-23)
+  - Request messages and response content are no longer truncated
+  - Full content stored for complete debugging regardless of verbose mode setting
+- Started 2.8 dev cycle
+
 ### 2.7.0
 
 - fix: Sign out now properly clears session and resets UI (2026-01-23)
@@ -2473,7 +3467,6 @@
   - Added cleanup effect for stream cancellation on component unmount
 - chore: Cleaned up old documentation
 - Started 2.5-dev cycle
-
 
 ### 2.4
 

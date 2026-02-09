@@ -38,6 +38,7 @@ export {
   enqueueMemoryExtractionBatch,
   getJobStatus,
   getQueueStats,
+  getActiveCountsByType,
   cancelJob,
   getPendingJobsForChat,
   cleanupOldJobs,
@@ -73,3 +74,11 @@ export {
   runScheduledCleanup,
   triggerUserCleanup,
 } from './scheduled-cleanup';
+
+// Scheduled danger scan
+export {
+  scheduleDangerScan,
+  stopDangerScanScheduler,
+  isDangerScanSchedulerRunning,
+  runScheduledDangerScan,
+} from './scheduled-danger-scan';

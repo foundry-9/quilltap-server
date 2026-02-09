@@ -7529,7 +7529,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ../../../node_modules/openai/version.mjs
-var VERSION = "6.17.0";
+var VERSION = "6.18.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -8567,6 +8567,10 @@ async function defaultParseResponse(client, props) {
     const mediaType = contentType?.split(";")[0]?.trim();
     const isJSON = mediaType?.includes("application/json") || mediaType?.endsWith("+json");
     if (isJSON) {
+      const contentLength = response.headers.get("content-length");
+      if (contentLength === "0") {
+        return void 0;
+      }
       const json = await response.json();
       return addRequestID(json, response);
     }
@@ -13913,7 +13917,7 @@ var OpenAI = class {
     return { response, options, controller, requestLogID, retryOfRequestLogID, startTime };
   }
   getAPIList(path3, Page2, opts) {
-    return this.requestAPIList(Page2, { method: "get", path: path3, ...opts });
+    return this.requestAPIList(Page2, opts && "then" in opts ? opts.then((opts2) => ({ method: "get", path: path3, ...opts2 })) : { method: "get", path: path3, ...opts });
   }
   requestAPIList(Page2, options) {
     const request = this.makeRequest(options, null, void 0);
@@ -13921,9 +13925,10 @@ var OpenAI = class {
   }
   async fetchWithTimeout(url2, init, ms, controller) {
     const { signal, method, ...options } = init || {};
+    const abort = this._makeAbort(controller);
     if (signal)
-      signal.addEventListener("abort", () => controller.abort());
-    const timeout = setTimeout(() => controller.abort(), ms);
+      signal.addEventListener("abort", abort, { once: true });
+    const timeout = setTimeout(abort, ms);
     const isReadableBody = globalThis.ReadableStream && options.body instanceof globalThis.ReadableStream || typeof options.body === "object" && options.body !== null && Symbol.asyncIterator in options.body;
     const fetchOptions = {
       signal: controller.signal,
@@ -14034,6 +14039,9 @@ var OpenAI = class {
     ]);
     this.validateHeaders(headers);
     return headers.values;
+  }
+  _makeAbort(controller) {
+    return () => controller.abort();
   }
   buildBody({ options: { body, headers: rawHeaders } }) {
     if (!body) {
@@ -15903,6 +15911,9 @@ var Protocol = class {
    * The Protocol object assumes ownership of the Transport, replacing any callbacks that have already been set, and expects that it is the only user of the Transport instance going forward.
    */
   async connect(transport) {
+    if (this._transport) {
+      throw new Error("Already connected to a transport. Call close() before connecting to a new transport, or use a separate Protocol instance per connection.");
+    }
     this._transport = transport;
     const _onclose = this.transport?.onclose;
     this._transport.onclose = () => {
@@ -15935,6 +15946,10 @@ var Protocol = class {
     this._progressHandlers.clear();
     this._taskProgressTokens.clear();
     this._pendingDebouncedNotifications.clear();
+    for (const controller of this._requestHandlerAbortControllers.values()) {
+      controller.abort();
+    }
+    this._requestHandlerAbortControllers.clear();
     const error = McpError.fromError(ErrorCode.ConnectionClosed, "Connection closed");
     this._transport = void 0;
     this.onclose?.();
@@ -15985,6 +16000,8 @@ var Protocol = class {
       sessionId: capturedTransport?.sessionId,
       _meta: request.params?._meta,
       sendNotification: async (notification) => {
+        if (abortController.signal.aborted)
+          return;
         const notificationOptions = { relatedRequestId: request.id };
         if (relatedTaskId) {
           notificationOptions.relatedTask = { taskId: relatedTaskId };
@@ -15992,6 +16009,9 @@ var Protocol = class {
         await this.notification(notification, notificationOptions);
       },
       sendRequest: async (r, resultSchema, options) => {
+        if (abortController.signal.aborted) {
+          throw new McpError(ErrorCode.ConnectionClosed, "Request was cancelled");
+        }
         const requestOptions = { ...options, relatedRequestId: request.id };
         if (relatedTaskId && !requestOptions.relatedTask) {
           requestOptions.relatedTask = { taskId: relatedTaskId };

@@ -21,7 +21,7 @@ interface NavUserMenuQuickHideContentProps {
  * Quick-hide tag selection content for the user menu submenu flyout.
  */
 export function NavUserMenuQuickHideContent({ onVisibilityChanged }: NavUserMenuQuickHideContentProps) {
-  const { quickHideTags, hiddenTagIds, toggleTag, loading } = useQuickHide()
+  const { quickHideTags, hiddenTagIds, hideDangerousChats, toggleTag, toggleHideDangerousChats, loading } = useQuickHide()
 
   if (loading) {
     return (
@@ -31,49 +31,77 @@ export function NavUserMenuQuickHideContent({ onVisibilityChanged }: NavUserMenu
     )
   }
 
-  if (quickHideTags.length === 0) {
-    return (
-      <div className="p-3 qt-text-small">
-        No quick-hide tags configured
-      </div>
-    )
-  }
-
   const handleToggle = (tagId: string, tagName: string, wasHidden: boolean) => {
     toggleTag(tagId)
     onVisibilityChanged?.()
   }
 
+  const handleDangerToggle = () => {
+    toggleHideDangerousChats()
+    onVisibilityChanged?.()
+  }
+
   return (
-    <div className="qt-navbar-dropdown-section space-y-1">
-      <div className="qt-navbar-dropdown-label">
-        Quick Hide Tags
+    <div className="space-y-1">
+      {/* Quick Hide Tags */}
+      {quickHideTags.length > 0 && (
+        <div className="qt-navbar-dropdown-section space-y-1">
+          <div className="qt-navbar-dropdown-label">
+            Quick Hide Tags
+          </div>
+          {quickHideTags.map(tag => {
+            const isHidden = hiddenTagIds.has(tag.id)
+            return (
+              <button
+                key={tag.id}
+                type="button"
+                onClick={() => handleToggle(tag.id, tag.name, isHidden)}
+                className={`qt-navbar-dropdown-item ${isHidden ? 'qt-navbar-dropdown-item-active' : ''}`}
+              >
+                <TagBadge tag={tag} size="sm" />
+                {isHidden ? (
+                  <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                    <path d="M1 1l22 22" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Content Filters */}
+      <div className="qt-navbar-dropdown-section space-y-1">
+        <div className="qt-navbar-dropdown-label">
+          Content Filters
+        </div>
+        <button
+          type="button"
+          onClick={handleDangerToggle}
+          className={`qt-navbar-dropdown-item ${hideDangerousChats ? 'qt-navbar-dropdown-item-active' : ''}`}
+        >
+          <span className="text-sm">Dangerous Chats</span>
+          {hideDangerousChats ? (
+            <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+              <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+              <path d="M1 1l22 22" />
+            </svg>
+          ) : (
+            <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          )}
+        </button>
       </div>
-      {quickHideTags.map(tag => {
-        const isHidden = hiddenTagIds.has(tag.id)
-        return (
-          <button
-            key={tag.id}
-            type="button"
-            onClick={() => handleToggle(tag.id, tag.name, isHidden)}
-            className={`qt-navbar-dropdown-item ${isHidden ? 'qt-navbar-dropdown-item-active' : ''}`}
-          >
-            <TagBadge tag={tag} size="sm" />
-            {isHidden ? (
-              <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
-                <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
-                <path d="M1 1l22 22" />
-              </svg>
-            ) : (
-              <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                <circle cx="12" cy="12" r="3" />
-              </svg>
-            )}
-          </button>
-        )
-      })}
     </div>
   )
 }

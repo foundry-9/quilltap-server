@@ -9,7 +9,7 @@
 
 import { BackgroundJob, BackgroundJobSchema, BackgroundJobType, BackgroundJobStatus } from '@/lib/schemas/types';
 import { UserOwnedBaseRepository, CreateOptions } from './base.repository';
-import { QueryFilter } from '../interfaces';
+import { TypedQueryFilter } from '../interfaces';
 import { logger } from '@/lib/logger';
 
 /**
@@ -53,74 +53,74 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
    * Find all jobs (use with caution - primarily for admin/debugging)
    */
   async findAll(): Promise<BackgroundJob[]> {
-    try {
-      const collection = await this.getCollection();
-      const results = await collection.find({}, { limit: 1000 });
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        const results = await collection.find({}, { limit: 1000 });
 
-      const jobs = results
-        .map((doc) => {
-          const validation = this.validateSafe(doc);
-          if (validation.success && validation.data) {
-            return validation.data;
-          }
-          return null;
-        })
-        .filter((job): job is BackgroundJob => job !== null);
-      return jobs;
-    } catch (error) {
-      logger.error('Error finding all background jobs', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+        const jobs = results
+          .map((doc) => {
+            const validation = this.validateSafe(doc);
+            if (validation.success && validation.data) {
+              return validation.data;
+            }
+            return null;
+          })
+          .filter((job): job is BackgroundJob => job !== null);
+        return jobs;
+      },
+      'Error finding all background jobs',
+      {},
+      []
+    );
   }
 
   /**
    * Find jobs by user ID with optional status filter
    */
   async findByUserId(userId: string, status?: BackgroundJobStatus): Promise<BackgroundJob[]> {
-    try {
-      const query: QueryFilter = { userId };
-      if (status) {
-        query.status = status;
-      }
+    return this.safeQuery(
+      async () => {
+        const query: TypedQueryFilter<BackgroundJob> = { userId };
+        if (status) {
+          query.status = status;
+        }
 
-      const results = await this.findByFilter(query, {
-        sort: { createdAt: -1 as any },
-        limit: 100,
-      });
-      return results;
-    } catch (error) {
-      logger.error('Error finding background jobs by user ID', {
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+        const results = await this.findByFilter(query, {
+          sort: { createdAt: -1 as any },
+          limit: 100,
+        });
+        return results;
+      },
+      'Error finding background jobs by user ID',
+      { userId },
+      []
+    );
   }
 
   /**
    * Find pending jobs for a specific chat
+   * Only returns PENDING and PROCESSING jobs - FAILED jobs don't block new job creation
+   * since the user may have fixed the underlying issue (e.g., changed provider)
    */
   async findPendingForChat(chatId: string): Promise<BackgroundJob[]> {
-    try {
-      const results = await this.findByFilter(
-        {
-          'payload.chatId': chatId,
-          status: { $in: ['PENDING', 'PROCESSING', 'FAILED'] },
-        } as QueryFilter,
-        {
-          sort: { priority: -1 as any, createdAt: 1 as any },
-        }
-      );
-      return results;
-    } catch (error) {
-      logger.error('Error finding pending jobs for chat', {
-        chatId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+    return this.safeQuery(
+      async () => {
+        const results = await this.findByFilter(
+          {
+            'payload.chatId': chatId,
+            status: { $in: ['PENDING', 'PROCESSING'] },
+          } as TypedQueryFilter<BackgroundJob>,
+          {
+            sort: { priority: -1 as any, createdAt: 1 as any },
+          }
+        );
+        return results;
+      },
+      'Error finding pending jobs for chat',
+      { chatId },
+      []
+    );
   }
 
   /**
@@ -128,42 +128,42 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
    * Uses findOneAndUpdate for concurrent-safe job claiming
    */
   async claimNextJob(): Promise<BackgroundJob | null> {
-    try {
-      const collection = await this.getCollection();
-      const now = this.getCurrentTimestamp();
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        const now = this.getCurrentTimestamp();
 
-      const result = await collection.findOneAndUpdate(
-        {
-          status: { $in: ['PENDING', 'FAILED'] },
-          scheduledAt: { $lte: now },
-          $expr: { $lt: ['$attempts', '$maxAttempts'] },
-        } as QueryFilter,
-        {
-          $set: {
-            status: 'PROCESSING',
-            startedAt: now,
-            updatedAt: now,
-          },
-          $inc: { attempts: 1 },
-        } as any,
-        {
-          returnDocument: 'after',
+        const result = await collection.findOneAndUpdate(
+          {
+            status: { $in: ['PENDING', 'FAILED'] },
+            scheduledAt: { $lte: now },
+            $expr: { $lt: ['$attempts', '$maxAttempts'] },
+          } as TypedQueryFilter<BackgroundJob>,
+          {
+            $set: {
+              status: 'PROCESSING',
+              startedAt: now,
+              updatedAt: now,
+            },
+            $inc: { attempts: 1 },
+          } as any,
+          {
+            returnDocument: 'after',
+          }
+        );
+
+        if (!result) {
+          return null;
         }
-      );
 
-      if (!result) {
-        return null;
-      }
-
-      const validated = this.validate(result);
-      logger.info('Claimed job', { jobId: validated.id, type: validated.type, attempts: validated.attempts });
-      return validated;
-    } catch (error) {
-      logger.error('Error claiming next job', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    }
+        const validated = this.validate(result);
+        logger.info('Claimed job', { jobId: validated.id, type: validated.type, attempts: validated.attempts });
+        return validated;
+      },
+      'Error claiming next job',
+      {},
+      null
+    );
   }
 
   /**
@@ -173,18 +173,15 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
     data: Omit<BackgroundJob, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions
   ): Promise<BackgroundJob> {
-    try {
-      const job = await this._create(data, options);
-      logger.info('Background job created', { jobId: job.id, type: data.type, userId: data.userId });
-      return job;
-    } catch (error) {
-      logger.error('Error creating background job', {
-        type: data.type,
-        userId: data.userId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      async () => {
+        const job = await this._create(data, options);
+        logger.info('Background job created', { jobId: job.id, type: data.type, userId: data.userId });
+        return job;
+      },
+      'Error creating background job',
+      { type: data.type, userId: data.userId }
+    );
   }
 
   /**
@@ -193,360 +190,372 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
   async createBatch(
     jobs: Array<Omit<BackgroundJob, 'id' | 'createdAt' | 'updatedAt'>>
   ): Promise<string[]> {
-    try {
-      if (jobs.length === 0) {
-        return [];
-      }
+    return this.safeQuery(
+      async () => {
+        if (jobs.length === 0) {
+          return [];
+        }
 
-      const now = this.getCurrentTimestamp();
-      const validatedJobs: BackgroundJob[] = [];
-      const ids: string[] = [];
+        const now = this.getCurrentTimestamp();
+        const validatedJobs: BackgroundJob[] = [];
+        const ids: string[] = [];
 
-      for (const jobData of jobs) {
-        const id = this.generateId();
-        ids.push(id);
+        for (const jobData of jobs) {
+          const id = this.generateId();
+          ids.push(id);
 
-        const job: BackgroundJob = {
-          ...jobData,
-          id,
-          createdAt: now,
-          updatedAt: now,
-        };
+          const job: BackgroundJob = {
+            ...jobData,
+            id,
+            createdAt: now,
+            updatedAt: now,
+          };
 
-        validatedJobs.push(this.validate(job));
-      }
+          validatedJobs.push(this.validate(job));
+        }
 
-      const collection = await this.getCollection();
-      await collection.insertMany(validatedJobs);
+        const collection = await this.getCollection();
+        await collection.insertMany(validatedJobs);
 
-      logger.info('Background jobs batch created', { count: validatedJobs.length });
-      return ids;
-    } catch (error) {
-      logger.error('Error creating batch of background jobs', {
-        count: jobs.length,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        logger.info('Background jobs batch created', { count: validatedJobs.length });
+        return ids;
+      },
+      'Error creating batch of background jobs',
+      { count: jobs.length }
+    );
   }
 
   /**
    * Update a job
    */
   async update(id: string, data: Partial<BackgroundJob>): Promise<BackgroundJob | null> {
-    try {
-      const result = await this._update(id, data);
-      return result;
-    } catch (error) {
-      logger.error('Error updating background job', {
-        jobId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      async () => {
+        const result = await this._update(id, data);
+        return result;
+      },
+      'Error updating background job',
+      { jobId: id }
+    );
   }
 
   /**
    * Mark a job as completed
    */
   async markCompleted(id: string, result?: Record<string, unknown>): Promise<BackgroundJob | null> {
-    try {
-      const collection = await this.getCollection();
-      const now = this.getCurrentTimestamp();
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        const now = this.getCurrentTimestamp();
 
-      const updateData: any = {
-        status: 'COMPLETED',
-        completedAt: now,
-        updatedAt: now,
-      };
+        const updateData: any = {
+          status: 'COMPLETED',
+          completedAt: now,
+          updatedAt: now,
+        };
 
-      if (result) {
-        updateData['payload.result'] = result;
-      }
+        if (result) {
+          updateData['payload.result'] = result;
+        }
 
-      const updated = await collection.findOneAndUpdate(
-        { id } as QueryFilter,
-        { $set: updateData } as any,
-        { returnDocument: 'after' }
-      );
+        const updated = await collection.findOneAndUpdate(
+          { id },
+          { $set: updateData } as any,
+          { returnDocument: 'after' }
+        );
 
-      if (!updated) {
-        logger.warn('Background job not found for completion', { jobId: id });
-        return null;
-      }
+        if (!updated) {
+          logger.warn('Background job not found for completion', { jobId: id });
+          return null;
+        }
 
-      const validated = this.validate(updated);
-      logger.info('Background job completed', { jobId: id, type: validated.type });
-      return validated;
-    } catch (error) {
-      logger.error('Error marking job as completed', {
-        jobId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        const validated = this.validate(updated);
+        logger.info('Background job completed', { jobId: id, type: validated.type });
+        return validated;
+      },
+      'Error marking job as completed',
+      { jobId: id }
+    );
   }
 
   /**
    * Mark a job as failed with retry scheduling
    */
   async markFailed(id: string, errorMessage: string): Promise<BackgroundJob | null> {
-    try {
-      const collection = await this.getCollection();
-      const now = this.getCurrentTimestamp();
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        const now = this.getCurrentTimestamp();
 
-      // First get the current job to check attempts
-      const currentJob = await this.findById(id);
-      if (!currentJob) {
-        logger.warn('Background job not found for failure marking', { jobId: id });
-        return null;
-      }
+        // First get the current job to check attempts
+        const currentJob = await this.findById(id);
+        if (!currentJob) {
+          logger.warn('Background job not found for failure marking', { jobId: id });
+          return null;
+        }
 
-      // Calculate next retry time with exponential backoff
-      // 30s, 60s, 120s, 240s (capped at 5 minutes)
-      const backoffSeconds = Math.min(30 * Math.pow(2, currentJob.attempts), 300);
-      const scheduledAt = new Date(Date.now() + backoffSeconds * 1000).toISOString();
+        // Calculate next retry time with exponential backoff
+        // 30s, 60s, 120s, 240s (capped at 5 minutes)
+        const backoffSeconds = Math.min(30 * Math.pow(2, currentJob.attempts), 300);
+        const scheduledAt = new Date(Date.now() + backoffSeconds * 1000).toISOString();
 
-      // Determine if we should mark as DEAD or FAILED for retry
-      const newStatus = currentJob.attempts >= currentJob.maxAttempts ? 'DEAD' : 'FAILED';
+        // Determine if we should mark as DEAD or FAILED for retry
+        const newStatus = currentJob.attempts >= currentJob.maxAttempts ? 'DEAD' : 'FAILED';
 
-      const updated = await collection.findOneAndUpdate(
-        { id } as QueryFilter,
-        {
-          $set: {
-            status: newStatus,
-            lastError: errorMessage,
-            scheduledAt,
-            updatedAt: now,
-          },
-        } as any,
-        { returnDocument: 'after' }
-      );
+        const updated = await collection.findOneAndUpdate(
+          { id },
+          {
+            $set: {
+              status: newStatus,
+              lastError: errorMessage,
+              scheduledAt,
+              updatedAt: now,
+            },
+          } as any,
+          { returnDocument: 'after' }
+        );
 
-      if (!updated) {
-        return null;
-      }
+        if (!updated) {
+          return null;
+        }
 
-      const validated = this.validate(updated);
+        const validated = this.validate(updated);
 
-      if (newStatus === 'DEAD') {
-        logger.warn('Background job marked as DEAD (max attempts reached)', {
-          jobId: id,
-          type: validated.type,
-          attempts: validated.attempts,
-          error: errorMessage,
-        });
-      } else {
-        logger.info('Background job marked as FAILED (will retry)', {
-          jobId: id,
-          type: validated.type,
-          attempts: validated.attempts,
-          nextRetryAt: scheduledAt,
-          error: errorMessage,
-        });
-      }
+        if (newStatus === 'DEAD') {
+          logger.warn('Background job marked as DEAD (max attempts reached)', {
+            jobId: id,
+            type: validated.type,
+            attempts: validated.attempts,
+            error: errorMessage,
+          });
+        } else {
+          logger.info('Background job marked as FAILED (will retry)', {
+            jobId: id,
+            type: validated.type,
+            attempts: validated.attempts,
+            nextRetryAt: scheduledAt,
+            error: errorMessage,
+          });
+        }
 
-      return validated;
-    } catch (error) {
-      logger.error('Error marking job as failed', {
-        jobId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return validated;
+      },
+      'Error marking job as failed',
+      { jobId: id }
+    );
   }
 
   /**
    * Delete a job
    */
   async delete(id: string): Promise<boolean> {
-    try {
-      const result = await this._delete(id);
-      return result;
-    } catch (error) {
-      logger.error('Error deleting background job', {
-        jobId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      async () => {
+        const result = await this._delete(id);
+        return result;
+      },
+      'Error deleting background job',
+      { jobId: id }
+    );
   }
 
   /**
    * Get queue statistics
    */
   async getStats(userId?: string): Promise<QueueStats> {
-    try {
-      // Since the abstraction layer may not support full aggregation pipelines,
-      // we fetch all items and aggregate in JavaScript
-      const filter = userId ? ({ userId } as QueryFilter) : {};
-      const jobs = await this.findByFilter(filter);
+    return this.safeQuery(
+      async () => {
+        // Since the abstraction layer may not support full aggregation pipelines,
+        // we fetch all items and aggregate in JavaScript
+        const filter = userId ? ({ userId } as TypedQueryFilter<BackgroundJob>) : {};
+        const jobs = await this.findByFilter(filter);
 
-      const stats: QueueStats = {
-        pending: 0,
-        processing: 0,
-        completed: 0,
-        failed: 0,
-        dead: 0,
-        paused: 0,
-      };
+        const stats: QueueStats = {
+          pending: 0,
+          processing: 0,
+          completed: 0,
+          failed: 0,
+          dead: 0,
+          paused: 0,
+        };
 
-      for (const job of jobs) {
-        switch (job.status) {
-          case 'PENDING':
-            stats.pending++;
-            break;
-          case 'PROCESSING':
-            stats.processing++;
-            break;
-          case 'COMPLETED':
-            stats.completed++;
-            break;
-          case 'FAILED':
-            stats.failed++;
-            break;
-          case 'DEAD':
-            stats.dead++;
-            break;
-          case 'PAUSED':
-            stats.paused++;
-            break;
+        for (const job of jobs) {
+          switch (job.status) {
+            case 'PENDING':
+              stats.pending++;
+              break;
+            case 'PROCESSING':
+              stats.processing++;
+              break;
+            case 'COMPLETED':
+              stats.completed++;
+              break;
+            case 'FAILED':
+              stats.failed++;
+              break;
+            case 'DEAD':
+              stats.dead++;
+              break;
+            case 'PAUSED':
+              stats.paused++;
+              break;
+          }
         }
-      }
-      return stats;
-    } catch (error) {
-      logger.error('Error getting queue statistics', {
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return { pending: 0, processing: 0, completed: 0, failed: 0, dead: 0, paused: 0 };
-    }
+        return stats;
+      },
+      'Error getting queue statistics',
+      { userId },
+      { pending: 0, processing: 0, completed: 0, failed: 0, dead: 0, paused: 0 }
+    );
+  }
+
+  /**
+   * Get active (PENDING + PROCESSING) job counts grouped by job type
+   */
+  async getActiveCountsByType(userId?: string): Promise<Record<string, number>> {
+    return this.safeQuery(
+      async () => {
+        const filter: TypedQueryFilter<BackgroundJob> = {
+          status: { $in: ['PENDING', 'PROCESSING'] },
+        };
+        if (userId) {
+          (filter as any).userId = userId;
+        }
+
+        const jobs = await this.findByFilter(filter);
+        const counts: Record<string, number> = {};
+
+        for (const job of jobs) {
+          counts[job.type] = (counts[job.type] || 0) + 1;
+        }
+
+        return counts;
+      },
+      'Error getting active counts by type',
+      { userId },
+      {}
+    );
   }
 
   /**
    * Cleanup old completed jobs
    */
   async cleanupOldJobs(olderThan: Date): Promise<number> {
-    try {
-      const deletedCount = await this.deleteMany({
-        status: { $in: ['COMPLETED', 'DEAD'] },
-        completedAt: { $lt: olderThan.toISOString() },
-      } as QueryFilter);
+    return this.safeQuery(
+      async () => {
+        const deletedCount = await this.deleteMany({
+          status: { $in: ['COMPLETED', 'DEAD'] },
+          completedAt: { $lt: olderThan.toISOString() },
+        });
 
-      logger.info('Cleaned up old background jobs', { deletedCount });
-      return deletedCount;
-    } catch (error) {
-      logger.error('Error cleaning up old jobs', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return 0;
-    }
+        logger.info('Cleaned up old background jobs', { deletedCount });
+        return deletedCount;
+      },
+      'Error cleaning up old jobs',
+      {},
+      0
+    );
   }
 
   /**
    * Cancel a pending job
    */
   async cancel(id: string): Promise<boolean> {
-    try {
-      const collection = await this.getCollection();
-      const result = await collection.updateOne(
-        { id, status: { $in: ['PENDING', 'FAILED'] } } as QueryFilter,
-        {
-          $set: {
-            status: 'DEAD',
-            lastError: 'Cancelled by user',
-            updatedAt: this.getCurrentTimestamp(),
-          },
-        } as any
-      );
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        const result = await collection.updateOne(
+          { id, status: { $in: ['PENDING', 'FAILED'] } } as TypedQueryFilter<BackgroundJob>,
+          {
+            $set: {
+              status: 'DEAD',
+              lastError: 'Cancelled by user',
+              updatedAt: this.getCurrentTimestamp(),
+            },
+          } as any
+        );
 
-      if (result.modifiedCount === 0) {
-        logger.warn('Background job not found or not cancellable', { jobId: id });
-        return false;
-      }
+        if (result.modifiedCount === 0) {
+          logger.warn('Background job not found or not cancellable', { jobId: id });
+          return false;
+        }
 
-      logger.info('Background job cancelled', { jobId: id });
-      return true;
-    } catch (error) {
-      logger.error('Error cancelling background job', {
-        jobId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return false;
-    }
+        logger.info('Background job cancelled', { jobId: id });
+        return true;
+      },
+      'Error cancelling background job',
+      { jobId: id },
+      false
+    );
   }
 
   /**
    * Pause a pending or failed job
    */
   async pause(id: string): Promise<BackgroundJob | null> {
-    try {
-      const collection = await this.getCollection();
-      const now = this.getCurrentTimestamp();
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        const now = this.getCurrentTimestamp();
 
-      const result = await collection.findOneAndUpdate(
-        { id, status: { $in: ['PENDING', 'FAILED'] } } as QueryFilter,
-        {
-          $set: {
-            status: 'PAUSED',
-            updatedAt: now,
-          },
-        } as any,
-        { returnDocument: 'after' }
-      );
+        const result = await collection.findOneAndUpdate(
+          { id, status: { $in: ['PENDING', 'FAILED'] } } as TypedQueryFilter<BackgroundJob>,
+          {
+            $set: {
+              status: 'PAUSED',
+              updatedAt: now,
+            },
+          } as any,
+          { returnDocument: 'after' }
+        );
 
-      if (!result) {
-        logger.warn('Background job not found or not pausable', { jobId: id });
-        return null;
-      }
+        if (!result) {
+          logger.warn('Background job not found or not pausable', { jobId: id });
+          return null;
+        }
 
-      const validated = this.validate(result);
-      logger.info('Background job paused', { jobId: id, type: validated.type });
-      return validated;
-    } catch (error) {
-      logger.error('Error pausing background job', {
-        jobId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        const validated = this.validate(result);
+        logger.info('Background job paused', { jobId: id, type: validated.type });
+        return validated;
+      },
+      'Error pausing background job',
+      { jobId: id }
+    );
   }
 
   /**
    * Resume a paused job
    */
   async resume(id: string): Promise<BackgroundJob | null> {
-    try {
-      const collection = await this.getCollection();
-      const now = this.getCurrentTimestamp();
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        const now = this.getCurrentTimestamp();
 
-      const result = await collection.findOneAndUpdate(
-        { id, status: 'PAUSED' } as QueryFilter,
-        {
-          $set: {
-            status: 'PENDING',
-            scheduledAt: now,
-            updatedAt: now,
-          },
-        } as any,
-        { returnDocument: 'after' }
-      );
+        const result = await collection.findOneAndUpdate(
+          { id, status: 'PAUSED' },
+          {
+            $set: {
+              status: 'PENDING',
+              scheduledAt: now,
+              updatedAt: now,
+            },
+          } as any,
+          { returnDocument: 'after' }
+        );
 
-      if (!result) {
-        logger.warn('Background job not found or not resumable', { jobId: id });
-        return null;
-      }
+        if (!result) {
+          logger.warn('Background job not found or not resumable', { jobId: id });
+          return null;
+        }
 
-      const validated = this.validate(result);
-      logger.info('Background job resumed', { jobId: id, type: validated.type });
-      return validated;
-    } catch (error) {
-      logger.error('Error resuming background job', {
-        jobId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        const validated = this.validate(result);
+        logger.info('Background job resumed', { jobId: id, type: validated.type });
+        return validated;
+      },
+      'Error resuming background job',
+      { jobId: id }
+    );
   }
 
   /**
@@ -554,34 +563,34 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
    * Jobs that have been processing for longer than timeout are reset to FAILED
    */
   async resetStuckJobs(timeoutMinutes: number = 10): Promise<number> {
-    try {
-      const collection = await this.getCollection();
-      const cutoff = new Date(Date.now() - timeoutMinutes * 60 * 1000).toISOString();
-      const now = this.getCurrentTimestamp();
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        const cutoff = new Date(Date.now() - timeoutMinutes * 60 * 1000).toISOString();
+        const now = this.getCurrentTimestamp();
 
-      const result = await collection.updateMany(
-        {
-          status: 'PROCESSING',
-          startedAt: { $lt: cutoff },
-        } as QueryFilter,
-        {
-          $set: {
-            status: 'FAILED',
-            lastError: `Timed out after ${timeoutMinutes} minutes`,
-            updatedAt: now,
+        const result = await collection.updateMany(
+          {
+            status: 'PROCESSING',
+            startedAt: { $lt: cutoff },
           },
-        } as any
-      );
+          {
+            $set: {
+              status: 'FAILED',
+              lastError: `Timed out after ${timeoutMinutes} minutes`,
+              updatedAt: now,
+            },
+          } as any
+        );
 
-      if (result.modifiedCount > 0) {
-        logger.warn('Reset stuck processing jobs', { count: result.modifiedCount });
-      }
-      return result.modifiedCount;
-    } catch (error) {
-      logger.error('Error resetting stuck jobs', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return 0;
-    }
+        if (result.modifiedCount > 0) {
+          logger.warn('Reset stuck processing jobs', { count: result.modifiedCount });
+        }
+        return result.modifiedCount;
+      },
+      'Error resetting stuck jobs',
+      {},
+      0
+    );
   }
 }

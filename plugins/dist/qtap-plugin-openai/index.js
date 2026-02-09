@@ -242,7 +242,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // node_modules/openai/version.mjs
-var VERSION = "6.17.0";
+var VERSION = "6.18.0";
 
 // node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -1280,6 +1280,10 @@ async function defaultParseResponse(client, props) {
     const mediaType = contentType?.split(";")[0]?.trim();
     const isJSON = mediaType?.includes("application/json") || mediaType?.endsWith("+json");
     if (isJSON) {
+      const contentLength = response.headers.get("content-length");
+      if (contentLength === "0") {
+        return void 0;
+      }
       const json = await response.json();
       return addRequestID(json, response);
     }
@@ -6626,7 +6630,7 @@ var OpenAI = class {
     return { response, options, controller, requestLogID, retryOfRequestLogID, startTime };
   }
   getAPIList(path2, Page2, opts) {
-    return this.requestAPIList(Page2, { method: "get", path: path2, ...opts });
+    return this.requestAPIList(Page2, opts && "then" in opts ? opts.then((opts2) => ({ method: "get", path: path2, ...opts2 })) : { method: "get", path: path2, ...opts });
   }
   requestAPIList(Page2, options) {
     const request = this.makeRequest(options, null, void 0);
@@ -6634,9 +6638,10 @@ var OpenAI = class {
   }
   async fetchWithTimeout(url, init, ms, controller) {
     const { signal, method, ...options } = init || {};
+    const abort = this._makeAbort(controller);
     if (signal)
-      signal.addEventListener("abort", () => controller.abort());
-    const timeout = setTimeout(() => controller.abort(), ms);
+      signal.addEventListener("abort", abort, { once: true });
+    const timeout = setTimeout(abort, ms);
     const isReadableBody = globalThis.ReadableStream && options.body instanceof globalThis.ReadableStream || typeof options.body === "object" && options.body !== null && Symbol.asyncIterator in options.body;
     const fetchOptions = {
       signal: controller.signal,
@@ -6747,6 +6752,9 @@ var OpenAI = class {
     ]);
     this.validateHeaders(headers);
     return headers.values;
+  }
+  _makeAbort(controller) {
+    return () => controller.abort();
   }
   buildBody({ options: { body, headers: rawHeaders } }) {
     if (!body) {
@@ -7291,12 +7299,6 @@ var OpenAIEmbeddingProvider = class {
    * @returns The embedding result
    */
   async generateEmbedding(text, model, apiKey, options) {
-    logger3.debug("Generating OpenAI embedding", {
-      context: "OpenAIEmbeddingProvider.generateEmbedding",
-      model,
-      textLength: text.length,
-      dimensions: options?.dimensions
-    });
     const requestPayload = {
       model,
       input: text
@@ -7324,11 +7326,6 @@ var OpenAIEmbeddingProvider = class {
     }
     const data = await response.json();
     const embedding = data.data[0].embedding;
-    logger3.debug("OpenAI embedding generated successfully", {
-      context: "OpenAIEmbeddingProvider.generateEmbedding",
-      model,
-      dimensions: embedding.length
-    });
     return {
       embedding,
       model,
@@ -7349,12 +7346,6 @@ var OpenAIEmbeddingProvider = class {
    * @returns Array of embedding results
    */
   async generateBatchEmbeddings(texts, model, apiKey, options) {
-    logger3.debug("Generating batch OpenAI embeddings", {
-      context: "OpenAIEmbeddingProvider.generateBatchEmbeddings",
-      model,
-      count: texts.length,
-      dimensions: options?.dimensions
-    });
     const requestPayload = {
       model,
       input: texts
@@ -7393,11 +7384,6 @@ var OpenAIEmbeddingProvider = class {
         } : void 0
       });
     }
-    logger3.debug("OpenAI batch embeddings generated successfully", {
-      context: "OpenAIEmbeddingProvider.generateBatchEmbeddings",
-      model,
-      count: results.length
-    });
     return results;
   }
   /**

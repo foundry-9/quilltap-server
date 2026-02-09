@@ -367,6 +367,23 @@ export const ThemeFontDefinitionSchema = z.object({
 export type ThemeFontDefinition = z.infer<typeof ThemeFontDefinitionSchema>;
 
 /**
+ * Subsystem display override schema
+ * Allows themes to rename or re-image Foundry subsystem pages.
+ */
+export const SubsystemOverridesSchema = z.object({
+  /** Override the display name */
+  name: z.string().min(1).max(100).optional(),
+  /** Override the short description */
+  description: z.string().min(1).max(500).optional(),
+  /** Override the thumbnail image (URL, data URI, or relative path) */
+  thumbnail: z.string().optional(),
+  /** Override the full-page background image (URL, data URI, or relative path) */
+  backgroundImage: z.string().optional(),
+});
+
+export type SubsystemOverridesType = z.infer<typeof SubsystemOverridesSchema>;
+
+/**
  * Theme plugin configuration schema
  *
  * Defines the configuration for theme plugins that provide UI theming.
@@ -402,6 +419,9 @@ export const ThemeConfigSchema = z.object({
    * Set to false to force file-based loading (tokens.json + styles.css).
    */
   useModule: z.boolean().default(true).optional().describe('Use module-based self-contained loading'),
+
+  /** Subsystem display overrides — keys are subsystem IDs */
+  subsystems: z.record(z.string(), SubsystemOverridesSchema).optional().describe('Override Foundry subsystem names, descriptions, and images'),
 });
 
 export type ThemeConfig = z.infer<typeof ThemeConfigSchema>;

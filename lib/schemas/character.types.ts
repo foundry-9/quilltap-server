@@ -38,6 +38,7 @@ export type CharacterSystemPrompt = z.infer<typeof CharacterSystemPromptSchema>;
 export const PhysicalDescriptionSchema = z.object({
   id: UUIDSchema,
   name: z.string().min(1),
+  usageContext: z.string().max(200).nullable().optional(),
   shortPrompt: z.string().max(350).nullable().optional(),
   mediumPrompt: z.string().max(500).nullable().optional(),
   longPrompt: z.string().max(750).nullable().optional(),
@@ -48,6 +49,34 @@ export const PhysicalDescriptionSchema = z.object({
 });
 
 export type PhysicalDescription = z.infer<typeof PhysicalDescriptionSchema>;
+
+// ============================================================================
+// CLOTHING RECORDS
+// ============================================================================
+
+// Clothing Record for outfit descriptions
+export const ClothingRecordSchema = z.object({
+  id: UUIDSchema,
+  name: z.string().min(1),
+  usageContext: z.string().max(200).nullable().optional(),
+  description: z.string().nullable().optional(),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type ClothingRecord = z.infer<typeof ClothingRecordSchema>;
+
+// ============================================================================
+// CHARACTER PRONOUNS
+// ============================================================================
+
+export const PronounsSchema = z.object({
+  subject: z.string().min(1).max(20),
+  object: z.string().min(1).max(20),
+  possessive: z.string().min(1).max(20),
+});
+
+export type Pronouns = z.infer<typeof PronounsSchema>;
 
 // ============================================================================
 // CHARACTER
@@ -80,17 +109,23 @@ export const CharacterSchema = z.object({
   talkativeness: z.number().min(0.1).max(1.0).default(0.5),
   controlledBy: ControlledByEnum.default('llm'),  // Who controls this character: 'llm' (AI) or 'user' (player)
 
+  /** Default agent mode enabled state for chats with this character (null = inherit from global) */
+  defaultAgentModeEnabled: z.boolean().nullable().optional(),
+
   // Relationships
   personaLinks: z.array(z.object({
     personaId: UUIDSchema,
     isDefault: z.boolean(),
   })).default([]),
+  aliases: z.array(z.string()).default([]),
+  pronouns: PronounsSchema.nullable().optional(),
   tags: z.array(UUIDSchema).default([]),
   avatarOverrides: z.array(z.object({
     chatId: UUIDSchema,
     imageId: UUIDSchema,
   })).default([]),
   physicalDescriptions: z.array(PhysicalDescriptionSchema).default([]),
+  clothingRecords: z.array(ClothingRecordSchema).default([]),
 
   // Timestamps
   createdAt: TimestampSchema,

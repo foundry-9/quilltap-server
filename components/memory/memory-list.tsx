@@ -34,12 +34,14 @@ interface Memory {
 
 interface MemoryListProps {
   characterId: string
+  /** Optional key to trigger data refresh when changed */
+  refreshKey?: number
 }
 
 type SortBy = 'createdAt' | 'updatedAt' | 'importance'
 type SortOrder = 'asc' | 'desc'
 
-export function MemoryList({ characterId }: MemoryListProps) {
+export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<SortBy>('createdAt')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
@@ -102,10 +104,10 @@ export function MemoryList({ characterId }: MemoryListProps) {
     deleteSuccessMessage: 'Memory deleted',
   })
 
-  // Refetch when filters change
+  // Refetch when filters change or refreshKey changes
   useEffect(() => {
     refetch()
-  }, [search, sortBy, sortOrder, sourceFilter, refetch])
+  }, [search, sortBy, sortOrder, sourceFilter, refreshKey, refetch])
 
   const handleHousekeepingComplete = () => {
     setShowHousekeeping(false)

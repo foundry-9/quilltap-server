@@ -43,6 +43,7 @@ export interface SidebarChat {
   projectId?: string | null
   projectName?: string | null
   projectColor?: string | null
+  isDangerous?: boolean
 }
 
 export interface SidebarProject {

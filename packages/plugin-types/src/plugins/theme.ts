@@ -326,6 +326,33 @@ export interface ThemeMetadata {
 }
 
 // ============================================================================
+// SUBSYSTEM OVERRIDES
+// ============================================================================
+
+/**
+ * Optional overrides for Foundry subsystem display in the UI.
+ *
+ * Theme plugins can provide alternative names, descriptions, and images
+ * for any of the 9 Foundry subsystems. For example, a "plain English" theme
+ * could rename "The Lantern" to "Image Generation".
+ *
+ * Image values can be:
+ * - Absolute URLs: "https://example.com/image.png"
+ * - Data URIs: "data:image/png;base64,..."
+ * - Relative paths (resolved to the theme's asset route at runtime): "images/my-lantern.jpg"
+ */
+export interface SubsystemOverrides {
+  /** Override the display name (e.g., "Image Generation" instead of "The Lantern") */
+  name?: string;
+  /** Override the short description */
+  description?: string;
+  /** Override the thumbnail image shown on the Foundry hub card */
+  thumbnail?: string;
+  /** Override the full-page background image on the subsystem page */
+  backgroundImage?: string;
+}
+
+// ============================================================================
 // THEME PLUGIN INTERFACE
 // ============================================================================
 
@@ -396,6 +423,16 @@ export interface ThemePlugin {
    * Base64-encoded font data for fully self-contained themes
    */
   fonts?: EmbeddedFont[];
+
+  /**
+   * Optional subsystem display overrides
+   *
+   * Allows a theme to rename, re-describe, or re-image any of the
+   * Foundry subsystem pages. Keys are subsystem IDs:
+   * 'foundry' | 'aurora' | 'forge' | 'salon' | 'commonplace-book' |
+   * 'prospero' | 'dangermouse' | 'calliope' | 'lantern'
+   */
+  subsystems?: Partial<Record<string, SubsystemOverrides>>;
 
   /**
    * Optional method for dynamic token generation

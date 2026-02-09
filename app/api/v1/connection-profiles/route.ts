@@ -162,6 +162,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       parameters = {},
       isDefault = false,
       isCheap = false,
+      isDangerousCompatible = false,
       allowWebSearch = false,
       useNativeWebSearch = false,
     } = body;
@@ -218,6 +219,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       parameters: parameters,
       isDefault,
       isCheap,
+      isDangerousCompatible,
       allowWebSearch,
       useNativeWebSearch,
       tags: [],

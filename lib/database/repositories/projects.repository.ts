@@ -10,7 +10,7 @@
 
 import { Project, ProjectSchema } from '@/lib/schemas/types';
 import { UserOwnedBaseRepository, CreateOptions } from './base.repository';
-import { QueryFilter } from '../interfaces';
+import { TypedQueryFilter } from '../interfaces';
 import { logger } from '@/lib/logger';
 
 /**
@@ -50,31 +50,28 @@ export class ProjectsRepository extends UserOwnedBaseRepository<Project> {
     data: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions
   ): Promise<Project> {
-    try {
-      // Set defaults for optional fields
-      const projectData = {
-        ...data,
-        allowAnyCharacter: data.allowAnyCharacter ?? false,
-        characterRoster: data.characterRoster ?? [],
-      };
+    return this.safeQuery(
+      async () => {
+        // Set defaults for optional fields
+        const projectData = {
+          ...data,
+          allowAnyCharacter: data.allowAnyCharacter ?? false,
+          characterRoster: data.characterRoster ?? [],
+        };
 
-      const project = await this._create(projectData, options);
+        const project = await this._create(projectData, options);
 
-      logger.info('Project created', {
-        projectId: project.id,
-        userId: project.userId,
-        name: project.name,
-      });
+        logger.info('Project created', {
+          projectId: project.id,
+          userId: project.userId,
+          name: project.name,
+        });
 
-      return project;
-    } catch (error) {
-      logger.error('Error creating project', {
-        userId: data.userId,
-        name: data.name,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return project;
+      },
+      'Error creating project',
+      { userId: data.userId, name: data.name }
+    );
   }
 
   /**
@@ -84,21 +81,19 @@ export class ProjectsRepository extends UserOwnedBaseRepository<Project> {
    * @returns Promise<Project | null> The updated project if found, null otherwise
    */
   async update(id: string, data: Partial<Project>): Promise<Project | null> {
-    try {
-      const project = await this._update(id, data);
+    return this.safeQuery(
+      async () => {
+        const project = await this._update(id, data);
 
-      if (project) {
-        logger.info('Project updated', { projectId: id });
-      }
+        if (project) {
+          logger.info('Project updated', { projectId: id });
+        }
 
-      return project;
-    } catch (error) {
-      logger.error('Error updating project', {
-        projectId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return project;
+      },
+      'Error updating project',
+      { projectId: id }
+    );
   }
 
   /**
@@ -107,21 +102,19 @@ export class ProjectsRepository extends UserOwnedBaseRepository<Project> {
    * @returns Promise<boolean> True if project was deleted, false if not found
    */
   async delete(id: string): Promise<boolean> {
-    try {
-      const result = await this._delete(id);
+    return this.safeQuery(
+      async () => {
+        const result = await this._delete(id);
 
-      if (result) {
-        logger.info('Project deleted', { projectId: id });
-      }
+        if (result) {
+          logger.info('Project deleted', { projectId: id });
+        }
 
-      return result;
-    } catch (error) {
-      logger.error('Error deleting project', {
-        projectId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return result;
+      },
+      'Error deleting project',
+      { projectId: id }
+    );
   }
 
   /**
@@ -130,18 +123,14 @@ export class ProjectsRepository extends UserOwnedBaseRepository<Project> {
    * @returns Promise<Project[]> Array of projects with this character
    */
   async findByCharacterId(characterId: string): Promise<Project[]> {
-    try {
-      const projects = await this.findByFilter({
+    return this.safeQuery(
+      () => this.findByFilter({
         characterRoster: { $in: [characterId] },
-      } as QueryFilter);
-      return projects;
-    } catch (error) {
-      logger.error('Error finding projects by character ID', {
-        characterId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+      } as TypedQueryFilter<Project>),
+      'Error finding projects by character ID',
+      { characterId },
+      []
+    );
   }
 
   // ============================================================================
@@ -155,26 +144,23 @@ export class ProjectsRepository extends UserOwnedBaseRepository<Project> {
    * @returns Promise<Project | null> The updated project if found, null otherwise
    */
   async addToRoster(projectId: string, characterId: string): Promise<Project | null> {
-    try {
-      const project = await this.findById(projectId);
-      if (!project) {
-        logger.warn('Project not found for roster addition', { projectId });
-        return null;
-      }
+    return this.safeQuery(
+      async () => {
+        const project = await this.findById(projectId);
+        if (!project) {
+          logger.warn('Project not found for roster addition', { projectId });
+          return null;
+        }
 
-      if (!project.characterRoster.includes(characterId)) {
-        project.characterRoster.push(characterId);
-        return await this.update(projectId, { characterRoster: project.characterRoster });
-      }
-      return project;
-    } catch (error) {
-      logger.error('Error adding character to project roster', {
-        projectId,
-        characterId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        if (!project.characterRoster.includes(characterId)) {
+          project.characterRoster.push(characterId);
+          return await this.update(projectId, { characterRoster: project.characterRoster });
+        }
+        return project;
+      },
+      'Error adding character to project roster',
+      { projectId, characterId }
+    );
   }
 
   /**
@@ -184,26 +170,24 @@ export class ProjectsRepository extends UserOwnedBaseRepository<Project> {
    * @returns Promise<Project | null> The updated project if found, null otherwise
    */
   async addManyToRoster(projectId: string, characterIds: string[]): Promise<Project | null> {
-    try {
-      const project = await this.findById(projectId);
-      if (!project) {
-        logger.warn('Project not found for roster addition', { projectId });
-        return null;
-      }
+    return this.safeQuery(
+      async () => {
+        const project = await this.findById(projectId);
+        if (!project) {
+          logger.warn('Project not found for roster addition', { projectId });
+          return null;
+        }
 
-      const newIds = characterIds.filter((id) => !project.characterRoster.includes(id));
-      if (newIds.length > 0) {
-        project.characterRoster.push(...newIds);
-        return await this.update(projectId, { characterRoster: project.characterRoster });
-      }
-      return project;
-    } catch (error) {
-      logger.error('Error adding characters to project roster', {
-        projectId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        const newIds = characterIds.filter((id) => !project.characterRoster.includes(id));
+        if (newIds.length > 0) {
+          project.characterRoster.push(...newIds);
+          return await this.update(projectId, { characterRoster: project.characterRoster });
+        }
+        return project;
+      },
+      'Error adding characters to project roster',
+      { projectId }
+    );
   }
 
   /**
@@ -213,29 +197,26 @@ export class ProjectsRepository extends UserOwnedBaseRepository<Project> {
    * @returns Promise<Project | null> The updated project if found, null otherwise
    */
   async removeFromRoster(projectId: string, characterId: string): Promise<Project | null> {
-    try {
-      const project = await this.findById(projectId);
-      if (!project) {
-        logger.warn('Project not found for roster removal', { projectId });
-        return null;
-      }
+    return this.safeQuery(
+      async () => {
+        const project = await this.findById(projectId);
+        if (!project) {
+          logger.warn('Project not found for roster removal', { projectId });
+          return null;
+        }
 
-      const beforeCount = project.characterRoster.length;
-      project.characterRoster = project.characterRoster.filter((id) => id !== characterId);
-      const afterCount = project.characterRoster.length;
+        const beforeCount = project.characterRoster.length;
+        project.characterRoster = project.characterRoster.filter((id) => id !== characterId);
+        const afterCount = project.characterRoster.length;
 
-      if (beforeCount !== afterCount) {
-        return await this.update(projectId, { characterRoster: project.characterRoster });
-      }
-      return project;
-    } catch (error) {
-      logger.error('Error removing character from project roster', {
-        projectId,
-        characterId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        if (beforeCount !== afterCount) {
+          return await this.update(projectId, { characterRoster: project.characterRoster });
+        }
+        return project;
+      },
+      'Error removing character from project roster',
+      { projectId, characterId }
+    );
   }
 
   /**
@@ -245,27 +226,25 @@ export class ProjectsRepository extends UserOwnedBaseRepository<Project> {
    * @returns Promise<boolean> True if character can participate
    */
   async canCharacterParticipate(projectId: string, characterId: string): Promise<boolean> {
-    try {
-      const project = await this.findById(projectId);
-      if (!project) {
-        return false;
-      }
+    return this.safeQuery(
+      async () => {
+        const project = await this.findById(projectId);
+        if (!project) {
+          return false;
+        }
 
-      // If allowAnyCharacter is true, any character can participate
-      if (project.allowAnyCharacter) {
-        return true;
-      }
+        // If allowAnyCharacter is true, any character can participate
+        if (project.allowAnyCharacter) {
+          return true;
+        }
 
-      // Otherwise, check if character is in the roster
-      return project.characterRoster.includes(characterId);
-    } catch (error) {
-      logger.error('Error checking character participation', {
-        projectId,
-        characterId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return false;
-    }
+        // Otherwise, check if character is in the roster
+        return project.characterRoster.includes(characterId);
+      },
+      'Error checking character participation',
+      { projectId, characterId },
+      false
+    );
   }
 
   /**
@@ -278,16 +257,11 @@ export class ProjectsRepository extends UserOwnedBaseRepository<Project> {
     projectId: string,
     allowAnyCharacter: boolean
   ): Promise<Project | null> {
-    try {
-      return await this.update(projectId, { allowAnyCharacter });
-    } catch (error) {
-      logger.error('Error setting allowAnyCharacter', {
-        projectId,
-        allowAnyCharacter,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      () => this.update(projectId, { allowAnyCharacter }),
+      'Error setting allowAnyCharacter',
+      { projectId, allowAnyCharacter }
+    );
   }
 
   // ============================================================================
@@ -301,16 +275,11 @@ export class ProjectsRepository extends UserOwnedBaseRepository<Project> {
    * @returns Promise<Project | null> The updated project if found, null otherwise
    */
   async setMountPoint(projectId: string, mountPointId: string | null): Promise<Project | null> {
-    try {
-      return await this.update(projectId, { mountPointId });
-    } catch (error) {
-      logger.error('Error setting mount point for project', {
-        projectId,
-        mountPointId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      () => this.update(projectId, { mountPointId }),
+      'Error setting mount point for project',
+      { projectId, mountPointId }
+    );
   }
 
   /**
@@ -319,15 +288,11 @@ export class ProjectsRepository extends UserOwnedBaseRepository<Project> {
    * @returns Promise<Project[]> Array of projects using this mount point
    */
   async findByMountPointId(mountPointId: string): Promise<Project[]> {
-    try {
-      const projects = await this.findByFilter({ mountPointId } as QueryFilter);
-      return projects;
-    } catch (error) {
-      logger.error('Error finding projects by mount point', {
-        mountPointId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+    return this.safeQuery(
+      () => this.findByFilter({ mountPointId }),
+      'Error finding projects by mount point',
+      { mountPointId },
+      []
+    );
   }
 }

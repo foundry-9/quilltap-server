@@ -17,9 +17,9 @@ export function ImportCompleteStep({ importResult }: ImportCompleteStepProps) {
   return (
     <div className="space-y-4">
       <div className="flex flex-col items-center justify-center py-6">
-        <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mb-4">
+        <div className="w-12 h-12 rounded-full qt-bg-success/10 flex items-center justify-center mb-4">
           <svg
-            className="w-6 h-6 text-green-600 dark:text-green-400"
+            className="w-6 h-6 text-success"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -46,7 +46,7 @@ export function ImportCompleteStep({ importResult }: ImportCompleteStepProps) {
               <span className="text-foreground capitalize">
                 {key.replace(/([A-Z])/g, ' $1').trim()}
               </span>
-              <span className="font-medium text-green-600 dark:text-green-400">
+              <span className="font-medium text-success">
                 +{value}
               </span>
             </div>
@@ -69,13 +69,13 @@ export function ImportCompleteStep({ importResult }: ImportCompleteStepProps) {
 
       {/* Warnings */}
       {importResult.warnings && importResult.warnings.length > 0 && (
-        <div className="p-4 bg-yellow-100/20 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-          <h4 className="font-medium text-yellow-800 dark:text-yellow-200 mb-2">
+        <div className="p-4 qt-bg-warning/10 border border-warning/30 rounded-lg">
+          <h4 className="font-medium text-warning mb-2">
             Warnings
           </h4>
           <ul className="space-y-1">
             {importResult.warnings.map((warning, idx) => (
-              <li key={idx} className="text-sm text-yellow-700 dark:text-yellow-300">
+              <li key={idx} className="text-sm text-warning">
                 • {warning}
               </li>
             ))}

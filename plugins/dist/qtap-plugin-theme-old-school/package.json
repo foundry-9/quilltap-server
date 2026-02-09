@@ -1,0 +1,29 @@
+{
+  "name": "qtap-plugin-theme-old-school",
+  "version": "1.0.6",
+  "description": "Old School theme plugin for Quilltap - the original default theme preserved as a plugin",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "author": "Foundry-9 LLC",
+  "license": "MIT",
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "clean": "rm -f index.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.0"
+  },
+  "peerDependencies": {
+    "@quilltap/plugin-utils": "^1.0.0",
+    "react": ">=18.0.0"
+  },
+  "keywords": [
+    "quilltap",
+    "theme",
+    "old-school",
+    "default",
+    "classic",
+    "slate-blue",
+    "professional"
+  ]
+}

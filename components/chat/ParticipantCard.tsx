@@ -6,15 +6,21 @@
  *
  * Displays a single participant in the chat sidebar with:
  * - Avatar and name
- * - Turn indicator (glowing border when it's their turn)
+ * - Turn position badge (numbered by predicted turn order)
+ * - Connection profile dropdown (for characters)
  * - Talkativeness slider (for characters)
- * - LLM backend indicator (for characters)
- * - Queue position badge (when queued)
+ * - Stop button (when generating)
+ * - Active/inactive toggle (visible eye icon)
  * - Nudge/Queue button
+ * - Expandable settings section (system prompt override only)
  */
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import Avatar from '@/components/ui/Avatar'
+import type { TurnOrderStatus } from '@/lib/chat/turn-manager'
+
+// Special constant for user impersonation selection
+const USER_IMPERSONATION_VALUE = '__user__'
 
 export interface ParticipantData {
   id: string
@@ -22,6 +28,7 @@ export interface ParticipantData {
   controlledBy?: 'llm' | 'user'
   displayOrder: number
   isActive: boolean
+  systemPromptOverride?: string | null
   character?: {
     id: string
     name: string
@@ -53,6 +60,13 @@ export interface ParticipantData {
   } | null
 }
 
+export interface ConnectionProfileOption {
+  id: string
+  name: string
+  provider?: string
+  modelName?: string
+}
+
 interface ParticipantCardProps {
   participant: ParticipantData
   isCurrentTurn: boolean
@@ -67,11 +81,21 @@ interface ParticipantCardProps {
   isUserParticipant?: boolean // True if this is the user's persona
   canRemove?: boolean // True if this character can be removed (not the only character)
   canSkip?: boolean // True if user can skip their turn (next speaker is null = user's turn)
+  // Turn order display
+  turnPosition?: number | null // Position in predicted turn order (1-based), null for inactive
+  turnStatus?: TurnOrderStatus // Status for badge styling
+  onStopStreaming?: () => void // Stop/interrupt the current generation
   // Impersonation support
   isImpersonating?: boolean // True if user is currently impersonating this participant
   isActiveTyping?: boolean // True if this is the active typing participant (when impersonating multiple)
   onImpersonate?: (participantId: string) => void // Start impersonating
   onStopImpersonate?: (participantId: string) => void // Stop impersonating
+  // Connection profile controls
+  connectionProfiles?: ConnectionProfileOption[]
+  onConnectionProfileChange?: (participantId: string, profileId: string | null, controlledBy: 'llm' | 'user') => void
+  // Inline settings controls
+  onSystemPromptOverrideChange?: (participantId: string, override: string | null) => void
+  onActiveChange?: (participantId: string, isActive: boolean) => void
 }
 
 export function ParticipantCard({
@@ -88,14 +112,26 @@ export function ParticipantCard({
   isUserParticipant = false,
   canRemove = true,
   canSkip = false,
+  turnPosition,
+  turnStatus,
+  onStopStreaming,
   isImpersonating = false,
   isActiveTyping = false,
   onImpersonate,
   onStopImpersonate,
+  connectionProfiles,
+  onConnectionProfileChange,
+  onSystemPromptOverrideChange,
+  onActiveChange,
 }: ParticipantCardProps) {
   const [localTalkativeness, setLocalTalkativeness] = useState(
     participant.character?.talkativeness ?? 0.5
   )
+  const [settingsExpanded, setSettingsExpanded] = useState(false)
+  const [localSystemPrompt, setLocalSystemPrompt] = useState(
+    participant.systemPromptOverride || ''
+  )
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const isCharacter = participant.type === 'CHARACTER'
   const entity = isCharacter ? participant.character : participant.persona
@@ -106,8 +142,7 @@ export function ParticipantCard({
 
   const name = entity.name
   const title = entity.title
-  const talkativeness = participant.character?.talkativeness ?? 0.5
-
+  const isInactive = turnStatus === 'inactive'
 
   // Check if this is a user-controlled character (not LLM-controlled)
   const isUserControlledCharacter = isCharacter && participant.controlledBy === 'user'
@@ -140,6 +175,37 @@ export function ParticipantCard({
     }
   }
 
+  // Handle connection profile change
+  const handleProfileChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    if (!onConnectionProfileChange) return
+    const value = e.target.value
+    if (value === USER_IMPERSONATION_VALUE) {
+      onConnectionProfileChange(participant.id, null, 'user')
+    } else {
+      onConnectionProfileChange(participant.id, value || null, 'llm')
+    }
+  }
+
+  // Handle system prompt override with debounce
+  const handleSystemPromptChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value
+    setLocalSystemPrompt(value)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      onSystemPromptOverrideChange?.(participant.id, value || null)
+    }, 600)
+  }
+
+  // Handle active toggle via the eye icon button
+  const handleActiveToggleClick = () => {
+    onActiveChange?.(participant.id, !participant.isActive)
+  }
+
+  // Determine the current connection profile select value
+  const connectionProfileValue = participant.controlledBy === 'user'
+    ? USER_IMPERSONATION_VALUE
+    : (participant.connectionProfile?.id || '')
+
   // Determine button label
   const getActionButtonLabel = () => {
     if (queuePosition > 0) return 'Dequeue'
@@ -153,16 +219,44 @@ export function ParticipantCard({
   // Determine if button should be disabled - only disabled while actively generating
   const isActionDisabled = isGenerating && isCurrentTurn
 
+  // Get the CSS class for the position badge based on turn status
+  const getPositionBadgeClass = (): string => {
+    if (!turnStatus) return ''
+    switch (turnStatus) {
+      case 'generating': return 'qt-participant-position-generating'
+      case 'next': return 'qt-participant-position-next'
+      case 'queued': return 'qt-participant-position-queued'
+      case 'eligible': return 'qt-participant-position-eligible'
+      case 'user-turn': return 'qt-participant-position-user-turn'
+      case 'spoken': return 'qt-participant-position-spoken'
+      default: return ''
+    }
+  }
+
+  // Determine card class based on state
+  const getCardClass = (): string => {
+    if (isInactive) return 'qt-participant-card-inactive'
+    if (isCurrentTurn) return 'qt-participant-card-active'
+    return 'qt-participant-card'
+  }
+
   return (
     <div
       className={`
-        ${isCurrentTurn ? 'qt-participant-card-active' : 'qt-participant-card'}
+        ${getCardClass()}
         participant-card
       `}
     >
-      {/* Queue position badge */}
-      {queuePosition > 0 && (
-        <div className="qt-participant-queue-badge absolute -top-2 -right-2 w-6 h-6 shadow-md">
+      {/* Position badge - shown for all active participants with a position */}
+      {turnPosition != null && turnPosition > 0 && (
+        <div className={`qt-participant-position-badge ${getPositionBadgeClass()}`} data-testid="position-badge">
+          {turnPosition}
+        </div>
+      )}
+
+      {/* Queue position badge - fallback when no turnPosition provided */}
+      {turnPosition == null && queuePosition > 0 && (
+        <div className="qt-participant-queue-badge absolute -top-2 -right-2 w-6 h-6 qt-shadow-md">
           {queuePosition}
         </div>
       )}
@@ -210,11 +304,32 @@ export function ParticipantCard({
             </div>
           )}
 
-          {/* LLM indicator for characters */}
-          {isCharacter && participant.connectionProfile && (
-            <div className="qt-participant-card-status mt-1 truncate" title={`${participant.connectionProfile.provider}: ${participant.connectionProfile.modelName}`}>
-              {participant.connectionProfile.modelName || participant.connectionProfile.name}
+          {/* Connection profile dropdown for characters */}
+          {isCharacter && connectionProfiles && onConnectionProfileChange ? (
+            <div className="mt-1">
+              <select
+                value={connectionProfileValue}
+                onChange={handleProfileChange}
+                className="qt-select qt-select-sm w-full"
+                title="Connection profile"
+                aria-label={`Connection profile for ${name}`}
+              >
+                <option value="">Select a provider...</option>
+                <option value={USER_IMPERSONATION_VALUE}>User (you type)</option>
+                {connectionProfiles.map((profile) => (
+                  <option key={profile.id} value={profile.id}>
+                    {profile.modelName || profile.name}
+                  </option>
+                ))}
+              </select>
             </div>
+          ) : (
+            /* Fallback: plain-text LLM indicator when no dropdown */
+            isCharacter && participant.connectionProfile && (
+              <div className="qt-participant-card-status mt-1 truncate" title={`${participant.connectionProfile.provider}: ${participant.connectionProfile.modelName}`}>
+                {participant.connectionProfile.modelName || participant.connectionProfile.name}
+              </div>
+            )
           )}
 
           {/* Talkativeness slider for characters */}
@@ -259,8 +374,21 @@ export function ParticipantCard({
 
       {/* Action buttons */}
       <div className="qt-participant-card-actions">
-        {/* User participant: show Queue and Skip buttons side by side */}
-        {isUserParticipant && onSkip ? (
+        {/* Stop button - shown when this participant is generating */}
+        {turnStatus === 'generating' && onStopStreaming ? (
+          <button
+            onClick={onStopStreaming}
+            className="flex-1 qt-button qt-button-sm qt-participant-stop-button"
+            title="Stop generating"
+            aria-label="Stop generating"
+          >
+            <svg className="w-3.5 h-3.5 mr-1" fill="currentColor" viewBox="0 0 24 24">
+              <rect x="6" y="6" width="12" height="12" rx="1" />
+            </svg>
+            Stop
+          </button>
+        ) : isUserParticipant && onSkip ? (
+          /* User participant: show Queue and Skip buttons side by side */
           <>
             <button
               onClick={handleActionClick}
@@ -302,6 +430,28 @@ export function ParticipantCard({
             `}
           >
             {getActionButtonLabel()}
+          </button>
+        )}
+
+        {/* Active/inactive toggle - visible eye icon */}
+        {onActiveChange && (
+          <button
+            onClick={handleActiveToggleClick}
+            className="qt-button qt-button-sm py-1.5 px-2 qt-participant-active-toggle qt-button-secondary"
+            data-active={participant.isActive ? 'true' : 'false'}
+            title={participant.isActive ? `Deactivate ${name}` : `Activate ${name}`}
+            aria-label={participant.isActive ? `Deactivate ${name}` : `Activate ${name}`}
+          >
+            {participant.isActive ? (
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+            ) : (
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+              </svg>
+            )}
           </button>
         )}
 
@@ -352,7 +502,38 @@ export function ParticipantCard({
             )}
           </button>
         )}
+
+        {/* Settings toggle button - now only for system prompt override */}
+        {onSystemPromptOverrideChange && (
+          <button
+            onClick={() => setSettingsExpanded(!settingsExpanded)}
+            className={`qt-button qt-button-sm py-1.5 px-2 ${settingsExpanded ? 'qt-button-primary' : 'qt-button-secondary'}`}
+            title={settingsExpanded ? 'Hide settings' : 'Show settings'}
+            aria-label={settingsExpanded ? 'Hide participant settings' : 'Show participant settings'}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </button>
+        )}
       </div>
+
+      {/* Expandable settings section - system prompt override only */}
+      {settingsExpanded && onSystemPromptOverrideChange && (
+        <div className="mt-2 pt-2 border-t border-border space-y-2">
+          <div>
+            <label className="qt-text-xs block mb-1">System Prompt Override</label>
+            <textarea
+              value={localSystemPrompt}
+              onChange={handleSystemPromptChange}
+              placeholder="Custom scenario or context..."
+              rows={2}
+              className="qt-textarea qt-text-xs w-full"
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

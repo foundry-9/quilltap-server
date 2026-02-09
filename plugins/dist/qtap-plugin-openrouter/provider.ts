@@ -4,7 +4,7 @@
  * Provides chat completion functionality using OpenRouter's API
  * Supports 100+ models including GPT-4, Claude, Gemini, Llama and more
  *
- * Updated to use SDK v0.4.0 with callModel() and getTextStream() for improved streaming
+ * Updated to use SDK v0.8.0 with callModel() and getTextStream() for improved streaming
  */
 
 import { OpenRouter, fromChatMessages } from '@openrouter/sdk';
@@ -151,7 +151,9 @@ export class OpenRouterProvider implements LLMProvider {
       if (providerPrefs.only) requestParams.provider.only = providerPrefs.only;
     }
 
-    const response = await client.chat.send(requestParams);
+    const response = await client.chat.send({
+      chatGenerationParams: requestParams,
+    });
 
     const choice = response.choices[0];
     const content = choice.message.content;
@@ -584,7 +586,9 @@ export class OpenRouterProvider implements LLMProvider {
       requestBody.imageConfig = { aspectRatio: params.aspectRatio };
     }
 
-    const response = (await client.chat.send(requestBody)) as any;
+    const response = (await client.chat.send({
+      chatGenerationParams: requestBody,
+    })) as any;
 
     const choice = response.choices?.[0];
     if (!choice) {

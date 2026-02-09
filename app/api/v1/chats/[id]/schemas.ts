@@ -14,6 +14,7 @@ export const updateChatSchema = z.object({
   isManuallyRenamed: z.boolean().optional(),
   documentEditingMode: z.boolean().optional(),
   projectId: z.uuid().nullish(),
+  imageProfileId: z.uuid().nullish(), // Chat-level image profile (shared by all participants)
 });
 
 export const updateParticipantSchema = z.object({
@@ -50,6 +51,7 @@ export const chatUpdateRequestSchema = z.object({
   addParticipant: addParticipantSchema.optional(),
   removeParticipantId: z.uuid().optional(),
   roleplayTemplateId: z.string().nullish(),
+  imageProfileId: z.uuid().nullish(), // Chat-level image profile (shortcut, same as chat.imageProfileId)
 });
 
 export const addTagSchema = z.object({

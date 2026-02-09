@@ -37,7 +37,7 @@ export function TokenDisplaySettingsComponent({
               checked={tokenSettings[option.key]}
               onChange={(e) => onTokenDisplayChange(option.key, e.target.checked)}
               disabled={saving}
-              className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+              className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-primary"
             />
             <div className="flex-1">
               <div className="font-medium">{option.label}</div>

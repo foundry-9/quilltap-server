@@ -89,6 +89,7 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, 
       defaultDisabledTools: [],
       defaultDisabledToolGroups: [],
       state: {},
+      backgroundDisplayMode: 'theme',
     });
 
     logger.info('[Projects v1] Project created', {

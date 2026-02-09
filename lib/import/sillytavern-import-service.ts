@@ -227,6 +227,7 @@ export async function importMultiCharacterChat(
         avatarOverrides: [] as { chatId: string; imageId: string }[],
         defaultImageId: null,
         physicalDescriptions: [],
+        clothingRecords: [],
       })
       entityId = character.id
       if (controlledBy === 'llm') {
@@ -273,6 +274,7 @@ export async function importMultiCharacterChat(
         avatarOverrides: [] as { chatId: string; imageId: string }[],
         defaultImageId: null,
         physicalDescriptions: [],
+        clothingRecords: [],
       })
       entityId = character.id
       createdEntities.characters.push(character)

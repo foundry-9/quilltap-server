@@ -9,6 +9,7 @@ import { createServiceLogger } from '@/lib/logging/create-logger'
 import {
   shouldUsePseudoTools,
   buildPseudoToolInstructions,
+  buildNativeToolInstructions,
   parsePseudoToolCalls,
   convertToToolCallRequest,
   stripPseudoToolMarkers,
@@ -47,6 +48,15 @@ export function buildPseudoToolSystemInstructions(
   enabledToolOptions: EnabledToolOptions
 ): string {
   return buildPseudoToolInstructions(enabledToolOptions)
+}
+
+/**
+ * Build native tool instructions to inject into system prompt
+ * Guides models with native function calling to actually invoke tools
+ * rather than narrating tool usage in prose.
+ */
+export function buildNativeToolSystemInstructions(): string {
+  return buildNativeToolInstructions(true)
 }
 
 /**

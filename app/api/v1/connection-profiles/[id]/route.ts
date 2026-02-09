@@ -104,6 +104,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
         parameters,
         isDefault,
         isCheap,
+        isDangerousCompatible,
         allowWebSearch,
         useNativeWebSearch,
       } = body;
@@ -185,6 +186,13 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
           return badRequest('isCheap must be a boolean');
         }
         updateData.isCheap = isCheap;
+      }
+
+      if (isDangerousCompatible !== undefined) {
+        if (typeof isDangerousCompatible !== 'boolean') {
+          return badRequest('isDangerousCompatible must be a boolean');
+        }
+        updateData.isDangerousCompatible = isDangerousCompatible;
       }
 
       if (allowWebSearch !== undefined) {

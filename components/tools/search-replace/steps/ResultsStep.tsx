@@ -53,7 +53,7 @@ export function ResultsStep({ result, error }: ResultsStepProps) {
       <div className="flex flex-col items-center justify-center">
         <div className={`
           w-16 h-16 rounded-full flex items-center justify-center mb-4
-          ${hasErrors ? 'bg-yellow-500/10' : 'bg-green-500/10'}
+          ${hasErrors ? 'qt-bg-warning/10' : 'qt-bg-success/10'}
         `}>
           <span className="text-2xl">
             {hasErrors ? '⚠️' : '✅'}

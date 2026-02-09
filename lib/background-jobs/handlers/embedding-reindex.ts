@@ -66,13 +66,6 @@ export async function handleEmbeddingReindexAll(job: BackgroundJob): Promise<voi
   // Mark all existing statuses as PENDING
   const markedCount = await repos.embeddingStatus.markAllPendingByProfileId(payload.profileId);
 
-  logger.debug('[EmbeddingReindexAll] Marked existing statuses as pending', {
-    context: 'handleEmbeddingReindexAll',
-    jobId: job.id,
-    profileId: payload.profileId,
-    markedCount,
-  });
-
   // Create or update embedding status records for all memories
   // and enqueue generate jobs
   let enqueuedCount = 0;

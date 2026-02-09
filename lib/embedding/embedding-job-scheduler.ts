@@ -49,12 +49,6 @@ export async function scheduleEmbedding(
   const profile = await repos.embeddingProfiles.findDefault(userId);
 
   if (!profile) {
-    logger.debug('[EmbeddingScheduler] No default embedding profile, skipping', {
-      context: 'scheduleEmbedding',
-      userId,
-      entityType,
-      entityId,
-    });
     return;
   }
 
@@ -68,10 +62,6 @@ export async function scheduleEmbedding(
 
   // Currently only MEMORY is supported for embedding
   if (entityType !== 'MEMORY') {
-    logger.debug('[EmbeddingScheduler] Entity type not supported for embedding', {
-      context: 'scheduleEmbedding',
-      entityType,
-    });
     return;
   }
 
@@ -80,14 +70,6 @@ export async function scheduleEmbedding(
     entityType: 'MEMORY',
     entityId,
     characterId,
-    profileId: profile.id,
-  });
-
-  logger.debug('[EmbeddingScheduler] Embedding job scheduled', {
-    context: 'scheduleEmbedding',
-    userId,
-    entityType,
-    entityId,
     profileId: profile.id,
   });
 }
@@ -116,22 +98,11 @@ export async function scheduleRefit(
   }
 
   if (!profile) {
-    logger.debug('[EmbeddingScheduler] No embedding profile, skipping refit', {
-      context: 'scheduleRefit',
-      userId,
-      profileId,
-    });
     return;
   }
 
   // Only refit for BUILTIN profiles
   if (profile.provider !== 'BUILTIN') {
-    logger.debug('[EmbeddingScheduler] Non-BUILTIN profile, skipping refit', {
-      context: 'scheduleRefit',
-      userId,
-      profileId: profile.id,
-      provider: profile.provider,
-    });
     return;
   }
 
@@ -169,13 +140,6 @@ export async function scheduleRefit(
   }, REFIT_DEBOUNCE_MS);
 
   refitDebounceTimers.set(debounceKey, timer);
-
-  logger.debug('[EmbeddingScheduler] Refit scheduled (debounce started)', {
-    context: 'scheduleRefit',
-    userId,
-    profileId: profile.id,
-    debounceMs: REFIT_DEBOUNCE_MS,
-  });
 }
 
 /**
@@ -191,12 +155,6 @@ export function cancelPendingRefit(userId: string, profileId: string): void {
   if (timer) {
     clearTimeout(timer);
     refitDebounceTimers.delete(debounceKey);
-
-    logger.debug('[EmbeddingScheduler] Pending refit cancelled', {
-      context: 'cancelPendingRefit',
-      userId,
-      profileId,
-    });
   }
 }
 
@@ -235,13 +193,4 @@ export async function handleEntityDeletion(
 
   // Delete embedding status records for this entity
   const deletedCount = await repos.embeddingStatus.deleteByEntity(entityType, entityId);
-
-  if (deletedCount > 0) {
-    logger.debug('[EmbeddingScheduler] Embedding status deleted', {
-      context: 'handleEntityDeletion',
-      entityType,
-      entityId,
-      deletedCount,
-    });
-  }
 }

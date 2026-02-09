@@ -174,12 +174,6 @@ export class GoogleImagenProvider implements ImageGenProviderBase {
     const apiModelId = IMAGEN_MODEL_MAP[model] || model;
     const endpoint = `${baseUrl}/models/${apiModelId}:predict`;
 
-    logger.debug('Calling Imagen API', {
-      context: 'GoogleImagenProvider.generateWithImagen',
-      userModel: model,
-      apiModel: apiModelId,
-    });
-
     const requestBody: Record<string, unknown> = {
       instances: [
         {

@@ -191,6 +191,19 @@ export function jsonArrayContainsAny(column: string, values: unknown[]): { sql: 
 }
 
 /**
+ * Generate SQL for checking if any element in a JSON array matches a LIKE pattern
+ * Used for regex-like text search on array fields like keywords
+ * @param column The column name containing a JSON array
+ * @param pattern The LIKE pattern to match (use % for wildcards)
+ */
+export function jsonArrayContainsLike(column: string, pattern: string): { sql: string; params: unknown[] } {
+  return {
+    sql: `EXISTS (SELECT 1 FROM json_each("${column}") WHERE value LIKE ?)`,
+    params: [pattern],
+  };
+}
+
+/**
  * Generate SQL for checking if a JSON array of objects contains an object
  * with a nested field matching a value.
  * Used for queries like: participants.characterId = 'some-id'

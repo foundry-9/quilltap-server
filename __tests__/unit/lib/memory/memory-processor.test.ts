@@ -110,6 +110,7 @@ describe('Memory Processor Types', () => {
       const result: MemoryProcessingResult = {
         success: true,
         memoryCreated: true,
+        memoryReinforced: false,
         memoryId: 'mem-123',
         usage: {
           promptTokens: 100,
@@ -120,6 +121,7 @@ describe('Memory Processor Types', () => {
 
       expect(result.success).toBe(true)
       expect(result.memoryCreated).toBe(true)
+      expect(result.memoryReinforced).toBe(false)
       expect(result.memoryId).toBe('mem-123')
       expect(result.usage?.totalTokens).toBe(150)
     })
@@ -128,6 +130,7 @@ describe('Memory Processor Types', () => {
       const result: MemoryProcessingResult = {
         success: true,
         memoryCreated: false,
+        memoryReinforced: false,
         usage: {
           promptTokens: 50,
           completionTokens: 10,
@@ -137,6 +140,7 @@ describe('Memory Processor Types', () => {
 
       expect(result.success).toBe(true)
       expect(result.memoryCreated).toBe(false)
+      expect(result.memoryReinforced).toBe(false)
       expect(result.memoryId).toBeUndefined()
     })
 
@@ -144,12 +148,36 @@ describe('Memory Processor Types', () => {
       const result: MemoryProcessingResult = {
         success: false,
         memoryCreated: false,
+        memoryReinforced: false,
         error: 'API rate limit exceeded',
       }
 
       expect(result.success).toBe(false)
       expect(result.memoryCreated).toBe(false)
+      expect(result.memoryReinforced).toBe(false)
       expect(result.error).toBe('API rate limit exceeded')
+    })
+
+    it('should represent successful memory reinforcement', () => {
+      const result: MemoryProcessingResult = {
+        success: true,
+        memoryCreated: false,
+        memoryReinforced: true,
+        reinforcedMemoryId: 'mem-existing-456',
+        relatedMemoryIds: ['mem-related-1', 'mem-related-2'],
+        usage: {
+          promptTokens: 80,
+          completionTokens: 30,
+          totalTokens: 110,
+        },
+      }
+
+      expect(result.success).toBe(true)
+      expect(result.memoryCreated).toBe(false)
+      expect(result.memoryReinforced).toBe(true)
+      expect(result.reinforcedMemoryId).toBe('mem-existing-456')
+      expect(result.relatedMemoryIds).toEqual(['mem-related-1', 'mem-related-2'])
+      expect(result.usage?.totalTokens).toBe(110)
     })
   })
 })
@@ -262,6 +290,7 @@ describe('Memory Inter-Character Tracking Types (v2.7-dev)', () => {
       const memoryResult: MemoryProcessingResult = {
         success: true,
         memoryCreated: true,
+        memoryReinforced: false,
         memoryId: 'mem-inter-char',
         // The memory itself would have:
         // - characterId: 'char-luna' (who holds this memory)

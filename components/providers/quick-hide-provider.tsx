@@ -11,14 +11,18 @@ interface QuickHideTag {
 interface QuickHideContextValue {
   quickHideTags: QuickHideTag[]
   hiddenTagIds: Set<string>
+  hideDangerousChats: boolean
   loading: boolean
   toggleTag: (tagId: string) => void
+  toggleHideDangerousChats: () => void
   clearAllHidden: () => void
   refresh: () => Promise<void>
   shouldHideByIds: (tagIds?: Array<string | null | undefined>) => boolean
+  shouldHideChat: (chat: { characterTags?: string[]; isDangerous?: boolean }) => boolean
 }
 
 const STORAGE_KEY = 'quilltap.quickHide.activeTags'
+const DANGER_STORAGE_KEY = 'quilltap.quickHide.hideDangerous'
 
 const QuickHideContext = createContext<QuickHideContextValue | null>(null)
 
@@ -38,6 +42,7 @@ export function QuickHideProvider({ children }: { children: React.ReactNode }) {
   const { status } = useSession()
   const [quickHideTags, setQuickHideTags] = useState<QuickHideTag[]>([])
   const [hiddenTagIds, setHiddenTagIds] = useState<Set<string>>(new Set())
+  const [hideDangerousChats, setHideDangerousChats] = useState(false)
   const [loading, setLoading] = useState(true)
   const [storageReady, setStorageReady] = useState(false)
 
@@ -81,6 +86,10 @@ export function QuickHideProvider({ children }: { children: React.ReactNode }) {
           setHiddenTagIds(new Set(parsed.filter((id) => typeof id === 'string')))
         }
       }
+      const dangerRaw = window.localStorage.getItem(DANGER_STORAGE_KEY)
+      if (dangerRaw === 'true') {
+        setHideDangerousChats(true)
+      }
     } catch (error) {
       console.warn('Unable to load quick-hide preferences', { error: error instanceof Error ? error.message : String(error) })
     } finally {
@@ -94,22 +103,27 @@ export function QuickHideProvider({ children }: { children: React.ReactNode }) {
     }
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(hiddenTagIds)))
+      window.localStorage.setItem(DANGER_STORAGE_KEY, hideDangerousChats ? 'true' : 'false')
     } catch (error) {
       console.warn('Unable to persist quick-hide preferences', { error: error instanceof Error ? error.message : String(error) })
     }
-  }, [hiddenTagIds, storageReady])
+  }, [hiddenTagIds, hideDangerousChats, storageReady])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
     const handler = (event: StorageEvent) => {
-      if (event.key !== STORAGE_KEY || !event.newValue) return
-      try {
-        const parsed = JSON.parse(event.newValue)
-        if (Array.isArray(parsed)) {
-          setHiddenTagIds(new Set(parsed.filter((id) => typeof id === 'string')))
+      if (event.key === STORAGE_KEY && event.newValue) {
+        try {
+          const parsed = JSON.parse(event.newValue)
+          if (Array.isArray(parsed)) {
+            setHiddenTagIds(new Set(parsed.filter((id) => typeof id === 'string')))
+          }
+        } catch {
+          // ignore
         }
-      } catch {
-        // ignore
+      }
+      if (event.key === DANGER_STORAGE_KEY && event.newValue) {
+        setHideDangerousChats(event.newValue === 'true')
       }
     }
     window.addEventListener('storage', handler)
@@ -129,8 +143,13 @@ export function QuickHideProvider({ children }: { children: React.ReactNode }) {
     })
   }, [])
 
+  const toggleHideDangerousChats = useCallback(() => {
+    setHideDangerousChats(prev => !prev)
+  }, [])
+
   const clearAllHidden = useCallback(() => {
     setHiddenTagIds(new Set())
+    setHideDangerousChats(false)
   }, [])
 
   const shouldHideByIds = useCallback(
@@ -148,17 +167,33 @@ export function QuickHideProvider({ children }: { children: React.ReactNode }) {
     [hiddenTagIds]
   )
 
+  const shouldHideChat = useCallback(
+    (chat: { characterTags?: string[]; isDangerous?: boolean }) => {
+      if (shouldHideByIds(chat.characterTags)) {
+        return true
+      }
+      if (hideDangerousChats && chat.isDangerous) {
+        return true
+      }
+      return false
+    },
+    [shouldHideByIds, hideDangerousChats]
+  )
+
   const value = useMemo<QuickHideContextValue>(
     () => ({
       quickHideTags,
       hiddenTagIds,
+      hideDangerousChats,
       loading,
       toggleTag,
+      toggleHideDangerousChats,
       clearAllHidden,
       refresh: loadTags,
       shouldHideByIds,
+      shouldHideChat,
     }),
-    [quickHideTags, hiddenTagIds, loading, toggleTag, clearAllHidden, loadTags, shouldHideByIds]
+    [quickHideTags, hiddenTagIds, hideDangerousChats, loading, toggleTag, toggleHideDangerousChats, clearAllHidden, loadTags, shouldHideByIds, shouldHideChat]
   )
 
   return <QuickHideContext.Provider value={value}>{children}</QuickHideContext.Provider>

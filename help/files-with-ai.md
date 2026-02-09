@@ -477,7 +477,7 @@ Resources (10 files), Archive (10 files)"
 - Delete old files to free space
 - Approve file writing permission
 - Ensure destination folder exists
-- Check Settings > File Storage configuration
+- Check The Forge > File Storage configuration
 
 ## Related Topics
 
