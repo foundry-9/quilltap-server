@@ -12,8 +12,12 @@ import { ContextCompressionSettingsComponent } from '@/components/settings/chat-
 import { LLMLoggingSettingsComponent } from '@/components/settings/chat-settings/LLMLoggingSettings'
 import { AutomationSettings } from '@/components/settings/chat-settings/AutomationSettings'
 import { AgentModeSettings } from '@/components/settings/chat-settings/AgentModeSettings'
+import { useSubsystemInfo } from '@/components/providers/theme-provider'
 
 export default function SalonPage() {
+  const info = useSubsystemInfo('salon')
+  const foundryInfo = useSubsystemInfo('foundry')
+
   const {
     settings,
     loading,
@@ -36,7 +40,7 @@ export default function SalonPage() {
     handleAgentModeMaxTurnsChange,
   } = useChatSettings()
 
-  const bgStyle = { '--story-background-url': 'url(/images/salon.png)' } as React.CSSProperties
+  const bgStyle = info.backgroundImage ? { '--story-background-url': `url(${info.backgroundImage})` } as React.CSSProperties : undefined
 
   if (loading) {
     return (
@@ -60,14 +64,14 @@ export default function SalonPage() {
     <div className="qt-page-container" style={bgStyle}>
       <div className="mb-2">
         <nav className="qt-text-small qt-text-muted">
-          <Link href="/foundry" className="qt-link">The Foundry</Link>
+          <Link href="/foundry" className="qt-link">{foundryInfo.name}</Link>
           <span className="mx-2">/</span>
-          <span>The Salon</span>
+          <span>{info.name}</span>
         </nav>
       </div>
       <div className="mb-8">
-        <h1 className="qt-heading-1">The Salon</h1>
-        <p className="qt-text-muted mt-2">Chat behavior, avatars, compression, and automation settings</p>
+        <h1 className="qt-heading-1">{info.name}</h1>
+        <p className="qt-text-muted mt-2">{info.description}</p>
       </div>
 
       {error && <div className="qt-alert-error mb-4">{error}</div>}

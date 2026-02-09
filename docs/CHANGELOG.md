@@ -4,6 +4,27 @@
 
 ### 2.10-dev
 
+- feat: Theme-overridable subsystem names and Foundry card images
+  - Centralized all 9 subsystem definitions (name, description, thumbnail, background) in `lib/foundry/subsystem-defaults.ts`
+  - Added `SubsystemOverrides` interface and optional `subsystems` field to `ThemePlugin` in `@quilltap/plugin-types` (1.13.0)
+  - Theme plugins can now override display names, descriptions, thumbnail images, and background images for any Foundry subsystem
+  - Added `SubsystemOverridesSchema` to plugin manifest validation
+  - Theme registry resolves relative image paths to theme asset URLs automatically
+  - API `/api/v1/themes/:id?action=tokens` now returns `subsystems` overrides
+  - Created `useSubsystemInfo()` and `useAllSubsystemInfo()` hooks in theme provider
+  - Refactored Foundry hub page and all 8 subsystem pages to use hooks instead of hardcoded strings
+  - Sidebar footer Foundry link title is now theme-overridable
+  - Foundry card CSS classes (`qt-foundry-card`, `qt-foundry-card-image`, `qt-foundry-card-content`) remain fully customizable via theme `cssOverrides`
+  - Themes can set `thumbnail` or `backgroundImage` to `"none"` to suppress default images
+  - Subsystem pages conditionally apply `--story-background-url` only when a background image is provided
+  - Foundry hub cards conditionally render the image container only when a thumbnail is provided
+
+- feat: Old School theme — plain-English subsystem names and text-focused Foundry cards
+  - Subsystem names overridden: Settings, Prompts, Data, Chat Behavior, RAG/Memories, LLM Usage, Content Filters, Appearance, Images/Backgrounds
+  - Foundry cards redesigned with CSS grid: icon + title centered on left (40%), description on right (60%), gentle gradient background
+  - Background images and thumbnails suppressed via `"none"` overrides
+  - Old School bumped to 1.0.6
+
 - chore: Remove Ocean theme plugin
   - Deleted `plugins/dist/qtap-plugin-theme-ocean/` directory and all contents
   - Removed Ocean from Storybook theme selector, help docs, tests, and code comments

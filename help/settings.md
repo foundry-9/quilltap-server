@@ -124,6 +124,7 @@ All changes in The Foundry are saved automatically. You don't need to click a "S
 
 ## Important Notes
 
+- **Subsystem names may vary by theme:** If you have an active theme, it may rename subsystem pages (e.g., "The Lantern" might appear as "Image Generation"). The underlying functionality and documentation links remain the same regardless of display names.
 - **API Keys are sensitive:** Never share your API keys with others or commit them to version control
 - **Profiles depend on API Keys:** You must create API keys before creating connection profiles
 - **Plugin installation:** Some plugins may require specific configuration before they work

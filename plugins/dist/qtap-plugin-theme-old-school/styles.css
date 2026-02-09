@@ -595,6 +595,77 @@
 }
 
 /* ============================================================================
+   FOUNDRY CARD OVERRIDES
+   Text-focused layout: icon + title on left, description on right,
+   with a gentle gradient instead of a background image.
+   ============================================================================ */
+[data-theme="old-school"] .qt-foundry-card {
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--color-primary) 8%, var(--qt-card-bg)),
+    var(--qt-card-bg)
+  );
+  min-height: 7rem;
+}
+
+[data-theme="old-school"].dark .qt-foundry-card {
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--color-primary) 12%, var(--qt-card-bg)),
+    var(--qt-card-bg)
+  );
+}
+
+/* Hide the background image and its spacer */
+[data-theme="old-school"] .qt-foundry-card-image {
+  display: none;
+}
+
+[data-theme="old-school"] .qt-foundry-card > [aria-hidden="true"] {
+  display: none;
+}
+
+/* Content takes full width, laid out as a 2-column grid:
+   column 1 = icon (row 1) + title (row 2)
+   column 2 = description (spans both rows, vertically centered) */
+[data-theme="old-school"] .qt-foundry-card-content {
+  width: 100% !important;
+  display: grid !important;
+  grid-template-columns: 40% 1fr;
+  grid-template-rows: auto auto;
+  gap: 0.625rem 1.5rem;
+  align-items: start;
+}
+
+/* Icon: top-left cell, centered */
+[data-theme="old-school"] .qt-foundry-card-content > span:first-child {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: end;
+  justify-self: center;
+}
+
+/* Unwrap the title/description wrapper so children participate in the grid */
+[data-theme="old-school"] .qt-foundry-card-content > div:last-child {
+  display: contents;
+}
+
+/* Title: bottom-left, under icon, centered */
+[data-theme="old-school"] .qt-foundry-card .qt-card-title {
+  grid-column: 1;
+  grid-row: 2;
+  white-space: nowrap;
+  justify-self: center;
+  text-align: center;
+}
+
+/* Description: right column, spans both rows, vertically centered */
+[data-theme="old-school"] .qt-foundry-card .qt-card-description {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  align-self: center;
+  margin-top: 0;
+}
+
+/* ============================================================================
    SELECTION & FOCUS
    ============================================================================ */
 [data-theme="old-school"] ::selection {

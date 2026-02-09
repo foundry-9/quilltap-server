@@ -3,7 +3,7 @@
   "name": "qtap-plugin-theme-old-school",
   "title": "Old School",
   "description": "The original Quilltap default theme preserved as a plugin. Warm slate-blue palette with Inter for UI and EB Garamond for branding and long-form content. Professional, clean, and comfortable for extended sessions.",
-  "version": "1.0.0",
+  "version": "1.0.6",
   "author": {
     "name": "Foundry-9 LLC",
     "email": "charles.sebold@foundry-9.com",
@@ -88,7 +88,53 @@
         "display": "swap"
       }
     ],
-    "useModule": true
+    "useModule": true,
+    "subsystems": {
+      "foundry": {
+        "name": "Settings"
+      },
+      "aurora": {
+        "name": "Prompts",
+        "description": "Roleplay templates and prompt configuration",
+        "thumbnail": "none",
+        "backgroundImage": "none"
+      },
+      "forge": {
+        "name": "Data",
+        "thumbnail": "none",
+        "backgroundImage": "none"
+      },
+      "salon": {
+        "name": "Chat Behavior",
+        "thumbnail": "none",
+        "backgroundImage": "none"
+      },
+      "commonplace-book": {
+        "name": "RAG/Memories",
+        "thumbnail": "none",
+        "backgroundImage": "none"
+      },
+      "prospero": {
+        "name": "LLM Usage",
+        "thumbnail": "none",
+        "backgroundImage": "none"
+      },
+      "dangermouse": {
+        "name": "Content Filters",
+        "thumbnail": "none",
+        "backgroundImage": "none"
+      },
+      "calliope": {
+        "name": "Appearance",
+        "thumbnail": "none",
+        "backgroundImage": "none"
+      },
+      "lantern": {
+        "name": "Images/Backgrounds",
+        "thumbnail": "none",
+        "backgroundImage": "none"
+      }
+    }
   },
   "permissions": {
     "fileSystem": [],

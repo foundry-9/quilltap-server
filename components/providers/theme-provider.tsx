@@ -12,11 +12,14 @@
 
 export { ThemeProvider, ThemeContext } from './theme/ThemeProvider';
 export { useTheme } from './theme/useTheme';
+export { useSubsystemInfo, useAllSubsystemInfo } from './theme/useSubsystemInfo';
+export type { ResolvedSubsystemInfo } from './theme/useSubsystemInfo';
 export type {
   ThemeContextValue,
   ThemeSummary,
   ThemeProviderProps,
   ThemeFont,
+  SubsystemOverride,
   ThemeTokensResponse,
   ThemesListResponse,
 } from './theme/types';

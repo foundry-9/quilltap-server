@@ -58,6 +58,9 @@ export interface ThemeContextValue {
   /** Whether to show theme selector in the navigation bar */
   showNavThemeSelector: boolean;
 
+  /** Subsystem display overrides from the active theme (null = no overrides) */
+  subsystems: Record<string, SubsystemOverride> | null;
+
   /** Set the active theme by ID (null for default) */
   setTheme: (themeId: string | null) => Promise<void>;
 
@@ -85,6 +88,16 @@ export interface ThemeProviderProps {
 }
 
 /**
+ * Subsystem display override from active theme
+ */
+export interface SubsystemOverride {
+  name?: string;
+  description?: string;
+  thumbnail?: string;
+  backgroundImage?: string;
+}
+
+/**
  * Font configuration from theme
  */
 export interface ThemeFont {
@@ -102,6 +115,7 @@ export interface ThemeTokensResponse {
   tokens: ThemeTokens;
   fonts?: ThemeFont[];
   cssOverrides?: string;
+  subsystems?: Record<string, SubsystemOverride>;
 }
 
 /**

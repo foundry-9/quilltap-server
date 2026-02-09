@@ -31,7 +31,7 @@ function initialize() {
 }
 var metadata = {
   name: "qtap-plugin-theme-old-school",
-  version: "1.0.0",
+  version: "1.0.6",
   type: "THEME"
 };
 var oldSchoolThemePlugin = {

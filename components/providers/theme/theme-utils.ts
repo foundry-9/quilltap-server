@@ -6,7 +6,7 @@
 
 import { DEFAULT_THEME_TOKENS } from '@/lib/themes/default-tokens';
 import type { ThemeTokens, ColorMode } from '@/lib/themes/types';
-import type { ThemeSummary, ThemeTokensResponse, ThemesListResponse, ThemeFont } from './types';
+import type { ThemeSummary, ThemeTokensResponse, ThemesListResponse, ThemeFont, SubsystemOverride } from './types';
 
 /**
  * Resolve the actual color mode based on preference and system settings
@@ -92,6 +92,7 @@ export async function fetchThemeTokens(
   tokens: ThemeTokens;
   fonts: ThemeFont[];
   cssOverrides: string | undefined;
+  subsystems: Record<string, SubsystemOverride> | null;
 } | null> {
   try {
     const response = await fetch(`/api/v1/themes/${themeId}?action=tokens`);
@@ -101,6 +102,7 @@ export async function fetchThemeTokens(
         tokens: data.tokens,
         fonts: data.fonts || [],
         cssOverrides: data.cssOverrides || undefined,
+        subsystems: data.subsystems || null,
       };
     } else if (response.status === 404) {
       return null;

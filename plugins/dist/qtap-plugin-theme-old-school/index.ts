@@ -25,7 +25,7 @@ export function initialize(): void {
  */
 export const metadata = {
   name: 'qtap-plugin-theme-old-school',
-  version: '1.0.0',
+  version: '1.0.6',
   type: 'THEME',
 } as const;
 

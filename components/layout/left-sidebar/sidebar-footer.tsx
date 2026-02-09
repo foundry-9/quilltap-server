@@ -14,7 +14,7 @@ import { useState, useRef, useCallback } from 'react'
 import { useEffect } from 'react'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { useSidebarData } from '@/components/providers/sidebar-data-provider'
-import { useTheme } from '@/components/providers/theme-provider'
+import { useTheme, useSubsystemInfo } from '@/components/providers/theme-provider'
 import { ProfileMenu } from './profile-menu'
 import { NavUserMenuThemeContent } from '@/components/dashboard/nav-user-menu-theme'
 import { NavUserMenuQuickHideContent, QuickHideIcon } from '@/components/dashboard/nav-user-menu-quick-hide'
@@ -67,6 +67,7 @@ export function SidebarFooter() {
   const quickHide = useQuickHide()
   const { chats } = useSidebarData()
   const theme = useTheme()
+  const foundryInfo = useSubsystemInfo('foundry')
   const [openPopout, setOpenPopout] = useState<PopoutMenu>(null)
   const themesRef = useRef<HTMLDivElement>(null)
   const quickHideRef = useRef<HTMLDivElement>(null)
@@ -117,7 +118,7 @@ export function SidebarFooter() {
         <Link
           href="/foundry"
           className="qt-left-sidebar-item justify-center px-0"
-          title="Foundry"
+          title={foundryInfo.name}
         >
           <FoundryIcon className="qt-left-sidebar-item-icon w-5 h-5" />
         </Link>
