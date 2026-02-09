@@ -26,7 +26,6 @@ This document tracks planned features and improvements for Quilltap.
   - [X] Implies a new quick-hide just for dangerous content
   - [ ] Further: user-determined danger paths (e.g., this talks about politics, I don't want to talk about politics) in addition to the general "most providers won't handle this" rails
   - [X] Testing
-- [X] Title generation needs better guidelines (every NSFW option shouldn't preach about consent and boundaries, for example)
 
 ### LLM Integration (The Foundry)
 
@@ -35,11 +34,6 @@ This document tracks planned features and improvements for Quilltap.
   - [X] per project
   - [X] per chat
 - [ ] Finish file read/write tool calling support with permissions
-- [ ] More intelligent handling of empty messages from the LLM (usually some kind of error, but a plain blank often means you crossed a provider line - NSFW, content filtering)
-  - [X] Image prompt generation
-  - [ ] Memory generation
-  - [ ] Context compression
-  - [ ] LLM chat message generation
 - [X] Fully agentic capabilities (limits on how many turns it takes, trading information back and forth, etc.)
 - [ ] Add Google embeddings
 - [ ] Add prompt guidelines for all image generators that have them
@@ -64,7 +58,6 @@ This document tracks planned features and improvements for Quilltap.
 
 ### Calliope: Themes & UI
 
-- [ ] Arcadia "art deco" theme to show off what the theme system can really do
 - [ ] Get theme-storybook to match the app for everything
 
 ### Virgil: Setup & Onboarding
@@ -79,6 +72,13 @@ This document tracks planned features and improvements for Quilltap.
 
 ## Completed in v2.10
 
+- [X] Title generation needs better guidelines (every NSFW option shouldn't preach about consent and boundaries, for example)
+- [X] More intelligent handling of empty messages from the LLM (usually some kind of error, but a plain blank often means you crossed a provider line - NSFW, content filtering)
+  - [X] Image prompt generation
+  - [X] Memory generation
+  - [X] Context compression
+  - [X] LLM chat message generation
+- [X] Arcadia "art deco" theme to show off what the theme system can really do
 - [X] Pull chat settings into the participants sidebar, make it the chat sidebar
   - [X] Every participant should be able to be taken over ad-hoc
   - [X] Every participant should be able to be silenced or phased out of the current conversation
