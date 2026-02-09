@@ -65,6 +65,9 @@ const ChatMessageRowSchema = z.object({
   createdAt: TimestampSchema,
 });
 
+/** Maximum allowed search query length to prevent excessive memory usage */
+const MAX_SEARCH_QUERY_LENGTH = 1000;
+
 /**
  * Chats repository with database abstraction layer backend
  */
@@ -914,6 +917,14 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
    */
   async countMessagesWithText(chatId: string, searchText: string): Promise<number> {
     try {
+      if (searchText.length > MAX_SEARCH_QUERY_LENGTH) {
+        logger.warn('Search text exceeds maximum length', {
+          chatId,
+          queryLength: searchText.length,
+          maxLength: MAX_SEARCH_QUERY_LENGTH,
+        });
+        return 0;
+      }
       const messages = await this.getMessages(chatId);
       let count = 0;
 
@@ -943,6 +954,14 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
     searchText: string
   ): Promise<Array<{ messageId: string; content: string; chatId: string }>> {
     try {
+      if (searchText.length > MAX_SEARCH_QUERY_LENGTH) {
+        logger.warn('Search text exceeds maximum length', {
+          chatId,
+          queryLength: searchText.length,
+          maxLength: MAX_SEARCH_QUERY_LENGTH,
+        });
+        return [];
+      }
       const messages = await this.getMessages(chatId);
       const matches: Array<{ messageId: string; content: string; chatId: string }> = [];
 

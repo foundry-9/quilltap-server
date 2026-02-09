@@ -38,11 +38,11 @@ export interface RngToolCall {
  *
  * Dice: /\b(\d+)?d(\d+)\b/gi - matches "d6", "2d20", "3d10", etc.
  * Coin: /\bflip.{1,3}coin\b/gi - matches "flip a coin", "flip the coin", etc.
- * Bottle: /\bspin\b.*\bbottle\b/gi - matches "spin the bottle", "spin a bottle", etc.
+ * Bottle: /\bspin\b.{0,50}\bbottle\b/gi - matches "spin the bottle", "spin a bottle", etc. (bounded to prevent ReDoS)
  */
 const DICE_PATTERN = /\b(\d+)?d(\d+)\b/gi
 const COIN_FLIP_PATTERN = /\bflip.{1,3}coin\b/gi
-const SPIN_BOTTLE_PATTERN = /\bspin\b.*\bbottle\b/gi
+const SPIN_BOTTLE_PATTERN = /\bspin\b.{0,50}\bbottle\b/gi
 
 /**
  * Detect RNG patterns in a user message

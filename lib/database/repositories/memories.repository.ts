@@ -13,6 +13,9 @@ import { AbstractBaseRepository, CreateOptions } from './base.repository';
 import { logger } from '@/lib/logger';
 import { QueryFilter } from '../interfaces';
 
+/** Maximum allowed search query length to prevent ReDoS and excessive memory usage */
+const MAX_SEARCH_QUERY_LENGTH = 1000;
+
 /**
  * Memories Repository
  * Implements CRUD operations for memories with character-scoping and advanced search capabilities.
@@ -116,8 +119,16 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    */
   async searchByContent(characterId: string, query: string): Promise<Memory[]> {
     try {
+      if (query.length > MAX_SEARCH_QUERY_LENGTH) {
+        logger.warn('Search query exceeds maximum length', {
+          characterId,
+          queryLength: query.length,
+          maxLength: MAX_SEARCH_QUERY_LENGTH,
+        });
+        return [];
+      }
       // Escape special regex characters to treat query as literal text
-      const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const escapedQuery = this.escapeRegex(query);
       const regex = new RegExp(escapedQuery, 'i'); // Case-insensitive regex search
 
       const memories = await this.findByFilter({
@@ -726,7 +737,15 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
     searchText: string
   ): Promise<number> {
     try {
-      const regex = new RegExp(searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      if (searchText.length > MAX_SEARCH_QUERY_LENGTH) {
+        logger.warn('Search text exceeds maximum length', {
+          characterId,
+          queryLength: searchText.length,
+          maxLength: MAX_SEARCH_QUERY_LENGTH,
+        });
+        return 0;
+      }
+      const regex = new RegExp(this.escapeRegex(searchText), 'i');
 
       // Build the query filter - search in content, summary, and keywords
       const filter: QueryFilter = {
@@ -770,7 +789,15 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
     searchText: string
   ): Promise<Memory[]> {
     try {
-      const regex = new RegExp(searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      if (searchText.length > MAX_SEARCH_QUERY_LENGTH) {
+        logger.warn('Search text exceeds maximum length', {
+          characterId,
+          queryLength: searchText.length,
+          maxLength: MAX_SEARCH_QUERY_LENGTH,
+        });
+        return [];
+      }
+      const regex = new RegExp(this.escapeRegex(searchText), 'i');
 
       // Build the query filter - search in content, summary, and keywords
       const filter: QueryFilter = {
@@ -891,7 +918,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   ): Promise<Memory[]> {
     try {
       // Escape special regex characters to treat query as literal text
-      const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const escapedQuery = this.escapeRegex(query);
       const regex = new RegExp(escapedQuery, 'i');
 
       const memories = await this.findByFilter({

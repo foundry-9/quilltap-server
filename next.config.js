@@ -140,10 +140,6 @@ const nextConfig = {
       module: /lib\/themes\/theme-registry\.ts/,
       message: /Critical dependency/,
     });
-    config.ignoreWarnings.push({
-      module: /migrations\/lib\/mongodb-utils\.ts/,
-      message: /Critical dependency/,
-    });
     // createRequire with dynamic argument (process.cwd()) — webpack can't parse it but it works at runtime
     config.ignoreWarnings.push({
       module: /lib\/startup\/plugin-initialization\.ts/,
@@ -164,10 +160,6 @@ const nextConfig = {
     });
     config.ignoreWarnings.push({
       module: /lib\/themes\/theme-registry\.ts/,
-      message: /Can't resolve/,
-    });
-    config.ignoreWarnings.push({
-      module: /migrations\/lib\/mongodb-utils\.ts/,
       message: /Can't resolve/,
     });
 

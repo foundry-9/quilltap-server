@@ -140,14 +140,11 @@ export class FoldersRepository extends UserOwnedBaseRepository<Folder> {
     projectId: string | null
   ): Promise<Folder | null> {
     try {
-      const query: QueryFilter = { userId, path };
-
-      if (projectId === null) {
-        // For general files, projectId should be null or not exist
-        query.$or = [{ projectId: null }, { projectId: { $exists: false } }];
-      } else {
-        query.projectId = projectId;
-      }
+      const query: QueryFilter = {
+        userId,
+        path,
+        ...this.createNullableFilter('projectId', projectId),
+      };
 
       const result = await this.findOneByFilter(query);
 
@@ -180,13 +177,11 @@ export class FoldersRepository extends UserOwnedBaseRepository<Folder> {
     projectId: string | null
   ): Promise<Folder[]> {
     try {
-      const query: QueryFilter = { userId, parentFolderId };
-
-      if (projectId === null) {
-        query.$or = [{ projectId: null }, { projectId: { $exists: false } }];
-      } else {
-        query.projectId = projectId;
-      }
+      const query: QueryFilter = {
+        userId,
+        parentFolderId,
+        ...this.createNullableFilter('projectId', projectId),
+      };
 
       const options: QueryOptions = { sort: { name: 1 } };
 
@@ -212,13 +207,10 @@ export class FoldersRepository extends UserOwnedBaseRepository<Folder> {
    */
   async findAllInProject(userId: string, projectId: string | null): Promise<Folder[]> {
     try {
-      const query: QueryFilter = { userId };
-
-      if (projectId === null) {
-        query.$or = [{ projectId: null }, { projectId: { $exists: false } }];
-      } else {
-        query.projectId = projectId;
-      }
+      const query: QueryFilter = {
+        userId,
+        ...this.createNullableFilter('projectId', projectId),
+      };
 
       const options: QueryOptions = { sort: { path: 1 } };
 
@@ -252,16 +244,11 @@ export class FoldersRepository extends UserOwnedBaseRepository<Folder> {
       const query: QueryFilter = {
         userId,
         path: {
-          $regex: `^${parentPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`,
+          $regex: `^${this.escapeRegex(parentPath)}`,
           $ne: parentPath,
         },
+        ...this.createNullableFilter('projectId', projectId),
       };
-
-      if (projectId === null) {
-        query.$or = [{ projectId: null }, { projectId: { $exists: false } }];
-      } else {
-        query.projectId = projectId;
-      }
 
       const options: QueryOptions = { sort: { path: 1 } };
 
@@ -333,14 +320,9 @@ export class FoldersRepository extends UserOwnedBaseRepository<Folder> {
       // Find all folders with paths starting with the old prefix
       const matchQuery: QueryFilter = {
         userId,
-        path: { $regex: `^${oldPathPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}` },
+        path: { $regex: `^${this.escapeRegex(oldPathPrefix)}` },
+        ...this.createNullableFilter('projectId', projectId),
       };
-
-      if (projectId === null) {
-        matchQuery.$or = [{ projectId: null }, { projectId: { $exists: false } }];
-      } else {
-        matchQuery.projectId = projectId;
-      }
 
       // Get folders to update
       const foldersToUpdate = await this.findByFilter(matchQuery);

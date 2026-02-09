@@ -247,6 +247,24 @@
   }
 
   /* ==========================================================================
+     SHADOW UTILITIES
+     ========================================================================== */
+
+  /**
+   * Small shadow - subtle elevation for interactive elements
+   */
+  .qt-shadow-sm {
+    box-shadow: var(--qt-card-shadow, 0 1px 3px hsl(225 18% 10% / 0.06), 0 1px 2px hsl(225 18% 10% / 0.04));
+  }
+
+  /**
+   * Medium shadow - moderate elevation for overlays, badges
+   */
+  .qt-shadow-md {
+    box-shadow: var(--qt-card-shadow-hover, 0 4px 12px hsl(225 18% 10% / 0.1), 0 2px 4px hsl(225 18% 10% / 0.05));
+  }
+
+  /* ==========================================================================
      HOVER VARIANTS
      ========================================================================== */
 

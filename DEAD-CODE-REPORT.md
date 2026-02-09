@@ -19,16 +19,20 @@ Dead code analysis is performed periodically using knip. A knip configuration fi
 
 ---
 
-## Flagged as Dead Code (2026-02-08)
+## Cleanup Completed (2026-02-09)
 
-### Sidebar Collapse/Resize (Foundry Hub Restructure)
+### Dead Code Removed
 
 | Location | Item | Reason |
 |----------|------|--------|
 | `hooks/useSidebarResize.ts` | Entire file | Sidebar is now permanently collapsed; resize functionality removed |
 | `components/settings/appearance/SidebarWidthControl.tsx` | Entire file | Sidebar width control removed from Appearance settings |
+| `migrations/lib/mongodb-utils.ts` | Entire file | MongoDB stub with no-op functions; no code imports it |
+| `lib/database/migration/migration-service.ts` | Entire file | MongoDB migration service stub that always returns errors |
+| `lib/database/migration/index.ts` | Barrel file | Re-export for removed migration service |
+| `__tests__/unit/lib/database/migration/migration-service.test.ts` | Test file | Tests for removed migration service stub |
 
-**Note:** These files are no longer imported anywhere but are preserved pending confirmation that no external references remain.
+Also removed: `next.config.js` webpack warning suppressions for deleted `mongodb-utils.ts`.
 
 ---
 
@@ -169,7 +173,7 @@ These files are flagged by knip but are actually used:
 | Various `hooks/index.ts` barrel files | Re-exports, harmless |
 | Packages directory (`packages/*`) | npm packages published separately |
 | Plugins directory (`plugins/*`) | Loaded dynamically at runtime |
-| Migrations lib (`migrations/lib/*`) | Used by migration scripts |
+| Migrations lib (`migrations/lib/*`) | Used by migration scripts (mongodb-utils.ts removed 2026-02-09) |
 
 ---
 

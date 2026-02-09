@@ -226,7 +226,7 @@ export function ChatCard({
   return (
     <div
       ref={cardRef}
-      className="qt-entity-card chat-card relative cursor-pointer hover:bg-muted/50 transition-colors"
+      className="qt-entity-card chat-card relative cursor-pointer hover:qt-bg-surface-alt transition-colors"
       onClick={handleCardClick}
       role="button"
       tabIndex={0}
@@ -235,7 +235,7 @@ export function ChatCard({
       {/* Highlight animation arrow for imported chats */}
       {highlighted && (
         <div className="absolute -right-12 top-1/2 transform -translate-y-1/2 chat-card-highlight-arrow">
-          <span className="text-6xl text-yellow-200 font-black" style={{ textShadow: '0 0 10px rgba(255, 255, 0, 0.8)' }}>←</span>
+          <span className="text-6xl qt-text-warning font-black" style={{ textShadow: '0 0 10px rgba(255, 255, 0, 0.8)' }}>←</span>
         </div>
       )}
 
@@ -243,7 +243,7 @@ export function ChatCard({
         <div className="flex items-stretch flex-1 gap-4">
           {/* Story background thumbnail (preferred) or Avatar stack */}
           {showAvatars && chat.storyBackgroundUrl ? (
-            <div className="flex-shrink-0 self-stretch w-24 min-h-[4rem] max-h-32 rounded-lg overflow-hidden bg-muted">
+            <div className="flex-shrink-0 self-stretch w-24 min-h-[4rem] max-h-32 rounded-lg overflow-hidden qt-bg-muted">
               <img
                 src={chat.storyBackgroundUrl}
                 alt=""
@@ -258,10 +258,10 @@ export function ChatCard({
           <div className="flex-1 min-w-0">
             {/* Title row */}
             <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <h3 className="text-xl font-semibold text-foreground truncate">
+              <h3 className="qt-card-title truncate">
                 {displayTitle}
               </h3>
-              <span className="chat-card__badge inline-flex items-center rounded-full bg-primary/15 px-3 py-1 text-sm font-semibold text-primary flex-shrink-0">
+              <span className="chat-card__badge inline-flex items-center rounded-full qt-bg-primary/10 px-3 py-1 qt-body-sm font-semibold flex-shrink-0">
                 {chat.messageCount}
               </span>
               {chat.isDangerousChat && (
@@ -296,7 +296,7 @@ export function ChatCard({
                 {showProject && chat.project && (
                   <Link
                     href={`/prospero/${chat.project.id}`}
-                    className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-muted hover:bg-muted/80 transition-colors"
+                    className="inline-flex items-center gap-1 qt-text-xs px-2 py-1 rounded-full qt-bg-muted hover:qt-bg-surface-alt transition-colors"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <FolderIcon className="w-3 h-3" color={chat.project.color} />

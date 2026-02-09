@@ -4,6 +4,24 @@
 
 ### 2.10-dev
 
+- refactor: Comprehensive codebase audit and cleanup
+  - **Dead code removal**: Delete unused `useSidebarResize` hook, `SidebarWidthControl` component, MongoDB `mongodb-utils.ts` stub, `DatabaseMigrationService` stub class and barrel file, and associated test file; remove stale webpack warning suppressions from `next.config.js`
+  - **API conformance**: Refactor `/api/v1/session` and `/api/v1/system/data-dir` routes to use standard `createContextHandler` middleware, `withCollectionActionDispatch`, and response helpers from `@/lib/api/responses`
+  - **Security**: Fix ReDoS vulnerability in spin-bottle regex by bounding `.*` to `.{0,50}`; add 1000-character max query length validation in `MemoriesRepository.searchByContent()`, `countMemoriesWithText()`, `findMemoriesWithText()` and `ChatsRepository.countMessagesWithText()`, `findMessagesWithText()`
+  - **DRY improvements**: Extract `escapeRegex()` and `createNullableFilter()` helper methods to `AbstractBaseRepository`; refactor `FilesRepository`, `MemoriesRepository`, `FoldersRepository` to use shared helpers instead of duplicated inline logic
+  - **Theme compliance**: Add `qt-shadow-sm` and `qt-shadow-md` utility classes to `_utilities.css`; convert raw Tailwind violations to qt-* classes in `ChatCard.tsx`, `Avatar.tsx`, `SettingsCard.tsx`, `tags-tab.tsx`
+  - **Test coverage**: Add 22 tests for RNG pattern detector (including ReDoS resistance); add 17 tests for base repository `escapeRegex`/`createNullableFilter` helpers; update session API test for middleware conformance
+  - **Documentation**: Update `DEAD-CODE-REPORT.md`, `migrations/README.md` (remove stale MongoDB examples, update to SQLite patterns), `components/settings/appearance/README.md`
+
+- **Known Technical Debt** (identified in audit, deferred):
+  - `ChatsRepository` SRP split (1,093 lines handling 6 distinct concerns: chat metadata, participants, impersonation, token tracking, messages, search/replace)
+  - Redundant try-catch wrappers in 50+ repository methods that could use a `safeQuery()` helper in `AbstractBaseRepository`
+  - `UsersRepository.migrateUserId` bypasses database abstraction with direct `(db as any).db` SQLite access
+  - ~45 remaining component files with 1-8 raw Tailwind violations each (colors, shadows, typography)
+  - `QueryFilter` is loosely typed across all repositories — a typed query builder would prevent runtime errors
+  - Inconsistent error handling: some repositories throw, some return null, some return empty arrays
+  - Duplicated search/replace logic between `MemoriesRepository` and `ChatsRepository` (could share a `SearchableRepository` mixin)
+
 - refactor: Codebase cleanup and technical debt reduction
   - **Security**: Replace `exec()` with `execFile()` in data-dir route to eliminate command injection vulnerability; Linux fallback uses sequential `execFile` calls instead of shell chaining
   - **Deprecated code removal**: Remove deprecated tool-registry backwards-compatibility wrappers (`hasTool`, `hasMultiToolPlugins`, `getMultiToolPluginNames`, `registerTool`, `getTool`, `getAllTools`, `getToolNames`, `getToolMetadata`, `getAllToolMetadata`, `getToolDefinitions`, `unregisterToolsByPrefix`, `getPluginNameForTool`, `isMultiToolPlugin`); update `tool-executor.ts` to use non-deprecated `hasPlugin`, `getAllPlugins`, `getPluginNames`; rename convenience function exports to match

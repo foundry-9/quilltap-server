@@ -313,14 +313,8 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
       const query: Record<string, unknown> = {
         userId,
         folderPath,
+        ...this.createNullableFilter('projectId', projectId),
       };
-
-      if (projectId) {
-        query.projectId = projectId;
-      } else {
-        // General files - either null or not set
-        query.$or = [{ projectId: null }, { projectId: { $exists: false } }];
-      }
 
       const files = await this.findByFilter(query as QueryFilter);
       return files;
@@ -358,12 +352,7 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
         query.folderPath = { $regex: `^${this.escapeRegex(folderPath)}` };
       }
 
-      if (projectId) {
-        query.projectId = projectId;
-      } else {
-        // General files - either null or not set
-        query.$or = [{ projectId: null }, { projectId: { $exists: false } }];
-      }
+      Object.assign(query, this.createNullableFilter('projectId', projectId));
 
       const files = await this.findByFilter(query as QueryFilter);
       return files;
@@ -391,13 +380,8 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
     try {
       const query: Record<string, unknown> = {
         userId,
+        ...this.createNullableFilter('projectId', projectId),
       };
-
-      if (projectId) {
-        query.projectId = projectId;
-      } else {
-        query.$or = [{ projectId: null }, { projectId: { $exists: false } }];
-      }
 
       const files = await this.findByFilter(query as QueryFilter);
 
@@ -538,12 +522,6 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
     }
   }
 
-  /**
-   * Helper to escape special regex characters
-   */
-  private escapeRegex(str: string): string {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  }
 }
 
 // Export singleton instance

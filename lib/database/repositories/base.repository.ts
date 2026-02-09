@@ -124,6 +124,25 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
     return new Date().toISOString();
   }
 
+  /**
+   * Escape special regex characters in a string for safe use in RegExp construction
+   */
+  protected escapeRegex(str: string): string {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  /**
+   * Create a filter for a field that may be null.
+   * When value is non-null, filters by exact match.
+   * When value is null, matches records where the field is null or does not exist.
+   */
+  protected createNullableFilter(field: string, value: string | null): QueryFilter {
+    if (value !== null) {
+      return { [field]: value } as QueryFilter;
+    }
+    return { $or: [{ [field]: null }, { [field]: { $exists: false } }] } as QueryFilter;
+  }
+
   // ============================================================================
   // Abstract Methods (required implementations)
   // ============================================================================
