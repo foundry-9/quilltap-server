@@ -1,9 +1,12 @@
 /**
- * Default Theme Tokens
+ * Default Theme Tokens — Professional Neutral
  *
  * These values match the current globals.css and serve as the
  * fallback when no theme plugin is active. They represent the
  * "Default" theme that ships with Quilltap.
+ *
+ * Base hue: 225 (cool blue-gray) — neutral, precise, professional.
+ * System font stack throughout — no decorative fonts.
  *
  * @module themes/default-tokens
  */
@@ -16,56 +19,72 @@ import type { ThemeTokens, Typography, Spacing, Effects } from './types';
 
 /**
  * Default light mode colors
- * Extracted from globals.css - warm slate-blue palette
- * Base hue: 220 (slate-blue) for professional, neutral warmth
+ * Cool blue-gray palette (hue 225) with low saturation
+ * Professional, neutral, and precise
  */
 const DEFAULT_LIGHT_COLORS = {
-  background: 'hsl(220 20% 97%)',
-  foreground: 'hsl(220 25% 12%)',
-  primary: 'hsl(220 60% 20%)',
-  primaryForeground: 'hsl(220 20% 98%)',
-  secondary: 'hsl(220 15% 92%)',
-  secondaryForeground: 'hsl(220 25% 25%)',
-  muted: 'hsl(220 15% 94%)',
-  mutedForeground: 'hsl(220 10% 45%)',
-  accent: 'hsl(210 60% 95%)',
-  accentForeground: 'hsl(210 70% 35%)',
-  destructive: 'hsl(0 72% 51%)',
+  background: 'hsl(225 14% 97%)',
+  foreground: 'hsl(225 18% 13%)',
+  primary: 'hsl(225 65% 48%)',
+  primaryForeground: 'hsl(0 0% 100%)',
+  secondary: 'hsl(225 10% 92%)',
+  secondaryForeground: 'hsl(225 18% 22%)',
+  muted: 'hsl(225 10% 94%)',
+  mutedForeground: 'hsl(225 8% 42%)',
+  accent: 'hsl(225 10% 93%)',
+  accentForeground: 'hsl(225 18% 22%)',
+  destructive: 'hsl(0 68% 50%)',
   destructiveForeground: 'hsl(0 0% 100%)',
-  card: 'hsl(220 20% 100%)',
-  cardForeground: 'hsl(220 25% 12%)',
-  popover: 'hsl(220 20% 100%)',
-  popoverForeground: 'hsl(220 25% 12%)',
-  border: 'hsl(220 15% 88%)',
-  input: 'hsl(220 15% 88%)',
-  ring: 'hsl(220 60% 50%)',
+  card: 'hsl(0 0% 100%)',
+  cardForeground: 'hsl(225 18% 13%)',
+  popover: 'hsl(0 0% 100%)',
+  popoverForeground: 'hsl(225 18% 13%)',
+  border: 'hsl(225 10% 87%)',
+  input: 'hsl(225 10% 87%)',
+  ring: 'hsl(225 65% 48%)',
+  success: 'hsl(152 60% 38%)',
+  successForeground: 'hsl(0 0% 100%)',
+  warning: 'hsl(38 90% 46%)',
+  warningForeground: 'hsl(0 0% 10%)',
+  info: 'hsl(210 75% 48%)',
+  infoForeground: 'hsl(0 0% 100%)',
+  chatUser: 'hsl(225 62% 50%)',
+  chatUserForeground: 'hsl(0 0% 100%)',
 } as const;
 
 /**
  * Default dark mode colors
- * Extracted from globals.css - warm slate-blue palette
- * Creates visible surface hierarchy: page (8%) → card (12%) → popover (15%)
+ * Cool blue-gray palette (hue 225) with low saturation
+ * Creates visible surface hierarchy: page (9%) → card (12%) → popover (14%)
  */
 const DEFAULT_DARK_COLORS = {
-  background: 'hsl(220 25% 8%)',
-  foreground: 'hsl(220 15% 92%)',
-  primary: 'hsl(220 50% 75%)',
-  primaryForeground: 'hsl(220 25% 8%)',
-  secondary: 'hsl(220 20% 18%)',
-  secondaryForeground: 'hsl(220 15% 85%)',
-  muted: 'hsl(220 15% 15%)',
-  mutedForeground: 'hsl(220 10% 55%)',
-  accent: 'hsl(210 50% 20%)',
-  accentForeground: 'hsl(210 70% 75%)',
-  destructive: 'hsl(0 65% 55%)',
+  background: 'hsl(225 18% 9%)',
+  foreground: 'hsl(225 10% 92%)',
+  primary: 'hsl(225 55% 68%)',
+  primaryForeground: 'hsl(225 18% 9%)',
+  secondary: 'hsl(225 14% 17%)',
+  secondaryForeground: 'hsl(225 10% 85%)',
+  muted: 'hsl(225 12% 14%)',
+  mutedForeground: 'hsl(225 8% 56%)',
+  accent: 'hsl(225 14% 18%)',
+  accentForeground: 'hsl(225 10% 85%)',
+  destructive: 'hsl(0 60% 54%)',
   destructiveForeground: 'hsl(0 0% 100%)',
-  card: 'hsl(220 20% 12%)',
-  cardForeground: 'hsl(220 15% 92%)',
-  popover: 'hsl(220 20% 15%)',
-  popoverForeground: 'hsl(220 15% 92%)',
-  border: 'hsl(220 15% 20%)',
-  input: 'hsl(220 15% 20%)',
-  ring: 'hsl(220 60% 60%)',
+  card: 'hsl(225 16% 12%)',
+  cardForeground: 'hsl(225 10% 92%)',
+  popover: 'hsl(225 16% 14%)',
+  popoverForeground: 'hsl(225 10% 92%)',
+  border: 'hsl(225 12% 20%)',
+  input: 'hsl(225 12% 20%)',
+  ring: 'hsl(225 55% 60%)',
+  success: 'hsl(152 55% 44%)',
+  successForeground: 'hsl(0 0% 100%)',
+  warning: 'hsl(38 85% 52%)',
+  warningForeground: 'hsl(0 0% 10%)',
+  info: 'hsl(210 70% 58%)',
+  infoForeground: 'hsl(0 0% 100%)',
+  chatUser: 'hsl(225 60% 56%)',
+  chatUserForeground: 'hsl(0 0% 100%)',
 } as const;
 
 // ============================================================================
@@ -74,11 +93,11 @@ const DEFAULT_DARK_COLORS = {
 
 /**
  * Default typography settings
- * Uses Inter as the primary font (loaded via @font-face in globals.css)
+ * System font stack throughout — San Francisco on Mac, Segoe UI on Windows
  */
 export const DEFAULT_TYPOGRAPHY: Typography = {
   // Font families
-  fontSans: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+  fontSans: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
   fontSerif: 'Georgia, Cambria, "Times New Roman", Times, serif',
   fontMono: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
 
@@ -115,15 +134,15 @@ export const DEFAULT_TYPOGRAPHY: Typography = {
 
 /**
  * Default spacing and border radius values
- * Extracted from globals.css @theme block
+ * Tighter radii for a precise, engineered look
  */
 export const DEFAULT_SPACING: Spacing = {
-  // Border radius (from globals.css)
-  radiusSm: 'calc(0.5rem - 4px)',  // ~4px
-  radiusMd: 'calc(0.5rem - 2px)',  // ~6px
-  radiusLg: '0.5rem',              // 8px
-  radiusXl: '0.75rem',             // 12px
-  radiusFull: '9999px',            // Full/pill
+  // Border radius
+  radiusSm: '0.25rem',    // 4px
+  radiusMd: '0.375rem',   // 6px
+  radiusLg: '0.5rem',     // 8px
+  radiusXl: '0.625rem',   // 10px
+  radiusFull: '9999px',   // Full/pill
 
   // Spacing scale (Tailwind defaults)
   spacing1: '0.25rem',   // 4px
@@ -144,13 +163,14 @@ export const DEFAULT_SPACING: Spacing = {
 
 /**
  * Default visual effects (shadows, transitions)
+ * Restrained shadows — visible but never showy
  */
 export const DEFAULT_EFFECTS: Effects = {
-  // Shadows (Tailwind defaults)
+  // Shadows
   shadowSm: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
-  shadowMd: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
-  shadowLg: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
-  shadowXl: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)',
+  shadowMd: '0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05)',
+  shadowLg: '0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.04)',
+  shadowXl: '0 20px 25px -5px rgb(0 0 0 / 0.08), 0 8px 10px -6px rgb(0 0 0 / 0.04)',
 
   // Transitions
   transitionFast: '150ms',
@@ -196,11 +216,11 @@ export const DEFAULT_THEME_TOKENS: ThemeTokens = {
 export const DEFAULT_THEME_METADATA = {
   id: 'default',
   name: 'Default',
-  description: 'The default Quilltap theme with a clean, professional appearance',
+  description: 'Professional neutral theme with system fonts and restrained design',
   version: '1.0.0',
   author: 'Quilltap',
   supportsDarkMode: true,
-  tags: ['default', 'professional', 'clean'],
+  tags: ['default', 'professional', 'neutral', 'system-fonts'],
 } as const;
 
 // ============================================================================

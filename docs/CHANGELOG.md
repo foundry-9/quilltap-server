@@ -4,6 +4,16 @@
 
 ### 2.10-dev
 
+- feat: Replace default theme with Professional Neutral design
+  - Color palette shifted from warm slate-blue (hue 220) to cool blue-gray (hue 225)
+  - System font stack throughout — dropped Inter and EB Garamond in favor of OS defaults
+  - Lower saturation across the board — color is for meaning, not decoration
+  - Tighter, fixed border radii (0.25/0.375/0.5rem) instead of calc-based values
+  - Restrained shadows and compact UI (3.5rem header/sidebar vs 4rem)
+  - Sans-serif assistant chat messages (was serif)
+  - Qt-* variables now scoped to `[data-theme="default"]` selector
+  - Updated globals.css, default-tokens.ts, and @quilltap/theme-storybook to match
+
 - feat: Add "The Great Estate" theme plugin with warm gold-and-mahogany palette
   - Manor house library aesthetic — mahogany (hue 20) and gold (hue 43) palette
   - Full-page background image with carbon-fibre texture overlay for tactile depth

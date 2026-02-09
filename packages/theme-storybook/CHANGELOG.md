@@ -2,6 +2,16 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.18] - 2026-02-08
+
+### Changed
+- Updated default theme tokens to Professional Neutral design
+  - Color palette shifted from hue 220 to 225 (cooler, more corporate)
+  - System font stack throughout (dropped Inter/EB Garamond references)
+  - Fixed border radii (0.25/0.375/0.5rem) instead of calc-based values
+  - Updated sidebar and header dimensions to match new compact defaults (3.5rem)
+  - All light and dark mode colors updated to new low-saturation palette
+
 ## [1.0.17] - 2026-02-02
 
 ### Added
