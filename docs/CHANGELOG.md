@@ -4,6 +4,10 @@
 
 ### 2.10-dev
 
+- fix: Improve Art Deco assistant message readability with heavier font weight
+  - Add `--qt-chat-assistant-font-weight` variable to qt-* component system (default: inherit)
+  - Art Deco theme sets Cormorant Garamond to weight 500 (Medium) for chat messages
+
 - feat: Replace default theme with Professional Neutral design
   - Color palette shifted from warm slate-blue (hue 220) to cool blue-gray (hue 225)
   - System font stack throughout — dropped Inter and EB Garamond in favor of OS defaults

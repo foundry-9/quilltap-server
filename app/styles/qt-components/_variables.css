@@ -264,6 +264,7 @@
   --qt-chat-assistant-fg: var(--color-foreground);
   --qt-chat-assistant-border: var(--color-border);
   --qt-chat-assistant-font: var(--font-sans);
+  --qt-chat-assistant-font-weight: inherit;
 
   --qt-chat-composer-bg: var(--color-background);
   --qt-chat-composer-border: var(--color-border);
