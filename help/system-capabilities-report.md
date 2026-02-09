@@ -1,6 +1,6 @@
 # Capabilities Report
 
-> **[Open this page in Quilltap](/tools)**
+> **[Open this page in Quilltap](/foundry)**
 
 The Capabilities Report tool generates detailed documentation of your Quilltap system's configuration, installed providers, and capabilities.
 
@@ -68,7 +68,7 @@ A capabilities report includes:
 
 **Step-by-Step:**
 
-1. **Go to the Tools page** (`/tools`)
+1. **Go to Prospero** (`/foundry/prospero`)
 
 2. **Find the Capabilities Report card**
 

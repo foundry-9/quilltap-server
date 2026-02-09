@@ -34,6 +34,7 @@ import type {
   ChatMetadata,
   ChatParticipantBase,
   PhysicalDescription,
+  ClothingRecord,
   PromptTemplate,
   RoleplayTemplate,
   ProviderModel,
@@ -521,6 +522,13 @@ function remapBackupData(
       remapped.physicalDescriptions = remapped.physicalDescriptions.map((desc: PhysicalDescription) => ({
         ...desc,
         id: remapper.remap(desc.id),
+      }));
+    }
+    // Handle clothingRecords
+    if (remapped.clothingRecords) {
+      remapped.clothingRecords = remapped.clothingRecords.map((record: ClothingRecord) => ({
+        ...record,
+        id: remapper.remap(record.id),
       }));
     }
     return remapped as Character;

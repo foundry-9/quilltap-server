@@ -148,7 +148,7 @@ export function FileWritePermissionPrompt({
       ref={promptRef}
       className="mx-4 my-3 animate-in fade-in slide-in-from-bottom-4 duration-300"
     >
-      <div className="qt-card border-2 border-primary/50 bg-primary/5 rounded-lg p-4 shadow-lg">
+      <div className="qt-card border-2 border-primary/50 bg-primary/5 rounded-lg p-4 qt-shadow-lg">
         {/* Header */}
         <div className="flex items-start gap-3">
           <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">

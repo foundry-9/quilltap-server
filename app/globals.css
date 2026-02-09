@@ -60,244 +60,157 @@
  */
 
 /*
- * Quilltap Default Theme
+ * Quilltap Default Theme — Professional Neutral
  *
  * Design Philosophy:
- * Light and dark modes are siblings, not inversions. They share the same
- * personality—professional, warm, assured—but adapted for different lighting
- * conditions. Like the same room at noon and midnight.
+ * Light and dark modes are siblings — same personality, different lighting.
+ * No pure white or pure black. Cool blue-gray hue family (225) with low
+ * saturation for a corporate, precise feel. System font stack throughout.
  *
  * Color Foundation:
- * Base hue: 220 (slate-blue) - professional, neutral, slightly warm
- * This hue appears throughout both modes, creating visual consistency.
- *
- * Key Principles:
- * 1. No pure white (#fff) or pure black (#000) - too harsh for long reading
- * 2. Surface hierarchy is visible but subtle in both modes
- * 3. Each semantic token (secondary, muted, accent) serves a distinct purpose
- * 4. The chat-user color feels equally vibrant in both contexts
- * 5. Text contrast is comfortable (not maximal) for extended sessions
+ * Base hue: 225 (cool blue-gray) — neutral, precise, professional.
+ * Primary: A confident but not flashy indigo-blue.
+ * Saturation: Low across the board. Color is for meaning, not decoration.
  */
 
 /* Base theme variables (light mode defaults) */
 :root {
-  /*
-   * BACKGROUND LAYERS
-   * Creates depth: page → surface → elevated
-   * Light mode: darker = closer to you (shadows work naturally)
-   */
+  /* Page background - cool off-white */
+  --theme-background: hsl(225 14% 97%);
 
-  /* Page background - warm off-white, not stark */
-  --theme-background: hsl(220 20% 97%);
-
-  /* Card/surface background - true white, lifted from page */
-  --theme-card: hsl(220 20% 100%);
-  --theme-card-foreground: hsl(220 25% 12%);
+  /* Card/surface background - pure white, lifted from page */
+  --theme-card: hsl(0 0% 100%);
+  --theme-card-foreground: hsl(225 18% 13%);
 
   /* Popover/dropdown - same as card, shadow provides elevation */
-  --theme-popover: hsl(220 20% 100%);
-  --theme-popover-foreground: hsl(220 25% 12%);
+  --theme-popover: hsl(0 0% 100%);
+  --theme-popover-foreground: hsl(225 18% 13%);
 
-  /*
-   * TEXT COLORS
-   * Primary: main content - not pure black, slightly warm
-   * Foreground uses the same value for consistency
-   */
-  --theme-foreground: hsl(220 25% 12%);
+  /* Text - not pure black, slightly cool */
+  --theme-foreground: hsl(225 18% 13%);
 
-  /*
-   * PRIMARY ACTION
-   * Deep slate-blue - authoritative but not aggressive
-   * Used for primary buttons, key interactive elements
-   */
-  --theme-primary: hsl(220 60% 20%);
-  --theme-primary-foreground: hsl(220 20% 98%);
+  /* Primary action - confident indigo-blue */
+  --theme-primary: hsl(225 65% 48%);
+  --theme-primary-foreground: hsl(0 0% 100%);
 
-  /*
-   * SECONDARY ACTION
-   * Subtle blue-gray tint - for alternate/less prominent actions
-   * Distinct from muted (which is for de-emphasized content)
-   */
-  --theme-secondary: hsl(220 15% 92%);
-  --theme-secondary-foreground: hsl(220 25% 25%);
+  /* Secondary action - subtle cool-gray tint */
+  --theme-secondary: hsl(225 10% 92%);
+  --theme-secondary-foreground: hsl(225 18% 22%);
 
-  /*
-   * MUTED
-   * For de-emphasized content: timestamps, metadata, helper text
-   * Lighter than secondary, clearly "quiet"
-   */
-  --theme-muted: hsl(220 15% 94%);
-  --theme-muted-foreground: hsl(220 12% 40%);
+  /* Muted - de-emphasized content */
+  --theme-muted: hsl(225 10% 94%);
+  --theme-muted-foreground: hsl(225 8% 42%);
 
-  /*
-   * ACCENT
-   * For highlights, badges, attention-drawing elements
-   * Warmer than secondary - a hint of personality
-   */
-  --theme-accent: hsl(210 60% 95%);
-  --theme-accent-foreground: hsl(210 70% 35%);
+  /* Accent - neutral, same personality as secondary */
+  --theme-accent: hsl(225 10% 93%);
+  --theme-accent-foreground: hsl(225 18% 22%);
 
-  /*
-   * SEMANTIC COLORS
-   * Destructive, success, warning, info
-   * Tuned for light backgrounds
-   */
-  --theme-destructive: hsl(0 72% 51%);
+  /* Semantic colors */
+  --theme-destructive: hsl(0 68% 50%);
   --theme-destructive-foreground: hsl(0 0% 100%);
 
-  --theme-success: hsl(142 70% 40%);
+  --theme-success: hsl(152 60% 38%);
   --theme-success-foreground: hsl(0 0% 100%);
 
-  --theme-warning: hsl(38 92% 45%);
+  --theme-warning: hsl(38 90% 46%);
   --theme-warning-foreground: hsl(0 0% 10%);
 
-  --theme-info: hsl(210 80% 50%);
+  --theme-info: hsl(210 75% 48%);
   --theme-info-foreground: hsl(0 0% 100%);
 
-  /*
-   * BORDERS & INPUTS
-   * Subtle but visible - defines edges without harsh lines
-   */
-  --theme-border: hsl(220 15% 88%);
-  --theme-input: hsl(220 15% 88%);
-  --theme-ring: hsl(220 60% 50%);
+  /* Borders & inputs */
+  --theme-border: hsl(225 10% 87%);
+  --theme-input: hsl(225 10% 87%);
+  --theme-ring: hsl(225 65% 48%);
 
-  /*
-   * CHAT-SPECIFIC
-   * User message bubbles - the signature Quilltap blue
-   * Vibrant but not garish, readable white text
-   */
-  --theme-chat-user: hsl(215 80% 52%);
+  /* Chat - user bubble matches primary hue */
+  --theme-chat-user: hsl(225 62% 50%);
   --theme-chat-user-foreground: hsl(0 0% 100%);
 
-  /*
-   * SIDEBAR
-   * Slightly darker than page background for definition
-   * Creates natural visual separation
-   */
-  --theme-sidebar-background: hsl(220 20% 95%);
-  --theme-sidebar-foreground: hsl(220 25% 20%);
-  --theme-sidebar-border: hsl(220 15% 88%);
-  --theme-sidebar-muted: hsl(220 10% 55%);
-  --theme-sidebar-accent: hsl(210 60% 95%);
-  --theme-sidebar-accent-foreground: hsl(210 70% 35%);
+  /* Sidebar */
+  --theme-sidebar-background: hsl(225 14% 95%);
+  --theme-sidebar-foreground: hsl(225 18% 18%);
+  --theme-sidebar-border: hsl(225 10% 87%);
+  --theme-sidebar-muted: hsl(225 8% 50%);
+  --theme-sidebar-accent: hsl(225 10% 93%);
+  --theme-sidebar-accent-foreground: hsl(225 18% 22%);
 
+  /* Radii - tighter for a precise look */
   --theme-radius-lg: 0.5rem;
-  --theme-radius-md: calc(0.5rem - 2px);
-  --theme-radius-sm: calc(0.5rem - 4px);
+  --theme-radius-md: 0.375rem;
+  --theme-radius-sm: 0.25rem;
 
-  /* Typography - default font stacks */
-  --theme-font-sans: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --theme-font-serif: "EB Garamond", Georgia, Cambria, "Times New Roman", Times, serif;
-  --theme-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-  --theme-font-brand: "EB Garamond", Georgia, "Times New Roman", serif;
-  --theme-font-chat-user: var(--theme-font-brand);
+  /* Typography - system fonts only */
+  --theme-font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --theme-font-serif: Georgia, Cambria, "Times New Roman", Times, serif;
+  --theme-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --theme-font-brand: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --theme-font-chat-user: var(--theme-font-sans);
 }
 
 /*
  * DARK MODE - Considered companion, not inversion
  */
 .dark {
-  /*
-   * BACKGROUND LAYERS
-   * Dark mode: lighter = closer to you (reverse of light mode)
-   * Creates subtle elevation through lightness, not just shadow
-   */
-
-  /* Page background - deep blue-gray, not pure black */
-  --theme-background: hsl(220 25% 8%);
+  /* Page background - deep cool blue-gray */
+  --theme-background: hsl(225 18% 9%);
 
   /* Card/surface - noticeably lighter than page */
-  --theme-card: hsl(220 20% 12%);
-  --theme-card-foreground: hsl(220 15% 92%);
+  --theme-card: hsl(225 16% 12%);
+  --theme-card-foreground: hsl(225 10% 92%);
 
   /* Popover/dropdown - another step lighter */
-  --theme-popover: hsl(220 20% 15%);
-  --theme-popover-foreground: hsl(220 15% 92%);
+  --theme-popover: hsl(225 16% 14%);
+  --theme-popover-foreground: hsl(225 10% 92%);
 
-  /*
-   * TEXT COLORS
-   * Off-white, slightly warm - easier on eyes than pure white
-   */
-  --theme-foreground: hsl(220 15% 92%);
+  /* Text - off-white, slightly cool */
+  --theme-foreground: hsl(225 10% 92%);
 
-  /*
-   * PRIMARY ACTION
-   * Lighter slate-blue for visibility on dark
-   * Still authoritative, now as a lighter beacon
-   */
-  --theme-primary: hsl(220 50% 75%);
-  --theme-primary-foreground: hsl(220 25% 8%);
+  /* Primary action - lighter for dark backgrounds */
+  --theme-primary: hsl(225 55% 68%);
+  --theme-primary-foreground: hsl(225 18% 9%);
 
-  /*
-   * SECONDARY ACTION
-   * Subtle surface distinction - darker than primary
-   * Clear difference from muted
-   */
-  --theme-secondary: hsl(220 20% 18%);
-  --theme-secondary-foreground: hsl(220 15% 85%);
+  /* Secondary action */
+  --theme-secondary: hsl(225 14% 17%);
+  --theme-secondary-foreground: hsl(225 10% 85%);
 
-  /*
-   * MUTED
-   * For de-emphasized content
-   * Darker than secondary, clearly receding
-   */
-  --theme-muted: hsl(220 15% 15%);
-  --theme-muted-foreground: hsl(220 10% 55%);
+  /* Muted */
+  --theme-muted: hsl(225 12% 14%);
+  --theme-muted-foreground: hsl(225 8% 56%);
 
-  /*
-   * ACCENT
-   * Warmer highlight for dark mode
-   * Subtle glow effect
-   */
-  --theme-accent: hsl(210 50% 20%);
-  --theme-accent-foreground: hsl(210 70% 75%);
+  /* Accent */
+  --theme-accent: hsl(225 14% 18%);
+  --theme-accent-foreground: hsl(225 10% 85%);
 
-  /*
-   * SEMANTIC COLORS
-   * Slightly adjusted for dark backgrounds
-   * Maintain meaning while ensuring visibility
-   */
-  --theme-destructive: hsl(0 65% 55%);
+  /* Semantic colors - adjusted for dark backgrounds */
+  --theme-destructive: hsl(0 60% 54%);
   --theme-destructive-foreground: hsl(0 0% 100%);
 
-  --theme-success: hsl(142 65% 45%);
+  --theme-success: hsl(152 55% 44%);
   --theme-success-foreground: hsl(0 0% 100%);
 
-  --theme-warning: hsl(38 90% 50%);
+  --theme-warning: hsl(38 85% 52%);
   --theme-warning-foreground: hsl(0 0% 10%);
 
-  --theme-info: hsl(210 75% 60%);
+  --theme-info: hsl(210 70% 58%);
   --theme-info-foreground: hsl(0 0% 100%);
 
-  /*
-   * BORDERS & INPUTS
-   * Lighter than background but subtle
-   * Defines without dividing
-   */
-  --theme-border: hsl(220 15% 20%);
-  --theme-input: hsl(220 15% 20%);
-  --theme-ring: hsl(220 60% 60%);
+  /* Borders & inputs */
+  --theme-border: hsl(225 12% 20%);
+  --theme-input: hsl(225 12% 20%);
+  --theme-ring: hsl(225 55% 60%);
 
-  /*
-   * CHAT-SPECIFIC
-   * User message bubbles - boosted saturation/lightness for dark
-   * Maintains the signature blue while staying vibrant
-   */
-  --theme-chat-user: hsl(215 85% 58%);
+  /* Chat - boosted for dark backgrounds */
+  --theme-chat-user: hsl(225 60% 56%);
   --theme-chat-user-foreground: hsl(0 0% 100%);
 
-  /*
-   * SIDEBAR
-   * Darker than main content for focus
-   * Creates depth without being a void
-   */
-  --theme-sidebar-background: hsl(220 25% 6%);
-  --theme-sidebar-foreground: hsl(220 15% 88%);
-  --theme-sidebar-border: hsl(220 15% 15%);
-  --theme-sidebar-muted: hsl(220 10% 50%);
-  --theme-sidebar-accent: hsl(210 50% 20%);
-  --theme-sidebar-accent-foreground: hsl(210 70% 75%);
+  /* Sidebar - darker than main content */
+  --theme-sidebar-background: hsl(225 18% 7%);
+  --theme-sidebar-foreground: hsl(225 10% 88%);
+  --theme-sidebar-border: hsl(225 12% 16%);
+  --theme-sidebar-muted: hsl(225 8% 48%);
+  --theme-sidebar-accent: hsl(225 14% 18%);
+  --theme-sidebar-accent-foreground: hsl(225 10% 85%);
 }
 
 /*

@@ -53,13 +53,13 @@ export function TaskItem({
   const getStatusColor = (status: string): string => {
     switch (status) {
       case 'PROCESSING':
-        return 'text-blue-600 dark:text-blue-400'
+        return 'text-info'
       case 'PENDING':
-        return 'text-yellow-600 dark:text-yellow-400'
+        return 'text-warning'
       case 'FAILED':
-        return 'text-red-600 dark:text-red-400'
+        return 'text-destructive'
       case 'PAUSED':
-        return 'text-orange-600 dark:text-orange-400'
+        return 'text-warning'
       default:
         return 'text-muted-foreground'
     }
@@ -136,7 +136,7 @@ export function TaskItem({
                 {job.typeName}
               </span>
               {job.priority > 0 && (
-                <span className="text-xs px-1.5 py-0.5 bg-primary/10 text-primary rounded">
+                <span className="text-xs px-1.5 py-0.5 qt-bg-primary/10 text-primary rounded">
                   P{job.priority}
                 </span>
               )}
@@ -153,7 +153,7 @@ export function TaskItem({
               <span>{formatDate(job.scheduledAt)}</span>
             </div>
             {job.lastError && (
-              <div className="text-xs text-red-500 mt-1 truncate">
+              <div className="text-xs text-destructive mt-1 truncate">
                 Error: {job.lastError}
               </div>
             )}
@@ -170,7 +170,7 @@ export function TaskItem({
               <button
                 onClick={() => onResume(job.id)}
                 disabled={jobActionLoading === job.id}
-                className="p-1 rounded hover:bg-green-100 dark:hover:bg-green-900/30 text-green-600 dark:text-green-400"
+                className="p-1 rounded hover:qt-bg-success/10 text-success"
                 title="Resume"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -181,7 +181,7 @@ export function TaskItem({
               <button
                 onClick={() => onPause(job.id)}
                 disabled={jobActionLoading === job.id}
-                className="p-1 rounded hover:bg-orange-100 dark:hover:bg-orange-900/30 text-orange-600 dark:text-orange-400"
+                className="p-1 rounded hover:qt-bg-warning/10 text-warning"
                 title="Pause"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -193,7 +193,7 @@ export function TaskItem({
             <button
               onClick={() => onView(job.id)}
               disabled={jobActionLoading === job.id}
-              className="p-1 rounded hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400"
+              className="p-1 rounded hover:qt-bg-info/10 text-info"
               title="View Details"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -206,7 +206,7 @@ export function TaskItem({
               <button
                 onClick={() => onDelete(job.id)}
                 disabled={jobActionLoading === job.id}
-                className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400"
+                className="p-1 rounded hover:qt-bg-destructive/10 text-destructive"
                 title="Delete"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

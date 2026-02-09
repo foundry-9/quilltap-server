@@ -37,13 +37,6 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
     apiKey: string,
     options?: EmbeddingOptions
   ): Promise<EmbeddingResult> {
-    logger.debug('Generating OpenAI embedding', {
-      context: 'OpenAIEmbeddingProvider.generateEmbedding',
-      model,
-      textLength: text.length,
-      dimensions: options?.dimensions,
-    });
-
     const requestPayload: Record<string, unknown> = {
       model,
       input: text,
@@ -77,12 +70,6 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
     const data = await response.json();
     const embedding = data.data[0].embedding;
 
-    logger.debug('OpenAI embedding generated successfully', {
-      context: 'OpenAIEmbeddingProvider.generateEmbedding',
-      model,
-      dimensions: embedding.length,
-    });
-
     return {
       embedding,
       model,
@@ -109,13 +96,6 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
     apiKey: string,
     options?: EmbeddingOptions
   ): Promise<EmbeddingResult[]> {
-    logger.debug('Generating batch OpenAI embeddings', {
-      context: 'OpenAIEmbeddingProvider.generateBatchEmbeddings',
-      model,
-      count: texts.length,
-      dimensions: options?.dimensions,
-    });
-
     const requestPayload: Record<string, unknown> = {
       model,
       input: texts,
@@ -159,12 +139,6 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
         } : undefined,
       });
     }
-
-    logger.debug('OpenAI batch embeddings generated successfully', {
-      context: 'OpenAIEmbeddingProvider.generateBatchEmbeddings',
-      model,
-      count: results.length,
-    });
 
     return results;
   }

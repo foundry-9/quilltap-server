@@ -9,6 +9,9 @@ import { TokenDisplaySettingsComponent } from './TokenDisplaySettings'
 import { ContextCompressionSettingsComponent } from './ContextCompressionSettings'
 import { LLMLoggingSettingsComponent } from './LLMLoggingSettings'
 import { AutomationSettings } from './AutomationSettings'
+import { AgentModeSettings } from './AgentModeSettings'
+import { StoryBackgroundsSettings } from './StoryBackgroundsSettings'
+import { DangerousContentSettings } from './DangerousContentSettings'
 
 /**
  * ChatSettingsTab Component
@@ -30,6 +33,7 @@ export default function ChatSettingsTab() {
     saving,
     connectionProfiles,
     embeddingProfiles,
+    imageProfiles,
     loadingProfiles,
     handleAvatarModeChange,
     handleAvatarStyleChange,
@@ -40,6 +44,11 @@ export default function ChatSettingsTab() {
     handleContextCompressionUpdate,
     handleLLMLoggingChange,
     handleAutoDetectRngChange,
+    handleAgentModeDefaultEnabledChange,
+    handleAgentModeMaxTurnsChange,
+    handleStoryBackgroundsEnabledChange,
+    handleStoryBackgroundsProfileChange,
+    handleDangerousContentUpdate,
   } = useChatSettings()
 
   if (loading) {
@@ -52,7 +61,7 @@ export default function ChatSettingsTab() {
 
   if (!settings) {
     return (
-      <div className="text-red-600 dark:text-red-400 py-8">
+      <div className="text-destructive py-8">
         Failed to load chat settings
       </div>
     )
@@ -125,6 +134,33 @@ export default function ChatSettingsTab() {
           settings={settings}
           saving={saving}
           onAutoDetectRngChange={handleAutoDetectRngChange}
+        />
+
+        <AgentModeSettings
+          settings={settings}
+          saving={saving}
+          onDefaultEnabledChange={handleAgentModeDefaultEnabledChange}
+          onMaxTurnsChange={handleAgentModeMaxTurnsChange}
+        />
+
+        <StoryBackgroundsSettings
+          settings={settings}
+          saving={saving}
+          loadingProfiles={loadingProfiles}
+          imageProfiles={imageProfiles}
+          onEnabledChange={handleStoryBackgroundsEnabledChange}
+          onProfileChange={handleStoryBackgroundsProfileChange}
+        />
+
+        <DangerousContentSettings
+          settings={settings}
+          saving={saving}
+          connectionProfiles={connectionProfiles}
+          imageProfiles={imageProfiles}
+          loadingProfiles={loadingProfiles}
+          onUpdate={handleDangerousContentUpdate}
+          imagePromptProfileId={settings.cheapLLMSettings.imagePromptProfileId}
+          onImagePromptProfileChange={(id) => handleCheapLLMUpdate({ imagePromptProfileId: id })}
         />
       </div>
     </div>

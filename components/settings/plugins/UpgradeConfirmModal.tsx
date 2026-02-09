@@ -126,12 +126,12 @@ export function UpgradeConfirmModal({
       <div className="space-y-4">
         {/* Warning banner */}
         <div className="qt-alert-warning flex items-start gap-3">
-          <WarningIcon className="w-5 h-5 flex-shrink-0 mt-0.5 text-yellow-600 dark:text-yellow-400" />
+          <WarningIcon className="w-5 h-5 flex-shrink-0 mt-0.5 text-warning" />
           <div>
-            <h4 className="font-medium text-yellow-800 dark:text-yellow-200">
+            <h4 className="font-medium text-foreground">
               Breaking Changes Detected
             </h4>
-            <p className="qt-text-small mt-1 text-yellow-700 dark:text-yellow-300">
+            <p className="qt-text-small mt-1 text-muted-foreground">
               This is a major version upgrade which may include breaking changes.
               We recommend reviewing the changelog before upgrading.
             </p>

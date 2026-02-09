@@ -116,7 +116,7 @@ export function ProfileSelectionStep({
               <>
                 <dt className="text-muted-foreground">Type:</dt>
                 <dd className="text-foreground">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium qt-bg-success/10 text-success">
                     Cost-efficient
                   </span>
                 </dd>
@@ -128,7 +128,7 @@ export function ProfileSelectionStep({
 
       <div className="p-4 rounded-lg border border-border bg-muted/20">
         <h4 className="font-medium text-foreground mb-2 flex items-center gap-2">
-          <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4 text-info" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           Tip

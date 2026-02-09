@@ -111,24 +111,24 @@ export function OrphanScanModal({
   const allSelected = orphans.length > 0 && selectedKeys.size === orphans.length
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="qt-dialog-overlay">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/50"
+        className="absolute inset-0"
         onClick={!scanning && !adopting ? onClose : undefined}
       />
 
       {/* Modal */}
       <div className="relative qt-card w-full max-w-2xl max-h-[90vh] overflow-hidden mx-4 flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between p-6 border-b border-border">
           <h2 className="qt-text-large font-semibold">
             Scan for Orphan Files
           </h2>
           <button
             onClick={onClose}
             disabled={scanning || adopting}
-            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50"
+            className="p-1 rounded hover:bg-muted disabled:opacity-50"
             aria-label="Close"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -146,17 +146,17 @@ export function OrphanScanModal({
         <div className="flex-1 overflow-y-auto p-6">
           {/* Error display */}
           {error && (
-            <div className="mb-4 p-3 rounded bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-sm">
+            <div className="mb-4 qt-alert-error">
               {error}
             </div>
           )}
 
           {/* Success message for adoption */}
           {adoptResult && adoptResult.adopted > 0 && (
-            <div className="mb-4 p-3 rounded bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 text-sm">
+            <div className="mb-4 qt-alert-success">
               Successfully adopted {adoptResult.adopted} file{adoptResult.adopted !== 1 ? 's' : ''}.
               {adoptResult.failed.length > 0 && (
-                <span className="text-yellow-600 dark:text-yellow-400 ml-2">
+                <span className="text-warning ml-2">
                   {adoptResult.failed.length} failed.
                 </span>
               )}
@@ -164,7 +164,7 @@ export function OrphanScanModal({
           )}
 
           {/* Mount point info */}
-          <div className="mb-4 p-3 rounded bg-gray-50 dark:bg-gray-800">
+          <div className="mb-4 p-3 rounded bg-muted">
             <p className="qt-text">
               <strong>Mount Point:</strong> {mountPoint.name}
             </p>
@@ -203,20 +203,20 @@ export function OrphanScanModal({
             <>
               {/* Summary */}
               <div className="mb-4 grid grid-cols-3 gap-4 text-center">
-                <div className="p-3 rounded bg-blue-50 dark:bg-blue-900/20">
-                  <p className="qt-text-large font-semibold text-blue-700 dark:text-blue-300">
+                <div className="p-3 rounded qt-bg-primary/10">
+                  <p className="qt-text-large font-semibold text-primary">
                     {scanResult.totalFilesInStorage}
                   </p>
                   <p className="qt-text-small text-muted-foreground">In Storage</p>
                 </div>
-                <div className="p-3 rounded bg-green-50 dark:bg-green-900/20">
-                  <p className="qt-text-large font-semibold text-green-700 dark:text-green-300">
+                <div className="p-3 rounded qt-bg-success/10">
+                  <p className="qt-text-large font-semibold text-success">
                     {scanResult.totalFilesInDatabase}
                   </p>
                   <p className="qt-text-small text-muted-foreground">In Database</p>
                 </div>
-                <div className="p-3 rounded bg-yellow-50 dark:bg-yellow-900/20">
-                  <p className="qt-text-large font-semibold text-yellow-700 dark:text-yellow-300">
+                <div className="p-3 rounded qt-bg-warning/10">
+                  <p className="qt-text-large font-semibold text-warning">
                     {orphans.length}
                   </p>
                   <p className="qt-text-small text-muted-foreground">Orphaned</p>
@@ -226,7 +226,7 @@ export function OrphanScanModal({
               {/* No orphans */}
               {orphans.length === 0 && (
                 <div className="text-center py-8">
-                  <p className="qt-text text-green-600 dark:text-green-400">
+                  <p className="qt-text text-success">
                     No orphaned files found. All files in storage are tracked in the database.
                   </p>
                 </div>
@@ -239,7 +239,7 @@ export function OrphanScanModal({
                     <div className="flex items-center gap-2">
                       <button
                         onClick={allSelected ? handleDeselectAll : handleSelectAll}
-                        className="qt-text-small text-blue-600 dark:text-blue-400 hover:underline"
+                        className="qt-text-small text-primary hover:underline"
                       >
                         {allSelected ? 'Deselect All' : 'Select All'}
                       </button>
@@ -249,13 +249,13 @@ export function OrphanScanModal({
                     </div>
                     <button
                       onClick={handleScan}
-                      className="qt-text-small text-blue-600 dark:text-blue-400 hover:underline"
+                      className="qt-text-small text-primary hover:underline"
                     >
                       Rescan
                     </button>
                   </div>
 
-                  <div className="border rounded dark:border-gray-700 max-h-64 overflow-y-auto">
+                  <div className="border border-border rounded max-h-64 overflow-y-auto">
                     {orphans.map((orphan) => (
                       <OrphanFileRow
                         key={orphan.storageKey}
@@ -285,7 +285,7 @@ export function OrphanScanModal({
 
               {/* Scan errors */}
               {scanResult.errors.length > 0 && (
-                <div className="mt-4 p-3 rounded bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300 text-sm">
+                <div className="mt-4 qt-alert-warning">
                   <p className="font-medium mb-1">Scan warnings:</p>
                   <ul className="list-disc list-inside">
                     {scanResult.errors.slice(0, 5).map((err, i) => (
@@ -302,7 +302,7 @@ export function OrphanScanModal({
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700">
+        <div className="flex justify-end gap-3 p-6 border-t border-border">
           <button
             onClick={onClose}
             disabled={scanning || adopting}
@@ -342,8 +342,8 @@ function OrphanFileRow({
 
   return (
     <label
-      className={`flex items-center gap-3 p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 border-b last:border-b-0 dark:border-gray-700 ${
-        selected ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+      className={`flex items-center gap-3 p-3 cursor-pointer hover:bg-muted border-b last:border-b-0 border-border ${
+        selected ? 'qt-bg-primary/10' : ''
       }`}
     >
       <input

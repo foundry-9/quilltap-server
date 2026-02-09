@@ -209,7 +209,7 @@ export default function FilePreviewPdf({
       {!isLoading && numPages > 0 && (
         <>
           {/* Controls */}
-          <div className="flex items-center gap-4 mb-4 p-2 bg-surface-secondary rounded">
+          <div className="flex items-center gap-4 mb-4 p-2 bg-muted rounded">
             {/* Page navigation */}
             <div className="flex items-center gap-2">
               <button
@@ -270,7 +270,7 @@ export default function FilePreviewPdf({
           <div className="flex-1 overflow-auto flex justify-center">
             <canvas
               ref={canvasRef}
-              className="shadow-lg"
+              className="qt-shadow-lg"
             />
           </div>
         </>

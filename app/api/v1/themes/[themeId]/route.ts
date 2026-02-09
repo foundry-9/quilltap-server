@@ -37,7 +37,8 @@ async function handleGetTokens(
     );
   }
 
-  // Get theme tokens and fonts
+  // Get theme data
+  const theme = themeRegistry.get(themeId);
   const tokens = themeRegistry.getTokens(themeId);
   const loadedFonts = themeRegistry.getFonts(themeId);
   const cssOverrides = themeRegistry.getCSSOverrides(themeId);
@@ -50,7 +51,12 @@ async function handleGetTokens(
     weight: font.weight,
     style: font.style,
     display: font.display,
-  }));return NextResponse.json({ tokens, fonts, cssOverrides });
+  }));
+
+  // Include subsystem overrides (already resolved to full URLs by the registry)
+  const subsystems = theme?.subsystems || undefined;
+
+  return NextResponse.json({ tokens, fonts, cssOverrides, subsystems });
 }
 
 /**

@@ -22,6 +22,15 @@ const DEFAULT_POLL_INTERVAL = 2000;
 /** Rate limit delay between job completions in ms */
 const RATE_LIMIT_DELAY = 500;
 
+/** Per-job execution timeout in ms (3 minutes) */
+const JOB_EXECUTION_TIMEOUT_MS = 3 * 60 * 1000;
+
+/** How often to check for stuck PROCESSING jobs (5 minutes) */
+const STUCK_JOB_CHECK_INTERVAL_MS = 5 * 60 * 1000;
+
+/** Stuck job recovery timer */
+let stuckJobCheckInterval: ReturnType<typeof setInterval> | null = null;
+
 /**
  * Start the job processor
  * @param intervalMs - Polling interval in milliseconds (default: 2000)
@@ -42,12 +51,23 @@ export function startProcessor(intervalMs: number = DEFAULT_POLL_INTERVAL): void
 
   logger.info('[JobQueue] Processor started', { intervalMs });
 
-  // Also reset any stuck jobs on startup
+  // Reset any stuck jobs on startup
   resetStuckJobs().catch((error) => {
     logger.error('[JobQueue] Error resetting stuck jobs on startup', {
       error: getErrorMessage(error),
     });
   });
+
+  // Periodically check for stuck jobs (in case an LLM call hangs)
+  if (!stuckJobCheckInterval) {
+    stuckJobCheckInterval = setInterval(() => {
+      resetStuckJobs().catch((error) => {
+        logger.error('[JobQueue] Error in periodic stuck job check', {
+          error: getErrorMessage(error),
+        });
+      });
+    }, STUCK_JOB_CHECK_INTERVAL_MS);
+  }
 }
 
 /**
@@ -57,6 +77,10 @@ export function stopProcessor(): void {
   if (processorInterval) {
     clearInterval(processorInterval);
     processorInterval = null;
+  }
+  if (stuckJobCheckInterval) {
+    clearInterval(stuckJobCheckInterval);
+    stuckJobCheckInterval = null;
   }
   processorRunning = false;
   logger.info('[JobQueue] Processor stopped');
@@ -102,7 +126,12 @@ export async function processNextJob(): Promise<boolean> {
 
     try {
       const handler = getHandler(job.type);
-      await handler(job);
+      await Promise.race([
+        handler(job),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`Job execution timed out after ${JOB_EXECUTION_TIMEOUT_MS / 1000}s`)), JOB_EXECUTION_TIMEOUT_MS)
+        ),
+      ]);
 
       await repos.backgroundJobs.markCompleted(job.id);
       logger.info('[JobQueue] Job completed successfully', {

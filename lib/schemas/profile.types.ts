@@ -57,6 +57,8 @@ export const ConnectionProfileSchema = z.object({
   allowWebSearch: z.boolean().default(false),
   /** Whether to use the provider's native web search integration (if supported) */
   useNativeWebSearch: z.boolean().default(false),
+  /** Whether this profile is suitable for uncensored/dangerous content (user must explicitly opt in) */
+  isDangerousCompatible: z.boolean().default(false),
   tags: z.array(UUIDSchema).default([]),
 
   // Token usage tracking (persisted, incremented after each message)
@@ -99,6 +101,8 @@ export const ImageProfileSchema = z.object({
   modelName: z.string(),
   parameters: JsonSchema.default({}),
   isDefault: z.boolean().default(false),
+  /** Whether this profile is suitable for uncensored/dangerous image content (user must explicitly opt in) */
+  isDangerousCompatible: z.boolean().default(false),
   tags: z.array(UUIDSchema).default([]),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

@@ -57,7 +57,7 @@ jest.mock('@/components/chat/EphemeralMessage', () => ({
 }))
 
 // Import the hook and mocked modules after mocks are set up
-import { useTurnManagement } from '@/app/(authenticated)/chats/[id]/hooks/useTurnManagement'
+import { useTurnManagement } from '@/app/(authenticated)/salon/[id]/hooks/useTurnManagement'
 import { showErrorToast, showInfoToast } from '@/lib/toast'
 import {
   nudgeParticipant,

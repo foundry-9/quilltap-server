@@ -9,7 +9,7 @@
 import { Folder, FolderInput, FolderSchema } from '@/lib/schemas/types';
 import { UserOwnedBaseRepository, CreateOptions } from './base.repository';
 import { logger } from '@/lib/logger';
-import { QueryFilter, QueryOptions } from '../interfaces';
+import { TypedQueryFilter, QueryOptions } from '../interfaces';
 
 /**
  * Folders Repository
@@ -51,25 +51,22 @@ export class FoldersRepository extends UserOwnedBaseRepository<Folder> {
     data: Omit<FolderInput, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions
   ): Promise<Folder> {
-    try {
-      const folder = await this._create(data, options);
+    return this.safeQuery(
+      async () => {
+        const folder = await this._create(data, options);
 
-      logger.info('Folder created', {
-        folderId: folder.id,
-        userId: data.userId,
-        path: data.path,
-        projectId: data.projectId,
-      });
+        logger.info('Folder created', {
+          folderId: folder.id,
+          userId: data.userId,
+          path: data.path,
+          projectId: data.projectId,
+        });
 
-      return folder;
-    } catch (error) {
-      logger.error('Error creating folder', {
-        userId: data.userId,
-        path: data.path,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return folder;
+      },
+      'Error creating folder',
+      { userId: data.userId, path: data.path }
+    );
   }
 
   /**
@@ -79,23 +76,21 @@ export class FoldersRepository extends UserOwnedBaseRepository<Folder> {
    * @returns Promise<Folder | null> The updated folder if found, null otherwise
    */
   async update(id: string, data: Partial<Folder>): Promise<Folder | null> {
-    try {
-      const updated = await this._update(id, data);
+    return this.safeQuery(
+      async () => {
+        const updated = await this._update(id, data);
 
-      if (updated) {
-        logger.info('Folder updated', { folderId: id });
-      } else {
-        logger.warn('Folder not found for update', { folderId: id });
-      }
+        if (updated) {
+          logger.info('Folder updated', { folderId: id });
+        } else {
+          logger.warn('Folder not found for update', { folderId: id });
+        }
 
-      return updated;
-    } catch (error) {
-      logger.error('Error updating folder', {
-        folderId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return updated;
+      },
+      'Error updating folder',
+      { folderId: id }
+    );
   }
 
   /**
@@ -104,23 +99,21 @@ export class FoldersRepository extends UserOwnedBaseRepository<Folder> {
    * @returns Promise<boolean> True if folder was deleted, false if not found
    */
   async delete(id: string): Promise<boolean> {
-    try {
-      const result = await this._delete(id);
+    return this.safeQuery(
+      async () => {
+        const result = await this._delete(id);
 
-      if (result) {
-        logger.info('Folder deleted', { folderId: id });
-      } else {
-        logger.warn('Folder not found for deletion', { folderId: id });
-      }
+        if (result) {
+          logger.info('Folder deleted', { folderId: id });
+        } else {
+          logger.warn('Folder not found for deletion', { folderId: id });
+        }
 
-      return result;
-    } catch (error) {
-      logger.error('Error deleting folder', {
-        folderId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return result;
+      },
+      'Error deleting folder',
+      { folderId: id }
+    );
   }
 
   // ============================================================================
@@ -139,32 +132,26 @@ export class FoldersRepository extends UserOwnedBaseRepository<Folder> {
     path: string,
     projectId: string | null
   ): Promise<Folder | null> {
-    try {
-      const query: QueryFilter = { userId, path };
+    return this.safeQuery(
+      async () => {
+        const query: TypedQueryFilter<Folder> = {
+          userId,
+          path,
+          ...this.createNullableFilter('projectId', projectId),
+        };
 
-      if (projectId === null) {
-        // For general files, projectId should be null or not exist
-        query.$or = [{ projectId: null }, { projectId: { $exists: false } }];
-      } else {
-        query.projectId = projectId;
-      }
+        const result = await this.findOneByFilter(query);
 
-      const result = await this.findOneByFilter(query);
+        if (!result) {
+          return null;
+        }
 
-      if (!result) {
-        return null;
-      }
-
-      return result;
-    } catch (error) {
-      logger.error('Error finding folder by path', {
-        userId,
-        path,
-        projectId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    }
+        return result;
+      },
+      'Error finding folder by path',
+      { userId, path, projectId },
+      null
+    );
   }
 
   /**
@@ -179,29 +166,24 @@ export class FoldersRepository extends UserOwnedBaseRepository<Folder> {
     parentFolderId: string | null,
     projectId: string | null
   ): Promise<Folder[]> {
-    try {
-      const query: QueryFilter = { userId, parentFolderId };
+    return this.safeQuery(
+      async () => {
+        const query: TypedQueryFilter<Folder> = {
+          userId,
+          parentFolderId,
+          ...this.createNullableFilter('projectId', projectId),
+        };
 
-      if (projectId === null) {
-        query.$or = [{ projectId: null }, { projectId: { $exists: false } }];
-      } else {
-        query.projectId = projectId;
-      }
+        const options: QueryOptions = { sort: { name: 1 } };
 
-      const options: QueryOptions = { sort: { name: 1 } };
+        const results = await this.findByFilter(query, options);
 
-      const results = await this.findByFilter(query, options);
-
-      return results;
-    } catch (error) {
-      logger.error('Error finding folders by parent', {
-        userId,
-        parentFolderId,
-        projectId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+        return results;
+      },
+      'Error finding folders by parent',
+      { userId, parentFolderId, projectId },
+      []
+    );
   }
 
   /**
@@ -211,28 +193,23 @@ export class FoldersRepository extends UserOwnedBaseRepository<Folder> {
    * @returns Promise<Folder[]> Array of all folders in scope
    */
   async findAllInProject(userId: string, projectId: string | null): Promise<Folder[]> {
-    try {
-      const query: QueryFilter = { userId };
+    return this.safeQuery(
+      async () => {
+        const query: TypedQueryFilter<Folder> = {
+          userId,
+          ...this.createNullableFilter('projectId', projectId),
+        };
 
-      if (projectId === null) {
-        query.$or = [{ projectId: null }, { projectId: { $exists: false } }];
-      } else {
-        query.projectId = projectId;
-      }
+        const options: QueryOptions = { sort: { path: 1 } };
 
-      const options: QueryOptions = { sort: { path: 1 } };
+        const results = await this.findByFilter(query, options);
 
-      const results = await this.findByFilter(query, options);
-
-      return results;
-    } catch (error) {
-      logger.error('Error finding all folders in project', {
-        userId,
-        projectId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+        return results;
+      },
+      'Error finding all folders in project',
+      { userId, projectId },
+      []
+    );
   }
 
   /**
@@ -247,36 +224,28 @@ export class FoldersRepository extends UserOwnedBaseRepository<Folder> {
     parentPath: string,
     projectId: string | null
   ): Promise<Folder[]> {
-    try {
-      // Use regex to find paths that start with parentPath but are not the parentPath itself
-      const query: QueryFilter = {
-        userId,
-        path: {
-          $regex: `^${parentPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`,
-          $ne: parentPath,
-        },
-      };
+    return this.safeQuery(
+      async () => {
+        // Use regex to find paths that start with parentPath but are not the parentPath itself
+        const query: TypedQueryFilter<Folder> = {
+          userId,
+          path: {
+            $regex: `^${this.escapeRegex(parentPath)}`,
+            $ne: parentPath,
+          },
+          ...this.createNullableFilter('projectId', projectId),
+        };
 
-      if (projectId === null) {
-        query.$or = [{ projectId: null }, { projectId: { $exists: false } }];
-      } else {
-        query.projectId = projectId;
-      }
+        const options: QueryOptions = { sort: { path: 1 } };
 
-      const options: QueryOptions = { sort: { path: 1 } };
+        const results = await this.findByFilter(query, options);
 
-      const results = await this.findByFilter(query, options);
-
-      return results;
-    } catch (error) {
-      logger.error('Error finding descendant folders', {
-        userId,
-        parentPath,
-        projectId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+        return results;
+      },
+      'Error finding descendant folders',
+      { userId, parentPath, projectId },
+      []
+    );
   }
 
   // ============================================================================
@@ -295,23 +264,21 @@ export class FoldersRepository extends UserOwnedBaseRepository<Folder> {
       return [];
     }
 
-    try {
-      const createdFolders: Folder[] = [];
+    return this.safeQuery(
+      async () => {
+        const createdFolders: Folder[] = [];
 
-      for (const data of folders) {
-        const folder = await this.create(data);
-        createdFolders.push(folder);
-      }
+        for (const data of folders) {
+          const folder = await this.create(data);
+          createdFolders.push(folder);
+        }
 
-      logger.info('Folders created in bulk', { count: createdFolders.length });
-      return createdFolders;
-    } catch (error) {
-      logger.error('Error creating folders in bulk', {
-        count: folders.length,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        logger.info('Folders created in bulk', { count: createdFolders.length });
+        return createdFolders;
+      },
+      'Error creating folders in bulk',
+      { count: folders.length }
+    );
   }
 
   /**
@@ -329,48 +296,38 @@ export class FoldersRepository extends UserOwnedBaseRepository<Folder> {
     newPathPrefix: string,
     projectId: string | null
   ): Promise<number> {
-    try {
-      // Find all folders with paths starting with the old prefix
-      const matchQuery: QueryFilter = {
-        userId,
-        path: { $regex: `^${oldPathPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}` },
-      };
+    return this.safeQuery(
+      async () => {
+        // Find all folders with paths starting with the old prefix
+        const matchQuery: TypedQueryFilter<Folder> = {
+          userId,
+          path: { $regex: `^${this.escapeRegex(oldPathPrefix)}` },
+          ...this.createNullableFilter('projectId', projectId),
+        };
 
-      if (projectId === null) {
-        matchQuery.$or = [{ projectId: null }, { projectId: { $exists: false } }];
-      } else {
-        matchQuery.projectId = projectId;
-      }
+        // Get folders to update
+        const foldersToUpdate = await this.findByFilter(matchQuery);
 
-      // Get folders to update
-      const foldersToUpdate = await this.findByFilter(matchQuery);
+        let updatedCount = 0;
+        for (const folder of foldersToUpdate) {
+          const newPath = folder.path.replace(oldPathPrefix, newPathPrefix);
+          await this.update(folder.id, { path: newPath });
+          updatedCount++;
+        }
 
-      let updatedCount = 0;
-      for (const folder of foldersToUpdate) {
-        const newPath = folder.path.replace(oldPathPrefix, newPathPrefix);
-        await this.update(folder.id, { path: newPath });
-        updatedCount++;
-      }
+        logger.info('Updated folder path prefixes', {
+          userId,
+          oldPathPrefix,
+          newPathPrefix,
+          projectId,
+          updatedCount,
+        });
 
-      logger.info('Updated folder path prefixes', {
-        userId,
-        oldPathPrefix,
-        newPathPrefix,
-        projectId,
-        updatedCount,
-      });
-
-      return updatedCount;
-    } catch (error) {
-      logger.error('Error updating folder path prefixes', {
-        userId,
-        oldPathPrefix,
-        newPathPrefix,
-        projectId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return updatedCount;
+      },
+      'Error updating folder path prefixes',
+      { userId, oldPathPrefix, newPathPrefix, projectId }
+    );
   }
 
   /**
@@ -379,15 +336,14 @@ export class FoldersRepository extends UserOwnedBaseRepository<Folder> {
    * @returns Promise<boolean> True if folder has children
    */
   async hasChildren(folderId: string): Promise<boolean> {
-    try {
-      const count = await this.count({ parentFolderId: folderId } as QueryFilter);
-      return count > 0;
-    } catch (error) {
-      logger.error('Error checking for child folders', {
-        folderId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return false;
-    }
+    return this.safeQuery(
+      async () => {
+        const count = await this.count({ parentFolderId: folderId });
+        return count > 0;
+      },
+      'Error checking for child folders',
+      { folderId },
+      false
+    );
   }
 }

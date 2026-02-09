@@ -81,7 +81,7 @@ function ChatItem({
 
   return (
     <Link
-      href={`/chats/${chat.id}`}
+      href={`/salon/${chat.id}`}
       className={`qt-left-sidebar-item ${isCollapsed ? 'justify-center px-0' : ''}`}
       title={isCollapsed ? `${displayName}${chat.projectName ? ` (${chat.projectName})` : ''} (${messageCount} messages)` : undefined}
     >
@@ -112,6 +112,9 @@ function ChatItem({
               {messageCount > 999 ? '999+' : messageCount}
             </span>
           )}
+          {chat.isDangerous && (
+            <span className="qt-text-destructive text-xs flex-shrink-0" title="Flagged as dangerous" aria-label="Flagged as dangerous">*</span>
+          )}
         </>
       )}
     </Link>
@@ -120,7 +123,7 @@ function ChatItem({
 
 export function ChatsSection() {
   const { isCollapsed } = useSidebar()
-  const { shouldHideByIds } = useQuickHide()
+  const { shouldHideChat } = useQuickHide()
   const { chats, loading } = useSidebarData()
 
   // Don't show section if loading or no chats
@@ -134,10 +137,10 @@ export function ChatsSection() {
     )
   }
 
-  // Filter out chats with hidden character tags AND chats that belong to projects
+  // Filter out chats with hidden character tags, dangerous chats, AND chats that belong to projects
   // Project chats are shown under their respective projects in the projects section
   const visibleChats = chats.filter(
-    chat => !shouldHideByIds(chat.characterTags) && !chat.projectId
+    chat => !shouldHideChat(chat) && !chat.projectId
   )
 
   if (visibleChats.length === 0) {
@@ -146,7 +149,7 @@ export function ChatsSection() {
         <div className="px-2 py-1 text-xs text-muted-foreground">
           {!isCollapsed && 'No chats yet'}
         </div>
-        <ViewAllLink href="/chats" label="Start one" />
+        <ViewAllLink href="/salon" label="Start one" />
       </SidebarSection>
     )
   }
@@ -160,7 +163,7 @@ export function ChatsSection() {
           isCollapsed={isCollapsed}
         />
       ))}
-      <ViewAllLink href="/chats" />
+      <ViewAllLink href="/salon" />
     </SidebarSection>
   )
 }

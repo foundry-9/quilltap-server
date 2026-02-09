@@ -1,6 +1,6 @@
 # Image Generation Profiles
 
-> **[Open this page in Quilltap](/settings?tab=image-profiles)**
+> **[Open this page in Quilltap](/foundry/lantern)**
 
 Image Generation Profiles configure services that can create images during chats. With an image generation profile set up, you can ask an AI to generate images as part of your conversations.
 
@@ -62,7 +62,7 @@ First, obtain an API key from an image generation provider:
 
 ### Step 2: Add the Key to Quilltap
 
-1. Go to Settings → **API Keys** tab
+1. Go to **The Forge** (`/foundry/forge`) and expand **API Keys**
 2. Click **Add API Key**
 3. Select the image provider from the dropdown
 4. Enter your API key

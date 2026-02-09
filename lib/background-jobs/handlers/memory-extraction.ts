@@ -59,6 +59,14 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
         memoryId: result.memoryId,
         chatId: payload.chatId,
         characterId: payload.characterId,
+        relatedMemoryIds: result.relatedMemoryIds,
+      });
+    } else if (result.memoryReinforced) {
+      logger.info('[MemoryExtraction] Memory reinforced', {
+        jobId: job.id,
+        reinforcedMemoryId: result.reinforcedMemoryId,
+        chatId: payload.chatId,
+        characterId: payload.characterId,
       });
     } else {
     }

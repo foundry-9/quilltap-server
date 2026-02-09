@@ -210,15 +210,15 @@ export function ProviderIcon({
 
 // Provider badge colors and labels
 const PROVIDER_BADGES: Record<string, { bg: string; text: string; label: string }> = {
-  OPENAI: { bg: 'bg-green-100', text: 'text-green-800', label: 'OpenAI' },
-  GROK: { bg: 'bg-purple-100', text: 'text-purple-800', label: 'Grok' },
-  GOOGLE_IMAGEN: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Google Imagen' },
-  GOOGLE: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Google' },
-  OPENROUTER: { bg: 'bg-orange-100', text: 'text-orange-800', label: 'OpenRouter' },
-  ETERNAL_AI: { bg: 'bg-purple-100', text: 'text-purple-800', label: 'Eternal AI' },
-  ANTHROPIC: { bg: 'bg-amber-100', text: 'text-amber-800', label: 'Anthropic' },
-  OLLAMA: { bg: 'bg-gray-100', text: 'text-gray-800', label: 'Ollama' },
-  OPENAI_COMPATIBLE: { bg: 'bg-slate-100', text: 'text-slate-800', label: 'OpenAI Compatible' },
+  OPENAI: { bg: 'qt-bg-success/10', text: 'text-success', label: 'OpenAI' },
+  GROK: { bg: 'qt-bg-primary/10', text: 'text-primary', label: 'Grok' },
+  GOOGLE_IMAGEN: { bg: 'qt-bg-info/10', text: 'text-info', label: 'Google Imagen' },
+  GOOGLE: { bg: 'qt-bg-info/10', text: 'text-info', label: 'Google' },
+  OPENROUTER: { bg: 'qt-bg-warning/10', text: 'text-warning', label: 'OpenRouter' },
+  ETERNAL_AI: { bg: 'qt-bg-primary/10', text: 'text-primary', label: 'Eternal AI' },
+  ANTHROPIC: { bg: 'qt-bg-warning/10', text: 'text-warning', label: 'Anthropic' },
+  OLLAMA: { bg: 'bg-muted', text: 'text-muted-foreground', label: 'Ollama' },
+  OPENAI_COMPATIBLE: { bg: 'bg-muted', text: 'text-muted-foreground', label: 'OpenAI Compatible' },
 }
 
 export function ProviderBadge({

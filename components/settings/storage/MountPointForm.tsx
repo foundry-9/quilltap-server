@@ -152,7 +152,7 @@ export function MountPointForm({
           <div key={field.name}>
             <label htmlFor={inputId} className="block qt-text font-medium mb-1">
               {field.label}
-              {field.required && <span className="text-red-500 ml-1">*</span>}
+              {field.required && <span className="text-destructive ml-1">*</span>}
             </label>
             <input
               type="password"
@@ -160,12 +160,12 @@ export function MountPointForm({
               value={(value as string) || ''}
               onChange={(e) => handleConfigChange(field.name, e.target.value)}
               placeholder={field.placeholder || (isEditing ? '••••••••' : '')}
-              className={`qt-input w-full ${error ? 'border-red-500' : ''}`}
+              className={`qt-input w-full ${error ? 'border-destructive' : ''}`}
             />
             {field.description && (
               <p className="qt-text-small text-muted-foreground mt-1">{field.description}</p>
             )}
-            {error && <p className="text-sm text-red-500 mt-1">{error}</p>}
+            {error && <p className="text-sm text-destructive mt-1">{error}</p>}
           </div>
         )
 
@@ -174,7 +174,7 @@ export function MountPointForm({
           <div key={field.name}>
             <label htmlFor={inputId} className="block qt-text font-medium mb-1">
               {field.label}
-              {field.required && <span className="text-red-500 ml-1">*</span>}
+              {field.required && <span className="text-destructive ml-1">*</span>}
             </label>
             <input
               type="number"
@@ -184,12 +184,12 @@ export function MountPointForm({
                 handleConfigChange(field.name, e.target.value ? Number(e.target.value) : undefined)
               }
               placeholder={field.placeholder}
-              className={`qt-input w-full ${error ? 'border-red-500' : ''}`}
+              className={`qt-input w-full ${error ? 'border-destructive' : ''}`}
             />
             {field.description && (
               <p className="qt-text-small text-muted-foreground mt-1">{field.description}</p>
             )}
-            {error && <p className="text-sm text-red-500 mt-1">{error}</p>}
+            {error && <p className="text-sm text-destructive mt-1">{error}</p>}
           </div>
         )
 
@@ -198,7 +198,7 @@ export function MountPointForm({
           <div key={field.name}>
             <label htmlFor={inputId} className="block qt-text font-medium mb-1">
               {field.label}
-              {field.required && <span className="text-red-500 ml-1">*</span>}
+              {field.required && <span className="text-destructive ml-1">*</span>}
             </label>
             <input
               type="text"
@@ -206,12 +206,12 @@ export function MountPointForm({
               value={(value as string) || ''}
               onChange={(e) => handleConfigChange(field.name, e.target.value)}
               placeholder={field.placeholder}
-              className={`qt-input w-full ${error ? 'border-red-500' : ''}`}
+              className={`qt-input w-full ${error ? 'border-destructive' : ''}`}
             />
             {field.description && (
               <p className="qt-text-small text-muted-foreground mt-1">{field.description}</p>
             )}
-            {error && <p className="text-sm text-red-500 mt-1">{error}</p>}
+            {error && <p className="text-sm text-destructive mt-1">{error}</p>}
           </div>
         )
     }
@@ -222,7 +222,7 @@ export function MountPointForm({
       {/* Name */}
       <div>
         <label htmlFor="name" className="block qt-text font-medium mb-1">
-          Name <span className="text-red-500">*</span>
+          Name <span className="text-destructive">*</span>
         </label>
         <input
           type="text"
@@ -239,9 +239,9 @@ export function MountPointForm({
             }
           }}
           placeholder="e.g., Primary S3 Storage"
-          className={`qt-input w-full ${errors.name ? 'border-red-500' : ''}`}
+          className={`qt-input w-full ${errors.name ? 'border-destructive' : ''}`}
         />
-        {errors.name && <p className="text-sm text-red-500 mt-1">{errors.name}</p>}
+        {errors.name && <p className="text-sm text-destructive mt-1">{errors.name}</p>}
       </div>
 
       {/* Description */}
@@ -262,7 +262,7 @@ export function MountPointForm({
       {/* Backend Type */}
       <div>
         <label htmlFor="backendType" className="block qt-text font-medium mb-1">
-          Storage Backend <span className="text-red-500">*</span>
+          Storage Backend <span className="text-destructive">*</span>
         </label>
         <select
           id="backendType"
@@ -281,7 +281,7 @@ export function MountPointForm({
           <p className="qt-text-small text-muted-foreground mt-1">{selectedBackend.description}</p>
         )}
         {isEditing && (
-          <p className="qt-text-small text-amber-600 dark:text-amber-400 mt-1">
+          <p className="qt-text-small text-warning mt-1">
             Backend type cannot be changed after creation
           </p>
         )}
@@ -289,7 +289,7 @@ export function MountPointForm({
 
       {/* Backend-specific config fields */}
       {selectedBackend && selectedBackend.configFields.length > 0 && (
-        <div className="space-y-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+        <div className="space-y-4 pt-4 border-t border-border">
           <h4 className="qt-text font-medium">Backend Configuration</h4>
           {selectedBackend.configFields.map(renderConfigField)}
         </div>
@@ -328,7 +328,7 @@ export function MountPointForm({
       </div>
 
       {/* Actions */}
-      <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+      <div className="flex justify-end gap-3 pt-4 border-t border-border">
         <button type="button" onClick={onCancel} className="qt-button qt-button-secondary">
           Cancel
         </button>

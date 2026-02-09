@@ -50,11 +50,24 @@ const createCharacterSchema = z.object({
       z.object({
         id: z.uuid(),
         name: z.string().min(1),
+        usageContext: z.string().max(200).nullable().optional(),
         shortPrompt: z.string().max(350).nullable().optional(),
         mediumPrompt: z.string().max(500).nullable().optional(),
         longPrompt: z.string().max(750).nullable().optional(),
         completePrompt: z.string().max(1000).nullable().optional(),
         fullDescription: z.string().nullable().optional(),
+        createdAt: z.string(),
+        updatedAt: z.string(),
+      })
+    )
+    .optional(),
+  clothingRecords: z
+    .array(
+      z.object({
+        id: z.uuid(),
+        name: z.string().min(1),
+        usageContext: z.string().max(200).nullable().optional(),
+        description: z.string().nullable().optional(),
         createdAt: z.string(),
         updatedAt: z.string(),
       })
@@ -216,6 +229,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       avatarOverrides: [] as { chatId: string; imageId: string }[],
       defaultImageId: null,
       physicalDescriptions: validatedData.physicalDescriptions || [],
+      clothingRecords: validatedData.clothingRecords || [],
       systemPrompts: validatedData.systemPrompts || [],
     });
 
@@ -265,6 +279,7 @@ async function handleQuickCreate(req: NextRequest, context: AuthenticatedContext
       avatarOverrides: [] as { chatId: string; imageId: string }[],
       defaultImageId: null,
       physicalDescriptions: [],
+      clothingRecords: [],
     });
 
     logger.info('[Characters v1] Quick create completed', {
@@ -339,6 +354,7 @@ async function handleImport(req: NextRequest, context: AuthenticatedContext) {
       avatarOverrides: [] as { chatId: string; imageId: string }[],
       defaultImageId: null,
       physicalDescriptions: [],
+      clothingRecords: [],
     });
 
     const chats = await repos.chats.findByCharacterId(character.id);

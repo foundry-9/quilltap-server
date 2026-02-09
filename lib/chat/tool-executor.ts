@@ -50,6 +50,11 @@ import {
   formatStateResults,
   type StateToolContext,
 } from '@/lib/tools/handlers/state-handler';
+import {
+  executeSubmitFinalResponseTool,
+  formatSubmitFinalResponseResults,
+  type SubmitFinalResponseToolContext,
+} from '@/lib/tools/handlers/submit-final-response-handler';
 
 export interface ToolCallRequest {
   name: string;
@@ -201,6 +206,7 @@ const BUILT_IN_TOOLS = new Set([
   'search_help',
   'rng',
   'state',
+  'submit_final_response',
 ]);
 
 export async function executeToolCallWithContext(
@@ -215,9 +221,9 @@ export async function executeToolCallWithContext(
 
     // Check tool registry for plugin-provided tools (static or multi-tool)
     // Only route to plugins if this is NOT a built-in tool
-    // hasTool checks if plugin with that name exists, hasMultiToolPlugins checks if any plugins exist
-    const isStaticTool = !isBuiltInTool && toolRegistry.hasTool(toolCall.name);
-    const isMultiToolPluginTool = !isBuiltInTool && !isStaticTool && toolRegistry.hasMultiToolPlugins();
+    // hasPlugin checks if plugin with that name exists, getAllPlugins checks if any plugins exist
+    const isStaticTool = !isBuiltInTool && toolRegistry.hasPlugin(toolCall.name);
+    const isMultiToolPluginTool = !isBuiltInTool && !isStaticTool && toolRegistry.getAllPlugins().length > 0;
 
     if (isStaticTool || isMultiToolPluginTool) {
       // Fetch user's tool configuration from database
@@ -237,7 +243,7 @@ export async function executeToolCallWithContext(
         } else {
           // For multi-tool plugins (like MCP), we need to load configs for all multi-tool plugins
           // The tool registry's executeTool will find the right plugin
-          const multiToolPluginNames = toolRegistry.getMultiToolPluginNames();
+          const multiToolPluginNames = toolRegistry.getPluginNames();
           for (const pluginName of multiToolPluginNames) {
             const fullPluginName = `qtap-plugin-${pluginName}`;
             const userConfig = await repos.pluginConfigs.findByUserAndPlugin(userId, fullPluginName);
@@ -586,6 +592,31 @@ export async function executeToolCallWithContext(
           previousValue: result.previousValue,
         } : null,
         error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle submit_final_response (agent mode completion)
+    if (toolCall.name === 'submit_final_response') {
+      // Execute submit final response tool
+      const submitContext: SubmitFinalResponseToolContext = {
+        chatId,
+      };
+
+      const result = await executeSubmitFinalResponseTool(toolCall.arguments, submitContext);
+
+      // Format results for LLM consumption
+      const formattedResult = formatSubmitFinalResponseResults(result);
+
+      return {
+        toolName: 'submit_final_response',
+        success: result.success,
+        result: result.success ? {
+          formattedText: formattedResult,
+          finalResponse: result.finalResponse,
+          summary: result.summary,
+          confidence: result.confidence,
+        } : null,
+        error: result.success ? undefined : result.message,
       };
     }
 

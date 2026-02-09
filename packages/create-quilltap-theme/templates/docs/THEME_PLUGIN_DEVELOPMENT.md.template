@@ -487,7 +487,7 @@ For advanced customization, create `styles.css` with component overrides. This u
 [data-theme="sunset"] {
   /* Custom component variables */
   --qt-button-radius: 0.5rem;
-  --qt-button-shadow: 0 2px 4px rgba(255, 100, 50, 0.2);
+  --qt-button-primary-shadow: 0 2px 4px rgba(255, 100, 50, 0.2);
 
   --qt-card-radius: 0.75rem;
   --qt-card-shadow: 0 4px 12px rgba(255, 100, 50, 0.1);
@@ -523,7 +523,7 @@ For advanced customization, create `styles.css` with component overrides. This u
 }
 
 /* Chat bubbles with warm styling */
-[data-theme="sunset"] .qt-chat-bubble-user {
+[data-theme="sunset"] .qt-chat-message-user {
   background: linear-gradient(135deg,
     var(--theme-chat-user) 0%,
     hsl(35 70% 90%) 100%
@@ -531,7 +531,7 @@ For advanced customization, create `styles.css` with component overrides. This u
   border-radius: 1rem 1rem 0.25rem 1rem;
 }
 
-[data-theme="sunset"] .qt-chat-bubble-assistant {
+[data-theme="sunset"] .qt-chat-message-assistant {
   border-radius: 1rem 1rem 1rem 0.25rem;
 }
 
@@ -564,9 +564,9 @@ For advanced customization, create `styles.css` with component overrides. This u
 | `.qt-input`, `.qt-textarea`, `.qt-select` | Form inputs |
 | `.qt-badge`, `.qt-badge-primary`, `.qt-badge-secondary`, `.qt-badge-outline` | Badges |
 | `.qt-avatar`, `.qt-avatar-sm`, `.qt-avatar-lg`, `.qt-avatar-xl` | Avatars |
-| `.qt-dialog`, `.qt-dialog-header`, `.qt-dialog-content`, `.qt-dialog-footer` | Dialogs |
-| `.qt-chat-message`, `.qt-chat-bubble`, `.qt-chat-bubble-user`, `.qt-chat-bubble-assistant` | Chat UI |
-| `.qt-tabs`, `.qt-tab`, `.qt-tab-active` | Tab navigation |
+| `.qt-dialog`, `.qt-dialog-header`, `.qt-dialog-body`, `.qt-dialog-footer` | Dialogs |
+| `.qt-chat-message`, `.qt-chat-message-user`, `.qt-chat-message-assistant` | Chat UI |
+| `.qt-tab-group`, `.qt-tab`, `.qt-tab-active`, `.qt-tab-content` | Tab navigation |
 
 ### Component Variable Reference
 
@@ -581,22 +581,20 @@ Override these variables for consistent component styling:
 --qt-button-font-weight
 --qt-button-primary-bg
 --qt-button-primary-fg
---qt-button-primary-border
---qt-button-shadow
+--qt-button-primary-shadow
 
 /* Cards */
 --qt-card-radius
 --qt-card-padding
 --qt-card-shadow
---qt-card-border-width
---qt-card-border-color
+--qt-card-border
 
 /* Inputs */
 --qt-input-radius
 --qt-input-padding-y
 --qt-input-padding-x
---qt-input-border-width
---qt-input-font-size
+--qt-input-border
+--qt-input-transition
 
 /* Badges */
 --qt-badge-radius

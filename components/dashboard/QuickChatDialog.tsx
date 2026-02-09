@@ -58,7 +58,7 @@ export function QuickChatDialog({
 
   return (
     <div className="quick-chat-dialog fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md md:max-w-3xl rounded-2xl border border-border bg-card p-6 shadow-2xl max-h-[90vh] flex flex-col">
+      <div className="w-full max-w-md md:max-w-3xl rounded-2xl border border-border bg-card p-6 qt-shadow-lg max-h-[90vh] flex flex-col">
         <h3 className="mb-4 text-lg font-semibold flex-shrink-0">
           Start Chat with {characterName}
         </h3>
@@ -81,7 +81,7 @@ export function QuickChatDialog({
                     id="quick-profile"
                     value={selectedProfileId}
                     onChange={(e) => setSelectedProfileId(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   >
                     <option value="">Select a profile</option>
                     {profiles.map((profile) => (
@@ -102,7 +102,7 @@ export function QuickChatDialog({
                       id="quick-partner"
                       value={selectedPartnerId}
                       onChange={(e) => setSelectedPartnerId(e.target.value)}
-                      className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     >
                       <option value="">Chat as yourself</option>
                       {userControlledCharacters.map((char) => (
@@ -137,7 +137,7 @@ export function QuickChatDialog({
                     value={scenario}
                     onChange={(e) => setScenario(e.target.value)}
                     placeholder="Describe the starting scenario for this chat..."
-                    className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     rows={3}
                   />
                 </div>
@@ -159,7 +159,7 @@ export function QuickChatDialog({
         <div className="mt-6 flex justify-end gap-3 flex-shrink-0">
           <button
             onClick={handleClose}
-            className="inline-flex items-center rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-muted-foreground shadow-sm transition hover:bg-muted cursor-pointer"
+            className="inline-flex items-center rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-muted-foreground qt-shadow-sm transition hover:bg-muted cursor-pointer"
           >
             Cancel
           </button>

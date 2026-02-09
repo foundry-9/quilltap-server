@@ -40,13 +40,6 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
     model: string,
     apiKey: string // Ignored for Ollama
   ): Promise<EmbeddingResult> {
-    logger.debug('Generating Ollama embedding', {
-      context: 'OllamaEmbeddingProvider.generateEmbedding',
-      model,
-      textLength: text.length,
-      baseUrl: this.baseUrl,
-    });
-
     // Ollama uses 'prompt' instead of 'input'
     const requestPayload = {
       model,
@@ -79,12 +72,6 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
       throw new Error('No embedding returned from Ollama');
     }
 
-    logger.debug('Ollama embedding generated successfully', {
-      context: 'OllamaEmbeddingProvider.generateEmbedding',
-      model,
-      dimensions: embedding.length,
-    });
-
     return {
       embedding,
       model,
@@ -107,24 +94,12 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
     model: string,
     apiKey: string
   ): Promise<EmbeddingResult[]> {
-    logger.debug('Generating batch Ollama embeddings', {
-      context: 'OllamaEmbeddingProvider.generateBatchEmbeddings',
-      model,
-      count: texts.length,
-    });
-
     const results: EmbeddingResult[] = [];
 
     for (const text of texts) {
       const result = await this.generateEmbedding(text, model, apiKey);
       results.push(result);
     }
-
-    logger.debug('Ollama batch embeddings generated successfully', {
-      context: 'OllamaEmbeddingProvider.generateBatchEmbeddings',
-      model,
-      count: results.length,
-    });
 
     return results;
   }

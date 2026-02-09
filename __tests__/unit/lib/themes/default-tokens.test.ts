@@ -374,15 +374,15 @@ describe('default theme tokens', () => {
 
     it('provides contrasting background and foreground for light mode', () => {
       const { light } = DEFAULT_THEME_TOKENS.colors
-      // Light mode: light background (97%), dark foreground (12%)
+      // Light mode: light background (97%), dark foreground (13%)
       expect(light.background).toContain('97%')
-      expect(light.foreground).toContain('12%')
+      expect(light.foreground).toContain('13%')
     })
 
     it('provides contrasting background and foreground for dark mode', () => {
       const { dark } = DEFAULT_THEME_TOKENS.colors
-      // Dark mode: dark background (8%), light foreground (92%)
-      expect(dark.background).toContain('8%')
+      // Dark mode: dark background (9%), light foreground (92%)
+      expect(dark.background).toContain('9%')
       expect(dark.foreground).toContain('92%')
     })
   })

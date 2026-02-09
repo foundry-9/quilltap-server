@@ -19,6 +19,7 @@ interface ImageProfile {
   modelName: string
   parameters: Record<string, any>
   isDefault: boolean
+  isDangerousCompatible?: boolean
   apiKey?: ApiKey | null
 }
 
@@ -78,6 +79,7 @@ export function ImageProfileForm({
     modelName: profile?.modelName || 'dall-e-3',
     parameters: profile?.parameters || {},
     isDefault: profile?.isDefault || false,
+    isDangerousCompatible: profile?.isDangerousCompatible || false,
   })
 
   const [loading, setLoading] = useState(false)
@@ -414,6 +416,20 @@ export function ImageProfileForm({
         />
         <label htmlFor="isDefault" className="ml-2 text-sm text-foreground">
           Set as default profile for image generation
+        </label>
+      </div>
+
+      {/* Uncensored-Compatible Checkbox */}
+      <div className="flex items-center">
+        <input
+          type="checkbox"
+          id="isDangerousCompatible"
+          checked={formData.isDangerousCompatible}
+          onChange={e => setFormData(prev => ({ ...prev, isDangerousCompatible: e.target.checked }))}
+          className="h-4 w-4 rounded"
+        />
+        <label htmlFor="isDangerousCompatible" className="ml-2 text-sm text-foreground">
+          Uncensored-compatible (suitable for dangerous/sensitive content routing)
         </label>
       </div>
 

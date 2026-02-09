@@ -8,7 +8,7 @@
 import { logger } from '@/lib/logger';
 import { EmbeddingProfile, EmbeddingProfileSchema } from '@/lib/schemas/types';
 import { TaggableBaseRepository, CreateOptions } from './base.repository';
-import { QueryFilter } from '../interfaces';
+import { TypedQueryFilter } from '../interfaces';
 
 /**
  * Embedding Profiles Repository
@@ -41,47 +41,44 @@ export class EmbeddingProfilesRepository extends TaggableBaseRepository<Embeddin
    * Find embedding profile by name for a specific user
    */
   async findByName(userId: string, name: string): Promise<EmbeddingProfile | null> {
-    try {
-      const profile = await this.findOneByFilter({
-        userId,
-        name,
-      } as QueryFilter);
+    return this.safeQuery(
+      async () => {
+        const profile = await this.findOneByFilter({
+          userId,
+          name,
+        });
 
-      if (!profile) {
-        return null;
-      }
-      return profile;
-    } catch (error) {
-      logger.error('Error finding embedding profile by name', {
-        userId,
-        name,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    }
+        if (!profile) {
+          return null;
+        }
+        return profile;
+      },
+      'Error finding embedding profile by name',
+      { userId, name },
+      null
+    );
   }
 
   /**
    * Find default embedding profile for user
    */
   async findDefault(userId: string): Promise<EmbeddingProfile | null> {
-    try {
-      const profile = await this.findOneByFilter({
-        userId,
-        isDefault: true,
-      } as QueryFilter);
+    return this.safeQuery(
+      async () => {
+        const profile = await this.findOneByFilter({
+          userId,
+          isDefault: true,
+        });
 
-      if (!profile) {
-        return null;
-      }
-      return profile;
-    } catch (error) {
-      logger.error('Error finding default embedding profile', {
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    }
+        if (!profile) {
+          return null;
+        }
+        return profile;
+      },
+      'Error finding default embedding profile',
+      { userId },
+      null
+    );
   }
 
   /**
@@ -91,102 +88,92 @@ export class EmbeddingProfilesRepository extends TaggableBaseRepository<Embeddin
     data: Omit<EmbeddingProfile, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions
   ): Promise<EmbeddingProfile> {
-    try {
-      const profile = await this._create(data, options);
+    return this.safeQuery(
+      async () => {
+        const profile = await this._create(data, options);
 
-      logger.info('Embedding profile created successfully', {
-        profileId: profile.id,
-        userId: data.userId,
-        name: data.name,
-        provider: data.provider,
-      });
+        logger.info('Embedding profile created successfully', {
+          profileId: profile.id,
+          userId: data.userId,
+          name: data.name,
+          provider: data.provider,
+        });
 
-      return profile;
-    } catch (error) {
-      logger.error('Error creating embedding profile', {
-        userId: data.userId,
-        name: data.name,
-        provider: data.provider,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return profile;
+      },
+      'Error creating embedding profile',
+      { userId: data.userId, name: data.name, provider: data.provider }
+    );
   }
 
   /**
    * Update an embedding profile
    */
   async update(id: string, data: Partial<EmbeddingProfile>): Promise<EmbeddingProfile | null> {
-    try {
-      // Remove id and createdAt to prevent accidental overwrites
-      const updateData = { ...data };
-      delete updateData.id;
-      delete updateData.createdAt;
+    return this.safeQuery(
+      async () => {
+        // Remove id and createdAt to prevent accidental overwrites
+        const updateData = { ...data };
+        delete updateData.id;
+        delete updateData.createdAt;
 
-      const profile = await this._update(id, updateData);
+        const profile = await this._update(id, updateData);
 
-      if (profile) {
-        logger.info('Embedding profile updated successfully', {
-          profileId: id,
-        });
-      }
+        if (profile) {
+          logger.info('Embedding profile updated successfully', {
+            profileId: id,
+          });
+        }
 
-      return profile;
-    } catch (error) {
-      logger.error('Error updating embedding profile', {
-        profileId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return profile;
+      },
+      'Error updating embedding profile',
+      { profileId: id }
+    );
   }
 
   /**
    * Delete an embedding profile
    */
   async delete(id: string): Promise<boolean> {
-    try {
-      const result = await this._delete(id);
+    return this.safeQuery(
+      async () => {
+        const result = await this._delete(id);
 
-      if (result) {
-        logger.info('Embedding profile deleted successfully', {
-          profileId: id,
-        });
-      }
+        if (result) {
+          logger.info('Embedding profile deleted successfully', {
+            profileId: id,
+          });
+        }
 
-      return result;
-    } catch (error) {
-      logger.error('Error deleting embedding profile', {
-        profileId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return result;
+      },
+      'Error deleting embedding profile',
+      { profileId: id }
+    );
   }
 
   /**
    * Unset all embedding profiles for a user as default
    * Used when setting a new default profile
    */
-  async unsetAllDefaults(userId: string): Promise<boolean> {
-    try {
-      const count = await this.updateMany(
-        { userId, isDefault: true } as QueryFilter,
-        { isDefault: false } as Partial<EmbeddingProfile>
-      );
+  async unsetAllDefaults(userId: string): Promise<number> {
+    return this.safeQuery(
+      async () => {
+        const count = await this.updateMany(
+          { userId, isDefault: true },
+          { isDefault: false } as Partial<EmbeddingProfile>
+        );
 
-      logger.info('All default embedding profiles unset for user', {
-        userId,
-        modifiedCount: count,
-      });
+        logger.info('All default embedding profiles unset for user', {
+          userId,
+          modifiedCount: count,
+        });
 
-      return count > 0 || (await this.count({ userId } as QueryFilter)) === 0;
-    } catch (error) {
-      logger.error('Error unsetting all default embedding profiles', {
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return count;
+      },
+      'Error unsetting all default embedding profiles',
+      { userId }
+    );
   }
 }

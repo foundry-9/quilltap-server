@@ -116,7 +116,7 @@ export function SpeakerSelector({
       {/* Dropdown menu */}
       {isOpen && (
         <div
-          className="absolute bottom-full left-0 mb-1 w-64 max-h-64 overflow-y-auto qt-card shadow-lg rounded-lg border z-50"
+          className="absolute bottom-full left-0 mb-1 w-64 max-h-64 overflow-y-auto qt-card qt-shadow-lg rounded-lg border z-50"
           role="listbox"
         >
           <div className="py-1">

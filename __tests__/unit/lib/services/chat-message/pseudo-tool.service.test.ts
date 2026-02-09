@@ -6,6 +6,7 @@
 import {
   checkShouldUsePseudoTools,
   buildPseudoToolSystemInstructions,
+  buildNativeToolSystemInstructions,
   parsePseudoToolsFromResponse,
   stripPseudoToolMarkersFromResponse,
   determineEnabledToolOptions,
@@ -25,6 +26,7 @@ jest.mock('@/lib/tools')
 
 const mockedShouldUsePseudoTools = tools.shouldUsePseudoTools as jest.MockedFunction<typeof tools.shouldUsePseudoTools>
 const mockedBuildPseudoToolInstructions = tools.buildPseudoToolInstructions as jest.MockedFunction<typeof tools.buildPseudoToolInstructions>
+const mockedBuildNativeToolInstructions = tools.buildNativeToolInstructions as jest.MockedFunction<typeof tools.buildNativeToolInstructions>
 const mockedParsePseudoToolCalls = tools.parsePseudoToolCalls as jest.MockedFunction<typeof tools.parsePseudoToolCalls>
 const mockedConvertToToolCallRequest = tools.convertToToolCallRequest as jest.MockedFunction<typeof tools.convertToToolCallRequest>
 const mockedStripPseudoToolMarkers = tools.stripPseudoToolMarkers as jest.MockedFunction<typeof tools.stripPseudoToolMarkers>
@@ -109,6 +111,27 @@ describe('pseudo-tool.service', () => {
       })
 
       expect(result).toContain('search')
+    })
+  })
+
+  describe('buildNativeToolSystemInstructions', () => {
+    it('should call buildNativeToolInstructions with hasTools=true', () => {
+      const nativeInstructions = '## Tool Execution Rules\nNever narrate tool use.'
+      mockedBuildNativeToolInstructions.mockReturnValue(nativeInstructions)
+
+      const result = buildNativeToolSystemInstructions()
+
+      expect(mockedBuildNativeToolInstructions).toHaveBeenCalledWith(true)
+      expect(result).toBe(nativeInstructions)
+    })
+
+    it('should return the value from buildNativeToolInstructions', () => {
+      const expected = 'Tool rules content here'
+      mockedBuildNativeToolInstructions.mockReturnValue(expected)
+
+      const result = buildNativeToolSystemInstructions()
+
+      expect(result).toBe(expected)
     })
   })
 

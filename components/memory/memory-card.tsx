@@ -41,7 +41,7 @@ export function MemoryCard({ memory, onEdit, onDelete, onNavigateToSource, isDel
   const importanceColor = memory.importance >= 0.7
     ? 'text-destructive'
     : memory.importance >= 0.4
-      ? 'text-yellow-600'
+      ? 'text-warning'
       : 'text-muted-foreground'
 
   const importanceLabel = memory.importance >= 0.7
@@ -73,8 +73,8 @@ export function MemoryCard({ memory, onEdit, onDelete, onNavigateToSource, isDel
           </span>
           <span className={`text-xs px-2 py-0.5 rounded-full ${
             memory.source === 'AUTO'
-              ? 'bg-blue-100/80 text-blue-700'
-              : 'bg-green-100/80 text-green-700'
+              ? 'qt-bg-info/10 text-info'
+              : 'qt-bg-success/10 text-success'
           }`}>
             {memory.source === 'AUTO' ? 'Auto' : 'Manual'}
           </span>

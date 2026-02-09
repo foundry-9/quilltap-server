@@ -89,7 +89,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
       }
 
       const body = await req.json();
-      const { name, provider, apiKeyId, baseUrl, modelName, parameters, isDefault } = body;
+      const { name, provider, apiKeyId, baseUrl, modelName, parameters, isDefault, isDangerousCompatible } = body;
 
       // Build update data
       const updateData: Record<string, unknown> = {};
@@ -168,6 +168,13 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
         }
 
         updateData.isDefault = isDefault;
+      }
+
+      if (isDangerousCompatible !== undefined) {
+        if (typeof isDangerousCompatible !== 'boolean') {
+          return badRequest('isDangerousCompatible must be a boolean');
+        }
+        updateData.isDangerousCompatible = isDangerousCompatible;
       }
 
       // Update the profile

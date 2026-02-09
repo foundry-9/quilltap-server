@@ -1,6 +1,6 @@
 {
   "name": "quilltap",
-  "version": "2.9.0-bugfix.0",
+  "version": "2.10.0",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -52,8 +52,9 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.893.0",
     "@msgpack/msgpack": "^3.1.3",
-    "@quilltap/plugin-types": "^1.12.0",
+    "@quilltap/plugin-types": "1.13",
     "@quilltap/plugin-utils": "^1.2.3",
+    "@quilltap/theme-storybook": "^1.0.20",
     "@tanstack/react-virtual": "^3.13.18",
     "@types/sharp": "^0.31.1",
     "adm-zip": "^0.5.16",
@@ -69,13 +70,18 @@
     "react-dom": "^19.2.3",
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^16.1.0",
+    "rehype-highlight": "^7.0.2",
+    "rehype-stringify": "^10.0.1",
     "remark-gfm": "^4.0.1",
+    "remark-parse": "^11.0.0",
+    "remark-rehype": "^11.1.2",
     "sharp": "^0.34.5",
+    "unified": "^11.0.5",
     "zod": "^4.0.0"
   },
   "devDependencies": {
     "@jest/globals": "^30.2.0",
-    "@openrouter/sdk": "^0.5.1",
+    "@openrouter/sdk": "^0.8.0",
     "@playwright/test": "^1.58.0",
     "@storybook/nextjs": "^10.2.3",
     "@storybook/react": "^10.1.11",
@@ -87,7 +93,7 @@
     "@types/archiver": "^7.0.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/jest": "^30.0.0",
-    "@types/node": "~22.0.0",
+    "@types/node": "^22.0.0",
     "@types/react": "^19.2.8",
     "@types/react-dom": "^19.2.3",
     "@types/react-syntax-highlighter": "^15.5.13",

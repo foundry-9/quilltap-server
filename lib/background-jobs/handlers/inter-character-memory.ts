@@ -74,18 +74,22 @@ export async function handleInterCharacterMemory(job: BackgroundJob): Promise<vo
 
   // Create the memory
   // Inter-character memories are stored on the observer character about the subject character
+  const importance = result.result.importance || 0.5
   const memory = await repos.memories.create({
     characterId: payload.observerCharacterId,
     content: result.result.content || '',
     summary: result.result.summary || '',
     keywords: result.result.keywords || [],
     tags: [],
-    importance: result.result.importance || 0.5,
+    importance,
     source: 'AUTO',
     chatId: payload.chatId,
     sourceMessageId: payload.sourceMessageId,
     // Store reference to the subject character this memory is about
     aboutCharacterId: payload.subjectCharacterId,
+    reinforcementCount: 1,
+    relatedMemoryIds: [],
+    reinforcedImportance: importance,
   });
 
   logger.info('[InterCharacterMemory] Memory created', {

@@ -242,7 +242,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // node_modules/openai/version.mjs
-var VERSION = "6.17.0";
+var VERSION = "6.18.0";
 
 // node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -1280,6 +1280,10 @@ async function defaultParseResponse(client, props) {
     const mediaType = contentType?.split(";")[0]?.trim();
     const isJSON = mediaType?.includes("application/json") || mediaType?.endsWith("+json");
     if (isJSON) {
+      const contentLength = response.headers.get("content-length");
+      if (contentLength === "0") {
+        return void 0;
+      }
       const json = await response.json();
       return addRequestID(json, response);
     }
@@ -6626,7 +6630,7 @@ var OpenAI = class {
     return { response, options, controller, requestLogID, retryOfRequestLogID, startTime };
   }
   getAPIList(path2, Page2, opts) {
-    return this.requestAPIList(Page2, { method: "get", path: path2, ...opts });
+    return this.requestAPIList(Page2, opts && "then" in opts ? opts.then((opts2) => ({ method: "get", path: path2, ...opts2 })) : { method: "get", path: path2, ...opts });
   }
   requestAPIList(Page2, options) {
     const request = this.makeRequest(options, null, void 0);
@@ -6634,9 +6638,10 @@ var OpenAI = class {
   }
   async fetchWithTimeout(url, init, ms, controller) {
     const { signal, method, ...options } = init || {};
+    const abort = this._makeAbort(controller);
     if (signal)
-      signal.addEventListener("abort", () => controller.abort());
-    const timeout = setTimeout(() => controller.abort(), ms);
+      signal.addEventListener("abort", abort, { once: true });
+    const timeout = setTimeout(abort, ms);
     const isReadableBody = globalThis.ReadableStream && options.body instanceof globalThis.ReadableStream || typeof options.body === "object" && options.body !== null && Symbol.asyncIterator in options.body;
     const fetchOptions = {
       signal: controller.signal,
@@ -6747,6 +6752,9 @@ var OpenAI = class {
     ]);
     this.validateHeaders(headers);
     return headers.values;
+  }
+  _makeAbort(controller) {
+    return () => controller.abort();
   }
   buildBody({ options: { body, headers: rawHeaders } }) {
     if (!body) {
@@ -7102,13 +7110,6 @@ ${textContent}`
     if (!apiKey) {
       throw new Error("Grok provider requires an API key");
     }
-    logger.debug("Sending message via Responses API", {
-      context: "GrokProvider.sendMessage",
-      model: params.model,
-      messageCount: params.messages.length,
-      hasTools: !!(params.tools && params.tools.length > 0),
-      webSearchEnabled: params.webSearchEnabled
-    });
     const { input, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
     const requestBody = {
       model: params.model,
@@ -7127,17 +7128,10 @@ ${textContent}`
       tools.push({ type: "web_search" });
       tools.push({ type: "x_search" });
       requestBody.include = ["citations"];
-      logger.debug("Web search enabled with server-side tools", {
-        context: "GrokProvider.sendMessage"
-      });
     }
     if (params.tools && params.tools.length > 0) {
       const functionTools = this.formatToolsForResponsesAPI(params.tools);
       tools.push(...functionTools);
-      logger.debug("Function tools added", {
-        context: "GrokProvider.sendMessage",
-        toolCount: functionTools.length
-      });
     }
     if (tools.length > 0) {
       requestBody.tools = tools;
@@ -7160,12 +7154,6 @@ ${textContent}`
       throw new Error(`Grok API error (${response.status}): ${errorText}`);
     }
     const data = await response.json();
-    logger.debug("Received response from Responses API", {
-      context: "GrokProvider.sendMessage",
-      responseId: data.id,
-      status: data.status,
-      outputCount: data.output.length
-    });
     const text = this.extractTextFromResponse(data);
     const finishReason = this.getFinishReason(data);
     const raw = this.buildRawResponse(data);
@@ -7185,13 +7173,6 @@ ${textContent}`
     if (!apiKey) {
       throw new Error("Grok provider requires an API key");
     }
-    logger.debug("Starting streaming message via Responses API", {
-      context: "GrokProvider.streamMessage",
-      model: params.model,
-      messageCount: params.messages.length,
-      hasTools: !!(params.tools && params.tools.length > 0),
-      webSearchEnabled: params.webSearchEnabled
-    });
     const { input, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
     const requestBody = {
       model: params.model,
@@ -7281,10 +7262,6 @@ ${textContent}`
                 finalResponse = event.response;
               }
             } catch (parseError) {
-              logger.debug("Failed to parse SSE event", {
-                context: "GrokProvider.streamMessage",
-                data
-              });
             }
           }
         }
@@ -7326,9 +7303,6 @@ ${textContent}`
         baseURL: this.baseUrl
       });
       await client.models.list();
-      logger.debug("API key validated successfully", {
-        context: "GrokProvider.validateApiKey"
-      });
       return true;
     } catch (error) {
       logger.error("Grok API key validation failed", { context: "GrokProvider.validateApiKey" }, error instanceof Error ? error : void 0);
@@ -7343,10 +7317,6 @@ ${textContent}`
       });
       const models = await client.models.list();
       const grokModels = models.data.map((m) => m.id).sort();
-      logger.debug("Fetched available models", {
-        context: "GrokProvider.getAvailableModels",
-        modelCount: grokModels.length
-      });
       return grokModels;
     } catch (error) {
       logger.error("Failed to fetch Grok models", { context: "GrokProvider.getAvailableModels" }, error instanceof Error ? error : void 0);
@@ -7357,10 +7327,6 @@ ${textContent}`
     if (!apiKey) {
       throw new Error("Grok provider requires an API key");
     }
-    logger.debug("Generating image", {
-      context: "GrokProvider.generateImage",
-      model: params.model ?? "grok-2-image"
-    });
     const client = new OpenAI({
       apiKey,
       baseURL: this.baseUrl

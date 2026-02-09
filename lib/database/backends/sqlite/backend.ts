@@ -12,6 +12,7 @@ import {
   DatabaseCollection,
   DatabaseTransaction,
   ConnectionState,
+  TypedQueryFilter,
   QueryFilter,
   QueryOptions,
   UpdateSpec,
@@ -63,9 +64,9 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
   /**
    * Find a single document
    */
-  async findOne(filter: QueryFilter, options?: QueryOptions): Promise<T | null> {
+  async findOne(filter: TypedQueryFilter<T>, options?: QueryOptions): Promise<T | null> {
     try {
-      const query = buildSelectQuery(this.name, filter, { ...options, limit: 1 }, this.jsonColumns, this.arrayColumns);
+      const query = buildSelectQuery(this.name, filter as QueryFilter, { ...options, limit: 1 }, this.jsonColumns, this.arrayColumns);
       const row = this.db.prepare(query.sql).get(...query.params) as Record<string, unknown> | undefined;
 
       if (!row) {
@@ -85,9 +86,9 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
   /**
    * Find multiple documents
    */
-  async find(filter: QueryFilter, options?: QueryOptions): Promise<T[]> {
+  async find(filter: TypedQueryFilter<T>, options?: QueryOptions): Promise<T[]> {
     try {
-      const query = buildSelectQuery(this.name, filter, options, this.jsonColumns, this.arrayColumns);
+      const query = buildSelectQuery(this.name, filter as QueryFilter, options, this.jsonColumns, this.arrayColumns);
       const rows = this.db.prepare(query.sql).all(...query.params) as Record<string, unknown>[];
 
       return rows.map(row => this.hydrateRow(row));
@@ -168,7 +169,7 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
   /**
    * Update a single document
    */
-  async updateOne(filter: QueryFilter, update: UpdateSpec<T>): Promise<UpdateResult> {
+  async updateOne(filter: TypedQueryFilter<T>, update: UpdateSpec<T>): Promise<UpdateResult> {
     try {
       // First, check if document exists
       const existing = await this.findOne(filter);
@@ -176,7 +177,7 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
         return { matchedCount: 0, modifiedCount: 0, acknowledged: true };
       }
 
-      const query = buildUpdateQuery(this.name, filter, update as UpdateSpec<unknown>, this.jsonColumns, this.arrayColumns);
+      const query = buildUpdateQuery(this.name, filter as QueryFilter, update as UpdateSpec<unknown>, this.jsonColumns, this.arrayColumns);
       const result = this.db.prepare(query.sql).run(...query.params);
 
       return {
@@ -196,9 +197,9 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
   /**
    * Update multiple documents
    */
-  async updateMany(filter: QueryFilter, update: UpdateSpec<T>): Promise<UpdateResult> {
+  async updateMany(filter: TypedQueryFilter<T>, update: UpdateSpec<T>): Promise<UpdateResult> {
     try {
-      const query = buildUpdateQuery(this.name, filter, update as UpdateSpec<unknown>, this.jsonColumns, this.arrayColumns);
+      const query = buildUpdateQuery(this.name, filter as QueryFilter, update as UpdateSpec<unknown>, this.jsonColumns, this.arrayColumns);
       const result = this.db.prepare(query.sql).run(...query.params);
 
       return {
@@ -219,26 +220,32 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
    * Find and update a document, returning the result
    */
   async findOneAndUpdate(
-    filter: QueryFilter,
+    filter: TypedQueryFilter<T>,
     update: UpdateSpec<T>,
     options?: { returnDocument?: 'before' | 'after'; upsert?: boolean }
   ): Promise<T | null> {
     try {
       const returnAfter = options?.returnDocument !== 'before';
 
-      // Get the document before update if needed
-      const before = returnAfter ? null : await this.findOne(filter);
+      // Always find the document first to get its ID
+      // This is needed for returnDocument: 'after' since the filter may not match post-update
+      const before = await this.findOne(filter);
 
-      // Perform the update
-      const updateQuery = buildUpdateQuery(this.name, filter, update as UpdateSpec<unknown>, this.jsonColumns, this.arrayColumns);
-      const result = this.db.prepare(updateQuery.sql).run(...updateQuery.params);
-
-      if (result.changes === 0 && options?.upsert) {
-        // Document doesn't exist and upsert is requested
-        // This is a simplified implementation - full upsert would need more logic
-        logger.warn('Upsert not fully implemented for findOneAndUpdate');
+      if (!before) {
+        if (options?.upsert) {
+          // Document doesn't exist and upsert is requested
+          // This is a simplified implementation - full upsert would need more logic
+          logger.warn('Upsert not fully implemented for findOneAndUpdate');
+        }
         return null;
       }
+
+      const doc = before as Record<string, unknown>;
+      const docId = doc.id;
+
+      // Perform the update using the document's ID for precision
+      const updateQuery = buildUpdateQuery(this.name, { id: docId } as QueryFilter, update as UpdateSpec<unknown>, this.jsonColumns, this.arrayColumns);
+      const result = this.db.prepare(updateQuery.sql).run(...updateQuery.params);
 
       if (result.changes === 0) {
         return null;
@@ -246,7 +253,8 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
 
       // Return the appropriate document
       if (returnAfter) {
-        return await this.findOne(filter);
+        // Find by ID since the original filter may no longer match after update
+        return await this.findOne({ id: docId } as TypedQueryFilter<T>);
       }
 
       return before;
@@ -262,7 +270,7 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
   /**
    * Delete a single document
    */
-  async deleteOne(filter: QueryFilter): Promise<DeleteResult> {
+  async deleteOne(filter: TypedQueryFilter<T>): Promise<DeleteResult> {
     try {
       // First find the document to ensure we only delete one
       const existing = await this.findOne(filter);
@@ -290,9 +298,9 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
   /**
    * Delete multiple documents
    */
-  async deleteMany(filter: QueryFilter): Promise<DeleteResult> {
+  async deleteMany(filter: TypedQueryFilter<T>): Promise<DeleteResult> {
     try {
-      const query = buildDeleteQuery(this.name, filter, this.jsonColumns, this.arrayColumns);
+      const query = buildDeleteQuery(this.name, filter as QueryFilter, this.jsonColumns, this.arrayColumns);
       const result = this.db.prepare(query.sql).run(...query.params);
 
       return {
@@ -311,9 +319,9 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
   /**
    * Count documents matching filter
    */
-  async countDocuments(filter?: QueryFilter): Promise<number> {
+  async countDocuments(filter?: TypedQueryFilter<T>): Promise<number> {
     try {
-      const query = buildCountQuery(this.name, filter || {}, this.jsonColumns, this.arrayColumns);
+      const query = buildCountQuery(this.name, (filter || {}) as QueryFilter, this.jsonColumns, this.arrayColumns);
 
       const result = this.db.prepare(query.sql).get(...query.params) as { count: number };
 
@@ -330,7 +338,7 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
   /**
    * Check if any documents match filter
    */
-  async exists(filter: QueryFilter): Promise<boolean> {
+  async exists(filter: TypedQueryFilter<T>): Promise<boolean> {
     const count = await this.countDocuments(filter);
     return count > 0;
   }

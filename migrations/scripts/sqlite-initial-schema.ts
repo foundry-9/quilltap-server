@@ -67,10 +67,13 @@ export const SQLITE_TABLES = [
       "npc" INTEGER DEFAULT 0,
       "talkativeness" REAL DEFAULT 0.5,
       "controlledBy" TEXT DEFAULT 'llm',
+      "aliases" TEXT DEFAULT '[]',
+      "pronouns" TEXT DEFAULT NULL,
       "personaLinks" TEXT DEFAULT '[]',
       "tags" TEXT DEFAULT '[]',
       "avatarOverrides" TEXT DEFAULT '[]',
       "physicalDescriptions" TEXT DEFAULT '[]',
+      "clothingRecords" TEXT DEFAULT '[]',
       "createdAt" TEXT NOT NULL,
       "updatedAt" TEXT NOT NULL
     )`,

@@ -6,7 +6,8 @@
  */
 
 import { getRepositories } from '@/lib/repositories/factory';
-import { PhysicalDescription, ImageProvider } from '@/lib/schemas/types';
+import { PhysicalDescription, ClothingRecord, ImageProvider } from '@/lib/schemas/types';
+import type { ResolvedCharacterAppearance } from '@/lib/image-gen/appearance-resolution';
 
 /**
  * Placeholder information extracted from a prompt
@@ -22,6 +23,8 @@ export interface PlaceholderInfo {
   entityId?: string;
   /** All available physical descriptions for this entity */
   descriptions?: PhysicalDescription[];
+  /** All available clothing records for this entity */
+  clothingRecords?: ClothingRecord[];
 }
 
 /**
@@ -85,6 +88,7 @@ export async function resolvePlaceholders(
     // {{me}}, {{I}}, or {{char}} = the caller (character when assistant calls, user-controlled character when user calls)
     if (lowerName === 'me' || lowerName === 'i' || lowerName === 'char') {
       let descriptions: PhysicalDescription[] = [];
+      let clothing: ClothingRecord[] = [];
       let entityId: string | undefined;
       let entityType: 'character' | 'user' = 'user';
       let resolvedName = name;
@@ -99,6 +103,7 @@ export async function resolvePlaceholders(
             const character = await repos.characters.findById(characterId);
             if (character) {
               descriptions = character.physicalDescriptions || [];
+              clothing = character.clothingRecords || [];
               entityId = character.id;
               entityType = 'character';
               resolvedName = character.name;
@@ -112,6 +117,7 @@ export async function resolvePlaceholders(
           const character = await repos.characters.findById(characterParticipant.characterId);
           if (character) {
             descriptions = character.physicalDescriptions || [];
+            clothing = character.clothingRecords || [];
             entityId = character.id;
             entityType = 'character';
             resolvedName = character.name;
@@ -125,6 +131,7 @@ export async function resolvePlaceholders(
         type: entityType,
         entityId,
         descriptions,
+        clothingRecords: clothing,
       });
       continue;
     }
@@ -132,6 +139,7 @@ export async function resolvePlaceholders(
     // {{user}} = the OTHER participant (user-controlled character when LLM calls, LLM character when user calls)
     if (lowerName === 'user') {
       let descriptions: PhysicalDescription[] = [];
+      let clothing: ClothingRecord[] = [];
       let entityId: string | undefined;
       let entityType: 'character' | 'user' = 'character';
       let resolvedName = name;
@@ -170,6 +178,7 @@ export async function resolvePlaceholders(
             const character = await repos.characters.findById(characterId);
             if (character) {
               descriptions = character.physicalDescriptions || [];
+              clothing = character.clothingRecords || [];
               entityId = character.id;
               entityType = 'character';
               resolvedName = character.name;
@@ -184,13 +193,17 @@ export async function resolvePlaceholders(
         type: entityType,
         entityId,
         descriptions,
+        clothingRecords: clothing,
       });
       continue;
     }
 
-    // Try to find a character by name (includes former personas which are now characters with controlledBy: 'user')
+    // Try to find a character by name or alias (includes former personas which are now characters with controlledBy: 'user')
     const characters = await repos.characters.findByUserId(userId);
-    const character = characters.find(c => c.name.toLowerCase() === lowerName);
+    const character = characters.find(c =>
+      c.name.toLowerCase() === lowerName ||
+      (c.aliases && c.aliases.some(alias => alias.toLowerCase() === lowerName))
+    );
 
     if (character) {
       resolved.push({
@@ -199,6 +212,7 @@ export async function resolvePlaceholders(
         type: 'character',
         entityId: character.id,
         descriptions: character.physicalDescriptions || [],
+        clothingRecords: character.clothingRecords || [],
       });
       continue;
     }
@@ -209,6 +223,7 @@ export async function resolvePlaceholders(
       name,
       type: 'character', // Default to character type
       descriptions: [],
+      clothingRecords: [],
     });
   }
 
@@ -229,6 +244,7 @@ export function getAllDescriptionTiers(
   long?: string;
   complete?: string;
   entityName?: string;
+  usageContext?: string;
 } | null {
   if (!descriptions || descriptions.length === 0) {
     return null;
@@ -243,6 +259,7 @@ export function getAllDescriptionTiers(
     long: primary.longPrompt || undefined,
     complete: primary.completePrompt || undefined,
     entityName: primary.name,
+    usageContext: primary.usageContext || undefined,
   };
 }
 
@@ -284,39 +301,81 @@ export function calculateAvailableSpace(
  * @param originalPrompt - Original prompt with placeholders
  * @param resolvedPlaceholders - Resolved placeholder information
  * @param provider - Target image generation provider
+ * @param resolvedAppearances - Optional context-aware resolved appearances that override raw descriptions
  * @returns Context object for cheap LLM
  */
 export function buildExpansionContext(
   originalPrompt: string,
   resolvedPlaceholders: PlaceholderInfo[],
-  provider: ImageProvider
+  provider: ImageProvider,
+  resolvedAppearances?: ResolvedCharacterAppearance[]
 ): {
   originalPrompt: string;
   placeholders: Array<{
     placeholder: string;
     name: string;
+    usageContext?: string;
     tiers: {
       short?: string;
       medium?: string;
       long?: string;
       complete?: string;
     };
+    clothing?: Array<{
+      name: string;
+      usageContext?: string | null;
+      description?: string | null;
+    }>;
   }>;
   targetLength: number;
   provider: string;
 } {
   const placeholderData = resolvedPlaceholders.map(placeholder => {
+    // Check if we have a resolved appearance for this character
+    const resolved = resolvedAppearances?.find(
+      a => a.characterId === placeholder.entityId
+    );
+
+    if (resolved) {
+      // Use the single resolved appearance instead of all tiers/clothing
+      return {
+        placeholder: placeholder.placeholder,
+        name: placeholder.name,
+        usageContext: resolved.physicalDescriptionName,
+        tiers: {
+          // Put the resolved description in the 'complete' tier so the
+          // prompt crafter uses it directly
+          complete: resolved.physicalDescription,
+        },
+        ...(resolved.clothingDescription ? {
+          clothing: [{
+            name: resolved.clothingSource === 'narrative' ? 'Current outfit (from story)' : 'Current outfit',
+            usageContext: null as string | null,
+            description: resolved.clothingDescription as string | null,
+          }],
+        } : {}),
+      };
+    }
+
+    // No resolved appearance — fall back to raw data (original behavior)
     const tiers = getAllDescriptionTiers(placeholder.descriptions || []);
+    const clothing = (placeholder.clothingRecords || []).map(r => ({
+      name: r.name,
+      usageContext: r.usageContext,
+      description: r.description,
+    }));
 
     return {
       placeholder: placeholder.placeholder,
       name: placeholder.name,
+      usageContext: tiers?.usageContext,
       tiers: {
         short: tiers?.short,
         medium: tiers?.medium,
         long: tiers?.long,
         complete: tiers?.complete,
       },
+      ...(clothing.length > 0 ? { clothing } : {}),
     };
   });
 

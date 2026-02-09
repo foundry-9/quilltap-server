@@ -1,6 +1,6 @@
 # Editing Characters
 
-> **[Open this page in Quilltap](/characters)**
+> **[Open this page in Quilltap](/aurora)**
 
 This guide covers how to modify and refine your existing characters in Quilltap.
 
@@ -33,7 +33,7 @@ The edit interface has multiple tabs for different aspects of character:
 |-----|---------|-----------|
 | **Details** | Name, description, personality, scenario, first message | Modify core character info |
 | **System Prompts** | AI instructions and behaviors | Fine-tune how character acts |
-| **Physical Descriptions** | Appearance details for images | Add visual information |
+| **Appearance** | Physical descriptions and clothing records | Add visual and outfit information |
 | **Rename/Replace** | Bulk rename or replace content | Reorganize or rebrand character |
 
 ## Editing Character Details
@@ -183,7 +183,7 @@ You can switch between prompts in chat settings.
 
 ## Editing Physical Descriptions
 
-The Physical Descriptions tab contains visual information about characters.
+The Appearance tab contains visual information about characters, including physical descriptions and clothing records.
 
 ### What Physical Descriptions Do
 
@@ -196,7 +196,7 @@ Physical descriptions help:
 
 ### Editing Physical Description
 
-1. Click **Physical Descriptions** tab
+1. Click **Appearance** tab
 2. See current descriptions (different lengths)
 3. Edit manually or use AI to regenerate
 
@@ -236,6 +236,24 @@ armor from her military days..."
 - Best for detailed image generation
 - Includes all visual elements, personality reflected in appearance
 
+### Usage Context
+
+Each physical description can have an optional **Usage Context** field — a short note (up to 200 characters) describing when this particular appearance is most appropriate.
+
+**Examples of good values:**
+
+- "at work in a professional capacity"
+- "relaxing at the pool"
+- "attending a formal gala"
+- "in combat gear on a mission"
+
+**How it affects AI behavior:**
+
+- **In chat:** Physical descriptions are included in the system prompt sent to the AI. When multiple descriptions exist, the AI uses the usage context to decide which appearance best fits the current scene.
+- **In image generation:** The usage context is passed to the image prompt crafting system, helping it select the most scene-appropriate visual details.
+
+If no usage context is set, the AI will use the description based on its name and contents alone.
+
 ### Regenerating Descriptions
 
 1. Click **Generate New Description**
@@ -273,6 +291,36 @@ a striking appearance. She has a small scar on her left eyebrow from
 an old injury. She dresses practically in leather jackets and dark 
 jeans, with minimal jewelry except for a detective's badge on her belt.
 ```
+
+## Editing Clothing Records
+
+The Appearance tab also includes a **Clothing & Outfits** section below physical descriptions.
+
+### What Clothing Records Do
+
+Clothing records describe what your character wears in different situations. They are:
+
+- Injected into the system prompt so the AI knows what the character is wearing
+- Included in image generation context for accurate visual depiction
+- Used by story background generation for scene-appropriate outfit selection
+
+### Adding a Clothing Record
+
+1. Click **Appearance** tab
+2. Scroll to **Clothing & Outfits** section
+3. Click **Add Outfit**
+4. Fill in:
+   - **Name** (required) — e.g. "Battle Armor", "Formal Gown", "Casual Wear"
+   - **Usage Context** — When this outfit is worn, e.g. "in combat", "at formal events"
+   - **Description** — Markdown text describing the outfit in detail
+5. Click **Create**
+
+### Managing Clothing Records
+
+- **Edit:** Click the pencil icon on any clothing record card
+- **Delete:** Click the trash icon to remove a record
+- **Expand:** Click the chevron to see the full description rendered as markdown
+- Multiple outfits can be defined per character for different contexts
 
 ## Using Rename/Replace Tab
 

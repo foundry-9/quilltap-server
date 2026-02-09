@@ -7,6 +7,7 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { buildContext, type MessageWithParticipant, type BuiltContext, type ProjectContext, type ContextCompressionResult } from '@/lib/chat/context-manager'
+import type { SemanticSearchResult } from '@/lib/memory/memory-service'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
@@ -44,7 +45,7 @@ export interface BuildMessageContextOptions {
   participantCharacters?: Map<string, Character>
   roleplayTemplate: { systemPrompt: string } | null
   chatSettings: { cheapLLMSettings?: { embeddingProfileId?: string }; defaultTimestampConfig?: TimestampConfig | null } | null
-  pseudoToolInstructions?: string
+  toolInstructions?: string
   newUserMessage?: string
   isContinueMode: boolean
   /** Project context if chat is in a project */
@@ -62,6 +63,8 @@ export interface BuildMessageContextOptions {
    * Used to calculate dynamic window size when using a fallback cache.
    */
   cachedCompressionMessageCount?: number
+  /** Pre-searched memories from proactive recall (skips internal memory search when provided) */
+  preSearchedMemories?: SemanticSearchResult[]
 }
 
 /**
@@ -277,7 +280,7 @@ export async function buildMessageContext(
     participantCharacters,
     roleplayTemplate,
     chatSettings,
-    pseudoToolInstructions,
+    toolInstructions,
     newUserMessage,
     projectContext,
     contextCompressionSettings,
@@ -285,6 +288,7 @@ export async function buildMessageContext(
     bypassCompression,
     cachedCompressionResult,
     cachedCompressionMessageCount,
+    preSearchedMemories,
   } = options
 
   // Build conversation messages
@@ -320,8 +324,8 @@ export async function buildMessageContext(
     allParticipants: isMultiCharacter ? chat.participants : undefined,
     participantCharacters: isMultiCharacter ? participantCharacters : undefined,
     messagesWithParticipants: isMultiCharacter ? messagesWithParticipants : undefined,
-    // Pseudo-tool support
-    pseudoToolInstructions,
+    // Tool instructions (native tool rules or pseudo-tool instructions)
+    toolInstructions,
     // Timestamp injection
     timestampConfig,
     isInitialMessage,
@@ -333,6 +337,8 @@ export async function buildMessageContext(
     bypassCompression,
     cachedCompressionResult,
     cachedCompressionMessageCount,
+    // Proactive memory recall
+    preSearchedMemories,
   })
 
   // Log context building results for debugging

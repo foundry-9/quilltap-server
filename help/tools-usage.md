@@ -1,6 +1,6 @@
 # Using Tools in Chat
 
-> **[Open this page in Quilltap](/chats)**
+> **[Open this page in Quilltap](/salon)**
 
 This guide explains how to work effectively with AI tools during your conversations in Quilltap.
 

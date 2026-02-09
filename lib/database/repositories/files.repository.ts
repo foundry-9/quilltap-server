@@ -8,7 +8,7 @@
 import { logger } from '@/lib/logger';
 import { FileEntry, FileEntrySchema, FileCategory, FileSource } from '@/lib/schemas/types';
 import { TaggableBaseRepository, CreateOptions } from './base.repository';
-import { QueryFilter } from '../interfaces';
+import { TypedQueryFilter } from '../interfaces';
 
 /**
  * Files Repository
@@ -43,96 +43,84 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
       return [];
     }
 
-    try {
-      const files = await this.findByFilter({ id: { $in: ids } } as QueryFilter);
-      return files;
-    } catch (error) {
-      logger.error('Error finding files by IDs', {
-        idCount: ids.length,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      async () => {
+        const files = await this.findByFilter({ id: { $in: ids } });
+        return files;
+      },
+      'Error finding files by IDs',
+      { idCount: ids.length }
+    );
   }
 
   /**
    * Find files by SHA256 content hash (for deduplication)
    */
   async findBySha256(sha256: string): Promise<FileEntry[]> {
-    try {
-      const files = await this.findByFilter({ sha256 } as QueryFilter);
-      return files;
-    } catch (error) {
-      logger.error('Error finding files by SHA256', {
-        sha256,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      async () => {
+        const files = await this.findByFilter({ sha256 });
+        return files;
+      },
+      'Error finding files by SHA256',
+      { sha256 }
+    );
   }
 
   /**
    * Find files by category
    */
   async findByCategory(category: FileCategory): Promise<FileEntry[]> {
-    try {
-      const files = await this.findByFilter({ category } as QueryFilter);
-      return files;
-    } catch (error) {
-      logger.error('Error finding files by category', {
-        category,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      async () => {
+        const files = await this.findByFilter({ category });
+        return files;
+      },
+      'Error finding files by category',
+      { category }
+    );
   }
 
   /**
    * Find files by source
    */
   async findBySource(source: FileSource): Promise<FileEntry[]> {
-    try {
-      const files = await this.findByFilter({ source } as QueryFilter);
-      return files;
-    } catch (error) {
-      logger.error('Error finding files by source', {
-        source,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      async () => {
+        const files = await this.findByFilter({ source });
+        return files;
+      },
+      'Error finding files by source',
+      { source }
+    );
   }
 
   /**
    * Find files linked to a specific entity
    */
   async findByLinkedTo(entityId: string): Promise<FileEntry[]> {
-    try {
-      const files = await this.findByFilter({ linkedTo: { $in: [entityId] } } as QueryFilter);
-      return files;
-    } catch (error) {
-      logger.error('Error finding files linked to entity', {
-        entityId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      async () => {
+        const files = await this.findByFilter({ linkedTo: { $in: [entityId] } });
+        return files;
+      },
+      'Error finding files linked to entity',
+      { entityId }
+    );
   }
 
   /**
    * Find files by user ID
    */
   async findByUserId(userId: string): Promise<FileEntry[]> {
-    try {
-      const files = await this.findByFilter({ userId } as QueryFilter);
-      return files;
-    } catch (error) {
-      logger.error('Error finding files by user ID', {
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      async () => {
+        const files = await this.findByFilter({ userId });
+        return files;
+      },
+      'Error finding files by user ID',
+      { userId }
+    );
   }
 
   /**
@@ -144,154 +132,137 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
     data: Omit<FileEntry, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions
   ): Promise<FileEntry> {
-    try {
-      const file = await this._create(data, options);
-      logger.info('File created', {
-        fileId: file.id,
-        userId: file.userId,
-        filename: file.originalFilename,
-      });
-      return file;
-    } catch (error) {
-      logger.error('Error creating file', {
-        userId: data.userId,
-        filename: data.originalFilename,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      async () => {
+        const file = await this._create(data, options);
+        logger.info('File created', {
+          fileId: file.id,
+          userId: file.userId,
+          filename: file.originalFilename,
+        });
+        return file;
+      },
+      'Error creating file',
+      { userId: data.userId, filename: data.originalFilename }
+    );
   }
 
   /**
    * Update file entry
    */
   async update(id: string, data: Partial<FileEntry>): Promise<FileEntry | null> {
-    try {
-      // Remove id and createdAt to prevent accidental overwrites
-      const { id: _id, createdAt: _createdAt, ...updateData } = data as any;
+    return this.safeQuery(
+      async () => {
+        // Remove id and createdAt to prevent accidental overwrites
+        const { id: _id, createdAt: _createdAt, ...updateData } = data as any;
 
-      const file = await this._update(id, updateData);
+        const file = await this._update(id, updateData);
 
-      if (file) {
-        logger.info('File updated', { fileId: id });
-      } else {
-        logger.warn('File not found for update', { fileId: id });
-      }
+        if (file) {
+          logger.info('File updated', { fileId: id });
+        } else {
+          logger.warn('File not found for update', { fileId: id });
+        }
 
-      return file;
-    } catch (error) {
-      logger.error('Error updating file', {
-        fileId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return file;
+      },
+      'Error updating file',
+      { fileId: id }
+    );
   }
 
   /**
    * Delete file entry
    */
   async delete(id: string): Promise<boolean> {
-    try {
-      const result = await this._delete(id);
+    return this.safeQuery(
+      async () => {
+        const result = await this._delete(id);
 
-      if (result) {
-        logger.info('File deleted', { fileId: id });
-      } else {
-        logger.warn('File not found for deletion', { fileId: id });
-      }
+        if (result) {
+          logger.info('File deleted', { fileId: id });
+        } else {
+          logger.warn('File not found for deletion', { fileId: id });
+        }
 
-      return result;
-    } catch (error) {
-      logger.error('Error deleting file', {
-        fileId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return result;
+      },
+      'Error deleting file',
+      { fileId: id }
+    );
   }
 
   /**
    * Add entity to linkedTo array
    */
   async addLink(fileId: string, entityId: string): Promise<FileEntry | null> {
-    try {
-      const file = await this.findById(fileId);
-      if (!file) {
-        logger.warn('File not found for adding link', { fileId });
-        return null;
-      }
+    return this.safeQuery(
+      async () => {
+        const file = await this.findById(fileId);
+        if (!file) {
+          logger.warn('File not found for adding link', { fileId });
+          return null;
+        }
 
-      if (!file.linkedTo.includes(entityId)) {
-        file.linkedTo.push(entityId);
-        return await this.update(fileId, { linkedTo: file.linkedTo });
-      }
-      return file;
-    } catch (error) {
-      logger.error('Error adding link to file', {
-        fileId,
-        entityId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        if (!file.linkedTo.includes(entityId)) {
+          file.linkedTo.push(entityId);
+          return await this.update(fileId, { linkedTo: file.linkedTo });
+        }
+        return file;
+      },
+      'Error adding link to file',
+      { fileId, entityId }
+    );
   }
 
   /**
    * Remove entity from linkedTo array
    */
   async removeLink(fileId: string, entityId: string): Promise<FileEntry | null> {
-    try {
-      const file = await this.findById(fileId);
-      if (!file) {
-        logger.warn('File not found for removing link', { fileId });
-        return null;
-      }
+    return this.safeQuery(
+      async () => {
+        const file = await this.findById(fileId);
+        if (!file) {
+          logger.warn('File not found for removing link', { fileId });
+          return null;
+        }
 
-      const beforeCount = file.linkedTo.length;
-      file.linkedTo = file.linkedTo.filter((id) => id !== entityId);
-      const afterCount = file.linkedTo.length;
+        const beforeCount = file.linkedTo.length;
+        file.linkedTo = file.linkedTo.filter((id) => id !== entityId);
+        const afterCount = file.linkedTo.length;
 
-      if (beforeCount !== afterCount) {
-        return await this.update(fileId, { linkedTo: file.linkedTo });
-      }
-      return file;
-    } catch (error) {
-      logger.error('Error removing link from file', {
-        fileId,
-        entityId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        if (beforeCount !== afterCount) {
+          return await this.update(fileId, { linkedTo: file.linkedTo });
+        }
+        return file;
+      },
+      'Error removing link from file',
+      { fileId, entityId }
+    );
   }
 
   /**
    * Update S3 storage reference
    */
   async updateS3Reference(fileId: string, s3Key: string, s3Bucket: string): Promise<FileEntry | null> {
-    try {
-      const result = await this.update(fileId, {
-        s3Key,
-        s3Bucket,
-      });
+    return this.safeQuery(
+      async () => {
+        const result = await this.update(fileId, {
+          s3Key,
+          s3Bucket,
+        });
 
-      if (result) {
-        logger.info('S3 reference updated for file', { fileId, s3Key, s3Bucket });
-      } else {
-        logger.warn('File not found for updating S3 reference', { fileId });
-      }
+        if (result) {
+          logger.info('S3 reference updated for file', { fileId, s3Key, s3Bucket });
+        } else {
+          logger.warn('File not found for updating S3 reference', { fileId });
+        }
 
-      return result;
-    } catch (error) {
-      logger.error('Error updating S3 reference for file', {
-        fileId,
-        s3Key,
-        s3Bucket,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return result;
+      },
+      'Error updating S3 reference for file',
+      { fileId, s3Key, s3Bucket }
+    );
   }
 
   // =========================================================================
@@ -309,31 +280,20 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
     projectId: string | null,
     folderPath: string
   ): Promise<FileEntry[]> {
-    try {
-      const query: Record<string, unknown> = {
-        userId,
-        folderPath,
-      };
+    return this.safeQuery(
+      async () => {
+        const query: Record<string, unknown> = {
+          userId,
+          folderPath,
+          ...this.createNullableFilter('projectId', projectId),
+        };
 
-      if (projectId) {
-        query.projectId = projectId;
-      } else {
-        // General files - either null or not set
-        query.$or = [{ projectId: null }, { projectId: { $exists: false } }];
-      }
-
-      const files = await this.findByFilter(query as QueryFilter);
-      return files;
-    } catch (error) {
-      logger.error('Error finding files in folder', {
-        context: 'files-repository',
-        userId,
-        projectId,
-        folderPath,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        const files = await this.findByFilter(query as TypedQueryFilter<FileEntry>);
+        return files;
+      },
+      'Error finding files in folder',
+      { userId, projectId, folderPath }
+    );
   }
 
   /**
@@ -347,36 +307,26 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
     projectId: string | null,
     folderPath: string
   ): Promise<FileEntry[]> {
-    try {
-      const query: Record<string, unknown> = {
-        userId,
-      };
+    return this.safeQuery(
+      async () => {
+        const query: Record<string, unknown> = {
+          userId,
+        };
 
-      // Root folder matches everything
-      if (folderPath !== '/') {
-        // Use regex to match folder path prefix
-        query.folderPath = { $regex: `^${this.escapeRegex(folderPath)}` };
-      }
+        // Root folder matches everything
+        if (folderPath !== '/') {
+          // Use regex to match folder path prefix
+          query.folderPath = { $regex: `^${this.escapeRegex(folderPath)}` };
+        }
 
-      if (projectId) {
-        query.projectId = projectId;
-      } else {
-        // General files - either null or not set
-        query.$or = [{ projectId: null }, { projectId: { $exists: false } }];
-      }
+        Object.assign(query, this.createNullableFilter('projectId', projectId));
 
-      const files = await this.findByFilter(query as QueryFilter);
-      return files;
-    } catch (error) {
-      logger.error('Error finding files in folder (recursive)', {
-        context: 'files-repository',
-        userId,
-        projectId,
-        folderPath,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        const files = await this.findByFilter(query as TypedQueryFilter<FileEntry>);
+        return files;
+      },
+      'Error finding files in folder (recursive)',
+      { userId, projectId, folderPath }
+    );
   }
 
   /**
@@ -388,43 +338,34 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
     userId: string,
     projectId: string | null
   ): Promise<string[]> {
-    try {
-      const query: Record<string, unknown> = {
-        userId,
-      };
+    return this.safeQuery(
+      async () => {
+        const query: Record<string, unknown> = {
+          userId,
+          ...this.createNullableFilter('projectId', projectId),
+        };
 
-      if (projectId) {
-        query.projectId = projectId;
-      } else {
-        query.$or = [{ projectId: null }, { projectId: { $exists: false } }];
-      }
+        const files = await this.findByFilter(query as TypedQueryFilter<FileEntry>);
 
-      const files = await this.findByFilter(query as QueryFilter);
+        // Extract unique folder paths and sort
+        const folderSet = new Set<string>();
+        files.forEach((file) => {
+          if (file.folderPath) {
+            folderSet.add(file.folderPath);
+          }
+        });
 
-      // Extract unique folder paths and sort
-      const folderSet = new Set<string>();
-      files.forEach((file) => {
-        if (file.folderPath) {
-          folderSet.add(file.folderPath);
+        const folders = Array.from(folderSet).sort();
+
+        // Always include root if not present
+        if (!folders.includes('/')) {
+          folders.unshift('/');
         }
-      });
-
-      const folders = Array.from(folderSet).sort();
-
-      // Always include root if not present
-      if (!folders.includes('/')) {
-        folders.unshift('/');
-      }
-      return folders;
-    } catch (error) {
-      logger.error('Error listing folders', {
-        context: 'files-repository',
-        userId,
-        projectId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return folders;
+      },
+      'Error listing folders',
+      { userId, projectId }
+    );
   }
 
   /**
@@ -433,18 +374,14 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
    * @param projectId - The project ID
    */
   async findByProjectId(userId: string, projectId: string): Promise<FileEntry[]> {
-    try {
-      const files = await this.findByFilter({ userId, projectId } as QueryFilter);
-      return files;
-    } catch (error) {
-      logger.error('Error finding files by project ID', {
-        context: 'files-repository',
-        userId,
-        projectId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      async () => {
+        const files = await this.findByFilter({ userId, projectId });
+        return files;
+      },
+      'Error finding files by project ID',
+      { userId, projectId }
+    );
   }
 
   /**
@@ -459,23 +396,18 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
     projectId: string,
     filename: string
   ): Promise<FileEntry[]> {
-    try {
-      const files = await this.findByFilter({
-        userId,
-        projectId,
-        originalFilename: filename,
-      } as QueryFilter);
-      return files;
-    } catch (error) {
-      logger.error('Error finding files by filename in project', {
-        context: 'files-repository',
-        userId,
-        projectId,
-        filename,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      async () => {
+        const files = await this.findByFilter({
+          userId,
+          projectId,
+          originalFilename: filename,
+        });
+        return files;
+      },
+      'Error finding files by filename in project',
+      { userId, projectId, filename }
+    );
   }
 
   /**
@@ -484,22 +416,14 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
    * @param storageKey - The storage key to search for
    */
   async findByStorageKey(storageKey: string): Promise<FileEntry | null> {
-    try {
-      const file = await this.findOneByFilter({ storageKey } as QueryFilter);
-
-      if (file) {
-      } else {
-      }
-
-      return file;
-    } catch (error) {
-      logger.error('Error finding file by storage key', {
-        context: 'files-repository',
-        storageKey,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      async () => {
+        const file = await this.findOneByFilter({ storageKey });
+        return file;
+      },
+      'Error finding file by storage key',
+      { storageKey }
+    );
   }
 
   /**
@@ -508,17 +432,14 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
    * @returns Array of file entries stored in the mount point
    */
   async findByMountPointId(mountPointId: string): Promise<FileEntry[]> {
-    try {
-      const files = await this.findByFilter({ mountPointId } as QueryFilter);
-      return files;
-    } catch (error) {
-      logger.error('Error finding files by mount point', {
-        context: 'files-repository',
-        mountPointId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      async () => {
+        const files = await this.findByFilter({ mountPointId });
+        return files;
+      },
+      'Error finding files by mount point',
+      { mountPointId }
+    );
   }
 
   /**
@@ -526,28 +447,19 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
    * @param userId - The user ID for ownership verification
    */
   async findGeneralFiles(userId: string): Promise<FileEntry[]> {
-    try {
-      const files = await this.findByFilter({
-        userId,
-        $or: [{ projectId: null }, { projectId: { $exists: false } }],
-      } as QueryFilter);
-      return files;
-    } catch (error) {
-      logger.error('Error finding general files', {
-        context: 'files-repository',
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      async () => {
+        const files = await this.findByFilter({
+          userId,
+          $or: [{ projectId: null }, { projectId: { $exists: false } }],
+        });
+        return files;
+      },
+      'Error finding general files',
+      { userId }
+    );
   }
 
-  /**
-   * Helper to escape special regex characters
-   */
-  private escapeRegex(str: string): string {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  }
 }
 
 // Export singleton instance

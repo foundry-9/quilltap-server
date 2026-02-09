@@ -45,8 +45,10 @@ export default function AboutPage() {
           private AI environment that learns and remembers.
         </p>
         <p className="qt-text-primary">
-          The platform ships with project-based file organization, multi-character chat, long-term memory with
-          semantic search, and a plugin system for themes, providers, templates, and tools.
+          The platform is organized into named subsystems &mdash; Aurora (characters), The Salon (chat),
+          Prospero (projects), The Commonplace Book (memory), The Lantern (story backgrounds),
+          Dangermouse (content filtering), Calliope (themes), and The Foundry (architecture) &mdash;
+          each extensible through a plugin system.
         </p>
       </div>
 
@@ -56,15 +58,39 @@ export default function AboutPage() {
         <ul className="space-y-2 qt-text-primary">
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Projects &amp; files</strong> &ndash; organize work into projects with folders, files, and custom instructions</span>
+            <span><strong>Aurora &ndash; Characters</strong> &ndash; detailed profiles with pronouns, aliases, clothing records, personalities, and multi-character turn management</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>LLM file access</strong> &ndash; AI can read, search, and write your project files with permission</span>
+            <span><strong>The Salon &ndash; Chat</strong> &ndash; chat interface with tool palette, agent mode, server-side rendering, and embedded tool messages</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Long-term memory</strong> &ndash; semantic recall across conversations, not just within them</span>
+            <span><strong>Prospero &ndash; Projects</strong> &ndash; projects with files, folders, agent mode, and custom instructions</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-1">&#8226;</span>
+            <span><strong>The Commonplace Book &ndash; Memory</strong> &ndash; long-term memory with semantic recall, memory gate, proactive recall, and deduplication</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-1">&#8226;</span>
+            <span><strong>The Lantern &ndash; Story Backgrounds</strong> &ndash; AI-generated atmospheric background images derived from chat context</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-1">&#8226;</span>
+            <span><strong>Dangermouse &ndash; Content Filtering</strong> &ndash; content classification with detection, auto-routing to uncensored providers, and quick-hide integration</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-1">&#8226;</span>
+            <span><strong>Gaming &amp; Interactivity</strong> &ndash; persistent chat state, dice rolls, coin flips, inventories, stats, and game tracking</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-1">&#8226;</span>
+            <span><strong>Calliope &ndash; Themes</strong> &ndash; six bundled themes with live switching and plugin support</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-1">&#8226;</span>
+            <span><strong>The Foundry &ndash; Architecture</strong> &ndash; unified settings hub, plugin system for themes, providers, templates, and tools</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
@@ -72,15 +98,7 @@ export default function AboutPage() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Multi-character chats</strong> &ndash; SillyTavern import, turn management, impersonation, swipes</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>LLM tools</strong> &ndash; web search, image generation, MCP connector, custom tool plugins</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Plugin system</strong> &ndash; extend with themes, providers, templates, and tools via npm packages</span>
+            <span><strong>LLM tools</strong> &ndash; web search, image generation, agent mode, MCP connector, custom tool plugins</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>

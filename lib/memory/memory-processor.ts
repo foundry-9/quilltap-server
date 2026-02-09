@@ -7,10 +7,12 @@
  */
 
 import { getRepositories } from '@/lib/repositories/factory'
-import { extractMemoryFromMessage, extractCharacterMemoryFromMessage, extractInterCharacterMemoryFromMessage, MemoryCandidate } from './cheap-llm-tasks'
+import { extractMemoryFromMessage, extractCharacterMemoryFromMessage, extractInterCharacterMemoryFromMessage, MemoryCandidate, UncensoredFallbackOptions } from './cheap-llm-tasks'
 import { getCheapLLMProvider, CheapLLMConfig, CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { ConnectionProfile, CheapLLMSettings, Memory } from '@/lib/schemas/types'
-import { createMemoryWithEmbedding, findSimilarMemories } from './memory-service'
+import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
+import { createMemoryWithGate } from './memory-service'
+import type { MemoryGateOutcome } from './memory-gate'
 import { logger } from '@/lib/logger'
 
 /**
@@ -43,6 +45,8 @@ export interface MemoryExtractionContext {
   cheapLLMSettings: CheapLLMSettings
   /** Available connection profiles for user-defined strategy */
   availableProfiles?: ConnectionProfile[]
+  /** Dangerous content settings for uncensored fallback */
+  dangerSettings?: DangerousContentSettings
 }
 
 /**
@@ -73,6 +77,8 @@ export interface InterCharacterMemoryContext {
   cheapLLMSettings: CheapLLMSettings
   /** Available connection profiles for user-defined strategy */
   availableProfiles?: ConnectionProfile[]
+  /** Dangerous content settings for uncensored fallback */
+  dangerSettings?: DangerousContentSettings
 }
 
 /**
@@ -83,8 +89,14 @@ export interface MemoryProcessingResult {
   success: boolean
   /** Whether a memory was created */
   memoryCreated: boolean
+  /** Whether an existing memory was reinforced */
+  memoryReinforced: boolean
   /** The created memory ID if successful */
   memoryId?: string
+  /** The reinforced memory ID if reinforced */
+  reinforcedMemoryId?: string
+  /** IDs of related memories that were linked */
+  relatedMemoryIds?: string[]
   /** Error message if failed */
   error?: string
   /** Token usage for cost tracking */
@@ -141,96 +153,16 @@ function buildExtractionContext(ctx: MemoryExtractionContext): string {
 }
 
 /**
- * Checks if a similar memory already exists using semantic similarity
- * Falls back to keyword-based search if embedding is not available
- */
-async function checkForDuplicateMemory(
-  characterId: string,
-  candidate: MemoryCandidate,
-  userId: string
-): Promise<boolean> {
-  const content = candidate.content || ''
-  const summary = candidate.summary || ''
-
-  // Try semantic similarity first
-  try {
-    const similarMemories = await findSimilarMemories(
-      characterId,
-      content,
-      summary,
-      {
-        userId,
-        threshold: 0.85, // High threshold for duplicate detection
-      }
-    )
-
-    if (similarMemories.length > 0) {
-      return true
-    }
-  } catch (error) {
-    // Fall back to keyword-based search
-  }
-
-  // Fallback: keyword-based duplicate detection
-  if (!candidate.keywords || candidate.keywords.length === 0) {
-    return false
-  }
-
-  const repos = getRepositories()
-
-  // Search for memories with overlapping keywords
-  const existingMemories = await repos.memories.findByKeywords(
-    characterId,
-    candidate.keywords
-  )
-
-  if (existingMemories.length === 0) {
-    return false
-  }
-
-  // Check for high overlap in content
-  const candidateContent = content.toLowerCase()
-
-  for (const memory of existingMemories) {
-    const memoryContent = memory.content.toLowerCase()
-
-    // If more than 70% of the candidate keywords are in an existing memory,
-    // consider it a duplicate
-    const matchingKeywords = candidate.keywords.filter(
-      kw => memoryContent.includes(kw.toLowerCase())
-    )
-
-    if (matchingKeywords.length >= candidate.keywords.length * 0.7) {
-      return true
-    }
-
-    // Also check for significant content overlap
-    if (candidateContent.length > 50 && memoryContent.length > 50) {
-      // Simple substring check
-      if (
-        candidateContent.includes(memoryContent.substring(0, 50)) ||
-        memoryContent.includes(candidateContent.substring(0, 50))
-      ) {
-        return true
-      }
-    }
-  }
-
-  return false
-}
-
-/**
- * Creates a memory from an extraction candidate with embedding generation
+ * Creates a memory from an extraction candidate using the Memory Gate.
+ * Returns the full gate outcome (action, novel details, related IDs).
  */
 async function createMemoryFromCandidate(
   ctx: MemoryExtractionContext,
   candidate: MemoryCandidate
-): Promise<Memory> {
-  // Use the memory service which handles embedding generation
-  const memory = await createMemoryWithEmbedding(
+): Promise<MemoryGateOutcome> {
+  return createMemoryWithGate(
     {
       characterId: ctx.characterId,
-      // Set aboutCharacterId if we know who the memory is about (user-controlled character)
       aboutCharacterId: ctx.userCharacterId || null,
       chatId: ctx.chatId,
       content: candidate.content || '',
@@ -239,26 +171,22 @@ async function createMemoryFromCandidate(
       importance: candidate.importance || 0.5,
       source: 'AUTO',
       sourceMessageId: ctx.sourceMessageId,
-      tags: [], // Could inherit from character/chat tags in the future
+      tags: [],
     },
     {
       userId: ctx.userId,
-      // Embedding generation is automatic if profile is configured
     }
   )
-
-  return memory
 }
 
 /**
- * Creates an inter-character memory from an extraction candidate with embedding generation
+ * Creates an inter-character memory from an extraction candidate using the Memory Gate.
  */
 async function createInterCharacterMemoryFromCandidate(
   ctx: InterCharacterMemoryContext,
   candidate: MemoryCandidate
-): Promise<Memory> {
-  // Use the memory service which handles embedding generation
-  const memory = await createMemoryWithEmbedding(
+): Promise<MemoryGateOutcome> {
+  return createMemoryWithGate(
     {
       characterId: ctx.observerCharacterId,
       aboutCharacterId: ctx.subjectCharacterId,
@@ -275,8 +203,6 @@ async function createInterCharacterMemoryFromCandidate(
       userId: ctx.userId,
     }
   )
-
-  return memory
 }
 
 /**
@@ -307,6 +233,12 @@ export async function processMessageForMemory(
     // Build context for extraction
     const extractionContext = buildExtractionContext(ctx)
 
+    // Build uncensored fallback options if danger settings are provided
+    const uncensoredFallback: UncensoredFallbackOptions | undefined =
+      ctx.dangerSettings && ctx.availableProfiles
+        ? { dangerSettings: ctx.dangerSettings, availableProfiles: ctx.availableProfiles }
+        : undefined
+
     // Extract memories for both user and character
     const [userMemoryResult, characterMemoryResult] = await Promise.all([
       extractMemoryFromMessage(
@@ -316,7 +248,8 @@ export async function processMessageForMemory(
         ctx.characterName,
         ctx.personaName,
         selection,
-        ctx.userId
+        ctx.userId,
+        uncensoredFallback
       ),
       extractCharacterMemoryFromMessage(
         ctx.userMessage,
@@ -325,12 +258,16 @@ export async function processMessageForMemory(
         ctx.characterName,
         ctx.personaName,
         selection,
-        ctx.userId
+        ctx.userId,
+        uncensoredFallback
       ),
     ])
 
     let memoryCreated = false
+    let memoryReinforced = false
     let memoryId: string | undefined = undefined
+    let reinforcedMemoryId: string | undefined = undefined
+    let relatedMemoryIds: string[] | undefined = undefined
     let totalUsage = {
       promptTokens: 0,
       completionTokens: 0,
@@ -348,22 +285,46 @@ export async function processMessageForMemory(
       const userCandidate = userMemoryResult.result
 
       if (userCandidate?.significant) {
-        const isDuplicate = await checkForDuplicateMemory(ctx.characterId, userCandidate, ctx.userId)
-        if (!isDuplicate) {
-          const memory = await createMemoryFromCandidate(ctx, userCandidate)
-          memoryCreated = true
-          memoryId = memory.id
+        const outcome = await createMemoryFromCandidate(ctx, userCandidate)
 
-          const logMsg = `[Memory] Created USER memory for ${ctx.characterName}:\n` +
-            `  Content: ${userCandidate.content}\n` +
-            `  Summary: ${userCandidate.summary}\n` +
-            `  Importance: ${userCandidate.importance}\n` +
-            `  Keywords: ${userCandidate.keywords?.join(', ')}`
-          debugLogs.push(logMsg)
-        } else {
-          const logMsg = `[Memory] USER memory skipped (duplicate) for ${ctx.characterName}:\n` +
-            `  Summary: ${userCandidate.summary}`
-          debugLogs.push(logMsg)
+        switch (outcome.action) {
+          case 'REINFORCE': {
+            memoryReinforced = true
+            reinforcedMemoryId = outcome.memory.id
+            const logMsg = `[Memory] REINFORCED USER memory for ${ctx.characterName}:\n` +
+              `  Memory ID: ${outcome.memory.id}\n` +
+              `  Count: ${outcome.memory.reinforcementCount ?? 1}\n` +
+              `  Novel details: ${outcome.novelDetails?.join(', ') || 'none'}\n` +
+              `  Summary: ${userCandidate.summary}`
+            debugLogs.push(logMsg)
+            break
+          }
+          case 'INSERT_RELATED': {
+            memoryCreated = true
+            memoryId = outcome.memory.id
+            relatedMemoryIds = outcome.relatedMemoryIds
+            const logMsg = `[Memory] Created USER memory (linked to ${outcome.relatedMemoryIds?.length || 0} related) for ${ctx.characterName}:\n` +
+              `  Content: ${userCandidate.content}\n` +
+              `  Summary: ${userCandidate.summary}\n` +
+              `  Importance: ${userCandidate.importance}\n` +
+              `  Keywords: ${userCandidate.keywords?.join(', ')}\n` +
+              `  Related: ${outcome.relatedMemoryIds?.join(', ')}`
+            debugLogs.push(logMsg)
+            break
+          }
+          case 'INSERT':
+          case 'SKIP_GATE':
+          default: {
+            memoryCreated = true
+            memoryId = outcome.memory.id
+            const logMsg = `[Memory] Created USER memory for ${ctx.characterName}:\n` +
+              `  Content: ${userCandidate.content}\n` +
+              `  Summary: ${userCandidate.summary}\n` +
+              `  Importance: ${userCandidate.importance}\n` +
+              `  Keywords: ${userCandidate.keywords?.join(', ')}`
+            debugLogs.push(logMsg)
+            break
+          }
         }
       } else {
         const logMsg = `[Memory] USER memory not significant enough for ${ctx.characterName}:\n` +
@@ -389,20 +350,48 @@ export async function processMessageForMemory(
       const charCandidate = characterMemoryResult.result
 
       if (charCandidate?.significant) {
-        const isDuplicate = await checkForDuplicateMemory(ctx.characterId, charCandidate, ctx.userId)
-        if (!isDuplicate) {
-          await createMemoryFromCandidate(ctx, charCandidate)
+        const outcome = await createMemoryFromCandidate(ctx, charCandidate)
 
-          const logMsg = `[Memory] Created CHARACTER memory for ${ctx.characterName}:\n` +
-            `  Content: ${charCandidate.content}\n` +
-            `  Summary: ${charCandidate.summary}\n` +
-            `  Importance: ${charCandidate.importance}\n` +
-            `  Keywords: ${charCandidate.keywords?.join(', ')}`
-          debugLogs.push(logMsg)
-        } else {
-          const logMsg = `[Memory] CHARACTER memory skipped (duplicate) for ${ctx.characterName}:\n` +
-            `  Summary: ${charCandidate.summary}`
-          debugLogs.push(logMsg)
+        switch (outcome.action) {
+          case 'REINFORCE': {
+            memoryReinforced = true
+            if (!reinforcedMemoryId) reinforcedMemoryId = outcome.memory.id
+            const logMsg = `[Memory] REINFORCED CHARACTER memory for ${ctx.characterName}:\n` +
+              `  Memory ID: ${outcome.memory.id}\n` +
+              `  Count: ${outcome.memory.reinforcementCount ?? 1}\n` +
+              `  Novel details: ${outcome.novelDetails?.join(', ') || 'none'}\n` +
+              `  Summary: ${charCandidate.summary}`
+            debugLogs.push(logMsg)
+            break
+          }
+          case 'INSERT_RELATED': {
+            memoryCreated = true
+            if (!memoryId) memoryId = outcome.memory.id
+            if (outcome.relatedMemoryIds) {
+              relatedMemoryIds = [...(relatedMemoryIds || []), ...outcome.relatedMemoryIds]
+            }
+            const logMsg = `[Memory] Created CHARACTER memory (linked to ${outcome.relatedMemoryIds?.length || 0} related) for ${ctx.characterName}:\n` +
+              `  Content: ${charCandidate.content}\n` +
+              `  Summary: ${charCandidate.summary}\n` +
+              `  Importance: ${charCandidate.importance}\n` +
+              `  Keywords: ${charCandidate.keywords?.join(', ')}\n` +
+              `  Related: ${outcome.relatedMemoryIds?.join(', ')}`
+            debugLogs.push(logMsg)
+            break
+          }
+          case 'INSERT':
+          case 'SKIP_GATE':
+          default: {
+            memoryCreated = true
+            if (!memoryId) memoryId = outcome.memory.id
+            const logMsg = `[Memory] Created CHARACTER memory for ${ctx.characterName}:\n` +
+              `  Content: ${charCandidate.content}\n` +
+              `  Summary: ${charCandidate.summary}\n` +
+              `  Importance: ${charCandidate.importance}\n` +
+              `  Keywords: ${charCandidate.keywords?.join(', ')}`
+            debugLogs.push(logMsg)
+            break
+          }
         }
       } else {
         const logMsg = `[Memory] CHARACTER memory not significant enough for ${ctx.characterName}:\n` +
@@ -420,7 +409,10 @@ export async function processMessageForMemory(
     return {
       success: true,
       memoryCreated,
+      memoryReinforced,
       memoryId,
+      reinforcedMemoryId,
+      relatedMemoryIds: relatedMemoryIds && relatedMemoryIds.length > 0 ? relatedMemoryIds : undefined,
       usage: totalUsage,
       debugLogs: debugLogs.length > 0 ? debugLogs : undefined,
     }
@@ -431,6 +423,7 @@ export async function processMessageForMemory(
     return {
       success: false,
       memoryCreated: false,
+      memoryReinforced: false,
       error: error instanceof Error ? error.message : 'Unknown error',
       debugLogs: debugLogs.length > 0 ? debugLogs : undefined,
     }
@@ -453,6 +446,11 @@ export function processMessageForMemoryAsync(
         logger.info(
           '[Memory] Created memory for character',
           { memoryId: result.memoryId, characterId: ctx.characterId, userId: ctx.userId }
+        )
+      } else if (result.memoryReinforced) {
+        logger.info(
+          '[Memory] Reinforced existing memory for character',
+          { reinforcedMemoryId: result.reinforcedMemoryId, characterId: ctx.characterId, userId: ctx.userId }
         )
       } else if (!result.success) {
         logger.warn(`[Memory] Extraction failed: ${result.error}`, { characterId: ctx.characterId, userId: ctx.userId })
@@ -613,6 +611,12 @@ export async function processInterCharacterMemory(
       false
     )
 
+    // Build uncensored fallback options if danger settings are provided
+    const uncensoredFallback: UncensoredFallbackOptions | undefined =
+      ctx.dangerSettings && ctx.availableProfiles
+        ? { dangerSettings: ctx.dangerSettings, availableProfiles: ctx.availableProfiles }
+        : undefined
+
     // Extract memory that observer has about subject
     const memoryResult = await extractInterCharacterMemoryFromMessage(
       ctx.observerCharacterName,
@@ -620,11 +624,15 @@ export async function processInterCharacterMemory(
       ctx.subjectCharacterName,
       ctx.subjectMessage,
       selection,
-      ctx.userId
+      ctx.userId,
+      uncensoredFallback
     )
 
     let memoryCreated = false
+    let memoryReinforced = false
     let memoryId: string | undefined = undefined
+    let reinforcedMemoryId: string | undefined = undefined
+    let relatedMemoryIds: string[] | undefined = undefined
     const totalUsage = {
       promptTokens: 0,
       completionTokens: 0,
@@ -641,23 +649,46 @@ export async function processInterCharacterMemory(
       const candidate = memoryResult.result
 
       if (candidate?.significant) {
-        const isDuplicate = await checkForDuplicateMemory(ctx.observerCharacterId, candidate, ctx.userId)
-        if (!isDuplicate) {
-          const memory = await createInterCharacterMemoryFromCandidate(ctx, candidate)
-          memoryCreated = true
-          memoryId = memory.id
+        const outcome = await createInterCharacterMemoryFromCandidate(ctx, candidate)
 
-          const logMsg = `[Memory] Created INTER-CHARACTER memory: ${ctx.observerCharacterName} about ${ctx.subjectCharacterName}:\n` +
-            `  Content: ${candidate.content}\n` +
-            `  Summary: ${candidate.summary}\n` +
-            `  Importance: ${candidate.importance}\n` +
-            `  Keywords: ${candidate.keywords?.join(', ')}`
-          debugLogs.push(logMsg)
-
-        } else {
-          const logMsg = `[Memory] INTER-CHARACTER memory skipped (duplicate): ${ctx.observerCharacterName} about ${ctx.subjectCharacterName}:\n` +
-            `  Summary: ${candidate.summary}`
-          debugLogs.push(logMsg)
+        switch (outcome.action) {
+          case 'REINFORCE': {
+            memoryReinforced = true
+            reinforcedMemoryId = outcome.memory.id
+            const logMsg = `[Memory] REINFORCED INTER-CHARACTER memory: ${ctx.observerCharacterName} about ${ctx.subjectCharacterName}:\n` +
+              `  Memory ID: ${outcome.memory.id}\n` +
+              `  Count: ${outcome.memory.reinforcementCount ?? 1}\n` +
+              `  Novel details: ${outcome.novelDetails?.join(', ') || 'none'}\n` +
+              `  Summary: ${candidate.summary}`
+            debugLogs.push(logMsg)
+            break
+          }
+          case 'INSERT_RELATED': {
+            memoryCreated = true
+            memoryId = outcome.memory.id
+            relatedMemoryIds = outcome.relatedMemoryIds
+            const logMsg = `[Memory] Created INTER-CHARACTER memory (linked to ${outcome.relatedMemoryIds?.length || 0} related): ${ctx.observerCharacterName} about ${ctx.subjectCharacterName}:\n` +
+              `  Content: ${candidate.content}\n` +
+              `  Summary: ${candidate.summary}\n` +
+              `  Importance: ${candidate.importance}\n` +
+              `  Keywords: ${candidate.keywords?.join(', ')}\n` +
+              `  Related: ${outcome.relatedMemoryIds?.join(', ')}`
+            debugLogs.push(logMsg)
+            break
+          }
+          case 'INSERT':
+          case 'SKIP_GATE':
+          default: {
+            memoryCreated = true
+            memoryId = outcome.memory.id
+            const logMsg = `[Memory] Created INTER-CHARACTER memory: ${ctx.observerCharacterName} about ${ctx.subjectCharacterName}:\n` +
+              `  Content: ${candidate.content}\n` +
+              `  Summary: ${candidate.summary}\n` +
+              `  Importance: ${candidate.importance}\n` +
+              `  Keywords: ${candidate.keywords?.join(', ')}`
+            debugLogs.push(logMsg)
+            break
+          }
         }
       } else {
         const logMsg = `[Memory] INTER-CHARACTER memory not significant enough: ${ctx.observerCharacterName} about ${ctx.subjectCharacterName}:\n` +
@@ -674,7 +705,10 @@ export async function processInterCharacterMemory(
     return {
       success: true,
       memoryCreated,
+      memoryReinforced,
       memoryId,
+      reinforcedMemoryId,
+      relatedMemoryIds: relatedMemoryIds && relatedMemoryIds.length > 0 ? relatedMemoryIds : undefined,
       usage: totalUsage,
       debugLogs: debugLogs.length > 0 ? debugLogs : undefined,
     }
@@ -688,6 +722,7 @@ export async function processInterCharacterMemory(
     return {
       success: false,
       memoryCreated: false,
+      memoryReinforced: false,
       error: error instanceof Error ? error.message : 'Unknown error',
       debugLogs: debugLogs.length > 0 ? debugLogs : undefined,
     }
@@ -711,6 +746,16 @@ export function processInterCharacterMemoryAsync(
           '[Memory] Created inter-character memory',
           {
             memoryId: result.memoryId,
+            observerCharacterId: ctx.observerCharacterId,
+            subjectCharacterId: ctx.subjectCharacterId,
+            userId: ctx.userId,
+          }
+        )
+      } else if (result.memoryReinforced) {
+        logger.info(
+          '[Memory] Reinforced inter-character memory',
+          {
+            reinforcedMemoryId: result.reinforcedMemoryId,
             observerCharacterId: ctx.observerCharacterId,
             subjectCharacterId: ctx.subjectCharacterId,
             userId: ctx.userId,

@@ -284,7 +284,7 @@ export function SettingsCard({
   const showFooterActions = hasActions && actionsPosition === 'footer'
 
   return (
-    <div className="border border-border rounded-lg p-4 bg-card shadow-sm space-y-3">
+    <div className="qt-border rounded-lg p-4 qt-bg-card qt-shadow-sm space-y-3">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
@@ -352,7 +352,7 @@ export function SettingsCard({
 
       {/* Footer actions */}
       {showFooterActions && (
-        <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-border">
+        <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t qt-border-default">
           <ActionButtons actions={actions} deleteConfig={deleteConfig} />
         </div>
       )}

@@ -46,7 +46,7 @@ migrations/
 │   ├── s3-utils.ts       # S3 utilities for migrations
 │   ├── file-manager.ts   # File operations
 │   ├── secrets.ts        # Encryption utilities
-│   ├── database-utils.ts # Database utilities
+│   ├── database-utils.ts # SQLite database utilities
 │   └── json-store/       # JSON store utilities for migrations
 └── scripts/
     ├── index.ts                              # Migration registry
@@ -70,33 +70,30 @@ migrations/
 ```typescript
 import type { Migration, MigrationResult } from '../types';
 import { logger } from '../lib/logger';
-import { getMongoDatabase, isMongoDBBackend } from '../lib/mongodb-utils';
+import { isSQLiteBackend, getSQLiteDatabase } from '../lib/database-utils';
 
 export const myNewMigration: Migration = {
   id: 'my-migration-v1',
   description: 'Description of what this migration does',
-  introducedInVersion: '2.7.0',
-  dependsOn: ['migrate-json-to-mongodb-v1'], // optional dependencies
+  introducedInVersion: '2.9.0',
 
   async shouldRun(): Promise<boolean> {
-    // Return true if migration needs to run
-    if (!isMongoDBBackend()) return false;
-    // Check for data that needs migration
+    if (!isSQLiteBackend()) return false;
+    // Check if migration needs to run
     return true;
   },
 
   async run(): Promise<MigrationResult> {
     const startTime = Date.now();
     try {
+      const db = getSQLiteDatabase();
       // Migration logic here
-      const db = await getMongoDatabase();
-      const result = await db.collection('my_collection').updateMany(...);
 
       return {
         id: 'my-migration-v1',
         success: true,
-        itemsAffected: result.modifiedCount,
-        message: `Updated ${result.modifiedCount} documents`,
+        itemsAffected: 0,
+        message: 'Migration completed',
         durationMs: Date.now() - startTime,
         timestamp: new Date().toISOString(),
       };
@@ -133,7 +130,7 @@ Migrations can declare dependencies on other migrations:
 ```typescript
 export const myMigration: Migration = {
   id: 'my-migration-v1',
-  dependsOn: ['migrate-json-to-mongodb-v1', 'add-multi-character-fields-v1'],
+  dependsOn: ['sqlite-initial-schema-v1'],
   // ...
 };
 ```
@@ -142,7 +139,7 @@ The MigrationRunner sorts migrations topologically to ensure dependencies run fi
 
 ## Migration State
 
-Migration state is stored in MongoDB in the `migrations_state` collection:
+Migration state is stored in SQLite in the `migrations_state` table:
 
 ```json
 {

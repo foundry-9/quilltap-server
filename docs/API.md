@@ -901,6 +901,68 @@ Remove a tag from a character.
 
 ---
 
+#### Character Clothing Records
+
+Clothing records describe what a character wears in different contexts. They are embedded in the character document as a JSON array and used for system prompts and image generation.
+
+##### `GET /api/v1/characters/[id]/clothing`
+
+Returns all clothing records for a character.
+
+**Response:**
+```json
+{
+  "clothingRecords": [
+    {
+      "id": "uuid",
+      "name": "Battle Armor",
+      "usageContext": "in combat situations",
+      "description": "Heavy plate armor with dragon motifs...",
+      "createdAt": "ISO timestamp",
+      "updatedAt": "ISO timestamp"
+    }
+  ]
+}
+```
+
+##### `POST /api/v1/characters/[id]/clothing`
+
+Creates a new clothing record.
+
+**Body:**
+```json
+{
+  "name": "Battle Armor",
+  "usageContext": "in combat situations",
+  "description": "Heavy plate armor with dragon motifs..."
+}
+```
+
+**Response:** `201 Created` with `{ clothingRecord: {...} }`
+
+##### `GET /api/v1/characters/[id]/clothing/[recordId]`
+
+Returns a single clothing record.
+
+##### `PUT /api/v1/characters/[id]/clothing/[recordId]`
+
+Updates a clothing record. All fields are optional.
+
+**Body:**
+```json
+{
+  "name": "Updated Name",
+  "usageContext": "updated context",
+  "description": "Updated description..."
+}
+```
+
+##### `DELETE /api/v1/characters/[id]/clothing/[recordId]`
+
+Deletes a clothing record. Returns `{ success: true }`.
+
+---
+
 ### NPCs
 
 NPCs are characters with `npc: true`. They appear in Settings > NPCs and can be created directly from chat.

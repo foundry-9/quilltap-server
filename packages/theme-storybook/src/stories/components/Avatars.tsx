@@ -17,9 +17,6 @@ export const Avatars: React.FC = () => {
           Avatar Sizes
         </h3>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div className="qt-avatar qt-avatar-xs">
-            <div className="qt-avatar-fallback">XS</div>
-          </div>
           <div className="qt-avatar qt-avatar-sm">
             <div className="qt-avatar-fallback">SM</div>
           </div>
@@ -79,43 +76,6 @@ export const Avatars: React.FC = () => {
               <div className="qt-avatar-fallback">SQ</div>
             </div>
             <p style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: 'var(--color-muted-foreground)', textAlign: 'center' }}>Square</p>
-          </div>
-        </div>
-      </section>
-
-      {/* Avatar with Status */}
-      <section style={{ marginBottom: '2rem' }}>
-        <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
-          Avatar with Status
-        </h3>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-          <div style={{ position: 'relative' }}>
-            <div className="qt-avatar">
-              <div className="qt-avatar-fallback">ON</div>
-            </div>
-            <span className="qt-avatar-status qt-avatar-status-online" />
-            <p style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: 'var(--color-muted-foreground)', textAlign: 'center' }}>Online</p>
-          </div>
-          <div style={{ position: 'relative' }}>
-            <div className="qt-avatar">
-              <div className="qt-avatar-fallback">AW</div>
-            </div>
-            <span className="qt-avatar-status qt-avatar-status-away" />
-            <p style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: 'var(--color-muted-foreground)', textAlign: 'center' }}>Away</p>
-          </div>
-          <div style={{ position: 'relative' }}>
-            <div className="qt-avatar">
-              <div className="qt-avatar-fallback">BS</div>
-            </div>
-            <span className="qt-avatar-status qt-avatar-status-busy" />
-            <p style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: 'var(--color-muted-foreground)', textAlign: 'center' }}>Busy</p>
-          </div>
-          <div style={{ position: 'relative' }}>
-            <div className="qt-avatar">
-              <div className="qt-avatar-fallback">OF</div>
-            </div>
-            <span className="qt-avatar-status qt-avatar-status-offline" />
-            <p style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: 'var(--color-muted-foreground)', textAlign: 'center' }}>Offline</p>
           </div>
         </div>
       </section>

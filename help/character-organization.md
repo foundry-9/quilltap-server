@@ -1,6 +1,6 @@
 # Organizing Characters
 
-> **[Open this page in Quilltap](/characters)**
+> **[Open this page in Quilltap](/aurora)**
 
 This guide covers how to organize, tag, filter, and manage your character collection.
 

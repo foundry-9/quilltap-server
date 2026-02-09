@@ -1,6 +1,6 @@
 # Theme Quick-Switcher
 
-> **[Open this page in Quilltap](/settings?tab=appearance)**
+> **[Open this page in Quilltap](/foundry/calliope)**
 
 The theme quick-switcher is a convenient sidebar button that gives you instant access to switch between themes and color modes (light/dark/system). It's an optional feature that you can enable or disable based on your preferences.
 
@@ -164,7 +164,7 @@ The quick-switcher menu is organized as:
 ┌─────────────────────┐
 │ Default Theme       │ ← Default theme always first
 │ ─────────────────── │
-│ Ocean               │ ← Plugin themes (if any)
+│ Great Estate        │ ← Plugin themes (if any)
 │ Rains               │
 │ Earl Grey           │
 │ ─────────────────── │
@@ -185,11 +185,11 @@ The quick-switcher menu is organized as:
 
 ### Quick Theme Switching for Work
 
-1. You're working on a fantasy project with the Ocean theme
+1. You're working on a fantasy project with the Great Estate theme
 2. You switch to a sci-fi project (different color mood)
 3. Click the quick-switcher palette icon
 4. Select the Earl Grey theme
-5. Back to fantasy work? Click the palette icon again, select Ocean
+5. Back to fantasy work? Click the palette icon again, select Great Estate
 6. No Settings needed, no page refresh, instant switching
 
 ### Time-Based Color Mode Switching

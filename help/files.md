@@ -518,5 +518,5 @@ Files attached to chat messages can be saved as permanent general files:
 - **Projects** — Manage project-specific files
 - **Characters** — Upload character images and profile files
 - **Chats** — Attach and manage message files
-- **Settings > File Storage** — Configure where files are stored
+- **The Forge > File Storage** — Configure where files are stored
 - **Search** — Find files by name or content

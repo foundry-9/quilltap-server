@@ -26,7 +26,7 @@ import {
 } from 'react';
 import { useSession } from '@/components/providers/session-provider';
 import { ThemeStyleInjector } from '@/components/providers/theme-style-injector';
-import type { ThemeContextValue, ThemeProviderProps, ThemeFont, ThemeSummary } from './types';
+import type { ThemeContextValue, ThemeProviderProps, ThemeFont, ThemeSummary, SubsystemOverride } from './types';
 import type { ColorMode } from '@/lib/themes/types';
 import {
   resolveColorMode,
@@ -78,6 +78,7 @@ export function ThemeProvider({
   const [availableThemes, setAvailableThemes] = useState<ThemeSummary[]>([]);
   const [themeFonts, setThemeFonts] = useState<ThemeFont[]>([]);
   const [cssOverrides, setCssOverrides] = useState<string | undefined>(initialCssOverrides);
+  const [subsystems, setSubsystems] = useState<Record<string, SubsystemOverride> | null>(null);
   const [showNavThemeSelector, setShowNavThemeSelectorState] = useState<boolean>(
     initialPreference?.showNavThemeSelector ?? false
   );
@@ -127,11 +128,13 @@ export function ThemeProvider({
       setTokens(result.tokens);
       setThemeFonts(result.fonts);
       setCssOverrides(result.cssOverrides);
+      setSubsystems(result.subsystems);
     } else {
       // Fall back to default tokens
       setTokens(getDefaultTokens());
       setThemeFonts([]);
       setCssOverrides(undefined);
+      setSubsystems(null);
     }
   }, []);
 
@@ -201,6 +204,7 @@ export function ThemeProvider({
         setTokens(getDefaultTokens());
         setThemeFonts([]);
         setCssOverrides(undefined);
+        setSubsystems(null);
       }
 
       // Persist to server
@@ -255,6 +259,7 @@ export function ThemeProvider({
       isLoading,
       error,
       showNavThemeSelector,
+      subsystems,
       setTheme,
       setColorMode,
       setShowNavThemeSelector,
@@ -269,6 +274,7 @@ export function ThemeProvider({
       isLoading,
       error,
       showNavThemeSelector,
+      subsystems,
       setTheme,
       setColorMode,
       setShowNavThemeSelector,

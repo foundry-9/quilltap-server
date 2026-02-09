@@ -79,7 +79,7 @@ export function CharactersSection({ characters }: CharactersSectionProps) {
     <div className="qt-homepage-section">
       <div className="qt-homepage-section-header">
         <h2 className="qt-homepage-section-title">Characters</h2>
-        <Link href="/characters" className="qt-homepage-section-link">
+        <Link href="/aurora" className="qt-homepage-section-link">
           View all &rarr;
         </Link>
       </div>
@@ -87,7 +87,7 @@ export function CharactersSection({ characters }: CharactersSectionProps) {
         {visibleCharacters.length === 0 ? (
           <div className="text-center py-6 text-muted-foreground">
             <p className="text-sm">No favorite characters</p>
-            <Link href="/characters" className="text-xs text-primary hover:underline">
+            <Link href="/aurora" className="text-xs text-primary hover:underline">
               Mark some as favorites
             </Link>
           </div>

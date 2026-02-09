@@ -13,7 +13,7 @@ export function ProjectsSection({ projects }: ProjectsSectionProps) {
     <div className="qt-homepage-section">
       <div className="qt-homepage-section-header">
         <h2 className="qt-homepage-section-title">Active Projects</h2>
-        <Link href="/projects" className="qt-homepage-section-link">
+        <Link href="/prospero" className="qt-homepage-section-link">
           View all &rarr;
         </Link>
       </div>

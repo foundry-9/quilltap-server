@@ -51,8 +51,8 @@ const baseProfile: ConnectionProfile = {
 }
 
 const mockRepos = {
-  users: {
-    getChatSettings: jest.fn(),
+  chatSettings: {
+    findByUserId: jest.fn(),
   },
   connections: {
     findById: jest.fn(),
@@ -73,7 +73,7 @@ const mockFileAttachment: FileAttachment = {
 describe('lib/chat/file-attachment-fallback', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    mockRepos.users.getChatSettings.mockReset()
+    mockRepos.chatSettings.findByUserId.mockReset()
     mockRepos.connections.findById.mockReset()
     mockRepos.connections.findByUserId.mockReset()
     mockRepos.connections.findApiKeyById.mockReset()
@@ -130,7 +130,7 @@ describe('lib/chat/file-attachment-fallback', () => {
   })
 
   it('returns unsupported when no image description profile is available', async () => {
-    mockRepos.users.getChatSettings.mockResolvedValue(null)
+    mockRepos.chatSettings.findByUserId.mockResolvedValue(null)
     mockRepos.connections.findByUserId.mockResolvedValue([])
 
     const result = await generateImageDescription(mockFileAttachment, mockRepos, baseProfile.userId)
@@ -140,7 +140,7 @@ describe('lib/chat/file-attachment-fallback', () => {
   })
 
   it('rejects when the selected profile does not support the attachment MIME type', async () => {
-    mockRepos.users.getChatSettings.mockResolvedValue({ imageDescriptionProfileId: baseProfile.id })
+    mockRepos.chatSettings.findByUserId.mockResolvedValue({ imageDescriptionProfileId: baseProfile.id })
     mockRepos.connections.findById.mockResolvedValue(baseProfile)
     mockProfileSupportsMimeType.mockImplementation((_profile, mimeType) => mimeType === 'image/jpeg')
 
@@ -151,7 +151,7 @@ describe('lib/chat/file-attachment-fallback', () => {
   })
 
   it('requests an image description via the cheap LLM pipeline', async () => {
-    mockRepos.users.getChatSettings.mockResolvedValue({ imageDescriptionProfileId: baseProfile.id })
+    mockRepos.chatSettings.findByUserId.mockResolvedValue({ imageDescriptionProfileId: baseProfile.id })
     mockRepos.connections.findById.mockResolvedValue(baseProfile)
     mockRepos.connections.findApiKeyByIdAndUserId.mockResolvedValue({
       ciphertext: 'cipher',
@@ -183,7 +183,7 @@ describe('lib/chat/file-attachment-fallback', () => {
   })
 
   it('flags suspicious LLM responses so the UI can warn the user', async () => {
-    mockRepos.users.getChatSettings.mockResolvedValue({ imageDescriptionProfileId: baseProfile.id })
+    mockRepos.chatSettings.findByUserId.mockResolvedValue({ imageDescriptionProfileId: baseProfile.id })
     mockRepos.connections.findById.mockResolvedValue(baseProfile)
     mockRepos.connections.findApiKeyByIdAndUserId.mockResolvedValue(null)
     mockProfileSupportsMimeType.mockReturnValue(true)

@@ -21,7 +21,7 @@ const DEFAULT_FLAGS: RouteFlagResult = {
 const ROUTE_FLAGS: RouteFlagDefinition[] = [
   {
     // Chat conversation pages currently are the only routes that expose the debug panel.
-    pattern: /^\/chats\/[^/]+$/,
+    pattern: /^\/salon\/[^/]+$/,
     supportsDebug: true,
   },
 ];

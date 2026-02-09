@@ -1,0 +1,59 @@
+/**
+ * Safe Query Helper
+ *
+ * Eliminates redundant try-catch boilerplate across repository methods.
+ * Provides consistent error logging with automatic error message extraction.
+ *
+ * Three failure modes:
+ * - Rethrow (no fallback): logs error then re-throws
+ * - Fallback (fallback provided): logs error then returns fallback value
+ * - Silent (fallback = undefined): logs error then returns undefined
+ */
+
+import { logger } from '@/lib/logger';
+
+/**
+ * Extract a human-readable error message from an unknown error value.
+ */
+export function extractErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Execute an async operation with standardized error handling.
+ *
+ * @overload Rethrow mode — no fallback argument; logs then re-throws.
+ */
+export async function safeQuery<R>(
+  operation: () => Promise<R>,
+  errorMessage: string,
+  context?: Record<string, unknown>
+): Promise<R>;
+
+/**
+ * @overload Fallback mode — returns `fallback` on error instead of throwing.
+ */
+export async function safeQuery<R>(
+  operation: () => Promise<R>,
+  errorMessage: string,
+  context: Record<string, unknown>,
+  fallback: R
+): Promise<R>;
+
+/**
+ * Implementation — uses rest param length to distinguish rethrow vs fallback.
+ */
+export async function safeQuery<R>(
+  operation: () => Promise<R>,
+  errorMessage: string,
+  context: Record<string, unknown> = {},
+  ...rest: [] | [R]
+): Promise<R> {
+  try {
+    return await operation();
+  } catch (error) {
+    logger.error(errorMessage, { ...context, error: extractErrorMessage(error) });
+    if (rest.length > 0) return rest[0] as R;
+    throw error;
+  }
+}

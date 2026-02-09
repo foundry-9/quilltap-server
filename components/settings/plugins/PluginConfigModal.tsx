@@ -180,7 +180,7 @@ export function PluginConfigModal({
               id={field.key}
               checked={Boolean(value ?? field.default)}
               onChange={(e) => handleFieldChange(field.key, e.target.checked)}
-              className="w-4 h-4 rounded border-border"
+              className="w-4 h-4 rounded border-input"
             />
             <span className="qt-text-small">{field.description || 'Enable'}</span>
           </label>
@@ -192,7 +192,7 @@ export function PluginConfigModal({
             id={field.key}
             value={String(value ?? field.default ?? '')}
             onChange={(e) => handleFieldChange(field.key, e.target.value)}
-            className="qt-input w-full"
+            className="qt-select"
           >
             <option value="">Select...</option>
             {field.options?.map((opt) => (
@@ -244,7 +244,7 @@ export function PluginConfigModal({
               {field.type !== 'boolean' && (
                 <label htmlFor={field.key} className="block qt-text-label">
                   {field.label}
-                  {field.required && <span className="text-red-500 ml-1">*</span>}
+                  {field.required && <span className="text-destructive ml-1">*</span>}
                 </label>
               )}
               {renderField(field)}

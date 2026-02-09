@@ -489,25 +489,25 @@ export default function PluginsTab() {
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div>
               <p className="qt-text-label">Total Plugins</p>
-              <p className="text-2xl font-bold qt-text-primary">{stats.total}</p>
+              <p className="text-2xl font-bold text-primary">{stats.total}</p>
             </div>
             <div>
               <p className="qt-text-label">Enabled</p>
-              <p className="text-2xl font-bold qt-text-success">{stats.enabled}</p>
+              <p className="text-2xl font-bold text-success">{stats.enabled}</p>
             </div>
             <div>
               <p className="qt-text-label">Upgrades</p>
-              <p className={`text-2xl font-bold ${availableUpgrades.length > 0 ? 'qt-text-warning' : 'qt-text-muted'}`}>
+              <p className={`text-2xl font-bold ${availableUpgrades.length > 0 ? 'text-warning' : 'text-muted-foreground'}`}>
                 {availableUpgrades.length}
               </p>
             </div>
             <div>
               <p className="qt-text-label">Disabled</p>
-              <p className="text-2xl font-bold qt-text-muted">{stats.disabled}</p>
+              <p className="text-2xl font-bold text-muted-foreground">{stats.disabled}</p>
             </div>
             <div>
               <p className="qt-text-label">Errors</p>
-              <p className={`text-2xl font-bold ${stats.errors > 0 ? 'qt-text-destructive' : 'qt-text-muted'}`}>
+              <p className={`text-2xl font-bold ${stats.errors > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
                 {stats.errors}
               </p>
             </div>
@@ -576,7 +576,7 @@ export default function PluginsTab() {
           {plugins.length === 0 ? (
             <div className="qt-card p-8 text-center">
               <svg
-                className="mx-auto h-12 w-12 text-muted-foreground"
+                className="mx-auto h-12 w-12 text-muted-foreground/50"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -588,7 +588,7 @@ export default function PluginsTab() {
                   d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
                 />
               </svg>
-              <h3 className="mt-4 text-lg qt-text-primary">
+              <h3 className="mt-4 text-lg text-primary">
                 No Plugins Found
               </h3>
               <p className="mt-2 qt-text-small">
@@ -737,7 +737,7 @@ export default function PluginsTab() {
           ) : availableUpgrades.length === 0 ? (
             <div className="qt-card p-8 text-center">
               <svg
-                className="mx-auto h-12 w-12 text-green-500"
+                className="mx-auto h-12 w-12 text-success"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -749,7 +749,7 @@ export default function PluginsTab() {
                   d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-              <h3 className="mt-4 text-lg qt-text-primary">
+              <h3 className="mt-4 text-lg text-primary">
                 All Plugins Up to Date
               </h3>
               <p className="mt-2 qt-text-small">
@@ -899,7 +899,7 @@ export default function PluginsTab() {
             {searchResults.length === 0 && !searching && (
               <div className="qt-card p-8 text-center">
                 <svg
-                  className="mx-auto h-12 w-12 text-muted-foreground"
+                  className="mx-auto h-12 w-12 text-muted-foreground/50"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -911,7 +911,7 @@ export default function PluginsTab() {
                     d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
                   />
                 </svg>
-                <h3 className="mt-4 text-lg qt-text-primary">
+                <h3 className="mt-4 text-lg text-primary">
                   Search for Plugins
                 </h3>
                 <p className="mt-2 qt-text-small">

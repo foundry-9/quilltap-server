@@ -31895,7 +31895,7 @@ var CONTENT_TYPE_HEADER = "Content-Type";
 var SERVER_TIMEOUT_HEADER = "X-Server-Timeout";
 var USER_AGENT_HEADER = "User-Agent";
 var GOOGLE_API_CLIENT_HEADER = "x-goog-api-client";
-var SDK_VERSION = "1.39.0";
+var SDK_VERSION = "1.40.0";
 var LIBRARY_LABEL = `google-genai-sdk/${SDK_VERSION}`;
 var VERTEX_AI_API_DEFAULT_VERSION = "v1beta1";
 var GOOGLE_AI_API_DEFAULT_VERSION = "v1beta";
@@ -36692,6 +36692,10 @@ async function defaultParseResponse(client, props) {
     const mediaType = (_a4 = contentType === null || contentType === void 0 ? void 0 : contentType.split(";")[0]) === null || _a4 === void 0 ? void 0 : _a4.trim();
     const isJSON = (mediaType === null || mediaType === void 0 ? void 0 : mediaType.includes("application/json")) || (mediaType === null || mediaType === void 0 ? void 0 : mediaType.endsWith("+json"));
     if (isJSON) {
+      const contentLength = response.headers.get("content-length");
+      if (contentLength === "0") {
+        return void 0;
+      }
       const json = await response.json();
       return json;
     }
@@ -37088,9 +37092,10 @@ var BaseGeminiNextGenAPIClient = class _BaseGeminiNextGenAPIClient {
   }
   async fetchWithTimeout(url, init, ms, controller) {
     const _b = init || {}, { signal, method } = _b, options = __rest(_b, ["signal", "method"]);
+    const abort = controller.abort.bind(controller);
     if (signal)
-      signal.addEventListener("abort", () => controller.abort());
-    const timeout = setTimeout(() => controller.abort(), ms);
+      signal.addEventListener("abort", abort, { once: true });
+    const timeout = setTimeout(abort, ms);
     const isReadableBody = globalThis.ReadableStream && options.body instanceof globalThis.ReadableStream || typeof options.body === "object" && options.body !== null && Symbol.asyncIterator in options.body;
     const fetchOptions = Object.assign(Object.assign(Object.assign({ signal: controller.signal }, isReadableBody ? { duplex: "half" } : {}), { method: "GET" }), options);
     if (method) {
@@ -39136,7 +39141,7 @@ var safeJSON2 = (text) => {
 var sleep2 = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ../../../node_modules/openai/version.mjs
-var VERSION2 = "6.17.0";
+var VERSION2 = "6.18.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -40174,6 +40179,10 @@ async function defaultParseResponse2(client, props) {
     const mediaType = contentType?.split(";")[0]?.trim();
     const isJSON = mediaType?.includes("application/json") || mediaType?.endsWith("+json");
     if (isJSON) {
+      const contentLength = response.headers.get("content-length");
+      if (contentLength === "0") {
+        return void 0;
+      }
       const json = await response.json();
       return addRequestID(json, response);
     }
@@ -45520,7 +45529,7 @@ var OpenAI = class {
     return { response, options, controller, requestLogID, retryOfRequestLogID, startTime };
   }
   getAPIList(path3, Page2, opts) {
-    return this.requestAPIList(Page2, { method: "get", path: path3, ...opts });
+    return this.requestAPIList(Page2, opts && "then" in opts ? opts.then((opts2) => ({ method: "get", path: path3, ...opts2 })) : { method: "get", path: path3, ...opts });
   }
   requestAPIList(Page2, options) {
     const request = this.makeRequest(options, null, void 0);
@@ -45528,9 +45537,10 @@ var OpenAI = class {
   }
   async fetchWithTimeout(url, init, ms, controller) {
     const { signal, method, ...options } = init || {};
+    const abort = this._makeAbort(controller);
     if (signal)
-      signal.addEventListener("abort", () => controller.abort());
-    const timeout = setTimeout(() => controller.abort(), ms);
+      signal.addEventListener("abort", abort, { once: true });
+    const timeout = setTimeout(abort, ms);
     const isReadableBody = globalThis.ReadableStream && options.body instanceof globalThis.ReadableStream || typeof options.body === "object" && options.body !== null && Symbol.asyncIterator in options.body;
     const fetchOptions = {
       signal: controller.signal,
@@ -45641,6 +45651,9 @@ var OpenAI = class {
     ]);
     this.validateHeaders(headers);
     return headers.values;
+  }
+  _makeAbort(controller) {
+    return () => controller.abort();
   }
   buildBody({ options: { body, headers: rawHeaders } }) {
     if (!body) {
@@ -46672,11 +46685,6 @@ var GoogleImagenProvider = class {
     const baseUrl = "https://generativelanguage.googleapis.com/v1beta";
     const apiModelId = IMAGEN_MODEL_MAP[model] || model;
     const endpoint = `${baseUrl}/models/${apiModelId}:predict`;
-    logger2.debug("Calling Imagen API", {
-      context: "GoogleImagenProvider.generateWithImagen",
-      userModel: model,
-      apiModel: apiModelId
-    });
     const requestBody = {
       instances: [
         {

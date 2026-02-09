@@ -3,7 +3,7 @@
  * Defines all TypeScript types and interfaces used in the chat settings module
  */
 
-import type { LLMLoggingSettings as LLMLoggingSettingsType } from '@/lib/schemas/settings.types'
+import type { LLMLoggingSettings as LLMLoggingSettingsType, DangerousContentSettings as DangerousContentSettingsType } from '@/lib/schemas/settings.types'
 
 export type AvatarDisplayMode = 'ALWAYS' | 'GROUP_ONLY' | 'NEVER'
 export type AvatarDisplayStyle = 'CIRCULAR' | 'RECTANGULAR'
@@ -50,6 +50,15 @@ export interface MemoryCascadePreferences {
   onSwipeRegenerate: MemoryCascadeAction
 }
 
+/**
+ * Story Backgrounds Settings
+ * Controls AI-generated background images for chats
+ */
+export interface StoryBackgroundsSettings {
+  enabled: boolean
+  defaultImageProfileId?: string | null
+}
+
 export interface ChatSettings {
   id: string
   userId: string
@@ -64,6 +73,12 @@ export interface ChatSettings {
   llmLoggingSettings?: LLMLoggingSettings
   /** Auto-detect RNG patterns (dice rolls, coin flips) in user messages and execute them automatically */
   autoDetectRng?: boolean
+  /** Agent mode settings for iterative tool use with self-correction */
+  agentModeSettings?: AgentModeSettings
+  /** Story backgrounds settings for AI-generated chat backgrounds */
+  storyBackgroundsSettings?: StoryBackgroundsSettings
+  /** Dangerous content handling settings */
+  dangerousContentSettings?: DangerousContentSettings
   createdAt: string
   updatedAt: string
 }
@@ -82,6 +97,7 @@ export interface ConnectionProfile {
   modelName: string
   isDefault: boolean
   isCheap?: boolean
+  isDangerousCompatible?: boolean
   apiKeyId?: string
   apiKey?: ApiKey | null
 }
@@ -92,6 +108,17 @@ export interface EmbeddingProfile {
   provider: string
   modelName: string
   isDefault: boolean
+  apiKeyId?: string
+  apiKey?: ApiKey | null
+}
+
+export interface ImageProfile {
+  id: string
+  name: string
+  provider: string
+  modelName: string
+  isDefault: boolean
+  isDangerousCompatible?: boolean
   apiKeyId?: string
   apiKey?: ApiKey | null
 }
@@ -339,3 +366,49 @@ export const AUTOMATION_OPTIONS = [
  * Default automation settings
  */
 export const DEFAULT_AUTO_DETECT_RNG = true
+
+/**
+ * Agent Mode Settings
+ * Controls iterative tool use with self-correction
+ */
+export interface AgentModeSettings {
+  /** Maximum number of agent turns (1-25) */
+  maxTurns: number
+  /** Whether agent mode is enabled by default for new chats */
+  defaultEnabled: boolean
+}
+
+/**
+ * Default agent mode settings
+ */
+export const DEFAULT_AGENT_MODE_SETTINGS: AgentModeSettings = {
+  maxTurns: 10,
+  defaultEnabled: false,
+}
+
+/**
+ * Default story backgrounds settings
+ */
+export const DEFAULT_STORY_BACKGROUNDS_SETTINGS: StoryBackgroundsSettings = {
+  enabled: false,
+  defaultImageProfileId: null,
+}
+
+/**
+ * Dangerous Content Settings
+ * Re-exported from schema types for use in chat settings components
+ */
+export type DangerousContentSettings = DangerousContentSettingsType
+
+/**
+ * Default dangerous content settings
+ */
+export const DEFAULT_DANGEROUS_CONTENT_SETTINGS: DangerousContentSettings = {
+  mode: 'OFF',
+  threshold: 0.7,
+  scanTextChat: true,
+  scanImagePrompts: true,
+  scanImageGeneration: false,
+  displayMode: 'SHOW',
+  showWarningBadges: true,
+}

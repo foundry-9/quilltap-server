@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { logger } from '@/lib/logger';
-import { notFound, serverError } from '@/lib/api/responses';
+import { notFound, badRequest, serverError } from '@/lib/api/responses';
 import { handleResetState } from '../actions';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 
@@ -26,6 +26,12 @@ export async function handleDelete(
   // Handle reset-state action
   if (action === 'reset-state') {
     return handleResetState(chatId, ctx);
+  }
+
+  // Reject unrecognized actions to prevent accidental chat deletion
+  if (action) {
+    logger.warn('[Chats v1] Unknown DELETE action, rejecting to prevent data loss', { chatId, action });
+    return badRequest(`Unknown DELETE action: ${action}. Available DELETE actions: reset-state`);
   }
 
   try {

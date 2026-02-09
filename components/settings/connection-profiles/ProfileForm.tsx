@@ -74,7 +74,7 @@ export function ProfileForm({
   }, [])
 
   return (
-    <div id="profile-form" className="bg-muted border border-border rounded-lg p-6">
+    <div id="profile-form" className="bg-card border border-border rounded-lg p-6">
       <h3 className="text-lg font-semibold mb-4">
         {editingId ? 'Edit Connection Profile' : 'Add New Connection Profile'}
       </h3>
@@ -198,7 +198,7 @@ export function ProfileForm({
               type="button"
               onClick={onConnect}
               disabled={isConnecting}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
+              className="qt-button-primary disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
             >
               {isConnecting ? 'Connecting...' : 'Connect'}
             </button>
@@ -215,7 +215,7 @@ export function ProfileForm({
                 if (reqs.requiresApiKey && !isConnected) return true
                 return false
               })()}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
+              className="qt-button-primary disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
             >
               {isFetchingModels ? 'Fetching...' : 'Fetch Models'}
             </button>
@@ -224,7 +224,7 @@ export function ProfileForm({
               type="button"
               onClick={onTestMessage}
               disabled={!isConnected || isTestingMessage || !formData.modelName}
-              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
+              className="qt-button-primary disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
             >
               {isTestingMessage ? 'Testing...' : 'Test Message'}
             </button>
@@ -232,19 +232,19 @@ export function ProfileForm({
 
           {/* Status messages */}
           {connectionMessage && (
-            <div className="text-sm text-green-700 bg-green-50/50 border border-green-200/70 rounded px-3 py-2 mb-2">
+            <div className="text-sm qt-alert-success">
               ✓ {connectionMessage}
             </div>
           )}
 
           {modelsMessage && (
-            <div className="text-sm text-blue-700 bg-blue-50/50 border border-blue-200/70 rounded px-3 py-2 mb-2">
+            <div className="text-sm qt-alert-info">
               ✓ {modelsMessage}
             </div>
           )}
 
           {testMessageResult && (
-            <div className="text-sm text-purple-700 bg-purple-50/50 border border-purple-200/70 rounded px-3 py-2 mb-2">
+            <div className="text-sm qt-alert-info">
               ✓ {testMessageResult}
             </div>
           )}
@@ -393,7 +393,7 @@ export function ProfileForm({
               name="isDefault"
               checked={formData.isDefault}
               onChange={(e) => onFormChange('isDefault', e.target.checked)}
-              className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600"
+              className="w-4 h-4 rounded border-input"
             />
             <label htmlFor="isDefault" className="text-sm">
               Set as default profile
@@ -406,10 +406,23 @@ export function ProfileForm({
               name="isCheap"
               checked={formData.isCheap}
               onChange={(e) => onFormChange('isCheap', e.target.checked)}
-              className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600"
+              className="w-4 h-4 rounded border-input"
             />
             <label htmlFor="isCheap" className="text-sm">
               Mark as cheap LLM (suitable for cost-effective tasks like memory extraction)
+            </label>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="isDangerousCompatible"
+              name="isDangerousCompatible"
+              checked={formData.isDangerousCompatible}
+              onChange={(e) => onFormChange('isDangerousCompatible', e.target.checked)}
+              className="w-4 h-4 rounded border-input"
+            />
+            <label htmlFor="isDangerousCompatible" className="text-sm">
+              Uncensored-compatible (suitable for dangerous/sensitive content routing)
             </label>
           </div>
           {/* Web Search Tool - available for all providers with tool support */}
@@ -420,7 +433,7 @@ export function ProfileForm({
               name="allowWebSearch"
               checked={formData.allowWebSearch}
               onChange={(e) => onFormChange('allowWebSearch', e.target.checked)}
-              className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600"
+              className="w-4 h-4 rounded border-input"
             />
             <label htmlFor="allowWebSearch" className="text-sm">
               Allow web search tool
@@ -438,7 +451,7 @@ export function ProfileForm({
                   name="useNativeWebSearch"
                   checked={formData.useNativeWebSearch}
                   onChange={(e) => onFormChange('useNativeWebSearch', e.target.checked)}
-                  className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600"
+                  className="w-4 h-4 rounded border-input"
                 />
                 <label htmlFor="useNativeWebSearch" className="text-sm">
                   Use provider native web search
@@ -470,14 +483,14 @@ export function ProfileForm({
           <button
             type="submit"
             disabled={isSaving}
-            className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground"
+            className="qt-button-primary disabled:bg-muted disabled:text-muted-foreground"
           >
             {isSaving ? 'Saving...' : editingId ? 'Update Profile' : 'Create Profile'}
           </button>
           <button
             type="button"
             onClick={onCancel}
-            className="px-6 py-2 bg-muted text-foreground rounded-lg hover:bg-accent"
+            className="qt-button-secondary"
           >
             Cancel
           </button>
@@ -510,7 +523,7 @@ function OpenRouterOptions({
           id="enableZDR"
           checked={formData.enableZDR}
           onChange={(e) => onSetField('enableZDR', e.target.checked)}
-          className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600"
+          className="w-4 h-4 rounded border-input"
         />
         <div className="flex flex-col gap-1">
           <label htmlFor="enableZDR" className="text-sm">
@@ -529,7 +542,7 @@ function OpenRouterOptions({
           id="useCustomModel"
           checked={formData.useCustomModel}
           onChange={(e) => onSetField('useCustomModel', e.target.checked)}
-          className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600"
+          className="w-4 h-4 rounded border-input"
         />
         <div className="flex flex-col gap-1">
           <label htmlFor="useCustomModel" className="text-sm">
@@ -551,7 +564,7 @@ function OpenRouterOptions({
             supports up to 3 total models (1 primary + 2 fallbacks).
           </p>
           {formData.fallbackModels.length >= 2 && (
-            <p className="qt-text-xs text-amber-600 dark:text-amber-400 mb-2">
+            <p className="qt-text-xs text-warning mb-2">
               Maximum fallback models reached. Remove one to add a different model.
             </p>
           )}
@@ -641,7 +654,7 @@ function OpenRouterOptions({
             ))}
         </div>
         {formData.providerOrder.length > 0 && (
-          <div className="space-y-1 border border-border rounded p-2 bg-background">
+          <div className="space-y-1 border border-border rounded p-2 bg-card">
             <p className="qt-text-label-xs mb-1">Priority order:</p>
             {formData.providerOrder.map((provider, idx) => (
               <div key={provider} className="flex items-center gap-2 bg-primary/5 rounded px-2 py-1">
@@ -717,7 +730,7 @@ function AnthropicOptions({
           id="enableCacheBreakpoints"
           checked={formData.enableCacheBreakpoints}
           onChange={(e) => onSetField('enableCacheBreakpoints', e.target.checked)}
-          className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600"
+          className="w-4 h-4 rounded border-input"
         />
         <label htmlFor="enableCacheBreakpoints" className="text-sm">
           Enable Prompt Caching

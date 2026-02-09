@@ -23,25 +23,30 @@ import packageJson from '@/package.json';
 import { resolve, join } from 'node:path';
 import { existsSync } from 'node:fs';
 
-// Use __non_webpack_require__ to bypass bundler static analysis for dynamic plugin loading
-// This magic global is provided by webpack/Turbopack for native Node.js require access
-const dynamicRequire: NodeRequire = typeof __non_webpack_require__ !== 'undefined'
-  ? __non_webpack_require__
-  : require;
-
-// Get the Module object dynamically to avoid Next.js bundler issues
-// Using explicit interface instead of `typeof import('module')` to avoid bundler tracing
+// Dynamic plugin loading requires native Node.js require, not the bundler's.
+// - Webpack (dev): provides __non_webpack_require__ for native require access
+// - Turbopack (Next.js 16+ production) / plain Node.js: use createRequire from node:module
+//   accessed via require('node:module') so webpack sees it as dead code
 interface NodeModuleParent {
   filename?: string;
   paths?: string[];
 }
-interface NodeModule {
+interface NodeModuleInternal {
   _resolveFilename: (request: string, parent: NodeModuleParent | null, isMain: boolean, options?: object) => string;
   _nodeModulePaths: (from: string) => string[];
 }
-const Module: NodeModule = typeof __non_webpack_require__ !== 'undefined'
-  ? __non_webpack_require__('module')
-  : require('module');
+
+let dynamicRequire: NodeRequire;
+let Module: NodeModuleInternal;
+
+if (typeof __non_webpack_require__ !== 'undefined') {
+  dynamicRequire = __non_webpack_require__;
+  Module = __non_webpack_require__('module') as unknown as NodeModuleInternal;
+} else {
+  const nodeModule = require('node:module');
+  dynamicRequire = nodeModule.createRequire(process.cwd() + '/') as NodeRequire;
+  Module = nodeModule as unknown as NodeModuleInternal;
+}
 
 // Get the app's node_modules path for peer dependency resolution
 const appNodeModules = join(process.cwd(), 'node_modules');
@@ -99,7 +104,7 @@ function loadExternalPluginModule(modulePath: string): unknown {
 
   try {
     // Clear the module from cache to ensure fresh load with our patched resolver
-    delete require.cache[require.resolve(modulePath)];
+    delete dynamicRequire.cache[dynamicRequire.resolve(modulePath)];
   } catch {
     // Module not in cache, that's fine
   }
@@ -285,21 +290,9 @@ async function performInitialization(): Promise<PluginInitializationResult> {
     // Note: Migrations are now run in instrumentation.ts BEFORE plugin initialization.
     // This ensures data compatibility before any plugins are loaded.
 
-    // Get final stats
+    // Get final stats (but don't mark as initialized yet - registries need to be initialized first)
     const stats = pluginRegistry.getStats();
     result.stats = stats;
-    result.success = true;
-    initialized = true;
-
-    const duration = Date.now() - startTime;
-    logger.info('Plugin system initialized', {
-      duration: `${duration}ms`,
-      total: stats.total,
-      enabled: stats.enabled,
-      disabled: stats.disabled,
-      errors: result.errors.length,
-      warnings: result.warnings.length,
-    });
 
     // Log enabled plugins
     const enabledPlugins = pluginRegistry.getEnabled();
@@ -350,18 +343,8 @@ async function performInitialization(): Promise<PluginInitializationResult> {
 
           if (pluginModule?.plugin) {
             providers.push(pluginModule.plugin);
-            logger.debug('Loaded provider plugin', {
-              plugin: loadedPlugin.manifest.name,
-              capabilities: loadedPlugin.capabilities,
-              source: loadedPlugin.source,
-            });
           } else if (pluginModule?.default?.plugin) {
             providers.push(pluginModule.default.plugin);
-            logger.debug('Loaded provider plugin (default export)', {
-              plugin: loadedPlugin.manifest.name,
-              capabilities: loadedPlugin.capabilities,
-              source: loadedPlugin.source,
-            });
           } else {
             logger.warn('Provider plugin module does not export a plugin object', {
               plugin: loadedPlugin.manifest.name,
@@ -510,6 +493,22 @@ async function performInitialization(): Promise<PluginInitializationResult> {
         warnings: [`File storage initialization failed: ${errorMsg}`],
       });
     }
+
+    // Mark as fully initialized AFTER all registries are set up
+    // This is critical for avoiding race conditions where a second call to initializePlugins()
+    // returns early before provider registry is initialized (Docker/production issue)
+    result.success = true;
+    initialized = true;
+
+    const duration = Date.now() - startTime;
+    logger.info('Plugin system initialized', {
+      duration: `${duration}ms`,
+      total: stats.total,
+      enabled: stats.enabled,
+      disabled: stats.disabled,
+      errors: result.errors.length,
+      warnings: result.warnings.length,
+    });
 
     return result;
   } catch (error) {

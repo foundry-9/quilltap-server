@@ -117,7 +117,7 @@ export function ProfileForm({
   const currentModels = embeddingModels[form.formData.provider] || []
 
   return (
-    <div className="border border-border rounded-lg p-6 bg-muted/50">
+    <div className="border border-border rounded-lg p-6 bg-card">
       <h3 className="text-md font-semibold text-foreground mb-4">
         {profile?.id ? 'Edit Profile' : 'Create New Profile'}
       </h3>
@@ -160,7 +160,7 @@ export function ProfileForm({
             <option value="OLLAMA">Ollama (Local)</option>
           </select>
           {isBuiltin && (
-            <p className="mt-1 qt-text-xs text-blue-600 dark:text-blue-400">
+            <p className="mt-1 qt-text-xs text-info">
               Built-in embeddings use TF-IDF with BM25 enhancement. No API key required, works offline.
               The vocabulary will be automatically built from your memories.
             </p>
@@ -187,7 +187,7 @@ export function ProfileForm({
               ))}
             </select>
             {filteredApiKeys.length === 0 && (
-              <p className="mt-1 qt-text-xs text-amber-600">
+              <p className="mt-1 qt-text-xs text-warning">
                 No {form.formData.provider} API keys found. Add one in the API Keys tab first.
               </p>
             )}

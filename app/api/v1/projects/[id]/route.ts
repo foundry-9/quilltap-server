@@ -23,6 +23,7 @@
  * DELETE /api/v1/projects/[id]?action=clear-mount-point - Clear project mount point (use system default)
  *
  * GET /api/v1/projects/[id]?action=get-state - Get project state
+ * GET /api/v1/projects/[id]?action=get-background - Get project story background URL
  * PUT /api/v1/projects/[id]?action=set-state - Set project state
  * DELETE /api/v1/projects/[id]?action=reset-state - Reset project state to empty
  */
@@ -49,6 +50,8 @@ const updateProjectSchema = z.object({
   characterRoster: z.array(z.uuid()).optional(),
   color: z.string().regex(/^#(?:[0-9a-fA-F]{3}){1,2}$/).nullable().optional(),
   icon: z.string().max(50).nullable().optional(),
+  defaultAgentModeEnabled: z.boolean().nullable().optional(),
+  backgroundDisplayMode: z.enum(['latest_chat', 'project', 'static', 'theme']).optional(),
 });
 
 const addCharacterSchema = z.object({
@@ -218,8 +221,12 @@ async function handleListChats(req: NextRequest, context: AuthenticatedContext, 
     const allChats = await repos.chats.findAll();
     const projectChats = allChats.filter(c => c.projectId === id);
 
-    // Sort by updatedAt descending
-    projectChats.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    // Sort by lastMessageAt descending, falling back to updatedAt for chats without messages
+    projectChats.sort((a, b) => {
+      const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : new Date(a.updatedAt).getTime();
+      const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : new Date(b.updatedAt).getTime();
+      return bTime - aTime;
+    });
 
     // Get total count before pagination
     const total = projectChats.length;
@@ -273,12 +280,27 @@ async function handleListChats(req: NextRequest, context: AuthenticatedContext, 
           })
           .filter(Boolean);
 
+        // Get story background if available
+        let storyBackground = null;
+        if (chat.storyBackgroundImageId) {
+          const bgFile = await repos.files.findById(chat.storyBackgroundImageId);
+          if (bgFile) {
+            storyBackground = {
+              id: bgFile.id,
+              filepath: getFilePath(bgFile),
+            };
+          }
+        }
+
         return {
           id: chat.id,
           title: chat.title,
           messageCount: chat.messageCount,
           participants: participants.filter(Boolean),
           tags: chatTags,
+          storyBackground,
+          isDangerousChat: chat.isDangerousChat === true,
+          lastMessageAt: chat.lastMessageAt ?? null,
           updatedAt: chat.updatedAt,
           createdAt: chat.createdAt,
         };
@@ -347,6 +369,72 @@ async function handleGetState(req: NextRequest, context: AuthenticatedContext, {
   } catch (error) {
     logger.error('[Projects v1] Error getting state', { projectId: id }, error instanceof Error ? error : undefined);
     return serverError('Failed to get state');
+  }
+}
+
+async function handleGetBackground(req: NextRequest, context: AuthenticatedContext, { id }: { id: string }) {
+  const { user, repos } = context;
+
+  try {
+    const project = await repos.projects.findById(id);
+    if (!checkOwnership(project, user.id)) {
+      return notFound('Project');
+    }
+
+    // Determine the background based on backgroundDisplayMode
+    const displayMode = project.backgroundDisplayMode || 'theme';
+
+    // If mode is 'theme', no background
+    if (displayMode === 'theme') {
+      return NextResponse.json({ backgroundUrl: null, displayMode });
+    }
+
+    // If mode is 'static', use staticBackgroundImageId
+    if (displayMode === 'static' && project.staticBackgroundImageId) {
+      const file = await repos.files.findById(project.staticBackgroundImageId);
+      if (file) {
+        return NextResponse.json({
+          backgroundUrl: getFilePath(file),
+          displayMode,
+        });
+      }
+    }
+
+    // If mode is 'project', use storyBackgroundImageId
+    if (displayMode === 'project' && project.storyBackgroundImageId) {
+      const file = await repos.files.findById(project.storyBackgroundImageId);
+      if (file) {
+        return NextResponse.json({
+          backgroundUrl: getFilePath(file),
+          displayMode,
+        });
+      }
+    }
+
+    // If mode is 'latest_chat', find the most recently updated chat with a background
+    if (displayMode === 'latest_chat') {
+      const allChats = await repos.chats.findAll();
+      const projectChats = allChats
+        .filter(c => c.projectId === id && c.storyBackgroundImageId)
+        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+
+      if (projectChats.length > 0 && projectChats[0].storyBackgroundImageId) {
+        const file = await repos.files.findById(projectChats[0].storyBackgroundImageId);
+        if (file) {
+          return NextResponse.json({
+            backgroundUrl: getFilePath(file),
+            displayMode,
+            sourceChatId: projectChats[0].id,
+          });
+        }
+      }
+    }
+
+    // No background available
+    return NextResponse.json({ backgroundUrl: null, displayMode });
+  } catch (error) {
+    logger.error('[Projects v1] Error getting background', { projectId: id }, error instanceof Error ? error : undefined);
+    return serverError('Failed to get background');
   }
 }
 
@@ -421,6 +509,8 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
       return handleGetMountPoint(req, context, { id });
     case 'get-state':
       return handleGetState(req, context, { id });
+    case 'get-background':
+      return handleGetBackground(req, context, { id });
     default:
       return handleGetDefault(req, context, { id });
   }

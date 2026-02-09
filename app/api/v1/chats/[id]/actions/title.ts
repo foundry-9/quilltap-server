@@ -8,7 +8,7 @@ import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { badRequest, serverError } from '@/lib/api/responses';
 import { getCheapLLMProvider } from '@/lib/llm/cheap-llm';
-import { titleChat, ChatMessage } from '@/lib/memory/cheap-llm-tasks';
+import { titleChat, extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 import type { ChatMetadata } from '@/lib/schemas/types';
 
@@ -58,16 +58,7 @@ export async function handleRegenerateTitle(
     }
 
     const allMessages = await repos.chats.getMessages(chatId);
-    const conversationMessages: ChatMessage[] = allMessages
-      .filter((msg) => msg.type === 'message')
-      .filter((msg) => {
-        const role = (msg as { role: string }).role;
-        return role === 'USER' || role === 'ASSISTANT';
-      })
-      .map((msg) => ({
-        role: (msg as { role: string }).role.toLowerCase() as 'user' | 'assistant',
-        content: (msg as { content: string }).content,
-      }));
+    const conversationMessages = extractVisibleConversation(allMessages);
 
     if (conversationMessages.length === 0) {
       return badRequest('No messages in chat to generate title from');

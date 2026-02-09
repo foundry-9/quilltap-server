@@ -1,6 +1,6 @@
 # Participants Sidebar
 
-> **[Open this page in Quilltap](/chats)**
+> **[Open this page in Quilltap](/salon)**
 
 The Participants Sidebar is your control center for managing characters in multi-character chats. It shows who's in the conversation, whose turn it is, and provides controls for managing participation.
 
@@ -40,9 +40,10 @@ When collapsed, the sidebar shows:
 
 **Mini Avatars:**
 - Small circular avatars for each participant
-- Stacked vertically on the right edge
+- Stacked vertically on the right edge, sorted by predicted turn order
 - Shows current speaker with glowing border
-- Queue position badges visible
+- Turn position badges on all active participants (color-coded by status)
+- Inactive participants shown dimmed
 
 **Quick Actions:**
 - Pause/Resume button at the top
@@ -86,7 +87,7 @@ Each character in the sidebar has a card with:
 **Avatar:**
 - Character's profile image or initials
 - Current speaker has glowing/animated border
-- Queue position badge (1, 2, 3...) if queued
+- Turn position badge showing predicted speaking order (color-coded by status)
 
 **Name and Title:**
 - Character's name
@@ -97,12 +98,18 @@ Each character in the sidebar has a card with:
 - "Persona" for user personas
 - "NPC" for on-the-fly characters
 
-### Status Indicators
+### Connection Profile Dropdown
 
-**Connection Profile Badge:**
-- Shows which LLM service/model the character uses
-- Provider icon (OpenAI, Anthropic, etc.)
-- Model name if space permits
+Each character card includes a **connection profile dropdown** that lets you change which LLM service and model the character uses, directly from the sidebar:
+
+- **Dropdown selector** shows the current model (e.g., "gpt-4-turbo", "claude-3-opus")
+- **"User (you type)"** option switches the character to user control (impersonation)
+- **Change immediately** — selecting a different profile saves automatically
+- Only shown for CHARACTER participants, not personas
+
+This makes switching models the fastest possible action — no need to open a settings modal.
+
+### Status Indicators
 
 **Control Mode:**
 - LLM icon if AI-controlled
@@ -130,6 +137,14 @@ Each character in the sidebar has a card with:
 - **Nudge** — Force immediate response (LLM characters)
 - **Queue** — Add to speaking queue
 - **Dequeue** — Remove from queue (if queued)
+- **Stop** — Interrupt the current generation (shown on the generating character's card)
+
+**Active/Inactive Toggle (Eye Icon):**
+- Visible eye icon button on every participant card
+- Click to toggle the character's active status
+- Active characters have an open eye icon
+- Inactive characters have a crossed-out eye icon and dimmed card appearance
+- Inactive characters appear at the bottom of the sidebar with no position badge
 
 **Impersonation Controls:**
 
@@ -139,6 +154,17 @@ Each character in the sidebar has a card with:
 **Remove Button:**
 - Remove this character from the chat
 - Only available if more than one character present
+
+### Settings Toggle (Gear Icon)
+
+Each participant card has a **gear icon** button that expands an inline settings section:
+
+**System Prompt Override:**
+- Compact text area for adding custom context or scenario instructions for this participant
+- Overrides the character's default system prompt for this chat only
+- Changes auto-save after a short delay
+
+Note: The active/inactive toggle has been moved out of the settings section to a visible eye icon button in the action buttons area for easier access.
 
 ## Header Information
 
@@ -271,14 +297,17 @@ Adds characters to an ordered speaking list:
 - Queue persists until processed or cleared
 - Queued characters speak before random selection
 
-### Queue Badges
+### Turn Order Badges
 
-Number badges show queue position:
+Position badges on each participant show their predicted turn order:
 
-- **1** — Will speak next
-- **2** — Will speak second
-- **3** — Will speak third
-- And so on...
+- **Green pulsing** — Currently generating (#1)
+- **Green static** — Next speaker
+- **Blue** — Queued to speak
+- **Neutral** — Eligible, sorted by talkativeness
+- **Amber** — Your turn position
+- **Dimmed** — Already spoke this cycle
+- **No badge** — Inactive participant
 
 ## Impersonation
 

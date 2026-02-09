@@ -15,6 +15,7 @@ import { Provider, ConnectionProfile, CheapLLMSettings } from '@/lib/schemas/typ
 import { logger } from '@/lib/logger'
 import { createContextSummaryEvent, createTitleGenerationEvent } from '@/lib/services/system-events.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
+import { queueStoryBackgroundIfEnabled } from '@/lib/background-jobs/handlers/title-update'
 
 /**
  * Calculates the number of interchanges in a chat
@@ -515,6 +516,18 @@ async function considerTitleUpdateAsync(
           updatedAt: new Date().toISOString(),
         })
         logger.info(`[Title Update] Updated title for chat ${chatId} to: "${suggestedTitle}"`)
+
+        // Queue story background generation if enabled
+        const chatSettings = await repos.chatSettings.findByUserId(userId)
+        if (chatSettings) {
+          // Re-fetch chat to get updated title
+          const updatedChat = await repos.chats.findById(chatId)
+          if (updatedChat) {
+            queueStoryBackgroundIfEnabled(userId, updatedChat, chatSettings, suggestedTitle).catch(error => {
+              logger.error(`[Title Update] Failed to queue story background for chat ${chatId}:`, {}, error instanceof Error ? error : new Error(String(error)))
+            })
+          }
+        }
       } else {
         // Still update the last check interchange even if no title change
         await repos.chats.update(chatId, {
