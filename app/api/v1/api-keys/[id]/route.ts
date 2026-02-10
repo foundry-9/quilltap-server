@@ -14,11 +14,13 @@ import { getUserRepositories } from '@/lib/repositories/factory';
 import { encryptApiKey, decryptApiKey, maskApiKey } from '@/lib/encryption';
 import { Provider } from '@/lib/schemas/types';
 import { providerRegistry } from '@/lib/plugins/provider-registry';
+import { searchProviderRegistry } from '@/lib/plugins/search-provider-registry';
 import { logger } from '@/lib/logger';
 import { notFound, badRequest, serverError } from '@/lib/api/responses';
 
 /**
- * Test API key validity using the provider plugin's validateApiKey method
+ * Test API key validity using the provider plugin's validateApiKey method.
+ * Checks both LLM providers and search providers.
  */
 async function testProviderApiKey(
   provider: Provider,
@@ -26,18 +28,22 @@ async function testProviderApiKey(
   baseUrl?: string
 ): Promise<{ valid: boolean; error?: string }> {
   try {
-
-    // Get provider plugin from registry
-    const plugin = providerRegistry.getProvider(provider);
-    if (!plugin) {
-      logger.warn('[API Keys v1] Provider plugin not found', { provider });
-      return { valid: false, error: `Provider ${provider} not found` };
+    // Try LLM provider first
+    const llmPlugin = providerRegistry.getProvider(provider);
+    if (llmPlugin) {
+      const isValid = await llmPlugin.validateApiKey(apiKey, baseUrl);
+      return { valid: isValid };
     }
 
-    // Use plugin's validateApiKey method
-    const isValid = await plugin.validateApiKey(apiKey, baseUrl);
+    // Try search provider
+    const searchPlugin = searchProviderRegistry.getProvider(provider);
+    if (searchPlugin?.validateApiKey) {
+      const isValid = await searchPlugin.validateApiKey(apiKey, baseUrl);
+      return { valid: isValid };
+    }
 
-    return { valid: isValid };
+    logger.warn('[API Keys v1] Provider plugin not found', { provider });
+    return { valid: false, error: `Provider ${provider} not found` };
   } catch (error) {
     logger.error('[API Keys v1] Key validation failed', { provider }, error as Error);
     return {

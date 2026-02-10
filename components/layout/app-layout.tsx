@@ -28,8 +28,20 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const pathname = usePathname()
   const { data: session, status } = useSession()
 
-  // Don't render layout on auth pages
+  // Don't render layout on auth or setup pages
   const isAuthPage = pathname?.startsWith('/auth')
+  const isSetupPage = pathname?.startsWith('/setup')
+
+  // Setup page bypasses session check entirely (pepper may not be resolved yet)
+  if (isSetupPage) {
+    return (
+      <div className="flex flex-col h-screen bg-background text-foreground">
+        <main className="flex-1 min-h-0 overflow-auto">
+          {children}
+        </main>
+      </div>
+    )
+  }
 
   // Show loading state while checking session
   if (status === 'loading') {

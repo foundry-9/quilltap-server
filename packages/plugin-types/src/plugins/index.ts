@@ -25,6 +25,7 @@ export type {
   PluginAuthor,
   PluginCompatibility,
   ProviderConfig,
+  SearchProviderConfig,
   PluginPermissions,
   PluginManifest,
   InstalledPluginInfo,
@@ -52,3 +53,12 @@ export type {
   RoleplayTemplatePlugin,
   RoleplayTemplatePluginExport,
 } from './roleplay-template';
+
+export type {
+  SearchProviderMetadata,
+  SearchProviderConfigRequirements,
+  SearchResult,
+  SearchOutput,
+  SearchProviderPlugin,
+  SearchProviderPluginExport,
+} from './search-provider';

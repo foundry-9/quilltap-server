@@ -21,6 +21,7 @@
 
 import { logger } from '@/lib/logger';
 import type { UpgradeResults } from '@/lib/plugins/upgrader';
+import type { PepperState } from './pepper-vault';
 
 export type StartupPhase =
   | 'pending'
@@ -43,6 +44,8 @@ interface StartupStateData {
   pluginUpgrades: UpgradeResults | null;
   /** Whether upgrade notifications have been sent to the client */
   upgradesNotified: boolean;
+  /** Pepper vault state */
+  pepperState: PepperState;
 }
 
 // Extend globalThis type for our startup state
@@ -58,6 +61,9 @@ declare global {
  */
 function getGlobalState(): StartupStateData {
   if (!global.__quilltapStartupState) {
+    // In test environment, default pepper to resolved so tests don't need
+    // to explicitly configure the pepper vault
+    const isTest = process.env.NODE_ENV === 'test';
     global.__quilltapStartupState = {
       phase: 'pending',
       migrationsComplete: false,
@@ -67,6 +73,7 @@ function getGlobalState(): StartupStateData {
       error: null,
       pluginUpgrades: null,
       upgradesNotified: false,
+      pepperState: isTest ? 'resolved' : 'needs-setup',
     };
   }
   return global.__quilltapStartupState;
@@ -225,6 +232,30 @@ export const startupState = {
   },
 
   /**
+   * Set the pepper vault state
+   */
+  setPepperState(state: PepperState): void {
+    getGlobalState().pepperState = state;
+  },
+
+  /**
+   * Get the pepper vault state
+   */
+  getPepperState(): PepperState {
+    return getGlobalState().pepperState;
+  },
+
+  /**
+   * Check if the pepper is available and encryption is ready.
+   * Both 'resolved' and 'needs-vault-storage' are operational states
+   * — the pepper IS in process.env and works, just needs vault storage.
+   */
+  isPepperResolved(): boolean {
+    const state = getGlobalState().pepperState;
+    return state === 'resolved' || state === 'needs-vault-storage';
+  },
+
+  /**
    * Wait for the server to be ready
    * Returns immediately if already ready
    * Times out after maxWaitMs (default 30 seconds)
@@ -309,6 +340,7 @@ export const startupState = {
       error: null,
       pluginUpgrades: null,
       upgradesNotified: false,
+      pepperState: 'needs-setup',
     };
     setReadyPromise(undefined);
     setReadyResolve(undefined);

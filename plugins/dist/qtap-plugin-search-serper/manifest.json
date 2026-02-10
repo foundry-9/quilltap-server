@@ -1,0 +1,37 @@
+{
+  "name": "qtap-plugin-search-serper",
+  "title": "Serper Web Search",
+  "description": "Google search results via the Serper.dev API. Provides web search capabilities for the search_web tool.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Foundry-9 LLC"
+  },
+  "license": "MIT",
+  "compatibility": {
+    "quilltapVersion": ">=2.10.0"
+  },
+  "capabilities": ["SEARCH_PROVIDER"],
+  "category": "PROVIDER",
+  "main": "index.js",
+  "typescript": true,
+  "enabledByDefault": true,
+  "status": "STABLE",
+  "searchProviderConfig": {
+    "providerName": "SERPER",
+    "displayName": "Serper Web Search",
+    "description": "Google search results via Serper.dev API",
+    "abbreviation": "SRP",
+    "colors": {
+      "bg": "bg-orange-100",
+      "text": "text-orange-800",
+      "icon": "text-orange-600"
+    },
+    "requiresApiKey": true,
+    "apiKeyLabel": "Serper API Key",
+    "requiresBaseUrl": false
+  },
+  "permissions": {
+    "network": ["google.serper.dev"]
+  },
+  "keywords": ["search", "web", "serper", "google"]
+}

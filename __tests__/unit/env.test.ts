@@ -16,7 +16,6 @@ describe('Environment Validation', () => {
     process.env.BASE_URL = 'http://localhost:3000';
     process.env.GOOGLE_CLIENT_ID = 'test-client-id';
     process.env.GOOGLE_CLIENT_SECRET = 'test-client-secret';
-    process.env.ENCRYPTION_MASTER_PEPPER = 'test-pepper-key-minimum-32-characters';
   });
 
   afterEach(() => {
@@ -53,15 +52,13 @@ describe('Environment Validation', () => {
     expect(() => validateEnv()).not.toThrow();
   });
 
-  it('should fail with short ENCRYPTION_MASTER_PEPPER', async () => {
-    process.env.ENCRYPTION_MASTER_PEPPER = 'short';
+  it('should succeed without ENCRYPTION_MASTER_PEPPER (managed by pepper vault)', async () => {
+    delete process.env.ENCRYPTION_MASTER_PEPPER;
 
     jest.resetModules();
 
-    await expect(async () => {
-      const { validateEnv } = await import('@/lib/env');
-      validateEnv();
-    }).rejects.toThrow();
+    const { validateEnv } = await import('@/lib/env');
+    expect(() => validateEnv()).not.toThrow();
   });
 
   it('should accept valid NODE_ENV values', async () => {
