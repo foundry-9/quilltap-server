@@ -4,6 +4,20 @@
 
 ### 2.10.1
 
+- feat: Pepper Vault — web-based setup wizard for ENCRYPTION_MASTER_PEPPER
+  - Auto-generates encryption pepper on first run, no manual env var needed
+  - Web-based setup wizard at `/setup` with optional passphrase protection
+  - Stores encrypted pepper in SQLite `pepper_vault` table
+  - Three startup modes: auto-resolve (no passphrase), unlock (passphrase), and setup (first run)
+  - Env var pepper users prompted to store in vault via dismissible banner
+  - API routes at `/api/v1/system/pepper-vault` for status, setup, unlock, and store
+  - `PepperVaultGate` client component redirects to setup when needed
+  - Pepper state tracked in `startupState` with `isPepperResolved()` gate
+  - Authenticated API routes return 503 when pepper is not resolved
+  - `lib/encryption.ts` now uses lazy pepper loading (reads from `process.env` on demand)
+  - `ENCRYPTION_MASTER_PEPPER` is now optional in env schema
+  - Comprehensive unit tests for pepper vault lifecycle
+
 - feat: Pluggable web search provider system
   - New `SEARCH_PROVIDER` plugin type for pluggable web search backends
   - New `SearchProviderPlugin` interface in `@quilltap/plugin-types@1.14.0`

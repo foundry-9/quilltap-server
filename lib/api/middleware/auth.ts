@@ -27,6 +27,24 @@ async function ensureServerReady(): Promise<void> {
       });
     }
   }
+
+  if (!startupState.isPepperResolved()) {
+    const pepperState = startupState.getPepperState();
+    contextLogger.debug('Request blocked: pepper not resolved', { pepperState });
+    throw new PepperNotReadyError(pepperState);
+  }
+}
+
+/**
+ * Error thrown when the pepper vault is not yet resolved
+ */
+class PepperNotReadyError extends Error {
+  public pepperState: string;
+  constructor(pepperState: string) {
+    super('Setup required');
+    this.name = 'PepperNotReadyError';
+    this.pepperState = pepperState;
+  }
 }
 
 /**
@@ -64,7 +82,17 @@ export type ContextParamsHandler<P = Record<string, string>, T = NextResponse> =
 export async function withContext<T>(
   handler: ContextHandler<T>
 ): Promise<T | NextResponse> {
-  await ensureServerReady();
+  try {
+    await ensureServerReady();
+  } catch (error) {
+    if (error instanceof PepperNotReadyError) {
+      return NextResponse.json(
+        { error: 'Setup required', setupUrl: '/setup', pepperState: error.pepperState },
+        { status: 503 }
+      );
+    }
+    throw error;
+  }
 
   const session = await getServerSession();
 
@@ -92,7 +120,17 @@ export async function withContextParams<P extends Record<string, string>, T>(
   params: P,
   handler: ContextParamsHandler<P, T>
 ): Promise<T | NextResponse> {
-  await ensureServerReady();
+  try {
+    await ensureServerReady();
+  } catch (error) {
+    if (error instanceof PepperNotReadyError) {
+      return NextResponse.json(
+        { error: 'Setup required', setupUrl: '/setup', pepperState: error.pepperState },
+        { status: 503 }
+      );
+    }
+    throw error;
+  }
 
   const session = await getServerSession();
 
@@ -124,7 +162,17 @@ export function createContextHandler(
   ) => Promise<NextResponse>
 ): (request: NextRequest) => Promise<NextResponse> {
   return async (request: NextRequest) => {
-    await ensureServerReady();
+    try {
+      await ensureServerReady();
+    } catch (error) {
+      if (error instanceof PepperNotReadyError) {
+        return NextResponse.json(
+          { error: 'Setup required', setupUrl: '/setup', pepperState: error.pepperState },
+          { status: 503 }
+        );
+      }
+      throw error;
+    }
 
     const session = await getServerSession();
 
@@ -162,7 +210,17 @@ export function createContextParamsHandler<P extends Record<string, string>>(
   context: { params: Promise<P> }
 ) => Promise<NextResponse> {
   return async (request: NextRequest, context: { params: Promise<P> }) => {
-    await ensureServerReady();
+    try {
+      await ensureServerReady();
+    } catch (error) {
+      if (error instanceof PepperNotReadyError) {
+        return NextResponse.json(
+          { error: 'Setup required', setupUrl: '/setup', pepperState: error.pepperState },
+          { status: 503 }
+        );
+      }
+      throw error;
+    }
 
     const params = await context.params;
     const session = await getServerSession();
