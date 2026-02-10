@@ -27,3 +27,17 @@ export type {
 export {
   createProviderLogger,
 } from './provider-plugin';
+
+// Export all search provider plugin types and interfaces
+export type {
+  SearchProviderMetadata,
+  SearchProviderConfigRequirements,
+  SearchResult,
+  SearchOutput,
+  SearchProviderPlugin,
+  SearchProviderPluginExport,
+} from './search-provider-plugin';
+
+export {
+  createSearchProviderLogger,
+} from './search-provider-plugin';

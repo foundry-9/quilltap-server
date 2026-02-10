@@ -117,8 +117,8 @@ Some tools show as unavailable (grayed out). This means the tool **cannot be use
 
 **Search Web - Unavailable**
 
-- Reason: Web search is not enabled in the connection profile
-- Solution: Enable web search in your connection profile settings
+- Reason: Web search is not enabled in the connection profile, or no search provider API key is configured
+- Solution: Enable web search in your connection profile settings and add a search provider API key (e.g., Serper) in Settings > API Keys
 
 If a tool you need is unavailable, the dialog shows the reason. Take the suggested action to make it available.
 

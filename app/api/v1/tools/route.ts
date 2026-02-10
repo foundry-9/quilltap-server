@@ -18,6 +18,7 @@ import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { successResponse, serverError } from '@/lib/api/responses';
 import { toolRegistry } from '@/lib/plugins/tool-registry';
+import { isWebSearchConfigured } from '@/lib/tools/handlers/web-search-handler';
 
 /**
  * Built-in tool definitions (these are always available)
@@ -250,6 +251,9 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
             if (!chatContext.allowsWebSearch) {
               tool.available = false;
               tool.unavailableReason = 'Web search must be enabled in the connection profile';
+            } else if (!isWebSearchConfigured()) {
+              tool.available = false;
+              tool.unavailableReason = 'No search provider configured. Please add a search provider API key in Settings > API Keys.';
             }
             break;
         }

@@ -103,6 +103,7 @@ export type {
   PluginAuthor,
   PluginCompatibility,
   ProviderConfig,
+  SearchProviderConfig,
   PluginPermissions,
   PluginManifest,
   InstalledPluginInfo,
@@ -152,6 +153,16 @@ export type {
   FileStoragePluginExport,
 } from './plugins/file-storage';
 
+export type {
+  // Search provider plugin types
+  SearchProviderMetadata,
+  SearchProviderConfigRequirements,
+  SearchResult,
+  SearchOutput,
+  SearchProviderPlugin,
+  SearchProviderPluginExport,
+} from './plugins/search-provider';
+
 // ============================================================================
 // Common Types
 // ============================================================================
@@ -181,4 +192,4 @@ export { createConsoleLogger, createNoopLogger } from './common/logger';
  * Version of the plugin-types package.
  * Can be used at runtime to check compatibility.
  */
-export const PLUGIN_TYPES_VERSION = '1.13.0';
+export const PLUGIN_TYPES_VERSION = '1.14.0';

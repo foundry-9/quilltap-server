@@ -2,7 +2,19 @@
 
 ## Recent Changes
 
-### 2.11-dev
+### 2.10.1
+
+- feat: Pluggable web search provider system
+  - New `SEARCH_PROVIDER` plugin type for pluggable web search backends
+  - New `SearchProviderPlugin` interface in `@quilltap/plugin-types@1.14.0`
+  - New search provider registry (`lib/plugins/search-provider-registry.ts`) for managing search provider plugins
+  - Bundled Serper.dev search provider plugin (`qtap-plugin-search-serper`)
+  - Web search handler rewritten to use search provider plugins with DB-stored API keys
+  - Providers API now returns both LLM and search providers
+  - API key test endpoint supports both LLM and search providers
+  - `SERPER_API_KEY` env var deprecated in favor of Settings > API Keys
+  - Backwards compatible: legacy `SERPER_API_KEY` env var still works as fallback
+  - New `docs/SEARCH_PLUGIN_DEVELOPMENT.md` guide for building search provider plugins
 
 ### 2.10.0
 
@@ -663,4 +675,3 @@
   - New SSE events: `agent_iteration`, `agent_completed`, `agent_force_final`
   - New help documentation: `/help/agent-mode`
   - Migration automatically adds required database columns
-

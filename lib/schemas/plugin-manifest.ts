@@ -36,6 +36,7 @@ export const PluginCapabilityEnum = z.enum([
   'UPGRADE_MIGRATION',     // Provides version upgrade migrations (runs early in startup)
   'ROLEPLAY_TEMPLATE',     // Provides roleplay formatting templates
   'TOOL_PROVIDER',         // Provides LLM tools (e.g., curl, calculators, etc.)
+  'SEARCH_PROVIDER',       // Provides web search backend (e.g., Serper, Bing, DuckDuckGo)
 ]);
 
 export type PluginCapability = z.infer<typeof PluginCapabilityEnum>;
@@ -530,6 +531,51 @@ export const ToolConfigSchema = z.object({
 export type ToolConfig = z.infer<typeof ToolConfigSchema>;
 
 /**
+ * Search provider plugin configuration schema
+ *
+ * Defines the configuration for web search provider plugins.
+ * These plugins use the SEARCH_PROVIDER capability and provide
+ * backends for the built-in `search_web` tool.
+ */
+export const SearchProviderConfigSchema = z.object({
+  /** Internal identifier for the search provider (e.g., 'SERPER', 'BING') */
+  providerName: z.string().regex(/^[A-Z][A-Z0-9_]*$/),
+
+  /** Human-readable display name (e.g., 'Serper Web Search') */
+  displayName: z.string().min(1).max(100),
+
+  /** Short description of the search provider */
+  description: z.string().min(1).max(500),
+
+  /** 2-4 character abbreviation for use in icons/badges (e.g., 'SRP', 'BNG') */
+  abbreviation: z.string().min(2).max(4).regex(/^[A-Z0-9]+$/),
+
+  /** Color configuration using Tailwind CSS classes */
+  colors: z.object({
+    /** Background color class */
+    bg: z.string().min(1),
+    /** Text color class */
+    text: z.string().min(1),
+    /** Icon color class */
+    icon: z.string().min(1),
+  }),
+
+  /** Whether the search provider requires an API key */
+  requiresApiKey: z.boolean().default(true),
+
+  /** Custom label for the API key field */
+  apiKeyLabel: z.string().min(1).max(100).optional(),
+
+  /** Whether the search provider requires a custom base URL */
+  requiresBaseUrl: z.boolean().default(false),
+
+  /** Default base URL for the search provider (if customizable) */
+  baseUrlDefault: z.url().optional(),
+});
+
+export type SearchProviderConfig = z.infer<typeof SearchProviderConfigSchema>;
+
+/**
  * File backend configuration field schema
  *
  * Defines a single configuration field for file storage backend plugins.
@@ -697,6 +743,9 @@ export const PluginManifestSchema = z.strictObject({
 
   /** Tool configuration (for TOOL_PROVIDER capability plugins) */
   toolConfig: ToolConfigSchema.optional(),
+
+  /** Search provider configuration (for SEARCH_PROVIDER capability plugins) */
+  searchProviderConfig: SearchProviderConfigSchema.optional(),
 
   /** File backend configuration (for FILE_BACKEND capability plugins) */
   fileBackendConfig: FileBackendConfigSchema.optional(),

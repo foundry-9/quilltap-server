@@ -13,6 +13,7 @@ import { logger } from '@/lib/logger';
 import { safeValidatePluginManifest, pluginRequiresRestart, type PluginManifest } from '@/lib/schemas/plugin-manifest';
 import { isPluginCompatible } from './manifest-loader';
 import { hotLoadProviderPlugin } from './provider-registry';
+import { hotLoadSearchProviderPlugin } from './search-provider-registry';
 import { getNpmPluginsDir } from '@/lib/paths';
 
 const execAsync = promisify(exec);
@@ -271,12 +272,23 @@ export async function installPluginFromNpm(
       source: 'npm',
     });
 
-    // Attempt to hot-load LLM provider plugins so they're available immediately
+    // Attempt to hot-load provider plugins so they're available immediately
     let hotLoaded = false;
     if (manifest.capabilities.includes('LLM_PROVIDER')) {
       hotLoaded = hotLoadProviderPlugin(installedPath, manifest);
       if (hotLoaded) {
         logger.info('LLM provider plugin hot-loaded successfully', {
+          context: 'PluginInstaller.installPluginFromNpm',
+          packageName,
+        });
+      }
+    }
+
+    if (manifest.capabilities.includes('SEARCH_PROVIDER')) {
+      const searchHotLoaded = hotLoadSearchProviderPlugin(installedPath, manifest);
+      if (searchHotLoaded) {
+        hotLoaded = true;
+        logger.info('Search provider plugin hot-loaded successfully', {
           context: 'PluginInstaller.installPluginFromNpm',
           packageName,
         });
