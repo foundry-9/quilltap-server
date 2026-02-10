@@ -17,9 +17,27 @@
 export async function register() {
   // Only run in Node.js runtime (not Edge Runtime)
   if (process.env.NEXT_RUNTIME === 'nodejs') {
+    // ================================================================
+    // PHASE -0.5: Pepper Vault (before env validation in logger import)
+    // ================================================================
+    // Must run before logger/env imports since those now allow optional pepper.
+    // Uses standalone migration logger and database utils.
+    if (process.env.SKIP_ENV_VALIDATION !== 'true' &&
+        process.env.NEXT_PHASE !== 'phase-production-build') {
+      const { provisionPepper } = await import('./lib/startup/pepper-vault');
+      const pepperState = await provisionPepper();
+      // Store state temporarily on global for transfer to startupState after import
+      (global as any).__quilltapPepperState = pepperState;
+    }
+
     // Use dynamic import for logger to avoid Edge Runtime issues
     const { logger } = await import('./lib/logger');
     const { startupState } = await import('./lib/startup/startup-state');
+
+    // Transfer pepper state from global to startupState
+    if ((global as any).__quilltapPepperState) {
+      startupState.setPepperState((global as any).__quilltapPepperState);
+    }
 
     logger.info('Server starting - initializing services', {
       context: 'instrumentation.register',

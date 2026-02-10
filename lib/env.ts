@@ -21,10 +21,10 @@ const envSchema = z
     GITHUB_ID: z.string().optional(),
     GITHUB_SECRET: z.string().optional(),
 
-    // Encryption
-    ENCRYPTION_MASTER_PEPPER: z
-      .string()
-      .min(32, 'ENCRYPTION_MASTER_PEPPER must be at least 32 characters'),
+    // NOTE: ENCRYPTION_MASTER_PEPPER is NOT in the schema.
+    // It is managed by the pepper vault (lib/startup/pepper-vault.ts) and
+    // read directly from process.env at runtime by lib/encryption.ts.
+    // See app/setup/page.tsx for the setup wizard.
 
     // Rate Limiting (optional)
     RATE_LIMIT_API_MAX: z.string().regex(/^\d+$/).optional(),
@@ -112,7 +112,6 @@ export function validateEnv(): Env {
     return {
       NODE_ENV: process.env.NODE_ENV || 'production',
       BASE_URL: process.env.BASE_URL || 'http://localhost:3000',
-      ENCRYPTION_MASTER_PEPPER: process.env.ENCRYPTION_MASTER_PEPPER || 'build-time-placeholder-pepper-value',
       QUILLTAP_FILE_STORAGE_PATH: './data/files',
       S3_MODE: 'disabled',
       S3_REGION: 'us-east-1',

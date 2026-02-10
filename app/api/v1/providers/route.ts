@@ -12,6 +12,7 @@ import {
   successResponse,
 } from '@/lib/api/responses';
 import { providerRegistry } from '@/lib/plugins/provider-registry';
+import { searchProviderRegistry } from '@/lib/plugins/search-provider-registry';
 
 // ============================================================================
 // GET Handler
@@ -19,7 +20,7 @@ import { providerRegistry } from '@/lib/plugins/provider-registry';
 
 export const GET = createAuthenticatedHandler(async (req, context) => {
   try {
-    // Get all registered providers
+    // Get all registered LLM providers
     const plugins = providerRegistry.getAllProviders();
 
     // Transform to response format
@@ -35,13 +36,36 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
       configRequirements: plugin.config,
     }));
 
+    // Get all registered search providers
+    const searchPlugins = searchProviderRegistry.getAllProviders();
+
+    const searchProviderList = searchPlugins.map((plugin) => ({
+      id: plugin.metadata.providerName,
+      name: plugin.metadata.providerName,
+      displayName: plugin.metadata.displayName,
+      description: plugin.metadata.description,
+      abbreviation: plugin.metadata.abbreviation,
+      colors: plugin.metadata.colors,
+      type: 'search',
+      configRequirements: {
+        requiresApiKey: plugin.config.requiresApiKey,
+        requiresBaseUrl: plugin.config.requiresBaseUrl,
+        apiKeyLabel: plugin.config.apiKeyLabel,
+      },
+    }));
+
+    // Combine both lists
+    const allProviders = [...providerList, ...searchProviderList];
+
     logger.info('[Providers v1] Listed providers', {
-      count: providerList.length,
+      llmCount: providerList.length,
+      searchCount: searchProviderList.length,
+      totalCount: allProviders.length,
     });
 
     return successResponse({
-      providers: providerList,
-      count: providerList.length,
+      providers: allProviders,
+      count: allProviders.length,
     });
   } catch (error) {
     logger.error(

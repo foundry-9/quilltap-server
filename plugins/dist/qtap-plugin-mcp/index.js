@@ -6960,8 +6960,10 @@ var envSchema = import_zod.z.object({
   APPLE_SECRET: import_zod.z.string().optional(),
   GITHUB_ID: import_zod.z.string().optional(),
   GITHUB_SECRET: import_zod.z.string().optional(),
-  // Encryption
-  ENCRYPTION_MASTER_PEPPER: import_zod.z.string().min(32, "ENCRYPTION_MASTER_PEPPER must be at least 32 characters"),
+  // NOTE: ENCRYPTION_MASTER_PEPPER is NOT in the schema.
+  // It is managed by the pepper vault (lib/startup/pepper-vault.ts) and
+  // read directly from process.env at runtime by lib/encryption.ts.
+  // See app/setup/page.tsx for the setup wizard.
   // Rate Limiting (optional)
   RATE_LIMIT_API_MAX: import_zod.z.string().regex(/^\d+$/).optional(),
   RATE_LIMIT_API_WINDOW: import_zod.z.string().regex(/^\d+$/).optional(),
@@ -7019,7 +7021,6 @@ function validateEnv() {
     return {
       NODE_ENV: process.env.NODE_ENV || "production",
       BASE_URL: process.env.BASE_URL || "http://localhost:3000",
-      ENCRYPTION_MASTER_PEPPER: process.env.ENCRYPTION_MASTER_PEPPER || "build-time-placeholder-pepper-value",
       QUILLTAP_FILE_STORAGE_PATH: "./data/files",
       S3_MODE: "disabled",
       S3_REGION: "us-east-1",

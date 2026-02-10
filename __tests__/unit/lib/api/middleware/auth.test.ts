@@ -14,6 +14,8 @@ jest.mock('@/lib/startup/startup-state', () => ({
     isReady: jest.fn().mockReturnValue(true),
     waitForReady: jest.fn().mockResolvedValue(true),
     getPhase: jest.fn().mockReturnValue('ready'),
+    isPepperResolved: jest.fn().mockReturnValue(true),
+    getPepperState: jest.fn().mockReturnValue('resolved'),
   },
 }));
 

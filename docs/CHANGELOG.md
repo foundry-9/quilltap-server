@@ -4,6 +4,38 @@
 
 ### 2.11-dev
 
+- Started 2.11 dev branch
+
+### 2.10.1
+
+- fix: Remove verbose debug logging from pepper vault and web search handler
+
+- feat: Pepper Vault — web-based setup wizard for ENCRYPTION_MASTER_PEPPER
+  - Auto-generates encryption pepper on first run, no manual env var needed
+  - Web-based setup wizard at `/setup` with optional passphrase protection
+  - Stores encrypted pepper in SQLite `pepper_vault` table
+  - Three startup modes: auto-resolve (no passphrase), unlock (passphrase), and setup (first run)
+  - Env var pepper users prompted to store in vault via dismissible banner
+  - API routes at `/api/v1/system/pepper-vault` for status, setup, unlock, and store
+  - `PepperVaultGate` client component redirects to setup when needed
+  - Pepper state tracked in `startupState` with `isPepperResolved()` gate
+  - Authenticated API routes return 503 when pepper is not resolved
+  - `lib/encryption.ts` now uses lazy pepper loading (reads from `process.env` on demand)
+  - `ENCRYPTION_MASTER_PEPPER` is now optional in env schema
+  - Comprehensive unit tests for pepper vault lifecycle
+
+- feat: Pluggable web search provider system
+  - New `SEARCH_PROVIDER` plugin type for pluggable web search backends
+  - New `SearchProviderPlugin` interface in `@quilltap/plugin-types@1.14.0`
+  - New search provider registry (`lib/plugins/search-provider-registry.ts`) for managing search provider plugins
+  - Bundled Serper.dev search provider plugin (`qtap-plugin-search-serper`)
+  - Web search handler rewritten to use search provider plugins with DB-stored API keys
+  - Providers API now returns both LLM and search providers
+  - API key test endpoint supports both LLM and search providers
+  - `SERPER_API_KEY` env var deprecated in favor of Settings > API Keys
+  - Backwards compatible: legacy `SERPER_API_KEY` env var still works as fallback
+  - New `docs/SEARCH_PLUGIN_DEVELOPMENT.md` guide for building search provider plugins
+
 ### 2.10.0
 
 - refactor: Add type-safe `TypedQueryFilter<T>` to database abstraction layer
@@ -663,4 +695,3 @@
   - New SSE events: `agent_iteration`, `agent_completed`, `agent_force_final`
   - New help documentation: `/help/agent-mode`
   - Migration automatically adds required database columns
-

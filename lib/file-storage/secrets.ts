@@ -49,14 +49,12 @@ export function getEncryptionKey(): Buffer {
     return cachedKey;
   }
 
-  // Fall back to master pepper from env.ts
+  // Fall back to master pepper from process.env (may be set by pepper vault)
   try {
-    // Import here to avoid circular dependencies
-    const { env } = require('@/lib/env');
-    const pepper = env.ENCRYPTION_MASTER_PEPPER;
+    const pepper = process.env.ENCRYPTION_MASTER_PEPPER;
 
     if (!pepper) {
-      throw new Error('No encryption key configured');
+      throw new Error('No encryption key configured. Complete setup at /setup');
     }
     cachedKey = deriveKey(pepper);
     return cachedKey;
@@ -69,7 +67,7 @@ export function getEncryptionKey(): Buffer {
       error: errorMsg,
     });
     throw new Error(
-      'Failed to get encryption key. Ensure ENCRYPTION_MASTER_PEPPER is configured.'
+      'Failed to get encryption key. Complete setup at /setup or set ENCRYPTION_MASTER_PEPPER.'
     );
   }
 }

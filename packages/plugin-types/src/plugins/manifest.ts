@@ -14,6 +14,7 @@ export type PluginCapability =
   | 'THEME'
   | 'ROLEPLAY_TEMPLATE'
   | 'TOOL_PROVIDER'
+  | 'SEARCH_PROVIDER'
   | 'UTILITY';
 
 /**
@@ -105,6 +106,34 @@ export interface ProviderConfig {
 }
 
 /**
+ * Search provider-specific configuration (for SEARCH_PROVIDER plugins)
+ */
+export interface SearchProviderConfig {
+  /** Internal provider name (e.g., 'SERPER', 'BING') */
+  providerName: string;
+  /** Human-readable display name */
+  displayName: string;
+  /** Provider description */
+  description: string;
+  /** Short abbreviation (2-4 chars) */
+  abbreviation: string;
+  /** UI color configuration */
+  colors: {
+    bg: string;
+    text: string;
+    icon: string;
+  };
+  /** Whether the provider requires an API key */
+  requiresApiKey: boolean;
+  /** Label for API key input */
+  apiKeyLabel?: string;
+  /** Whether the provider requires a base URL */
+  requiresBaseUrl: boolean;
+  /** Default base URL */
+  baseUrlDefault?: string;
+}
+
+/**
  * Required permissions for the plugin
  */
 export interface PluginPermissions {
@@ -178,6 +207,9 @@ export interface PluginManifest {
 
   /** Provider-specific configuration (for LLM_PROVIDER plugins) */
   providerConfig?: ProviderConfig;
+
+  /** Search provider configuration (for SEARCH_PROVIDER plugins) */
+  searchProviderConfig?: SearchProviderConfig;
 
   /** Required permissions */
   permissions?: PluginPermissions;

@@ -83,7 +83,14 @@ function CustomSessionProvider({
       });
 
       if (!response.ok) {
-        // This shouldn't happen in single-user mode - log and retry
+        if (response.status === 503) {
+          // Server not ready (e.g., pepper vault setup needed)
+          // Set as unauthenticated so the UI isn't stuck on "Loading..."
+          setSession(null);
+          setStatus("unauthenticated");
+          return null;
+        }
+        // Other errors - log and retry
         console.error("Failed to fetch session, will retry");
         setStatus("loading");
         return null;
