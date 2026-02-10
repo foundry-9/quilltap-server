@@ -12,6 +12,7 @@ import type { LLMProvider } from './base';
 import type { ImageGenProvider } from '@/lib/image-gen/base';
 import type { EmbeddingProvider, LocalEmbeddingProvider } from '@quilltap/plugin-types';
 import { providerRegistry } from '@/lib/plugins/provider-registry';
+import { searchProviderRegistry } from '@/lib/plugins/search-provider-registry';
 
 // ============================================================================
 // LOGGER SETUP
@@ -109,8 +110,9 @@ export function createImageProvider(
  * @returns Array of all available provider names
  */
 export function getAllAvailableProviders(): string[] {
-  const pluginProviders = providerRegistry.getProviderNames();
-  return pluginProviders;
+  const llmProviders = providerRegistry.getProviderNames();
+  const searchProviders = searchProviderRegistry.getProviderNames();
+  return [...llmProviders, ...searchProviders];
 }
 
 /**

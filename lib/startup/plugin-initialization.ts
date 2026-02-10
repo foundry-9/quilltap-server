@@ -14,7 +14,9 @@ import { initializeProviderRegistry } from '@/lib/plugins/provider-registry';
 import { initializeThemeRegistry, themeRegistry } from '@/lib/themes/theme-registry';
 import { initializeRoleplayTemplateRegistry, roleplayTemplateRegistry } from '@/lib/plugins/roleplay-template-registry';
 import { initializeToolRegistry, toolRegistry } from '@/lib/plugins/tool-registry';
+import { initializeSearchProviderRegistry, searchProviderRegistry } from '@/lib/plugins/search-provider-registry';
 import type { ToolPlugin } from '@/lib/plugins/interfaces/tool-plugin';
+import type { SearchProviderPlugin } from '@/lib/plugins/interfaces/search-provider-plugin';
 import type { ThemePlugin } from '@quilltap/plugin-types';
 import { injectPluginLoggerFactory, clearPluginLoggerFactory } from '@/lib/plugins/plugin-logger-bridge';
 import { fileStorageManager } from '@/lib/file-storage/manager';
@@ -448,6 +450,47 @@ async function performInitialization(): Promise<PluginInitializationResult> {
       }
     }
 
+    // Initialize search provider registry from enabled plugins with SEARCH_PROVIDER capability
+    const searchProviderPlugins = pluginRegistry.getEnabledByCapability('SEARCH_PROVIDER');
+    if (searchProviderPlugins.length > 0) {
+      const searchProviders: SearchProviderPlugin[] = [];
+      for (const loadedPlugin of searchProviderPlugins) {
+        try {
+          const mainFile = loadedPlugin.manifest.main || 'index.js';
+          const modulePath = resolve(process.cwd(), loadedPlugin.pluginPath, mainFile);
+
+          // Use external loader for npm-installed plugins to resolve peer dependencies
+          const isExternalPlugin = loadedPlugin.source === 'npm';
+          const pluginModule = isExternalPlugin
+            ? loadExternalPluginModule(modulePath)
+            : dynamicRequire(modulePath);
+
+          if ((pluginModule as { plugin?: unknown })?.plugin) {
+            searchProviders.push((pluginModule as { plugin: SearchProviderPlugin }).plugin);
+          } else if ((pluginModule as { default?: { plugin?: unknown } })?.default?.plugin) {
+            searchProviders.push((pluginModule as { default: { plugin: SearchProviderPlugin } }).default.plugin);
+          } else {
+            logger.warn('Search provider plugin module does not export a plugin object', {
+              plugin: loadedPlugin.manifest.name,
+              exports: Object.keys(pluginModule as object),
+            });
+          }
+        } catch (error) {
+          logger.error('Failed to load search provider plugin module', {
+            plugin: loadedPlugin.manifest.name,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      if (searchProviders.length > 0) {
+        await initializeSearchProviderRegistry(searchProviders);
+        logger.info('Search provider registry initialized', {
+          searchProviders: searchProviders.length,
+        });
+      }
+    }
+
     // Initialize file storage registry from enabled plugins with FILE_BACKEND capability
     const fileBackendPlugins = pluginRegistry.getEnabledByCapability('FILE_BACKEND');
     if (fileBackendPlugins.length > 0) {
@@ -546,6 +589,8 @@ export function resetPluginSystem(): void {
   roleplayTemplateRegistry.reset();
   // Reset tool registry
   toolRegistry.reset();
+  // Reset search provider registry
+  searchProviderRegistry.reset();
   // Clear the plugin logger factory
   clearPluginLoggerFactory();
 }

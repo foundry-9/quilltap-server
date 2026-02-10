@@ -246,6 +246,17 @@ Most plugins can be uninstalled:
 
 **Usage:** Enable plugin → Use in chat (AI can use tools)
 
+### Search Provider Plugins
+
+**What they do:** Add web search backends for the Search Web tool
+
+**Examples:**
+
+- Serper (bundled) — Google search via serper.dev
+- Custom web search integrations
+
+**Installation:** Install → Add API key in Settings > API Keys → Enable web search in connection profile
+
 ### Provider Plugins
 
 **What they do:** Add support for new LLM or service providers

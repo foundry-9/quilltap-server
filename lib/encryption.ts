@@ -15,25 +15,27 @@ const IV_LENGTH = 16 // 128 bits
 const PBKDF2_ITERATIONS = 100000
 const PBKDF2_DIGEST = 'sha256'
 
-// Skip validation during build time (Next.js static generation)
-const SKIP_ENV_VALIDATION = process.env.SKIP_ENV_VALIDATION === 'true'
-
-// Get master pepper - may be undefined during build
-const MASTER_PEPPER = process.env.ENCRYPTION_MASTER_PEPPER || ''
-
-// Validate that master pepper is configured (skip during build)
-if (!SKIP_ENV_VALIDATION && !MASTER_PEPPER) {
-  throw new Error(
-    'ENCRYPTION_MASTER_PEPPER environment variable is not set. ' +
-    'Generate one with: openssl rand -base64 32'
-  )
-}
-
-if (!SKIP_ENV_VALIDATION && MASTER_PEPPER && MASTER_PEPPER.length < 32) {
-  logger.warn(
-    'ENCRYPTION_MASTER_PEPPER should be at least 32 characters for security',
-    { context: 'encryption.init', pepperLength: MASTER_PEPPER.length }
-  )
+/**
+ * Get the master pepper lazily from process.env.
+ *
+ * The pepper may be set at startup via env var, or provisioned later
+ * by the pepper vault setup wizard. Reading from process.env each time
+ * ensures we pick up the pepper whenever it becomes available.
+ */
+function getMasterPepper(): string {
+  const pepper = process.env.ENCRYPTION_MASTER_PEPPER || ''
+  if (!pepper) {
+    throw new Error(
+      'Encryption pepper not configured. Complete setup at /setup'
+    )
+  }
+  if (pepper.length < 32) {
+    logger.warn(
+      'ENCRYPTION_MASTER_PEPPER should be at least 32 characters for security',
+      { context: 'encryption.init', pepperLength: pepper.length }
+    )
+  }
+  return pepper
 }
 
 /**
@@ -47,7 +49,7 @@ if (!SKIP_ENV_VALIDATION && MASTER_PEPPER && MASTER_PEPPER.length < 32) {
 function deriveUserKey(userId: string): Buffer {
   return crypto.pbkdf2Sync(
     userId,
-    MASTER_PEPPER,
+    getMasterPepper(),
     PBKDF2_ITERATIONS,
     KEY_LENGTH,
     PBKDF2_DIGEST

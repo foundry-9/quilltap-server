@@ -94,7 +94,7 @@ describe('executeWebSearchTool', () => {
   })
 
   describe('API key handling', () => {
-    it('should fail when SERPER_API_KEY is not set', async () => {
+    it('should fail when no search provider is registered and SERPER_API_KEY is not set', async () => {
       delete process.env.SERPER_API_KEY
       const input = { query: 'test query' }
       const context: WebSearchToolContext = { userId: 'user-123' }
@@ -103,7 +103,6 @@ describe('executeWebSearchTool', () => {
 
       expect(result.success).toBe(false)
       expect(result.error).toContain('Web search is not configured')
-      expect(result.error).toContain('SERPER_API_KEY')
       expect(mockFetch).not.toHaveBeenCalled()
     })
   })

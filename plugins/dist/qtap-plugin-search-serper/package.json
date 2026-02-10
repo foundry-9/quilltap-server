@@ -1,0 +1,27 @@
+{
+  "name": "qtap-plugin-search-serper",
+  "version": "1.0.0",
+  "description": "Serper.dev web search provider for Quilltap",
+  "main": "index.js",
+  "scripts": {
+    "build": "node esbuild.config.mjs"
+  },
+  "dependencies": {
+    "@quilltap/plugin-types": "^1.14.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.0"
+  },
+  "keywords": [
+    "quilltap",
+    "plugin",
+    "search",
+    "serper",
+    "web-search"
+  ],
+  "author": {
+    "name": "Foundry-9 LLC",
+    "url": "https://github.com/foundry-9"
+  },
+  "license": "MIT"
+}

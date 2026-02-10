@@ -133,8 +133,9 @@ JWT_SECRET="$(openssl rand -base64 32)"
 GOOGLE_CLIENT_ID="your-google-client-id"
 GOOGLE_CLIENT_SECRET="your-google-client-secret"
 
-# Encryption (CRITICAL: back this up securely!)
-ENCRYPTION_MASTER_PEPPER="$(openssl rand -base64 32)"
+# Encryption (optional: auto-generated on first run via /setup wizard)
+# If set, takes precedence over the pepper vault. You'll be prompted to store it.
+# ENCRYPTION_MASTER_PEPPER="$(openssl rand -base64 32)"
 
 # SQLite Database
 # Database file is automatically created and stored in the data directory
@@ -240,7 +241,7 @@ docker compose -f docker-compose.prod.yml restart nginx
 |----------|-------------|---------|
 | `BASE_URL` | Your production domain | `https://yourdomain.com` |
 | `JWT_SECRET` | Secret for JWT session signing (32+ chars) | `$(openssl rand -base64 32)` |
-| `ENCRYPTION_MASTER_PEPPER` | Master encryption key (32+ chars) | `$(openssl rand -base64 32)` |
+| `ENCRYPTION_MASTER_PEPPER` | Master encryption key (optional, auto-generated via /setup) | `$(openssl rand -base64 32)` |
 | `SQLITE_PATH` | Path to SQLite database file | `/app/quilltap/data/quilltap.db` |
 | `DOMAIN` | Your domain for SSL | `yourdomain.com` |
 | `SSL_EMAIL` | Email for SSL renewal notifications | `admin@yourdomain.com` |
@@ -290,10 +291,11 @@ QUILLTAP_HOST_DATA_DIR=/mnt/external/quilltap docker-compose -f docker-compose.p
 
 **CRITICAL SECURITY NOTES:**
 
-1. **Backup `ENCRYPTION_MASTER_PEPPER`** - If lost, all encrypted API keys are unrecoverable
-2. **Use strong values** - Generate with `openssl rand -base64 32`
-3. **Keep `.env.production` secret** - Never commit to version control
-4. **Restrict file permissions** - `chmod 600 .env.production`
+1. **Backup `ENCRYPTION_MASTER_PEPPER`** - If lost (and no vault passphrase), all encrypted API keys are unrecoverable. The setup wizard displays it once — save it securely.
+2. **Pepper Vault** - The encryption pepper is auto-generated on first run and stored encrypted in SQLite. You can protect it with a passphrase via the `/setup` page. For Docker, either set `ENCRYPTION_MASTER_PEPPER` env var or use a persistent volume so the vault survives container rebuilds.
+3. **Use strong values** - Generate with `openssl rand -base64 32`
+4. **Keep `.env.production` secret** - Never commit to version control
+5. **Restrict file permissions** - `chmod 600 .env.production`
 
 ## Plugin Management
 
@@ -609,7 +611,7 @@ docker compose -f docker-compose.prod.yml logs app
 
 # Common issues:
 # - Port 3000 already in use
-# - ENCRYPTION_MASTER_PEPPER not set
+# - Pepper vault needs setup (navigate to /setup)
 # - S3/MinIO not accessible
 # - .env.production missing required variables
 # - SQLite database file not writable
