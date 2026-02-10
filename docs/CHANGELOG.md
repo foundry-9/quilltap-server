@@ -4,6 +4,8 @@
 
 ### 2.10.1
 
+- fix: Remove verbose debug logging from pepper vault and web search handler
+
 - feat: Pepper Vault — web-based setup wizard for ENCRYPTION_MASTER_PEPPER
   - Auto-generates encryption pepper on first run, no manual env var needed
   - Web-based setup wizard at `/setup` with optional passphrase protection

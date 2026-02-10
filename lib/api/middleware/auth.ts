@@ -30,7 +30,6 @@ async function ensureServerReady(): Promise<void> {
 
   if (!startupState.isPepperResolved()) {
     const pepperState = startupState.getPepperState();
-    contextLogger.debug('Request blocked: pepper not resolved', { pepperState });
     throw new PepperNotReadyError(pepperState);
   }
 }

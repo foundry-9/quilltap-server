@@ -98,11 +98,6 @@ async function getSearchProviderApiKey(
     )
 
     if (!apiKeyRecord) {
-      logger.debug('No active API key found for search provider', {
-        provider: providerName,
-        userId,
-        totalKeys: allKeys.length,
-      })
       return null
     }
 
@@ -156,13 +151,6 @@ export async function executeWebSearchTool(
     const provider = searchProviderRegistry.getDefaultProvider()
 
     if (provider) {
-      logger.debug('Executing web search via provider plugin', {
-        userId: context.userId,
-        provider: provider.metadata.providerName,
-        query,
-        maxResults,
-      })
-
       // Look up the API key from the database
       let apiKey: string | null = null
 

@@ -139,14 +139,6 @@ function generatePepper(): string {
   return crypto.randomBytes(32).toString('base64');
 }
 
-/**
- * Display pepper hash prefix in log for debugging (never the full pepper)
- */
-function displayPepperToLog(pepper: string): void {
-  const hash = hashPepper(pepper);
-  log.debug('Pepper fingerprint', { hashPrefix: hash.substring(0, 12) });
-}
-
 // ============================================================================
 // Database Operations
 // ============================================================================
@@ -228,7 +220,7 @@ export async function provisionPepper(): Promise<PepperState> {
       if (envHash === stored.pepper_hash) {
         // Hashes match — all good
         log.info('Pepper resolved: env var matches stored hash');
-        displayPepperToLog(envPepper);
+
         setCurrentPepperState('resolved');
         closeSQLite();
         return 'resolved';
@@ -249,7 +241,7 @@ export async function provisionPepper(): Promise<PepperState> {
     // Case 2: Env var set + no stored pepper
     if (envPepper && !stored) {
       log.info('Pepper resolved from env var, vault storage recommended');
-      displayPepperToLog(envPepper);
+
       setCurrentPepperState('needs-vault-storage');
       closeSQLite();
       return 'needs-vault-storage';
@@ -266,7 +258,7 @@ export async function provisionPepper(): Promise<PepperState> {
         if (pepper && hashPepper(pepper) === stored.pepper_hash) {
           log.info('Pepper resolved: decrypted from vault (no passphrase)');
           process.env.ENCRYPTION_MASTER_PEPPER = pepper;
-          displayPepperToLog(pepper);
+
           setCurrentPepperState('resolved');
           closeSQLite();
           return 'resolved';
@@ -333,7 +325,7 @@ export function setupPepper(passphrase: string): { pepper: string } {
   setCurrentPepperState('resolved');
 
   log.info('Pepper setup complete', { hasPassphrase });
-  displayPepperToLog(pepper);
+
   closeSQLite();
 
   return { pepper };
@@ -381,7 +373,7 @@ export function unlockPepper(passphrase: string): boolean {
   setCurrentPepperState('resolved');
 
   log.info('Pepper unlocked successfully');
-  displayPepperToLog(pepper);
+
   closeSQLite();
   return true;
 }
@@ -417,6 +409,6 @@ export function storePepperInVault(passphrase: string): void {
   setCurrentPepperState('resolved');
 
   log.info('Pepper stored in vault', { hasPassphrase });
-  displayPepperToLog(pepper);
+
   closeSQLite();
 }

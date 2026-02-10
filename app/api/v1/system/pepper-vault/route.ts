@@ -32,8 +32,6 @@ export async function GET() {
     // startupState is the authoritative source (set during instrumentation.ts)
     const state = startupState.getPepperState?.() ?? getPepperState();
 
-    pepperLogger.debug('Pepper vault status requested', { state });
-
     return NextResponse.json({ state });
   } catch (error) {
     pepperLogger.error('Error getting pepper vault status', {
