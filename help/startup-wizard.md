@@ -8,12 +8,27 @@ Welcome to Quilltap! This guide walks you through everything you need to get sta
 
 ### What You'll Set Up
 
-To use Quilltap, you need to connect it to an AI service. This guide covers:
+When you first launch Quilltap, you'll be guided through a few quick setup steps:
 
-1. **Connection Profile** — How Quilltap talks to an AI service
-2. **Embedding Profile** — How Quilltap searches your memories (optional but recommended)
-3. **Cheap LLM** — A cost-saving option for background tasks (optional)
-4. **Your First Chat** — Starting a conversation with a character
+1. **Encryption Setup** — Quilltap generates an encryption key to protect your data (automatic)
+2. **Your Profile** — Tell Quilltap your name and pick an archetype so characters know who they're talking to
+3. **Connection Profile** — How Quilltap talks to an AI service
+4. **Embedding Profile** — How Quilltap searches your memories (optional but recommended)
+5. **Cheap LLM** — A cost-saving option for background tasks (optional)
+6. **Your First Chat** — Starting a conversation with a character
+
+### First Run: Encryption and Profile Setup
+
+On your very first launch, Quilltap will walk you through two initial steps:
+
+1. **Encryption Setup** (`/setup`) — An encryption key is generated automatically to protect your API keys and sensitive data. You can optionally protect it with a passphrase.
+
+2. **Profile Setup** (`/setup/profile`) — You'll enter your name and choose an archetype that describes how you interact with your characters:
+   - **The Proprietor** — Direct and professional, focused on getting things done
+   - **The Resident** — Curious and sociable, here to connect with characters
+   - **The Author** — Imaginative and expressive, approaching characters as a storyteller
+
+   This creates a user-controlled character that represents you in conversations. Characters will greet you by name and know a bit about your style. You can change your name, avatar, and details anytime from Aurora.
 
 ### Understanding the Basics
 

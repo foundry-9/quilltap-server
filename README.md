@@ -7,7 +7,7 @@ Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, 
 No subscriptions. No data harvested. No forgetting everything between sessions.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.10.1-green.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.10.2-green.svg)](package.json)
 
 <p align="center">
   <img src="https://quilltap.ai/images/welcome-to-quilltap-2-8.png" alt="Welcome to Quilltap" />
@@ -79,13 +79,12 @@ cp .env.example .env.local
 
 # Generate your secrets
 openssl rand -base64 32  # Use this for JWT_SECRET
-openssl rand -base64 32  # Use this for ENCRYPTION_MASTER_PEPPER
 
 # Edit .env.local with your values, then:
 docker-compose up
 ```
 
-Open `http://localhost:3000` and you're running.
+Open `http://localhost:3000` and you're running. On first launch, you'll be guided through a setup wizard that generates your encryption key automatically.
 
 ### Essential Configuration
 
@@ -93,10 +92,11 @@ Your `.env.local` needs at minimum:
 
 ```env
 BASE_URL="http://localhost:3000"
-ENCRYPTION_MASTER_PEPPER="your-generated-pepper-here"
 ```
 
-**Important:** Back up your `ENCRYPTION_MASTER_PEPPER`. If you lose it, all your encrypted API keys become unrecoverable.
+The encryption key (`ENCRYPTION_MASTER_PEPPER`) is auto-generated on first run and stored in an encrypted vault. You can optionally protect it with a passphrase during the setup wizard at `/setup`. If you prefer to manage it manually, set `ENCRYPTION_MASTER_PEPPER` in your `.env.local` and you'll be prompted to store it in the vault.
+
+**Important:** If you set a passphrase, you'll need it each time Quilltap starts (when the env var is not set). The setup wizard will show your encryption pepper once — back it up securely.
 
 For production deployment with SSL, see the [Deployment Guide](docs/DEPLOYMENT.md).
 

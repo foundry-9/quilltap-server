@@ -207,7 +207,10 @@ async function createInitialMessages(
   }
 
   if (!firstMessageContent) {
-    firstMessageContent = `Hello there! I'm ${context.character.name}. It's great to meet you. What's on your mind today?`;
+    const userName = context.userCharacter?.name;
+    firstMessageContent = userName
+      ? `Hello, ${userName}! I'm ${context.character.name}. What's on your mind today?`
+      : `Hello there! I'm ${context.character.name}. It's great to meet you. What's on your mind today?`;
   }
 
   const firstCharacterParticipant =
