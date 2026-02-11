@@ -32,6 +32,7 @@ const createCharacterSchema = z.object({
   exampleDialogues: z.string().optional(),
   avatarUrl: z.url().optional().or(z.literal('')),
   defaultConnectionProfileId: z.uuid().optional(),
+  controlledBy: z.enum(['llm', 'user']).optional(),
   npc: z.boolean().optional(),
   systemPrompts: z
     .array(
@@ -222,6 +223,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       exampleDialogues: validatedData.exampleDialogues || null,
       avatarUrl: validatedData.avatarUrl || null,
       defaultConnectionProfileId: validatedData.defaultConnectionProfileId || null,
+      controlledBy: validatedData.controlledBy || 'llm',
       isFavorite: false,
       npc: validatedData.npc ?? false,
       tags: [] as string[],
@@ -236,6 +238,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     logger.info('[Characters v1] Character created', {
       characterId: character.id,
       name: character.name,
+      controlledBy: character.controlledBy || 'llm',
       npc: character.npc,
     });
 

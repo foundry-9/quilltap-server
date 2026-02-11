@@ -229,7 +229,7 @@ export function ProfileModal({
                 >
                   {providers.length > 0 ? (
                     providers
-                      .filter((p) => p.capabilities.chat)
+                      .filter((p) => p.capabilities?.chat)
                       .map((p) => (
                         <option key={p.name} value={p.name}>
                           {p.displayName}
