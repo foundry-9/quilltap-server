@@ -254,6 +254,8 @@ In development, logs are written to `logs/combined.log` and `logs/error.log`. Us
 
 ## Git and Github release instructions
 
+### For dev changes moving to release
+
 **Do NOT just run this script; run the commands one at a time.**
 
 ```bash
@@ -323,6 +325,64 @@ docker push csebold/quilltap:latest
 
 # Now let's get back to work!
 git checkout main
+```
+
+### for bugfix changes moving to release
+
+```bash
+# Don't just run this script; run the commands one at a time.
+git checkout release
+# This brings in all the changes without the history
+git merge --squash --strategy-option=theirs bugfix
+# Remove the detritus after the release
+node -e "const p=require('./package.json');const v=p.version.split('-')[0].split('.');v[2]++;p.version=v.join('.');require('fs').writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
+# Update package-lock.json to be up-to-date
+npm install
+# Get new release version for tags
+NEWRELEASE=$(sed -n -E 's/.*"version": "([^"]*)".*/\1/p' package.json)
+# Change the badge to release version standards
+sed -i '' -E 's/(badge\/version-)[^)]+\.svg/\1'"$NEWRELEASE"'-green.svg/' README.md
+# Presumably we ran tests and bumped prerelease versions when we committed last time
+git add package.json package-lock.json README.md
+git commit --no-verify -m "release: $NEWRELEASE"
+# We'll tag it so we can handle the release
+git tag -s -m "$NEWRELEASE" $NEWRELEASE
+
+# Let's set up the bugfix version again
+git checkout bugfix
+# Merge everything that release has
+git merge --strategy-option=theirs release
+# make this the new first bugfix version
+sed -i '' -E 's/("version": ")[^"]*"/\1'"$NEWRELEASE"'-bugfix.0"/' package.json
+# Update package-lock.json again
+npm install
+# Let's fix that badge in the README file too
+sed -i '' -E 's/(badge\/version-)[^-]*-[a-z]+/\1'"$NEWRELEASE"'--bugfix.0-yellow/' README.md
+# Again, we haven't changed anything substantial, so no pre-commits
+git add package.json package-lock.json README.md
+git commit --no-verify -m "bugfix: started $NEWRELEASE bug branch"
+
+# Now let's pull this into dev
+git merge --strategy=recursive bugfix
+# Deal with the problems, they should be easy
+DEVTAG=$(git tag | grep '\-dev' | sort -r | head -n 1)
+# We need to get ourselves realigned with the last dev version
+git merge -s ours $DEVTAG
+git push
+git checkout release
+git push
+
+# time to get Docker squared away again
+docker login
+docker build -t csebold/quilltap:$NEWRELEASE .
+docker push csebold/quilltap:$NEWRELEASE
+docker tag csebold/quilltap:$NEWRELEASE csebold/quilltap:latest
+docker push csebold/quilltap:latest
+
+git checkout bugfix
+git push
+git checkout main
+# OK, let's get back to work
 ```
 
 ## Testing Your Changes

@@ -20,8 +20,8 @@ export function PepperVaultGate() {
   const [showBanner, setShowBanner] = useState(false);
 
   useEffect(() => {
-    // Don't check if we're already on the setup page
-    if (pathname === '/setup') return;
+    // Don't check if we're already on a setup page
+    if (pathname === '/setup' || pathname?.startsWith('/setup/')) return;
 
     // Only fetch once per app lifecycle
     if (gateFetched) return;
@@ -39,6 +39,22 @@ export function PepperVaultGate() {
           router.push('/setup');
         } else if (state === 'needs-vault-storage') {
           setShowBanner(true);
+        }
+
+        // If pepper is resolved, check for user character existence
+        if (state === 'resolved' || state === 'needs-vault-storage') {
+          try {
+            const charRes = await fetch('/api/v1/characters?controlledBy=user&limit=1');
+            if (charRes.ok) {
+              const charData = await charRes.json();
+              const characters = charData.characters || [];
+              if (characters.length === 0) {
+                router.push('/setup/profile');
+              }
+            }
+          } catch {
+            // Non-critical — don't block the app if this check fails
+          }
         }
       } catch {
         // If we can't reach the API, don't block — the server middleware

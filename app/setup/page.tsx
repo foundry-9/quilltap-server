@@ -16,6 +16,24 @@ export default function SetupPage() {
   const [attempts, setAttempts] = useState(0);
   const [copied, setCopied] = useState(false);
 
+  /** Navigate to /setup/profile if no user character exists, otherwise / */
+  const navigateAfterSetup = useCallback(async () => {
+    try {
+      const charRes = await fetch('/api/v1/characters?controlledBy=user&limit=1');
+      if (charRes.ok) {
+        const charData = await charRes.json();
+        const characters = charData.characters || [];
+        if (characters.length === 0) {
+          router.push('/setup/profile');
+          return;
+        }
+      }
+    } catch {
+      // Non-critical — fall through to home
+    }
+    router.push('/');
+  }, [router]);
+
   const checkState = useCallback(async () => {
     try {
       const res = await fetch('/api/v1/system/pepper-vault');
@@ -23,12 +41,12 @@ export default function SetupPage() {
       setPepperState(data.state);
 
       if (data.state === 'resolved') {
-        router.push('/');
+        navigateAfterSetup();
       }
     } catch {
       setError('Failed to check pepper vault status');
     }
-  }, [router]);
+  }, [navigateAfterSetup]);
 
   useEffect(() => {
     checkState();
@@ -100,7 +118,7 @@ export default function SetupPage() {
         return;
       }
 
-      router.push('/');
+      await navigateAfterSetup();
     } catch {
       setError('Failed to unlock');
     } finally {
@@ -136,7 +154,7 @@ export default function SetupPage() {
         return;
       }
 
-      router.push('/');
+      await navigateAfterSetup();
     } catch {
       setError('Failed to store pepper');
     } finally {
@@ -185,7 +203,7 @@ export default function SetupPage() {
             </button>
           </div>
           <button
-            onClick={() => router.push('/')}
+            onClick={() => navigateAfterSetup()}
             className="qt-btn w-full py-2"
           >
             Continue to Quilltap
@@ -320,7 +338,7 @@ export default function SetupPage() {
                 {loading ? 'Storing...' : 'Store in Vault'}
               </button>
               <button
-                onClick={() => router.push('/')}
+                onClick={() => navigateAfterSetup()}
                 className="qt-btn flex-1 py-2 opacity-60"
               >
                 Skip for Now

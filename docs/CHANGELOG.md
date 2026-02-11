@@ -2,6 +2,20 @@
 
 ## Recent Changes
 
+### 2.10.2
+
+- feat: User profile setup on first run
+  - New `/setup/profile` page with name input and archetype selection (Proprietor, Resident, Author)
+  - Creates a user-controlled character so the turn manager correctly yields to the user
+  - Automatically sets the new user character as default partner for all existing LLM-controlled characters
+  - PepperVaultGate redirects to profile setup when no user character exists
+  - All setup page exits (pepper setup, unlock, vault storage) route through profile setup when needed
+  - Fallback greeting now uses the user character's name when available
+  - Updated startup wizard help documentation
+
+- fix: Guard against missing `capabilities` on search providers in connection profile forms
+  - `ProfileForm.tsx` and `ProfileModal.tsx`: `p.capabilities.chat` → `p.capabilities?.chat`
+
 ### 2.10.1
 
 - fix: Remove verbose debug logging from pepper vault and web search handler
