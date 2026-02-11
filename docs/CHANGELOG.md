@@ -6,7 +6,7 @@
 
 - Started 2.11 dev branch
 
-### 2.10.1
+### 2.10.2
 
 - feat: User profile setup on first run
   - New `/setup/profile` page with name input and archetype selection (Proprietor, Resident, Author)
@@ -19,6 +19,8 @@
 
 - fix: Guard against missing `capabilities` on search providers in connection profile forms
   - `ProfileForm.tsx` and `ProfileModal.tsx`: `p.capabilities.chat` → `p.capabilities?.chat`
+
+### 2.10.1
 
 - fix: Remove verbose debug logging from pepper vault and web search handler
 
