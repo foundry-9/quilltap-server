@@ -632,7 +632,7 @@ async function handleImportExecute(req: NextRequest, context: any) {
       importMemories: importMemories || false,
     });
 
-    const result = await executeImport(user.id, exportData, {
+    const result = await executeImport(user.id, exportData as QuilltapExport, {
       conflictStrategy: mappedConflictStrategy,
       includeMemories: importMemories || false,
       includeRelatedEntities: false,

@@ -38,7 +38,7 @@ const nextConfig = {
     },
     // Proxy/middleware body size limit - allow large import/export files
     // Default is 10MB which truncates .qtap import files with memories
-    middlewareClientMaxBodySize: '100mb',
+    proxyClientMaxBodySize: '100mb',
   },
 
   // Image optimization configuration
