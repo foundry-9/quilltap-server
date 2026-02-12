@@ -160,15 +160,26 @@ export function useImportData({
   }, [setState])
 
   const loadPreview = useCallback(
-    async (exportData: QuilltapExport) => {
+    async (exportData: QuilltapExport, file: File | null) => {
       setState((prev) => ({ ...prev, loadingPreview: true, error: null }))
 
       try {
-        const response = await fetch('/api/v1/system/tools?action=import-preview', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ exportData }),
-        })
+        let response: Response
+        if (file) {
+          // Use FormData with the original file to avoid re-serializing large JSON
+          const formData = new FormData()
+          formData.append('file', file)
+          response = await fetch('/api/v1/system/tools?action=import-preview', {
+            method: 'POST',
+            body: formData,
+          })
+        } else {
+          response = await fetch('/api/v1/system/tools?action=import-preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ exportData }),
+          })
+        }
 
         if (!response.ok) {
           const data = await response.json()
@@ -225,9 +236,9 @@ export function useImportData({
 
     // Load preview when moving to preview step
     if (currentStep === 'file' && state.exportData) {
-      await loadPreview(state.exportData)
+      await loadPreview(state.exportData, state.selectedFile)
     }
-  }, [state.step, state.exportData, loadPreview, setState])
+  }, [state.step, state.exportData, state.selectedFile, loadPreview, setState])
 
   const handleBack = useCallback(() => {
     setState((prev) => {
@@ -257,18 +268,34 @@ export function useImportData({
     setState((prev) => ({ ...prev, importing: true, error: null }))
 
     try {
-      const response = await fetch('/api/v1/system/tools?action=import-execute', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          exportData: state.exportData,
-          options: {
-            selectedIds: state.selectedEntityIds,
-            conflictStrategy: state.conflictStrategy,
-            importMemories: state.importMemories,
-          },
-        }),
-      })
+      let response: Response
+      if (state.selectedFile) {
+        // Use FormData with the original file to avoid re-serializing large JSON
+        const formData = new FormData()
+        formData.append('file', state.selectedFile)
+        formData.append('options', JSON.stringify({
+          selectedIds: state.selectedEntityIds,
+          conflictStrategy: state.conflictStrategy,
+          importMemories: state.importMemories,
+        }))
+        response = await fetch('/api/v1/system/tools?action=import-execute', {
+          method: 'POST',
+          body: formData,
+        })
+      } else {
+        response = await fetch('/api/v1/system/tools?action=import-execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            exportData: state.exportData,
+            options: {
+              selectedIds: state.selectedEntityIds,
+              conflictStrategy: state.conflictStrategy,
+              importMemories: state.importMemories,
+            },
+          }),
+        })
+      }
 
       if (!response.ok) {
         const data = await response.json()
@@ -298,7 +325,7 @@ export function useImportData({
         error: message,
       }))
     }
-  }, [state.exportData, state.conflictStrategy, state.importMemories, state.selectedEntityIds, onSuccess, setState])
+  }, [state.exportData, state.selectedFile, state.conflictStrategy, state.importMemories, state.selectedEntityIds, onSuccess, setState])
 
   return {
     state,

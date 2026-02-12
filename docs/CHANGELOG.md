@@ -5,6 +5,13 @@
 ### 2.11-dev
 
 - Started 2.11 dev branch
+- fix: Import of large .qtap files (>10MB) now works correctly
+  - Added `proxyClientMaxBodySize: '100mb'` to next.config.js to prevent proxy body truncation
+  - Frontend import now sends the original file via FormData instead of re-serializing JSON
+  - Backend import-execute endpoint now supports FormData uploads (matching import-preview)
+- fix: Corrected table names in user ID migration
+  - `prompts` → `prompt_templates`, `messages` → `chat_messages` to match actual SQLite schema
+  - Removed `memories` from migration list (no `userId` column in that table)
 - fix: Participants sidebar now always shows in chat conversation page
   - Removed `isMultiChar` gate so sidebar renders even with zero participants
   - Users can now add characters to chats that have no participants
