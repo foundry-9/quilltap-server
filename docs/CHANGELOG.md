@@ -5,6 +5,10 @@
 ### 2.11-dev
 
 - Started 2.11 dev branch
+- fix: Participants sidebar now always shows in chat conversation page
+  - Removed `isMultiChar` gate so sidebar renders even with zero participants
+  - Users can now add characters to chats that have no participants
+  - Updated empty state message to "Add a character to get started"
 - fix: Story background files now correctly stored in `/story-backgrounds/` folder
   - Added `projectId` and `folderPath` to file metadata when saving generated story backgrounds
   - Auto-create `/story-backgrounds/` folder record in database on first background generation per scope
