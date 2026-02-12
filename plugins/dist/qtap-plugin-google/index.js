@@ -382,14 +382,14 @@ var require_common = __commonJS({
             const status = "status" in res.data.error && typeof res.data.error.status === "string" ? res.data.error.status : res.statusText;
             const code = "code" in res.data.error && typeof res.data.error.code === "number" ? res.data.error.code : res.status;
             if ("errors" in res.data.error && Array.isArray(res.data.error.errors)) {
-              const errorMessages = [];
+              const errorMessages2 = [];
               for (const e2 of res.data.error.errors) {
                 if (typeof e2 === "object" && "message" in e2 && typeof e2.message === "string") {
-                  errorMessages.push(e2.message);
+                  errorMessages2.push(e2.message);
                 }
               }
               return Object.assign({
-                message: errorMessages.join("\n") || message,
+                message: errorMessages2.join("\n") || message,
                 code,
                 status
               }, res.data.error);
@@ -4602,24 +4602,24 @@ var require_ponyfill_es2018 = __commonJS({
               return null;
             }
           }
-          function shutdown(isError, error) {
+          function shutdown(isError2, error) {
             if (shuttingDown) {
               return;
             }
             shuttingDown = true;
             if (dest._state === "writable" && !WritableStreamCloseQueuedOrInFlight(dest)) {
-              uponFulfillment(waitForWritesToFinish(), () => finalize(isError, error));
+              uponFulfillment(waitForWritesToFinish(), () => finalize(isError2, error));
             } else {
-              finalize(isError, error);
+              finalize(isError2, error);
             }
           }
-          function finalize(isError, error) {
+          function finalize(isError2, error) {
             WritableStreamDefaultWriterRelease(writer);
             ReadableStreamReaderGenericRelease(reader);
             if (signal !== void 0) {
               signal.removeEventListener("abort", abortAlgorithm);
             }
-            if (isError) {
+            if (isError2) {
               reject(error);
             } else {
               resolve(void 0);
@@ -8013,11 +8013,11 @@ var init_request = __esm({
 });
 
 // node_modules/node-fetch/src/errors/abort-error.js
-var AbortError;
+var AbortError2;
 var init_abort_error = __esm({
   "node_modules/node-fetch/src/errors/abort-error.js"() {
     init_base();
-    AbortError = class extends FetchBaseError {
+    AbortError2 = class extends FetchBaseError {
       constructor(message, type = "aborted") {
         super(message, type);
       }
@@ -8028,7 +8028,7 @@ var init_abort_error = __esm({
 // node_modules/node-fetch/src/index.js
 var src_exports = {};
 __export(src_exports, {
-  AbortError: () => AbortError,
+  AbortError: () => AbortError2,
   Blob: () => fetch_blob_default,
   FetchError: () => FetchError,
   File: () => file_default,
@@ -8060,7 +8060,7 @@ async function fetch2(url, options_) {
     const { signal } = request;
     let response = null;
     const abort = () => {
-      const error = new AbortError("The operation was aborted.");
+      const error = new AbortError2("The operation was aborted.");
       reject(error);
       if (request.body && request.body instanceof import_node_stream2.default.Readable) {
         request.body.destroy(error);
@@ -22030,6 +22030,206 @@ __export(index_exports, {
 });
 module.exports = __toCommonJS(index_exports);
 
+// node_modules/is-network-error/index.js
+var objectToString = Object.prototype.toString;
+var isError = (value) => objectToString.call(value) === "[object Error]";
+var errorMessages = /* @__PURE__ */ new Set([
+  "network error",
+  // Chrome
+  "Failed to fetch",
+  // Chrome
+  "NetworkError when attempting to fetch resource.",
+  // Firefox
+  "The Internet connection appears to be offline.",
+  // Safari 16
+  "Network request failed",
+  // `cross-fetch`
+  "fetch failed",
+  // Undici (Node.js)
+  "terminated",
+  // Undici (Node.js)
+  " A network error occurred.",
+  // Bun (WebKit)
+  "Network connection lost"
+  // Cloudflare Workers (fetch)
+]);
+function isNetworkError(error) {
+  const isValid = error && isError(error) && error.name === "TypeError" && typeof error.message === "string";
+  if (!isValid) {
+    return false;
+  }
+  const { message, stack } = error;
+  if (message === "Load failed") {
+    return stack === void 0 || "__sentry_captured__" in error;
+  }
+  if (message.startsWith("error sending request for url")) {
+    return true;
+  }
+  return errorMessages.has(message);
+}
+
+// node_modules/p-retry/index.js
+function validateRetries(retries) {
+  if (typeof retries === "number") {
+    if (retries < 0) {
+      throw new TypeError("Expected `retries` to be a non-negative number.");
+    }
+    if (Number.isNaN(retries)) {
+      throw new TypeError("Expected `retries` to be a valid number or Infinity, got NaN.");
+    }
+  } else if (retries !== void 0) {
+    throw new TypeError("Expected `retries` to be a number or Infinity.");
+  }
+}
+function validateNumberOption(name, value, { min = 0, allowInfinity = false } = {}) {
+  if (value === void 0) {
+    return;
+  }
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    throw new TypeError(`Expected \`${name}\` to be a number${allowInfinity ? " or Infinity" : ""}.`);
+  }
+  if (!allowInfinity && !Number.isFinite(value)) {
+    throw new TypeError(`Expected \`${name}\` to be a finite number.`);
+  }
+  if (value < min) {
+    throw new TypeError(`Expected \`${name}\` to be \u2265 ${min}.`);
+  }
+}
+var AbortError = class extends Error {
+  constructor(message) {
+    super();
+    if (message instanceof Error) {
+      this.originalError = message;
+      ({ message } = message);
+    } else {
+      this.originalError = new Error(message);
+      this.originalError.stack = this.stack;
+    }
+    this.name = "AbortError";
+    this.message = message;
+  }
+};
+function calculateDelay(retriesConsumed, options) {
+  const attempt = Math.max(1, retriesConsumed + 1);
+  const random = options.randomize ? Math.random() + 1 : 1;
+  let timeout = Math.round(random * options.minTimeout * options.factor ** (attempt - 1));
+  timeout = Math.min(timeout, options.maxTimeout);
+  return timeout;
+}
+function calculateRemainingTime(start, max) {
+  if (!Number.isFinite(max)) {
+    return max;
+  }
+  return max - (performance.now() - start);
+}
+async function onAttemptFailure({ error, attemptNumber, retriesConsumed, startTime, options }) {
+  const normalizedError = error instanceof Error ? error : new TypeError(`Non-error was thrown: "${error}". You should only throw errors.`);
+  if (normalizedError instanceof AbortError) {
+    throw normalizedError.originalError;
+  }
+  const retriesLeft = Number.isFinite(options.retries) ? Math.max(0, options.retries - retriesConsumed) : options.retries;
+  const maxRetryTime = options.maxRetryTime ?? Number.POSITIVE_INFINITY;
+  const context = Object.freeze({
+    error: normalizedError,
+    attemptNumber,
+    retriesLeft,
+    retriesConsumed
+  });
+  await options.onFailedAttempt(context);
+  if (calculateRemainingTime(startTime, maxRetryTime) <= 0) {
+    throw normalizedError;
+  }
+  const consumeRetry = await options.shouldConsumeRetry(context);
+  const remainingTime = calculateRemainingTime(startTime, maxRetryTime);
+  if (remainingTime <= 0 || retriesLeft <= 0) {
+    throw normalizedError;
+  }
+  if (normalizedError instanceof TypeError && !isNetworkError(normalizedError)) {
+    if (consumeRetry) {
+      throw normalizedError;
+    }
+    options.signal?.throwIfAborted();
+    return false;
+  }
+  if (!await options.shouldRetry(context)) {
+    throw normalizedError;
+  }
+  if (!consumeRetry) {
+    options.signal?.throwIfAborted();
+    return false;
+  }
+  const delayTime = calculateDelay(retriesConsumed, options);
+  const finalDelay = Math.min(delayTime, remainingTime);
+  options.signal?.throwIfAborted();
+  if (finalDelay > 0) {
+    await new Promise((resolve, reject) => {
+      const onAbort = () => {
+        clearTimeout(timeoutToken);
+        options.signal?.removeEventListener("abort", onAbort);
+        reject(options.signal.reason);
+      };
+      const timeoutToken = setTimeout(() => {
+        options.signal?.removeEventListener("abort", onAbort);
+        resolve();
+      }, finalDelay);
+      if (options.unref) {
+        timeoutToken.unref?.();
+      }
+      options.signal?.addEventListener("abort", onAbort, { once: true });
+    });
+  }
+  options.signal?.throwIfAborted();
+  return true;
+}
+async function pRetry(input, options = {}) {
+  options = { ...options };
+  validateRetries(options.retries);
+  if (Object.hasOwn(options, "forever")) {
+    throw new Error("The `forever` option is no longer supported. For many use-cases, you can set `retries: Infinity` instead.");
+  }
+  options.retries ??= 10;
+  options.factor ??= 2;
+  options.minTimeout ??= 1e3;
+  options.maxTimeout ??= Number.POSITIVE_INFINITY;
+  options.maxRetryTime ??= Number.POSITIVE_INFINITY;
+  options.randomize ??= false;
+  options.onFailedAttempt ??= () => {
+  };
+  options.shouldRetry ??= () => true;
+  options.shouldConsumeRetry ??= () => true;
+  validateNumberOption("factor", options.factor, { min: 0, allowInfinity: false });
+  validateNumberOption("minTimeout", options.minTimeout, { min: 0, allowInfinity: false });
+  validateNumberOption("maxTimeout", options.maxTimeout, { min: 0, allowInfinity: true });
+  validateNumberOption("maxRetryTime", options.maxRetryTime, { min: 0, allowInfinity: true });
+  if (!(options.factor > 0)) {
+    options.factor = 1;
+  }
+  options.signal?.throwIfAborted();
+  let attemptNumber = 0;
+  let retriesConsumed = 0;
+  const startTime = performance.now();
+  while (Number.isFinite(options.retries) ? retriesConsumed <= options.retries : true) {
+    attemptNumber++;
+    try {
+      options.signal?.throwIfAborted();
+      const result = await input(attemptNumber);
+      options.signal?.throwIfAborted();
+      return result;
+    } catch (error) {
+      if (await onAttemptFailure({
+        error,
+        attemptNumber,
+        retriesConsumed,
+        startTime,
+        options
+      })) {
+        retriesConsumed++;
+      }
+    }
+  }
+  throw new Error("Retry attempts exhausted without throwing an error.");
+}
+
 // node_modules/@google/genai/dist/node/index.mjs
 var import_google_auth_library = __toESM(require_src6(), 1);
 var import_fs = require("fs");
@@ -31895,10 +32095,25 @@ var CONTENT_TYPE_HEADER = "Content-Type";
 var SERVER_TIMEOUT_HEADER = "X-Server-Timeout";
 var USER_AGENT_HEADER = "User-Agent";
 var GOOGLE_API_CLIENT_HEADER = "x-goog-api-client";
-var SDK_VERSION = "1.40.0";
+var SDK_VERSION = "1.41.0";
 var LIBRARY_LABEL = `google-genai-sdk/${SDK_VERSION}`;
 var VERTEX_AI_API_DEFAULT_VERSION = "v1beta1";
 var GOOGLE_AI_API_DEFAULT_VERSION = "v1beta";
+var DEFAULT_RETRY_ATTEMPTS = 5;
+var DEFAULT_RETRY_HTTP_STATUS_CODES = [
+  408,
+  // Request timeout
+  429,
+  // Too many requests
+  500,
+  // Internal server error
+  502,
+  // Bad gateway
+  503,
+  // Service unavailable
+  504
+  // Gateway timeout
+];
 var ApiClient = class {
   constructor(opts) {
     var _a4, _b, _c;
@@ -32225,8 +32440,24 @@ var ApiClient = class {
     });
   }
   async apiCall(url, requestInit) {
-    return fetch(url, requestInit).catch((e2) => {
-      throw new Error(`exception ${e2} sending request`);
+    var _a4;
+    if (!this.clientOptions.httpOptions || !this.clientOptions.httpOptions.retryOptions) {
+      return fetch(url, requestInit);
+    }
+    const retryOptions = this.clientOptions.httpOptions.retryOptions;
+    const runFetch = async () => {
+      const response = await fetch(url, requestInit);
+      if (response.ok) {
+        return response;
+      }
+      if (DEFAULT_RETRY_HTTP_STATUS_CODES.includes(response.status)) {
+        throw new Error(`Retryable HTTP Error: ${response.statusText}`);
+      }
+      throw new AbortError(`Non-retryable exception ${response.statusText} sending request`);
+    };
+    return pRetry(runFetch, {
+      // Retry attempts is one less than the number of total attempts.
+      retries: ((_a4 = retryOptions.attempts) !== null && _a4 !== void 0 ? _a4 : DEFAULT_RETRY_ATTEMPTS) - 1
     });
   }
   getDefaultHeaders() {
@@ -37092,7 +37323,7 @@ var BaseGeminiNextGenAPIClient = class _BaseGeminiNextGenAPIClient {
   }
   async fetchWithTimeout(url, init, ms, controller) {
     const _b = init || {}, { signal, method } = _b, options = __rest(_b, ["signal", "method"]);
-    const abort = controller.abort.bind(controller);
+    const abort = this._makeAbort(controller);
     if (signal)
       signal.addEventListener("abort", abort, { once: true });
     const timeout = setTimeout(abort, ms);
@@ -37188,6 +37419,9 @@ var BaseGeminiNextGenAPIClient = class _BaseGeminiNextGenAPIClient {
     ]);
     this.validateHeaders(headers);
     return headers.values;
+  }
+  _makeAbort(controller) {
+    return () => controller.abort();
   }
   buildBody({ options: { body, headers: rawHeaders } }) {
     if (!body) {
@@ -37480,6 +37714,9 @@ function createTuningJobConfigToMldev(fromObject, parentObject, _rootObject) {
   if (getValueByPath(fromObject, ["outputUri"]) !== void 0) {
     throw new Error("outputUri parameter is not supported in Gemini API.");
   }
+  if (getValueByPath(fromObject, ["encryptionSpec"]) !== void 0) {
+    throw new Error("encryptionSpec parameter is not supported in Gemini API.");
+  }
   return toObject;
 }
 function createTuningJobConfigToVertex(fromObject, parentObject, rootObject) {
@@ -37704,6 +37941,12 @@ function createTuningJobConfigToVertex(fromObject, parentObject, rootObject) {
   const fromOutputUri = getValueByPath(fromObject, ["outputUri"]);
   if (parentObject !== void 0 && fromOutputUri != null) {
     setValueByPath(parentObject, ["outputUri"], fromOutputUri);
+  }
+  const fromEncryptionSpec = getValueByPath(fromObject, [
+    "encryptionSpec"
+  ]);
+  if (parentObject !== void 0 && fromEncryptionSpec != null) {
+    setValueByPath(parentObject, ["encryptionSpec"], fromEncryptionSpec);
   }
   return toObject;
 }
@@ -38810,6 +39053,7 @@ var NodeFiles = class extends Files {
 var LANGUAGE_LABEL_PREFIX = "gl-node/";
 var GoogleGenAI = class {
   get interactions() {
+    var _a4;
     if (this._interactions !== void 0) {
       return this._interactions;
     }
@@ -38824,7 +39068,8 @@ var GoogleGenAI = class {
       apiVersion: this.apiClient.getApiVersion(),
       clientAdapter: this.apiClient,
       defaultHeaders: this.apiClient.getDefaultHeaders(),
-      timeout: httpOpts === null || httpOpts === void 0 ? void 0 : httpOpts.timeout
+      timeout: httpOpts === null || httpOpts === void 0 ? void 0 : httpOpts.timeout,
+      maxRetries: (_a4 = httpOpts === null || httpOpts === void 0 ? void 0 : httpOpts.retryOptions) === null || _a4 === void 0 ? void 0 : _a4.attempts
     });
     this._interactions = nextGenClient.interactions;
     return this._interactions;
