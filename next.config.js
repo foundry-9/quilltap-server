@@ -32,7 +32,6 @@ const nextConfig = {
 
   // Experimental features
   experimental: {
-    turbopackUseSystemTlsCerts: true,
     serverActions: {
       bodySizeLimit: '100mb',
     },
@@ -94,7 +93,10 @@ const nextConfig = {
     ];
   },
 
-  // Webpack optimizations
+  // Turbopack configuration (Next.js 16+ uses Turbopack by default)
+  turbopack: {},
+
+  // Webpack optimizations (used when building with --webpack flag)
   webpack: (config, { isServer }) => {
     if (!isServer) {
       // Don't resolve 'fs' module on the client to prevent errors

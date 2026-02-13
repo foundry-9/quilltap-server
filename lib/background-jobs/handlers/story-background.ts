@@ -469,11 +469,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
         projectId: folderProjectId,
         mountPointId: uploadResult.mountPointId,
       });
-      logger.debug('[StoryBackground] Created /story-backgrounds/ folder record', {
-        context: 'background-jobs.story-background',
-        jobId: job.id,
-        projectId: folderProjectId,
-      });
+
     }
 
     // Create file metadata record

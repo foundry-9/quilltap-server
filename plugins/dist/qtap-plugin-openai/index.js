@@ -242,7 +242,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // node_modules/openai/version.mjs
-var VERSION = "6.18.0";
+var VERSION = "6.21.0";
 
 // node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -5802,6 +5802,114 @@ var Responses = class extends APIResource {
 Responses.InputItems = InputItems;
 Responses.InputTokens = InputTokens;
 
+// node_modules/openai/resources/skills/content.mjs
+var Content2 = class extends APIResource {
+  /**
+   * Get Skill Content
+   */
+  retrieve(skillID, options) {
+    return this._client.get(path`/skills/${skillID}/content`, {
+      ...options,
+      headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
+      __binaryResponse: true
+    });
+  }
+};
+
+// node_modules/openai/resources/skills/versions/content.mjs
+var Content3 = class extends APIResource {
+  /**
+   * Get Skill Version Content
+   */
+  retrieve(version, params, options) {
+    const { skill_id } = params;
+    return this._client.get(path`/skills/${skill_id}/versions/${version}/content`, {
+      ...options,
+      headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
+      __binaryResponse: true
+    });
+  }
+};
+
+// node_modules/openai/resources/skills/versions/versions.mjs
+var Versions = class extends APIResource {
+  constructor() {
+    super(...arguments);
+    this.content = new Content3(this._client);
+  }
+  /**
+   * Create Skill Version
+   */
+  create(skillID, body = {}, options) {
+    return this._client.post(path`/skills/${skillID}/versions`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
+  }
+  /**
+   * Get Skill Version
+   */
+  retrieve(version, params, options) {
+    const { skill_id } = params;
+    return this._client.get(path`/skills/${skill_id}/versions/${version}`, options);
+  }
+  /**
+   * List Skill Versions
+   */
+  list(skillID, query = {}, options) {
+    return this._client.getAPIList(path`/skills/${skillID}/versions`, CursorPage, {
+      query,
+      ...options
+    });
+  }
+  /**
+   * Delete Skill Version
+   */
+  delete(version, params, options) {
+    const { skill_id } = params;
+    return this._client.delete(path`/skills/${skill_id}/versions/${version}`, options);
+  }
+};
+Versions.Content = Content3;
+
+// node_modules/openai/resources/skills/skills.mjs
+var Skills = class extends APIResource {
+  constructor() {
+    super(...arguments);
+    this.content = new Content2(this._client);
+    this.versions = new Versions(this._client);
+  }
+  /**
+   * Create Skill
+   */
+  create(body = {}, options) {
+    return this._client.post("/skills", maybeMultipartFormRequestOptions({ body, ...options }, this._client));
+  }
+  /**
+   * Get Skill
+   */
+  retrieve(skillID, options) {
+    return this._client.get(path`/skills/${skillID}`, options);
+  }
+  /**
+   * Update Skill Default Version
+   */
+  update(skillID, body, options) {
+    return this._client.post(path`/skills/${skillID}`, { body, ...options });
+  }
+  /**
+   * List Skills
+   */
+  list(query = {}, options) {
+    return this._client.getAPIList("/skills", CursorPage, { query, ...options });
+  }
+  /**
+   * Delete Skill
+   */
+  delete(skillID, options) {
+    return this._client.delete(path`/skills/${skillID}`, options);
+  }
+};
+Skills.Content = Content2;
+Skills.Versions = Versions;
+
 // node_modules/openai/resources/uploads/parts.mjs
 var Parts = class extends APIResource {
   /**
@@ -6387,6 +6495,7 @@ var OpenAI = class {
     this.conversations = new Conversations(this);
     this.evals = new Evals(this);
     this.containers = new Containers(this);
+    this.skills = new Skills(this);
     this.videos = new Videos(this);
     if (apiKey === void 0) {
       throw new OpenAIError("Missing credentials. Please pass an `apiKey`, or set the `OPENAI_API_KEY` environment variable.");
@@ -6818,6 +6927,7 @@ OpenAI.Realtime = Realtime2;
 OpenAI.Conversations = Conversations;
 OpenAI.Evals = Evals;
 OpenAI.Containers = Containers;
+OpenAI.Skills = Skills;
 OpenAI.Videos = Videos;
 
 // node_modules/@quilltap/plugin-utils/dist/index.mjs
