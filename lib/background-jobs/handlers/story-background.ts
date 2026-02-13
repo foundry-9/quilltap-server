@@ -453,6 +453,25 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       folderPath: '/story-backgrounds/',
     });
 
+    // Ensure /story-backgrounds/ folder record exists in database
+    const folderProjectId = payload.projectId ?? null;
+    const existingFolder = await repos.folders.findByPath(
+      job.userId,
+      '/story-backgrounds/',
+      folderProjectId
+    );
+    if (!existingFolder) {
+      await repos.folders.create({
+        userId: job.userId,
+        path: '/story-backgrounds/',
+        name: 'story-backgrounds',
+        parentFolderId: null,
+        projectId: folderProjectId,
+        mountPointId: uploadResult.mountPointId,
+      });
+
+    }
+
     // Create file metadata record
     const category: FileCategory = 'IMAGE';
     const source: FileSource = 'GENERATED';
@@ -475,6 +494,8 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       tags: [],
       storageKey: uploadResult.storageKey,
       mountPointId: uploadResult.mountPointId,
+      projectId: folderProjectId,
+      folderPath: '/story-backgrounds/',
     }, { id: fileId });
 
     logger.info('[StoryBackground] Image saved successfully', {

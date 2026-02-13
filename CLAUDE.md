@@ -14,7 +14,7 @@ Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, 
 - **Package Manager**: npm
 - **Testing**: Jest and coverage tools (Istanbul/nyc), Playwright
 - **Data Storage**: SQLite with zero external dependencies. Uses `better-sqlite3` driver directly. Data models are defined as TypeScript interfaces with Zod schemas.
-- **File Storage**: local or optional S3-compatible storage (embedded MinIO for development, external S3 for production)
+- **File Storage**: local or optional S3-compatible storage (AWS S3, MinIO, Cloudflare R2, etc.)
 - **AI and LLM Services**: OpenAI, Anthropic, xAI/Grok, Google, OpenRouter
 - **Design Documentation**: Storybook
 - **API Structure**: Versioned REST API under `/api/v1/` with action dispatch pattern

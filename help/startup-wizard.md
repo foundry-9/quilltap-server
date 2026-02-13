@@ -243,6 +243,7 @@ Ollama doesn't require an API key, but you need Ollama running:
    - Ollama usually runs automatically after installation
    - If not, run: `ollama serve`
    - It runs on `http://localhost:11434` by default
+   - **Docker users:** No URL changes needed — add `11434` to `HOST_REDIRECT_PORTS` when running the container
 
 4. **No API Key Needed**
    - Skip adding an API key
@@ -494,6 +495,8 @@ You're ready to chat! Quilltap comes with a starter character, or you can create
 - Check Ollama is on the default port (11434)
 - Try accessing `http://localhost:11434` in your browser
 - Restart Ollama if needed
+
+> **Docker users:** If you're running Quilltap in Docker and Ollama on your host machine, you don't need to change the URL. Add `11434` to the `HOST_REDIRECT_PORTS` environment variable when starting the container, and `http://localhost:11434` works transparently. See the [Deployment Guide](/docs/DEPLOYMENT.md) for details.
 
 ---
 

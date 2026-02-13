@@ -591,7 +591,7 @@ describe('ParticipantSidebar', () => {
       )
 
       expect(screen.getByText('No participants')).toBeInTheDocument()
-      expect(screen.getByText('All characters have been removed')).toBeInTheDocument()
+      expect(screen.getByText('Add a character to get started')).toBeInTheDocument()
     })
 
     it('shows inactive participants instead of empty state when all participants are inactive', () => {

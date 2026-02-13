@@ -22,8 +22,17 @@ import { injectPluginLoggerFactory, clearPluginLoggerFactory } from '@/lib/plugi
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import type { FileStorageProviderPlugin } from '@/lib/file-storage/interfaces';
 import packageJson from '@/package.json';
-import { resolve, join } from 'node:path';
+import { join } from 'node:path';
+
 import { existsSync } from 'node:fs';
+
+// Use an indirection for path.resolve so the bundler cannot statically analyse
+// the resulting file pattern (which otherwise triggers "matches N files" warnings
+// because resolve(process.cwd(), <dynamic>, <dynamic>) looks overly broad).
+const _resolve: typeof import('node:path').resolve =
+  typeof __non_webpack_require__ !== 'undefined'
+    ? __non_webpack_require__('node:path').resolve
+    : require('node:path').resolve;
 
 // Dynamic plugin loading requires native Node.js require, not the bundler's.
 // - Webpack (dev): provides __non_webpack_require__ for native require access
@@ -274,7 +283,7 @@ async function performInitialization(): Promise<PluginInitializationResult> {
     if (typescriptPlugins.length > 0) {
       for (const plugin of typescriptPlugins) {
         const mainFile = plugin.manifest.main || 'index.js';
-        const jsPath = resolve(process.cwd(), plugin.pluginPath, mainFile);
+        const jsPath = _resolve(process.cwd(), plugin.pluginPath, mainFile);
 
         if (!existsSync(jsPath)) {
           result.errors.push({
@@ -334,7 +343,7 @@ async function performInitialization(): Promise<PluginInitializationResult> {
       for (const loadedPlugin of allProviderPlugins) {
         try {
           const mainFile = loadedPlugin.manifest.main || 'index.js';
-          const modulePath = resolve(process.cwd(), loadedPlugin.pluginPath, mainFile);
+          const modulePath = _resolve(process.cwd(), loadedPlugin.pluginPath, mainFile);
 
           // Use external loader for npm-installed plugins to resolve peer dependencies
           // Bundled plugins (in plugins/dist) can use dynamicRequire directly
@@ -385,7 +394,7 @@ async function performInitialization(): Promise<PluginInitializationResult> {
 
       try {
         const mainFile = loadedPlugin.manifest.main || 'index.js';
-        const modulePath = resolve(process.cwd(), loadedPlugin.pluginPath, mainFile);
+        const modulePath = _resolve(process.cwd(), loadedPlugin.pluginPath, mainFile);
 
         if (!existsSync(modulePath)) {
           continue; // No module file, will fall back to file-based
@@ -419,7 +428,7 @@ async function performInitialization(): Promise<PluginInitializationResult> {
       for (const loadedPlugin of toolPlugins) {
         try {
           const mainFile = loadedPlugin.manifest.main || 'index.js';
-          const modulePath = resolve(process.cwd(), loadedPlugin.pluginPath, mainFile);
+          const modulePath = _resolve(process.cwd(), loadedPlugin.pluginPath, mainFile);
 
           // Use external loader for npm-installed plugins to resolve peer dependencies
           const isExternalPlugin = loadedPlugin.source === 'npm';
@@ -457,7 +466,7 @@ async function performInitialization(): Promise<PluginInitializationResult> {
       for (const loadedPlugin of searchProviderPlugins) {
         try {
           const mainFile = loadedPlugin.manifest.main || 'index.js';
-          const modulePath = resolve(process.cwd(), loadedPlugin.pluginPath, mainFile);
+          const modulePath = _resolve(process.cwd(), loadedPlugin.pluginPath, mainFile);
 
           // Use external loader for npm-installed plugins to resolve peer dependencies
           const isExternalPlugin = loadedPlugin.source === 'npm';
@@ -497,7 +506,7 @@ async function performInitialization(): Promise<PluginInitializationResult> {
       for (const loadedPlugin of fileBackendPlugins) {
         try {
           const mainFile = loadedPlugin.manifest.main || 'index.js';
-          const modulePath = resolve(process.cwd(), loadedPlugin.pluginPath, mainFile);
+          const modulePath = _resolve(process.cwd(), loadedPlugin.pluginPath, mainFile);
 
           // Use external loader for npm-installed plugins to resolve peer dependencies
           const isExternalPlugin = loadedPlugin.source === 'npm';

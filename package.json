@@ -1,6 +1,6 @@
 {
   "name": "quilltap",
-  "version": "2.10.2-bugfix.0",
+  "version": "2.11.0",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -18,11 +18,8 @@
     "devssl": "next dev --experimental-https --experimental-https-key ./certs/localhost-key.pem --experimental-https-cert ./certs/localhost.pem",
     "build": "npm run build:plugins && next build",
     "build:plugins": "tsx scripts/build-plugins.ts",
-    "build:docker": "docker-compose build",
-    "build:docker:rebuild": "docker-compose build --no-cache",
+    "build:docker": "./scripts/build-push-docker.sh",
     "start": "next start",
-    "start:docker": "docker-compose up -d",
-    "stop:docker": "docker-compose down",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test": "LOG_LEVEL=error npm run test:all",

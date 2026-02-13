@@ -25,7 +25,5 @@
     "ts-node",
     "@vitest/mocker"
   ],
-  "ignoreBinaries": [
-    "docker-compose"
-  ]
+  "ignoreBinaries": []
 }

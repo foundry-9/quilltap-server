@@ -57,9 +57,8 @@ When running Quilltap in Docker, the "Open in File Browser" button is not availa
 
 Instead, access your data through your **host system**:
 
-1. Find the volume mount location in your `docker-compose.yml`
-2. The default is `~/.quilltap` (or the value of `QUILLTAP_HOST_DATA_DIR`)
-3. Open that directory on your host system
+1. Find the volume mount path you used with `docker run -v /path/to/data:/app/quilltap`
+2. Open that directory on your host system
 
 For example, if you're using the default configuration:
 - **macOS/Linux**: Open `~/.quilltap` in Finder or your file manager

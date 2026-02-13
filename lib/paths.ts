@@ -20,8 +20,8 @@
  *
  * Environment variables:
  * - QUILLTAP_DATA_DIR: Overrides the base directory (non-Docker only)
- * - QUILLTAP_HOST_DATA_DIR: Used by docker-compose.yml to set the host-side volume mount path
- *   (not read by the application; defaults to ~/.quilltap in docker-compose.yml)
+ * - QUILLTAP_HOST_DATA_DIR: Not read by the application; documented for users
+ *   who want to set the host-side volume mount path when running Docker
  *
  * @module lib/paths
  */
@@ -160,7 +160,7 @@ export interface BaseDataDirInfo {
  * otherwise returns platform-specific default.
  *
  * In Docker, QUILLTAP_DATA_DIR is ignored because the container must use
- * /app/quilltap to match the volume mount configured in docker-compose.yml.
+ * /app/quilltap to match the volume mount configured via `docker run -v`.
  *
  * @returns Object containing the path and its source
  */

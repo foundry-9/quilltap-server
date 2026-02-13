@@ -144,6 +144,8 @@ playwright-report/
 test-results/
 playwright/.cache/
 
+.vscode/
+
 .claude/*
 !.claude/commands
 certs
