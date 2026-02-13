@@ -4,6 +4,30 @@
 
 ### 2.11-dev
 
+- build: Removed dead Docker infrastructure (docker-compose files, Dockerfile.allinone, Nginx/Certbot/MinIO configs)
+  - Deleted `docker-compose.yml`, `docker-compose.prod.yml`, `docker-compose.test.yml`, `Dockerfile.allinone`
+  - Removed `docker/start-allinone.sh`, `docker/init-letsencrypt.sh`, `docker/nginx.conf`
+  - Removed `build:docker:rebuild`, `start:docker`, `stop:docker` npm scripts
+- build: Added `HOST_REDIRECT_PORTS` support to Docker image for transparent host port forwarding
+  - New `docker/entrypoint.sh` script sets up socat forwarders for comma-separated port list
+  - Enables Docker users to reach host services (Ollama, LM Studio, MCP servers) at `localhost` URLs
+  - Installed socat in the production Docker image
+- feat: Added Docker startup scripts (`scripts/start-quilltap.sh` and `scripts/start-quilltap.ps1`)
+  - Platform detection sets correct default data directory (macOS, Linux, Windows)
+  - Auto-detects Ollama on port 11434 and adds it to `HOST_REDIRECT_PORTS`
+  - Supports `--data-dir`, `--port`, `--redirect-ports`, `--tag`, `--env`, `--restart`, `--dry-run`
+  - Checks for existing containers before creating duplicates
+  - `--no-auto-detect` flag to skip service detection
+- chore: Removed all authentication infrastructure (JWT, OAuth, Google sign-in)
+  - Removed `JWT_SECRET`, `AUTH_DISABLED`, `OAUTH_DISABLED`, `GOOGLE_CLIENT_*` from .env.example and docs
+  - Removed authentication sections from DEPLOYMENT.md
+  - Simplified README.md Quick Start — no configuration required for local use
+- docs: Rewrote all Docker documentation around `docker run` and startup scripts
+  - README.md Quick Start now recommends startup scripts with `docker run` as fallback
+  - Updated DEVELOPMENT.md, docs/DEPLOYMENT.md, docs/DATABASE_ABSTRACTION.md, docs/BACKUP-RESTORE.md
+  - Added reverse proxy examples (Nginx, Caddy) to DEPLOYMENT.md
+  - Added Docker user notes to help files (startup-wizard, connection-profiles, embedding-profiles)
+  - Cleaned up stale references in .env.example, package.json, knip.json, lib/paths.ts, DataDirectorySection component
 - build: Updated Docker build process to make sure Windows and macOS were covered
 - fix: Import of large .qtap files (>10MB) now works correctly
   - Added `proxyClientMaxBodySize: '100mb'` to next.config.js to prevent proxy body truncation

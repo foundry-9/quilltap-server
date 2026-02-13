@@ -232,6 +232,7 @@ Embeddings maintain a vocabulary of indexed memories:
 - Start Ollama server: `ollama serve`
 - Install model: `ollama pull nomic-embed-text`
 - Set base URL to <http://localhost:11434> (or your server)
+- **Docker users:** No URL changes needed — add `11434` to `HOST_REDIRECT_PORTS`
 
 **Models for Ollama:**
 

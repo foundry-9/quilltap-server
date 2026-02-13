@@ -50,13 +50,12 @@ quilltap/
 ├── docs/                     # Documentation (API, deployment, backup guides)
 ├── features/                 # Feature roadmap and spec documents
 │   └── complete/             # Completed feature specifications
-├── docker/                   # Docker configuration (nginx, scripts, cert helpers)
+├── docker/                   # Docker configuration (entrypoint script)
 ├── scripts/                  # Utility scripts (migrations, cleanup, builds)
 ├── public/                   # Static assets (icons, manifest)
 ├── website/                  # Website assets (images, splash graphics)
 ├── certs/                    # Development TLS certificates
 ├── logs/                     # Application log files (when LOG_OUTPUT includes file)
-├── docker-compose*.yml       # Docker Compose configurations
 ├── Dockerfile                # Production Docker build
 ├── proxy.ts                  # Local HTTPS proxy helper for dev
 ├── jest.config.ts            # Jest unit test configuration
@@ -90,8 +89,6 @@ npm run devssl
 # Or plain HTTP
 npm run dev
 
-# Optional: Start MinIO for S3-compatible file storage
-docker-compose -f docker-compose.yml up -d minio createbuckets
 ```
 
 The application will be available at [https://localhost:3000](https://localhost:3000)
@@ -99,11 +96,11 @@ The application will be available at [https://localhost:3000](https://localhost:
 ### Running with Docker
 
 ```bash
-# Start everything (app + MinIO + SQLite)
-docker-compose -f docker-compose.yml up
+# Run from Docker Hub
+docker run -d --name quilltap -p 3000:3000 -v ~/.quilltap:/app/quilltap csebold/quilltap
 
 # View logs
-docker-compose -f docker-compose.yml logs -f app
+docker logs -f quilltap
 ```
 
 ### Testing
@@ -191,7 +188,6 @@ Files are stored on the local filesystem by default, with optional S3-compatible
 **S3-Compatible Storage (Optional)**:
 - Configure via mount points in Settings > Storage
 - Supports AWS S3, MinIO, Cloudflare R2, etc.
-- For development, Docker Compose provides embedded MinIO
 
 ## Plugin Development
 

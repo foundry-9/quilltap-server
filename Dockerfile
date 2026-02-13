@@ -83,11 +83,18 @@ COPY --from=builder --chown=nextjs:nodejs /app/plugins/dist ./plugins/dist
 # Copy package files for native module dependencies
 COPY package.json package-lock.json ./
 
+# Install socat for optional host port forwarding
+RUN apk add --no-cache socat
+
 # Install only production dependencies (including better-sqlite3)
 RUN npm ci --omit=dev
 
 # Rebuild native modules for the current Alpine Linux platform
 RUN npm rebuild
+
+# Copy entrypoint script
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
 USER nextjs
 
@@ -96,4 +103,5 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
+ENTRYPOINT ["entrypoint.sh"]
 CMD ["node", "server.js"]
