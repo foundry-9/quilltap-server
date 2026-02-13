@@ -317,11 +317,7 @@ git push
 git push --tags
 
 # Time to push to Docker
-docker login
-docker build -t csebold/quilltap:$NEWRELEASE .
-docker push csebold/quilltap:$NEWRELEASE
-docker tag csebold/quilltap:$NEWRELEASE csebold/quilltap:latest
-docker push csebold/quilltap:latest
+npm run build:docker
 
 # Now let's get back to work!
 git checkout main

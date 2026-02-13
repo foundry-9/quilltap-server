@@ -4,7 +4,7 @@
 
 ### 2.11-dev
 
-- Started 2.11 dev branch
+- build: Updated Docker build process to make sure Windows and macOS were covered
 - fix: Import of large .qtap files (>10MB) now works correctly
   - Added `proxyClientMaxBodySize: '100mb'` to next.config.js to prevent proxy body truncation
   - Frontend import now sends the original file via FormData instead of re-serializing JSON
@@ -20,6 +20,7 @@
   - Added `projectId` and `folderPath` to file metadata when saving generated story backgrounds
   - Auto-create `/story-backgrounds/` folder record in database on first background generation per scope
   - Fixed project `list-files` API response missing `folderPath` and other fields needed by FileBrowser UI
+- Started 2.11 dev branch
 
 ### 2.10.2
 

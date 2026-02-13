@@ -1,6 +1,6 @@
 {
   "name": "quilltap",
-  "version": "2.11.0-dev.29",
+  "version": "2.11.0-dev.36",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -18,7 +18,7 @@
     "devssl": "next dev --experimental-https --experimental-https-key ./certs/localhost-key.pem --experimental-https-cert ./certs/localhost.pem",
     "build": "npm run build:plugins && next build",
     "build:plugins": "tsx scripts/build-plugins.ts",
-    "build:docker": "docker-compose build",
+    "build:docker": "./scripts/build-push-docker.sh",
     "build:docker:rebuild": "docker-compose build --no-cache",
     "start": "next start",
     "start:docker": "docker-compose up -d",
