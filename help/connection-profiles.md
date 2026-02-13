@@ -185,6 +185,8 @@ For self-hosted or alternative LLM providers (like local Ollama instances):
 4. Complete other settings as needed
 5. Test to verify connection works
 
+> **Docker users:** If you're running Quilltap in Docker and local services (like Ollama) on your host machine, you don't need to change any URLs. Add the port to the `HOST_REDIRECT_PORTS` environment variable when starting the container (e.g., `HOST_REDIRECT_PORTS="11434"`), and `http://localhost:11434` works transparently inside the container.
+
 ## Provider-Specific Notes
 
 ### OpenAI (GPT-4, GPT-3.5, etc.)

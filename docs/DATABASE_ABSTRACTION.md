@@ -24,19 +24,12 @@ Quilltap uses **SQLite** as its database backend. SQLite provides:
 
 ## Docker Deployment
 
-### Development
-
-Use `docker-compose.yml` for local development with SQLite:
+Run Quilltap with a persistent data volume:
 ```bash
-docker-compose -f docker-compose.yml up
+docker run -d --name quilltap -p 3000:3000 -v /path/to/data:/app/quilltap csebold/quilltap
 ```
 
-### Production
-
-Use `docker-compose.prod.yml` for production deployments:
-```bash
-docker-compose -f docker-compose.prod.yml up -d
-```
+The SQLite database is stored at `/app/quilltap/data/quilltap.db` inside the container.
 
 ## Architecture
 
@@ -222,7 +215,7 @@ Platform-specific locations:
 - macOS: `~/Library/Application Support/Quilltap/data/quilltap.db`
 - Windows: `%APPDATA%\Quilltap\data\quilltap.db`
 
-The data directory is automatically created if it doesn't exist. For Docker, the `/app/quilltap` directory is mounted from the host's platform-specific location by default (`QUILLTAP_HOST_DATA_DIR`).
+The data directory is automatically created if it doesn't exist. For Docker, mount a host directory to `/app/quilltap` using `docker run -v /path/to/data:/app/quilltap`.
 
 ## Troubleshooting
 

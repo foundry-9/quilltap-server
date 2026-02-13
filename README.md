@@ -7,7 +7,7 @@ Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, 
 No subscriptions. No data harvested. No forgetting everything between sessions.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.10.2-green.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.11.0-green.svg)](package.json)
 
 <p align="center">
   <img src="https://quilltap.ai/images/welcome-to-quilltap-2-8.png" alt="Welcome to Quilltap" />
@@ -58,47 +58,55 @@ If you're coming from SillyTavern, Quilltap imports your characters and chats di
 
 ### Prerequisites
 
-- **Docker and Docker Compose** (recommended), or
+- **Docker** (recommended), or
 - **Node.js 22+** (for local development)
 
 ### With Docker (Recommended)
 
-#### Use Docker production image
+The [csebold/quilltap](https://hub.docker.com/repository/docker/csebold/quilltap/general) Docker image is available on Docker Hub. Use the included startup script to get running with platform-appropriate defaults:
 
-[csebold/quilltap](https://hub.docker.com/repository/docker/csebold/quilltap/general)
-
-#### For local development
+**Linux / macOS (bash):**
 
 ```bash
-# Clone the repository
-git clone https://github.com/foundry-9/quilltap.git
-cd quilltap
+./scripts/start-quilltap.sh
+```
 
-# Configure environment
-cp .env.example .env.local
+**Windows (PowerShell):**
 
-# Generate your secrets
-openssl rand -base64 32  # Use this for JWT_SECRET
+```powershell
+.\scripts\start-quilltap.ps1
+```
 
-# Edit .env.local with your values, then:
-docker-compose up
+The script auto-detects your platform, sets the correct data directory, and checks for local services like Ollama — forwarding their ports into the container automatically.
+
+Common options:
+
+```bash
+# Custom data directory and port
+./scripts/start-quilltap.sh --data-dir /mnt/data/quilltap --port 8080
+
+# Explicitly forward additional host ports
+./scripts/start-quilltap.sh --redirect-ports 11434,3030
+
+# Preview the docker command without running it
+./scripts/start-quilltap.sh --dry-run
+```
+
+Or run directly with `docker run`:
+
+```bash
+docker run -d \
+  --name quilltap \
+  -p 3000:3000 \
+  -v /path/to/data:/app/quilltap \
+  csebold/quilltap
 ```
 
 Open `http://localhost:3000` and you're running. On first launch, you'll be guided through a setup wizard that generates your encryption key automatically.
 
-### Essential Configuration
+No configuration is required for local use — everything has sensible defaults. The encryption key is auto-generated on first run and stored in an encrypted vault. You can optionally protect it with a passphrase during the setup wizard at `/setup`.
 
-Your `.env.local` needs at minimum:
-
-```env
-BASE_URL="http://localhost:3000"
-```
-
-The encryption key (`ENCRYPTION_MASTER_PEPPER`) is auto-generated on first run and stored in an encrypted vault. You can optionally protect it with a passphrase during the setup wizard at `/setup`. If you prefer to manage it manually, set `ENCRYPTION_MASTER_PEPPER` in your `.env.local` and you'll be prompted to store it in the vault.
-
-**Important:** If you set a passphrase, you'll need it each time Quilltap starts (when the env var is not set). The setup wizard will show your encryption pepper once — back it up securely.
-
-For production deployment with SSL, see the [Deployment Guide](docs/DEPLOYMENT.md).
+For production deployment, see the [Deployment Guide](docs/DEPLOYMENT.md).
 
 ---
 
@@ -281,12 +289,12 @@ All Quilltap data (database, files, logs) is stored in a single directory:
 | **Linux**   | `~/.quilltap`                                      | `QUILLTAP_DATA_DIR`       |
 | **macOS**   | `~/Library/Application Support/Quilltap`           | `QUILLTAP_DATA_DIR`       |
 | **Windows** | `%APPDATA%\Quilltap`                               | `QUILLTAP_DATA_DIR`       |
-| **Docker**  | Host: `~/.quilltap` → Container: `/app/quilltap`   | `QUILLTAP_HOST_DATA_DIR`  |
+| **Docker**  | Mount a host directory to `/app/quilltap`            | Volume mount (`-v`)       |
 
-**Docker users:** Set `QUILLTAP_HOST_DATA_DIR` to change where data is stored on your host machine:
+**Docker users:** Mount your data directory when running the container:
 
 ```bash
-QUILLTAP_HOST_DATA_DIR=/mnt/data/quilltap docker-compose up
+docker run -d --name quilltap -p 3000:3000 -v /mnt/data/quilltap:/app/quilltap csebold/quilltap
 ```
 
 **Non-Docker users:** Set `QUILLTAP_DATA_DIR` to override the default:
@@ -329,14 +337,9 @@ See [Backup & Restore](docs/BACKUP-RESTORE.md) for details.
 
 **Application won't start:**
 
-- Docker: Check `docker ps` and `docker-compose logs -f app`
+- Docker: Check `docker ps` and `docker logs quilltap`
 - Verify port 3000 isn't in use
-- Confirm `BASE_URL` matches your actual URL
-
-**Files not displaying (S3/MinIO):**
-
-- Verify S3 credentials in `.env.local`
-- Check MinIO console at `localhost:9001` if using embedded MinIO
+- If using a custom domain, confirm `BASE_URL` matches your actual URL
 
 More help: [GitHub Issues](https://github.com/foundry-9/quilltap/issues)
 
@@ -384,7 +387,7 @@ Built with these excellent open source projects:
 
 **UI:** Tailwind CSS, React Markdown, React Syntax Highlighter, PDF.js, sharp
 
-**Infrastructure:** Docker, Nginx, MinIO, AWS SDK
+**Infrastructure:** Docker, AWS SDK
 
 **Testing:** Jest, Playwright, Storybook, Testing Library
 

@@ -225,7 +225,7 @@ sha256sum quilltap-backup.db > quilltap-backup.db.sha256
 **Stop the application first:**
 
 ```bash
-docker-compose down
+docker stop quilltap
 # OR for local development
 # Kill the npm dev process
 ```
@@ -255,7 +255,7 @@ aws s3 sync ./s3-backup-YYYYMMDD/ s3://quilltap-files/ --endpoint-url http://loc
 **Restart the application:**
 
 ```bash
-docker-compose up -d
+docker start quilltap
 # OR
 npm run dev
 ```
@@ -264,13 +264,13 @@ npm run dev
 
 ```bash
 # Stop container
-docker-compose down
+docker stop quilltap
 
 # Restore SQLite database file
-docker cp ./quilltap-backup-YYYYMMDD.db quilltap-app:/app/quilltap/data/quilltap.db
+docker cp ./quilltap-backup-YYYYMMDD.db quilltap:/app/quilltap/data/quilltap.db
 
 # Restart
-docker-compose up -d
+docker start quilltap
 ```
 
 ### From Encrypted Backup
@@ -359,7 +359,7 @@ sqlite3 /path/to/quilltap.db "PRAGMA integrity_check;"
 cp quilltap-backup-YYYYMMDD.db /path/to/quilltap.db
 
 # Restart the application
-docker-compose restart app
+docker restart quilltap
 ```
 
 ### Lost Files
@@ -468,7 +468,7 @@ echo "Latest backup is current: $AGE days old"
 2. **Stop the application:**
 
    ```bash
-   docker-compose down
+   docker stop quilltap
    ```
 
 3. **Restore encryption key (if needed):**
@@ -492,13 +492,13 @@ echo "Latest backup is current: $AGE days old"
 6. **Start application:**
 
    ```bash
-   docker-compose up -d
+   docker start quilltap
    ```
 
 7. **Verify:**
 
    ```bash
-   docker-compose logs -f app
+   docker logs -f quilltap
    curl http://localhost:3000/api/health
    ```
 
@@ -553,7 +553,7 @@ SQLite restore is typically fast since it's a file copy operation:
 ls -lh /path/to/quilltap.db
 
 # Check application startup logs
-docker-compose logs -f app
+docker logs -f quilltap
 ```
 
 ### Verification Failures
