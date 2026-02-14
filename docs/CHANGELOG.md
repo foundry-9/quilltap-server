@@ -11,8 +11,9 @@
   - Added health checker (`electron/health-checker.ts`): polls `/api/health` until server is ready
   - Added splash screen (`electron/splash/`): dark-themed loading UI with progress bar, error/retry states, and IPC bridge
   - Added preload script (`electron/preload.ts`): context bridge for secure splash ↔ main process communication
-  - Added Electron Builder config (`electron-builder.yml`): macOS DMG packaging with VZ entitlements
+  - Added Electron Builder config (`electron-builder.yml`): macOS zip packaging (DMG disabled due to framework symlink bug)
   - Added macOS entitlements (`electron/entitlements.mac.plist`): virtualization, unsigned memory, network client
+  - Added `scripts/stage-lima.sh`: stages limactl and guest agent binaries into the Electron bundle
   - Generated app icon (`electron/resources/icon.icns`, `icon.png`) from `public/quill.svg`
   - Added npm scripts: `electron:compile`, `electron:dev`, `electron:build`
   - Dev mode (`ELECTRON_DEV=1`) skips Lima and connects directly to `localhost:3000`

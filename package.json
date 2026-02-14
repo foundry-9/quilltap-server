@@ -1,6 +1,6 @@
 {
   "name": "quilltap",
-  "version": "2.12.0-lima.6",
+  "version": "2.12.0-lima.7",
   "private": true,
   "main": "dist-electron/main.js",
   "author": {
@@ -17,8 +17,10 @@
   "scripts": {
     "dev": "next dev --webpack",
     "devssl": "next dev --experimental-https --experimental-https-key ./certs/localhost-key.pem --experimental-https-cert ./certs/localhost.pem",
-    "build": "npm run build:plugins && next build && npm run electron:build",
+    "build": "npm run build:next && npm run build:electron",
+    "build:electron": "npm run electron:stage-lima && npm run electron:build",
     "build:plugins": "tsx scripts/build-plugins.ts",
+    "build:next": "npm run build:plugins && next build",
     "build:docker": "./scripts/build-push-docker.sh",
     "start": "next start",
     "lint": "eslint .",
@@ -48,6 +50,7 @@
     "build:help": "tsx scripts/build-help-index.ts",
     "electron:compile": "tsc -p electron/tsconfig.json",
     "electron:dev": "npm run electron:compile && ELECTRON_DEV=1 electron dist-electron/main.js",
+    "electron:stage-lima": "./scripts/stage-lima.sh",
     "electron:build": "npm run electron:compile && electron-builder"
   },
   "dependencies": {

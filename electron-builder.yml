@@ -1,23 +1,48 @@
 appId: com.foundry9.quilltap
 productName: Quilltap
 directories:
-  output: dist-electron
+  output: out
   buildResources: electron/resources
 files:
+  # Include compiled Electron code and splash screen assets
   - dist-electron/**/*
-  - electron/splash/**/*.html
-  - electron/splash/**/*.css
-  - electron/splash/**/*.js
+  - electron/splash/**/*
+  # Exclude everything else from the project (node_modules, src, etc.)
+  # The negation patterns prevent the entire project from being bundled.
+  - "!app/**/*"
+  - "!components/**/*"
+  - "!lib/**/*"
+  - "!public/**/*"
+  - "!scripts/**/*"
+  - "!lima/**/*"
+  - "!features/**/*"
+  - "!docs/**/*"
+  - "!help/**/*"
+  - "!migrations/**/*"
+  - "!plugins/**/*"
+  - "!packages/**/*"
+  - "!__tests__/**/*"
+  - "!.storybook/**/*"
+  - "!.githooks/**/*"
 extraResources:
   - from: lima/quilltap.yaml
     to: lima/quilltap.yaml
+  # Lima binaries staged by scripts/stage-lima.sh
+  - from: electron/resources/lima/
+    to: lima/
 mac:
   category: public.app-category.productivity
   target:
-    - target: dmg
+    - target: zip
       arch:
         - arm64
-  hardenedRuntime: true
-  entitlements: electron/entitlements.mac.plist
-  entitlementsInherit: electron/entitlements.mac.plist
+    # DMG disabled: electron-builder drops the Electron Framework binary
+    # from DMG images (known bug with framework symlinks). Use zip instead.
+    # Re-enable when signing with a proper Apple Developer identity.
+  # hardenedRuntime requires a valid Apple Developer signing identity.
+  # Set to true and uncomment identity/entitlements when distributing signed builds.
+  hardenedRuntime: false
+  identity: null
+  # entitlements: electron/entitlements.mac.plist
+  # entitlementsInherit: electron/entitlements.mac.plist
   icon: electron/resources/icon.icns

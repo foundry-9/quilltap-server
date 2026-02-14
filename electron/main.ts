@@ -14,10 +14,10 @@ import { SplashUpdate } from './types';
 
 const isDev = !!process.env.ELECTRON_DEV;
 
-/** Root of the electron source directory (for static files like splash/) */
-const electronDir = app.isPackaged
-  ? path.join(process.resourcesPath, 'electron')
-  : path.join(__dirname, '..', 'electron');
+/** Root of the app directory (for static files like electron/splash/) */
+const appRoot = app.isPackaged
+  ? app.getAppPath()
+  : path.join(__dirname, '..');
 
 let splashWindow: BrowserWindow | null = null;
 let mainWindow: BrowserWindow | null = null;
@@ -62,7 +62,7 @@ function createSplashWindow(): BrowserWindow {
     },
   });
 
-  win.loadFile(path.join(electronDir, 'splash', 'splash.html'));
+  win.loadFile(path.join(appRoot, 'electron', 'splash', 'splash.html'));
   win.once('ready-to-show', () => win.show());
 
   return win;
