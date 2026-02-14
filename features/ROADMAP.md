@@ -4,6 +4,45 @@ This document tracks planned features and improvements for Quilltap.
 
 ## In Progress
 
+## 3.0: the container future
+
+**macOS‑First Plan: Quilltap Sandbox Prototype (v0.1)**  
+
+1️⃣ **Host layer:**  
+
+- Run **Lima** directly. No Hyper‑V or nested virtualization trickery needed.  
+- Bundle Lima into `/Applications/Quilltap.app/Contents/Resources/runtime/`.  
+- Installer adds a helper binary with `com.quilltap.limalaunchd` service entry (for starting/stopping the VM silently).  
+
+2️⃣ **Runtime image:**  
+
+- Build an **arm64** Firecracker‑compatible VM image under Linux (Alpine or Debian remix).  
+- Pack Node, Python, Socat, SQLite, and Quilltap’s own binaries into `/opt/quilltap`.  
+- Store it as `quilltap-linux-arm64.img`—the equivalent of your Docker image.  
+- Mount `~/Quilltap Projects/` as `/data/` inside the VM at runtime.  
+
+3️⃣ **Frontend orchestration:**  
+
+- Electron launcher calls the Lima API (via socket or CLI) to fire up Firecracker with the image.  
+- The VM boots, Quilltap backend (Node + API server) starts automatically.  
+- Electron waits for localhost:5050 → connects → opens the app.  
+
+4️⃣ **Networking & shutdown:**  
+
+- NAT handled via Lima’s `virtio-net` backend.  
+- Socket forwarders pre‑registered: localhost:5050 → guest:5050.  
+- On exit, `lima stop quilltap` gracefully powers down the VM.  
+
+5️⃣ **Developer continuity:**  
+
+- Keep the Docker pipeline alive; every build produces both `quilltap:latest` for Docker and a matching `.img` for macOS runtime.  
+- This keeps behavior mirrored for all environments.  
+
+---
+
+*She leans back, taps the pencil once, satisfied.*  
+"macOS gives you an instant leg‑up. You can get this sandbox running, prove out the launch sequence, mounts, and networking—all without another dime of hardware. Then we port that Lima setup script to Windows later and swap Apple’s hypervisor APIs for Hyper‑V or WSL under the hood."  
+
 ## Planned Features
 
 ### Game and State (Pascal the Croupier)
