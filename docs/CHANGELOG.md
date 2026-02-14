@@ -4,9 +4,14 @@
 
 ### 3.0-dev
 
-- Started 3.0 dev branch for Lima/Firecracker virtualization
+- feat: Phase 1a — Lima VM boots Quilltap from the command line
+  - Added Lima VM template (`lima/quilltap.yaml`): VZ driver, Alpine Linux arm64, VirtioFS data mount, port forwarding 3000→5050, OpenRC service provisioning
+  - Added rootfs build script (`scripts/build-rootfs.sh`): exports Docker production image as a tarball importable by Lima and WSL2
+  - Added `isLimaEnvironment()` to `lib/paths.ts` to prevent Docker false-positive when running inside a Lima VM
+  - Added `quilltap-linux-*.tar.gz` to `.gitignore` for rootfs build artifacts
 - Replaced Firecracker with Lima+VZ (macOS) / Lima+WSL2 (Windows) cross-platform VM strategy
 - Updated ROADMAP with phased architecture: shared guest image and orchestration, thin platform-specific VM backends
+- Started 3.0 dev branch for Lima/Firecracker virtualization
 
 ### 2.12-dev
 

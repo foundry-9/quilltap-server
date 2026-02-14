@@ -167,3 +167,6 @@ plugins/**/package-lock.json
 
 # Help index JSON (generated from help/ Markdown files)
 help/help-index.json
+
+# Lima/VM rootfs build artifacts
+quilltap-linux-*.tar.gz

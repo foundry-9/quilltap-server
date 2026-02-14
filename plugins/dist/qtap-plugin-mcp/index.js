@@ -7084,6 +7084,9 @@ var isUserManaged = checkIsUserManaged();
 var import_path2 = __toESM(require("path"));
 var import_os = __toESM(require("os"));
 var import_fs2 = __toESM(require("fs"));
+function isLimaEnvironment() {
+  return process.env.LIMA_CONTAINER === "true";
+}
 function isDockerEnvironment() {
   if (process.env.DOCKER_CONTAINER === "true") {
     return true;
@@ -7101,6 +7104,9 @@ function isDockerEnvironment() {
   return false;
 }
 function getPlatform() {
+  if (isLimaEnvironment()) {
+    return "linux";
+  }
   if (isDockerEnvironment()) {
     return "docker";
   }
