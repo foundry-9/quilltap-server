@@ -19,6 +19,7 @@ Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, 
 - **Design Documentation**: Storybook
 - **API Structure**: Versioned REST API under `/api/v1/` with action dispatch pattern
 - **User Documentation**: Found in `/help/` and maintained and searchable using MessagePack
+- **Electron**: Electron front-end to Lima backend is primary way to use app
 - **Virtualization**: Lima + VZ (macOS) / WSL2 (Windows) for self-contained app distribution
 
 ## API Architecture
@@ -87,8 +88,8 @@ Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/
   - [help/](help/) - User documentation for every page and every visible feature - **IMPORTANT**: If anything in this directory is updated that we must run `npm run build:help` and add the changes from that process to the list of files to be committed
   - [.githooks/README.md](.githooks/README.md) — Documents the custom Git hook directory, especially the pre-commit script that lints, tests, bumps package versions, and how to configure/disable hooks — Grade: A (current dev workflow) — Last updated: 2025-11-18
   - [DEAD-CODE-REPORT.md](DEAD-CODE-REPORT.md) — Dead code analysis report with cleanup history, known false positives, and remaining low-priority items — Grade: A (reflects cleanup completed 2025-12-27) — Last updated: 2025-12-27
-  - [DEVELOPMENT.md](DEVELOPMENT.md) — Contributor guide covering repo structure, prerequisites, running the app (Docker and local), testing, linting, logging, data storage, and plugin development pointers — Grade: A (primary contributor reference) — Last updated: 2026-01-01
-  - [README.md](README.md) — High-level product overview, feature list, tech stack, setup instructions, deployment guidance, configuration, troubleshooting, and support links — Grade: A (source of truth for the product) — Last updated: 2026-01-23
+  - [DEVELOPMENT.md](DEVELOPMENT.md) — Contributor guide covering repo structure, prerequisites, running the app (Electron, Docker, and local), Electron/Lima VM development workflow, testing, linting, logging, data storage, and plugin development pointers — Grade: A (primary contributor reference) — Last updated: 2026-02-14
+  - [README.md](README.md) — High-level product overview, feature list, tech stack, setup instructions (Electron and Docker), deployment guidance, configuration, troubleshooting, and support links — Grade: A (source of truth for the product) — Last updated: 2026-02-14
   - [features/ROADMAP.md](features/ROADMAP.md) — Planned features and completed work for v2.7 and beyond — Grade: A (active roadmap) — Last updated: 2026-01-23
   - [`__tests__/unit/DELETED_IMAGE_HANDLING_TESTS.md`](__tests__/unit/DELETED_IMAGE_HANDLING_TESTS.md) — Describes the unit tests covering deleted image placeholders, gallery handling, modal behavior, and clean-up flows (31 total tests) — Grade: A (matches implemented tests) — Last updated: 2025-11-27
   - [components/characters/system-prompts-editor/README.md](components/characters/system-prompts-editor/README.md) — Documentation for the reorganized character system prompts editor: structure, hooks, components, APIs, logging, and styling — Grade: A (module-level documentation) — Last updated: 2025-12-17
@@ -135,6 +136,9 @@ Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/
   - [packages/create-quilltap-theme/CHANGELOG.md](packages/create-quilltap-theme/CHANGELOG.md) — Changelog for the create-quilltap-theme package — Grade: A (package changelog) — Last updated: 2025-12-31
   - [plugins/dist/qtap-plugin-mcp/README.md](plugins/dist/qtap-plugin-mcp/README.md) — Documentation for the MCP Server Connector plugin: configuration, authentication, tool naming, security, and troubleshooting — Grade: A (plugin documentation) — Last updated: 2026-01-13
   - [migrations/README.md](migrations/README.md) — Documentation for the migration system: architecture, adding new migrations, running migrations, and troubleshooting — Grade: A (migration system docs) — Last updated: 2026-01-22
+  - [electron-builder.yml](electron-builder.yml) — Electron Builder packaging config: app ID, macOS ARM64 ZIP target, resource bundling, Lima binary staging — Grade: A (build configuration) — Last updated: 2026-02-14
+  - [lima/quilltap.yaml](lima/quilltap.yaml) — Lima VM template: Alpine Linux 3.21, VZ hypervisor, VirtioFS mounts, OpenRC service provisioning, port forwarding — Grade: A (VM configuration) — Last updated: 2026-02-14
+  - [electron/tsconfig.json](electron/tsconfig.json) — Electron-specific TypeScript config: ES2022 target, CommonJS modules, outputs to dist-electron/ — Grade: A (build configuration) — Last updated: 2026-02-14
 
 ## qt-\* CSS tokens and semantic classes for themes
 
@@ -154,6 +158,7 @@ Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/
     - macOS: ~/Library/Application Support/Quilltap/
     - Windows: %APPDATA%\Quilltap\
     - Docker: /app/quilltap/
+    - Lima VM: /data/quilltap/ (VirtioFS mount of macOS path)
   - Category
     - `data/`
     - `files/`

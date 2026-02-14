@@ -24,16 +24,33 @@ quilltap/
 │   ├── nav/                  # Navigation components
 │   ├── providers/            # React context providers
 │   └── ui/                   # Generic UI components (Avatar, Badge, Button, etc.)
+├── electron/                 # Electron main process (launcher, VM management)
+│   ├── main.ts               # Electron entry point, orchestrates boot sequence
+│   ├── lima-manager.ts       # Lima VM lifecycle (create, start, stop, status)
+│   ├── health-checker.ts     # Polls /api/health until app is ready
+│   ├── download-manager.ts   # Downloads rootfs tarball with progress/retry
+│   ├── constants.ts          # Shared constants (ports, timeouts, paths)
+│   ├── types.ts              # TypeScript types for Electron IPC
+│   ├── preload.ts            # Context-isolated IPC bridge for splash screen
+│   ├── splash/               # Splash screen HTML/CSS/JS
+│   ├── resources/            # App icons and staged Lima binaries
+│   └── tsconfig.json         # Electron-specific TypeScript config
+├── lima/                     # Lima VM configuration
+│   └── quilltap.yaml         # VM template (Alpine Linux, VZ hypervisor, mounts)
 ├── lib/                      # Domain logic and utilities
 │   ├── auth/                 # Single-user mode and session management
 │   ├── chat/                 # Chat logic (context-manager, turn-manager, tool execution)
+│   ├── file-storage/         # File storage manager (local, S3, plugin backends)
 │   ├── llm/                  # LLM utilities (formatting, pricing, streaming)
 │   ├── memory/               # Memory and embedding logic
+│   ├── paths.ts              # Platform-aware data directory resolution
 │   ├── plugins/              # Plugin registry and loader
 │   ├── s3/                   # S3 storage utilities
 │   ├── sillytavern/          # SillyTavern import/export
 │   ├── tools/                # Tool definitions (image generation, web search, memory)
 │   └── backup/               # Backup and restore logic
+├── help/                     # User documentation (Markdown, built to MessagePack)
+├── migrations/               # Database migration scripts and migration-only files
 ├── plugins/                  # Plugin source code
 │   ├── dist/                 # Built plugins (loaded at runtime)
 │   └── src/                  # Plugin source files
@@ -52,11 +69,14 @@ quilltap/
 │   └── complete/             # Completed feature specifications
 ├── docker/                   # Docker configuration (entrypoint script)
 ├── scripts/                  # Utility scripts (migrations, cleanup, builds)
+│   ├── build-rootfs.sh       # Build Docker image and export rootfs tarball
+│   └── stage-lima.sh         # Copy Lima binaries into electron/resources/
 ├── public/                   # Static assets (icons, manifest)
 ├── website/                  # Website assets (images, splash graphics)
 ├── certs/                    # Development TLS certificates
 ├── logs/                     # Application log files (when LOG_OUTPUT includes file)
-├── Dockerfile                # Production Docker build
+├── Dockerfile                # Production Docker build (also used for rootfs)
+├── electron-builder.yml      # Electron Builder packaging configuration
 ├── proxy.ts                  # Local HTTPS proxy helper for dev
 ├── jest.config.ts            # Jest unit test configuration
 ├── jest.integration.config.ts # Jest integration test configuration
@@ -73,6 +93,11 @@ quilltap/
 - **Node.js 22+**
 - **SQLite** (automatic with better-sqlite3)
 - **File storage**: Local filesystem (default) or optionally S3-compatible storage
+
+For Electron/Lima development (macOS):
+
+- **Lima** — Install via Homebrew: `brew install lima`
+- **Docker** — Required for building the rootfs tarball (with buildx support)
 
 ### Running Locally
 
@@ -102,6 +127,62 @@ docker run -d --name quilltap -p 3000:3000 -v ~/.quilltap:/app/quilltap csebold/
 # View logs
 docker logs -f quilltap
 ```
+
+### Running with Electron (Primary Distribution)
+
+Quilltap's primary distribution is an Electron app that runs the backend inside a Lima VM (using Apple's Virtualization.framework on macOS). The Electron shell manages the VM lifecycle and presents the web UI in a native window.
+
+**Architecture:**
+
+```text
+Electron (host) → Lima VM (Alpine Linux guest) → Node.js + Quilltap (port 3000)
+                    ↕ VirtioFS file sharing        ↕ Port forward: 5050 → 3000
+```
+
+**Development mode** (skip the VM, connect to your local dev server):
+
+```bash
+# Terminal 1: Start the Next.js dev server
+npm run dev
+
+# Terminal 2: Launch Electron pointing at localhost:3000
+npm run electron:dev
+```
+
+In dev mode (`ELECTRON_DEV=1`), Electron skips all Lima/VM operations and connects directly to `http://localhost:3000`.
+
+**Building the full Electron app:**
+
+```bash
+# 1. Build the rootfs tarball (Docker image → Alpine guest filesystem)
+./scripts/build-rootfs.sh
+
+# 2. Stage Lima binaries into electron/resources/
+npm run electron:stage-lima
+
+# 3. Compile Electron TypeScript + package the app
+npm run build:electron
+```
+
+Or use `npm run build:electron` which runs steps 2–3 together (you must build the rootfs separately).
+
+**Key paths:**
+
+| What | Where |
+| --- | --- |
+| Lima home directory | `~/.qtlima/` (short path due to macOS 104-char socket limit) |
+| VM template | `lima/quilltap.yaml` |
+| Rootfs cache | `~/Library/Caches/Quilltap/lima-images/quilltap-linux-arm64.tar.gz` |
+| Staged Lima binaries | `electron/resources/lima/` |
+| Compiled Electron JS | `dist-electron/` |
+
+**VM details:**
+
+- **Guest OS**: Alpine Linux 3.21 (aarch64)
+- **Resources**: 2 CPUs, 2GB RAM, 10GB disk
+- **Hypervisor**: VZ (Virtualization.framework, no QEMU)
+- **File sharing**: VirtioFS — mounts `~/Library/Application Support/Quilltap` into the guest at `/data/quilltap`
+- **Port forwarding**: Host 5050 → Guest 3000
 
 ### Testing
 
@@ -175,7 +256,17 @@ All application data is stored in SQLite:
 - **roleplayTemplates** - Roleplay format templates
 - **providerModels** - Cached provider model lists
 
-The SQLite database file is stored at `~/.quilltap/data/quilltap.db` on local systems or `/app/quilltap/data/quilltap.db` in Docker.
+The SQLite database file location depends on platform:
+
+| Environment | Database Path |
+| --- | --- |
+| **Linux** | `~/.quilltap/data/quilltap.db` |
+| **macOS** | `~/Library/Application Support/Quilltap/data/quilltap.db` |
+| **Windows** | `%APPDATA%\Quilltap\data\quilltap.db` |
+| **Docker** | `/app/quilltap/data/quilltap.db` |
+| **Lima VM** | `/data/quilltap/data/quilltap.db` (maps to macOS path via VirtioFS) |
+
+Override with `QUILLTAP_DATA_DIR` (non-Docker environments).
 
 ### File Storage
 
@@ -315,6 +406,9 @@ git push --tags
 # Time to push to Docker
 npm run build:docker
 
+# Time to build Electron
+npm run build:electron
+
 # Now let's get back to work!
 git checkout main
 ```
@@ -376,7 +470,9 @@ git commit --no-verify -m "bugfix: started $NEWRELEASE bug branch"
 ## Additional Documentation
 
 - [API Documentation](docs/API.md) - REST endpoints and authentication
+- [Database Abstraction](docs/DATABASE_ABSTRACTION.md) - SQLite backend and data directory
 - [Deployment Guide](docs/DEPLOYMENT.md) - Production deployment patterns
 - [Backup & Restore Guide](docs/BACKUP-RESTORE.md) - Data backup procedures
 - [Plugin Developer Guide](plugins/README.md) - Creating plugins
 - [Theme Utility Classes](features/complete/theme-utility-classes.md) - Qt-* CSS system
+- [Roadmap](features/ROADMAP.md) - Planned features including Electron/Lima phases

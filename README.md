@@ -7,7 +7,7 @@ Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, 
 No subscriptions. No data harvested. No forgetting everything between sessions.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.12.0--lima.7-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.12.0--lima.8-yellow.svg)](package.json)
 
 <p align="center">
   <img src="https://quilltap.ai/images/welcome-to-quilltap-2-8.png" alt="Welcome to Quilltap" />
@@ -58,10 +58,33 @@ If you're coming from SillyTavern, Quilltap imports your characters and chats di
 
 ### Prerequisites
 
-- **Docker** (recommended), or
+- **Electron desktop app** (recommended for macOS), or
+- **Docker** (recommended for servers and Linux), or
 - **Node.js 22+** (for local development)
 
-### With Docker (Recommended)
+### With Electron (Recommended for macOS)
+
+Download the latest Quilltap release for macOS. The Electron app bundles everything — it runs the backend inside a lightweight Lima VM using Apple's Virtualization.framework, so there's nothing else to install.
+
+On first launch, Quilltap will:
+1. Download the Linux guest image (~150MB, cached for future launches)
+2. Create and boot a Lima VM (Alpine Linux, 2 CPUs, 2GB RAM)
+3. Start the Quilltap backend inside the VM
+4. Open the app in a native window
+
+Your data is stored in `~/Library/Application Support/Quilltap` and shared with the VM via VirtioFS, so it's always accessible from your Mac.
+
+To build from source:
+
+```bash
+# Build the rootfs (requires Docker)
+./scripts/build-rootfs.sh
+
+# Build the Electron app (requires Lima: brew install lima)
+npm run build:electron
+```
+
+### With Docker (Recommended for Servers)
 
 The [csebold/quilltap](https://hub.docker.com/repository/docker/csebold/quilltap/general) Docker image is available on Docker Hub. Use the included startup script to get running with platform-appropriate defaults:
 
@@ -286,6 +309,7 @@ All Quilltap data (database, files, logs) is stored in a single directory:
 
 | Environment | Default Location                                   | Override Variable         |
 | ----------- | -------------------------------------------------- | ------------------------- |
+| **Electron (macOS)** | `~/Library/Application Support/Quilltap` (shared with VM via VirtioFS) | `QUILLTAP_DATA_DIR` |
 | **Linux**   | `~/.quilltap`                                      | `QUILLTAP_DATA_DIR`       |
 | **macOS**   | `~/Library/Application Support/Quilltap`           | `QUILLTAP_DATA_DIR`       |
 | **Windows** | `%APPDATA%\Quilltap`                               | `QUILLTAP_DATA_DIR`       |
@@ -347,7 +371,7 @@ More help: [GitHub Issues](https://github.com/foundry-9/quilltap/issues)
 
 ## Tech Stack
 
-Next.js 16 (App Router) • React 19 • TypeScript 5.6 • SQLite • Tailwind CSS 4.1 • Docker
+Next.js 16 (App Router) • React 19 • TypeScript 5.6 • SQLite • Tailwind CSS 4.1 • Electron • Lima/VZ • Docker
 
 3,400+ tests with Jest and Playwright.
 
@@ -387,7 +411,7 @@ Built with these excellent open source projects:
 
 **UI:** Tailwind CSS, React Markdown, React Syntax Highlighter, PDF.js, sharp
 
-**Infrastructure:** Docker, AWS SDK
+**Infrastructure:** Electron, Lima, Docker, AWS SDK
 
 **Testing:** Jest, Playwright, Storybook, Testing Library
 
