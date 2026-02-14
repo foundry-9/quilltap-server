@@ -4,6 +4,7 @@
 
 ### 3.0-dev
 
+- fix: File storage paths are now portable across platforms (Lima, Docker, macOS, Linux) — default local mount point uses runtime-resolved path instead of DB-stored absolute path
 - feat: Phase 1a — Lima VM boots Quilltap from the command line
   - Added Lima VM template (`lima/quilltap.yaml`): VZ driver, Alpine Linux arm64, VirtioFS data mount, port forwarding 3000→5050, OpenRC service provisioning
   - Added rootfs build script (`scripts/build-rootfs.sh`): exports Docker production image as a tarball importable by Lima and WSL2

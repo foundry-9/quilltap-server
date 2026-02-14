@@ -1016,8 +1016,15 @@ class FileStorageManager {
           throw new Error('Local backend configuration missing basePath');
         }
 
+        // Use the runtime-resolved files directory for the default local mount point.
+        // The DB may store a platform-specific absolute path (e.g., macOS path) that
+        // won't resolve on other platforms (Lima VM, Docker, Windows). getFilesDir()
+        // respects QUILLTAP_DATA_DIR and platform detection, making file storage
+        // portable across environments sharing the same database.
+        const resolvedBasePath = mountPoint.isDefault ? getFilesDir() : config.basePath;
+
         const backend = new LocalFileStorageBackend({
-          basePath: config.basePath,
+          basePath: resolvedBasePath,
         });
 
         // Test connection and ensure directory exists
@@ -1025,7 +1032,8 @@ class FileStorageManager {
         if (!testResult.success) {
           logger.warn('Local backend connection test failed', {
             mountPointId: mountPoint.id,
-            basePath: config.basePath,
+            basePath: resolvedBasePath,
+            storedBasePath: config.basePath,
             message: testResult.message,
           });
         } else {
@@ -1033,7 +1041,9 @@ class FileStorageManager {
 
         logger.info('Created local file storage backend', {
           mountPointId: mountPoint.id,
-          basePath: config.basePath,
+          basePath: resolvedBasePath,
+          storedBasePath: config.basePath,
+          isDefault: mountPoint.isDefault,
         });
 
         return backend;
