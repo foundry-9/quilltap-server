@@ -6,6 +6,10 @@ This document tracks planned features and improvements for Quilltap.
 
 ## Planned Features
 
+### Game and State (Pascal the Croupier)
+
+- [ ] Document the new incarnation of the game and state system
+
 ### Plugin architecture (The Foundry)
 
 - [ ] Ability to have simplified architecture for:

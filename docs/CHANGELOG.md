@@ -2,7 +2,12 @@
 
 ## Recent Changes
 
-### 2.11-dev
+### 2.12-dev
+
+- Documented the new game-and-state subsystem incarnation, "Pascal the Croupier"
+- Started 2.12 dev branch
+
+### 2.11.0
 
 - build: Removed dead Docker infrastructure (docker-compose files, Dockerfile.allinone, Nginx/Certbot/MinIO configs)
   - Deleted `docker-compose.yml`, `docker-compose.prod.yml`, `docker-compose.test.yml`, `Dockerfile.allinone`
