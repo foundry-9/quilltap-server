@@ -2,6 +2,12 @@
 
 ## Recent Changes
 
+### 3.0-dev
+
+- Started 3.0 dev branch for Lima/Firecracker virtualization
+- Replaced Firecracker with Lima+VZ (macOS) / Lima+WSL2 (Windows) cross-platform VM strategy
+- Updated ROADMAP with phased architecture: shared guest image and orchestration, thin platform-specific VM backends
+
 ### 2.12-dev
 
 - fix: Google Gemini 3 models no longer fail with tool-calling errors — `supportsToolCalling()` now excludes `gemini-3*`, `gemini-pro-latest`, and `gemini-flash-latest`; model metadata reports `missingCapabilities: ['function-calling']` for these models

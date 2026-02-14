@@ -19,6 +19,7 @@ Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, 
 - **Design Documentation**: Storybook
 - **API Structure**: Versioned REST API under `/api/v1/` with action dispatch pattern
 - **User Documentation**: Found in `/help/` and maintained and searchable using MessagePack
+- **Virtualization**: Lima + VZ (macOS) / WSL2 (Windows) for self-contained app distribution
 
 ## API Architecture
 

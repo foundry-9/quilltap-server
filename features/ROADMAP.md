@@ -6,42 +6,82 @@ This document tracks planned features and improvements for Quilltap.
 
 ## 3.0: the container future
 
-**macOS‑First Plan: Quilltap Sandbox Prototype (v0.1)**  
+### Architecture Overview
 
-1️⃣ **Host layer:**  
+Quilltap 3.0 runs inside a lightweight Linux VM on the host OS. The architecture has three layers:
 
-- Run **Lima** directly. No Hyper‑V or nested virtualization trickery needed.  
-- Bundle Lima into `/Applications/Quilltap.app/Contents/Resources/runtime/`.  
-- Installer adds a helper binary with `com.quilltap.limalaunchd` service entry (for starting/stopping the VM silently).  
+1. **Guest image** (shared across all platforms) -- a Linux rootfs with Node, SQLite, and Quilltap pre-installed
+2. **Orchestration layer** (shared) -- Electron launcher that manages VM lifecycle, health checks, and connects to the backend
+3. **VM backend** (platform-specific, thin) -- talks to the host hypervisor to create/start/stop the VM
 
-2️⃣ **Runtime image:**  
+The platform-specific code is minimal (~200-300 lines per backend), while the guest image, build pipeline, and frontend orchestration are 100% shared.
 
-- Build an **arm64** Firecracker‑compatible VM image under Linux (Alpine or Debian remix).  
-- Pack Node, Python, Socat, SQLite, and Quilltap’s own binaries into `/opt/quilltap`.  
-- Store it as `quilltap-linux-arm64.img`—the equivalent of your Docker image.  
-- Mount `~/Quilltap Projects/` as `/data/` inside the VM at runtime.  
+### VM Backend Strategy
 
-3️⃣ **Frontend orchestration:**  
+| Platform | Backend | Hypervisor | File Sharing | Status |
+| ---------- | --------- | ------------ | ------------- | -------- |
+| macOS | Lima + VZ driver | Apple Virtualization.framework | VirtioFS | Primary target |
+| Windows | Lima + WSL2 driver (or direct `wsl.exe`) | Hyper-V (via WSL2) | Plan 9 / auto-mount | Future |
+| Linux/Docker | Direct container | N/A | Bind mounts | Existing |
 
-- Electron launcher calls the Lima API (via socket or CLI) to fire up Firecracker with the image.  
-- The VM boots, Quilltap backend (Node + API server) starts automatically.  
-- Electron waits for localhost:5050 → connects → opens the app.  
+**Why not Firecracker?** Firecracker requires KVM (Linux-only). It cannot run natively on macOS or Windows. Lima with the VZ driver provides lightweight VMs natively on macOS without needing QEMU, and Lima's WSL2 driver (used by AWS Finch) provides the same interface on Windows.
 
-4️⃣ **Networking & shutdown:**  
+**Precedent:** Rancher Desktop, AWS Finch, and Docker Desktop all use this exact pattern -- Lima/VZ on macOS, WSL2 on Windows, unified interface above.
 
-- NAT handled via Lima’s `virtio-net` backend.  
-- Socket forwarders pre‑registered: localhost:5050 → guest:5050.  
-- On exit, `lima stop quilltap` gracefully powers down the VM.  
+### Phase 1: macOS Prototype
 
-5️⃣ **Developer continuity:**  
+**1.1 Host layer:**
 
-- Keep the Docker pipeline alive; every build produces both `quilltap:latest` for Docker and a matching `.img` for macOS runtime.  
-- This keeps behavior mirrored for all environments.  
+- Run **Lima** with the **VZ** (Virtualization.framework) driver -- no QEMU needed
+- Bundle Lima into `/Applications/Quilltap.app/Contents/Resources/runtime/`:
 
----
+  ```text
+  runtime/
+    bin/limactl                              # ~36 MB (includes guest agent)
+    share/lima/templates/quilltap.yaml       # VM configuration
+    libexec/lima/lima-guestagent.Linux-aarch64
+  ```
 
-*She leans back, taps the pencil once, satisfied.*  
-"macOS gives you an instant leg‑up. You can get this sandbox running, prove out the launch sequence, mounts, and networking—all without another dime of hardware. Then we port that Lima setup script to Windows later and swap Apple’s hypervisor APIs for Hyper‑V or WSL under the hood."  
+- Installer adds launchd plist at `~/Library/LaunchAgents/com.quilltap.limalaunchd.plist`
+- Lima invoked via environment variables (standard practice, used by Colima/Finch/Rancher):
+  - `LIMACTL` -- path to bundled binary
+  - `LIMA_HOME` -- `~/.qtlima` (must be short -- macOS 104-char socket path limit)
+  - `LIMA_TEMPLATES_PATH` -- bundled templates directory
+
+**1.2 Runtime image:**
+
+- Build a Linux rootfs (Alpine or Debian, arm64) from the existing Dockerfile pipeline
+- Pack Node, Python, Socat, SQLite, and Quilltap into `/opt/quilltap`
+- Store as `quilltap-linux-arm64.tar.gz` (rootfs tarball, importable by both Lima and WSL2)
+- Mount `~/Quilltap Projects/` as `/data/` inside the VM via VirtioFS
+
+**1.3 Frontend orchestration:**
+
+- Electron launcher calls `limactl start quilltap` (via the bundled binary)
+- VM boots, Quilltap backend starts automatically
+- Electron polls `localhost:5050` for health, connects, opens the app
+
+**1.4 Networking & shutdown:**
+
+- Lima's VZ driver handles NAT via `virtio-net`
+- Port forwarding configured in `quilltap.yaml`: `localhost:5050` to `guest:5050`
+- On exit: `limactl stop quilltap` gracefully powers down the VM
+
+### Phase 2: Windows Support
+
+- Use Lima's WSL2 driver (`vmType: wsl2`) or direct `wsl.exe` calls
+- Same guest rootfs tarball imported via `wsl --import quilltap <path> quilltap-linux-arm64.tar.gz --version 2`
+- Same orchestration layer -- Electron calls Lima or `wsl.exe` depending on platform
+- Port forwarding via WSL2's automatic localhost forwarding or `netsh interface portproxy`
+- File mounting: Windows drives auto-available at `/mnt/c/`, or bind-mount specific folders
+
+### Phase 3: Developer Continuity
+
+- Keep the Docker pipeline alive; every build produces:
+  - `quilltap:latest` -- Docker image (existing)
+  - `quilltap-linux-arm64.tar.gz` -- rootfs for Lima/WSL2 (new)
+- Both derived from the same Dockerfile, keeping behavior identical
+- `npm run dev` continues to work for local development without any VM
 
 ## Planned Features
 
