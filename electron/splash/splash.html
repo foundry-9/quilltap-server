@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quilltap</title>
+  <link rel="stylesheet" href="splash.css">
+</head>
+<body>
+  <div class="logo-container pulse" id="logo">
+    <img src="../resources/icon.png" alt="Quilltap" onerror="this.style.display='none'">
+  </div>
+
+  <div class="app-name">Quilltap</div>
+
+  <!-- Loading state -->
+  <div class="loading-container" id="loading">
+    <div class="status-message" id="status">Initializing...</div>
+
+    <div class="progress-container" id="progressContainer">
+      <div class="progress-bar indeterminate" id="progressBar"></div>
+    </div>
+
+    <div class="detail-text" id="detail"></div>
+
+    <div class="first-run-note" id="firstRunNote">
+      First launch takes 2–3 minutes to set up
+    </div>
+  </div>
+
+  <!-- Error state -->
+  <div class="error-container" id="errorContainer">
+    <div class="error-message" id="errorMessage"></div>
+    <div class="button-group">
+      <button class="btn btn-primary" id="retryBtn">Retry</button>
+      <button class="btn btn-secondary" id="quitBtn">Quit</button>
+    </div>
+  </div>
+
+  <script src="splash.js"></script>
+</body>
+</html>

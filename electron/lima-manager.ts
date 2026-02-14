@@ -1,0 +1,163 @@
+import { spawn } from 'child_process';
+import * as path from 'path';
+import * as fs from 'fs';
+import { app } from 'electron';
+import {
+  LIMA_HOME,
+  VM_NAME,
+  LIMA_BINARY_NAME,
+  VM_CREATE_TIMEOUT_S,
+  VM_START_TIMEOUT_S,
+  VM_STOP_TIMEOUT_S,
+} from './constants';
+import { LimaStatus, CommandResult } from './types';
+
+/**
+ * Manages the Lima VM lifecycle: create, start, stop, delete, and status checks.
+ */
+export class LimaManager {
+  private limaPath: string;
+  private templatePath: string;
+
+  constructor() {
+    const resourcesPath = app.isPackaged
+      ? process.resourcesPath
+      : path.join(__dirname, '..');
+
+    // Bundled limactl binary (packaged) or system limactl (dev)
+    const bundledLima = path.join(resourcesPath, 'lima', 'bin', LIMA_BINARY_NAME);
+    this.limaPath = fs.existsSync(bundledLima)
+      ? bundledLima
+      : LIMA_BINARY_NAME; // fall back to PATH
+
+    // Lima template YAML
+    this.templatePath = app.isPackaged
+      ? path.join(resourcesPath, 'lima', 'quilltap.yaml')
+      : path.join(__dirname, '..', 'lima', 'quilltap.yaml');
+  }
+
+  /** Environment variables applied to every limactl spawn */
+  private get env(): NodeJS.ProcessEnv {
+    const resourcesPath = app.isPackaged
+      ? process.resourcesPath
+      : path.join(__dirname, '..');
+    const limaDir = path.join(resourcesPath, 'lima', 'bin');
+
+    return {
+      ...process.env,
+      LIMA_HOME,
+      PATH: `${limaDir}:${process.env.PATH}`,
+    };
+  }
+
+  /** Execute a limactl command and capture output */
+  private exec(args: string[], timeoutS: number): Promise<CommandResult> {
+    return new Promise((resolve) => {
+      const child = spawn(this.limaPath, args, {
+        env: this.env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        timeout: timeoutS * 1000,
+      });
+
+      let stdout = '';
+      let stderr = '';
+
+      child.stdout.on('data', (data: Buffer) => {
+        stdout += data.toString();
+      });
+
+      child.stderr.on('data', (data: Buffer) => {
+        stderr += data.toString();
+      });
+
+      child.on('close', (code) => {
+        if (code === 0) {
+          resolve({ success: true, stdout, stderr });
+        } else {
+          resolve({
+            success: false,
+            stdout,
+            stderr,
+            error: `limactl exited with code ${code}: ${stderr.trim() || stdout.trim()}`,
+          });
+        }
+      });
+
+      child.on('error', (err) => {
+        resolve({
+          success: false,
+          stdout,
+          stderr,
+          error: `Failed to spawn limactl: ${err.message}`,
+        });
+      });
+    });
+  }
+
+  /** Check if the VM exists and whether it's running */
+  async checkStatus(): Promise<LimaStatus> {
+    const result = await this.exec(['list', '--json'], 30);
+
+    if (!result.success) {
+      return { exists: false, running: false, message: result.error || 'Failed to list VMs' };
+    }
+
+    try {
+      // limactl list --json outputs one JSON object per line
+      const lines = result.stdout.trim().split('\n').filter(Boolean);
+      for (const line of lines) {
+        const vm = JSON.parse(line);
+        if (vm.name === VM_NAME) {
+          const running = vm.status === 'Running';
+          return {
+            exists: true,
+            running,
+            message: `VM ${VM_NAME} exists, status: ${vm.status}`,
+          };
+        }
+      }
+      return { exists: false, running: false, message: `VM ${VM_NAME} not found` };
+    } catch {
+      return { exists: false, running: false, message: 'Failed to parse limactl output' };
+    }
+  }
+
+  /** Create the VM from the template */
+  async createVM(): Promise<CommandResult> {
+    console.log('[LimaManager] Creating VM from template:', this.templatePath);
+    return this.exec(
+      ['create', '--name', VM_NAME, this.templatePath],
+      VM_CREATE_TIMEOUT_S
+    );
+  }
+
+  /** Start an existing VM */
+  async startVM(): Promise<CommandResult> {
+    console.log('[LimaManager] Starting VM:', VM_NAME);
+    return this.exec(['start', VM_NAME], VM_START_TIMEOUT_S);
+  }
+
+  /** Stop a running VM */
+  async stopVM(): Promise<CommandResult> {
+    console.log('[LimaManager] Stopping VM:', VM_NAME);
+    return this.exec(['stop', VM_NAME], VM_STOP_TIMEOUT_S);
+  }
+
+  /** Force-delete the VM */
+  async deleteVM(): Promise<CommandResult> {
+    console.log('[LimaManager] Deleting VM:', VM_NAME);
+    return this.exec(['delete', '--force', VM_NAME], VM_STOP_TIMEOUT_S);
+  }
+
+  /** Read recent VM logs for debugging */
+  async getLogs(lines: number = 50): Promise<string> {
+    const logPath = path.join(LIMA_HOME, VM_NAME, 'serial.log');
+    try {
+      const content = fs.readFileSync(logPath, 'utf-8');
+      const allLines = content.split('\n');
+      return allLines.slice(-lines).join('\n');
+    } catch {
+      return 'No logs available';
+    }
+  }
+}

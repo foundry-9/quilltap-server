@@ -1,0 +1,23 @@
+appId: com.foundry9.quilltap
+productName: Quilltap
+directories:
+  output: dist-electron
+  buildResources: electron/resources
+files:
+  - dist-electron/**/*
+  - electron/splash/**/*.html
+  - electron/splash/**/*.css
+  - electron/splash/**/*.js
+extraResources:
+  - from: lima/quilltap.yaml
+    to: lima/quilltap.yaml
+mac:
+  category: public.app-category.productivity
+  target:
+    - target: dmg
+      arch:
+        - arm64
+  hardenedRuntime: true
+  entitlements: electron/entitlements.mac.plist
+  entitlementsInherit: electron/entitlements.mac.plist
+  icon: electron/resources/icon.icns

@@ -4,6 +4,18 @@
 
 ### 3.0-dev
 
+- feat: Phase 1.3 — Electron launcher for Lima VM
+  - Added Electron main process (`electron/main.ts`): splash screen → Lima boot → health poll → main window orchestration
+  - Added Lima manager (`electron/lima-manager.ts`): wraps limactl create/start/stop/delete with env isolation
+  - Added download manager (`electron/download-manager.ts`): first-run rootfs download with progress, retries, and caching
+  - Added health checker (`electron/health-checker.ts`): polls `/api/health` until server is ready
+  - Added splash screen (`electron/splash/`): dark-themed loading UI with progress bar, error/retry states, and IPC bridge
+  - Added preload script (`electron/preload.ts`): context bridge for secure splash ↔ main process communication
+  - Added Electron Builder config (`electron-builder.yml`): macOS DMG packaging with VZ entitlements
+  - Added macOS entitlements (`electron/entitlements.mac.plist`): virtualization, unsigned memory, network client
+  - Generated app icon (`electron/resources/icon.icns`, `icon.png`) from `public/quill.svg`
+  - Added npm scripts: `electron:compile`, `electron:dev`, `electron:build`
+  - Dev mode (`ELECTRON_DEV=1`) skips Lima and connects directly to `localhost:3000`
 - fix: File storage paths are now portable across platforms (Lima, Docker, macOS, Linux) — default local mount point uses runtime-resolved path instead of DB-stored absolute path
 - feat: Phase 1a — Lima VM boots Quilltap from the command line
   - Added Lima VM template (`lima/quilltap.yaml`): VZ driver, Alpine Linux arm64, VirtioFS data mount, port forwarding 3000→5050, OpenRC service provisioning

@@ -170,3 +170,6 @@ help/help-index.json
 
 # Lima/VM rootfs build artifacts
 quilltap-linux-*.tar.gz
+
+# Electron build output
+dist-electron/
