@@ -46261,11 +46261,18 @@ var GoogleProvider = class {
       // Image generation model, no function calling
       "gemini-2.0-flash-exp-image-generation",
       // Experimental image model
-      "imagen"
+      "imagen",
       // Imagen models don't support function calling
+      "gemini-pro-latest",
+      // Resolves to Gemini 3, which doesn't support function calling
+      "gemini-flash-latest"
+      // May resolve to a model without function calling
     ];
     const lowerName = modelName.toLowerCase();
     if (noToolsModels.some((m2) => lowerName.includes(m2.toLowerCase()))) {
+      return false;
+    }
+    if (lowerName.includes("gemini-3")) {
       return false;
     }
     if (lowerName.includes("-image") && !lowerName.includes("vision")) {
@@ -46828,7 +46835,8 @@ var GoogleProvider = class {
             level: "info",
             message: "This is a thinking/reasoning model. Responses may take longer as the model reasons through complex problems."
           }
-        ]
+        ],
+        missingCapabilities: ["function-calling"]
       };
     }
     if (lowerModelId.includes("gemini-3") && lowerModelId.includes("image")) {
@@ -46893,7 +46901,8 @@ var GoogleProvider = class {
             level: "info",
             message: "This is Gemini 3 Pro, a thinking/reasoning model. Responses may take longer as the model reasons through complex problems."
           }
-        ]
+        ],
+        missingCapabilities: ["function-calling"]
       };
     }
     if (lowerModelId.includes("gemini-1.5")) {

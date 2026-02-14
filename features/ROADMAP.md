@@ -98,28 +98,6 @@ This document tracks planned features and improvements for Quilltap.
   - [X] Search the memories for those keywords
   - [X] Preload the prompt with things that spring to mind because of the keywords
 
-## Completed in v2.9.0
-
-- [X] Complete AI wizard for characters or NPCs
-- [X] Refactor embedding service to use plugin architecture
-  - Currently `lib/embedding/embedding-service.ts` has hardcoded handlers for each provider
-  - Should delegate to plugins via `createEmbeddingProvider()` interface
-  - Would make embedding providers consistent with LLM and image providers
-
-## Completed in v2.8.1
-
-- [X] Option for built-in TF-IDF embedding if you don't need full semantic support (v2.8.1)
-
-## Completed in v2.8
-
-- [X] Pull NPC tab out of settings and just list them among the characters
-- [X] Ability to auto-upgrade plugins
-- [X] Removal of sync functionality
-- [X] Have the previews of themes actually match the themes
-- [X] Make all plugins either dist or site-wide
-- [X] Make the signout actually completely wipe the session data from the browser and take you back to the beginning page
-- [X] Remove authentication (this will be a local-only website)
-
 ## Completed in v2.7.0 and earlier
 
 See [CHANGELOG.md](../docs/CHANGELOG_v2.md) for details on v2.7.0 and earlier releases.

@@ -73,6 +73,7 @@ Legacy routes outside `/api/v1/` were removed in v2.8. Only `/api/v1/` routes ar
 - **Calliope** - the UX/UI and themes systems
 - **The Foundry** - the architecture underneath, plugins and packages and services — UI route: `/foundry` (was `/tools`)
 - **The Salon** - the chat interface — UI route: `/salon` (was `/chats`)
+- **Pascal the Croupier** - the RNG and game state tracking system
 
 Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/chats`, `/api/v1/projects`). Old UI routes redirect to new ones.
 
