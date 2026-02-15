@@ -4,10 +4,11 @@
 
 ### 3.0-dev
 
+- fix: Docker build OOM — exclude large directories from build context, use webpack instead of Turbopack, cap Node heap
 - feat: Phase 2 — Windows/WSL2 support
   - Added VM manager abstraction (`electron/vm-manager.ts`): `IVMManager` interface and `createVMManager()` factory function
   - Added WSL2 manager (`electron/wsl-manager.ts`): imports/starts/stops/unregisters WSL2 distros using `wsl.exe`
-  - Added WSL2 init script (`lima/wsl-init.sh`): entry point for Quilttap inside WSL2 with data directory resolution
+  - Added WSL2 init script (`lima/wsl-init.sh`): entry point for Quilltap inside WSL2 with data directory resolution
   - Added `wsl2` Docker stage to `Dockerfile`: bakes in provisioning that Lima YAML does at creation time on macOS
   - Updated `electron/constants.ts` with platform-aware rootfs filename, cache directory, and WSL paths
   - Updated `electron/main.ts` to use VM manager factory and platform-agnostic variable names
