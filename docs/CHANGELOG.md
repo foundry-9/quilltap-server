@@ -4,6 +4,9 @@
 
 ### 2.12-dev
 
+- build: Strip plugin node_modules from Docker image, reducing image size by ~350 MB per architecture
+- build: Remove dead `next-auth` entry from `outputFileTracingIncludes` in next.config.js
+- build: Docker build script now rebuilds better-sqlite3 for local platform after completing, so local dev works immediately
 - fix: SQLite null hydration now converts null to undefined for Zod `.optional()` compatibility — fixes Docker validation errors on `dangerFlags`, `context`, `description`, and other nullable columns
 - fix: Corrupted JSON columns no longer crash chat loading — hydration uses `fromJsonSafe` instead of `fromJson`, logging warnings for corrupted data instead of throwing
 - fix: Corrupted individual chat messages are now skipped instead of failing the entire chat load — `getMessages` uses `safeParse` per message with warning logs for invalid rows

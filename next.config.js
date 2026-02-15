@@ -25,7 +25,6 @@ const nextConfig = {
     '/*': [
       './node_modules/@openrouter/**/*',
       './node_modules/zod/**/*',
-      './node_modules/next-auth/**/*',
       './node_modules/better-sqlite3/**/*',
     ],
   },

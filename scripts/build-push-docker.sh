@@ -45,3 +45,7 @@ docker buildx build --platform linux/$FOREIGN --tag csebold/quilltap:$NEWRELEASE
 # Create multi-platform manifests
 docker buildx imagetools create --tag csebold/quilltap:$NEWRELEASE csebold/quilltap:$NEWRELEASE-amd64 csebold/quilltap:$NEWRELEASE-arm64
 docker buildx imagetools create --tag csebold/quilltap:$CHANNEL csebold/quilltap:$CHANNEL-amd64 csebold/quilltap:$CHANNEL-arm64
+
+# Rebuild better-sqlite3 for the local platform (Docker build compiles for Linux)
+echo "Rebuilding better-sqlite3 for local development..."
+npm rebuild better-sqlite3

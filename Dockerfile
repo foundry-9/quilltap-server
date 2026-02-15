@@ -53,6 +53,9 @@ COPY . .
 # SKIP_ENV_VALIDATION=true skips runtime env var validation during build
 RUN SKIP_ENV_VALIDATION=true npm run build:plugins
 
+# Remove plugin node_modules (dependencies are bundled during build)
+RUN rm -rf /app/plugins/dist/*/node_modules
+
 # Build Next.js
 # SKIP_ENV_VALIDATION=true skips runtime env var validation during build
 RUN SKIP_ENV_VALIDATION=true npm run build
