@@ -2,6 +2,73 @@
 
 ## Recent Changes
 
+### 3.0-dev
+
+- feat: Cleanup orphaned file records — `POST /api/v1/files?action=cleanup-orphaned` detects and purges DB records whose backing files are missing from storage, with dry-run mode (default) for safe preview
+- fix: Thumbnail cache mismatch — cache writes now use canonical `users/{userId}/thumbnails/{fileId}_{size}.webp` key via new `uploadRaw()`/`deleteRaw()` methods, matching cache reads so thumbnails are actually cached instead of regenerated every request
+- feat: Batch thumbnail pre-generation — `POST /api/v1/files?action=generate-thumbnails` processes up to 100 images with bounded concurrency (3 concurrent Sharp ops); FileBrowser triggers this after loading files
+- feat: Thumbnail retry — `FileThumbnail` component retries up to 2 times with exponential backoff when thumbnail load fails
+- feat: Thumbnail cleanup on file deletion — cached thumbnails are removed when the original image is deleted
+- refactor: Extract shared thumbnail utilities into `lib/files/thumbnail-utils.ts`
+- fix: MountPointSchema validation failure — change `.nullable()` to `.nullish()` on `encryptedSecrets` and `userId` fields so SQLite NULL→undefined values pass Zod validation, restoring mount point loading and all image/file serving
+- fix: Broken images in Electron/Lima VM — file storage manager now overrides tilde-based paths in VM/container environments and re-identifies the default mount point on refresh
+- feat: Auto-refresh Lima/WSL2 VM when rootfs tarball is updated
+  - `scripts/build-rootfs.sh` now writes a `.build-id` sidecar file next to the tarball with version+timestamp
+  - Docker image is now always rebuilt by default; added `--no-rebuild` flag to skip if image exists (was the opposite)
+  - Electron startup compares tarball build ID against a marker in LIMA_HOME; if they differ, the VM is automatically deleted and recreated
+  - Added `'updating-vm'` splash phase for the reprovisioning UI state
+  - Added `ROOTFS_BUILD_ID_PATH` and `VM_BUILD_ID_PATH` constants
+- fix: Add `.nullable()` to Zod schemas for chat message fields that can be null in SQLite (role, content, attachments, debugMemoryLogs, dangerFlags, context, systemEventType, description)
+- build: Remove `eslint.ignoreDuringBuilds` from next.config.js — ESLint now runs during builds
+- build: Exclude `plugins/` directory from tsconfig.json to avoid type-checking plugin source
+- fix: Correct `quilttap` → `quilltap` typo in build-rootfs.sh, wsl-manager.ts, paths.ts, and documentation
+- feat: Download Lima from GitHub Releases instead of requiring Homebrew installation
+  - `scripts/stage-lima.sh` now downloads Lima tarball from GitHub Releases with local caching (`~/Library/Caches/Quilltap/lima-binaries/`)
+  - Added runtime Xcode Command Line Tools check with cached verification marker
+  - CLT missing dialog offers one-click install via `xcode-select --install` with retry flow
+  - Lima version pinned in `electron/constants.ts` (currently 2.0.3)
+- fix: Docker build OOM — exclude large directories from build context, use webpack instead of Turbopack, cap Node heap
+- feat: Phase 2 — Windows/WSL2 support
+  - Added VM manager abstraction (`electron/vm-manager.ts`): `IVMManager` interface and `createVMManager()` factory function
+  - Added WSL2 manager (`electron/wsl-manager.ts`): imports/starts/stops/unregisters WSL2 distros using `wsl.exe`
+  - Added WSL2 init script (`lima/wsl-init.sh`): entry point for Quilltap inside WSL2 with data directory resolution
+  - Added `wsl2` Docker stage to `Dockerfile`: bakes in provisioning that Lima YAML does at creation time on macOS
+  - Updated `electron/constants.ts` with platform-aware rootfs filename, cache directory, and WSL paths
+  - Updated `electron/main.ts` to use VM manager factory and platform-agnostic variable names
+  - Updated `electron/lima-manager.ts` to implement `IVMManager` interface
+  - Added `checkPrerequisites()` to both managers for startup validation (WSL2 installed, limactl available)
+  - Updated `scripts/build-rootfs.sh` with `--platform` flag for multi-arch builds (arm64/amd64)
+  - Updated `electron-builder.yml` with Windows NSIS target and mac-only `extraResources`
+  - Added Windows icon (`electron/resources/icon.ico`) generated from existing PNG
+  - Added npm scripts: `electron:build:mac`, `electron:build:win`
+  - Created Windows troubleshooting guide (`docs/WINDOWS.md`)
+  - Added `scripts/build-push-docker.ps1`: PowerShell mirror of `build-push-docker.sh` for Windows
+- fix: Use `cross-env` for npm scripts with inline env vars (`LOG_LEVEL`, `ELECTRON_DEV`) for Windows compatibility
+- fix: Made path assertions in tests cross-platform (use `path.join()` instead of hardcoded `/` separators) for paths.test, config.test, plugin-route-loader.test
+- fix: Increased test timeouts for backup-parser and plugin-initialization tests that exceeded the default 5s under slower I/O (WSL2)
+- feat: Phase 1.3 — Electron launcher for Lima VM
+  - Added Electron main process (`electron/main.ts`): splash screen → Lima boot → health poll → main window orchestration
+  - Added Lima manager (`electron/lima-manager.ts`): wraps limactl create/start/stop/delete with env isolation
+  - Added download manager (`electron/download-manager.ts`): first-run rootfs download with progress, retries, and caching
+  - Added health checker (`electron/health-checker.ts`): polls `/api/health` until server is ready
+  - Added splash screen (`electron/splash/`): dark-themed loading UI with progress bar, error/retry states, and IPC bridge
+  - Added preload script (`electron/preload.ts`): context bridge for secure splash ↔ main process communication
+  - Added Electron Builder config (`electron-builder.yml`): macOS zip packaging (DMG disabled due to framework symlink bug)
+  - Added macOS entitlements (`electron/entitlements.mac.plist`): virtualization, unsigned memory, network client
+  - Added `scripts/stage-lima.sh`: stages limactl and guest agent binaries into the Electron bundle
+  - Generated app icon (`electron/resources/icon.icns`, `icon.png`) from `public/quill.svg`
+  - Added npm scripts: `electron:compile`, `electron:dev`, `electron:build`
+  - Dev mode (`ELECTRON_DEV=1`) skips Lima and connects directly to `localhost:3000`
+- fix: File storage paths are now portable across platforms (Lima, Docker, macOS, Linux) — default local mount point uses runtime-resolved path instead of DB-stored absolute path
+- feat: Phase 1a — Lima VM boots Quilltap from the command line
+  - Added Lima VM template (`lima/quilltap.yaml`): VZ driver, Alpine Linux arm64, VirtioFS data mount, port forwarding 3000→5050, OpenRC service provisioning
+  - Added rootfs build script (`scripts/build-rootfs.sh`): exports Docker production image as a tarball importable by Lima and WSL2
+  - Added `isLimaEnvironment()` to `lib/paths.ts` to prevent Docker false-positive when running inside a Lima VM
+  - Added `quilltap-linux-*.tar.gz` to `.gitignore` for rootfs build artifacts
+- Replaced Firecracker with Lima+VZ (macOS) / Lima+WSL2 (Windows) cross-platform VM strategy
+- Updated ROADMAP with phased architecture: shared guest image and orchestration, thin platform-specific VM backends
+- Started 3.0 dev branch for Lima/Firecracker virtualization
+
 ### 2.12-dev
 
 - build: Strip plugin node_modules from Docker image, reducing image size by ~350 MB per architecture

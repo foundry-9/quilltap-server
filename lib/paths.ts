@@ -61,6 +61,18 @@ export interface LegacyPaths {
 // ============================================================================
 
 /**
+ * Check if running inside a Lima VM
+ *
+ * Lima VMs are provisioned with LIMA_CONTAINER=true in /etc/profile.d/quilltap.sh.
+ * This check must run before isDockerEnvironment() because the rootfs exported
+ * from Docker still contains /.dockerenv and /app, which would otherwise trigger
+ * a Docker false-positive.
+ */
+export function isLimaEnvironment(): boolean {
+  return process.env.LIMA_CONTAINER === 'true';
+}
+
+/**
  * Check if running in a Docker container
  *
  * Detects Docker by checking:
@@ -96,6 +108,11 @@ export function isDockerEnvironment(): boolean {
  * @returns Platform identifier
  */
 export function getPlatform(): Platform {
+  // Lima check must come before Docker: the rootfs exported from Docker
+  // contains /.dockerenv and /app, which would trigger a false positive.
+  if (isLimaEnvironment()) {
+    return 'linux';
+  }
   if (isDockerEnvironment()) {
     return 'docker';
   }
@@ -335,7 +352,7 @@ export function getLegacyPaths(): LegacyPaths {
  *
  * Checks for:
  * - ./data directory with quilltap.db (project-relative)
- * - ~/.quilltap/data directory with quilttap.db (home-relative, on macOS/Windows)
+ * - ~/.quilltap/data directory with quilltap.db (home-relative, on macOS/Windows)
  * - ./logs directory with log files
  * - ~/.quilltap/files on macOS/Windows (where it differs from the new default)
  *

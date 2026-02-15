@@ -27,11 +27,32 @@ import type { MountPoint } from './mount-point.types';
 import { LocalFileStorageBackend } from './backends/local';
 import { decryptSecrets } from './secrets';
 import type { FileEntry } from '@/lib/schemas/file.types';
+
+/**
+ * Parameters for uploadRaw — writes content at an explicit storage key,
+ * bypassing the normal buildStorageKey() path generation.
+ */
+interface UploadRawParams {
+  /** Explicit storage key to write to */
+  storageKey: string;
+
+  /** File content */
+  content: Buffer;
+
+  /** MIME type */
+  contentType: string;
+
+  /** A FileEntry used to resolve the correct backend (mount point) */
+  fileEntry: FileEntry;
+
+  /** Optional custom metadata */
+  metadata?: Record<string, string>;
+}
 import { createLogger } from '@/lib/logging/create-logger';
 import { env } from '@/lib/env';
 import { mountPointsRepository } from '@/lib/database/repositories/mount-points.repository';
 import { getRepositories } from '@/lib/repositories/factory';
-import { getFilesDir } from '@/lib/paths';
+import { getFilesDir, isLimaEnvironment, isDockerEnvironment } from '@/lib/paths';
 
 const logger = createLogger('file-storage:manager');
 
@@ -500,6 +521,19 @@ class FileStorageManager {
       for (const mp of mountPoints) {
         this.mountPoints.set(mp.id, mp);
       }
+
+      // Re-identify the default mount point after reload
+      for (const [id, mp] of this.mountPoints) {
+        if (mp.isDefault) {
+          this.defaultMountPointId = id;
+          break;
+        }
+      }
+
+      logger.debug('Mount points refreshed', {
+        count: this.mountPoints.size,
+        defaultMountPointId: this.defaultMountPointId,
+      });
     } catch (error) {
       const errorMsg =
         error instanceof Error ? error.message : 'Unknown database error';
@@ -683,6 +717,74 @@ class FileStorageManager {
       throw new Error(
         `Failed to delete file '${file.originalFilename}': ${errorMsg}`
       );
+    }
+  }
+
+  /**
+   * Upload content at an explicit storage key
+   *
+   * Unlike uploadFile(), this does NOT generate a storage key from user/project/filename.
+   * Used for writing derived data (e.g. thumbnails) at a predictable, canonical key
+   * so that cache lookups and cache writes always agree on the path.
+   *
+   * @param params - Upload parameters with explicit key
+   * @throws {Error} If upload fails
+   */
+  async uploadRaw(params: UploadRawParams): Promise<void> {
+    const { storageKey, content, contentType, fileEntry, metadata } = params;
+    try {
+      const backend = await this.getBackendForFile(fileEntry);
+
+      await backend.upload(storageKey, content, contentType, metadata);
+
+      logger.debug('Raw upload completed', {
+        storageKey,
+        size: content.length,
+        fileId: fileEntry.id,
+      });
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown upload error';
+
+      logger.error('Raw upload failed', {
+        storageKey,
+        fileId: fileEntry.id,
+        error: errorMsg,
+      });
+
+      throw new Error(`Failed to upload raw content at '${storageKey}': ${errorMsg}`);
+    }
+  }
+
+  /**
+   * Delete content at an explicit storage key
+   *
+   * Counterpart to uploadRaw() — deletes data at a known key without needing
+   * a full FileEntry with the correct storageKey field.
+   *
+   * @param storageKey - The explicit key to delete
+   * @param fileEntry - A FileEntry used to resolve the correct backend
+   * @throws {Error} If deletion fails
+   */
+  async deleteRaw(storageKey: string, fileEntry: FileEntry): Promise<void> {
+    try {
+      const backend = await this.getBackendForFile(fileEntry);
+
+      await backend.delete(storageKey);
+
+      logger.debug('Raw delete completed', {
+        storageKey,
+        fileId: fileEntry.id,
+      });
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown deletion error';
+
+      logger.error('Raw delete failed', {
+        storageKey,
+        fileId: fileEntry.id,
+        error: errorMsg,
+      });
+
+      throw new Error(`Failed to delete raw content at '${storageKey}': ${errorMsg}`);
     }
   }
 
@@ -1016,8 +1118,26 @@ class FileStorageManager {
           throw new Error('Local backend configuration missing basePath');
         }
 
+        // Use runtime-resolved files directory for:
+        // 1. The default mount point (always — DB may store a platform-specific path)
+        // 2. Any local mount point with a tilde path in VM/container environments
+        //    (tilde would expand to the wrong home directory, e.g. /root/Library/...)
+        const inVmOrContainer = isLimaEnvironment() || isDockerEnvironment();
+        const useRuntimePath = mountPoint.isDefault ||
+          (config.basePath.startsWith('~/') && inVmOrContainer);
+
+        if (useRuntimePath && !mountPoint.isDefault) {
+          logger.warn('Overriding tilde basePath in VM/container environment', {
+            mountPointId: mountPoint.id,
+            storedBasePath: config.basePath,
+            resolvedBasePath: getFilesDir(),
+          });
+        }
+
+        const resolvedBasePath = useRuntimePath ? getFilesDir() : config.basePath;
+
         const backend = new LocalFileStorageBackend({
-          basePath: config.basePath,
+          basePath: resolvedBasePath,
         });
 
         // Test connection and ensure directory exists
@@ -1025,15 +1145,18 @@ class FileStorageManager {
         if (!testResult.success) {
           logger.warn('Local backend connection test failed', {
             mountPointId: mountPoint.id,
-            basePath: config.basePath,
+            basePath: resolvedBasePath,
+            storedBasePath: config.basePath,
             message: testResult.message,
           });
-        } else {
         }
 
         logger.info('Created local file storage backend', {
           mountPointId: mountPoint.id,
-          basePath: config.basePath,
+          basePath: resolvedBasePath,
+          storedBasePath: config.basePath,
+          isDefault: mountPoint.isDefault,
+          useRuntimePath,
         });
 
         return backend;

@@ -1,0 +1,177 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #1a1a1a;
+  color: #e0e0e0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  overflow: hidden;
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.logo-container {
+  width: 80px;
+  height: 80px;
+  margin-bottom: 24px;
+}
+
+.logo-container img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.logo-container.pulse img {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+
+.app-name {
+  font-size: 24px;
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 8px;
+  letter-spacing: 1px;
+}
+
+.status-message {
+  font-size: 14px;
+  color: #a0a0a0;
+  margin-bottom: 20px;
+  text-align: center;
+  min-height: 20px;
+}
+
+.progress-container {
+  width: 280px;
+  height: 4px;
+  background: #333333;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 12px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.progress-container.visible {
+  opacity: 1;
+}
+
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #6366f1, #8b5cf6);
+  border-radius: 2px;
+  width: 0%;
+  transition: width 0.3s ease;
+}
+
+.progress-bar.indeterminate {
+  width: 30%;
+  animation: indeterminate 1.5s ease-in-out infinite;
+}
+
+@keyframes indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+
+.detail-text {
+  font-size: 12px;
+  color: #666666;
+  text-align: center;
+  min-height: 16px;
+}
+
+.first-run-note {
+  font-size: 11px;
+  color: #555555;
+  margin-top: 16px;
+  text-align: center;
+  display: none;
+}
+
+.first-run-note.visible {
+  display: block;
+}
+
+/* Error state */
+.error-container {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.error-container.visible {
+  display: flex;
+}
+
+.error-message {
+  font-size: 13px;
+  color: #ef4444;
+  margin-bottom: 20px;
+  max-width: 360px;
+  line-height: 1.5;
+}
+
+.button-group {
+  display: flex;
+  gap: 12px;
+  -webkit-app-region: no-drag;
+}
+
+.btn {
+  padding: 8px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn-primary {
+  background: #6366f1;
+  color: #ffffff;
+}
+
+.btn-primary:hover {
+  background: #5558e6;
+}
+
+.btn-secondary {
+  background: #333333;
+  color: #cccccc;
+}
+
+.btn-secondary:hover {
+  background: #444444;
+}
+
+/* Normal state container */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.loading-container.hidden {
+  display: none;
+}

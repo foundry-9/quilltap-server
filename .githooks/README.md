@@ -5,9 +5,11 @@ This directory contains git hooks for the Quilltap project.
 ## Hooks
 
 ### pre-commit
+
 Runs quality checks (linting and testing) and automatically bumps the patch version before each commit.
 
 **Behavior:**
+
 1. **Runs ESLint** - Ensures code quality standards are met
 2. **Runs tests** - Ensures all tests pass (uses `--passWithNoTests` flag)
 3. **Bumps version** - Increments the patch version (e.g., 0.1.0 → 0.1.1)
@@ -16,7 +18,8 @@ Runs quality checks (linting and testing) and automatically bumps the patch vers
 **If any step fails, the commit is aborted** to maintain code quality.
 
 **Example:**
-```
+
+```text
 $ git commit -m "Add feature X"
 🔍 Running pre-commit checks...
 
@@ -34,7 +37,8 @@ $ git commit -m "Add feature X"
 ```
 
 **If checks fail:**
-```
+
+```text
 $ git commit -m "Add feature X"
 🔍 Running pre-commit checks...
 
@@ -47,6 +51,7 @@ $ git commit -m "Add feature X"
 ## Configuration
 
 The git hooks path is configured in `.git/config` via:
+
 ```bash
 git config core.hooksPath .githooks
 ```
@@ -56,6 +61,7 @@ This setting is local to the repository and will be respected by all developers 
 ## Development
 
 To modify or add hooks:
+
 1. Edit the script file in `.githooks/`
 2. Ensure the script is executable: `chmod +x .githooks/hook-name`
 3. Test your changes before committing
@@ -63,6 +69,7 @@ To modify or add hooks:
 ## Disabling Hooks
 
 If you need to skip the pre-commit hook for a specific commit, use:
+
 ```bash
 git commit --no-verify -m "Your message"
 ```

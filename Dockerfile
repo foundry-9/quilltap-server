@@ -56,9 +56,10 @@ RUN SKIP_ENV_VALIDATION=true npm run build:plugins
 # Remove plugin node_modules (dependencies are bundled during build)
 RUN rm -rf /app/plugins/dist/*/node_modules
 
-# Build Next.js
+# Build Next.js using webpack (Turbopack default in Next 16+ exceeds Docker memory limits)
 # SKIP_ENV_VALIDATION=true skips runtime env var validation during build
-RUN SKIP_ENV_VALIDATION=true npm run build
+# NODE_OPTIONS caps V8 heap to prevent OOM-kills in memory-constrained containers
+RUN SKIP_ENV_VALIDATION=true NODE_OPTIONS="--max-old-space-size=3072" npx next build --webpack
 
 # Production stage
 FROM base AS production
@@ -108,3 +109,23 @@ ENV HOSTNAME="0.0.0.0"
 
 ENTRYPOINT ["entrypoint.sh"]
 CMD ["node", "server.js"]
+
+# WSL2 stage — extends production with baked-in provisioning for Windows
+FROM production AS wsl2
+
+USER root
+
+# Bake in the WSL init script
+COPY lima/wsl-init.sh /usr/local/bin/wsl-init.sh
+RUN chmod +x /usr/local/bin/wsl-init.sh
+
+# Pre-install runtime dependencies (Lima YAML does this at provision time)
+RUN apk add --no-cache libstdc++ libgcc
+
+# Set environment defaults
+RUN printf 'export LIMA_CONTAINER=true\nexport NODE_ENV=production\nexport PORT=5050\nexport HOSTNAME=0.0.0.0\n' \
+    > /etc/profile.d/quilltap.sh && chmod 644 /etc/profile.d/quilltap.sh
+
+# Remove Docker entrypoint — WSL2 uses wsl-init.sh directly
+ENTRYPOINT []
+CMD ["/usr/local/bin/wsl-init.sh"]

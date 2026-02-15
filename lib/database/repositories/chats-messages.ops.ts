@@ -28,28 +28,28 @@ export const ChatMessageRowSchema = z.object({
   id: UUIDSchema,
   chatId: UUIDSchema,
   type: z.string(),  // 'message', 'context-summary', or 'system'
-  role: RoleEnum.optional(),  // Only for type='message'
-  content: z.string().optional(),  // For type='message'
+  role: RoleEnum.nullable().optional(),  // Only for type='message'
+  content: z.string().nullable().optional(),  // For type='message'
   rawResponse: JsonSchema.nullable().optional(),  // JSON object
   tokenCount: z.number().nullable().optional(),
   promptTokens: z.number().nullable().optional(),
   completionTokens: z.number().nullable().optional(),
   swipeGroupId: z.string().nullable().optional(),
   swipeIndex: z.number().nullable().optional(),
-  attachments: z.array(UUIDSchema).default([]),  // JSON array
-  debugMemoryLogs: z.array(z.string()).optional(),  // JSON array
+  attachments: z.array(UUIDSchema).nullable().default([]),  // JSON array
+  debugMemoryLogs: z.array(z.string()).nullable().optional(),  // JSON array
   thoughtSignature: z.string().nullable().optional(),
   participantId: UUIDSchema.nullable().optional(),
   recoveryType: z.enum(['token_limit', 'token_limit_static', 'content_limit', 'content_limit_static']).nullable().optional(),
   // Server-side pre-rendered HTML for simple messages
   renderedHtml: z.string().nullable().optional(),
   // Danger content flags from gatekeeper classification
-  dangerFlags: z.array(DangerFlagSchema).optional(),  // JSON array
+  dangerFlags: z.array(DangerFlagSchema).nullable().optional(),  // JSON array
   // For type='context-summary'
-  context: z.string().optional(),
+  context: z.string().nullable().optional(),
   // For type='system'
-  systemEventType: z.string().optional(),
-  description: z.string().optional(),
+  systemEventType: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
   totalTokens: z.number().nullable().optional(),
   provider: z.string().nullable().optional(),
   modelName: z.string().nullable().optional(),

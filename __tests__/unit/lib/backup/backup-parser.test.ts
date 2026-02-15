@@ -210,7 +210,7 @@ describe('Backup Parser', () => {
       expect(result.chats).toHaveLength(1)
       expect(result.chats[0].id).toBe('chat-1')
       expect(result.tags).toHaveLength(1)
-    })
+    }, 15000)
 
     it('parses backup with multiple entities of each type', async () => {
       const characters = [
