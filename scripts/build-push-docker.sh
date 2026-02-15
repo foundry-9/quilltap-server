@@ -35,12 +35,13 @@ else
 fi
 
 # Build native image with regular docker (fast)
-docker build -t csebold/quilltap:$NEWRELEASE-$NATIVE -t csebold/quilltap:$CHANNEL-$NATIVE .
+# Target the production stage — the wsl2 stage is only for Windows/WSL2 rootfs exports
+docker build --target production -t csebold/quilltap:$NEWRELEASE-$NATIVE -t csebold/quilltap:$CHANNEL-$NATIVE .
 docker push csebold/quilltap:$NEWRELEASE-$NATIVE
 docker push csebold/quilltap:$CHANNEL-$NATIVE
 
 # Build foreign image with buildx (emulated, slower)
-docker buildx build --platform linux/$FOREIGN --tag csebold/quilltap:$NEWRELEASE-$FOREIGN --tag csebold/quilltap:$CHANNEL-$FOREIGN --push .
+docker buildx build --target production --platform linux/$FOREIGN --tag csebold/quilltap:$NEWRELEASE-$FOREIGN --tag csebold/quilltap:$CHANNEL-$FOREIGN --push .
 
 # Create multi-platform manifests
 docker buildx imagetools create --tag csebold/quilltap:$NEWRELEASE csebold/quilltap:$NEWRELEASE-amd64 csebold/quilltap:$NEWRELEASE-arm64
