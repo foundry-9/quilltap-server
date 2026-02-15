@@ -22,7 +22,7 @@ echo "Lima version: $LIMA_VERSION"
 # Detect architecture
 ARCH="$(uname -m)"
 case "$ARCH" in
-  arm64)  LIMA_ARCH="aarch64" ;;
+  arm64)  LIMA_ARCH="arm64" ;;
   x86_64) LIMA_ARCH="x86_64" ;;
   *)
     echo "ERROR: Unsupported architecture: $ARCH"
