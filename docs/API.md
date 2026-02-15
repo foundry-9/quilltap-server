@@ -1699,6 +1699,62 @@ Upload a file via multipart/form-data.
 
 **Response**: `201 Created`
 
+#### `POST /api/v1/files?action=generate-thumbnails`
+
+Batch pre-generate thumbnails for image files. Processes with bounded concurrency (3 concurrent Sharp operations) to avoid overwhelming the server.
+
+**Request Body**:
+
+```json
+{
+  "fileIds": ["file-uuid-1", "file-uuid-2"],
+  "size": 150
+}
+```
+
+- `fileIds` (required) - Array of file UUIDs (max 100)
+- `size` (optional) - Thumbnail size in pixels (default 150, max 300)
+
+**Response**: `200 OK`
+
+```json
+{
+  "total": 10,
+  "generated": 7,
+  "cached": 2,
+  "errors": 1
+}
+```
+
+#### `POST /api/v1/files?action=cleanup-orphaned`
+
+Scan for and optionally delete stale file records — database entries whose backing files no longer exist in storage. Defaults to dry-run mode for safety.
+
+**Request Body**:
+
+```json
+{
+  "dryRun": true
+}
+```
+
+- `dryRun` (optional) - If `true` (default), only report stale records without deleting. Set to `false` to delete stale DB records and clean up their cached thumbnails.
+
+**Response**: `200 OK`
+
+```json
+{
+  "total": 50,
+  "stale": 3,
+  "deleted": 0,
+  "dryRun": true,
+  "staleFiles": [
+    { "id": "file-uuid-1", "filename": "lost-image.png" },
+    { "id": "file-uuid-2", "filename": "missing-doc.pdf" }
+  ]
+}
+```
+
 #### `GET /api/v1/files/[id]`
 
 Download a file by ID. Returns the file content with appropriate headers.

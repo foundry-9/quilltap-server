@@ -4,6 +4,12 @@
 
 ### 3.0-dev
 
+- feat: Cleanup orphaned file records — `POST /api/v1/files?action=cleanup-orphaned` detects and purges DB records whose backing files are missing from storage, with dry-run mode (default) for safe preview
+- fix: Thumbnail cache mismatch — cache writes now use canonical `users/{userId}/thumbnails/{fileId}_{size}.webp` key via new `uploadRaw()`/`deleteRaw()` methods, matching cache reads so thumbnails are actually cached instead of regenerated every request
+- feat: Batch thumbnail pre-generation — `POST /api/v1/files?action=generate-thumbnails` processes up to 100 images with bounded concurrency (3 concurrent Sharp ops); FileBrowser triggers this after loading files
+- feat: Thumbnail retry — `FileThumbnail` component retries up to 2 times with exponential backoff when thumbnail load fails
+- feat: Thumbnail cleanup on file deletion — cached thumbnails are removed when the original image is deleted
+- refactor: Extract shared thumbnail utilities into `lib/files/thumbnail-utils.ts`
 - fix: MountPointSchema validation failure — change `.nullable()` to `.nullish()` on `encryptedSecrets` and `userId` fields so SQLite NULL→undefined values pass Zod validation, restoring mount point loading and all image/file serving
 - fix: Broken images in Electron/Lima VM — file storage manager now overrides tilde-based paths in VM/container environments and re-identifies the default mount point on refresh
 - feat: Auto-refresh Lima/WSL2 VM when rootfs tarball is updated

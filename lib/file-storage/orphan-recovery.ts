@@ -112,6 +112,28 @@ export interface AdoptOrphansResult {
   files: FileEntry[];
 }
 
+/**
+ * A file entry whose backing file is missing from storage
+ */
+export interface StaleFileRecord {
+  id: string;
+  originalFilename: string;
+  storageKey: string | null;
+  mountPointId: string | null;
+  mimeType: string;
+  size: number;
+}
+
+/**
+ * Result of scanning for stale database records
+ */
+export interface ScanStaleRecordsResult {
+  scannedAt: Date;
+  totalRecords: number;
+  staleRecords: StaleFileRecord[];
+  errors: string[];
+}
+
 // ============================================================================
 // STORAGE KEY PARSING
 // ============================================================================
@@ -446,4 +468,81 @@ export async function adoptOrphans(
   });
 
   return result;
+}
+
+// ============================================================================
+// STALE RECORD DETECTION (reverse orphans)
+// ============================================================================
+
+const STALE_CHECK_CONCURRENCY = 5;
+
+/**
+ * Scan file entries for stale records — DB rows whose backing files
+ * no longer exist in storage. This is the inverse of scanForOrphans().
+ *
+ * @param fileEntries - File entries to check (typically all files for a user)
+ * @returns Scan results with list of stale records
+ */
+export async function scanForStaleRecords(
+  fileEntries: FileEntry[]
+): Promise<ScanStaleRecordsResult> {
+  logger.info('Starting stale record scan', { totalRecords: fileEntries.length });
+  const startTime = Date.now();
+
+  const staleRecords: StaleFileRecord[] = [];
+  const errors: string[] = [];
+
+  // Process with bounded concurrency
+  const queue = [...fileEntries];
+
+  async function processNext(): Promise<void> {
+    while (queue.length > 0) {
+      const entry = queue.shift();
+      if (!entry) break;
+
+      try {
+        const exists = await fileStorageManager.fileExists(entry);
+        if (!exists) {
+          staleRecords.push({
+            id: entry.id,
+            originalFilename: entry.originalFilename,
+            storageKey: entry.storageKey ?? null,
+            mountPointId: entry.mountPointId ?? null,
+            mimeType: entry.mimeType,
+            size: entry.size,
+          });
+          logger.debug('Found stale record', {
+            fileId: entry.id,
+            filename: entry.originalFilename,
+            storageKey: entry.storageKey,
+          });
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        errors.push(`Failed to check ${entry.id} (${entry.originalFilename}): ${errorMsg}`);
+        logger.warn('Error checking file existence', {
+          fileId: entry.id,
+          error: errorMsg,
+        });
+      }
+    }
+  }
+
+  const workers = Array.from({ length: STALE_CHECK_CONCURRENCY }, () => processNext());
+  await Promise.all(workers);
+
+  const duration = Date.now() - startTime;
+  logger.info('Stale record scan complete', {
+    totalRecords: fileEntries.length,
+    staleCount: staleRecords.length,
+    errorCount: errors.length,
+    durationMs: duration,
+  });
+
+  return {
+    scannedAt: new Date(),
+    totalRecords: fileEntries.length,
+    staleRecords,
+    errors,
+  };
 }

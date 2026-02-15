@@ -139,6 +139,26 @@ export default function FileBrowser({
     fetchFiles()
   }, [fetchFiles])
 
+  // Trigger batch thumbnail pre-generation after files load
+  useEffect(() => {
+    if (loading || files.length === 0) return
+
+    const imageFileIds = files
+      .filter(f => f.mimeType?.startsWith('image/'))
+      .map(f => f.id)
+
+    if (imageFileIds.length === 0) return
+
+    // Fire-and-forget — individual FileThumbnail components will pick up cached results
+    fetch('/api/v1/files?action=generate-thumbnails', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileIds: imageFileIds.slice(0, 100) }),
+    }).catch(() => {
+      // Silently ignore — thumbnails will be generated on-demand as fallback
+    })
+  }, [loading, files])
+
   // Filter files by current folder and sort them
   const filteredFiles = useMemo(() => {
     const filtered = files.filter(file => {

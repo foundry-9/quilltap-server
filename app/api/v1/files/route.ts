@@ -16,6 +16,14 @@ import { normalizeFolderPath, validateFolderPath } from '@/lib/files/folder-util
 import { createHash } from 'crypto';
 import { z } from 'zod';
 import { successResponse, badRequest, forbidden, serverError, validationError } from '@/lib/api/responses';
+import {
+  DEFAULT_THUMBNAIL_SIZE,
+  MAX_THUMBNAIL_SIZE,
+  canGenerateThumbnail,
+  generateThumbnail,
+  cleanupThumbnails,
+} from '@/lib/files/thumbnail-utils';
+import { scanForStaleRecords } from '@/lib/file-storage/orphan-recovery';
 
 const writeFileSchema = z.object({
   filename: z.string().min(1).max(255),
@@ -102,7 +110,17 @@ export const POST = createAuthenticatedHandler(async (request, { user, repos }) 
     return handleUploadFile(request, user, repos);
   }
 
-  return badRequest(`Unknown action: ${action}. Available actions: write, upload`);
+  // Handle batch thumbnail generation
+  if (action === 'generate-thumbnails') {
+    return handleGenerateThumbnails(request, user, repos);
+  }
+
+  // Handle cleanup of orphaned DB records (missing backing files)
+  if (action === 'cleanup-orphaned') {
+    return handleCleanupOrphaned(request, user, repos);
+  }
+
+  return badRequest(`Unknown action: ${action}. Available actions: write, upload, generate-thumbnails, cleanup-orphaned`);
 });
 
 // ============================================================================
@@ -334,5 +352,193 @@ async function handleUploadFile(request: NextRequest, user: any, repos: any): Pr
   } catch (error) {
     logger.error('[Files v1] Error uploading file', { userId: user?.id }, error instanceof Error ? error : undefined);
     return serverError('Failed to upload file');
+  }
+}
+
+// ============================================================================
+// Helper: Generate Thumbnails (batch)
+// ============================================================================
+
+const MAX_BATCH_SIZE = 100;
+const THUMBNAIL_CONCURRENCY = 3;
+
+const generateThumbnailsSchema = z.object({
+  fileIds: z.array(z.string().uuid()).min(1).max(MAX_BATCH_SIZE),
+  size: z.number().int().min(1).max(MAX_THUMBNAIL_SIZE).optional(),
+});
+
+async function handleGenerateThumbnails(
+  request: NextRequest,
+  user: any,
+  repos: any
+): Promise<NextResponse> {
+  try {
+    const body = await request.json();
+    const parsed = generateThumbnailsSchema.safeParse(body);
+
+    if (!parsed.success) {
+      return badRequest('Invalid request: ' + parsed.error.issues.map((e: any) => e.message).join(', '));
+    }
+
+    const { fileIds, size } = parsed.data;
+    const thumbnailSize = size ?? DEFAULT_THUMBNAIL_SIZE;
+
+    logger.debug('[Files v1] Batch thumbnail generation requested', {
+      count: fileIds.length,
+      size: thumbnailSize,
+      userId: user.id,
+    });
+
+    // Fetch all requested file entries
+    const fileEntries = await Promise.all(
+      fileIds.map((id: string) => repos.files.findById(id))
+    );
+
+    // Filter to owned, resizable images
+    const validEntries = fileEntries.filter(
+      (entry: any) => entry && entry.userId === user.id && canGenerateThumbnail(entry.mimeType)
+    );
+
+    // Process with bounded concurrency
+    let generated = 0;
+    let cached = 0;
+    let errors = 0;
+
+    const processQueue = [...validEntries];
+
+    async function processNext(): Promise<void> {
+      while (processQueue.length > 0) {
+        const entry = processQueue.shift();
+        if (!entry) break;
+
+        try {
+          const result = await generateThumbnail(entry, thumbnailSize);
+          if (result.fromCache) {
+            cached++;
+          } else {
+            generated++;
+          }
+        } catch (error) {
+          errors++;
+          logger.warn('[Files v1] Batch thumbnail generation failed for file', {
+            fileId: entry.id,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+        }
+      }
+    }
+
+    // Launch concurrent workers
+    const workers = Array.from({ length: THUMBNAIL_CONCURRENCY }, () => processNext());
+    await Promise.all(workers);
+
+    logger.info('[Files v1] Batch thumbnail generation complete', {
+      total: validEntries.length,
+      generated,
+      cached,
+      errors,
+      userId: user.id,
+    });
+
+    return successResponse({
+      total: validEntries.length,
+      generated,
+      cached,
+      errors,
+    });
+  } catch (error) {
+    logger.error('[Files v1] Error in batch thumbnail generation', {
+      userId: user?.id,
+    }, error instanceof Error ? error : undefined);
+    return serverError('Failed to generate thumbnails');
+  }
+}
+
+// ============================================================================
+// Helper: Cleanup Orphaned Records (DB records with missing backing files)
+// ============================================================================
+
+const cleanupOrphanedSchema = z.object({
+  dryRun: z.boolean().optional().default(true),
+});
+
+async function handleCleanupOrphaned(
+  request: NextRequest,
+  user: any,
+  repos: any
+): Promise<NextResponse> {
+  try {
+    let dryRun = true;
+    try {
+      const body = await request.json();
+      const parsed = cleanupOrphanedSchema.safeParse(body);
+      if (parsed.success) {
+        dryRun = parsed.data.dryRun;
+      }
+    } catch {
+      // Empty body or invalid JSON — default to dryRun: true
+    }
+
+    logger.info('[Files v1] Cleanup orphaned records requested', {
+      userId: user.id,
+      dryRun,
+    });
+
+    // Get all files for this user
+    const allFiles = await repos.files.findByUserId(user.id);
+
+    // Scan for stale records
+    const scanResult = await scanForStaleRecords(allFiles);
+
+    let deleted = 0;
+
+    if (!dryRun && scanResult.staleRecords.length > 0) {
+      for (const stale of scanResult.staleRecords) {
+        try {
+          // Find the full entry for thumbnail cleanup
+          const entry = allFiles.find((f: any) => f.id === stale.id);
+          if (entry && canGenerateThumbnail(entry.mimeType)) {
+            await cleanupThumbnails(entry);
+          }
+
+          // Delete the DB record
+          await repos.files.delete(stale.id);
+          deleted++;
+
+          logger.debug('[Files v1] Deleted stale file record', {
+            fileId: stale.id,
+            filename: stale.originalFilename,
+          });
+        } catch (error) {
+          logger.error('[Files v1] Failed to delete stale record', {
+            fileId: stale.id,
+          }, error instanceof Error ? error : undefined);
+        }
+      }
+
+      logger.info('[Files v1] Cleanup orphaned records complete', {
+        userId: user.id,
+        total: scanResult.totalRecords,
+        stale: scanResult.staleRecords.length,
+        deleted,
+      });
+    }
+
+    return successResponse({
+      total: scanResult.totalRecords,
+      stale: scanResult.staleRecords.length,
+      deleted,
+      dryRun,
+      staleFiles: scanResult.staleRecords.map((r) => ({
+        id: r.id,
+        filename: r.originalFilename,
+      })),
+      errors: scanResult.errors.length > 0 ? scanResult.errors : undefined,
+    });
+  } catch (error) {
+    logger.error('[Files v1] Error cleaning up orphaned records', {
+      userId: user?.id,
+    }, error instanceof Error ? error : undefined);
+    return serverError('Failed to cleanup orphaned records');
   }
 }
