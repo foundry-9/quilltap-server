@@ -4,6 +4,7 @@
 
 ### 3.0-dev
 
+- fix: Broken images in Electron/Lima VM — file storage manager now overrides tilde-based paths in VM/container environments and re-identifies the default mount point on refresh
 - feat: Auto-refresh Lima/WSL2 VM when rootfs tarball is updated
   - `scripts/build-rootfs.sh` now writes a `.build-id` sidecar file next to the tarball with version+timestamp
   - Docker image is now always rebuilt by default; added `--no-rebuild` flag to skip if image exists (was the opposite)

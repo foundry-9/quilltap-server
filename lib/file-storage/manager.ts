@@ -31,7 +31,7 @@ import { createLogger } from '@/lib/logging/create-logger';
 import { env } from '@/lib/env';
 import { mountPointsRepository } from '@/lib/database/repositories/mount-points.repository';
 import { getRepositories } from '@/lib/repositories/factory';
-import { getFilesDir } from '@/lib/paths';
+import { getFilesDir, isLimaEnvironment, isDockerEnvironment } from '@/lib/paths';
 
 const logger = createLogger('file-storage:manager');
 
@@ -500,6 +500,19 @@ class FileStorageManager {
       for (const mp of mountPoints) {
         this.mountPoints.set(mp.id, mp);
       }
+
+      // Re-identify the default mount point after reload
+      for (const [id, mp] of this.mountPoints) {
+        if (mp.isDefault) {
+          this.defaultMountPointId = id;
+          break;
+        }
+      }
+
+      logger.debug('Mount points refreshed', {
+        count: this.mountPoints.size,
+        defaultMountPointId: this.defaultMountPointId,
+      });
     } catch (error) {
       const errorMsg =
         error instanceof Error ? error.message : 'Unknown database error';
@@ -1016,12 +1029,23 @@ class FileStorageManager {
           throw new Error('Local backend configuration missing basePath');
         }
 
-        // Use the runtime-resolved files directory for the default local mount point.
-        // The DB may store a platform-specific absolute path (e.g., macOS path) that
-        // won't resolve on other platforms (Lima VM, Docker, Windows). getFilesDir()
-        // respects QUILLTAP_DATA_DIR and platform detection, making file storage
-        // portable across environments sharing the same database.
-        const resolvedBasePath = mountPoint.isDefault ? getFilesDir() : config.basePath;
+        // Use runtime-resolved files directory for:
+        // 1. The default mount point (always — DB may store a platform-specific path)
+        // 2. Any local mount point with a tilde path in VM/container environments
+        //    (tilde would expand to the wrong home directory, e.g. /root/Library/...)
+        const inVmOrContainer = isLimaEnvironment() || isDockerEnvironment();
+        const useRuntimePath = mountPoint.isDefault ||
+          (config.basePath.startsWith('~/') && inVmOrContainer);
+
+        if (useRuntimePath && !mountPoint.isDefault) {
+          logger.warn('Overriding tilde basePath in VM/container environment', {
+            mountPointId: mountPoint.id,
+            storedBasePath: config.basePath,
+            resolvedBasePath: getFilesDir(),
+          });
+        }
+
+        const resolvedBasePath = useRuntimePath ? getFilesDir() : config.basePath;
 
         const backend = new LocalFileStorageBackend({
           basePath: resolvedBasePath,
@@ -1036,7 +1060,6 @@ class FileStorageManager {
             storedBasePath: config.basePath,
             message: testResult.message,
           });
-        } else {
         }
 
         logger.info('Created local file storage backend', {
@@ -1044,6 +1067,7 @@ class FileStorageManager {
           basePath: resolvedBasePath,
           storedBasePath: config.basePath,
           isDefault: mountPoint.isDefault,
+          useRuntimePath,
         });
 
         return backend;
