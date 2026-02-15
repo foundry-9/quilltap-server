@@ -53,6 +53,9 @@ COPY . .
 # SKIP_ENV_VALIDATION=true skips runtime env var validation during build
 RUN SKIP_ENV_VALIDATION=true npm run build:plugins
 
+# Remove plugin node_modules (dependencies are bundled during build)
+RUN rm -rf /app/plugins/dist/*/node_modules
+
 # Build Next.js using webpack (Turbopack default in Next 16+ exceeds Docker memory limits)
 # SKIP_ENV_VALIDATION=true skips runtime env var validation during build
 # NODE_OPTIONS caps V8 heap to prevent OOM-kills in memory-constrained containers

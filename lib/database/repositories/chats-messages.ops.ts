@@ -75,13 +75,14 @@ export class ChatMessagesOps {
     return safeQuery(async () => {
       const messagesCollection = await this.ctx.getMessagesCollection();
 
+      let rawMessages: any[];
+
       if (this.ctx.isSQLiteBackend()) {
         // SQLite: Query individual message rows, sorted by createdAt
-        const messages = await messagesCollection.find(
+        rawMessages = await messagesCollection.find(
           { chatId } as QueryFilter,
           { sort: { createdAt: 1 } as SortSpec }
         );
-        return messages.map((msg: any) => ChatEventSchema.parse(msg));
       } else {
         // Legacy data compatibility: Extract from embedded array
         const messagesDoc = await messagesCollection.findOne({ chatId } as QueryFilter);
@@ -90,9 +91,27 @@ export class ChatMessagesOps {
           return [];
         }
 
-        const messages = (messagesDoc as any).messages || [];
-        return messages.map((msg: any) => ChatEventSchema.parse(msg));
+        rawMessages = (messagesDoc as any).messages || [];
       }
+
+      // Validate each message individually - skip corrupted messages rather than
+      // failing the entire chat load
+      const validMessages: ChatEvent[] = [];
+      for (const msg of rawMessages) {
+        const result = ChatEventSchema.safeParse(msg);
+        if (result.success) {
+          validMessages.push(result.data);
+        } else {
+          logger.warn('Skipping corrupted chat message', {
+            chatId,
+            messageId: msg?.id || 'unknown',
+            messageType: msg?.type || 'unknown',
+            errors: result.error.issues.map(i => `${i.path.join('.')}: ${i.message}`),
+          });
+        }
+      }
+
+      return validMessages;
     }, 'Failed to get messages for chat', { chatId }, []);
   }
 
