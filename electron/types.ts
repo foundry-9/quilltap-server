@@ -3,6 +3,7 @@ export type SplashPhase =
   | 'initializing'
   | 'downloading'
   | 'creating-vm'
+  | 'updating-vm'
   | 'starting-vm'
   | 'waiting-health'
   | 'ready'

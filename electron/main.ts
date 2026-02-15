@@ -1,8 +1,11 @@
 import { app, BrowserWindow, dialog, ipcMain } from 'electron';
 import { spawn } from 'child_process';
+import * as fs from 'fs';
 import * as path from 'path';
 import {
   HOST_PORT,
+  ROOTFS_BUILD_ID_PATH,
+  VM_BUILD_ID_PATH,
   SPLASH_WIDTH,
   SPLASH_HEIGHT,
   MAIN_WIDTH,
@@ -228,6 +231,30 @@ async function startupSequence(): Promise<void> {
 
   const vmStatus = await vmManager.checkStatus();
 
+  // Step 3b: Check if rootfs tarball has been updated since the VM was provisioned
+  if (vmStatus.exists) {
+    let tarballBuildId = '';
+    let vmBuildId = '';
+    try { tarballBuildId = fs.readFileSync(ROOTFS_BUILD_ID_PATH, 'utf-8').trim(); } catch { /* missing is fine */ }
+    try { vmBuildId = fs.readFileSync(VM_BUILD_ID_PATH, 'utf-8').trim(); } catch { /* missing is fine */ }
+
+    if (tarballBuildId && tarballBuildId !== vmBuildId) {
+      console.log(`[Main] Rootfs updated: tarball="${tarballBuildId}" vm="${vmBuildId}" — reprovisioning VM`);
+      sendSplashUpdate({
+        phase: 'updating-vm',
+        message: 'Updating Quilltap to latest build...',
+        detail: `New build: ${tarballBuildId}`,
+      });
+
+      if (vmStatus.running) {
+        await vmManager.stopVM();
+      }
+      await vmManager.deleteVM();
+      vmStatus.exists = false;
+      vmStatus.running = false;
+    }
+  }
+
   // Step 4: Create VM if it doesn't exist
   if (!vmStatus.exists) {
     sendSplashUpdate({
@@ -244,6 +271,18 @@ async function startupSequence(): Promise<void> {
       }
       sendSplashError(`Failed to create VM: ${createResult.error}`, true);
       return;
+    }
+
+    // Record the tarball build ID so we can detect future updates
+    try {
+      const tarballBuildId = fs.readFileSync(ROOTFS_BUILD_ID_PATH, 'utf-8').trim();
+      if (tarballBuildId) {
+        fs.writeFileSync(VM_BUILD_ID_PATH, tarballBuildId, 'utf-8');
+        console.log(`[Main] Wrote VM build ID: ${tarballBuildId}`);
+      }
+    } catch {
+      // Non-fatal — build ID marker is best-effort
+      console.warn('[Main] Could not write VM build ID marker');
     }
   }
 

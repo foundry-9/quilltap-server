@@ -7,7 +7,7 @@
 # Usage:
 #   ./scripts/build-rootfs.sh                         # build for host arch (arm64 on macOS)
 #   ./scripts/build-rootfs.sh --platform linux/amd64  # build amd64 rootfs (for Windows/WSL2)
-#   ./scripts/build-rootfs.sh --rebuild               # force rebuild even if image exists
+#   ./scripts/build-rootfs.sh --no-rebuild            # skip build if Docker image already exists
 #   ./scripts/build-rootfs.sh --image TAG             # export from a specific existing image
 #
 # Output:
@@ -26,7 +26,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 VERSION=$(node -p "require('$PROJECT_ROOT/package.json').version")
 
 # Defaults — detect host architecture
-FORCE_REBUILD=false
+SKIP_REBUILD=false
 CUSTOM_IMAGE=""
 
 # Detect default platform from host
@@ -40,8 +40,8 @@ PLATFORM="$DEFAULT_PLATFORM"
 # Parse arguments
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --rebuild)
-      FORCE_REBUILD=true
+    --no-rebuild)
+      SKIP_REBUILD=true
       shift
       ;;
     --platform)
@@ -53,9 +53,9 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     --help|-h)
-      echo "Usage: $0 [--rebuild] [--platform linux/amd64|linux/arm64] [--image TAG]"
+      echo "Usage: $0 [--no-rebuild] [--platform linux/amd64|linux/arm64] [--image TAG]"
       echo ""
-      echo "  --rebuild          Force rebuild even if Docker image already exists"
+      echo "  --no-rebuild       Skip Docker build if image already exists"
       echo "  --platform PLAT    Target platform (default: auto-detected from host)"
       echo "  --image TAG        Export from an existing Docker image instead of building"
       exit 0
@@ -109,9 +109,8 @@ echo ""
 
 # Step 1: Build the Docker image (if needed)
 if [ -z "$CUSTOM_IMAGE" ]; then
-  if docker image inspect "$IMAGE_TAG" > /dev/null 2>&1 && [ "$FORCE_REBUILD" = false ]; then
-    echo "==> Step 1/5: Docker image '$IMAGE_TAG' already exists, skipping build"
-    echo "    (use --rebuild to force a fresh build)"
+  if docker image inspect "$IMAGE_TAG" > /dev/null 2>&1 && [ "$SKIP_REBUILD" = true ]; then
+    echo "==> Step 1/5: Docker image '$IMAGE_TAG' already exists, skipping build (--no-rebuild)"
   else
     echo "==> Step 1/5: Building Docker ${DOCKER_TARGET} image..."
     docker build \
@@ -144,10 +143,16 @@ gzip -c "$OUTPUT_FILE.tar.tmp" > "$OUTPUT_FILE"
 rm -f "$OUTPUT_FILE.tmp" "$OUTPUT_FILE.tar.tmp"
 rm -rf "$TMPDIR"
 
-# Step 4: Copy to cache directory
+# Step 4: Copy to cache directory and write build ID sidecar
 echo "==> Step 4/5: Copying to cache directory..."
 mkdir -p "$IMAGES_DIR"
 cp "$OUTPUT_FILE" "$IMAGES_DIR/$OUTPUT_FILENAME"
+
+# Write build ID sidecar so Electron can detect tarball updates
+BUILD_ID="${VERSION}+$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+BUILD_ID_FILE="$IMAGES_DIR/${OUTPUT_FILENAME}.build-id"
+echo "$BUILD_ID" > "$BUILD_ID_FILE"
+echo "    Build ID: $BUILD_ID"
 
 # Step 5: Clean up Docker container
 echo "==> Step 5/5: Cleaning up..."
@@ -157,5 +162,6 @@ echo ""
 echo "==> Done! Rootfs tarball ready."
 echo "    Local copy: $OUTPUT_FILE"
 echo "    Cache:      $IMAGES_DIR/$OUTPUT_FILENAME"
+echo "    Build ID:   $BUILD_ID_FILE"
 echo "    Size: $(du -h "$OUTPUT_FILE" | cut -f1)"
 echo "    Version: $VERSION"

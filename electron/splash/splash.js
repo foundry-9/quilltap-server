@@ -18,6 +18,7 @@ const phaseMessages = {
   'initializing': 'Initializing...',
   'downloading': 'Downloading system image...',
   'creating-vm': 'Creating virtual machine...',
+  'updating-vm': 'Updating Quilltap to latest build...',
   'starting-vm': 'Starting virtual machine...',
   'waiting-health': 'Waiting for server...',
   'ready': 'Ready!',
@@ -40,7 +41,7 @@ window.quilltap.onUpdate((data) => {
     progressBar.classList.remove('indeterminate');
     progressBar.style.width = data.progress + '%';
     firstRunNote.classList.add('visible');
-  } else if (data.phase === 'creating-vm' || data.phase === 'starting-vm') {
+  } else if (data.phase === 'creating-vm' || data.phase === 'updating-vm' || data.phase === 'starting-vm') {
     progressContainer.classList.add('visible');
     progressBar.classList.add('indeterminate');
     progressBar.style.width = '';

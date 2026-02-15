@@ -4,6 +4,15 @@
 
 ### 3.0-dev
 
+- feat: Auto-refresh Lima/WSL2 VM when rootfs tarball is updated
+  - `scripts/build-rootfs.sh` now writes a `.build-id` sidecar file next to the tarball with version+timestamp
+  - Docker image is now always rebuilt by default; added `--no-rebuild` flag to skip if image exists (was the opposite)
+  - Electron startup compares tarball build ID against a marker in LIMA_HOME; if they differ, the VM is automatically deleted and recreated
+  - Added `'updating-vm'` splash phase for the reprovisioning UI state
+  - Added `ROOTFS_BUILD_ID_PATH` and `VM_BUILD_ID_PATH` constants
+- fix: Add `.nullable()` to Zod schemas for chat message fields that can be null in SQLite (role, content, attachments, debugMemoryLogs, dangerFlags, context, systemEventType, description)
+- build: Remove `eslint.ignoreDuringBuilds` from next.config.js — ESLint now runs during builds
+- build: Exclude `plugins/` directory from tsconfig.json to avoid type-checking plugin source
 - feat: Download Lima from GitHub Releases instead of requiring Homebrew installation
   - `scripts/stage-lima.sh` now downloads Lima tarball from GitHub Releases with local caching (`~/Library/Caches/Quilltap/lima-binaries/`)
   - Added runtime Xcode Command Line Tools check with cached verification marker

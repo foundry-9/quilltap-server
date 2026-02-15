@@ -59,6 +59,12 @@ export const ROOTFS_CACHE_DIR = (() => {
 /** Full path to the cached rootfs tarball */
 export const ROOTFS_PATH = path.join(ROOTFS_CACHE_DIR, ROOTFS_FILENAME);
 
+/** Build ID sidecar file written by build-rootfs.sh next to the tarball */
+export const ROOTFS_BUILD_ID_PATH = ROOTFS_PATH + '.build-id';
+
+/** Marker file inside LIMA_HOME recording the build ID of the currently provisioned VM */
+export const VM_BUILD_ID_PATH = path.join(LIMA_HOME, VM_NAME, '.rootfs-build-id');
+
 /** Windows-side data directory (passed into WSL2 as env var) */
 export const WIN_DATA_DIR = (() => {
   if (process.platform === 'win32') {

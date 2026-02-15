@@ -49,6 +49,7 @@
   "exclude": [
     "node_modules",
     "packages",
+    "plugins",
     "playwright.config.ts",
     "__tests__",
     "scripts"

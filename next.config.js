@@ -53,11 +53,6 @@ const nextConfig = {
     minimumCacheTTL: 60,
   },
 
-  // Skip ESLint during builds (linting runs separately in CI/pre-commit)
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-
   // Production optimizations
   compress: true,
   poweredByHeader: false,
