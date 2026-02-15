@@ -21,6 +21,8 @@ import { getFileAssociations } from '@/lib/files/get-file-associations';
 import { getUserRepositories } from '@/lib/repositories/factory';
 import { z } from 'zod';
 import { successResponse, notFound, badRequest, serverError, forbidden, validationError } from '@/lib/api/responses';
+import fs from 'fs';
+import path from 'path';
 
 const moveFileSchema = z.object({
   folderPath: z.string().optional(),
@@ -71,7 +73,29 @@ async function handleDownloadFile(request: NextRequest, repos: any, fileId: stri
     }
 
     if (!fileEntry.storageKey) {
-      logger.error('[Files v1] File has no storage key - may need migration', { fileId });
+      // Try legacy path: public/data/files/storage/{id}.{ext}
+      const ext = fileEntry.originalFilename.includes('.')
+        ? fileEntry.originalFilename.substring(fileEntry.originalFilename.lastIndexOf('.'))
+        : '';
+      const legacyPath = path.join(process.cwd(), 'public', 'data', 'files', 'storage', `${fileId}${ext}`);
+
+      if (fs.existsSync(legacyPath)) {
+        logger.debug('[Files v1] Serving file from legacy path', { fileId, legacyPath });
+        const buffer = fs.readFileSync(legacyPath);
+
+        return new NextResponse(new Uint8Array(buffer), {
+          headers: {
+            'Content-Type': fileEntry.mimeType,
+            'Content-Length': buffer.length.toString(),
+            'Content-Disposition': `inline; filename="${fileEntry.originalFilename}"`,
+            'Cache-Control': 'public, max-age=31536000, immutable',
+            'X-Frame-Options': 'SAMEORIGIN',
+            'Content-Security-Policy': "frame-ancestors 'self'",
+          },
+        });
+      }
+
+      logger.error('[Files v1] File has no storage key and no legacy file found', { fileId, legacyPath });
       return serverError('File not available - storage key missing');
     }
 

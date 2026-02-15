@@ -47,6 +47,9 @@
 
 ### 2.12-dev
 
+- fix: Story backgrounds and images now work in Docker — `getFilePath()` always returns API route (`/api/v1/files/{id}`) instead of legacy `data/files/storage/` paths that are unreachable in Docker's standalone build
+- fix: Legacy files without `storageKey` are now served via the API download handler with a fallback to `public/data/files/storage/`
+- feat: Added migration `migrate-legacy-jsonl-files-v1` to import legacy JSONL file entries into SQLite and copy physical files to the centralized files directory
 - fix: Google Gemini 3 models no longer fail with tool-calling errors — `supportsToolCalling()` now excludes `gemini-3*`, `gemini-pro-latest`, and `gemini-flash-latest`; model metadata reports `missingCapabilities: ['function-calling']` for these models
 - fix: Orchestrator automatically retries without tools when any provider returns a "tool use unsupported" error, preventing hard failures on models that don't support function calling
 - Documented the new game-and-state subsystem incarnation, "Pascal the Croupier"
