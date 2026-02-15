@@ -1,6 +1,6 @@
 {
   "name": "quilltap",
-  "version": "2.12.0-lima.17",
+  "version": "2.12.0-lima.23",
   "private": true,
   "main": "dist-electron/main.js",
   "author": {
@@ -20,6 +20,7 @@
     "build": "npm run build:next",
     "build:all": "npm run build:electron && npm run build:next",
     "build:electron": "npm run electron:stage-lima && npm run electron:build",
+    "build:electron:rootfs": "./scripts/build-rootfs.sh",
     "build:plugins": "tsx scripts/build-plugins.ts",
     "build:next": "npm run build:plugins && next build",
     "build:docker": "./scripts/build-push-docker.sh",
