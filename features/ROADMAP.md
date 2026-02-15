@@ -21,7 +21,7 @@ The platform-specific code is minimal (~200-300 lines per backend), while the gu
 | Platform | Backend | Hypervisor | File Sharing | Status |
 | ---------- | --------- | ------------ | ------------- | -------- |
 | macOS | Lima + VZ driver | Apple Virtualization.framework | VirtioFS | Primary target |
-| Windows | Lima + WSL2 driver (or direct `wsl.exe`) | Hyper-V (via WSL2) | Plan 9 / auto-mount | Future |
+| Windows | Direct `wsl.exe` | Hyper-V (via WSL2) | Plan 9 / auto-mount | Implemented |
 | Linux/Docker | Direct container | N/A | Bind mounts | Existing |
 
 **Why not Firecracker?** Firecracker requires KVM (Linux-only). It cannot run natively on macOS or Windows. Lima with the VZ driver provides lightweight VMs natively on macOS without needing QEMU, and Lima's WSL2 driver (used by AWS Finch) provides the same interface on Windows.
@@ -64,12 +64,23 @@ The platform-specific code is minimal (~200-300 lines per backend), while the gu
 **1.4 Networking & shutdown:**
 
 - Lima's VZ driver handles NAT via `virtio-net`
-- Port forwarding configured in `quilltap.yaml`: `localhost:5050` to `guest:5050`
+- Port forwarding configured in `quilltap.yaml`: `localhost:5050` to `guest:3000`
 - On exit: `limactl stop quilltap` gracefully powers down the VM
 
 ### Phase 2: Windows Support
 
-- Use Lima's WSL2 driver (`vmType: wsl2`) or direct `wsl.exe` calls
+**Completed.** Direct `wsl.exe` calls (simpler than Lima's WSL2 driver).
+
+- [X] VM manager abstraction (`IVMManager` interface + `createVMManager()` factory)
+- [X] WSL2 manager (`wsl.exe --import` / `--terminate` / `--unregister`)
+- [X] Rootfs build with `--platform linux/amd64` and `wsl2` Dockerfile stage
+- [X] WSL2 init script baked into rootfs
+- [X] Port forwarding via WSL2 automatic localhost forwarding
+- [X] File sharing via `wslpath` conversion of Windows data directory
+- [X] Windows NSIS installer packaging
+- [X] Prerequisite check for WSL2
+
+Previously planned (superseded):
 - Same guest rootfs tarball imported via `wsl --import quilltap <path> quilltap-linux-arm64.tar.gz --version 2`
 - Same orchestration layer -- Electron calls Lima or `wsl.exe` depending on platform
 - Port forwarding via WSL2's automatic localhost forwarding or `netsh interface portproxy`

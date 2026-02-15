@@ -1,13 +1,25 @@
 import * as path from 'path';
 import * as os from 'os';
 
+// --- Lima-specific (macOS only) ---
+
 /** Lima home directory — isolated from default ~/.lima */
 export const LIMA_HOME = path.join(os.homedir(), '.qtlima');
 
-/** Name of the Lima VM instance */
+/** Lima binary name */
+export const LIMA_BINARY_NAME = 'limactl';
+
+// --- WSL-specific (Windows only) ---
+
+/** Directory where the WSL2 distro ext4 vhdx is stored */
+export const WSL_DISTRO_INSTALL_DIR = path.join(os.homedir(), '.qtvm', 'quilltap');
+
+// --- Shared constants ---
+
+/** Name of the VM / distro instance */
 export const VM_NAME = 'quilltap';
 
-/** Host port that maps to guest port 3000 */
+/** Host port that maps to guest port 5050 */
 export const HOST_PORT = 5050;
 
 /** Health endpoint URL */
@@ -19,23 +31,34 @@ export const HEALTH_POLL_INTERVAL_MS = 2000;
 /** Maximum health poll attempts before timeout (2 minutes at 2s intervals) */
 export const HEALTH_MAX_ATTEMPTS = 60;
 
-/** Rootfs tarball filename */
-export const ROOTFS_FILENAME = 'quilltap-linux-arm64.tar.gz';
+/** Rootfs tarball filename — architecture-specific */
+export const ROOTFS_FILENAME = process.platform === 'win32'
+  ? 'quilltap-linux-amd64.tar.gz'
+  : 'quilltap-linux-arm64.tar.gz';
 
 /** Directory where rootfs tarballs are cached */
-export const ROOTFS_CACHE_DIR = path.join(
-  os.homedir(),
-  'Library',
-  'Caches',
-  'Quilltap',
-  'lima-images'
-);
+export const ROOTFS_CACHE_DIR = (() => {
+  if (process.platform === 'win32') {
+    const localAppData = process.env.LOCALAPPDATA
+      || path.join(os.homedir(), 'AppData', 'Local');
+    return path.join(localAppData, 'Quilltap', 'vm-images');
+  }
+  // macOS
+  return path.join(os.homedir(), 'Library', 'Caches', 'Quilltap', 'lima-images');
+})();
 
 /** Full path to the cached rootfs tarball */
 export const ROOTFS_PATH = path.join(ROOTFS_CACHE_DIR, ROOTFS_FILENAME);
 
-/** Lima binary name */
-export const LIMA_BINARY_NAME = 'limactl';
+/** Windows-side data directory (passed into WSL2 as env var) */
+export const WIN_DATA_DIR = (() => {
+  if (process.platform === 'win32') {
+    const appData = process.env.APPDATA
+      || path.join(os.homedir(), 'AppData', 'Roaming');
+    return path.join(appData, 'Quilltap');
+  }
+  return '';
+})();
 
 /** Timeout for VM creation (seconds) */
 export const VM_CREATE_TIMEOUT_S = 300;

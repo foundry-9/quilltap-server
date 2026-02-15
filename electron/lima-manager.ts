@@ -10,12 +10,14 @@ import {
   VM_START_TIMEOUT_S,
   VM_STOP_TIMEOUT_S,
 } from './constants';
-import { LimaStatus, CommandResult } from './types';
+import { VMStatus, CommandResult } from './types';
+import { IVMManager } from './vm-manager';
 
 /**
  * Manages the Lima VM lifecycle: create, start, stop, delete, and status checks.
+ * macOS-only implementation using the Lima hypervisor.
  */
-export class LimaManager {
+export class LimaManager implements IVMManager {
   private limaPath: string;
   private templatePath: string;
 
@@ -34,6 +36,18 @@ export class LimaManager {
     this.templatePath = app.isPackaged
       ? path.join(resourcesPath, 'lima', 'quilltap.yaml')
       : path.join(__dirname, '..', 'lima', 'quilltap.yaml');
+  }
+
+  /** Verify that limactl is available */
+  async checkPrerequisites(): Promise<{ ok: boolean; error?: string }> {
+    const result = await this.exec(['--version'], 10);
+    if (result.success) {
+      return { ok: true };
+    }
+    return {
+      ok: false,
+      error: 'Lima is not installed or not found. Please install Lima (https://lima-vm.io).',
+    };
   }
 
   /** Environment variables applied to every limactl spawn */
@@ -95,7 +109,7 @@ export class LimaManager {
   }
 
   /** Check if the VM exists and whether it's running */
-  async checkStatus(): Promise<LimaStatus> {
+  async checkStatus(): Promise<VMStatus> {
     const result = await this.exec(['list', '--json'], 30);
 
     if (!result.success) {

@@ -7,7 +7,7 @@ Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, 
 No subscriptions. No data harvested. No forgetting everything between sessions.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.12.0--lima.8-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.12.0--lima.9-yellow.svg)](package.json)
 
 <p align="center">
   <img src="https://quilltap.ai/images/welcome-to-quilltap-2-8.png" alt="Welcome to Quilltap" />
@@ -58,30 +58,42 @@ If you're coming from SillyTavern, Quilltap imports your characters and chats di
 
 ### Prerequisites
 
-- **Electron desktop app** (recommended for macOS), or
+- **Electron desktop app** (recommended for macOS and Windows), or
 - **Docker** (recommended for servers and Linux), or
 - **Node.js 22+** (for local development)
 
-### With Electron (Recommended for macOS)
+### With Electron (Recommended for Desktop)
 
-Download the latest Quilltap release for macOS. The Electron app bundles everything — it runs the backend inside a lightweight Lima VM using Apple's Virtualization.framework, so there's nothing else to install.
+Download the latest Quilltap release for your platform. The Electron app bundles everything — it runs the backend inside a lightweight Linux VM, so there's nothing else to install.
+
+- **macOS**: Uses Lima with Apple's Virtualization.framework (VZ driver)
+- **Windows**: Uses WSL2 (built into Windows 10/11)
 
 On first launch, Quilltap will:
 1. Download the Linux guest image (~150MB, cached for future launches)
-2. Create and boot a Lima VM (Alpine Linux, 2 CPUs, 2GB RAM)
+2. Create and boot the VM / WSL2 distro
 3. Start the Quilltap backend inside the VM
 4. Open the app in a native window
 
-Your data is stored in `~/Library/Application Support/Quilltap` and shared with the VM via VirtioFS, so it's always accessible from your Mac.
+**Windows prerequisite:** WSL2 must be enabled. If it's not already installed, run `wsl --install` in PowerShell as Administrator and restart your computer. Quilltap will check for this on startup and show a clear error if WSL2 is missing.
+
+**Data locations:**
+
+| Platform | Data Directory |
+| --- | --- |
+| macOS | `~/Library/Application Support/Quilltap` (shared with VM via VirtioFS) |
+| Windows | `%APPDATA%\Quilttap` (accessed from WSL2 via `/mnt/c/...`) |
 
 To build from source:
 
 ```bash
 # Build the rootfs (requires Docker)
-./scripts/build-rootfs.sh
+./scripts/build-rootfs.sh                          # macOS (arm64)
+./scripts/build-rootfs.sh --platform linux/amd64   # Windows (amd64)
 
-# Build the Electron app (requires Lima: brew install lima)
-npm run build:electron
+# Build the Electron app
+npm run electron:build:mac   # macOS (requires Lima: brew install lima)
+npm run electron:build:win   # Windows (NSIS installer)
 ```
 
 ### With Docker (Recommended for Servers)
@@ -310,6 +322,7 @@ All Quilltap data (database, files, logs) is stored in a single directory:
 | Environment | Default Location                                   | Override Variable         |
 | ----------- | -------------------------------------------------- | ------------------------- |
 | **Electron (macOS)** | `~/Library/Application Support/Quilltap` (shared with VM via VirtioFS) | `QUILLTAP_DATA_DIR` |
+| **Electron (Windows)** | `%APPDATA%\Quilltap` (accessed from WSL2 via auto-mount) | `QUILLTAP_DATA_DIR` |
 | **Linux**   | `~/.quilltap`                                      | `QUILLTAP_DATA_DIR`       |
 | **macOS**   | `~/Library/Application Support/Quilltap`           | `QUILLTAP_DATA_DIR`       |
 | **Windows** | `%APPDATA%\Quilltap`                               | `QUILLTAP_DATA_DIR`       |
@@ -353,6 +366,7 @@ See [Backup & Restore](docs/BACKUP-RESTORE.md) for details.
 - [File LLM Access](docs/FILE_LLM_ACCESS.md) — How AI reads your files
 - [Development Guide](DEVELOPMENT.md) — Contributing and local dev
 - [Changelog](docs/CHANGELOG.md) — Release history
+- [Windows Troubleshooting](docs/WINDOWS.md) — WSL2 setup and common issues
 - [Roadmap](features/ROADMAP.md) — What's coming
 
 ---
@@ -365,13 +379,19 @@ See [Backup & Restore](docs/BACKUP-RESTORE.md) for details.
 - Verify port 3000 isn't in use
 - If using a custom domain, confirm `BASE_URL` matches your actual URL
 
+**Windows Electron app won't start:**
+
+- Ensure WSL2 is installed: run `wsl --install` in PowerShell as Administrator
+- Check if the distro exists: `wsl --list --verbose`
+- See the [Windows Troubleshooting Guide](docs/WINDOWS.md) for more details
+
 More help: [GitHub Issues](https://github.com/foundry-9/quilltap/issues)
 
 ---
 
 ## Tech Stack
 
-Next.js 16 (App Router) • React 19 • TypeScript 5.6 • SQLite • Tailwind CSS 4.1 • Electron • Lima/VZ • Docker
+Next.js 16 (App Router) • React 19 • TypeScript 5.6 • SQLite • Tailwind CSS 4.1 • Electron • Lima/VZ (macOS) • WSL2 (Windows) • Docker
 
 3,400+ tests with Jest and Playwright.
 

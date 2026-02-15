@@ -7,7 +7,7 @@ import {
   MAIN_WIDTH,
   MAIN_HEIGHT,
 } from './constants';
-import { LimaManager } from './lima-manager';
+import { IVMManager, createVMManager } from './vm-manager';
 import { DownloadManager } from './download-manager';
 import { HealthChecker } from './health-checker';
 import { SplashUpdate } from './types';
@@ -21,7 +21,7 @@ const appRoot = app.isPackaged
 
 let splashWindow: BrowserWindow | null = null;
 let mainWindow: BrowserWindow | null = null;
-let limaManager: LimaManager;
+let vmManager: IVMManager;
 let downloadManager: DownloadManager;
 let healthChecker: HealthChecker;
 let isQuitting = false;
@@ -105,7 +105,7 @@ function createMainWindow(): BrowserWindow {
 
 /**
  * Main startup sequence. Orchestrates:
- * 1. Lima binary check
+ * 1. System requirements check
  * 2. Rootfs download (if needed)
  * 3. VM creation (if needed)
  * 4. VM start (if needed)
@@ -113,7 +113,7 @@ function createMainWindow(): BrowserWindow {
  * 6. Main window launch
  */
 async function startupSequence(): Promise<void> {
-  // In dev mode, skip Lima entirely
+  // In dev mode, skip VM entirely
   if (isDev) {
     sendSplashUpdate({
       phase: 'waiting-health',
@@ -142,11 +142,18 @@ async function startupSequence(): Promise<void> {
 
   // --- Production / VM mode ---
 
-  // Step 1: Initializing
+  // Step 1: Initializing — check platform prerequisites
   sendSplashUpdate({
     phase: 'initializing',
     message: 'Checking system requirements...',
   });
+
+  // Verify platform prerequisites (WSL2 on Windows, limactl on macOS)
+  const prereq = await vmManager.checkPrerequisites();
+  if (!prereq.ok) {
+    sendSplashError(prereq.error || 'System requirements not met.', false);
+    return;
+  }
 
   // Step 2: Check if rootfs needs downloading
   if (downloadManager.needsDownload()) {
@@ -189,7 +196,7 @@ async function startupSequence(): Promise<void> {
     message: 'Checking virtual machine...',
   });
 
-  const vmStatus = await limaManager.checkStatus();
+  const vmStatus = await vmManager.checkStatus();
 
   // Step 4: Create VM if it doesn't exist
   if (!vmStatus.exists) {
@@ -199,7 +206,7 @@ async function startupSequence(): Promise<void> {
       detail: 'This may take a minute on first launch',
     });
 
-    const createResult = await limaManager.createVM();
+    const createResult = await vmManager.createVM();
     if (!createResult.success) {
       sendSplashError(`Failed to create VM: ${createResult.error}`, true);
       return;
@@ -213,7 +220,7 @@ async function startupSequence(): Promise<void> {
       message: 'Starting virtual machine...',
     });
 
-    const startResult = await limaManager.startVM();
+    const startResult = await vmManager.startVM();
     if (!startResult.success) {
       sendSplashError(`Failed to start VM: ${startResult.error}`, true);
       return;
@@ -242,7 +249,7 @@ async function startupSequence(): Promise<void> {
 
     mainWindow = createMainWindow();
   } else {
-    const logs = await limaManager.getLogs(20);
+    const logs = await vmManager.getLogs(20);
     sendSplashError(
       `Server did not become healthy after ${healthStatus.attempts} attempts.\n\nRecent logs:\n${logs}`,
       true
@@ -253,7 +260,7 @@ async function startupSequence(): Promise<void> {
 // --- App lifecycle ---
 
 app.whenReady().then(() => {
-  limaManager = new LimaManager();
+  vmManager = createVMManager();
   downloadManager = new DownloadManager();
   healthChecker = new HealthChecker();
 
@@ -282,9 +289,9 @@ app.on('before-quit', async (event) => {
   isQuitting = true;
   event.preventDefault();
 
-  console.log('[Main] Stopping Lima VM before quit...');
+  console.log('[Main] Stopping VM before quit...');
   try {
-    await limaManager.stopVM();
+    await vmManager.stopVM();
   } catch (err) {
     console.error('[Main] Error stopping VM:', err);
   }

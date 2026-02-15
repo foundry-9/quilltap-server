@@ -8,12 +8,15 @@ export type SplashPhase =
   | 'ready'
   | 'error';
 
-/** Status of the Lima VM */
-export interface LimaStatus {
+/** Status of the VM (Lima on macOS, WSL2 on Windows) */
+export interface VMStatus {
   exists: boolean;
   running: boolean;
   message: string;
 }
+
+/** @deprecated Use VMStatus instead */
+export type LimaStatus = VMStatus;
 
 /** Progress information during rootfs download */
 export interface DownloadProgress {
@@ -40,7 +43,7 @@ export interface SplashUpdate {
   canRetry?: boolean;
 }
 
-/** Result of a Lima command execution */
+/** Result of a VM command execution (limactl or wsl.exe) */
 export interface CommandResult {
   success: boolean;
   stdout: string;

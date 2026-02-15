@@ -139,7 +139,7 @@ describe('lib/paths', () => {
       process.env.DOCKER_CONTAINER = 'true';
 
       const { getDataDir } = await import('@/lib/paths');
-      expect(getDataDir()).toBe('/app/quilltap/data');
+      expect(getDataDir()).toBe(path.join('/app/quilltap', 'data'));
     });
   });
 
@@ -153,7 +153,7 @@ describe('lib/paths', () => {
       process.env.DOCKER_CONTAINER = 'true';
 
       const { getFilesDir } = await import('@/lib/paths');
-      expect(getFilesDir()).toBe('/app/quilltap/files');
+      expect(getFilesDir()).toBe(path.join('/app/quilltap', 'files'));
     });
   });
 
@@ -167,7 +167,7 @@ describe('lib/paths', () => {
       process.env.DOCKER_CONTAINER = 'true';
 
       const { getLogsDir } = await import('@/lib/paths');
-      expect(getLogsDir()).toBe('/app/quilltap/logs');
+      expect(getLogsDir()).toBe(path.join('/app/quilltap', 'logs'));
     });
   });
 
@@ -181,7 +181,7 @@ describe('lib/paths', () => {
       process.env.DOCKER_CONTAINER = 'true';
 
       const { getSQLiteDatabasePath } = await import('@/lib/paths');
-      expect(getSQLiteDatabasePath()).toBe('/app/quilltap/data/quilltap.db');
+      expect(getSQLiteDatabasePath()).toBe(path.join('/app/quilltap', 'data', 'quilltap.db'));
     });
   });
 

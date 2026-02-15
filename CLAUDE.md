@@ -19,7 +19,7 @@ Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, 
 - **Design Documentation**: Storybook
 - **API Structure**: Versioned REST API under `/api/v1/` with action dispatch pattern
 - **User Documentation**: Found in `/help/` and maintained and searchable using MessagePack
-- **Electron**: Electron front-end to Lima backend is primary way to use app
+- **Electron**: Electron front-end to Lima/WSL2 backend is primary way to use app
 - **Virtualization**: Lima + VZ (macOS) / WSL2 (Windows) for self-contained app distribution
 
 ## API Architecture
@@ -136,8 +136,10 @@ Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/
   - [packages/create-quilltap-theme/CHANGELOG.md](packages/create-quilltap-theme/CHANGELOG.md) — Changelog for the create-quilltap-theme package — Grade: A (package changelog) — Last updated: 2025-12-31
   - [plugins/dist/qtap-plugin-mcp/README.md](plugins/dist/qtap-plugin-mcp/README.md) — Documentation for the MCP Server Connector plugin: configuration, authentication, tool naming, security, and troubleshooting — Grade: A (plugin documentation) — Last updated: 2026-01-13
   - [migrations/README.md](migrations/README.md) — Documentation for the migration system: architecture, adding new migrations, running migrations, and troubleshooting — Grade: A (migration system docs) — Last updated: 2026-01-22
-  - [electron-builder.yml](electron-builder.yml) — Electron Builder packaging config: app ID, macOS ARM64 ZIP target, resource bundling, Lima binary staging — Grade: A (build configuration) — Last updated: 2026-02-14
+  - [docs/WINDOWS.md](docs/WINDOWS.md) — Windows/WSL2 troubleshooting guide: prerequisites, common issues, data locations, manual operations — Grade: A (troubleshooting guide) — Last updated: 2026-02-14
+  - [electron-builder.yml](electron-builder.yml) — Electron Builder packaging config: app ID, macOS ZIP + Windows NSIS targets, resource bundling, Lima binary staging — Grade: A (build configuration) — Last updated: 2026-02-14
   - [lima/quilltap.yaml](lima/quilltap.yaml) — Lima VM template: Alpine Linux 3.21, VZ hypervisor, VirtioFS mounts, OpenRC service provisioning, port forwarding — Grade: A (VM configuration) — Last updated: 2026-02-14
+  - [lima/wsl-init.sh](lima/wsl-init.sh) — WSL2 init script: starts Node.js server inside WSL2 distro with data directory resolution — Grade: A (VM configuration) — Last updated: 2026-02-14
   - [electron/tsconfig.json](electron/tsconfig.json) — Electron-specific TypeScript config: ES2022 target, CommonJS modules, outputs to dist-electron/ — Grade: A (build configuration) — Last updated: 2026-02-14
 
 ## qt-\* CSS tokens and semantic classes for themes
@@ -158,7 +160,8 @@ Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/
     - macOS: ~/Library/Application Support/Quilltap/
     - Windows: %APPDATA%\Quilltap\
     - Docker: /app/quilltap/
-    - Lima VM: /data/quilltap/ (VirtioFS mount of macOS path)
+    - Lima VM: /data/quilttap/ (VirtioFS mount of macOS path)
+    - WSL2: Accessed via /mnt/c/.../AppData/Roaming/Quilttap/ (Windows path passed as env var)
   - Category
     - `data/`
     - `files/`

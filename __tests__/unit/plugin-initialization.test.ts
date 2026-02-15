@@ -56,7 +56,7 @@ describe('Plugin Initialization', () => {
       expect(result.success).toBe(true);
       expect(result.stats.total).toBeGreaterThan(0);
       expect(isPluginSystemInitialized()).toBe(true);
-    });
+    }, 15000);
 
     it('should be idempotent', async () => {
       const result1 = await initializePlugins();

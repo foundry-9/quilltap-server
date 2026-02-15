@@ -105,3 +105,23 @@ ENV HOSTNAME="0.0.0.0"
 
 ENTRYPOINT ["entrypoint.sh"]
 CMD ["node", "server.js"]
+
+# WSL2 stage — extends production with baked-in provisioning for Windows
+FROM production AS wsl2
+
+USER root
+
+# Bake in the WSL init script
+COPY lima/wsl-init.sh /usr/local/bin/wsl-init.sh
+RUN chmod +x /usr/local/bin/wsl-init.sh
+
+# Pre-install runtime dependencies (Lima YAML does this at provision time)
+RUN apk add --no-cache libstdc++ libgcc
+
+# Set environment defaults
+RUN printf 'export LIMA_CONTAINER=true\nexport NODE_ENV=production\nexport PORT=5050\nexport HOSTNAME=0.0.0.0\n' \
+    > /etc/profile.d/quilltap.sh && chmod 644 /etc/profile.d/quilltap.sh
+
+# Remove Docker entrypoint — WSL2 uses wsl-init.sh directly
+ENTRYPOINT []
+CMD ["/usr/local/bin/wsl-init.sh"]

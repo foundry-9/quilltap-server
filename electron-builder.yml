@@ -24,12 +24,6 @@ files:
   - "!__tests__/**/*"
   - "!.storybook/**/*"
   - "!.githooks/**/*"
-extraResources:
-  - from: lima/quilltap.yaml
-    to: lima/quilltap.yaml
-  # Lima binaries staged by scripts/stage-lima.sh
-  - from: electron/resources/lima/
-    to: lima/
 mac:
   category: public.app-category.productivity
   target:
@@ -46,3 +40,21 @@ mac:
   # entitlements: electron/entitlements.mac.plist
   # entitlementsInherit: electron/entitlements.mac.plist
   icon: electron/resources/icon.icns
+  extraResources:
+    - from: lima/quilltap.yaml
+      to: lima/quilltap.yaml
+    # Lima binaries staged by scripts/stage-lima.sh
+    - from: electron/resources/lima/
+      to: lima/
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: electron/resources/icon.ico
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Quilltap

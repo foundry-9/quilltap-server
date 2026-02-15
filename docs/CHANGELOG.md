@@ -4,6 +4,24 @@
 
 ### 3.0-dev
 
+- feat: Phase 2 — Windows/WSL2 support
+  - Added VM manager abstraction (`electron/vm-manager.ts`): `IVMManager` interface and `createVMManager()` factory function
+  - Added WSL2 manager (`electron/wsl-manager.ts`): imports/starts/stops/unregisters WSL2 distros using `wsl.exe`
+  - Added WSL2 init script (`lima/wsl-init.sh`): entry point for Quilttap inside WSL2 with data directory resolution
+  - Added `wsl2` Docker stage to `Dockerfile`: bakes in provisioning that Lima YAML does at creation time on macOS
+  - Updated `electron/constants.ts` with platform-aware rootfs filename, cache directory, and WSL paths
+  - Updated `electron/main.ts` to use VM manager factory and platform-agnostic variable names
+  - Updated `electron/lima-manager.ts` to implement `IVMManager` interface
+  - Added `checkPrerequisites()` to both managers for startup validation (WSL2 installed, limactl available)
+  - Updated `scripts/build-rootfs.sh` with `--platform` flag for multi-arch builds (arm64/amd64)
+  - Updated `electron-builder.yml` with Windows NSIS target and mac-only `extraResources`
+  - Added Windows icon (`electron/resources/icon.ico`) generated from existing PNG
+  - Added npm scripts: `electron:build:mac`, `electron:build:win`
+  - Created Windows troubleshooting guide (`docs/WINDOWS.md`)
+  - Added `scripts/build-push-docker.ps1`: PowerShell mirror of `build-push-docker.sh` for Windows
+- fix: Use `cross-env` for npm scripts with inline env vars (`LOG_LEVEL`, `ELECTRON_DEV`) for Windows compatibility
+- fix: Made path assertions in tests cross-platform (use `path.join()` instead of hardcoded `/` separators) for paths.test, config.test, plugin-route-loader.test
+- fix: Increased test timeouts for backup-parser and plugin-initialization tests that exceeded the default 5s under slower I/O (WSL2)
 - feat: Phase 1.3 — Electron launcher for Lima VM
   - Added Electron main process (`electron/main.ts`): splash screen → Lima boot → health poll → main window orchestration
   - Added Lima manager (`electron/lima-manager.ts`): wraps limactl create/start/stop/delete with env isolation

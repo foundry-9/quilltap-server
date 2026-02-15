@@ -247,7 +247,8 @@ describe('Plugin Route Loader', () => {
       const routes = getPluginRoutes();
 
       expect(routes[0].handlerPath).toBeDefined();
-      expect(routes[0].handlerPath).toContain('/test/plugin');
+      // Use path.sep-aware check: on Windows paths use backslashes
+      expect(routes[0].handlerPath).toMatch(/[/\\]test[/\\]plugin/);
     });
   });
 
