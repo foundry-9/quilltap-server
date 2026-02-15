@@ -11,6 +11,7 @@ import {
   ChatMetadata,
   ChatEvent,
   ChatEventSchema,
+  DangerFlagSchema,
 } from '@/lib/schemas/types';
 import { UUIDSchema, TimestampSchema, JsonSchema, RoleEnum } from '@/lib/schemas/common.types';
 import { QueryFilter, SortSpec } from '../interfaces';
@@ -40,6 +41,10 @@ export const ChatMessageRowSchema = z.object({
   thoughtSignature: z.string().nullable().optional(),
   participantId: UUIDSchema.nullable().optional(),
   recoveryType: z.enum(['token_limit', 'token_limit_static', 'content_limit', 'content_limit_static']).nullable().optional(),
+  // Server-side pre-rendered HTML for simple messages
+  renderedHtml: z.string().nullable().optional(),
+  // Danger content flags from gatekeeper classification
+  dangerFlags: z.array(DangerFlagSchema).optional(),  // JSON array
   // For type='context-summary'
   context: z.string().optional(),
   // For type='system'

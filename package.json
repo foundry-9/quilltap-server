@@ -1,6 +1,6 @@
 {
   "name": "quilltap",
-  "version": "2.12.0-lima.14",
+  "version": "2.12.0-lima.15",
   "private": true,
   "main": "dist-electron/main.js",
   "author": {

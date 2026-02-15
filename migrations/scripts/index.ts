@@ -81,6 +81,8 @@ import { fixChatMessageCountsMigration } from './fix-chat-message-counts';
 import { addMemoryGateFieldsMigration } from './add-memory-gate-fields';
 // Migrate legacy JSONL file entries to SQLite
 import { migrateLegacyJsonlFilesMigration } from './migrate-legacy-jsonl-files';
+// Add missing columns to chat_messages and fix empty JSON strings
+import { addChatMessageMissingColumnsMigration } from './add-chat-message-missing-columns';
 
 /**
  * All available migrations.
@@ -157,6 +159,8 @@ export const migrations: Migration[] = [
   addMemoryGateFieldsMigration,
   // Migrate legacy JSONL file entries to SQLite
   migrateLegacyJsonlFilesMigration,
+  // Add missing columns to chat_messages and fix empty JSON strings
+  addChatMessageMissingColumnsMigration,
 ];
 
 export {
@@ -228,4 +232,6 @@ export {
   addMemoryGateFieldsMigration,
   // Migrate legacy JSONL file entries to SQLite
   migrateLegacyJsonlFilesMigration,
+  // Add missing columns to chat_messages and fix empty JSON strings
+  addChatMessageMissingColumnsMigration,
 };

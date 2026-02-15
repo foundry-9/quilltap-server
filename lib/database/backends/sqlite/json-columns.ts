@@ -34,7 +34,7 @@ export function toJson(value: unknown): string | null {
  * Parse a JSON string from SQLite back to a JavaScript value
  */
 export function fromJson<T = unknown>(value: string | null): T | null {
-  if (value === null || value === undefined) {
+  if (value === null || value === undefined || value === '') {
     return null;
   }
 
@@ -53,7 +53,7 @@ export function fromJson<T = unknown>(value: string | null): T | null {
  * Safely parse JSON, returning null on failure instead of throwing
  */
 export function fromJsonSafe<T = unknown>(value: string | null, defaultValue: T | null = null): T | null {
-  if (value === null || value === undefined) {
+  if (value === null || value === undefined || value === '') {
     return defaultValue;
   }
 
