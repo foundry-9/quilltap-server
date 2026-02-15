@@ -38,7 +38,7 @@ quilltap/
 │   ├── resources/            # App icons (icns, ico, png) and staged Lima binaries
 │   └── tsconfig.json         # Electron-specific TypeScript config
 ├── lima/                     # Lima/WSL2 VM configuration
-│   ├── quilttap.yaml         # Lima VM template (macOS: Alpine Linux, VZ hypervisor, mounts)
+│   ├── quilltap.yaml         # Lima VM template (macOS: Alpine Linux, VZ hypervisor, mounts)
 │   └── wsl-init.sh           # WSL2 init script (Windows: starts Node.js server)
 ├── lib/                      # Domain logic and utilities
 │   ├── auth/                 # Single-user mode and session management
@@ -198,8 +198,8 @@ npm run electron:build:win
 
 | What                 | Where                                                           |
 | -------------------- | --------------------------------------------------------------- |
-| WSL2 distro install  | `~/.qtvm/quilttap/`                                             |
-| Rootfs cache         | `%LOCALAPPDATA%\Quilttap\vm-images\quilttap-linux-amd64.tar.gz` |
+| WSL2 distro install  | `~/.qtvm/quilltap/`                                             |
+| Rootfs cache         | `%LOCALAPPDATA%\Quilttap\vm-images\quilltap-linux-amd64.tar.gz` |
 | App data             | `%APPDATA%\Quilttap\`                                           |
 | Compiled Electron JS | `dist-electron/`                                                |
 
@@ -208,7 +208,7 @@ npm run electron:build:win
 - **Guest OS**: Alpine Linux 3.21 (aarch64)
 - **Resources**: 2 CPUs, 2GB RAM, 10GB disk
 - **Hypervisor**: VZ (Virtualization.framework, no QEMU)
-- **File sharing**: VirtioFS — mounts `~/Library/Application Support/Quilttap` into the guest at `/data/quilttap`
+- **File sharing**: VirtioFS — mounts `~/Library/Application Support/Quilttap` into the guest at `/data/quilltap`
 - **Port forwarding**: Host 5050 → Guest 3000
 
 **VM details (Windows):**
@@ -300,7 +300,7 @@ The SQLite database file location depends on platform:
 | **Windows** | `%APPDATA%\Quilltap\data\quilltap.db`                                     |
 | **Docker**  | `/app/quilltap/data/quilltap.db`                                          |
 | **Lima VM** | `/data/quilltap/data/quilltap.db` (maps to macOS path via VirtioFS)       |
-| **WSL2**    | Accessed via `/mnt/c/Users/.../AppData/Roaming/Quilttap/data/quilttap.db` |
+| **WSL2**    | Accessed via `/mnt/c/Users/.../AppData/Roaming/Quilttap/data/quilltap.db` |
 
 Override with `QUILLTAP_DATA_DIR` (non-Docker environments).
 

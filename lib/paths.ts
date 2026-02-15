@@ -352,7 +352,7 @@ export function getLegacyPaths(): LegacyPaths {
  *
  * Checks for:
  * - ./data directory with quilltap.db (project-relative)
- * - ~/.quilltap/data directory with quilttap.db (home-relative, on macOS/Windows)
+ * - ~/.quilltap/data directory with quilltap.db (home-relative, on macOS/Windows)
  * - ./logs directory with log files
  * - ~/.quilltap/files on macOS/Windows (where it differs from the new default)
  *

@@ -13,6 +13,7 @@
 - fix: Add `.nullable()` to Zod schemas for chat message fields that can be null in SQLite (role, content, attachments, debugMemoryLogs, dangerFlags, context, systemEventType, description)
 - build: Remove `eslint.ignoreDuringBuilds` from next.config.js — ESLint now runs during builds
 - build: Exclude `plugins/` directory from tsconfig.json to avoid type-checking plugin source
+- fix: Correct `quilttap` → `quilltap` typo in build-rootfs.sh, wsl-manager.ts, paths.ts, and documentation
 - feat: Download Lima from GitHub Releases instead of requiring Homebrew installation
   - `scripts/stage-lima.sh` now downloads Lima tarball from GitHub Releases with local caching (`~/Library/Caches/Quilltap/lima-binaries/`)
   - Added runtime Xcode Command Line Tools check with cached verification marker

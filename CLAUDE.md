@@ -160,7 +160,7 @@ Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/
     - macOS: ~/Library/Application Support/Quilltap/
     - Windows: %APPDATA%\Quilltap\
     - Docker: /app/quilltap/
-    - Lima VM: /data/quilttap/ (VirtioFS mount of macOS path)
+    - Lima VM: /data/quilltap/ (VirtioFS mount of macOS path)
     - WSL2: Accessed via /mnt/c/.../AppData/Roaming/Quilttap/ (Windows path passed as env var)
   - Category
     - `data/`

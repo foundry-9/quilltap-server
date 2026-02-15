@@ -11,8 +11,8 @@
 #   ./scripts/build-rootfs.sh --image TAG             # export from a specific existing image
 #
 # Output:
-#   <cache-dir>/quilttap-linux-<arch>.tar.gz  (used by VM)
-#   quilttap-linux-<arch>.tar.gz              (local copy)
+#   <cache-dir>/quilltap-linux-<arch>.tar.gz  (used by VM)
+#   quilltap-linux-<arch>.tar.gz              (local copy)
 #
 # Prerequisites:
 #   - Docker (with buildx for multi-platform builds)
@@ -83,9 +83,9 @@ case "$PLATFORM" in
     ;;
 esac
 
-IMAGE_TAG="${CUSTOM_IMAGE:-quilttap-rootfs-${ARCH_LABEL}:${VERSION}}"
-CONTAINER_NAME="quilttap-rootfs-export-$$"
-OUTPUT_FILENAME="quilttap-linux-${ARCH_LABEL}.tar.gz"
+IMAGE_TAG="${CUSTOM_IMAGE:-quilltap-rootfs-${ARCH_LABEL}:${VERSION}}"
+CONTAINER_NAME="quilltap-rootfs-export-$$"
+OUTPUT_FILENAME="quilltap-linux-${ARCH_LABEL}.tar.gz"
 OUTPUT_FILE="$PROJECT_ROOT/$OUTPUT_FILENAME"
 
 # Determine cache directory based on OS
@@ -96,7 +96,7 @@ elif [[ -n "${LOCALAPPDATA:-}" ]]; then
   IMAGES_DIR="$LOCALAPPDATA/Quilttap/vm-images"
 else
   # Linux / fallback
-  IMAGES_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/quilttap/vm-images"
+  IMAGES_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/quilltap/vm-images"
 fi
 
 echo "==> Building Quilltap rootfs tarball"

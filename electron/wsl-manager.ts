@@ -99,7 +99,7 @@ export class WSLManager implements IVMManager {
       // wsl --list --verbose output format (may have UTF-16 BOM):
       //   NAME        STATE       VERSION
       // * Ubuntu      Running     2
-      //   quilttap    Stopped     2
+      //   quilltap    Stopped     2
       const lines = result.stdout
         .replace(/\0/g, '')  // strip UTF-16 null bytes
         .split('\n')
@@ -163,7 +163,7 @@ export class WSLManager implements IVMManager {
       ? `QUILTTAP_WIN_DATADIR=${WIN_DATA_DIR}`
       : '';
 
-    const cmd = `${dataEnv} nohup /usr/local/bin/wsl-init.sh > /tmp/quilttap-stdout.log 2>&1 &`;
+    const cmd = `${dataEnv} nohup /usr/local/bin/wsl-init.sh > /tmp/quilltap-stdout.log 2>&1 &`;
 
     return this.exec(
       ['-d', VM_NAME, '--exec', 'sh', '-c', cmd],
@@ -187,8 +187,8 @@ export class WSLManager implements IVMManager {
   async getLogs(lines: number = 50): Promise<string> {
     // Try the stdout log first, then fall back to the app's combined log
     const logPaths = [
-      '/tmp/quilttap-stdout.log',
-      '/data/quilttap/logs/combined.log',
+      '/tmp/quilltap-stdout.log',
+      '/data/quilltap/logs/combined.log',
     ];
 
     for (const logPath of logPaths) {
