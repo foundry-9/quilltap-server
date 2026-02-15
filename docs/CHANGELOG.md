@@ -4,6 +4,7 @@
 
 ### 3.0-dev
 
+- fix: MountPointSchema validation failure — change `.nullable()` to `.nullish()` on `encryptedSecrets` and `userId` fields so SQLite NULL→undefined values pass Zod validation, restoring mount point loading and all image/file serving
 - fix: Broken images in Electron/Lima VM — file storage manager now overrides tilde-based paths in VM/container environments and re-identifies the default mount point on refresh
 - feat: Auto-refresh Lima/WSL2 VM when rootfs tarball is updated
   - `scripts/build-rootfs.sh` now writes a `.build-id` sidecar file next to the tarball with version+timestamp

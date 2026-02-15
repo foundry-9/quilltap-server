@@ -77,11 +77,11 @@ export const MountPointSchema = z.object({
   // Backend configuration
   backendType: z.string().min(1, 'Backend type is required'),
   backendConfig: z.record(z.string(), z.unknown()),
-  encryptedSecrets: z.string().nullable(),
+  encryptedSecrets: z.string().nullish(),
 
   // Scope and ownership
   scope: MountPointScopeEnum,
-  userId: UUIDSchema.nullable(),
+  userId: UUIDSchema.nullish(),
 
   // Default mount point flag
   isDefault: z.boolean().default(false),
