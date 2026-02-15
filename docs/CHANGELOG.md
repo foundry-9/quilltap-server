@@ -4,6 +4,9 @@
 
 ### 2.12-dev
 
+- fix: SQLite null hydration now converts null to undefined for Zod `.optional()` compatibility — fixes Docker validation errors on `dangerFlags`, `context`, `description`, and other nullable columns
+- fix: Corrupted JSON columns no longer crash chat loading — hydration uses `fromJsonSafe` instead of `fromJson`, logging warnings for corrupted data instead of throwing
+- fix: Corrupted individual chat messages are now skipped instead of failing the entire chat load — `getMessages` uses `safeParse` per message with warning logs for invalid rows
 - fix: Empty strings in JSON columns (`rawResponse`, `attachments`, `debugMemoryLogs`) no longer crash chat loading — `fromJson`/`fromJsonSafe` now guard against empty strings, added missing `renderedHtml` and `dangerFlags` columns to `ChatMessageRowSchema`, and added migration to fix existing data
 - fix: Story backgrounds and images now work in Docker — `getFilePath()` always returns API route (`/api/v1/files/{id}`) instead of legacy `data/files/storage/` paths that are unreachable in Docker's standalone build
 - fix: Legacy files without `storageKey` are now served via the API download handler with a fallback to `public/data/files/storage/`

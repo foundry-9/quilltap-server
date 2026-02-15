@@ -25,7 +25,7 @@ import { SQLiteConfig, loadSQLiteConfig } from '../../config';
 import { getSQLiteClient, closeSQLiteClient, isSQLiteConnected, setupSQLiteShutdownHandlers } from './client';
 import { generateDDL, extractSchemaMetadata } from '../../schema-translator';
 import { buildSelectQuery, buildCountQuery, buildUpdateQuery, buildDeleteQuery, translateFilter } from './query-translator';
-import { documentToRow, rowToDocument, toJson, fromJson } from './json-columns';
+import { documentToRow, rowToDocument, toJson, fromJson, fromJsonSafe } from './json-columns';
 import { logger } from '@/lib/logger';
 
 // ============================================================================
@@ -370,7 +370,19 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
         if (value === null) {
           result[key] = undefined;  // null JSON object → undefined for .optional() schemas
         } else if (typeof value === 'string') {
-          result[key] = fromJson(value);
+          // Use fromJsonSafe to handle corrupted/truncated JSON gracefully
+          // Returns null for empty strings or parse failures - convert to undefined for .optional() schemas
+          const parsed = fromJsonSafe(value);
+          if (parsed === null && value !== '' && value !== 'null') {
+            // Non-empty string that failed to parse - likely corrupted data
+            logger.warn('Corrupted JSON in column, using default', {
+              table: this.name,
+              column: key,
+              valueLength: value.length,
+              valuePreview: value.substring(0, 80),
+            });
+          }
+          result[key] = parsed === null ? undefined : parsed;
         } else {
           result[key] = value;  // Already parsed (shouldn't happen, but handle gracefully)
         }
@@ -386,8 +398,9 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
       } else if (typeof value === 'number') {
         result[key] = value;
       } else {
-        // Keep null as null for .nullable() fields, pass through other values
-        result[key] = value;
+        // Convert null to undefined for Zod .optional() compatibility
+        // (.nullable().optional() also accepts undefined, so this is safe for all schemas)
+        result[key] = value === null ? undefined : value;
       }
     }
 
