@@ -6,6 +6,7 @@ import {
   LIMA_HOME,
   VM_NAME,
   LIMA_BINARY_NAME,
+  CLT_VERIFIED_MARKER,
   VM_CREATE_TIMEOUT_S,
   VM_START_TIMEOUT_S,
   VM_STOP_TIMEOUT_S,
@@ -38,16 +39,77 @@ export class LimaManager implements IVMManager {
       : path.join(__dirname, '..', 'lima', 'quilltap.yaml');
   }
 
-  /** Verify that limactl is available */
+  /** Verify that Xcode CLT and limactl are available */
   async checkPrerequisites(): Promise<{ ok: boolean; error?: string }> {
+    // Step 1: Check for Xcode Command Line Tools
+    const cltOk = await this.verifyCLT();
+    if (!cltOk) {
+      console.log('[LimaManager] Xcode Command Line Tools not found');
+      return { ok: false, error: 'CLT_MISSING' };
+    }
+
+    // Step 2: Check limactl
     const result = await this.exec(['--version'], 10);
     if (result.success) {
+      console.log('[LimaManager] Prerequisites OK:', result.stdout.trim());
       return { ok: true };
     }
     return {
       ok: false,
       error: 'Lima is not installed or not found. Please install Lima (https://lima-vm.io).',
     };
+  }
+
+  /**
+   * Verify Xcode Command Line Tools are installed.
+   * Uses a cached marker file to avoid running xcode-select on every launch.
+   */
+  private async verifyCLT(): Promise<boolean> {
+    // Check cached marker first
+    if (fs.existsSync(CLT_VERIFIED_MARKER)) {
+      console.log('[LimaManager] CLT verified (cached)');
+      return true;
+    }
+
+    // Run xcode-select -p to check for CLT
+    return new Promise((resolve) => {
+      const child = spawn('xcode-select', ['-p'], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        timeout: 10_000,
+      });
+
+      child.on('close', (code) => {
+        if (code === 0) {
+          // Write marker file with timestamp
+          try {
+            fs.mkdirSync(path.dirname(CLT_VERIFIED_MARKER), { recursive: true });
+            fs.writeFileSync(CLT_VERIFIED_MARKER, new Date().toISOString(), 'utf-8');
+            console.log('[LimaManager] CLT verified, marker written');
+          } catch (err) {
+            console.warn('[LimaManager] Could not write CLT marker:', err);
+          }
+          resolve(true);
+        } else {
+          resolve(false);
+        }
+      });
+
+      child.on('error', () => {
+        resolve(false);
+      });
+    });
+  }
+
+  /** Clear the CLT verification cache, forcing a re-check on next startup */
+  clearCLTCache(): void {
+    try {
+      if (fs.existsSync(CLT_VERIFIED_MARKER)) {
+        fs.unlinkSync(CLT_VERIFIED_MARKER);
+        console.log('[LimaManager] CLT cache cleared');
+      }
+    } catch (err) {
+      console.warn('[LimaManager] Could not clear CLT cache:', err);
+    }
   }
 
   /** Environment variables applied to every limactl spawn */

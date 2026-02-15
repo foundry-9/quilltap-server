@@ -7,7 +7,7 @@ Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, 
 No subscriptions. No data harvested. No forgetting everything between sessions.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.12.0--lima.12-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.12.0--lima.13-yellow.svg)](package.json)
 
 <p align="center">
   <img src="https://quilltap.ai/images/welcome-to-quilltap-2-8.png" alt="Welcome to Quilltap" />
@@ -66,7 +66,7 @@ If you're coming from SillyTavern, Quilltap imports your characters and chats di
 
 Download the latest Quilltap release for your platform. The Electron app bundles everything — it runs the backend inside a lightweight Linux VM, so there's nothing else to install.
 
-- **macOS**: Uses Lima with Apple's Virtualization.framework (VZ driver)
+- **macOS**: Uses Lima with Apple's Virtualization.framework (VZ driver). Requires Xcode Command Line Tools (`xcode-select --install`).
 - **Windows**: Uses WSL2 (built into Windows 10/11)
 
 On first launch, Quilltap will:
@@ -92,7 +92,7 @@ To build from source:
 ./scripts/build-rootfs.sh --platform linux/amd64   # Windows (amd64)
 
 # Build the Electron app
-npm run electron:build:mac   # macOS (requires Lima: brew install lima)
+npm run electron:build:mac   # macOS (Lima downloaded automatically)
 npm run electron:build:win   # Windows (NSIS installer)
 ```
 

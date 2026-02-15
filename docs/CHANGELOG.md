@@ -4,6 +4,11 @@
 
 ### 3.0-dev
 
+- feat: Download Lima from GitHub Releases instead of requiring Homebrew installation
+  - `scripts/stage-lima.sh` now downloads Lima tarball from GitHub Releases with local caching (`~/Library/Caches/Quilltap/lima-binaries/`)
+  - Added runtime Xcode Command Line Tools check with cached verification marker
+  - CLT missing dialog offers one-click install via `xcode-select --install` with retry flow
+  - Lima version pinned in `electron/constants.ts` (currently 2.0.3)
 - fix: Docker build OOM — exclude large directories from build context, use webpack instead of Turbopack, cap Node heap
 - feat: Phase 2 — Windows/WSL2 support
   - Added VM manager abstraction (`electron/vm-manager.ts`): `IVMManager` interface and `createVMManager()` factory function

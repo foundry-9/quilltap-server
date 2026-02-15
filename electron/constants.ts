@@ -9,6 +9,15 @@ export const LIMA_HOME = path.join(os.homedir(), '.qtlima');
 /** Lima binary name */
 export const LIMA_BINARY_NAME = 'limactl';
 
+/** Lima version to download from GitHub Releases */
+export const LIMA_VERSION = '2.0.3';
+
+/** Directory where downloaded Lima tarballs are cached */
+export const LIMA_CACHE_DIR = path.join(os.homedir(), 'Library', 'Caches', 'Quilltap', 'lima-binaries');
+
+/** Marker file indicating Xcode CLT has been verified */
+export const CLT_VERIFIED_MARKER = path.join(LIMA_HOME, '.clt-verified');
+
 // --- WSL-specific (Windows only) ---
 
 /** Directory where the WSL2 distro ext4 vhdx is stored */

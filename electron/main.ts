@@ -1,4 +1,5 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain } from 'electron';
+import { spawn } from 'child_process';
 import * as path from 'path';
 import {
   HOST_PORT,
@@ -8,6 +9,7 @@ import {
   MAIN_HEIGHT,
 } from './constants';
 import { IVMManager, createVMManager } from './vm-manager';
+import { LimaManager } from './lima-manager';
 import { DownloadManager } from './download-manager';
 import { HealthChecker } from './health-checker';
 import { SplashUpdate } from './types';
@@ -148,9 +150,37 @@ async function startupSequence(): Promise<void> {
     message: 'Checking system requirements...',
   });
 
-  // Verify platform prerequisites (WSL2 on Windows, limactl on macOS)
+  // Verify platform prerequisites (WSL2 on Windows, CLT + limactl on macOS)
   const prereq = await vmManager.checkPrerequisites();
   if (!prereq.ok) {
+    if (prereq.error === 'CLT_MISSING') {
+      // Xcode Command Line Tools not installed — offer to install them
+      const result = await dialog.showMessageBox({
+        type: 'warning',
+        title: 'Xcode Command Line Tools Required',
+        message: 'Quilltap needs Xcode Command Line Tools to run its virtual machine.',
+        detail:
+          'Lima requires macOS SDK libraries provided by Xcode Command Line Tools. ' +
+          'Click "Install" to open the Apple installer, then click "Retry" in Quilltap after installation completes.',
+        buttons: ['Install', 'Quit'],
+        defaultId: 0,
+        cancelId: 1,
+      });
+
+      if (result.response === 0) {
+        // Spawn the Apple CLT installer UI
+        spawn('xcode-select', ['--install'], { stdio: 'ignore', detached: true }).unref();
+        sendSplashError(
+          'Installing Xcode Command Line Tools...\n\n' +
+          'Complete the Apple installer, then click Retry.',
+          true
+        );
+      } else {
+        app.quit();
+      }
+      return;
+    }
+
     sendSplashError(prereq.error || 'System requirements not met.', false);
     return;
   }
@@ -208,6 +238,10 @@ async function startupSequence(): Promise<void> {
 
     const createResult = await vmManager.createVM();
     if (!createResult.success) {
+      // Clear CLT cache so next retry re-checks prerequisites
+      if (vmManager instanceof LimaManager) {
+        vmManager.clearCLTCache();
+      }
       sendSplashError(`Failed to create VM: ${createResult.error}`, true);
       return;
     }
@@ -222,6 +256,10 @@ async function startupSequence(): Promise<void> {
 
     const startResult = await vmManager.startVM();
     if (!startResult.success) {
+      // Clear CLT cache so next retry re-checks prerequisites
+      if (vmManager instanceof LimaManager) {
+        vmManager.clearCLTCache();
+      }
       sendSplashError(`Failed to start VM: ${startResult.error}`, true);
       return;
     }

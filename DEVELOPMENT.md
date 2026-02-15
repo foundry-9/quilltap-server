@@ -100,7 +100,7 @@ quilltap/
 For Electron development:
 
 - **Docker** — Required for building the rootfs tarball (with buildx support)
-- **macOS**: **Lima** — Install via Homebrew: `brew install lima`
+- **macOS**: **Xcode Command Line Tools** — Install via `xcode-select --install` (Lima is downloaded automatically during build)
 - **Windows**: **WSL2** — Run `wsl --install` in PowerShell as Administrator
 
 ### Running Locally
@@ -170,7 +170,7 @@ In dev mode (`ELECTRON_DEV=1`), Electron skips all VM operations and connects di
 # 1. Build the rootfs tarball (Docker image → Alpine guest filesystem)
 ./scripts/build-rootfs.sh
 
-# 2. Build the Electron app (stages Lima binaries + compiles + packages)
+# 2. Build the Electron app (downloads Lima from GitHub, compiles + packages)
 npm run electron:build:mac
 
 # --- Windows ---
@@ -189,7 +189,9 @@ npm run electron:build:win
 | Lima home directory  | `~/.qtlima/` (short path due to macOS 104-char socket limit)        |
 | VM template          | `lima/quilltap.yaml`                                                |
 | Rootfs cache         | `~/Library/Caches/Quilltap/lima-images/quilltap-linux-arm64.tar.gz` |
+| Lima binary cache    | `~/Library/Caches/Quilltap/lima-binaries/` (downloaded from GitHub) |
 | Staged Lima binaries | `electron/resources/lima/`                                          |
+| CLT verified marker  | `~/.qtlima/.clt-verified`                                           |
 | Compiled Electron JS | `dist-electron/`                                                    |
 
 **Key paths (Windows):**
