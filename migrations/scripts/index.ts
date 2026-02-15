@@ -79,6 +79,8 @@ import { addCharacterClothingRecordsFieldMigration } from './add-character-cloth
 import { fixChatMessageCountsMigration } from './fix-chat-message-counts';
 // Add memory gate fields (reinforcement tracking, related links)
 import { addMemoryGateFieldsMigration } from './add-memory-gate-fields';
+// Migrate legacy JSONL file entries to SQLite
+import { migrateLegacyJsonlFilesMigration } from './migrate-legacy-jsonl-files';
 
 /**
  * All available migrations.
@@ -153,6 +155,8 @@ export const migrations: Migration[] = [
   fixChatMessageCountsMigration,
   // Add memory gate fields (reinforcement tracking, related links)
   addMemoryGateFieldsMigration,
+  // Migrate legacy JSONL file entries to SQLite
+  migrateLegacyJsonlFilesMigration,
 ];
 
 export {
@@ -222,4 +226,6 @@ export {
   fixChatMessageCountsMigration,
   // Add memory gate fields (reinforcement tracking, related links)
   addMemoryGateFieldsMigration,
+  // Migrate legacy JSONL file entries to SQLite
+  migrateLegacyJsonlFilesMigration,
 };

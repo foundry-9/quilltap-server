@@ -48,7 +48,7 @@ describe('File Path Utilities', () => {
       expect(path).toBe('/api/v1/files/file-2');
     });
 
-    it('should return local path for legacy file without storageKey', () => {
+    it('should return API route for legacy file without storageKey', () => {
       const file: FileEntry = {
         id: 'file-3',
         originalFilename: 'avatar.jpg',
@@ -60,10 +60,10 @@ describe('File Path Utilities', () => {
       };
 
       const path = getFilePath(file);
-      expect(path).toBe('data/files/storage/file-3.jpg');
+      expect(path).toBe('/api/v1/files/file-3');
     });
 
-    it('should extract extension from filename for legacy files', () => {
+    it('should return API route for legacy file with complex name', () => {
       const file: FileEntry = {
         id: 'file-4',
         originalFilename: 'image.complex.name.png',
@@ -75,10 +75,10 @@ describe('File Path Utilities', () => {
       };
 
       const path = getFilePath(file);
-      expect(path).toBe('data/files/storage/file-4.png');
+      expect(path).toBe('/api/v1/files/file-4');
     });
 
-    it('should handle legacy files without extension', () => {
+    it('should return API route for legacy file without extension', () => {
       const file: FileEntry = {
         id: 'file-5',
         originalFilename: 'noextension',
@@ -90,7 +90,7 @@ describe('File Path Utilities', () => {
       };
 
       const path = getFilePath(file);
-      expect(path).toBe('data/files/storage/file-5');
+      expect(path).toBe('/api/v1/files/file-5');
     });
 
     it('should prefer storageKey over s3Key when both present', () => {
@@ -316,7 +316,7 @@ describe('File Path Utilities', () => {
       });
     });
 
-    it('should build file reference for legacy local file', () => {
+    it('should build file reference for legacy local file via API route', () => {
       const file: FileEntry = {
         id: 'file-2',
         originalFilename: 'image.jpg',
@@ -331,7 +331,7 @@ describe('File Path Utilities', () => {
 
       expect(result).toEqual({
         id: 'file-2',
-        filepath: 'data/files/storage/file-2.jpg',
+        filepath: '/api/v1/files/file-2',
         filename: 'image.jpg',
         mimeType: 'image/jpeg',
         size: 2048,
