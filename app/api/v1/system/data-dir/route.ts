@@ -15,6 +15,7 @@ import {
   getBaseDataDirWithSource,
   getPlatform,
   isDockerEnvironment,
+  isLimaEnvironment,
   Platform,
 } from '@/lib/paths';
 import { logger } from '@/lib/logger';
@@ -35,6 +36,8 @@ interface DataDirInfo {
   platform: Platform;
   /** Whether running in Docker */
   isDocker: boolean;
+  /** Whether running inside a VM (Lima on macOS or WSL2 on Windows) */
+  isVM: boolean;
   /** Whether the "open" action is supported */
   canOpen: boolean;
 }
@@ -47,6 +50,7 @@ export const GET = createContextHandler(async () => {
   const dirInfo = getBaseDataDirWithSource();
   const platform = getPlatform();
   const isDocker = isDockerEnvironment();
+  const isVM = isLimaEnvironment();
 
   const response: DataDirInfo = {
     path: dirInfo.path,
@@ -54,6 +58,7 @@ export const GET = createContextHandler(async () => {
     sourceDescription: dirInfo.sourceDescription,
     platform,
     isDocker,
+    isVM,
     canOpen: !isDocker,
   };
 

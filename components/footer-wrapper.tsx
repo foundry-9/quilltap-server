@@ -1,10 +1,31 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import packageJson from '@/package.json';
 
+type BackendMode = 'local' | 'Docker' | 'VM';
+
 export default function FooterWrapper() {
   const pathname = usePathname();
+  const [backendMode, setBackendMode] = useState<BackendMode | null>(null);
+
+  useEffect(() => {
+    fetch('/api/v1/system/data-dir')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.data?.isVM) {
+          setBackendMode('VM');
+        } else if (data.data?.isDocker) {
+          setBackendMode('Docker');
+        } else {
+          setBackendMode('local');
+        }
+      })
+      .catch(() => {
+        setBackendMode('local');
+      });
+  }, []);
 
   // Hide footer on chat pages - they have their own layout
   const isChatPage = pathname?.match(/^\/salon\/[^/]+$/);
@@ -19,7 +40,7 @@ export default function FooterWrapper() {
   return (
     <footer className="qt-footer">
       <div className="qt-footer-container">
-        <span>v{packageJson.version}</span>
+        <span>v{packageJson.version}{backendMode ? ` (${backendMode})` : ''}</span>
         <span className="qt-footer-separator">•</span>
         <a
           href="https://foundry-9.com/"
