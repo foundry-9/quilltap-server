@@ -175,7 +175,7 @@ class ToolRegistry {
     pluginName: string,
     config: Record<string, unknown>
   ): Record<string, unknown> {
-    if (pluginName !== 'mcp_connector') {
+    if (pluginName !== 'mcp') {
       return config;
     }
 
