@@ -114,6 +114,11 @@ export class MCPConnectionManager {
    * Connect to a single MCP server
    */
   private async connectServer(config: MCPServerConfig): Promise<void> {
+    managerLogger.debug('Connecting to MCP server', {
+      serverId: config.name,
+      url: config.url,
+      authType: config.authType,
+    });
     const client = new MCPClient(config);
 
     try {

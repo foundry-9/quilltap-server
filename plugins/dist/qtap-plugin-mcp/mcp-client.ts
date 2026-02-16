@@ -106,7 +106,15 @@ export class MCPClient {
     }
 
     this.state.status = 'connecting';
-    const resolvedUrl = rewriteLocalhostUrl(this.config.url);
+    const originalUrl = this.config.url;
+    const resolvedUrl = rewriteLocalhostUrl(originalUrl);
+    const wasRewritten = resolvedUrl !== originalUrl;
+    console.debug('[mcp-client] Connecting to MCP server', {
+      serverId: this.config.name,
+      originalUrl,
+      resolvedUrl,
+      wasRewritten,
+    });
     const url = new URL(resolvedUrl);
     const headers = this.buildHeaders();
 

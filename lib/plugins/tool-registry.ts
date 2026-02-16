@@ -19,6 +19,7 @@ import type {
   ToolExecutionResult,
 } from './interfaces/tool-plugin';
 import { getErrorMessage } from '@/lib/errors';
+import { rewriteLocalhostUrl } from '@/lib/host-rewrite';
 
 // ============================================================================
 // TYPES
@@ -160,6 +161,66 @@ class ToolRegistry {
   }
 
   /**
+   * Preprocess tool config before passing it to a plugin.
+   *
+   * For the MCP plugin, rewrites localhost URLs in the `servers` JSON
+   * so that Docker/Lima/WSL2 environments reach the host machine.
+   * This mirrors how provider-registry rewrites URLs for LLM providers.
+   *
+   * @param pluginName The plugin name
+   * @param config The raw user configuration
+   * @returns The config with any necessary URL rewrites applied
+   */
+  private preprocessToolConfig(
+    pluginName: string,
+    config: Record<string, unknown>
+  ): Record<string, unknown> {
+    if (pluginName !== 'mcp_connector') {
+      return config;
+    }
+
+    const serversJson = config.servers;
+    if (typeof serversJson !== 'string' || !serversJson.trim()) {
+      return config;
+    }
+
+    try {
+      const servers = JSON.parse(serversJson);
+      if (!Array.isArray(servers)) {
+        return config;
+      }
+
+      let rewritten = false;
+      const updatedServers = servers.map((server: Record<string, unknown>) => {
+        if (typeof server.url === 'string') {
+          const originalUrl = server.url;
+          const resolvedUrl = rewriteLocalhostUrl(originalUrl);
+          if (resolvedUrl !== originalUrl) {
+            this.logger.debug('Rewrote MCP server URL at app layer', {
+              serverName: server.name,
+              originalUrl,
+              resolvedUrl,
+            });
+            rewritten = true;
+            return { ...server, url: resolvedUrl };
+          }
+        }
+        return server;
+      });
+
+      if (rewritten) {
+        return { ...config, servers: JSON.stringify(updatedServers) };
+      }
+    } catch (error) {
+      this.logger.warn('Failed to preprocess MCP server config for URL rewriting', {
+        error: getErrorMessage(error),
+      });
+    }
+
+    return config;
+  }
+
+  /**
    * Get tool definitions from a plugin
    *
    * Handles both new pattern (getToolDefinitions) and legacy patterns.
@@ -245,7 +306,8 @@ class ToolRegistry {
       }
 
       try {
-        const pluginTools = await this.getPluginToolDefinitions(plugin, config);
+        const processedConfig = this.preprocessToolConfig(pluginName, config);
+        const pluginTools = await this.getPluginToolDefinitions(plugin, processedConfig);
 
         tools.push(...pluginTools);
       } catch (error) {
@@ -279,11 +341,12 @@ class ToolRegistry {
       }
 
       try {
-        const pluginTools = await this.getPluginToolDefinitions(plugin, config);
+        const processedConfig = this.preprocessToolConfig(pluginName, config);
+        const pluginTools = await this.getPluginToolDefinitions(plugin, processedConfig);
         const ownsTool = pluginTools.some(t => t.function.name === toolName);
 
         if (ownsTool) {
-          return { plugin, config };
+          return { plugin, config: processedConfig };
         }
       } catch (error) {
         this.logger.warn('Error checking plugin for tool', {

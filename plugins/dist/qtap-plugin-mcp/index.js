@@ -19709,7 +19709,15 @@ var MCPClient = class {
       return;
     }
     this.state.status = "connecting";
-    const resolvedUrl = rewriteLocalhostUrl(this.config.url);
+    const originalUrl = this.config.url;
+    const resolvedUrl = rewriteLocalhostUrl(originalUrl);
+    const wasRewritten = resolvedUrl !== originalUrl;
+    console.debug("[mcp-client] Connecting to MCP server", {
+      serverId: this.config.name,
+      originalUrl,
+      resolvedUrl,
+      wasRewritten
+    });
     const url2 = new URL(resolvedUrl);
     const headers = this.buildHeaders();
     try {
@@ -19982,6 +19990,11 @@ var MCPConnectionManager = class {
    * Connect to a single MCP server
    */
   async connectServer(config) {
+    managerLogger.debug("Connecting to MCP server", {
+      serverId: config.name,
+      url: config.url,
+      authType: config.authType
+    });
     const client = new MCPClient(config);
     try {
       await client.connect();

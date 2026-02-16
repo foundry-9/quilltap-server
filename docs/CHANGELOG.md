@@ -4,6 +4,7 @@
 
 ### 3.0-dev
 
+- fix: MCP server localhost URL rewriting now works reliably in Docker/Lima/WSL2 — moved URL rewriting to the app layer (`tool-registry.ts`) so it uses the app's trusted `host-rewrite.ts` directly, matching the pattern used for LLM providers; the bundled plugin copy is kept as a belt-and-suspenders fallback; added debug logging for original vs resolved URLs in both the app layer and plugin
 - fix: Docker footer shows "(local)" instead of "(Docker)" — fixed `footer-wrapper.tsx` accessing `data.data?.isDocker` instead of `data.isDocker` from the `/api/v1/system/data-dir` response
 - fix: Docker host URL rewriting now uses `host.docker.internal` hostname directly instead of parsing `/etc/hosts` for an IP — Docker Desktop resolves this via built-in DNS (127.0.0.11), which is more reliable; `/etc/hosts` parsing moved to fallback strategy for edge cases
 - fix: "Test Connection" and model listing now work in Docker/VM environments — added `validateApiKey()` and `getAvailableModels()` wrapper methods to provider registries that apply `rewriteLocalhostUrl` before delegating to plugins; updated all call sites (api-keys route, provider-validation, capabilities-report)
