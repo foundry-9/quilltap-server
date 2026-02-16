@@ -19411,7 +19411,7 @@ var SSEClientTransport = class {
 };
 
 // ../../../lib/host-rewrite.ts
-var import_child_process = require("child_process");
+var import_node_fs = require("node:fs");
 var LOCALHOST_HOSTS = /* @__PURE__ */ new Set([
   "localhost",
   "127.0.0.1",
@@ -19434,28 +19434,40 @@ function resolveHostGatewayIP() {
     return cachedGatewayIP;
   }
   try {
-    const result = (0, import_child_process.execSync)(
-      "getent hosts host.docker.internal 2>/dev/null | awk '{print $1}'",
-      { encoding: "utf-8", timeout: 2e3 }
-    ).trim();
-    if (result && result !== "") {
-      rewriteLogger.info("Host gateway IP from host.docker.internal", { ip: result });
-      cachedGatewayIP = result;
-      return cachedGatewayIP;
+    const hosts = (0, import_node_fs.readFileSync)("/etc/hosts", "utf-8");
+    for (const line of hosts.split("\n")) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith("#") || trimmed === "") continue;
+      const parts = trimmed.split(/\s+/);
+      if (parts.length >= 2 && parts.slice(1).includes("host.docker.internal")) {
+        const ip = parts[0];
+        rewriteLogger.info("Host gateway IP from /etc/hosts (host.docker.internal)", { ip });
+        cachedGatewayIP = ip;
+        return cachedGatewayIP;
+      }
     }
   } catch {
+    rewriteLogger.debug("Could not read /etc/hosts for host.docker.internal lookup");
   }
   try {
-    const result = (0, import_child_process.execSync)(
-      "ip route 2>/dev/null | grep default | awk '{print $3}' | head -1",
-      { encoding: "utf-8", timeout: 2e3 }
-    ).trim();
-    if (result && result !== "") {
-      rewriteLogger.info("Host gateway IP from default route", { ip: result });
-      cachedGatewayIP = result;
-      return cachedGatewayIP;
+    const routeTable = (0, import_node_fs.readFileSync)("/proc/net/route", "utf-8");
+    for (const line of routeTable.split("\n").slice(1)) {
+      const fields = line.trim().split("	");
+      if (fields.length >= 3 && fields[1] === "00000000") {
+        const hexGateway = fields[2];
+        const ip = [
+          parseInt(hexGateway.substring(6, 8), 16),
+          parseInt(hexGateway.substring(4, 6), 16),
+          parseInt(hexGateway.substring(2, 4), 16),
+          parseInt(hexGateway.substring(0, 2), 16)
+        ].join(".");
+        rewriteLogger.info("Host gateway IP from /proc/net/route", { ip });
+        cachedGatewayIP = ip;
+        return cachedGatewayIP;
+      }
     }
   } catch {
+    rewriteLogger.debug("Could not read /proc/net/route for default gateway lookup");
   }
   rewriteLogger.warn("Could not resolve host gateway IP \u2014 localhost URLs will not be rewritten");
   cachedGatewayIP = null;

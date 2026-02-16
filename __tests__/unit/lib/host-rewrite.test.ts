@@ -16,8 +16,9 @@ jest.mock('@/lib/logger', () => ({
   },
 }));
 
-jest.mock('child_process', () => ({
-  execSync: jest.fn(),
+jest.mock('node:fs', () => ({
+  ...jest.requireActual('node:fs'),
+  readFileSync: jest.fn(),
 }));
 
 
@@ -101,12 +102,60 @@ describe('lib/host-rewrite', () => {
       expect(rewriteLocalhostUrl('not-a-url')).toBe('not-a-url');
     });
 
-    it('should return URL unchanged when gateway resolution fails', async () => {
-      process.env.LIMA_CONTAINER = 'true';
-      // No QUILLTAP_HOST_IP set, and mocked execSync/dns will return nothing
+    it('should resolve gateway from /etc/hosts (host.docker.internal)', async () => {
+      process.env.DOCKER_CONTAINER = 'true';
+      // No QUILLTAP_HOST_IP — should fall through to /etc/hosts
 
-      const { execSync } = require('child_process');
-      (execSync as jest.Mock).mockImplementation(() => { throw new Error('not found'); });
+      const { readFileSync } = require('node:fs');
+      (readFileSync as jest.Mock).mockImplementation((path: string) => {
+        if (path === '/etc/hosts') {
+          return [
+            '127.0.0.1\tlocalhost',
+            '::1\tlocalhost',
+            '192.168.65.254\thost.docker.internal',
+            '172.17.0.2\tcontainer-name',
+          ].join('\n');
+        }
+        throw new Error('ENOENT');
+      });
+
+      const { rewriteLocalhostUrl } = await import('@/lib/host-rewrite');
+      expect(rewriteLocalhostUrl('http://localhost:11434')).toBe('http://192.168.65.254:11434/');
+    });
+
+    it('should resolve gateway from /proc/net/route', async () => {
+      process.env.LIMA_CONTAINER = 'true';
+      // No QUILLTAP_HOST_IP — should fall through to /proc/net/route
+
+      const { readFileSync } = require('node:fs');
+      (readFileSync as jest.Mock).mockImplementation((path: string) => {
+        if (path === '/etc/hosts') {
+          // No host.docker.internal entry
+          return '127.0.0.1\tlocalhost\n::1\tlocalhost\n';
+        }
+        if (path === '/proc/net/route') {
+          // Default gateway 192.168.5.2 = hex C0A80502 -> little-endian 0205A8C0
+          return [
+            'Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT',
+            'eth0\t00000000\t0205A8C0\t0003\t0\t0\t0\t00000000\t0\t0\t0',
+            'eth0\t0005A8C0\t00000000\t0001\t0\t0\t0\t00FFFFFF\t0\t0\t0',
+          ].join('\n');
+        }
+        throw new Error('ENOENT');
+      });
+
+      const { rewriteLocalhostUrl } = await import('@/lib/host-rewrite');
+      expect(rewriteLocalhostUrl('http://localhost:11434')).toBe('http://192.168.5.2:11434/');
+    });
+
+    it('should return URL unchanged when all resolution strategies fail', async () => {
+      process.env.LIMA_CONTAINER = 'true';
+      // No QUILLTAP_HOST_IP, and file reads will fail
+
+      const { readFileSync } = require('node:fs');
+      (readFileSync as jest.Mock).mockImplementation(() => {
+        throw new Error('ENOENT');
+      });
 
       const { rewriteLocalhostUrl } = await import('@/lib/host-rewrite');
       expect(rewriteLocalhostUrl('http://localhost:11434')).toBe('http://localhost:11434');

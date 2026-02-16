@@ -11,16 +11,19 @@
  *
  * Gateway IP resolution order:
  * 1. `QUILLTAP_HOST_IP` env var (explicit override)
- * 2. Resolve `host.docker.internal` via getent (Docker)
- * 3. Default gateway from `ip route` (Lima vzNAT / WSL2)
+ * 2. Resolve `host.docker.internal` from /etc/hosts (Docker)
+ * 3. Default gateway from /proc/net/route (Lima vzNAT / WSL2)
  * 4. Give up gracefully — return URL unchanged
+ *
+ * All strategies use synchronous file reads — no shelling out to `getent`
+ * or `ip route`, which are unavailable in Alpine Linux images.
  *
  * @module lib/host-rewrite
  */
 
 import { logger } from '@/lib/logger';
 import { isDockerEnvironment, isLimaEnvironment } from '@/lib/paths';
-import { execSync } from 'child_process';
+import { readFileSync } from 'node:fs';
 
 // ============================================================================
 // Types
@@ -69,34 +72,54 @@ function resolveHostGatewayIP(): string | null {
     return cachedGatewayIP;
   }
 
-  // Strategy 2: Resolve host.docker.internal via getent (works in Docker)
+  // Strategy 2: Resolve host.docker.internal from /etc/hosts (Docker)
+  // Docker adds a `host.docker.internal` entry to /etc/hosts in containers.
+  // We parse the file directly instead of shelling out to `getent`, which
+  // is unavailable in Alpine Linux images.
   try {
-    const result = execSync(
-      'getent hosts host.docker.internal 2>/dev/null | awk \'{print $1}\'',
-      { encoding: 'utf-8', timeout: 2000 }
-    ).trim();
-    if (result && result !== '') {
-      rewriteLogger.info('Host gateway IP from host.docker.internal', { ip: result });
-      cachedGatewayIP = result;
-      return cachedGatewayIP;
+    const hosts = readFileSync('/etc/hosts', 'utf-8');
+    for (const line of hosts.split('\n')) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('#') || trimmed === '') continue;
+      // /etc/hosts format: <IP> <hostname1> [hostname2] ...
+      const parts = trimmed.split(/\s+/);
+      if (parts.length >= 2 && parts.slice(1).includes('host.docker.internal')) {
+        const ip = parts[0];
+        rewriteLogger.info('Host gateway IP from /etc/hosts (host.docker.internal)', { ip });
+        cachedGatewayIP = ip;
+        return cachedGatewayIP;
+      }
     }
   } catch {
-    // getent not available or lookup failed
+    rewriteLogger.debug('Could not read /etc/hosts for host.docker.internal lookup');
   }
 
-  // Strategy 3: Default gateway from `ip route` (Lima/WSL2)
+  // Strategy 3: Default gateway from /proc/net/route (Lima/WSL2)
+  // Parse the kernel routing table directly instead of shelling out to
+  // `ip route`, which is unavailable in Alpine Linux images.
+  // The file format is tab-separated with hex-encoded IPs.
   try {
-    const result = execSync(
-      'ip route 2>/dev/null | grep default | awk \'{print $3}\' | head -1',
-      { encoding: 'utf-8', timeout: 2000 }
-    ).trim();
-    if (result && result !== '') {
-      rewriteLogger.info('Host gateway IP from default route', { ip: result });
-      cachedGatewayIP = result;
-      return cachedGatewayIP;
+    const routeTable = readFileSync('/proc/net/route', 'utf-8');
+    for (const line of routeTable.split('\n').slice(1)) { // skip header
+      const fields = line.trim().split('\t');
+      // fields[1] = Destination, fields[2] = Gateway
+      // Default route has destination 00000000
+      if (fields.length >= 3 && fields[1] === '00000000') {
+        const hexGateway = fields[2];
+        // Convert hex gateway to dotted-quad IP (little-endian on Linux)
+        const ip = [
+          parseInt(hexGateway.substring(6, 8), 16),
+          parseInt(hexGateway.substring(4, 6), 16),
+          parseInt(hexGateway.substring(2, 4), 16),
+          parseInt(hexGateway.substring(0, 2), 16),
+        ].join('.');
+        rewriteLogger.info('Host gateway IP from /proc/net/route', { ip });
+        cachedGatewayIP = ip;
+        return cachedGatewayIP;
+      }
     }
   } catch {
-    // `ip` command not available (macOS bare metal, Windows)
+    rewriteLogger.debug('Could not read /proc/net/route for default gateway lookup');
   }
 
   rewriteLogger.warn('Could not resolve host gateway IP — localhost URLs will not be rewritten');
