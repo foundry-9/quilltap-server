@@ -9,6 +9,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
+import { rewriteLocalhostUrl } from '@/lib/host-rewrite';
 import { sanitizeCustomHeaders } from './security';
 import type {
   MCPServerConfig,
@@ -105,7 +106,8 @@ export class MCPClient {
     }
 
     this.state.status = 'connecting';
-    const url = new URL(this.config.url);
+    const resolvedUrl = rewriteLocalhostUrl(this.config.url);
+    const url = new URL(resolvedUrl);
     const headers = this.buildHeaders();
 
     try {

@@ -78,6 +78,12 @@ Only needed when exposing Quilltap on a custom domain. For local use, everything
 |----------|-------------|---------|
 | `BASE_URL` | Your production URL | `http://localhost:3000` |
 
+### Networking
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `QUILLTAP_HOST_IP` | Override host gateway IP for localhost URL rewriting (Docker/Lima/WSL2) | Auto-detected |
+
 ### Encryption
 
 | Variable | Description | Default |
@@ -118,25 +124,37 @@ Only needed when exposing Quilltap on a custom domain. For local use, everything
 | `SITE_PLUGINS_ENABLED` | Comma-separated plugin IDs, or `all` | `all` |
 | `SITE_PLUGINS_DISABLED` | Comma-separated plugin IDs to disable | (empty) |
 
-## Host Port Forwarding
+## Accessing Host Services (Ollama, LM Studio, etc.)
 
-If you run local services on your host machine (Ollama, LM Studio, MCP servers), the Docker container needs to reach them. Quilltap includes built-in port forwarding via the `HOST_REDIRECT_PORTS` environment variable.
+If you run local services on your host machine (Ollama, LM Studio, MCP servers), Quilltap automatically rewrites `localhost` and `127.0.0.1` URLs to point at the host gateway IP. This means you can configure `http://localhost:11434` in the UI and it will work transparently in Docker, Lima VMs, and WSL2 — no manual port forwarding needed.
+
+On Linux, add `--add-host` so the container can resolve the host IP:
 
 ```bash
 docker run -d \
   --name quilltap \
   -p 3000:3000 \
   -v /path/to/data:/app/quilltap \
-  -e HOST_REDIRECT_PORTS="11434,3030" \
   --add-host=host.docker.internal:host-gateway \
   csebold/quilltap
 ```
 
-This forwards the specified ports from the container's `localhost` to the Docker host using `socat`. Services like Ollama at `http://localhost:11434` work transparently inside the container without changing any URLs.
+On **macOS and Windows**, Docker Desktop provides `host.docker.internal` automatically — no extra flags needed.
 
-**Platform notes:**
-- **Mac and Windows:** `--add-host` is optional — Docker Desktop provides `host.docker.internal` automatically
-- **Linux:** `--add-host=host.docker.internal:host-gateway` is required
+### Override Host IP
+
+If automatic detection doesn't work in your environment, set the `QUILLTAP_HOST_IP` environment variable to the IP address of your host machine:
+
+```bash
+docker run -d \
+  --name quilltap \
+  -p 3000:3000 \
+  -v /path/to/data:/app/quilltap \
+  -e QUILLTAP_HOST_IP="192.168.1.100" \
+  csebold/quilltap
+```
+
+This override works in all environments (Docker, Lima, WSL2).
 
 ## Reverse Proxy Setup
 

@@ -19410,6 +19410,84 @@ var SSEClientTransport = class {
   }
 };
 
+// ../../../lib/host-rewrite.ts
+var import_child_process = require("child_process");
+var LOCALHOST_HOSTS = /* @__PURE__ */ new Set([
+  "localhost",
+  "127.0.0.1",
+  "[::1]",
+  "::1"
+]);
+var cachedGatewayIP;
+var rewriteLogger = logger.child({ module: "host-rewrite" });
+function isVMEnvironment() {
+  return isDockerEnvironment() || isLimaEnvironment();
+}
+function resolveHostGatewayIP() {
+  if (cachedGatewayIP !== void 0) {
+    return cachedGatewayIP;
+  }
+  const envIP = process.env.QUILLTAP_HOST_IP;
+  if (envIP) {
+    rewriteLogger.info("Host gateway IP from QUILLTAP_HOST_IP", { ip: envIP });
+    cachedGatewayIP = envIP;
+    return cachedGatewayIP;
+  }
+  try {
+    const result = (0, import_child_process.execSync)(
+      "getent hosts host.docker.internal 2>/dev/null | awk '{print $1}'",
+      { encoding: "utf-8", timeout: 2e3 }
+    ).trim();
+    if (result && result !== "") {
+      rewriteLogger.info("Host gateway IP from host.docker.internal", { ip: result });
+      cachedGatewayIP = result;
+      return cachedGatewayIP;
+    }
+  } catch {
+  }
+  try {
+    const result = (0, import_child_process.execSync)(
+      "ip route 2>/dev/null | grep default | awk '{print $3}' | head -1",
+      { encoding: "utf-8", timeout: 2e3 }
+    ).trim();
+    if (result && result !== "") {
+      rewriteLogger.info("Host gateway IP from default route", { ip: result });
+      cachedGatewayIP = result;
+      return cachedGatewayIP;
+    }
+  } catch {
+  }
+  rewriteLogger.warn("Could not resolve host gateway IP \u2014 localhost URLs will not be rewritten");
+  cachedGatewayIP = null;
+  return cachedGatewayIP;
+}
+function rewriteLocalhostUrl(url2) {
+  if (!isVMEnvironment()) {
+    return url2;
+  }
+  let parsed;
+  try {
+    parsed = new URL(url2);
+  } catch {
+    return url2;
+  }
+  if (!LOCALHOST_HOSTS.has(parsed.hostname)) {
+    return url2;
+  }
+  const gatewayIP = resolveHostGatewayIP();
+  if (!gatewayIP) {
+    return url2;
+  }
+  parsed.hostname = gatewayIP;
+  const rewritten = parsed.toString();
+  rewriteLogger.debug("Rewrote localhost URL", {
+    original: url2,
+    rewritten,
+    gatewayIP
+  });
+  return rewritten;
+}
+
 // security.ts
 function validateMCPServerUrl(url2) {
   try {
@@ -19614,7 +19692,8 @@ var MCPClient = class {
       return;
     }
     this.state.status = "connecting";
-    const url2 = new URL(this.config.url);
+    const resolvedUrl = rewriteLocalhostUrl(this.config.url);
+    const url2 = new URL(resolvedUrl);
     const headers = this.buildHeaders();
     try {
       try {

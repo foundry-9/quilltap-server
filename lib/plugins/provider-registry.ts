@@ -17,6 +17,7 @@ import type { LLMProvider } from '@/lib/llm/base';
 import type { ImageGenProvider } from '@/lib/image-gen/base';
 import type { EmbeddingProvider, LocalEmbeddingProvider } from '@quilltap/plugin-types';
 import { getErrorMessage } from '@/lib/errors';
+import { rewriteLocalhostUrl } from '@/lib/host-rewrite';
 import type { PluginManifest } from '@/lib/schemas/plugin-manifest';
 import { resolve, join } from 'node:path';
 import { existsSync } from 'node:fs';
@@ -226,7 +227,8 @@ class ProviderRegistry {
     }
 
     try {
-      return plugin.createProvider(baseUrl);
+      const resolvedUrl = baseUrl ? rewriteLocalhostUrl(baseUrl) : baseUrl;
+      return plugin.createProvider(resolvedUrl);
     } catch (error) {
       this.logger.error('Failed to create LLM provider', {
         provider: name,
@@ -265,7 +267,8 @@ class ProviderRegistry {
     }
 
     try {
-      return plugin.createImageProvider(baseUrl);
+      const resolvedUrl = baseUrl ? rewriteLocalhostUrl(baseUrl) : baseUrl;
+      return plugin.createImageProvider(resolvedUrl);
     } catch (error) {
       this.logger.error('Failed to create image provider', {
         provider: name,
@@ -304,7 +307,8 @@ class ProviderRegistry {
     }
 
     try {
-      return plugin.createEmbeddingProvider(baseUrl);
+      const resolvedUrl = baseUrl ? rewriteLocalhostUrl(baseUrl) : baseUrl;
+      return plugin.createEmbeddingProvider(resolvedUrl);
     } catch (error) {
       this.logger.error('Failed to create embedding provider', {
         provider: name,

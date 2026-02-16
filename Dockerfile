@@ -87,8 +87,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/plugins/dist ./plugins/dist
 # Copy package files for native module dependencies
 COPY package.json package-lock.json ./
 
-# Install socat for optional host port forwarding, zip/unzip for backup/restore
-RUN apk add --no-cache socat zip unzip
+# Install zip/unzip for backup/restore
+RUN apk add --no-cache zip unzip
 
 # Install only production dependencies (including better-sqlite3)
 RUN npm ci --omit=dev
