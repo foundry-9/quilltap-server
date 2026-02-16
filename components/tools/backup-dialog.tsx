@@ -34,7 +34,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
       }
 
       if (data.backupId) {
-        // Trigger download
+        // Trigger download via direct URL navigation
         const downloadUrl = `/api/v1/system/backup/${data.backupId}`
         const link = document.createElement('a')
         link.href = downloadUrl

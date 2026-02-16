@@ -4,6 +4,7 @@
 
 ### 3.0-dev
 
+- fix: Backup download fails in Electron with "Failed to fetch" — added `will-download` session handler in Electron main process that prompts a native save dialog for all file downloads (backups, exports, etc.), streaming directly to disk without memory pressure
 - feat: Per-data-directory Lima VMs — each data directory gets its own VM (`quilltap-<hash>`) so switching directories is stop+start instead of delete+recreate; includes legacy single-VM migration, port-conflict safety (stops other quilltap-* VMs before starting), and debug dir-map JSON
 - feat: Disk usage display on splash screen directory chooser — shows data directory size and VM size per entry; two-phase async loading so UI renders immediately
 - feat: Color-coded VM log output on splash screen — parses logrus key=value log format to extract just the `msg` field; detail text color-coded by level (blue=info, amber=warn, red=error, gray=debug)

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, session } from 'electron';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -591,6 +591,27 @@ app.whenReady().then(() => {
 
   // Pre-configure VM manager with last-used directory
   vmManager.setDataDir(appSettings.lastDataDir);
+
+  // Handle file downloads (backups, exports, etc.) — prompt user with a save dialog
+  session.defaultSession.on('will-download', (_event, item) => {
+    const suggestedName = item.getFilename();
+    const parentWindow = mainWindow || splashWindow || undefined;
+
+    const savePath = dialog.showSaveDialogSync(parentWindow as BrowserWindow, {
+      defaultPath: suggestedName,
+      filters: [
+        { name: 'All Files', extensions: ['*'] },
+      ],
+    });
+
+    if (savePath) {
+      item.setSavePath(savePath);
+      console.log(`[Main] Downloading file to: ${savePath}`);
+    } else {
+      item.cancel();
+      console.log('[Main] Download cancelled by user');
+    }
+  });
 
   splashWindow = createSplashWindow();
 
