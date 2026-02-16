@@ -65,15 +65,22 @@ export const ROOTFS_BUILD_ID_PATH = ROOTFS_PATH + '.build-id';
 /** Marker file inside LIMA_HOME recording the build ID of the currently provisioned VM */
 export const VM_BUILD_ID_PATH = path.join(LIMA_HOME, VM_NAME, '.rootfs-build-id');
 
-/** Windows-side data directory (passed into WSL2 as env var) */
-export const WIN_DATA_DIR = (() => {
+/** Default data directory per platform */
+export const DEFAULT_DATA_DIR = (() => {
   if (process.platform === 'win32') {
     const appData = process.env.APPDATA
       || path.join(os.homedir(), 'AppData', 'Roaming');
     return path.join(appData, 'Quilltap');
   }
-  return '';
+  if (process.platform === 'darwin') {
+    return path.join(os.homedir(), 'Library', 'Application Support', 'Quilltap');
+  }
+  // Linux fallback
+  return path.join(os.homedir(), '.quilltap');
 })();
+
+/** @deprecated Use DEFAULT_DATA_DIR instead. Windows-side data directory (passed into WSL2 as env var) */
+export const WIN_DATA_DIR = DEFAULT_DATA_DIR;
 
 /** Timeout for VM creation (seconds) */
 export const VM_CREATE_TIMEOUT_S = 300;
@@ -86,7 +93,7 @@ export const VM_STOP_TIMEOUT_S = 60;
 
 /** Splash window dimensions */
 export const SPLASH_WIDTH = 500;
-export const SPLASH_HEIGHT = 350;
+export const SPLASH_HEIGHT = 420;
 
 /** Main window dimensions */
 export const MAIN_WIDTH = 1200;

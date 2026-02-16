@@ -15,7 +15,8 @@ import { IVMManager, createVMManager } from './vm-manager';
 import { LimaManager } from './lima-manager';
 import { DownloadManager } from './download-manager';
 import { HealthChecker } from './health-checker';
-import { SplashUpdate } from './types';
+import { SplashUpdate, DirectoryInfo } from './types';
+import { AppSettings, loadSettings, saveSettings } from './settings';
 
 const isDev = !!process.env.ELECTRON_DEV;
 
@@ -30,6 +31,10 @@ let vmManager: IVMManager;
 let downloadManager: DownloadManager;
 let healthChecker: HealthChecker;
 let isQuitting = false;
+let appSettings: AppSettings;
+
+/** Whether we're in the auto-start countdown (can be interrupted) */
+let autoStartPending = false;
 
 /** Send an update to the splash screen */
 function sendSplashUpdate(update: SplashUpdate): void {
@@ -46,6 +51,18 @@ function sendSplashError(message: string, canRetry: boolean = true): void {
       message,
       canRetry,
     });
+  }
+}
+
+/** Send directory info to splash screen */
+function sendDirectoryInfo(): void {
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    const info: DirectoryInfo = {
+      dirs: appSettings.knownDataDirs,
+      lastUsed: appSettings.lastDataDir,
+      autoStart: appSettings.autoStart,
+    };
+    splashWindow.webContents.send('splash:directories', info);
   }
 }
 
@@ -135,15 +152,68 @@ function createMainWindow(): BrowserWindow {
 }
 
 /**
+ * Show the directory chooser on the splash screen.
+ * Called on first launch or when user clicks "change directory".
+ */
+function showDirectoryChooser(): void {
+  console.log('[Main] Showing directory chooser');
+  sendSplashUpdate({
+    phase: 'choose-directory',
+    message: 'Choose data directory',
+  });
+  sendDirectoryInfo();
+}
+
+/**
+ * Handle the splash screen ready event.
+ * Decides whether to auto-start or show the directory chooser.
+ */
+function onSplashReady(): void {
+  if (isDev) {
+    // In dev mode, skip directory chooser entirely
+    startupSequence(appSettings.lastDataDir);
+    return;
+  }
+
+  if (appSettings.autoStart && appSettings.lastDataDir) {
+    // Auto-start: show a brief loading state with "change" link visible
+    autoStartPending = true;
+    sendSplashUpdate({
+      phase: 'initializing',
+      message: 'Starting up...',
+    });
+    // Send directory info so the "change" link knows the state
+    sendDirectoryInfo();
+
+    // Give user time to see and click "change directory" before auto-starting
+    setTimeout(() => {
+      if (autoStartPending) {
+        autoStartPending = false;
+        startupSequence(appSettings.lastDataDir);
+      }
+    }, 5000);
+  } else {
+    // First launch or auto-start disabled — show directory chooser
+    showDirectoryChooser();
+  }
+}
+
+/**
  * Main startup sequence. Orchestrates:
  * 1. System requirements check
  * 2. Rootfs download (if needed)
- * 3. VM creation (if needed)
+ * 3. VM creation (if needed, with possible recreation for dir change)
  * 4. VM start (if needed)
  * 5. Health check polling
  * 6. Main window launch
  */
-async function startupSequence(): Promise<void> {
+async function startupSequence(dataDir: string): Promise<void> {
+  autoStartPending = false;
+
+  // Configure the VM manager with the chosen data directory
+  vmManager.setDataDir(dataDir);
+  console.log(`[Main] Starting with data directory: ${dataDir}`);
+
   // In dev mode, skip VM entirely
   if (isDev) {
     sendSplashUpdate({
@@ -223,7 +293,6 @@ async function startupSequence(): Promise<void> {
     });
 
     try {
-      // TODO: Replace with actual GitHub Releases URL when available
       const downloadUrl = process.env.QUILLTAP_ROOTFS_URL || '';
       if (!downloadUrl) {
         sendSplashError(
@@ -256,6 +325,26 @@ async function startupSequence(): Promise<void> {
   });
 
   const vmStatus = await vmManager.checkStatus();
+
+  // Step 3a: Check if data directory changed (requires VM recreation on macOS)
+  if (vmStatus.exists) {
+    const dirMatches = await vmManager.dataDirMatchesVM();
+    if (!dirMatches) {
+      console.log('[Main] Data directory changed — recreating VM');
+      sendSplashUpdate({
+        phase: 'creating-vm',
+        message: 'Switching data directory...',
+        detail: 'Recreating virtual machine with new mount',
+      });
+
+      if (vmStatus.running) {
+        await vmManager.stopVM();
+      }
+      await vmManager.deleteVM();
+      vmStatus.exists = false;
+      vmStatus.running = false;
+    }
+  }
 
   // Step 3b: Check if rootfs tarball has been updated since the VM was provisioned
   if (vmStatus.exists) {
@@ -381,21 +470,116 @@ async function startupSequence(): Promise<void> {
 // --- App lifecycle ---
 
 app.whenReady().then(() => {
+  appSettings = loadSettings();
   vmManager = createVMManager();
   downloadManager = new DownloadManager();
   healthChecker = new HealthChecker();
+
+  // Pre-configure VM manager with last-used directory
+  vmManager.setDataDir(appSettings.lastDataDir);
 
   splashWindow = createSplashWindow();
 
   // Wait for splash to load before starting sequence
   splashWindow.webContents.on('did-finish-load', () => {
-    startupSequence();
+    onSplashReady();
   });
+});
+
+// --- IPC handlers for directory chooser ---
+
+/** Return current directory list and settings */
+ipcMain.handle('splash:get-directories', (): DirectoryInfo => {
+  return {
+    dirs: appSettings.knownDataDirs,
+    lastUsed: appSettings.lastDataDir,
+    autoStart: appSettings.autoStart,
+  };
+});
+
+/** Open native folder picker */
+ipcMain.handle('splash:select-directory', async (): Promise<string> => {
+  if (!splashWindow) return '';
+
+  const result = await dialog.showOpenDialog(splashWindow, {
+    title: 'Choose Quilltap Data Directory',
+    properties: ['openDirectory', 'createDirectory'],
+    buttonLabel: 'Select',
+  });
+
+  if (result.canceled || result.filePaths.length === 0) {
+    return '';
+  }
+
+  const selectedPath = result.filePaths[0];
+  console.log('[Main] User selected directory:', selectedPath);
+
+  // Add to known dirs if not already present
+  if (!appSettings.knownDataDirs.includes(selectedPath)) {
+    appSettings.knownDataDirs.push(selectedPath);
+    saveSettings(appSettings);
+  }
+
+  // Send updated directory list to splash
+  sendDirectoryInfo();
+
+  return selectedPath;
+});
+
+/** Remove a directory from the known list */
+ipcMain.on('splash:remove-directory', (_event, dirPath: string) => {
+  console.log('[Main] Removing directory from known list:', dirPath);
+
+  // Don't allow removing the last-used directory while it's in use
+  appSettings.knownDataDirs = appSettings.knownDataDirs.filter(d => d !== dirPath);
+
+  // Ensure at least one directory remains
+  if (appSettings.knownDataDirs.length === 0) {
+    const { DEFAULT_DATA_DIR } = require('./constants');
+    appSettings.knownDataDirs = [DEFAULT_DATA_DIR];
+  }
+
+  // If removed dir was last-used, switch to first available
+  if (appSettings.lastDataDir === dirPath) {
+    appSettings.lastDataDir = appSettings.knownDataDirs[0];
+  }
+
+  saveSettings(appSettings);
+  sendDirectoryInfo();
+});
+
+/** User chose a directory and clicked Start */
+ipcMain.on('splash:start', (_event, dirPath: string) => {
+  console.log('[Main] Starting with directory:', dirPath);
+  autoStartPending = false;
+
+  // Update settings
+  appSettings.lastDataDir = dirPath;
+  if (!appSettings.knownDataDirs.includes(dirPath)) {
+    appSettings.knownDataDirs.push(dirPath);
+  }
+  saveSettings(appSettings);
+
+  startupSequence(dirPath);
+});
+
+/** Toggle auto-start preference */
+ipcMain.on('splash:set-auto-start', (_event, enabled: boolean) => {
+  console.log('[Main] Auto-start set to:', enabled);
+  appSettings.autoStart = enabled;
+  saveSettings(appSettings);
+});
+
+/** Interrupt auto-start to show directory chooser */
+ipcMain.on('splash:show-chooser', () => {
+  console.log('[Main] User interrupted auto-start — showing directory chooser');
+  autoStartPending = false;
+  showDirectoryChooser();
 });
 
 // Handle retry from splash screen
 ipcMain.on('splash:retry', () => {
-  startupSequence();
+  startupSequence(appSettings.lastDataDir);
 });
 
 // Handle quit from splash screen

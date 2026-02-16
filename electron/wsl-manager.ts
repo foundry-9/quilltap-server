@@ -4,7 +4,7 @@ import {
   VM_NAME,
   WSL_DISTRO_INSTALL_DIR,
   ROOTFS_PATH,
-  WIN_DATA_DIR,
+  DEFAULT_DATA_DIR,
   VM_CREATE_TIMEOUT_S,
   VM_START_TIMEOUT_S,
   VM_STOP_TIMEOUT_S,
@@ -17,6 +17,32 @@ import { IVMManager } from './vm-manager';
  */
 export class WSLManager implements IVMManager {
   private wslPath: string = 'wsl.exe';
+  private dataDir: string;
+
+  constructor() {
+    this.dataDir = DEFAULT_DATA_DIR;
+  }
+
+  /** Set the host-side data directory (passed as env var to WSL2) */
+  setDataDir(hostPath: string): void {
+    console.log('[WSLManager] Data directory set to:', hostPath);
+    this.dataDir = hostPath;
+  }
+
+  /** Get the currently configured data directory */
+  getDataDir(): string {
+    return this.dataDir;
+  }
+
+  /**
+   * On Windows/WSL2, the data directory is passed as an env var on each start,
+   * so no VM recreation is needed — always returns true.
+   */
+  async dataDirMatchesVM(): Promise<boolean> {
+    // WSL2 receives the data dir as an env var on each start,
+    // so switching directories doesn't require VM recreation
+    return true;
+  }
 
   /** Execute a wsl.exe command and capture output */
   private exec(args: string[], timeoutS: number, onOutput?: (line: string) => void): Promise<CommandResult> {
@@ -178,15 +204,15 @@ export class WSLManager implements IVMManager {
     console.log('[WSLManager] Starting distro:', VM_NAME);
 
     // Ensure Windows-side data directory exists
-    if (WIN_DATA_DIR) {
-      fs.mkdirSync(WIN_DATA_DIR, { recursive: true });
+    if (this.dataDir) {
+      fs.mkdirSync(this.dataDir, { recursive: true });
     }
 
     // Launch wsl-init.sh in the background inside the distro.
     // We pass the Windows data directory path as an env var;
     // wsl-init.sh converts it to a WSL path via wslpath.
-    const dataEnv = WIN_DATA_DIR
-      ? `QUILTTAP_WIN_DATADIR=${WIN_DATA_DIR}`
+    const dataEnv = this.dataDir
+      ? `QUILTTAP_WIN_DATADIR=${this.dataDir}`
       : '';
 
     const cmd = `${dataEnv} nohup /usr/local/bin/wsl-init.sh > /tmp/quilltap-stdout.log 2>&1 &`;

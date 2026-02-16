@@ -7,6 +7,7 @@ import {
   VM_NAME,
   LIMA_BINARY_NAME,
   CLT_VERIFIED_MARKER,
+  DEFAULT_DATA_DIR,
   VM_CREATE_TIMEOUT_S,
   VM_START_TIMEOUT_S,
   VM_STOP_TIMEOUT_S,
@@ -21,6 +22,7 @@ import { IVMManager } from './vm-manager';
 export class LimaManager implements IVMManager {
   private limaPath: string;
   private templatePath: string;
+  private dataDir: string;
 
   constructor() {
     const resourcesPath = app.isPackaged
@@ -37,6 +39,60 @@ export class LimaManager implements IVMManager {
     this.templatePath = app.isPackaged
       ? path.join(resourcesPath, 'lima', 'quilltap.yaml')
       : path.join(__dirname, '..', 'lima', 'quilltap.yaml');
+
+    // Default data directory
+    this.dataDir = DEFAULT_DATA_DIR;
+  }
+
+  /** Set the host-side data directory for the VM mount */
+  setDataDir(hostPath: string): void {
+    console.log('[LimaManager] Data directory set to:', hostPath);
+    this.dataDir = hostPath;
+  }
+
+  /** Get the currently configured data directory */
+  getDataDir(): string {
+    return this.dataDir;
+  }
+
+  /**
+   * Check if the running VM's mounted data directory matches the configured one.
+   * Reads the instance YAML to compare mount locations.
+   */
+  async dataDirMatchesVM(): Promise<boolean> {
+    const instanceYaml = path.join(LIMA_HOME, VM_NAME, 'lima.yaml');
+    try {
+      if (!fs.existsSync(instanceYaml)) {
+        console.log('[LimaManager] No instance YAML found — no VM to compare');
+        return true; // No VM exists, so no mismatch
+      }
+
+      const content = fs.readFileSync(instanceYaml, 'utf-8');
+      // Look for the mount location line that maps to /data/quilltap
+      // The YAML has:  - location: "~/Library/Application Support/Quilltap"
+      //                  mountPoint: "/data/quilltap"
+      const mountMatch = content.match(/location:\s*"?([^"\n]+)"?\s*\n\s*mountPoint:\s*"?\/data\/quilltap/);
+      if (!mountMatch) {
+        console.log('[LimaManager] Could not find data mount in instance YAML');
+        return false;
+      }
+
+      const vmMountPath = mountMatch[1].trim();
+      // Resolve ~ to homedir for comparison
+      const resolvedVmPath = vmMountPath.startsWith('~/')
+        ? path.join(require('os').homedir(), vmMountPath.slice(2))
+        : vmMountPath;
+      const resolvedDataDir = this.dataDir.startsWith('~/')
+        ? path.join(require('os').homedir(), this.dataDir.slice(2))
+        : this.dataDir;
+
+      const matches = resolvedVmPath === resolvedDataDir;
+      console.log(`[LimaManager] VM mount="${resolvedVmPath}" configured="${resolvedDataDir}" matches=${matches}`);
+      return matches;
+    } catch (err) {
+      console.warn('[LimaManager] Error checking VM data dir:', err);
+      return false;
+    }
   }
 
   /** Verify that Xcode CLT and limactl are available */
@@ -216,11 +272,35 @@ export class LimaManager implements IVMManager {
     }
   }
 
-  /** Create the VM from the template */
+  /**
+   * Generate a modified YAML template with the configured data directory.
+   * Copies the base template and replaces the mount location.
+   * Returns the path to the generated file.
+   */
+  private generateModifiedTemplate(): string {
+    const content = fs.readFileSync(this.templatePath, 'utf-8');
+
+    // Replace the data mount location line
+    // The template has:  - location: "~/Library/Application Support/Quilltap"
+    const modified = content.replace(
+      /(-\s*location:\s*)"[^"]*"(\s*\n\s*mountPoint:\s*"?\/data\/quilltap)/,
+      `$1"${this.dataDir}"$2`
+    );
+
+    // Write to a temp file in LIMA_HOME
+    fs.mkdirSync(LIMA_HOME, { recursive: true });
+    const tempPath = path.join(LIMA_HOME, 'quilltap-generated.yaml');
+    fs.writeFileSync(tempPath, modified, 'utf-8');
+    console.log('[LimaManager] Generated modified template at', tempPath, 'with dataDir:', this.dataDir);
+    return tempPath;
+  }
+
+  /** Create the VM from the template (using modified template with configured data dir) */
   async createVM(onOutput?: (line: string) => void): Promise<CommandResult> {
-    console.log('[LimaManager] Creating VM from template:', this.templatePath);
+    const templateToUse = this.generateModifiedTemplate();
+    console.log('[LimaManager] Creating VM from template:', templateToUse);
     return this.exec(
-      ['create', '--name', VM_NAME, this.templatePath],
+      ['create', '--name', VM_NAME, templateToUse],
       VM_CREATE_TIMEOUT_S,
       onOutput
     );

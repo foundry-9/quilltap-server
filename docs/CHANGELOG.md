@@ -4,6 +4,24 @@
 
 ### 3.0-dev
 
+- build: Re-enable DMG packaging for macOS — framework symlink issue no longer applies; removed zip fallback
+- feat: Data directory chooser on splash screen
+  - New initial phase on the splash screen lets users pick or switch between data directories
+  - Added `electron/settings.ts` for persisting directory preferences (lastDataDir, knownDataDirs, autoStart) in Electron's userData path
+  - Added `'choose-directory'` splash phase and `DirectoryInfo` IPC type
+  - Added `DEFAULT_DATA_DIR` platform-specific constant (macOS/Windows/Linux); deprecated `WIN_DATA_DIR`
+  - Extended `IVMManager` with `setDataDir()`, `getDataDir()`, and `dataDirMatchesVM()` for configurable data directories
+  - `LimaManager.createVM()` now generates a modified YAML template with the chosen mount location; `dataDirMatchesVM()` reads instance YAML to detect changes
+  - `WSLManager` passes configurable data directory as env var on each start (no VM recreation needed)
+  - Splash screen auto-starts with last-used directory (1.5s interrupt window) or shows directory chooser on first launch
+  - Directory chooser UI: radio list of known directories, add/remove buttons, auto-start checkbox, native folder picker
+  - "Change data directory..." link visible during initializing phase to interrupt auto-start
+  - Switching to a different directory on macOS automatically recreates the Lima VM with the new mount
+- feat: Branded splash screen and live VM startup progress
+  - Redesigned splash screen with Quilltap logo, animated quill, and serif brand name
+  - Live output streaming from limactl/wsl.exe during VM create and start phases
+  - Progress bar shows indeterminate animation during VM operations and determinate bar during downloads
+  - First-run note visible during long operations (VM creation, downloads)
 - feat: Cleanup orphaned file records — `POST /api/v1/files?action=cleanup-orphaned` detects and purges DB records whose backing files are missing from storage, with dry-run mode (default) for safe preview
 - fix: Thumbnail cache mismatch — cache writes now use canonical `users/{userId}/thumbnails/{fileId}_{size}.webp` key via new `uploadRaw()`/`deleteRaw()` methods, matching cache reads so thumbnails are actually cached instead of regenerated every request
 - feat: Batch thumbnail pre-generation — `POST /api/v1/files?action=generate-thumbnails` processes up to 100 images with bounded concurrency (3 concurrent Sharp ops); FileBrowser triggers this after loading files

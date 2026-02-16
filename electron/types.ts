@@ -1,5 +1,6 @@
 /** Phase identifiers for splash screen state machine */
 export type SplashPhase =
+  | 'choose-directory'
   | 'initializing'
   | 'downloading'
   | 'creating-vm'
@@ -8,6 +9,16 @@ export type SplashPhase =
   | 'waiting-health'
   | 'ready'
   | 'error';
+
+/** Directory information sent to the splash screen */
+export interface DirectoryInfo {
+  /** All known data directories */
+  dirs: string[];
+  /** The last-used directory (pre-selected) */
+  lastUsed: string;
+  /** Whether auto-start is enabled */
+  autoStart: boolean;
+}
 
 /** Status of the VM (Lima on macOS, WSL2 on Windows) */
 export interface VMStatus {

@@ -151,6 +151,11 @@ body {
   transform: scale(0.97);
 }
 
+.btn-sm {
+  padding: 5px 12px;
+  font-size: 12px;
+}
+
 .btn-primary {
   background: #6366f1;
   color: #ffffff;
@@ -178,4 +183,154 @@ body {
 
 .loading-container.hidden {
   display: none;
+}
+
+/* Directory chooser */
+.directory-container {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 420px;
+  padding: 0 20px;
+}
+
+.directory-container.visible {
+  display: flex;
+}
+
+.directory-label {
+  font-size: 13px;
+  color: #888888;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 600;
+}
+
+.directory-list {
+  width: 100%;
+  max-height: 140px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+  border-radius: 6px;
+  background: #222222;
+  border: 1px solid #333333;
+  -webkit-app-region: no-drag;
+}
+
+.directory-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.directory-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.directory-list::-webkit-scrollbar-thumb {
+  background: #444444;
+  border-radius: 3px;
+}
+
+.directory-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+  gap: 8px;
+}
+
+.directory-item:hover {
+  background: #2a2a2a;
+}
+
+.directory-item.selected {
+  background: #2d2d5e;
+}
+
+.directory-item input[type="radio"] {
+  accent-color: #6366f1;
+  flex-shrink: 0;
+}
+
+.directory-item-path {
+  font-size: 12px;
+  color: #cccccc;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.directory-item-remove {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: #666666;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: color 0.15s, background 0.15s;
+  line-height: 1;
+}
+
+.directory-item-remove:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.directory-actions {
+  margin-bottom: 10px;
+  -webkit-app-region: no-drag;
+}
+
+.auto-start-row {
+  margin-bottom: 14px;
+  -webkit-app-region: no-drag;
+}
+
+.auto-start-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #888888;
+  cursor: pointer;
+}
+
+.auto-start-label input[type="checkbox"] {
+  accent-color: #6366f1;
+}
+
+/* Change directory button shown during loading */
+.btn-change-dir {
+  margin-top: 14px;
+  padding: 5px 14px;
+  border: 1px solid #444444;
+  border-radius: 5px;
+  background: #2a2a2a;
+  color: #9999cc;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  display: none;
+}
+
+.btn-change-dir.visible {
+  display: inline-block;
+}
+
+.btn-change-dir:hover {
+  background: #333355;
+  color: #bbbbee;
+  border-color: #6366f1;
+}
+
+.btn-change-dir:active {
+  transform: scale(0.97);
 }

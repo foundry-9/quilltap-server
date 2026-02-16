@@ -12,6 +12,25 @@
     <span class="brand-name">Quilltap</span>
   </div>
 
+  <!-- Directory chooser state -->
+  <div class="directory-container" id="directoryContainer">
+    <div class="directory-label">Data Directory</div>
+    <div class="directory-list" id="directoryList"></div>
+    <div class="directory-actions">
+      <button class="btn btn-secondary btn-sm" id="addDirBtn">Add Directory...</button>
+    </div>
+    <div class="auto-start-row">
+      <label class="auto-start-label">
+        <input type="checkbox" id="autoStartCheckbox" checked>
+        <span>Auto-start with last used directory</span>
+      </label>
+    </div>
+    <div class="button-group">
+      <button class="btn btn-primary" id="startBtn">Start</button>
+      <button class="btn btn-secondary" id="chooserQuitBtn">Quit</button>
+    </div>
+  </div>
+
   <!-- Loading state -->
   <div class="loading-container" id="loading">
     <div class="status-message" id="status">Initializing...</div>
@@ -25,6 +44,8 @@
     <div class="first-run-note" id="firstRunNote">
       First launch takes 2–3 minutes to set up
     </div>
+
+    <button class="btn btn-change-dir" id="changeDirLink">Change data directory...</button>
   </div>
 
   <!-- Error state -->

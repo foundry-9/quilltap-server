@@ -13,6 +13,18 @@ export interface IVMManager {
   stopVM(): Promise<CommandResult>;
   deleteVM(): Promise<CommandResult>;
   getLogs(lines?: number): Promise<string>;
+
+  /** Set the host-side data directory for the VM mount / env var */
+  setDataDir(hostPath: string): void;
+
+  /** Get the currently configured data directory */
+  getDataDir(): string;
+
+  /**
+   * Check if the VM's currently mounted data directory matches the given path.
+   * Returns true if they match (no recreation needed), false if different.
+   */
+  dataDirMatchesVM(): Promise<boolean>;
 }
 
 /**

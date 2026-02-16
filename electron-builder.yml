@@ -27,12 +27,9 @@ files:
 mac:
   category: public.app-category.productivity
   target:
-    - target: zip
+    - target: dmg
       arch:
         - arm64
-    # DMG disabled: electron-builder drops the Electron Framework binary
-    # from DMG images (known bug with framework symlinks). Use zip instead.
-    # Re-enable when signing with a proper Apple Developer identity.
   # hardenedRuntime requires a valid Apple Developer signing identity.
   # Set to true and uncomment identity/entitlements when distributing signed builds.
   hardenedRuntime: false
