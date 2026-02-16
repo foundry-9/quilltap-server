@@ -3483,7 +3483,7 @@ var require_schemes = __commonJS({
       urnComponent.nss = (uuidComponent.uuid || "").toLowerCase();
       return urnComponent;
     }
-    var http = (
+    var http2 = (
       /** @type {SchemeHandler} */
       {
         scheme: "http",
@@ -3492,11 +3492,11 @@ var require_schemes = __commonJS({
         serialize: httpSerialize
       }
     );
-    var https = (
+    var https2 = (
       /** @type {SchemeHandler} */
       {
         scheme: "https",
-        domainHost: http.domainHost,
+        domainHost: http2.domainHost,
         parse: httpParse,
         serialize: httpSerialize
       }
@@ -3540,8 +3540,8 @@ var require_schemes = __commonJS({
     var SCHEMES = (
       /** @type {Record<SchemeName, SchemeHandler>} */
       {
-        http,
-        https,
+        http: http2,
+        https: https2,
         ws,
         wss,
         urn,
@@ -19641,6 +19641,99 @@ function parseServerConfigs(serversJson) {
 }
 
 // mcp-client.ts
+var http = __toESM(require("node:http"));
+var https = __toESM(require("node:https"));
+var import_node_stream = require("node:stream");
+var clientLogger = logger.child({ module: "mcp-client" });
+var LOCALHOST_HOSTS2 = /* @__PURE__ */ new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
+function createHostPreservingFetch(targetHostname) {
+  return async (input, init) => {
+    const url2 = new URL(typeof input === "string" ? input : input.toString());
+    const originalHost = url2.host;
+    if (LOCALHOST_HOSTS2.has(url2.hostname)) {
+      url2.hostname = targetHostname;
+    }
+    const reqHeaders = {};
+    if (init?.headers) {
+      if (init.headers instanceof Headers) {
+        init.headers.forEach((value, key) => {
+          reqHeaders[key] = value;
+        });
+      } else if (Array.isArray(init.headers)) {
+        for (const [key, value] of init.headers) {
+          reqHeaders[key] = value;
+        }
+      } else {
+        Object.assign(reqHeaders, init.headers);
+      }
+    }
+    reqHeaders["Host"] = originalHost;
+    let body = null;
+    if (init?.body) {
+      if (typeof init.body === "string") {
+        body = init.body;
+      } else if (Buffer.isBuffer(init.body)) {
+        body = init.body;
+      } else if (init.body instanceof ArrayBuffer) {
+        body = Buffer.from(init.body);
+      } else if (init.body instanceof Uint8Array) {
+        body = Buffer.from(init.body);
+      }
+    }
+    const isHttps = url2.protocol === "https:";
+    const httpModule = isHttps ? https : http;
+    return new Promise((resolve, reject) => {
+      const req = httpModule.request(
+        {
+          hostname: url2.hostname,
+          port: parseInt(url2.port) || (isHttps ? 443 : 80),
+          path: url2.pathname + url2.search,
+          method: init?.method || "GET",
+          headers: reqHeaders
+        },
+        (res) => {
+          const webStream = import_node_stream.Readable.toWeb(
+            res
+          );
+          const responseHeaders = new Headers();
+          for (const [key, value] of Object.entries(res.headers)) {
+            if (value) {
+              if (Array.isArray(value)) {
+                for (const v of value) {
+                  responseHeaders.append(key, v);
+                }
+              } else {
+                responseHeaders.set(key, value);
+              }
+            }
+          }
+          resolve(
+            new Response(webStream, {
+              status: res.statusCode ?? 500,
+              statusText: res.statusMessage ?? "",
+              headers: responseHeaders
+            })
+          );
+        }
+      );
+      req.on("error", reject);
+      if (init?.signal) {
+        if (init.signal.aborted) {
+          req.destroy();
+          reject(new DOMException("The operation was aborted.", "AbortError"));
+          return;
+        }
+        init.signal.addEventListener("abort", () => {
+          req.destroy();
+        });
+      }
+      if (body) {
+        req.write(body);
+      }
+      req.end();
+    });
+  };
+}
 var MCPClient = class {
   constructor(config) {
     this.client = null;
@@ -19703,6 +19796,10 @@ var MCPClient = class {
    * Connect to the MCP server
    *
    * Tries Streamable HTTP first, then falls back to SSE if that fails.
+   *
+   * In Docker/Lima environments, we provide a custom fetch function to the
+   * MCP SDK transports that routes traffic to the host gateway while
+   * preserving the original Host header (which MCP servers validate).
    */
   async connect() {
     if (this.state.status === "connected" || this.state.status === "ready") {
@@ -19712,14 +19809,24 @@ var MCPClient = class {
     const originalUrl = this.config.url;
     const resolvedUrl = rewriteLocalhostUrl(originalUrl);
     const wasRewritten = resolvedUrl !== originalUrl;
-    console.debug("[mcp-client] Connecting to MCP server", {
+    clientLogger.debug("Connecting to MCP server", {
       serverId: this.config.name,
       originalUrl,
       resolvedUrl,
       wasRewritten
     });
-    const url2 = new URL(resolvedUrl);
+    const url2 = new URL(originalUrl);
     const headers = this.buildHeaders();
+    let customFetch;
+    if (wasRewritten) {
+      const resolvedParsed = new URL(resolvedUrl);
+      customFetch = createHostPreservingFetch(resolvedParsed.hostname);
+      clientLogger.info("Using host-preserving fetch for VM environment", {
+        serverId: this.config.name,
+        targetHostname: resolvedParsed.hostname,
+        originalHost: url2.host
+      });
+    }
     try {
       try {
         this.client = new Client(
@@ -19729,10 +19836,18 @@ var MCPClient = class {
         this.transport = new StreamableHTTPClientTransport(url2, {
           requestInit: {
             headers
-          }
+          },
+          fetch: customFetch
         });
         await this.client.connect(this.transport);
+        clientLogger.debug("Connected via Streamable HTTP", {
+          serverId: this.config.name
+        });
       } catch (streamableError) {
+        clientLogger.debug("Streamable HTTP failed, falling back to SSE", {
+          serverId: this.config.name,
+          error: streamableError instanceof Error ? streamableError.message : String(streamableError)
+        });
         if (this.transport) {
           try {
             await this.transport.close();
@@ -19746,9 +19861,13 @@ var MCPClient = class {
         this.transport = new SSEClientTransport(url2, {
           requestInit: {
             headers
-          }
+          },
+          fetch: customFetch
         });
         await this.client.connect(this.transport);
+        clientLogger.debug("Connected via SSE", {
+          serverId: this.config.name
+        });
       }
       this.state.status = "connected";
       this.state.lastConnected = /* @__PURE__ */ new Date();
@@ -19756,7 +19875,7 @@ var MCPClient = class {
     } catch (error) {
       this.state.status = "error";
       this.state.lastError = error instanceof Error ? error.message : "Connection failed";
-      console.error("Failed to connect to MCP server", {
+      clientLogger.error("Failed to connect to MCP server", {
         serverId: this.config.name,
         error: this.state.lastError
       });
@@ -19786,7 +19905,7 @@ var MCPClient = class {
     } catch (error) {
       this.state.status = "error";
       this.state.lastError = error instanceof Error ? error.message : "Tool discovery failed";
-      console.error("Tool discovery failed", {
+      clientLogger.error("Tool discovery failed", {
         serverId: this.config.name,
         error: this.state.lastError
       });
@@ -19840,7 +19959,7 @@ var MCPClient = class {
       try {
         await this.transport.close();
       } catch (error) {
-        console.warn("Error closing transport", {
+        clientLogger.warn("Error closing transport", {
           serverId: this.config.name,
           error: error instanceof Error ? error.message : String(error)
         });
