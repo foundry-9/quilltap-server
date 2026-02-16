@@ -4,6 +4,7 @@ import { useEffect, useCallback, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
+import { triggerDownload } from '@/lib/download-utils'
 
 interface ImageModalProps {
   isOpen: boolean
@@ -55,14 +56,7 @@ export default function ImageModal({
     try {
       const response = await fetch(src)
       const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
+      await triggerDownload(blob, filename)
     } catch (error) {
       console.error('Failed to download image:', { error: error instanceof Error ? error.message : String(error) })
     }

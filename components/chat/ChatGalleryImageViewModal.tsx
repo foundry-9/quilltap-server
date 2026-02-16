@@ -6,6 +6,7 @@ import { showConfirmation } from '@/lib/alert'
 import { safeJsonParse } from '@/lib/fetch-helpers'
 import { useImageNavigation } from '@/hooks/useImageNavigation'
 import DeletedImagePlaceholder from '@/components/images/DeletedImagePlaceholder'
+import { triggerDownload } from '@/lib/download-utils'
 
 interface ChatFile {
   id: string
@@ -94,14 +95,7 @@ export default function ChatGalleryImageViewModal({
     try {
       const response = await fetch(file.url)
       const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = file.filename
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
+      await triggerDownload(blob, file.filename)
     } catch (error) {
       console.error('Failed to download image:', { error: error instanceof Error ? error.message : String(error) })
     }

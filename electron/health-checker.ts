@@ -10,6 +10,11 @@ import { HealthStatus } from './types';
  * Polls the Quilltap health endpoint until the server is ready.
  */
 export class HealthChecker {
+  private healthUrl: string;
+
+  constructor(healthUrl?: string) {
+    this.healthUrl = healthUrl || HEALTH_URL;
+  }
   /**
    * Poll the health endpoint until healthy or max attempts reached.
    * Accepts 'degraded' as good enough to proceed.
@@ -45,7 +50,7 @@ export class HealthChecker {
   /** Single health check attempt */
   private checkHealth(attempt: number): Promise<HealthStatus> {
     return new Promise((resolve) => {
-      const request = http.get(HEALTH_URL, { timeout: 5000 }, (response) => {
+      const request = http.get(this.healthUrl, { timeout: 5000 }, (response) => {
         let body = '';
 
         response.on('data', (chunk: Buffer) => {

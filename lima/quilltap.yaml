@@ -94,7 +94,7 @@ provision:
 
       # Install runtime library dependencies that native modules need
       apk update
-      apk add --no-cache libstdc++ libgcc
+      apk add --no-cache libstdc++ libgcc zip unzip
 
       # ── Remove Docker false-positive marker ────────────────────────
       rm -f /.dockerenv

@@ -87,8 +87,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/plugins/dist ./plugins/dist
 # Copy package files for native module dependencies
 COPY package.json package-lock.json ./
 
-# Install socat for optional host port forwarding
-RUN apk add --no-cache socat
+# Install socat for optional host port forwarding, zip/unzip for backup/restore
+RUN apk add --no-cache socat zip unzip
 
 # Install only production dependencies (including better-sqlite3)
 RUN npm ci --omit=dev
@@ -120,7 +120,7 @@ COPY lima/wsl-init.sh /usr/local/bin/wsl-init.sh
 RUN chmod +x /usr/local/bin/wsl-init.sh
 
 # Pre-install runtime dependencies (Lima YAML does this at provision time)
-RUN apk add --no-cache libstdc++ libgcc
+RUN apk add --no-cache libstdc++ libgcc zip unzip
 
 # Set environment defaults
 RUN printf 'export LIMA_CONTAINER=true\nexport NODE_ENV=production\nexport PORT=5050\nexport HOSTNAME=0.0.0.0\n' \

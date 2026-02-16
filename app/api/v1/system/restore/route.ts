@@ -4,10 +4,17 @@
  * POST /api/v1/system/restore - Restore data from a backup
  * POST /api/v1/system/restore?action=preview - Preview backup contents
  *
- * Accepts multipart/form-data with file and mode
+ * Accepts multipart/form-data with file and mode.
+ * Writes the uploaded zip to a temp file on disk immediately, then passes
+ * the file path to the restore/preview functions to avoid holding the
+ * entire zip in memory.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { randomUUID } from 'crypto';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { restore, previewRestore } from '@/lib/backup/restore-service';
@@ -20,11 +27,33 @@ export const maxDuration = 300; // 5 minutes
 export const dynamic = 'force-dynamic';
 
 /**
- * Parse request and get the ZIP buffer from file upload
+ * Write the uploaded file to a temp path on disk and return the path.
+ * The buffer is released after writing so it can be GC'd.
  */
-async function getBackupBuffer(
+async function writeUploadToDisk(file: File): Promise<string> {
+  const tempZipPath = path.join(os.tmpdir(), `quilltap-restore-${randomUUID()}.zip`);
+  const arrayBuffer = await file.arrayBuffer();
+  await fs.promises.writeFile(tempZipPath, Buffer.from(arrayBuffer));
+  return tempZipPath;
+}
+
+/**
+ * Clean up a temp file (best-effort)
+ */
+async function cleanupTempFile(filePath: string): Promise<void> {
+  try {
+    await fs.promises.unlink(filePath);
+  } catch {
+    // Ignore cleanup errors
+  }
+}
+
+/**
+ * Parse request and write the uploaded ZIP to a temp file on disk
+ */
+async function getBackupFile(
   req: NextRequest
-): Promise<{ buffer: Buffer; mode: 'replace' | 'new-account'; isPreview?: boolean } | NextResponse> {
+): Promise<{ zipPath: string; mode: 'replace' | 'new-account'; isPreview?: boolean } | NextResponse> {
   const contentType = req.headers.get('content-type');
 
   if (!contentType?.includes('multipart/form-data')) {
@@ -47,9 +76,11 @@ async function getBackupBuffer(
 
   const mode = modeParam as 'replace' | 'new-account';
   const isPreview = previewParam === 'true';
-  const zipBuffer = Buffer.from(await file.arrayBuffer());
 
-  return { buffer: zipBuffer, mode, isPreview };
+  // Write to disk immediately and release the in-memory buffer
+  const zipPath = await writeUploadToDisk(file);
+
+  return { zipPath, mode, isPreview };
 }
 
 /**
@@ -60,6 +91,7 @@ export const POST = createAuthenticatedHandler(async (req, { user }) => {
 
   // Handle preview action
   if (action === 'preview') {
+    let tempZipPath: string | null = null;
     try {
       const formData = await req.formData();
       const file = formData.get('file') as File | null;
@@ -68,8 +100,8 @@ export const POST = createAuthenticatedHandler(async (req, { user }) => {
         return badRequest('No file provided');
       }
 
-      const zipBuffer = Buffer.from(await file.arrayBuffer());
-      const preview = previewRestore(zipBuffer);
+      tempZipPath = await writeUploadToDisk(file);
+      const preview = await previewRestore(tempZipPath);
 
       logger.info('[System Restore v1] Preview generated', {
         userId: user.id,
@@ -83,19 +115,25 @@ export const POST = createAuthenticatedHandler(async (req, { user }) => {
     } catch (error) {
       logger.error('[System Restore v1] Error generating preview', {}, error instanceof Error ? error : undefined);
       return serverError(error instanceof Error ? error.message : 'Failed to preview backup');
+    } finally {
+      if (tempZipPath) {
+        await cleanupTempFile(tempZipPath);
+      }
     }
   }
 
   // Handle restore
+  let tempZipPath: string | null = null;
   try {
-    const result = await getBackupBuffer(req);
+    const result = await getBackupFile(req);
 
     // If it's a NextResponse (error), return it
     if (result instanceof NextResponse) {
       return result;
     }
 
-    const { buffer, mode, isPreview } = result;
+    const { zipPath, mode, isPreview } = result;
+    tempZipPath = zipPath;
 
     // If preview mode from formdata
     if (isPreview) {
@@ -104,7 +142,7 @@ export const POST = createAuthenticatedHandler(async (req, { user }) => {
         mode,
       });
 
-      const summary = previewRestore(buffer);
+      const summary = await previewRestore(zipPath);
       return NextResponse.json({
         success: true,
         preview: true,
@@ -118,7 +156,7 @@ export const POST = createAuthenticatedHandler(async (req, { user }) => {
     });
 
     // Perform the actual restore
-    const summary = await restore(buffer, {
+    const summary = await restore(zipPath, {
       mode,
       targetUserId: user.id,
     });
@@ -148,5 +186,9 @@ export const POST = createAuthenticatedHandler(async (req, { user }) => {
 
     logger.error('[System Restore v1] Error restoring backup', {}, error instanceof Error ? error : undefined);
     return serverError('Failed to restore backup');
+  } finally {
+    if (tempZipPath) {
+      await cleanupTempFile(tempZipPath);
+    }
   }
 });

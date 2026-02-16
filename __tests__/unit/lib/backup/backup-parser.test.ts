@@ -8,11 +8,17 @@
  * Comprehensive tests for backup ZIP parsing and restoration utilities.
  * Tests cover ZIP file parsing, file extraction, preview generation,
  * manifest validation, and edge cases with malformed backups.
+ *
+ * Uses shell `zip` to create test archives (matching the production code).
  */
 
+import { execFileSync } from 'child_process'
+import fs from 'fs'
+import os from 'os'
+import path from 'path'
 import {
   parseBackupZip,
-  getFileFromZip,
+  getFileFromExtractedBackup,
   previewRestore,
 } from '@/lib/backup/restore-service'
 import type {
@@ -41,9 +47,10 @@ jest.mock('@/lib/logger', () => ({
 }))
 
 /**
- * Helper to create a mock backup ZIP using archiver (same as production code)
+ * Helper to create a mock backup ZIP file on disk using shell `zip`.
+ * Returns the path to the zip file. Caller is responsible for cleanup.
  */
-async function createBackupZip(options: {
+function createBackupZipFile(options: {
   manifest?: Partial<BackupManifest>
   characters?: any[]
   chats?: any[]
@@ -64,9 +71,22 @@ async function createBackupZip(options: {
     originalFilename: string
     content: Buffer | string
   }>
-}): Promise<Buffer> {
-  const archiver = require('archiver')
+  /**
+   * If true, skip creating the manifest.json file (for error testing)
+   */
+  skipManifest?: boolean
+  /**
+   * If provided, write this raw string as characters.json instead of the array
+   */
+  rawCharactersJson?: string
+  /**
+   * If true, skip creating data/characters.json (for error testing)
+   */
+  skipCharacters?: boolean
+}): string {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'quilltap-test-backup-'))
   const rootFolder = options.rootFolder || 'quilltap-backup-2024-01-01T00-00-00-000Z'
+  const stagingDir = path.join(tempDir, rootFolder)
 
   const defaultManifest: BackupManifest = {
     version: '1.0',
@@ -91,92 +111,113 @@ async function createBackupZip(options: {
     ...options.manifest,
   }
 
-  return new Promise((resolve, reject) => {
-    const archive = archiver('zip', { zlib: { level: 9 } })
-    const chunks: Buffer[] = []
+  // Create directory structure
+  fs.mkdirSync(path.join(stagingDir, 'data'), { recursive: true })
 
-    // Collect data chunks from the archive
-    archive.on('data', (chunk: Buffer) => {
-      chunks.push(chunk)
-    })
+  // Write manifest
+  if (!options.skipManifest) {
+    fs.writeFileSync(
+      path.join(stagingDir, 'manifest.json'),
+      JSON.stringify(defaultManifest, null, 2)
+    )
+  }
 
-    archive.on('error', (err: Error) => {
-      reject(err)
-    })
+  // Write data files
+  if (options.rawCharactersJson !== undefined) {
+    fs.writeFileSync(path.join(stagingDir, 'data', 'characters.json'), options.rawCharactersJson)
+  } else if (!options.skipCharacters) {
+    fs.writeFileSync(
+      path.join(stagingDir, 'data', 'characters.json'),
+      JSON.stringify(options.characters || [], null, 2)
+    )
+  }
 
-    archive.on('warning', (err: Error) => {
-      console.warn('Archive warning:', err)
-    })
+  fs.writeFileSync(
+    path.join(stagingDir, 'data', 'chats.json'),
+    JSON.stringify(options.chats || [], null, 2)
+  )
+  fs.writeFileSync(
+    path.join(stagingDir, 'data', 'tags.json'),
+    JSON.stringify(options.tags || [], null, 2)
+  )
+  fs.writeFileSync(
+    path.join(stagingDir, 'data', 'connection-profiles.json'),
+    JSON.stringify(options.connectionProfiles || [], null, 2)
+  )
+  fs.writeFileSync(
+    path.join(stagingDir, 'data', 'image-profiles.json'),
+    JSON.stringify(options.imageProfiles || [], null, 2)
+  )
+  fs.writeFileSync(
+    path.join(stagingDir, 'data', 'embedding-profiles.json'),
+    JSON.stringify(options.embeddingProfiles || [], null, 2)
+  )
+  fs.writeFileSync(
+    path.join(stagingDir, 'data', 'memories.json'),
+    JSON.stringify(options.memories || [], null, 2)
+  )
+  fs.writeFileSync(
+    path.join(stagingDir, 'data', 'files.json'),
+    JSON.stringify(options.files || [], null, 2)
+  )
 
-    // Add manifest
-    archive.append(JSON.stringify(defaultManifest, null, 2), {
-      name: `${rootFolder}/manifest.json`,
-    })
+  // Optional files for backwards compatibility
+  if (options.promptTemplates !== undefined) {
+    fs.writeFileSync(
+      path.join(stagingDir, 'data', 'prompt-templates.json'),
+      JSON.stringify(options.promptTemplates, null, 2)
+    )
+  }
+  if (options.roleplayTemplates !== undefined) {
+    fs.writeFileSync(
+      path.join(stagingDir, 'data', 'roleplay-templates.json'),
+      JSON.stringify(options.roleplayTemplates, null, 2)
+    )
+  }
+  if (options.providerModels !== undefined) {
+    fs.writeFileSync(
+      path.join(stagingDir, 'data', 'provider-models.json'),
+      JSON.stringify(options.providerModels, null, 2)
+    )
+  }
+  if (options.projects !== undefined) {
+    fs.writeFileSync(
+      path.join(stagingDir, 'data', 'projects.json'),
+      JSON.stringify(options.projects, null, 2)
+    )
+  }
 
-    // Add data files
-    archive.append(JSON.stringify(options.characters || [], null, 2), {
-      name: `${rootFolder}/data/characters.json`,
-    })
-    archive.append(JSON.stringify(options.chats || [], null, 2), {
-      name: `${rootFolder}/data/chats.json`,
-    })
-    archive.append(JSON.stringify(options.tags || [], null, 2), {
-      name: `${rootFolder}/data/tags.json`,
-    })
-    archive.append(JSON.stringify(options.connectionProfiles || [], null, 2), {
-      name: `${rootFolder}/data/connection-profiles.json`,
-    })
-    archive.append(JSON.stringify(options.imageProfiles || [], null, 2), {
-      name: `${rootFolder}/data/image-profiles.json`,
-    })
-    archive.append(JSON.stringify(options.embeddingProfiles || [], null, 2), {
-      name: `${rootFolder}/data/embedding-profiles.json`,
-    })
-    archive.append(JSON.stringify(options.memories || [], null, 2), {
-      name: `${rootFolder}/data/memories.json`,
-    })
-    archive.append(JSON.stringify(options.files || [], null, 2), {
-      name: `${rootFolder}/data/files.json`,
-    })
-
-    // Optional files for backwards compatibility
-    if (options.promptTemplates !== undefined) {
-      archive.append(JSON.stringify(options.promptTemplates, null, 2), {
-        name: `${rootFolder}/data/prompt-templates.json`,
-      })
+  // Add file data if provided
+  if (options.includeFileData) {
+    for (const file of options.includeFileData) {
+      const fileDir = path.join(stagingDir, 'files', file.category)
+      fs.mkdirSync(fileDir, { recursive: true })
+      const content = typeof file.content === 'string' ? Buffer.from(file.content) : file.content
+      fs.writeFileSync(path.join(fileDir, `${file.id}_${file.originalFilename}`), content)
     }
-    if (options.roleplayTemplates !== undefined) {
-      archive.append(JSON.stringify(options.roleplayTemplates, null, 2), {
-        name: `${rootFolder}/data/roleplay-templates.json`,
-      })
-    }
-    if (options.providerModels !== undefined) {
-      archive.append(JSON.stringify(options.providerModels, null, 2), {
-        name: `${rootFolder}/data/provider-models.json`,
-      })
-    }
-    if (options.projects !== undefined) {
-      archive.append(JSON.stringify(options.projects, null, 2), {
-        name: `${rootFolder}/data/projects.json`,
-      })
-    }
+  }
 
-    // Add file data if provided
-    if (options.includeFileData) {
-      for (const file of options.includeFileData) {
-        const content = typeof file.content === 'string' ? Buffer.from(file.content) : file.content
-        archive.append(content, {
-          name: `${rootFolder}/files/${file.category}/${file.id}_${file.originalFilename}`,
-        })
-      }
-    }
+  // Create the zip
+  const zipPath = path.join(tempDir, `${rootFolder}.zip`)
+  execFileSync('zip', ['-r', zipPath, rootFolder], { cwd: tempDir })
 
-    // Finalize and wait for the archive to complete
-    archive.on('end', () => {
-      resolve(Buffer.concat(chunks))
-    })
-    archive.finalize()
-  })
+  // Clean up the staging dir (keep only the zip)
+  fs.rmSync(stagingDir, { recursive: true, force: true })
+
+  return zipPath
+}
+
+/**
+ * Helper to clean up test zip files
+ */
+function cleanupZip(zipPath: string): void {
+  try {
+    fs.unlinkSync(zipPath)
+    const dir = path.dirname(zipPath)
+    fs.rmSync(dir, { recursive: true, force: true })
+  } catch {
+    // Ignore cleanup errors in tests
+  }
 }
 
 describe('Backup Parser', () => {
@@ -191,7 +232,7 @@ describe('Backup Parser', () => {
       ]
       const tags = [createMockTag({ id: 'tag-1' })]
 
-      const zipBuffer = await createBackupZip({
+      const zipPath = createBackupZipFile({
         characters,
         chats,
         tags,
@@ -202,14 +243,21 @@ describe('Backup Parser', () => {
         files: [],
       })
 
-      const result = parseBackupZip(zipBuffer)
+      try {
+        const { data: result, extractDir } = await parseBackupZip(zipPath)
 
-      expect(result.manifest.version).toBe('1.0')
-      expect(result.characters).toHaveLength(1)
-      expect(result.characters[0].id).toBe('char-1')
-      expect(result.chats).toHaveLength(1)
-      expect(result.chats[0].id).toBe('chat-1')
-      expect(result.tags).toHaveLength(1)
+        expect(result.manifest.version).toBe('1.0')
+        expect(result.characters).toHaveLength(1)
+        expect(result.characters[0].id).toBe('char-1')
+        expect(result.chats).toHaveLength(1)
+        expect(result.chats[0].id).toBe('chat-1')
+        expect(result.tags).toHaveLength(1)
+
+        // Clean up extraction dir
+        fs.rmSync(extractDir, { recursive: true, force: true })
+      } finally {
+        cleanupZip(zipPath)
+      }
     }, 15000)
 
     it('parses backup with multiple entities of each type', async () => {
@@ -227,7 +275,7 @@ describe('Backup Parser', () => {
         createMockMemory({ id: 'mem-2', characterId: 'char-2' }),
       ]
 
-      const zipBuffer = await createBackupZip({
+      const zipPath = createBackupZipFile({
         characters,
         tags,
         memories,
@@ -238,12 +286,18 @@ describe('Backup Parser', () => {
         files: [],
       })
 
-      const result = parseBackupZip(zipBuffer)
+      try {
+        const { data: result, extractDir } = await parseBackupZip(zipPath)
 
-      expect(result.characters).toHaveLength(3)
-      expect(result.tags).toHaveLength(2)
-      expect(result.memories).toHaveLength(2)
-      expect(result.characters.map((c) => c.name)).toEqual(['Character 1', 'Character 2', 'Character 3'])
+        expect(result.characters).toHaveLength(3)
+        expect(result.tags).toHaveLength(2)
+        expect(result.memories).toHaveLength(2)
+        expect(result.characters.map((c) => c.name)).toEqual(['Character 1', 'Character 2', 'Character 3'])
+
+        fs.rmSync(extractDir, { recursive: true, force: true })
+      } finally {
+        cleanupZip(zipPath)
+      }
     })
 
     it('parses backup with profiles', async () => {
@@ -258,7 +312,7 @@ describe('Backup Parser', () => {
         createMockEmbeddingProfile({ id: 'emb-1', provider: 'openai' }),
       ]
 
-      const zipBuffer = await createBackupZip({
+      const zipPath = createBackupZipFile({
         connectionProfiles,
         imageProfiles,
         embeddingProfiles,
@@ -269,18 +323,24 @@ describe('Backup Parser', () => {
         files: [],
       })
 
-      const result = parseBackupZip(zipBuffer)
+      try {
+        const { data: result, extractDir } = await parseBackupZip(zipPath)
 
-      expect(result.connectionProfiles).toHaveLength(2)
-      expect(result.imageProfiles).toHaveLength(1)
-      expect(result.embeddingProfiles).toHaveLength(1)
-      expect(result.connectionProfiles[0].provider).toBe('openai')
+        expect(result.connectionProfiles).toHaveLength(2)
+        expect(result.imageProfiles).toHaveLength(1)
+        expect(result.embeddingProfiles).toHaveLength(1)
+        expect(result.connectionProfiles[0].provider).toBe('openai')
+
+        fs.rmSync(extractDir, { recursive: true, force: true })
+      } finally {
+        cleanupZip(zipPath)
+      }
     })
 
     it('handles optional files for backwards compatibility - missing templates', async () => {
       const characters = [createMockCharacter({ id: 'char-1' })]
 
-      const zipBuffer = await createBackupZip({
+      const zipPath = createBackupZipFile({
         characters,
         chats: [],
         tags: [],
@@ -292,13 +352,19 @@ describe('Backup Parser', () => {
         // Don't include optional files
       })
 
-      const result = parseBackupZip(zipBuffer)
+      try {
+        const { data: result, extractDir } = await parseBackupZip(zipPath)
 
-      expect(result.characters).toHaveLength(1)
-      expect(result.promptTemplates).toEqual([])
-      expect(result.roleplayTemplates).toEqual([])
-      expect(result.providerModels).toEqual([])
-      expect(result.projects).toEqual([])
+        expect(result.characters).toHaveLength(1)
+        expect(result.promptTemplates).toEqual([])
+        expect(result.roleplayTemplates).toEqual([])
+        expect(result.providerModels).toEqual([])
+        expect(result.projects).toEqual([])
+
+        fs.rmSync(extractDir, { recursive: true, force: true })
+      } finally {
+        cleanupZip(zipPath)
+      }
     })
 
     it('handles optional files when present', async () => {
@@ -311,7 +377,7 @@ describe('Backup Parser', () => {
       const providerModels = [{ id: 'pm-1', provider: 'openai', modelId: 'gpt-4' }]
       const projects = [{ id: 'proj-1', userId: 'user-1', name: 'Project 1' }]
 
-      const zipBuffer = await createBackupZip({
+      const zipPath = createBackupZipFile({
         characters: [],
         chats: [],
         tags: [],
@@ -326,16 +392,22 @@ describe('Backup Parser', () => {
         projects,
       })
 
-      const result = parseBackupZip(zipBuffer)
+      try {
+        const { data: result, extractDir } = await parseBackupZip(zipPath)
 
-      expect(result.promptTemplates).toHaveLength(1)
-      expect(result.roleplayTemplates).toHaveLength(1)
-      expect(result.providerModels).toHaveLength(1)
-      expect(result.projects).toHaveLength(1)
+        expect(result.promptTemplates).toHaveLength(1)
+        expect(result.roleplayTemplates).toHaveLength(1)
+        expect(result.providerModels).toHaveLength(1)
+        expect(result.projects).toHaveLength(1)
+
+        fs.rmSync(extractDir, { recursive: true, force: true })
+      } finally {
+        cleanupZip(zipPath)
+      }
     })
 
     it('handles empty backup with no entities', async () => {
-      const zipBuffer = await createBackupZip({
+      const zipPath = createBackupZipFile({
         characters: [],
         chats: [],
         tags: [],
@@ -346,13 +418,19 @@ describe('Backup Parser', () => {
         files: [],
       })
 
-      const result = parseBackupZip(zipBuffer)
+      try {
+        const { data: result, extractDir } = await parseBackupZip(zipPath)
 
-      expect(result.manifest.version).toBe('1.0')
-      expect(result.characters).toEqual([])
-      expect(result.chats).toEqual([])
-      expect(result.tags).toEqual([])
-      expect(result.memories).toEqual([])
+        expect(result.manifest.version).toBe('1.0')
+        expect(result.characters).toEqual([])
+        expect(result.chats).toEqual([])
+        expect(result.tags).toEqual([])
+        expect(result.memories).toEqual([])
+
+        fs.rmSync(extractDir, { recursive: true, force: true })
+      } finally {
+        cleanupZip(zipPath)
+      }
     })
 
     it('parses manifest metadata correctly', async () => {
@@ -363,7 +441,7 @@ describe('Backup Parser', () => {
         appVersion: '2.1.0',
       }
 
-      const zipBuffer = await createBackupZip({
+      const zipPath = createBackupZipFile({
         manifest,
         characters: [],
         chats: [],
@@ -375,34 +453,18 @@ describe('Backup Parser', () => {
         files: [],
       })
 
-      const result = parseBackupZip(zipBuffer)
+      try {
+        const { data: result, extractDir } = await parseBackupZip(zipPath)
 
-      expect(result.manifest.version).toBe('1.0')
-      expect(result.manifest.createdAt).toBe('2024-01-15T10:30:00.000Z')
-      expect(result.manifest.userId).toBe('user-abc-123')
-      expect(result.manifest.appVersion).toBe('2.1.0')
-    })
+        expect(result.manifest.version).toBe('1.0')
+        expect(result.manifest.createdAt).toBe('2024-01-15T10:30:00.000Z')
+        expect(result.manifest.userId).toBe('user-abc-123')
+        expect(result.manifest.appVersion).toBe('2.1.0')
 
-    it('handles different root folder names', async () => {
-      const characters = [createMockCharacter({ id: 'char-1' })]
-
-      const customRootFolder = 'my-custom-backup-folder-2024'
-      const zipBuffer = await createBackupZip({
-        rootFolder: customRootFolder,
-        characters,
-        chats: [],
-        tags: [],
-        connectionProfiles: [],
-        imageProfiles: [],
-        embeddingProfiles: [],
-        memories: [],
-        files: [],
-      })
-
-      const result = parseBackupZip(zipBuffer)
-
-      expect(result.characters).toHaveLength(1)
-      expect(result.characters[0].id).toBe('char-1')
+        fs.rmSync(extractDir, { recursive: true, force: true })
+      } finally {
+        cleanupZip(zipPath)
+      }
     })
 
     it('preserves all entity properties during parsing', async () => {
@@ -415,7 +477,7 @@ describe('Backup Parser', () => {
         isFavorite: true,
       })
 
-      const zipBuffer = await createBackupZip({
+      const zipPath = createBackupZipFile({
         characters: [character],
         chats: [],
         tags: [],
@@ -426,12 +488,18 @@ describe('Backup Parser', () => {
         files: [],
       })
 
-      const result = parseBackupZip(zipBuffer)
+      try {
+        const { data: result, extractDir } = await parseBackupZip(zipPath)
 
-      expect(result.characters[0]).toEqual(character)
-      expect(result.characters[0].name).toBe('Test Character')
-      expect(result.characters[0].tags).toEqual(['tag-1', 'tag-2'])
-      expect(result.characters[0].isFavorite).toBe(true)
+        expect(result.characters[0]).toEqual(character)
+        expect(result.characters[0].name).toBe('Test Character')
+        expect(result.characters[0].tags).toEqual(['tag-1', 'tag-2'])
+        expect(result.characters[0].isFavorite).toBe(true)
+
+        fs.rmSync(extractDir, { recursive: true, force: true })
+      } finally {
+        cleanupZip(zipPath)
+      }
     })
 
     it('handles nested object structures in entities', async () => {
@@ -444,7 +512,7 @@ describe('Backup Parser', () => {
         },
       })
 
-      const zipBuffer = await createBackupZip({
+      const zipPath = createBackupZipFile({
         connectionProfiles: [connectionProfile],
         characters: [],
         chats: [],
@@ -455,113 +523,85 @@ describe('Backup Parser', () => {
         files: [],
       })
 
-      const result = parseBackupZip(zipBuffer)
+      try {
+        const { data: result, extractDir } = await parseBackupZip(zipPath)
 
-      expect(result.connectionProfiles[0].parameters).toEqual({
-        temperature: 0.7,
-        maxTokens: 2000,
-        topP: 0.9,
-      })
+        expect(result.connectionProfiles[0].parameters).toEqual({
+          temperature: 0.7,
+          maxTokens: 2000,
+          topP: 0.9,
+        })
+
+        fs.rmSync(extractDir, { recursive: true, force: true })
+      } finally {
+        cleanupZip(zipPath)
+      }
     })
 
     it('throws error when manifest.json is missing', async () => {
-      const archiver = require('archiver')
-      const zipBuffer = await new Promise<Buffer>((resolve, reject) => {
-        const archive = archiver('zip', { zlib: { level: 9 } })
-        const chunks: Buffer[] = []
-        archive.on('data', (chunk: Buffer) => chunks.push(chunk))
-        archive.on('end', () => resolve(Buffer.concat(chunks)))
-        archive.on('error', (err: Error) => reject(err))
-        archive.append('[]', { name: 'some-folder/data/characters.json' })
-        archive.finalize()
+      const zipPath = createBackupZipFile({
+        skipManifest: true,
+        characters: [],
+        chats: [],
+        tags: [],
+        connectionProfiles: [],
+        imageProfiles: [],
+        embeddingProfiles: [],
+        memories: [],
+        files: [],
+        // Use a non-quilltap-backup- prefix so root folder detection falls through
+        rootFolder: 'some-folder',
       })
 
-      expect(() => parseBackupZip(zipBuffer)).toThrow('Invalid backup: manifest.json not found')
+      try {
+        await expect(parseBackupZip(zipPath)).rejects.toThrow(/Invalid backup/)
+      } finally {
+        cleanupZip(zipPath)
+      }
     })
 
     it('throws error when required data file is missing', async () => {
-      const archiver = require('archiver')
-      const rootFolder = 'quilltap-backup-2024-01-01T00-00-00-000Z'
-
-      const manifest: BackupManifest = {
-        version: '1.0',
-        createdAt: new Date().toISOString(),
-        userId: 'user-123',
-        appVersion: '2.0.0',
-        counts: {
-          characters: 0,
-          chats: 0,
-          messages: 0,
-          tags: 0,
-          connectionProfiles: 0,
-          imageProfiles: 0,
-          embeddingProfiles: 0,
-          memories: 0,
-          files: 0,
-          promptTemplates: 0,
-          roleplayTemplates: 0,
-          providerModels: 0,
-          projects: 0,
-        },
-      }
-
-      const zipBuffer = await new Promise<Buffer>((resolve, reject) => {
-        const archive = archiver('zip', { zlib: { level: 9 } })
-        const chunks: Buffer[] = []
-        archive.on('data', (chunk: Buffer) => chunks.push(chunk))
-        archive.on('end', () => resolve(Buffer.concat(chunks)))
-        archive.on('error', (err: Error) => reject(err))
-        archive.append(JSON.stringify(manifest), { name: `${rootFolder}/manifest.json` })
-        archive.finalize()
+      const zipPath = createBackupZipFile({
+        skipCharacters: true,
+        chats: [],
+        tags: [],
+        connectionProfiles: [],
+        imageProfiles: [],
+        embeddingProfiles: [],
+        memories: [],
+        files: [],
       })
 
-      expect(() => parseBackupZip(zipBuffer)).toThrow(/Invalid backup/)
+      try {
+        await expect(parseBackupZip(zipPath)).rejects.toThrow()
+      } finally {
+        cleanupZip(zipPath)
+      }
     })
 
     it('throws error on malformed JSON in data files', async () => {
-      const archiver = require('archiver')
-      const rootFolder = 'quilltap-backup-2024-01-01T00-00-00-000Z'
-
-      const manifest: BackupManifest = {
-        version: '1.0',
-        createdAt: new Date().toISOString(),
-        userId: 'user-123',
-        appVersion: '2.0.0',
-        counts: {
-          characters: 0,
-          chats: 0,
-          messages: 0,
-          tags: 0,
-          connectionProfiles: 0,
-          imageProfiles: 0,
-          embeddingProfiles: 0,
-          memories: 0,
-          files: 0,
-          promptTemplates: 0,
-          roleplayTemplates: 0,
-          providerModels: 0,
-          projects: 0,
-        },
-      }
-
-      const zipBuffer = await new Promise<Buffer>((resolve, reject) => {
-        const archive = archiver('zip', { zlib: { level: 9 } })
-        const chunks: Buffer[] = []
-        archive.on('data', (chunk: Buffer) => chunks.push(chunk))
-        archive.on('end', () => resolve(Buffer.concat(chunks)))
-        archive.on('error', (err: Error) => reject(err))
-        archive.append(JSON.stringify(manifest), { name: `${rootFolder}/manifest.json` })
-        archive.append('{ invalid json }', { name: `${rootFolder}/data/characters.json` })
-        archive.finalize()
+      const zipPath = createBackupZipFile({
+        rawCharactersJson: '{ invalid json }',
+        chats: [],
+        tags: [],
+        connectionProfiles: [],
+        imageProfiles: [],
+        embeddingProfiles: [],
+        memories: [],
+        files: [],
       })
 
-      expect(() => parseBackupZip(zipBuffer)).toThrow()
+      try {
+        await expect(parseBackupZip(zipPath)).rejects.toThrow()
+      } finally {
+        cleanupZip(zipPath)
+      }
     })
   })
 
-  describe('getFileFromZip()', () => {
+  describe('getFileFromExtractedBackup()', () => {
     it('extracts a file from the backup ZIP', async () => {
-      const zipBuffer = await createBackupZip({
+      const zipPath = createBackupZipFile({
         characters: [],
         chats: [],
         tags: [],
@@ -580,22 +620,31 @@ describe('Backup Parser', () => {
         ],
       })
 
-      const fileEntry = {
-        id: 'file-1',
-        category: 'documents',
-        originalFilename: 'test.txt',
-      } as any
+      try {
+        const { extractDir, rootFolder } = await parseBackupZip(zipPath)
+        const rootPath = rootFolder ? path.join(extractDir, rootFolder) : extractDir
 
-      const result = getFileFromZip(zipBuffer, fileEntry)
+        const fileEntry = {
+          id: 'file-1',
+          category: 'documents',
+          originalFilename: 'test.txt',
+        } as any
 
-      expect(result).not.toBeNull()
-      expect(result!.toString('utf8')).toBe('Hello, World!')
+        const result = await getFileFromExtractedBackup(rootPath, fileEntry)
+
+        expect(result).not.toBeNull()
+        expect(result!.toString('utf8')).toBe('Hello, World!')
+
+        fs.rmSync(extractDir, { recursive: true, force: true })
+      } finally {
+        cleanupZip(zipPath)
+      }
     })
 
     it('extracts binary file content correctly', async () => {
       const binaryContent = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 
-      const zipBuffer = await createBackupZip({
+      const zipPath = createBackupZipFile({
         characters: [],
         chats: [],
         tags: [],
@@ -614,20 +663,29 @@ describe('Backup Parser', () => {
         ],
       })
 
-      const fileEntry = {
-        id: 'img-1',
-        category: 'images',
-        originalFilename: 'test.png',
-      } as any
+      try {
+        const { extractDir, rootFolder } = await parseBackupZip(zipPath)
+        const rootPath = rootFolder ? path.join(extractDir, rootFolder) : extractDir
 
-      const result = getFileFromZip(zipBuffer, fileEntry)
+        const fileEntry = {
+          id: 'img-1',
+          category: 'images',
+          originalFilename: 'test.png',
+        } as any
 
-      expect(result).not.toBeNull()
-      expect(Buffer.compare(result!, binaryContent)).toBe(0)
+        const result = await getFileFromExtractedBackup(rootPath, fileEntry)
+
+        expect(result).not.toBeNull()
+        expect(Buffer.compare(result!, binaryContent)).toBe(0)
+
+        fs.rmSync(extractDir, { recursive: true, force: true })
+      } finally {
+        cleanupZip(zipPath)
+      }
     })
 
     it('returns null when file is not found in ZIP', async () => {
-      const zipBuffer = await createBackupZip({
+      const zipPath = createBackupZipFile({
         characters: [],
         chats: [],
         tags: [],
@@ -646,19 +704,28 @@ describe('Backup Parser', () => {
         ],
       })
 
-      const fileEntry = {
-        id: 'file-999',
-        category: 'documents',
-        originalFilename: 'missing.txt',
-      } as any
+      try {
+        const { extractDir, rootFolder } = await parseBackupZip(zipPath)
+        const rootPath = rootFolder ? path.join(extractDir, rootFolder) : extractDir
 
-      const result = getFileFromZip(zipBuffer, fileEntry)
+        const fileEntry = {
+          id: 'file-999',
+          category: 'documents',
+          originalFilename: 'missing.txt',
+        } as any
 
-      expect(result).toBeNull()
+        const result = await getFileFromExtractedBackup(rootPath, fileEntry)
+
+        expect(result).toBeNull()
+
+        fs.rmSync(extractDir, { recursive: true, force: true })
+      } finally {
+        cleanupZip(zipPath)
+      }
     })
 
     it('handles files in different categories', async () => {
-      const zipBuffer = await createBackupZip({
+      const zipPath = createBackupZipFile({
         characters: [],
         chats: [],
         tags: [],
@@ -689,21 +756,30 @@ describe('Backup Parser', () => {
         ],
       })
 
-      const docEntry = { id: 'doc-1', category: 'documents', originalFilename: 'doc.pdf' } as any
-      const imgEntry = { id: 'img-1', category: 'images', originalFilename: 'photo.jpg' } as any
-      const audioEntry = { id: 'audio-1', category: 'audio', originalFilename: 'sound.mp3' } as any
+      try {
+        const { extractDir, rootFolder } = await parseBackupZip(zipPath)
+        const rootPath = rootFolder ? path.join(extractDir, rootFolder) : extractDir
 
-      const docResult = getFileFromZip(zipBuffer, docEntry)
-      const imgResult = getFileFromZip(zipBuffer, imgEntry)
-      const audioResult = getFileFromZip(zipBuffer, audioEntry)
+        const docEntry = { id: 'doc-1', category: 'documents', originalFilename: 'doc.pdf' } as any
+        const imgEntry = { id: 'img-1', category: 'images', originalFilename: 'photo.jpg' } as any
+        const audioEntry = { id: 'audio-1', category: 'audio', originalFilename: 'sound.mp3' } as any
 
-      expect(docResult!.toString('utf8')).toBe('PDF content')
-      expect(imgResult!.toString('utf8')).toBe('JPG content')
-      expect(audioResult!.toString('utf8')).toBe('MP3 content')
+        const docResult = await getFileFromExtractedBackup(rootPath, docEntry)
+        const imgResult = await getFileFromExtractedBackup(rootPath, imgEntry)
+        const audioResult = await getFileFromExtractedBackup(rootPath, audioEntry)
+
+        expect(docResult!.toString('utf8')).toBe('PDF content')
+        expect(imgResult!.toString('utf8')).toBe('JPG content')
+        expect(audioResult!.toString('utf8')).toBe('MP3 content')
+
+        fs.rmSync(extractDir, { recursive: true, force: true })
+      } finally {
+        cleanupZip(zipPath)
+      }
     })
 
     it('handles filenames with special characters', async () => {
-      const zipBuffer = await createBackupZip({
+      const zipPath = createBackupZipFile({
         characters: [],
         chats: [],
         tags: [],
@@ -722,16 +798,25 @@ describe('Backup Parser', () => {
         ],
       })
 
-      const fileEntry = {
-        id: 'file-1',
-        category: 'documents',
-        originalFilename: 'file with spaces & special!.txt',
-      } as any
+      try {
+        const { extractDir, rootFolder } = await parseBackupZip(zipPath)
+        const rootPath = rootFolder ? path.join(extractDir, rootFolder) : extractDir
 
-      const result = getFileFromZip(zipBuffer, fileEntry)
+        const fileEntry = {
+          id: 'file-1',
+          category: 'documents',
+          originalFilename: 'file with spaces & special!.txt',
+        } as any
 
-      expect(result).not.toBeNull()
-      expect(result!.toString('utf8')).toBe('Special filename content')
+        const result = await getFileFromExtractedBackup(rootPath, fileEntry)
+
+        expect(result).not.toBeNull()
+        expect(result!.toString('utf8')).toBe('Special filename content')
+
+        fs.rmSync(extractDir, { recursive: true, force: true })
+      } finally {
+        cleanupZip(zipPath)
+      }
     })
   })
 
@@ -749,7 +834,7 @@ describe('Backup Parser', () => {
         })),
       }))
 
-      const zipBuffer = await createBackupZip({
+      const zipPath = createBackupZipFile({
         characters,
         chats,
         tags: Array(7).fill(null).map((_, i) => createMockTag({ id: `tag-${i}` })),
@@ -765,21 +850,25 @@ describe('Backup Parser', () => {
         embeddingProfiles: [createMockEmbeddingProfile({ id: 'emb-1' })],
       })
 
-      const summary = previewRestore(zipBuffer)
+      try {
+        const summary = await previewRestore(zipPath)
 
-      expect(summary.characters).toBe(5)
-      expect(summary.chats).toBe(3)
-      expect(summary.messages).toBe(30) // 3 chats * 10 messages
-      expect(summary.tags).toBe(7)
-      expect(summary.memories).toBe(15)
-      expect(summary.files).toBe(4)
-      expect(summary.profiles.connection).toBe(2)
-      expect(summary.profiles.image).toBe(1)
-      expect(summary.profiles.embedding).toBe(1)
+        expect(summary.characters).toBe(5)
+        expect(summary.chats).toBe(3)
+        expect(summary.messages).toBe(30) // 3 chats * 10 messages
+        expect(summary.tags).toBe(7)
+        expect(summary.memories).toBe(15)
+        expect(summary.files).toBe(4)
+        expect(summary.profiles.connection).toBe(2)
+        expect(summary.profiles.image).toBe(1)
+        expect(summary.profiles.embedding).toBe(1)
+      } finally {
+        cleanupZip(zipPath)
+      }
     })
 
     it('includes template counts in preview', async () => {
-      const zipBuffer = await createBackupZip({
+      const zipPath = createBackupZipFile({
         characters: [createMockCharacter({ id: 'char-1' })],
         chats: [],
         tags: [],
@@ -792,14 +881,18 @@ describe('Backup Parser', () => {
         roleplayTemplates: Array(2).fill(null).map((_, i) => ({ id: `rt-${i}`, name: `Roleplay ${i}` })),
       })
 
-      const summary = previewRestore(zipBuffer)
+      try {
+        const summary = await previewRestore(zipPath)
 
-      expect(summary.templates.prompt).toBe(3)
-      expect(summary.templates.roleplay).toBe(2)
+        expect(summary.templates.prompt).toBe(3)
+        expect(summary.templates.roleplay).toBe(2)
+      } finally {
+        cleanupZip(zipPath)
+      }
     })
 
     it('handles empty backup with zero counts', async () => {
-      const zipBuffer = await createBackupZip({
+      const zipPath = createBackupZipFile({
         characters: [],
         chats: [],
         tags: [],
@@ -810,18 +903,22 @@ describe('Backup Parser', () => {
         files: [],
       })
 
-      const summary = previewRestore(zipBuffer)
+      try {
+        const summary = await previewRestore(zipPath)
 
-      expect(summary.characters).toBe(0)
-      expect(summary.chats).toBe(0)
-      expect(summary.messages).toBe(0)
-      expect(summary.tags).toBe(0)
-      expect(summary.memories).toBe(0)
-      expect(summary.files).toBe(0)
+        expect(summary.characters).toBe(0)
+        expect(summary.chats).toBe(0)
+        expect(summary.messages).toBe(0)
+        expect(summary.tags).toBe(0)
+        expect(summary.memories).toBe(0)
+        expect(summary.files).toBe(0)
+      } finally {
+        cleanupZip(zipPath)
+      }
     })
 
     it('includes warnings array in summary', async () => {
-      const zipBuffer = await createBackupZip({
+      const zipPath = createBackupZipFile({
         characters: [createMockCharacter({ id: 'char-1' })],
         chats: [],
         tags: [],
@@ -832,10 +929,14 @@ describe('Backup Parser', () => {
         files: [],
       })
 
-      const summary = previewRestore(zipBuffer)
+      try {
+        const summary = await previewRestore(zipPath)
 
-      expect(summary.warnings).toBeDefined()
-      expect(Array.isArray(summary.warnings)).toBe(true)
+        expect(summary.warnings).toBeDefined()
+        expect(Array.isArray(summary.warnings)).toBe(true)
+      } finally {
+        cleanupZip(zipPath)
+      }
     })
 
     it('handles chats with no messages', async () => {
@@ -844,7 +945,7 @@ describe('Backup Parser', () => {
         messages: [],
       }))
 
-      const zipBuffer = await createBackupZip({
+      const zipPath = createBackupZipFile({
         characters: [],
         chats,
         tags: [],
@@ -855,10 +956,14 @@ describe('Backup Parser', () => {
         files: [],
       })
 
-      const summary = previewRestore(zipBuffer)
+      try {
+        const summary = await previewRestore(zipPath)
 
-      expect(summary.chats).toBe(5)
-      expect(summary.messages).toBe(0)
+        expect(summary.chats).toBe(5)
+        expect(summary.messages).toBe(0)
+      } finally {
+        cleanupZip(zipPath)
+      }
     })
   })
 })

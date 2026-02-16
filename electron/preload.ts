@@ -29,4 +29,12 @@ contextBridge.exposeInMainWorld('quilltap', {
   onDirectories: (callback: (data: DirectoryInfo) => void) => {
     ipcRenderer.on('splash:directories', (_event, data: DirectoryInfo) => callback(data));
   },
+
+  // --- File downloads (used by main app window) ---
+  /** Save file data to disk via native save dialog (for blobs already in memory) */
+  saveFile: (data: ArrayBuffer, filename: string): Promise<boolean> =>
+    ipcRenderer.invoke('app:save-file', data, filename),
+  /** Download a URL to disk via native save dialog (streams to disk, no memory pressure) */
+  downloadUrl: (url: string): Promise<void> =>
+    ipcRenderer.invoke('app:download-url', url),
 });

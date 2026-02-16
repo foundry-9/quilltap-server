@@ -4,6 +4,9 @@
 
 ### 3.0-dev
 
+- fix: Backup/restore now uses disk-based temp files + shell `zip`/`unzip` instead of in-memory `archiver`/`adm-zip` — fixes OOM crashes in VM when backing up or restoring large data directories; backup download streams from disk via `ReadStream`; restore writes upload to temp file immediately and extracts on disk; removed `archiver`, `adm-zip`, and `@types/archiver` dependencies
+- feat: Show backend mode (local/Docker/VM) in footer
+- fix: All downloads (backups, .qtap exports, images, API keys, files) now work in Electron — added preload bridge on main window with two IPC channels: `saveFile` for blob-based downloads (small JSON exports) and `downloadUrl` for URL-based downloads (backup .zip, files) that streams through Electron's `will-download` handler to disk without memory pressure; centralized download utility (`lib/download-utils.ts`) detects Electron and routes accordingly, falling back to anchor-click for browsers
 - fix: Backup download fails in Electron with "Failed to fetch" — added `will-download` session handler in Electron main process that prompts a native save dialog for all file downloads (backups, exports, etc.), streaming directly to disk without memory pressure
 - feat: Per-data-directory Lima VMs — each data directory gets its own VM (`quilltap-<hash>`) so switching directories is stop+start instead of delete+recreate; includes legacy single-VM migration, port-conflict safety (stops other quilltap-* VMs before starting), and debug dir-map JSON
 - feat: Disk usage display on splash screen directory chooser — shows data directory size and VM size per entry; two-phase async loading so UI renders immediately
@@ -89,10 +92,7 @@
   - Added `quilltap-linux-*.tar.gz` to `.gitignore` for rootfs build artifacts
 - Replaced Firecracker with Lima+VZ (macOS) / Lima+WSL2 (Windows) cross-platform VM strategy
 - Updated ROADMAP with phased architecture: shared guest image and orchestration, thin platform-specific VM backends
-- Started 3.0 dev branch for Lima/Firecracker virtualization
-
-### 2.12-dev
-
+- Started 3.0 dev branch for Lima/Firecracker virtualization, took over 2.12-dev changes
 - build: Strip plugin node_modules from Docker image, reducing image size by ~350 MB per architecture
 - build: Remove dead `next-auth` entry from `outputFileTracingIncludes` in next.config.js
 - build: Docker build script now rebuilds better-sqlite3 for local platform after completing, so local dev works immediately

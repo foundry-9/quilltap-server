@@ -250,6 +250,7 @@ function createMainWindow(): BrowserWindow {
     show: false,
     title: 'Quilltap',
     webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -587,7 +588,9 @@ app.whenReady().then(() => {
   appSettings = loadSettings();
   vmManager = createVMManager();
   downloadManager = new DownloadManager();
-  healthChecker = new HealthChecker();
+  healthChecker = isDev
+    ? new HealthChecker('http://localhost:3000/api/health')
+    : new HealthChecker();
 
   // Pre-configure VM manager with last-used directory
   vmManager.setDataDir(appSettings.lastDataDir);
@@ -721,6 +724,30 @@ ipcMain.on('splash:retry', () => {
 // Handle quit from splash screen
 ipcMain.on('splash:quit', () => {
   app.quit();
+});
+
+// Handle file save from main app window (for blobs already in memory)
+ipcMain.handle('app:save-file', async (_event, data: ArrayBuffer, filename: string) => {
+  const ext = path.extname(filename).replace('.', '');
+  const parentWindow = mainWindow || undefined;
+  const result = await dialog.showSaveDialog(parentWindow as BrowserWindow, {
+    defaultPath: filename,
+    filters: [{ name: ext.toUpperCase() || 'All Files', extensions: [ext || '*'] }],
+  });
+  if (result.canceled || !result.filePath) return false;
+  fs.writeFileSync(result.filePath, Buffer.from(data));
+  console.log(`[Main] Saved file to: ${result.filePath}`);
+  return true;
+});
+
+// Handle URL download from main app window (streams to disk via will-download handler)
+ipcMain.handle('app:download-url', async (_event, url: string) => {
+  if (!mainWindow) return;
+  // Resolve relative URLs against the app server
+  const baseUrl = isDev ? 'http://localhost:3000' : `http://localhost:${HOST_PORT}`;
+  const fullUrl = url.startsWith('/') ? `${baseUrl}${url}` : url;
+  console.log(`[Main] Triggering download for: ${fullUrl}`);
+  mainWindow.webContents.downloadURL(fullUrl);
 });
 
 // Graceful shutdown: stop the VM before quitting
