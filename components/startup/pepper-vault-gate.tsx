@@ -21,7 +21,11 @@ export function PepperVaultGate() {
 
   useEffect(() => {
     // Don't check if we're already on a setup page
-    if (pathname === '/setup' || pathname?.startsWith('/setup/')) return;
+    if (pathname === '/setup' || pathname?.startsWith('/setup/')) {
+      // Reset the flag so we re-check when navigating away from setup
+      gateFetched = false;
+      return;
+    }
 
     // Only fetch once per app lifecycle
     if (gateFetched) return;

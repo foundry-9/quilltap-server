@@ -93,7 +93,8 @@ export default function ProfileSetupPage() {
         );
       }
 
-      router.push('/');
+      // Full page load to re-initialize session provider and all client state
+      window.location.href = '/';
     } catch {
       setError('Something went wrong. Please try again.');
     } finally {

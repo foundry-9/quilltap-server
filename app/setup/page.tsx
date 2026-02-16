@@ -31,7 +31,8 @@ export default function SetupPage() {
     } catch {
       // Non-critical — fall through to home
     }
-    router.push('/');
+    // Full page load to re-initialize session provider and all client state
+    window.location.href = '/';
   }, [router]);
 
   const checkState = useCallback(async () => {
