@@ -20241,6 +20241,7 @@ var MCPConnectionManager = class {
 var connectionManager = new MCPConnectionManager();
 
 // index.ts
+var pluginLogger = logger.child({ module: "mcp-plugin" });
 function parseConfig(toolConfig) {
   return {
     servers: typeof toolConfig.servers === "string" ? toolConfig.servers : "[]",
@@ -20264,6 +20265,7 @@ async function ensureInitialized(toolConfig) {
   const config = parseConfig(toolConfig);
   const configHash = getConfigHash(config);
   if (initialized && configHash !== lastConfigHash) {
+    pluginLogger.info("MCP config changed, re-initializing connections");
     initialized = false;
   }
   if (initialized) return true;
@@ -20271,12 +20273,13 @@ async function ensureInitialized(toolConfig) {
     return false;
   }
   try {
+    pluginLogger.debug("Initializing MCP plugin", { configHash });
     await connectionManager.initialize(config);
     initialized = true;
     lastConfigHash = configHash;
     return true;
   } catch (error) {
-    console.error("Failed to initialize MCP plugin", {
+    pluginLogger.error("Failed to initialize MCP plugin", {
       error: error instanceof Error ? error.message : String(error)
     });
     return false;
@@ -20407,7 +20410,7 @@ ${output}`;
     try {
       await connectionManager.reconfigure(parsedConfig.servers || "[]");
     } catch (error) {
-      console.error("Reconfiguration failed", {
+      pluginLogger.error("Reconfiguration failed", {
         error: error instanceof Error ? error.message : String(error)
       });
     }

@@ -4,6 +4,7 @@
 
 ### 3.0-dev
 
+- fix: MCP connections constantly re-initializing in Docker/Lima/WSL2 — removed app-level URL preprocessing from `tool-registry.ts` that caused config hash mismatch between preprocessed (rewritten) and raw (original) configs; `getToolHierarchy` and `streaming.service` passed raw configs while `getConfiguredToolDefinitions` passed preprocessed configs, causing the MCP plugin to tear down and recreate connections on every API call; URL rewriting now happens solely in `MCPClient.connect()` which is the correct single point of rewrite; added structured logging to MCP plugin initialization
 - fix: Node.js OOM crashes in Docker/Lima/WSL2 — set `NODE_OPTIONS="--max-old-space-size=2048"` in all runtime environments (Dockerfile production and WSL2 stages, Lima VM profile and OpenRC service, `wsl-init.sh`); bumped Lima VM memory from 2GiB to 4GiB; users can override via `docker run -e NODE_OPTIONS=...`
 - fix: MCP URL rewrite used wrong plugin name — `preprocessToolConfig` matched against `mcp_connector` (manifest toolName) but the tool registry keys by runtime `metadata.toolName` which the MCP plugin sets to `mcp`; rewrite condition never matched
 - fix: MCP server localhost URL rewriting now works reliably in Docker/Lima/WSL2 — moved URL rewriting to the app layer (`tool-registry.ts`) so it uses the app's trusted `host-rewrite.ts` directly, matching the pattern used for LLM providers; the bundled plugin copy is kept as a belt-and-suspenders fallback; added debug logging for original vs resolved URLs in both the app layer and plugin
