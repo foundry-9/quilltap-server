@@ -4,6 +4,7 @@
 
 ### 3.0-dev
 
+- fix: Streaming backup restore for large files — replaced FormData upload with raw binary streaming (upload-then-reference pattern) to bypass Next.js body size limits for backups >100MB; file is uploaded once with progress tracking via XHR, then referenced by uploadId for preview and restore; server streams request body directly to disk without buffering; includes user-scoped upload tracking with 1-hour TTL cleanup
 - fix: Backup/restore now uses disk-based temp files + shell `zip`/`unzip` instead of in-memory `archiver`/`adm-zip` — fixes OOM crashes in VM when backing up or restoring large data directories; backup download streams from disk via `ReadStream`; restore writes upload to temp file immediately and extracts on disk; removed `archiver`, `adm-zip`, and `@types/archiver` dependencies
 - feat: Show backend mode (local/Docker/VM) in footer
 - fix: All downloads (backups, .qtap exports, images, API keys, files) now work in Electron — added preload bridge on main window with two IPC channels: `saveFile` for blob-based downloads (small JSON exports) and `downloadUrl` for URL-based downloads (backup .zip, files) that streams through Electron's `will-download` handler to disk without memory pressure; centralized download utility (`lib/download-utils.ts`) detects Electron and routes accordingly, falling back to anchor-click for browsers

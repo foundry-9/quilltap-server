@@ -29,6 +29,9 @@ export interface RestoreState {
   restoring: boolean
   restoreSummary: RestoreSummary | null
   error: string | null
+  uploadId: string | null
+  uploadProgress: number
+  uploading: boolean
 }
 
 export interface RestoreActions {

@@ -1,13 +1,12 @@
 /**
  * System Restore API v1
  *
- * POST /api/v1/system/restore - Restore data from a backup
- * POST /api/v1/system/restore?action=preview - Preview backup contents
+ * POST /api/v1/system/restore?action=upload   - Upload backup file as raw binary stream
+ * POST /api/v1/system/restore?action=preview  - Preview an already-uploaded backup
+ * POST /api/v1/system/restore                 - Restore from an already-uploaded backup
  *
- * Accepts multipart/form-data with file and mode.
- * Writes the uploaded zip to a temp file on disk immediately, then passes
- * the file path to the restore/preview functions to avoid holding the
- * entire zip in memory.
+ * Uses an upload-then-reference pattern to bypass Next.js FormData body size limits,
+ * eliminate double uploads, and avoid buffering large files in memory.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -26,143 +25,206 @@ import { badRequest, serverError, validationError } from '@/lib/api/responses';
 export const maxDuration = 300; // 5 minutes
 export const dynamic = 'force-dynamic';
 
+// --- Pending upload tracking ---
+
+interface PendingUpload {
+  path: string;
+  createdAt: number;
+  userId: string;
+}
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UPLOAD_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+const pendingUploads = new Map<string, PendingUpload>();
+
 /**
- * Write the uploaded file to a temp path on disk and return the path.
- * The buffer is released after writing so it can be GC'd.
+ * Clean up uploads older than UPLOAD_TTL_MS. Called lazily on each request.
  */
-async function writeUploadToDisk(file: File): Promise<string> {
-  const tempZipPath = path.join(os.tmpdir(), `quilltap-restore-${randomUUID()}.zip`);
-  const arrayBuffer = await file.arrayBuffer();
-  await fs.promises.writeFile(tempZipPath, Buffer.from(arrayBuffer));
-  return tempZipPath;
+function cleanupExpiredUploads(): void {
+  const now = Date.now();
+  for (const [id, upload] of pendingUploads) {
+    if (now - upload.createdAt > UPLOAD_TTL_MS) {
+      logger.debug('[System Restore v1] Cleaning up expired upload', { uploadId: id });
+      pendingUploads.delete(id);
+      fs.promises.unlink(upload.path).catch(() => {});
+    }
+  }
 }
 
 /**
- * Clean up a temp file (best-effort)
+ * Look up a pending upload, validating ownership and existence.
  */
-async function cleanupTempFile(filePath: string): Promise<void> {
+function getPendingUpload(uploadId: string, userId: string): PendingUpload | null {
+  if (!UUID_REGEX.test(uploadId)) return null;
+  const upload = pendingUploads.get(uploadId);
+  if (!upload) return null;
+  if (upload.userId !== userId) return null;
+  return upload;
+}
+
+/**
+ * Remove a pending upload from the map and delete its temp file.
+ */
+async function removePendingUpload(uploadId: string): Promise<void> {
+  const upload = pendingUploads.get(uploadId);
+  if (upload) {
+    pendingUploads.delete(uploadId);
+    try {
+      await fs.promises.unlink(upload.path);
+    } catch {
+      // Ignore cleanup errors
+    }
+  }
+}
+
+// --- Action handlers ---
+
+/**
+ * POST /api/v1/system/restore?action=upload
+ *
+ * Accepts raw binary body (Content-Type: application/octet-stream).
+ * Streams req.body to a temp file on disk. Returns { uploadId, size }.
+ */
+async function handleUpload(req: NextRequest, userId: string): Promise<NextResponse> {
+  cleanupExpiredUploads();
+
+  const body = req.body;
+  if (!body) {
+    return badRequest('No request body');
+  }
+
+  const uploadId = randomUUID();
+  const tempZipPath = path.join(os.tmpdir(), `quilltap-restore-${uploadId}.zip`);
+
+  logger.debug('[System Restore v1] Starting upload stream', { uploadId, userId });
+
   try {
-    await fs.promises.unlink(filePath);
-  } catch {
-    // Ignore cleanup errors
+    const writeStream = fs.createWriteStream(tempZipPath);
+    const reader = body.getReader();
+    let totalBytes = 0;
+
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      const ok = writeStream.write(value);
+      if (!ok) {
+        // Wait for drain if back-pressure
+        await new Promise<void>((resolve) => writeStream.once('drain', resolve));
+      }
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      writeStream.end(() => resolve());
+      writeStream.on('error', reject);
+    });
+
+    pendingUploads.set(uploadId, {
+      path: tempZipPath,
+      createdAt: Date.now(),
+      userId,
+    });
+
+    logger.info('[System Restore v1] Upload complete', { uploadId, userId, size: totalBytes });
+
+    return NextResponse.json({
+      success: true,
+      uploadId,
+      size: totalBytes,
+    });
+  } catch (error) {
+    // Clean up partial file on error
+    await fs.promises.unlink(tempZipPath).catch(() => {});
+    logger.error('[System Restore v1] Upload failed', { uploadId }, error instanceof Error ? error : undefined);
+    return serverError('Failed to upload backup file');
   }
 }
 
 /**
- * Parse request and write the uploaded ZIP to a temp file on disk
+ * POST /api/v1/system/restore?action=preview
+ *
+ * Accepts JSON body: { uploadId }
+ * Looks up the temp file and previews it without deleting.
  */
-async function getBackupFile(
-  req: NextRequest
-): Promise<{ zipPath: string; mode: 'replace' | 'new-account'; isPreview?: boolean } | NextResponse> {
-  const contentType = req.headers.get('content-type');
+async function handlePreview(req: NextRequest, userId: string): Promise<NextResponse> {
+  cleanupExpiredUploads();
 
-  if (!contentType?.includes('multipart/form-data')) {
-    return badRequest('Content-Type must be multipart/form-data');
+  let body: { uploadId?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return badRequest('Invalid JSON body');
   }
 
-  // Handle file upload
-  const formData = await req.formData();
-  const file = formData.get('file') as File;
-  const modeParam = formData.get('mode') as string;
-  const previewParam = formData.get('preview') as string;
-
-  if (!file) {
-    return badRequest('No file provided');
+  const { uploadId } = body;
+  if (!uploadId) {
+    return badRequest('uploadId is required');
   }
 
-  if (!modeParam || !['replace', 'new-account'].includes(modeParam)) {
+  const upload = getPendingUpload(uploadId, userId);
+  if (!upload) {
+    return badRequest('Upload not found or expired');
+  }
+
+  try {
+    const preview = await previewRestore(upload.path);
+
+    logger.info('[System Restore v1] Preview generated', { userId, uploadId, preview });
+
+    return NextResponse.json({
+      success: true,
+      preview,
+    });
+  } catch (error) {
+    logger.error('[System Restore v1] Error generating preview', { uploadId }, error instanceof Error ? error : undefined);
+    return serverError(error instanceof Error ? error.message : 'Failed to preview backup');
+  }
+}
+
+/**
+ * POST /api/v1/system/restore (no action)
+ *
+ * Accepts JSON body: { uploadId, mode }
+ * Performs the restore and cleans up the temp file.
+ */
+async function handleRestore(req: NextRequest, userId: string): Promise<NextResponse> {
+  cleanupExpiredUploads();
+
+  let body: { uploadId?: string; mode?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return badRequest('Invalid JSON body');
+  }
+
+  const { uploadId, mode } = body;
+
+  if (!uploadId) {
+    return badRequest('uploadId is required');
+  }
+
+  if (!mode || !['replace', 'new-account'].includes(mode)) {
     return badRequest('mode must be "replace" or "new-account"');
   }
 
-  const mode = modeParam as 'replace' | 'new-account';
-  const isPreview = previewParam === 'true';
-
-  // Write to disk immediately and release the in-memory buffer
-  const zipPath = await writeUploadToDisk(file);
-
-  return { zipPath, mode, isPreview };
-}
-
-/**
- * POST /api/v1/system/restore - Restore from backup
- */
-export const POST = createAuthenticatedHandler(async (req, { user }) => {
-  const action = getActionParam(req);
-
-  // Handle preview action
-  if (action === 'preview') {
-    let tempZipPath: string | null = null;
-    try {
-      const formData = await req.formData();
-      const file = formData.get('file') as File | null;
-
-      if (!file) {
-        return badRequest('No file provided');
-      }
-
-      tempZipPath = await writeUploadToDisk(file);
-      const preview = await previewRestore(tempZipPath);
-
-      logger.info('[System Restore v1] Preview generated', {
-        userId: user.id,
-        preview,
-      });
-
-      return NextResponse.json({
-        success: true,
-        preview,
-      });
-    } catch (error) {
-      logger.error('[System Restore v1] Error generating preview', {}, error instanceof Error ? error : undefined);
-      return serverError(error instanceof Error ? error.message : 'Failed to preview backup');
-    } finally {
-      if (tempZipPath) {
-        await cleanupTempFile(tempZipPath);
-      }
-    }
+  const upload = getPendingUpload(uploadId, userId);
+  if (!upload) {
+    return badRequest('Upload not found or expired');
   }
 
-  // Handle restore
-  let tempZipPath: string | null = null;
   try {
-    const result = await getBackupFile(req);
+    logger.info('[System Restore v1] Starting restore', { userId, uploadId, mode });
 
-    // If it's a NextResponse (error), return it
-    if (result instanceof NextResponse) {
-      return result;
-    }
-
-    const { zipPath, mode, isPreview } = result;
-    tempZipPath = zipPath;
-
-    // If preview mode from formdata
-    if (isPreview) {
-      logger.info('[System Restore v1] Preview from restore endpoint', {
-        userId: user.id,
-        mode,
-      });
-
-      const summary = await previewRestore(zipPath);
-      return NextResponse.json({
-        success: true,
-        preview: true,
-        summary,
-      });
-    }
-
-    logger.info('[System Restore v1] Starting restore', {
-      userId: user.id,
-      mode,
-    });
-
-    // Perform the actual restore
-    const summary = await restore(zipPath, {
-      mode,
-      targetUserId: user.id,
+    const summary = await restore(upload.path, {
+      mode: mode as 'replace' | 'new-account',
+      targetUserId: userId,
     });
 
     logger.info('[System Restore v1] Restore completed', {
-      userId: user.id,
+      userId,
+      uploadId,
       mode,
       restoreCounts: {
         characters: summary.characters,
@@ -184,11 +246,27 @@ export const POST = createAuthenticatedHandler(async (req, { user }) => {
       return validationError(error);
     }
 
-    logger.error('[System Restore v1] Error restoring backup', {}, error instanceof Error ? error : undefined);
+    logger.error('[System Restore v1] Error restoring backup', { uploadId }, error instanceof Error ? error : undefined);
     return serverError('Failed to restore backup');
   } finally {
-    if (tempZipPath) {
-      await cleanupTempFile(tempZipPath);
-    }
+    await removePendingUpload(uploadId);
   }
+}
+
+/**
+ * POST /api/v1/system/restore
+ */
+export const POST = createAuthenticatedHandler(async (req, { user }) => {
+  const action = getActionParam(req);
+
+  if (action === 'upload') {
+    return handleUpload(req, user.id);
+  }
+
+  if (action === 'preview') {
+    return handlePreview(req, user.id);
+  }
+
+  // Default: restore
+  return handleRestore(req, user.id);
 });
