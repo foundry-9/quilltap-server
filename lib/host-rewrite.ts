@@ -6,17 +6,15 @@
  * machine where services like Ollama or LM Studio are running.
  *
  * This module provides a single function that transparently rewrites
- * localhost URLs to point at the host gateway IP, so users can configure
+ * localhost URLs to point at the host, so users can configure
  * `http://localhost:11434` and have it Just Work in every environment.
  *
- * Gateway IP resolution order:
- * 1. `QUILLTAP_HOST_IP` env var (explicit override)
- * 2. Resolve `host.docker.internal` from /etc/hosts (Docker)
- * 3. Default gateway from /proc/net/route (Lima vzNAT / WSL2)
- * 4. Give up gracefully — return URL unchanged
- *
- * All strategies use synchronous file reads — no shelling out to `getent`
- * or `ip route`, which are unavailable in Alpine Linux images.
+ * Gateway resolution order:
+ * 1. `QUILLTAP_HOST_IP` env var (explicit override) → rewrite to that IP
+ * 2. In Docker: rewrite `localhost` → `host.docker.internal` (let DNS resolve it)
+ * 3. In Lima/WSL2: default gateway from /proc/net/route
+ * 4. Fallback: try DNS lookup of `host.docker.internal` via /etc/hosts
+ * 5. Give up gracefully — return URL unchanged
  *
  * @module lib/host-rewrite
  */
@@ -38,10 +36,10 @@ const LOCALHOST_HOSTS = new Set([
 ]);
 
 // ============================================================================
-// Cached Gateway IP
+// Cached Gateway Host
 // ============================================================================
 
-let cachedGatewayIP: string | null | undefined; // undefined = not yet resolved
+let cachedGatewayHost: string | null | undefined; // undefined = not yet resolved
 
 const rewriteLogger = logger.child({ module: 'host-rewrite' });
 
@@ -53,45 +51,34 @@ export function isVMEnvironment(): boolean {
 }
 
 /**
- * Resolve the host gateway IP address.
+ * Resolve the host gateway address (IP or hostname).
  *
- * Tries multiple strategies in order; caches the result so DNS/exec
- * only happens once per process lifetime.
+ * Tries multiple strategies in order; caches the result so file reads
+ * only happen once per process lifetime.
  */
-function resolveHostGatewayIP(): string | null {
+function resolveHostGateway(): string | null {
   // Return cached result if already resolved
-  if (cachedGatewayIP !== undefined) {
-    return cachedGatewayIP;
+  if (cachedGatewayHost !== undefined) {
+    return cachedGatewayHost;
   }
 
   // Strategy 1: Explicit env var override
   const envIP = process.env.QUILLTAP_HOST_IP;
   if (envIP) {
-    rewriteLogger.info('Host gateway IP from QUILLTAP_HOST_IP', { ip: envIP });
-    cachedGatewayIP = envIP;
-    return cachedGatewayIP;
+    rewriteLogger.info('Host gateway from QUILLTAP_HOST_IP', { host: envIP });
+    cachedGatewayHost = envIP;
+    return cachedGatewayHost;
   }
 
-  // Strategy 2: Resolve host.docker.internal from /etc/hosts (Docker)
-  // Docker adds a `host.docker.internal` entry to /etc/hosts in containers.
-  // We parse the file directly instead of shelling out to `getent`, which
-  // is unavailable in Alpine Linux images.
-  try {
-    const hosts = readFileSync('/etc/hosts', 'utf-8');
-    for (const line of hosts.split('\n')) {
-      const trimmed = line.trim();
-      if (trimmed.startsWith('#') || trimmed === '') continue;
-      // /etc/hosts format: <IP> <hostname1> [hostname2] ...
-      const parts = trimmed.split(/\s+/);
-      if (parts.length >= 2 && parts.slice(1).includes('host.docker.internal')) {
-        const ip = parts[0];
-        rewriteLogger.info('Host gateway IP from /etc/hosts (host.docker.internal)', { ip });
-        cachedGatewayIP = ip;
-        return cachedGatewayIP;
-      }
-    }
-  } catch {
-    rewriteLogger.debug('Could not read /etc/hosts for host.docker.internal lookup');
+  // Strategy 2: Docker — use host.docker.internal directly as a hostname
+  // Docker Desktop provides built-in DNS resolution for host.docker.internal
+  // via its DNS server (127.0.0.11), so we don't need to resolve it to an IP.
+  // This is more reliable than parsing /etc/hosts, which may not contain the entry
+  // when Docker's built-in DNS handles the resolution.
+  if (isDockerEnvironment()) {
+    rewriteLogger.info('Docker environment detected — using host.docker.internal as gateway hostname');
+    cachedGatewayHost = 'host.docker.internal';
+    return cachedGatewayHost;
   }
 
   // Strategy 3: Default gateway from /proc/net/route (Lima/WSL2)
@@ -114,17 +101,38 @@ function resolveHostGatewayIP(): string | null {
           parseInt(hexGateway.substring(0, 2), 16),
         ].join('.');
         rewriteLogger.info('Host gateway IP from /proc/net/route', { ip });
-        cachedGatewayIP = ip;
-        return cachedGatewayIP;
+        cachedGatewayHost = ip;
+        return cachedGatewayHost;
       }
     }
   } catch {
     rewriteLogger.debug('Could not read /proc/net/route for default gateway lookup');
   }
 
-  rewriteLogger.warn('Could not resolve host gateway IP — localhost URLs will not be rewritten');
-  cachedGatewayIP = null;
-  return cachedGatewayIP;
+  // Strategy 4: Fallback — resolve host.docker.internal from /etc/hosts
+  // Covers edge cases where Docker adds it to /etc/hosts but we're not
+  // detected as Docker (e.g., custom container runtimes).
+  try {
+    const hosts = readFileSync('/etc/hosts', 'utf-8');
+    for (const line of hosts.split('\n')) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('#') || trimmed === '') continue;
+      // /etc/hosts format: <IP> <hostname1> [hostname2] ...
+      const parts = trimmed.split(/\s+/);
+      if (parts.length >= 2 && parts.slice(1).includes('host.docker.internal')) {
+        const ip = parts[0];
+        rewriteLogger.info('Host gateway IP from /etc/hosts (host.docker.internal)', { ip });
+        cachedGatewayHost = ip;
+        return cachedGatewayHost;
+      }
+    }
+  } catch {
+    rewriteLogger.debug('Could not read /etc/hosts for host.docker.internal lookup');
+  }
+
+  rewriteLogger.warn('Could not resolve host gateway — localhost URLs will not be rewritten');
+  cachedGatewayHost = null;
+  return cachedGatewayHost;
 }
 
 // ============================================================================
@@ -132,15 +140,15 @@ function resolveHostGatewayIP(): string | null {
 // ============================================================================
 
 /**
- * Rewrite a localhost URL to point at the host gateway IP.
+ * Rewrite a localhost URL to point at the host gateway.
  *
  * No-ops when:
  * - Not running in a VM/container environment
  * - The URL doesn't point to localhost or 127.0.0.1
- * - Gateway IP resolution fails
+ * - Gateway resolution fails
  *
  * @param url The URL to potentially rewrite
- * @returns The original URL or a rewritten version with the gateway IP
+ * @returns The original URL or a rewritten version with the gateway host
  */
 export function rewriteLocalhostUrl(url: string): string {
   // No-op on bare metal
@@ -162,29 +170,29 @@ export function rewriteLocalhostUrl(url: string): string {
     return url;
   }
 
-  // Resolve the gateway IP
-  const gatewayIP = resolveHostGatewayIP();
-  if (!gatewayIP) {
+  // Resolve the gateway host
+  const gatewayHost = resolveHostGateway();
+  if (!gatewayHost) {
     return url;
   }
 
   // Rewrite the hostname
-  parsed.hostname = gatewayIP;
+  parsed.hostname = gatewayHost;
   const rewritten = parsed.toString();
 
   rewriteLogger.debug('Rewrote localhost URL', {
     original: url,
     rewritten,
-    gatewayIP,
+    gatewayHost,
   });
 
   return rewritten;
 }
 
 /**
- * Reset the cached gateway IP (for testing).
+ * Reset the cached gateway host (for testing).
  * @internal
  */
 export function _resetGatewayCache(): void {
-  cachedGatewayIP = undefined;
+  cachedGatewayHost = undefined;
 }

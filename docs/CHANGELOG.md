@@ -4,6 +4,9 @@
 
 ### 3.0-dev
 
+- fix: Docker footer shows "(local)" instead of "(Docker)" — fixed `footer-wrapper.tsx` accessing `data.data?.isDocker` instead of `data.isDocker` from the `/api/v1/system/data-dir` response
+- fix: Docker host URL rewriting now uses `host.docker.internal` hostname directly instead of parsing `/etc/hosts` for an IP — Docker Desktop resolves this via built-in DNS (127.0.0.11), which is more reliable; `/etc/hosts` parsing moved to fallback strategy for edge cases
+- fix: "Test Connection" and model listing now work in Docker/VM environments — added `validateApiKey()` and `getAvailableModels()` wrapper methods to provider registries that apply `rewriteLocalhostUrl` before delegating to plugins; updated all call sites (api-keys route, provider-validation, capabilities-report)
 - fix: Host URL rewriting now works in Docker/Lima — replaced shell-based gateway resolution (`getent`, `ip route`) with synchronous file reads (`/etc/hosts` for `host.docker.internal`, `/proc/net/route` for default gateway) since neither command exists in Alpine Linux images; removed `child_process` dependency from `host-rewrite.ts`
 - feat: App-level localhost URL rewriting for VM/container environments — `rewriteLocalhostUrl()` transparently rewrites `localhost`/`127.0.0.1` URLs to the host gateway IP in Docker, Lima, and WSL2 environments; auto-detects gateway via `host.docker.internal` DNS or default route; supports `QUILLTAP_HOST_IP` env var override; replaces socat-based port forwarding in Docker; applied to all LLM/image/embedding provider creation and MCP server connections
 - fix: Sidebar not appearing after first-time setup wizard or backup restore — setup and profile pages now do a full page load instead of client-side navigation so session provider re-initializes; restore triggers a page reload on completion; session provider retries every 5 seconds after a 503 instead of waiting 5 minutes; PepperVaultGate resets its one-shot flag when on setup pages

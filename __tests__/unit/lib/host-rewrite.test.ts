@@ -60,7 +60,7 @@ describe('lib/host-rewrite', () => {
       expect(rewriteLocalhostUrl('http://localhost:11434')).toBe('http://192.168.5.2:11434/');
     });
 
-    it('should rewrite http://127.0.0.1:8080 in Docker environment', async () => {
+    it('should rewrite http://127.0.0.1:8080 in Docker environment with explicit IP', async () => {
       process.env.DOCKER_CONTAINER = 'true';
       process.env.QUILLTAP_HOST_IP = '172.17.0.1';
       const { rewriteLocalhostUrl } = await import('@/lib/host-rewrite');
@@ -102,37 +102,27 @@ describe('lib/host-rewrite', () => {
       expect(rewriteLocalhostUrl('not-a-url')).toBe('not-a-url');
     });
 
-    it('should resolve gateway from /etc/hosts (host.docker.internal)', async () => {
+    it('should rewrite localhost to host.docker.internal in Docker (no explicit IP)', async () => {
       process.env.DOCKER_CONTAINER = 'true';
-      // No QUILLTAP_HOST_IP — should fall through to /etc/hosts
-
-      const { readFileSync } = require('node:fs');
-      (readFileSync as jest.Mock).mockImplementation((path: string) => {
-        if (path === '/etc/hosts') {
-          return [
-            '127.0.0.1\tlocalhost',
-            '::1\tlocalhost',
-            '192.168.65.254\thost.docker.internal',
-            '172.17.0.2\tcontainer-name',
-          ].join('\n');
-        }
-        throw new Error('ENOENT');
-      });
+      // No QUILLTAP_HOST_IP — Docker strategy should use host.docker.internal directly
 
       const { rewriteLocalhostUrl } = await import('@/lib/host-rewrite');
-      expect(rewriteLocalhostUrl('http://localhost:11434')).toBe('http://192.168.65.254:11434/');
+      expect(rewriteLocalhostUrl('http://localhost:11434')).toBe('http://host.docker.internal:11434/');
     });
 
-    it('should resolve gateway from /proc/net/route', async () => {
+    it('should rewrite 127.0.0.1 to host.docker.internal in Docker', async () => {
+      process.env.DOCKER_CONTAINER = 'true';
+
+      const { rewriteLocalhostUrl } = await import('@/lib/host-rewrite');
+      expect(rewriteLocalhostUrl('http://127.0.0.1:8080/v1/chat')).toBe('http://host.docker.internal:8080/v1/chat');
+    });
+
+    it('should resolve gateway from /proc/net/route in Lima', async () => {
       process.env.LIMA_CONTAINER = 'true';
       // No QUILLTAP_HOST_IP — should fall through to /proc/net/route
 
       const { readFileSync } = require('node:fs');
       (readFileSync as jest.Mock).mockImplementation((path: string) => {
-        if (path === '/etc/hosts') {
-          // No host.docker.internal entry
-          return '127.0.0.1\tlocalhost\n::1\tlocalhost\n';
-        }
         if (path === '/proc/net/route') {
           // Default gateway 192.168.5.2 = hex C0A80502 -> little-endian 0205A8C0
           return [
@@ -146,6 +136,30 @@ describe('lib/host-rewrite', () => {
 
       const { rewriteLocalhostUrl } = await import('@/lib/host-rewrite');
       expect(rewriteLocalhostUrl('http://localhost:11434')).toBe('http://192.168.5.2:11434/');
+    });
+
+    it('should fall back to /etc/hosts for host.docker.internal in non-Docker environment', async () => {
+      process.env.LIMA_CONTAINER = 'true';
+      // No QUILLTAP_HOST_IP, /proc/net/route fails, but /etc/hosts has host.docker.internal
+
+      const { readFileSync } = require('node:fs');
+      (readFileSync as jest.Mock).mockImplementation((path: string) => {
+        if (path === '/proc/net/route') {
+          throw new Error('ENOENT');
+        }
+        if (path === '/etc/hosts') {
+          return [
+            '127.0.0.1\tlocalhost',
+            '::1\tlocalhost',
+            '192.168.65.254\thost.docker.internal',
+            '172.17.0.2\tcontainer-name',
+          ].join('\n');
+        }
+        throw new Error('ENOENT');
+      });
+
+      const { rewriteLocalhostUrl } = await import('@/lib/host-rewrite');
+      expect(rewriteLocalhostUrl('http://localhost:11434')).toBe('http://192.168.65.254:11434/');
     });
 
     it('should return URL unchanged when all resolution strategies fail', async () => {

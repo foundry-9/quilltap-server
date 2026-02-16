@@ -17,6 +17,7 @@ import type {
   SearchProviderConfigRequirements,
 } from '@quilltap/plugin-types';
 import { getErrorMessage } from '@/lib/errors';
+import { rewriteLocalhostUrl } from '@/lib/host-rewrite';
 import type { PluginManifest } from '@/lib/schemas/plugin-manifest';
 import { resolve, join } from 'node:path';
 import { existsSync } from 'node:fs';
@@ -266,6 +267,36 @@ class SearchProviderRegistry {
    */
   isSearchConfigured(): boolean {
     return this.state.providers.size > 0;
+  }
+
+  /**
+   * Validate an API key using the search provider plugin, with localhost URL rewriting.
+   *
+   * @param name The provider name
+   * @param apiKey The API key to validate
+   * @param baseUrl Optional base URL (will be rewritten if localhost in VM/container)
+   * @returns true if the API key is valid, or false if provider has no validateApiKey
+   * @throws Error if provider not found
+   */
+  async validateApiKey(name: string, apiKey: string, baseUrl?: string): Promise<boolean> {
+    const plugin = this.getProvider(name);
+    if (!plugin) {
+      const error = `Search provider '${name}' not found in registry`;
+      this.logger.error(error);
+      throw new Error(error);
+    }
+
+    if (!plugin.validateApiKey) {
+      return false;
+    }
+
+    const resolvedUrl = baseUrl ? rewriteLocalhostUrl(baseUrl) : baseUrl;
+    this.logger.debug('Validating search provider API key with URL rewriting', {
+      provider: name,
+      originalUrl: baseUrl,
+      resolvedUrl,
+    });
+    return plugin.validateApiKey(apiKey, resolvedUrl);
   }
 
   /**

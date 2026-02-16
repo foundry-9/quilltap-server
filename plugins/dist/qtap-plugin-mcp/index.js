@@ -19418,36 +19418,25 @@ var LOCALHOST_HOSTS = /* @__PURE__ */ new Set([
   "[::1]",
   "::1"
 ]);
-var cachedGatewayIP;
+var cachedGatewayHost;
 var rewriteLogger = logger.child({ module: "host-rewrite" });
 function isVMEnvironment() {
   return isDockerEnvironment() || isLimaEnvironment();
 }
-function resolveHostGatewayIP() {
-  if (cachedGatewayIP !== void 0) {
-    return cachedGatewayIP;
+function resolveHostGateway() {
+  if (cachedGatewayHost !== void 0) {
+    return cachedGatewayHost;
   }
   const envIP = process.env.QUILLTAP_HOST_IP;
   if (envIP) {
-    rewriteLogger.info("Host gateway IP from QUILLTAP_HOST_IP", { ip: envIP });
-    cachedGatewayIP = envIP;
-    return cachedGatewayIP;
+    rewriteLogger.info("Host gateway from QUILLTAP_HOST_IP", { host: envIP });
+    cachedGatewayHost = envIP;
+    return cachedGatewayHost;
   }
-  try {
-    const hosts = (0, import_node_fs.readFileSync)("/etc/hosts", "utf-8");
-    for (const line of hosts.split("\n")) {
-      const trimmed = line.trim();
-      if (trimmed.startsWith("#") || trimmed === "") continue;
-      const parts = trimmed.split(/\s+/);
-      if (parts.length >= 2 && parts.slice(1).includes("host.docker.internal")) {
-        const ip = parts[0];
-        rewriteLogger.info("Host gateway IP from /etc/hosts (host.docker.internal)", { ip });
-        cachedGatewayIP = ip;
-        return cachedGatewayIP;
-      }
-    }
-  } catch {
-    rewriteLogger.debug("Could not read /etc/hosts for host.docker.internal lookup");
+  if (isDockerEnvironment()) {
+    rewriteLogger.info("Docker environment detected \u2014 using host.docker.internal as gateway hostname");
+    cachedGatewayHost = "host.docker.internal";
+    return cachedGatewayHost;
   }
   try {
     const routeTable = (0, import_node_fs.readFileSync)("/proc/net/route", "utf-8");
@@ -19462,16 +19451,32 @@ function resolveHostGatewayIP() {
           parseInt(hexGateway.substring(0, 2), 16)
         ].join(".");
         rewriteLogger.info("Host gateway IP from /proc/net/route", { ip });
-        cachedGatewayIP = ip;
-        return cachedGatewayIP;
+        cachedGatewayHost = ip;
+        return cachedGatewayHost;
       }
     }
   } catch {
     rewriteLogger.debug("Could not read /proc/net/route for default gateway lookup");
   }
-  rewriteLogger.warn("Could not resolve host gateway IP \u2014 localhost URLs will not be rewritten");
-  cachedGatewayIP = null;
-  return cachedGatewayIP;
+  try {
+    const hosts = (0, import_node_fs.readFileSync)("/etc/hosts", "utf-8");
+    for (const line of hosts.split("\n")) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith("#") || trimmed === "") continue;
+      const parts = trimmed.split(/\s+/);
+      if (parts.length >= 2 && parts.slice(1).includes("host.docker.internal")) {
+        const ip = parts[0];
+        rewriteLogger.info("Host gateway IP from /etc/hosts (host.docker.internal)", { ip });
+        cachedGatewayHost = ip;
+        return cachedGatewayHost;
+      }
+    }
+  } catch {
+    rewriteLogger.debug("Could not read /etc/hosts for host.docker.internal lookup");
+  }
+  rewriteLogger.warn("Could not resolve host gateway \u2014 localhost URLs will not be rewritten");
+  cachedGatewayHost = null;
+  return cachedGatewayHost;
 }
 function rewriteLocalhostUrl(url2) {
   if (!isVMEnvironment()) {
@@ -19486,16 +19491,16 @@ function rewriteLocalhostUrl(url2) {
   if (!LOCALHOST_HOSTS.has(parsed.hostname)) {
     return url2;
   }
-  const gatewayIP = resolveHostGatewayIP();
-  if (!gatewayIP) {
+  const gatewayHost = resolveHostGateway();
+  if (!gatewayHost) {
     return url2;
   }
-  parsed.hostname = gatewayIP;
+  parsed.hostname = gatewayHost;
   const rewritten = parsed.toString();
   rewriteLogger.debug("Rewrote localhost URL", {
     original: url2,
     rewritten,
-    gatewayIP
+    gatewayHost
   });
   return rewritten;
 }

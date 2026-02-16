@@ -14,9 +14,9 @@ export default function FooterWrapper() {
     fetch('/api/v1/system/data-dir')
       .then((res) => res.json())
       .then((data) => {
-        if (data.data?.isVM) {
+        if (data.isVM) {
           setBackendMode('VM');
-        } else if (data.data?.isDocker) {
+        } else if (data.isDocker) {
           setBackendMode('Docker');
         } else {
           setBackendMode('local');

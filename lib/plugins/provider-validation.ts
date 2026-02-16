@@ -147,9 +147,8 @@ export async function testProviderConnection(
   apiKey: string,
   baseUrl?: string
 ): Promise<ProviderConnectionTestResult> {
-  // Get provider plugin
-  const providerPlugin = getProvider(provider);
-  if (!providerPlugin) {
+  // Check provider exists
+  if (!providerRegistry.hasProvider(provider)) {
     logger.warn('Provider not found for connection test', {
       provider,
       context: 'provider-validation.testProviderConnection',
@@ -170,15 +169,16 @@ export async function testProviderConnection(
   }
 
   try {
-    // Use the plugin's validateApiKey method to test connection
-    const isValid = await providerPlugin.validateApiKey(apiKey, baseUrl);
+    // Use the registry wrapper which applies localhost URL rewriting
+    const isValid = await providerRegistry.validateApiKey(provider, apiKey, baseUrl);
 
     if (isValid) {
       return { valid: true };
     }
+    const metadata = providerRegistry.getProviderMetadata(provider);
     return {
       valid: false,
-      error: `Failed to validate connection to ${providerPlugin.metadata.displayName}`,
+      error: `Failed to validate connection to ${metadata?.displayName ?? provider}`,
     };
   } catch (error) {
     const errorMessage = getErrorMessage(error);

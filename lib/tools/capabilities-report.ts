@@ -334,7 +334,7 @@ async function collectModels(userId: string): Promise<ModelInfo[]> {
         continue;
       }
 
-      // No cached models - fetch from provider
+      // No cached models - fetch from provider via registry wrapper (applies URL rewriting)
       const decryptedKey = decryptApiKey(
         apiKeyRecord.ciphertext,
         apiKeyRecord.iv,
@@ -344,10 +344,12 @@ async function collectModels(userId: string): Promise<ModelInfo[]> {
 
       const baseUrl = baseUrlByProvider.get(providerName);
 
-      // Fetch models
-      if (provider.getAvailableModels) {
-        moduleLogger.info('Fetching models from provider (no cache available)', { providerName });
-        const models = await provider.getAvailableModels(decryptedKey, baseUrl);
+      // Fetch models using registry wrapper which applies localhost URL rewriting
+      // The wrapper returns [] if the provider doesn't implement getAvailableModels
+      moduleLogger.info('Fetching models from provider (no cache available)', { providerName });
+      const models = await providerRegistry.getAvailableModels(providerName, decryptedKey, baseUrl);
+
+      if (models.length > 0) {
         // Sort models alphabetically and limit to 50
         const sortedModels = [...models].sort((a, b) => a.localeCompare(b)).slice(0, 50);
         modelsByProvider.push({
@@ -358,16 +360,14 @@ async function collectModels(userId: string): Promise<ModelInfo[]> {
           providerName,
           modelCount: models.length,
         });
-      } else {
-        // Fall back to static model info if available
-        if (provider.getModelInfo) {
-          const modelInfo = provider.getModelInfo();
-          const models = modelInfo.map(m => m.id || m.name).sort((a, b) => a.localeCompare(b));
-          modelsByProvider.push({
-            provider: providerName,
-            models,
-          });
-        }
+      } else if (provider.getModelInfo) {
+        // Fall back to static model info if getAvailableModels not supported or returned empty
+        const modelInfo = provider.getModelInfo();
+        const staticModels = modelInfo.map(m => m.id || m.name).sort((a, b) => a.localeCompare(b));
+        modelsByProvider.push({
+          provider: providerName,
+          models: staticModels,
+        });
       }
     } catch (error) {
       const errorMessage = getErrorMessage(error);

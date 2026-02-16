@@ -426,6 +426,62 @@ class ProviderRegistry {
     return null;
   }
 
+  /**
+   * Validate an API key using the provider plugin, with localhost URL rewriting.
+   *
+   * @param name The provider name
+   * @param apiKey The API key to validate
+   * @param baseUrl Optional base URL (will be rewritten if localhost in VM/container)
+   * @returns true if the API key is valid
+   * @throws Error if provider not found
+   */
+  async validateApiKey(name: string, apiKey: string, baseUrl?: string): Promise<boolean> {
+    const plugin = this.getProvider(name);
+    if (!plugin) {
+      const error = `Provider '${name}' not found in registry`;
+      this.logger.error(error);
+      throw new Error(error);
+    }
+
+    const resolvedUrl = baseUrl ? rewriteLocalhostUrl(baseUrl) : baseUrl;
+    this.logger.debug('Validating API key with URL rewriting', {
+      provider: name,
+      originalUrl: baseUrl,
+      resolvedUrl,
+    });
+    return plugin.validateApiKey(apiKey, resolvedUrl);
+  }
+
+  /**
+   * Fetch available models from a provider, with localhost URL rewriting.
+   *
+   * @param name The provider name
+   * @param apiKey The API key for authentication
+   * @param baseUrl Optional base URL (will be rewritten if localhost in VM/container)
+   * @returns Array of model IDs, or empty array if not supported
+   * @throws Error if provider not found
+   */
+  async getAvailableModels(name: string, apiKey: string, baseUrl?: string): Promise<string[]> {
+    const plugin = this.getProvider(name);
+    if (!plugin) {
+      const error = `Provider '${name}' not found in registry`;
+      this.logger.error(error);
+      throw new Error(error);
+    }
+
+    if (!plugin.getAvailableModels) {
+      return [];
+    }
+
+    const resolvedUrl = baseUrl ? rewriteLocalhostUrl(baseUrl) : baseUrl;
+    this.logger.debug('Fetching available models with URL rewriting', {
+      provider: name,
+      originalUrl: baseUrl,
+      resolvedUrl,
+    });
+    return plugin.getAvailableModels(apiKey, resolvedUrl);
+  }
+
   // =========================================================================
   // Runtime Configuration Query Methods
   // =========================================================================
