@@ -12,8 +12,8 @@ export HOSTNAME=0.0.0.0
 
 # Resolve data directory: Electron passes the Windows path via env var,
 # which we convert to a WSL mount path with wslpath.
-if [ -n "${QUILTTAP_WIN_DATADIR:-}" ]; then
-  QUILTTAP_DATA_DIR=$(wslpath "$QUILTTAP_WIN_DATADIR")
+if [ -n "${QUILLTAP_WIN_DATADIR:-}" ]; then
+  QUILTTAP_DATA_DIR=$(wslpath "$QUILLTAP_WIN_DATADIR")
 else
   QUILTTAP_DATA_DIR=/data/quilltap
 fi

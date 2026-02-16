@@ -218,7 +218,7 @@ export class WSLManager implements IVMManager {
     // We pass the Windows data directory path as an env var;
     // wsl-init.sh converts it to a WSL path via wslpath.
     const dataEnv = this.dataDir
-      ? `QUILTTAP_WIN_DATADIR=${this.dataDir}`
+      ? `QUILLTAP_WIN_DATADIR=${this.dataDir}`
       : '';
 
     const cmd = `${dataEnv} nohup /usr/local/bin/wsl-init.sh > /tmp/quilltap-stdout.log 2>&1 &`;

@@ -1,6 +1,6 @@
 {
   "name": "quilltap",
-  "version": "3.0.0-dev.10",
+  "version": "3.0.0-dev.11",
   "private": true,
   "main": "dist-electron/main.js",
   "author": {

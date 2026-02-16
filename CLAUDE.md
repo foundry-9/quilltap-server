@@ -6,6 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, and anyone who wants an AI assistant that actually knows what they're working on. Connect to any LLM provider, organize your work into projects with persistent files and context, create characters with real personalities, and build a private AI environment that learns and remembers.
 
+### Spelling **IMPORTANT**
+
+This project is spelled "Quilltap", as in "quill" + "tap", **NOT** "Quilttap", as in "quilt" + "tap". There is a linting rule to keep you from using that word. Please, please, never call anything in this system "quilttap" because that is **WRONG.**
+
 ## Technology Stack
 
 - **Frontend Framework**: React via Next.js
@@ -161,7 +165,7 @@ Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/
     - Windows: %APPDATA%\Quilltap\
     - Docker: /app/quilltap/
     - Lima VM: /data/quilltap/ (VirtioFS mount of macOS path)
-    - WSL2: Accessed via /mnt/c/.../AppData/Roaming/Quilttap/ (Windows path passed as env var)
+    - WSL2: Accessed via /mnt/c/.../AppData/Roaming/Quilltap/ (Windows path passed as env var)
   - Category
     - `data/`
     - `files/`
