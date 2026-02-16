@@ -106,6 +106,7 @@ EXPOSE 3000
 
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+ENV NODE_OPTIONS="--max-old-space-size=2048"
 
 ENTRYPOINT ["entrypoint.sh"]
 CMD ["node", "server.js"]
@@ -123,7 +124,7 @@ RUN chmod +x /usr/local/bin/wsl-init.sh
 RUN apk add --no-cache libstdc++ libgcc zip unzip
 
 # Set environment defaults
-RUN printf 'export LIMA_CONTAINER=true\nexport NODE_ENV=production\nexport PORT=5050\nexport HOSTNAME=0.0.0.0\n' \
+RUN printf 'export LIMA_CONTAINER=true\nexport NODE_ENV=production\nexport PORT=5050\nexport HOSTNAME=0.0.0.0\nexport NODE_OPTIONS="--max-old-space-size=2048"\n' \
     > /etc/profile.d/quilltap.sh && chmod 644 /etc/profile.d/quilltap.sh
 
 # Remove Docker entrypoint — WSL2 uses wsl-init.sh directly

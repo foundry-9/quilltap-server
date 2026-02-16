@@ -394,6 +394,10 @@ docker stats quilltap
 
 # If high, restart the container
 docker restart quilltap
+
+# The default Node.js heap limit is 2048 MB (set via NODE_OPTIONS).
+# To increase it, override at runtime:
+docker run -e NODE_OPTIONS="--max-old-space-size=4096" quilltap
 ```
 
 ### Data Not Persisting

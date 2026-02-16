@@ -9,6 +9,7 @@ export LIMA_CONTAINER=true
 export NODE_ENV=production
 export PORT=5050
 export HOSTNAME=0.0.0.0
+export NODE_OPTIONS="--max-old-space-size=2048"
 
 # Resolve data directory: Electron passes the Windows path via env var,
 # which we convert to a WSL mount path with wslpath.

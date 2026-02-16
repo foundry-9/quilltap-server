@@ -20,7 +20,7 @@ images:
     digest: "sha512:1aaf22b4a584e69e228e6aa38a295159c0143d9ccebe7ad4928e92b414714066af3bfe5f9e0ca4d4d64a70ca9fea09033af90258a6f2344130d70b660151127a"
 
 cpus: 2
-memory: "2GiB"
+memory: "4GiB"
 disk: "10GiB"
 
 mounts:
@@ -63,6 +63,7 @@ provision:
       export NODE_ENV=production
       export PORT=3000
       export HOSTNAME=0.0.0.0
+      export NODE_OPTIONS="--max-old-space-size=2048"
       ENVEOF
       chmod 644 /etc/profile.d/quilltap.sh
 
@@ -118,6 +119,7 @@ provision:
       export NODE_ENV=production
       export PORT=3000
       export HOSTNAME=0.0.0.0
+      export NODE_OPTIONS="--max-old-space-size=2048"
 
       depend() {
         need net

@@ -4,6 +4,8 @@
 
 ### 3.0-dev
 
+- fix: Node.js OOM crashes in Docker/Lima/WSL2 — set `NODE_OPTIONS="--max-old-space-size=2048"` in all runtime environments (Dockerfile production and WSL2 stages, Lima VM profile and OpenRC service, `wsl-init.sh`); bumped Lima VM memory from 2GiB to 4GiB; users can override via `docker run -e NODE_OPTIONS=...`
+- fix: MCP URL rewrite used wrong plugin name — `preprocessToolConfig` matched against `mcp_connector` (manifest toolName) but the tool registry keys by runtime `metadata.toolName` which the MCP plugin sets to `mcp`; rewrite condition never matched
 - fix: MCP server localhost URL rewriting now works reliably in Docker/Lima/WSL2 — moved URL rewriting to the app layer (`tool-registry.ts`) so it uses the app's trusted `host-rewrite.ts` directly, matching the pattern used for LLM providers; the bundled plugin copy is kept as a belt-and-suspenders fallback; added debug logging for original vs resolved URLs in both the app layer and plugin
 - fix: Docker footer shows "(local)" instead of "(Docker)" — fixed `footer-wrapper.tsx` accessing `data.data?.isDocker` instead of `data.isDocker` from the `/api/v1/system/data-dir` response
 - fix: Docker host URL rewriting now uses `host.docker.internal` hostname directly instead of parsing `/etc/hosts` for an IP — Docker Desktop resolves this via built-in DNS (127.0.0.11), which is more reliable; `/etc/hosts` parsing moved to fallback strategy for edge cases
