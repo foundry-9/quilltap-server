@@ -36,7 +36,6 @@ import type {
   EmbeddingProfile,
   Memory,
   FileEntry,
-  ChatMetadata,
   ChatParticipantBase,
   PhysicalDescription,
   ClothingRecord,
@@ -521,17 +520,22 @@ function remapBackupData(
   }));
 
   // Remap files
+  // IMPORTANT: Chain remapFields → remapArrayFields so array spread doesn't overwrite remapped scalar fields
   const remappedFiles = data.files.map((file) => ({
-    ...remapper.remapFields(file, ['id']),
-    ...remapper.remapArrayFields(file, ['linkedTo', 'tags']),
+    ...remapper.remapArrayFields(
+      remapper.remapFields(file, ['id', 'projectId']),
+      ['linkedTo', 'tags']
+    ),
     userId: targetUserId,
   }));
 
   // Remap characters
   const remappedCharacters = data.characters.map((char) => {
     const remapped = {
-      ...remapper.remapFields(char, ['id', 'defaultImageId', 'defaultConnectionProfileId', 'defaultPartnerId']),
-      ...remapper.remapArrayFields(char, ['tags']),
+      ...remapper.remapArrayFields(
+        remapper.remapFields(char, ['id', 'defaultImageId', 'defaultConnectionProfileId', 'defaultPartnerId', 'defaultImageProfileId']),
+        ['tags']
+      ),
       userId: targetUserId,
     };
     // Handle personaLinks array of objects
@@ -568,30 +572,45 @@ function remapBackupData(
 
   // Remap connection profiles
   const remappedConnectionProfiles = data.connectionProfiles.map((profile) => ({
-    ...remapper.remapFields(profile, ['id', 'apiKeyId']),
-    ...remapper.remapArrayFields(profile, ['tags']),
+    ...remapper.remapArrayFields(
+      remapper.remapFields(profile, ['id', 'apiKeyId']),
+      ['tags']
+    ),
     userId: targetUserId,
   })) as ConnectionProfile[];
 
   // Remap image profiles
   const remappedImageProfiles = data.imageProfiles.map((profile) => ({
-    ...remapper.remapFields(profile, ['id', 'apiKeyId']),
-    ...remapper.remapArrayFields(profile, ['tags']),
+    ...remapper.remapArrayFields(
+      remapper.remapFields(profile, ['id', 'apiKeyId']),
+      ['tags']
+    ),
     userId: targetUserId,
   })) as ImageProfile[];
 
   // Remap embedding profiles
   const remappedEmbeddingProfiles = data.embeddingProfiles.map((profile) => ({
-    ...remapper.remapFields(profile, ['id', 'apiKeyId']),
-    ...remapper.remapArrayFields(profile, ['tags']),
+    ...remapper.remapArrayFields(
+      remapper.remapFields(profile, ['id', 'apiKeyId']),
+      ['tags']
+    ),
     userId: targetUserId,
   })) as EmbeddingProfile[];
 
   // Remap chats (complex due to participants and messages)
   const remappedChats = data.chats.map((chat) => {
     const remappedChat = {
-      ...remapper.remapFields(chat, ['id', 'activeTypingParticipantId']),
-      ...remapper.remapArrayFields(chat, ['tags', 'impersonatingParticipantIds']),
+      ...remapper.remapArrayFields(
+        remapper.remapFields(chat, [
+          'id',
+          'activeTypingParticipantId',
+          'lastTurnParticipantId',
+          'projectId',
+          'storyBackgroundImageId',
+          'imageProfileId',
+        ]),
+        ['tags', 'impersonatingParticipantIds']
+      ),
       userId: targetUserId,
     };
 
@@ -607,8 +626,10 @@ function remapBackupData(
 
     // Remap messages
     remappedChat.messages = chat.messages.map((msg) => ({
-      ...remapper.remapFields(msg, ['id', 'swipeGroupId']),
-      ...remapper.remapArrayFields(msg, ['attachments']),
+      ...remapper.remapArrayFields(
+        remapper.remapFields(msg, ['id', 'swipeGroupId', 'participantId']),
+        ['attachments']
+      ),
     }));
 
     return remappedChat as ChatWithMessages;
@@ -616,21 +637,27 @@ function remapBackupData(
 
   // Remap memories
   const remappedMemories = data.memories.map((memory) => ({
-    ...remapper.remapFields(memory, ['id', 'characterId', 'aboutCharacterId', 'chatId', 'sourceMessageId']),
-    ...remapper.remapArrayFields(memory, ['tags']),
+    ...remapper.remapArrayFields(
+      remapper.remapFields(memory, ['id', 'characterId', 'aboutCharacterId', 'chatId', 'sourceMessageId', 'projectId']),
+      ['tags', 'relatedMemoryIds']
+    ),
   })) as Memory[];
 
   // Remap prompt templates
   const remappedPromptTemplates = data.promptTemplates.map((template) => ({
-    ...remapper.remapFields(template, ['id']),
-    ...remapper.remapArrayFields(template, ['tags']),
+    ...remapper.remapArrayFields(
+      remapper.remapFields(template, ['id']),
+      ['tags']
+    ),
     userId: targetUserId,
   })) as PromptTemplate[];
 
   // Remap roleplay templates
   const remappedRoleplayTemplates = data.roleplayTemplates.map((template) => ({
-    ...remapper.remapFields(template, ['id']),
-    ...remapper.remapArrayFields(template, ['tags']),
+    ...remapper.remapArrayFields(
+      remapper.remapFields(template, ['id']),
+      ['tags']
+    ),
     userId: targetUserId,
   })) as RoleplayTemplate[];
 
@@ -639,8 +666,10 @@ function remapBackupData(
 
   // Remap projects
   const remappedProjects = data.projects.map((project) => ({
-    ...remapper.remapFields(project, ['id']),
-    ...remapper.remapArrayFields(project, ['characterRoster']),
+    ...remapper.remapArrayFields(
+      remapper.remapFields(project, ['id', 'staticBackgroundImageId', 'storyBackgroundImageId']),
+      ['characterRoster']
+    ),
     userId: targetUserId,
   })) as Project[];
 
@@ -708,24 +737,15 @@ export async function restore(
 
     const repos = getUserRepositories(targetUserId);
 
-    // ID mapping tables to track backup IDs -> newly created IDs
-    // This is necessary because repositories generate new IDs during create()
-    const tagIdMap = new Map<string, string>();
-    const connectionProfileIdMap = new Map<string, string>();
-    const imageProfileIdMap = new Map<string, string>();
-    const embeddingProfileIdMap = new Map<string, string>();
-    const fileIdMap = new Map<string, string>();
-    const characterIdMap = new Map<string, string>();
-    const chatIdMap = new Map<string, string>();
-    const projectIdMap = new Map<string, string>();
-
     // Restore in dependency order
+    // All entities preserve their backup/remapped IDs via CreateOptions.id,
+    // so cross-references (characterId in participants, tags, etc.) are already correct.
+
     // 1. Tags (no dependencies)
     for (const tag of data.tags) {
       try {
-        const { id: backupId, userId, createdAt, updatedAt, ...tagData } = tag;
-        const createdTag = await repos.tags.create({ ...tagData, nameLower: tagData.nameLower || tagData.name.toLowerCase() });
-        tagIdMap.set(backupId, createdTag.id);
+        const { userId, createdAt, updatedAt, ...tagData } = tag;
+        await repos.tags.create({ ...tagData, nameLower: tagData.nameLower || tagData.name.toLowerCase() }, { id: tag.id });
       } catch (error) {
         warnings.push(`Failed to restore tag "${tag.name}": ${error instanceof Error ? error.message : String(error)}`);
         moduleLogger.warn('Failed to restore tag', { tagId: tag.id, error });
@@ -735,10 +755,9 @@ export async function restore(
     // 2. Connection profiles (no entity dependencies, but have tag refs)
     for (const profile of data.connectionProfiles) {
       try {
-        const { id: backupId, userId, createdAt, updatedAt, apiKeyId, ...profileData } = profile;
+        const { userId, createdAt, updatedAt, apiKeyId, ...profileData } = profile;
         // Note: apiKeyId is not restored as API keys are encrypted and can't be restored
-        const createdProfile = await repos.connections.create({ ...profileData, apiKeyId: null });
-        connectionProfileIdMap.set(backupId, createdProfile.id);
+        await repos.connections.create({ ...profileData, apiKeyId: null }, { id: profile.id });
       } catch (error) {
         warnings.push(`Failed to restore connection profile "${profile.name}": ${error instanceof Error ? error.message : String(error)}`);
         moduleLogger.warn('Failed to restore connection profile', { profileId: profile.id, error });
@@ -748,9 +767,8 @@ export async function restore(
     // 3. Image profiles
     for (const profile of data.imageProfiles) {
       try {
-        const { id: backupId, userId, createdAt, updatedAt, apiKeyId, ...profileData } = profile;
-        const createdProfile = await repos.imageProfiles.create({ ...profileData, apiKeyId: null });
-        imageProfileIdMap.set(backupId, createdProfile.id);
+        const { userId, createdAt, updatedAt, apiKeyId, ...profileData } = profile;
+        await repos.imageProfiles.create({ ...profileData, apiKeyId: null }, { id: profile.id });
       } catch (error) {
         warnings.push(`Failed to restore image profile "${profile.name}": ${error instanceof Error ? error.message : String(error)}`);
         moduleLogger.warn('Failed to restore image profile', { profileId: profile.id, error });
@@ -760,9 +778,8 @@ export async function restore(
     // 4. Embedding profiles
     for (const profile of data.embeddingProfiles) {
       try {
-        const { id: backupId, userId, createdAt, updatedAt, apiKeyId, ...profileData } = profile;
-        const createdProfile = await repos.embeddingProfiles.create({ ...profileData, apiKeyId: null });
-        embeddingProfileIdMap.set(backupId, createdProfile.id);
+        const { userId, createdAt, updatedAt, apiKeyId, ...profileData } = profile;
+        await repos.embeddingProfiles.create({ ...profileData, apiKeyId: null }, { id: profile.id });
       } catch (error) {
         warnings.push(`Failed to restore embedding profile "${profile.name}": ${error instanceof Error ? error.message : String(error)}`);
         moduleLogger.warn('Failed to restore embedding profile', { profileId: profile.id, error });
@@ -770,10 +787,14 @@ export async function restore(
     }
 
     // 5. Files (read from extracted dir on disk, upload to storage)
+    // In new-account mode, file IDs are remapped but on-disk filenames use original IDs.
+    // Use parsedData.files (original) for disk lookup, data.files (remapped) for DB records.
     let filesRestored = 0;
-    for (const file of data.files) {
+    for (let i = 0; i < data.files.length; i++) {
+      const file = data.files[i];
+      const originalFile = parsedData.files[i]; // original IDs for disk lookup
       try {
-        const fileBuffer = await getFileFromExtractedBackup(rootPath, file);
+        const fileBuffer = await getFileFromExtractedBackup(rootPath, originalFile);
         if (fileBuffer) {
           // Upload to storage using file storage manager
           const uploadResult = await fileStorageManager.uploadFile({
@@ -787,8 +808,8 @@ export async function restore(
           });
 
           // Create file metadata with storage key and mount point ID
-          const { id: backupId, userId, createdAt, updatedAt, s3Key, s3Bucket, storageKey, mountPointId, ...fileData } = file;
-          const createdFile = await repos.files.create(
+          const { userId, createdAt, updatedAt, s3Key, s3Bucket, storageKey, mountPointId, ...fileData } = file;
+          await repos.files.create(
             {
               ...fileData,
               storageKey: uploadResult.storageKey,
@@ -796,7 +817,6 @@ export async function restore(
             },
             { id: file.id }
           );
-          fileIdMap.set(backupId, createdFile.id);
           filesRestored++;
         } else {
           warnings.push(`File not found in backup: ${file.originalFilename}`);
@@ -810,10 +830,8 @@ export async function restore(
     // 6. Characters
     for (const character of data.characters) {
       try {
-        const { id: backupId, userId, createdAt, updatedAt, ...charData } = character;
-        const createdCharacter = await repos.characters.create(charData);
-        // Track the mapping from backup ID to newly created ID
-        characterIdMap.set(backupId, createdCharacter.id);
+        const { userId, createdAt, updatedAt, ...charData } = character;
+        await repos.characters.create(charData, { id: character.id });
       } catch (error) {
         warnings.push(`Failed to restore character "${character.name}": ${error instanceof Error ? error.message : String(error)}`);
         moduleLogger.warn('Failed to restore character', { characterId: character.id, error });
@@ -824,9 +842,8 @@ export async function restore(
     let messagesRestored = 0;
     for (const chat of data.chats) {
       try {
-        const { id: backupId, userId, createdAt, updatedAt, messages, ...chatData } = chat;
-        const createdChat = await repos.chats.create(chatData);
-        chatIdMap.set(backupId, createdChat.id);
+        const { userId, createdAt, updatedAt, messages, ...chatData } = chat;
+        const createdChat = await repos.chats.create(chatData, { id: chat.id });
 
         // Add messages to the chat
         for (const message of messages) {
@@ -844,39 +861,16 @@ export async function restore(
     }
 
     // 9. Memories
-    // Note: Characters Not Personas migration (Phase 7) will convert personaId to aboutCharacterId
-    // after restore if needed. For new backups, aboutCharacterId may already be set.
+    // IDs are preserved during creation, so characterId/aboutCharacterId already point
+    // to the correct (preserved) character IDs — no remapping needed.
     for (const memory of data.memories) {
       try {
         const { id, createdAt, updatedAt, ...memoryData } = memory;
 
-        // Remap characterId to the newly created character's ID
-        const newCharacterId = characterIdMap.get(memoryData.characterId);
-        if (!newCharacterId) {
-          warnings.push(`Failed to restore memory: Character ID ${memoryData.characterId} not found in restored characters`);
-          moduleLogger.warn('Failed to restore memory - character not found', {
-            memoryId: memory.id,
-            backupCharacterId: memoryData.characterId,
-          });
-          continue;
-        }
-
         // Personas are no longer supported; clear personaId for backwards compatibility
-        const newPersonaId = null;
-
-        // Remap aboutCharacterId if present (new backups with Characters Not Personas)
-        let newAboutCharacterId = memoryData.aboutCharacterId;
-        if (memoryData.aboutCharacterId) {
-          newAboutCharacterId = characterIdMap.get(memoryData.aboutCharacterId) || null;
-          if (!newAboutCharacterId) {
-          }
-        }
-
         await repos.memories.create({
           ...memoryData,
-          characterId: newCharacterId,
-          personaId: newPersonaId,
-          aboutCharacterId: newAboutCharacterId,
+          personaId: null,
         });
       } catch (error) {
         warnings.push(`Failed to restore memory: ${error instanceof Error ? error.message : String(error)}`);
@@ -934,9 +928,8 @@ export async function restore(
     let projectsRestored = 0;
     for (const project of data.projects) {
       try {
-        const { id: backupId, userId, createdAt, updatedAt, ...projectData } = project;
-        const createdProject = await repos.projects.create(projectData);
-        projectIdMap.set(backupId, createdProject.id);
+        const { userId, createdAt, updatedAt, ...projectData } = project;
+        await repos.projects.create(projectData, { id: project.id });
         projectsRestored++;
       } catch (error) {
         warnings.push(`Failed to restore project "${project.name}": ${error instanceof Error ? error.message : String(error)}`);
@@ -1012,202 +1005,7 @@ export async function restore(
       moduleLogger.debug('No npm plugins directory in backup');
     }
 
-    // ============================================================================
-    // POST-RESTORE RECONCILIATION PHASE
-    // ============================================================================
-    // Repositories generate new IDs during create(), so relationship fields still
-    // reference backup IDs. This phase updates all entities with the correct IDs.
-    // ============================================================================
-
-    moduleLogger.info('Starting post-restore reconciliation phase', {
-      idMappings: {
-        tags: tagIdMap.size,
-        files: fileIdMap.size,
-        connectionProfiles: connectionProfileIdMap.size,
-        imageProfiles: imageProfileIdMap.size,
-        characters: characterIdMap.size,
-        chats: chatIdMap.size,
-        projects: projectIdMap.size,
-      },
-    });
-
-    // Helper to remap an ID, returning undefined if not in map (or if original was null/undefined)
-    const remapId = (id: string | null | undefined, idMap: Map<string, string>): string | null => {
-      if (!id) return null;
-      return idMap.get(id) || null;
-    };
-
-    // Helper to remap an array of IDs
-    const remapIdArray = (ids: string[] | undefined, idMap: Map<string, string>): string[] => {
-      if (!ids) return [];
-      return ids.map((id) => idMap.get(id) || id).filter((id) => id !== null) as string[];
-    };
-
-    // 13. Update characters with correct relationship IDs
-    for (const [backupId, newId] of characterIdMap) {
-      try {
-        // Find the original character data to get relationship fields
-        const originalChar = data.characters.find((c) => c.id === backupId);
-        if (!originalChar) continue;
-
-        const updates: Partial<Character> = {};
-        let hasUpdates = false;
-
-        // Remap defaultImageId
-        if (originalChar.defaultImageId) {
-          const newImageId = remapId(originalChar.defaultImageId, fileIdMap);
-          if (newImageId) {
-            updates.defaultImageId = newImageId;
-            hasUpdates = true;
-          }
-        }
-
-        // Remap defaultConnectionProfileId
-        if (originalChar.defaultConnectionProfileId) {
-          const newProfileId = remapId(originalChar.defaultConnectionProfileId, connectionProfileIdMap);
-          if (newProfileId) {
-            updates.defaultConnectionProfileId = newProfileId;
-            hasUpdates = true;
-          }
-        }
-
-        // Remap defaultPartnerId (Characters Not Personas: default user-controlled character to pair with)
-        if (originalChar.defaultPartnerId) {
-          const newPartnerId = remapId(originalChar.defaultPartnerId, characterIdMap);
-          if (newPartnerId) {
-            updates.defaultPartnerId = newPartnerId;
-            hasUpdates = true;
-          }
-        }
-
-        // Personas are no longer supported; clear personaLinks for backwards compatibility
-        if (originalChar.personaLinks && originalChar.personaLinks.length > 0) {
-          updates.personaLinks = [];
-          hasUpdates = true;
-        }
-
-        // Remap avatarOverrides
-        if (originalChar.avatarOverrides && originalChar.avatarOverrides.length > 0) {
-          updates.avatarOverrides = originalChar.avatarOverrides
-            .map((override) => {
-              const newChatId = remapId(override.chatId, chatIdMap);
-              const newImageId = remapId(override.imageId, fileIdMap);
-              if (newChatId && newImageId) {
-                return { chatId: newChatId, imageId: newImageId };
-              }
-              return null;
-            })
-            .filter((override) => override !== null) as { chatId: string; imageId: string }[];
-          hasUpdates = true;
-        }
-
-        // Remap tags
-        if (originalChar.tags && originalChar.tags.length > 0) {
-          const remappedTags = remapIdArray(originalChar.tags, tagIdMap);
-          if (remappedTags.length > 0) {
-            updates.tags = remappedTags;
-            hasUpdates = true;
-          }
-        }
-
-        if (hasUpdates) {
-          await repos.characters.update(newId, updates);
-        }
-      } catch (error) {
-        warnings.push(`Failed to reconcile character relationships: ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to reconcile character relationships', { characterId: newId, error });
-      }
-    }
-
-    // 14. Update chats with correct participant IDs
-    for (const [backupId, newId] of chatIdMap) {
-      try {
-        const originalChat = data.chats.find((c) => c.id === backupId);
-        if (!originalChat) continue;
-
-        const updates: Partial<ChatMetadata> = {};
-        let hasUpdates = false;
-
-        // Remap participants
-        if (originalChat.participants && originalChat.participants.length > 0) {
-          updates.participants = originalChat.participants.map((participant) => {
-            const remapped: ChatParticipantBase = { ...participant };
-
-            if (participant.characterId) {
-              const newCharId = remapId(participant.characterId, characterIdMap);
-              if (newCharId) remapped.characterId = newCharId;
-            }
-
-            if (participant.connectionProfileId) {
-              const newConnId = remapId(participant.connectionProfileId, connectionProfileIdMap);
-              if (newConnId) remapped.connectionProfileId = newConnId;
-            }
-
-            if (participant.imageProfileId) {
-              const newImgProfId = remapId(participant.imageProfileId, imageProfileIdMap);
-              if (newImgProfId) remapped.imageProfileId = newImgProfId;
-            }
-
-            return remapped;
-          });
-          hasUpdates = true;
-        }
-
-        // Remap tags
-        if (originalChat.tags && originalChat.tags.length > 0) {
-          const remappedTags = remapIdArray(originalChat.tags, tagIdMap);
-          if (remappedTags.length > 0) {
-            updates.tags = remappedTags;
-            hasUpdates = true;
-          }
-        }
-
-        // Remap projectId
-        if (originalChat.projectId) {
-          const newProjectId = remapId(originalChat.projectId, projectIdMap);
-          if (newProjectId) {
-            updates.projectId = newProjectId;
-            hasUpdates = true;
-          }
-        }
-
-        if (hasUpdates) {
-          await repos.chats.update(newId, updates);
-        }
-      } catch (error) {
-        warnings.push(`Failed to reconcile chat relationships: ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to reconcile chat relationships', { chatId: newId, error });
-      }
-    }
-
-    // 15. Update projects with correct characterRoster IDs
-    for (const [backupId, newId] of projectIdMap) {
-      try {
-        const originalProject = data.projects.find((p) => p.id === backupId);
-        if (!originalProject) continue;
-
-        const updates: Partial<Project> = {};
-        let hasUpdates = false;
-
-        // Remap characterRoster
-        if (originalProject.characterRoster && originalProject.characterRoster.length > 0) {
-          const remappedRoster = remapIdArray(originalProject.characterRoster, characterIdMap);
-          if (remappedRoster.length > 0) {
-            updates.characterRoster = remappedRoster;
-            hasUpdates = true;
-          }
-        }
-
-        if (hasUpdates) {
-          await repos.projects.update(newId, updates);
-        }
-      } catch (error) {
-        warnings.push(`Failed to reconcile project relationships: ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to reconcile project relationships', { projectId: newId, error });
-      }
-    }
-
-    moduleLogger.info('Post-restore reconciliation phase completed');
+    moduleLogger.info('All entities restored with preserved IDs - no reconciliation needed');
 
     const summary: RestoreSummary = {
       characters: data.characters.length,
