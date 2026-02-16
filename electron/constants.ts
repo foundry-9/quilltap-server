@@ -1,5 +1,6 @@
 import * as path from 'path';
 import * as os from 'os';
+import * as crypto from 'crypto';
 
 // --- Lima-specific (macOS only) ---
 
@@ -25,8 +26,11 @@ export const WSL_DISTRO_INSTALL_DIR = path.join(os.homedir(), '.qtvm', 'quilltap
 
 // --- Shared constants ---
 
-/** Name of the VM / distro instance */
-export const VM_NAME = 'quilltap';
+/** Name of the WSL2 distro instance (Windows only — Lima uses per-directory VM names) */
+export const WSL_DISTRO_NAME = 'quilltap';
+
+/** @deprecated Use WSL_DISTRO_NAME for WSL or vmNameForDir() for Lima */
+export const VM_NAME = WSL_DISTRO_NAME;
 
 /** Host port that maps to guest port 5050 */
 export const HOST_PORT = 5050;
@@ -62,8 +66,25 @@ export const ROOTFS_PATH = path.join(ROOTFS_CACHE_DIR, ROOTFS_FILENAME);
 /** Build ID sidecar file written by build-rootfs.sh next to the tarball */
 export const ROOTFS_BUILD_ID_PATH = ROOTFS_PATH + '.build-id';
 
-/** Marker file inside LIMA_HOME recording the build ID of the currently provisioned VM */
-export const VM_BUILD_ID_PATH = path.join(LIMA_HOME, VM_NAME, '.rootfs-build-id');
+/**
+ * Derive a deterministic Lima VM name from an absolute data directory path.
+ * Produces names like `quilltap-a1b2c3d4e5f6` (valid Lima instance names).
+ */
+export function vmNameForDir(dirPath: string): string {
+  const hash = crypto.createHash('sha256').update(dirPath).digest('hex').slice(0, 12);
+  return `quilltap-${hash}`;
+}
+
+/**
+ * Return the path to the build-ID sidecar for a specific VM.
+ * Each VM has its own `.rootfs-build-id` at `~/.qtlima/<vm-name>/.rootfs-build-id`.
+ */
+export function vmBuildIdPath(vmName: string): string {
+  return path.join(LIMA_HOME, vmName, '.rootfs-build-id');
+}
+
+/** JSON map of VM name -> data dir path, for debugging */
+export const DIR_MAP_PATH = path.join(LIMA_HOME, '.dir-map.json');
 
 /** Default data directory per platform */
 export const DEFAULT_DATA_DIR = (() => {

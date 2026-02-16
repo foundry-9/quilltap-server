@@ -4,19 +4,21 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {
   HOST_PORT,
+  LIMA_HOME,
   ROOTFS_BUILD_ID_PATH,
-  VM_BUILD_ID_PATH,
   SPLASH_WIDTH,
   SPLASH_HEIGHT,
   MAIN_WIDTH,
   MAIN_HEIGHT,
+  vmBuildIdPath,
 } from './constants';
 import { IVMManager, createVMManager } from './vm-manager';
 import { LimaManager } from './lima-manager';
 import { DownloadManager } from './download-manager';
 import { HealthChecker } from './health-checker';
-import { SplashUpdate, DirectoryInfo } from './types';
+import { SplashUpdate, DirectoryInfo, DirectorySizeInfo, DetailLevel } from './types';
 import { AppSettings, loadSettings, saveSettings } from './settings';
+import { getSizesForDir } from './disk-utils';
 
 const isDev = !!process.env.ELECTRON_DEV;
 
@@ -54,42 +56,166 @@ function sendSplashError(message: string, canRetry: boolean = true): void {
   }
 }
 
-/** Send directory info to splash screen */
+/** Send directory info to splash screen (two-phase: immediate with empty sizes, then async with real sizes) */
 function sendDirectoryInfo(): void {
-  if (splashWindow && !splashWindow.isDestroyed()) {
-    const info: DirectoryInfo = {
-      dirs: appSettings.knownDataDirs,
-      lastUsed: appSettings.lastDataDir,
-      autoStart: appSettings.autoStart,
-    };
-    splashWindow.webContents.send('splash:directories', info);
+  if (!splashWindow || splashWindow.isDestroyed()) return;
+
+  // Phase 1: Send immediately with empty sizes so UI renders fast
+  const info: DirectoryInfo = {
+    dirs: appSettings.knownDataDirs,
+    lastUsed: appSettings.lastDataDir,
+    autoStart: appSettings.autoStart,
+    sizes: {},
+  };
+  splashWindow.webContents.send('splash:directories', info);
+
+  // Phase 2: Calculate sizes async in background, send update when done
+  calculateDirectorySizes().then((sizes) => {
+    if (splashWindow && !splashWindow.isDestroyed()) {
+      const updated: DirectoryInfo = {
+        dirs: appSettings.knownDataDirs,
+        lastUsed: appSettings.lastDataDir,
+        autoStart: appSettings.autoStart,
+        sizes,
+      };
+      splashWindow.webContents.send('splash:directories', updated);
+    }
+  });
+}
+
+/** Calculate disk sizes for all known data directories */
+async function calculateDirectorySizes(): Promise<Record<string, DirectorySizeInfo>> {
+  const sizes: Record<string, DirectorySizeInfo> = {};
+  for (const dir of appSettings.knownDataDirs) {
+    try {
+      sizes[dir] = getSizesForDir(dir);
+    } catch (err) {
+      console.warn('[Main] Error calculating size for', dir, err);
+      sizes[dir] = { dataSize: -1, vmSize: -1 };
+    }
+  }
+  return sizes;
+}
+
+/**
+ * Migrate the legacy single-VM "quilltap" instance to per-directory VMs.
+ * On first launch after upgrade, if ~/.qtlima/quilltap/ exists (old single VM),
+ * stop and delete it. The new per-directory VM will be created by the normal flow.
+ */
+async function migrateLegacyVM(): Promise<void> {
+  if (process.platform !== 'darwin') return;
+
+  const legacyVmDir = path.join(LIMA_HOME, 'quilltap');
+  if (!fs.existsSync(legacyVmDir)) return;
+
+  console.log('[Main] Legacy single-VM detected at', legacyVmDir, '— migrating to per-directory VMs');
+
+  // Use the VM manager's exec capabilities to stop and delete the legacy VM.
+  // We temporarily need to interact with the old "quilltap" name.
+  // The safest way is to use limactl directly.
+  try {
+    const { execSync } = require('child_process');
+    const env = { ...process.env, LIMA_HOME };
+
+    // Try to stop it if running (ignore errors — it may already be stopped)
+    try {
+      execSync('limactl stop quilltap', { env, timeout: 60_000, stdio: 'pipe' });
+      console.log('[Main] Legacy VM stopped');
+    } catch {
+      console.log('[Main] Legacy VM was not running (or stop failed — proceeding with delete)');
+    }
+
+    // Delete the legacy VM
+    try {
+      execSync('limactl delete --force quilltap', { env, timeout: 60_000, stdio: 'pipe' });
+      console.log('[Main] Legacy VM deleted successfully');
+    } catch (err) {
+      console.warn('[Main] Could not delete legacy VM via limactl, removing directory directly:', err);
+      // Fallback: remove the directory directly
+      fs.rmSync(legacyVmDir, { recursive: true, force: true });
+      console.log('[Main] Legacy VM directory removed');
+    }
+  } catch (err) {
+    console.error('[Main] Legacy VM migration error:', err);
+    // Non-fatal — the old VM directory just takes up space
   }
 }
 
 /**
- * Extract a user-friendly status message from VM manager output lines.
- * Lima outputs lines like: INFO[0005] Attempting to download the image...
- * WSL outputs progress during import.
+ * Extract a user-friendly status message and log level from VM manager output lines.
+ *
+ * Lima (logrus key=value text format):
+ *   time="2026-02-16T07:43:47-06:00" level=info msg="[hostagent] [VZ] - vm state change: running"
+ *   — We extract the msg= value and the level= value.
+ *
+ * Lima (short logrus format, some operations):
+ *   INFO[0005] Attempting to download the image  from="https://..." digest="sha256:..."
+ *
+ * Lima (JSON format, if configured):
+ *   {"level":"info","msg":"Starting the VM","time":"..."}
+ *
+ * WSL outputs plain-text progress during import.
  */
-function formatVMOutput(line: string): string {
-  // Lima log format: INFO[NNNN] message  or  WARN[NNNN] message
-  const limaMatch = line.match(/(?:INFO|WARN)\[\d+\]\s+(.+)/);
-  if (limaMatch) {
-    return limaMatch[1].trim();
+function formatVMOutput(line: string): { message: string; level: DetailLevel } | null {
+  const trimmed = line.trim();
+  if (!trimmed) return null;
+
+  // Try JSON format first: {"level":"info","msg":"..."}
+  if (trimmed.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed.msg) {
+        return { message: truncate(parsed.msg), level: toDetailLevel(parsed.level) };
+      }
+    } catch {
+      // Not valid JSON — fall through
+    }
   }
 
-  // For WSL or other plain-text output, return it directly if it's short enough
-  const cleaned = line.replace(/\0/g, '').trim();
-  if (cleaned && cleaned.length <= 120) {
-    return cleaned;
+  // Logrus key=value text format: time="..." level=info msg="..."
+  const msgMatch = trimmed.match(/\bmsg="((?:[^"\\]|\\.)*)"/);
+  if (msgMatch) {
+    const msg = msgMatch[1].replace(/\\"/g, '"');
+    const levelMatch = trimmed.match(/\blevel=(\w+)/);
+    const level = levelMatch ? toDetailLevel(levelMatch[1]) : 'info';
+    return { message: truncate(msg), level };
   }
 
-  // Truncate overly long lines
-  if (cleaned) {
-    return cleaned.substring(0, 117) + '...';
+  // Short logrus format: LEVEL[NNNN] message  key=value
+  const shortMatch = trimmed.match(/^(DEBU|INFO|WARN|ERRO|FATA|PANI)\[\d+\]\s+(.+)/);
+  if (shortMatch) {
+    const levelMap: Record<string, DetailLevel> = {
+      'DEBU': 'debug', 'INFO': 'info', 'WARN': 'warn',
+      'ERRO': 'error', 'FATA': 'error', 'PANI': 'error',
+    };
+    const level = levelMap[shortMatch[1]] || 'info';
+    const fullText = shortMatch[2];
+    // The msg ends where key=value pairs begin (double-space separator)
+    const dblIdx = fullText.indexOf('  ');
+    const msg = dblIdx > 0 ? fullText.substring(0, dblIdx) : fullText;
+    return { message: truncate(msg.trim()), level };
   }
 
-  return '';
+  // Plain text (WSL or other) — return as info
+  const cleaned = trimmed.replace(/\0/g, '');
+  if (!cleaned) return null;
+  return { message: truncate(cleaned), level: 'info' };
+}
+
+/** Normalize a level string to a valid DetailLevel */
+function toDetailLevel(raw: string | undefined): DetailLevel {
+  if (!raw) return 'info';
+  const lower = raw.toLowerCase();
+  if (lower === 'warning') return 'warn';
+  if (lower === 'fatal' || lower === 'panic') return 'error';
+  if (['info', 'warn', 'error', 'debug'].includes(lower)) return lower as DetailLevel;
+  return 'info';
+}
+
+/** Truncate a string to a splash-friendly length */
+function truncate(text: string, max: number = 120): string {
+  if (text.length <= max) return text;
+  return text.substring(0, max - 3) + '...';
 }
 
 /** Create the splash window */
@@ -202,7 +328,7 @@ function onSplashReady(): void {
  * Main startup sequence. Orchestrates:
  * 1. System requirements check
  * 2. Rootfs download (if needed)
- * 3. VM creation (if needed, with possible recreation for dir change)
+ * 3. VM creation (if needed) — per-directory VM, no recreation on dir change
  * 4. VM start (if needed)
  * 5. Health check polling
  * 6. Main window launch
@@ -213,6 +339,7 @@ async function startupSequence(dataDir: string): Promise<void> {
   // Configure the VM manager with the chosen data directory
   vmManager.setDataDir(dataDir);
   console.log(`[Main] Starting with data directory: ${dataDir}`);
+  console.log(`[Main] VM name for directory: ${vmManager.getVMName()}`);
 
   // In dev mode, skip VM entirely
   if (isDev) {
@@ -248,6 +375,9 @@ async function startupSequence(dataDir: string): Promise<void> {
     phase: 'initializing',
     message: 'Checking system requirements...',
   });
+
+  // Migrate legacy single-VM if present (one-time operation)
+  await migrateLegacyVM();
 
   // Verify platform prerequisites (WSL2 on Windows, CLT + limactl on macOS)
   const prereq = await vmManager.checkPrerequisites();
@@ -318,7 +448,7 @@ async function startupSequence(dataDir: string): Promise<void> {
     }
   }
 
-  // Step 3: Check VM status
+  // Step 3: Check VM status (per-directory VM — no mismatch check needed)
   sendSplashUpdate({
     phase: 'initializing',
     message: 'Checking virtual machine...',
@@ -326,32 +456,13 @@ async function startupSequence(dataDir: string): Promise<void> {
 
   const vmStatus = await vmManager.checkStatus();
 
-  // Step 3a: Check if data directory changed (requires VM recreation on macOS)
-  if (vmStatus.exists) {
-    const dirMatches = await vmManager.dataDirMatchesVM();
-    if (!dirMatches) {
-      console.log('[Main] Data directory changed — recreating VM');
-      sendSplashUpdate({
-        phase: 'creating-vm',
-        message: 'Switching data directory...',
-        detail: 'Recreating virtual machine with new mount',
-      });
-
-      if (vmStatus.running) {
-        await vmManager.stopVM();
-      }
-      await vmManager.deleteVM();
-      vmStatus.exists = false;
-      vmStatus.running = false;
-    }
-  }
-
   // Step 3b: Check if rootfs tarball has been updated since the VM was provisioned
+  const currentVmBuildIdPath = vmBuildIdPath(vmManager.getVMName());
   if (vmStatus.exists) {
     let tarballBuildId = '';
     let vmBuildId = '';
     try { tarballBuildId = fs.readFileSync(ROOTFS_BUILD_ID_PATH, 'utf-8').trim(); } catch { /* missing is fine */ }
-    try { vmBuildId = fs.readFileSync(VM_BUILD_ID_PATH, 'utf-8').trim(); } catch { /* missing is fine */ }
+    try { vmBuildId = fs.readFileSync(currentVmBuildIdPath, 'utf-8').trim(); } catch { /* missing is fine */ }
 
     if (tarballBuildId && tarballBuildId !== vmBuildId) {
       console.log(`[Main] Rootfs updated: tarball="${tarballBuildId}" vm="${vmBuildId}" — reprovisioning VM`);
@@ -379,12 +490,13 @@ async function startupSequence(dataDir: string): Promise<void> {
     });
 
     const createResult = await vmManager.createVM((line) => {
-      const detail = formatVMOutput(line);
-      if (detail) {
+      const parsed = formatVMOutput(line);
+      if (parsed) {
         sendSplashUpdate({
           phase: 'creating-vm',
           message: 'Creating virtual machine...',
-          detail,
+          detail: parsed.message,
+          detailLevel: parsed.level,
         });
       }
     });
@@ -401,7 +513,8 @@ async function startupSequence(dataDir: string): Promise<void> {
     try {
       const tarballBuildId = fs.readFileSync(ROOTFS_BUILD_ID_PATH, 'utf-8').trim();
       if (tarballBuildId) {
-        fs.writeFileSync(VM_BUILD_ID_PATH, tarballBuildId, 'utf-8');
+        fs.mkdirSync(path.dirname(currentVmBuildIdPath), { recursive: true });
+        fs.writeFileSync(currentVmBuildIdPath, tarballBuildId, 'utf-8');
         console.log(`[Main] Wrote VM build ID: ${tarballBuildId}`);
       }
     } catch {
@@ -418,12 +531,13 @@ async function startupSequence(dataDir: string): Promise<void> {
     });
 
     const startResult = await vmManager.startVM((line) => {
-      const detail = formatVMOutput(line);
-      if (detail) {
+      const parsed = formatVMOutput(line);
+      if (parsed) {
         sendSplashUpdate({
           phase: 'starting-vm',
           message: 'Starting virtual machine...',
-          detail,
+          detail: parsed.message,
+          detailLevel: parsed.level,
         });
       }
     });
@@ -494,6 +608,7 @@ ipcMain.handle('splash:get-directories', (): DirectoryInfo => {
     dirs: appSettings.knownDataDirs,
     lastUsed: appSettings.lastDataDir,
     autoStart: appSettings.autoStart,
+    sizes: {},
   };
 });
 

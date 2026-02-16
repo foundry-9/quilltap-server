@@ -4,6 +4,9 @@
 
 ### 3.0-dev
 
+- feat: Per-data-directory Lima VMs — each data directory gets its own VM (`quilltap-<hash>`) so switching directories is stop+start instead of delete+recreate; includes legacy single-VM migration, port-conflict safety (stops other quilltap-* VMs before starting), and debug dir-map JSON
+- feat: Disk usage display on splash screen directory chooser — shows data directory size and VM size per entry; two-phase async loading so UI renders immediately
+- feat: Color-coded VM log output on splash screen — parses logrus key=value log format to extract just the `msg` field; detail text color-coded by level (blue=info, amber=warn, red=error, gray=debug)
 - build: Re-enable DMG packaging for macOS — framework symlink issue no longer applies; removed zip fallback
 - feat: Data directory chooser on splash screen
   - New initial phase on the splash screen lets users pick or switch between data directories

@@ -4,25 +4,31 @@ import * as fs from 'fs';
 import { app } from 'electron';
 import {
   LIMA_HOME,
-  VM_NAME,
   LIMA_BINARY_NAME,
   CLT_VERIFIED_MARKER,
   DEFAULT_DATA_DIR,
   VM_CREATE_TIMEOUT_S,
   VM_START_TIMEOUT_S,
   VM_STOP_TIMEOUT_S,
+  vmNameForDir,
+  DIR_MAP_PATH,
 } from './constants';
 import { VMStatus, CommandResult } from './types';
 import { IVMManager } from './vm-manager';
+import { dirSize } from './disk-utils';
 
 /**
- * Manages the Lima VM lifecycle: create, start, stop, delete, and status checks.
+ * Manages per-directory Lima VM lifecycle: create, start, stop, delete, and status checks.
  * macOS-only implementation using the Lima hypervisor.
+ *
+ * Each data directory gets its own VM named `quilltap-<hash>` so that switching
+ * directories only requires stop + start (no delete + recreate).
  */
 export class LimaManager implements IVMManager {
   private limaPath: string;
   private templatePath: string;
   private dataDir: string;
+  private vmName: string;
 
   constructor() {
     const resourcesPath = app.isPackaged
@@ -40,14 +46,18 @@ export class LimaManager implements IVMManager {
       ? path.join(resourcesPath, 'lima', 'quilltap.yaml')
       : path.join(__dirname, '..', 'lima', 'quilltap.yaml');
 
-    // Default data directory
+    // Default data directory and derived VM name
     this.dataDir = DEFAULT_DATA_DIR;
+    this.vmName = vmNameForDir(this.dataDir);
   }
 
   /** Set the host-side data directory for the VM mount */
   setDataDir(hostPath: string): void {
     console.log('[LimaManager] Data directory set to:', hostPath);
     this.dataDir = hostPath;
+    this.vmName = vmNameForDir(hostPath);
+    console.log('[LimaManager] VM name for directory:', this.vmName);
+    this.updateDirMap();
   }
 
   /** Get the currently configured data directory */
@@ -55,44 +65,20 @@ export class LimaManager implements IVMManager {
     return this.dataDir;
   }
 
-  /**
-   * Check if the running VM's mounted data directory matches the configured one.
-   * Reads the instance YAML to compare mount locations.
-   */
-  async dataDirMatchesVM(): Promise<boolean> {
-    const instanceYaml = path.join(LIMA_HOME, VM_NAME, 'lima.yaml');
-    try {
-      if (!fs.existsSync(instanceYaml)) {
-        console.log('[LimaManager] No instance YAML found — no VM to compare');
-        return true; // No VM exists, so no mismatch
-      }
+  /** Get the VM name for the current data directory */
+  getVMName(): string {
+    return this.vmName;
+  }
 
-      const content = fs.readFileSync(instanceYaml, 'utf-8');
-      // Look for the mount location line that maps to /data/quilltap
-      // The YAML has:  - location: "~/Library/Application Support/Quilltap"
-      //                  mountPoint: "/data/quilltap"
-      const mountMatch = content.match(/location:\s*"?([^"\n]+)"?\s*\n\s*mountPoint:\s*"?\/data\/quilltap/);
-      if (!mountMatch) {
-        console.log('[LimaManager] Could not find data mount in instance YAML');
-        return false;
-      }
+  /** Get the disk size of the VM directory in bytes */
+  async getVMDiskSize(): Promise<number> {
+    const vmDir = path.join(LIMA_HOME, this.vmName);
+    return dirSize(vmDir);
+  }
 
-      const vmMountPath = mountMatch[1].trim();
-      // Resolve ~ to homedir for comparison
-      const resolvedVmPath = vmMountPath.startsWith('~/')
-        ? path.join(require('os').homedir(), vmMountPath.slice(2))
-        : vmMountPath;
-      const resolvedDataDir = this.dataDir.startsWith('~/')
-        ? path.join(require('os').homedir(), this.dataDir.slice(2))
-        : this.dataDir;
-
-      const matches = resolvedVmPath === resolvedDataDir;
-      console.log(`[LimaManager] VM mount="${resolvedVmPath}" configured="${resolvedDataDir}" matches=${matches}`);
-      return matches;
-    } catch (err) {
-      console.warn('[LimaManager] Error checking VM data dir:', err);
-      return false;
-    }
+  /** Get the disk size of the data directory in bytes */
+  async getDataDirDiskSize(): Promise<number> {
+    return dirSize(this.dataDir);
   }
 
   /** Verify that Xcode CLT and limactl are available */
@@ -244,7 +230,7 @@ export class LimaManager implements IVMManager {
     });
   }
 
-  /** Check if the VM exists and whether it's running */
+  /** Check if the VM for the current data directory exists and whether it's running */
   async checkStatus(): Promise<VMStatus> {
     const result = await this.exec(['list', '--json'], 30);
 
@@ -257,18 +243,44 @@ export class LimaManager implements IVMManager {
       const lines = result.stdout.trim().split('\n').filter(Boolean);
       for (const line of lines) {
         const vm = JSON.parse(line);
-        if (vm.name === VM_NAME) {
+        if (vm.name === this.vmName) {
           const running = vm.status === 'Running';
           return {
             exists: true,
             running,
-            message: `VM ${VM_NAME} exists, status: ${vm.status}`,
+            message: `VM ${this.vmName} exists, status: ${vm.status}`,
           };
         }
       }
-      return { exists: false, running: false, message: `VM ${VM_NAME} not found` };
+      return { exists: false, running: false, message: `VM ${this.vmName} not found` };
     } catch {
       return { exists: false, running: false, message: 'Failed to parse limactl output' };
+    }
+  }
+
+  /**
+   * Stop any other running quilltap-* VM to prevent port conflicts on host:5050.
+   * Called before starting the current VM.
+   */
+  async stopOtherRunningVMs(): Promise<void> {
+    const result = await this.exec(['list', '--json'], 30);
+    if (!result.success) return;
+
+    try {
+      const lines = result.stdout.trim().split('\n').filter(Boolean);
+      for (const line of lines) {
+        const vm = JSON.parse(line);
+        if (
+          vm.name !== this.vmName &&
+          vm.name.startsWith('quilltap-') &&
+          vm.status === 'Running'
+        ) {
+          console.log(`[LimaManager] Stopping other running VM: ${vm.name}`);
+          await this.exec(['stop', vm.name], VM_STOP_TIMEOUT_S);
+        }
+      }
+    } catch (err) {
+      console.warn('[LimaManager] Error checking for other running VMs:', err);
     }
   }
 
@@ -289,7 +301,7 @@ export class LimaManager implements IVMManager {
 
     // Write to a temp file in LIMA_HOME
     fs.mkdirSync(LIMA_HOME, { recursive: true });
-    const tempPath = path.join(LIMA_HOME, 'quilltap-generated.yaml');
+    const tempPath = path.join(LIMA_HOME, `${this.vmName}-generated.yaml`);
     fs.writeFileSync(tempPath, modified, 'utf-8');
     console.log('[LimaManager] Generated modified template at', tempPath, 'with dataDir:', this.dataDir);
     return tempPath;
@@ -298,41 +310,63 @@ export class LimaManager implements IVMManager {
   /** Create the VM from the template (using modified template with configured data dir) */
   async createVM(onOutput?: (line: string) => void): Promise<CommandResult> {
     const templateToUse = this.generateModifiedTemplate();
-    console.log('[LimaManager] Creating VM from template:', templateToUse);
+    console.log('[LimaManager] Creating VM', this.vmName, 'from template:', templateToUse);
     return this.exec(
-      ['create', '--name', VM_NAME, templateToUse],
+      ['create', '--name', this.vmName, templateToUse],
       VM_CREATE_TIMEOUT_S,
       onOutput
     );
   }
 
-  /** Start an existing VM */
+  /** Start an existing VM (stops any other quilltap-* VM first) */
   async startVM(onOutput?: (line: string) => void): Promise<CommandResult> {
-    console.log('[LimaManager] Starting VM:', VM_NAME);
-    return this.exec(['start', VM_NAME], VM_START_TIMEOUT_S, onOutput);
+    // Prevent port conflicts: stop any other running quilltap-* VMs
+    await this.stopOtherRunningVMs();
+
+    console.log('[LimaManager] Starting VM:', this.vmName);
+    return this.exec(['start', this.vmName], VM_START_TIMEOUT_S, onOutput);
   }
 
   /** Stop a running VM */
   async stopVM(): Promise<CommandResult> {
-    console.log('[LimaManager] Stopping VM:', VM_NAME);
-    return this.exec(['stop', VM_NAME], VM_STOP_TIMEOUT_S);
+    console.log('[LimaManager] Stopping VM:', this.vmName);
+    return this.exec(['stop', this.vmName], VM_STOP_TIMEOUT_S);
   }
 
   /** Force-delete the VM */
   async deleteVM(): Promise<CommandResult> {
-    console.log('[LimaManager] Deleting VM:', VM_NAME);
-    return this.exec(['delete', '--force', VM_NAME], VM_STOP_TIMEOUT_S);
+    console.log('[LimaManager] Deleting VM:', this.vmName);
+    return this.exec(['delete', '--force', this.vmName], VM_STOP_TIMEOUT_S);
   }
 
   /** Read recent VM logs for debugging */
   async getLogs(lines: number = 50): Promise<string> {
-    const logPath = path.join(LIMA_HOME, VM_NAME, 'serial.log');
+    const logPath = path.join(LIMA_HOME, this.vmName, 'serial.log');
     try {
       const content = fs.readFileSync(logPath, 'utf-8');
       const allLines = content.split('\n');
       return allLines.slice(-lines).join('\n');
     } catch {
       return 'No logs available';
+    }
+  }
+
+  /**
+   * Update the dir-map JSON file that maps VM names to data directory paths.
+   * This is purely for debugging/discovery — not used at runtime.
+   */
+  private updateDirMap(): void {
+    try {
+      let map: Record<string, string> = {};
+      if (fs.existsSync(DIR_MAP_PATH)) {
+        map = JSON.parse(fs.readFileSync(DIR_MAP_PATH, 'utf-8'));
+      }
+      map[this.vmName] = this.dataDir;
+      fs.mkdirSync(path.dirname(DIR_MAP_PATH), { recursive: true });
+      fs.writeFileSync(DIR_MAP_PATH, JSON.stringify(map, null, 2), 'utf-8');
+      console.log('[LimaManager] Updated dir-map:', this.vmName, '->', this.dataDir);
+    } catch (err) {
+      console.warn('[LimaManager] Could not update dir-map:', err);
     }
   }
 }

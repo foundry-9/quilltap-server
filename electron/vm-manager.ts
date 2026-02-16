@@ -20,11 +20,14 @@ export interface IVMManager {
   /** Get the currently configured data directory */
   getDataDir(): string;
 
-  /**
-   * Check if the VM's currently mounted data directory matches the given path.
-   * Returns true if they match (no recreation needed), false if different.
-   */
-  dataDirMatchesVM(): Promise<boolean>;
+  /** Get the VM/distro name for the current data directory */
+  getVMName(): string;
+
+  /** Get the disk size of the VM in bytes (-1 if no VM exists) */
+  getVMDiskSize(): Promise<number>;
+
+  /** Get the disk size of the data directory in bytes (-1 if missing) */
+  getDataDirDiskSize(): Promise<number>;
 }
 
 /**

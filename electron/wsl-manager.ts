@@ -1,7 +1,7 @@
 import { spawn } from 'child_process';
 import * as fs from 'fs';
 import {
-  VM_NAME,
+  WSL_DISTRO_NAME,
   WSL_DISTRO_INSTALL_DIR,
   ROOTFS_PATH,
   DEFAULT_DATA_DIR,
@@ -11,6 +11,7 @@ import {
 } from './constants';
 import { VMStatus, CommandResult } from './types';
 import { IVMManager } from './vm-manager';
+import { dirSize } from './disk-utils';
 
 /**
  * Manages the WSL2 distro lifecycle on Windows: import, start, stop, unregister.
@@ -34,14 +35,19 @@ export class WSLManager implements IVMManager {
     return this.dataDir;
   }
 
-  /**
-   * On Windows/WSL2, the data directory is passed as an env var on each start,
-   * so no VM recreation is needed — always returns true.
-   */
-  async dataDirMatchesVM(): Promise<boolean> {
-    // WSL2 receives the data dir as an env var on each start,
-    // so switching directories doesn't require VM recreation
-    return true;
+  /** Get the WSL2 distro name (always the same — data dir is passed as env var) */
+  getVMName(): string {
+    return WSL_DISTRO_NAME;
+  }
+
+  /** Get the disk size of the WSL2 distro install directory in bytes */
+  async getVMDiskSize(): Promise<number> {
+    return dirSize(WSL_DISTRO_INSTALL_DIR);
+  }
+
+  /** Get the disk size of the data directory in bytes */
+  async getDataDirDiskSize(): Promise<number> {
+    return dirSize(this.dataDir);
   }
 
   /** Execute a wsl.exe command and capture output */
@@ -165,18 +171,18 @@ export class WSLManager implements IVMManager {
         const cleaned = line.replace(/^\*?\s*/, '');
         const parts = cleaned.split(/\s+/);
 
-        if (parts[0] === VM_NAME) {
+        if (parts[0] === WSL_DISTRO_NAME) {
           const state = parts[1] || '';
           const running = state.toLowerCase() === 'running';
           return {
             exists: true,
             running,
-            message: `Distro ${VM_NAME} exists, state: ${state}`,
+            message: `Distro ${WSL_DISTRO_NAME} exists, state: ${state}`,
           };
         }
       }
 
-      return { exists: false, running: false, message: `Distro ${VM_NAME} not found` };
+      return { exists: false, running: false, message: `Distro ${WSL_DISTRO_NAME} not found` };
     } catch {
       return { exists: false, running: false, message: 'Failed to parse wsl output' };
     }
@@ -190,7 +196,7 @@ export class WSLManager implements IVMManager {
     fs.mkdirSync(WSL_DISTRO_INSTALL_DIR, { recursive: true });
 
     return this.exec(
-      ['--import', VM_NAME, WSL_DISTRO_INSTALL_DIR, ROOTFS_PATH, '--version', '2'],
+      ['--import', WSL_DISTRO_NAME, WSL_DISTRO_INSTALL_DIR, ROOTFS_PATH, '--version', '2'],
       VM_CREATE_TIMEOUT_S,
       onOutput
     );
@@ -201,7 +207,7 @@ export class WSLManager implements IVMManager {
    * WSL keeps the distro alive as long as the Node.js process is running.
    */
   async startVM(onOutput?: (line: string) => void): Promise<CommandResult> {
-    console.log('[WSLManager] Starting distro:', VM_NAME);
+    console.log('[WSLManager] Starting distro:', WSL_DISTRO_NAME);
 
     // Ensure Windows-side data directory exists
     if (this.dataDir) {
@@ -218,7 +224,7 @@ export class WSLManager implements IVMManager {
     const cmd = `${dataEnv} nohup /usr/local/bin/wsl-init.sh > /tmp/quilltap-stdout.log 2>&1 &`;
 
     return this.exec(
-      ['-d', VM_NAME, '--exec', 'sh', '-c', cmd],
+      ['-d', WSL_DISTRO_NAME, '--exec', 'sh', '-c', cmd],
       VM_START_TIMEOUT_S,
       onOutput
     );
@@ -226,14 +232,14 @@ export class WSLManager implements IVMManager {
 
   /** Terminate the distro */
   async stopVM(): Promise<CommandResult> {
-    console.log('[WSLManager] Terminating distro:', VM_NAME);
-    return this.exec(['--terminate', VM_NAME], VM_STOP_TIMEOUT_S);
+    console.log('[WSLManager] Terminating distro:', WSL_DISTRO_NAME);
+    return this.exec(['--terminate', WSL_DISTRO_NAME], VM_STOP_TIMEOUT_S);
   }
 
   /** Unregister the distro (deletes all data inside the distro) */
   async deleteVM(): Promise<CommandResult> {
-    console.log('[WSLManager] Unregistering distro:', VM_NAME);
-    return this.exec(['--unregister', VM_NAME], VM_STOP_TIMEOUT_S);
+    console.log('[WSLManager] Unregistering distro:', WSL_DISTRO_NAME);
+    return this.exec(['--unregister', WSL_DISTRO_NAME], VM_STOP_TIMEOUT_S);
   }
 
   /** Read recent logs from inside the distro */
@@ -246,7 +252,7 @@ export class WSLManager implements IVMManager {
 
     for (const logPath of logPaths) {
       const result = await this.exec(
-        ['-d', VM_NAME, '--exec', 'tail', '-n', String(lines), logPath],
+        ['-d', WSL_DISTRO_NAME, '--exec', 'tail', '-n', String(lines), logPath],
         15
       );
       if (result.success && result.stdout.trim()) {

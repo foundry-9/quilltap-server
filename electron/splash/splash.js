@@ -25,6 +25,9 @@ const changeDirLink = document.getElementById('changeDirLink');
 /** Currently selected directory in the chooser */
 let selectedDir = '';
 
+/** Current sizes data (may arrive after initial directory list) */
+let currentSizes = {};
+
 /** Phase descriptions shown to the user */
 const phaseMessages = {
   'choose-directory': 'Choose data directory',
@@ -37,6 +40,42 @@ const phaseMessages = {
   'ready': 'Ready!',
   'error': 'Something went wrong',
 };
+
+/**
+ * Format a byte count into a human-readable string.
+ * Duplicated from disk-utils since splash.js has no Node access.
+ */
+function formatBytes(bytes) {
+  if (bytes < 0) return '';
+  if (bytes === 0) return '0 B';
+
+  var units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  var k = 1024;
+  var i = Math.floor(Math.log(bytes) / Math.log(k));
+  var value = bytes / Math.pow(k, i);
+
+  return value.toFixed(i > 0 ? 1 : 0) + ' ' + units[i];
+}
+
+/**
+ * Build a size summary string for a directory.
+ * Returns empty string if no size data available.
+ */
+function formatSizeInfo(sizeInfo) {
+  if (!sizeInfo) return '';
+
+  var parts = [];
+  if (sizeInfo.dataSize >= 0) {
+    parts.push('Data: ' + formatBytes(sizeInfo.dataSize));
+  }
+  if (sizeInfo.vmSize >= 0) {
+    parts.push('VM: ' + formatBytes(sizeInfo.vmSize));
+  } else {
+    parts.push('No VM');
+  }
+
+  return parts.join(' \u2022 '); // bullet separator
+}
 
 /** Show one UI section and hide the others */
 function showSection(section) {
@@ -54,30 +93,43 @@ function showSection(section) {
 }
 
 /** Render the directory list from the given info */
-function renderDirectoryList(dirs, lastUsed) {
+function renderDirectoryList(dirs, lastUsed, sizes) {
   directoryList.innerHTML = '';
   selectedDir = lastUsed || (dirs.length > 0 ? dirs[0] : '');
 
   dirs.forEach(function(dir) {
-    const item = document.createElement('div');
+    var item = document.createElement('div');
     item.className = 'directory-item' + (dir === selectedDir ? ' selected' : '');
 
-    const radio = document.createElement('input');
+    var radio = document.createElement('input');
     radio.type = 'radio';
     radio.name = 'dataDir';
     radio.checked = dir === selectedDir;
 
-    const pathLabel = document.createElement('span');
+    var infoWrap = document.createElement('div');
+    infoWrap.className = 'directory-item-info';
+
+    var pathLabel = document.createElement('span');
     pathLabel.className = 'directory-item-path';
     pathLabel.textContent = dir;
     pathLabel.title = dir;
+    infoWrap.appendChild(pathLabel);
+
+    // Add size info if available
+    var sizeText = formatSizeInfo(sizes && sizes[dir]);
+    if (sizeText) {
+      var sizeLabel = document.createElement('span');
+      sizeLabel.className = 'directory-item-sizes';
+      sizeLabel.textContent = sizeText;
+      infoWrap.appendChild(sizeLabel);
+    }
 
     item.appendChild(radio);
-    item.appendChild(pathLabel);
+    item.appendChild(infoWrap);
 
     // Only show remove button if there's more than one directory
     if (dirs.length > 1) {
-      const removeBtn = document.createElement('button');
+      var removeBtn = document.createElement('button');
       removeBtn.className = 'directory-item-remove';
       removeBtn.textContent = '\u00d7'; // multiplication sign (x)
       removeBtn.title = 'Remove from list';
@@ -147,8 +199,12 @@ window.quilltap.onUpdate(function(data) {
     progressContainer.classList.remove('visible');
   }
 
-  // Update detail text
+  // Update detail text with color coding based on log level
   detailEl.textContent = data.detail || '';
+  detailEl.className = 'detail-text';
+  if (data.detail && data.detailLevel) {
+    detailEl.classList.add('detail-' + data.detailLevel);
+  }
 });
 
 /** Handle error from main process */
@@ -168,7 +224,8 @@ window.quilltap.onError(function(data) {
 
 /** Handle directory info updates from main process */
 window.quilltap.onDirectories(function(data) {
-  renderDirectoryList(data.dirs, data.lastUsed);
+  currentSizes = data.sizes || {};
+  renderDirectoryList(data.dirs, data.lastUsed, currentSizes);
   autoStartCheckbox.checked = data.autoStart;
 });
 

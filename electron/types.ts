@@ -10,6 +10,14 @@ export type SplashPhase =
   | 'ready'
   | 'error';
 
+/** Disk usage information for a single data directory */
+export interface DirectorySizeInfo {
+  /** Size of the data directory in bytes, or -1 if unknown/missing */
+  dataSize: number;
+  /** Size of the associated VM in bytes, or -1 if no VM exists */
+  vmSize: number;
+}
+
 /** Directory information sent to the splash screen */
 export interface DirectoryInfo {
   /** All known data directories */
@@ -18,6 +26,8 @@ export interface DirectoryInfo {
   lastUsed: string;
   /** Whether auto-start is enabled */
   autoStart: boolean;
+  /** Disk usage per directory path (may arrive asynchronously) */
+  sizes: Record<string, DirectorySizeInfo>;
 }
 
 /** Status of the VM (Lima on macOS, WSL2 on Windows) */
@@ -46,12 +56,17 @@ export interface HealthStatus {
   error?: string;
 }
 
+/** Log level for color-coding detail text on the splash screen */
+export type DetailLevel = 'info' | 'warn' | 'error' | 'debug';
+
 /** Update message sent to splash screen via IPC */
 export interface SplashUpdate {
   phase: SplashPhase;
   message: string;
   progress?: number;
   detail?: string;
+  /** Log level for color-coding the detail text */
+  detailLevel?: DetailLevel;
   canRetry?: boolean;
 }
 
