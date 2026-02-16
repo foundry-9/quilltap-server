@@ -127,7 +127,7 @@ export class LimaManager implements IVMManager {
   }
 
   /** Execute a limactl command and capture output */
-  private exec(args: string[], timeoutS: number): Promise<CommandResult> {
+  private exec(args: string[], timeoutS: number, onOutput?: (line: string) => void): Promise<CommandResult> {
     return new Promise((resolve) => {
       const child = spawn(this.limaPath, args, {
         env: this.env,
@@ -137,16 +137,34 @@ export class LimaManager implements IVMManager {
 
       let stdout = '';
       let stderr = '';
+      let stderrBuf = '';
 
       child.stdout.on('data', (data: Buffer) => {
         stdout += data.toString();
       });
 
       child.stderr.on('data', (data: Buffer) => {
-        stderr += data.toString();
+        const chunk = data.toString();
+        stderr += chunk;
+
+        if (onOutput) {
+          stderrBuf += chunk;
+          const lines = stderrBuf.split('\n');
+          // Keep the last incomplete line in the buffer
+          stderrBuf = lines.pop() || '';
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed) onOutput(trimmed);
+          }
+        }
       });
 
       child.on('close', (code) => {
+        // Flush any remaining buffered output
+        if (onOutput && stderrBuf.trim()) {
+          onOutput(stderrBuf.trim());
+        }
+
         if (code === 0) {
           resolve({ success: true, stdout, stderr });
         } else {
@@ -199,18 +217,19 @@ export class LimaManager implements IVMManager {
   }
 
   /** Create the VM from the template */
-  async createVM(): Promise<CommandResult> {
+  async createVM(onOutput?: (line: string) => void): Promise<CommandResult> {
     console.log('[LimaManager] Creating VM from template:', this.templatePath);
     return this.exec(
       ['create', '--name', VM_NAME, this.templatePath],
-      VM_CREATE_TIMEOUT_S
+      VM_CREATE_TIMEOUT_S,
+      onOutput
     );
   }
 
   /** Start an existing VM */
-  async startVM(): Promise<CommandResult> {
+  async startVM(onOutput?: (line: string) => void): Promise<CommandResult> {
     console.log('[LimaManager] Starting VM:', VM_NAME);
-    return this.exec(['start', VM_NAME], VM_START_TIMEOUT_S);
+    return this.exec(['start', VM_NAME], VM_START_TIMEOUT_S, onOutput);
   }
 
   /** Stop a running VM */

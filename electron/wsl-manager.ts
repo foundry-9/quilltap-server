@@ -19,7 +19,7 @@ export class WSLManager implements IVMManager {
   private wslPath: string = 'wsl.exe';
 
   /** Execute a wsl.exe command and capture output */
-  private exec(args: string[], timeoutS: number): Promise<CommandResult> {
+  private exec(args: string[], timeoutS: number, onOutput?: (line: string) => void): Promise<CommandResult> {
     return new Promise((resolve) => {
       const child = spawn(this.wslPath, args, {
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -29,16 +29,41 @@ export class WSLManager implements IVMManager {
 
       let stdout = '';
       let stderr = '';
+      let outputBuf = '';
 
       child.stdout.on('data', (data: Buffer) => {
-        stdout += data.toString();
+        const chunk = data.toString();
+        stdout += chunk;
+
+        if (onOutput) {
+          outputBuf += chunk;
+          const lines = outputBuf.split('\n');
+          outputBuf = lines.pop() || '';
+          for (const line of lines) {
+            const trimmed = line.replace(/\0/g, '').trim();
+            if (trimmed) onOutput(trimmed);
+          }
+        }
       });
 
       child.stderr.on('data', (data: Buffer) => {
-        stderr += data.toString();
+        const chunk = data.toString();
+        stderr += chunk;
+
+        if (onOutput) {
+          const lines = chunk.split('\n');
+          for (const line of lines) {
+            const trimmed = line.replace(/\0/g, '').trim();
+            if (trimmed) onOutput(trimmed);
+          }
+        }
       });
 
       child.on('close', (code) => {
+        if (onOutput && outputBuf.replace(/\0/g, '').trim()) {
+          onOutput(outputBuf.replace(/\0/g, '').trim());
+        }
+
         if (code === 0) {
           resolve({ success: true, stdout, stderr });
         } else {
@@ -132,7 +157,7 @@ export class WSLManager implements IVMManager {
   }
 
   /** Import the rootfs tarball as a new WSL2 distro */
-  async createVM(): Promise<CommandResult> {
+  async createVM(onOutput?: (line: string) => void): Promise<CommandResult> {
     console.log('[WSLManager] Importing distro from rootfs:', ROOTFS_PATH);
 
     // Ensure install directory exists
@@ -140,7 +165,8 @@ export class WSLManager implements IVMManager {
 
     return this.exec(
       ['--import', VM_NAME, WSL_DISTRO_INSTALL_DIR, ROOTFS_PATH, '--version', '2'],
-      VM_CREATE_TIMEOUT_S
+      VM_CREATE_TIMEOUT_S,
+      onOutput
     );
   }
 
@@ -148,7 +174,7 @@ export class WSLManager implements IVMManager {
    * Start the distro and launch the Quilltap backend.
    * WSL keeps the distro alive as long as the Node.js process is running.
    */
-  async startVM(): Promise<CommandResult> {
+  async startVM(onOutput?: (line: string) => void): Promise<CommandResult> {
     console.log('[WSLManager] Starting distro:', VM_NAME);
 
     // Ensure Windows-side data directory exists
@@ -167,7 +193,8 @@ export class WSLManager implements IVMManager {
 
     return this.exec(
       ['-d', VM_NAME, '--exec', 'sh', '-c', cmd],
-      VM_START_TIMEOUT_S
+      VM_START_TIMEOUT_S,
+      onOutput
     );
   }
 

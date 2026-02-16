@@ -49,6 +49,32 @@ function sendSplashError(message: string, canRetry: boolean = true): void {
   }
 }
 
+/**
+ * Extract a user-friendly status message from VM manager output lines.
+ * Lima outputs lines like: INFO[0005] Attempting to download the image...
+ * WSL outputs progress during import.
+ */
+function formatVMOutput(line: string): string {
+  // Lima log format: INFO[NNNN] message  or  WARN[NNNN] message
+  const limaMatch = line.match(/(?:INFO|WARN)\[\d+\]\s+(.+)/);
+  if (limaMatch) {
+    return limaMatch[1].trim();
+  }
+
+  // For WSL or other plain-text output, return it directly if it's short enough
+  const cleaned = line.replace(/\0/g, '').trim();
+  if (cleaned && cleaned.length <= 120) {
+    return cleaned;
+  }
+
+  // Truncate overly long lines
+  if (cleaned) {
+    return cleaned.substring(0, 117) + '...';
+  }
+
+  return '';
+}
+
 /** Create the splash window */
 function createSplashWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -263,7 +289,16 @@ async function startupSequence(): Promise<void> {
       detail: 'This may take a minute on first launch',
     });
 
-    const createResult = await vmManager.createVM();
+    const createResult = await vmManager.createVM((line) => {
+      const detail = formatVMOutput(line);
+      if (detail) {
+        sendSplashUpdate({
+          phase: 'creating-vm',
+          message: 'Creating virtual machine...',
+          detail,
+        });
+      }
+    });
     if (!createResult.success) {
       // Clear CLT cache so next retry re-checks prerequisites
       if (vmManager instanceof LimaManager) {
@@ -293,7 +328,16 @@ async function startupSequence(): Promise<void> {
       message: 'Starting virtual machine...',
     });
 
-    const startResult = await vmManager.startVM();
+    const startResult = await vmManager.startVM((line) => {
+      const detail = formatVMOutput(line);
+      if (detail) {
+        sendSplashUpdate({
+          phase: 'starting-vm',
+          message: 'Starting virtual machine...',
+          detail,
+        });
+      }
+    });
     if (!startResult.success) {
       // Clear CLT cache so next retry re-checks prerequisites
       if (vmManager instanceof LimaManager) {

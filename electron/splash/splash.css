@@ -18,33 +18,37 @@ body {
   user-select: none;
 }
 
-.logo-container {
-  width: 80px;
-  height: 80px;
+.brand-logo {
+  display: inline-flex;
+  align-items: center;
   margin-bottom: 24px;
 }
 
-.logo-container img {
-  width: 100%;
-  height: 100%;
+.brand-quill {
+  width: 72px;
+  height: 72px;
+  margin-right: -14px;
+  margin-bottom: 10px;
+  position: relative;
+  z-index: 1;
   object-fit: contain;
 }
 
-.logo-container.pulse img {
+.brand-name {
+  font-family: "EB Garamond", "Playfair Display", Georgia, Cambria, "Times New Roman", Times, ui-serif, serif;
+  font-size: 48px;
+  font-weight: 700;
+  color: #f0ebe3;
+  letter-spacing: 0.5px;
+}
+
+.brand-logo.pulse .brand-quill {
   animation: pulse 2s ease-in-out infinite;
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 0.6; transform: scale(1); }
+  0%, 100% { opacity: 0.7; transform: scale(1); }
   50% { opacity: 1; transform: scale(1.05); }
-}
-
-.app-name {
-  font-size: 24px;
-  font-weight: 600;
-  color: #ffffff;
-  margin-bottom: 8px;
-  letter-spacing: 1px;
 }
 
 .status-message {

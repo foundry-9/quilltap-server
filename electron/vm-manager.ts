@@ -8,8 +8,8 @@ export interface IVMManager {
   /** Verify platform prerequisites (e.g. WSL2 installed, limactl available) */
   checkPrerequisites(): Promise<{ ok: boolean; error?: string }>;
   checkStatus(): Promise<VMStatus>;
-  createVM(): Promise<CommandResult>;
-  startVM(): Promise<CommandResult>;
+  createVM(onOutput?: (line: string) => void): Promise<CommandResult>;
+  startVM(onOutput?: (line: string) => void): Promise<CommandResult>;
   stopVM(): Promise<CommandResult>;
   deleteVM(): Promise<CommandResult>;
   getLogs(lines?: number): Promise<string>;
