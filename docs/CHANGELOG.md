@@ -4,6 +4,10 @@
 
 ### 3.0-dev
 
+- build: Automated release workflow via GitHub Actions — triggered on version tags, builds rootfs tarballs (amd64 + arm64) with Docker buildx/QEMU, builds Electron installers for macOS (DMG) and Windows (NSIS), and creates a GitHub Release with all assets attached
+- feat: Electron app auto-constructs rootfs download URL from app version and GitHub Releases — first-launch rootfs download now works out of the box for official releases without needing `QUILLTAP_ROOTFS_URL`
+- fix: `build-rootfs.sh` Windows cache directory misspelled as `Quilttap` instead of `Quilltap`
+- build: Added `.gitattributes` to enforce LF line endings for shell scripts and YAML files
 - fix: Suppress new-window/tab links in Electron — external URLs now open in the system browser via `shell.openExternal`; same-origin new-window requests (e.g., images) are blocked since they can't be reached outside the VM; generate-image page "Open in new tab" replaced with ImageModal preview; added `will-navigate` guard to prevent main window from navigating away
 - fix: MCP connections failing in Lima with `getaddrinfo ENOTFOUND host.docker.internal` — Lima VMs have `/app` (from Docker rootfs extraction) which triggered `isDockerEnvironment()`, causing `resolveHostGateway()` to return `host.docker.internal` instead of using `/proc/net/route` to find the actual gateway IP; reordered gateway resolution strategies so `/proc/net/route` is tried before the Docker `host.docker.internal` fallback
 - fix: MCP connections failing in Docker/Lima with "Non-200 status code (400)" — root cause was MCP servers validating the HTTP Host header and rejecting requests from `host.docker.internal`; Node.js `fetch` (undici) doesn't allow overriding the Host header, so simple URL rewriting changed both the routing AND the Host header; implemented a custom fetch using `http.request` that routes traffic to the host gateway while preserving the original `Host: localhost:PORT` header; passed via the MCP SDK's `fetch` option on both `StreamableHTTPClientTransport` and `SSEClientTransport`; also migrated `mcp-client.ts` from `console.*` to structured logger

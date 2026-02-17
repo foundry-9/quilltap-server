@@ -93,7 +93,7 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   IMAGES_DIR="$HOME/Library/Caches/Quilltap/lima-images"
 elif [[ -n "${LOCALAPPDATA:-}" ]]; then
   # Windows (Git Bash / MSYS2)
-  IMAGES_DIR="$LOCALAPPDATA/Quilttap/vm-images"
+  IMAGES_DIR="$LOCALAPPDATA/Quilltap/vm-images"
 else
   # Linux / fallback
   IMAGES_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/quilltap/vm-images"

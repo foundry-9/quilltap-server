@@ -10,6 +10,7 @@ import {
   SPLASH_HEIGHT,
   MAIN_WIDTH,
   MAIN_HEIGHT,
+  DEFAULT_ROOTFS_URL,
   vmBuildIdPath,
 } from './constants';
 import { IVMManager, createVMManager } from './vm-manager';
@@ -449,11 +450,11 @@ async function startupSequence(dataDir: string): Promise<void> {
     });
 
     try {
-      const downloadUrl = process.env.QUILLTAP_ROOTFS_URL || '';
+      const downloadUrl = process.env.QUILLTAP_ROOTFS_URL || DEFAULT_ROOTFS_URL;
       if (!downloadUrl) {
         sendSplashError(
-          'No rootfs tarball found. Please run scripts/build-rootfs.sh first, ' +
-          'or set QUILLTAP_ROOTFS_URL to download it automatically.',
+          'No rootfs tarball found and no download URL available. ' +
+          'Set QUILLTAP_ROOTFS_URL or install from an official release.',
           true
         );
         return;

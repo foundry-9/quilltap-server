@@ -1,5 +1,6 @@
 import * as path from 'path';
 import * as os from 'os';
+import * as fs from 'fs';
 import * as crypto from 'crypto';
 
 // --- Lima-specific (macOS only) ---
@@ -125,3 +126,21 @@ export const DOWNLOAD_PROGRESS_THROTTLE_MS = 500;
 
 /** Maximum download retry attempts */
 export const DOWNLOAD_MAX_RETRIES = 3;
+
+/** GitHub repository for release asset URLs */
+const GITHUB_REPO = 'foundry-9/quilltap';
+
+/** App version read from package.json */
+export const APP_VERSION = (() => {
+  try {
+    const pkgPath = path.join(__dirname, '..', 'package.json');
+    return JSON.parse(fs.readFileSync(pkgPath, 'utf-8')).version as string;
+  } catch {
+    return '';
+  }
+})();
+
+/** Default rootfs download URL — GitHub Releases asset for current version */
+export const DEFAULT_ROOTFS_URL = APP_VERSION
+  ? `https://github.com/${GITHUB_REPO}/releases/download/${APP_VERSION}/${ROOTFS_FILENAME}`
+  : '';

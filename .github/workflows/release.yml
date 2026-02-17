@@ -1,0 +1,143 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+*'  # e.g., 3.0.0, 3.1.0-beta.1
+
+permissions:
+  contents: write
+
+jobs:
+  build-rootfs:
+    name: Build rootfs (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+          - arch: arm64
+            platform: linux/arm64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set up QEMU for cross-platform builds
+        uses: docker/setup-qemu-action@v3
+
+      - name: Build rootfs tarball
+        run: ./scripts/build-rootfs.sh --platform ${{ matrix.platform }}
+
+      - name: Upload rootfs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rootfs-${{ matrix.arch }}
+          path: quilltap-linux-${{ matrix.arch }}.tar.gz
+          retention-days: 5
+
+  build-electron-mac:
+    name: Build Electron (macOS)
+    runs-on: macos-latest
+    needs: build-rootfs
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download arm64 rootfs
+        uses: actions/download-artifact@v4
+        with:
+          name: rootfs-arm64
+          path: /tmp/rootfs
+
+      - name: Place rootfs in Lima cache
+        run: |
+          CACHE_DIR="$HOME/Library/Caches/Quilltap/lima-images"
+          mkdir -p "$CACHE_DIR"
+          cp /tmp/rootfs/quilltap-linux-arm64.tar.gz "$CACHE_DIR/"
+
+      - name: Build Electron app (macOS)
+        run: npm run electron:build:mac
+        env:
+          # Disable code signing in CI (no Apple Developer cert)
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Upload macOS installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-mac
+          path: out/*.dmg
+          retention-days: 5
+
+  build-electron-win:
+    name: Build Electron (Windows)
+    runs-on: windows-latest
+    needs: build-rootfs
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Electron app (Windows)
+        run: npm run electron:build:win
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-win
+          path: out/*.exe
+          retention-days: 5
+
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [build-electron-mac, build-electron-win]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: find artifacts -type f | sort
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+
+          gh release create "$TAG" \
+            --title "Quilltap $TAG" \
+            --generate-notes \
+            artifacts/rootfs-amd64/quilltap-linux-amd64.tar.gz \
+            artifacts/rootfs-arm64/quilltap-linux-arm64.tar.gz \
+            artifacts/electron-mac/*.dmg \
+            artifacts/electron-win/*.exe
