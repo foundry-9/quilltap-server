@@ -11,8 +11,8 @@
  *
  * Gateway resolution order:
  * 1. `QUILLTAP_HOST_IP` env var (explicit override) → rewrite to that IP
- * 2. In Docker: rewrite `localhost` → `host.docker.internal` (let DNS resolve it)
- * 3. In Lima/WSL2: default gateway from /proc/net/route
+ * 2. Default gateway from /proc/net/route (works in Lima, WSL2, and Docker)
+ * 3. In Docker: rewrite `localhost` → `host.docker.internal` (let DNS resolve it)
  * 4. Fallback: try DNS lookup of `host.docker.internal` via /etc/hosts
  * 5. Give up gracefully — return URL unchanged
  *
@@ -70,21 +70,13 @@ function resolveHostGateway(): string | null {
     return cachedGatewayHost;
   }
 
-  // Strategy 2: Docker — use host.docker.internal directly as a hostname
-  // Docker Desktop provides built-in DNS resolution for host.docker.internal
-  // via its DNS server (127.0.0.11), so we don't need to resolve it to an IP.
-  // This is more reliable than parsing /etc/hosts, which may not contain the entry
-  // when Docker's built-in DNS handles the resolution.
-  if (isDockerEnvironment()) {
-    rewriteLogger.info('Docker environment detected — using host.docker.internal as gateway hostname');
-    cachedGatewayHost = 'host.docker.internal';
-    return cachedGatewayHost;
-  }
-
-  // Strategy 3: Default gateway from /proc/net/route (Lima/WSL2)
+  // Strategy 2: Default gateway from /proc/net/route (Lima/WSL2/Docker)
   // Parse the kernel routing table directly instead of shelling out to
   // `ip route`, which is unavailable in Alpine Linux images.
   // The file format is tab-separated with hex-encoded IPs.
+  // This runs before the Docker host.docker.internal strategy because Lima
+  // VMs also have /app (triggering isDockerEnvironment()) but do NOT have
+  // host.docker.internal in DNS.
   try {
     const routeTable = readFileSync('/proc/net/route', 'utf-8');
     for (const line of routeTable.split('\n').slice(1)) { // skip header
@@ -107,6 +99,19 @@ function resolveHostGateway(): string | null {
     }
   } catch {
     rewriteLogger.debug('Could not read /proc/net/route for default gateway lookup');
+  }
+
+  // Strategy 3: Docker — use host.docker.internal directly as a hostname
+  // Docker Desktop provides built-in DNS resolution for host.docker.internal
+  // via its DNS server (127.0.0.11), so we don't need to resolve it to an IP.
+  // This is more reliable than parsing /etc/hosts, which may not contain the entry
+  // when Docker's built-in DNS handles the resolution.
+  // NOTE: This runs AFTER /proc/net/route because Lima VMs trigger
+  // isDockerEnvironment() (they have /app) but don't have host.docker.internal.
+  if (isDockerEnvironment()) {
+    rewriteLogger.info('Docker environment detected — using host.docker.internal as gateway hostname');
+    cachedGatewayHost = 'host.docker.internal';
+    return cachedGatewayHost;
   }
 
   // Strategy 4: Fallback — resolve host.docker.internal from /etc/hosts

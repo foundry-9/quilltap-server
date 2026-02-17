@@ -19433,11 +19433,6 @@ function resolveHostGateway() {
     cachedGatewayHost = envIP;
     return cachedGatewayHost;
   }
-  if (isDockerEnvironment()) {
-    rewriteLogger.info("Docker environment detected \u2014 using host.docker.internal as gateway hostname");
-    cachedGatewayHost = "host.docker.internal";
-    return cachedGatewayHost;
-  }
   try {
     const routeTable = (0, import_node_fs.readFileSync)("/proc/net/route", "utf-8");
     for (const line of routeTable.split("\n").slice(1)) {
@@ -19457,6 +19452,11 @@ function resolveHostGateway() {
     }
   } catch {
     rewriteLogger.debug("Could not read /proc/net/route for default gateway lookup");
+  }
+  if (isDockerEnvironment()) {
+    rewriteLogger.info("Docker environment detected \u2014 using host.docker.internal as gateway hostname");
+    cachedGatewayHost = "host.docker.internal";
+    return cachedGatewayHost;
   }
   try {
     const hosts = (0, import_node_fs.readFileSync)("/etc/hosts", "utf-8");
