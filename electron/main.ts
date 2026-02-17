@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, session } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -259,6 +259,31 @@ function createMainWindow(): BrowserWindow {
   const url = isDev
     ? 'http://localhost:3000'
     : `http://localhost:${HOST_PORT}`;
+
+  // Intercept new-window requests (target="_blank", window.open)
+  win.webContents.setWindowOpenHandler(({ url: targetUrl }) => {
+    const appOrigin = isDev ? 'http://localhost:3000' : `http://localhost:${HOST_PORT}`;
+    if (targetUrl.startsWith(appOrigin)) {
+      // Same-origin URLs (images, files) can't be opened externally — block them.
+      // The frontend handles these with in-app preview modals when running in Electron.
+      console.log('[Main] Blocked same-origin new-window request:', targetUrl);
+      return { action: 'deny' };
+    }
+    // External URLs → open in system browser
+    console.log('[Main] Opening external URL in system browser:', targetUrl);
+    shell.openExternal(targetUrl);
+    return { action: 'deny' };
+  });
+
+  // Prevent the main window from navigating away to external URLs
+  win.webContents.on('will-navigate', (event, navUrl) => {
+    const appOrigin = isDev ? 'http://localhost:3000' : `http://localhost:${HOST_PORT}`;
+    if (!navUrl.startsWith(appOrigin)) {
+      event.preventDefault();
+      console.log('[Main] Blocked in-window navigation to external URL:', navUrl);
+      shell.openExternal(navUrl);
+    }
+  });
 
   win.loadURL(url);
   win.once('ready-to-show', () => {
