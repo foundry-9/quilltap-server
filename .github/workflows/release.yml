@@ -137,9 +137,37 @@ jobs:
         run: |
           TAG="${GITHUB_REF_NAME}"
 
+          cat > /tmp/release-body.md <<'BODY'
+          ## Installation
+
+          ### macOS
+
+          1. Download the `.dmg` file and open it
+          2. Drag **Quilltap** to your Applications folder
+          3. **Important:** Before launching, open Terminal and run:
+             ```
+             xattr -cr /Applications/Quilltap.app
+             ```
+             This is required because the app is not yet code-signed. Without this step, macOS will show a "damaged and can't be opened" error.
+          4. Launch Quilltap from Applications
+
+          ### Windows
+
+          1. Download and run the `.exe` installer
+          2. Follow the installation prompts
+          3. Launch Quilltap from the Start Menu or desktop shortcut
+
+          ### Docker / Linux
+
+          Download the `quilltap-linux-<arch>.tar.gz` rootfs tarball for use with Docker or Lima. See the [README](https://github.com/foundry-9/quilltap#readme) for setup instructions.
+          BODY
+
+          # Strip leading whitespace from heredoc (indented for YAML readability)
+          sed -i 's/^          //' /tmp/release-body.md
+
           gh release create "$TAG" \
             --title "Quilltap $TAG" \
-            --generate-notes \
+            --notes-file /tmp/release-body.md \
             artifacts/rootfs-amd64/quilltap-linux-amd64.tar.gz \
             artifacts/rootfs-arm64/quilltap-linux-arm64.tar.gz \
             artifacts/electron-mac/*.dmg \

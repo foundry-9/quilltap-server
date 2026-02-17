@@ -1,10 +1,11 @@
 import * as https from 'https';
 import * as http from 'http';
 import * as fs from 'fs';
-import * as path from 'path';
 import {
   ROOTFS_CACHE_DIR,
   ROOTFS_PATH,
+  ROOTFS_BUILD_ID_PATH,
+  APP_VERSION,
   DOWNLOAD_PROGRESS_THROTTLE_MS,
   DOWNLOAD_MAX_RETRIES,
 } from './constants';
@@ -15,9 +16,41 @@ import { DownloadProgress } from './types';
  * retry logic, and cache management.
  */
 export class DownloadManager {
-  /** Check if the rootfs tarball already exists in cache */
+  /**
+   * Check if the rootfs tarball needs downloading.
+   * Returns true if the tarball is missing OR if the cached tarball's
+   * build-ID version doesn't match the running app version (e.g., a
+   * locally-built dev tarball is present but the user installed a release).
+   */
   needsDownload(): boolean {
-    return !fs.existsSync(ROOTFS_PATH);
+    if (!fs.existsSync(ROOTFS_PATH)) return true;
+
+    // If we can't determine the app version, trust the existing file
+    if (!APP_VERSION) return false;
+
+    // Check the build-ID sidecar to see if the cached tarball matches this app version
+    try {
+      const buildId = fs.readFileSync(ROOTFS_BUILD_ID_PATH, 'utf-8').trim();
+      // Build ID format: "VERSION+TIMESTAMP" (e.g., "3.0.0+2026-02-17T12:00:00Z")
+      const cachedVersion = buildId.split('+')[0];
+      if (cachedVersion !== APP_VERSION) {
+        console.log(
+          `[DownloadManager] Cached rootfs version "${cachedVersion}" does not match app version "${APP_VERSION}" — re-downloading`
+        );
+        // Remove stale tarball and build-ID so the download writes fresh ones
+        try { fs.unlinkSync(ROOTFS_PATH); } catch { /* ignore */ }
+        try { fs.unlinkSync(ROOTFS_BUILD_ID_PATH); } catch { /* ignore */ }
+        return true;
+      }
+    } catch {
+      // No build-ID sidecar — can't verify version, trust the existing tarball.
+      // This covers tarballs bundled directly in the cache by the CI workflow
+      // (which don't have a sidecar) and first-run downloads (sidecar written
+      // after download by the startup sequence).
+      console.log('[DownloadManager] No build-ID sidecar found, trusting existing tarball');
+    }
+
+    return false;
   }
 
   /**
@@ -127,6 +160,18 @@ export class DownloadManager {
           fileStream.close(() => {
             // Move temp file to final location
             fs.renameSync(tempPath, ROOTFS_PATH);
+
+            // Write build-ID sidecar so future launches can verify the version
+            if (APP_VERSION) {
+              try {
+                const buildId = `${APP_VERSION}+${new Date().toISOString()}`;
+                fs.writeFileSync(ROOTFS_BUILD_ID_PATH, buildId, 'utf-8');
+                console.log(`[DownloadManager] Wrote build-ID sidecar: ${buildId}`);
+              } catch (err) {
+                console.warn('[DownloadManager] Could not write build-ID sidecar:', err);
+              }
+            }
+
             resolve();
           });
         });
