@@ -166,6 +166,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -175,11 +177,40 @@ jobs:
       - name: List artifacts
         run: find artifacts -type f | sort
 
+      - name: Determine release type
+        id: release-type
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+
+          # Check if this is a clean x.y.z tag (no prerelease suffix)
+          if [[ "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            CLEAN_TAG=true
+          else
+            CLEAN_TAG=false
+          fi
+
+          # Check if the tagged commit is on the release branch
+          ON_RELEASE=$(git branch -r --contains HEAD | grep -q 'origin/release' && echo true || echo false)
+
+          # Production release requires clean tag AND release branch
+          if [[ "$CLEAN_TAG" == "true" && "$ON_RELEASE" == "true" ]]; then
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "Release type: production"
+          else
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "Release type: prerelease (clean_tag=$CLEAN_TAG, on_release=$ON_RELEASE)"
+          fi
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
         run: |
           TAG="${GITHUB_REF_NAME}"
+
+          PRERELEASE_FLAG=""
+          if [[ "${{ steps.release-type.outputs.prerelease }}" == "true" ]]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
 
           cat > /tmp/release-body.md <<'BODY'
           ## Installation
@@ -206,6 +237,7 @@ jobs:
           gh release create "$TAG" \
             --title "Quilltap $TAG" \
             --notes-file /tmp/release-body.md \
+            $PRERELEASE_FLAG \
             artifacts/rootfs-amd64/quilltap-linux-amd64.tar.gz \
             artifacts/rootfs-arm64/quilltap-linux-arm64.tar.gz \
             artifacts/electron-mac/*.dmg \
