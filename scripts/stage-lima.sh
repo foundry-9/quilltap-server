@@ -68,7 +68,7 @@ tar -xzf "$TARBALL_PATH" -C "$DEST" --include='share/lima/lima-guestagent.Linux-
   echo "WARNING: Could not extract guest agents — VM provisioning may fail"
 
 # Sign limactl with Developer ID for notarization compliance
-if [ -n "$CODESIGN_IDENTITY" ]; then
+if [ -n "${CODESIGN_IDENTITY:-}" ]; then
   echo "Signing limactl with Developer ID..."
   codesign \
     --force \
