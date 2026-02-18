@@ -294,9 +294,16 @@ export class LimaManager implements IVMManager {
 
     // Replace the data mount location line
     // The template has:  - location: "~/Library/Application Support/Quilltap"
-    const modified = content.replace(
+    let modified = content.replace(
       /(-\s*location:\s*)"[^"]*"(\s*\n\s*mountPoint:\s*"?\/data\/quilltap)/,
       `$1"${this.dataDir}"$2`
+    );
+
+    // Replace QUILLTAP_HOST_DATA_DIR with the actual host-side data directory
+    // so the app can display the correct path in the footer
+    modified = modified.replace(
+      /QUILLTAP_HOST_DATA_DIR="[^"]*"/g,
+      `QUILLTAP_HOST_DATA_DIR="${this.dataDir}"`
     );
 
     // Write to a temp file in LIMA_HOME

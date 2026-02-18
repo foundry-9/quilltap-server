@@ -14,16 +14,18 @@ export NODE_OPTIONS="--max-old-space-size=2048"
 # Resolve data directory: Electron passes the Windows path via env var,
 # which we convert to a WSL mount path with wslpath.
 if [ -n "${QUILLTAP_WIN_DATADIR:-}" ]; then
-  QUILTTAP_DATA_DIR=$(wslpath "$QUILLTAP_WIN_DATADIR")
+  QUILLTAP_DATA_DIR=$(wslpath "$QUILLTAP_WIN_DATADIR")
+  # Preserve the original Windows path for display in the footer
+  export QUILLTAP_HOST_DATA_DIR="$QUILLTAP_WIN_DATADIR"
 else
-  QUILTTAP_DATA_DIR=/data/quilltap
+  QUILLTAP_DATA_DIR=/data/quilltap
 fi
-export QUILTTAP_DATA_DIR
+export QUILLTAP_DATA_DIR
 
-mkdir -p "$QUILTTAP_DATA_DIR/data" \
-         "$QUILTTAP_DATA_DIR/files" \
-         "$QUILTTAP_DATA_DIR/logs" \
-         "$QUILTTAP_DATA_DIR/plugins/npm"
+mkdir -p "$QUILLTAP_DATA_DIR/data" \
+         "$QUILLTAP_DATA_DIR/files" \
+         "$QUILLTAP_DATA_DIR/logs" \
+         "$QUILLTAP_DATA_DIR/plugins/npm"
 
 # Remove Docker marker so app doesn't think it's in Docker
 rm -f /.dockerenv

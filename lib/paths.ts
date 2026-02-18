@@ -20,8 +20,9 @@
  *
  * Environment variables:
  * - QUILLTAP_DATA_DIR: Overrides the base directory (non-Docker only)
- * - QUILLTAP_HOST_DATA_DIR: Not read by the application; documented for users
- *   who want to set the host-side volume mount path when running Docker
+ * - QUILLTAP_HOST_DATA_DIR: The host-side data directory path. In VM/Docker
+ *   environments, this preserves the original host path for display purposes.
+ *   Falls back to getBaseDataDir() when not set.
  *
  * @module lib/paths
  */
@@ -288,6 +289,25 @@ export function getPluginsDir(): string {
  */
 export function getNpmPluginsDir(): string {
   return path.join(getPluginsDir(), 'npm');
+}
+
+/**
+ * Get the host-side data directory path for display purposes
+ *
+ * In VM/Docker environments, QUILLTAP_HOST_DATA_DIR preserves the original
+ * host path (e.g., ~/Library/Application Support/Quilltap on macOS) even
+ * though the app sees /data/quilltap or /app/quilltap inside the container.
+ *
+ * Falls back to getBaseDataDir() when not set (i.e., running locally).
+ *
+ * @returns Host-side data directory path
+ */
+export function getHostDataDir(): string {
+  const envOverride = process.env.QUILLTAP_HOST_DATA_DIR;
+  if (envOverride) {
+    return envOverride;
+  }
+  return getBaseDataDir();
 }
 
 // ============================================================================

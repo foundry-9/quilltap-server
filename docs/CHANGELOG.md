@@ -4,6 +4,8 @@
 
 ### 3.0-dev
 
+- feat: Display host data directory path in footer — monospace path shown between the version tag and copyright notice so users can see where their data lives; new `getHostDataDir()` function reads `QUILLTAP_HOST_DATA_DIR` env var (set automatically in Lima/WSL2, configurable for Docker via `-e`); added `hostPath` field to `/api/v1/system/data-dir` response; new `qt-footer-path` CSS class for themed path display
+- fix: WSL2 init script used `QUILTTAP_DATA_DIR` (misspelled with double-T) instead of `QUILLTAP_DATA_DIR` — the app never saw the configured data directory inside WSL2; fixed all occurrences
 - fix: Docker host URL rewriting used wrong gateway — `/proc/net/route` returned the Docker bridge IP (e.g. 172.17.0.1) which can't reach services on the host's localhost; reordered gateway resolution so Docker environments use `host.docker.internal` first (via Docker Desktop DNS or `--add-host` on Linux), with `/proc/net/route` reserved for Lima/WSL2 where NAT networking genuinely forwards to host loopback
 - build: Automated release workflow via GitHub Actions — triggered on version tags, builds rootfs tarballs (amd64 + arm64) with Docker buildx/QEMU, builds Electron installers for macOS (DMG) and Windows (NSIS), and creates a GitHub Release with all assets attached
 - feat: Electron app auto-constructs rootfs download URL from app version and GitHub Releases — first-launch rootfs download now works out of the box for official releases without needing `QUILLTAP_ROOTFS_URL`

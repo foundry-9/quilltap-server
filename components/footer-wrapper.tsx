@@ -9,6 +9,7 @@ type BackendMode = 'local' | 'Docker' | 'VM';
 export default function FooterWrapper() {
   const pathname = usePathname();
   const [backendMode, setBackendMode] = useState<BackendMode | null>(null);
+  const [hostPath, setHostPath] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/api/v1/system/data-dir')
@@ -20,6 +21,9 @@ export default function FooterWrapper() {
           setBackendMode('Docker');
         } else {
           setBackendMode('local');
+        }
+        if (data.hostPath) {
+          setHostPath(data.hostPath);
         }
       })
       .catch(() => {
@@ -41,6 +45,9 @@ export default function FooterWrapper() {
     <footer className="qt-footer">
       <div className="qt-footer-container">
         <span>v{packageJson.version}{backendMode ? ` (${backendMode})` : ''}</span>
+        {hostPath && (
+          <span className="qt-footer-path" title={hostPath}>{hostPath}</span>
+        )}
         <span className="qt-footer-separator">•</span>
         <a
           href="https://foundry-9.com/"

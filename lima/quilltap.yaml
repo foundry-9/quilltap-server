@@ -60,6 +60,7 @@ provision:
       cat > /etc/profile.d/quilltap.sh <<'ENVEOF'
       export LIMA_CONTAINER=true
       export QUILLTAP_DATA_DIR=/data/quilltap
+      export QUILLTAP_HOST_DATA_DIR="~/Library/Application Support/Quilltap"
       export NODE_ENV=production
       export PORT=3000
       export HOSTNAME=0.0.0.0
@@ -116,6 +117,7 @@ provision:
 
       export LIMA_CONTAINER=true
       export QUILLTAP_DATA_DIR=/data/quilltap
+      export QUILLTAP_HOST_DATA_DIR="~/Library/Application Support/Quilltap"
       export NODE_ENV=production
       export PORT=3000
       export HOSTNAME=0.0.0.0

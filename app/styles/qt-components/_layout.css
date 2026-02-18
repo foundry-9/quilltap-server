@@ -970,6 +970,19 @@
   }
 
   /**
+   * Footer path - monospace display of host data directory
+   */
+  .qt-footer-path {
+    font-family: monospace;
+    @apply text-xs;
+    @apply hidden sm:inline;
+    @apply truncate;
+    max-width: 24rem;
+    color: var(--qt-footer-fg);
+    opacity: 0.7;
+  }
+
+  /**
    * Footer separator (bullet point between items)
    */
   .qt-footer-separator {
