@@ -67,6 +67,20 @@ tar -xzf "$TARBALL_PATH" -C "$DEST" --include='share/lima/lima-guestagent.Linux-
   tar -xzf "$TARBALL_PATH" -C "$DEST" share/lima/lima-guestagent.Linux-aarch64.gz share/lima/lima-guestagent.Linux-x86_64.gz 2>/dev/null || \
   echo "WARNING: Could not extract guest agents — VM provisioning may fail"
 
+# Sign limactl with Developer ID for notarization compliance
+if [ -n "$CODESIGN_IDENTITY" ]; then
+  echo "Signing limactl with Developer ID..."
+  codesign \
+    --force \
+    --sign "$CODESIGN_IDENTITY" \
+    --options runtime \
+    --timestamp \
+    electron/resources/lima/bin/limactl
+  echo "limactl signed."
+else
+  echo "Skipping limactl signing: CODESIGN_IDENTITY not set"
+fi
+
 # Summary
 echo ""
 echo "Staged Lima files:"

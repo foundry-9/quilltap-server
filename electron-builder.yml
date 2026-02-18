@@ -35,10 +35,12 @@ mac:
   entitlements: electron/entitlements.mac.plist
   entitlementsInherit: electron/entitlements.mac.plist
   icon: electron/resources/icon.icns
+  signIgnore:
+    - "lima/bin/limactl"
+    - "lima/share/lima/lima-guestagent"
   extraResources:
     - from: lima/quilltap.yaml
       to: lima/quilltap.yaml
-    # Lima binaries staged by scripts/stage-lima.sh
     - from: electron/resources/lima/
       to: lima/
 win:
