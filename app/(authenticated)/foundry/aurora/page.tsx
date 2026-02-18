@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import RoleplayTemplatesTab from '@/components/settings/roleplay-templates'
 import PromptsTab from '@/components/settings/prompts-tab'
+import AIImportTab from '@/components/settings/ai-import'
 import { useSubsystemInfo } from '@/components/providers/theme-provider'
 
 export default function AuroraPage() {
@@ -31,6 +32,10 @@ export default function AuroraPage() {
 
         <CollapsibleCard title="Prompts" description="Configure system prompts and prompt blocks">
           <PromptsTab />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="AI Character Import" description="Generate characters from source material using AI">
+          <AIImportTab />
         </CollapsibleCard>
       </div>
     </div>

@@ -1,0 +1,680 @@
+'use client';
+
+/**
+ * AI Character Import Wizard
+ *
+ * Multi-step wizard that generates characters from source material using AI.
+ * Steps: Source Material -> Configuration -> Generation -> Review & Import
+ */
+
+import { useCallback, useRef } from 'react';
+import { useAIImport } from './hooks/useAIImport';
+import {
+  STEP_DISPLAY_NAMES,
+  CORE_STEPS,
+  type AIImportStepName,
+  type StepProgress,
+} from './types';
+import type { QuilltapExport } from '@/lib/export/types';
+
+// ============================================================================
+// Step Indicator
+// ============================================================================
+
+function StepIndicator({ current, total }: { current: number; total: number }) {
+  return (
+    <div className="flex items-center gap-2 mb-6">
+      {Array.from({ length: total }, (_, i) => {
+        const step = i + 1;
+        const isActive = step === current;
+        const isComplete = step < current;
+        return (
+          <div key={step} className="flex items-center gap-2">
+            <div
+              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                isActive
+                  ? 'qt-bg-accent qt-text-on-accent'
+                  : isComplete
+                    ? 'qt-bg-success qt-text-on-accent'
+                    : 'qt-bg-muted qt-text-muted'
+              }`}
+            >
+              {isComplete ? '\u2713' : step}
+            </div>
+            {i < total - 1 && (
+              <div className={`w-8 h-0.5 ${isComplete ? 'qt-bg-success' : 'qt-bg-muted'}`} />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ============================================================================
+// Step 1: Source Material
+// ============================================================================
+
+function SourceMaterialStep({
+  uploadedFiles,
+  sourceText,
+  uploading,
+  uploadError,
+  onSourceTextChange,
+  onUploadFiles,
+  onRemoveFile,
+}: {
+  uploadedFiles: { id: string; name: string; size: number }[];
+  sourceText: string;
+  uploading: boolean;
+  uploadError: string | null;
+  onSourceTextChange: (text: string) => void;
+  onUploadFiles: (files: File[]) => void;
+  onRemoveFile: (id: string) => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      const files = Array.from(e.dataTransfer.files).filter((f) =>
+        ['text/plain', 'text/markdown', 'application/pdf'].includes(f.type) ||
+        f.name.endsWith('.txt') || f.name.endsWith('.md') || f.name.endsWith('.pdf')
+      );
+      if (files.length > 0) {
+        onUploadFiles(files);
+      }
+    },
+    [onUploadFiles]
+  );
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+  }, []);
+
+  const handleFileSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(e.target.files || []);
+      if (files.length > 0) {
+        onUploadFiles(files);
+      }
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    },
+    [onUploadFiles]
+  );
+
+  const formatSize = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="qt-heading-3 mb-2">Upload Source Files</h3>
+        <p className="qt-text-small qt-text-muted mb-3">
+          Upload wiki pages, character sheets, story documents, or any text files describing a character.
+          Supports .txt, .md, and .pdf files.
+        </p>
+
+        <div
+          className="qt-border-default border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:qt-border-accent transition-colors"
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            accept=".txt,.md,.pdf"
+            multiple
+            onChange={handleFileSelect}
+          />
+          <p className="qt-text-muted">
+            {uploading ? 'Uploading...' : 'Drop files here or click to browse'}
+          </p>
+        </div>
+
+        {uploadError && (
+          <p className="qt-text-small text-red-500 mt-2">{uploadError}</p>
+        )}
+
+        {uploadedFiles.length > 0 && (
+          <div className="mt-3 space-y-2">
+            {uploadedFiles.map((file) => (
+              <div key={file.id} className="flex items-center justify-between qt-bg-muted rounded px-3 py-2">
+                <span className="qt-text-small truncate mr-2">{file.name} ({formatSize(file.size)})</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemoveFile(file.id);
+                  }}
+                  className="qt-button-ghost qt-button-sm text-red-500 hover:text-red-600 flex-shrink-0"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <h3 className="qt-heading-3 mb-2">Freeform Text</h3>
+        <p className="qt-text-small qt-text-muted mb-3">
+          Paste any additional character information, backstory, or notes here.
+        </p>
+        <textarea
+          className="qt-input w-full"
+          rows={8}
+          value={sourceText}
+          onChange={(e) => onSourceTextChange(e.target.value)}
+          placeholder="Paste character descriptions, wiki content, backstory, personality notes..."
+        />
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Step 2: Configuration
+// ============================================================================
+
+function ConfigurationStep({
+  profiles,
+  loadingProfiles,
+  profileId,
+  includeMemories,
+  includeChats,
+  onProfileChange,
+  onIncludeMemoriesChange,
+  onIncludeChatsChange,
+}: {
+  profiles: { id: string; name: string; provider: string; modelName: string }[];
+  loadingProfiles: boolean;
+  profileId: string;
+  includeMemories: boolean;
+  includeChats: boolean;
+  onProfileChange: (id: string) => void;
+  onIncludeMemoriesChange: (v: boolean) => void;
+  onIncludeChatsChange: (v: boolean) => void;
+}) {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="qt-heading-3 mb-2">Connection Profile</h3>
+        <p className="qt-text-small qt-text-muted mb-3">
+          Select the AI provider to use for character generation.
+        </p>
+        {loadingProfiles ? (
+          <p className="qt-text-muted">Loading profiles...</p>
+        ) : profiles.length === 0 ? (
+          <p className="text-red-500">No connection profiles found. Create one in Settings first.</p>
+        ) : (
+          <select
+            className="qt-input w-full"
+            value={profileId}
+            onChange={(e) => onProfileChange(e.target.value)}
+          >
+            {profiles.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} ({p.provider} / {p.modelName})
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+
+      <div className="space-y-3">
+        <h3 className="qt-heading-3">Options</h3>
+
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={includeMemories}
+            onChange={(e) => onIncludeMemoriesChange(e.target.checked)}
+            className="qt-checkbox"
+          />
+          <div>
+            <span className="qt-text-default font-medium">Generate Memories</span>
+            <p className="qt-text-small qt-text-muted">
+              Extract key facts and experiences as Commonplace Book memories
+            </p>
+          </div>
+        </label>
+
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={includeChats}
+            onChange={(e) => onIncludeChatsChange(e.target.checked)}
+            className="qt-checkbox"
+          />
+          <div>
+            <span className="qt-text-default font-medium">Generate Example Chat</span>
+            <p className="qt-text-small qt-text-muted">
+              Create a sample conversation demonstrating the character&apos;s voice
+            </p>
+          </div>
+        </label>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Step 3: Generation Progress
+// ============================================================================
+
+function GenerationProgressStep({
+  steps,
+  generating,
+  includeMemories,
+  includeChats,
+  error,
+}: {
+  steps: Record<AIImportStepName, StepProgress>;
+  generating: boolean;
+  includeMemories: boolean;
+  includeChats: boolean;
+  error: string | null;
+}) {
+  const visibleSteps: AIImportStepName[] = [
+    ...(steps.analyzing.status !== 'pending' ? ['analyzing' as AIImportStepName] : []),
+    ...CORE_STEPS,
+    ...(includeMemories ? ['memories' as AIImportStepName] : []),
+    ...(includeChats ? ['chats' as AIImportStepName] : []),
+    ...(steps.repair.status !== 'pending' ? ['repair' as AIImportStepName] : []),
+  ];
+
+  const getStatusIcon = (status: StepProgress['status']): string => {
+    switch (status) {
+      case 'complete':
+        return '\u2713';
+      case 'error':
+        return '\u26A0';
+      case 'in_progress':
+        return '\u25CF';
+      default:
+        return '\u25CB';
+    }
+  };
+
+  const getStatusColor = (status: StepProgress['status']): string => {
+    switch (status) {
+      case 'complete':
+        return 'text-green-500';
+      case 'error':
+        return 'text-yellow-500';
+      case 'in_progress':
+        return 'text-blue-500 animate-pulse';
+      default:
+        return 'qt-text-muted';
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {generating && (
+        <p className="qt-text-muted text-sm">
+          Generating character data... This may take a minute depending on source material length.
+        </p>
+      )}
+
+      <div className="space-y-2">
+        {visibleSteps.map((stepName) => {
+          const step = steps[stepName];
+          return (
+            <div key={stepName} className="flex items-start gap-3 py-2">
+              <span className={`text-lg flex-shrink-0 ${getStatusColor(step.status)}`}>
+                {getStatusIcon(step.status)}
+              </span>
+              <div className="flex-1 min-w-0">
+                <span className={`qt-text-default ${step.status === 'pending' ? 'qt-text-muted' : ''}`}>
+                  {STEP_DISPLAY_NAMES[stepName]}
+                </span>
+                {step.snippet && (
+                  <p className="qt-text-small qt-text-muted truncate">{step.snippet}</p>
+                )}
+                {step.error && (
+                  <p className="qt-text-small text-yellow-500">{step.error}</p>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {error && (
+        <div className="qt-bg-destructive/10 qt-border-destructive border rounded-lg p-3 mt-4">
+          <p className="text-red-500 text-sm">{error}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// Step 4: Review & Import
+// ============================================================================
+
+function ReviewStep({
+  result,
+  stepResults,
+  errors,
+  importing,
+  importResult,
+  onImport,
+  onAddMore,
+  onStartOver,
+}: {
+  result: QuilltapExport | null;
+  stepResults: Record<string, unknown> | null;
+  errors: Record<string, string>;
+  importing: boolean;
+  importResult: { success: boolean; importedCount: number; warnings: string[] } | null;
+  onImport: () => void;
+  onAddMore: () => void;
+  onStartOver: () => void;
+}) {
+  if (!result || !stepResults) {
+    return <p className="qt-text-muted">No generated data available.</p>;
+  }
+
+  const basics = stepResults.character_basics as {
+    name?: string;
+    title?: string;
+    description?: string;
+  } | undefined;
+
+  const memories = stepResults.memories as unknown[] | undefined;
+  const chats = stepResults.chats as { title?: string; messages?: unknown[] } | undefined;
+  const physDesc = stepResults.physical_descriptions as { shortPrompt?: string } | undefined;
+  const pronouns = stepResults.pronouns as { subject?: string; object?: string; possessive?: string } | undefined;
+  const systemPrompts = stepResults.system_prompts as { name?: string }[] | undefined;
+
+  const completedFields: string[] = [];
+  const failedFields: string[] = [];
+
+  const fieldNames: Record<string, string> = {
+    character_basics: 'Character Basics',
+    first_message: 'Dialogue',
+    system_prompts: 'System Prompts',
+    physical_descriptions: 'Appearance',
+    pronouns: 'Pronouns',
+    memories: 'Memories',
+    chats: 'Example Chat',
+  };
+
+  for (const [key, label] of Object.entries(fieldNames)) {
+    if (errors[key]) {
+      failedFields.push(label);
+    } else if (key in stepResults) {
+      completedFields.push(label);
+    }
+  }
+
+  if (importResult?.success) {
+    return (
+      <div className="space-y-4">
+        <div className="qt-bg-success/10 border border-green-500/30 rounded-lg p-4">
+          <h3 className="qt-heading-3 text-green-500 mb-2">Import Successful!</h3>
+          <p className="qt-text-default">
+            <strong>{basics?.name}</strong> has been imported successfully.
+            {importResult.importedCount > 1 && ` (${importResult.importedCount} entities imported)`}
+          </p>
+          {importResult.warnings.length > 0 && (
+            <div className="mt-2">
+              <p className="qt-text-small qt-text-muted">Warnings:</p>
+              <ul className="list-disc list-inside qt-text-small qt-text-muted">
+                {importResult.warnings.map((w, i) => (
+                  <li key={i}>{w}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+        <button onClick={onStartOver} className="qt-button-primary">
+          Import Another Character
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Character Summary */}
+      <div>
+        <h3 className="qt-heading-3 mb-2">Character Summary</h3>
+        <div className="qt-bg-muted rounded-lg p-4 space-y-2">
+          <p className="qt-text-default">
+            <strong>Name:</strong> {basics?.name || 'Unknown'}
+          </p>
+          {basics?.title && (
+            <p className="qt-text-default">
+              <strong>Title:</strong> {basics.title}
+            </p>
+          )}
+          {pronouns && (
+            <p className="qt-text-default">
+              <strong>Pronouns:</strong> {pronouns.subject}/{pronouns.object}/{pronouns.possessive}
+            </p>
+          )}
+          {basics?.description && (
+            <p className="qt-text-small qt-text-muted mt-2">
+              {basics.description.length > 200
+                ? basics.description.substring(0, 200) + '...'
+                : basics.description}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Completion Matrix */}
+      <div>
+        <h3 className="qt-heading-3 mb-2">Generated Content</h3>
+        <div className="grid grid-cols-2 gap-2">
+          {completedFields.map((field) => (
+            <div key={field} className="flex items-center gap-2 text-green-500 qt-text-small">
+              <span>{'\u2713'}</span> {field}
+            </div>
+          ))}
+          {failedFields.map((field) => (
+            <div key={field} className="flex items-center gap-2 text-yellow-500 qt-text-small">
+              <span>{'\u26A0'}</span> {field}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Counts */}
+      <div className="flex gap-4 qt-text-small">
+        {physDesc && <span className="qt-text-muted">Physical descriptions: 5 variants</span>}
+        {systemPrompts && <span className="qt-text-muted">System prompts: {systemPrompts.length}</span>}
+        {memories && <span className="qt-text-muted">Memories: {memories.length}</span>}
+        {chats?.messages && <span className="qt-text-muted">Chat messages: {chats.messages.length}</span>}
+      </div>
+
+      {/* Errors */}
+      {Object.keys(errors).length > 0 && (
+        <div className="qt-bg-muted rounded-lg p-3">
+          <p className="qt-text-small text-yellow-500 mb-1">
+            Some steps had issues (non-critical):
+          </p>
+          {Object.entries(errors)
+            .filter(([key]) => key !== '_fatal')
+            .map(([key, err]) => (
+              <p key={key} className="qt-text-small qt-text-muted">
+                {fieldNames[key] || key}: {err}
+              </p>
+            ))}
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="flex gap-3 flex-wrap">
+        <button
+          onClick={onImport}
+          disabled={importing}
+          className="qt-button-primary"
+        >
+          {importing ? 'Importing...' : 'Import Character'}
+        </button>
+        <button onClick={onAddMore} className="qt-button-secondary">
+          Add More & Regenerate
+        </button>
+        <button onClick={onStartOver} className="qt-button-ghost">
+          Start Over
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Main Component
+// ============================================================================
+
+export default function AIImportWizard() {
+  const {
+    currentStep,
+    canProceed,
+    error,
+    // Step 1
+    uploadedFiles,
+    sourceText,
+    uploading,
+    uploadError,
+    setSourceText,
+    uploadFiles,
+    removeFile,
+    // Step 2
+    profiles,
+    loadingProfiles,
+    profileId,
+    includeMemories,
+    includeChats,
+    setProfileId,
+    setIncludeMemories,
+    setIncludeChats,
+    // Step 3 & 4
+    generation,
+    startGeneration,
+    // Import
+    importing,
+    importResult,
+    importCharacter,
+    // Navigation
+    nextStep,
+    prevStep,
+    // Actions
+    reset,
+    addMoreMaterial,
+  } = useAIImport();
+
+  const stepLabels = ['Source Material', 'Configuration', 'Generation', 'Review'];
+
+  return (
+    <div className="space-y-4">
+      <StepIndicator current={currentStep} total={4} />
+
+      <div className="mb-2">
+        <h3 className="qt-heading-2">{stepLabels[currentStep - 1]}</h3>
+      </div>
+
+      {/* Step Content */}
+      {currentStep === 1 && (
+        <SourceMaterialStep
+          uploadedFiles={uploadedFiles}
+          sourceText={sourceText}
+          uploading={uploading}
+          uploadError={uploadError}
+          onSourceTextChange={setSourceText}
+          onUploadFiles={uploadFiles}
+          onRemoveFile={removeFile}
+        />
+      )}
+
+      {currentStep === 2 && (
+        <ConfigurationStep
+          profiles={profiles}
+          loadingProfiles={loadingProfiles}
+          profileId={profileId}
+          includeMemories={includeMemories}
+          includeChats={includeChats}
+          onProfileChange={setProfileId}
+          onIncludeMemoriesChange={setIncludeMemories}
+          onIncludeChatsChange={setIncludeChats}
+        />
+      )}
+
+      {currentStep === 3 && (
+        <GenerationProgressStep
+          steps={generation.steps}
+          generating={generation.generating}
+          includeMemories={includeMemories}
+          includeChats={includeChats}
+          error={error}
+        />
+      )}
+
+      {currentStep === 4 && (
+        <ReviewStep
+          result={generation.result}
+          stepResults={generation.stepResults}
+          errors={generation.errors}
+          importing={importing}
+          importResult={importResult}
+          onImport={importCharacter}
+          onAddMore={addMoreMaterial}
+          onStartOver={reset}
+        />
+      )}
+
+      {/* Navigation Footer */}
+      {currentStep < 3 && (
+        <div className="flex justify-between pt-4 qt-border-default border-t">
+          <button
+            onClick={prevStep}
+            disabled={currentStep === 1}
+            className="qt-button-secondary"
+          >
+            Back
+          </button>
+          {currentStep === 2 ? (
+            <button
+              onClick={() => startGeneration()}
+              disabled={!canProceed || generation.generating}
+              className="qt-button-primary"
+            >
+              Generate Character
+            </button>
+          ) : (
+            <button
+              onClick={nextStep}
+              disabled={!canProceed}
+              className="qt-button-primary"
+            >
+              Next
+            </button>
+          )}
+        </div>
+      )}
+
+      {currentStep === 3 && !generation.generating && generation.result && (
+        <div className="flex justify-end pt-4 qt-border-default border-t">
+          <button
+            onClick={nextStep}
+            className="qt-button-primary"
+          >
+            Review Results
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}

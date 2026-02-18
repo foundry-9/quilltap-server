@@ -184,16 +184,17 @@ Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/
 - Check for Typescript errors by running "npx tsc" rather than "npm run build"
 - When committing, record basic changes in `docs/CHANGELOG.md` in reverse chronological order
 - Keep the documentation above up to date, and update this file if you add more documentation, in the same format.
-- Any change to data, particularly the schemas used to read or write data either to files or to the database, should be checked to see if they need to be reflected in exports, backups, and/or the migrations/ directory.
+- Any change to data, particularly the schemas used to read or write data either to files or to the database, should be checked to see if they need to be reflected in .qtap or SillyTavern exports, the [qtap schema](./public/schemas/qtap-export.schema.json), backups, and/or the migrations/ directory.
 - Any files that exist in the app source code only because they are necessary for migrations should move to the `migrations/` directory.
-- If we make changes to anything in the `packages/` directory, we need to make sure we update package.json numbers and pause to allow the developer/human user to `npm publish` to push those packages into npmjs. We do *not* just copy things down into the appropriate directories! We wait to publish the new npm package first. You can stop everything, ask me to publish the new version, then install the new one. If that doesn't work, let's fix the NPM problem we're having, **NOT** work around it.
+- **IMPORTANT**: If we make changes to anything in the `packages/` directory, we need to make sure we update package.json numbers and pause to allow the developer/human user to `npm publish` to push those packages into npmjs. We do *not* just copy things down into the appropriate directories! We wait to publish the new npm package first. You can stop everything, ask me to publish the new version, then install the new one. If that doesn't work, let's fix the NPM problem we're having, **NOT** work around it.
 - Commits take a long time because there is a precommit script in `.githooks/pre-commit` that kills the dev server, runs lint, runs the unit tests, does a test compile with `npx tsc`, builds the plugins, and then does a full Next.js build of the app, to ensure that we're committing something that basically works.
 - Leave no stubs and "TODO" code behind unless you have agreed on it with me ahead of time
 - All user-visible changes must be documented in help files found in `help/*.md`
 
 ## Best Practices and Principles
 
-- respect encapsulation and single source of truth. If a feature requires duplicate code, consider inheritance
+- respect encapsulation and single source of truth
+  - If a feature requires duplicate code, consider inheritance
 - SRP
 - DRY
 - KISS

@@ -2,6 +2,12 @@
 
 ## Recent Changes
 
+### 3.1-dev
+
+- feat: AI Character Import — new multi-step wizard on Aurora page that generates complete characters from source material (wiki pages, documents, freeform text) using AI; extracts character basics, dialogue, system prompts, physical descriptions, pronouns, memories, and example chats via focused LLM calls; assembles validated `.qtap` export for import; supports incremental regeneration
+- feat: Added `qtap-schema-validator` — Ajv-based JSON Schema validator for `.qtap` export format (Draft 2020-12), reusable for import validation
+- feat: Added `AI_IMPORT` log type for LLM call tracking
+
 ### 3.0-dev
 
 - build: Exclude node_modules from Electron app.asar — Electron code uses zero npm deps (only Node builtins + Electron APIs), so the 502MB node_modules was bundled for nothing; DMG reduced from 262MB to ~132MB; added `"!node_modules"` to electron-builder.yml files config
