@@ -766,6 +766,12 @@ ipcMain.handle('app:save-file', async (_event, data: ArrayBuffer, filename: stri
   return true;
 });
 
+// Open a path in the host's file browser
+ipcMain.handle('app:open-path', async (_event, dirPath: string) => {
+  console.log(`[Main] Opening path in file browser: ${dirPath}`);
+  await shell.openPath(dirPath);
+});
+
 // Handle URL download from main app window (streams to disk via will-download handler)
 ipcMain.handle('app:download-url', async (_event, url: string) => {
   if (!mainWindow) return;

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import packageJson from '@/package.json';
+import { showSuccessToast } from '@/lib/toast';
 
 type BackendMode = 'local' | 'Docker' | 'VM';
 
@@ -46,7 +47,22 @@ export default function FooterWrapper() {
       <div className="qt-footer-container">
         <span>v{packageJson.version}{backendMode ? ` (${backendMode})` : ''}</span>
         {hostPath && (
-          <span className="qt-footer-path" title={hostPath}>{hostPath}</span>
+          <button
+            className="qt-footer-path"
+            title={window.quilltap?.openPath ? 'Open in file browser' : 'Click to copy path'}
+            onClick={() => {
+              if (window.quilltap?.openPath) {
+                window.quilltap.openPath(hostPath);
+              } else {
+                const copyText = /[\s"'\\$`!#&|;(){}]/.test(hostPath) ? `"${hostPath}"` : hostPath;
+                navigator.clipboard.writeText(copyText).then(() => {
+                  showSuccessToast('Path copied to clipboard');
+                });
+              }
+            }}
+          >
+            {hostPath}
+          </button>
         )}
         <span className="qt-footer-separator">•</span>
         <a

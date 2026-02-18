@@ -970,7 +970,7 @@
   }
 
   /**
-   * Footer path - monospace display of host data directory
+   * Footer path - monospace display of host data directory (interactive button)
    */
   .qt-footer-path {
     font-family: monospace;
@@ -980,6 +980,16 @@
     max-width: 24rem;
     color: var(--qt-footer-fg);
     opacity: 0.7;
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  .qt-footer-path:hover {
+    opacity: 1;
+    text-decoration: underline;
   }
 
   /**

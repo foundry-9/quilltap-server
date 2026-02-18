@@ -37,4 +37,9 @@ contextBridge.exposeInMainWorld('quilltap', {
   /** Download a URL to disk via native save dialog (streams to disk, no memory pressure) */
   downloadUrl: (url: string): Promise<void> =>
     ipcRenderer.invoke('app:download-url', url),
+
+  // --- File system ---
+  /** Open a path in the host's file browser */
+  openPath: (dirPath: string): Promise<void> =>
+    ipcRenderer.invoke('app:open-path', dirPath),
 });

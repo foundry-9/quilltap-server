@@ -24,6 +24,9 @@ interface QuilltapElectronBridge {
   // --- File downloads (used by main app window) ---
   saveFile: (data: ArrayBuffer, filename: string) => Promise<boolean>;
   downloadUrl: (url: string) => Promise<void>;
+
+  // --- File system ---
+  openPath: (dirPath: string) => Promise<void>;
 }
 
 declare global {

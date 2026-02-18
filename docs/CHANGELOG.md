@@ -4,6 +4,7 @@
 
 ### 3.0-dev
 
+- feat: Footer data directory path is now clickable — in Electron, opens the host file browser to that location; in browser mode (Docker/local), copies the path to clipboard with a toast notification; tooltip indicates the action; styled with hover underline and opacity transition
 - feat: Display host data directory path in footer — monospace path shown between the version tag and copyright notice so users can see where their data lives; new `getHostDataDir()` function reads `QUILLTAP_HOST_DATA_DIR` env var (set automatically in Lima/WSL2, configurable for Docker via `-e`); added `hostPath` field to `/api/v1/system/data-dir` response; new `qt-footer-path` CSS class for themed path display
 - fix: WSL2 init script used `QUILTTAP_DATA_DIR` (misspelled with double-T) instead of `QUILLTAP_DATA_DIR` — the app never saw the configured data directory inside WSL2; fixed all occurrences
 - fix: Docker host URL rewriting used wrong gateway — `/proc/net/route` returned the Docker bridge IP (e.g. 172.17.0.1) which can't reach services on the host's localhost; reordered gateway resolution so Docker environments use `host.docker.internal` first (via Docker Desktop DNS or `--add-host` on Linux), with `/proc/net/route` reserved for Lima/WSL2 where NAT networking genuinely forwards to host loopback
