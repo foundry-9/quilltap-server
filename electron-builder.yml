@@ -24,18 +24,16 @@ files:
   - "!__tests__/**/*"
   - "!.storybook/**/*"
   - "!.githooks/**/*"
+afterSign: electron/notarize.js
 mac:
   category: public.app-category.productivity
   target:
     - target: dmg
       arch:
         - arm64
-  # hardenedRuntime requires a valid Apple Developer signing identity.
-  # Set to true and uncomment identity/entitlements when distributing signed builds.
-  hardenedRuntime: false
-  identity: null
-  # entitlements: electron/entitlements.mac.plist
-  # entitlementsInherit: electron/entitlements.mac.plist
+  hardenedRuntime: true
+  entitlements: electron/entitlements.mac.plist
+  entitlementsInherit: electron/entitlements.mac.plist
   icon: electron/resources/icon.icns
   extraResources:
     - from: lima/quilltap.yaml
