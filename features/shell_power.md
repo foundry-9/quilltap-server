@@ -88,4 +88,7 @@ This acknowledgement is shown once per attached directory and is stored so it is
   vice versa
   - Workspace → Files copies are subject to protection filters (see Protection)
   - returns `command_result`
-  
+
+### Working Directory Persistence
+
+The working directory for shell tool calls is stored as part of the chat session state. Each call to `exec_sync`, `exec_async`, and `sudo_sync` spawns a fresh process using the stored working directory — there is no persistent shell session between calls. If `chdir` has not been called in the current session, the working directory defaults to the chat directory (for general chats) or the project directory (for project chats), creating it first if it does not exist. A VM restart resets the working directory to this default.
