@@ -79,7 +79,7 @@ provision:
       # ── Extract Node.js and the Quilltap app from the rootfs ───────
       # We extract Node.js from the Docker image rather than installing
       # via apk, because Alpine's packaged nodejs has SQLite symbol
-      # relocation errors. The Docker image's Node (node:22-alpine) is
+      # relocation errors. The Docker image's Node (node:24-alpine) is
       # built correctly. Since both Node and /app/ come from the same
       # image, native modules (better-sqlite3) are already compiled
       # for the right Node version — no npm rebuild needed.
