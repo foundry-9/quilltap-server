@@ -141,7 +141,9 @@ describe('lib/host-rewrite', () => {
     it('should use /proc/net/route in Lima even when isDockerEnvironment() is true (has /app)', async () => {
       // Lima VMs have /app (from Docker rootfs extraction) which triggers
       // isDockerEnvironment(), but host.docker.internal doesn't exist in Lima.
-      // The fix ensures /proc/net/route is checked BEFORE the Docker strategy.
+      // The Docker strategy (host.docker.internal) is gated on
+      // isDockerEnvironment() && !isLimaEnvironment(), so Lima falls through
+      // to /proc/net/route which works with Lima's VZ NAT networking.
       process.env.LIMA_CONTAINER = 'true';
       // Simulate: no explicit IP, but /proc/net/route exists
 

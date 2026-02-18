@@ -4,6 +4,7 @@
 
 ### 3.0-dev
 
+- fix: Docker host URL rewriting used wrong gateway — `/proc/net/route` returned the Docker bridge IP (e.g. 172.17.0.1) which can't reach services on the host's localhost; reordered gateway resolution so Docker environments use `host.docker.internal` first (via Docker Desktop DNS or `--add-host` on Linux), with `/proc/net/route` reserved for Lima/WSL2 where NAT networking genuinely forwards to host loopback
 - build: Automated release workflow via GitHub Actions — triggered on version tags, builds rootfs tarballs (amd64 + arm64) with Docker buildx/QEMU, builds Electron installers for macOS (DMG) and Windows (NSIS), and creates a GitHub Release with all assets attached
 - feat: Electron app auto-constructs rootfs download URL from app version and GitHub Releases — first-launch rootfs download now works out of the box for official releases without needing `QUILLTAP_ROOTFS_URL`
 - fix: `build-rootfs.sh` Windows cache directory misspelled as `Quilttap` instead of `Quilltap`
