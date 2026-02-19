@@ -129,7 +129,7 @@ jobs:
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           CSC_NAME: ${{ secrets.CSC_NAME }}
           CODESIGN_IDENTITY: ${{ secrets.CODESIGN_IDENTITY }}
-          APPLE_API_KEY: ${{ env.APPLE_API_KEY }}
+          # APPLE_API_KEY is set via GITHUB_ENV in the "Write Apple API key to file" step
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_KEY_ISSUER: ${{ secrets.APPLE_API_KEY_ISSUER }}
           DEBUG: electron-notarize*
