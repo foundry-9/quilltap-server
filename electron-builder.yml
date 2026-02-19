@@ -47,6 +47,11 @@ mac:
     - from: electron/resources/lima/
       to: lima/
 win:
+  azureSignOptions:
+    publisherName: "Charles Sebold"
+    endpoint: "https://eus.codesigning.azure.net/"
+    certificateProfileName: "quilltap"
+    codeSigningAccountName: "quilltap"
   target:
     - target: nsis
       arch:
