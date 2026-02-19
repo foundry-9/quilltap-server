@@ -7,7 +7,10 @@ files:
   # Include compiled Electron code and splash screen assets
   - dist-electron/**/*
   - electron/splash/**/*
-  # Exclude everything else from the project (node_modules, src, etc.)
+  - package.json
+  # Exclude node_modules - Electron code uses zero npm deps (only Node builtins + Electron APIs)
+  - "!node_modules"
+  # Exclude everything else from the project (src, config, etc.)
   # The negation patterns prevent the entire project from being bundled.
   - "!app/**/*"
   - "!components/**/*"
