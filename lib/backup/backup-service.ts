@@ -17,6 +17,8 @@ import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { getNpmPluginsDir } from '@/lib/paths';
+import { getRawDatabase } from '@/lib/database/backends/sqlite/client';
+import { runBackupCheckpoint } from '@/lib/database/backends/sqlite/protection';
 import type { BackupManifest, BackupData, ChatWithMessages } from './types';
 import type { ChatEvent } from '@/lib/schemas/types';
 
@@ -206,6 +208,12 @@ export async function createBackup(userId: string): Promise<{
   manifest: BackupManifest;
 }> {
   moduleLogger.info('Starting backup creation', { userId });
+
+  // Flush WAL to ensure logical backup reads consistent data
+  const rawDb = getRawDatabase();
+  if (rawDb) {
+    runBackupCheckpoint(rawDb);
+  }
 
   // Collect all user data
   const data = await collectUserData(userId);

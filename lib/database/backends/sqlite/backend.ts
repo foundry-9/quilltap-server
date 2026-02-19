@@ -23,6 +23,8 @@ import {
 } from '../../interfaces';
 import { SQLiteConfig, loadSQLiteConfig } from '../../config';
 import { getSQLiteClient, closeSQLiteClient, isSQLiteConnected, setupSQLiteShutdownHandlers } from './client';
+import { runIntegrityCheck, startPeriodicCheckpoints } from './protection';
+import { createPhysicalBackup, applyRetentionPolicy } from './physical-backup';
 import { generateDDL, extractSchemaMetadata } from '../../schema-translator';
 import { buildSelectQuery, buildCountQuery, buildUpdateQuery, buildDeleteQuery, translateFilter } from './query-translator';
 import { documentToRow, rowToDocument, toJson, fromJson, fromJsonSafe } from './json-columns';
@@ -457,6 +459,22 @@ export class SQLiteBackend implements DatabaseBackend {
       this._state = 'connected';
 
       setupSQLiteShutdownHandlers();
+
+      // Run integrity check (synchronous, logs result but doesn't block startup)
+      runIntegrityCheck(this.db);
+
+      // Start periodic WAL checkpoints
+      startPeriodicCheckpoints(this.db);
+
+      // Create a physical backup on startup (async, non-blocking)
+      const db = this.db;
+      createPhysicalBackup(db)
+        .then(() => applyRetentionPolicy())
+        .catch((error) => {
+          logger.error('Startup physical backup or retention policy failed', {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
 
       logger.info('SQLite backend connected', { path: this.config.path });
     } catch (error) {

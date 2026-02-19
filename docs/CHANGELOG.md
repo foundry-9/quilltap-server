@@ -4,6 +4,7 @@
 
 ### 3.0-dev
 
+- feat: Comprehensive SQLite database protection — integrity check on startup (`PRAGMA quick_check`), periodic WAL checkpoints every 5 minutes (PASSIVE), TRUNCATE checkpoint on shutdown, physical database backups on startup with tiered retention policy (7 days all, weekly for 4 weeks, monthly for 12 months, yearly forever), pre-backup WAL flush for logical backups, `unhandledRejection` process handler, `synchronous = FULL` default for durable writes
 - build: Run rootfs builds on native architecture runners — amd64 on `ubuntu-latest`, arm64 on `ubuntu-24.04-arm`; removed Docker Buildx and QEMU setup steps since native builds don't need cross-compilation emulation
 - build: Exclude node_modules from Electron app.asar — Electron code uses zero npm deps (only Node builtins + Electron APIs), so the 502MB node_modules was bundled for nothing; DMG reduced from 262MB to ~132MB; added `"!node_modules"` to electron-builder.yml files config
 - build: Added unsigned dev build target `electron:build:mac:dev` — skips code signing and notarization for faster local iteration

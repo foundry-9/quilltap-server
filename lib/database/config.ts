@@ -40,7 +40,7 @@ export const SQLiteConfigSchema = z.object({
   /** Journal mode (only used if walMode is false) */
   journalMode: z.enum(['delete', 'truncate', 'persist', 'memory', 'off']).default('delete'),
   /** Synchronous mode */
-  synchronous: z.enum(['off', 'normal', 'full', 'extra']).default('normal'),
+  synchronous: z.enum(['off', 'normal', 'full', 'extra']).default('full'),
   /** Cache size in KB (negative for KB, positive for pages) */
   cacheSize: z.int().default(-64000), // 64MB
 });

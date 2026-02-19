@@ -230,8 +230,24 @@ export class WSLManager implements IVMManager {
     );
   }
 
-  /** Terminate the distro */
+  /** Gracefully stop the Node.js server, then terminate the distro */
   async stopVM(): Promise<CommandResult> {
+    console.log('[WSLManager] Gracefully stopping Node.js server in distro:', WSL_DISTRO_NAME);
+
+    // Send SIGTERM to the Node.js server process so it can flush writes and close the database
+    const killResult = await this.exec(
+      ['-d', WSL_DISTRO_NAME, '--exec', 'pkill', '-TERM', 'node'],
+      10
+    );
+
+    if (killResult.success) {
+      // Give the process a few seconds to finish cleanup
+      console.log('[WSLManager] Waiting for Node.js server to exit...');
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    } else {
+      console.log('[WSLManager] No Node.js process found or already stopped');
+    }
+
     console.log('[WSLManager] Terminating distro:', WSL_DISTRO_NAME);
     return this.exec(['--terminate', WSL_DISTRO_NAME], VM_STOP_TIMEOUT_S);
   }

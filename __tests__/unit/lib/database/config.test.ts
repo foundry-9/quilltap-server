@@ -167,7 +167,7 @@ describe('Database Configuration Module', () => {
       const { loadSQLiteConfig } = await import('@/lib/database/config');
       const config = loadSQLiteConfig();
 
-      expect(config.synchronous).toBe('normal');
+      expect(config.synchronous).toBe('full');
     });
 
     it('should parse SQLITE_CACHE_SIZE as integer', async () => {

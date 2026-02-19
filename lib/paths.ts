@@ -272,6 +272,18 @@ export function getSQLiteDatabasePath(): string {
 }
 
 /**
+ * Get the physical database backups directory path
+ *
+ * Physical backups are stored alongside the database file under data/backups/.
+ * These are independent of the logical backup system (Backup & Restore).
+ *
+ * @returns Backups directory path (<base>/data/backups)
+ */
+export function getBackupsDir(): string {
+  return path.join(getDataDir(), 'backups');
+}
+
+/**
  * Get the plugins directory path
  *
  * @returns Plugins directory path (<base>/plugins)
