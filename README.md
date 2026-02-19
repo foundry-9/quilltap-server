@@ -7,7 +7,7 @@ Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, 
 No subscriptions. No data harvested. No forgetting everything between sessions.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-3.0.0--dev.35-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-3.0.0--dev.38-yellow.svg)](package.json)
 
 <p align="center">
   <img src="https://quilltap.ai/images/welcome-to-quilltap-2-8.png" alt="Welcome to Quilltap" />
@@ -82,14 +82,14 @@ On first launch, Quilltap will:
 | Platform | Data Directory |
 | --- | --- |
 | macOS | `~/Library/Application Support/Quilltap` (shared with VM via VirtioFS) |
-| Windows | `%APPDATA%\Quilttap` (accessed from WSL2 via `/mnt/c/...`) |
+| Windows | `%APPDATA%\Quilltap` (accessed from WSL2 via `/mnt/c/...`) |
 
 To build from source:
 
 ```bash
 # Build the rootfs (requires Docker)
-./scripts/build-rootfs.sh                          # macOS (arm64)
-./scripts/build-rootfs.sh --platform linux/amd64   # Windows (amd64)
+npm run build:electron:rootfs                                    # macOS (arm64)
+npm run build:electron:rootfs -- --platform linux/amd64          # Windows (amd64)
 
 # Build the Electron app
 npm run electron:build:mac   # macOS (Lima downloaded automatically)

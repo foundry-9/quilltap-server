@@ -72,8 +72,8 @@ quilltap/
 │   └── complete/             # Completed feature specifications
 ├── docker/                   # Docker configuration (entrypoint script)
 ├── scripts/                  # Utility scripts (migrations, cleanup, builds)
-│   ├── build-rootfs.sh       # Build Docker image and export rootfs tarball
-│   └── stage-lima.sh         # Copy Lima binaries into electron/resources/
+│   ├── build-rootfs.ts       # Build Docker image and export rootfs tarball
+│   └── stage-lima.ts         # Download and stage Lima binaries into electron/resources/
 ├── public/                   # Static assets (icons, manifest)
 ├── website/                  # Website assets (images, splash graphics)
 ├── certs/                    # Development TLS certificates
@@ -168,7 +168,7 @@ In dev mode (`ELECTRON_DEV=1`), Electron skips all VM operations and connects di
 # --- macOS ---
 
 # 1. Build the rootfs tarball (Docker image → Alpine guest filesystem)
-./scripts/build-rootfs.sh
+npm run build:electron:rootfs
 
 # 2. Build the Electron app (downloads Lima from GitHub, compiles + packages)
 npm run electron:build:mac
@@ -176,7 +176,7 @@ npm run electron:build:mac
 # --- Windows ---
 
 # 1. Build the amd64 rootfs tarball (uses wsl2 Docker target)
-./scripts/build-rootfs.sh --platform linux/amd64
+npm run build:electron:rootfs -- --platform linux/amd64
 
 # 2. Build the Electron app (compiles + packages NSIS installer)
 npm run electron:build:win
@@ -199,8 +199,8 @@ npm run electron:build:win
 | What                 | Where                                                           |
 | -------------------- | --------------------------------------------------------------- |
 | WSL2 distro install  | `~/.qtvm/quilltap/`                                             |
-| Rootfs cache         | `%LOCALAPPDATA%\Quilttap\vm-images\quilltap-linux-amd64.tar.gz` |
-| App data             | `%APPDATA%\Quilttap\`                                           |
+| Rootfs cache         | `%LOCALAPPDATA%\Quilltap\vm-images\quilltap-linux-amd64.tar.gz` |
+| App data             | `%APPDATA%\Quilltap\`                                           |
 | Compiled Electron JS | `dist-electron/`                                                |
 
 **VM details (macOS):**
@@ -208,7 +208,7 @@ npm run electron:build:win
 - **Guest OS**: Alpine Linux 3.21 (aarch64)
 - **Resources**: 2 CPUs, 2GB RAM, 10GB disk
 - **Hypervisor**: VZ (Virtualization.framework, no QEMU)
-- **File sharing**: VirtioFS — mounts `~/Library/Application Support/Quilttap` into the guest at `/data/quilltap`
+- **File sharing**: VirtioFS — mounts `~/Library/Application Support/Quilltap` into the guest at `/data/quilltap`
 - **Port forwarding**: Host 5050 → Guest 3000
 
 **VM details (Windows):**
@@ -300,7 +300,7 @@ The SQLite database file location depends on platform:
 | **Windows** | `%APPDATA%\Quilltap\data\quilltap.db`                                     |
 | **Docker**  | `/app/quilltap/data/quilltap.db`                                          |
 | **Lima VM** | `/data/quilltap/data/quilltap.db` (maps to macOS path via VirtioFS)       |
-| **WSL2**    | Accessed via `/mnt/c/Users/.../AppData/Roaming/Quilttap/data/quilltap.db` |
+| **WSL2**    | Accessed via `/mnt/c/Users/.../AppData/Roaming/Quilltap/data/quilltap.db` |
 
 Override with `QUILLTAP_DATA_DIR` (non-Docker environments).
 

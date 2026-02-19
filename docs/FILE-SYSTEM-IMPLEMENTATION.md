@@ -184,6 +184,8 @@ AI-generated files include:
 
 1. **Test migration (dry run)**:
    ```bash
+   # Note: The migrate-files script was removed in v2.0. These instructions
+   # are preserved for historical reference only.
    npm run migrate-files:dry-run
    ```
 

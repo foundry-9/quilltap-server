@@ -57,14 +57,18 @@ export const ROOTFS_CACHE_DIR = (() => {
       || path.join(os.homedir(), 'AppData', 'Local');
     return path.join(localAppData, 'Quilltap', 'vm-images');
   }
-  // macOS
-  return path.join(os.homedir(), 'Library', 'Caches', 'Quilltap', 'lima-images');
+  if (process.platform === 'darwin') {
+    return path.join(os.homedir(), 'Library', 'Caches', 'Quilltap', 'lima-images');
+  }
+  // Linux
+  const cacheHome = process.env.XDG_CACHE_HOME || path.join(os.homedir(), '.cache');
+  return path.join(cacheHome, 'quilltap', 'vm-images');
 })();
 
 /** Full path to the cached rootfs tarball */
 export const ROOTFS_PATH = path.join(ROOTFS_CACHE_DIR, ROOTFS_FILENAME);
 
-/** Build ID sidecar file written by build-rootfs.sh next to the tarball */
+/** Build ID sidecar file written by build-rootfs.ts next to the tarball */
 export const ROOTFS_BUILD_ID_PATH = ROOTFS_PATH + '.build-id';
 
 /**

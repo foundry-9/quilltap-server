@@ -30,8 +30,17 @@ jobs:
       - name: Set up QEMU for cross-platform builds
         uses: docker/setup-qemu-action@v3
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
       - name: Build rootfs tarball
-        run: ./scripts/build-rootfs.sh --platform ${{ matrix.platform }}
+        run: npx tsx scripts/build-rootfs.ts --platform ${{ matrix.platform }}
 
       - name: Upload rootfs artifact
         uses: actions/upload-artifact@v4

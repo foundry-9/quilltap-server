@@ -1,6 +1,6 @@
 # Lima VM template for Quilltap
 # Usage:
-#   ./scripts/build-rootfs.sh                     # build the app tarball (needs Docker)
+#   npm run build:electron:rootfs                  # build the app tarball (needs Docker)
 #   LIMA_HOME=~/.qtlima limactl create --name quilltap lima/quilltap.yaml
 #   LIMA_HOME=~/.qtlima limactl start quilltap
 #   curl http://localhost:5050/api/health
@@ -87,7 +87,7 @@ provision:
       TARBALL=/mnt/lima-images/quilltap-linux-arm64.tar.gz
       if [ ! -f "$TARBALL" ]; then
         echo "ERROR: Rootfs tarball not found at $TARBALL"
-        echo "Run ./scripts/build-rootfs.sh first."
+        echo "Run 'npm run build:electron:rootfs' first."
         exit 1
       fi
 

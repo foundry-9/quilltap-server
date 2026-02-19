@@ -4,7 +4,7 @@ This document covers common issues when running Quilltap on Windows via the Elec
 
 ## Architecture
 
-On Windows, the Quilttap Electron app runs the backend inside a WSL2 (Windows Subsystem for Linux 2) distro. WSL2 is built into Windows 10 version 2004+ and Windows 11.
+On Windows, the Quilltap Electron app runs the backend inside a WSL2 (Windows Subsystem for Linux 2) distro. WSL2 is built into Windows 10 version 2004+ and Windows 11.
 
 ```text
 Electron (Windows host) → WSL2 distro "quilltap" (Alpine Linux x86_64)
@@ -16,7 +16,7 @@ Electron (Windows host) → WSL2 distro "quilltap" (Alpine Linux x86_64)
 
 ### Installing WSL2
 
-WSL2 must be enabled before Quilttap can run. Open **PowerShell as Administrator** and run:
+WSL2 must be enabled before Quilltap can run. Open **PowerShell as Administrator** and run:
 
 ```powershell
 wsl --install
@@ -28,7 +28,7 @@ Restart your computer when prompted. After restart, verify WSL2 is working:
 wsl --status
 ```
 
-If Quilttap starts and shows "WSL2 is not installed", this is what you need to fix.
+If Quilltap starts and shows "WSL2 is not installed", this is what you need to fix.
 
 ## Common Issues
 
@@ -42,21 +42,21 @@ If Quilttap starts and shows "WSL2 is not installed", this is what you need to f
 3. Restart your computer
 4. Run `wsl --status` to verify
 
-### Quilttap distro won't start
+### Quilltap distro won't start
 
 **Check distro status:**
 ```powershell
 wsl --list --verbose
 ```
 
-You should see a `quilltap` entry. If it shows "Stopped", Quilttap will start it automatically. If it's missing, Quilttap will import it on next launch.
+You should see a `quilltap` entry. If it shows "Stopped", Quilltap will start it automatically. If it's missing, Quilltap will import it on next launch.
 
 **Force re-import:**
 ```powershell
 # Remove the existing distro (WARNING: deletes data inside the distro)
 wsl --unregister quilltap
 
-# Relaunch Quilttap — it will re-import the rootfs
+# Relaunch Quilltap — it will re-import the rootfs
 ```
 
 ### Server not responding after startup
@@ -73,34 +73,34 @@ wsl -d quilltap --exec tail -50 /tmp/quilltap-stdout.log
 
 ### Data not persisting between sessions
 
-Quilttap stores data in `%APPDATA%\Quilttap` on Windows. This directory is passed into WSL2 as an environment variable and accessed via `/mnt/c/Users/<you>/AppData/Roaming/Quilttap/` inside the distro.
+Quilltap stores data in `%APPDATA%\Quilltap` on Windows. This directory is passed into WSL2 as an environment variable and accessed via `/mnt/c/Users/<you>/AppData/Roaming/Quilltap/` inside the distro.
 
 **Verify the data directory exists:**
 ```powershell
-dir %APPDATA%\Quilttap
+dir %APPDATA%\Quilltap
 ```
 
 You should see `data/`, `files/`, `logs/`, and `plugins/` subdirectories.
 
 ### Port 5050 already in use
 
-If another application is using port 5050, Quilttap won't be able to start.
+If another application is using port 5050, Quilltap won't be able to start.
 
 **Find what's using the port:**
 ```powershell
 netstat -ano | findstr :5050
 ```
 
-**Fix:** Stop the conflicting application, or configure Quilttap to use a different port (not yet supported — planned for future release).
+**Fix:** Stop the conflicting application, or configure Quilltap to use a different port (not yet supported — planned for future release).
 
 ## Data Locations
 
 | What | Windows Path |
 | --- | --- |
-| App data (database, files, logs) | `%APPDATA%\Quilttap\` |
-| Rootfs cache | `%LOCALAPPDATA%\Quilttap\vm-images\` |
+| App data (database, files, logs) | `%APPDATA%\Quilltap\` |
+| Rootfs cache | `%LOCALAPPDATA%\Quilltap\vm-images\` |
 | WSL2 distro (ext4 vhdx) | `~\.qtvm\quilltap\` |
-| Electron app | Wherever the installer put it (default: `%LOCALAPPDATA%\Programs\Quilttap\`) |
+| Electron app | Wherever the installer put it (default: `%LOCALAPPDATA%\Programs\Quilltap\`) |
 
 ## Manual Operations
 
@@ -109,7 +109,7 @@ netstat -ano | findstr :5050
 wsl --list --verbose
 ```
 
-### Stop the Quilttap distro
+### Stop the Quilltap distro
 ```powershell
 wsl --terminate quilltap
 ```
@@ -117,7 +117,7 @@ wsl --terminate quilltap
 ### Remove and reinstall the distro
 ```powershell
 wsl --unregister quilltap
-# Relaunch Quilttap to re-import
+# Relaunch Quilltap to re-import
 ```
 
 ### Access the distro shell
