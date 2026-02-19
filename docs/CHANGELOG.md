@@ -4,6 +4,7 @@
 
 ### 3.0-dev
 
+- fix: Docker startup scripts now automatically set `QUILLTAP_HOST_DATA_DIR` — both `start-quilltap.sh` and `start-quilltap.ps1` pass the resolved host data directory as an environment variable to the container, so the app can display the real host path in the footer without requiring users to manually add `-e QUILLTAP_HOST_DATA_DIR=...`
 - fix: macOS codesign in CI — `stage-lima.sh` crashed with "unbound variable" because `set -u` rejected the unset `CODESIGN_IDENTITY`; used `${CODESIGN_IDENTITY:-}` default syntax and added missing env var passthrough in release workflow
 - feat: Footer data directory path is now clickable — in Electron, opens the host file browser to that location; in browser mode (Docker/local), copies the path to clipboard with a toast notification; tooltip indicates the action; styled with hover underline and opacity transition
 - feat: Display host data directory path in footer — monospace path shown between the version tag and copyright notice so users can see where their data lives; new `getHostDataDir()` function reads `QUILLTAP_HOST_DATA_DIR` env var (set automatically in Lima/WSL2, configurable for Docker via `-e`); added `hostPath` field to `/api/v1/system/data-dir` response; new `qt-footer-path` CSS class for themed path display

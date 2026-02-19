@@ -98,6 +98,9 @@ CMD=(docker run -d
   -v "$DATA_DIR:/app/quilltap"
 )
 
+# Pass the host-side data directory so the app can display it in the UI
+CMD+=(-e "QUILLTAP_HOST_DATA_DIR=$DATA_DIR")
+
 # Linux needs explicit host.docker.internal mapping for localhost URL rewriting
 if [ "$PLATFORM" = "linux" ]; then
   CMD+=(--add-host=host.docker.internal:host-gateway)
