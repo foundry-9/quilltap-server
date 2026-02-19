@@ -4,6 +4,8 @@
 
 ### 3.0-dev
 
+- build: Docker image build and push job in release workflow — new `build-docker` job uses `docker/build-push-action` with Buildx to build multi-platform (`linux/amd64` + `linux/arm64`) images targeting the `production` Dockerfile stage; pushes to Docker Hub with version tag plus `latest` (clean semver) or `dev` (prerelease) channel tag; uses GitHub Actions layer caching; runs after Electron builds and gates the GitHub Release; release notes updated with `docker pull` instructions
+- build: Azure Trusted Signing for Windows Electron builds — added `azureSignOptions` to electron-builder.yml for code signing Windows installers via Azure Trusted Signing; release workflow passes `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, and `AZURE_CLIENT_SECRET` secrets to the Windows build step
 - feat: `quilltap` npm package for `npx quilltap` — run Quilltap as a local Node.js server with zero configuration; ships pre-built Next.js standalone output with native modules (better-sqlite3, sharp) installed at the user's platform at install time; CLI supports `--port`, `--data-dir`, `--open`, `--version`, `--help`; build script (`npm run build:package`) assembles the standalone output, static assets, public files, and bundled plugins; release workflow publishes to npm on version tags
 
 - fix: Lima VM fails to start with "com.apple.security.virtualization" entitlement error — `limactl` was listed in `signIgnore` in electron-builder.yml, so it was never code-signed and never received the virtualization entitlement needed for macOS Virtualization.framework (VZ driver); removed `limactl` from `signIgnore` so it inherits the app's entitlements (virtualization, JIT, network); `lima-guestagent` remains unsigned as it's a Linux binary
