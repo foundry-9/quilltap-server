@@ -4,6 +4,7 @@
 
 ### 3.0-dev
 
+- build: Consolidated platform-specific Docker scripts into cross-platform TypeScript — `build-push-docker.ts` replaces `.sh`/`.ps1` build scripts; new `start-quilltap-docker.ts` provides a unified `npm run start:docker` command with CLI args and env var overrides; removed dead `HOST_REDIRECT_PORTS`/Ollama auto-detection code from PowerShell startup script; original `start-quilltap.sh`/`.ps1` kept for `curl | bash` usage
 - fix: Docker startup scripts now automatically set `QUILLTAP_HOST_DATA_DIR` — both `start-quilltap.sh` and `start-quilltap.ps1` pass the resolved host data directory as an environment variable to the container, so the app can display the real host path in the footer without requiring users to manually add `-e QUILLTAP_HOST_DATA_DIR=...`
 - fix: macOS codesign in CI — `stage-lima.sh` crashed with "unbound variable" because `set -u` rejected the unset `CODESIGN_IDENTITY`; used `${CODESIGN_IDENTITY:-}` default syntax and added missing env var passthrough in release workflow
 - feat: Footer data directory path is now clickable — in Electron, opens the host file browser to that location; in browser mode (Docker/local), copies the path to clipboard with a toast notification; tooltip indicates the action; styled with hover underline and opacity transition
