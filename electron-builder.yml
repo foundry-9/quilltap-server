@@ -40,7 +40,6 @@ mac:
   entitlementsInherit: electron/entitlements.mac.plist
   icon: electron/resources/icon.icns
   signIgnore:
-    - "lima/bin/limactl"
     - "lima/share/lima/lima-guestagent"
   extraResources:
     - from: lima/quilltap.yaml
