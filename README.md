@@ -7,7 +7,7 @@ Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, 
 No subscriptions. No data harvested. No forgetting everything between sessions.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-3.0.0--dev.45-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-3.0.0--dev.46-yellow.svg)](package.json)
 
 <p align="center">
   <img src="https://quilltap.ai/images/welcome-to-quilltap-2-8.png" alt="Welcome to Quilltap" />
@@ -60,7 +60,26 @@ If you're coming from SillyTavern, Quilltap imports your characters and chats di
 
 - **Electron desktop app** (recommended for macOS and Windows), or
 - **Docker** (recommended for servers and Linux), or
-- **Node.js 22+** (for local development)
+- **Node.js 18+** with `npx quilltap` (lightweight local server), or
+- **Node.js 22+** (for local development from source)
+
+### With npx (Easiest for Local Use)
+
+Run Quilltap as a local Node.js server with zero configuration:
+
+```bash
+npx quilltap
+```
+
+Open [http://localhost:3000](http://localhost:3000). Options:
+
+```bash
+npx quilltap --port 8080                  # Custom port
+npx quilltap --data-dir /path/to/data     # Custom data directory
+npx quilltap --open                       # Open browser automatically
+```
+
+Or install globally: `npm install -g quilltap && quilltap`
 
 ### With Electron (Recommended for Desktop)
 

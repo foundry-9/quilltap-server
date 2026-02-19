@@ -1,0 +1,42 @@
+{
+  "name": "quilltap",
+  "version": "3.0.0",
+  "description": "Self-hosted AI workspace for writers, worldbuilders, and roleplayers. Run with npx quilltap.",
+  "author": {
+    "name": "Charles Sebold",
+    "email": "charles.sebold@foundry-9.com",
+    "url": "https://foundry-9.com"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/foundry-9/quilltap.git",
+    "directory": "packages/quilltap"
+  },
+  "homepage": "https://quilltap.ai",
+  "keywords": [
+    "quilltap",
+    "ai",
+    "llm",
+    "chat",
+    "roleplay",
+    "writing",
+    "worldbuilding",
+    "self-hosted"
+  ],
+  "bin": {
+    "quilltap": "bin/quilltap.js"
+  },
+  "files": [
+    "bin/",
+    "standalone/",
+    "README.md"
+  ],
+  "dependencies": {
+    "better-sqlite3": "^12.6.2",
+    "sharp": "^0.34.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
