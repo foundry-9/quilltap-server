@@ -29,7 +29,7 @@
  *   QUILLTAP_IMAGE_TAG          Image tag
  */
 
-import { execSync } from 'child_process';
+import { execFileSync, execSync } from 'child_process';
 import { mkdirSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
@@ -212,7 +212,8 @@ cmd.push(`${IMAGE}:${opts.tag}`);
 
 if (opts.dryRun) {
   console.log('Dry run — would execute:');
-  console.log(`  ${cmd.join(' ')}`);
+  const quoted = cmd.map(a => a.includes(' ') ? `"${a}"` : a);
+  console.log(`  ${quoted.join(' ')}`);
   process.exit(0);
 }
 
@@ -230,7 +231,7 @@ if (dockerContainerExists(opts.name)) {
 
 console.log('Starting Quilltap...');
 try {
-  execSync(cmd.join(' '), { stdio: 'inherit' });
+  execFileSync(cmd[0], cmd.slice(1), { stdio: 'inherit' });
 } catch {
   console.error('Failed to start container.');
   process.exit(1);
