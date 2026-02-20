@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import {
   HOST_PORT,
@@ -24,8 +25,29 @@ import { HealthChecker } from './health-checker';
 import { SplashUpdate, DirectoryInfo, DirectorySizeInfo, RuntimeMode, DetailLevel } from './types';
 import { AppSettings, loadSettings, saveSettings } from './settings';
 import { getSizesForDir } from './disk-utils';
+import { runCrashGuard, markStartupSuccess, isInSafeMode } from './crash-guard';
 
 const isDev = !!process.env.ELECTRON_DEV;
+
+// Run crash guard before app is ready — tracks consecutive crashes and enters
+// safe mode after 3 consecutive failures (clears caches, resets settings)
+runCrashGuard();
+
+// Prevent macOS NSPersistentUIRestorer from attempting window state restoration,
+// which can cause EXC_BREAKPOINT crashes in the Electron Framework
+if (process.platform === 'darwin') {
+  app.commandLine.appendSwitch('disable-session-crashed-bubble');
+  try {
+    /* eslint-disable quilltap/no-quilltap-misspelling -- actual macOS bundle ID */
+    fs.rmSync(
+      path.join(os.homedir(), 'Library', 'Saved Application State', 'com.foundry9.quilttap.savedState'),
+      { recursive: true, force: true }
+    );
+    /* eslint-enable quilltap/no-quilltap-misspelling */
+  } catch {
+    // Non-fatal — directory may not exist
+  }
+}
 
 /** Root of the app directory (for static files like electron/splash/) */
 const appRoot = app.isPackaged
@@ -395,6 +417,7 @@ async function startupSequence(dataDir: string): Promise<void> {
 
     if (status.status === 'healthy' || status.status === 'degraded') {
       mainWindow = createMainWindow();
+      markStartupSuccess();
       return;
     }
 
@@ -617,6 +640,7 @@ async function startupSequence(dataDir: string): Promise<void> {
     });
 
     mainWindow = createMainWindow();
+    markStartupSuccess();
   } else {
     const logs = await vmManager.getLogs(20);
     sendSplashError(
@@ -753,6 +777,7 @@ async function dockerStartupSequence(dataDir: string): Promise<void> {
     });
 
     mainWindow = createMainWindow();
+    markStartupSuccess();
   } else {
     const logs = await dockerManager.getLogs(20);
     sendSplashError(
@@ -766,6 +791,15 @@ async function dockerStartupSequence(dataDir: string): Promise<void> {
 
 app.whenReady().then(async () => {
   appSettings = loadSettings();
+
+  // If crash guard triggered safe mode, ensure autoStart is off so user gets
+  // the directory chooser and can pick a different (working) data directory
+  if (isInSafeMode()) {
+    console.log('[Main] Safe mode active — disabling autoStart');
+    appSettings.autoStart = false;
+    saveSettings(appSettings);
+  }
+
   vmManager = createVMManager();
   dockerManager = new DockerManager();
   downloadManager = new DownloadManager();

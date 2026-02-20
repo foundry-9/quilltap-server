@@ -4,6 +4,7 @@
 
 ### 3.0-dev
 
+- feat: Crash-loop protection for Electron app — new `electron/crash-guard.ts` module tracks consecutive startup failures via a JSON state file; after 3 consecutive crashes, enters safe mode which clears Chromium caches, removes macOS saved application state, and resets settings to safe defaults (autoStart off, data directory reset to platform default); `markStartupSuccess()` resets the counter after successful main window creation; also removes macOS `NSPersistentUIRestorer` saved state on every launch and adds `disable-session-crashed-bubble` switch to prevent `EXC_BREAKPOINT` crashes from window state restoration
 - refactor: Dead code cleanup — removed 7 unused files, removed unused exports from toast, TemplateHighlighter, theme-style-injector, useThemePreview, cheap-llm, and pricing-fetcher; consolidated duplicate `resolveImageProfileForChat` into shared utility; added `electron/**` to knip.json ignore list
 - refactor: Extract shared plugin dynamic loader — deduplicated 66 lines of `loadExternalPluginModule` + `PEER_DEPENDENCIES` + `__non_webpack_require__` bootstrap from provider-registry.ts and search-provider-registry.ts into `lib/plugins/dynamic-loader.ts`
 - refactor: Adopt enrichment utilities — added `enrichWithDefaultImage` to `lib/api/middleware/enrichment.ts`; refactored connection-profiles, embedding-profiles, image-profiles, characters, projects, and chat helpers to use shared enrichment utilities instead of inline reimplementations
