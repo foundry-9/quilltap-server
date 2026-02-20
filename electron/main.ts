@@ -679,58 +679,37 @@ async function dockerStartupSequence(dataDir: string): Promise<void> {
     console.warn('[Main] Could not check/stop VM (non-fatal):', err);
   }
 
-  // Step 3: Pull Docker image if needed
-  let imageTag = 'latest';
-  if (APP_VERSION) {
-    const versionExists = await dockerManager.imageExistsLocally(APP_VERSION);
-    if (versionExists) {
-      imageTag = APP_VERSION;
-    } else {
-      // Try to pull version-specific tag
-      sendSplashUpdate({
-        phase: 'pulling-image',
-        message: 'Pulling Quilltap image...',
-        detail: `${DOCKER_IMAGE}:${APP_VERSION}`,
-      });
-
-      const pullResult = await dockerManager.pullImage(APP_VERSION, (line) => {
-        sendSplashUpdate({
-          phase: 'pulling-image',
-          message: 'Pulling Quilltap image...',
-          detail: line.length > 120 ? line.substring(0, 117) + '...' : line,
-        });
-      });
-
-      if (pullResult.success) {
-        imageTag = APP_VERSION;
-      } else {
-        console.log('[Main] Version-specific tag not found, falling back to latest');
-      }
-    }
+  // Step 3: Ensure the version-matched Docker image is available
+  if (!APP_VERSION) {
+    sendSplashError('Cannot determine app version — Docker mode requires a version-tagged image.', false);
+    return;
   }
 
-  // If we don't have the image yet, pull latest
-  if (imageTag === 'latest') {
-    const latestExists = await dockerManager.imageExistsLocally('latest');
-    if (!latestExists) {
+  const versionExists = await dockerManager.imageExistsLocally(APP_VERSION);
+  if (!versionExists) {
+    // Try to pull the version-specific tag
+    sendSplashUpdate({
+      phase: 'pulling-image',
+      message: 'Pulling Quilltap image...',
+      detail: `${DOCKER_IMAGE}:${APP_VERSION}`,
+    });
+
+    const pullResult = await dockerManager.pullImage(APP_VERSION, (line) => {
       sendSplashUpdate({
         phase: 'pulling-image',
         message: 'Pulling Quilltap image...',
-        detail: `${DOCKER_IMAGE}:latest`,
+        detail: line.length > 120 ? line.substring(0, 117) + '...' : line,
       });
+    });
 
-      const pullResult = await dockerManager.pullImage('latest', (line) => {
-        sendSplashUpdate({
-          phase: 'pulling-image',
-          message: 'Pulling Quilltap image...',
-          detail: line.length > 120 ? line.substring(0, 117) + '...' : line,
-        });
-      });
-
-      if (!pullResult.success) {
-        sendSplashError(`Failed to pull Docker image: ${pullResult.error}`, true);
-        return;
-      }
+    if (!pullResult.success) {
+      sendSplashError(
+        `Failed to pull Docker image ${DOCKER_IMAGE}:${APP_VERSION}.\n\n` +
+        `The Electron app requires the exact matching Docker image for version ${APP_VERSION}.\n\n` +
+        `Error: ${pullResult.error}`,
+        true
+      );
+      return;
     }
   }
 

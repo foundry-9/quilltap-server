@@ -4,6 +4,7 @@
 
 ### 3.0-dev
 
+- fix: Docker mode in Electron app no longer falls back to `latest` tag — `startContainer()` and `dockerStartupSequence()` now require the exact version-tagged image (`csebold/quilltap:<APP_VERSION>`) matching the Electron app version; if the image can't be pulled, a clear error is shown instead of silently running a mismatched version; also augments PATH when spawning Docker commands so credential helpers (`docker-credential-osxkeychain` on macOS, `docker-credential-wincred` on Windows) are found in packaged Electron's minimal PATH environment
 - docs: Rewrote README.md for 3.0 — reorganized Getting Started into three tiers (native desktop installer, Docker, from source) with GitHub Releases as primary recommendation; added agentic sandbox teaser; updated tech stack and acknowledgments; added Pascal the Croupier and Search plugin type; applied project literary voice throughout
 - docs: Updated About page (`/about`) to match 3.0 features — added native desktop app and Docker runtime to feature list, database protection, Pascal the Croupier, expanded tech stack with Electron/Lima/WSL2/Docker, added Download Latest Release link and Acknowledgments section
 - docs: Added literary style directive to CLAUDE.md — "steampunk + roaring 20s + Great Gatsby + Wodehouse + Lemony Snicket" for all user-facing writing

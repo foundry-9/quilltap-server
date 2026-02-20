@@ -1,5 +1,6 @@
 import { spawn, execFileSync } from 'child_process';
 import * as fs from 'fs';
+import * as path from 'path';
 import {
   DOCKER_IMAGE,
   DOCKER_CONTAINER_PORT,
@@ -20,6 +21,25 @@ const DOCKER_SEARCH_PATHS = [
   '/usr/bin/docker',
   '/snap/bin/docker',
 ];
+
+/**
+ * Extra directories to add to PATH when spawning Docker commands.
+ * Docker invokes credential helpers (e.g. docker-credential-osxkeychain on macOS,
+ * docker-credential-wincred on Windows) as subprocesses, and those helpers
+ * won't be found under the minimal PATH that packaged Electron apps inherit.
+ */
+const EXTRA_PATH_DIRS: string[] = process.platform === 'win32'
+  ? [
+    path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Docker', 'Docker', 'resources', 'bin'),
+    path.join(process.env.ProgramW6432 || 'C:\\Program Files', 'Docker', 'Docker', 'resources', 'bin'),
+    path.join(process.env.LOCALAPPDATA || '', 'Docker', 'wsl', 'docker-credential-wincred'),
+  ].filter(Boolean)
+  : [
+    '/usr/local/bin',
+    '/opt/homebrew/bin',
+    '/usr/bin',
+    '/snap/bin',
+  ];
 
 /**
  * Resolve the full path to the `docker` CLI binary.
@@ -118,14 +138,11 @@ export class DockerManager {
     // Clean up any existing container with this name
     await this.exec(['rm', '-f', this.containerName], 10_000);
 
-    // Resolve image tag: prefer version-specific, fallback to latest
-    let imageTag = 'latest';
-    if (APP_VERSION) {
-      const versionExists = await this.imageExistsLocally(APP_VERSION);
-      if (versionExists) {
-        imageTag = APP_VERSION;
-      }
+    // Always use the version-specific image tag — no fallback to latest
+    if (!APP_VERSION) {
+      return { success: false, stdout: '', stderr: '', error: 'APP_VERSION is not set — cannot determine which Docker image to run' };
     }
+    const imageTag = APP_VERSION;
 
     const imageRef = `${DOCKER_IMAGE}:${imageTag}`;
     console.log('[DockerManager] Starting container:', this.containerName, 'from', imageRef);
@@ -186,9 +203,19 @@ export class DockerManager {
     return new Promise((resolve) => {
       console.log('[DockerManager] exec:', this.dockerPath, args.join(' '));
 
+      // Augment PATH so Docker can find credential helpers
+      // (e.g. docker-credential-osxkeychain on macOS, docker-credential-wincred on Windows)
+      const currentPath = process.env.PATH || '';
+      const pathParts = currentPath.split(path.delimiter);
+      const extraDirs = EXTRA_PATH_DIRS.filter(d => !pathParts.includes(d));
+      const augmentedPath = extraDirs.length > 0
+        ? `${currentPath}${path.delimiter}${extraDirs.join(path.delimiter)}`
+        : currentPath;
+
       const proc = spawn(this.dockerPath, args, {
         stdio: ['ignore', 'pipe', 'pipe'],
         timeout,
+        env: { ...process.env, PATH: augmentedPath },
       });
 
       let stdout = '';
