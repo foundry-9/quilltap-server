@@ -1,4 +1,4 @@
-import { spawn } from 'child_process';
+import { ChildProcess, spawn } from 'child_process';
 import * as fs from 'fs';
 import {
   WSL_DISTRO_NAME,
@@ -19,6 +19,13 @@ import { dirSize } from './disk-utils';
 export class WSLManager implements IVMManager {
   private wslPath: string = 'wsl.exe';
   private dataDir: string;
+
+  /**
+   * Long-lived wsl.exe child process that keeps the distro alive.
+   * WSL2 terminates a distro when no active sessions remain, so we must
+   * keep the wsl.exe process running for the lifetime of the Electron app.
+   */
+  private serverProcess: ChildProcess | null = null;
 
   constructor() {
     this.dataDir = DEFAULT_DATA_DIR;
@@ -204,7 +211,15 @@ export class WSLManager implements IVMManager {
 
   /**
    * Start the distro and launch the Quilltap backend.
-   * WSL keeps the distro alive as long as the Node.js process is running.
+   *
+   * Spawns wsl.exe as a long-lived foreground process running wsl-init.sh
+   * directly (no nohup, no backgrounding). This keeps the WSL2 session
+   * alive for the lifetime of the Electron app — WSL2 terminates a distro
+   * when no active sessions remain, so backgrounding with `nohup ... &`
+   * caused the distro to shut down immediately after the shell exited.
+   *
+   * We use `--exec env VAR=value /path/to/script` instead of `sh -c "..."`
+   * to avoid shell interpretation of Windows backslashes in the data dir path.
    */
   async startVM(onOutput?: (line: string) => void): Promise<CommandResult> {
     console.log('[WSLManager] Starting distro:', WSL_DISTRO_NAME);
@@ -214,20 +229,73 @@ export class WSLManager implements IVMManager {
       fs.mkdirSync(this.dataDir, { recursive: true });
     }
 
-    // Launch wsl-init.sh in the background inside the distro.
-    // We pass the Windows data directory path as an env var;
-    // wsl-init.sh converts it to a WSL path via wslpath.
-    const dataEnv = this.dataDir
-      ? `QUILLTAP_WIN_DATADIR=${this.dataDir}`
-      : '';
+    // Build args: wsl.exe -d quilltap --exec env QUILLTAP_WIN_DATADIR=<path> /usr/local/bin/wsl-init.sh
+    // Using --exec bypasses shell interpretation, so Windows backslashes in
+    // the data dir path are passed through verbatim to the env command.
+    const wslArgs = ['-d', WSL_DISTRO_NAME, '--exec'];
 
-    const cmd = `${dataEnv} nohup /usr/local/bin/wsl-init.sh > /tmp/quilltap-stdout.log 2>&1 &`;
+    if (this.dataDir) {
+      wslArgs.push('env', `QUILLTAP_WIN_DATADIR=${this.dataDir}`);
+    }
 
-    return this.exec(
-      ['-d', WSL_DISTRO_NAME, '--exec', 'sh', '-c', cmd],
-      VM_START_TIMEOUT_S,
-      onOutput
-    );
+    wslArgs.push('/usr/local/bin/wsl-init.sh');
+
+    return new Promise((resolve) => {
+      const child = spawn(this.wslPath, wslArgs, {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true,
+      });
+
+      this.serverProcess = child;
+
+      let resolved = false;
+
+      // Forward output to the splash screen callback
+      const handleData = (stream: 'stdout' | 'stderr') => (data: Buffer) => {
+        const lines = data.toString().split('\n');
+        for (const line of lines) {
+          const trimmed = line.replace(/\0/g, '').trim();
+          if (trimmed && onOutput) {
+            onOutput(trimmed);
+          }
+        }
+      };
+
+      child.stdout?.on('data', handleData('stdout'));
+      child.stderr?.on('data', handleData('stderr'));
+
+      // If wsl.exe fails to start (e.g. binary not found), report the error
+      child.on('error', (err) => {
+        this.serverProcess = null;
+        if (!resolved) {
+          resolved = true;
+          resolve({
+            success: false,
+            stdout: '',
+            stderr: '',
+            error: `Failed to spawn wsl.exe: ${err.message}`,
+          });
+        }
+      });
+
+      // If the process exits unexpectedly before the health checker takes over,
+      // that's fine — the health checker will detect the failure. But if it exits
+      // immediately (within 2s), it's likely a startup error we should report.
+      child.on('close', (code) => {
+        this.serverProcess = null;
+        console.log(`[WSLManager] wsl.exe exited with code ${code}`);
+      });
+
+      // The server takes time to start. We return success immediately after
+      // spawning — the health checker in main.ts handles waiting for readiness.
+      // Give it a brief moment to catch immediate spawn failures.
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          resolve({ success: true, stdout: '', stderr: '' });
+        }
+      }, 1000);
+    });
   }
 
   /** Gracefully stop the Node.js server, then terminate the distro */
@@ -248,6 +316,13 @@ export class WSLManager implements IVMManager {
       console.log('[WSLManager] No Node.js process found or already stopped');
     }
 
+    // Clean up the long-lived wsl.exe child process
+    if (this.serverProcess) {
+      console.log('[WSLManager] Killing wsl.exe server process');
+      this.serverProcess.kill();
+      this.serverProcess = null;
+    }
+
     console.log('[WSLManager] Terminating distro:', WSL_DISTRO_NAME);
     return this.exec(['--terminate', WSL_DISTRO_NAME], VM_STOP_TIMEOUT_S);
   }
@@ -260,11 +335,23 @@ export class WSLManager implements IVMManager {
 
   /** Read recent logs from inside the distro */
   async getLogs(lines: number = 50): Promise<string> {
-    // Try the stdout log first, then fall back to the app's combined log
-    const logPaths = [
-      '/tmp/quilltap-stdout.log',
-      '/data/quilltap/logs/combined.log',
-    ];
+    // The server runs as a foreground process (stdout goes to the wsl.exe pipe),
+    // so we read from the app's own log file inside the distro.
+    // The data dir is a wslpath-converted Windows path (e.g. /mnt/c/.../Quilltap).
+    const logPaths: string[] = [];
+
+    // If we know the Windows data dir, convert it to a WSL path for the log
+    if (this.dataDir) {
+      // wslpath conversion: C:\Users\... → /mnt/c/Users/...
+      // Do a quick inline approximation (the real conversion happens in the distro)
+      const wslDataDir = this.dataDir
+        .replace(/\\/g, '/')
+        .replace(/^([A-Za-z]):/, (_m, drive: string) => `/mnt/${drive.toLowerCase()}`);
+      logPaths.push(`${wslDataDir}/logs/combined.log`);
+    }
+
+    // Fallback paths
+    logPaths.push('/data/quilltap/logs/combined.log');
 
     for (const logPath of logPaths) {
       const result = await this.exec(
