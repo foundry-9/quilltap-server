@@ -155,7 +155,7 @@ export default function ImageModal({
   // Use portal to render at document body level, avoiding stacking context issues
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm"
+      className="fixed inset-0 z-[100] flex items-center justify-center qt-bg-overlay backdrop-blur-sm"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
@@ -257,7 +257,7 @@ export default function ImageModal({
       </div>
 
       {/* Filename at bottom */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/70 text-sm bg-black/50 px-3 py-1 rounded">
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 qt-text-overlay-muted text-sm qt-bg-overlay-caption px-3 py-1 rounded">
         {filename}
       </div>
     </div>,

@@ -279,14 +279,14 @@ export default function CharactersPage() {
                 <div className="flex items-center gap-1 ml-2">
                   <button
                     onClick={(e) => toggleFavorite(e, character.id)}
-                    className="text-2xl text-amber-400 transition-transform hover:scale-110"
+                    className="text-2xl qt-text-favorite transition-transform hover:scale-110"
                     title={character.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
                   >
                     {character.isFavorite ? '⭐' : '☆'}
                   </button>
                   <button
                     onClick={(e) => toggleControlledBy(e, character.id)}
-                    className="text-amber-400 transition-transform hover:scale-110"
+                    className="qt-text-favorite transition-transform hover:scale-110"
                     title={character.controlledBy === 'user' ? 'Switch to LLM control' : 'Switch to user control'}
                   >
                     {character.controlledBy === 'user' ? (

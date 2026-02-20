@@ -483,7 +483,7 @@ export default function MessageContent({
           overflow-wrap: break-word !important;
         }
       `}</style>
-      <div className={`qt-chat-message-content qt-prose prose prose-sm dark:prose-invert message-content ${className}`} style={{ overflow: 'hidden' }}>
+      <div className={`qt-chat-message-content qt-prose prose prose-sm qt-prose-auto message-content ${className}`} style={{ overflow: 'hidden' }}>
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           components={components}

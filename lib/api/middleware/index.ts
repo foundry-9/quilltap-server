@@ -41,7 +41,6 @@ export {
 export {
   getFilePath,
   getAvatarPath,
-  enrichWithDefaultImage,
   buildFileReference,
 } from './file-path';
 
@@ -49,9 +48,11 @@ export {
 export {
   enrichWithApiKey,
   enrichWithTags,
+  enrichWithDefaultImage,
   enrichProfile,
   enrichMany,
   unsetAllDefaults,
   type EnrichedApiKey,
   type EnrichedTag,
+  type EnrichedDefaultImage,
 } from './enrichment';

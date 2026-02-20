@@ -92,7 +92,7 @@ function renderToasts() {
  * @param message - The message to display
  * @param options - Configuration options (duration in ms, type of toast)
  */
-export function showToast(message: string, options: ToastOptions = {}): string {
+function showToast(message: string, options: ToastOptions = {}): string {
   ensureContainer()
 
   const {
@@ -149,18 +149,3 @@ export function showInfoToast(message: string, duration?: number): string {
   return showToast(message, { type: 'info', duration })
 }
 
-/**
- * Removes a specific toast by ID
- */
-export function removeToast(id: string) {
-  toasts = toasts.filter(t => t.id !== id)
-  renderToasts()
-}
-
-/**
- * Clears all toasts
- */
-export function clearToasts() {
-  toasts = []
-  renderToasts()
-}

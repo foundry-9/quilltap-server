@@ -276,8 +276,8 @@ export function SettingsCard({
 
           {/* Migration Confirmation Dialog */}
           {showMigrationConfirm && (
-            <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-              <p className="text-sm text-amber-800 dark:text-amber-200 mb-2">
+            <div className="p-3 rounded-lg qt-warning-box">
+              <p className="text-sm qt-warning-box-text mb-2">
                 This project has {mountPointData?.fileCount} file(s). They will be migrated to the new storage location. Continue?
               </p>
               <div className="flex gap-2">
@@ -319,7 +319,7 @@ export function SettingsCard({
               aria-checked={project.allowAnyCharacter}
             >
               <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                className={`inline-block h-4 w-4 transform rounded-full qt-bg-toggle-knob transition-transform ${
                   project.allowAnyCharacter ? 'translate-x-6' : 'translate-x-1'
                 }`}
               />

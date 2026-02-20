@@ -33,6 +33,313 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
+// node_modules/retry/lib/retry_operation.js
+var require_retry_operation = __commonJS({
+  "node_modules/retry/lib/retry_operation.js"(exports2, module2) {
+    function RetryOperation(timeouts, options) {
+      if (typeof options === "boolean") {
+        options = { forever: options };
+      }
+      this._originalTimeouts = JSON.parse(JSON.stringify(timeouts));
+      this._timeouts = timeouts;
+      this._options = options || {};
+      this._maxRetryTime = options && options.maxRetryTime || Infinity;
+      this._fn = null;
+      this._errors = [];
+      this._attempts = 1;
+      this._operationTimeout = null;
+      this._operationTimeoutCb = null;
+      this._timeout = null;
+      this._operationStart = null;
+      this._timer = null;
+      if (this._options.forever) {
+        this._cachedTimeouts = this._timeouts.slice(0);
+      }
+    }
+    module2.exports = RetryOperation;
+    RetryOperation.prototype.reset = function() {
+      this._attempts = 1;
+      this._timeouts = this._originalTimeouts.slice(0);
+    };
+    RetryOperation.prototype.stop = function() {
+      if (this._timeout) {
+        clearTimeout(this._timeout);
+      }
+      if (this._timer) {
+        clearTimeout(this._timer);
+      }
+      this._timeouts = [];
+      this._cachedTimeouts = null;
+    };
+    RetryOperation.prototype.retry = function(err) {
+      if (this._timeout) {
+        clearTimeout(this._timeout);
+      }
+      if (!err) {
+        return false;
+      }
+      var currentTime = (/* @__PURE__ */ new Date()).getTime();
+      if (err && currentTime - this._operationStart >= this._maxRetryTime) {
+        this._errors.push(err);
+        this._errors.unshift(new Error("RetryOperation timeout occurred"));
+        return false;
+      }
+      this._errors.push(err);
+      var timeout = this._timeouts.shift();
+      if (timeout === void 0) {
+        if (this._cachedTimeouts) {
+          this._errors.splice(0, this._errors.length - 1);
+          timeout = this._cachedTimeouts.slice(-1);
+        } else {
+          return false;
+        }
+      }
+      var self2 = this;
+      this._timer = setTimeout(function() {
+        self2._attempts++;
+        if (self2._operationTimeoutCb) {
+          self2._timeout = setTimeout(function() {
+            self2._operationTimeoutCb(self2._attempts);
+          }, self2._operationTimeout);
+          if (self2._options.unref) {
+            self2._timeout.unref();
+          }
+        }
+        self2._fn(self2._attempts);
+      }, timeout);
+      if (this._options.unref) {
+        this._timer.unref();
+      }
+      return true;
+    };
+    RetryOperation.prototype.attempt = function(fn, timeoutOps) {
+      this._fn = fn;
+      if (timeoutOps) {
+        if (timeoutOps.timeout) {
+          this._operationTimeout = timeoutOps.timeout;
+        }
+        if (timeoutOps.cb) {
+          this._operationTimeoutCb = timeoutOps.cb;
+        }
+      }
+      var self2 = this;
+      if (this._operationTimeoutCb) {
+        this._timeout = setTimeout(function() {
+          self2._operationTimeoutCb();
+        }, self2._operationTimeout);
+      }
+      this._operationStart = (/* @__PURE__ */ new Date()).getTime();
+      this._fn(this._attempts);
+    };
+    RetryOperation.prototype.try = function(fn) {
+      console.log("Using RetryOperation.try() is deprecated");
+      this.attempt(fn);
+    };
+    RetryOperation.prototype.start = function(fn) {
+      console.log("Using RetryOperation.start() is deprecated");
+      this.attempt(fn);
+    };
+    RetryOperation.prototype.start = RetryOperation.prototype.try;
+    RetryOperation.prototype.errors = function() {
+      return this._errors;
+    };
+    RetryOperation.prototype.attempts = function() {
+      return this._attempts;
+    };
+    RetryOperation.prototype.mainError = function() {
+      if (this._errors.length === 0) {
+        return null;
+      }
+      var counts = {};
+      var mainError = null;
+      var mainErrorCount = 0;
+      for (var i2 = 0; i2 < this._errors.length; i2++) {
+        var error = this._errors[i2];
+        var message = error.message;
+        var count = (counts[message] || 0) + 1;
+        counts[message] = count;
+        if (count >= mainErrorCount) {
+          mainError = error;
+          mainErrorCount = count;
+        }
+      }
+      return mainError;
+    };
+  }
+});
+
+// node_modules/retry/lib/retry.js
+var require_retry = __commonJS({
+  "node_modules/retry/lib/retry.js"(exports2) {
+    var RetryOperation = require_retry_operation();
+    exports2.operation = function(options) {
+      var timeouts = exports2.timeouts(options);
+      return new RetryOperation(timeouts, {
+        forever: options && (options.forever || options.retries === Infinity),
+        unref: options && options.unref,
+        maxRetryTime: options && options.maxRetryTime
+      });
+    };
+    exports2.timeouts = function(options) {
+      if (options instanceof Array) {
+        return [].concat(options);
+      }
+      var opts = {
+        retries: 10,
+        factor: 2,
+        minTimeout: 1 * 1e3,
+        maxTimeout: Infinity,
+        randomize: false
+      };
+      for (var key in options) {
+        opts[key] = options[key];
+      }
+      if (opts.minTimeout > opts.maxTimeout) {
+        throw new Error("minTimeout is greater than maxTimeout");
+      }
+      var timeouts = [];
+      for (var i2 = 0; i2 < opts.retries; i2++) {
+        timeouts.push(this.createTimeout(i2, opts));
+      }
+      if (options && options.forever && !timeouts.length) {
+        timeouts.push(this.createTimeout(i2, opts));
+      }
+      timeouts.sort(function(a, b) {
+        return a - b;
+      });
+      return timeouts;
+    };
+    exports2.createTimeout = function(attempt, opts) {
+      var random = opts.randomize ? Math.random() + 1 : 1;
+      var timeout = Math.round(random * Math.max(opts.minTimeout, 1) * Math.pow(opts.factor, attempt));
+      timeout = Math.min(timeout, opts.maxTimeout);
+      return timeout;
+    };
+    exports2.wrap = function(obj, options, methods) {
+      if (options instanceof Array) {
+        methods = options;
+        options = null;
+      }
+      if (!methods) {
+        methods = [];
+        for (var key in obj) {
+          if (typeof obj[key] === "function") {
+            methods.push(key);
+          }
+        }
+      }
+      for (var i2 = 0; i2 < methods.length; i2++) {
+        var method = methods[i2];
+        var original = obj[method];
+        obj[method] = function retryWrapper(original2) {
+          var op = exports2.operation(options);
+          var args = Array.prototype.slice.call(arguments, 1);
+          var callback = args.pop();
+          args.push(function(err) {
+            if (op.retry(err)) {
+              return;
+            }
+            if (err) {
+              arguments[0] = op.mainError();
+            }
+            callback.apply(this, arguments);
+          });
+          op.attempt(function() {
+            original2.apply(obj, args);
+          });
+        }.bind(obj, original);
+        obj[method].options = options;
+      }
+    };
+  }
+});
+
+// node_modules/retry/index.js
+var require_retry2 = __commonJS({
+  "node_modules/retry/index.js"(exports2, module2) {
+    module2.exports = require_retry();
+  }
+});
+
+// node_modules/p-retry/index.js
+var require_p_retry = __commonJS({
+  "node_modules/p-retry/index.js"(exports2, module2) {
+    "use strict";
+    var retry = require_retry2();
+    var networkErrorMsgs = [
+      "Failed to fetch",
+      // Chrome
+      "NetworkError when attempting to fetch resource.",
+      // Firefox
+      "The Internet connection appears to be offline.",
+      // Safari
+      "Network request failed"
+      // `cross-fetch`
+    ];
+    var AbortError3 = class extends Error {
+      constructor(message) {
+        super();
+        if (message instanceof Error) {
+          this.originalError = message;
+          ({ message } = message);
+        } else {
+          this.originalError = new Error(message);
+          this.originalError.stack = this.stack;
+        }
+        this.name = "AbortError";
+        this.message = message;
+      }
+    };
+    var decorateErrorWithCounts = (error, attemptNumber, options) => {
+      const retriesLeft = options.retries - (attemptNumber - 1);
+      error.attemptNumber = attemptNumber;
+      error.retriesLeft = retriesLeft;
+      return error;
+    };
+    var isNetworkError = (errorMessage) => networkErrorMsgs.includes(errorMessage);
+    var pRetry2 = (input, options) => new Promise((resolve, reject) => {
+      options = {
+        onFailedAttempt: () => {
+        },
+        retries: 10,
+        ...options
+      };
+      const operation = retry.operation(options);
+      operation.attempt(async (attemptNumber) => {
+        try {
+          resolve(await input(attemptNumber));
+        } catch (error) {
+          if (!(error instanceof Error)) {
+            reject(new TypeError(`Non-error was thrown: "${error}". You should only throw errors.`));
+            return;
+          }
+          if (error instanceof AbortError3) {
+            operation.stop();
+            reject(error.originalError);
+          } else if (error instanceof TypeError && !isNetworkError(error.message)) {
+            operation.stop();
+            reject(error);
+          } else {
+            decorateErrorWithCounts(error, attemptNumber, options);
+            try {
+              await options.onFailedAttempt(error);
+            } catch (error2) {
+              reject(error2);
+              return;
+            }
+            if (!operation.retry(error)) {
+              reject(operation.mainError());
+            }
+          }
+        }
+      });
+    });
+    module2.exports = pRetry2;
+    module2.exports.default = pRetry2;
+    module2.exports.AbortError = AbortError3;
+  }
+});
+
 // node_modules/extend/index.js
 var require_extend = __commonJS({
   "node_modules/extend/index.js"(exports2, module2) {
@@ -382,14 +689,14 @@ var require_common = __commonJS({
             const status = "status" in res.data.error && typeof res.data.error.status === "string" ? res.data.error.status : res.statusText;
             const code = "code" in res.data.error && typeof res.data.error.code === "number" ? res.data.error.code : res.status;
             if ("errors" in res.data.error && Array.isArray(res.data.error.errors)) {
-              const errorMessages2 = [];
+              const errorMessages = [];
               for (const e2 of res.data.error.errors) {
                 if (typeof e2 === "object" && "message" in e2 && typeof e2.message === "string") {
-                  errorMessages2.push(e2.message);
+                  errorMessages.push(e2.message);
                 }
               }
               return Object.assign({
-                message: errorMessages2.join("\n") || message,
+                message: errorMessages.join("\n") || message,
                 code,
                 status
               }, res.data.error);
@@ -490,7 +797,7 @@ var require_common = __commonJS({
 });
 
 // node_modules/gaxios/build/cjs/src/retry.js
-var require_retry = __commonJS({
+var require_retry3 = __commonJS({
   "node_modules/gaxios/build/cjs/src/retry.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
@@ -4602,24 +4909,24 @@ var require_ponyfill_es2018 = __commonJS({
               return null;
             }
           }
-          function shutdown(isError2, error) {
+          function shutdown(isError, error) {
             if (shuttingDown) {
               return;
             }
             shuttingDown = true;
             if (dest._state === "writable" && !WritableStreamCloseQueuedOrInFlight(dest)) {
-              uponFulfillment(waitForWritesToFinish(), () => finalize(isError2, error));
+              uponFulfillment(waitForWritesToFinish(), () => finalize(isError, error));
             } else {
-              finalize(isError2, error);
+              finalize(isError, error);
             }
           }
-          function finalize(isError2, error) {
+          function finalize(isError, error) {
             WritableStreamDefaultWriterRelease(writer);
             ReadableStreamReaderGenericRelease(reader);
             if (signal !== void 0) {
               signal.removeEventListener("abort", abortAlgorithm);
             }
-            if (isError2) {
+            if (isError) {
               reject(error);
             } else {
               resolve(void 0);
@@ -8013,11 +8320,11 @@ var init_request = __esm({
 });
 
 // node_modules/node-fetch/src/errors/abort-error.js
-var AbortError2;
+var AbortError;
 var init_abort_error = __esm({
   "node_modules/node-fetch/src/errors/abort-error.js"() {
     init_base();
-    AbortError2 = class extends FetchBaseError {
+    AbortError = class extends FetchBaseError {
       constructor(message, type = "aborted") {
         super(message, type);
       }
@@ -8028,7 +8335,7 @@ var init_abort_error = __esm({
 // node_modules/node-fetch/src/index.js
 var src_exports = {};
 __export(src_exports, {
-  AbortError: () => AbortError2,
+  AbortError: () => AbortError,
   Blob: () => fetch_blob_default,
   FetchError: () => FetchError,
   File: () => file_default,
@@ -8060,7 +8367,7 @@ async function fetch2(url, options_) {
     const { signal } = request;
     let response = null;
     const abort = () => {
-      const error = new AbortError2("The operation was aborted.");
+      const error = new AbortError("The operation was aborted.");
       reject(error);
       if (request.body && request.body instanceof import_node_stream2.default.Readable) {
         request.body.destroy(error);
@@ -8341,7 +8648,7 @@ var require_gaxios = __commonJS({
     var extend_1 = __importDefault(require_extend());
     var https_1 = require("https");
     var common_js_1 = require_common();
-    var retry_js_1 = require_retry();
+    var retry_js_1 = require_retry3();
     var stream_1 = require("stream");
     var interceptor_js_1 = require_interceptor();
     var randomUUID = async () => globalThis.crypto?.randomUUID() || (await import("crypto")).randomUUID();
@@ -22030,207 +22337,8 @@ __export(index_exports, {
 });
 module.exports = __toCommonJS(index_exports);
 
-// node_modules/is-network-error/index.js
-var objectToString = Object.prototype.toString;
-var isError = (value) => objectToString.call(value) === "[object Error]";
-var errorMessages = /* @__PURE__ */ new Set([
-  "network error",
-  // Chrome
-  "Failed to fetch",
-  // Chrome
-  "NetworkError when attempting to fetch resource.",
-  // Firefox
-  "The Internet connection appears to be offline.",
-  // Safari 16
-  "Network request failed",
-  // `cross-fetch`
-  "fetch failed",
-  // Undici (Node.js)
-  "terminated",
-  // Undici (Node.js)
-  " A network error occurred.",
-  // Bun (WebKit)
-  "Network connection lost"
-  // Cloudflare Workers (fetch)
-]);
-function isNetworkError(error) {
-  const isValid = error && isError(error) && error.name === "TypeError" && typeof error.message === "string";
-  if (!isValid) {
-    return false;
-  }
-  const { message, stack } = error;
-  if (message === "Load failed") {
-    return stack === void 0 || "__sentry_captured__" in error;
-  }
-  if (message.startsWith("error sending request for url")) {
-    return true;
-  }
-  return errorMessages.has(message);
-}
-
-// node_modules/p-retry/index.js
-function validateRetries(retries) {
-  if (typeof retries === "number") {
-    if (retries < 0) {
-      throw new TypeError("Expected `retries` to be a non-negative number.");
-    }
-    if (Number.isNaN(retries)) {
-      throw new TypeError("Expected `retries` to be a valid number or Infinity, got NaN.");
-    }
-  } else if (retries !== void 0) {
-    throw new TypeError("Expected `retries` to be a number or Infinity.");
-  }
-}
-function validateNumberOption(name, value, { min = 0, allowInfinity = false } = {}) {
-  if (value === void 0) {
-    return;
-  }
-  if (typeof value !== "number" || Number.isNaN(value)) {
-    throw new TypeError(`Expected \`${name}\` to be a number${allowInfinity ? " or Infinity" : ""}.`);
-  }
-  if (!allowInfinity && !Number.isFinite(value)) {
-    throw new TypeError(`Expected \`${name}\` to be a finite number.`);
-  }
-  if (value < min) {
-    throw new TypeError(`Expected \`${name}\` to be \u2265 ${min}.`);
-  }
-}
-var AbortError = class extends Error {
-  constructor(message) {
-    super();
-    if (message instanceof Error) {
-      this.originalError = message;
-      ({ message } = message);
-    } else {
-      this.originalError = new Error(message);
-      this.originalError.stack = this.stack;
-    }
-    this.name = "AbortError";
-    this.message = message;
-  }
-};
-function calculateDelay(retriesConsumed, options) {
-  const attempt = Math.max(1, retriesConsumed + 1);
-  const random = options.randomize ? Math.random() + 1 : 1;
-  let timeout = Math.round(random * options.minTimeout * options.factor ** (attempt - 1));
-  timeout = Math.min(timeout, options.maxTimeout);
-  return timeout;
-}
-function calculateRemainingTime(start, max) {
-  if (!Number.isFinite(max)) {
-    return max;
-  }
-  return max - (performance.now() - start);
-}
-async function onAttemptFailure({ error, attemptNumber, retriesConsumed, startTime, options }) {
-  const normalizedError = error instanceof Error ? error : new TypeError(`Non-error was thrown: "${error}". You should only throw errors.`);
-  if (normalizedError instanceof AbortError) {
-    throw normalizedError.originalError;
-  }
-  const retriesLeft = Number.isFinite(options.retries) ? Math.max(0, options.retries - retriesConsumed) : options.retries;
-  const maxRetryTime = options.maxRetryTime ?? Number.POSITIVE_INFINITY;
-  const context = Object.freeze({
-    error: normalizedError,
-    attemptNumber,
-    retriesLeft,
-    retriesConsumed
-  });
-  await options.onFailedAttempt(context);
-  if (calculateRemainingTime(startTime, maxRetryTime) <= 0) {
-    throw normalizedError;
-  }
-  const consumeRetry = await options.shouldConsumeRetry(context);
-  const remainingTime = calculateRemainingTime(startTime, maxRetryTime);
-  if (remainingTime <= 0 || retriesLeft <= 0) {
-    throw normalizedError;
-  }
-  if (normalizedError instanceof TypeError && !isNetworkError(normalizedError)) {
-    if (consumeRetry) {
-      throw normalizedError;
-    }
-    options.signal?.throwIfAborted();
-    return false;
-  }
-  if (!await options.shouldRetry(context)) {
-    throw normalizedError;
-  }
-  if (!consumeRetry) {
-    options.signal?.throwIfAborted();
-    return false;
-  }
-  const delayTime = calculateDelay(retriesConsumed, options);
-  const finalDelay = Math.min(delayTime, remainingTime);
-  options.signal?.throwIfAborted();
-  if (finalDelay > 0) {
-    await new Promise((resolve, reject) => {
-      const onAbort = () => {
-        clearTimeout(timeoutToken);
-        options.signal?.removeEventListener("abort", onAbort);
-        reject(options.signal.reason);
-      };
-      const timeoutToken = setTimeout(() => {
-        options.signal?.removeEventListener("abort", onAbort);
-        resolve();
-      }, finalDelay);
-      if (options.unref) {
-        timeoutToken.unref?.();
-      }
-      options.signal?.addEventListener("abort", onAbort, { once: true });
-    });
-  }
-  options.signal?.throwIfAborted();
-  return true;
-}
-async function pRetry(input, options = {}) {
-  options = { ...options };
-  validateRetries(options.retries);
-  if (Object.hasOwn(options, "forever")) {
-    throw new Error("The `forever` option is no longer supported. For many use-cases, you can set `retries: Infinity` instead.");
-  }
-  options.retries ??= 10;
-  options.factor ??= 2;
-  options.minTimeout ??= 1e3;
-  options.maxTimeout ??= Number.POSITIVE_INFINITY;
-  options.maxRetryTime ??= Number.POSITIVE_INFINITY;
-  options.randomize ??= false;
-  options.onFailedAttempt ??= () => {
-  };
-  options.shouldRetry ??= () => true;
-  options.shouldConsumeRetry ??= () => true;
-  validateNumberOption("factor", options.factor, { min: 0, allowInfinity: false });
-  validateNumberOption("minTimeout", options.minTimeout, { min: 0, allowInfinity: false });
-  validateNumberOption("maxTimeout", options.maxTimeout, { min: 0, allowInfinity: true });
-  validateNumberOption("maxRetryTime", options.maxRetryTime, { min: 0, allowInfinity: true });
-  if (!(options.factor > 0)) {
-    options.factor = 1;
-  }
-  options.signal?.throwIfAborted();
-  let attemptNumber = 0;
-  let retriesConsumed = 0;
-  const startTime = performance.now();
-  while (Number.isFinite(options.retries) ? retriesConsumed <= options.retries : true) {
-    attemptNumber++;
-    try {
-      options.signal?.throwIfAborted();
-      const result = await input(attemptNumber);
-      options.signal?.throwIfAborted();
-      return result;
-    } catch (error) {
-      if (await onAttemptFailure({
-        error,
-        attemptNumber,
-        retriesConsumed,
-        startTime,
-        options
-      })) {
-        retriesConsumed++;
-      }
-    }
-  }
-  throw new Error("Retry attempts exhausted without throwing an error.");
-}
-
 // node_modules/@google/genai/dist/node/index.mjs
+var import_p_retry = __toESM(require_p_retry(), 1);
 var import_google_auth_library = __toESM(require_src6(), 1);
 var import_fs = require("fs");
 var fs2 = __toESM(require("fs/promises"), 1);
@@ -22982,6 +23090,11 @@ var Environment;
   Environment2["ENVIRONMENT_UNSPECIFIED"] = "ENVIRONMENT_UNSPECIFIED";
   Environment2["ENVIRONMENT_BROWSER"] = "ENVIRONMENT_BROWSER";
 })(Environment || (Environment = {}));
+var EmbeddingApiType;
+(function(EmbeddingApiType2) {
+  EmbeddingApiType2["PREDICT"] = "PREDICT";
+  EmbeddingApiType2["EMBED_CONTENT"] = "EMBED_CONTENT";
+})(EmbeddingApiType || (EmbeddingApiType = {}));
 var SafetyFilterLevel;
 (function(SafetyFilterLevel2) {
   SafetyFilterLevel2["BLOCK_LOW_AND_ABOVE"] = "BLOCK_LOW_AND_ABOVE";
@@ -24150,6 +24263,9 @@ function tJobState(state) {
   } else {
     return stateString;
   }
+}
+function tIsVertexEmbedContentModel(model) {
+  return model.includes("gemini") && model !== "gemini-embedding-001" || model.includes("maas");
 }
 function batchJobDestinationFromMldev(fromObject) {
   const toObject = {};
@@ -29132,33 +29248,99 @@ function embedContentConfigToMldev(fromObject, parentObject, _rootObject) {
   }
   return toObject;
 }
-function embedContentConfigToVertex(fromObject, parentObject, _rootObject) {
+function embedContentConfigToVertex(fromObject, parentObject, rootObject) {
   const toObject = {};
-  const fromTaskType = getValueByPath(fromObject, ["taskType"]);
-  if (parentObject !== void 0 && fromTaskType != null) {
-    setValueByPath(parentObject, ["instances[]", "task_type"], fromTaskType);
-  }
-  const fromTitle = getValueByPath(fromObject, ["title"]);
-  if (parentObject !== void 0 && fromTitle != null) {
-    setValueByPath(parentObject, ["instances[]", "title"], fromTitle);
-  }
-  const fromOutputDimensionality = getValueByPath(fromObject, [
-    "outputDimensionality"
+  let discriminatorTaskType = getValueByPath(rootObject, [
+    "embeddingApiType"
   ]);
-  if (parentObject !== void 0 && fromOutputDimensionality != null) {
-    setValueByPath(parentObject, ["parameters", "outputDimensionality"], fromOutputDimensionality);
+  if (discriminatorTaskType === void 0) {
+    discriminatorTaskType = "PREDICT";
   }
-  const fromMimeType = getValueByPath(fromObject, ["mimeType"]);
-  if (parentObject !== void 0 && fromMimeType != null) {
-    setValueByPath(parentObject, ["instances[]", "mimeType"], fromMimeType);
+  if (discriminatorTaskType === "PREDICT") {
+    const fromTaskType = getValueByPath(fromObject, ["taskType"]);
+    if (parentObject !== void 0 && fromTaskType != null) {
+      setValueByPath(parentObject, ["instances[]", "task_type"], fromTaskType);
+    }
+  } else if (discriminatorTaskType === "EMBED_CONTENT") {
+    const fromTaskType = getValueByPath(fromObject, ["taskType"]);
+    if (parentObject !== void 0 && fromTaskType != null) {
+      setValueByPath(parentObject, ["taskType"], fromTaskType);
+    }
   }
-  const fromAutoTruncate = getValueByPath(fromObject, ["autoTruncate"]);
-  if (parentObject !== void 0 && fromAutoTruncate != null) {
-    setValueByPath(parentObject, ["parameters", "autoTruncate"], fromAutoTruncate);
+  let discriminatorTitle = getValueByPath(rootObject, [
+    "embeddingApiType"
+  ]);
+  if (discriminatorTitle === void 0) {
+    discriminatorTitle = "PREDICT";
+  }
+  if (discriminatorTitle === "PREDICT") {
+    const fromTitle = getValueByPath(fromObject, ["title"]);
+    if (parentObject !== void 0 && fromTitle != null) {
+      setValueByPath(parentObject, ["instances[]", "title"], fromTitle);
+    }
+  } else if (discriminatorTitle === "EMBED_CONTENT") {
+    const fromTitle = getValueByPath(fromObject, ["title"]);
+    if (parentObject !== void 0 && fromTitle != null) {
+      setValueByPath(parentObject, ["title"], fromTitle);
+    }
+  }
+  let discriminatorOutputDimensionality = getValueByPath(rootObject, [
+    "embeddingApiType"
+  ]);
+  if (discriminatorOutputDimensionality === void 0) {
+    discriminatorOutputDimensionality = "PREDICT";
+  }
+  if (discriminatorOutputDimensionality === "PREDICT") {
+    const fromOutputDimensionality = getValueByPath(fromObject, [
+      "outputDimensionality"
+    ]);
+    if (parentObject !== void 0 && fromOutputDimensionality != null) {
+      setValueByPath(parentObject, ["parameters", "outputDimensionality"], fromOutputDimensionality);
+    }
+  } else if (discriminatorOutputDimensionality === "EMBED_CONTENT") {
+    const fromOutputDimensionality = getValueByPath(fromObject, [
+      "outputDimensionality"
+    ]);
+    if (parentObject !== void 0 && fromOutputDimensionality != null) {
+      setValueByPath(parentObject, ["outputDimensionality"], fromOutputDimensionality);
+    }
+  }
+  let discriminatorMimeType = getValueByPath(rootObject, [
+    "embeddingApiType"
+  ]);
+  if (discriminatorMimeType === void 0) {
+    discriminatorMimeType = "PREDICT";
+  }
+  if (discriminatorMimeType === "PREDICT") {
+    const fromMimeType = getValueByPath(fromObject, ["mimeType"]);
+    if (parentObject !== void 0 && fromMimeType != null) {
+      setValueByPath(parentObject, ["instances[]", "mimeType"], fromMimeType);
+    }
+  }
+  let discriminatorAutoTruncate = getValueByPath(rootObject, [
+    "embeddingApiType"
+  ]);
+  if (discriminatorAutoTruncate === void 0) {
+    discriminatorAutoTruncate = "PREDICT";
+  }
+  if (discriminatorAutoTruncate === "PREDICT") {
+    const fromAutoTruncate = getValueByPath(fromObject, [
+      "autoTruncate"
+    ]);
+    if (parentObject !== void 0 && fromAutoTruncate != null) {
+      setValueByPath(parentObject, ["parameters", "autoTruncate"], fromAutoTruncate);
+    }
+  } else if (discriminatorAutoTruncate === "EMBED_CONTENT") {
+    const fromAutoTruncate = getValueByPath(fromObject, [
+      "autoTruncate"
+    ]);
+    if (parentObject !== void 0 && fromAutoTruncate != null) {
+      setValueByPath(parentObject, ["autoTruncate"], fromAutoTruncate);
+    }
   }
   return toObject;
 }
-function embedContentParametersToMldev(apiClient, fromObject, rootObject) {
+function embedContentParametersPrivateToMldev(apiClient, fromObject, rootObject) {
   const toObject = {};
   const fromModel = getValueByPath(fromObject, ["model"]);
   if (fromModel != null) {
@@ -29174,6 +29356,10 @@ function embedContentParametersToMldev(apiClient, fromObject, rootObject) {
     }
     setValueByPath(toObject, ["requests[]", "content"], transformedList);
   }
+  const fromContent = getValueByPath(fromObject, ["content"]);
+  if (fromContent != null) {
+    contentToMldev$1(tContent(fromContent));
+  }
   const fromConfig = getValueByPath(fromObject, ["config"]);
   if (fromConfig != null) {
     embedContentConfigToMldev(fromConfig, toObject);
@@ -29184,25 +29370,45 @@ function embedContentParametersToMldev(apiClient, fromObject, rootObject) {
   }
   return toObject;
 }
-function embedContentParametersToVertex(apiClient, fromObject, rootObject) {
+function embedContentParametersPrivateToVertex(apiClient, fromObject, rootObject) {
   const toObject = {};
   const fromModel = getValueByPath(fromObject, ["model"]);
   if (fromModel != null) {
     setValueByPath(toObject, ["_url", "model"], tModel(apiClient, fromModel));
   }
-  const fromContents = getValueByPath(fromObject, ["contents"]);
-  if (fromContents != null) {
-    let transformedList = tContentsForEmbed(apiClient, fromContents);
-    if (Array.isArray(transformedList)) {
-      transformedList = transformedList.map((item) => {
-        return item;
-      });
+  let discriminatorContents = getValueByPath(rootObject, [
+    "embeddingApiType"
+  ]);
+  if (discriminatorContents === void 0) {
+    discriminatorContents = "PREDICT";
+  }
+  if (discriminatorContents === "PREDICT") {
+    const fromContents = getValueByPath(fromObject, ["contents"]);
+    if (fromContents != null) {
+      let transformedList = tContentsForEmbed(apiClient, fromContents);
+      if (Array.isArray(transformedList)) {
+        transformedList = transformedList.map((item) => {
+          return item;
+        });
+      }
+      setValueByPath(toObject, ["instances[]", "content"], transformedList);
     }
-    setValueByPath(toObject, ["instances[]", "content"], transformedList);
+  }
+  let discriminatorContent = getValueByPath(rootObject, [
+    "embeddingApiType"
+  ]);
+  if (discriminatorContent === void 0) {
+    discriminatorContent = "PREDICT";
+  }
+  if (discriminatorContent === "EMBED_CONTENT") {
+    const fromContent = getValueByPath(fromObject, ["content"]);
+    if (fromContent != null) {
+      setValueByPath(toObject, ["content"], tContent(fromContent));
+    }
   }
   const fromConfig = getValueByPath(fromObject, ["config"]);
   if (fromConfig != null) {
-    embedContentConfigToVertex(fromConfig, toObject);
+    embedContentConfigToVertex(fromConfig, toObject, rootObject);
   }
   return toObject;
 }
@@ -29254,6 +29460,22 @@ function embedContentResponseFromVertex(fromObject, rootObject) {
   const fromMetadata = getValueByPath(fromObject, ["metadata"]);
   if (fromMetadata != null) {
     setValueByPath(toObject, ["metadata"], fromMetadata);
+  }
+  if (rootObject && getValueByPath(rootObject, ["embeddingApiType"]) === "EMBED_CONTENT") {
+    const embedding = getValueByPath(fromObject, ["embedding"]);
+    const usageMetadata = getValueByPath(fromObject, ["usageMetadata"]);
+    const truncated = getValueByPath(fromObject, ["truncated"]);
+    if (embedding) {
+      const stats = {};
+      if (usageMetadata && usageMetadata["promptTokenCount"]) {
+        stats.tokenCount = usageMetadata["promptTokenCount"];
+      }
+      if (truncated) {
+        stats.truncated = truncated;
+      }
+      embedding.statistics = stats;
+      setValueByPath(toObject, ["embeddings"], [embedding]);
+    }
   }
   return toObject;
 }
@@ -32095,7 +32317,7 @@ var CONTENT_TYPE_HEADER = "Content-Type";
 var SERVER_TIMEOUT_HEADER = "X-Server-Timeout";
 var USER_AGENT_HEADER = "User-Agent";
 var GOOGLE_API_CLIENT_HEADER = "x-goog-api-client";
-var SDK_VERSION = "1.41.0";
+var SDK_VERSION = "1.42.0";
 var LIBRARY_LABEL = `google-genai-sdk/${SDK_VERSION}`;
 var VERTEX_AI_API_DEFAULT_VERSION = "v1beta1";
 var GOOGLE_AI_API_DEFAULT_VERSION = "v1beta";
@@ -32453,9 +32675,9 @@ var ApiClient = class {
       if (DEFAULT_RETRY_HTTP_STATUS_CODES.includes(response.status)) {
         throw new Error(`Retryable HTTP Error: ${response.statusText}`);
       }
-      throw new AbortError(`Non-retryable exception ${response.statusText} sending request`);
+      throw new import_p_retry.AbortError(`Non-retryable exception ${response.statusText} sending request`);
     };
-    return pRetry(runFetch, {
+    return (0, import_p_retry.default)(runFetch, {
       // Retry attempts is one less than the number of total attempts.
       retries: ((_a4 = retryOptions.attempts) !== null && _a4 !== void 0 ? _a4 : DEFAULT_RETRY_ATTEMPTS) - 1
     });
@@ -33432,6 +33654,23 @@ var Models = class extends BaseModule {
   constructor(apiClient) {
     super();
     this.apiClient = apiClient;
+    this.embedContent = async (params) => {
+      if (!this.apiClient.isVertexAI()) {
+        return await this.embedContentInternal(params);
+      }
+      const isVertexEmbedContentModel = params.model.includes("gemini") && params.model !== "gemini-embedding-001" || params.model.includes("maas");
+      if (isVertexEmbedContentModel) {
+        const contents = tContents(params.contents);
+        if (contents.length > 1) {
+          throw new Error("The embedContent API for this model only supports one content at a time.");
+        }
+        const paramsPrivate = Object.assign(Object.assign({}, params), { content: contents[0], embeddingApiType: EmbeddingApiType.EMBED_CONTENT });
+        return await this.embedContentInternal(paramsPrivate);
+      } else {
+        const paramsPrivate = Object.assign(Object.assign({}, params), { embeddingApiType: EmbeddingApiType.PREDICT });
+        return await this.embedContentInternal(paramsPrivate);
+      }
+    };
     this.generateContent = async (params) => {
       var _a4, _b, _c, _d, _e;
       const transformedParams = await this.processParamsMaybeAddMcpUsage(params);
@@ -33928,14 +34167,15 @@ var Models = class extends BaseModule {
    * console.log(response);
    * ```
    */
-  async embedContent(params) {
+  async embedContentInternal(params) {
     var _a4, _b, _c, _d;
     let response;
     let path3 = "";
     let queryParams = {};
     if (this.apiClient.isVertexAI()) {
-      const body = embedContentParametersToVertex(this.apiClient, params);
-      path3 = formatMap("{model}:predict", body["_url"]);
+      const body = embedContentParametersPrivateToVertex(this.apiClient, params, params);
+      const endpointUrl = tIsVertexEmbedContentModel(params.model) ? "{model}:embedContent" : "{model}:predict";
+      path3 = formatMap(endpointUrl, body["_url"]);
       queryParams = body["_query"];
       delete body["_url"];
       delete body["_query"];
@@ -33956,13 +34196,13 @@ var Models = class extends BaseModule {
         });
       });
       return response.then((apiResponse) => {
-        const resp = embedContentResponseFromVertex(apiResponse);
+        const resp = embedContentResponseFromVertex(apiResponse, params);
         const typedResp = new EmbedContentResponse();
         Object.assign(typedResp, resp);
         return typedResp;
       });
     } else {
-      const body = embedContentParametersToMldev(this.apiClient, params);
+      const body = embedContentParametersPrivateToMldev(this.apiClient, params);
       path3 = formatMap("{model}:batchEmbedContents", body["_url"]);
       queryParams = body["_query"];
       delete body["_url"];
@@ -37440,6 +37680,11 @@ var BaseGeminiNextGenAPIClient = class _BaseGeminiNextGenAPIClient {
       return { bodyHeaders: void 0, body };
     } else if (typeof body === "object" && (Symbol.asyncIterator in body || Symbol.iterator in body && "next" in body && typeof body.next === "function")) {
       return { bodyHeaders: void 0, body: ReadableStreamFrom(body) };
+    } else if (typeof body === "object" && headers.values.get("content-type") === "application/x-www-form-urlencoded") {
+      return {
+        bodyHeaders: { "content-type": "application/x-www-form-urlencoded" },
+        body: this.stringifyQuery(body)
+      };
     } else {
       return this.encoder({ body, headers });
     }

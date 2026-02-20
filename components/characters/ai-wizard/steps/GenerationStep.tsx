@@ -84,7 +84,7 @@ export function GenerationStep({
               </div>
               <div>
                 <strong className="text-foreground">Full Description:</strong>
-                <div className="prose prose-sm dark:prose-invert max-w-none mt-1">
+                <div className="prose prose-sm qt-prose-auto max-w-none mt-1">
                   <ReactMarkdown>{pd.fullDescription}</ReactMarkdown>
                 </div>
               </div>

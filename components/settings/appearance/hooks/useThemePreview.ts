@@ -131,11 +131,3 @@ export function useThemePreview(themeId: string | null): UseThemePreviewResult {
     clearCache,
   }
 }
-
-/**
- * Clear all cached theme tokens
- * Useful when themes are updated or plugins are reinstalled
- */
-export function clearAllThemeTokensCache(): void {
-  tokensCache.clear()
-}

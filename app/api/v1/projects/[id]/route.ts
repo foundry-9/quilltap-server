@@ -29,8 +29,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedParamsHandler, checkOwnership, AuthenticatedContext } from '@/lib/api/middleware';
-import { getFilePath } from '@/lib/api/middleware/file-path';
+import { createAuthenticatedParamsHandler, checkOwnership, AuthenticatedContext, enrichWithDefaultImage, getFilePath } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
@@ -127,17 +126,7 @@ async function handleGetDefault(req: NextRequest, context: AuthenticatedContext,
         );
 
         // Get default image for avatar display
-        let defaultImage = null;
-        if (char.defaultImageId) {
-          const file = await repos.files.findById(char.defaultImageId);
-          if (file) {
-            defaultImage = {
-              id: file.id,
-              filepath: getFilePath(file),
-              url: null,
-            };
-          }
-        }
+        const defaultImage = await enrichWithDefaultImage(char.defaultImageId, repos);
 
         return {
           id: char.id,
@@ -248,17 +237,7 @@ async function handleListChats(req: NextRequest, context: AuthenticatedContext, 
               if (!char) return null;
 
               // Fetch defaultImage if character has one
-              let defaultImage = null;
-              if (char.defaultImageId) {
-                const imageFile = await repos.files.findById(char.defaultImageId);
-                if (imageFile) {
-                  defaultImage = {
-                    id: imageFile.id,
-                    filepath: getFilePath(imageFile),
-                    url: null,
-                  };
-                }
-              }
+              const defaultImage = await enrichWithDefaultImage(char.defaultImageId, repos);
 
               return {
                 id: p.id,

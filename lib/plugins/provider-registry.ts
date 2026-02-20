@@ -19,88 +19,7 @@ import type { EmbeddingProvider, LocalEmbeddingProvider } from '@quilltap/plugin
 import { getErrorMessage } from '@/lib/errors';
 import { rewriteLocalhostUrl } from '@/lib/host-rewrite';
 import type { PluginManifest } from '@/lib/schemas/plugin-manifest';
-import { resolve, join } from 'node:path';
-import { existsSync } from 'node:fs';
-
-// Dynamic plugin loading requires native Node.js require, not the bundler's.
-// - Webpack (dev): provides __non_webpack_require__ for native require access
-// - Turbopack (Next.js 16+ production) / plain Node.js: use createRequire from node:module
-//   accessed via require('node:module') so webpack sees it as dead code
-interface NodeModuleParent {
-  filename?: string;
-  paths?: string[];
-}
-interface NodeModuleInternal {
-  _resolveFilename: (request: string, parent: NodeModuleParent | null, isMain: boolean, options?: object) => string;
-  _nodeModulePaths: (from: string) => string[];
-}
-
-let dynamicRequire: NodeRequire;
-let Module: NodeModuleInternal;
-
-if (typeof __non_webpack_require__ !== 'undefined') {
-  dynamicRequire = __non_webpack_require__;
-  Module = __non_webpack_require__('module') as unknown as NodeModuleInternal;
-} else {
-  const nodeModule = require('node:module');
-  dynamicRequire = nodeModule.createRequire(process.cwd() + '/') as NodeRequire;
-  Module = nodeModule as unknown as NodeModuleInternal;
-}
-
-// Get the app's node_modules path for peer dependency resolution
-const appNodeModules = join(process.cwd(), 'node_modules');
-
-// Peer dependencies that external plugins can use from the host app
-const PEER_DEPENDENCIES = new Set([
-  'react',
-  'react/jsx-runtime',
-  'react/jsx-dev-runtime',
-  'react-dom',
-]);
-
-/**
- * Load an external plugin module with peer dependency resolution.
- */
-function loadExternalPluginModule(modulePath: string): unknown {
-  const originalResolveFilename = Module._resolveFilename;
-  const appModulePaths = Module._nodeModulePaths(appNodeModules);
-
-  Module._resolveFilename = function(
-    request: string,
-    parent: { filename?: string; paths?: string[] } | null,
-    isMain: boolean,
-    options?: object
-  ) {
-    try {
-      return originalResolveFilename.call(this, request, parent, isMain, options);
-    } catch (error) {
-      if (PEER_DEPENDENCIES.has(request) && parent?.filename && !parent.filename.includes(join('plugins', 'dist'))) {
-        try {
-          const fakeParent = {
-            filename: join(appNodeModules, 'react', 'index.js'),
-            paths: appModulePaths,
-          };
-          return originalResolveFilename.call(this, request, fakeParent, isMain, options);
-        } catch {
-          // Fall through
-        }
-      }
-      throw error;
-    }
-  };
-
-  try {
-    delete dynamicRequire.cache[dynamicRequire.resolve(modulePath)];
-  } catch {
-    // Not in cache
-  }
-
-  try {
-    return dynamicRequire(modulePath);
-  } finally {
-    Module._resolveFilename = originalResolveFilename;
-  }
-}
+import { loadPluginModule, extractPluginExport } from './dynamic-loader';
 
 // ============================================================================
 // TYPES
@@ -668,42 +587,18 @@ class ProviderRegistry {
     }
 
     try {
-      const mainFile = manifest.main || 'index.js';
-      const modulePath = resolve(pluginPath, mainFile);
-
-      if (!existsSync(modulePath)) {
-        this.logger.error('Provider plugin main file not found', {
-          plugin: manifest.name,
-          expectedPath: modulePath,
-        });
+      const pluginModule = loadPluginModule(pluginPath, manifest);
+      if (!pluginModule) {
         return false;
       }
 
-      // Determine if this is an external (npm-installed) plugin
-      // External plugins have paths containing node_modules but not in plugins/dist
-      const isExternalPlugin = pluginPath.includes('node_modules') && !pluginPath.includes(join('plugins', 'dist'));
-
-      // Load the plugin module with peer dependency resolution for external plugins
-      const pluginModule = isExternalPlugin
-        ? loadExternalPluginModule(modulePath)
-        : (() => {
-            // Clear require cache for bundled plugins
-            try {
-              const resolvedPath = dynamicRequire.resolve(modulePath);
-              delete dynamicRequire.cache[resolvedPath];
-            } catch {
-              // Module may not be in cache yet, that's fine
-            }
-            return dynamicRequire(modulePath);
-          })();
-
       // Extract the provider plugin object
-      const providerPlugin = pluginModule?.plugin || pluginModule?.default?.plugin;
+      const providerPlugin = extractPluginExport(pluginModule) as LLMProviderPlugin | undefined;
 
       if (!providerPlugin?.metadata?.providerName) {
         this.logger.warn('Provider plugin module does not export a valid plugin object', {
           plugin: manifest.name,
-          exports: Object.keys(pluginModule || {}),
+          exports: Object.keys((pluginModule as Record<string, unknown>) || {}),
         });
         return false;
       }

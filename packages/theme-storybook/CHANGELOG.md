@@ -2,6 +2,19 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.21] - 2026-02-20
+
+### Added
+- Overlay utility classes: `qt-bg-overlay`, `qt-bg-overlay-medium`, `qt-bg-overlay-light`, `qt-bg-overlay-none`, `qt-bg-overlay-caption`
+- Overlay button utility classes: `qt-bg-overlay-btn`, `hover:qt-bg-overlay-btn`
+- Overlay text utilities: `qt-text-overlay`, `qt-text-overlay-muted`
+- Spinner utility classes: `qt-spinner`, `qt-spinner-lg` (themed loading spinners)
+- Favorite color utility: `qt-text-favorite` (themed amber star color)
+- Toggle knob utility: `qt-bg-toggle-knob` (themed toggle switch circle)
+- Warning box utilities: `qt-warning-box`, `qt-warning-box-text` (themed warning container)
+- Prose dark mode utility: `qt-prose-auto` (handles dark mode prose automatically via `.dark` selector)
+- CSS custom properties for all new utilities: `--qt-overlay-*`, `--qt-spinner-*`, `--qt-favorite-color`, `--qt-toggle-knob-bg`, `--qt-warning-box-*`
+
 ## [1.0.20] - 2026-02-09
 
 ### Added

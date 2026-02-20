@@ -9,7 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedHandler, AuthenticatedContext } from '@/lib/api/middleware';
+import { createAuthenticatedHandler, AuthenticatedContext, enrichWithApiKey, enrichWithTags } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { successResponse, created, notFound, badRequest, serverError } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
@@ -46,32 +46,14 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
     // Enrich with API key info and tags
     const enrichedProfiles = await Promise.all(
       profiles.map(async (profile) => {
-        // Get API key info if exists
-        let apiKey = null;
-        if (profile.apiKeyId) {
-          const key = await repos.connections.findApiKeyById(profile.apiKeyId);
-          if (key) {
-            apiKey = {
-              id: key.id,
-              label: key.label,
-              provider: key.provider,
-              isActive: key.isActive,
-            };
-          }
-        }
-
-        // Get tag details
-        const tagDetails = await Promise.all(
-          profile.tags.map(async (tagId) => {
-            const tag = await repos.tags.findById(tagId);
-            return tag ? { tagId, tag } : null;
-          })
-        );
+        // Enrich with API key and tag details
+        const apiKey = await enrichWithApiKey(profile.apiKeyId, repos);
+        const tags = await enrichWithTags(profile.tags, repos);
 
         return {
           ...profile,
           apiKey,
-          tags: tagDetails.filter(Boolean),
+          tags,
         };
       })
     );
@@ -406,18 +388,7 @@ export const POST = createAuthenticatedHandler(async (req, context) => {
     });
 
     // Enrich with API key info
-    let apiKey = null;
-    if (profile.apiKeyId) {
-      const key = await repos.connections.findApiKeyById(profile.apiKeyId);
-      if (key) {
-        apiKey = {
-          id: key.id,
-          label: key.label,
-          provider: key.provider,
-          isActive: key.isActive,
-        };
-      }
-    }
+    const apiKey = await enrichWithApiKey(profile.apiKeyId, repos);
 
     logger.info('[Image Profiles v1] Profile created', { profileId: profile.id, provider: profile.provider });
 
