@@ -928,6 +928,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       return
     }
 
+    // Respect pause state - don't auto-generate if chat is paused
+    if (isPaused) {
+      return
+    }
+
     const participant = participantsAsBase.find(p => p.id === participantId && p.isActive)
     if (!participant) {
       showErrorToast('This participant is no longer available in the chat.')
@@ -1082,7 +1087,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         inputRef.current?.focus({ preventScroll: true })
       }, 150)
     }
-  }, [id, streaming, waitingForResponse, participantsAsBase, turnManagement.hasActiveCharacters, setMessages, setEphemeralMessages, scrollOnStreamComplete])
+  }, [id, streaming, waitingForResponse, isPaused, participantsAsBase, turnManagement.hasActiveCharacters, setMessages, setEphemeralMessages, scrollOnStreamComplete])
 
   // Keep the ref in sync with the current callback to break dependency cycle
   triggerContinueModeRef.current = triggerContinueMode
@@ -2011,11 +2016,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 }
 
                 // Add assistant message to messages list
+                // Include participantId so turn state calculation correctly identifies
+                // who just spoke (prevents spurious auto-trigger of next turn)
                 const assistantMessage: Message = {
                   id: data.messageId,
                   role: 'ASSISTANT',
                   content: fullContent,
                   createdAt: new Date().toISOString(),
+                  participantId: firstCharParticipant?.id,
                 }
                 setMessages((prev) => [...prev, assistantMessage])
                 setStreamingContent('')
