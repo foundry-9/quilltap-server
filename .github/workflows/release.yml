@@ -181,50 +181,6 @@ jobs:
           path: out/*.exe
           retention-days: 5
 
-  publish-npm:
-    name: Publish npm package
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: 'npm'
-          registry-url: 'https://registry.npmjs.org'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build quilltap package
-        run: npm run build:package
-
-      - name: Set version from tag
-        run: |
-          TAG="${GITHUB_REF_NAME}"
-          cd packages/quilltap
-          npm version "$TAG" --no-git-tag-version --allow-same-version
-
-      - name: Determine npm tag
-        id: npm-tag
-        run: |
-          TAG="${GITHUB_REF_NAME}"
-          if [[ "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "tag=latest" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=next" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Publish to npm
-        run: |
-          cd packages/quilltap
-          npm publish --tag ${{ steps.npm-tag.outputs.tag }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
   build-docker:
     name: Build and push Docker images
     runs-on: ubuntu-latest

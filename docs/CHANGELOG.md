@@ -4,6 +4,7 @@
 
 ### 3.0-dev
 
+- build: Remove npm publish job from release workflow — the `publish-npm` job added too much weight to the release pipeline; npm publishing will be handled separately
 - build: Docker image build and push job in release workflow — new `build-docker` job uses `docker/build-push-action` with Buildx to build multi-platform (`linux/amd64` + `linux/arm64`) images targeting the `production` Dockerfile stage; pushes to Docker Hub with version tag plus `latest` (clean semver) or `dev` (prerelease) channel tag; uses GitHub Actions layer caching; runs after Electron builds and gates the GitHub Release; release notes updated with `docker pull` instructions
 - build: Azure Trusted Signing for Windows Electron builds — added `azureSignOptions` to electron-builder.yml for code signing Windows installers via Azure Trusted Signing; release workflow passes `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, and `AZURE_CLIENT_SECRET` secrets to the Windows build step
 - feat: `quilltap` npm package for `npx quilltap` — run Quilltap as a local Node.js server with zero configuration; ships pre-built Next.js standalone output with native modules (better-sqlite3, sharp) installed at the user's platform at install time; CLI supports `--port`, `--data-dir`, `--open`, `--version`, `--help`; build script (`npm run build:package`) assembles the standalone output, static assets, public files, and bundled plugins; release workflow publishes to npm on version tags
