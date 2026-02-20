@@ -4,6 +4,8 @@
 
 ### 3.0-dev
 
+- fix: Docker Electron app footer showing container path `/app/quilltap` instead of host data directory — `DockerManager.startContainer()` was not passing `QUILLTAP_HOST_DATA_DIR` env var to the container, so `getHostDataDir()` fell back to the container-internal path; added `-e QUILLTAP_HOST_DATA_DIR` to the Docker run args, matching the standalone Docker script and Lima/WSL2 backends
+- build: Added unsigned Windows dev build target `electron:build:win:dev` — mirrors the existing `electron:build:mac:dev`; uses a JS config wrapper (`electron-builder-win-dev.js`) that loads the base YAML and strips Azure Trusted Signing options for local iteration
 - feat: Docker runtime support in Electron splash screen — new runtime toggle (Docker vs Lima/WSL2 VM) on the splash screen with character artwork backgrounds (Foundryman for Docker, Prospero for VM); DockerManager class handles container lifecycle (pull, start, stop, delete) with full Docker CLI path resolution for packaged Electron apps; port conflict prevention stops VMs before Docker start and vice versa; graceful shutdown stops the active runtime backend
 - feat: Enhanced directory management with delete confirmation — delete button on all directories (not just when multiple exist) opens a confirmation dialog with two options: "Remove configuration only" (removes from list) or "Delete configuration AND data" (removes from list, deletes data on disk, cleans up associated VM and Docker container)
 - feat: Art Deco-themed splash screen — full-window background with gold art deco frame, center-darkened gradient overlay, Raleway font for section labels matching the Art Deco theme, enlarged splash window (580x680) to accommodate runtime toggle

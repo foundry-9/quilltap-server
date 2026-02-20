@@ -135,6 +135,7 @@ export class DockerManager {
       '--name', this.containerName,
       '-p', `${HOST_PORT}:${DOCKER_CONTAINER_PORT}`,
       '-v', `${this.dataDir}:/app/quilltap`,
+      '-e', `QUILLTAP_HOST_DATA_DIR=${this.dataDir}`,
       imageRef,
     ];
 
