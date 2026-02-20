@@ -1,3 +1,6 @@
+/** Runtime mode: VM (Lima/WSL2) or Docker */
+export type RuntimeMode = 'docker' | 'vm';
+
 /** Phase identifiers for splash screen state machine */
 export type SplashPhase =
   | 'choose-directory'
@@ -6,6 +9,8 @@ export type SplashPhase =
   | 'creating-vm'
   | 'updating-vm'
   | 'starting-vm'
+  | 'pulling-image'
+  | 'starting-container'
   | 'waiting-health'
   | 'ready'
   | 'error';
@@ -28,6 +33,12 @@ export interface DirectoryInfo {
   autoStart: boolean;
   /** Disk usage per directory path (may arrive asynchronously) */
   sizes: Record<string, DirectorySizeInfo>;
+  /** Current runtime mode (docker or vm) */
+  runtimeMode: RuntimeMode;
+  /** Whether Docker CLI is available on this system */
+  dockerAvailable: boolean;
+  /** Label for the VM button (e.g. "Lima" on macOS, "WSL2" on Windows) */
+  vmLabel: string;
 }
 
 /** Status of the VM (Lima on macOS, WSL2 on Windows) */

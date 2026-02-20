@@ -118,12 +118,18 @@ export const VM_START_TIMEOUT_S = 120;
 export const VM_STOP_TIMEOUT_S = 60;
 
 /** Splash window dimensions */
-export const SPLASH_WIDTH = 500;
-export const SPLASH_HEIGHT = 420;
+export const SPLASH_WIDTH = 580;
+export const SPLASH_HEIGHT = 680;
 
 /** Main window dimensions */
 export const MAIN_WIDTH = 1200;
 export const MAIN_HEIGHT = 800;
+
+/** Docker image name on Docker Hub */
+export const DOCKER_IMAGE = 'csebold/quilltap';
+
+/** Port the Quilltap container listens on internally */
+export const DOCKER_CONTAINER_PORT = 3000;
 
 /** Download progress throttle (ms) */
 export const DOWNLOAD_PROGRESS_THROTTLE_MS = 500;

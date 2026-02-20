@@ -22,20 +22,40 @@ const chooserQuitBtn = document.getElementById('chooserQuitBtn');
 const autoStartCheckbox = document.getElementById('autoStartCheckbox');
 const changeDirLink = document.getElementById('changeDirLink');
 
+// Runtime mode elements
+const runtimeDockerBtn = document.getElementById('runtimeDocker');
+const runtimeVMBtn = document.getElementById('runtimeVM');
+const vmLabelEl = document.getElementById('vmLabel');
+
+// Delete confirmation elements
+const deleteOverlay = document.getElementById('deleteOverlay');
+const deleteDialogPath = document.getElementById('deleteDialogPath');
+const deleteConfigOnlyBtn = document.getElementById('deleteConfigOnlyBtn');
+const deleteConfigAndDataBtn = document.getElementById('deleteConfigAndDataBtn');
+const deleteCancelBtn = document.getElementById('deleteCancelBtn');
+
 /** Currently selected directory in the chooser */
-let selectedDir = '';
+var selectedDir = '';
 
 /** Current sizes data (may arrive after initial directory list) */
-let currentSizes = {};
+var currentSizes = {};
+
+/** Current runtime mode */
+var currentRuntimeMode = 'vm';
+
+/** Directory pending deletion (for the confirmation dialog) */
+var pendingDeleteDir = '';
 
 /** Phase descriptions shown to the user */
-const phaseMessages = {
+var phaseMessages = {
   'choose-directory': 'Choose data directory',
   'initializing': 'Initializing...',
   'downloading': 'Downloading system image...',
   'creating-vm': 'Creating virtual machine...',
   'updating-vm': 'Updating Quilltap to latest build...',
   'starting-vm': 'Starting virtual machine...',
+  'pulling-image': 'Pulling Docker image...',
+  'starting-container': 'Starting Docker container...',
   'waiting-health': 'Waiting for server...',
   'ready': 'Ready!',
   'error': 'Something went wrong',
@@ -92,6 +112,30 @@ function showSection(section) {
   }
 }
 
+/** Update the runtime mode button visual state */
+function updateRuntimeButtons() {
+  if (currentRuntimeMode === 'docker') {
+    runtimeDockerBtn.classList.add('selected');
+    runtimeVMBtn.classList.remove('selected');
+  } else {
+    runtimeDockerBtn.classList.remove('selected');
+    runtimeVMBtn.classList.add('selected');
+  }
+}
+
+/** Show the delete confirmation dialog */
+function showDeleteConfirmation(dir) {
+  pendingDeleteDir = dir;
+  deleteDialogPath.textContent = dir;
+  deleteOverlay.classList.add('visible');
+}
+
+/** Hide the delete confirmation dialog */
+function hideDeleteConfirmation() {
+  pendingDeleteDir = '';
+  deleteOverlay.classList.remove('visible');
+}
+
 /** Render the directory list from the given info */
 function renderDirectoryList(dirs, lastUsed, sizes) {
   directoryList.innerHTML = '';
@@ -127,18 +171,16 @@ function renderDirectoryList(dirs, lastUsed, sizes) {
     item.appendChild(radio);
     item.appendChild(infoWrap);
 
-    // Only show remove button if there's more than one directory
-    if (dirs.length > 1) {
-      var removeBtn = document.createElement('button');
-      removeBtn.className = 'directory-item-remove';
-      removeBtn.textContent = '\u00d7'; // multiplication sign (x)
-      removeBtn.title = 'Remove from list';
-      removeBtn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        window.quilltap.removeDirectory(dir);
-      });
-      item.appendChild(removeBtn);
-    }
+    // Always show delete button
+    var removeBtn = document.createElement('button');
+    removeBtn.className = 'directory-item-remove';
+    removeBtn.textContent = '\u00d7'; // multiplication sign (x)
+    removeBtn.title = 'Delete...';
+    removeBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      showDeleteConfirmation(dir);
+    });
+    item.appendChild(removeBtn);
 
     // Click to select
     item.addEventListener('click', function() {
@@ -180,13 +222,16 @@ window.quilltap.onUpdate(function(data) {
     changeDirLink.classList.remove('visible');
   }
 
-  // Show progress bar for download phase
+  // Show progress bar for download and Docker phases
   if (data.phase === 'downloading' && typeof data.progress === 'number') {
     progressContainer.classList.add('visible');
     progressBar.classList.remove('indeterminate');
     progressBar.style.width = data.progress + '%';
     firstRunNote.classList.add('visible');
-  } else if (data.phase === 'creating-vm' || data.phase === 'updating-vm' || data.phase === 'starting-vm') {
+  } else if (
+    data.phase === 'creating-vm' || data.phase === 'updating-vm' || data.phase === 'starting-vm' ||
+    data.phase === 'pulling-image' || data.phase === 'starting-container'
+  ) {
     progressContainer.classList.add('visible');
     progressBar.classList.add('indeterminate');
     progressBar.style.width = '';
@@ -227,6 +272,28 @@ window.quilltap.onDirectories(function(data) {
   currentSizes = data.sizes || {};
   renderDirectoryList(data.dirs, data.lastUsed, currentSizes);
   autoStartCheckbox.checked = data.autoStart;
+
+  // Update runtime mode state
+  currentRuntimeMode = data.runtimeMode || 'vm';
+  updateRuntimeButtons();
+
+  // Update Docker button availability
+  if (data.dockerAvailable) {
+    runtimeDockerBtn.disabled = false;
+  } else {
+    runtimeDockerBtn.disabled = true;
+    // Force VM mode if Docker is not available
+    if (currentRuntimeMode === 'docker') {
+      currentRuntimeMode = 'vm';
+      updateRuntimeButtons();
+      window.quilltap.setRuntimeMode('vm');
+    }
+  }
+
+  // Update VM label
+  if (data.vmLabel) {
+    vmLabelEl.textContent = data.vmLabel;
+  }
 });
 
 /** Retry button */
@@ -268,4 +335,40 @@ autoStartCheckbox.addEventListener('change', function() {
 /** Change directory button during loading */
 changeDirLink.addEventListener('click', function() {
   window.quilltap.showDirectoryChooser();
+});
+
+/** Runtime mode: Docker button */
+runtimeDockerBtn.addEventListener('click', function() {
+  if (runtimeDockerBtn.disabled) return;
+  currentRuntimeMode = 'docker';
+  updateRuntimeButtons();
+  window.quilltap.setRuntimeMode('docker');
+});
+
+/** Runtime mode: VM button */
+runtimeVMBtn.addEventListener('click', function() {
+  currentRuntimeMode = 'vm';
+  updateRuntimeButtons();
+  window.quilltap.setRuntimeMode('vm');
+});
+
+/** Delete confirmation: config only */
+deleteConfigOnlyBtn.addEventListener('click', async function() {
+  if (pendingDeleteDir) {
+    await window.quilltap.deleteDirectory(pendingDeleteDir, 'config-only');
+    hideDeleteConfirmation();
+  }
+});
+
+/** Delete confirmation: config and data */
+deleteConfigAndDataBtn.addEventListener('click', async function() {
+  if (pendingDeleteDir) {
+    await window.quilltap.deleteDirectory(pendingDeleteDir, 'config-and-data');
+    hideDeleteConfirmation();
+  }
+});
+
+/** Delete confirmation: cancel */
+deleteCancelBtn.addEventListener('click', function() {
+  hideDeleteConfirmation();
 });

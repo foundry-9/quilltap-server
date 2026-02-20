@@ -14,6 +14,17 @@
 
   <!-- Directory chooser state -->
   <div class="directory-container" id="directoryContainer">
+    <div class="runtime-mode-section">
+      <div class="directory-label">Runtime</div>
+      <div class="runtime-mode-buttons" id="runtimeButtons">
+        <button class="runtime-btn" id="runtimeDocker" disabled>
+          <span class="runtime-btn-label">Docker</span>
+        </button>
+        <button class="runtime-btn selected" id="runtimeVM">
+          <span class="runtime-btn-label" id="vmLabel">Lima</span>
+        </button>
+      </div>
+    </div>
     <div class="directory-label">Data Directory</div>
     <div class="directory-list" id="directoryList"></div>
     <div class="directory-actions">
@@ -21,7 +32,7 @@
     </div>
     <div class="auto-start-row">
       <label class="auto-start-label">
-        <input type="checkbox" id="autoStartCheckbox" checked>
+        <input type="checkbox" id="autoStartCheckbox">
         <span>Auto-start with last used directory</span>
       </label>
     </div>
@@ -54,6 +65,20 @@
     <div class="button-group">
       <button class="btn btn-primary" id="retryBtn">Retry</button>
       <button class="btn btn-secondary" id="quitBtn">Quit</button>
+    </div>
+  </div>
+
+  <!-- Delete confirmation overlay -->
+  <div class="delete-overlay" id="deleteOverlay">
+    <div class="delete-dialog">
+      <div class="delete-dialog-title">Delete Configuration</div>
+      <div class="delete-dialog-path" id="deleteDialogPath"></div>
+      <div class="delete-dialog-buttons">
+        <button class="btn btn-primary btn-sm" id="deleteConfigOnlyBtn">Remove configuration only</button>
+        <button class="btn btn-danger btn-sm" id="deleteConfigAndDataBtn">Delete configuration AND data</button>
+        <button class="btn btn-secondary btn-sm" id="deleteCancelBtn">Cancel</button>
+      </div>
+      <div class="delete-dialog-warning">Deleting data is irreversible.</div>
     </div>
   </div>
 

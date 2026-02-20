@@ -4,6 +4,10 @@
 
 ### 3.0-dev
 
+- feat: Docker runtime support in Electron splash screen — new runtime toggle (Docker vs Lima/WSL2 VM) on the splash screen with character artwork backgrounds (Foundryman for Docker, Prospero for VM); DockerManager class handles container lifecycle (pull, start, stop, delete) with full Docker CLI path resolution for packaged Electron apps; port conflict prevention stops VMs before Docker start and vice versa; graceful shutdown stops the active runtime backend
+- feat: Enhanced directory management with delete confirmation — delete button on all directories (not just when multiple exist) opens a confirmation dialog with two options: "Remove configuration only" (removes from list) or "Delete configuration AND data" (removes from list, deletes data on disk, cleans up associated VM and Docker container)
+- feat: Art Deco-themed splash screen — full-window background with gold art deco frame, center-darkened gradient overlay, Raleway font for section labels matching the Art Deco theme, enlarged splash window (580x680) to accommodate runtime toggle
+- change: Auto-start defaults to off for new installs — existing users with `autoStart: true` in their settings are not affected; new `runtimeMode` setting persisted alongside other app settings
 - fix: Azure Trusted Signing endpoint region — changed from East US (`eus`) to Central US (`cus`) to match the region where the Trusted Signing account was created; Windows builds were failing with 403 Forbidden
 - build: Remove npm publish job from release workflow — the `publish-npm` job added too much weight to the release pipeline; npm publishing will be handled separately
 - build: Docker image build and push job in release workflow — new `build-docker` job uses `docker/build-push-action` with Buildx to build multi-platform (`linux/amd64` + `linux/arm64`) images targeting the `production` Dockerfile stage; pushes to Docker Hub with version tag plus `latest` (clean semver) or `dev` (prerelease) channel tag; uses GitHub Actions layer caching; runs after Electron builds and gates the GitHub Release; release notes updated with `docker pull` instructions

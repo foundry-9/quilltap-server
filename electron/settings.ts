@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { app } from 'electron';
 import { DEFAULT_DATA_DIR } from './constants';
+import { RuntimeMode } from './types';
 
 /** Persisted application settings for data directory management */
 export interface AppSettings {
@@ -11,6 +12,8 @@ export interface AppSettings {
   knownDataDirs: string[];
   /** Whether to auto-start with lastDataDir (skip chooser) */
   autoStart: boolean;
+  /** Runtime mode: 'docker' or 'vm' (Lima/WSL2) */
+  runtimeMode: RuntimeMode;
 }
 
 /** Default settings for first launch */
@@ -18,7 +21,8 @@ function defaultSettings(): AppSettings {
   return {
     lastDataDir: DEFAULT_DATA_DIR,
     knownDataDirs: [DEFAULT_DATA_DIR],
-    autoStart: true,
+    autoStart: false,
+    runtimeMode: 'vm',
   };
 }
 
@@ -44,6 +48,7 @@ export function loadSettings(): AppSettings {
           ? parsed.knownDataDirs
           : defaults.knownDataDirs,
         autoStart: typeof parsed.autoStart === 'boolean' ? parsed.autoStart : defaults.autoStart,
+        runtimeMode: parsed.runtimeMode === 'docker' ? 'docker' : 'vm',
       };
     }
   } catch (err) {

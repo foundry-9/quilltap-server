@@ -17,8 +17,11 @@ contextBridge.exposeInMainWorld('quilltap', {
   getDirectories: (): Promise<DirectoryInfo> => ipcRenderer.invoke('splash:get-directories'),
   /** Open native folder picker and return chosen path (or empty string if cancelled) */
   selectDirectory: (): Promise<string> => ipcRenderer.invoke('splash:select-directory'),
-  /** Remove a directory from the known list */
-  removeDirectory: (dirPath: string) => ipcRenderer.send('splash:remove-directory', dirPath),
+  /** Set the runtime mode (docker or vm) */
+  setRuntimeMode: (mode: string) => ipcRenderer.send('splash:set-runtime-mode', mode),
+  /** Delete a directory with confirmation action ('config-only' or 'config-and-data') */
+  deleteDirectory: (dirPath: string, action: string): Promise<boolean> =>
+    ipcRenderer.invoke('splash:delete-directory', dirPath, action),
   /** Save chosen directory and begin startup */
   startWithDirectory: (dirPath: string) => ipcRenderer.send('splash:start', dirPath),
   /** Toggle auto-start preference */

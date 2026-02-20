@@ -1,3 +1,19 @@
+@font-face {
+  font-family: 'Raleway';
+  src: url('Raleway-Light.woff2') format('woff2');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Raleway';
+  src: url('Raleway-SemiBold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -5,7 +21,15 @@
 }
 
 body {
-  background: #1a1a1a;
+  background:
+    linear-gradient(to right,
+      rgba(15, 23, 41, 0.15) 0%,
+      rgba(15, 23, 41, 0.85) 25%,
+      rgba(15, 23, 41, 0.97) 50%,
+      rgba(15, 23, 41, 0.85) 75%,
+      rgba(15, 23, 41, 0.15) 100%
+    ),
+    url('splash-bg.png') center / cover no-repeat #0f1729;
   color: #e0e0e0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   display: flex;
@@ -207,7 +231,7 @@ body {
   flex-direction: column;
   align-items: center;
   width: 100%;
-  max-width: 420px;
+  max-width: 540px;
   padding: 0 20px;
 }
 
@@ -216,12 +240,13 @@ body {
 }
 
 .directory-label {
-  font-size: 13px;
-  color: #888888;
+  font-family: 'Raleway', sans-serif;
+  font-size: 14px;
+  color: #c0a060;
   margin-bottom: 10px;
   text-transform: uppercase;
-  letter-spacing: 1px;
-  font-weight: 600;
+  letter-spacing: 0.12em;
+  font-weight: 300;
 }
 
 .directory-list {
@@ -363,4 +388,158 @@ body {
 
 .btn-change-dir:active {
   transform: scale(0.97);
+}
+
+/* Runtime mode toggle */
+.runtime-mode-section {
+  width: 100%;
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.runtime-mode-buttons {
+  display: flex;
+  gap: 8px;
+  -webkit-app-region: no-drag;
+}
+
+.runtime-btn {
+  width: 250px;
+  height: 250px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 16px;
+  border: 3px solid #444444;
+  border-radius: 12px;
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s, filter 0.15s;
+  -webkit-app-region: no-drag;
+}
+
+.runtime-btn .runtime-btn-label {
+  position: relative;
+  z-index: 2;
+  text-shadow:
+    0 0 8px rgba(0, 0, 0, 0.9),
+    0 0 16px rgba(0, 0, 0, 0.7),
+    0 1px 3px rgba(0, 0, 0, 0.9);
+  background: rgba(0, 0, 0, 0.55);
+  padding: 6px 20px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(4px);
+}
+
+#runtimeDocker {
+  background-image: url('runtime-docker.png');
+}
+
+#runtimeVM {
+  background-image: url('runtime-vm.png');
+}
+
+.runtime-btn:hover:not(:disabled) {
+  border-color: #888888;
+}
+
+.runtime-btn.selected {
+  border-color: #6366f1;
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.5), inset 0 0 0 1px rgba(99, 102, 241, 0.3);
+}
+
+.runtime-btn.selected .runtime-btn-label {
+  background: rgba(99, 102, 241, 0.6);
+  border-color: rgba(99, 102, 241, 0.5);
+}
+
+.runtime-btn:disabled {
+  filter: grayscale(0.8) brightness(0.5);
+  cursor: not-allowed;
+}
+
+.runtime-btn:disabled .runtime-btn-label {
+  opacity: 0.6;
+}
+
+/* Danger button for destructive actions */
+.btn-danger {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.btn-danger:hover {
+  background: #b91c1c;
+}
+
+/* Delete confirmation overlay */
+.delete-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+  -webkit-app-region: no-drag;
+}
+
+.delete-overlay.visible {
+  display: flex;
+}
+
+.delete-dialog {
+  background: #2a2a2a;
+  border: 1px solid #444444;
+  border-radius: 10px;
+  padding: 20px;
+  max-width: 380px;
+  width: 90%;
+  text-align: center;
+}
+
+.delete-dialog-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #e0e0e0;
+  margin-bottom: 10px;
+}
+
+.delete-dialog-path {
+  font-size: 11px;
+  color: #999999;
+  margin-bottom: 16px;
+  word-break: break-all;
+  font-family: monospace;
+}
+
+.delete-dialog-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.delete-dialog-buttons .btn {
+  width: 100%;
+}
+
+.delete-dialog-warning {
+  font-size: 11px;
+  color: #ef4444;
+  font-weight: 500;
 }
