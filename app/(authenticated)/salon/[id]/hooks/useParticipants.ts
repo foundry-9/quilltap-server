@@ -1,0 +1,250 @@
+'use client'
+
+import { useMemo, useCallback } from 'react'
+import type { ParticipantData } from '@/components/chat/ParticipantCard'
+import type { ChatParticipantBase, Character } from '@/lib/schemas/types'
+import {
+  findUserParticipant,
+  isMultiCharacterChat,
+  isAllLLMChat,
+  selectNextSpeaker,
+} from '@/lib/chat/turn-manager'
+import type { TurnState, TurnSelectionResult } from '@/lib/chat/turn-manager'
+import type { Chat, Participant, CharacterData, Message } from '../types'
+
+interface UseParticipantsParams {
+  chat: Chat | null
+  messages: Message[]
+  impersonatingParticipantIds: string[]
+  turnState: TurnState
+  turnSelectionResult: TurnSelectionResult | null
+}
+
+export function useParticipants({
+  chat,
+  messages,
+  impersonatingParticipantIds,
+  turnState,
+  turnSelectionResult,
+}: UseParticipantsParams) {
+  // Extract participants once to satisfy React Compiler's dependency inference
+  const chatParticipants = chat?.participants ?? null
+
+  // Convert participants to the base type used by turn-manager
+  const participantsAsBase = useMemo((): ChatParticipantBase[] => {
+    if (!chatParticipants) return []
+    return chatParticipants
+      .filter(p => p.type === 'CHARACTER' && (p.characterId || p.character?.id))
+      .map(p => {
+        const characterId = p.characterId || p.character?.id
+        return {
+          id: p.id,
+          type: 'CHARACTER' as const,
+          characterId: characterId!,
+          controlledBy: p.controlledBy ?? 'llm',
+          connectionProfileId: p.connectionProfile?.id ?? null,
+          imageProfileId: p.imageProfile?.id ?? null,
+          systemPromptOverride: p.systemPromptOverride ?? null,
+          displayOrder: p.displayOrder,
+          isActive: p.isActive,
+          hasHistoryAccess: p.hasHistoryAccess ?? false,
+          joinScenario: p.joinScenario ?? null,
+          createdAt: p.createdAt ?? new Date().toISOString(),
+          updatedAt: p.updatedAt ?? new Date().toISOString(),
+        }
+      })
+  }, [chatParticipants])
+
+  const userParticipantId = useMemo(() => {
+    if (participantsAsBase.length === 0) return null
+    const userParticipant = findUserParticipant(participantsAsBase)
+    return userParticipant?.id ?? null
+  }, [participantsAsBase])
+
+  const isMultiChar = useMemo(() => {
+    if (participantsAsBase.length === 0) return false
+    return isMultiCharacterChat(participantsAsBase)
+  }, [participantsAsBase])
+
+  const hasActiveCharacters = useMemo(() => {
+    return participantsAsBase.filter(p => p.type === 'CHARACTER' && p.isActive).length > 0
+  }, [participantsAsBase])
+
+  const isSingleCharacterChat = useMemo(() => {
+    return participantsAsBase.filter(p => p.type === 'CHARACTER' && p.isActive).length === 1
+  }, [participantsAsBase])
+
+  // Get non-user-controlled characters for header display
+  const llmCharacters = useMemo(() => {
+    if (!chatParticipants) return []
+    return chatParticipants
+      .filter(p => p.type === 'CHARACTER' && p.controlledBy === 'llm' && p.character)
+      .map(p => p.character!)
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [chatParticipants])
+
+  const charactersMap = useMemo((): Map<string, Character> => {
+    const map = new Map<string, Character>()
+    if (!chatParticipants) return map
+    chatParticipants.forEach(p => {
+      if (p.type === 'CHARACTER' && p.character) {
+        map.set(p.character.id, {
+          id: p.character.id,
+          userId: '',
+          name: p.character.name,
+          talkativeness: p.character.talkativeness ?? 0.5,
+          isFavorite: false,
+          createdAt: '',
+          updatedAt: '',
+        } as Character)
+      }
+    })
+    return map
+  }, [chatParticipants])
+
+  const participantData: ParticipantData[] = useMemo(() => {
+    if (!chatParticipants) return []
+    return chatParticipants.map(p => ({
+      id: p.id,
+      type: p.type,
+      controlledBy: p.controlledBy ?? (p.type === 'PERSONA' ? 'user' : 'llm'),
+      displayOrder: p.displayOrder,
+      isActive: p.isActive,
+      systemPromptOverride: p.systemPromptOverride ?? null,
+      character: p.character ? {
+        id: p.character.id,
+        name: p.character.name,
+        title: p.character.title,
+        avatarUrl: p.character.avatarUrl,
+        talkativeness: p.character.talkativeness ?? 0.5,
+        defaultImage: p.character.defaultImage,
+      } : null,
+      persona: p.persona ? {
+        id: p.persona.id,
+        name: p.persona.name,
+        title: p.persona.title,
+        avatarUrl: p.persona.avatarUrl,
+        defaultImage: p.persona.defaultImage,
+      } : null,
+      connectionProfile: p.connectionProfile,
+    }))
+  }, [chatParticipants])
+
+  // Characters the user can speak as (for SpeakerSelector)
+  const controlledCharacters = useMemo(() => {
+    const result: Array<{
+      participantId: string
+      characterId: string
+      name: string
+      character: {
+        defaultImage?: { id: string; filepath: string; url?: string } | null
+        avatarUrl?: string | null
+      } | null
+    }> = []
+
+    for (const p of participantData) {
+      const isUserControlled = p.type === 'PERSONA' || p.controlledBy === 'user'
+      const isImpersonating = impersonatingParticipantIds.includes(p.id)
+      if ((isUserControlled || isImpersonating) && p.isActive) {
+        const entity = p.character || p.persona
+        if (entity) {
+          result.push({
+            participantId: p.id,
+            characterId: entity.id,
+            name: entity.name,
+            character: {
+              defaultImage: entity.defaultImage,
+              avatarUrl: entity.avatarUrl,
+            },
+          })
+        }
+      }
+    }
+
+    return result
+  }, [participantData, impersonatingParticipantIds])
+
+  // LLM participants for AllLLMPauseModal
+  const llmParticipants = useMemo(() => {
+    return participantData
+      .filter(p => p.type === 'CHARACTER' && p.isActive && p.controlledBy !== 'user' && !impersonatingParticipantIds.includes(p.id))
+      .map(p => ({
+        id: p.id,
+        characterId: p.character?.id || '',
+        characterName: p.character?.name || 'Unknown',
+        character: p.character ? {
+          defaultImage: p.character.defaultImage,
+          avatarUrl: p.character.avatarUrl,
+        } : null,
+      }))
+  }, [participantData, impersonatingParticipantIds])
+
+  // Check if this is an all-LLM chat (no user-controlled participants)
+  const isAllLLM = useMemo(() => {
+    return isAllLLMChat(participantsAsBase)
+  }, [participantsAsBase])
+
+  // Count turns since last user message (for all-LLM pause logic)
+  const allLLMTurnCount = useMemo(() => {
+    if (!isAllLLM) return 0
+    let count = 0
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'USER') break
+      if (messages[i].role === 'ASSISTANT') count++
+    }
+    return count
+  }, [isAllLLM, messages])
+
+  // Compute effective next speaker for all-LLM chats
+  const effectiveNextSpeakerId = useMemo(() => {
+    if (!turnSelectionResult) return null
+    if (turnSelectionResult.nextSpeakerId !== null) {
+      return turnSelectionResult.nextSpeakerId
+    }
+    if (isAllLLM && participantsAsBase.length > 0 && charactersMap.size > 0) {
+      const freshResult = selectNextSpeaker(participantsAsBase, charactersMap, turnState, userParticipantId)
+      return freshResult.nextSpeakerId
+    }
+    return null
+  }, [turnSelectionResult, isAllLLM, participantsAsBase, charactersMap, turnState, userParticipantId])
+
+  const getParticipantById = useCallback((participantId: string | null | undefined) => {
+    if (!participantId || !chatParticipants) return null
+    return chatParticipants.find(p => p.id === participantId) ?? null
+  }, [chatParticipants])
+
+  // Helper functions to get character/persona from participants
+  const getFirstCharacterParticipant = useCallback(() => {
+    return chatParticipants?.find(p => p.type === 'CHARACTER' && p.isActive)
+  }, [chatParticipants])
+
+  const getFirstPersonaParticipant = useCallback(() => {
+    return chatParticipants?.find(p => p.type === 'PERSONA' && p.isActive)
+  }, [chatParticipants])
+
+  const getFirstCharacter = useCallback(() => getFirstCharacterParticipant()?.character, [getFirstCharacterParticipant])
+  const getFirstPersona = useCallback(() => getFirstPersonaParticipant()?.persona, [getFirstPersonaParticipant])
+  const getFirstConnectionProfile = useCallback(() => getFirstCharacterParticipant()?.connectionProfile, [getFirstCharacterParticipant])
+
+  return {
+    participantsAsBase,
+    userParticipantId,
+    isMultiChar,
+    hasActiveCharacters,
+    isSingleCharacterChat,
+    llmCharacters,
+    charactersMap,
+    participantData,
+    controlledCharacters,
+    llmParticipants,
+    isAllLLM,
+    allLLMTurnCount,
+    effectiveNextSpeakerId,
+    getParticipantById,
+    getFirstCharacterParticipant,
+    getFirstPersonaParticipant,
+    getFirstCharacter,
+    getFirstPersona,
+    getFirstConnectionProfile,
+  }
+}
