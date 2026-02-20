@@ -49,7 +49,7 @@ mac:
 win:
   azureSignOptions:
     publisherName: "Charles Sebold"
-    endpoint: "https://eus.codesigning.azure.net/"
+    endpoint: "https://cus.codesigning.azure.net/"
     certificateProfileName: "quilltap"
     codeSigningAccountName: "quilltap"
   target:
