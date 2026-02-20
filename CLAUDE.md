@@ -192,6 +192,7 @@ Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/
 - Commits take a long time because there is a precommit script in `.githooks/pre-commit` that kills the dev server, runs lint, runs the unit tests, does a test compile with `npx tsc`, builds the plugins, and then does a full Next.js build of the app, to ensure that we're committing something that basically works.
 - Leave no stubs and "TODO" code behind unless you have agreed on it with me ahead of time
 - All user-visible changes must be documented in help files found in `help/*.md`
+- All writing for users is to be in the style of "steampunk + roaring 20s + Great Gatsby + Wodehouse + Lemony Snicket"
 
 ## Best Practices and Principles
 

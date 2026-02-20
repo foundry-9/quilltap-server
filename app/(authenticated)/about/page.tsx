@@ -14,7 +14,7 @@ export default function AboutPage() {
       <div className="mb-8">
         <h1 className="qt-heading-1">About <BrandName /></h1>
         <p className="qt-text-muted mt-2">
-          Self-hosted AI workspace for writers, worldbuilders, and roleplayers
+          Your AI, your projects, your stories, your partners, your rules.
         </p>
       </div>
 
@@ -39,16 +39,24 @@ export default function AboutPage() {
       <div className="qt-card p-6 mb-6">
         <h2 className="text-xl font-semibold mb-4">What is <BrandName />?</h2>
         <p className="qt-text-primary mb-4">
-          <BrandName /> is a self-hosted AI workspace for writers, worldbuilders, roleplayers, and anyone who wants an
-          AI assistant that actually knows what they&apos;re working on. Connect to any LLM provider, organize your work
-          into projects with persistent files and context, create characters with real personalities, and build a
-          private AI environment that learns and remembers.
+          <BrandName /> is a self-hosted AI workspace for writers, worldbuilders, roleplayers, and anyone who
+          finds it deeply unsatisfying that their AI assistant forgets everything the moment they close a tab.
+          Connect to any LLM provider, organize your work into projects with persistent files and context,
+          create characters with genuine personalities, and build a private AI environment that learns,
+          remembers, and &mdash; crucially &mdash; belongs entirely to you.
+        </p>
+        <p className="qt-text-primary mb-4">
+          The platform is organized into named subsystems, each with its own character and purpose &mdash;
+          rather like the wings of a well-appointed estate. Aurora (characters), The Salon (chat),
+          Prospero (projects), The Commonplace Book (memory), The Lantern (story backgrounds),
+          Dangermouse (content filtering), Pascal the Croupier (gaming &amp; RNG),
+          Calliope (themes), and The Foundry (architecture) &mdash;
+          all extensible through a plugin system.
         </p>
         <p className="qt-text-primary">
-          The platform is organized into named subsystems &mdash; Aurora (characters), The Salon (chat),
-          Prospero (projects), The Commonplace Book (memory), The Lantern (story backgrounds),
-          Dangermouse (content filtering), Calliope (themes), and The Foundry (architecture) &mdash;
-          each extensible through a plugin system.
+          <BrandName /> runs as a native desktop application on macOS and Windows, powered by a lightweight
+          Linux VM behind the scenes. You can also run it via Docker or directly from source, should you
+          prefer to take the scenic route. No subscriptions, no data harvested, no landlords.
         </p>
       </div>
 
@@ -56,6 +64,14 @@ export default function AboutPage() {
       <div className="qt-card p-6 mb-6">
         <h2 className="text-xl font-semibold mb-4">Key Features</h2>
         <ul className="space-y-2 qt-text-primary">
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-1">&#8226;</span>
+            <span><strong>Native desktop app</strong> &ndash; macOS (Lima/VZ) and Windows (WSL2) installers with branded splash screen, data directory management, and automatic VM lifecycle</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-1">&#8226;</span>
+            <span><strong>Docker runtime</strong> &ndash; toggle between VM and Docker from the splash screen, or run standalone via Docker Hub</span>
+          </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
             <span><strong>Aurora &ndash; Characters</strong> &ndash; detailed profiles with pronouns, aliases, clothing records, personalities, and multi-character turn management</span>
@@ -66,7 +82,7 @@ export default function AboutPage() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Prospero &ndash; Projects</strong> &ndash; projects with files, folders, agent mode, and custom instructions</span>
+            <span><strong>Prospero &ndash; Projects</strong> &ndash; projects with files, folders, semantic search, agent mode, and custom instructions</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
@@ -82,7 +98,7 @@ export default function AboutPage() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Gaming &amp; Interactivity</strong> &ndash; persistent chat state, dice rolls, coin flips, inventories, stats, and game tracking</span>
+            <span><strong>Pascal the Croupier &ndash; Gaming</strong> &ndash; persistent chat state, dice rolls, coin flips, inventories, stats, and game tracking</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
@@ -90,7 +106,7 @@ export default function AboutPage() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>The Foundry &ndash; Architecture</strong> &ndash; unified settings hub, plugin system for themes, providers, templates, and tools</span>
+            <span><strong>The Foundry &ndash; Architecture</strong> &ndash; unified settings hub, plugin system for themes, providers, templates, tools, search, and storage</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
@@ -98,18 +114,22 @@ export default function AboutPage() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>LLM tools</strong> &ndash; web search, image generation, agent mode, MCP connector, custom tool plugins</span>
+            <span><strong>LLM tools</strong> &ndash; web search, image generation, file management, agent mode, MCP connector, custom tool plugins</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Secure by design</strong> &ndash; AES-256-GCM encrypted API keys, all data stays on your infrastructure</span>
+            <span><strong>Database protection</strong> &ndash; automatic integrity checks, WAL checkpoints, and physical backups with tiered retention</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-1">&#8226;</span>
+            <span><strong>Secure by design</strong> &ndash; AES-256-GCM encrypted API keys, all data stays on your infrastructure, no external dependencies</span>
           </li>
         </ul>
       </div>
 
       {/* Tech Stack */}
       <div className="qt-card p-6 mb-6">
-        <h2 className="text-xl font-semibold mb-4">Tech Stack</h2>
+        <h2 className="text-xl font-semibold mb-4">The Machinery Behind the Curtain</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 qt-text-primary">
           <div>
             <span className="font-medium">Runtime:</span> Node.js 22+
@@ -124,10 +144,19 @@ export default function AboutPage() {
             <span className="font-medium">Database:</span> SQLite
           </div>
           <div>
-            <span className="font-medium">File Storage:</span> Local filesystem
+            <span className="font-medium">Desktop:</span> Electron
           </div>
           <div>
             <span className="font-medium">Styling:</span> Tailwind CSS 4+
+          </div>
+          <div>
+            <span className="font-medium">macOS VM:</span> Lima / VZ
+          </div>
+          <div>
+            <span className="font-medium">Windows VM:</span> WSL2
+          </div>
+          <div>
+            <span className="font-medium">Containers:</span> Docker
           </div>
         </div>
       </div>
@@ -146,6 +175,17 @@ export default function AboutPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
             </svg>
             Quilltap Website
+          </a>
+          <a
+            href="https://github.com/foundry-9/quilltap/releases"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="qt-button qt-button-secondary"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Download Latest Release
           </a>
           <a
             href="https://github.com/foundry-9/quilltap"
@@ -187,14 +227,14 @@ export default function AboutPage() {
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
             </svg>
-            Foundry-9 LLC Website
+            Foundry-9 LLC
           </a>
         </div>
       </div>
 
       {/* Author & Support */}
       <div className="qt-card p-6 mb-6">
-        <h2 className="text-xl font-semibold mb-4">Author & Support</h2>
+        <h2 className="text-xl font-semibold mb-4">Author &amp; Support</h2>
         <div className="qt-text-primary space-y-2">
           <p><span className="font-medium">Author:</span> Charles Sebold</p>
           <p>
@@ -210,6 +250,29 @@ export default function AboutPage() {
             </a>
           </p>
         </div>
+      </div>
+
+      {/* Acknowledgments */}
+      <div className="qt-card p-6 mb-6">
+        <h2 className="text-xl font-semibold mb-4">Acknowledgments</h2>
+        <p className="qt-text-primary mb-4">
+          <BrandName /> stands on the shoulders of these excellent open source projects, and is grateful for the view.
+        </p>
+        <div className="qt-text-primary space-y-2 text-sm">
+          <p><span className="font-medium">Core:</span> React, Next.js, TypeScript, better-sqlite3, Zod</p>
+          <p><span className="font-medium">AI &amp; LLM:</span> OpenAI SDK, Anthropic SDK, Google Generative AI SDK, xAI/Grok SDK, Model Context Protocol SDK</p>
+          <p><span className="font-medium">UI:</span> Tailwind CSS, React Markdown, React Syntax Highlighter, PDF.js, sharp, Lucide Icons</p>
+          <p><span className="font-medium">Desktop &amp; Infrastructure:</span> Electron, Lima, Docker, AWS SDK</p>
+          <p><span className="font-medium">Testing:</span> Jest, Playwright, Storybook, Testing Library</p>
+        </div>
+        <p className="qt-text-muted text-sm mt-4">
+          Special thanks to{' '}
+          <a href="https://github.com/SillyTavern/SillyTavern" target="_blank" rel="noopener noreferrer" className="qt-link">
+            SillyTavern
+          </a>
+          {' '}for pioneering this space and inspiring character format compatibility.
+          One does not forget those who blazed the trail.
+        </p>
       </div>
 
       {/* Copyright */}
