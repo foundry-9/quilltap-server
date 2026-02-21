@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } from 'electron';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -66,6 +66,9 @@ let dockerAvailable = false;
 
 /** Whether we're in the auto-start countdown (can be interrupted) */
 let autoStartPending = false;
+
+/** When true, onSplashReady() skips auto-start and goes straight to the directory chooser */
+let skipAutoStart = false;
 
 /** Send an update to the splash screen */
 function sendSplashUpdate(update: SplashUpdate): void {
@@ -275,6 +278,191 @@ function createSplashWindow(): BrowserWindow {
   return win;
 }
 
+/** Stop the currently running backend (VM or Docker container) */
+async function stopCurrentBackend(): Promise<void> {
+  if (appSettings.runtimeMode === 'docker') {
+    console.log('[Main] Stopping Docker container...');
+    try {
+      await dockerManager.stopContainer();
+    } catch (err) {
+      console.warn('[Main] Error stopping Docker container (non-fatal):', err);
+    }
+  } else {
+    console.log('[Main] Stopping VM...');
+    try {
+      await vmManager.stopVM();
+    } catch (err) {
+      console.warn('[Main] Error stopping VM (non-fatal):', err);
+    }
+  }
+}
+
+/**
+ * Restart the backend server. Closes the main window, stops the current
+ * backend, recreates the splash, and relaunches with the same data directory.
+ */
+async function restartServer(): Promise<void> {
+  console.log('[Main] Restarting server...');
+
+  // Close main window
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.close();
+    mainWindow = null;
+  }
+
+  // Show splash with restart status
+  splashWindow = createSplashWindow();
+  splashWindow.webContents.on('did-finish-load', async () => {
+    sendSplashUpdate({
+      phase: 'initializing',
+      message: 'Restarting server...',
+    });
+
+    await stopCurrentBackend();
+    routeStartup(appSettings.lastDataDir);
+  });
+}
+
+/**
+ * Switch to a different data directory. Closes the main window, stops the
+ * current backend, and shows the directory chooser on the splash screen.
+ */
+async function changeSite(): Promise<void> {
+  console.log('[Main] Changing site...');
+
+  // Close main window
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.close();
+    mainWindow = null;
+  }
+
+  // Set flag so onSplashReady goes to directory chooser instead of auto-start
+  skipAutoStart = true;
+
+  // Show splash — onSplashReady will handle showing the directory chooser
+  splashWindow = createSplashWindow();
+  splashWindow.webContents.on('did-finish-load', async () => {
+    sendSplashUpdate({
+      phase: 'initializing',
+      message: 'Stopping server...',
+    });
+
+    await stopCurrentBackend();
+    onSplashReady();
+  });
+}
+
+/** Build the application menu with Navigate items */
+function buildAppMenu(win: BrowserWindow): void {
+  const appOrigin = isDev ? 'http://localhost:3000' : `http://localhost:${HOST_PORT}`;
+
+  const navigateItems: { label: string; path: string; accelerator?: string }[] = [
+    { label: 'Home', path: '/', accelerator: 'CmdOrCtrl+Shift+H' },
+    { label: 'Projects', path: '/prospero', accelerator: 'CmdOrCtrl+Shift+P' },
+    { label: 'Files', path: '/files', accelerator: 'CmdOrCtrl+Shift+F' },
+    { label: 'Characters', path: '/aurora', accelerator: 'CmdOrCtrl+Shift+C' },
+    { label: 'Chats', path: '/salon', accelerator: 'CmdOrCtrl+Shift+S' },
+    { label: 'Settings', path: '/foundry', accelerator: 'CmdOrCtrl+,' },
+    { label: 'Profile', path: '/profile' },
+    { label: 'About', path: '/about' },
+  ];
+
+  const navigateSubmenu = navigateItems.map(({ label, path, accelerator }) => ({
+    label,
+    accelerator,
+    click: () => {
+      win.webContents.loadURL(`${appOrigin}${path}`);
+    },
+  }));
+
+  const serverItems: Electron.MenuItemConstructorOptions[] = [
+    {
+      label: 'Restart Server',
+      click: () => { restartServer(); },
+    },
+    {
+      label: 'Change Site...',
+      click: () => { changeSite(); },
+    },
+  ];
+
+  const template: Electron.MenuItemConstructorOptions[] = [
+    ...(process.platform === 'darwin'
+      ? [{
+          label: app.name,
+          submenu: [
+            { role: 'about' as const },
+            { type: 'separator' as const },
+            ...serverItems,
+            { type: 'separator' as const },
+            { role: 'services' as const },
+            { type: 'separator' as const },
+            { role: 'hide' as const },
+            { role: 'hideOthers' as const },
+            { role: 'unhide' as const },
+            { type: 'separator' as const },
+            { role: 'quit' as const },
+          ],
+        }]
+      : [{
+          label: 'File',
+          submenu: [
+            ...serverItems,
+            { type: 'separator' as const },
+            { role: 'quit' as const },
+          ],
+        }]),
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' },
+      ],
+    },
+    {
+      label: 'Navigate',
+      submenu: navigateSubmenu,
+    },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' },
+        { role: 'forceReload' },
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' },
+      ],
+    },
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        ...(process.platform === 'darwin'
+          ? [
+              { type: 'separator' as const },
+              { role: 'front' as const },
+            ]
+          : [
+              { role: 'close' as const },
+            ]),
+      ],
+    },
+  ];
+
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
+}
+
 /** Create the main application window */
 function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -333,6 +521,8 @@ function createMainWindow(): BrowserWindow {
     mainWindow = null;
   });
 
+  buildAppMenu(win);
+
   return win;
 }
 
@@ -357,6 +547,13 @@ function onSplashReady(): void {
   if (isDev) {
     // In dev mode, skip directory chooser entirely
     startupSequence(appSettings.lastDataDir);
+    return;
+  }
+
+  // "Change Site" sets this flag to bypass auto-start
+  if (skipAutoStart) {
+    skipAutoStart = false;
+    showDirectoryChooser();
     return;
   }
 
