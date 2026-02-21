@@ -330,8 +330,10 @@ export function documentToRow(
 
   for (const [key, value] of Object.entries(document)) {
     // BLOB columns: convert number[] to Float32 Buffer
-    if (blobColumns.has(key) && Array.isArray(value) && value.length > 0 && typeof value[0] === 'number') {
+    if (blobColumns.has(key) && Array.isArray(value) && typeof value[0] === 'number') {
       row[key] = embeddingToBlob(value as number[]);
+    } else if (blobColumns.has(key) && Array.isArray(value) && value.length === 0) {
+      row[key] = null; // Empty embedding arrays stored as NULL
     } else if (blobColumns.has(key) && Buffer.isBuffer(value)) {
       row[key] = value;
     } else if (jsonColumns.includes(key) || (shouldStoreAsJson(value) && !blobColumns.has(key))) {

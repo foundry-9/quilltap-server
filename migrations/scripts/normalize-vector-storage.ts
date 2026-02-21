@@ -186,10 +186,16 @@ export const normalizeVectorStorageMigration: Migration = {
             for (const row of batch) {
               try {
                 const embedding = JSON.parse(row.embedding) as number[];
-                if (Array.isArray(embedding) && embedding.length > 0) {
-                  const blob = embeddingToBlob(embedding);
-                  updateStmt.run(blob, row.id);
-                  memoriesConverted++;
+                if (Array.isArray(embedding)) {
+                  if (embedding.length > 0) {
+                    const blob = embeddingToBlob(embedding);
+                    updateStmt.run(blob, row.id);
+                    memoriesConverted++;
+                  } else {
+                    // Empty embedding array — set to NULL to clear stale TEXT
+                    updateStmt.run(null, row.id);
+                    memoriesConverted++;
+                  }
                 }
               } catch {
                 // Skip rows with unparseable embeddings
