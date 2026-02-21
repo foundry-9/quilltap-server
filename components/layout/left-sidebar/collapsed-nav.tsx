@@ -9,7 +9,7 @@
  * @module components/layout/left-sidebar/collapsed-nav
  */
 
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 
 /**
@@ -106,14 +106,18 @@ const navItems: NavItem[] = [
 ]
 
 export function CollapsedNav() {
+  const router = useRouter()
+
   return (
     <nav className="qt-collapsed-nav" aria-label="Quick navigation">
-      {/* Home button with Quilltap quill icon */}
-      <Link
+      {/* Home button — uses <a> + router.push() instead of <Link> to avoid startTransition stall on chat page */}
+      {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+      <a
         href="/"
         className="qt-collapsed-nav-button"
         title="Home"
         aria-label="Home"
+        onClick={(e) => { e.preventDefault(); router.push('/') }}
       >
         <Image
           src="/quill.svg"
@@ -122,19 +126,20 @@ export function CollapsedNav() {
           height={28}
           className="w-7 h-7"
         />
-      </Link>
+      </a>
       {navItems.map((item) => {
         const Icon = item.icon
         return (
-          <Link
+          <a
             key={item.id}
             href={item.href}
             className="qt-collapsed-nav-button"
             title={item.tooltip}
             aria-label={item.tooltip}
+            onClick={(e) => { e.preventDefault(); router.push(item.href) }}
           >
             <Icon className="w-5 h-5" />
-          </Link>
+          </a>
         )
       })}
     </nav>

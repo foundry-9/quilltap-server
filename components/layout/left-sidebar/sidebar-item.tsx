@@ -8,7 +8,7 @@
  * @module components/layout/left-sidebar/sidebar-item
  */
 
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { ReactNode, MouseEvent } from 'react'
 
 interface SidebarItemProps {
@@ -34,6 +34,7 @@ export function SidebarItem({
   active = false,
   className = '',
 }: SidebarItemProps) {
+  const router = useRouter()
   const itemClasses = [
     'qt-left-sidebar-item',
     active && 'qt-left-sidebar-item-active',
@@ -49,9 +50,13 @@ export function SidebarItem({
 
   if (href) {
     return (
-      <Link href={href} className={itemClasses}>
+      <a
+        href={href}
+        className={itemClasses}
+        onClick={(e) => { e.preventDefault(); router.push(href) }}
+      >
         {content}
-      </Link>
+      </a>
     )
   }
 
@@ -71,9 +76,15 @@ interface ViewAllLinkProps {
 }
 
 export function ViewAllLink({ href, label = 'View all' }: ViewAllLinkProps) {
+  const router = useRouter()
+
   return (
-    <Link href={href} className="qt-left-sidebar-view-all">
+    <a
+      href={href}
+      className="qt-left-sidebar-view-all"
+      onClick={(e) => { e.preventDefault(); router.push(href) }}
+    >
       {label} &rarr;
-    </Link>
+    </a>
   )
 }

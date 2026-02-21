@@ -9,7 +9,7 @@
  * @module components/layout/left-sidebar/sidebar-footer
  */
 
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useState, useRef, useCallback } from 'react'
 import { useEffect } from 'react'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
@@ -64,6 +64,7 @@ function PaletteIcon({ className }: { className?: string }) {
 type PopoutMenu = 'themes' | 'quickHide' | null
 
 export function SidebarFooter() {
+  const router = useRouter()
   const quickHide = useQuickHide()
   const { chats } = useSidebarData()
   const theme = useTheme()
@@ -115,13 +116,14 @@ export function SidebarFooter() {
   return (
     <div className="qt-left-sidebar-footer">
       <div className="qt-left-sidebar-footer-actions">
-        <Link
+        <a
           href="/foundry"
           className="qt-left-sidebar-item justify-center px-0"
           title={foundryInfo.name}
+          onClick={(e) => { e.preventDefault(); router.push('/foundry') }}
         >
           <FoundryIcon className="qt-left-sidebar-item-icon w-5 h-5" />
-        </Link>
+        </a>
 
         {showThemes && (
           <div ref={themesRef} className="relative">
