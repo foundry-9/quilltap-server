@@ -83,6 +83,8 @@ import { addMemoryGateFieldsMigration } from './add-memory-gate-fields';
 import { migrateLegacyJsonlFilesMigration } from './migrate-legacy-jsonl-files';
 // Add missing columns to chat_messages and fix empty JSON strings
 import { addChatMessageMissingColumnsMigration } from './add-chat-message-missing-columns';
+// Normalize vector embedding storage to Float32 BLOBs
+import { normalizeVectorStorageMigration } from './normalize-vector-storage';
 
 /**
  * All available migrations.
@@ -161,6 +163,8 @@ export const migrations: Migration[] = [
   migrateLegacyJsonlFilesMigration,
   // Add missing columns to chat_messages and fix empty JSON strings
   addChatMessageMissingColumnsMigration,
+  // Normalize vector embedding storage to Float32 BLOBs
+  normalizeVectorStorageMigration,
 ];
 
 export {
@@ -234,4 +238,6 @@ export {
   migrateLegacyJsonlFilesMigration,
   // Add missing columns to chat_messages and fix empty JSON strings
   addChatMessageMissingColumnsMigration,
+  // Normalize vector embedding storage to Float32 BLOBs
+  normalizeVectorStorageMigration,
 };

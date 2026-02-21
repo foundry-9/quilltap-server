@@ -170,7 +170,7 @@ export const SQLITE_TABLES = [
       "keywords" TEXT DEFAULT '[]',
       "tags" TEXT DEFAULT '[]',
       "importance" REAL DEFAULT 0.5,
-      "embedding" TEXT,
+      "embedding" BLOB,
       "source" TEXT DEFAULT 'MANUAL',
       "sourceMessageId" TEXT,
       "lastAccessedAt" TEXT,
@@ -560,7 +560,7 @@ export const SQLITE_TABLES = [
       `CREATE INDEX IF NOT EXISTS "idx_file_permissions_scope" ON "file_permissions" ("scope")`,
     ],
   },
-  // Vector indices (embeddings for semantic search)
+  // Vector indices metadata (per-character, no entries column — entries are in vector_entries)
   {
     name: 'vector_indices',
     sql: `CREATE TABLE IF NOT EXISTS "vector_indices" (
@@ -568,12 +568,24 @@ export const SQLITE_TABLES = [
       "characterId" TEXT NOT NULL,
       "version" INTEGER NOT NULL,
       "dimensions" INTEGER NOT NULL,
-      "entries" TEXT DEFAULT '[]',
       "createdAt" TEXT NOT NULL,
       "updatedAt" TEXT NOT NULL
     )`,
     indexes: [
       `CREATE INDEX IF NOT EXISTS "idx_vector_indices_characterId" ON "vector_indices" ("characterId")`,
+    ],
+  },
+  // Vector entries (per-embedding rows with Float32 BLOB storage)
+  {
+    name: 'vector_entries',
+    sql: `CREATE TABLE IF NOT EXISTS "vector_entries" (
+      "id" TEXT PRIMARY KEY,
+      "characterId" TEXT NOT NULL,
+      "embedding" BLOB NOT NULL,
+      "createdAt" TEXT NOT NULL
+    )`,
+    indexes: [
+      `CREATE INDEX IF NOT EXISTS "idx_vector_entries_characterId" ON "vector_entries" ("characterId")`,
     ],
   },
   // Migrations state (tracks which migrations have been run)

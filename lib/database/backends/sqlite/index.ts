@@ -52,6 +52,8 @@ export {
   jsonArrayContains,
   jsonArrayContainsAny,
   jsonArrayLength,
+  embeddingToBlob,
+  blobToEmbedding,
 } from './json-columns';
 
 // Query translation

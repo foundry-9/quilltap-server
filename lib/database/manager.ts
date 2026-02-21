@@ -225,6 +225,17 @@ export async function ensureCollection(name: string, schema: z.ZodType): Promise
 }
 
 /**
+ * Register columns that should be stored/hydrated as Float32 BLOBs.
+ * Must be called before using getCollection for the table.
+ */
+export async function registerBlobColumns(tableName: string, columns: string[]): Promise<void> {
+  const backend = await getDatabaseAsync();
+  if (backend instanceof SQLiteBackend) {
+    backend.registerBlobColumns(tableName, columns);
+  }
+}
+
+/**
  * Get all collection names
  */
 export async function listCollections(): Promise<string[]> {

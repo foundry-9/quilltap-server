@@ -53,3 +53,35 @@ export const VectorIndexSchema = z.object({
 });
 
 export type VectorIndex = z.infer<typeof VectorIndexSchema>;
+
+// ============================================================================
+// NORMALIZED VECTOR STORAGE (v2 — BLOB-backed)
+// ============================================================================
+
+/**
+ * Per-character metadata row in `vector_indices` table (no entries column).
+ */
+export const VectorIndexMetaSchema = z.object({
+  id: UUIDSchema,
+  characterId: UUIDSchema,
+  version: z.number(),
+  dimensions: z.number(),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type VectorIndexMeta = z.infer<typeof VectorIndexMetaSchema>;
+
+/**
+ * Per-embedding row in `vector_entries` table.
+ * The embedding is stored as a Float32 BLOB in SQLite but
+ * hydrated as number[] at the application layer.
+ */
+export const VectorEntryRowSchema = z.object({
+  id: UUIDSchema,
+  characterId: UUIDSchema,
+  embedding: z.array(z.number()),
+  createdAt: TimestampSchema,
+});
+
+export type VectorEntryRow = z.infer<typeof VectorEntryRowSchema>;

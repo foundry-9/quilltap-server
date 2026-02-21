@@ -1,6 +1,6 @@
 {
   "name": "quilltap",
-  "version": "3.0.0-dev.61",
+  "version": "3.0.0-dev.62",
   "private": true,
   "main": "dist-electron/main.js",
   "author": {
@@ -36,6 +36,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "oneoff:cleanup-old-files-v1.6": "tsx scripts/cleanup-old-files.ts",
+    "oneoff:rebuild-vector-indices": "tsx scripts/rebuild-vector-indices.ts",
     "oneoff:theme-convert-v2.8": "tsx scripts/convert-theme-to-module.ts",
     "oneoff:theme-convert-v2.8:all": "tsx scripts/convert-theme-to-module.ts --all",
     "oneoff:theme-convert-v2.8:dry-run": "tsx scripts/convert-theme-to-module.ts --all --dry-run",

@@ -200,6 +200,26 @@ Array and object fields are stored as JSON strings in SQLite. The abstraction la
 - Parses JSON back to objects/arrays on read
 - Supports querying within JSON via `json_extract()`
 
+### BLOB Columns
+
+Certain columns (notably vector embeddings) are stored as compact Float32 BLOBs instead of JSON text. This provides ~4-5x storage reduction and eliminates JSON parse/serialize overhead.
+
+**Registration:** Repositories call `registerBlobColumns(tableName, columns)` via the database manager to declare which columns contain BLOB data:
+
+```ts
+await registerBlobColumns('vector_entries', ['embedding']);
+await registerBlobColumns('memories', ['embedding']);
+```
+
+**Behavior:**
+- On write: `number[]` values in registered blob columns are converted to `Float32Array` Buffers via `embeddingToBlob()`
+- On read: Buffers are converted back to `number[]` via `blobToEmbedding()`
+- Legacy JSON text is handled gracefully during migration transitions
+
+**Utilities** (in `json-columns.ts`):
+- `embeddingToBlob(embedding: number[]): Buffer` — Creates a Float32Array buffer from a number array
+- `blobToEmbedding(blob: Buffer): number[]` — Reads Float32Array from buffer back to number array
+
 ### WAL Mode
 
 SQLite runs in WAL (Write-Ahead Logging) mode by default, which provides:
