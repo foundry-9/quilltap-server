@@ -490,6 +490,15 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   // --- Toolbar setup ---
   const { setLeftContent, setRightContent } = usePageToolbar()
+
+  // Extract stable setter from modals to avoid unstable object reference in effect deps
+  const { setModalImage } = modals
+
+  // Create a stable key for character list to avoid re-running the effect on every render
+  // (useParticipants returns a new array reference each time)
+  const llmCharacters = participantsWithImpersonation.llmCharacters
+  const llmCharacterKey = llmCharacters.map(c => c.id).join(',')
+
   useEffect(() => {
     if (chat?.title) {
       const getCharacterAvatarUrl = (character: CharacterData): string | null => {
@@ -515,7 +524,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               <span className="qt-text-muted">/</span>
             </>
           )}
-          {participantsWithImpersonation.llmCharacters.map((character) => {
+          {llmCharacters.map((character) => {
             const avatarUrl = getCharacterAvatarUrl(character)
             return (
               <span key={character.id} className="contents">
@@ -545,7 +554,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           {storyBackgroundUrl && (
             <button
               type="button"
-              onClick={() => modals.setModalImage({
+              onClick={() => setModalImage({
                 src: storyBackgroundUrl,
                 filename: storyBackgroundFilename || 'story_background.png',
                 fileId: storyBackgroundFileId || undefined,
@@ -569,7 +578,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       setLeftContent(null)
     }
     return () => setLeftContent(null)
-  }, [chat?.projectId, chat?.projectName, chat?.title, participantsWithImpersonation.llmCharacters, setLeftContent, storyBackgroundUrl, storyBackgroundFileId, storyBackgroundFilename, modals])
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- llmCharacterKey is a stable string proxy for the llmCharacters array
+  }, [chat?.projectId, chat?.projectName, chat?.title, llmCharacterKey, setLeftContent, storyBackgroundUrl, storyBackgroundFileId, storyBackgroundFilename, setModalImage])
 
   // Set cost summary in toolbar right section
   useEffect(() => {
