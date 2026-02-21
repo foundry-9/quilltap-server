@@ -29,7 +29,7 @@ body {
       rgba(15, 23, 41, 0.85) 75%,
       rgba(15, 23, 41, 0.15) 100%
     ),
-    url('splash-bg.png') center / cover no-repeat #0f1729;
+    url('splash-bg.webp') center / cover no-repeat #0f1729;
   color: #e0e0e0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   display: flex;
@@ -443,11 +443,11 @@ body {
 }
 
 #runtimeDocker {
-  background-image: url('runtime-docker.png');
+  background-image: url('runtime-docker.webp');
 }
 
 #runtimeVM {
-  background-image: url('runtime-vm.png');
+  background-image: url('runtime-vm.webp');
 }
 
 .runtime-btn:hover:not(:disabled) {

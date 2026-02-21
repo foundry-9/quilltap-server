@@ -1,6 +1,6 @@
 {
   "name": "qtap-plugin-theme-art-deco",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Art Deco theme plugin for Quilltap - navy and gold geometric elegance",
   "main": "index.js",
   "types": "index.d.ts",

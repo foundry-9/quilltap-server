@@ -692,7 +692,7 @@
 [data-theme="great-estate"] body {
   position: relative;
   min-height: 100vh;
-  background-image: url('/api/themes/assets/qtap-plugin-theme-great-estate/textures/background.png');
+  background-image: url('/api/themes/assets/qtap-plugin-theme-great-estate/textures/background.webp');
   background-size: cover;
   background-position: center center;
   background-attachment: fixed;

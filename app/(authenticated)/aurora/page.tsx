@@ -211,7 +211,7 @@ export default function CharactersPage() {
   }
 
   return (
-    <div className="character-page qt-page-container text-foreground" style={{ '--story-background-url': 'url(/images/aurora.png)' } as React.CSSProperties}>
+    <div className="character-page qt-page-container text-foreground" style={{ '--story-background-url': 'url(/images/aurora.webp)' } as React.CSSProperties}>
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/60 pb-6">
         <h1 className="text-3xl font-semibold leading-tight">Characters</h1>
         <div className="flex flex-wrap gap-3">
