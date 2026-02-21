@@ -184,7 +184,7 @@ Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/
 - If asked to fix linting errors, do not change out HTML `<img>` tags for Next.js `<Image>` tags; there is a reason that we don't use them sometimes, usually related to their being pulled in via APIs so Next.js can't know what it's going to display.
 - Every time we change a plugin, let's go ahead and bump the release number (the last of the three numbers in semver) on its package.json, and manifest.json if required, and re-run `npm run build:plugins` before we add things to the commit.
 - Check for Typescript errors by running "npx tsc" rather than "npm run build"
-- When committing, record basic changes in `docs/CHANGELOG.md` in reverse chronological order
+- **Important:** Before committing, record basic changes in `docs/CHANGELOG.md` in reverse chronological order
 - Keep the documentation above up to date, and update this file if you add more documentation, in the same format.
 - Any change to data, particularly the schemas used to read or write data either to files or to the database, should be checked to see if they need to be reflected in exports, backups, and/or the migrations/ directory.
 - Any files that exist in the app source code only because they are necessary for migrations should move to the `migrations/` directory.

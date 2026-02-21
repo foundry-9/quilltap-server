@@ -868,6 +868,36 @@
   --qt-tab-font-size: 0.875rem;
   --qt-tab-font-weight: 500;
   --qt-tab-transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ================================================================
+     OVERLAY VARIABLES
+     ================================================================ */
+  --qt-overlay-bg: hsl(30 10% 5% / 0.9);
+  --qt-overlay-medium-bg: hsl(30 10% 5% / 0.6);
+  --qt-overlay-light-bg: hsl(30 8% 8% / 0.2);
+  --qt-overlay-caption-bg: hsl(30 10% 5% / 0.55);
+  --qt-overlay-btn-bg: hsl(28 85% 58% / 0.1);
+  --qt-overlay-btn-hover-bg: hsl(28 85% 58% / 0.22);
+  --qt-overlay-fg: hsl(35 25% 95%);
+  --qt-overlay-muted-fg: hsl(35 25% 95% / 0.7);
+
+  /* ================================================================
+     SPINNER VARIABLES
+     ================================================================ */
+  --qt-spinner-track: hsl(var(--accent-brand) / 0.2);
+  --qt-spinner-indicator: hsl(var(--accent-brand));
+
+  /* ================================================================
+     FAVORITE VARIABLES
+     ================================================================ */
+  --qt-favorite-color: hsl(var(--accent-brand));
+
+  /* ================================================================
+     WARNING BOX VARIABLES
+     ================================================================ */
+  --qt-warning-box-bg: hsl(var(--warning-900) / 0.15);
+  --qt-warning-box-border: hsl(var(--warning-100) / 0.3);
+  --qt-warning-box-fg: hsl(var(--warning-100));
 }
 
 /* ============================================================================
@@ -1003,6 +1033,13 @@
   --qt-response-status-sending-fg: hsl(199 89% 70%);
   --qt-response-status-streaming-fg: hsl(142 76% 65%);
   --qt-response-status-tool-fg: hsl(270 70% 70%);
+
+  /* Toggle knob - warm parchment on dark */
+  --qt-toggle-knob-bg: hsl(35 25% 95%);
+
+  /* Overlay - warm charcoal tints for dark mode */
+  --qt-overlay-bg: hsl(30 10% 5% / 0.9);
+  --qt-overlay-medium-bg: hsl(30 10% 5% / 0.6);
 }
 
 /* ============================================================================
@@ -1015,6 +1052,14 @@
 
   /* Slightly more visible highlight in light mode */
   --qt-highlight-bg: hsl(var(--accent-brand) / 0.15);
+
+  /* Toggle knob - dark warm on light */
+  --qt-toggle-knob-bg: hsl(30 10% 15%);
+
+  /* Overlay - warm brown tints for light mode */
+  --qt-overlay-bg: hsl(35 15% 10% / 0.85);
+  --qt-overlay-medium-bg: hsl(35 15% 10% / 0.55);
+  --qt-overlay-light-bg: hsl(35 12% 12% / 0.2);
 }
 
 /* ============================================================================
