@@ -408,6 +408,11 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
             });
           }
           result[key] = parsed === null ? undefined : parsed;
+        } else if (Buffer.isBuffer(value)) {
+          // BLOB value in a JSON column — this happens when a column was converted
+          // from JSON text to BLOB storage (e.g., embeddings) but blob columns weren't
+          // registered for this collection. Deserialize as Float32 embedding.
+          result[key] = blobToEmbedding(value);
         } else {
           result[key] = value;  // Already parsed (shouldn't happen, but handle gracefully)
         }

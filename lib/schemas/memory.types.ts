@@ -49,7 +49,16 @@ export const MemorySchema = z.object({
   keywords: z.array(z.string()).default([]),        // For text-based search
   tags: z.array(UUIDSchema).default([]),            // Derived from character/persona/chat tags
   importance: z.number().min(0).max(1).default(0.5), // 0-1 scale for prioritization
-  embedding: z.array(z.number()).nullable().optional(), // Vector embedding for semantic search
+  // Vector embedding for semantic search.
+  // Accepts both number[] and Buffer (Float32 BLOB from SQLite) — Buffers are
+  // transformed to number[] at validation time for transparent BLOB storage support.
+  embedding: z.union([
+    z.array(z.number()),
+    z.instanceof(Buffer).transform((buf): number[] => {
+      const f32 = new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / Float32Array.BYTES_PER_ELEMENT);
+      return Array.from(f32);
+    }),
+  ]).nullable().optional(),
   source: MemorySourceEnum.default('MANUAL'),       // How it was created
   sourceMessageId: UUIDSchema.nullable().optional(), // If auto-created, which message triggered it
   lastAccessedAt: TimestampSchema.nullable().optional(), // For housekeeping decisions
