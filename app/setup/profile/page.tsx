@@ -93,8 +93,8 @@ export default function ProfileSetupPage() {
         );
       }
 
-      // Full page load to re-initialize session provider and all client state
-      window.location.href = '/';
+      // Continue to provider setup wizard
+      window.location.href = '/setup/providers';
     } catch {
       setError('Something went wrong. Please try again.');
     } finally {
