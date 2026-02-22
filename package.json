@@ -1,6 +1,6 @@
 {
   "name": "quilltap",
-  "version": "3.0.0-dev.71",
+  "version": "3.0.0-dev.72",
   "private": true,
   "main": "dist-electron/main.js",
   "author": {
@@ -21,6 +21,7 @@
     "build:help": "tsx scripts/build-help-index.ts",
     "build:next": "npm run build:plugins && next build",
     "build:package": "tsx scripts/build-quilltap-package.ts",
+    "build:standalone": "tsx scripts/build-standalone-tarball.ts",
     "build:plugins": "tsx scripts/build-plugins.ts",
     "deploy:dev": "./cicd/deploy.sh",
     "dev": "next dev --webpack",

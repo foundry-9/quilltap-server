@@ -7,24 +7,27 @@ Run Quilltap as a local Node.js server with zero configuration.
 ## Quick Start
 
 ```bash
-npx quilltap
+npm install -g quilltap
+quilltap
 ```
 
 Then open [http://localhost:3000](http://localhost:3000).
 
+On first run, the CLI downloads the application files (~150-250 MB compressed) and caches them locally. Subsequent launches start instantly.
+
 ## Installation
+
+### Install globally (recommended)
+
+```bash
+npm install -g quilltap
+quilltap
+```
 
 ### Run directly (no install)
 
 ```bash
 npx quilltap
-```
-
-### Install globally
-
-```bash
-npm install -g quilltap
-quilltap
 ```
 
 ## Usage
@@ -37,6 +40,7 @@ Options:
   -d, --data-dir <path>   Data directory (default: platform-specific)
   -o, --open              Open browser after server starts
   -v, --version           Show version number
+  --update                Force re-download of application files
   -h, --help              Show this help message
 ```
 
@@ -44,17 +48,34 @@ Options:
 
 ```bash
 # Start on default port 3000
-npx quilltap
+quilltap
 
 # Start on a custom port
-npx quilltap --port 8080
+quilltap --port 8080
 
 # Use a custom data directory
-npx quilltap --data-dir /mnt/data/quilltap
+quilltap --data-dir /mnt/data/quilltap
 
 # Start and open browser automatically
-npx quilltap --open
+quilltap --open
+
+# Force re-download after a manual update
+quilltap --update
 ```
+
+## How It Works
+
+The `quilltap` npm package is a lightweight CLI launcher (~10 KB). On first run, it downloads the pre-built application from [GitHub Releases](https://github.com/foundry-9/quilltap/releases) and caches it in a platform-specific directory. Native modules (`better-sqlite3`, `sharp`) are compiled for your platform when you install the npm package.
+
+### Cache Locations
+
+| Platform | Cache Directory |
+| --- | --- |
+| macOS | `~/Library/Caches/Quilltap/standalone/` |
+| Linux | `~/.cache/quilltap/standalone/` |
+| Windows | `%LOCALAPPDATA%\Quilltap\standalone\` |
+
+When you upgrade to a new version (`npm update -g quilltap`), the next run detects the version mismatch and downloads the matching application files automatically.
 
 ## Data Directory
 

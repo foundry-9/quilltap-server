@@ -29,7 +29,7 @@
   },
   "files": [
     "bin/",
-    "standalone/",
+    "lib/",
     "README.md"
   ],
   "dependencies": {

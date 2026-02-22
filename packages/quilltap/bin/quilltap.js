@@ -4,10 +4,9 @@
 const { fork, exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const { getCacheDir, isCacheValid, ensureStandalone } = require('../lib/download-manager');
 
 const PACKAGE_DIR = path.resolve(__dirname, '..');
-const STANDALONE_DIR = path.join(PACKAGE_DIR, 'standalone');
-const SERVER_JS = path.join(STANDALONE_DIR, 'server.js');
 
 // Read version from package.json
 function getVersion() {
@@ -23,6 +22,7 @@ function parseArgs(argv) {
     open: false,
     help: false,
     version: false,
+    update: false,
   };
 
   const args = argv.slice(2);
@@ -48,6 +48,9 @@ function parseArgs(argv) {
       case '--version':
       case '-v':
         opts.version = true;
+        break;
+      case '--update':
+        opts.update = true;
         break;
       case '--help':
       case '-h':
@@ -75,6 +78,7 @@ Options:
   -d, --data-dir <path>   Data directory (default: platform-specific)
   -o, --open              Open browser after server starts
   -v, --version           Show version number
+  --update                Force re-download of application files
   -h, --help              Show this help message
 
 Data directory defaults:
@@ -83,10 +87,11 @@ Data directory defaults:
   Windows:  %APPDATA%\\Quilltap
 
 Examples:
-  npx quilltap                          # Start on port 3000
-  npx quilltap -p 8080                  # Start on port 8080
-  npx quilltap -d /mnt/data/quilltap    # Custom data directory
-  npx quilltap -o                       # Start and open browser
+  quilltap                              # Start on port 3000
+  quilltap -p 8080                      # Start on port 8080
+  quilltap -d /mnt/data/quilltap        # Custom data directory
+  quilltap -o                           # Start and open browser
+  quilltap --update                     # Re-download app files
 
 More info: https://quilltap.ai
 `);
@@ -110,90 +115,105 @@ function openBrowser(url) {
 }
 
 // Main
-const opts = parseArgs(process.argv);
+async function main() {
+  const opts = parseArgs(process.argv);
 
-if (opts.help) {
-  printHelp();
-  process.exit(0);
-}
-
-if (opts.version) {
-  console.log(getVersion());
-  process.exit(0);
-}
-
-// Verify standalone directory exists
-if (!fs.existsSync(SERVER_JS)) {
-  console.error('Error: standalone/server.js not found.');
-  console.error('The package may not have been built correctly.');
-  console.error('If you installed from npm, please report this issue at:');
-  console.error('  https://github.com/foundry-9/quilltap/issues');
-  process.exit(1);
-}
-
-// Set up environment
-const env = {
-  ...process.env,
-  NODE_ENV: 'production',
-  PORT: String(opts.port),
-  HOSTNAME: '0.0.0.0',
-};
-
-if (opts.dataDir) {
-  env.QUILLTAP_DATA_DIR = path.resolve(opts.dataDir);
-}
-
-// Set NODE_PATH so native modules resolve from the package's own node_modules
-// This is critical: standalone/node_modules has native modules stripped,
-// so Node must walk up to packages/quilltap/node_modules to find them
-const packageNodeModules = path.join(PACKAGE_DIR, 'node_modules');
-env.NODE_PATH = env.NODE_PATH
-  ? `${packageNodeModules}${path.delimiter}${env.NODE_PATH}`
-  : packageNodeModules;
-
-const version = getVersion();
-const url = `http://localhost:${opts.port}`;
-
-console.log('');
-console.log(`  Quilltap v${version}`);
-console.log('');
-console.log(`  URL:       ${url}`);
-if (opts.dataDir) {
-  console.log(`  Data dir:  ${env.QUILLTAP_DATA_DIR}`);
-}
-console.log('');
-console.log('  Starting server...');
-console.log('');
-
-// Fork the Next.js standalone server
-const child = fork(SERVER_JS, [], {
-  cwd: STANDALONE_DIR,
-  env,
-  stdio: 'inherit',
-});
-
-// Open browser once server is listening
-if (opts.open) {
-  // Give the server a moment to start
-  setTimeout(() => openBrowser(url), 2000);
-}
-
-// Forward signals for graceful shutdown
-function shutdown(signal) {
-  child.kill(signal);
-}
-
-process.on('SIGINT', () => shutdown('SIGINT'));
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-
-child.on('exit', (code, signal) => {
-  if (signal) {
+  if (opts.help) {
+    printHelp();
     process.exit(0);
   }
-  process.exit(code || 0);
-});
 
-child.on('error', (err) => {
-  console.error('Failed to start server:', err.message);
-  process.exit(1);
-});
+  const version = getVersion();
+
+  if (opts.version) {
+    console.log(version);
+    process.exit(0);
+  }
+
+  // Ensure standalone files are downloaded and cached
+  const cacheDir = getCacheDir();
+  let standaloneDir;
+
+  try {
+    standaloneDir = await ensureStandalone(version, cacheDir, { force: opts.update });
+  } catch (err) {
+    console.error('');
+    console.error(err.message);
+    process.exit(1);
+  }
+
+  const serverJs = path.join(standaloneDir, 'server.js');
+
+  if (!fs.existsSync(serverJs)) {
+    console.error('Error: server.js not found in cached standalone directory.');
+    console.error('Try running "quilltap --update" to re-download.');
+    process.exit(1);
+  }
+
+  // Set up environment
+  const env = {
+    ...process.env,
+    NODE_ENV: 'production',
+    PORT: String(opts.port),
+    HOSTNAME: '0.0.0.0',
+  };
+
+  if (opts.dataDir) {
+    env.QUILLTAP_DATA_DIR = path.resolve(opts.dataDir);
+  }
+
+  // Set NODE_PATH so native modules resolve from the npm package's own node_modules.
+  // The standalone output has native modules stripped — better-sqlite3 and sharp
+  // are installed as real npm dependencies so they compile for the user's platform.
+  const packageNodeModules = path.join(PACKAGE_DIR, 'node_modules');
+  env.NODE_PATH = env.NODE_PATH
+    ? `${packageNodeModules}${path.delimiter}${env.NODE_PATH}`
+    : packageNodeModules;
+
+  const url = `http://localhost:${opts.port}`;
+
+  console.log('');
+  console.log(`  Quilltap v${version}`);
+  console.log('');
+  console.log(`  URL:       ${url}`);
+  if (opts.dataDir) {
+    console.log(`  Data dir:  ${env.QUILLTAP_DATA_DIR}`);
+  }
+  console.log('');
+  console.log('  Starting server...');
+  console.log('');
+
+  // Fork the Next.js standalone server
+  const child = fork(serverJs, [], {
+    cwd: standaloneDir,
+    env,
+    stdio: 'inherit',
+  });
+
+  // Open browser once server is listening
+  if (opts.open) {
+    setTimeout(() => openBrowser(url), 2000);
+  }
+
+  // Forward signals for graceful shutdown
+  function shutdown(signal) {
+    child.kill(signal);
+  }
+
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+
+  child.on('exit', (code, signal) => {
+    if (signal) {
+      process.exit(0);
+    }
+    process.exit(code || 0);
+  });
+
+  child.on('error', (err) => {
+    console.error('Failed to start server:', err.message);
+    process.exit(1);
+  });
+}
+
+main();
