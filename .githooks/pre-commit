@@ -293,6 +293,11 @@ fi
 
 sed "${SED_INPLACE[@]}" -E "s/\"version\": \"[^\"]+\"/\"version\": \"$NEW_VERSION\"/" package.json
 
+# Sync version to the quilltap npm package (thin CLI launcher)
+if [ -f packages/quilltap/package.json ]; then
+  sed "${SED_INPLACE[@]}" -E "s/\"version\": \"[^\"]+\"/\"version\": \"$NEW_VERSION\"/" packages/quilltap/package.json
+fi
+
 if [ -f README.md ]; then
   BADGE_VERSION=$(echo "$NEW_VERSION" | sed 's/-/--/g')
   sed "${SED_INPLACE[@]}" -E "s|badge/version-[^]]+\.svg|badge/version-$BADGE_VERSION-$BADGE_COLOR.svg|" README.md
@@ -319,6 +324,9 @@ if [ -f package-lock.json ]; then
 fi
 if [ -f README.md ]; then
   git add README.md
+fi
+if [ -f packages/quilltap/package.json ]; then
+  git add packages/quilltap/package.json
 fi
 
 log_step "🎉 Step 12/12: All validations completed successfully!"

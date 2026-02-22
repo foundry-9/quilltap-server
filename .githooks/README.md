@@ -12,8 +12,8 @@ Runs quality checks (linting and testing) and automatically bumps the patch vers
 
 1. **Runs ESLint** - Ensures code quality standards are met
 2. **Runs tests** - Ensures all tests pass (uses `--passWithNoTests` flag)
-3. **Bumps version** - Increments the patch version (e.g., 0.1.0 → 0.1.1)
-4. **Stages changes** - Adds the updated package.json and package-lock.json to the commit
+3. **Bumps version** - Increments the patch version (e.g., 0.1.0 → 0.1.1) and syncs the full version (including prerelease tags) to `packages/quilltap/package.json`
+4. **Stages changes** - Adds the updated package.json, package-lock.json, and packages/quilltap/package.json to the commit
 
 **If any step fails, the commit is aborted** to maintain code quality.
 
