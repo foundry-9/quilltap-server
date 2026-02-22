@@ -90,6 +90,8 @@ export const TimestampConfigSchema = z.object({
   fictionalBaseRealTime: z.string().nullable().optional(),
   /** Whether to auto-prepend "Current time: [timestamp]" or use {{timestamp}} template variable */
   autoPrepend: z.boolean().default(true),
+  /** IANA timezone name override for this chat (e.g., "America/New_York") */
+  timezone: z.string().nullable().optional(),
 });
 
 export type TimestampConfig = z.infer<typeof TimestampConfigSchema>;
@@ -291,6 +293,8 @@ export const ChatSettingsSchema = z.object({
     displayMode: 'SHOW',
     showWarningBadges: true,
   }),
+  /** Default IANA timezone for timestamp formatting (e.g., "America/New_York"). Falls back to QUILLTAP_TIMEZONE env var or system default. */
+  timezone: z.string().nullable().optional(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });

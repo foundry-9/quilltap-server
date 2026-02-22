@@ -109,6 +109,12 @@ Only needed when exposing Quilltap on a custom domain. For local use, everything
 | `S3_SECRET_KEY` | S3 secret key | - |
 | `S3_BUCKET` | S3 bucket name | `quilltap-files` |
 
+### Timezone
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `QUILLTAP_TIMEZONE` | IANA timezone name (e.g., `America/New_York`, `Europe/London`, `Asia/Tokyo`) for timestamp injection. Auto-detected in Electron app. | System default (usually UTC in Docker) |
+
 ### Logging
 
 | Variable | Description | Default |

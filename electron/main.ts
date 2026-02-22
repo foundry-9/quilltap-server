@@ -29,6 +29,10 @@ import { runCrashGuard, markStartupSuccess, isInSafeMode } from './crash-guard';
 
 const isDev = !!process.env.ELECTRON_DEV;
 
+/** Detect the host OS timezone to pass through to the backend */
+const hostTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+console.log('[Main] Detected host timezone:', hostTimezone);
+
 // Run crash guard before app is ready — tracks consecutive crashes and enters
 // safe mode after 3 consecutive failures (clears caches, resets settings)
 runCrashGuard();

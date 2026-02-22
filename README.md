@@ -7,7 +7,7 @@ Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, 
 No subscriptions. No data harvested. No forgetting everything between sessions. No landlords.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-3.0.0--dev.74-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-3.0.0--dev.75-yellow.svg)](package.json)
 
 <p align="center">
   <img src="https://quilltap.ai/images/welcome-to-quilltap-2-8.png" alt="Welcome to Quilltap" />
@@ -111,9 +111,12 @@ Or run directly:
 docker run -d \
   --name quilltap \
   -p 3000:3000 \
+  -e QUILLTAP_TIMEZONE=America/New_York \
   -v /path/to/your/data:/app/quilltap \
   csebold/quilltap
 ```
+
+> **Timezone tip:** Set `QUILLTAP_TIMEZONE` to your IANA timezone (e.g., `America/New_York`, `Europe/London`, `Asia/Tokyo`) so timestamp injection in chats shows your local time instead of UTC. The Electron desktop app detects this automatically.
 
 Open [http://localhost:3000](http://localhost:3000) and you're in business. The setup wizard will guide you through first-time configuration.
 

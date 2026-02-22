@@ -22,6 +22,11 @@ else
 fi
 export QUILLTAP_DATA_DIR
 
+# If host timezone was passed, set the TZ env var so Node.js uses it
+if [ -n "${QUILLTAP_TIMEZONE:-}" ]; then
+  export TZ="$QUILLTAP_TIMEZONE"
+fi
+
 mkdir -p "$QUILLTAP_DATA_DIR/data" \
          "$QUILLTAP_DATA_DIR/files" \
          "$QUILLTAP_DATA_DIR/logs" \

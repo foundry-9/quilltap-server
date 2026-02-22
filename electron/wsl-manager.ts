@@ -234,8 +234,24 @@ export class WSLManager implements IVMManager {
     // the data dir path are passed through verbatim to the env command.
     const wslArgs = ['-d', WSL_DISTRO_NAME, '--exec'];
 
+    // Build environment variables to pass into WSL2
+    const envVars: string[] = [];
     if (this.dataDir) {
-      wslArgs.push('env', `QUILLTAP_WIN_DATADIR=${this.dataDir}`);
+      envVars.push(`QUILLTAP_WIN_DATADIR=${this.dataDir}`);
+    }
+
+    // Pass host timezone to WSL2 backend
+    try {
+      const hostTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (hostTimezone) {
+        envVars.push(`QUILLTAP_TIMEZONE=${hostTimezone}`);
+      }
+    } catch {
+      // Intl not available — backend will use system default
+    }
+
+    if (envVars.length > 0) {
+      wslArgs.push('env', ...envVars);
     }
 
     wslArgs.push('/usr/local/bin/wsl-init.sh');

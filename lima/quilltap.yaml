@@ -65,6 +65,7 @@ provision:
       export PORT=3000
       export HOSTNAME=0.0.0.0
       export NODE_OPTIONS="--max-old-space-size=2048"
+      export QUILLTAP_TIMEZONE=""
       ENVEOF
       chmod 644 /etc/profile.d/quilltap.sh
 
@@ -122,6 +123,7 @@ provision:
       export PORT=3000
       export HOSTNAME=0.0.0.0
       export NODE_OPTIONS="--max-old-space-size=2048"
+      export QUILLTAP_TIMEZONE=""
 
       depend() {
         need net

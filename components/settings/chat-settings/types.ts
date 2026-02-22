@@ -43,6 +43,7 @@ export interface TimestampConfig {
   fictionalBaseTimestamp?: string | null
   fictionalBaseRealTime?: string | null
   autoPrepend: boolean
+  timezone?: string | null
 }
 
 export interface MemoryCascadePreferences {
@@ -79,6 +80,8 @@ export interface ChatSettings {
   storyBackgroundsSettings?: StoryBackgroundsSettings
   /** Dangerous content handling settings */
   dangerousContentSettings?: DangerousContentSettings
+  /** Default IANA timezone for timestamp formatting */
+  timezone?: string | null
   createdAt: string
   updatedAt: string
 }

@@ -6991,6 +6991,11 @@ var envSchema = import_zod.z.object({
   // Production SSL (optional)
   DOMAIN: import_zod.z.string().optional(),
   SSL_EMAIL: import_zod.z.string().email().optional(),
+  // Timezone Configuration
+  // IANA timezone name from the host OS (e.g., "America/New_York")
+  // Detected automatically by Electron and passed to Lima/WSL2/Docker
+  // Docker users can set this manually: -e QUILLTAP_TIMEZONE=America/New_York
+  QUILLTAP_TIMEZONE: import_zod.z.string().optional(),
   // File Storage Configuration
   // Base directory for all Quilltap data (database, files, logs)
   // Platform defaults: Linux: ~/.quilltap, macOS: ~/Library/Application Support/Quilltap, Windows: %APPDATA%\Quilltap

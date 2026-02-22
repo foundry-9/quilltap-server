@@ -286,6 +286,44 @@ Controls automatic behavior during chat interactions.
 - "Spin the bottle to see who goes next" → Randomly selects a participant
 - Character: *"I roll a d20"* → Executes d20 roll after the response
 
+### Timestamp Injection & Timezone
+
+Controls whether Quilltap injects the current date and time into the system prompt sent to the LLM, so the character knows what time it is — rather like winding a pocket watch before a conversation.
+
+**Timestamp Mode:**
+
+- **Disabled** — No timestamp is injected
+- **Conversation Start** — Include the time only in the initial system prompt
+- **Every Message** — Update the timestamp with each message sent
+
+**Timestamp Format:**
+
+- **Friendly** — Human-readable (e.g., "February 22, 2026 at 2:30 PM")
+- **ISO 8601** — Machine-readable with timezone offset (e.g., "2026-02-22T14:30:00-05:00")
+- **Date Only** — Just the date, no time
+- **Time Only** — Just the time, no date
+- **Custom** — Use your own format string with date-fns tokens
+
+**Timezone:**
+
+By default, Quilltap shows timestamps in the server's timezone — which, if you're running in Docker, Lima, or WSL2, is quite likely to be UTC. This is rather like a clock permanently set to Greenwich Mean Time while you're sipping cocktails in New York.
+
+To remedy this situation:
+
+1. **Automatic detection (Electron app):** The desktop app detects your operating system's timezone and passes it through to the server automatically. No action required on your part.
+2. **Per-chat override:** In the timestamp configuration for any chat, set a specific timezone from the searchable list.
+3. **Salon-level default:** In Chat Settings, set a default timezone that applies to all timestamp formatting.
+4. **Docker users:** Set the `QUILLTAP_TIMEZONE` environment variable when starting the container:
+   ```
+   docker run -e QUILLTAP_TIMEZONE=America/New_York ...
+   ```
+
+The timezone resolution follows a courteous chain of precedence: per-chat setting wins, then the Salon default, then the `QUILLTAP_TIMEZONE` environment variable, and finally the server's system timezone.
+
+**Fictional Time:**
+
+For those engaged in period dramas or interstellar adventures, toggle "Use fictional time" to inject a made-up timestamp that advances in real time from a base you specify. The timezone setting still applies to how the fictional time is formatted.
+
 ## Saving Chat Settings
 
 Most settings save automatically as you make changes. You'll see:

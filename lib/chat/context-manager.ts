@@ -224,6 +224,8 @@ export interface BuildContextOptions {
   timestampConfig?: TimestampConfig | null
   /** Whether this is the first user message in the conversation */
   isInitialMessage?: boolean
+  /** Resolved IANA timezone name for timestamp formatting */
+  timezone?: string
 
   // ============================================================================
   // Project Context
@@ -347,7 +349,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     selectedSystemPromptId,
     options.timestampConfig,
     options.isInitialMessage,
-    projectContext
+    projectContext,
+    options.timezone
   )
   const systemPromptTokens = estimateTokens(systemPrompt, provider)
 

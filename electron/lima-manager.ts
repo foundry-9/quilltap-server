@@ -306,6 +306,13 @@ export class LimaManager implements IVMManager {
       `QUILLTAP_HOST_DATA_DIR="${this.dataDir}"`
     );
 
+    // Replace QUILLTAP_TIMEZONE placeholder with the detected host timezone
+    const hostTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    modified = modified.replace(
+      /QUILLTAP_TIMEZONE="[^"]*"/g,
+      `QUILLTAP_TIMEZONE="${hostTimezone}"`
+    );
+
     // Write to a temp file in LIMA_HOME
     fs.mkdirSync(LIMA_HOME, { recursive: true });
     const tempPath = path.join(LIMA_HOME, `${this.vmName}-generated.yaml`);
