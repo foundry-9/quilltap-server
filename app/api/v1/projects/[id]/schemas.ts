@@ -42,11 +42,6 @@ export const removeFileSchema = z.object({
   fileId: z.uuid(),
 });
 
-export const setMountPointSchema = z.object({
-  mountPointId: z.uuid(),
-  migrateFiles: z.boolean().optional().default(false),
-});
-
 export const updateToolSettingsSchema = z.object({
   defaultDisabledTools: z.array(z.string()),
   defaultDisabledToolGroups: z.array(z.string()),

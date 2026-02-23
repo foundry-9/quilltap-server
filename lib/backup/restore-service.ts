@@ -807,13 +807,17 @@ export async function restore(
             folderPath: file.folderPath || '/',
           });
 
-          // Create file metadata with storage key and mount point ID
-          const { userId, createdAt, updatedAt, s3Key, s3Bucket, storageKey, mountPointId, ...fileData } = file;
+          // Create file metadata with storage key
+          // Strip auto-generated and legacy fields from backup data
+          const { userId, createdAt, updatedAt, storageKey, ...fileData } = file as typeof file & Record<string, unknown>;
+          // Remove legacy fields that may exist in older backups
+          delete (fileData as Record<string, unknown>).s3Key;
+          delete (fileData as Record<string, unknown>).s3Bucket;
+          delete (fileData as Record<string, unknown>).mountPointId;
           await repos.files.create(
             {
               ...fileData,
               storageKey: uploadResult.storageKey,
-              mountPointId: uploadResult.mountPointId,
             },
             { id: file.id }
           );

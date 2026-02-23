@@ -23,7 +23,6 @@ import {
   generateThumbnail,
   cleanupThumbnails,
 } from '@/lib/files/thumbnail-utils';
-import { scanForStaleRecords } from '@/lib/file-storage/orphan-recovery';
 
 const writeFileSchema = z.object({
   filename: z.string().min(1).max(255),
@@ -166,7 +165,7 @@ async function handleWriteFile(request: NextRequest, user: any, repos: any): Pro
 
     // Sanitize filename (prevent path traversal)
     const sanitizedFilename = filename.replace(/[/\\:*?"<>|]/g, '_');// Upload to file storage
-    const { storageKey, mountPointId } = await fileStorageManager.uploadFile({
+    const { storageKey } = await fileStorageManager.uploadFile({
       userId: user.id,
       fileId,
       filename: sanitizedFilename,
@@ -185,7 +184,6 @@ async function handleWriteFile(request: NextRequest, user: any, repos: any): Pro
       source: 'UPLOADED',
       category: 'FILE',
       storageKey,
-      mountPointId,
       projectId: targetProjectId,
       folderPath,
       linkedTo: [],
@@ -292,7 +290,7 @@ async function handleUploadFile(request: NextRequest, user: any, repos: any): Pr
     }
 
     // Upload to file storage
-    const { storageKey, mountPointId } = await fileStorageManager.uploadFile({
+    const { storageKey } = await fileStorageManager.uploadFile({
       userId: user.id,
       fileId,
       filename: sanitizedFilename,
@@ -316,7 +314,6 @@ async function handleUploadFile(request: NextRequest, user: any, repos: any): Pr
       source: 'UPLOADED',
       category: 'DOCUMENT',
       storageKey,
-      mountPointId,
       projectId: projectId || null,
       folderPath,
       linkedTo,
@@ -487,21 +484,33 @@ async function handleCleanupOrphaned(
     // Get all files for this user
     const allFiles = await repos.files.findByUserId(user.id);
 
-    // Scan for stale records
-    const scanResult = await scanForStaleRecords(allFiles);
+    // Scan for stale records (DB records with no backing file on disk)
+    const staleRecords: Array<{ id: string; originalFilename: string }> = [];
+    const errors: string[] = [];
+
+    for (const file of allFiles) {
+      try {
+        if (file.storageKey) {
+          const exists = await fileStorageManager.fileExists(file.storageKey);
+          if (!exists) {
+            staleRecords.push({ id: file.id, originalFilename: file.originalFilename });
+          }
+        }
+      } catch (error) {
+        errors.push(`Error checking file ${file.id}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
 
     let deleted = 0;
 
-    if (!dryRun && scanResult.staleRecords.length > 0) {
-      for (const stale of scanResult.staleRecords) {
+    if (!dryRun && staleRecords.length > 0) {
+      for (const stale of staleRecords) {
         try {
-          // Find the full entry for thumbnail cleanup
-          const entry = allFiles.find((f: any) => f.id === stale.id);
+          const entry = allFiles.find((f: { id: string }) => f.id === stale.id);
           if (entry && canGenerateThumbnail(entry.mimeType)) {
             await cleanupThumbnails(entry);
           }
 
-          // Delete the DB record
           await repos.files.delete(stale.id);
           deleted++;
 
@@ -518,22 +527,22 @@ async function handleCleanupOrphaned(
 
       logger.info('[Files v1] Cleanup orphaned records complete', {
         userId: user.id,
-        total: scanResult.totalRecords,
-        stale: scanResult.staleRecords.length,
+        total: allFiles.length,
+        stale: staleRecords.length,
         deleted,
       });
     }
 
     return successResponse({
-      total: scanResult.totalRecords,
-      stale: scanResult.staleRecords.length,
+      total: allFiles.length,
+      stale: staleRecords.length,
       deleted,
       dryRun,
-      staleFiles: scanResult.staleRecords.map((r) => ({
+      staleFiles: staleRecords.map((r: { id: string; originalFilename: string }) => ({
         id: r.id,
         filename: r.originalFilename,
       })),
-      errors: scanResult.errors.length > 0 ? scanResult.errors : undefined,
+      errors: errors.length > 0 ? errors : undefined,
     });
   } catch (error) {
     logger.error('[Files v1] Error cleaning up orphaned records', {

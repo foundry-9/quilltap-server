@@ -5,7 +5,6 @@
  * DELETE /api/v1/projects/[id]?action=remove-character - Remove character from roster
  * DELETE /api/v1/projects/[id]?action=remove-chat - Remove chat from project
  * DELETE /api/v1/projects/[id]?action=remove-file - Remove file from project
- * DELETE /api/v1/projects/[id]?action=clear-mount-point - Clear project mount point
  * DELETE /api/v1/projects/[id]?action=reset-state - Reset project state to empty
  */
 
@@ -16,7 +15,6 @@ import {
   handleRemoveCharacter,
   handleRemoveChat,
   handleRemoveFile,
-  handleClearMountPoint,
   handleResetState,
 } from '../actions';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
@@ -38,8 +36,6 @@ export async function handleDelete(
       return handleRemoveChat(req, projectId, ctx);
     case 'remove-file':
       return handleRemoveFile(req, projectId, ctx);
-    case 'clear-mount-point':
-      return handleClearMountPoint(projectId, ctx);
     case 'reset-state':
       return handleResetState(projectId, ctx);
     default:

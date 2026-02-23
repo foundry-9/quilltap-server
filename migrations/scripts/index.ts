@@ -87,6 +87,8 @@ import { addChatMessageMissingColumnsMigration } from './add-chat-message-missin
 import { normalizeVectorStorageMigration } from './normalize-vector-storage';
 // Add allowToolUse field to connection profiles
 import { addProfileAllowToolUseFieldMigration } from './add-profile-allow-tool-use-field';
+// Drop mount points system (S3 + mount point abstraction removed)
+import { dropMountPointsMigration } from './drop-mount-points';
 
 /**
  * All available migrations.
@@ -169,6 +171,8 @@ export const migrations: Migration[] = [
   normalizeVectorStorageMigration,
   // Add allowToolUse field to connection profiles
   addProfileAllowToolUseFieldMigration,
+  // Drop mount points system (S3 + mount point abstraction removed)
+  dropMountPointsMigration,
 ];
 
 export {
@@ -246,4 +250,6 @@ export {
   normalizeVectorStorageMigration,
   // Add allowToolUse field to connection profiles
   addProfileAllowToolUseFieldMigration,
+  // Drop mount points system (S3 + mount point abstraction removed)
+  dropMountPointsMigration,
 };

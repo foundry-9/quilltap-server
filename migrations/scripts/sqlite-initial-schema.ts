@@ -311,10 +311,7 @@ export const SQLITE_TABLES = [
       "tags" TEXT DEFAULT '[]',
       "projectId" TEXT,
       "folderPath" TEXT,
-      "mountPointId" TEXT,
       "storageKey" TEXT,
-      "s3Key" TEXT,
-      "s3Bucket" TEXT,
       "createdAt" TEXT NOT NULL,
       "updatedAt" TEXT NOT NULL
     )`,
@@ -334,7 +331,6 @@ export const SQLITE_TABLES = [
       "name" TEXT NOT NULL,
       "parentFolderId" TEXT,
       "projectId" TEXT,
-      "mountPointId" TEXT,
       "createdAt" TEXT NOT NULL,
       "updatedAt" TEXT NOT NULL
     )`,
@@ -510,36 +506,11 @@ export const SQLITE_TABLES = [
       "characterRoster" TEXT DEFAULT '[]',
       "color" TEXT,
       "icon" TEXT,
-      "mountPointId" TEXT,
       "createdAt" TEXT NOT NULL,
       "updatedAt" TEXT NOT NULL
     )`,
     indexes: [
       `CREATE INDEX IF NOT EXISTS "idx_projects_userId" ON "projects" ("userId")`,
-    ],
-  },
-  // Mount points (storage backends)
-  {
-    name: 'mount_points',
-    sql: `CREATE TABLE IF NOT EXISTS "mount_points" (
-      "id" TEXT PRIMARY KEY,
-      "name" TEXT NOT NULL,
-      "description" TEXT,
-      "backendType" TEXT NOT NULL,
-      "backendConfig" TEXT NOT NULL,
-      "encryptedSecrets" TEXT,
-      "scope" TEXT NOT NULL,
-      "userId" TEXT,
-      "isDefault" INTEGER DEFAULT 0,
-      "enabled" INTEGER DEFAULT 1,
-      "healthStatus" TEXT DEFAULT 'unknown',
-      "lastHealthCheck" TEXT,
-      "createdAt" TEXT NOT NULL,
-      "updatedAt" TEXT NOT NULL
-    )`,
-    indexes: [
-      `CREATE INDEX IF NOT EXISTS "idx_mount_points_userId" ON "mount_points" ("userId")`,
-      `CREATE INDEX IF NOT EXISTS "idx_mount_points_scope" ON "mount_points" ("scope")`,
     ],
   },
   // File permissions (LLM write permissions)

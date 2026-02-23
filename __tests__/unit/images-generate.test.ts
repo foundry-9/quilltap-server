@@ -89,7 +89,7 @@ describe('POST /api/v1/images?action=generate', () => {
     mockRepos.files = mockImagesRepo as any
 
     // Setup file storage and tag inheritance mocks (base mocks are in jest.setup.ts, but reset here)
-    mockFileStorageManager.uploadFile.mockResolvedValue({ storageKey: 'mock-storage-key', mountPointId: 'mock-mount-point' })
+    mockFileStorageManager.uploadFile.mockResolvedValue({ storageKey: 'mock-storage-key' })
     mockGetInheritedTags.mockResolvedValue([])
   })
 
@@ -238,7 +238,7 @@ describe('POST /api/v1/images?action=generate', () => {
       createdAt: new Date(),
       updatedAt: new Date(),
       tags: [],
-      s3Key: 'users/test-user-id/images/test-image-id/test.png',
+      storageKey: 'users/test-user-id/images/test-image-id/test.png',
     } as any)
 
     const request = createMockRequest({
@@ -332,7 +332,7 @@ describe('POST /api/v1/images?action=generate', () => {
       createdAt: new Date(),
       updatedAt: new Date(),
       tags: ['inherited-tag-1'],
-      s3Key: 'users/test-user-id/images/test-image-id/test.png',
+      storageKey: 'users/test-user-id/images/test-image-id/test.png',
     } as any)
 
     // Mock inherited tags from the character
@@ -420,7 +420,7 @@ describe('POST /api/v1/images?action=generate', () => {
       createdAt: new Date(),
       updatedAt: new Date(),
       tags: [],
-      s3Key: 'users/test-user-id/images/test-image-id/test.png',
+      storageKey: 'users/test-user-id/images/test-image-id/test.png',
     } as any)
 
     const request = createMockRequest({

@@ -32,22 +32,6 @@ describe('File Path Utilities', () => {
       expect(path).toBe('/api/v1/files/file-1');
     });
 
-    it('should return API route for file with s3Key', () => {
-      const file: FileEntry = {
-        id: 'file-2',
-        originalFilename: 'document.pdf',
-        mimeType: 'application/pdf',
-        size: 2048,
-        s3Key: 'uploads/document.pdf',
-        userId: 'user-1',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      const path = getFilePath(file);
-      expect(path).toBe('/api/v1/files/file-2');
-    });
-
     it('should return API route for legacy file without storageKey', () => {
       const file: FileEntry = {
         id: 'file-3',
@@ -93,22 +77,6 @@ describe('File Path Utilities', () => {
       expect(path).toBe('/api/v1/files/file-5');
     });
 
-    it('should prefer storageKey over s3Key when both present', () => {
-      const file: FileEntry = {
-        id: 'file-6',
-        originalFilename: 'test.txt',
-        mimeType: 'text/plain',
-        size: 128,
-        storageKey: 'new-storage',
-        s3Key: 'old-s3-key',
-        userId: 'user-1',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      const path = getFilePath(file);
-      expect(path).toBe('/api/v1/files/file-6');
-    });
   });
 
   describe('getAvatarPath', () => {

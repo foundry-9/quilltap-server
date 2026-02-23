@@ -6999,46 +6999,14 @@ var envSchema = import_zod.z.object({
   // File Storage Configuration
   // Base directory for all Quilltap data (database, files, logs)
   // Platform defaults: Linux: ~/.quilltap, macOS: ~/Library/Application Support/Quilltap, Windows: %APPDATA%\Quilltap
-  QUILLTAP_DATA_DIR: import_zod.z.string().optional(),
-  // Path for local filesystem storage (built-in backend)
-  QUILLTAP_FILE_STORAGE_PATH: import_zod.z.string().optional().default("./data/files"),
-  // Encryption key for mount point secrets (auto-generated if not set, falls back to ENCRYPTION_MASTER_PEPPER)
-  QUILLTAP_ENCRYPTION_KEY: import_zod.z.string().min(32).optional(),
-  // S3 Configuration (optional - S3 is now a plugin, local filesystem is the default)
-  // These env vars are used to auto-create an S3 mount point during migration
-  S3_MODE: import_zod.z.enum(["embedded", "external", "disabled"]).optional().default("disabled"),
-  S3_ENDPOINT: import_zod.z.string().url().optional(),
-  S3_REGION: import_zod.z.string().optional().default("us-east-1"),
-  S3_ACCESS_KEY: import_zod.z.string().optional(),
-  S3_SECRET_KEY: import_zod.z.string().optional(),
-  S3_BUCKET: import_zod.z.string().optional().default("quilltap-files"),
-  S3_PATH_PREFIX: import_zod.z.string().optional(),
-  S3_PUBLIC_URL: import_zod.z.string().url().optional(),
-  S3_FORCE_PATH_STYLE: import_zod.z.enum(["true", "false"]).optional()
-}).refine(
-  (data) => {
-    if (data.S3_MODE === "external") {
-      if (data.S3_ACCESS_KEY && !data.S3_SECRET_KEY || !data.S3_ACCESS_KEY && data.S3_SECRET_KEY) {
-        return false;
-      }
-    }
-    return true;
-  },
-  {
-    path: ["S3_MODE"],
-    error: "S3_ACCESS_KEY and S3_SECRET_KEY must both be provided, or both omitted (for IAM role auth)"
-  }
-);
+  QUILLTAP_DATA_DIR: import_zod.z.string().optional()
+});
 var isBuildPhase = process.env.SKIP_ENV_VALIDATION === "true" || process.env.NEXT_PHASE === "phase-production-build" || process.env.NEXT_RUNTIME === void 0 && process.argv.some((arg) => arg.includes("next") && process.argv.includes("build"));
 function validateEnv() {
   if (isBuildPhase) {
     return {
       NODE_ENV: process.env.NODE_ENV || "production",
       BASE_URL: process.env.BASE_URL || "http://localhost:3000",
-      QUILLTAP_FILE_STORAGE_PATH: "./data/files",
-      S3_MODE: "disabled",
-      S3_REGION: "us-east-1",
-      S3_BUCKET: "quilltap-files",
       LOG_LEVEL: "info",
       LOG_OUTPUT: "console",
       LOG_FILE_PATH: "./logs"
@@ -7068,29 +7036,8 @@ var env = validateEnv();
 var isProduction = env.NODE_ENV === "production";
 var isDevelopment = env.NODE_ENV === "development";
 var isTest = env.NODE_ENV === "test";
-function isLocalHostname(hostname) {
-  const lowerHostname = hostname.toLowerCase();
-  return lowerHostname === "localhost" || lowerHostname === "127.0.0.1";
-}
-function extractHostname(urlString) {
-  if (!urlString) return null;
-  try {
-    const url2 = new URL(urlString);
-    return url2.hostname;
-  } catch {
-    return null;
-  }
-}
 function checkIsUserManaged() {
-  const s3Mode = env.S3_MODE;
-  if (s3Mode === "embedded") {
-    return true;
-  }
-  const s3Hostname = extractHostname(env.S3_ENDPOINT);
-  if (s3Hostname && isLocalHostname(s3Hostname)) {
-    return true;
-  }
-  return false;
+  return true;
 }
 var isUserManaged = checkIsUserManaged();
 

@@ -405,10 +405,7 @@ export function createMockFileEntry(overrides: Partial<FileEntry> = {}): FileEnt
     generationRevisedPrompt: null,
     description: null,
     tags: [],
-    s3Key: storageKey,  // Keep for backward compatibility
-    s3Bucket: 'quilltap-files',  // Keep for backward compatibility
-    storageKey,  // New field for file storage manager
-    mountPointId: 'mock-mount-point',  // Default mount point
+    storageKey,
     createdAt: now,
     updatedAt: now,
     ...overrides,

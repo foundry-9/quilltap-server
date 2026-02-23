@@ -467,7 +467,6 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
         name: 'story-backgrounds',
         parentFolderId: null,
         projectId: folderProjectId,
-        mountPointId: uploadResult.mountPointId,
       });
 
     }
@@ -493,7 +492,6 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       description: `Story background for: ${payload.sceneContext || chat.title}`,
       tags: [],
       storageKey: uploadResult.storageKey,
-      mountPointId: uploadResult.mountPointId,
       projectId: folderProjectId,
       folderPath: '/story-backgrounds/',
     }, { id: fileId });

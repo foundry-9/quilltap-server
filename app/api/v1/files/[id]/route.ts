@@ -26,8 +26,6 @@ import { getFileAssociations } from '@/lib/files/get-file-associations';
 import { getUserRepositories } from '@/lib/repositories/factory';
 import { z } from 'zod';
 import { successResponse, notFound, badRequest, serverError, forbidden, validationError } from '@/lib/api/responses';
-import fs from 'fs';
-import path from 'path';
 
 const moveFileSchema = z.object({
   folderPath: z.string().optional(),
@@ -68,53 +66,9 @@ async function handleDownloadFile(request: NextRequest, repos: any, fileId: stri
       return notFound('File');
     }
 
-    // Fallback to s3Key if storageKey is missing (pre-mount-points files)
-    if (!fileEntry.storageKey && fileEntry.s3Key) {
-      fileEntry.storageKey = fileEntry.s3Key;
-    }
-
     if (!fileEntry.storageKey) {
-      // Try legacy path: public/data/files/storage/{id}.{ext}
-      const ext = fileEntry.originalFilename.includes('.')
-        ? fileEntry.originalFilename.substring(fileEntry.originalFilename.lastIndexOf('.'))
-        : '';
-      const legacyPath = path.join(process.cwd(), 'public', 'data', 'files', 'storage', `${fileId}${ext}`);
-
-      if (fs.existsSync(legacyPath)) {
-        logger.debug('[Files v1] Serving file from legacy path', { fileId, legacyPath });
-        const buffer = fs.readFileSync(legacyPath);
-
-        return new NextResponse(new Uint8Array(buffer), {
-          headers: {
-            'Content-Type': fileEntry.mimeType,
-            'Content-Length': buffer.length.toString(),
-            'Content-Disposition': `inline; filename="${fileEntry.originalFilename}"`,
-            'Cache-Control': 'public, max-age=31536000, immutable',
-            'X-Frame-Options': 'SAMEORIGIN',
-            'Content-Security-Policy': "frame-ancestors 'self'",
-          },
-        });
-      }
-
-      logger.error('[Files v1] File has no storage key and no legacy file found', { fileId, legacyPath });
+      logger.error('[Files v1] File has no storage key', { fileId });
       return serverError('File not available - storage key missing');
-    }
-
-    // Check if we should use presigned URL redirect or proxy through API
-    // For HTTP endpoints (e.g., local MinIO), we must proxy to avoid mixed content issues
-    const s3Endpoint = process.env.S3_ENDPOINT || '';
-    const isHttpEndpoint = s3Endpoint.startsWith('http://');
-    const LARGE_FILE_THRESHOLD = 5 * 1024 * 1024; // 5MB
-
-    // Try to use presigned URL redirect for large files
-    if (fileEntry.size > LARGE_FILE_THRESHOLD && !isHttpEndpoint) {
-      try {
-        const presignedUrl = await fileStorageManager.getFileUrl(fileEntry, { presigned: true });
-
-        return NextResponse.redirect(presignedUrl);
-      } catch (error) {
-        // Fall through to proxy download
-      }
     }
 
     // Download file and serve through API

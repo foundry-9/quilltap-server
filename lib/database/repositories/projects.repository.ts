@@ -264,35 +264,4 @@ export class ProjectsRepository extends UserOwnedBaseRepository<Project> {
     );
   }
 
-  // ============================================================================
-  // MOUNT POINT OPERATIONS
-  // ============================================================================
-
-  /**
-   * Set the mount point for a project
-   * @param projectId The project ID
-   * @param mountPointId The mount point ID (null to clear)
-   * @returns Promise<Project | null> The updated project if found, null otherwise
-   */
-  async setMountPoint(projectId: string, mountPointId: string | null): Promise<Project | null> {
-    return this.safeQuery(
-      () => this.update(projectId, { mountPointId }),
-      'Error setting mount point for project',
-      { projectId, mountPointId }
-    );
-  }
-
-  /**
-   * Find projects using a specific mount point
-   * @param mountPointId The mount point ID
-   * @returns Promise<Project[]> Array of projects using this mount point
-   */
-  async findByMountPointId(mountPointId: string): Promise<Project[]> {
-    return this.safeQuery(
-      () => this.findByFilter({ mountPointId }),
-      'Error finding projects by mount point',
-      { mountPointId },
-      []
-    );
-  }
 }

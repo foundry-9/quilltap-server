@@ -119,7 +119,6 @@ export async function generateThumbnail(
     storageKey: thumbnailKey,
     content: thumbnailBuffer,
     contentType: 'image/webp',
-    fileEntry,
   }).then(() => {
     logger.debug('Thumbnail cached', { fileId: fileEntry.id, size: clampedSize, key: thumbnailKey });
   }).catch((cacheError) => {
@@ -146,7 +145,7 @@ export async function cleanupThumbnails(fileEntry: FileEntry): Promise<void> {
   for (const size of COMMON_THUMBNAIL_SIZES) {
     const key = buildThumbnailStorageKey(fileEntry.userId, fileEntry.id, size);
     try {
-      await fileStorageManager.deleteRaw(key, fileEntry);
+      await fileStorageManager.deleteRaw(key);
       logger.debug('Deleted cached thumbnail', { fileId: fileEntry.id, size, key });
     } catch (error) {
       // Silently ignore — thumbnail may not exist for this size

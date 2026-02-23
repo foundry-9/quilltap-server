@@ -711,7 +711,7 @@ async function handleCapabilitiesReportGenerate(req: NextRequest, context: any) 
       originalFilename: result.filename,
       mimeType: 'text/markdown',
       size: contentBuffer.length,
-      storageKey: result.s3Key,
+      storageKey: result.storageKey,
       category: 'DOCUMENT',
       sha256: sha256Hash,
       folderPath: '/reports',
@@ -737,7 +737,7 @@ async function handleCapabilitiesReportGenerate(req: NextRequest, context: any) 
       success: true,
       reportId: result.reportId,
       filename: result.filename,
-      s3Key: result.s3Key,
+      storageKey: result.storageKey,
       size: result.size,
       content: result.content,
     });

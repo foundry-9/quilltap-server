@@ -129,7 +129,6 @@ async function saveGeneratedImage(
       description: null,
       tags: inheritedTags,
       storageKey: uploadResult.storageKey,
-      mountPointId: uploadResult.mountPointId,
     }, { id: fileId });
 
     // Always use API route for S3-backed files

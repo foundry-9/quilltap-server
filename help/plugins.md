@@ -269,19 +269,6 @@ Most plugins can be uninstalled:
 
 **Installation:** Install → Create profile using new provider in relevant Settings tab
 
-### Storage Plugins
-
-**What they do:** Add cloud storage backend support
-
-**Examples:**
-
-- AWS S3 integration
-- Google Cloud Storage
-- Azure Blob Storage
-- Dropbox integration
-
-**Usage:** Install → Configure in File Storage Settings tab
-
 ### Template Plugins
 
 **What they do:** Provide pre-built character and roleplay templates
@@ -455,7 +442,6 @@ For local development or plugins not on NPM:
 - **API Keys** — Credentials for plugins that need them
 - **Chat Tools** — Enable/disable tools per chat
 - **Connection Profiles** — If plugin adds new providers
-- **File Storage** — If plugin adds storage backends
 - **Roleplay Templates** — If plugin adds templates
 
 ## Plugin Resources

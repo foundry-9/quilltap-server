@@ -2,7 +2,7 @@
 
 ## Overview
 
-Quilltap uses **SQLite** for data storage and optionally **S3-compatible storage** for files. SQLite is self-contained and requires no external database services. The Docker image is the recommended way to run Quilltap in production.
+Quilltap uses **SQLite** for data storage and the **local filesystem** for files. SQLite is self-contained and requires no external database services. The Docker image is the recommended way to run Quilltap in production.
 
 ## Table of Contents
 
@@ -32,7 +32,6 @@ Quilltap uses **SQLite** for data storage and optionally **S3-compatible storage
 
 - **Domain name** with DNS pointing to your server (for HTTPS)
 - **Reverse proxy** (Nginx, Caddy, Traefik) for SSL termination
-- **S3-compatible storage** (AWS S3, MinIO, Cloudflare R2) for file storage
 
 ## Quick Start
 
@@ -97,17 +96,6 @@ Only needed when exposing Quilltap on a custom domain. For local use, everything
 | `SQLITE_PATH` | Path to SQLite database file | `/app/quilltap/data/quilltap.db` |
 | `SQLITE_WAL_MODE` | Enable Write-Ahead Logging | `true` |
 | `SQLITE_BUSY_TIMEOUT` | Max wait for database locks (ms) | `5000` |
-
-### S3 Storage (Optional)
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `S3_MODE` | Storage mode (`external` or `disabled`) | `disabled` |
-| `S3_ENDPOINT` | S3 endpoint URL | - |
-| `S3_REGION` | S3 region | `us-east-1` |
-| `S3_ACCESS_KEY` | S3 access key | - |
-| `S3_SECRET_KEY` | S3 secret key | - |
-| `S3_BUCKET` | S3 bucket name | `quilltap-files` |
 
 ### Timezone
 
@@ -251,7 +239,7 @@ docker restart quilltap
 Quilltap stores application data in two places:
 
 1. **SQLite Database File** — All application data in a single file at `/app/quilltap/data/quilltap.db`
-2. **File Storage** — Local filesystem (default) or S3-compatible storage for user files and images
+2. **File Storage** — Local filesystem for user files and images
 
 ### Storage Monitoring
 

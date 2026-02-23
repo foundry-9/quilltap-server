@@ -5,7 +5,6 @@
  * GET /api/v1/projects/[id]?action=list-characters - List character roster
  * GET /api/v1/projects/[id]?action=list-chats - List project chats
  * GET /api/v1/projects/[id]?action=list-files - List project files
- * GET /api/v1/projects/[id]?action=get-mount-point - Get project mount point config
  * GET /api/v1/projects/[id]?action=get-state - Get project state
  * GET /api/v1/projects/[id]?action=get-background - Get project story background URL
  */
@@ -17,7 +16,6 @@ import {
   handleListCharacters,
   handleListChats,
   handleListFiles,
-  handleGetMountPoint,
   handleGetState,
   handleGetBackground,
 } from '../actions';
@@ -40,8 +38,6 @@ export async function handleGet(
       return handleListChats(req, projectId, ctx);
     case 'list-files':
       return handleListFiles(projectId, ctx);
-    case 'get-mount-point':
-      return handleGetMountPoint(projectId, ctx);
     case 'get-state':
       return handleGetState(projectId, ctx);
     case 'get-background':

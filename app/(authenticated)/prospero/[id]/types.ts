@@ -73,7 +73,6 @@ export interface Project {
   color?: string | null
   icon?: string | null
   characterRoster: ProjectCharacter[]
-  mountPointId?: string | null
   defaultDisabledTools?: string[]
   defaultDisabledToolGroups?: string[]
   // Story backgrounds fields
@@ -83,13 +82,6 @@ export interface Project {
   backgroundDisplayMode?: BackgroundDisplayMode
   createdAt: string
   updatedAt: string
-}
-
-export interface MountPointInfo {
-  id: string
-  name: string
-  backendType: string
-  healthStatus: string
 }
 
 export interface EditForm {

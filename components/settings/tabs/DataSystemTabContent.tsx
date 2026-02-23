@@ -4,7 +4,6 @@ import { useSubsystemInfo } from '@/components/providers/theme-provider'
 import { useChatSettingsContext } from '@/components/settings/chat-settings/ChatSettingsProvider'
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import PluginsTab from '@/components/settings/plugins-tab'
-import StorageTab from '@/components/settings/storage-tab'
 import BackupRestoreCard from '@/components/tools/backup-restore-card'
 import { ImportExportCard } from '@/components/tools/import-export-card'
 import { LLMLoggingSettingsComponent } from '@/components/settings/chat-settings/LLMLoggingSettings'
@@ -35,11 +34,7 @@ export function DataSystemTabContent() {
           <PluginsTab />
         </CollapsibleCard>
 
-        <CollapsibleCard title="File Storage" description="Configure file storage settings">
-          <StorageTab />
-        </CollapsibleCard>
-
-        <CollapsibleCard title="Backup & Restore" description="Create and restore backups of your data">
+<CollapsibleCard title="Backup & Restore" description="Create and restore backups of your data">
           <BackupRestoreCard />
         </CollapsibleCard>
 

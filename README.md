@@ -7,7 +7,7 @@ Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, 
 No subscriptions. No data harvested. No forgetting everything between sessions. No landlords.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-3.0.0--dev.84-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-3.0.0--dev.85-yellow.svg)](package.json)
 
 <p align="center">
   <img src="https://quilltap.ai/images/welcome-to-quilltap-2-8.png" alt="Welcome to Quilltap" />
@@ -339,7 +339,7 @@ The Electron app lets you manage multiple data directories from its splash scree
 ### What's stored where
 
 - **Database:** SQLite file with automatic protection (integrity checks, WAL checkpoints, physical backups with tiered retention)
-- **Files:** Local filesystem or S3-compatible storage (AWS S3, MinIO, Cloudflare R2)
+- **Files:** Local filesystem
 - **API keys:** AES-256-GCM encrypted
 
 ### Backup options
@@ -442,7 +442,7 @@ Quilltap stands on the shoulders of these excellent open source projects, and is
 
 **UI:** Tailwind CSS, React Markdown, React Syntax Highlighter, PDF.js, sharp, Lucide Icons
 
-**Desktop & Infrastructure:** Electron, Lima, Docker, AWS SDK (S3-compatible storage)
+**Desktop & Infrastructure:** Electron, Lima, Docker
 
 **Testing:** Jest, Playwright, Storybook, Testing Library
 

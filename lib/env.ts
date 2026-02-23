@@ -57,43 +57,7 @@ const envSchema = z
     // Base directory for all Quilltap data (database, files, logs)
     // Platform defaults: Linux: ~/.quilltap, macOS: ~/Library/Application Support/Quilltap, Windows: %APPDATA%\Quilltap
     QUILLTAP_DATA_DIR: z.string().optional(),
-    // Path for local filesystem storage (built-in backend)
-    QUILLTAP_FILE_STORAGE_PATH: z.string().optional().default('./data/files'),
-    // Encryption key for mount point secrets (auto-generated if not set, falls back to ENCRYPTION_MASTER_PEPPER)
-    QUILLTAP_ENCRYPTION_KEY: z.string().min(32).optional(),
-
-    // S3 Configuration (optional - S3 is now a plugin, local filesystem is the default)
-    // These env vars are used to auto-create an S3 mount point during migration
-    S3_MODE: z.enum(['embedded', 'external', 'disabled']).optional().default('disabled'),
-    S3_ENDPOINT: z.string().url().optional(),
-    S3_REGION: z.string().optional().default('us-east-1'),
-    S3_ACCESS_KEY: z.string().optional(),
-    S3_SECRET_KEY: z.string().optional(),
-    S3_BUCKET: z.string().optional().default('quilltap-files'),
-    S3_PATH_PREFIX: z.string().optional(),
-    S3_PUBLIC_URL: z.string().url().optional(),
-    S3_FORCE_PATH_STYLE: z.enum(['true', 'false']).optional(),
-  })
-  .refine(
-    (data) => {
-      // S3 configuration validation for external mode
-      if (data.S3_MODE === 'external') {
-        // For AWS S3 (with or without endpoint), credentials are optional - IAM roles can provide them
-        // Only require explicit credentials if one is provided but not the other
-        if (
-          (data.S3_ACCESS_KEY && !data.S3_SECRET_KEY) ||
-          (!data.S3_ACCESS_KEY && data.S3_SECRET_KEY)
-        ) {
-          return false;
-        }
-      }
-      return true;
-    },
-    {
-      path: ['S3_MODE'],
-        error: 'S3_ACCESS_KEY and S3_SECRET_KEY must both be provided, or both omitted (for IAM role auth)'
-    }
-  );
+  });
 
 export type Env = z.infer<typeof envSchema>;
 
@@ -118,10 +82,6 @@ export function validateEnv(): Env {
     return {
       NODE_ENV: process.env.NODE_ENV || 'production',
       BASE_URL: process.env.BASE_URL || 'http://localhost:3000',
-      QUILLTAP_FILE_STORAGE_PATH: './data/files',
-      S3_MODE: 'disabled',
-      S3_REGION: 'us-east-1',
-      S3_BUCKET: 'quilltap-files',
       LOG_LEVEL: 'info',
       LOG_OUTPUT: 'console',
       LOG_FILE_PATH: './logs',
@@ -174,58 +134,19 @@ export const isDevelopment = env.NODE_ENV === 'development';
 export const isTest = env.NODE_ENV === 'test';
 
 /**
- * Check if a hostname is considered "local"
- * @param hostname - The hostname to check
- * @returns true if the hostname is localhost or 127.0.0.1
- */
-function isLocalHostname(hostname: string): boolean {
-  const lowerHostname = hostname.toLowerCase();
-  return lowerHostname === 'localhost' || lowerHostname === '127.0.0.1';
-}
-
-/**
- * Extract hostname from a URL string
- * @param urlString - The URL to parse
- * @returns The hostname or null if parsing fails
- */
-function extractHostname(urlString: string | undefined): string | null {
-  if (!urlString) return null;
-  try {
-    const url = new URL(urlString);
-    return url.hostname;
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Check if the deployment is user-managed (locally hosted)
  *
- * A deployment is considered "user-managed" if:
- * - The S3 endpoint points to localhost/127.0.0.1 or is in embedded mode
+ * All deployments are now local-only (no S3/remote storage),
+ * so this always returns true.
  *
- * This is useful for determining whether to show development/admin features,
- * enable certain debugging capabilities, or adjust behavior for self-hosted deployments.
- *
- * @returns true if the deployment appears to be locally/self-managed
+ * @returns true always — all deployments are self-managed
  */
 export function checkIsUserManaged(): boolean {
-  // Check S3 - embedded mode or localhost endpoint means user-managed
-  const s3Mode = env.S3_MODE;
-  if (s3Mode === 'embedded') {
-    return true;
-  }
-
-  const s3Hostname = extractHostname(env.S3_ENDPOINT);
-  if (s3Hostname && isLocalHostname(s3Hostname)) {
-    return true;
-  }
-
-  return false;
+  return true;
 }
 
 /**
  * Whether the deployment is user-managed (locally hosted)
- * True if file storage is running locally
+ * Always true since all storage is local
  */
 export const isUserManaged = checkIsUserManaged();

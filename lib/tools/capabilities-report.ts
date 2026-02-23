@@ -882,7 +882,7 @@ export function generateMarkdownReport(data: CapabilitiesReportData): string {
 export async function generateAndSaveReport(userId: string): Promise<{
   reportId: string;
   filename: string;
-  s3Key: string;
+  storageKey: string;
   size: number;
   content: string;
 }> {
@@ -914,14 +914,13 @@ export async function generateAndSaveReport(userId: string): Promise<{
     reportId,
     filename,
     storageKey: uploadResult.storageKey,
-    mountPointId: uploadResult.mountPointId,
     size: buffer.length,
   });
 
   return {
     reportId,
     filename,
-    s3Key: uploadResult.storageKey, // Return as s3Key for backward compatibility
+    storageKey: uploadResult.storageKey,
     size: buffer.length,
     content: markdown,
   };

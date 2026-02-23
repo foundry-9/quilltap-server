@@ -141,7 +141,7 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
   const fileId = crypto.randomUUID();
 
   // Upload to storage
-  const { storageKey, mountPointId } = await fileStorageManager.uploadFile({
+  const { storageKey } = await fileStorageManager.uploadFile({
     userId,
     fileId,
     filename: originalFilename,
@@ -175,7 +175,6 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
     description: description || null,
     tags: finalTags,
     storageKey,
-    mountPointId,
   }, { id: fileId });
   return fileEntry;
 }

@@ -18,7 +18,7 @@ This project is spelled "Quilltap", as in "quill" + "tap", **NOT** "Quilttap", a
 - **Package Manager**: npm
 - **Testing**: Jest and coverage tools (Istanbul/nyc), Playwright
 - **Data Storage**: SQLite with zero external dependencies. Uses `better-sqlite3` driver directly. Data models are defined as TypeScript interfaces with Zod schemas.
-- **File Storage**: local or optional S3-compatible storage (AWS S3, MinIO, Cloudflare R2, etc.)
+- **File Storage**: local filesystem only
 - **AI and LLM Services**: OpenAI, Anthropic, xAI/Grok, Google, OpenRouter
 - **Design Documentation**: Storybook
 - **API Structure**: Versioned REST API under `/api/v1/` with action dispatch pattern
@@ -104,7 +104,7 @@ Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/
   - [components/settings/prompts/README.md](components/settings/prompts/README.md) — Notes on the prompts settings tab after refactor: types, usePrompts hook, prompt cards/lists/modals, and design principles — Grade: A (accurate description) — Last updated: 2025-12-17
   - [components/tools/tasks-queue/README.md](components/tools/tasks-queue/README.md) — Overview of the tasks queue card module: types, hooks, TaskItem/Filters/Details components, API integration, and structure — Grade: A (current tasks queue docs) — Last updated: 2025-12-17
   - [docs/API.md](docs/API.md) — Comprehensive Quilltap API reference for v1 REST routes (characters, chats, messages, memories, api-keys, connection-profiles, system/jobs, system/backup) with action dispatch patterns and response examples — Grade: A (canonical API reference) — Last updated: 2026-01-13
-  - [docs/BACKUP-RESTORE.md](docs/BACKUP-RESTORE.md) — Backup/restore guide covering in-app backups, manual MongoDB/S3 scripts, CRON automation, encryption, disaster recovery, verification, and monitoring tips — Grade: A (operational guidance) — Last updated: 2025-12-10
+  - [docs/BACKUP-RESTORE.md](docs/BACKUP-RESTORE.md) — Backup/restore guide covering in-app backups, CRON automation, encryption, disaster recovery, verification, and monitoring tips — Grade: A (operational guidance) — Last updated: 2025-12-10
   - [docs/DATABASE_ABSTRACTION.md](docs/DATABASE_ABSTRACTION.md) — Database abstraction layer documentation: SQLite backend support, configuration, Docker deployment, architecture, interfaces, capabilities comparison, database protection (integrity checks, WAL checkpoints, physical backups), and troubleshooting — Grade: A (architecture reference) — Last updated: 2026-02-19
   - [help/database-protection.md](help/database-protection.md) — User-facing documentation for automatic database protection: integrity checks, WAL checkpoints, physical backups with retention policy, restore instructions, and comparison with logical backups — Grade: A (user documentation) — Last updated: 2026-02-19
   - [help/setup-wizard.md](help/setup-wizard.md) — User-facing documentation for the AI Stack Setup Wizard: 6-step guided flow for provider selection, API key entry, model selection, embedding/image setup, and test-and-confirm; covers first-run and settings re-entry modes — Grade: A (user documentation) — Last updated: 2026-02-22

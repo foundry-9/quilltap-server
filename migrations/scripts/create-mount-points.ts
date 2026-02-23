@@ -326,14 +326,8 @@ export const createMountPointsMigration: Migration = {
   dependsOn: ['sqlite-initial-schema-v1'],
 
   async shouldRun(): Promise<boolean> {
-    if (!isSQLiteBackend()) {
-      return false;
-    }
-
-    const needsMountPointSetup = needsSetup();
-    const needsFileMigration = hasFilesNeedingMigration();
-
-    return needsMountPointSetup || needsFileMigration;
+    // Mount points system has been removed (drop-mount-points-v1 migration handles cleanup)
+    return false;
   },
 
   async run(): Promise<MigrationResult> {

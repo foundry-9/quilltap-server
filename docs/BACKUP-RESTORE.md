@@ -2,7 +2,7 @@
 
 ## Overview
 
-Quilltap stores application data in **SQLite** and files in **local or S3-compatible storage**. This guide covers backing up and restoring your Quilltap data safely.
+Quilltap stores application data in **SQLite** and files on the **local filesystem**. This guide covers backing up and restoring your Quilltap data safely.
 
 ## Built-in Backup & Restore (Recommended)
 
@@ -82,7 +82,7 @@ Since Quilltap uses SQLite, all data is contained in a single database file. The
 - `users` - User accounts and authentication data
 - `characters` - Character definitions and metadata (includes `controlledBy` for LLM/user control)
 - `chats` - Chat metadata, message history, and impersonation state
-- `files` - File metadata (actual files stored locally or in S3)
+- `files` - File metadata (actual files stored on local filesystem)
 - `tags` - Tag definitions
 - `memories` - Character memory data with inter-character relationships
 - `connectionProfiles` - LLM connection configurations
@@ -92,7 +92,7 @@ Since Quilltap uses SQLite, all data is contained in a single database file. The
 
 ### File Storage
 
-Files are stored either locally or in S3-compatible storage:
+Files are stored on the local filesystem:
 
 - `users/{userId}/files/` - User-uploaded files
 - `users/{userId}/images/` - Generated and uploaded images
@@ -101,7 +101,7 @@ Files are stored either locally or in S3-compatible storage:
 
 - `ENCRYPTION_MASTER_PEPPER` in `.env` - Master encryption key (required to decrypt API keys)
 - SQLite database file path configuration
-- File storage configuration (local path or S3 credentials)
+- File storage directory path
 
 ## Regular Backups
 
@@ -161,10 +161,6 @@ cp /path/to/quilltap.db /backup/quilltap-$(date +%Y%m%d).db
 ```bash
 # Backup local file storage
 tar -czf quilltap-files-$(date +%Y%m%d).tar.gz /path/to/quilltap/files/
-
-# For S3 storage, use MinIO client or AWS CLI
-mc mirror myminio/quilltap-files ./s3-backup-$(date +%Y%m%d)/
-aws s3 sync s3://quilltap-files ./s3-backup-$(date +%Y%m%d)/ --endpoint-url http://localhost:9000
 ```
 
 **Docker Environment:**
@@ -199,8 +195,8 @@ cp /path/to/quilltap.db ./quilltap-backup-$(date +%Y%m%d).db
 # Network backup (NAS/Network share)
 cp quilltap-backup-*.db /mnt/nas/quilltap-backups/
 
-# Cloud backup for SQLite database
-aws s3 cp quilltap-backup-*.db s3://my-backup-bucket/quilltap/
+# Cloud backup for SQLite database (if using remote backup)
+# aws s3 cp quilltap-backup-*.db s3://my-backup-bucket/quilltap/
 ```
 
 ### Encryption & Security
@@ -246,10 +242,6 @@ cp quilltap.db /path/to/quilltap.db
 ```bash
 # Restore local files
 tar -xzf quilltap-files-YYYYMMDD.tar.gz -C /
-
-# For S3 storage
-mc mirror ./s3-backup-YYYYMMDD/ myminio/quilltap-files
-aws s3 sync ./s3-backup-YYYYMMDD/ s3://quilltap-files/ --endpoint-url http://localhost:9000
 ```
 
 **Restart the application:**
@@ -289,8 +281,8 @@ cp quilltap-backup-YYYYMMDD.db /path/to/quilltap.db
 ### From Cloud Storage
 
 ```bash
-# Download SQLite backup from S3
-aws s3 cp s3://my-backup-bucket/quilltap/quilltap-backup-YYYYMMDD.db .
+# Download SQLite backup from cloud storage (if using cloud backups)
+# aws s3 cp s3://my-backup-bucket/quilltap/quilltap-backup-YYYYMMDD.db .
 
 # Restore SQLite database
 cp quilltap-backup-YYYYMMDD.db /path/to/quilltap.db
