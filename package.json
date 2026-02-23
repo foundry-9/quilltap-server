@@ -1,6 +1,6 @@
 {
   "name": "quilltap",
-  "version": "3.0.0-dev.83",
+  "version": "3.0.0-dev.84",
   "private": true,
   "main": "dist-electron/main.js",
   "author": {
@@ -30,6 +30,7 @@
     "electron:build:mac:dev": "npm run electron:stage-lima && npm run electron:compile && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac -c.mac.identity=null",
     "electron:build:win": "npm run electron:compile && electron-builder --win",
     "electron:build:win:dev": "npm run electron:compile && electron-builder --win --config electron-builder-win-dev.js",
+    "electron:build:linux": "npm run electron:compile && electron-builder --linux",
     "electron:compile": "tsc -p electron/tsconfig.json",
     "electron:dev": "npm run electron:compile && cross-env ELECTRON_DEV=1 electron dist-electron/main.js",
     "electron:stage-lima": "tsx scripts/stage-lima.ts",

@@ -28,7 +28,7 @@ function defaultSettings(): AppSettings {
     lastDataDir: DEFAULT_DATA_DIR,
     knownDataDirs: [{ path: DEFAULT_DATA_DIR, name: 'Default' }],
     autoStart: false,
-    runtimeMode: 'vm',
+    runtimeMode: process.platform === 'linux' ? 'docker' : 'vm',
   };
 }
 
@@ -69,7 +69,8 @@ export function loadSettings(): AppSettings {
         lastDataDir: parsed.lastDataDir || defaults.lastDataDir,
         knownDataDirs,
         autoStart: typeof parsed.autoStart === 'boolean' ? parsed.autoStart : defaults.autoStart,
-        runtimeMode: parsed.runtimeMode === 'docker' ? 'docker' : 'vm',
+        runtimeMode: process.platform === 'linux' ? 'docker'
+          : (parsed.runtimeMode === 'docker' ? 'docker' : 'vm'),
       };
     }
   } catch (err) {

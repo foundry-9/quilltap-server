@@ -8,7 +8,9 @@ import {
   APP_VERSION,
   vmNameForDir,
 } from './constants';
-import { CommandResult } from './types';
+import { IVMManager } from './vm-manager';
+import { VMStatus, CommandResult } from './types';
+import { dirSize } from './disk-utils';
 
 /**
  * Common locations for the Docker CLI binary on macOS and Linux.
@@ -78,7 +80,7 @@ function resolveDockerPath(): string {
  * Manages Docker container lifecycle for Quilltap.
  * Alternative to Lima/WSL2 VM backends — uses Docker Desktop or Engine.
  */
-export class DockerManager {
+export class DockerManager implements IVMManager {
   private dockerPath: string;
   private dataDir: string = '';
   private containerName: string = '';
@@ -153,6 +155,8 @@ export class DockerManager {
       '-p', `${HOST_PORT}:${DOCKER_CONTAINER_PORT}`,
       '-v', `${this.dataDir}:/app/quilltap`,
       '-e', `QUILLTAP_HOST_DATA_DIR=${this.dataDir}`,
+      // Linux Docker Engine doesn't provide host.docker.internal by default
+      ...(process.platform === 'linux' ? ['--add-host=host.docker.internal:host-gateway'] : []),
       imageRef,
     ];
 
@@ -191,11 +195,108 @@ export class DockerManager {
     return result.success ? result.stdout : result.stderr;
   }
 
+  // --- IVMManager adapter methods ---
+
+  /** Check prerequisites: verify Docker CLI is available (and permissions on Linux) */
+  async checkPrerequisites(): Promise<{ ok: boolean; error?: string }> {
+    const available = await this.isDockerAvailable();
+    if (!available) {
+      return { ok: false, error: 'Docker CLI not found' };
+    }
+
+    // On Linux, check for permission issues (user not in docker group)
+    if (process.platform === 'linux') {
+      const infoResult = await this.exec(['info'], 10_000);
+      if (!infoResult.success && (infoResult.stderr || '').toLowerCase().includes('permission denied')) {
+        return { ok: false, error: 'DOCKER_PERMISSION_DENIED' };
+      }
+    }
+
+    return { ok: true };
+  }
+
+  /** Check container status */
+  async checkStatus(): Promise<VMStatus> {
+    if (!this.containerName) {
+      return { exists: false, running: false, message: 'No container name configured' };
+    }
+
+    const result = await this.exec(
+      ['inspect', '--format', '{{.State.Status}}', this.containerName],
+      10_000,
+    );
+
+    if (!result.success) {
+      return { exists: false, running: false, message: 'Container does not exist' };
+    }
+
+    const status = result.stdout.trim();
+    const running = status === 'running';
+    return { exists: true, running, message: `Container status: ${status}` };
+  }
+
+  /** Create VM — for Docker this means pulling the image */
+  async createVM(onOutput?: (line: string) => void): Promise<CommandResult> {
+    if (!APP_VERSION) {
+      return { success: false, stdout: '', stderr: '', error: 'APP_VERSION is not set' };
+    }
+    return this.pullImage(APP_VERSION, onOutput);
+  }
+
+  /** Start VM — delegates to startContainer */
+  async startVM(onOutput?: (line: string) => void): Promise<CommandResult> {
+    return this.startContainer(onOutput);
+  }
+
+  /** Stop VM — delegates to stopContainer */
+  async stopVM(): Promise<CommandResult> {
+    return this.stopContainer();
+  }
+
+  /** Delete VM — stop container and remove the Docker image */
+  async deleteVM(): Promise<CommandResult> {
+    // Stop the container first
+    await this.stopContainer();
+
+    // Remove the image
+    if (!APP_VERSION) {
+      return { success: false, stdout: '', stderr: '', error: 'APP_VERSION is not set' };
+    }
+    const imageRef = `${DOCKER_IMAGE}:${APP_VERSION}`;
+    console.log('[DockerManager] Removing image:', imageRef);
+    return this.exec(['rmi', imageRef], 30_000);
+  }
+
+  /** Get the currently configured data directory */
+  getDataDir(): string {
+    return this.dataDir;
+  }
+
+  /** Get the VM/container name for the current data directory */
+  getVMName(): string {
+    return this.containerName;
+  }
+
+  /** Get the disk size of the Docker image in bytes (-1 if not found) */
+  async getVMDiskSize(): Promise<number> {
+    if (!APP_VERSION) return -1;
+    const imageRef = `${DOCKER_IMAGE}:${APP_VERSION}`;
+    const result = await this.exec(['image', 'inspect', '--format', '{{.Size}}', imageRef], 10_000);
+    if (!result.success) return -1;
+    const size = parseInt(result.stdout.trim(), 10);
+    return isNaN(size) ? -1 : size;
+  }
+
+  /** Get the disk size of the data directory in bytes (-1 if missing) */
+  async getDataDirDiskSize(): Promise<number> {
+    return dirSize(this.dataDir);
+  }
+
   /**
    * Execute a docker CLI command.
    * Returns a CommandResult with stdout/stderr captured.
    */
-  private exec(
+  exec(
     args: string[],
     timeout: number = 30_000,
     onOutput?: (line: string) => void,

@@ -340,6 +340,13 @@ window.quilltap.onDirectories(function(data) {
   if (data.vmLabel) {
     vmLabelEl.textContent = data.vmLabel;
   }
+
+  // On Linux, hide the VM option — Docker is the only runtime
+  if (data.vmLabel === 'Docker' && data.runtimeMode === 'docker') {
+    runtimeVMBtn.style.display = 'none';
+    runtimeDockerBtn.classList.add('selected');
+    runtimeDockerBtn.style.flex = '1';
+  }
 });
 
 /** Retry button */

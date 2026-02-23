@@ -34,6 +34,10 @@ export interface IVMManager {
  * Factory: returns the correct VM manager for the current platform.
  */
 export function createVMManager(): IVMManager {
+  if (process.platform === 'linux') {
+    const { DockerManager } = require('./docker-manager');
+    return new DockerManager();
+  }
   if (process.platform === 'darwin') {
     const { LimaManager } = require('./lima-manager');
     return new LimaManager();

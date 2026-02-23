@@ -54,6 +54,11 @@ if (process.platform === 'darwin') {
   }
 }
 
+// Handle Ubuntu 24.04+ unprivileged user namespace restriction
+if (process.platform === 'linux') {
+  app.commandLine.appendSwitch('no-sandbox');
+}
+
 /** Root of the app directory (for static files like electron/splash/) */
 const appRoot = app.isPackaged
   ? app.getAppPath()
@@ -97,6 +102,7 @@ function sendSplashError(message: string, canRetry: boolean = true): void {
 
 /** Get the VM label for the current platform */
 function getVMLabel(): string {
+  if (process.platform === 'linux') return 'Docker';
   return process.platform === 'win32' ? 'WSL2' : 'Lima';
 }
 
@@ -732,6 +738,17 @@ async function startupSequence(dataDir: string): Promise<void> {
       return;
     }
 
+    if (prereq.error === 'DOCKER_PERMISSION_DENIED') {
+      sendSplashError(
+        'Docker permission denied.\n\n' +
+        'Add your user to the docker group:\n' +
+        '  sudo usermod -aG docker $USER\n\n' +
+        'Then log out and back in.',
+        true
+      );
+      return;
+    }
+
     sendSplashError(prereq.error || 'System requirements not met.', false);
     return;
   }
@@ -944,24 +961,29 @@ async function dockerStartupSequence(dataDir: string): Promise<void> {
   });
 
   if (!dockerAvailable) {
-    sendSplashError('Docker is not available. Install Docker Desktop and try again.', true);
+    const installMsg = process.platform === 'linux'
+      ? 'Docker Engine is required. Install it from https://docs.docker.com/engine/install/'
+      : 'Docker is not available. Install Docker Desktop and try again.';
+    sendSplashError(installMsg, true);
     return;
   }
 
-  // Step 2: Stop any running VM to prevent port conflicts
-  try {
-    const vmStatus = await vmManager.checkStatus();
-    if (vmStatus.running) {
-      console.log('[Main] Stopping running VM to prevent port conflict with Docker');
-      sendSplashUpdate({
-        phase: 'initializing',
-        message: 'Stopping virtual machine...',
-        detail: 'Preventing port conflict with Docker',
-      });
-      await vmManager.stopVM();
+  // Step 2: Stop any running VM to prevent port conflicts (skip on Linux — no separate VM)
+  if (process.platform !== 'linux') {
+    try {
+      const vmStatus = await vmManager.checkStatus();
+      if (vmStatus.running) {
+        console.log('[Main] Stopping running VM to prevent port conflict with Docker');
+        sendSplashUpdate({
+          phase: 'initializing',
+          message: 'Stopping virtual machine...',
+          detail: 'Preventing port conflict with Docker',
+        });
+        await vmManager.stopVM();
+      }
+    } catch (err) {
+      console.warn('[Main] Could not check/stop VM (non-fatal):', err);
     }
-  } catch (err) {
-    console.warn('[Main] Could not check/stop VM (non-fatal):', err);
   }
 
   // Step 3: Ensure the version-matched Docker image is available
