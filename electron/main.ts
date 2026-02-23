@@ -26,6 +26,7 @@ import { SplashUpdate, DirectoryInfo, DirectorySizeInfo, RuntimeMode, DetailLeve
 import { AppSettings, loadSettings, saveSettings, defaultNameForPath } from './settings';
 import { getSizesForDir } from './disk-utils';
 import { runCrashGuard, markStartupSuccess, isInSafeMode } from './crash-guard';
+import { initStartupLog, logStartup, closeStartupLog } from './startup-log';
 
 const isDev = !!process.env.ELECTRON_DEV;
 
@@ -76,6 +77,7 @@ let skipAutoStart = false;
 
 /** Send an update to the splash screen */
 function sendSplashUpdate(update: SplashUpdate): void {
+  logStartup(update.message, update.detail, update.detailLevel || update.phase);
   if (splashWindow && !splashWindow.isDestroyed()) {
     splashWindow.webContents.send('splash:update', update);
   }
@@ -83,6 +85,7 @@ function sendSplashUpdate(update: SplashUpdate): void {
 
 /** Send an error to the splash screen */
 function sendSplashError(message: string, canRetry: boolean = true): void {
+  logStartup(message, canRetry ? 'canRetry=true' : 'canRetry=false', 'ERROR');
   if (splashWindow && !splashWindow.isDestroyed()) {
     splashWindow.webContents.send('splash:error', {
       phase: 'error' as const,
@@ -196,16 +199,49 @@ async function migrateLegacyVM(): Promise<void> {
  *
  * WSL outputs plain-text progress during import.
  */
+
+/**
+ * Messages that are pure noise — suppress entirely (never shown or logged).
+ * These are Lima internals that provide no value to the user or for debugging.
+ */
+const VM_OUTPUT_SUPPRESS_PATTERNS = [
+  /\bNot forwarding\b/,
+  /\btcpproxy:.*error dialing\b/,
+];
+
+/**
+ * Messages that repeat during boot — show the first occurrence, suppress duplicates.
+ * Maps a regex to the last message key seen (reset per startup via resetVMOutputState).
+ */
+const VM_OUTPUT_DEDUP_PATTERNS = [
+  /guest agent events closed unexpectedly/,
+  /Waiting for the essential requirement/,
+  /Waiting for the final requirement/,
+];
+
+/** Track which dedup messages we've already seen (reset per startup) */
+let seenDedupMessages = new Set<number>();
+
+/** Reset dedup tracking at the start of each startup sequence */
+function resetVMOutputState(): void {
+  seenDedupMessages = new Set();
+}
+
 function formatVMOutput(line: string): { message: string; level: DetailLevel } | null {
   const trimmed = line.trim();
   if (!trimmed) return null;
+
+  // Suppress known noise patterns entirely
+  for (const pattern of VM_OUTPUT_SUPPRESS_PATTERNS) {
+    if (pattern.test(trimmed)) return null;
+  }
 
   // Try JSON format first: {"level":"info","msg":"..."}
   if (trimmed.startsWith('{')) {
     try {
       const parsed = JSON.parse(trimmed);
       if (parsed.msg) {
-        return { message: truncate(parsed.msg), level: toDetailLevel(parsed.level) };
+        return filterDedupAndReturn(truncate(parsed.msg), toDetailLevel(parsed.level));
       }
     } catch {
       // Not valid JSON — fall through
@@ -218,7 +254,7 @@ function formatVMOutput(line: string): { message: string; level: DetailLevel } |
     const msg = msgMatch[1].replace(/\\"/g, '"');
     const levelMatch = trimmed.match(/\blevel=(\w+)/);
     const level = levelMatch ? toDetailLevel(levelMatch[1]) : 'info';
-    return { message: truncate(msg), level };
+    return filterDedupAndReturn(truncate(msg), level);
   }
 
   // Short logrus format: LEVEL[NNNN] message  key=value
@@ -233,13 +269,26 @@ function formatVMOutput(line: string): { message: string; level: DetailLevel } |
     // The msg ends where key=value pairs begin (double-space separator)
     const dblIdx = fullText.indexOf('  ');
     const msg = dblIdx > 0 ? fullText.substring(0, dblIdx) : fullText;
-    return { message: truncate(msg.trim()), level };
+    return filterDedupAndReturn(truncate(msg.trim()), level);
   }
 
   // Plain text (WSL or other) — return as info
   const cleaned = trimmed.replace(/\0/g, '');
   if (!cleaned) return null;
-  return { message: truncate(cleaned), level: 'info' };
+  return filterDedupAndReturn(truncate(cleaned), 'info');
+}
+
+/** Check dedup patterns and suppress repeated messages after the first occurrence */
+function filterDedupAndReturn(message: string, level: DetailLevel): { message: string; level: DetailLevel } | null {
+  for (let i = 0; i < VM_OUTPUT_DEDUP_PATTERNS.length; i++) {
+    if (VM_OUTPUT_DEDUP_PATTERNS[i].test(message)) {
+      if (seenDedupMessages.has(i)) {
+        return null; // Already shown this pattern once — suppress
+      }
+      seenDedupMessages.add(i);
+    }
+  }
+  return { message, level };
 }
 
 /** Normalize a level string to a valid DetailLevel */
@@ -596,6 +645,10 @@ function onSplashReady(): void {
 async function startupSequence(dataDir: string): Promise<void> {
   autoStartPending = false;
 
+  // Initialize startup log (overwrites any previous log)
+  initStartupLog(dataDir);
+  resetVMOutputState();
+
   // Configure the VM manager with the chosen data directory
   vmManager.setDataDir(dataDir);
   console.log(`[Main] Starting with data directory: ${dataDir}`);
@@ -840,6 +893,7 @@ async function startupSequence(dataDir: string): Promise<void> {
       message: 'Ready!',
     });
 
+    closeStartupLog();
     mainWindow = createMainWindow();
     markStartupSuccess();
   } else {
@@ -848,6 +902,7 @@ async function startupSequence(dataDir: string): Promise<void> {
       `Server did not become healthy after ${healthStatus.attempts} attempts.\n\nRecent logs:\n${logs}`,
       true
     );
+    closeStartupLog();
   }
 }
 
@@ -873,6 +928,11 @@ function routeStartup(dataDir: string): void {
  */
 async function dockerStartupSequence(dataDir: string): Promise<void> {
   autoStartPending = false;
+
+  // Initialize startup log (overwrites any previous log)
+  initStartupLog(dataDir);
+  resetVMOutputState();
+
   dockerManager.setDataDir(dataDir);
   console.log(`[Main] Docker startup with data directory: ${dataDir}`);
   console.log(`[Main] Container name: ${dockerManager.getContainerName()}`);
@@ -977,6 +1037,7 @@ async function dockerStartupSequence(dataDir: string): Promise<void> {
       message: 'Ready!',
     });
 
+    closeStartupLog();
     mainWindow = createMainWindow();
     markStartupSuccess();
   } else {
@@ -985,6 +1046,7 @@ async function dockerStartupSequence(dataDir: string): Promise<void> {
       `Server did not become healthy after ${healthStatus.attempts} attempts.\n\nRecent logs:\n${logs}`,
       true
     );
+    closeStartupLog();
   }
 }
 
@@ -1240,12 +1302,73 @@ ipcMain.handle('app:download-url', async (_event, url: string) => {
   mainWindow.webContents.downloadURL(fullUrl);
 });
 
+/** Create a small, frameless window showing a shutdown message */
+function createShutdownWindow(): BrowserWindow {
+  const win = new BrowserWindow({
+    width: 360,
+    height: 200,
+    frame: false,
+    resizable: false,
+    center: true,
+    show: false,
+    backgroundColor: '#0f1729',
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  const backendLabel = appSettings.runtimeMode === 'docker' ? 'container' : 'virtual machine';
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0f1729; color: #e0e0e0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100vh; -webkit-app-region: drag; user-select: none;
+  }
+  .title {
+    font-family: Georgia, Cambria, "Times New Roman", serif;
+    font-size: 24px; font-weight: 700; color: #f0ebe3; margin-bottom: 16px;
+  }
+  .message { font-size: 14px; color: #a0a0a0; margin-bottom: 12px; }
+  .spinner {
+    width: 24px; height: 24px; border: 3px solid #333;
+    border-top-color: #d4af37; border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style></head><body>
+  <div class="title">Quilltap</div>
+  <div class="message">Stopping ${backendLabel}…</div>
+  <div class="spinner"></div>
+</body></html>`;
+
+  win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+  win.once('ready-to-show', () => win.show());
+  return win;
+}
+
 // Graceful shutdown: stop the VM or Docker container before quitting
 app.on('before-quit', async (event) => {
   if (isQuitting || isDev) return;
 
   isQuitting = true;
   event.preventDefault();
+
+  // Close interactive windows immediately so the user can't keep clicking
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.close();
+    mainWindow = null;
+  }
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    splashWindow.close();
+    splashWindow = null;
+  }
+
+  // Show a small shutdown indicator
+  const shutdownWindow = createShutdownWindow();
 
   if (appSettings.runtimeMode === 'docker') {
     console.log('[Main] Stopping Docker container before quit...');
@@ -1263,10 +1386,17 @@ app.on('before-quit', async (event) => {
     }
   }
 
+  if (!shutdownWindow.isDestroyed()) {
+    shutdownWindow.close();
+  }
+
   app.quit();
 });
 
 // On macOS, quit when all windows closed (not default Electron behavior)
+// Guard against the shutdown state where we intentionally close windows before quitting
 app.on('window-all-closed', () => {
-  app.quit();
+  if (!isQuitting) {
+    app.quit();
+  }
 });
