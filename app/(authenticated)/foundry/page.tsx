@@ -71,6 +71,21 @@ const SUBSYSTEM_ICONS: Record<SubsystemId, React.ReactNode> = {
       <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
     </svg>
   ),
+  pascal: (
+    <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="2" width="20" height="20" rx="3" />
+      <circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="16" cy="8" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="8" cy="16" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="16" cy="16" r="1.5" fill="currentColor" stroke="none" />
+    </svg>
+  ),
+  saquel: (
+    <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+    </svg>
+  ),
 }
 
 export default function FoundryPage() {

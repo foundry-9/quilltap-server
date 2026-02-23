@@ -25,7 +25,9 @@ export type SubsystemId =
   | 'prospero'
   | 'dangermouse'
   | 'calliope'
-  | 'lantern';
+  | 'lantern'
+  | 'pascal'
+  | 'saquel';
 
 /**
  * Static definition of a Foundry subsystem.
@@ -52,7 +54,7 @@ export interface SubsystemDefinition {
 /**
  * Default definitions for all Foundry subsystems.
  *
- * The `foundry` entry is the hub page itself; the remaining 8 entries
+ * The `foundry` entry is the hub page itself; the remaining 10 entries
  * are the child subsystem pages displayed as cards on the hub.
  */
 export const DEFAULT_SUBSYSTEM_DEFINITIONS: Record<SubsystemId, SubsystemDefinition> = {
@@ -128,6 +130,22 @@ export const DEFAULT_SUBSYSTEM_DEFINITIONS: Record<SubsystemId, SubsystemDefinit
     thumbnail: '/images/thumbnails/lantern.webp',
     backgroundImage: '/images/lantern.webp',
   },
+  pascal: {
+    id: 'pascal',
+    name: 'Pascal the Croupier',
+    description: 'Random number generation, dice, and game state tracking',
+    href: '/foundry/pascal',
+    thumbnail: '/images/thumbnails/pascal.webp',
+    backgroundImage: '/images/pascal.webp',
+  },
+  saquel: {
+    id: 'saquel',
+    name: 'Saquel Ytzama the Keeper of Secrets',
+    description: 'API key management, encryption, and secrets',
+    href: '/foundry/saquel',
+    thumbnail: '/images/thumbnails/saquel.webp',
+    backgroundImage: '/images/saquel.webp',
+  },
 };
 
 /**
@@ -143,4 +161,6 @@ export const CHILD_SUBSYSTEM_IDS: SubsystemId[] = [
   'dangermouse',
   'calliope',
   'lantern',
+  'pascal',
+  'saquel',
 ];
