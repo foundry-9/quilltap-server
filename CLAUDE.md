@@ -77,12 +77,12 @@ Legacy routes outside `/api/v1/` were removed in v2.8. Only `/api/v1/` routes ar
 - **Prospero** - the agentic and tool-using systems, and the way LLMs work — UI route: `/prospero` (was `/projects`)
 - **Aurora** - the complex character model and how it interacts with the prompts — UI route: `/aurora` (was `/characters`)
 - **Calliope** - the UX/UI and themes systems
-- **The Foundry** - the architecture underneath, plugins and packages and services — UI route: `/foundry` (was `/tools`)
+- **The Foundry** - the architecture underneath, plugins and packages and services — UI route: `/settings` (was `/foundry`, `/tools`); all settings now live on a single tabbed page with 7 tabs
 - **The Salon** - the chat interface — UI route: `/salon` (was `/chats`)
-- **Pascal the Croupier** - the RNG and game state tracking system — UI route: `/foundry/pascal`
-- **Saquel Ytzama the Keeper of Secrets** - the encryption, API key management, and secrets system — UI route: `/foundry/saquel`
+- **Pascal the Croupier** - the RNG and game state tracking system — merged into Chat tab at `/settings?tab=chat`
+- **Saquel Ytzama the Keeper of Secrets** - the encryption, API key management, and secrets system — merged into Data & System tab at `/settings?tab=system`
 
-Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/chats`, `/api/v1/projects`). Old UI routes redirect to new ones.
+Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/chats`, `/api/v1/projects`). Old UI routes (`/foundry/*`) redirect to the appropriate `/settings` tab.
 
 ## Current State
 

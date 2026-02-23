@@ -404,7 +404,7 @@ export default function NewChatPage() {
             <p className="font-medium">No connection profiles available</p>
             <p className="mt-1 text-sm">
               You need to create a connection profile before starting a chat.{' '}
-              <Link href="/foundry/forge" className="underline hover:no-underline">Go to The Forge</Link>
+              <Link href="/settings?tab=providers" className="underline hover:no-underline">Go to AI Providers</Link>
             </p>
           </div>
         )}

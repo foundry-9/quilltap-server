@@ -366,7 +366,7 @@ function buildAppMenu(win: BrowserWindow): void {
     { label: 'Files', path: '/files', accelerator: 'CmdOrCtrl+Shift+F' },
     { label: 'Characters', path: '/aurora', accelerator: 'CmdOrCtrl+Shift+C' },
     { label: 'Chats', path: '/salon', accelerator: 'CmdOrCtrl+Shift+S' },
-    { label: 'Settings', path: '/foundry', accelerator: 'CmdOrCtrl+,' },
+    { label: 'Settings', path: '/settings', accelerator: 'CmdOrCtrl+,' },
     { label: 'Profile', path: '/profile' },
     { label: 'About', path: '/about' },
   ];

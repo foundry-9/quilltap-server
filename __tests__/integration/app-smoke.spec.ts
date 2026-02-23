@@ -165,14 +165,14 @@ test.describe('App Smoke Tests', () => {
     await expect(page.getByRole('heading', { name: 'Sample Prompts' })).toBeVisible()
   })
 
-  test('tools page shows utility cards', async ({ page }) => {
-    await page.goto('/foundry')
-    await expect(page.getByRole('heading', { name: 'Tools' })).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Backup & Restore' })).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Import / Export' })).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Capabilities Report' })).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Tasks Queue' })).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Delete All Data' })).toBeVisible()
+  test('settings page shows tabbed layout', async ({ page }) => {
+    await page.goto('/settings')
+    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
+    // Default tab is AI Providers
+    await expect(page.getByRole('button', { name: /AI Providers/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Chat/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Appearance/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Data & System/ })).toBeVisible()
   })
 
   test('profile and about pages load', async ({ page }) => {
