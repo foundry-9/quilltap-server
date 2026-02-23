@@ -305,6 +305,7 @@ export function ChatModals({
           chatId={chatId}
           disabledTools={chat.disabledTools || []}
           disabledToolGroups={chat.disabledToolGroups || []}
+          profileToolsDisabled={chat.participants?.some(p => p.controlledBy === 'llm' && p.connectionProfile?.allowToolUse === false) ?? false}
           onSuccess={(newDisabledTools, newDisabledToolGroups) => {
             setChat(prev => prev ? {
               ...prev,

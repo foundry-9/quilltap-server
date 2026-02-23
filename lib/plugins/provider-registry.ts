@@ -670,6 +670,7 @@ const DEFAULT_CAPABILITIES = {
   imageGeneration: 'imageGeneration',
   embeddings: 'embeddings',
   webSearch: 'webSearch',
+  toolUse: 'toolUse',
 } as const;
 
 // ============================================================================

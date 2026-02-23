@@ -147,6 +147,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       isDangerousCompatible = false,
       allowWebSearch = false,
       useNativeWebSearch = false,
+      allowToolUse = true,
     } = body;
 
     // Validation
@@ -204,6 +205,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       isDangerousCompatible,
       allowWebSearch,
       useNativeWebSearch,
+      allowToolUse,
       tags: [],
       totalTokens: 0,
       totalPromptTokens: 0,

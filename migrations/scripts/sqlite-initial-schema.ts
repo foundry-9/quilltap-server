@@ -235,6 +235,7 @@ export const SQLITE_TABLES = [
       "isCheap" INTEGER DEFAULT 0,
       "allowWebSearch" INTEGER DEFAULT 0,
       "useNativeWebSearch" INTEGER DEFAULT 0,
+      "allowToolUse" INTEGER DEFAULT 1,
       "tags" TEXT DEFAULT '[]',
       "totalTokens" INTEGER DEFAULT 0,
       "totalPromptTokens" INTEGER DEFAULT 0,

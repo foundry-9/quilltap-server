@@ -27,6 +27,7 @@ export function useProfileForm(providers: ProviderConfig[]) {
         requiresApiKey: provider?.configRequirements?.requiresApiKey ?? true,
         requiresBaseUrl: provider?.configRequirements?.requiresBaseUrl ?? false,
         supportsWebSearch: provider?.capabilities?.webSearch ?? false,
+        supportsToolUse: provider?.capabilities?.toolUse ?? false,
       }
     },
     [providers]
@@ -50,6 +51,7 @@ export function useProfileForm(providers: ProviderConfig[]) {
         isDefault: profile.isDefault,
         isCheap: profile.isCheap ?? false,
         isDangerousCompatible: profile.isDangerousCompatible ?? false,
+        allowToolUse: profile.allowToolUse ?? true,
         allowWebSearch: profile.allowWebSearch ?? false,
         useNativeWebSearch: profile.useNativeWebSearch ?? false,
         // OpenRouter-specific fields
@@ -110,6 +112,7 @@ export function useProfileForm(providers: ProviderConfig[]) {
       isDefault: form.formData.isDefault,
       isCheap: form.formData.isCheap,
       isDangerousCompatible: form.formData.isDangerousCompatible,
+      allowToolUse: form.formData.allowToolUse,
       allowWebSearch: form.formData.allowWebSearch,
       useNativeWebSearch: form.formData.useNativeWebSearch,
       parameters,

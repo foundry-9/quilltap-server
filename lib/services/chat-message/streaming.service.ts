@@ -155,6 +155,16 @@ export async function buildTools(
     return { tools: [], modelSupportsNativeTools, useNativeWebSearch }
   }
 
+  // Profile-level tool override - if allowToolUse is explicitly false, skip all tools
+  if (connectionProfile.allowToolUse === false) {
+    logger.debug('Tools disabled by connection profile setting', {
+      context: 'chat-message.buildTools',
+      profileId: connectionProfile.id,
+      profileName: connectionProfile.name,
+    });
+    return { tools: [], modelSupportsNativeTools, useNativeWebSearch }
+  }
+
   // Fetch user's plugin tool configurations from database
   let toolConfigs = new Map<string, Record<string, unknown>>()
   try {

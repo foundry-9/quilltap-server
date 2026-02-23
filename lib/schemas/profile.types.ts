@@ -57,6 +57,8 @@ export const ConnectionProfileSchema = z.object({
   allowWebSearch: z.boolean().default(false),
   /** Whether to use the provider's native web search integration (if supported) */
   useNativeWebSearch: z.boolean().default(false),
+  /** Whether tool use is allowed for this profile (master override — when false, no tools are sent regardless of chat/project settings) */
+  allowToolUse: z.boolean().default(true),
   /** Whether this profile is suitable for uncensored/dangerous content (user must explicitly opt in) */
   isDangerousCompatible: z.boolean().default(false),
   tags: z.array(UUIDSchema).default([]),

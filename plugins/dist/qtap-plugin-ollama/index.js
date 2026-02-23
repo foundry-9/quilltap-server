@@ -7385,7 +7385,8 @@ var capabilities = {
   chat: true,
   imageGeneration: false,
   embeddings: true,
-  webSearch: false
+  webSearch: false,
+  toolUse: false
 };
 var attachmentSupport = {
   supportsAttachments: false,

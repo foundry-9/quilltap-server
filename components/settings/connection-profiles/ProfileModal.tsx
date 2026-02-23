@@ -167,6 +167,12 @@ export function ProfileModal({
     if (providerConfig?.configRequirements?.baseUrlDefault && !form.formData.baseUrl) {
       form.setField('baseUrl', providerConfig.configRequirements.baseUrlDefault)
     }
+
+    // Auto-default allowToolUse based on provider capability (new profiles only)
+    if (!profile?.id) {
+      const supportsToolUse = providerConfig?.capabilities?.toolUse ?? false
+      form.setField('allowToolUse', supportsToolUse)
+    }
   }
 
   // Handle model change - auto-fill name if empty (new profile only)
@@ -525,6 +531,18 @@ export function ProfileModal({
                 />
                 <label htmlFor="isDangerousCompatible" className="text-sm">
                   Uncensored-compatible (suitable for dangerous/sensitive content routing)
+                </label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="allowToolUse"
+                  checked={form.formData.allowToolUse}
+                  onChange={(e) => form.setField('allowToolUse', e.target.checked)}
+                  className="w-4 h-4 rounded"
+                />
+                <label htmlFor="allowToolUse" className="text-sm">
+                  Allow tool use (overrides chat and project tool settings when disabled)
                 </label>
               </div>
               <div className="flex items-center gap-2">

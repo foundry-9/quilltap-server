@@ -85,6 +85,8 @@ import { migrateLegacyJsonlFilesMigration } from './migrate-legacy-jsonl-files';
 import { addChatMessageMissingColumnsMigration } from './add-chat-message-missing-columns';
 // Normalize vector embedding storage to Float32 BLOBs
 import { normalizeVectorStorageMigration } from './normalize-vector-storage';
+// Add allowToolUse field to connection profiles
+import { addProfileAllowToolUseFieldMigration } from './add-profile-allow-tool-use-field';
 
 /**
  * All available migrations.
@@ -165,6 +167,8 @@ export const migrations: Migration[] = [
   addChatMessageMissingColumnsMigration,
   // Normalize vector embedding storage to Float32 BLOBs
   normalizeVectorStorageMigration,
+  // Add allowToolUse field to connection profiles
+  addProfileAllowToolUseFieldMigration,
 ];
 
 export {
@@ -240,4 +244,6 @@ export {
   addChatMessageMissingColumnsMigration,
   // Normalize vector embedding storage to Float32 BLOBs
   normalizeVectorStorageMigration,
+  // Add allowToolUse field to connection profiles
+  addProfileAllowToolUseFieldMigration,
 };
