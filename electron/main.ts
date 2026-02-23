@@ -23,7 +23,7 @@ import { DockerManager } from './docker-manager';
 import { DownloadManager } from './download-manager';
 import { HealthChecker } from './health-checker';
 import { SplashUpdate, DirectoryInfo, DirectorySizeInfo, RuntimeMode, DetailLevel } from './types';
-import { AppSettings, loadSettings, saveSettings } from './settings';
+import { AppSettings, loadSettings, saveSettings, defaultNameForPath } from './settings';
 import { getSizesForDir } from './disk-utils';
 import { runCrashGuard, markStartupSuccess, isInSafeMode } from './crash-guard';
 
@@ -128,10 +128,10 @@ async function calculateDirectorySizes(): Promise<Record<string, DirectorySizeIn
   const sizes: Record<string, DirectorySizeInfo> = {};
   for (const dir of appSettings.knownDataDirs) {
     try {
-      sizes[dir] = getSizesForDir(dir);
+      sizes[dir.path] = getSizesForDir(dir.path);
     } catch (err) {
-      console.warn('[Main] Error calculating size for', dir, err);
-      sizes[dir] = { dataSize: -1, vmSize: -1 };
+      console.warn('[Main] Error calculating size for', dir.path, err);
+      sizes[dir.path] = { dataSize: -1, vmSize: -1 };
     }
   }
   return sizes;
@@ -1077,8 +1077,8 @@ ipcMain.handle('splash:select-directory', async (): Promise<string> => {
   console.log('[Main] User selected directory:', selectedPath);
 
   // Add to known dirs if not already present
-  if (!appSettings.knownDataDirs.includes(selectedPath)) {
-    appSettings.knownDataDirs.push(selectedPath);
+  if (!appSettings.knownDataDirs.some(d => d.path === selectedPath)) {
+    appSettings.knownDataDirs.push({ path: selectedPath, name: defaultNameForPath(selectedPath) });
     saveSettings(appSettings);
   }
 
@@ -1132,16 +1132,16 @@ ipcMain.handle('splash:delete-directory', async (_event, dirPath: string, action
     }
 
     // Remove from known dirs
-    appSettings.knownDataDirs = appSettings.knownDataDirs.filter(d => d !== dirPath);
+    appSettings.knownDataDirs = appSettings.knownDataDirs.filter(d => d.path !== dirPath);
 
     // Ensure at least one directory remains
     if (appSettings.knownDataDirs.length === 0) {
-      appSettings.knownDataDirs = [DEFAULT_DATA_DIR];
+      appSettings.knownDataDirs = [{ path: DEFAULT_DATA_DIR, name: 'Default' }];
     }
 
     // If deleted dir was last-used, switch to first available
     if (appSettings.lastDataDir === dirPath) {
-      appSettings.lastDataDir = appSettings.knownDataDirs[0];
+      appSettings.lastDataDir = appSettings.knownDataDirs[0].path;
     }
 
     saveSettings(appSettings);
@@ -1160,8 +1160,8 @@ ipcMain.on('splash:start', (_event, dirPath: string) => {
 
   // Update settings
   appSettings.lastDataDir = dirPath;
-  if (!appSettings.knownDataDirs.includes(dirPath)) {
-    appSettings.knownDataDirs.push(dirPath);
+  if (!appSettings.knownDataDirs.some(d => d.path === dirPath)) {
+    appSettings.knownDataDirs.push({ path: dirPath, name: defaultNameForPath(dirPath) });
   }
   saveSettings(appSettings);
 
@@ -1180,6 +1180,24 @@ ipcMain.on('splash:show-chooser', () => {
   console.log('[Main] User interrupted auto-start — showing directory chooser');
   autoStartPending = false;
   showDirectoryChooser();
+});
+
+/** Rename a data directory's display name */
+ipcMain.handle('splash:rename-directory', (_event, dirPath: string, newName: string): boolean => {
+  const trimmed = newName.trim();
+  if (!trimmed) return false;
+
+  const entry = appSettings.knownDataDirs.find(d => d.path === dirPath);
+  if (!entry) {
+    console.warn('[Main] Rename failed — directory not found:', dirPath);
+    return false;
+  }
+
+  console.log(`[Main] Renaming directory "${entry.name}" → "${trimmed}" (${dirPath})`);
+  entry.name = trimmed;
+  saveSettings(appSettings);
+  sendDirectoryInfo();
+  return true;
 });
 
 // Handle retry from splash screen

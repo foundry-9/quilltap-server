@@ -15,6 +15,14 @@ export type SplashPhase =
   | 'ready'
   | 'error';
 
+/** A data directory with a human-readable name */
+export interface NamedDataDir {
+  /** Absolute file path */
+  path: string;
+  /** Human-readable display name */
+  name: string;
+}
+
 /** Disk usage information for a single data directory */
 export interface DirectorySizeInfo {
   /** Size of the data directory in bytes, or -1 if unknown/missing */
@@ -26,7 +34,7 @@ export interface DirectorySizeInfo {
 /** Directory information sent to the splash screen */
 export interface DirectoryInfo {
   /** All known data directories */
-  dirs: string[];
+  dirs: NamedDataDir[];
   /** The last-used directory (pre-selected) */
   lastUsed: string;
   /** Whether auto-start is enabled */

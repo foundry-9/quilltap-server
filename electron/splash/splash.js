@@ -27,6 +27,13 @@ const runtimeDockerBtn = document.getElementById('runtimeDocker');
 const runtimeVMBtn = document.getElementById('runtimeVM');
 const vmLabelEl = document.getElementById('vmLabel');
 
+// Rename elements
+const renameOverlay = document.getElementById('renameOverlay');
+const renameInput = document.getElementById('renameInput');
+const renameDialogPath = document.getElementById('renameDialogPath');
+const renameSaveBtn = document.getElementById('renameSaveBtn');
+const renameCancelBtn = document.getElementById('renameCancelBtn');
+
 // Delete confirmation elements
 const deleteOverlay = document.getElementById('deleteOverlay');
 const deleteDialogPath = document.getElementById('deleteDialogPath');
@@ -45,6 +52,9 @@ var currentRuntimeMode = 'vm';
 
 /** Directory pending deletion (for the confirmation dialog) */
 var pendingDeleteDir = '';
+
+/** Directory pending rename (path of the directory being renamed) */
+var pendingRenameDir = '';
 
 /** Phase descriptions shown to the user */
 var phaseMessages = {
@@ -136,31 +146,56 @@ function hideDeleteConfirmation() {
   deleteOverlay.classList.remove('visible');
 }
 
+/** Show the rename dialog for a directory */
+function showRenameDialog(dir) {
+  pendingRenameDir = dir.path;
+  renameInput.value = dir.name;
+  renameDialogPath.textContent = dir.path;
+  renameOverlay.classList.add('visible');
+  renameInput.focus();
+  renameInput.select();
+}
+
+/** Hide the rename dialog */
+function hideRenameDialog() {
+  pendingRenameDir = '';
+  renameOverlay.classList.remove('visible');
+}
+
 /** Render the directory list from the given info */
 function renderDirectoryList(dirs, lastUsed, sizes) {
   directoryList.innerHTML = '';
-  selectedDir = lastUsed || (dirs.length > 0 ? dirs[0] : '');
+  selectedDir = lastUsed || (dirs.length > 0 ? dirs[0].path : '');
 
   dirs.forEach(function(dir) {
+    var dirPath = dir.path;
+    var dirName = dir.name;
+
     var item = document.createElement('div');
-    item.className = 'directory-item' + (dir === selectedDir ? ' selected' : '');
+    item.className = 'directory-item' + (dirPath === selectedDir ? ' selected' : '');
 
     var radio = document.createElement('input');
     radio.type = 'radio';
     radio.name = 'dataDir';
-    radio.checked = dir === selectedDir;
+    radio.checked = dirPath === selectedDir;
 
     var infoWrap = document.createElement('div');
     infoWrap.className = 'directory-item-info';
 
+    var nameLabel = document.createElement('span');
+    nameLabel.className = 'directory-item-name';
+    nameLabel.textContent = dirName;
+    nameLabel.title = dirName;
+    infoWrap.appendChild(nameLabel);
+
     var pathLabel = document.createElement('span');
     pathLabel.className = 'directory-item-path';
-    pathLabel.textContent = dir;
-    pathLabel.title = dir;
+    pathLabel.textContent = dirPath;
+    pathLabel.title = dirPath;
     infoWrap.appendChild(pathLabel);
 
     // Add size info if available
-    var sizeText = formatSizeInfo(sizes && sizes[dir]);
+    var sizeText = formatSizeInfo(sizes && sizes[dirPath]);
     if (sizeText) {
       var sizeLabel = document.createElement('span');
       sizeLabel.className = 'directory-item-sizes';
@@ -171,20 +206,31 @@ function renderDirectoryList(dirs, lastUsed, sizes) {
     item.appendChild(radio);
     item.appendChild(infoWrap);
 
-    // Always show delete button
+    // Edit (rename) button
+    var editBtn = document.createElement('button');
+    editBtn.className = 'directory-item-edit';
+    editBtn.textContent = '\u270E'; // pencil icon
+    editBtn.title = 'Rename...';
+    editBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      showRenameDialog(dir);
+    });
+    item.appendChild(editBtn);
+
+    // Delete button
     var removeBtn = document.createElement('button');
     removeBtn.className = 'directory-item-remove';
     removeBtn.textContent = '\u00d7'; // multiplication sign (x)
     removeBtn.title = 'Delete...';
     removeBtn.addEventListener('click', function(e) {
       e.stopPropagation();
-      showDeleteConfirmation(dir);
+      showDeleteConfirmation(dirPath);
     });
     item.appendChild(removeBtn);
 
     // Click to select
     item.addEventListener('click', function() {
-      selectedDir = dir;
+      selectedDir = dirPath;
       // Update visual selection
       directoryList.querySelectorAll('.directory-item').forEach(function(el) {
         el.classList.remove('selected');
@@ -371,4 +417,28 @@ deleteConfigAndDataBtn.addEventListener('click', async function() {
 /** Delete confirmation: cancel */
 deleteCancelBtn.addEventListener('click', function() {
   hideDeleteConfirmation();
+});
+
+/** Rename: save */
+renameSaveBtn.addEventListener('click', async function() {
+  if (pendingRenameDir && renameInput.value.trim()) {
+    await window.quilltap.renameDirectory(pendingRenameDir, renameInput.value.trim());
+    hideRenameDialog();
+  }
+});
+
+/** Rename: cancel */
+renameCancelBtn.addEventListener('click', function() {
+  hideRenameDialog();
+});
+
+/** Rename: Enter key saves, Escape cancels */
+renameInput.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    renameSaveBtn.click();
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    hideRenameDialog();
+  }
 });

@@ -68,6 +68,19 @@
     </div>
   </div>
 
+  <!-- Rename overlay -->
+  <div class="rename-overlay" id="renameOverlay">
+    <div class="rename-dialog">
+      <div class="rename-dialog-title">Rename Directory</div>
+      <input type="text" id="renameInput" class="rename-input" maxlength="64" />
+      <div class="rename-dialog-path" id="renameDialogPath"></div>
+      <div class="rename-dialog-buttons">
+        <button class="btn btn-primary btn-sm" id="renameSaveBtn">Save</button>
+        <button class="btn btn-secondary btn-sm" id="renameCancelBtn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Delete confirmation overlay -->
   <div class="delete-overlay" id="deleteOverlay">
     <div class="delete-dialog">

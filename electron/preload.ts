@@ -22,6 +22,9 @@ contextBridge.exposeInMainWorld('quilltap', {
   /** Delete a directory with confirmation action ('config-only' or 'config-and-data') */
   deleteDirectory: (dirPath: string, action: string): Promise<boolean> =>
     ipcRenderer.invoke('splash:delete-directory', dirPath, action),
+  /** Rename a directory's display name */
+  renameDirectory: (dirPath: string, newName: string): Promise<boolean> =>
+    ipcRenderer.invoke('splash:rename-directory', dirPath, newName),
   /** Save chosen directory and begin startup */
   startWithDirectory: (dirPath: string) => ipcRenderer.send('splash:start', dirPath),
   /** Toggle auto-start preference */

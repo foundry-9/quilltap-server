@@ -2,25 +2,31 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { app } from 'electron';
 import { DEFAULT_DATA_DIR } from './constants';
-import { RuntimeMode } from './types';
+import { NamedDataDir, RuntimeMode } from './types';
 
 /** Persisted application settings for data directory management */
 export interface AppSettings {
   /** Last-used data directory path */
   lastDataDir: string;
   /** All directories the user has used or added */
-  knownDataDirs: string[];
+  knownDataDirs: NamedDataDir[];
   /** Whether to auto-start with lastDataDir (skip chooser) */
   autoStart: boolean;
   /** Runtime mode: 'docker' or 'vm' (Lima/WSL2) */
   runtimeMode: RuntimeMode;
 }
 
+/** Derive a human-readable name for a data directory path */
+export function defaultNameForPath(dirPath: string): string {
+  if (dirPath === DEFAULT_DATA_DIR) return 'Default';
+  return path.basename(dirPath) || dirPath;
+}
+
 /** Default settings for first launch */
 function defaultSettings(): AppSettings {
   return {
     lastDataDir: DEFAULT_DATA_DIR,
-    knownDataDirs: [DEFAULT_DATA_DIR],
+    knownDataDirs: [{ path: DEFAULT_DATA_DIR, name: 'Default' }],
     autoStart: false,
     runtimeMode: 'vm',
   };
@@ -42,11 +48,26 @@ export function loadSettings(): AppSettings {
 
       // Merge with defaults for forward-compatibility
       const defaults = defaultSettings();
+
+      // Migrate knownDataDirs from old string[] format to NamedDataDir[]
+      let knownDataDirs: NamedDataDir[] = defaults.knownDataDirs;
+      if (Array.isArray(parsed.knownDataDirs) && parsed.knownDataDirs.length > 0) {
+        if (typeof parsed.knownDataDirs[0] === 'string') {
+          // Old format: string[] — migrate to NamedDataDir[]
+          console.log('[Settings] Migrating knownDataDirs from string[] to NamedDataDir[]');
+          knownDataDirs = (parsed.knownDataDirs as string[]).map((dirPath: string) => ({
+            path: dirPath,
+            name: defaultNameForPath(dirPath),
+          }));
+        } else {
+          // New format: NamedDataDir[]
+          knownDataDirs = parsed.knownDataDirs;
+        }
+      }
+
       return {
         lastDataDir: parsed.lastDataDir || defaults.lastDataDir,
-        knownDataDirs: Array.isArray(parsed.knownDataDirs) && parsed.knownDataDirs.length > 0
-          ? parsed.knownDataDirs
-          : defaults.knownDataDirs,
+        knownDataDirs,
         autoStart: typeof parsed.autoStart === 'boolean' ? parsed.autoStart : defaults.autoStart,
         runtimeMode: parsed.runtimeMode === 'docker' ? 'docker' : 'vm',
       };

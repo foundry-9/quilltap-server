@@ -303,9 +303,18 @@ body {
   gap: 1px;
 }
 
+.directory-item-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e0e0e0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .directory-item-path {
-  font-size: 12px;
-  color: #cccccc;
+  font-size: 10px;
+  color: #888888;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -335,6 +344,24 @@ body {
 .directory-item-remove:hover {
   color: #ef4444;
   background: rgba(239, 68, 68, 0.1);
+}
+
+.directory-item-edit {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: #666666;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: color 0.15s, background 0.15s;
+  line-height: 1;
+}
+
+.directory-item-edit:hover {
+  color: #8b8bf0;
+  background: rgba(99, 102, 241, 0.1);
 }
 
 .directory-actions {
@@ -542,4 +569,71 @@ body {
   font-size: 11px;
   color: #ef4444;
   font-weight: 500;
+}
+
+/* Rename overlay */
+.rename-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+  -webkit-app-region: no-drag;
+}
+
+.rename-overlay.visible {
+  display: flex;
+}
+
+.rename-dialog {
+  background: #2a2a2a;
+  border: 1px solid #444444;
+  border-radius: 10px;
+  padding: 20px;
+  max-width: 380px;
+  width: 90%;
+  text-align: center;
+}
+
+.rename-dialog-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #e0e0e0;
+  margin-bottom: 12px;
+}
+
+.rename-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #555555;
+  border-radius: 6px;
+  background: #1a1a1a;
+  color: #e0e0e0;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+  margin-bottom: 8px;
+}
+
+.rename-input:focus {
+  border-color: #6366f1;
+}
+
+.rename-dialog-path {
+  font-size: 11px;
+  color: #777777;
+  margin-bottom: 14px;
+  word-break: break-all;
+  font-family: monospace;
+}
+
+.rename-dialog-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
 }
