@@ -81,6 +81,10 @@ function extractTarBuffer(buffer, destDir) {
 
     switch (type) {
       case 'directory':
+        // If a file exists at this path, remove it so the directory can be created
+        if (fs.existsSync(fullPath) && !fs.statSync(fullPath).isDirectory()) {
+          fs.unlinkSync(fullPath);
+        }
         fs.mkdirSync(fullPath, { recursive: true });
         break;
 
@@ -88,6 +92,11 @@ function extractTarBuffer(buffer, destDir) {
         // Ensure parent directory exists
         const dir = path.dirname(fullPath);
         fs.mkdirSync(dir, { recursive: true });
+
+        // If a directory exists at the file path, remove it first
+        if (fs.existsSync(fullPath) && fs.statSync(fullPath).isDirectory()) {
+          fs.rmSync(fullPath, { recursive: true, force: true });
+        }
 
         const fileData = buffer.subarray(offset, offset + size);
         fs.writeFileSync(fullPath, fileData);
