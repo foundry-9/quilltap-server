@@ -23,9 +23,11 @@ import {
 } from '../../interfaces';
 import { SQLiteConfig, loadSQLiteConfig } from '../../config';
 import { getSQLiteClient, closeSQLiteClient, isSQLiteConnected, setupSQLiteShutdownHandlers } from './client';
+import { runIntegrityCheck, startPeriodicCheckpoints } from './protection';
+import { createPhysicalBackup, applyRetentionPolicy } from './physical-backup';
 import { generateDDL, extractSchemaMetadata } from '../../schema-translator';
 import { buildSelectQuery, buildCountQuery, buildUpdateQuery, buildDeleteQuery, translateFilter } from './query-translator';
-import { documentToRow, rowToDocument, toJson, fromJson } from './json-columns';
+import { documentToRow, rowToDocument, toJson, fromJson, fromJsonSafe, blobToEmbedding } from './json-columns';
 import { logger } from '@/lib/logger';
 
 // ============================================================================
@@ -41,14 +43,16 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
   private jsonColumns: Set<string>;
   private arrayColumns: Set<string>;
   private booleanColumns: Set<string>;
+  private blobColumns: Set<string>;
   private preparedStatements: Map<string, Statement> = new Map();
 
-  constructor(db: DatabaseType, name: string, jsonColumns: string[] = [], arrayColumns: string[] = [], booleanColumns: string[] = []) {
+  constructor(db: DatabaseType, name: string, jsonColumns: string[] = [], arrayColumns: string[] = [], booleanColumns: string[] = [], blobColumns: string[] = []) {
     this.db = db;
     this.name = name;
     this.jsonColumns = new Set(jsonColumns);
     this.arrayColumns = new Set(arrayColumns);
     this.booleanColumns = new Set(booleanColumns);
+    this.blobColumns = new Set(blobColumns);
   }
 
   /**
@@ -107,7 +111,7 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
   async insertOne(document: T): Promise<InsertResult> {
     try {
       const doc = document as Record<string, unknown>;
-      const row = documentToRow(doc, Array.from(this.jsonColumns));
+      const row = documentToRow(doc, Array.from(this.jsonColumns), this.blobColumns);
 
       const columns = Object.keys(row);
       const placeholders = columns.map(() => '?').join(', ');
@@ -140,7 +144,7 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
     try {
       const insertedIds: string[] = [];
       const firstDoc = documents[0] as Record<string, unknown>;
-      const columns = Object.keys(documentToRow(firstDoc, Array.from(this.jsonColumns)));
+      const columns = Object.keys(documentToRow(firstDoc, Array.from(this.jsonColumns), this.blobColumns));
       const placeholders = columns.map(() => '?').join(', ');
 
       const sql = `INSERT INTO "${this.name}" (${columns.map(c => `"${c}"`).join(', ')}) VALUES (${placeholders})`;
@@ -149,7 +153,7 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
       const insertAll = this.db.transaction((docs: T[]) => {
         for (const document of docs) {
           const doc = document as Record<string, unknown>;
-          const row = documentToRow(doc, Array.from(this.jsonColumns));
+          const row = documentToRow(doc, Array.from(this.jsonColumns), this.blobColumns);
           stmt.run(...Object.values(row));
           insertedIds.push(doc.id as string);
         }
@@ -358,6 +362,27 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
       // Skip MongoDB _id field if somehow present
       if (key === '_id') continue;
 
+      // BLOB columns: convert Buffer back to number[]
+      if (this.blobColumns.has(key)) {
+        if (Buffer.isBuffer(value)) {
+          result[key] = blobToEmbedding(value);
+        } else if (value === null) {
+          result[key] = undefined;
+        } else {
+          // Legacy: might still be JSON text during migration transition
+          if (typeof value === 'string') {
+            try {
+              result[key] = JSON.parse(value);
+            } catch {
+              result[key] = undefined;
+            }
+          } else {
+            result[key] = value;
+          }
+        }
+        continue;
+      }
+
       // Check if this is a boolean column (from schema metadata or naming convention)
       const isBoolean = this.booleanColumns.has(key) ||
         key.startsWith('is') ||
@@ -370,7 +395,24 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
         if (value === null) {
           result[key] = undefined;  // null JSON object → undefined for .optional() schemas
         } else if (typeof value === 'string') {
-          result[key] = fromJson(value);
+          // Use fromJsonSafe to handle corrupted/truncated JSON gracefully
+          // Returns null for empty strings or parse failures - convert to undefined for .optional() schemas
+          const parsed = fromJsonSafe(value);
+          if (parsed === null && value !== '' && value !== 'null') {
+            // Non-empty string that failed to parse - likely corrupted data
+            logger.warn('Corrupted JSON in column, using default', {
+              table: this.name,
+              column: key,
+              valueLength: value.length,
+              valuePreview: value.substring(0, 80),
+            });
+          }
+          result[key] = parsed === null ? undefined : parsed;
+        } else if (Buffer.isBuffer(value)) {
+          // BLOB value in a JSON column — this happens when a column was converted
+          // from JSON text to BLOB storage (e.g., embeddings) but blob columns weren't
+          // registered for this collection. Deserialize as Float32 embedding.
+          result[key] = blobToEmbedding(value);
         } else {
           result[key] = value;  // Already parsed (shouldn't happen, but handle gracefully)
         }
@@ -386,8 +428,9 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
       } else if (typeof value === 'number') {
         result[key] = value;
       } else {
-        // Keep null as null for .nullable() fields, pass through other values
-        result[key] = value;
+        // Convert null to undefined for Zod .optional() compatibility
+        // (.nullable().optional() also accepts undefined, so this is safe for all schemas)
+        result[key] = value === null ? undefined : value;
       }
     }
 
@@ -420,6 +463,7 @@ export class SQLiteBackend implements DatabaseBackend {
   private collectionJsonColumns: Map<string, string[]> = new Map();
   private collectionArrayColumns: Map<string, string[]> = new Map();
   private collectionBooleanColumns: Map<string, string[]> = new Map();
+  private collectionBlobColumns: Map<string, string[]> = new Map();
 
   constructor(config?: SQLiteConfig) {
     this.config = config || loadSQLiteConfig();
@@ -444,6 +488,22 @@ export class SQLiteBackend implements DatabaseBackend {
       this._state = 'connected';
 
       setupSQLiteShutdownHandlers();
+
+      // Run integrity check (synchronous, logs result but doesn't block startup)
+      runIntegrityCheck(this.db);
+
+      // Start periodic WAL checkpoints
+      startPeriodicCheckpoints(this.db);
+
+      // Create a physical backup on startup (async, non-blocking)
+      const db = this.db;
+      createPhysicalBackup(db)
+        .then(() => applyRetentionPolicy())
+        .catch((error) => {
+          logger.error('Startup physical backup or retention policy failed', {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
 
       logger.info('SQLite backend connected', { path: this.config.path });
     } catch (error) {
@@ -483,6 +543,18 @@ export class SQLiteBackend implements DatabaseBackend {
   /**
    * Get a collection by name
    */
+  /**
+   * Register columns that should be stored as Float32 BLOBs instead of JSON text.
+   * Call this before using getCollection for tables with embedding columns.
+   */
+  registerBlobColumns(tableName: string, columns: string[]): void {
+    const existing = this.collectionBlobColumns.get(tableName) || [];
+    const merged = [...new Set([...existing, ...columns])];
+    this.collectionBlobColumns.set(tableName, merged);
+
+    logger.debug('Registered blob columns', { table: tableName, columns: merged });
+  }
+
   getCollection<T = unknown>(name: string): DatabaseCollection<T> {
     if (!this.db) {
       throw new Error('SQLite backend not connected');
@@ -491,7 +563,8 @@ export class SQLiteBackend implements DatabaseBackend {
     const jsonColumns = this.collectionJsonColumns.get(name) || [];
     const arrayColumns = this.collectionArrayColumns.get(name) || [];
     const booleanColumns = this.collectionBooleanColumns.get(name) || [];
-    return new SQLiteCollection<T>(this.db, name, jsonColumns, arrayColumns, booleanColumns);
+    const blobColumns = this.collectionBlobColumns.get(name) || [];
+    return new SQLiteCollection<T>(this.db, name, jsonColumns, arrayColumns, booleanColumns, blobColumns);
   }
 
   /**
@@ -552,6 +625,7 @@ export class SQLiteBackend implements DatabaseBackend {
       this.collectionJsonColumns.delete(name);
       this.collectionArrayColumns.delete(name);
       this.collectionBooleanColumns.delete(name);
+      this.collectionBlobColumns.delete(name);
 
       logger.info('Dropped collection', { table: name });
     } catch (error) {
@@ -623,7 +697,7 @@ export class SQLiteBackend implements DatabaseBackend {
 
     // SQLite transactions in better-sqlite3 are handled via the transaction() method
     // For the interface compliance, we provide a wrapper
-    return new SQLiteTransaction(this.db, this.collectionJsonColumns, this.collectionBooleanColumns);
+    return new SQLiteTransaction(this.db, this.collectionJsonColumns, this.collectionBooleanColumns, this.collectionBlobColumns);
   }
 
   /**
@@ -671,11 +745,13 @@ class SQLiteTransaction implements DatabaseTransaction {
   private rolledBack = false;
   private jsonColumns: Map<string, string[]>;
   private booleanColumns: Map<string, string[]>;
+  private blobColumns: Map<string, string[]>;
 
-  constructor(db: DatabaseType, jsonColumns: Map<string, string[]>, booleanColumns: Map<string, string[]>) {
+  constructor(db: DatabaseType, jsonColumns: Map<string, string[]>, booleanColumns: Map<string, string[]>, blobColumns: Map<string, string[]> = new Map()) {
     this.db = db;
     this.jsonColumns = jsonColumns;
     this.booleanColumns = booleanColumns;
+    this.blobColumns = blobColumns;
     // Start the transaction
     this.db.exec('BEGIN IMMEDIATE');
   }
@@ -699,7 +775,8 @@ class SQLiteTransaction implements DatabaseTransaction {
   getCollection<T = unknown>(name: string): DatabaseCollection<T> {
     const jsonCols = this.jsonColumns.get(name) || [];
     const boolCols = this.booleanColumns.get(name) || [];
-    return new SQLiteCollection<T>(this.db, name, jsonCols, boolCols);
+    const blobCols = this.blobColumns.get(name) || [];
+    return new SQLiteCollection<T>(this.db, name, jsonCols, [], boolCols, blobCols);
   }
 }
 

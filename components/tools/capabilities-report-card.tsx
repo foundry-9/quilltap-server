@@ -9,7 +9,7 @@ import { CapabilitiesReportDialog } from './capabilities-report-dialog'
 interface ReportInfo {
   id: string
   filename: string
-  s3Key: string
+  storageKey: string
   createdAt: string
   size: number
 }

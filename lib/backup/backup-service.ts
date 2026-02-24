@@ -2,19 +2,27 @@
  * Backup Service
  *
  * Creates complete user data backups by collecting all user data from the database
- * and S3, then packaging it into a ZIP archive.
+ * and file storage, then packaging it into a ZIP archive on disk using shell `zip`.
+ * No in-memory zip operations — files are staged in a temp directory and compressed
+ * by the `zip` binary to avoid OOM in memory-constrained VMs.
  */
 
-import archiver from 'archiver';
+import { execFile } from 'child_process';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
+import { promisify } from 'util';
 import { logger } from '@/lib/logger';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { getNpmPluginsDir } from '@/lib/paths';
+import { getRawDatabase } from '@/lib/database/backends/sqlite/client';
+import { runBackupCheckpoint } from '@/lib/database/backends/sqlite/protection';
 import type { BackupManifest, BackupData, ChatWithMessages } from './types';
 import type { ChatEvent } from '@/lib/schemas/types';
+
+const execFileAsync = promisify(execFile);
 
 // Get app version from package.json
 const APP_VERSION = process.env.npm_package_version || '2.0.0';
@@ -166,153 +174,155 @@ function createManifest(userId: string, data: Omit<BackupData, 'manifest'>): Bac
 }
 
 /**
- * Creates a complete backup as a ZIP buffer
+ * Writes a JSON file to the staging directory
+ */
+async function writeJsonFile(filePath: string, data: unknown): Promise<void> {
+  await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.promises.writeFile(filePath, JSON.stringify(data, null, 2), 'utf8');
+}
+
+/**
+ * Recursively removes a directory and all its contents
+ */
+async function cleanupDir(dirPath: string): Promise<void> {
+  try {
+    await fs.promises.rm(dirPath, { recursive: true, force: true });
+  } catch (error) {
+    moduleLogger.warn('Failed to clean up temp directory', {
+      dirPath,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+/**
+ * Creates a complete backup as a ZIP file on disk.
+ *
+ * Stages all data in a temp directory and shells out to `zip -r` to create
+ * the archive. At no point is more than one user file buffer in memory.
+ *
+ * @returns The path to the zip file on disk and the backup manifest
  */
 export async function createBackup(userId: string): Promise<{
-  zipBuffer: Buffer;
+  zipPath: string;
   manifest: BackupManifest;
 }> {
   moduleLogger.info('Starting backup creation', { userId });
+
+  // Flush WAL to ensure logical backup reads consistent data
+  const rawDb = getRawDatabase();
+  if (rawDb) {
+    runBackupCheckpoint(rawDb);
+  }
 
   // Collect all user data
   const data = await collectUserData(userId);
   const manifest = createManifest(userId, data);
 
-  const fullData: BackupData = {
-    manifest,
-    ...data,
-  };
-  // Create ZIP archive
-  const archive = archiver('zip', {
-    zlib: { level: 9 }, // Maximum compression
-  });
-
-  const chunks: Buffer[] = [];
-
-  // Collect data chunks from the archive
-  archive.on('data', (chunk: Buffer) => {
-    chunks.push(chunk);
-  });
-
-  // Handle archive errors
-  archive.on('error', (err) => {
-    moduleLogger.error('Archive error', { userId, error: err.message }, err);
-    throw err;
-  });
-
-  archive.on('warning', (err) => {
-    moduleLogger.warn('Archive warning', { userId, error: err.message });
-  });
-
-  // Generate backup folder name
+  // Create temp directory for staging
+  const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'quilltap-backup-'));
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const folderName = `quilltap-backup-${timestamp}`;
+  const stagingDir = path.join(tempDir, folderName);
 
-  // Add manifest.json
-  archive.append(JSON.stringify(manifest, null, 2), {
-    name: `${folderName}/manifest.json`,
-  });
+  moduleLogger.debug('Created staging directory', { tempDir, folderName });
 
-  // Add data files
-  archive.append(JSON.stringify(data.characters, null, 2), {
-    name: `${folderName}/data/characters.json`,
-  });
-  archive.append(JSON.stringify(data.chats, null, 2), {
-    name: `${folderName}/data/chats.json`,
-  });
-  archive.append(JSON.stringify(data.tags, null, 2), {
-    name: `${folderName}/data/tags.json`,
-  });
-  archive.append(JSON.stringify(data.connectionProfiles, null, 2), {
-    name: `${folderName}/data/connection-profiles.json`,
-  });
-  archive.append(JSON.stringify(data.imageProfiles, null, 2), {
-    name: `${folderName}/data/image-profiles.json`,
-  });
-  archive.append(JSON.stringify(data.embeddingProfiles, null, 2), {
-    name: `${folderName}/data/embedding-profiles.json`,
-  });
-  archive.append(JSON.stringify(data.memories, null, 2), {
-    name: `${folderName}/data/memories.json`,
-  });
-  archive.append(JSON.stringify(data.files, null, 2), {
-    name: `${folderName}/data/files.json`,
-  });
-  archive.append(JSON.stringify(data.promptTemplates, null, 2), {
-    name: `${folderName}/data/prompt-templates.json`,
-  });
-  archive.append(JSON.stringify(data.roleplayTemplates, null, 2), {
-    name: `${folderName}/data/roleplay-templates.json`,
-  });
-  archive.append(JSON.stringify(data.providerModels, null, 2), {
-    name: `${folderName}/data/provider-models.json`,
-  });
-  archive.append(JSON.stringify(data.projects, null, 2), {
-    name: `${folderName}/data/projects.json`,
-  });
-  archive.append(JSON.stringify(data.llmLogs, null, 2), {
-    name: `${folderName}/data/llm-logs.json`,
-  });
-  archive.append(JSON.stringify(data.pluginConfigs || [], null, 2), {
-    name: `${folderName}/data/plugin-configs.json`,
-  });
+  try {
+    // Create staging directory structure
+    await fs.promises.mkdir(path.join(stagingDir, 'data'), { recursive: true });
 
-  // Add actual files from storage
+    // Write data files sequentially to limit memory pressure
+    await writeJsonFile(path.join(stagingDir, 'data', 'characters.json'), data.characters);
+    await writeJsonFile(path.join(stagingDir, 'data', 'chats.json'), data.chats);
+    await writeJsonFile(path.join(stagingDir, 'data', 'tags.json'), data.tags);
+    await writeJsonFile(path.join(stagingDir, 'data', 'connection-profiles.json'), data.connectionProfiles);
+    await writeJsonFile(path.join(stagingDir, 'data', 'image-profiles.json'), data.imageProfiles);
+    await writeJsonFile(path.join(stagingDir, 'data', 'embedding-profiles.json'), data.embeddingProfiles);
+    await writeJsonFile(path.join(stagingDir, 'data', 'memories.json'), data.memories);
+    await writeJsonFile(path.join(stagingDir, 'data', 'files.json'), data.files);
+    await writeJsonFile(path.join(stagingDir, 'data', 'prompt-templates.json'), data.promptTemplates);
+    await writeJsonFile(path.join(stagingDir, 'data', 'roleplay-templates.json'), data.roleplayTemplates);
+    await writeJsonFile(path.join(stagingDir, 'data', 'provider-models.json'), data.providerModels);
+    await writeJsonFile(path.join(stagingDir, 'data', 'projects.json'), data.projects);
+    await writeJsonFile(path.join(stagingDir, 'data', 'llm-logs.json'), data.llmLogs);
+    await writeJsonFile(path.join(stagingDir, 'data', 'plugin-configs.json'), data.pluginConfigs || []);
 
-  for (const file of data.files) {
-    if (file.storageKey) {
-      try {
-        const fileBuffer = await fileStorageManager.downloadFile(file);
-        archive.append(fileBuffer, {
-          name: `${folderName}/files/${file.category}/${file.id}_${file.originalFilename}`,
-        });
-      } catch (error) {
-        moduleLogger.warn('Failed to download file for backup, skipping', {
-          fileId: file.id,
-          storageKey: file.storageKey,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        // Continue with backup even if some files fail
-      }
-    }
-  }
+    moduleLogger.debug('Wrote all JSON data files to staging directory');
 
-  // Add npm-installed plugins directory
-  const npmPluginsDir = getNpmPluginsDir();
-  if (fs.existsSync(npmPluginsDir)) {
-    try {
-      const pluginDirs = fs.readdirSync(npmPluginsDir, { withFileTypes: true });
-      for (const entry of pluginDirs) {
-        if (entry.isDirectory()) {
-          const pluginPath = path.join(npmPluginsDir, entry.name);
-          archive.directory(pluginPath, `${folderName}/plugins/npm/${entry.name}`);
-          moduleLogger.debug('Added npm plugin to backup', { pluginName: entry.name });
+    // Download and stage user files one at a time to limit memory
+    let filesStaged = 0;
+    for (const file of data.files) {
+      if (file.storageKey) {
+        try {
+          const fileBuffer = await fileStorageManager.downloadFile(file);
+          const fileDest = path.join(stagingDir, 'files', file.category, `${file.id}_${file.originalFilename}`);
+          await fs.promises.mkdir(path.dirname(fileDest), { recursive: true });
+          await fs.promises.writeFile(fileDest, fileBuffer);
+          filesStaged++;
+        } catch (error) {
+          moduleLogger.warn('Failed to download file for backup, skipping', {
+            fileId: file.id,
+            storageKey: file.storageKey,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          // Continue with backup even if some files fail
         }
       }
-    } catch (error) {
-      moduleLogger.warn('Failed to add npm plugins to backup', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      // Continue with backup even if npm plugins fail
     }
-  }
 
-  // Finalize and wait for the archive to complete
-  await new Promise<void>((resolve, reject) => {
-    archive.on('end', () => {
-      resolve();
+    moduleLogger.debug('Staged user files', { filesStaged, totalFiles: data.files.length });
+
+    // Copy npm-installed plugins
+    const npmPluginsDir = getNpmPluginsDir();
+    if (fs.existsSync(npmPluginsDir)) {
+      try {
+        const pluginDirs = fs.readdirSync(npmPluginsDir, { withFileTypes: true });
+        for (const entry of pluginDirs) {
+          if (entry.isDirectory()) {
+            const srcPath = path.join(npmPluginsDir, entry.name);
+            const destPath = path.join(stagingDir, 'plugins', 'npm', entry.name);
+            await fs.promises.cp(srcPath, destPath, { recursive: true });
+            moduleLogger.debug('Added npm plugin to backup', { pluginName: entry.name });
+          }
+        }
+      } catch (error) {
+        moduleLogger.warn('Failed to add npm plugins to backup', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        // Continue with backup even if npm plugins fail
+      }
+    }
+
+    // Write manifest last (after all data is staged)
+    await writeJsonFile(path.join(stagingDir, 'manifest.json'), manifest);
+
+    // Create the zip using shell `zip -r`
+    const zipFilePath = path.join(tempDir, `${folderName}.zip`);
+
+    moduleLogger.debug('Running shell zip command', { cwd: tempDir, folderName });
+
+    await execFileAsync('zip', ['-r', zipFilePath, folderName], {
+      cwd: tempDir,
+      maxBuffer: 10 * 1024 * 1024, // 10MB for zip stdout (progress output)
     });
-    archive.on('error', reject);
-    archive.finalize();
-  });
 
-  const zipBuffer = Buffer.concat(chunks.map(c => new Uint8Array(c)));
+    // Clean up the staging folder (keep only the zip)
+    await cleanupDir(stagingDir);
 
-  moduleLogger.info('Backup creation completed', {
-    userId,
-    zipSize: zipBuffer.length,
-    manifest,
-  });
+    // Get final zip size for logging
+    const zipStat = await fs.promises.stat(zipFilePath);
 
-  return { zipBuffer, manifest };
+    moduleLogger.info('Backup creation completed', {
+      userId,
+      zipPath: zipFilePath,
+      zipSize: zipStat.size,
+      manifest,
+    });
+
+    return { zipPath: zipFilePath, manifest };
+  } catch (error) {
+    // Clean up the entire temp dir on failure
+    await cleanupDir(tempDir);
+    throw error;
+  }
 }

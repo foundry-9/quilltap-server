@@ -205,6 +205,8 @@ export interface ProviderCapabilities {
 
   /** Whether the provider supports web search functionality */
   webSearch: boolean;
+  /** Whether the provider supports tool use / function calling (defaults to false if omitted) */
+  toolUse?: boolean;
 }
 
 /**

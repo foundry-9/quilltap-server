@@ -1,8 +1,8 @@
 # Dead Code Analysis Report
 
-**Last Updated**: 2026-02-08
+**Last Updated**: 2026-02-20
 **Tool Used**: knip
-**Codebase**: Quilltap v2.10.0-dev
+**Codebase**: Quilltap v3.0-dev
 
 ---
 
@@ -12,10 +12,59 @@ Dead code analysis is performed periodically using knip. A knip configuration fi
 
 | Category | Status |
 |----------|--------|
-| Unused Files | Cleaned up 2026-01-30 |
+| Unused Files | Cleaned up 2026-02-20 |
 | Migration Scripts | Deleted (migrations complete) |
 | Unused Dependencies | bcrypt, qrcode, ts-jest removed 2026-01-30 |
-| Unused Exports | Low priority, ~620 remaining (mostly barrel re-exports) |
+| Unused Exports | Low priority, ~600 remaining (mostly barrel re-exports) |
+
+---
+
+## Cleanup Completed (2026-02-20)
+
+### Files Removed
+
+| File | Reason |
+|------|--------|
+| `components/layout/left-sidebar/characters-section.tsx` | Never imported; superseded by homepage version |
+| `components/layout/left-sidebar/chats-section.tsx` | Never imported; superseded by homepage/prospero versions |
+| `components/layout/left-sidebar/files-section.tsx` | Never imported |
+| `components/layout/left-sidebar/projects-section.tsx` | Never imported; superseded by homepage version |
+| `components/settings/chat-settings-tab.tsx` | Deprecated re-export shim; never imported |
+| `components/settings/chat-settings/index.tsx` | Default export `ChatSettingsTab` unused; sub-modules imported directly |
+| `components/ui/brand-logo.tsx` | `BrandLogo` component never imported |
+
+### Functions Removed
+
+| Location | Function | Reason |
+|----------|----------|--------|
+| `lib/toast.tsx` | `removeToast()` | Never imported or called |
+| `lib/toast.tsx` | `clearToasts()` | Never imported or called |
+| `components/characters/TemplateHighlighter.tsx` | `replaceTemplatesWithNames()` | Never imported |
+| `components/providers/theme-style-injector.tsx` | `generateThemeCSS()` | Never imported |
+| `components/settings/appearance/hooks/useThemePreview.ts` | `clearAllThemeTokensCache()` | Never imported |
+| `lib/llm/cheap-llm.ts` | `getModelCostTier()` | Never imported |
+| `lib/llm/cheap-llm.ts` | `compareModelCosts()` | Never imported |
+| `lib/llm/cheap-llm.ts` | `getRecommendedCheapModels()` | Never imported |
+| `lib/llm/pricing-fetcher.ts` | `getAllModelsSortedByCost()` | Never imported |
+| `lib/llm/pricing-fetcher.ts` | `clearPricingCache()` | Never imported |
+| `lib/llm/pricing-fetcher.ts` | `isCacheFresh()` | Never imported |
+
+### Functions Unexported (kept as internal)
+
+| Location | Function | Reason |
+|----------|----------|--------|
+| `lib/toast.tsx` | `showToast()` | Used internally by convenience wrappers only |
+| `lib/llm/pricing-fetcher.ts` | `refreshPricingCache()` | Used internally by `getPricingCache()` only |
+
+### Duplicates Consolidated
+
+| Functions | New Location | Former Locations |
+|-----------|-------------|------------------|
+| `resolveImageProfileForChat()` | `lib/image-gen/profile-resolution.ts` | `lib/background-jobs/handlers/title-update.ts`, `app/api/v1/chats/[id]/actions/story-background.ts` |
+
+### Configuration Changes
+
+- Added `electron/**` to `knip.json` ignore list (Electron code is independently compiled)
 
 ---
 

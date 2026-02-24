@@ -262,42 +262,11 @@ jest.mock('@/lib/repositories/factory', () => ({
 
 // Mock file storage manager - used by cascade-delete and other modules
 jest.mock('@/lib/file-storage/manager', () => {
-  const mockBackend = {
-    getMetadata: jest.fn().mockReturnValue({
-      providerId: 'local',
-      displayName: 'Local Storage',
-      description: 'Mock local storage',
-      capabilities: {
-        presignedUrls: false,
-        publicUrls: false,
-        streamingUpload: true,
-        streamingDownload: true,
-        copy: true,
-        list: true,
-        metadata: true,
-      },
-    }),
-    testConnection: jest.fn().mockResolvedValue({ success: true, message: 'Mock connection OK', latencyMs: 1 }),
-    upload: jest.fn().mockResolvedValue(undefined),
-    download: jest.fn().mockResolvedValue(Buffer.from('mock file content')),
-    delete: jest.fn().mockResolvedValue(undefined),
-    exists: jest.fn().mockResolvedValue(true),
-    copy: jest.fn().mockResolvedValue(undefined),
-    getFileMetadata: jest.fn().mockResolvedValue({ size: 1024, contentType: 'image/jpeg', lastModified: new Date() }),
-    list: jest.fn().mockResolvedValue([]),
-    getProxyUrl: jest.fn().mockImplementation((key: string) => `/api/v1/files/proxy/${key}`),
-  }
-
   return {
     fileStorageManager: {
       initialize: jest.fn().mockResolvedValue(undefined),
       isInitialized: jest.fn().mockReturnValue(true),
-      registerProviderPlugin: jest.fn(),
-      getBackend: jest.fn().mockReturnValue(mockBackend),
-      getDefaultBackend: jest.fn().mockReturnValue(mockBackend),
-      getBackendForFile: jest.fn().mockReturnValue(mockBackend),
-      getBackendForProject: jest.fn().mockReturnValue(mockBackend),
-      uploadFile: jest.fn().mockResolvedValue({ storageKey: 'mock-storage-key', mountPointId: 'mock-mount-point' }),
+      uploadFile: jest.fn().mockResolvedValue({ storageKey: 'mock-storage-key' }),
       downloadFile: jest.fn().mockResolvedValue(Buffer.from('mock file content')),
       deleteFile: jest.fn().mockResolvedValue(undefined),
       getFileUrl: jest.fn().mockResolvedValue('http://localhost:3000/api/v1/files/proxy/mock-key'),

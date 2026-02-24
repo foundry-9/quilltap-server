@@ -161,7 +161,7 @@ export function ClothingRecordEditor({
                 </button>
               </div>
               {showPreview ? (
-                <div className="w-full px-3 py-2 border border-border bg-muted text-foreground rounded-lg min-h-[120px] prose dark:prose-invert prose-sm max-w-none">
+                <div className="w-full px-3 py-2 border border-border bg-muted text-foreground rounded-lg min-h-[120px] prose qt-prose-auto prose-sm max-w-none">
                   {formData.description ? (
                     <MessageContent content={formData.description} />
                   ) : (

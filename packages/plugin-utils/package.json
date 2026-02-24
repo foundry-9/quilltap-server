@@ -58,7 +58,7 @@
     }
   },
   "devDependencies": {
-    "openai": "^6.15.0",
+    "openai": "^6.22.0",
     "tsup": "^8.0.0",
     "typescript": "^5.3.0"
   },

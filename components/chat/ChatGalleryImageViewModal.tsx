@@ -6,6 +6,7 @@ import { showConfirmation } from '@/lib/alert'
 import { safeJsonParse } from '@/lib/fetch-helpers'
 import { useImageNavigation } from '@/hooks/useImageNavigation'
 import DeletedImagePlaceholder from '@/components/images/DeletedImagePlaceholder'
+import { triggerDownload } from '@/lib/download-utils'
 
 interface ChatFile {
   id: string
@@ -94,14 +95,7 @@ export default function ChatGalleryImageViewModal({
     try {
       const response = await fetch(file.url)
       const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = file.filename
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
+      await triggerDownload(blob, file.filename)
     } catch (error) {
       console.error('Failed to download image:', { error: error instanceof Error ? error.message : String(error) })
     }
@@ -227,7 +221,7 @@ export default function ChatGalleryImageViewModal({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-sm"
+      className="fixed inset-0 z-[60] flex items-center justify-center qt-bg-overlay backdrop-blur-sm"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
@@ -388,7 +382,7 @@ export default function ChatGalleryImageViewModal({
       </div>
 
       {/* Filename at bottom */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/70 text-sm bg-black/50 px-3 py-1 rounded">
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 qt-text-overlay-muted text-sm qt-bg-overlay-caption px-3 py-1 rounded">
         {file.filename}
       </div>
     </div>

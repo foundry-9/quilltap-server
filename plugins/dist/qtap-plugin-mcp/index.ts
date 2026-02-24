@@ -16,9 +16,12 @@ import type {
   ToolExecutionResult,
   UniversalTool,
 } from '@quilltap/plugin-types';
+import { logger } from '@/lib/logger';
 import { connectionManager } from './connection-manager';
 import { parseServerConfigs } from './security';
 import type { MCPPluginConfig } from './types';
+
+const pluginLogger = logger.child({ module: 'mcp-plugin' });
 
 /**
  * Parse plugin configuration from tool config
@@ -64,6 +67,7 @@ async function ensureInitialized(toolConfig: Record<string, unknown>): Promise<b
 
   // If config changed, re-initialize
   if (initialized && configHash !== lastConfigHash) {
+    pluginLogger.info('MCP config changed, re-initializing connections');
     initialized = false;
   }
 
@@ -75,13 +79,14 @@ async function ensureInitialized(toolConfig: Record<string, unknown>): Promise<b
   }
 
   try {
+    pluginLogger.debug('Initializing MCP plugin', { configHash });
     await connectionManager.initialize(config);
     initialized = true;
     lastConfigHash = configHash;
 
     return true;
   } catch (error) {
-    console.error('Failed to initialize MCP plugin', {
+    pluginLogger.error('Failed to initialize MCP plugin', {
       error: error instanceof Error ? error.message : String(error),
     });
     return false;
@@ -258,7 +263,7 @@ export const plugin: ToolPlugin = {
 
       // Update other settings
     } catch (error) {
-      console.error('Reconfiguration failed', {
+      pluginLogger.error('Reconfiguration failed', {
         error: error instanceof Error ? error.message : String(error),
       });
     }

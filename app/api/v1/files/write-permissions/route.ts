@@ -350,7 +350,7 @@ async function handleCompleteWrite(request: NextRequest, user: any, repos: any):
     const fileId = crypto.randomUUID();
 
     // Upload to file storage
-    const { storageKey, mountPointId } = await fileStorageManager.uploadFile({
+    const { storageKey } = await fileStorageManager.uploadFile({
       userId: user.id,
       fileId,
       filename,
@@ -378,7 +378,6 @@ async function handleCompleteWrite(request: NextRequest, user: any, repos: any):
       projectId,
       folderPath,
       storageKey,
-      mountPointId,
     }, { id: fileId });
 
     logger.info('[Files v1] File created after approval', {

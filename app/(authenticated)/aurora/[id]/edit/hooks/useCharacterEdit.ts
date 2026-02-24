@@ -207,7 +207,7 @@ export function useCharacterEdit(id: string) {
     }
     // Navigate to appropriate location based on character type
     if (state.character?.npc) {
-      router.push('/foundry')
+      router.push('/settings')
     } else {
       router.push(`/aurora/${id}/view`)
     }

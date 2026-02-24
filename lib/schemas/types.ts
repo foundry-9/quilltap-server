@@ -325,12 +325,16 @@ export {
   VectorMetadataSchema,
   VectorEntrySchema,
   VectorIndexSchema,
+  VectorIndexMetaSchema,
+  VectorEntryRowSchema,
 } from './vector-indices.types';
 
 export type {
   VectorMetadata,
   VectorEntry,
   VectorIndex,
+  VectorIndexMeta,
+  VectorEntryRow,
 } from './vector-indices.types';
 
 // ============================================================================

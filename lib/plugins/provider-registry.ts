@@ -17,89 +17,9 @@ import type { LLMProvider } from '@/lib/llm/base';
 import type { ImageGenProvider } from '@/lib/image-gen/base';
 import type { EmbeddingProvider, LocalEmbeddingProvider } from '@quilltap/plugin-types';
 import { getErrorMessage } from '@/lib/errors';
+import { rewriteLocalhostUrl } from '@/lib/host-rewrite';
 import type { PluginManifest } from '@/lib/schemas/plugin-manifest';
-import { resolve, join } from 'node:path';
-import { existsSync } from 'node:fs';
-
-// Dynamic plugin loading requires native Node.js require, not the bundler's.
-// - Webpack (dev): provides __non_webpack_require__ for native require access
-// - Turbopack (Next.js 16+ production) / plain Node.js: use createRequire from node:module
-//   accessed via require('node:module') so webpack sees it as dead code
-interface NodeModuleParent {
-  filename?: string;
-  paths?: string[];
-}
-interface NodeModuleInternal {
-  _resolveFilename: (request: string, parent: NodeModuleParent | null, isMain: boolean, options?: object) => string;
-  _nodeModulePaths: (from: string) => string[];
-}
-
-let dynamicRequire: NodeRequire;
-let Module: NodeModuleInternal;
-
-if (typeof __non_webpack_require__ !== 'undefined') {
-  dynamicRequire = __non_webpack_require__;
-  Module = __non_webpack_require__('module') as unknown as NodeModuleInternal;
-} else {
-  const nodeModule = require('node:module');
-  dynamicRequire = nodeModule.createRequire(process.cwd() + '/') as NodeRequire;
-  Module = nodeModule as unknown as NodeModuleInternal;
-}
-
-// Get the app's node_modules path for peer dependency resolution
-const appNodeModules = join(process.cwd(), 'node_modules');
-
-// Peer dependencies that external plugins can use from the host app
-const PEER_DEPENDENCIES = new Set([
-  'react',
-  'react/jsx-runtime',
-  'react/jsx-dev-runtime',
-  'react-dom',
-]);
-
-/**
- * Load an external plugin module with peer dependency resolution.
- */
-function loadExternalPluginModule(modulePath: string): unknown {
-  const originalResolveFilename = Module._resolveFilename;
-  const appModulePaths = Module._nodeModulePaths(appNodeModules);
-
-  Module._resolveFilename = function(
-    request: string,
-    parent: { filename?: string; paths?: string[] } | null,
-    isMain: boolean,
-    options?: object
-  ) {
-    try {
-      return originalResolveFilename.call(this, request, parent, isMain, options);
-    } catch (error) {
-      if (PEER_DEPENDENCIES.has(request) && parent?.filename && !parent.filename.includes(join('plugins', 'dist'))) {
-        try {
-          const fakeParent = {
-            filename: join(appNodeModules, 'react', 'index.js'),
-            paths: appModulePaths,
-          };
-          return originalResolveFilename.call(this, request, fakeParent, isMain, options);
-        } catch {
-          // Fall through
-        }
-      }
-      throw error;
-    }
-  };
-
-  try {
-    delete dynamicRequire.cache[dynamicRequire.resolve(modulePath)];
-  } catch {
-    // Not in cache
-  }
-
-  try {
-    return dynamicRequire(modulePath);
-  } finally {
-    Module._resolveFilename = originalResolveFilename;
-  }
-}
+import { loadPluginModule, extractPluginExport } from './dynamic-loader';
 
 // ============================================================================
 // TYPES
@@ -226,7 +146,8 @@ class ProviderRegistry {
     }
 
     try {
-      return plugin.createProvider(baseUrl);
+      const resolvedUrl = baseUrl ? rewriteLocalhostUrl(baseUrl) : baseUrl;
+      return plugin.createProvider(resolvedUrl);
     } catch (error) {
       this.logger.error('Failed to create LLM provider', {
         provider: name,
@@ -265,7 +186,8 @@ class ProviderRegistry {
     }
 
     try {
-      return plugin.createImageProvider(baseUrl);
+      const resolvedUrl = baseUrl ? rewriteLocalhostUrl(baseUrl) : baseUrl;
+      return plugin.createImageProvider(resolvedUrl);
     } catch (error) {
       this.logger.error('Failed to create image provider', {
         provider: name,
@@ -304,7 +226,8 @@ class ProviderRegistry {
     }
 
     try {
-      return plugin.createEmbeddingProvider(baseUrl);
+      const resolvedUrl = baseUrl ? rewriteLocalhostUrl(baseUrl) : baseUrl;
+      return plugin.createEmbeddingProvider(resolvedUrl);
     } catch (error) {
       this.logger.error('Failed to create embedding provider', {
         provider: name,
@@ -420,6 +343,62 @@ class ProviderRegistry {
     }
 
     return null;
+  }
+
+  /**
+   * Validate an API key using the provider plugin, with localhost URL rewriting.
+   *
+   * @param name The provider name
+   * @param apiKey The API key to validate
+   * @param baseUrl Optional base URL (will be rewritten if localhost in VM/container)
+   * @returns true if the API key is valid
+   * @throws Error if provider not found
+   */
+  async validateApiKey(name: string, apiKey: string, baseUrl?: string): Promise<boolean> {
+    const plugin = this.getProvider(name);
+    if (!plugin) {
+      const error = `Provider '${name}' not found in registry`;
+      this.logger.error(error);
+      throw new Error(error);
+    }
+
+    const resolvedUrl = baseUrl ? rewriteLocalhostUrl(baseUrl) : baseUrl;
+    this.logger.debug('Validating API key with URL rewriting', {
+      provider: name,
+      originalUrl: baseUrl,
+      resolvedUrl,
+    });
+    return plugin.validateApiKey(apiKey, resolvedUrl);
+  }
+
+  /**
+   * Fetch available models from a provider, with localhost URL rewriting.
+   *
+   * @param name The provider name
+   * @param apiKey The API key for authentication
+   * @param baseUrl Optional base URL (will be rewritten if localhost in VM/container)
+   * @returns Array of model IDs, or empty array if not supported
+   * @throws Error if provider not found
+   */
+  async getAvailableModels(name: string, apiKey: string, baseUrl?: string): Promise<string[]> {
+    const plugin = this.getProvider(name);
+    if (!plugin) {
+      const error = `Provider '${name}' not found in registry`;
+      this.logger.error(error);
+      throw new Error(error);
+    }
+
+    if (!plugin.getAvailableModels) {
+      return [];
+    }
+
+    const resolvedUrl = baseUrl ? rewriteLocalhostUrl(baseUrl) : baseUrl;
+    this.logger.debug('Fetching available models with URL rewriting', {
+      provider: name,
+      originalUrl: baseUrl,
+      resolvedUrl,
+    });
+    return plugin.getAvailableModels(apiKey, resolvedUrl);
   }
 
   // =========================================================================
@@ -608,42 +587,18 @@ class ProviderRegistry {
     }
 
     try {
-      const mainFile = manifest.main || 'index.js';
-      const modulePath = resolve(pluginPath, mainFile);
-
-      if (!existsSync(modulePath)) {
-        this.logger.error('Provider plugin main file not found', {
-          plugin: manifest.name,
-          expectedPath: modulePath,
-        });
+      const pluginModule = loadPluginModule(pluginPath, manifest);
+      if (!pluginModule) {
         return false;
       }
 
-      // Determine if this is an external (npm-installed) plugin
-      // External plugins have paths containing node_modules but not in plugins/dist
-      const isExternalPlugin = pluginPath.includes('node_modules') && !pluginPath.includes(join('plugins', 'dist'));
-
-      // Load the plugin module with peer dependency resolution for external plugins
-      const pluginModule = isExternalPlugin
-        ? loadExternalPluginModule(modulePath)
-        : (() => {
-            // Clear require cache for bundled plugins
-            try {
-              const resolvedPath = dynamicRequire.resolve(modulePath);
-              delete dynamicRequire.cache[resolvedPath];
-            } catch {
-              // Module may not be in cache yet, that's fine
-            }
-            return dynamicRequire(modulePath);
-          })();
-
       // Extract the provider plugin object
-      const providerPlugin = pluginModule?.plugin || pluginModule?.default?.plugin;
+      const providerPlugin = extractPluginExport(pluginModule) as LLMProviderPlugin | undefined;
 
       if (!providerPlugin?.metadata?.providerName) {
         this.logger.warn('Provider plugin module does not export a valid plugin object', {
           plugin: manifest.name,
-          exports: Object.keys(pluginModule || {}),
+          exports: Object.keys((pluginModule as Record<string, unknown>) || {}),
         });
         return false;
       }
@@ -715,6 +670,7 @@ const DEFAULT_CAPABILITIES = {
   imageGeneration: 'imageGeneration',
   embeddings: 'embeddings',
   webSearch: 'webSearch',
+  toolUse: 'toolUse',
 } as const;
 
 // ============================================================================

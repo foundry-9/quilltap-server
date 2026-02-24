@@ -93,7 +93,8 @@ export default function ProfileSetupPage() {
         );
       }
 
-      router.push('/');
+      // Continue to provider setup wizard
+      window.location.href = '/setup/providers';
     } catch {
       setError('Something went wrong. Please try again.');
     } finally {

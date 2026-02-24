@@ -23,8 +23,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import { createAuthenticatedParamsHandler, checkOwnership, AuthenticatedContext } from '@/lib/api/middleware';
-import { getFilePath } from '@/lib/api/middleware/file-path';
+import { createAuthenticatedParamsHandler, checkOwnership, AuthenticatedContext, enrichWithDefaultImage, getFilePath } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { executeCascadeDelete, getCascadeDeletePreview } from '@/lib/cascade-delete';
 import { exportSTCharacter, createSTCharacterPNG } from '@/lib/sillytavern/character';
@@ -347,17 +346,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
     default: {
       try {
         // Get default image
-        let defaultImage = null;
-        if (character.defaultImageId) {
-          const fileEntry = await repos.files.findById(character.defaultImageId);
-          if (fileEntry) {
-            defaultImage = {
-              id: fileEntry.id,
-              filepath: getFilePath(fileEntry),
-              url: null,
-            };
-          }
-        }
+        const defaultImage = await enrichWithDefaultImage(character.defaultImageId, repos);
 
         // Get chat count
         const chats = await repos.chats.findByCharacterId(id);
@@ -511,17 +500,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
         });
 
         // Build response with file info
-        let defaultImage = null;
-        if (updatedCharacter?.defaultImageId) {
-          const fileEntry = await repos.files.findById(updatedCharacter.defaultImageId);
-          if (fileEntry) {
-            defaultImage = {
-              id: fileEntry.id,
-              filepath: getFilePath(fileEntry),
-              url: null,
-            };
-          }
-        }
+        const defaultImage = await enrichWithDefaultImage(updatedCharacter?.defaultImageId, repos);
 
         logger.info('[Characters v1] Avatar updated', {
           characterId: id,

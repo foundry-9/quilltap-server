@@ -20,8 +20,9 @@
  *
  * Environment variables:
  * - QUILLTAP_DATA_DIR: Overrides the base directory (non-Docker only)
- * - QUILLTAP_HOST_DATA_DIR: Not read by the application; documented for users
- *   who want to set the host-side volume mount path when running Docker
+ * - QUILLTAP_HOST_DATA_DIR: The host-side data directory path. In VM/Docker
+ *   environments, this preserves the original host path for display purposes.
+ *   Falls back to getBaseDataDir() when not set.
  *
  * @module lib/paths
  */
@@ -61,6 +62,18 @@ export interface LegacyPaths {
 // ============================================================================
 
 /**
+ * Check if running inside a Lima VM
+ *
+ * Lima VMs are provisioned with LIMA_CONTAINER=true in /etc/profile.d/quilltap.sh.
+ * This check must run before isDockerEnvironment() because the rootfs exported
+ * from Docker still contains /.dockerenv and /app, which would otherwise trigger
+ * a Docker false-positive.
+ */
+export function isLimaEnvironment(): boolean {
+  return process.env.LIMA_CONTAINER === 'true';
+}
+
+/**
  * Check if running in a Docker container
  *
  * Detects Docker by checking:
@@ -96,6 +109,11 @@ export function isDockerEnvironment(): boolean {
  * @returns Platform identifier
  */
 export function getPlatform(): Platform {
+  // Lima check must come before Docker: the rootfs exported from Docker
+  // contains /.dockerenv and /app, which would trigger a false positive.
+  if (isLimaEnvironment()) {
+    return 'linux';
+  }
   if (isDockerEnvironment()) {
     return 'docker';
   }
@@ -254,6 +272,18 @@ export function getSQLiteDatabasePath(): string {
 }
 
 /**
+ * Get the physical database backups directory path
+ *
+ * Physical backups are stored alongside the database file under data/backups/.
+ * These are independent of the logical backup system (Backup & Restore).
+ *
+ * @returns Backups directory path (<base>/data/backups)
+ */
+export function getBackupsDir(): string {
+  return path.join(getDataDir(), 'backups');
+}
+
+/**
  * Get the plugins directory path
  *
  * @returns Plugins directory path (<base>/plugins)
@@ -271,6 +301,25 @@ export function getPluginsDir(): string {
  */
 export function getNpmPluginsDir(): string {
   return path.join(getPluginsDir(), 'npm');
+}
+
+/**
+ * Get the host-side data directory path for display purposes
+ *
+ * In VM/Docker environments, QUILLTAP_HOST_DATA_DIR preserves the original
+ * host path (e.g., ~/Library/Application Support/Quilltap on macOS) even
+ * though the app sees /data/quilltap or /app/quilltap inside the container.
+ *
+ * Falls back to getBaseDataDir() when not set (i.e., running locally).
+ *
+ * @returns Host-side data directory path
+ */
+export function getHostDataDir(): string {
+  const envOverride = process.env.QUILLTAP_HOST_DATA_DIR;
+  if (envOverride) {
+    return envOverride;
+  }
+  return getBaseDataDir();
 }
 
 // ============================================================================
@@ -335,7 +384,7 @@ export function getLegacyPaths(): LegacyPaths {
  *
  * Checks for:
  * - ./data directory with quilltap.db (project-relative)
- * - ~/.quilltap/data directory with quilttap.db (home-relative, on macOS/Windows)
+ * - ~/.quilltap/data directory with quilltap.db (home-relative, on macOS/Windows)
  * - ./logs directory with log files
  * - ~/.quilltap/files on macOS/Windows (where it differs from the new default)
  *

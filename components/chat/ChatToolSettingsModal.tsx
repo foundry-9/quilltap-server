@@ -19,6 +19,8 @@ interface ChatToolSettingsModalProps {
   chatId: string
   disabledTools: string[]
   disabledToolGroups: string[]
+  /** When true, tools are disabled at the connection profile level */
+  profileToolsDisabled?: boolean
   onSuccess?: (newDisabledTools: string[], newDisabledToolGroups: string[]) => void
 }
 
@@ -28,6 +30,7 @@ export default function ChatToolSettingsModal({
   chatId,
   disabledTools,
   disabledToolGroups,
+  profileToolsDisabled = false,
   onSuccess,
 }: Readonly<ChatToolSettingsModalProps>) {
   const [availableTools, setAvailableTools] = useState<AvailableTool[]>([])
@@ -123,6 +126,14 @@ export default function ChatToolSettingsModal({
       title="LLM Tool Settings"
     >
       <div className="qt-dialog-body">
+        {profileToolsDisabled && (
+          <div className="qt-warning-box mb-4">
+            <p className="text-sm font-medium">Tools disabled by connection profile</p>
+            <p className="text-xs mt-1">
+              The current connection profile has &ldquo;Allow tool use&rdquo; turned off. No tools will be sent to the LLM regardless of the settings below. To re-enable tools, edit the connection profile in The Forge.
+            </p>
+          </div>
+        )}
         <ToolSettingsContent
           availableTools={availableTools}
           disabledTools={localDisabledTools}

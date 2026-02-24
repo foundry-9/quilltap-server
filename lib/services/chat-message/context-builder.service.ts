@@ -17,6 +17,7 @@ import {
   formatFallbackAsMessagePrefix,
   type FallbackResult,
 } from '@/lib/chat/file-attachment-fallback'
+import { resolveTimezone } from '@/lib/chat/timestamp-utils'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type {
   ChatMetadataBase,
@@ -44,7 +45,7 @@ export interface BuildMessageContextOptions {
   isMultiCharacter: boolean
   participantCharacters?: Map<string, Character>
   roleplayTemplate: { systemPrompt: string } | null
-  chatSettings: { cheapLLMSettings?: { embeddingProfileId?: string }; defaultTimestampConfig?: TimestampConfig | null } | null
+  chatSettings: { cheapLLMSettings?: { embeddingProfileId?: string }; defaultTimestampConfig?: TimestampConfig | null; timezone?: string | null } | null
   toolInstructions?: string
   newUserMessage?: string
   isContinueMode: boolean
@@ -303,6 +304,12 @@ export async function buildMessageContext(
   // Get timestamp config from chat or user defaults
   const timestampConfig = chat.timestampConfig || chatSettings?.defaultTimestampConfig || null
 
+  // Resolve timezone from fallback chain: per-chat → Salon settings → QUILLTAP_TIMEZONE env var → system default
+  const timezone = resolveTimezone(
+    timestampConfig?.timezone,
+    chatSettings?.timezone
+  )
+
   // Build context with intelligent token management
   const builtContext = await buildContext({
     provider: connectionProfile.provider,
@@ -329,6 +336,7 @@ export async function buildMessageContext(
     // Timestamp injection
     timestampConfig,
     isInitialMessage,
+    timezone,
     // Project context
     projectContext,
     // Context compression

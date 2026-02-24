@@ -2,7 +2,196 @@
 
 ## Recent Changes
 
-### 2.11-dev
+### 3.0.0
+
+- refactor: Remove mount points, S3 support, and file storage abstraction — simplified file storage to a thin local-only `FileStorageManager` wrapping `LocalFileStorageBackend` directly; dropped `mount_points` table and `mountPointId`/`s3Key`/`s3Bucket` columns via migration; removed S3 plugin (`qtap-plugin-storage-s3`), mount-points API routes, storage settings UI, mount-points repository, and all S3 env vars; updated ~30 consumer files (API routes, services, import/export, backup/restore) to use simplified API; removed `FILE_BACKEND` plugin capability; deleted `help/file-storage-settings.md` and mount-point references from all documentation
+- feat: Linux/amd64 Electron desktop build — added first-class Linux support to the Electron shell using Docker Engine as the runtime backend (no VM layer needed); `DockerManager` now implements `IVMManager` for seamless integration with the existing platform abstraction; `createVMManager()` factory returns `DockerManager` on Linux; splash screen hides the VM toggle on Linux since Docker is the only runtime; `startContainer()` adds `--add-host=host.docker.internal:host-gateway` on Linux so localhost services (e.g. Ollama) are reachable from inside the container; `--no-sandbox` flag handles Ubuntu 24.04+ user namespace restrictions; new `electron:build:linux` script produces AppImage and .deb packages; CI release workflow builds and uploads Linux installers; settings default to `runtimeMode: 'docker'` on Linux
+- feat: Electron startup log file — all splash screen status messages, phase transitions, and errors are now persisted to `{DATA_DIR}/logs/startup.log` for post-mortem debugging; new `electron/startup-log.ts` module with `initStartupLog()`, `logStartup()`, and `closeStartupLog()`; log is overwritten on each startup; integrated into `sendSplashUpdate()` and `sendSplashError()` chokepoints so every splash message is captured automatically
+- fix: Filter noisy Lima VM output during startup — suppressed "Not forwarding TCP/UDP" port-skip messages and transient "tcpproxy: error dialing" SSH proxy errors entirely; deduplicated repeated "guest agent events closed unexpectedly" and "Waiting for ... requirement" messages (first occurrence shown, subsequent suppressed); dedup state resets per startup sequence
+- feat: Graceful shutdown splash screen — quitting the Electron app now immediately closes the main window (preventing further interaction) and shows a small frameless 360×200 window with a spinner and "Stopping virtual machine…" or "Stopping container…" message while the backend shuts down; `window-all-closed` handler guarded against the shutdown state to prevent recursive quit
+- fix: Replace hand-rolled tar extractor with battle-tested `tar` package — the custom 235-line POSIX tar parser in the `quilltap` npm package still failed on certain file/directory collisions in Next.js standalone output (`EISDIR` on nested app router segments); replaced entirely with the `tar` npm package (used by npm itself), which handles all edge cases correctly and streams extraction instead of buffering the entire decompressed tarball in memory
+- feat: Named data directories in Electron splash screen — data directories now display human-readable names instead of raw file paths; existing settings are migrated automatically (platform default gets "Default", others get their directory basename); users can rename directories via a pencil icon button and overlay dialog; updated `electron/settings.ts` with migration logic and rename IPC handler; new `NamedDataDir` type replaces plain path strings
+- feat: Settings page reorganization — replaced the 10-page Foundry subsystem navigation with a single tabbed `/settings` page using 7 plain-English tabs (AI Providers, Chat, Appearance, Memory & Search, Images, Templates & Prompts, Data & System); estate personifications remain as light-touch flavor (thumbnails, descriptions) rather than navigation structure; added `ChatSettingsProvider` context to share settings state across tabs without duplicate fetches; all old `/foundry/*` routes redirect to the appropriate settings tab; moved the AI Stack Setup Wizard to `/settings/wizard`; updated sidebar, Electron menu, and all internal links; deleted standalone wrapper components (`StandaloneDangerousContent`, `StandaloneStoryBackgrounds`) now that the shared context eliminates their need
+- feat: Add Pascal the Croupier and Saquel Ytzama the Keeper of Secrets as Foundry subsystem pages — new cards on the Foundry hub with dice (Pascal) and key (Saquel) icons; new subsystem pages at `/foundry/pascal` and `/foundry/saquel` with coming-soon content; converted PNG images to optimized WebP with thumbnails; added Old School theme replacement names ("Games" and "Encryption"); updated plugin-types subsystem ID list
+- feat: `allowToolUse` master switch on connection profiles — new boolean field (default true) that acts as a profile-level override for all LLM tools; when disabled, no tools are sent to the model regardless of chat or project tool settings; adds "No Tools" badge on profile cards, warning notice in Chat Tool Settings modal, and database migration for existing installations; provider plugins now declare `toolUse` capability so the checkbox auto-defaults based on provider (Anthropic, OpenAI, Grok default to true; others default to false)
+- feat: AI Stack Setup Wizard — guided 6-step wizard for first-run and settings re-entry provider configuration; walks users through provider selection, API key entry and validation, chat/cheap model selection, optional embedding and image provider setup, and final test-and-confirm; accessible at `/setup/providers` during first run (redirected after profile creation) and via `/foundry/forge/wizard` from The Forge; pre-populates existing configuration in settings mode; uses `useReducer` state machine pattern; creates connection profiles, embedding profiles, image profiles, and chat settings in one flow
+- feat: Local timezone support for timestamp injection — timestamps injected into system prompts now respect the user's local timezone instead of always using the server's timezone (usually UTC in Docker/Lima/WSL2); three-layer fallback chain: per-chat `timestampConfig.timezone` → Salon-level `chatSettings.timezone` → `QUILLTAP_TIMEZONE` env var → system default; Electron app auto-detects host OS timezone and passes it through to Lima VM, WSL2 distro, and Docker container; ISO-8601 format now outputs timezone offset (e.g., `2026-02-22T14:30:00-05:00`) instead of always `Z`; new timezone selector in Timestamp Configuration card with browser detection and searchable IANA timezone list; Docker users can set `-e QUILLTAP_TIMEZONE=America/New_York`
+- build: Consolidated release workflow — merged Docker build/push from standalone `docker.yml` into the unified `release.yml` workflow; Docker builds run in parallel with rootfs, standalone, and Electron builds; `create-release` now waits for Docker manifest push to succeed before creating the GitHub Release; added `publish-npm` job that publishes the `quilltap` npm package after the GitHub Release is created, with automatic dist-tag selection (`latest` for clean semver, `dev` for prerelease versions); deleted `docker.yml`
+- refactor: Thin CLI launcher for `quilltap` npm package — the npm package is now a lightweight CLI (~10 KB) that downloads the pre-built standalone output from GitHub Releases on first run, instead of bundling the entire Next.js standalone output (~400-600 MB) inside the package; downloads are cached per-version in a platform-specific directory (`~/Library/Caches/Quilltap/standalone/` on macOS, `~/.cache/quilltap/standalone/` on Linux, `%LOCALAPPDATA%\Quilltap\standalone\` on Windows); includes progress bar, retry with exponential backoff, and `--update` flag for forced re-download; new `build-standalone-tarball.ts` CI script creates a platform-agnostic tarball uploaded to GitHub Releases; `build-quilltap-package.ts` simplified to version sync only; minimal inline tar.gz extractor uses only Node.js built-ins (no external dependencies)
+- perf: Image optimization — converted 8 feature icon PNGs, 8 thumbnail JPGs, 3 theme texture PNGs, 3 Electron splash PNGs, and 2 website PNGs to WebP format; optimized 2 SVGs with SVGO; total image payload reduced from ~75 MB to ~4.6 MB (~94% savings); bumped Art Deco theme to 1.0.7/1.0.6, Great Estate theme to 1.0.2/1.0.1
+- fix: Infinite re-render loop and unclickable sidebar on chat page — the toolbar setup `useEffect` in `salon/[id]/page.tsx` had two unstable dependencies (`modals` object and `llmCharacters` array) that created new references every render, causing `setLeftContent` to fire in an infinite loop; this stalled React's `startTransition`, making all sidebar `<Link>` and `router.push()` navigation silently fail; fixed by extracting the stable `setModalImage` setter and using a joined-ID string as a stable proxy for the character array; simplified sidebar links to plain `<a>` tags (no `onClick`/`router.push()`) since native navigation is immune to `startTransition` stalls
+- fix: Prevent duplicate GitHub Releases from electron-builder auto-publish — added `publish: null` to `electron-builder.yml` so electron-builder no longer creates a draft release when `GH_TOKEN` is present; the `create-release` workflow job is now the sole release creator
+- feat: Restart Server and Change Site menu items in Electron app — new "Restart Server" menu item stops the current backend and relaunches with the same data directory; new "Change Site..." menu item stops the backend and returns to the splash directory chooser so users can switch between Quilltap sites without quitting; on macOS items appear in the app submenu, on Windows/Linux in a new File menu; extracted `stopCurrentBackend()` helper to DRY the shutdown logic
+- fix: Memories invisible after vector embedding BLOB migration — after migration converted embeddings from JSON text to Float32 BLOBs, the raw `Buffer` values failed Zod schema validation (`"expected array, received Buffer"`) and memories were silently filtered out; only memories with NULL embeddings survived; fix adds `Buffer.transform()` to embedding Zod schemas (`MemorySchema`, `VectorEntryRowSchema`) so Buffers are transparently deserialized to `number[]` at validation time; also registers blob columns in `MemoriesRepository.getCollection()`, fixes `documentToRow` handling of empty embedding arrays, and fixes migration to NULL-ify empty TEXT embeddings instead of skipping them
+- perf: Normalize vector embedding storage to Float32 BLOBs — embeddings in `vector_entries` and `memories.embedding` now stored as compact Float32 BLOBs (~4-5x smaller than JSON text); new `vector_entries` table with one row per embedding replaces the monolithic `vector_indices.entries` JSON column; incremental save operations (only changed entries written to disk); migration automatically converts existing JSON embeddings to BLOB format; removed unused `content` field from vector metadata
+- feat: Crash-loop protection for Electron app — new `electron/crash-guard.ts` module tracks consecutive startup failures via a JSON state file; after 3 consecutive crashes, enters safe mode which clears Chromium caches, removes macOS saved application state, and resets settings to safe defaults (autoStart off, data directory reset to platform default); `markStartupSuccess()` resets the counter after successful main window creation; also removes macOS `NSPersistentUIRestorer` saved state on every launch and adds `disable-session-crashed-bubble` switch to prevent `EXC_BREAKPOINT` crashes from window state restoration
+- refactor: Dead code cleanup — removed 7 unused files, removed unused exports from toast, TemplateHighlighter, theme-style-injector, useThemePreview, cheap-llm, and pricing-fetcher; consolidated duplicate `resolveImageProfileForChat` into shared utility; added `electron/**` to knip.json ignore list
+- refactor: Extract shared plugin dynamic loader — deduplicated 66 lines of `loadExternalPluginModule` + `PEER_DEPENDENCIES` + `__non_webpack_require__` bootstrap from provider-registry.ts and search-provider-registry.ts into `lib/plugins/dynamic-loader.ts`
+- refactor: Adopt enrichment utilities — added `enrichWithDefaultImage` to `lib/api/middleware/enrichment.ts`; refactored connection-profiles, embedding-profiles, image-profiles, characters, projects, and chat helpers to use shared enrichment utilities instead of inline reimplementations
+- refactor: API conformance — wrapped unauthenticated system routes (pepper-vault, plugins/initialize, plugins/upgrades, deployment, themes) in `createContextHandler`; replaced `NextResponse.json` with response helpers; refactored files/proxy route to use `createAuthenticatedParamsHandler`
+- refactor: qt-* class migration — added overlay utilities (`qt-bg-overlay`, `qt-bg-overlay-medium`, `qt-bg-overlay-light`, `qt-bg-overlay-caption`, `qt-bg-overlay-btn`), overlay text (`qt-text-overlay`, `qt-text-overlay-muted`), spinners (`qt-spinner`, `qt-spinner-lg`), `qt-text-favorite`, `qt-bg-toggle-knob`, `qt-warning-box`, and `qt-prose-auto` utility classes with CSS custom properties for theme overrideability; migrated 25+ component files from hardcoded Tailwind classes (`bg-black/*`, `bg-white/*`, `text-white`, `text-amber-400`, `border-blue-*`, `text-gray-400`, `bg-amber-*`, `dark:prose-invert`) to semantic qt-* classes; updated `packages/theme-storybook` to v1.0.21 with new tokens and utilities
+- refactor: Salon page decomposition — reduced `salon/[id]/page.tsx` from 2813 to 945 lines (66% reduction); extracted 8 new hooks (`useModalState`, `useDraftPersistence`, `useMemoryActions`, `useLLMLogs`, `useParticipants`, `useImpersonation`, `useChatControls`, `useSSEStreaming`) and 2 new components (`VirtualizedMessageList`, `ChatModals`); unified duplicate SSE streaming functions (`sendMessage` + `triggerContinueMode`) into shared `readSSEStream` core parser eliminating ~70% code duplication; total hook files 7→15, total component files 6→8
+- refactor: Projects [id] route decomposition — reduced `app/api/v1/projects/[id]/route.ts` from 1056 to 49 lines; extracted schemas to `schemas.ts`, 8 action modules (`project-crud`, `roster`, `chats`, `files`, `mount-points`, `state`, `background`, `tools`) under `actions/`, and 4 HTTP method handlers under `handlers/`; follows the same pattern established in the chats [id] route decomposition
+- docs: Identified future refactoring targets — ~~Projects [id] route split (1076 lines)~~, ~~Salon page decomposition (2813 lines)~~, `withErrorHandling()` HOF for 244 duplicated catch blocks, `withActionDispatch` migration for 22 routes, remaining `NextResponse.json` replacements
+
+- fix: Chat auto-triggers unwanted second AI response after every message — temporary assistant message in `sendMessage` was missing `participantId`, causing turn state to not recognize the AI had spoken and selecting it again; also added `isPaused` guard to `triggerContinueMode` so paused chats never auto-generate
+- fix: Docker mode in Electron app no longer falls back to `latest` tag — `startContainer()` and `dockerStartupSequence()` now require the exact version-tagged image (`csebold/quilltap:<APP_VERSION>`) matching the Electron app version; if the image can't be pulled, a clear error is shown instead of silently running a mismatched version; also augments PATH when spawning Docker commands so credential helpers (`docker-credential-osxkeychain` on macOS, `docker-credential-wincred` on Windows) are found in packaged Electron's minimal PATH environment
+- docs: Rewrote README.md for 3.0 — reorganized Getting Started into three tiers (native desktop installer, Docker, from source) with GitHub Releases as primary recommendation; added agentic sandbox teaser; updated tech stack and acknowledgments; added Pascal the Croupier and Search plugin type; applied project literary voice throughout
+- docs: Updated About page (`/about`) to match 3.0 features — added native desktop app and Docker runtime to feature list, database protection, Pascal the Croupier, expanded tech stack with Electron/Lima/WSL2/Docker, added Download Latest Release link and Acknowledgments section
+- docs: Added literary style directive to CLAUDE.md — "steampunk + roaring 20s + Great Gatsby + Wodehouse + Lemony Snicket" for all user-facing writing
+- fix: WSL2 Electron app fails to connect — `startVM` backgrounded the init script with `nohup ... &` inside `wsl.exe --exec sh -c`, causing the shell to exit immediately and WSL2 to terminate the distro (no active sessions); rewrote `startVM` to spawn `wsl.exe` as a long-lived foreground process using `--exec env VAR=value /path/to/script`, which also fixes Windows backslash corruption in the data directory path that occurred when `sh -c` interpreted `C:\Users\...` as escape sequences
+- build: Cross-platform `build-rootfs.ts` — replaced Unix-only shell commands (`gzip`, `gunzip`, `tar -rf`, `mktemp`, `rm`, `cp`, `du`) with Node.js equivalents (`zlib`, `fs`, stream pipelines) so the script works on Windows without requiring Unix tools; uses `docker export -o` instead of piping through `gzip`
+- fix: Docker Electron app footer showing container path `/app/quilltap` instead of host data directory — `DockerManager.startContainer()` was not passing `QUILLTAP_HOST_DATA_DIR` env var to the container, so `getHostDataDir()` fell back to the container-internal path; added `-e QUILLTAP_HOST_DATA_DIR` to the Docker run args, matching the standalone Docker script and Lima/WSL2 backends
+- build: Added unsigned Windows dev build target `electron:build:win:dev` — mirrors the existing `electron:build:mac:dev`; uses a JS config wrapper (`electron-builder-win-dev.js`) that loads the base YAML and strips Azure Trusted Signing options for local iteration
+- feat: Docker runtime support in Electron splash screen — new runtime toggle (Docker vs Lima/WSL2 VM) on the splash screen with character artwork backgrounds (Foundryman for Docker, Prospero for VM); DockerManager class handles container lifecycle (pull, start, stop, delete) with full Docker CLI path resolution for packaged Electron apps; port conflict prevention stops VMs before Docker start and vice versa; graceful shutdown stops the active runtime backend
+- feat: Enhanced directory management with delete confirmation — delete button on all directories (not just when multiple exist) opens a confirmation dialog with two options: "Remove configuration only" (removes from list) or "Delete configuration AND data" (removes from list, deletes data on disk, cleans up associated VM and Docker container)
+- feat: Art Deco-themed splash screen — full-window background with gold art deco frame, center-darkened gradient overlay, Raleway font for section labels matching the Art Deco theme, enlarged splash window (580x680) to accommodate runtime toggle
+- change: Auto-start defaults to off for new installs — existing users with `autoStart: true` in their settings are not affected; new `runtimeMode` setting persisted alongside other app settings
+- fix: Azure Trusted Signing endpoint region — changed from East US (`eus`) to Central US (`cus`) to match the region where the Trusted Signing account was created; Windows builds were failing with 403 Forbidden
+- build: Remove npm publish job from release workflow — the `publish-npm` job added too much weight to the release pipeline; npm publishing will be handled separately
+- build: Separate Docker workflow from release pipeline — Docker image builds moved to standalone `docker.yml` workflow triggered on version tags; builds run natively on matching-architecture runners (ubuntu-latest for amd64, ubuntu-24.04-arm for arm64) without Buildx/QEMU for faster builds; a final job creates and pushes multi-arch manifests with version tag plus `latest` (clean semver) or `dev` (prerelease); release workflow no longer waits on Docker builds
+- build: Azure Trusted Signing for Windows Electron builds — added `azureSignOptions` to electron-builder.yml for code signing Windows installers via Azure Trusted Signing; release workflow passes `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, and `AZURE_CLIENT_SECRET` secrets to the Windows build step
+- feat: `quilltap` npm package for `npx quilltap` — run Quilltap as a local Node.js server with zero configuration; ships pre-built Next.js standalone output with native modules (better-sqlite3, sharp) installed at the user's platform at install time; CLI supports `--port`, `--data-dir`, `--open`, `--version`, `--help`; build script (`npm run build:package`) assembles the standalone output, static assets, public files, and bundled plugins; release workflow publishes to npm on version tags
+
+- fix: Lima VM fails to start with "com.apple.security.virtualization" entitlement error — `limactl` was listed in `signIgnore` in electron-builder.yml, so it was never code-signed and never received the virtualization entitlement needed for macOS Virtualization.framework (VZ driver); removed `limactl` from `signIgnore` so it inherits the app's entitlements (virtualization, JIT, network); `lima-guestagent` remains unsigned as it's a Linux binary
+- feat: Comprehensive SQLite database protection — integrity check on startup (`PRAGMA quick_check`), periodic WAL checkpoints every 5 minutes (PASSIVE), TRUNCATE checkpoint on shutdown, physical database backups on startup with tiered retention policy (7 days all, weekly for 4 weeks, monthly for 12 months, yearly forever), pre-backup WAL flush for logical backups, `unhandledRejection` process handler, `synchronous = FULL` default for durable writes
+- fix: macOS Electron notarization in CI — electron-builder v26+'s built-in notarization was conflicting with the `afterSign` hook, failing with "Env vars APPLE_API_KEY, APPLE_API_KEY_ID and APPLE_API_ISSUER need to be set"; added `notarize: false` to electron-builder.yml to disable built-in notarization (afterSign hook handles it); removed redundant `APPLE_API_KEY` re-declaration from workflow step env that could shadow the GITHUB_ENV value
+- build: Run rootfs builds on native architecture runners — amd64 on `ubuntu-latest`, arm64 on `ubuntu-24.04-arm`; removed Docker Buildx and QEMU setup steps since native builds don't need cross-compilation emulation
+- build: Exclude node_modules from Electron app.asar — Electron code uses zero npm deps (only Node builtins + Electron APIs), so the 502MB node_modules was bundled for nothing; DMG reduced from 262MB to ~132MB; added `"!node_modules"` to electron-builder.yml files config
+- build: Added unsigned dev build target `electron:build:mac:dev` — skips code signing and notarization for faster local iteration
+- build: Switched notarization from Apple ID + app-specific password to App Store Connect API key — notarize.js now uses `APPLE_API_KEY`, `APPLE_API_KEY_ID`, and `APPLE_API_KEY_ISSUER`; release workflow writes the .p8 key content to a temp file and sets `APPLE_API_KEY` to its path so electron-builder's signing step can find it; added missing `appleApiKeyId` parameter required by @electron/notarize v3; release workflow updated with `CSC_NAME`, `CODESIGN_IDENTITY`, and API key secrets
+- build: Consolidated Electron build scripts (`stage-lima.sh`, `build-rootfs.sh`) into cross-platform TypeScript (`stage-lima.ts`, `build-rootfs.ts`) following the same `tsx` pattern used for Docker scripts; `stage-lima.ts` imports `LIMA_VERSION`/`LIMA_CACHE_DIR` directly from `electron/constants` instead of grep/sed parsing; simplified `package.json` scripts by removing redundant `build:all`, `build:electron`, and `electron:build`; added Node.js setup to `build-rootfs` CI job; fixed `ROOTFS_CACHE_DIR` in `electron/constants.ts` to support Linux via `XDG_CACHE_HOME`; renamed one-off migration scripts with `oneoff:` prefix and version tags (`cleanup-old-files` → `oneoff:cleanup-old-files-v1.6`, `theme:convert*` → `oneoff:theme-convert-v2.8*`); removed dead `migrate-files` and `consolidate-images` script entries (scripts deleted in v2.0); fixed "Quilttap" typos in README, DEVELOPMENT.md, and docs/WINDOWS.md
+- build: Consolidated platform-specific Docker scripts into cross-platform TypeScript — `build-push-docker.ts` replaces `.sh`/`.ps1` build scripts; new `start-quilltap-docker.ts` provides a unified `npm run start:docker` command with CLI args and env var overrides; removed dead `HOST_REDIRECT_PORTS`/Ollama auto-detection code from PowerShell startup script; original `start-quilltap.sh`/`.ps1` kept for `curl | bash` usage
+- fix: Docker startup scripts now automatically set `QUILLTAP_HOST_DATA_DIR` — both `start-quilltap.sh` and `start-quilltap.ps1` pass the resolved host data directory as an environment variable to the container, so the app can display the real host path in the footer without requiring users to manually add `-e QUILLTAP_HOST_DATA_DIR=...`
+- fix: macOS codesign in CI — `stage-lima.sh` crashed with "unbound variable" because `set -u` rejected the unset `CODESIGN_IDENTITY`; used `${CODESIGN_IDENTITY:-}` default syntax and added missing env var passthrough in release workflow
+- feat: Footer data directory path is now clickable — in Electron, opens the host file browser to that location; in browser mode (Docker/local), copies the path to clipboard with a toast notification; tooltip indicates the action; styled with hover underline and opacity transition
+- feat: Display host data directory path in footer — monospace path shown between the version tag and copyright notice so users can see where their data lives; new `getHostDataDir()` function reads `QUILLTAP_HOST_DATA_DIR` env var (set automatically in Lima/WSL2, configurable for Docker via `-e`); added `hostPath` field to `/api/v1/system/data-dir` response; new `qt-footer-path` CSS class for themed path display
+- fix: WSL2 init script used `QUILTTAP_DATA_DIR` (misspelled with double-T) instead of `QUILLTAP_DATA_DIR` — the app never saw the configured data directory inside WSL2; fixed all occurrences
+- fix: Docker host URL rewriting used wrong gateway — `/proc/net/route` returned the Docker bridge IP (e.g. 172.17.0.1) which can't reach services on the host's localhost; reordered gateway resolution so Docker environments use `host.docker.internal` first (via Docker Desktop DNS or `--add-host` on Linux), with `/proc/net/route` reserved for Lima/WSL2 where NAT networking genuinely forwards to host loopback
+- build: Automated release workflow via GitHub Actions — triggered on version tags, builds rootfs tarballs (amd64 + arm64) with Docker buildx/QEMU, builds Electron installers for macOS (DMG) and Windows (NSIS), and creates a GitHub Release with all assets attached
+- feat: Electron app auto-constructs rootfs download URL from app version and GitHub Releases — first-launch rootfs download now works out of the box for official releases without needing `QUILLTAP_ROOTFS_URL`
+- fix: `build-rootfs.sh` Windows cache directory misspelled as `Quilttap` instead of `Quilltap`
+- build: Added `.gitattributes` to enforce LF line endings for shell scripts and YAML files
+- fix: Suppress new-window/tab links in Electron — external URLs now open in the system browser via `shell.openExternal`; same-origin new-window requests (e.g., images) are blocked since they can't be reached outside the VM; generate-image page "Open in new tab" replaced with ImageModal preview; added `will-navigate` guard to prevent main window from navigating away
+- fix: MCP connections failing in Lima with `getaddrinfo ENOTFOUND host.docker.internal` — Lima VMs have `/app` (from Docker rootfs extraction) which triggered `isDockerEnvironment()`, causing `resolveHostGateway()` to return `host.docker.internal` instead of using `/proc/net/route` to find the actual gateway IP; reordered gateway resolution strategies so `/proc/net/route` is tried before the Docker `host.docker.internal` fallback
+- fix: MCP connections failing in Docker/Lima with "Non-200 status code (400)" — root cause was MCP servers validating the HTTP Host header and rejecting requests from `host.docker.internal`; Node.js `fetch` (undici) doesn't allow overriding the Host header, so simple URL rewriting changed both the routing AND the Host header; implemented a custom fetch using `http.request` that routes traffic to the host gateway while preserving the original `Host: localhost:PORT` header; passed via the MCP SDK's `fetch` option on both `StreamableHTTPClientTransport` and `SSEClientTransport`; also migrated `mcp-client.ts` from `console.*` to structured logger
+- fix: MCP connections constantly re-initializing in Docker/Lima/WSL2 — removed app-level URL preprocessing from `tool-registry.ts` that caused config hash mismatch between preprocessed (rewritten) and raw (original) configs; `getToolHierarchy` and `streaming.service` passed raw configs while `getConfiguredToolDefinitions` passed preprocessed configs, causing the MCP plugin to tear down and recreate connections on every API call; URL rewriting now happens solely in `MCPClient.connect()` which is the correct single point of rewrite; added structured logging to MCP plugin initialization
+- fix: Node.js OOM crashes in Docker/Lima/WSL2 — set `NODE_OPTIONS="--max-old-space-size=2048"` in all runtime environments (Dockerfile production and WSL2 stages, Lima VM profile and OpenRC service, `wsl-init.sh`); bumped Lima VM memory from 2GiB to 4GiB; users can override via `docker run -e NODE_OPTIONS=...`
+- fix: MCP URL rewrite used wrong plugin name — `preprocessToolConfig` matched against `mcp_connector` (manifest toolName) but the tool registry keys by runtime `metadata.toolName` which the MCP plugin sets to `mcp`; rewrite condition never matched
+- fix: MCP server localhost URL rewriting now works reliably in Docker/Lima/WSL2 — moved URL rewriting to the app layer (`tool-registry.ts`) so it uses the app's trusted `host-rewrite.ts` directly, matching the pattern used for LLM providers; the bundled plugin copy is kept as a belt-and-suspenders fallback; added debug logging for original vs resolved URLs in both the app layer and plugin
+- fix: Docker footer shows "(local)" instead of "(Docker)" — fixed `footer-wrapper.tsx` accessing `data.data?.isDocker` instead of `data.isDocker` from the `/api/v1/system/data-dir` response
+- fix: Docker host URL rewriting now uses `host.docker.internal` hostname directly instead of parsing `/etc/hosts` for an IP — Docker Desktop resolves this via built-in DNS (127.0.0.11), which is more reliable; `/etc/hosts` parsing moved to fallback strategy for edge cases
+- fix: "Test Connection" and model listing now work in Docker/VM environments — added `validateApiKey()` and `getAvailableModels()` wrapper methods to provider registries that apply `rewriteLocalhostUrl` before delegating to plugins; updated all call sites (api-keys route, provider-validation, capabilities-report)
+- fix: Host URL rewriting now works in Docker/Lima — replaced shell-based gateway resolution (`getent`, `ip route`) with synchronous file reads (`/etc/hosts` for `host.docker.internal`, `/proc/net/route` for default gateway) since neither command exists in Alpine Linux images; removed `child_process` dependency from `host-rewrite.ts`
+- feat: App-level localhost URL rewriting for VM/container environments — `rewriteLocalhostUrl()` transparently rewrites `localhost`/`127.0.0.1` URLs to the host gateway IP in Docker, Lima, and WSL2 environments; auto-detects gateway via `host.docker.internal` DNS or default route; supports `QUILLTAP_HOST_IP` env var override; replaces socat-based port forwarding in Docker; applied to all LLM/image/embedding provider creation and MCP server connections
+- fix: Sidebar not appearing after first-time setup wizard or backup restore — setup and profile pages now do a full page load instead of client-side navigation so session provider re-initializes; restore triggers a page reload on completion; session provider retries every 5 seconds after a 503 instead of waiting 5 minutes; PepperVaultGate resets its one-shot flag when on setup pages
+- fix: Backup restore in new-account mode now correctly preserves all entity cross-references — fixed spread-order bug in `remapBackupData` where `remapArrayFields` overwrote `remapFields` results; all entity types now preserve backup/remapped IDs via `CreateOptions.id` instead of generating new IDs and attempting post-hoc reconciliation; added missing ID field remaps (participantId in messages, projectId in chats/files/memories, storyBackgroundImageId/imageProfileId in chats, defaultImageProfileId in characters, relatedMemoryIds in memories, staticBackgroundImageId/storyBackgroundImageId in projects); fixed file restore to use original IDs for disk lookup; removed broken 200-line reconciliation phase
+- fix: Streaming backup restore for large files — replaced FormData upload with raw binary streaming (upload-then-reference pattern) to bypass Next.js body size limits for backups >100MB; file is uploaded once with progress tracking via XHR, then referenced by uploadId for preview and restore; server streams request body directly to disk without buffering; includes user-scoped upload tracking with 1-hour TTL cleanup
+- fix: Backup/restore now uses disk-based temp files + shell `zip`/`unzip` instead of in-memory `archiver`/`adm-zip` — fixes OOM crashes in VM when backing up or restoring large data directories; backup download streams from disk via `ReadStream`; restore writes upload to temp file immediately and extracts on disk; removed `archiver`, `adm-zip`, and `@types/archiver` dependencies
+- feat: Show backend mode (local/Docker/VM) in footer
+- fix: All downloads (backups, .qtap exports, images, API keys, files) now work in Electron — added preload bridge on main window with two IPC channels: `saveFile` for blob-based downloads (small JSON exports) and `downloadUrl` for URL-based downloads (backup .zip, files) that streams through Electron's `will-download` handler to disk without memory pressure; centralized download utility (`lib/download-utils.ts`) detects Electron and routes accordingly, falling back to anchor-click for browsers
+- fix: Backup download fails in Electron with "Failed to fetch" — added `will-download` session handler in Electron main process that prompts a native save dialog for all file downloads (backups, exports, etc.), streaming directly to disk without memory pressure
+- feat: Per-data-directory Lima VMs — each data directory gets its own VM (`quilltap-<hash>`) so switching directories is stop+start instead of delete+recreate; includes legacy single-VM migration, port-conflict safety (stops other quilltap-* VMs before starting), and debug dir-map JSON
+- feat: Disk usage display on splash screen directory chooser — shows data directory size and VM size per entry; two-phase async loading so UI renders immediately
+- feat: Color-coded VM log output on splash screen — parses logrus key=value log format to extract just the `msg` field; detail text color-coded by level (blue=info, amber=warn, red=error, gray=debug)
+- build: Re-enable DMG packaging for macOS — framework symlink issue no longer applies; removed zip fallback
+- feat: Data directory chooser on splash screen
+  - New initial phase on the splash screen lets users pick or switch between data directories
+  - Added `electron/settings.ts` for persisting directory preferences (lastDataDir, knownDataDirs, autoStart) in Electron's userData path
+  - Added `'choose-directory'` splash phase and `DirectoryInfo` IPC type
+  - Added `DEFAULT_DATA_DIR` platform-specific constant (macOS/Windows/Linux); deprecated `WIN_DATA_DIR`
+  - Extended `IVMManager` with `setDataDir()`, `getDataDir()`, and `dataDirMatchesVM()` for configurable data directories
+  - `LimaManager.createVM()` now generates a modified YAML template with the chosen mount location; `dataDirMatchesVM()` reads instance YAML to detect changes
+  - `WSLManager` passes configurable data directory as env var on each start (no VM recreation needed)
+  - Splash screen auto-starts with last-used directory (1.5s interrupt window) or shows directory chooser on first launch
+  - Directory chooser UI: radio list of known directories, add/remove buttons, auto-start checkbox, native folder picker
+  - "Change data directory..." link visible during initializing phase to interrupt auto-start
+  - Switching to a different directory on macOS automatically recreates the Lima VM with the new mount
+- feat: Branded splash screen and live VM startup progress
+  - Redesigned splash screen with Quilltap logo, animated quill, and serif brand name
+  - Live output streaming from limactl/wsl.exe during VM create and start phases
+  - Progress bar shows indeterminate animation during VM operations and determinate bar during downloads
+  - First-run note visible during long operations (VM creation, downloads)
+- feat: Cleanup orphaned file records — `POST /api/v1/files?action=cleanup-orphaned` detects and purges DB records whose backing files are missing from storage, with dry-run mode (default) for safe preview
+- fix: Thumbnail cache mismatch — cache writes now use canonical `users/{userId}/thumbnails/{fileId}_{size}.webp` key via new `uploadRaw()`/`deleteRaw()` methods, matching cache reads so thumbnails are actually cached instead of regenerated every request
+- feat: Batch thumbnail pre-generation — `POST /api/v1/files?action=generate-thumbnails` processes up to 100 images with bounded concurrency (3 concurrent Sharp ops); FileBrowser triggers this after loading files
+- feat: Thumbnail retry — `FileThumbnail` component retries up to 2 times with exponential backoff when thumbnail load fails
+- feat: Thumbnail cleanup on file deletion — cached thumbnails are removed when the original image is deleted
+- refactor: Extract shared thumbnail utilities into `lib/files/thumbnail-utils.ts`
+- fix: MountPointSchema validation failure — change `.nullable()` to `.nullish()` on `encryptedSecrets` and `userId` fields so SQLite NULL→undefined values pass Zod validation, restoring mount point loading and all image/file serving
+- fix: Broken images in Electron/Lima VM — file storage manager now overrides tilde-based paths in VM/container environments and re-identifies the default mount point on refresh
+- feat: Auto-refresh Lima/WSL2 VM when rootfs tarball is updated
+  - `scripts/build-rootfs.sh` now writes a `.build-id` sidecar file next to the tarball with version+timestamp
+  - Docker image is now always rebuilt by default; added `--no-rebuild` flag to skip if image exists (was the opposite)
+  - Electron startup compares tarball build ID against a marker in LIMA_HOME; if they differ, the VM is automatically deleted and recreated
+  - Added `'updating-vm'` splash phase for the reprovisioning UI state
+  - Added `ROOTFS_BUILD_ID_PATH` and `VM_BUILD_ID_PATH` constants
+- fix: Add `.nullable()` to Zod schemas for chat message fields that can be null in SQLite (role, content, attachments, debugMemoryLogs, dangerFlags, context, systemEventType, description)
+- build: Remove `eslint.ignoreDuringBuilds` from next.config.js — ESLint now runs during builds
+- build: Exclude `plugins/` directory from tsconfig.json to avoid type-checking plugin source
+- fix: Correct `quilttap` → `quilltap` typo in build-rootfs.sh, wsl-manager.ts, paths.ts, and documentation
+- feat: Download Lima from GitHub Releases instead of requiring Homebrew installation
+  - `scripts/stage-lima.sh` now downloads Lima tarball from GitHub Releases with local caching (`~/Library/Caches/Quilltap/lima-binaries/`)
+  - Added runtime Xcode Command Line Tools check with cached verification marker
+  - CLT missing dialog offers one-click install via `xcode-select --install` with retry flow
+  - Lima version pinned in `electron/constants.ts` (currently 2.0.3)
+- fix: Docker build OOM — exclude large directories from build context, use webpack instead of Turbopack, cap Node heap
+- feat: Phase 2 — Windows/WSL2 support
+  - Added VM manager abstraction (`electron/vm-manager.ts`): `IVMManager` interface and `createVMManager()` factory function
+  - Added WSL2 manager (`electron/wsl-manager.ts`): imports/starts/stops/unregisters WSL2 distros using `wsl.exe`
+  - Added WSL2 init script (`lima/wsl-init.sh`): entry point for Quilltap inside WSL2 with data directory resolution
+  - Added `wsl2` Docker stage to `Dockerfile`: bakes in provisioning that Lima YAML does at creation time on macOS
+  - Updated `electron/constants.ts` with platform-aware rootfs filename, cache directory, and WSL paths
+  - Updated `electron/main.ts` to use VM manager factory and platform-agnostic variable names
+  - Updated `electron/lima-manager.ts` to implement `IVMManager` interface
+  - Added `checkPrerequisites()` to both managers for startup validation (WSL2 installed, limactl available)
+  - Updated `scripts/build-rootfs.sh` with `--platform` flag for multi-arch builds (arm64/amd64)
+  - Updated `electron-builder.yml` with Windows NSIS target and mac-only `extraResources`
+  - Added Windows icon (`electron/resources/icon.ico`) generated from existing PNG
+  - Added npm scripts: `electron:build:mac`, `electron:build:win`
+  - Created Windows troubleshooting guide (`docs/WINDOWS.md`)
+  - Added `scripts/build-push-docker.ps1`: PowerShell mirror of `build-push-docker.sh` for Windows
+- fix: Use `cross-env` for npm scripts with inline env vars (`LOG_LEVEL`, `ELECTRON_DEV`) for Windows compatibility
+- fix: Made path assertions in tests cross-platform (use `path.join()` instead of hardcoded `/` separators) for paths.test, config.test, plugin-route-loader.test
+- fix: Increased test timeouts for backup-parser and plugin-initialization tests that exceeded the default 5s under slower I/O (WSL2)
+- feat: Phase 1.3 — Electron launcher for Lima VM
+  - Added Electron main process (`electron/main.ts`): splash screen → Lima boot → health poll → main window orchestration
+  - Added Lima manager (`electron/lima-manager.ts`): wraps limactl create/start/stop/delete with env isolation
+  - Added download manager (`electron/download-manager.ts`): first-run rootfs download with progress, retries, and caching
+  - Added health checker (`electron/health-checker.ts`): polls `/api/health` until server is ready
+  - Added splash screen (`electron/splash/`): dark-themed loading UI with progress bar, error/retry states, and IPC bridge
+  - Added preload script (`electron/preload.ts`): context bridge for secure splash ↔ main process communication
+  - Added Electron Builder config (`electron-builder.yml`): macOS zip packaging (DMG disabled due to framework symlink bug)
+  - Added macOS entitlements (`electron/entitlements.mac.plist`): virtualization, unsigned memory, network client
+  - Added `scripts/stage-lima.sh`: stages limactl and guest agent binaries into the Electron bundle
+  - Generated app icon (`electron/resources/icon.icns`, `icon.png`) from `public/quill.svg`
+  - Added npm scripts: `electron:compile`, `electron:dev`, `electron:build`
+  - Dev mode (`ELECTRON_DEV=1`) skips Lima and connects directly to `localhost:3000`
+- fix: File storage paths are now portable across platforms (Lima, Docker, macOS, Linux) — default local mount point uses runtime-resolved path instead of DB-stored absolute path
+- feat: Phase 1a — Lima VM boots Quilltap from the command line
+  - Added Lima VM template (`lima/quilltap.yaml`): VZ driver, Alpine Linux arm64, VirtioFS data mount, port forwarding 3000→5050, OpenRC service provisioning
+  - Added rootfs build script (`scripts/build-rootfs.sh`): exports Docker production image as a tarball importable by Lima and WSL2
+  - Added `isLimaEnvironment()` to `lib/paths.ts` to prevent Docker false-positive when running inside a Lima VM
+  - Added `quilltap-linux-*.tar.gz` to `.gitignore` for rootfs build artifacts
+- Replaced Firecracker with Lima+VZ (macOS) / Lima+WSL2 (Windows) cross-platform VM strategy
+- Updated ROADMAP with phased architecture: shared guest image and orchestration, thin platform-specific VM backends
+- Started 3.0 dev branch for Lima/Firecracker virtualization, took over 2.12-dev changes
+- build: Strip plugin node_modules from Docker image, reducing image size by ~350 MB per architecture
+- build: Remove dead `next-auth` entry from `outputFileTracingIncludes` in next.config.js
+- build: Docker build script now rebuilds better-sqlite3 for local platform after completing, so local dev works immediately
+- fix: SQLite null hydration now converts null to undefined for Zod `.optional()` compatibility — fixes Docker validation errors on `dangerFlags`, `context`, `description`, and other nullable columns
+- fix: Corrupted JSON columns no longer crash chat loading — hydration uses `fromJsonSafe` instead of `fromJson`, logging warnings for corrupted data instead of throwing
+- fix: Corrupted individual chat messages are now skipped instead of failing the entire chat load — `getMessages` uses `safeParse` per message with warning logs for invalid rows
+- fix: Empty strings in JSON columns (`rawResponse`, `attachments`, `debugMemoryLogs`) no longer crash chat loading — `fromJson`/`fromJsonSafe` now guard against empty strings, added missing `renderedHtml` and `dangerFlags` columns to `ChatMessageRowSchema`, and added migration to fix existing data
+- fix: Story backgrounds and images now work in Docker — `getFilePath()` always returns API route (`/api/v1/files/{id}`) instead of legacy `data/files/storage/` paths that are unreachable in Docker's standalone build
+- fix: Legacy files without `storageKey` are now served via the API download handler with a fallback to `public/data/files/storage/`
+- feat: Added migration `migrate-legacy-jsonl-files-v1` to import legacy JSONL file entries into SQLite and copy physical files to the centralized files directory
+- fix: Google Gemini 3 models no longer fail with tool-calling errors — `supportsToolCalling()` now excludes `gemini-3*`, `gemini-pro-latest`, and `gemini-flash-latest`; model metadata reports `missingCapabilities: ['function-calling']` for these models
+- fix: Orchestrator automatically retries without tools when any provider returns a "tool use unsupported" error, preventing hard failures on models that don't support function calling
+- Documented the new game-and-state subsystem incarnation, "Pascal the Croupier"
+- Started 2.12 dev branch
+
+### 2.11.0
 
 - build: Removed dead Docker infrastructure (docker-compose files, Dockerfile.allinone, Nginx/Certbot/MinIO configs)
   - Deleted `docker-compose.yml`, `docker-compose.prod.yml`, `docker-compose.test.yml`, `Dockerfile.allinone`
@@ -45,707 +234,3 @@
   - Auto-create `/story-backgrounds/` folder record in database on first background generation per scope
   - Fixed project `list-files` API response missing `folderPath` and other fields needed by FileBrowser UI
 - Started 2.11 dev branch
-
-### 2.10.2
-
-- feat: User profile setup on first run
-  - New `/setup/profile` page with name input and archetype selection (Proprietor, Resident, Author)
-  - Creates a user-controlled character so the turn manager correctly yields to the user
-  - Automatically sets the new user character as default partner for all existing LLM-controlled characters
-  - PepperVaultGate redirects to profile setup when no user character exists
-  - All setup page exits (pepper setup, unlock, vault storage) route through profile setup when needed
-  - Fallback greeting now uses the user character's name when available
-  - Updated startup wizard help documentation
-
-- fix: Guard against missing `capabilities` on search providers in connection profile forms
-  - `ProfileForm.tsx` and `ProfileModal.tsx`: `p.capabilities.chat` → `p.capabilities?.chat`
-
-### 2.10.1
-
-- fix: Remove verbose debug logging from pepper vault and web search handler
-
-- feat: Pepper Vault — web-based setup wizard for ENCRYPTION_MASTER_PEPPER
-  - Auto-generates encryption pepper on first run, no manual env var needed
-  - Web-based setup wizard at `/setup` with optional passphrase protection
-  - Stores encrypted pepper in SQLite `pepper_vault` table
-  - Three startup modes: auto-resolve (no passphrase), unlock (passphrase), and setup (first run)
-  - Env var pepper users prompted to store in vault via dismissible banner
-  - API routes at `/api/v1/system/pepper-vault` for status, setup, unlock, and store
-  - `PepperVaultGate` client component redirects to setup when needed
-  - Pepper state tracked in `startupState` with `isPepperResolved()` gate
-  - Authenticated API routes return 503 when pepper is not resolved
-  - `lib/encryption.ts` now uses lazy pepper loading (reads from `process.env` on demand)
-  - `ENCRYPTION_MASTER_PEPPER` is now optional in env schema
-  - Comprehensive unit tests for pepper vault lifecycle
-
-- feat: Pluggable web search provider system
-  - New `SEARCH_PROVIDER` plugin type for pluggable web search backends
-  - New `SearchProviderPlugin` interface in `@quilltap/plugin-types@1.14.0`
-  - New search provider registry (`lib/plugins/search-provider-registry.ts`) for managing search provider plugins
-  - Bundled Serper.dev search provider plugin (`qtap-plugin-search-serper`)
-  - Web search handler rewritten to use search provider plugins with DB-stored API keys
-  - Providers API now returns both LLM and search providers
-  - API key test endpoint supports both LLM and search providers
-  - `SERPER_API_KEY` env var deprecated in favor of Settings > API Keys
-  - Backwards compatible: legacy `SERPER_API_KEY` env var still works as fallback
-  - New `docs/SEARCH_PLUGIN_DEVELOPMENT.md` guide for building search provider plugins
-
-### 2.10.0
-
-- refactor: Add type-safe `TypedQueryFilter<T>` to database abstraction layer
-  - Introduce `TypedQueryFilter<T>` mapped type that constrains filter fields to `keyof T` at compile time
-  - `QueryFilter` becomes a backward-compatible alias (`TypedQueryFilter<Record<string, unknown>>`)
-  - Add `$regex?: RegExp | string` to `ComparisonCondition` (already used at runtime, now typed)
-  - Update `DatabaseCollection<T>`, `AbstractBaseRepository<T>`, and `SQLiteCollection<T>` method signatures
-  - Remove 138 unnecessary `as QueryFilter` casts across 26 repository files (14 remain for untyped message collections)
-  - Add 6 compile-time type assertion tests to query-translator test suite
-  - Remove unused `FieldFilter` type (subsumed by the mapped type)
-  - Zero runtime changes — purely compile-time typing improvement
-
-- refactor: Migrate ~65 component files from raw Tailwind to qt-* theme utility classes
-  - Convert hardcoded color/border/shadow classes to semantic equivalents across settings, characters, images, tools, chat, search, layout, and other components
-  - Add `qt-shadow-lg` and `hover:qt-bg-primary/10` utility classes to `_utilities.css`
-  - **@quilltap/theme-storybook** (1.0.19 → 1.0.20): Add `qt-shadow-lg` and `hover:qt-bg-primary/10` to `qt-components.css`
-  - Resolves identified technical debt: ~45 remaining component files with raw Tailwind violations
-
-- refactor: Replace direct SQLite access in `UsersRepository.migrateUserId` with database abstraction layer
-  - Use `withTransaction` for atomic all-or-nothing migration across 12 tables
-  - Use `collection.updateMany()` instead of raw `(db as any).db` prepared statements
-  - Add debug-level per-table logging and structured warn-level error messages
-
-- refactor: Add `safeQuery()` helper to eliminate redundant try-catch boilerplate
-  - Create standalone `safeQuery()` function and `extractErrorMessage()` utility in `safe-query.ts`
-  - Add `this.safeQuery()` protected method on `AbstractBaseRepository` with auto-injected `collection` context
-  - Convert ~315 catch blocks across 29 files (1 base class, 5 ops modules, 23 child repositories)
-  - Three failure modes preserved: rethrow (writes), fallback (reads), silent (non-critical)
-  - Inner try-catches and synchronous validation preserved as-is
-  - Resolves identified technical debt: redundant try-catch wrappers in repository methods
-
-- refactor: Split ChatsRepository into facade + 5 focused operations modules
-  - Extract `ChatParticipantsOps` (add/update/remove participant, query helpers)
-  - Extract `ChatImpersonationOps` (add/remove impersonation, active typing, LLM pause)
-  - Extract `ChatTokenTrackingOps` (increment/reset token aggregates)
-  - Extract `ChatMessagesOps` (get/add/update/clear messages, message count)
-  - Extract `ChatSearchReplaceOps` (count/find/replace text in messages)
-  - Shared dependency injection via `ChatOpsContext` interface — zero changes to callers
-  - Resolves identified technical debt: ChatsRepository SRP split (1,115 → 422 lines in facade)
-
-- fix: Sync qt-* theme utility classes across npm packages for theme developers
-  - **@quilltap/theme-storybook** (1.0.18 → 1.0.19):
-    - Add ~120 missing CSS variables to `qt-components.css` (navbar, sidebar, content, typography, panel, popover, chat composer/toolbar/attachment/sidebar, response status, participant, roleplay, queue badges, entity card, code, link, footer, brand, auth, page layout, tab extras)
-    - Add ~15 missing class definitions (`.qt-bg-surface`, `.qt-bg-surface-alt`, `.qt-bg-primary/*`, `.qt-border-default`, `.qt-shadow-sm`, `.qt-shadow-md`, `.qt-tab-group`, `.qt-tab-divider`, `.qt-dialog-overlay`, `.qt-navbar`, `.qt-navbar-link`, `.qt-navbar-link-active`)
-    - Rename `.qt-tabs` → `.qt-tab-group` to match app
-    - Add sidebar variables to `quilltap-defaults.css`
-    - Fix phantom class names in story components: `qt-chat-bubble*` → `qt-chat-message*`, `qt-chat-name` → `qt-chat-message-author`, `qt-chat-input*` → `qt-chat-composer*`, `qt-dialog-content` → `qt-dialog-body`, `qt-dialog-sm` removed, `qt-dialog-lg` → `qt-dialog-wide`, `qt-tab-panel` → `qt-tab-content`, `qt-nav-link*` → `qt-navbar-link*`
-    - Remove phantom Pill Tabs, Vertical Tabs, Chat List sections from stories
-    - Remove phantom `qt-avatar-xs` and Avatar with Status sections
-  - **create-quilltap-theme** (1.0.5 → 1.0.6):
-    - Fix `qt-chat-bubble-*` → `qt-chat-message-*` in `styles.css.template`
-    - Fix Available Component Classes table and Component Variable Reference in docs template
-
-- refactor: Comprehensive codebase audit and cleanup
-  - **Dead code removal**: Delete unused `useSidebarResize` hook, `SidebarWidthControl` component, MongoDB `mongodb-utils.ts` stub, `DatabaseMigrationService` stub class and barrel file, and associated test file; remove stale webpack warning suppressions from `next.config.js`
-  - **API conformance**: Refactor `/api/v1/session` and `/api/v1/system/data-dir` routes to use standard `createContextHandler` middleware, `withCollectionActionDispatch`, and response helpers from `@/lib/api/responses`
-  - **Security**: Fix ReDoS vulnerability in spin-bottle regex by bounding `.*` to `.{0,50}`; add 1000-character max query length validation in `MemoriesRepository.searchByContent()`, `countMemoriesWithText()`, `findMemoriesWithText()` and `ChatsRepository.countMessagesWithText()`, `findMessagesWithText()`
-  - **DRY improvements**: Extract `escapeRegex()` and `createNullableFilter()` helper methods to `AbstractBaseRepository`; refactor `FilesRepository`, `MemoriesRepository`, `FoldersRepository` to use shared helpers instead of duplicated inline logic
-  - **Theme compliance**: Add `qt-shadow-sm` and `qt-shadow-md` utility classes to `_utilities.css`; convert raw Tailwind violations to qt-* classes in `ChatCard.tsx`, `Avatar.tsx`, `SettingsCard.tsx`, `tags-tab.tsx`
-  - **Test coverage**: Add 22 tests for RNG pattern detector (including ReDoS resistance); add 17 tests for base repository `escapeRegex`/`createNullableFilter` helpers; update session API test for middleware conformance
-  - **Documentation**: Update `DEAD-CODE-REPORT.md`, `migrations/README.md` (remove stale MongoDB examples, update to SQLite patterns), `components/settings/appearance/README.md`
-
-- **Known Technical Debt** (identified in audit, deferred):
-  - ~~`ChatsRepository` SRP split~~ (resolved — see refactor above)
-  - ~~Redundant try-catch wrappers in 50+ repository methods that could use a `safeQuery()` helper in `AbstractBaseRepository`~~ (resolved — see refactor above)
-  - ~~`UsersRepository.migrateUserId` bypasses database abstraction with direct `(db as any).db` SQLite access~~
-  - ~~\~45 remaining component files with 1-8 raw Tailwind violations each (colors, shadows, typography)~~ (resolved — see refactor above)
-  - ~~`QueryFilter` is loosely typed across all repositories — a typed query builder would prevent runtime errors~~
-  - Inconsistent error handling: some repositories throw, some return null, some return empty arrays
-  - Duplicated search/replace logic between `MemoriesRepository` and `ChatsRepository` (could share a `SearchableRepository` mixin)
-
-- refactor: Codebase cleanup and technical debt reduction
-  - **Security**: Replace `exec()` with `execFile()` in data-dir route to eliminate command injection vulnerability; Linux fallback uses sequential `execFile` calls instead of shell chaining
-  - **Deprecated code removal**: Remove deprecated tool-registry backwards-compatibility wrappers (`hasTool`, `hasMultiToolPlugins`, `getMultiToolPluginNames`, `registerTool`, `getTool`, `getAllTools`, `getToolNames`, `getToolMetadata`, `getAllToolMetadata`, `getToolDefinitions`, `unregisterToolsByPrefix`, `getPluginNameForTool`, `isMultiToolPlugin`); update `tool-executor.ts` to use non-deprecated `hasPlugin`, `getAllPlugins`, `getPluginNames`; rename convenience function exports to match
-  - **Theme compliance**: Replace raw Tailwind classes with qt-* theme utility classes across settings components — `bg-black/50` → `qt-dialog-overlay` in 5 modal overlays; hardcoded red/yellow/blue/green alert colors → `qt-alert-error`/`qt-alert-warning`/`qt-alert-info`/`qt-alert-success` in 5 components; toggle knob `bg-white` → `bg-background`; checkbox `border-gray-300` → `border-input` in 6 chat-settings files; provider buttons → `qt-button-success`/`qt-button-primary` in ProfileForm
-  - **Dead code**: Rewrite vector-store test file with 35 real tests for `CharacterVectorStore` and `VectorStoreManager` against SQLite backend, replacing skipped MongoDB placeholder tests
-  - **Input validation**: Add range checking for `parseInt`/`parseFloat` query params in memories housekeeping endpoint (`maxMemories` 1-100000, `maxAgeMonths` 1-1200, `minImportance` 0-1)
-  - **Code cleanup**: Inline `CHEAPEST_MODEL_MAP` reference to use `LEGACY_CHEAPEST_MODEL_MAP` directly in `cheap-llm.ts`
-
-- feat: Theme-overridable subsystem names and Foundry card images
-  - Centralized all 9 subsystem definitions (name, description, thumbnail, background) in `lib/foundry/subsystem-defaults.ts`
-  - Added `SubsystemOverrides` interface and optional `subsystems` field to `ThemePlugin` in `@quilltap/plugin-types` (1.13.0)
-  - Theme plugins can now override display names, descriptions, thumbnail images, and background images for any Foundry subsystem
-  - Added `SubsystemOverridesSchema` to plugin manifest validation
-  - Theme registry resolves relative image paths to theme asset URLs automatically
-  - API `/api/v1/themes/:id?action=tokens` now returns `subsystems` overrides
-  - Created `useSubsystemInfo()` and `useAllSubsystemInfo()` hooks in theme provider
-  - Refactored Foundry hub page and all 8 subsystem pages to use hooks instead of hardcoded strings
-  - Sidebar footer Foundry link title is now theme-overridable
-  - Foundry card CSS classes (`qt-foundry-card`, `qt-foundry-card-image`, `qt-foundry-card-content`) remain fully customizable via theme `cssOverrides`
-  - Themes can set `thumbnail` or `backgroundImage` to `"none"` to suppress default images
-  - Subsystem pages conditionally apply `--story-background-url` only when a background image is provided
-  - Foundry hub cards conditionally render the image container only when a thumbnail is provided
-
-- feat: Old School theme — plain-English subsystem names and text-focused Foundry cards
-  - Subsystem names overridden: Settings, Prompts, Data, Chat Behavior, RAG/Memories, LLM Usage, Content Filters, Appearance, Images/Backgrounds
-  - Foundry cards redesigned with CSS grid: icon + title centered on left (40%), description on right (60%), gentle gradient background
-  - Background images and thumbnails suppressed via `"none"` overrides
-  - Old School bumped to 1.0.6
-
-- chore: Remove all debug log statements from application source code
-  - Removed ~160 `logger.debug()` and `console.debug()` call sites across 53 files
-  - Covers API routes, background jobs, services, database repositories, chat/memory/tools subsystems, image generation, and plugins
-  - Cleaned up orphaned logger imports left behind after removal
-  - Logger infrastructure and `.debug()` method remain available for development use
-
-- chore: Remove Ocean theme plugin
-  - Deleted `plugins/dist/qtap-plugin-theme-ocean/` directory and all contents
-  - Removed Ocean from Storybook theme selector, help docs, tests, and code comments
-
-- fix: Add missing Old School default qt-* variables to Rains and Earl Grey themes
-  - Both themes previously inherited ~120 unset qt-* CSS variables from Old School
-    when it was the default theme; after the default changed to Professional Neutral,
-    those variables picked up different values and broke the intended look
-  - Copied all Old School values for missing variables into both themes so they are
-    fully self-contained (alerts, badges, buttons, cards, inputs, left sidebar,
-    response status, queue badges, filter chips, tabs, and more)
-  - Rains bumped to 1.3.5, Earl Grey bumped to 1.3.3/1.3.2
-
-- fix: Improve Art Deco assistant message readability with heavier font weight
-  - Add `--qt-chat-assistant-font-weight` variable to qt-* component system (default: inherit)
-  - Art Deco theme sets Cormorant Garamond to weight 500 (Medium) for chat messages
-
-- feat: Replace default theme with Professional Neutral design
-  - Color palette shifted from warm slate-blue (hue 220) to cool blue-gray (hue 225)
-  - System font stack throughout — dropped Inter and EB Garamond in favor of OS defaults
-  - Lower saturation across the board — color is for meaning, not decoration
-  - Tighter, fixed border radii (0.25/0.375/0.5rem) instead of calc-based values
-  - Restrained shadows and compact UI (3.5rem header/sidebar vs 4rem)
-  - Sans-serif assistant chat messages (was serif)
-  - Qt-* variables now scoped to `[data-theme="default"]` selector
-  - Updated globals.css, default-tokens.ts, and @quilltap/theme-storybook to match
-
-- feat: Add "The Great Estate" theme plugin with warm gold-and-mahogany palette
-  - Manor house library aesthetic — mahogany (hue 20) and gold (hue 43) palette
-  - Full-page background image with carbon-fibre texture overlay for tactile depth
-  - Playfair Display serif headings with Inter sans-serif body text
-  - Gold left border on assistant messages, brown right border on user messages
-  - Black input backgrounds in dark mode, gold focus glow, uppercase buttons
-  - Full light/dark mode support
-  - Distributed with the app in `plugins/dist/qtap-plugin-theme-great-estate/`
-
-- fix: Overhaul Art Deco theme — darker palette, background images, sidebar fix
-  - Darken light mode palette (background 99% → 78%, cards → 75%, muted → 72%)
-  - Add background images: ivory-and-gold arches (light), geometric gold-on-navy (dark)
-  - Dark mode background dimmed via CSS gradient overlay for readability
-  - Left sidebar uses warm ivory in light mode (was dark navy — icons were invisible)
-  - Sidebar hover/active colors adjusted per mode for proper contrast
-
-- fix: Theme background images yield to story backgrounds (Ocean, Great Estate, Art Deco)
-  - When a story background (`--story-background-url`) is active, the theme's body
-    background image is hidden and solid theme colors are restored on containers
-  - Uses CSS `:has()` selector to detect story background presence
-  - Great Estate also hides its carbon-fibre texture overlay when story bg is active
-
-- feat: Add "Old School" theme plugin preserving the original default appearance
-  - Captures the warm slate-blue (hue 220) color palette for light and dark modes
-  - Bundles Inter (400/600/700) and EB Garamond (400/600/700) fonts
-  - Includes all default qt-* component variable definitions
-  - Distributed with the app in `plugins/dist/qtap-plugin-theme-old-school/`
-
-- feat: Foundry Hub restructure — unified settings and tools into `/foundry`
-  - New `/foundry` landing page with 8 subsystem navigation cards (Aurora, The Forge, The Salon, The Commonplace Book, Prospero, Dangermouse, Calliope, The Lantern)
-  - 8 new sub-routes (`/foundry/aurora`, `/foundry/forge`, `/foundry/salon`, `/foundry/commonplace-book`, `/foundry/prospero`, `/foundry/dangermouse`, `/foundry/calliope`, `/foundry/lantern`)
-  - New `CollapsibleCard` component with `qt-collapsible-card-*` CSS classes for all subsystem pages
-  - Standalone wrappers for `DangerousContentSettings` and `StoryBackgroundsSettings` (self-contained with `useChatSettings()`)
-  - Sidebar permanently collapsed: removed expand/collapse toggle, resize handle, and width persistence
-  - Sidebar nav items now use direct `<Link>` navigation instead of button + expand pattern
-  - Sidebar footer: merged Settings + Tools into single "Foundry" link
-  - `/settings` now redirects to `/foundry` for backward compatibility
-  - Removed `SidebarWidthControl` from Appearance settings
-  - Updated all `/settings` and `/tools` references in character edit, profiles, and salon pages
-  - Updated all help documentation to reference new Foundry routes
-
-- feat: Memory Deduplication tool in Foundry
-  - New tool card on `/foundry` page for finding and merging duplicate memories across all characters
-  - Uses cosine similarity with configurable threshold (0.70–0.95, default 0.80) to cluster duplicates
-  - Union-Find clustering identifies transitive duplicate groups
-  - Best survivor selected by importance, content length, and specificity scoring
-  - Novel details from discarded memories preserved as `[+]` footnotes in survivors (matching memory-gate format)
-  - Groups memories by embedding dimension to handle mixed-dimension vectors safely
-  - Preview mode shows per-character analysis before any changes
-  - Cleans up vector store entries for removed memories
-  - API: `GET /api/v1/system/tools?action=memory-dedup-preview`, `POST /api/v1/system/tools?action=memory-dedup`
-
-- feat: Memory Gate — pre-write similarity check replaces binary duplicate detection
-  - Three-tier decision at write time: REINFORCE near-duplicates (>= 0.80 similarity), LINK related-but-distinct memories (0.70–0.80), or INSERT genuinely new ones
-  - Reinforced memories track observation count (`reinforcementCount`), last reinforcement time, and boosted importance (`reinforcedImportance = min(1.0, importance + log2(count+1) * 0.05)`)
-  - Related memories are bidirectionally linked via `relatedMemoryIds` for thematic graph discovery
-  - Novel detail extraction appends new facts as `[+]` footnotes when reinforcing existing memories
-  - Housekeeping now uses `reinforcedImportance` for protection/scoring, with memories reinforced 5+ times always protected
-  - Hard-cap scoring rebalanced: importance 0.4, recency 0.2, access 0.2, reinforcement 0.2
-  - API supports `skipGate` option for force-insert and `relatedMemoryIds` for manual link management
-  - Falls back to keyword-based gate when embeddings unavailable
-  - Database migration adds 4 columns to memories table with automatic backfill
-
-- fix: Chat messageCount now only counts visible message bubbles (USER/ASSISTANT)
-  - System events, SYSTEM role messages, TOOL role messages, and context summaries no longer inflate the count
-  - Added `countVisibleMessages()` helper in chats repository
-  - Fixed characters API endpoint to use the same visible-only filter
-  - Migration recalculates all existing chat message counts
-
-- fix: Extract visible conversation only for all cheap LLM content-judging tasks
-  - New `extractVisibleConversation()` utility filters to USER/ASSISTANT messages and strips tool artifacts (JSON, `[Tool call made]`, `[Tool Result: ...]` markers)
-  - Applied to title generation, context summaries, story backgrounds, context compression, and proactive memory keyword extraction
-  - Prevents tool call artifacts (vault folder listings, JSON tool results) from influencing titles, summaries, and backgrounds
-  - Title generation (`titleChat`) now uses up to 100 messages weighted toward the end of the conversation instead of just the first 6, producing titles that reflect where the discussion went rather than just how it started
-
-- feat: Uncensored fallback for empty LLM responses across all cheap LLM subsystems
-  - When an LLM silently refuses content (returns empty), retries with uncensored provider in AUTO_ROUTE mode
-  - Covers memory extraction (user, character, inter-character), context compression, and chat streaming
-  - Extracted `sendToProvider()` in cheap-llm-tasks.ts, eliminating triple code duplication
-  - New `UncensoredFallbackOptions` type and `shouldAttemptUncensoredFallback()` helper
-  - Chat streaming: re-streams with uncensored provider and shows "Retrying with uncensored provider..." status
-  - Empty response error message is now context-aware (distinguishes single vs double-empty failures)
-
-- fix: Route appearance resolution through uncensored provider for dangerous chats
-  - When a chat is already flagged dangerous, appearance resolution now goes directly to the uncensored cheap LLM, avoiding content refusals from safe providers
-  - When the safe provider returns empty (content refusal), retries with the uncensored image prompt profile as fallback
-  - `resolveCharacterAppearances()` now returns `AppearanceResolutionResult` with `llmResolved` flag to indicate whether the LLM succeeded or fell back to defaults
-  - Uncensored LLM selection built once upfront in story background handler and reused for both appearance resolution and prompt crafting retries
-
-- feat: Context-aware character appearance resolution for image generation
-  - New `resolveCharacterAppearances()` cheap LLM task analyzes chat context to determine what each character currently looks like
-  - Clothing priority: narrative context (highest) > image prompt > stored records by usageContext > default
-  - Physical descriptions selected by best-matching usageContext for current scene
-  - Dangermouse integration: appearance text classified and sanitized when no uncensored provider available
-  - Chat image generation (`generate_image` tool) now fetches recent messages and resolves context-aware appearances
-  - Story background generation runs scene context derivation and appearance resolution in parallel
-  - Front page image generator now has Dangermouse prompt classification and AUTO_ROUTE provider rerouting
-  - New `APPEARANCE_RESOLUTION` LLM log type for tracking appearance resolution LLM calls
-  - Skip optimization: bypasses LLM call when characters have trivial data and no chat context
-  - Fail-safe: all resolution and sanitization errors fall back gracefully to existing behavior
-
-- feat: Add clothing records to characters
-  - New `clothingRecords` embedded JSON array on characters (name, usageContext, markdown description)
-  - Full CRUD API at `/api/v1/characters/[id]/clothing` and `/api/v1/characters/[id]/clothing/[recordId]`
-  - New UI components: expandable card, modal editor with markdown preview, list with empty state
-  - "Physical Descriptions" tab renamed to "Appearance" and now shows both physical descriptions and clothing records
-  - Clothing records injected into system prompts as `## Clothing / Outfits` block after physical appearance
-  - Clothing data included in image generation prompt expansion context for scene-appropriate outfit selection
-  - Story background generation includes primary outfit in character descriptions
-  - Backup/restore handles UUID remapping for clothing records
-  - Migration adds `clothingRecords` column to existing databases
-
-- feat: Add `usageContext` field to physical descriptions
-  - New optional free-text field (up to 200 chars) describes when each appearance is most appropriate
-  - Physical descriptions are now injected into chat system prompts (previously only used for image generation)
-  - Usage context passed through to image generation prompt expansion for scene-appropriate appearance selection
-  - Updated editor form with character counter and helper text
-  - Updated card display to show usage context inline
-
-- feat: Rename UI routes to align with internal feature naming conventions
-  - `/characters` → `/aurora` (Aurora - the character model system)
-  - `/chats` → `/salon` (Salon - the chat interface)
-  - `/projects` → `/prospero` (Prospero - the agentic and tool-using systems)
-  - `/tools` → `/foundry` (The Foundry - architecture, plugins, and services)
-  - Old routes redirect to new ones to preserve bookmarks
-  - API routes (`/api/v1/*`) remain unchanged
-  - Updated all internal navigation, tests, help files, and documentation
-
-- feat: Character identity reinforcement reminder appended to end of system prompt
-  - Adds a short `## Identity Reminder` block as the very last content before conversation messages
-  - Reminds the LLM which character it is and who it must not write for
-  - Multi-character variant explicitly names all other participants
-  - Placed after memories and summaries for maximum compliance near the generation boundary
-
-- feat: Turn-order-based participant sidebar with stop button and active toggle
-  - Participant sidebar now sorts participants by predicted turn order instead of static display order
-  - Numbered position badges on all participants show who's speaking (#1), who's next (#2), and predicted order
-  - Badge colors indicate status: green pulsing (generating), green (next), blue (queued), neutral (eligible), amber (user turn), dimmed (spoken)
-  - Inactive participants now shown at the bottom of the sidebar with dimmed/greyed appearance instead of being hidden
-  - Stop/interrupt button on the generating character's card replaces the composer stop button in multi-character chats
-  - Active/inactive toggle pulled from hidden settings into a visible eye icon button on each card
-  - Settings gear now only controls system prompt override
-  - Collapsed sidebar avatars sorted by turn order with color-coded position badges
-  - New `computePredictedTurnOrder` display-only utility (no turn algorithm changes)
-
-- feat: Simplify chat settings modal and add connection profile dropdown to participant cards
-  - Chat settings modal now only contains roleplay template and image generation settings
-  - Per-participant settings (connection profile, system prompt override, active toggle) moved to participant sidebar cards
-  - Each character card in the sidebar now has a connection profile dropdown for instant model switching
-  - "User (you type)" option in dropdown allows switching characters to user control without a separate dialog
-  - Gear icon on each card reveals expandable settings: system prompt override textarea and active toggle
-  - System prompt override auto-saves with debounce; active toggle saves immediately
-  - Connection profiles fetched once on page load for sidebar dropdowns
-
-- fix: Update SelectLLMProfileDialog to use v1 API endpoint
-  - Changed `/api/settings/connection-profiles` to `/api/v1/connection-profiles`
-
-- feat: Proactive memory recall for chat responses
-  - Characters now analyze recent conversation to recall relevant memories before responding
-  - New cheap LLM task extracts search keywords from messages since the character last spoke
-  - Keywords are used to search the character's memory store for contextually relevant memories
-  - Pre-searched memories are passed to context builder, skipping the default single-message search
-  - Works naturally in multi-character chats: each character recalls based on their own conversation gap
-  - Runs in parallel with the compression cache check to minimize added latency
-  - Status indicators shown in chat UI: "Analyzing recent conversation..." and "Searching {name}'s memories..."
-  - Graceful fallback to existing behavior when cheap LLM is unavailable or keyword extraction fails
-
-- refactor: Lift cheap LLM selection out of compression guard
-  - Cheap LLM provider resolution now happens unconditionally instead of only when compression is enabled
-  - Fixes implicit dependency where danger classification required compression to be enabled for cheap LLM access
-
-- feat: Character pronouns
-  - Characters can now have pronouns (subject/object/possessive) like he/him/his or they/them/their
-  - Dropdown selector with common presets (He/Him/His, She/Her/Her, They/Them/Their, It/It/Its) plus custom option
-  - Pronouns included in character's own system prompt so the LLM uses them correctly
-  - Other participants' pronouns shown in multi-character chat context
-  - User-controlled characters' pronouns included in "You are talking to..." line
-  - Pronouns displayed inline on character view page next to name and aliases
-  - New database migration adds `pronouns` column to characters table
-
-- feat: Character aliases
-  - Characters can now have alternate names (aliases) like "Liz" for "Elizabeth"
-  - Aliases are included in the character's own system prompt so the LLM knows about them
-  - Other participants' aliases are included when telling the LLM who else is in the chat
-  - Image prompt placeholders (e.g., `{{Liz}}`) resolve aliases to the correct character
-  - Alias-based name prefixes are stripped from LLM responses
-  - Chip-style editor in the character edit form for managing aliases
-  - Aliases displayed inline on character view page next to the name
-  - New database migration adds `aliases` column to characters table
-
-- fix: Retry story background prompt crafting with uncensored provider on empty response
-  - Detect when the cheap LLM returns an empty result (silent content safety refusal) during story background prompt crafting
-  - Retry with the uncensored `imagePromptProfileId` provider if configured, matching the existing pattern in image generation
-  - If no uncensored profile is configured, behavior is unchanged (warn and return)
-
-- fix: BaseModal z-index stacking issue on project pages
-  - Modal dialogs (e.g., "Browse All Files") could appear behind chat cards
-  - Root cause: `qt-page-container > *` creates stacking contexts that trapped modals
-  - Fix: BaseModal now uses React portal to render at document body level
-
-- chore: Upgrade @openrouter/sdk from 0.5.1 to 0.8.0
-  - Wrap `chat.send()` calls with `{ chatGenerationParams: ... }` (breaking change in SDK)
-  - Wrap `embeddings.generate()` calls with `{ requestBody: ... }` (breaking change in SDK)
-  - Bump qtap-plugin-openrouter to 1.0.16
-
-- security: Remove allowDangerousHtml from markdown renderer
-  - Raw HTML in messages (e.g. `<script>`, `<img onerror="">`) is now escaped as literal text
-  - Prevents XSS from imported chats containing malicious HTML
-  - Roleplay pattern processing (post-pipeline) is unaffected
-
-- refactor: Replace 19 empty if/else blocks across 10 repository files with debug logging
-  - Adds `logger.debug()` calls for find/update/delete operations in: image-profiles, chat-settings, llm-logs, plugin-config, files, prompt-templates, vector-indices, memories, characters, connection-profiles, and roleplay-templates repositories
-
-- fix: Standardize EmbeddingProfilesRepository.unsetAllDefaults return type
-  - Changed from `Promise<boolean>` (with confusing logic) to `Promise<number>` matching ImageProfilesRepository
-  - No callers used the return value; the enrichment middleware types it as `Promise<void>`
-
-- test: Add unit tests for markdown renderer canPreRenderMessage function
-  - 13 test cases covering USER, ASSISTANT, TOOL, SYSTEM roles and edge cases
-  - Added Jest mock configuration for ESM-only unified/remark/rehype libraries
-
-- fix: Story background images now pin to top of viewport instead of centering
-  - Prevents faces and heads from being cropped above the header on square images
-  - Applies to both chat layouts and project page containers
-
-- fix: Danger classification re-queuing all chats on every server restart
-  - System event created during classification incremented `messageCount`, but `dangerClassifiedAtMessageCount` was stored before the event — causing a permanent off-by-one that triggered re-classification of every chat on every startup
-  - Reordered handler to create the system event first, then re-read the updated `messageCount` before storing the classification result
-
-- fix: Make safe danger classification sticky unless new messages are added
-  - Previously only dangerous classifications were sticky; safe chats were re-checked on every scan
-  - Now safe chats skip re-classification unless `messageCount` has increased since last classification
-  - Defense-in-depth: guards added in scheduled scan filter, memory trigger, and job handler
-
-- feat: Queue status badges in page toolbar
-  - Compact badge group shows active job counts for memory, summarization, danger classification, and story background queues
-  - Color-coded: blue (memory), green (summary), red (danger), dark gray (story background)
-  - Fully themeable via `qt-queue-badge-*` CSS variables
-  - Event-driven polling: starts on route change or job enqueue, stops when all counts reach zero
-  - New `activeByType` field in GET /api/v1/system/jobs response
-
-- feat: Tag deletion in Settings
-  - New "Tag Management" section in Settings > Tags tab lists all tags with usage counts
-  - Delete button with confirmation popover shows how many entities will be affected
-  - Deleting a tag cascades removal across all entity types
-
-- fix: Tag deletion cascade now covers all 6 entity types
-  - Previously only cascaded to characters, chats, and connection profiles
-  - Now also cascades to image profiles, embedding profiles, and files
-  - Added debug logging for each entity cleaned during cascade
-
-- fix: Tag usage counts now include all entity types
-  - GET endpoints for tags now count image profiles, embedding profiles, and files
-  - Added `totalUsage` computed field summing all 6 entity type counts
-
-- fix: Quick-hide dangerous chats toggle now works across entire app
-  - Homepage Recent Chats, Character Conversations tab, and Project Chats sections now respect the toggle
-  - Sidebar quick-hide button now appears when dangerous chats exist (previously required the toggle to already be on)
-
-- feat: Danger indicator on all chat listings
-  - Subtle destructive-colored asterisk (*) shown next to message count on dangerous chats
-  - Displayed on ChatCard (chats page, project pages, character conversations), homepage recent chats, and both sidebar sections
-  - `isDangerousChat` field added to all chat list API responses (chats, project chats, character chats)
-  - Added to enrichment service, homepage types, and all transform functions
-
-- fix: Danger classification not processing chats with deleted connection profiles
-  - Scheduled scan now validates participant connection profile IDs against existing profiles
-  - Classification handler falls back to first available profile instead of silently skipping
-  - Safe chats are now re-checked when message count increases since last classification
-
-- fix: Danger classification scoring ignoring per-category scores
-  - Parser now uses the maximum of overall score and highest per-category score
-  - Also respects the LLM's explicit `isDangerous: true` response
-  - Any single category meeting the threshold is enough to flag the chat
-
-- fix: Project chats sorted by metadata activity instead of last message
-  - Project chats API now sorts by `lastMessageAt` instead of `updatedAt`
-  - Project chats API now returns `lastMessageAt` for correct date display on ChatCard
-
-- fix: Job queue processor can get permanently stuck on hanging LLM calls
-  - Per-job execution timeout (3 minutes) via Promise.race prevents indefinite hangs
-  - Periodic stuck job recovery runs every 5 minutes (previously only on startup)
-
-- fix: Chat timestamps now always reflect the last actual message sent or received
-  - `addMessage()` and `addMessages()` no longer update `lastMessageAt` or `updatedAt` for system events
-  - Base repository `_update()` respects explicit `updatedAt` from callers instead of always auto-setting
-  - Chats repository preserves existing `updatedAt` unless caller explicitly provides it
-  - Migration `fix-chat-updated-at-timestamps-v2` resets both `updatedAt` and `lastMessageAt` on all chats to the last actual message timestamp
-
-- feat: Startup danger classification scan and context summary chaining
-  - Scheduled danger scan runs on startup and every 10 minutes to classify legacy/unclassified chats
-  - Context summary → danger classification chaining: completing a summary automatically triggers classification
-  - Raw message fallback: chats without a context summary are classified using concatenated messages (truncated to 4000 chars)
-  - Decision tree: chats with summary → classify directly; long chats (>50 messages) without summary → generate summary first; short chats → classify from raw messages
-  - Batch jobs use priority -2 (lower than interactive priority -1)
-  - Background schedulers (cleanup + danger scan) wired into startup sequence
-  - Graceful error handling: scan failures never block startup or other processing
-
-- feat: Chat-level danger classification with quick-hide integration
-  - Background job classifies entire chats as dangerous using compressed context summary
-  - Uses existing Cheap LLM gatekeeper service for classification
-  - Sticky behavior: once classified as dangerous, stays dangerous (never re-checks)
-  - Re-checks when new messages are added (message count changes)
-  - New database fields: `isDangerousChat`, `dangerScore`, `dangerCategories`, `dangerClassifiedAt`, `dangerClassifiedAtMessageCount`
-  - Database migration: `add-chat-danger-classification-fields-v1`
-  - Quick-hide sidebar integration: "Content Filters" section with "Dangerous Chats" toggle
-  - Sidebar API exposes `isDangerous` on chat objects
-  - Sidebar and all-chats page filter dangerous chats when toggle is active
-  - `POST /api/v1/chats/[id]?action=reclassify-danger` endpoint to reset and re-queue classification
-  - DANGER_CLASSIFICATION system event for token tracking
-  - Automatically triggered after context summary generation in message orchestrator
-
-- fix: Plugin loading fails in Turbopack production builds ("dynamic usage of require is not supported")
-  - Replace `__non_webpack_require__` / bare `require` fallback with `createRequire` from `node:module` for Turbopack compatibility
-  - Keep `__non_webpack_require__` as primary path for webpack (dev mode), `createRequire` as fallback for Turbopack/plain Node.js
-  - Add `node:module` to webpack server externals and suppress `createRequire` parse warnings in `next.config.js`
-  - Fixes: `plugin-initialization.ts`, `provider-registry.ts`, `next.config.js`
-  
-- fix: Dangerous content settings not persisting (PUT route handler missing `dangerousContentSettings` field)
-
-- fix: Image description fallback crash (`repos.users.getChatSettings` → `repos.chatSettings.findByUserId`)
-
-- refactor: Move "Image Prompt Expansion LLM" setting from Cheap LLM card to Dangerous Content Handling card
-
-- feat: Dangerous content handling system
-  - Gatekeeper service classifies user messages for sensitive content using the Cheap LLM
-  - Three modes: Off (default), Detect Only (flag content), Auto-Route (reroute to uncensored providers)
-  - Provider routing service resolves uncensored-compatible profiles for flagged content
-  - Settings resolver follows existing cascade pattern (global only for v1)
-  - Orchestrator integration with streaming status events (classifying, rerouting)
-  - Settings UI with mode selector, threshold slider, scan toggles, profile dropdowns, display options
-  - Connection profiles and image profiles gain "Uncensored-Compatible" checkbox
-  - Message display with DangerFlagBadge (category badges, rerouted indicator, override button)
-  - DangerContentWrapper with Show/Blur/Collapse display modes
-  - Override API endpoint to mark danger flags as user-overridden
-  - Database migration adds `dangerousContentSettings` to chat_settings, `isDangerousCompatible` to profiles
-  - Image generation handler integration: classifies user image prompts and expanded prompts, reroutes to uncensored image providers
-  - DANGER_CLASSIFICATION system event type for LLM log tracking
-  - Fail-safe design: classification errors never block messages
-  - Content hash caching for classification deduplication (200 entries, 5min TTL)
-
-- fix: Story backgrounds not generated on inline title updates
-  - Title updates triggered via `context-summary.ts` (the inline path after message exchanges) never queued story background generation
-  - Only the unused background job handler path had the `queueStoryBackgroundIfEnabled` call
-  - Exported `queueStoryBackgroundIfEnabled` from the title-update handler and call it from the inline title update path
-
-- fix: Agent mode toggle showing "off" after navigating back to chat
-  - GET `/api/v1/chats/[id]` was not returning `agentModeEnabled` in the response object
-  - Frontend sync effect always received `undefined`, defaulting to `false` in the tool palette
-  - Added `agentModeEnabled` to the chat GET response
-
-- feat: Native tool execution rules injected into system prompt
-  - Models with native function calling now receive explicit instructions to invoke tools via tool_use blocks rather than narrating tool actions in prose
-  - Added character-voiced reinforcement after personality/scenario sections using template variables
-  - Renamed `pseudoToolInstructions` → `toolInstructions` throughout the pipeline since the parameter now carries either native or pseudo-tool instructions
-  - New `lib/tools/native-tool-prompt.ts` with `buildNativeToolInstructions()` function
-
-- fix: Story backgrounds settings race condition causing data loss
-  - When quickly changing multiple story backgrounds settings (enable + profile), updates could overwrite each other
-  - Added useRef to track latest settings state during concurrent API calls
-  - Added debug logging to chat settings repository to help diagnose future persistence issues
-
-- fix: Markdown elements missing spacing in server-rendered chat messages
-  - Headings, lists, blockquotes, and horizontal rules had no vertical spacing
-  - Tailwind Typography plugin (`prose` classes) was not installed in v4
-  - Added comprehensive CSS rules for all markdown elements in `.qt-chat-message-content`
-  - Now both server-rendered HTML and client-rendered ReactMarkdown have consistent spacing
-
-- fix: Server-rendered code blocks overlapping and corrupted in chat messages
-  - Roleplay patterns (dialogue detection) were being applied inside code blocks, corrupting JSON strings
-  - Added code block depth tracking to skip pattern application inside `<code>` and `<pre>` elements
-  - Fixed missing `white-space: pre-wrap` and `line-height` on `.hljs` styled code blocks
-  - Added explicit styling for `pre:has(> code.hljs)` to properly style server-rendered code
-  - Removed redundant `overflow: hidden` that was clipping code block content
-
-- fix: Story backgrounds now respect chat-specific image profile settings
-  - Changed priority order: Chat profile > Story backgrounds default > User default
-  - Previously, global story backgrounds default always took precedence over chat-specific settings
-  - Now, if a chat has an image profile configured, it will be used for that chat's backgrounds
-
-- fix: Chat image profile setting not loading in Chat Settings modal
-  - GET /api/v1/chats/[id] was not returning imageProfileId in the response
-  - Added imageProfileId to the chat response object
-
-- fix: Failed background jobs blocking new job creation for the same chat
-  - `findPendingForChat` no longer includes FAILED jobs in the "pending" check
-  - Users can now trigger new jobs after fixing underlying issues (e.g., changing provider)
-  - Improved logging to distinguish between new jobs and reused existing jobs
-  - `enqueueStoryBackgroundGeneration` now returns `{ jobId, isNew }` for better caller feedback
-
-- fix: Thumbnail cache misses logging as errors
-  - Changed thumbnail handler to use `fileExists` check before attempting download
-  - Prevents noisy error logs when thumbnails haven't been generated yet
-  - Thumbnails are still generated on-demand and cached for future requests
-
-- feat: Story backgrounds now derive scene context from chat history
-  - Added `deriveSceneContext` cheap LLM task that analyzes recent messages
-  - Generates imaginative scene descriptions based on conversation content
-  - If discussing a book or story, characters may be depicted as observers to that world
-  - Falls back to chat title if context derivation fails or no messages exist
-  - Logs derived context for debugging in background job handler
-
-- fix: Search and Replace now searches all memory fields (content, summary, keywords)
-  - Memory search previously only searched content and summary fields
-  - Now also searches and replaces text within the keywords array
-  - Added `jsonArrayContainsLike` utility for SQLite LIKE queries on JSON arrays
-  - Fixed RegExp to LIKE pattern conversion in SQLite query translator
-
-- feat: Search and Replace now refreshes data after completing
-  - Character view page refreshes Conversations and Memories tabs when changes are made
-  - Chat page refreshes messages when search-replace updates them
-  - Added `onComplete` callback to SearchReplaceModal
-  - Added `refreshKey` prop to MemoryList and CharacterConversationsTab components
-
-- feat: Unified ChatCard component for consistent chat list display
-  - Created reusable ChatCard component used across /chats, /projects/[id], and /characters/[id]/view
-  - Configurable via props: showAvatars, showProject, showPreview, useRelativeDates, actionType
-  - Supports both delete (permanent) and remove (unlink from project) actions
-  - Includes highlight animation for newly imported chats
-  - Chat cards now display story background thumbnails instead of avatar stacks when available
-  - Story background thumbnails stretch to fill card height with cover fit
-
-- feat: Story background support on project detail pages
-  - Project pages now display story backgrounds based on backgroundDisplayMode setting
-  - Uses useStoryBackground hook to fetch and render background via CSS variable
-  - Added story background support to qt-page-container CSS class
-  - Background renders as semi-transparent fixed layer behind page content
-
-- feat: Story background thumbnails in chat enrichment
-  - Added storyBackground field to EnrichedChatSummary in chat enrichment service
-  - Project chats API now returns storyBackground for each chat
-  - Character chats API now returns storyBackground for each chat
-
-- fix: Race condition in plugin initialization causing "Provider not found" errors in Docker
-  - Moved `initialized = true` flag to after all registries (provider, theme, tool) are initialized
-  - Previously, the flag was set too early, causing concurrent calls to `initializePlugins()` to return before provider registry was ready
-  - Fixes story background generation failing with "Provider 'OPENROUTER' not found in registry" in production
-
-- refactor: Image profile moved from per-participant to per-chat level
-  - Each chat now has a single image profile (or none) shared by all participants
-  - Image profile selector moved to Chat Settings (below Roleplay Template)
-  - Removed per-character image profile selector from participant settings
-  - New chat creation page now has a single image profile dropdown
-  - Migration automatically populates chat's imageProfileId from first participant
-  - Story backgrounds now use chat-level image profile
-  - API: `imageProfileId` field added to chat create/update requests
-
-- feat: Story Backgrounds - AI-generated atmospheric background images for chats
-  - When enabled, generates landscape scene images featuring characters after chat title updates
-  - Background images use 45% opacity behind chat content for atmosphere
-  - Configure in Settings > Chat Settings > Story Backgrounds
-  - Select image profile for generation (defaults to user's default profile)
-  - API endpoints: `GET /api/v1/chats/[id]?action=get-background`, `GET /api/v1/projects/[id]?action=get-background`
-  - Projects support multiple display modes: theme, static, project, or latest chat background
-  - New database fields: `storyBackgroundImageId`, `lastBackgroundGeneratedAt` on chats
-  - New CSS: Story background ::before layer on `.qt-chat-layout`, semi-transparent content overlay
-  - Manual regeneration via "Regenerate Background" button in chat tool palette
-  - Background auto-updates after generation completes (polling mechanism)
-  - Chat header shows clickable thumbnail of story background (opens full-screen modal)
-  - Duplicate job prevention: skips if background generation already pending for chat
-  - Uses Image Prompt Expansion LLM setting for prompt crafting
-
-- fix: ImageModal now renders via React Portal to resolve z-index stacking context issues
-  - Modal buttons (download, tag, delete) now always visible above page header/sidebar
-  - Uses `createPortal` to render at document body level
-
-- fix: SQLite backend improvements for background job processing
-  - Added `$expr` operator support for field-to-field comparisons in query translator
-  - Fixed `findOneAndUpdate` to correctly return updated document by ID
-  - Resolves issues with job queue claiming and processing
-
-- perf: Server-side markdown pre-rendering for chat messages
-  - Simple messages (no tools, no attachments) are now pre-rendered to HTML on the server
-  - Pre-rendered HTML is returned in the API response and rendered directly without client-side processing
-  - Significantly reduces CPU load when scrolling through long chats
-  - Complex messages with embedded tools or attachments fall back to client-side rendering
-  - Roleplay patterns (dialogue, narration, OOC) are applied server-side for pre-rendered messages
-  - Added `renderedHtml` field to message schema for pre-rendered content
-  - New markdown renderer service using unified/remark/rehype pipeline
-  - Added highlight.js CSS styling for server-rendered code blocks
-
-- feat: Chat composer tool palette revamp
-  - Reorganized hamburger menu into four labeled sections: Chat, Organize, Edit Content, Memory
-  - Added composer gutter tools: Attach, Generate Image, and RNG now accessible as icon buttons
-  - RNG icon changed from abstract cube to recognizable dice face with pips
-  - Preview toggle moved to formatting toolbar (document editing mode)
-  - New horizontal toolbar layout with gutter tools on left, hamburger/doc-mode buttons closer to textarea
-  - Tool palette popover now aligns with hamburger button, not gutter tools
-  - Full-width mode now properly expands composer textarea to fill available space
-  - New CSS classes: `.qt-composer-gutter-tools`, `.qt-composer-gutter-button`, `.qt-tool-palette-popover`, `.qt-tool-palette-section-header`, `.qt-tool-palette-section-content`
-  - RngDropdown component now supports `variant` prop for palette vs gutter styling
-
-- feat: RNG dropdown improvements
-  - Dice roll options (d6, d20) now have up/down spinner buttons to adjust count
-  - Removed redundant "Roll 2d6" option since count is now adjustable
-  - Dice counts persist within the dropdown session
-
-- feat: Tool message UI improvements
-  - Tool messages now embedded inside message bubbles (assistant or user)
-  - User-initiated tools (RNG, etc.) embed in user messages, not assistant messages
-  - Character-initiated tools embed in assistant messages
-  - Collapsed state shows truncated preview text for request/response
-  - Text content now wraps properly instead of horizontal scrolling
-  - Copy buttons added for tool request and response sections
-  - Image copy to clipboard button for generated images
-  - Compact embedded layout for better visual integration
-  - Consistent vertical spacing between all messages
-
-- feat: Agent Mode per-chat toggle in Tool Palette
-  - Agent Mode button now connected and fully functional in chat tool palette
-  - Clicking Agent button toggles agent mode on/off for the current chat
-  - Toggle status persists in database and is reflected across UI
-  - API endpoint: `POST /api/v1/chats/[id]?action=toggle-agent-mode`
-  - Logging for all agent mode toggle operations at info level
-  - State management synced from chat data when page loads
-
-- feat: Agent Mode - iterative tool use with self-correction
-  - LLMs can now use tools iteratively, verify results, and self-correct before delivering final response
-  - New `submit_final_response` tool signals completion of agent work
-  - Configurable max turns (1-25, default 10) with force-final safety limit
-  - Settings cascade: Global > Character > Project > Chat (each level can override)
-  - Global settings in Settings > Chat: default enabled toggle and max turns
-  - Per-chat toggle in tool palette (Agent button)
-  - New SSE events: `agent_iteration`, `agent_completed`, `agent_force_final`
-  - New help documentation: `/help/agent-mode`
-  - Migration automatically adds required database columns

@@ -1,196 +1,363 @@
 /**
- * Vector Indices Repository
+ * Vector Indices Repository (Normalized BLOB Storage)
  *
- * Backend-agnostic repository for Vector Index entities.
- * Works with SQLite through the database abstraction layer.
+ * Manages two tables for vector storage:
+ * - `vector_indices`: Per-character metadata (id, characterId, version, dimensions, timestamps)
+ * - `vector_entries`: Per-embedding rows with Float32 BLOB storage
  *
- * Stores character vector indices (embeddings for semantic search) in a database.
- * Each document represents a complete vector index for a single character.
+ * Embeddings are stored as compact Float32 BLOBs (~4x smaller than JSON text).
+ * The `memories.embedding` column also uses BLOB storage via registered blob columns.
  */
 
 import { logger } from '@/lib/logger';
-import { VectorIndex, VectorIndexSchema } from '@/lib/schemas/types';
-import { AbstractBaseRepository, CreateOptions } from './base.repository';
-import { TypedQueryFilter } from '../interfaces';
+import {
+  VectorIndexMeta, VectorIndexMetaSchema,
+  VectorEntryRow, VectorEntryRowSchema,
+} from '@/lib/schemas/types';
+import { getDatabaseAsync, ensureCollection, registerBlobColumns } from '../manager';
+import { DatabaseCollection, TypedQueryFilter, UpdateSpec } from '../interfaces';
 
-/**
- * Vector Indices Repository
- * Implements CRUD operations for vector indices with character-based lookups.
- */
-export class VectorIndicesRepository extends AbstractBaseRepository<VectorIndex> {
-  constructor() {
-    super('vector_indices', VectorIndexSchema);
+// ============================================================================
+// Repository Class
+// ============================================================================
+
+export class VectorIndicesRepository {
+  private initialized = false;
+
+  /**
+   * Ensure both tables exist and blob columns are registered.
+   */
+  private async ensureInitialized(): Promise<void> {
+    if (this.initialized) return;
+
+    // Ensure vector_indices table (metadata)
+    await ensureCollection('vector_indices', VectorIndexMetaSchema);
+
+    // Ensure vector_entries table (per-embedding rows)
+    await ensureCollection('vector_entries', VectorEntryRowSchema);
+
+    // Register BLOB columns
+    await registerBlobColumns('vector_entries', ['embedding']);
+    await registerBlobColumns('memories', ['embedding']);
+
+    this.initialized = true;
+
+    logger.debug('VectorIndicesRepository initialized', {
+      context: 'VectorIndicesRepository.ensureInitialized',
+    });
   }
 
   /**
-   * Find a vector index by ID
+   * Get the vector_indices collection (metadata table)
    */
-  async findById(id: string): Promise<VectorIndex | null> {
-    return this._findById(id);
+  private async getMetaCollection(): Promise<DatabaseCollection<VectorIndexMeta>> {
+    await this.ensureInitialized();
+    const db = await getDatabaseAsync();
+    return db.getCollection<VectorIndexMeta>('vector_indices');
   }
 
   /**
-   * Find all vector indices
+   * Get the vector_entries collection (per-embedding table)
    */
-  async findAll(): Promise<VectorIndex[]> {
-    return this._findAll();
+  private async getEntriesCollection(): Promise<DatabaseCollection<VectorEntryRow>> {
+    await this.ensureInitialized();
+    const db = await getDatabaseAsync();
+    return db.getCollection<VectorEntryRow>('vector_entries');
+  }
+
+  // ==========================================================================
+  // Meta Operations (vector_indices table)
+  // ==========================================================================
+
+  /**
+   * Find metadata for a character's vector index
+   */
+  async findMetaByCharacterId(characterId: string): Promise<VectorIndexMeta | null> {
+    try {
+      const collection = await this.getMetaCollection();
+      return await collection.findOne({ characterId } as TypedQueryFilter<VectorIndexMeta>);
+    } catch (error) {
+      logger.error('Error finding vector index meta', {
+        context: 'VectorIndicesRepository.findMetaByCharacterId',
+        characterId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
   }
 
   /**
-   * Find a vector index by character ID
+   * Save metadata for a character's vector index (upsert)
    */
-  async findByCharacterId(characterId: string): Promise<VectorIndex | null> {
-    return this.safeQuery(
-      async () => {
-        const index = await this.findOneByFilter({ characterId });
+  async saveMeta(characterId: string, dimensions: number): Promise<void> {
+    try {
+      const collection = await this.getMetaCollection();
+      const now = new Date().toISOString();
+      const existing = await this.findMetaByCharacterId(characterId);
 
-        if (!index) {
-          return null;
-        }
-        return index;
-      },
-      'Error finding vector index by character ID',
-      { context: 'VectorIndicesRepository.findByCharacterId', characterId },
-      null
-    );
-  }
-
-  /**
-   * Create a new vector index
-   */
-  async create(
-    data: Omit<VectorIndex, 'id' | 'createdAt' | 'updatedAt'>,
-    options?: CreateOptions
-  ): Promise<VectorIndex> {
-    return this.safeQuery(
-      async () => {
-        const index = await this._create(data, options);
-
-        logger.info('Vector index created', {
-          characterId: data.characterId,
-          entryCount: index.entries.length,
+      if (existing) {
+        await collection.updateOne(
+          { id: existing.id } as TypedQueryFilter<VectorIndexMeta>,
+          { $set: { dimensions, updatedAt: now } } as UpdateSpec<VectorIndexMeta>
+        );
+      } else {
+        await collection.insertOne({
+          id: characterId,
+          characterId,
+          version: 1,
+          dimensions,
+          createdAt: now,
+          updatedAt: now,
         });
-
-        return index;
-      },
-      'Error creating vector index',
-      { context: 'VectorIndicesRepository.create', characterId: data.characterId }
-    );
+      }
+    } catch (error) {
+      logger.error('Error saving vector index meta', {
+        context: 'VectorIndicesRepository.saveMeta',
+        characterId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
   }
 
   /**
-   * Update a vector index
+   * Delete metadata for a character
    */
-  async update(id: string, data: Partial<VectorIndex>): Promise<VectorIndex | null> {
-    return this.safeQuery(
-      () => this._update(id, data),
-      'Error updating vector index',
-      { id }
-    );
+  async deleteMetaByCharacterId(characterId: string): Promise<boolean> {
+    try {
+      const collection = await this.getMetaCollection();
+      const result = await collection.deleteMany({ characterId } as TypedQueryFilter<VectorIndexMeta>);
+      return result.deletedCount > 0;
+    } catch (error) {
+      logger.error('Error deleting vector index meta', {
+        context: 'VectorIndicesRepository.deleteMetaByCharacterId',
+        characterId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return false;
+    }
   }
 
+  // ==========================================================================
+  // Entry Operations (vector_entries table)
+  // ==========================================================================
+
   /**
-   * Save a complete vector index for a character (creates or updates)
-   * Uses upsert semantics - completely replaces the index for a character
+   * Find all entries for a character
    */
-  async save(characterId: string, index: Omit<VectorIndex, 'id'>): Promise<VectorIndex> {
-    return this.safeQuery(
-      async () => {
-        const now = this.getCurrentTimestamp();
-
-        // Try to find existing index by character ID
-        const existing = await this.findByCharacterId(characterId);
-
-        if (existing) {
-          // Update existing
-          const updated = await this.update(existing.id, {
-            ...index,
-            updatedAt: now,
-          });
-
-          if (!updated) {
-            throw new Error(`Failed to update vector index for character ${characterId}`);
-          }
-          return updated;
-        } else {
-          // Create new
-          const doc: Omit<VectorIndex, 'createdAt' | 'updatedAt'> = {
-            ...index,
-            id: characterId, // Use characterId as the document ID
-            characterId,
-          };
-
-          const created = await this.create(doc);
-          return created;
-        }
-      },
-      'Error saving vector index',
-      { context: 'VectorIndicesRepository.save', characterId }
-    );
+  async findEntriesByCharacterId(characterId: string): Promise<VectorEntryRow[]> {
+    try {
+      const collection = await this.getEntriesCollection();
+      return await collection.find({ characterId } as TypedQueryFilter<VectorEntryRow>);
+    } catch (error) {
+      logger.error('Error finding vector entries', {
+        context: 'VectorIndicesRepository.findEntriesByCharacterId',
+        characterId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
   }
 
   /**
-   * Delete a vector index by ID
+   * Add a single entry
    */
-  async delete(id: string): Promise<boolean> {
-    return this.safeQuery(
-      () => this._delete(id),
-      'Error deleting vector index',
-      { context: 'VectorIndicesRepository.delete', id }
-    );
+  async addEntry(entry: { id: string; characterId: string; embedding: number[] }): Promise<void> {
+    try {
+      const collection = await this.getEntriesCollection();
+      await collection.insertOne({
+        id: entry.id,
+        characterId: entry.characterId,
+        embedding: entry.embedding,
+        createdAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      logger.error('Error adding vector entry', {
+        context: 'VectorIndicesRepository.addEntry',
+        id: entry.id,
+        characterId: entry.characterId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
   }
 
   /**
-   * Delete a vector index by character ID
+   * Add multiple entries in a batch
+   */
+  async addEntries(entries: { id: string; characterId: string; embedding: number[] }[]): Promise<void> {
+    if (entries.length === 0) return;
+
+    try {
+      const collection = await this.getEntriesCollection();
+      const now = new Date().toISOString();
+      const rows = entries.map(e => ({
+        id: e.id,
+        characterId: e.characterId,
+        embedding: e.embedding,
+        createdAt: now,
+      }));
+      await collection.insertMany(rows);
+    } catch (error) {
+      logger.error('Error batch adding vector entries', {
+        context: 'VectorIndicesRepository.addEntries',
+        count: entries.length,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Remove a single entry by ID
+   */
+  async removeEntry(id: string): Promise<boolean> {
+    try {
+      const collection = await this.getEntriesCollection();
+      const result = await collection.deleteOne({ id } as TypedQueryFilter<VectorEntryRow>);
+      return result.deletedCount > 0;
+    } catch (error) {
+      logger.error('Error removing vector entry', {
+        context: 'VectorIndicesRepository.removeEntry',
+        id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return false;
+    }
+  }
+
+  /**
+   * Remove multiple entries by IDs
+   */
+  async removeEntries(ids: string[]): Promise<number> {
+    if (ids.length === 0) return 0;
+
+    try {
+      const collection = await this.getEntriesCollection();
+      let removed = 0;
+      for (const id of ids) {
+        const result = await collection.deleteOne({ id } as TypedQueryFilter<VectorEntryRow>);
+        removed += result.deletedCount;
+      }
+      return removed;
+    } catch (error) {
+      logger.error('Error batch removing vector entries', {
+        context: 'VectorIndicesRepository.removeEntries',
+        count: ids.length,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return 0;
+    }
+  }
+
+  /**
+   * Update an entry's embedding
+   */
+  async updateEntryEmbedding(id: string, embedding: number[]): Promise<boolean> {
+    try {
+      const collection = await this.getEntriesCollection();
+      const result = await collection.updateOne(
+        { id } as TypedQueryFilter<VectorEntryRow>,
+        { $set: { embedding } } as UpdateSpec<VectorEntryRow>
+      );
+      return result.modifiedCount > 0;
+    } catch (error) {
+      logger.error('Error updating vector entry embedding', {
+        context: 'VectorIndicesRepository.updateEntryEmbedding',
+        id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return false;
+    }
+  }
+
+  /**
+   * Remove all entries for a character
+   */
+  async removeEntriesByCharacterId(characterId: string): Promise<number> {
+    try {
+      const collection = await this.getEntriesCollection();
+      const result = await collection.deleteMany({ characterId } as TypedQueryFilter<VectorEntryRow>);
+      return result.deletedCount;
+    } catch (error) {
+      logger.error('Error removing all vector entries for character', {
+        context: 'VectorIndicesRepository.removeEntriesByCharacterId',
+        characterId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return 0;
+    }
+  }
+
+  /**
+   * Check if an entry exists
+   */
+  async entryExists(id: string): Promise<boolean> {
+    try {
+      const collection = await this.getEntriesCollection();
+      return await collection.exists({ id } as TypedQueryFilter<VectorEntryRow>);
+    } catch (error) {
+      logger.error('Error checking vector entry existence', {
+        context: 'VectorIndicesRepository.entryExists',
+        id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return false;
+    }
+  }
+
+  // ==========================================================================
+  // Combined Operations
+  // ==========================================================================
+
+  /**
+   * Delete a character's vector index entirely (meta + entries)
    */
   async deleteByCharacterId(characterId: string): Promise<boolean> {
-    return this.safeQuery(
-      async () => {
-        const index = await this.findByCharacterId(characterId);
-        if (!index) {
-          return false;
-        }
+    try {
+      const entriesRemoved = await this.removeEntriesByCharacterId(characterId);
+      const metaDeleted = await this.deleteMetaByCharacterId(characterId);
 
-        return this.delete(index.id);
-      },
-      'Error deleting vector index by character ID',
-      { context: 'VectorIndicesRepository.deleteByCharacterId', characterId },
-      false
-    );
-  }
+      logger.info('Vector index deleted for character', {
+        context: 'VectorIndicesRepository.deleteByCharacterId',
+        characterId,
+        entriesRemoved,
+        metaDeleted,
+      });
 
-  /**
-   * Check if a vector index exists for a character
-   */
-  async exists(characterId: string): Promise<boolean> {
-    return this.safeQuery(
-      async () => {
-        const index = await this.findByCharacterId(characterId);
-        return index !== null;
-      },
-      'Error checking vector index existence',
-      { context: 'VectorIndicesRepository.exists', characterId },
-      false
-    );
+      return metaDeleted || entriesRemoved > 0;
+    } catch (error) {
+      logger.error('Error deleting vector index for character', {
+        context: 'VectorIndicesRepository.deleteByCharacterId',
+        characterId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return false;
+    }
   }
 
   /**
    * Get all character IDs that have vector indices
    */
   async getAllCharacterIds(): Promise<string[]> {
-    return this.safeQuery(
-      async () => {
-        const indices = await this.findAll();
-        return indices.map((index) => index.characterId);
-      },
-      'Error getting all character IDs',
-      { context: 'VectorIndicesRepository.getAllCharacterIds' },
-      []
-    );
+    try {
+      const collection = await this.getMetaCollection();
+      const metas = await collection.find({});
+      return metas.map(m => m.characterId);
+    } catch (error) {
+      logger.error('Error getting all character IDs', {
+        context: 'VectorIndicesRepository.getAllCharacterIds',
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
   }
 }
 
-// Singleton instance
+// ============================================================================
+// Singleton
+// ============================================================================
+
 let instance: VectorIndicesRepository | null = null;
 
 export function getVectorIndicesRepository(): VectorIndicesRepository {

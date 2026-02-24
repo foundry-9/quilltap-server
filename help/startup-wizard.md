@@ -17,13 +17,19 @@ When you first launch Quilltap, you'll be guided through a few quick setup steps
 5. **Cheap LLM** — A cost-saving option for background tasks (optional)
 6. **Your First Chat** — Starting a conversation with a character
 
-### First Run: Encryption and Profile Setup
+### First Run: Encryption, Profile, and Provider Setup
 
-On your very first launch, Quilltap will walk you through two initial steps:
+On your very first launch, Quilltap will walk you through three initial steps:
 
 1. **Encryption Setup** (`/setup`) — An encryption key is generated automatically to protect your API keys and sensitive data. You can optionally protect it with a passphrase.
 
-2. **Profile Setup** (`/setup/profile`) — You'll enter your name and choose an archetype that describes how you interact with your characters:
+2. **Profile Setup** (`/setup/profile`) — You'll enter your name and choose an archetype that describes how you interact with your characters.
+
+3. **AI Stack Setup Wizard** (`/setup/providers`) — A guided wizard walks you through selecting providers, entering API keys, choosing models, and configuring embeddings and images. See [AI Stack Setup Wizard](setup-wizard.md) for full details.
+
+After completing the wizard, you can re-run it anytime from [The Forge](/foundry/forge).
+
+**Profile Setup** — You'll enter your name and choose an archetype:
    - **The Proprietor** — Direct and professional, focused on getting things done
    - **The Resident** — Curious and sociable, here to connect with characters
    - **The Author** — Imaginative and expressive, approaching characters as a storyteller

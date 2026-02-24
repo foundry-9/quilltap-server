@@ -75,7 +75,7 @@ import {
 } from './memory-trigger.service'
 import { trackMessageTokenUsage } from '@/lib/services/token-tracking.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
-import { isRecoverableRequestError } from '@/lib/llm/errors'
+import { isRecoverableRequestError, isToolUnsupportedError } from '@/lib/llm/errors'
 import { attemptRequestLimitRecovery } from './recovery.service'
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG } from '@/lib/llm/cheap-llm'
 import { extractMemorySearchKeywords, stripToolArtifacts, extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks'
@@ -1026,8 +1026,79 @@ async function processMessage(
       }
     }
   } catch (streamingError) {
+    // Check if this is a tool-unsupported error (e.g., Gemini 3 doesn't support function calling)
+    // Retry the same request without tools before falling through to other recovery paths
+    if (isToolUnsupportedError(streamingError) && actualTools.length > 0) {
+      logger.warn('Model does not support function calling, retrying without tools', {
+        chatId,
+        provider: effectiveProfile.provider,
+        model: effectiveProfile.modelName,
+        toolCount: actualTools.length,
+        error: streamingError instanceof Error ? streamingError.message : String(streamingError),
+      })
+
+      safeEnqueue(controller, encodeStatusEvent(encoder, {
+        stage: 'sending',
+        message: `Retrying without tools for ${character.name}...`,
+        characterName: character.name,
+        characterId: character.id,
+      }))
+
+      try {
+        for await (const chunk of streamMessage({
+          messages: formattedMessages,
+          connectionProfile: effectiveProfile,
+          apiKey: effectiveApiKey,
+          modelParams,
+          tools: [],
+          useNativeWebSearch,
+          userId,
+          messageId: preGeneratedAssistantMessageId,
+          chatId,
+        })) {
+          if (chunk.content) {
+            if (!hasStartedStreaming) {
+              safeEnqueue(controller, encodeStatusEvent(encoder, {
+                stage: 'streaming',
+                message: `${character.name} is responding...`,
+                characterName: character.name,
+                characterId: character.id,
+              }))
+              hasStartedStreaming = true
+            }
+            fullResponse += chunk.content
+            controller.enqueue(encodeContentChunk(encoder, chunk.content))
+          }
+
+          if (chunk.done) {
+            usage = chunk.usage || null
+            cacheUsage = chunk.cacheUsage || null
+            attachmentResults = chunk.attachmentResults || null
+            rawResponse = chunk.rawResponse
+            if (chunk.thoughtSignature) {
+              thoughtSignature = chunk.thoughtSignature
+            }
+          }
+        }
+
+        logger.info('Tool-unsupported retry succeeded. Consider configuring pseudo-tools for this model.', {
+          chatId,
+          provider: effectiveProfile.provider,
+          model: effectiveProfile.modelName,
+          responseLength: fullResponse.length,
+        })
+      } catch (retryError) {
+        logger.error('Tool-unsupported retry also failed', {
+          chatId,
+          provider: effectiveProfile.provider,
+          model: effectiveProfile.modelName,
+          error: retryError instanceof Error ? retryError.message : String(retryError),
+        })
+        throw retryError
+      }
+    }
     // Check if this is a recoverable request error (token limit, PDF pages, etc.)
-    if (isRecoverableRequestError(streamingError)) {
+    else if (isRecoverableRequestError(streamingError)) {
       logger.info('Recoverable request error detected, attempting recovery', {
         chatId,
         provider: effectiveProfile.provider,

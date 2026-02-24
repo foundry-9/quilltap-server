@@ -52,7 +52,9 @@ export function buildSystemPrompt(
   /** Whether this is the first message (for START_ONLY mode) */
   isInitialMessage?: boolean,
   /** Project context to include in system prompt */
-  projectContext?: ProjectContext | null
+  projectContext?: ProjectContext | null,
+  /** Resolved IANA timezone name for timestamp formatting */
+  timezone?: string
 ): string {
   const parts: string[] = []
 
@@ -68,7 +70,7 @@ export function buildSystemPrompt(
 
   // Handle timestamp injection
   if (timestampConfig && shouldInjectTimestamp(timestampConfig, isInitialMessage ?? false)) {
-    const timestamp = calculateCurrentTimestamp(timestampConfig)
+    const timestamp = calculateCurrentTimestamp(timestampConfig, timezone)
 
     if (timestampConfig.autoPrepend) {
       // Add timestamp as the first part of the system prompt

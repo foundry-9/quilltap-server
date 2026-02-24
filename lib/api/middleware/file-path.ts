@@ -8,36 +8,26 @@
 import type { FileEntry, Character } from '@/lib/schemas/types';
 
 /**
- * Get the filepath for a file based on storage type
+ * Get the filepath for a file
  *
- * For S3-backed files, returns the API route path.
- * For legacy local files, returns the local file path.
+ * Always returns the API route path. This ensures files are accessible
+ * in all deployment environments (local dev, Docker, etc.) since the
+ * API handler resolves the actual storage location.
  *
  * @param file - The file entry to get the path for
- * @returns The filepath for accessing the file
+ * @returns The API route path for accessing the file
  *
  * @example
  * ```ts
  * const file = await repos.files.findById(character.defaultImageId);
  * if (file) {
  *   const filepath = getFilePath(file);
- *   // Returns '/api/v1/files/{id}' for files with storageKey or s3Key
- *   // Returns 'data/files/storage/{id}.ext' for legacy local files
+ *   // Always returns '/api/v1/files/{id}'
  * }
  * ```
  */
 export function getFilePath(file: FileEntry): string {
-  // Files with storage keys (S3, mount points, etc.) use the API route
-  if (file.storageKey || file.s3Key) {
-    return `/api/v1/files/${file.id}`;
-  }
-
-  // Legacy local files - construct path with extension
-  const ext = file.originalFilename.includes('.')
-    ? file.originalFilename.substring(file.originalFilename.lastIndexOf('.'))
-    : '';
-
-  return `data/files/storage/${file.id}${ext}`;
+  return `/api/v1/files/${file.id}`;
 }
 
 /**

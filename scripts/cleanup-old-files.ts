@@ -12,7 +12,7 @@
  * - Preserves backups for safety
  *
  * Usage:
- *   npm run cleanup-old-files [--skip-backup]
+ *   npm run oneoff:cleanup-old-files-v1.6 [--skip-backup]
  */
 
 import { promises as fs } from 'fs';
@@ -214,7 +214,7 @@ async function cleanup() {
   if (!newSystemValid) {
     console.error('\n❌ ERROR: New file system not found or incomplete!');
     console.error('Please run the migration first:');
-    console.error('  npm run migrate-files');
+    console.error('  The migrate-files script (v1.6) has been removed. Please use a backup/restore instead.');
     process.exit(1);
   }
 
@@ -230,7 +230,7 @@ async function cleanup() {
     console.log('\n⚠️  WARNING: This will permanently delete old files!');
     console.log('A backup has been created, but please verify your new system is working.');
     console.log('\nTo proceed with cleanup, run:');
-    console.log('  npm run cleanup-old-files -- --yes');
+    console.log('  npm run oneoff:cleanup-old-files-v1.6 -- --yes');
     process.exit(0);
   }
 

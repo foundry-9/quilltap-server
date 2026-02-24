@@ -107,6 +107,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
         isDangerousCompatible,
         allowWebSearch,
         useNativeWebSearch,
+        allowToolUse,
       } = body;
 
       // Build update data
@@ -207,6 +208,13 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
           return badRequest('useNativeWebSearch must be a boolean');
         }
         updateData.useNativeWebSearch = useNativeWebSearch;
+      }
+
+      if (allowToolUse !== undefined) {
+        if (typeof allowToolUse !== 'boolean') {
+          return badRequest('allowToolUse must be a boolean');
+        }
+        updateData.allowToolUse = allowToolUse;
       }
 
       // Update the profile

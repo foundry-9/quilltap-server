@@ -250,38 +250,6 @@ Good file names help the AI find content:
 - Consider splitting into logical sections
 - AI reads full content, affecting token usage
 
-## File Storage Options
-
-### Default Storage
-
-Files use your system's default storage location:
-
-- Local storage (file system)
-- Configured S3/MinIO storage
-
-### Project-Specific Mount Points
-
-Projects can use dedicated storage:
-
-1. Open project Settings
-2. Find **File Storage** section
-3. Select a different mount point
-4. Optionally migrate existing files
-
-**Use Cases:**
-- Store media-heavy projects on S3
-- Keep sensitive projects on local storage
-- Separate storage for different project types
-
-### Migrating Files
-
-When changing mount points:
-
-1. Select new mount point
-2. Click **Migrate Files**
-3. Files are copied to new location
-4. Original files can be cleaned up
-
 ## Best Practices
 
 ### For World Building
@@ -373,3 +341,4 @@ When changing mount points:
 - [Files Management](files.md) — General file operations
 - [File Uploads](file-uploads.md) — Upload procedures
 - [Files with AI](files-with-ai.md) — AI file access
+

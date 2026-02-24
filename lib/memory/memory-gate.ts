@@ -313,7 +313,6 @@ export async function reinforceMemory(
         await vectorStore.addVector(existingMemory.id, embeddingResult.embedding, {
           memoryId: existingMemory.id,
           characterId: existingMemory.characterId,
-          content: updatedMemory.summary,
         })
       }
       await vectorStore.save()

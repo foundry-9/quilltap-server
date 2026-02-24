@@ -336,7 +336,6 @@ async function executeWriteFile(
     projectId: context.projectId,
     folderPath: targetFolderPath,
     storageKey: uploadResult.storageKey,
-    mountPointId: uploadResult.mountPointId,
   }, { id: fileId });
 
   logger.info('File created successfully', {

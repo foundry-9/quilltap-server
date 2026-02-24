@@ -31,7 +31,6 @@ Complete API reference for Quilltap v2.10.
   - [Templates](#templates)
   - [System Backup & Restore](#system-backup--restore)
   - [System Data Directory](#system-data-directory)
-  - [System Mount Points](#system-mount-points)
   - [Tools & Backup (Legacy)](#tools--backup)
   - [LLM Logs](#llm-logs)
   - [Themes](#themes)
@@ -1699,6 +1698,62 @@ Upload a file via multipart/form-data.
 
 **Response**: `201 Created`
 
+#### `POST /api/v1/files?action=generate-thumbnails`
+
+Batch pre-generate thumbnails for image files. Processes with bounded concurrency (3 concurrent Sharp operations) to avoid overwhelming the server.
+
+**Request Body**:
+
+```json
+{
+  "fileIds": ["file-uuid-1", "file-uuid-2"],
+  "size": 150
+}
+```
+
+- `fileIds` (required) - Array of file UUIDs (max 100)
+- `size` (optional) - Thumbnail size in pixels (default 150, max 300)
+
+**Response**: `200 OK`
+
+```json
+{
+  "total": 10,
+  "generated": 7,
+  "cached": 2,
+  "errors": 1
+}
+```
+
+#### `POST /api/v1/files?action=cleanup-orphaned`
+
+Scan for and optionally delete stale file records — database entries whose backing files no longer exist in storage. Defaults to dry-run mode for safety.
+
+**Request Body**:
+
+```json
+{
+  "dryRun": true
+}
+```
+
+- `dryRun` (optional) - If `true` (default), only report stale records without deleting. Set to `false` to delete stale DB records and clean up their cached thumbnails.
+
+**Response**: `200 OK`
+
+```json
+{
+  "total": 50,
+  "stale": 3,
+  "deleted": 0,
+  "dryRun": true,
+  "staleFiles": [
+    { "id": "file-uuid-1", "filename": "lost-image.png" },
+    { "id": "file-uuid-2", "filename": "missing-doc.pdf" }
+  ]
+}
+```
+
 #### `GET /api/v1/files/[id]`
 
 Download a file by ID. Returns the file content with appropriate headers.
@@ -2078,186 +2133,6 @@ Open the data directory in the system file browser (not available in Docker).
 {
   "message": "Data directory opened in file browser",
   "path": "/Users/user/Library/Application Support/Quilltap"
-}
-```
-
----
-
-### System Mount Points
-
-Manage storage mount points for file backends.
-
-#### `GET /api/v1/system/mount-points`
-
-List all mount points.
-
-**Response**: `200 OK`
-
-```json
-{
-  "mountPoints": [
-    {
-      "id": "mount-uuid",
-      "name": "Local Storage",
-      "backendType": "local",
-      "backendConfig": {
-        "basePath": "/Users/user/.quilltap/files"
-      },
-      "scope": "user",
-      "userId": "user-uuid",
-      "isDefault": true,
-      "enabled": true,
-      "healthStatus": "healthy",
-      "createdAt": "2026-01-15T12:00:00.000Z"
-    }
-  ],
-  "count": 1
-}
-```
-
-#### `GET /api/v1/system/mount-points?action=list-backends`
-
-List available storage backend types.
-
-**Response**: `200 OK`
-
-```json
-{
-  "backends": [
-    {
-      "type": "local",
-      "name": "Local Filesystem",
-      "description": "Store files on local filesystem",
-      "requiresConfig": ["basePath"]
-    },
-    {
-      "type": "s3",
-      "name": "S3 Compatible",
-      "description": "AWS S3 or S3-compatible storage (MinIO, etc.)",
-      "requiresConfig": ["endpoint", "accessKey", "secretKey", "bucket"]
-    }
-  ]
-}
-```
-
-#### `POST /api/v1/system/mount-points`
-
-Create a new mount point.
-
-**Request Body**:
-
-```json
-{
-  "name": "My S3 Storage",
-  "backendType": "s3",
-  "path": "/",
-  "isDefault": false,
-  "config": {
-    "endpoint": "https://s3.amazonaws.com",
-    "bucket": "my-bucket",
-    "region": "us-east-1"
-  }
-}
-```
-
-**Response**: `201 Created`
-
-#### `GET /api/v1/system/mount-points/[id]`
-
-Get a specific mount point.
-
-#### `PUT /api/v1/system/mount-points/[id]`
-
-Update a mount point.
-
-**Request Body**:
-
-```json
-{
-  "name": "Updated Name",
-  "path": "/new-path",
-  "config": {}
-}
-```
-
-#### `DELETE /api/v1/system/mount-points/[id]`
-
-Delete a mount point.
-
-#### `POST /api/v1/system/mount-points/[id]?action=test`
-
-Test mount point connection.
-
-**Response**: `200 OK`
-
-```json
-{
-  "mountPointId": "mount-uuid",
-  "healthy": true,
-  "status": "healthy",
-  "message": "Mount point connection successful",
-  "testedAt": "2026-01-15T12:00:00.000Z",
-  "backendType": "local"
-}
-```
-
-#### `POST /api/v1/system/mount-points/[id]?action=set-default`
-
-Set as the default mount point.
-
-**Response**: `200 OK`
-
-```json
-{
-  "success": true,
-  "mountPointId": "mount-uuid",
-  "message": "Mount point set as default"
-}
-```
-
-#### `POST /api/v1/system/mount-points/[id]?action=scan-orphans`
-
-Scan for orphaned files (files in storage without database records).
-
-**Response**: `200 OK`
-
-```json
-{
-  "totalFilesInStorage": 100,
-  "totalFilesInDatabase": 95,
-  "orphans": [
-    {
-      "storageKey": "users/uuid/files/orphan.txt",
-      "size": 1234,
-      "lastModified": "2026-01-15T12:00:00.000Z"
-    }
-  ],
-  "errors": [],
-  "scannedAt": "2026-01-15T12:00:00.000Z"
-}
-```
-
-#### `POST /api/v1/system/mount-points/[id]?action=adopt-orphans`
-
-Adopt orphaned files into the database.
-
-**Request Body**:
-
-```json
-{
-  "storageKeys": ["users/uuid/files/orphan.txt"],
-  "defaultProjectId": "project-uuid",
-  "source": "IMPORTED",
-  "computeHashes": false
-}
-```
-
-**Response**: `200 OK`
-
-```json
-{
-  "adopted": 5,
-  "failed": []
 }
 ```
 
@@ -2842,38 +2717,6 @@ Remove a chat from the project.
   "chatId": "uuid"
 }
 ```
-
-#### `GET /api/v1/projects/[id]?action=get-mount-point`
-
-Get project mount point configuration.
-
-**Response:**
-```json
-{
-  "projectId": "uuid",
-  "mountPointId": "uuid",
-  "currentMountPoint": { "id": "uuid", "name": "Local", "backendType": "local" },
-  "defaultMountPoint": { "id": "uuid", "name": "Local", "backendType": "local" },
-  "effectiveMountPoint": { "id": "uuid", "name": "Local", "backendType": "local" },
-  "fileCount": 5
-}
-```
-
-#### `PUT /api/v1/projects/[id]?action=set-mount-point`
-
-Set project mount point with optional file migration.
-
-**Request Body:**
-```json
-{
-  "mountPointId": "uuid",
-  "migrateFiles": true
-}
-```
-
-#### `DELETE /api/v1/projects/[id]?action=clear-mount-point`
-
-Clear project mount point (use system default).
 
 #### `POST /api/v1/projects/[id]?action=update-tool-settings`
 

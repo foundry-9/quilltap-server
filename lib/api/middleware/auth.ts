@@ -69,7 +69,7 @@ export type ContextHandler<T = NextResponse> = (
 /**
  * Type for route handlers with context and route params
  */
-export type ContextParamsHandler<P = Record<string, string>, T = NextResponse> = (
+export type ContextParamsHandler<P = Record<string, string | string[]>, T = NextResponse> = (
   request: NextRequest,
   context: RequestContext,
   params: P
@@ -114,7 +114,7 @@ export async function withContext<T>(
 /**
  * Wrap an API route handler with context and params
  */
-export async function withContextParams<P extends Record<string, string>, T>(
+export async function withContextParams<P extends Record<string, string | string[]>, T>(
   request: NextRequest,
   params: P,
   handler: ContextParamsHandler<P, T>
@@ -198,7 +198,7 @@ export function createContextHandler(
  * Creates a complete route handler that can be directly exported for routes
  * with dynamic parameters like [id].
  */
-export function createContextParamsHandler<P extends Record<string, string>>(
+export function createContextParamsHandler<P extends Record<string, string | string[]>>(
   handler: (
     request: NextRequest,
     context: RequestContext,
@@ -252,7 +252,7 @@ export function exists<T>(resource: T | null | undefined): resource is T {
 export const AuthenticatedContext = {} as RequestContext;
 export type AuthenticatedContext = RequestContext;
 export type AuthenticatedHandler<T = NextResponse> = ContextHandler<T>;
-export type AuthenticatedParamsHandler<P = Record<string, string>, T = NextResponse> = ContextParamsHandler<P, T>;
+export type AuthenticatedParamsHandler<P = Record<string, string | string[]>, T = NextResponse> = ContextParamsHandler<P, T>;
 export const withAuth = withContext;
 export const withAuthParams = withContextParams;
 export const createAuthenticatedHandler = createContextHandler;

@@ -90,7 +90,7 @@ function LazyMessageContentInner({
     return (
       <div
         ref={containerRef}
-        className={`qt-chat-message-content qt-prose prose prose-sm dark:prose-invert ${className}`}
+        className={`qt-chat-message-content qt-prose prose prose-sm qt-prose-auto ${className}`}
         dangerouslySetInnerHTML={{ __html: renderedHtml }}
       />
     )
@@ -110,7 +110,7 @@ function LazyMessageContentInner({
     return (
       <div
         ref={containerRef}
-        className={`qt-chat-message-content qt-prose prose prose-sm dark:prose-invert ${className}`}
+        className={`qt-chat-message-content qt-prose prose prose-sm qt-prose-auto ${className}`}
         style={{ minHeight: '2em' }} // Ensure some height for intersection detection
       >
         <p className="whitespace-pre-wrap">{preview}</p>

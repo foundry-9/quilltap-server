@@ -32,7 +32,6 @@ export const PluginCapabilityEnum = z.enum([
   'EMBEDDING_PROVIDER',    // Provides embedding generation
   'THEME',                 // Provides UI theme
   'DATABASE_BACKEND',      // Replaces/augments database
-  'FILE_BACKEND',          // Replaces/augments file storage
   'UPGRADE_MIGRATION',     // Provides version upgrade migrations (runs early in startup)
   'ROLEPLAY_TEMPLATE',     // Provides roleplay formatting templates
   'TOOL_PROVIDER',         // Provides LLM tools (e.g., curl, calculators, etc.)
@@ -575,57 +574,6 @@ export const SearchProviderConfigSchema = z.object({
 
 export type SearchProviderConfig = z.infer<typeof SearchProviderConfigSchema>;
 
-/**
- * File backend configuration field schema
- *
- * Defines a single configuration field for file storage backend plugins.
- * Similar to ConfigSchemaSchema but specifically for file backend settings.
- */
-export const FileBackendConfigFieldSchema = z.object({
-  /** Field name (used as key in config object) */
-  name: z.string().min(1).max(50).describe('Field name'),
-
-  /** Human-readable label for UI */
-  label: z.string().min(1).max(100).describe('Display label'),
-
-  /** Field type */
-  type: z.enum(['string', 'secret', 'boolean', 'number']).describe('Field type'),
-
-  /** Whether the field is required */
-  required: z.boolean().default(false).optional().describe('Whether field is required'),
-
-  /** Default value for the field */
-  defaultValue: z.union([z.string(), z.boolean(), z.number()]).optional().describe('Default value'),
-
-  /** Help text or description */
-  description: z.string().max(500).optional().describe('Field description'),
-
-  /** Placeholder text for string fields */
-  placeholder: z.string().max(200).optional().describe('Placeholder text'),
-});
-
-export type FileBackendConfigField = z.infer<typeof FileBackendConfigFieldSchema>;
-
-/**
- * File backend plugin configuration schema
- *
- * Defines the configuration for file storage backend plugins.
- * These plugins use the FILE_BACKEND capability and provide storage
- * backends like S3, GCS, local filesystem, etc.
- */
-export const FileBackendConfigSchema = z.object({
-  /** Unique backend identifier (e.g., 's3', 'gcs', 'local') */
-  backendId: z.string().min(1).max(50).describe('Backend identifier'),
-
-  /** Human-readable display name */
-  displayName: z.string().min(1).max(100).describe('Display name for UI'),
-
-  /** Configuration fields required by this backend */
-  configFields: z.array(FileBackendConfigFieldSchema).default([]).describe('Configuration fields'),
-});
-
-export type FileBackendConfig = z.infer<typeof FileBackendConfigSchema>;
-
 // ============================================================================
 // MAIN MANIFEST SCHEMA
 // ============================================================================
@@ -746,9 +694,6 @@ export const PluginManifestSchema = z.strictObject({
 
   /** Search provider configuration (for SEARCH_PROVIDER capability plugins) */
   searchProviderConfig: SearchProviderConfigSchema.optional(),
-
-  /** File backend configuration (for FILE_BACKEND capability plugins) */
-  fileBackendConfig: FileBackendConfigSchema.optional(),
 
   // ===== SECURITY & PERMISSIONS =====
   /** Permissions required by the plugin */
@@ -871,7 +816,6 @@ export function functionalityToCapabilities(functionality?: Functionality): Plug
 const RESTART_REQUIRED_CAPABILITIES: PluginCapability[] = [
   'AUTH_METHODS',
   'DATABASE_BACKEND',
-  'FILE_BACKEND',
   'UPGRADE_MIGRATION',
 ];
 
@@ -880,7 +824,7 @@ const RESTART_REQUIRED_CAPABILITIES: PluginCapability[] = [
  *
  * The restart requirement is determined by:
  * 1. Explicit `requiresRestart` field in the manifest (takes precedence)
- * 2. Inference from capabilities (AUTH_METHODS, DATABASE_BACKEND, FILE_BACKEND, UPGRADE_MIGRATION)
+ * 2. Inference from capabilities (AUTH_METHODS, DATABASE_BACKEND, UPGRADE_MIGRATION)
  *
  * @param manifest - The plugin manifest to check
  * @returns true if the plugin requires a server restart to activate

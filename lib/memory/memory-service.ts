@@ -214,7 +214,6 @@ async function createMemoryDirect(
     await vectorStore.addVector(memory.id, embeddingResult.embedding, {
       memoryId: memory.id,
       characterId: data.characterId,
-      content: data.summary,
     })
     await vectorStore.save()
 
@@ -270,7 +269,6 @@ async function createMemoryDirectWithEmbedding(
     await vectorStore.addVector(memory.id, embedding, {
       memoryId: memory.id,
       characterId: data.characterId,
-      content: data.summary,
     })
     await vectorStore.save()
 
@@ -332,7 +330,6 @@ export async function updateMemoryWithEmbedding(
         await vectorStore.addVector(memoryId, embeddingResult.embedding, {
           memoryId,
           characterId,
-          content: updatedMemory.summary,
         })
       }
       await vectorStore.save()
@@ -625,7 +622,6 @@ export async function generateMissingEmbeddings(
       await vectorStore.addVector(memory.id, embeddingResult.embedding, {
         memoryId: memory.id,
         characterId,
-        content: memory.summary,
       })
 
       processed++
@@ -682,7 +678,6 @@ export async function rebuildVectorIndex(
       await vectorStore.addVector(memory.id, memory.embedding!, {
         memoryId: memory.id,
         characterId,
-        content: memory.summary,
       })
       indexed++
     } catch (error) {

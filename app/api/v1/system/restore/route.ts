@@ -1,13 +1,19 @@
 /**
  * System Restore API v1
  *
- * POST /api/v1/system/restore - Restore data from a backup
- * POST /api/v1/system/restore?action=preview - Preview backup contents
+ * POST /api/v1/system/restore?action=upload   - Upload backup file as raw binary stream
+ * POST /api/v1/system/restore?action=preview  - Preview an already-uploaded backup
+ * POST /api/v1/system/restore                 - Restore from an already-uploaded backup
  *
- * Accepts multipart/form-data with file and mode
+ * Uses an upload-then-reference pattern to bypass Next.js FormData body size limits,
+ * eliminate double uploads, and avoid buffering large files in memory.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { randomUUID } from 'crypto';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { restore, previewRestore } from '@/lib/backup/restore-service';
@@ -19,112 +25,205 @@ import { badRequest, serverError, validationError } from '@/lib/api/responses';
 export const maxDuration = 300; // 5 minutes
 export const dynamic = 'force-dynamic';
 
+// --- Pending upload tracking ---
+
+interface PendingUpload {
+  path: string;
+  createdAt: number;
+  userId: string;
+}
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UPLOAD_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+const pendingUploads = new Map<string, PendingUpload>();
+
 /**
- * Parse request and get the ZIP buffer from file upload
+ * Clean up uploads older than UPLOAD_TTL_MS. Called lazily on each request.
  */
-async function getBackupBuffer(
-  req: NextRequest
-): Promise<{ buffer: Buffer; mode: 'replace' | 'new-account'; isPreview?: boolean } | NextResponse> {
-  const contentType = req.headers.get('content-type');
-
-  if (!contentType?.includes('multipart/form-data')) {
-    return badRequest('Content-Type must be multipart/form-data');
+function cleanupExpiredUploads(): void {
+  const now = Date.now();
+  for (const [id, upload] of pendingUploads) {
+    if (now - upload.createdAt > UPLOAD_TTL_MS) {
+      logger.debug('[System Restore v1] Cleaning up expired upload', { uploadId: id });
+      pendingUploads.delete(id);
+      fs.promises.unlink(upload.path).catch(() => {});
+    }
   }
-
-  // Handle file upload
-  const formData = await req.formData();
-  const file = formData.get('file') as File;
-  const modeParam = formData.get('mode') as string;
-  const previewParam = formData.get('preview') as string;
-
-  if (!file) {
-    return badRequest('No file provided');
-  }
-
-  if (!modeParam || !['replace', 'new-account'].includes(modeParam)) {
-    return badRequest('mode must be "replace" or "new-account"');
-  }
-
-  const mode = modeParam as 'replace' | 'new-account';
-  const isPreview = previewParam === 'true';
-  const zipBuffer = Buffer.from(await file.arrayBuffer());
-
-  return { buffer: zipBuffer, mode, isPreview };
 }
 
 /**
- * POST /api/v1/system/restore - Restore from backup
+ * Look up a pending upload, validating ownership and existence.
  */
-export const POST = createAuthenticatedHandler(async (req, { user }) => {
-  const action = getActionParam(req);
+function getPendingUpload(uploadId: string, userId: string): PendingUpload | null {
+  if (!UUID_REGEX.test(uploadId)) return null;
+  const upload = pendingUploads.get(uploadId);
+  if (!upload) return null;
+  if (upload.userId !== userId) return null;
+  return upload;
+}
 
-  // Handle preview action
-  if (action === 'preview') {
+/**
+ * Remove a pending upload from the map and delete its temp file.
+ */
+async function removePendingUpload(uploadId: string): Promise<void> {
+  const upload = pendingUploads.get(uploadId);
+  if (upload) {
+    pendingUploads.delete(uploadId);
     try {
-      const formData = await req.formData();
-      const file = formData.get('file') as File | null;
-
-      if (!file) {
-        return badRequest('No file provided');
-      }
-
-      const zipBuffer = Buffer.from(await file.arrayBuffer());
-      const preview = previewRestore(zipBuffer);
-
-      logger.info('[System Restore v1] Preview generated', {
-        userId: user.id,
-        preview,
-      });
-
-      return NextResponse.json({
-        success: true,
-        preview,
-      });
-    } catch (error) {
-      logger.error('[System Restore v1] Error generating preview', {}, error instanceof Error ? error : undefined);
-      return serverError(error instanceof Error ? error.message : 'Failed to preview backup');
+      await fs.promises.unlink(upload.path);
+    } catch {
+      // Ignore cleanup errors
     }
   }
+}
 
-  // Handle restore
+// --- Action handlers ---
+
+/**
+ * POST /api/v1/system/restore?action=upload
+ *
+ * Accepts raw binary body (Content-Type: application/octet-stream).
+ * Streams req.body to a temp file on disk. Returns { uploadId, size }.
+ */
+async function handleUpload(req: NextRequest, userId: string): Promise<NextResponse> {
+  cleanupExpiredUploads();
+
+  const body = req.body;
+  if (!body) {
+    return badRequest('No request body');
+  }
+
+  const uploadId = randomUUID();
+  const tempZipPath = path.join(os.tmpdir(), `quilltap-restore-${uploadId}.zip`);
+
+  logger.debug('[System Restore v1] Starting upload stream', { uploadId, userId });
+
   try {
-    const result = await getBackupBuffer(req);
+    const writeStream = fs.createWriteStream(tempZipPath);
+    const reader = body.getReader();
+    let totalBytes = 0;
 
-    // If it's a NextResponse (error), return it
-    if (result instanceof NextResponse) {
-      return result;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      const ok = writeStream.write(value);
+      if (!ok) {
+        // Wait for drain if back-pressure
+        await new Promise<void>((resolve) => writeStream.once('drain', resolve));
+      }
     }
 
-    const { buffer, mode, isPreview } = result;
-
-    // If preview mode from formdata
-    if (isPreview) {
-      logger.info('[System Restore v1] Preview from restore endpoint', {
-        userId: user.id,
-        mode,
-      });
-
-      const summary = previewRestore(buffer);
-      return NextResponse.json({
-        success: true,
-        preview: true,
-        summary,
-      });
-    }
-
-    logger.info('[System Restore v1] Starting restore', {
-      userId: user.id,
-      mode,
+    await new Promise<void>((resolve, reject) => {
+      writeStream.end(() => resolve());
+      writeStream.on('error', reject);
     });
 
-    // Perform the actual restore
-    const summary = await restore(buffer, {
-      mode,
-      targetUserId: user.id,
+    pendingUploads.set(uploadId, {
+      path: tempZipPath,
+      createdAt: Date.now(),
+      userId,
+    });
+
+    logger.info('[System Restore v1] Upload complete', { uploadId, userId, size: totalBytes });
+
+    return NextResponse.json({
+      success: true,
+      uploadId,
+      size: totalBytes,
+    });
+  } catch (error) {
+    // Clean up partial file on error
+    await fs.promises.unlink(tempZipPath).catch(() => {});
+    logger.error('[System Restore v1] Upload failed', { uploadId }, error instanceof Error ? error : undefined);
+    return serverError('Failed to upload backup file');
+  }
+}
+
+/**
+ * POST /api/v1/system/restore?action=preview
+ *
+ * Accepts JSON body: { uploadId }
+ * Looks up the temp file and previews it without deleting.
+ */
+async function handlePreview(req: NextRequest, userId: string): Promise<NextResponse> {
+  cleanupExpiredUploads();
+
+  let body: { uploadId?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return badRequest('Invalid JSON body');
+  }
+
+  const { uploadId } = body;
+  if (!uploadId) {
+    return badRequest('uploadId is required');
+  }
+
+  const upload = getPendingUpload(uploadId, userId);
+  if (!upload) {
+    return badRequest('Upload not found or expired');
+  }
+
+  try {
+    const preview = await previewRestore(upload.path);
+
+    logger.info('[System Restore v1] Preview generated', { userId, uploadId, preview });
+
+    return NextResponse.json({
+      success: true,
+      preview,
+    });
+  } catch (error) {
+    logger.error('[System Restore v1] Error generating preview', { uploadId }, error instanceof Error ? error : undefined);
+    return serverError(error instanceof Error ? error.message : 'Failed to preview backup');
+  }
+}
+
+/**
+ * POST /api/v1/system/restore (no action)
+ *
+ * Accepts JSON body: { uploadId, mode }
+ * Performs the restore and cleans up the temp file.
+ */
+async function handleRestore(req: NextRequest, userId: string): Promise<NextResponse> {
+  cleanupExpiredUploads();
+
+  let body: { uploadId?: string; mode?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return badRequest('Invalid JSON body');
+  }
+
+  const { uploadId, mode } = body;
+
+  if (!uploadId) {
+    return badRequest('uploadId is required');
+  }
+
+  if (!mode || !['replace', 'new-account'].includes(mode)) {
+    return badRequest('mode must be "replace" or "new-account"');
+  }
+
+  const upload = getPendingUpload(uploadId, userId);
+  if (!upload) {
+    return badRequest('Upload not found or expired');
+  }
+
+  try {
+    logger.info('[System Restore v1] Starting restore', { userId, uploadId, mode });
+
+    const summary = await restore(upload.path, {
+      mode: mode as 'replace' | 'new-account',
+      targetUserId: userId,
     });
 
     logger.info('[System Restore v1] Restore completed', {
-      userId: user.id,
+      userId,
+      uploadId,
       mode,
       restoreCounts: {
         characters: summary.characters,
@@ -146,7 +245,27 @@ export const POST = createAuthenticatedHandler(async (req, { user }) => {
       return validationError(error);
     }
 
-    logger.error('[System Restore v1] Error restoring backup', {}, error instanceof Error ? error : undefined);
+    logger.error('[System Restore v1] Error restoring backup', { uploadId }, error instanceof Error ? error : undefined);
     return serverError('Failed to restore backup');
+  } finally {
+    await removePendingUpload(uploadId);
   }
+}
+
+/**
+ * POST /api/v1/system/restore
+ */
+export const POST = createAuthenticatedHandler(async (req, { user }) => {
+  const action = getActionParam(req);
+
+  if (action === 'upload') {
+    return handleUpload(req, user.id);
+  }
+
+  if (action === 'preview') {
+    return handlePreview(req, user.id);
+  }
+
+  // Default: restore
+  return handleRestore(req, user.id);
 });

@@ -337,7 +337,7 @@ async function fetchProviderPricing(
 /**
  * Refresh pricing cache for all configured providers
  */
-export async function refreshPricingCache(userId: string): Promise<PricingCache> {
+async function refreshPricingCache(userId: string): Promise<PricingCache> {
   const repos = getRepositories()
   const profiles = await repos.connections.findAll()
 
@@ -424,24 +424,6 @@ export async function getModelPricing(
 }
 
 /**
- * Get all models across all providers, sorted by cost
- */
-export async function getAllModelsSortedByCost(
-  userId: string
-): Promise<ModelPricing[]> {
-  const cache = await getPricingCache(userId)
-  const allModels: ModelPricing[] = []
-
-  for (const providerData of Object.values(cache.providers)) {
-    if (providerData?.models) {
-      allModels.push(...providerData.models)
-    }
-  }
-
-  return sortByCost(allModels)
-}
-
-/**
  * Find the cheapest available model across all providers
  */
 export async function findCheapestAvailableModel(
@@ -474,19 +456,3 @@ export async function findCheapestAvailableModel(
   return sortByCost(candidates)[0]
 }
 
-/**
- * Clear the pricing cache (for testing or manual refresh)
- */
-export function clearPricingCache(): void {
-  pricingCache = null
-  openRouterPublicCache = null
-}
-
-/**
- * Check if pricing cache exists and is fresh
- */
-export function isCacheFresh(): boolean {
-  if (!pricingCache) return false
-  const cacheAge = Date.now() - new Date(pricingCache.updatedAt).getTime()
-  return cacheAge < CACHE_TTL_MS
-}
