@@ -8,7 +8,6 @@
  * @module components/layout/left-sidebar/sidebar-item
  */
 
-import Link from 'next/link'
 import { ReactNode, MouseEvent } from 'react'
 
 interface SidebarItemProps {
@@ -49,9 +48,12 @@ export function SidebarItem({
 
   if (href) {
     return (
-      <Link href={href} className={itemClasses}>
+      <a
+        href={href}
+        className={itemClasses}
+      >
         {content}
-      </Link>
+      </a>
     )
   }
 
@@ -72,8 +74,11 @@ interface ViewAllLinkProps {
 
 export function ViewAllLink({ href, label = 'View all' }: ViewAllLinkProps) {
   return (
-    <Link href={href} className="qt-left-sidebar-view-all">
+    <a
+      href={href}
+      className="qt-left-sidebar-view-all"
+    >
       {label} &rarr;
-    </Link>
+    </a>
   )
 }

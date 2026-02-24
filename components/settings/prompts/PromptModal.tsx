@@ -102,7 +102,7 @@ export function PromptModal({
           </div>
 
           {showPreview ? (
-            <div className="w-full rounded-md border border-input bg-background p-4 min-h-[300px] max-h-[400px] overflow-y-auto prose prose-sm dark:prose-invert max-w-none">
+            <div className="w-full rounded-md border border-input bg-background p-4 min-h-[300px] max-h-[400px] overflow-y-auto prose prose-sm qt-prose-auto max-w-none">
               <ReactMarkdown>{formData.content || '*No content*'}</ReactMarkdown>
             </div>
           ) : (

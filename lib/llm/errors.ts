@@ -258,6 +258,28 @@ export function parseContentLimitError(error: unknown): {
 }
 
 /**
+ * Patterns that indicate the model does not support tool/function calling
+ */
+const TOOL_UNSUPPORTED_ERROR_PATTERNS = [
+  /tool use with function calling is unsupported/i,
+  /function.?calling is not supported/i,
+  /does not support function.?calling/i,
+  /does not support tools/i,
+  /tool_use.*not.*supported/i,
+  /tools are not supported/i,
+]
+
+/**
+ * Check if an error indicates the model does not support tool/function calling
+ * @param error The error to check
+ * @returns True if the error is about unsupported tool calling
+ */
+export function isToolUnsupportedError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return TOOL_UNSUPPORTED_ERROR_PATTERNS.some(pattern => pattern.test(message))
+}
+
+/**
  * Check if an error is recoverable (token limit OR content limit)
  * This is the main function to use when deciding whether to attempt recovery
  * @param error The error to check

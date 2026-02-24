@@ -4,7 +4,101 @@ This document tracks planned features and improvements for Quilltap.
 
 ## In Progress
 
+## 3.0: the container future
+
+### Architecture Overview
+
+Quilltap 3.0 runs inside a lightweight Linux VM on the host OS. The architecture has three layers:
+
+1. **Guest image** (shared across all platforms) -- a Linux rootfs with Node, SQLite, and Quilltap pre-installed
+2. **Orchestration layer** (shared) -- Electron launcher that manages VM lifecycle, health checks, and connects to the backend
+3. **VM backend** (platform-specific, thin) -- talks to the host hypervisor to create/start/stop the VM
+
+The platform-specific code is minimal (~200-300 lines per backend), while the guest image, build pipeline, and frontend orchestration are 100% shared.
+
+### VM Backend Strategy
+
+| Platform | Backend | Hypervisor | File Sharing | Status |
+| ---------- | --------- | ------------ | ------------- | -------- |
+| macOS | Lima + VZ driver | Apple Virtualization.framework | VirtioFS | Primary target |
+| Windows | Direct `wsl.exe` | Hyper-V (via WSL2) | Plan 9 / auto-mount | Implemented |
+| Linux/Docker | Direct container | N/A | Bind mounts | Existing |
+
+**Why not Firecracker?** Firecracker requires KVM (Linux-only). It cannot run natively on macOS or Windows. Lima with the VZ driver provides lightweight VMs natively on macOS without needing QEMU, and Lima's WSL2 driver (used by AWS Finch) provides the same interface on Windows.
+
+**Precedent:** Rancher Desktop, AWS Finch, and Docker Desktop all use this exact pattern -- Lima/VZ on macOS, WSL2 on Windows, unified interface above.
+
+### Phase 1: macOS Prototype
+
+**1.1 Host layer:**
+
+- Run **Lima** with the **VZ** (Virtualization.framework) driver -- no QEMU needed
+- Bundle Lima into `/Applications/Quilltap.app/Contents/Resources/runtime/`:
+
+  ```text
+  runtime/
+    bin/limactl                              # ~36 MB (includes guest agent)
+    share/lima/templates/quilltap.yaml       # VM configuration
+    libexec/lima/lima-guestagent.Linux-aarch64
+  ```
+
+- Installer adds launchd plist at `~/Library/LaunchAgents/com.quilltap.limalaunchd.plist`
+- Lima invoked via environment variables (standard practice, used by Colima/Finch/Rancher):
+  - `LIMACTL` -- path to bundled binary
+  - `LIMA_HOME` -- `~/.qtlima` (must be short -- macOS 104-char socket path limit)
+  - `LIMA_TEMPLATES_PATH` -- bundled templates directory
+
+**1.2 Runtime image:**
+
+- Build a Linux rootfs (Alpine or Debian, arm64) from the existing Dockerfile pipeline
+- Pack Node, Python, Socat, SQLite, and Quilltap into `/opt/quilltap`
+- Store as `quilltap-linux-arm64.tar.gz` (rootfs tarball, importable by both Lima and WSL2)
+- Mount `~/Quilltap Projects/` as `/data/` inside the VM via VirtioFS
+
+**1.3 Frontend orchestration:**
+
+- Electron launcher calls `limactl start quilltap` (via the bundled binary)
+- VM boots, Quilltap backend starts automatically
+- Electron polls `localhost:5050` for health, connects, opens the app
+
+**1.4 Networking & shutdown:**
+
+- Lima's VZ driver handles NAT via `virtio-net`
+- Port forwarding configured in `quilltap.yaml`: `localhost:5050` to `guest:3000`
+- On exit: `limactl stop quilltap` gracefully powers down the VM
+
+### Phase 2: Windows Support
+
+**Completed.** Direct `wsl.exe` calls (simpler than Lima's WSL2 driver).
+
+- [X] VM manager abstraction (`IVMManager` interface + `createVMManager()` factory)
+- [X] WSL2 manager (`wsl.exe --import` / `--terminate` / `--unregister`)
+- [X] Rootfs build with `--platform linux/amd64` and `wsl2` Dockerfile stage
+- [X] WSL2 init script baked into rootfs
+- [X] Port forwarding via WSL2 automatic localhost forwarding
+- [X] File sharing via `wslpath` conversion of Windows data directory
+- [X] Windows NSIS installer packaging
+- [X] Prerequisite check for WSL2
+
+Previously planned (superseded):
+- Same guest rootfs tarball imported via `wsl --import quilltap <path> quilltap-linux-arm64.tar.gz --version 2`
+- Same orchestration layer -- Electron calls Lima or `wsl.exe` depending on platform
+- Port forwarding via WSL2's automatic localhost forwarding or `netsh interface portproxy`
+- File mounting: Windows drives auto-available at `/mnt/c/`, or bind-mount specific folders
+
+### Phase 3: Developer Continuity
+
+- Keep the Docker pipeline alive; every build produces:
+  - `quilltap:latest` -- Docker image (existing)
+  - `quilltap-linux-arm64.tar.gz` -- rootfs for Lima/WSL2 (new)
+- Both derived from the same Dockerfile, keeping behavior identical
+- `npm run dev` continues to work for local development without any VM
+
 ## Planned Features
+
+### Game and State (Pascal the Croupier)
+
+- [ ] Document the new incarnation of the game and state system
 
 ### Plugin architecture (The Foundry)
 
@@ -93,28 +187,6 @@ This document tracks planned features and improvements for Quilltap.
   - [X] Reduce that to keywords
   - [X] Search the memories for those keywords
   - [X] Preload the prompt with things that spring to mind because of the keywords
-
-## Completed in v2.9.0
-
-- [X] Complete AI wizard for characters or NPCs
-- [X] Refactor embedding service to use plugin architecture
-  - Currently `lib/embedding/embedding-service.ts` has hardcoded handlers for each provider
-  - Should delegate to plugins via `createEmbeddingProvider()` interface
-  - Would make embedding providers consistent with LLM and image providers
-
-## Completed in v2.8.1
-
-- [X] Option for built-in TF-IDF embedding if you don't need full semantic support (v2.8.1)
-
-## Completed in v2.8
-
-- [X] Pull NPC tab out of settings and just list them among the characters
-- [X] Ability to auto-upgrade plugins
-- [X] Removal of sync functionality
-- [X] Have the previews of themes actually match the themes
-- [X] Make all plugins either dist or site-wide
-- [X] Make the signout actually completely wipe the session data from the browser and take you back to the beginning page
-- [X] Remove authentication (this will be a local-only website)
 
 ## Completed in v2.7.0 and earlier
 

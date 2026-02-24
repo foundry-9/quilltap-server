@@ -14,6 +14,7 @@ describe('lib/paths', () => {
     jest.resetModules();
     process.env = { ...originalEnv };
     delete process.env.DOCKER_CONTAINER;
+    delete process.env.LIMA_CONTAINER;
     delete process.env.QUILLTAP_DATA_DIR;
   });
 
@@ -138,7 +139,7 @@ describe('lib/paths', () => {
       process.env.DOCKER_CONTAINER = 'true';
 
       const { getDataDir } = await import('@/lib/paths');
-      expect(getDataDir()).toBe('/app/quilltap/data');
+      expect(getDataDir()).toBe(path.join('/app/quilltap', 'data'));
     });
   });
 
@@ -152,7 +153,7 @@ describe('lib/paths', () => {
       process.env.DOCKER_CONTAINER = 'true';
 
       const { getFilesDir } = await import('@/lib/paths');
-      expect(getFilesDir()).toBe('/app/quilltap/files');
+      expect(getFilesDir()).toBe(path.join('/app/quilltap', 'files'));
     });
   });
 
@@ -166,7 +167,7 @@ describe('lib/paths', () => {
       process.env.DOCKER_CONTAINER = 'true';
 
       const { getLogsDir } = await import('@/lib/paths');
-      expect(getLogsDir()).toBe('/app/quilltap/logs');
+      expect(getLogsDir()).toBe(path.join('/app/quilltap', 'logs'));
     });
   });
 
@@ -180,7 +181,7 @@ describe('lib/paths', () => {
       process.env.DOCKER_CONTAINER = 'true';
 
       const { getSQLiteDatabasePath } = await import('@/lib/paths');
-      expect(getSQLiteDatabasePath()).toBe('/app/quilltap/data/quilltap.db');
+      expect(getSQLiteDatabasePath()).toBe(path.join('/app/quilltap', 'data', 'quilltap.db'));
     });
   });
 
@@ -206,6 +207,50 @@ describe('lib/paths', () => {
       expect(result.data).toBe(false);
       expect(result.logs).toBe(false);
       expect(result.files).toBe(false);
+    });
+  });
+
+  describe('isLimaEnvironment', () => {
+    it('should return true when LIMA_CONTAINER is set', async () => {
+      process.env.LIMA_CONTAINER = 'true';
+
+      const { isLimaEnvironment } = await import('@/lib/paths');
+      expect(isLimaEnvironment()).toBe(true);
+    });
+
+    it('should return false when LIMA_CONTAINER is not set', async () => {
+      delete process.env.LIMA_CONTAINER;
+
+      const { isLimaEnvironment } = await import('@/lib/paths');
+      expect(isLimaEnvironment()).toBe(false);
+    });
+  });
+
+  describe('getPlatform - Lima priority', () => {
+    it('should return linux when LIMA_CONTAINER is set, even if DOCKER_CONTAINER is also set', async () => {
+      process.env.LIMA_CONTAINER = 'true';
+      process.env.DOCKER_CONTAINER = 'true';
+
+      const { getPlatform } = await import('@/lib/paths');
+      expect(getPlatform()).toBe('linux');
+    });
+
+    it('should return linux when LIMA_CONTAINER is set', async () => {
+      process.env.LIMA_CONTAINER = 'true';
+
+      const { getPlatform } = await import('@/lib/paths');
+      expect(getPlatform()).toBe('linux');
+    });
+
+    it('should respect QUILLTAP_DATA_DIR in Lima environment', async () => {
+      process.env.LIMA_CONTAINER = 'true';
+      process.env.QUILLTAP_DATA_DIR = '/data/quilltap';
+
+      const { getBaseDataDirWithSource } = await import('@/lib/paths');
+      const result = getBaseDataDirWithSource();
+
+      expect(result.path).toBe('/data/quilltap');
+      expect(result.source).toBe('environment');
     });
   });
 

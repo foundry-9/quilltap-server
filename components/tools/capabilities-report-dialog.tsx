@@ -92,7 +92,7 @@ export function CapabilitiesReportDialog({
 
           {/* Body - Scrollable */}
           <div className="qt-dialog-body flex-1 overflow-y-auto min-h-0">
-            <div className="prose prose-sm dark:prose-invert max-w-none">
+            <div className="prose prose-sm qt-prose-auto max-w-none">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={{

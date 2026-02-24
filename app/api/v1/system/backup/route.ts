@@ -24,16 +24,17 @@ export const POST = createAuthenticatedHandler(async (req, { user }) => {
       userId: user.id,
     });
 
-    // Create the backup
-    const { zipBuffer, manifest } = await createBackup(user.id);
+    // Create the backup (returns path to zip on disk)
+    const { zipPath, manifest } = await createBackup(user.id);
 
-    // Store temporarily for download
+    // Store zip path temporarily for download
     const backupId = randomUUID();
-    storeTemporaryBackup(backupId, zipBuffer, user.id);
+    storeTemporaryBackup(backupId, zipPath, user.id);
 
     logger.info('[System Backup v1] Backup stored for download', {
       userId: user.id,
       backupId,
+      zipPath,
       expiresInMinutes: 30,
       manifest,
     });

@@ -11,6 +11,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import path from 'path';
 
 // Mock the logger before importing the module
 jest.mock('@/lib/logger', () => ({
@@ -166,7 +167,7 @@ describe('Database Configuration Module', () => {
       const { loadSQLiteConfig } = await import('@/lib/database/config');
       const config = loadSQLiteConfig();
 
-      expect(config.synchronous).toBe('normal');
+      expect(config.synchronous).toBe('full');
     });
 
     it('should parse SQLITE_CACHE_SIZE as integer', async () => {
@@ -342,7 +343,7 @@ describe('Database Configuration Module', () => {
 
       const { getDefaultDataDirectory } = await import('@/lib/database/config');
 
-      expect(getDefaultDataDirectory()).toBe('/app/quilltap/data');
+      expect(getDefaultDataDirectory()).toBe(path.join('/app/quilltap', 'data'));
     });
 
     it('should return platform-specific data directory in non-Docker environment', async () => {

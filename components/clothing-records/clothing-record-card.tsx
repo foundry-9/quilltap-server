@@ -98,7 +98,7 @@ export function ClothingRecordCard({
 
       {expanded && hasDescription && (
         <div className="mt-4 border-t border-border pt-4">
-          <div className="qt-text-small prose dark:prose-invert prose-sm max-w-none">
+          <div className="qt-text-small prose qt-prose-auto prose-sm max-w-none">
             <MessageContent content={record.description!} />
           </div>
         </div>

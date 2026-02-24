@@ -5,7 +5,7 @@
  */
 
 import { z } from 'zod';
-import { getFilePath } from '@/lib/api/middleware/file-path';
+import { enrichWithDefaultImage, enrichWithApiKey } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import type { ChatMetadata, ChatParticipantBase } from '@/lib/schemas/types';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
@@ -24,13 +24,7 @@ export async function getEnrichedCharacter(characterId: string, repos: Repos) {
   const charData = await repos.characters.findById(characterId);
   if (!charData) return null;
 
-  let defaultImage = null;
-  if (charData.defaultImageId) {
-    const fileEntry = await repos.files.findById(charData.defaultImageId);
-    if (fileEntry) {
-      defaultImage = { id: fileEntry.id, filepath: getFilePath(fileEntry), url: null };
-    }
-  }
+  const defaultImage = await enrichWithDefaultImage(charData.defaultImageId, repos);
 
   return {
     id: charData.id,
@@ -51,13 +45,7 @@ export async function getEnrichedConnectionProfile(profileId: string, repos: Rep
   const profile = await repos.connections.findById(profileId);
   if (!profile) return null;
 
-  let apiKeyInfo = null;
-  if (profile.apiKeyId) {
-    const apiKey = await repos.connections.findApiKeyById(profile.apiKeyId);
-    if (apiKey) {
-      apiKeyInfo = { id: apiKey.id, provider: apiKey.provider, label: apiKey.label };
-    }
-  }
+  const apiKeyInfo = await enrichWithApiKey(profile.apiKeyId, repos);
 
   return {
     id: profile.id,

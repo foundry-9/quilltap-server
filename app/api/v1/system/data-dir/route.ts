@@ -13,8 +13,10 @@ import { withCollectionActionDispatch } from '@/lib/api/middleware/actions';
 import { successResponse, errorResponse } from '@/lib/api/responses';
 import {
   getBaseDataDirWithSource,
+  getHostDataDir,
   getPlatform,
   isDockerEnvironment,
+  isLimaEnvironment,
   Platform,
 } from '@/lib/paths';
 import { logger } from '@/lib/logger';
@@ -35,8 +37,12 @@ interface DataDirInfo {
   platform: Platform;
   /** Whether running in Docker */
   isDocker: boolean;
+  /** Whether running inside a VM (Lima on macOS or WSL2 on Windows) */
+  isVM: boolean;
   /** Whether the "open" action is supported */
   canOpen: boolean;
+  /** Host-side data directory path (for display in footer) */
+  hostPath: string;
 }
 
 /**
@@ -47,6 +53,9 @@ export const GET = createContextHandler(async () => {
   const dirInfo = getBaseDataDirWithSource();
   const platform = getPlatform();
   const isDocker = isDockerEnvironment();
+  const isVM = isLimaEnvironment();
+
+  const hostPath = getHostDataDir();
 
   const response: DataDirInfo = {
     path: dirInfo.path,
@@ -54,7 +63,9 @@ export const GET = createContextHandler(async () => {
     sourceDescription: dirInfo.sourceDescription,
     platform,
     isDocker,
+    isVM,
     canOpen: !isDocker,
+    hostPath,
   };
 
   return successResponse(response);

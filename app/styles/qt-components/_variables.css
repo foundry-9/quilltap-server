@@ -488,6 +488,41 @@
   --qt-highlight-font-weight: 500;
 
   /* ==========================================================================
+     OVERLAY VARIABLES
+     ========================================================================== */
+  --qt-overlay-bg: rgb(0 0 0 / 0.85);
+  --qt-overlay-medium-bg: rgb(0 0 0 / 0.6);
+  --qt-overlay-light-bg: rgb(0 0 0 / 0.2);
+  --qt-overlay-caption-bg: rgb(0 0 0 / 0.5);
+  --qt-overlay-btn-bg: rgb(255 255 255 / 0.1);
+  --qt-overlay-btn-hover-bg: rgb(255 255 255 / 0.2);
+  --qt-overlay-fg: rgb(255 255 255);
+  --qt-overlay-muted-fg: rgb(255 255 255 / 0.7);
+
+  /* ==========================================================================
+     SPINNER VARIABLES
+     ========================================================================== */
+  --qt-spinner-track: color-mix(in srgb, var(--color-primary) 20%, transparent);
+  --qt-spinner-indicator: var(--color-primary);
+
+  /* ==========================================================================
+     FAVORITE VARIABLES
+     ========================================================================== */
+  --qt-favorite-color: hsl(45 96% 58%);
+
+  /* ==========================================================================
+     TOGGLE VARIABLES
+     ========================================================================== */
+  --qt-toggle-knob-bg: white;
+
+  /* ==========================================================================
+     WARNING BOX VARIABLES
+     ========================================================================== */
+  --qt-warning-box-bg: color-mix(in srgb, var(--color-warning) 8%, transparent);
+  --qt-warning-box-border: color-mix(in srgb, var(--color-warning) 30%, transparent);
+  --qt-warning-box-fg: var(--color-warning);
+
+  /* ==========================================================================
      FILTER CHIP VARIABLES
      ========================================================================== */
   --qt-filter-chip-radius: 9999px;

@@ -130,10 +130,16 @@ export class GoogleProvider implements LLMProvider {
       'gemini-2.5-flash-image', // Image generation model, no function calling
       'gemini-2.0-flash-exp-image-generation', // Experimental image model
       'imagen', // Imagen models don't support function calling
+      'gemini-pro-latest', // Resolves to Gemini 3, which doesn't support function calling
+      'gemini-flash-latest', // May resolve to a model without function calling
     ];
     const lowerName = modelName.toLowerCase();
     // Check explicit no-tools list
     if (noToolsModels.some(m => lowerName.includes(m.toLowerCase()))) {
+      return false;
+    }
+    // Gemini 3.x models don't support function calling
+    if (lowerName.includes('gemini-3')) {
       return false;
     }
     // Also disable for any model with "image" in the name that's not a vision model
@@ -862,6 +868,7 @@ export class GoogleProvider implements LLMProvider {
             message: 'This is a thinking/reasoning model. Responses may take longer as the model reasons through complex problems.',
           },
         ],
+        missingCapabilities: ['function-calling'],
       };
     }
 
@@ -937,6 +944,7 @@ export class GoogleProvider implements LLMProvider {
             message: 'This is Gemini 3 Pro, a thinking/reasoning model. Responses may take longer as the model reasons through complex problems.',
           },
         ],
+        missingCapabilities: ['function-calling'],
       };
     }
 

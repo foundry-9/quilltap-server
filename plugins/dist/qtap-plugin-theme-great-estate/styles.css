@@ -534,6 +534,41 @@
 
   --qt-tab-group-gap: 0.25rem;
   --qt-tab-divider-color: var(--color-border);
+
+  /* ==========================================================================
+     OVERLAY VARIABLES
+     ========================================================================== */
+  --qt-overlay-bg: hsl(20 28% 5% / 0.9);
+  --qt-overlay-medium-bg: hsl(20 28% 5% / 0.6);
+  --qt-overlay-light-bg: hsl(20 25% 8% / 0.2);
+  --qt-overlay-caption-bg: hsl(20 28% 5% / 0.55);
+  --qt-overlay-btn-bg: hsl(43 75% 55% / 0.1);
+  --qt-overlay-btn-hover-bg: hsl(43 75% 55% / 0.22);
+  --qt-overlay-fg: var(--estate-cream);
+  --qt-overlay-muted-fg: hsl(38 18% 88% / 0.7);
+
+  /* ==========================================================================
+     SPINNER VARIABLES
+     ========================================================================== */
+  --qt-spinner-track: color-mix(in srgb, var(--estate-gold) 20%, transparent);
+  --qt-spinner-indicator: var(--estate-gold);
+
+  /* ==========================================================================
+     FAVORITE VARIABLES
+     ========================================================================== */
+  --qt-favorite-color: var(--estate-gold);
+
+  /* ==========================================================================
+     TOGGLE VARIABLES
+     ========================================================================== */
+  --qt-toggle-knob-bg: var(--estate-cream);
+
+  /* ==========================================================================
+     WARNING BOX VARIABLES
+     ========================================================================== */
+  --qt-warning-box-bg: hsl(43 75% 55% / 0.1);
+  --qt-warning-box-border: hsl(20 35% 30% / 0.35);
+  --qt-warning-box-fg: hsl(43 70% 40%);
 }
 
 /* ============================================================================
@@ -657,7 +692,7 @@
 [data-theme="great-estate"] body {
   position: relative;
   min-height: 100vh;
-  background-image: url('/api/themes/assets/qtap-plugin-theme-great-estate/textures/background.png');
+  background-image: url('/api/themes/assets/qtap-plugin-theme-great-estate/textures/background.webp');
   background-size: cover;
   background-position: center center;
   background-attachment: fixed;

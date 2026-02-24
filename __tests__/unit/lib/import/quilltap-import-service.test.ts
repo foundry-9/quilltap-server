@@ -1353,7 +1353,6 @@ describe('quilltap-import-service', () => {
         characterRoster: [],
         color: null,
         icon: null,
-        mountPointId: null,
         defaultDisabledTools: [],
         defaultDisabledToolGroups: [],
         state: {},

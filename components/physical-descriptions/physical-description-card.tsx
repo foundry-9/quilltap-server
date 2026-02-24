@@ -145,7 +145,7 @@ export function PhysicalDescriptionCard({
               <h4 className="qt-text-label-xs uppercase tracking-wide mb-1">
                 Full Description
               </h4>
-              <div className="qt-text-small prose dark:prose-invert prose-sm max-w-none">
+              <div className="qt-text-small prose qt-prose-auto prose-sm max-w-none">
                 <MessageContent content={description.fullDescription} />
               </div>
             </div>

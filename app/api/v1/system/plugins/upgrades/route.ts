@@ -13,6 +13,7 @@
 import { NextResponse } from 'next/server';
 import { startupState } from '@/lib/startup/startup-state';
 import { logger } from '@/lib/logger';
+import { serverError } from '@/lib/api/responses';
 
 export const dynamic = 'force-dynamic';
 
@@ -63,14 +64,7 @@ export async function GET() {
       { context: 'api.v1.system.plugins.upgrades.GET' },
       error instanceof Error ? error : new Error(String(error))
     );
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to get upgrade notifications',
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 }
-    );
+    return serverError('Failed to get upgrade notifications');
   }
 }
 
@@ -98,13 +92,6 @@ export async function POST() {
       { context: 'api.v1.system.plugins.upgrades.POST' },
       error instanceof Error ? error : new Error(String(error))
     );
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to mark upgrades as notified',
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 }
-    );
+    return serverError('Failed to mark upgrades as notified');
   }
 }

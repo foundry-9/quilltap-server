@@ -110,7 +110,7 @@ export function ProfileList({
           <div className="flex items-center justify-between gap-4">
             <p className="text-sm font-medium flex-1">{refitSuccess}</p>
             <div className="flex items-center gap-2 flex-shrink-0">
-              <Link href="/foundry?tab=tasks" className="qt-button-ghost qt-button-sm">
+              <Link href="/settings?tab=system" className="qt-button-ghost qt-button-sm">
                 View Tasks Queue
               </Link>
               <button

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
+import { triggerUrlDownload } from '@/lib/download-utils'
 
 interface BackupDialogProps {
   isOpen: boolean
@@ -34,14 +35,9 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
       }
 
       if (data.backupId) {
-        // Trigger download
         const downloadUrl = `/api/v1/system/backup/${data.backupId}`
-        const link = document.createElement('a')
-        link.href = downloadUrl
-        link.download = data.filename || `quilltap-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
+        const filename = data.filename || `quilltap-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`
+        await triggerUrlDownload(downloadUrl, filename)
 
         showSuccessToast('Backup downloaded successfully')
       }

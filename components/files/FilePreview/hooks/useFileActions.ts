@@ -12,6 +12,7 @@
 import { useState, useCallback } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
+import { triggerUrlDownload } from '@/lib/download-utils'
 import { FileInfo } from '../../types'
 
 interface FileAssociation {
@@ -28,7 +29,7 @@ interface UseFileActionsOptions {
 
 interface UseFileActionsResult {
   /** Download the file */
-  handleDownload: () => void
+  handleDownload: () => Promise<void>
   /** Delete the file (with confirmation) */
   handleDelete: () => Promise<void>
   /** Move file (opens modal) */
@@ -63,16 +64,16 @@ export function useFileActions({
   // Files can always be moved - to a project, between projects, or back to general files
   const canMoveToProject = true
 
-  const handleDownload = useCallback(() => {
-    // Create a download link
-    const link = document.createElement('a')
-    link.href = `/api/v1/files/${file.id}`
-    link.download = file.originalFilename || file.filename || 'download'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-
-    showSuccessToast('Download started')
+  const handleDownload = useCallback(async () => {
+    try {
+      const filename = file.originalFilename || file.filename || 'download'
+      await triggerUrlDownload(`/api/v1/files/${file.id}`, filename)
+      showSuccessToast('Download started')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to download file'
+      console.error('[useFileActions] Download failed', { fileId: file.id, error: message })
+      showErrorToast(message)
+    }
   }, [file])
 
   const handleDelete = useCallback(async () => {

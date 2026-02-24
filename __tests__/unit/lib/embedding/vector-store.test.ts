@@ -2,7 +2,7 @@
  * Vector Store Unit Tests
  *
  * Tests CharacterVectorStore and VectorStoreManager against
- * the SQLite-backed vector index repository.
+ * the normalized BLOB-backed vector index repository.
  */
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals'
@@ -18,9 +18,19 @@ jest.mock('@/lib/logger', () => ({
 }))
 
 const mockRepo = {
-  findByCharacterId: jest.fn(),
-  save: jest.fn(),
+  findMetaByCharacterId: jest.fn(),
+  findEntriesByCharacterId: jest.fn(),
+  saveMeta: jest.fn(),
+  addEntry: jest.fn(),
+  addEntries: jest.fn(),
+  removeEntry: jest.fn(),
+  removeEntries: jest.fn(),
+  updateEntryEmbedding: jest.fn(),
+  removeEntriesByCharacterId: jest.fn(),
+  deleteMetaByCharacterId: jest.fn(),
   deleteByCharacterId: jest.fn(),
+  entryExists: jest.fn(),
+  getAllCharacterIds: jest.fn(),
 }
 
 jest.mock('@/lib/database/repositories/vector-indices.repository', () => ({
@@ -59,21 +69,25 @@ function makeMetadata(overrides: Partial<VectorMetadata> = {}): VectorMetadata {
   return {
     memoryId: 'mem-1',
     characterId: 'char-1',
-    content: 'test content',
     ...overrides,
   }
 }
 
-function makeVectorIndex(characterId: string, entries: Array<{ id: string; embedding: number[]; metadata: VectorMetadata }> = []) {
+function makeEntryRows(characterId: string, entries: Array<{ id: string; embedding: number[] }>) {
+  return entries.map(e => ({
+    id: e.id,
+    characterId,
+    embedding: e.embedding,
+    createdAt: '2025-01-01T00:00:00.000Z',
+  }))
+}
+
+function makeMeta(characterId: string, dimensions: number) {
   return {
     id: characterId,
     characterId,
     version: 1,
-    dimensions: entries.length > 0 ? entries[0].embedding.length : 0,
-    entries: entries.map(e => ({
-      ...e,
-      createdAt: '2025-01-01T00:00:00.000Z',
-    })),
+    dimensions,
     createdAt: '2025-01-01T00:00:00.000Z',
     updatedAt: '2025-01-01T00:00:00.000Z',
   }
@@ -82,8 +96,12 @@ function makeVectorIndex(characterId: string, entries: Array<{ id: string; embed
 describe('CharacterVectorStore', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    mockRepo.findByCharacterId.mockResolvedValue(null)
-    mockRepo.save.mockResolvedValue({})
+    mockRepo.findMetaByCharacterId.mockResolvedValue(null)
+    mockRepo.findEntriesByCharacterId.mockResolvedValue([])
+    mockRepo.saveMeta.mockResolvedValue(undefined)
+    mockRepo.addEntries.mockResolvedValue(undefined)
+    mockRepo.removeEntries.mockResolvedValue(0)
+    mockRepo.updateEntryEmbedding.mockResolvedValue(true)
     mockRepo.deleteByCharacterId.mockResolvedValue(true)
   })
 
@@ -97,11 +115,13 @@ describe('CharacterVectorStore', () => {
 
   describe('load', () => {
     it('loads entries from the database', async () => {
-      const index = makeVectorIndex('char-1', [
-        { id: 'v1', embedding: [1, 0, 0], metadata: makeMetadata({ memoryId: 'v1' }) },
-        { id: 'v2', embedding: [0, 1, 0], metadata: makeMetadata({ memoryId: 'v2' }) },
+      const entryRows = makeEntryRows('char-1', [
+        { id: 'v1', embedding: [1, 0, 0] },
+        { id: 'v2', embedding: [0, 1, 0] },
       ])
-      mockRepo.findByCharacterId.mockResolvedValue(index)
+      const meta = makeMeta('char-1', 3)
+      mockRepo.findMetaByCharacterId.mockResolvedValue(meta)
+      mockRepo.findEntriesByCharacterId.mockResolvedValue(entryRows)
 
       const store = new CharacterVectorStore('char-1')
       await store.load()
@@ -113,7 +133,8 @@ describe('CharacterVectorStore', () => {
     })
 
     it('starts fresh when no index exists in database', async () => {
-      mockRepo.findByCharacterId.mockResolvedValue(null)
+      mockRepo.findMetaByCharacterId.mockResolvedValue(null)
+      mockRepo.findEntriesByCharacterId.mockResolvedValue([])
 
       const store = new CharacterVectorStore('char-1')
       await store.load()
@@ -123,7 +144,7 @@ describe('CharacterVectorStore', () => {
     })
 
     it('starts fresh on database error', async () => {
-      mockRepo.findByCharacterId.mockRejectedValue(new Error('DB error'))
+      mockRepo.findMetaByCharacterId.mockRejectedValue(new Error('DB error'))
 
       const store = new CharacterVectorStore('char-1')
       await store.load()
@@ -136,7 +157,8 @@ describe('CharacterVectorStore', () => {
       const store = new CharacterVectorStore('char-1')
       await store.addVector('local-1', [1, 2, 3], makeMetadata())
 
-      mockRepo.findByCharacterId.mockResolvedValue(null)
+      mockRepo.findMetaByCharacterId.mockResolvedValue(null)
+      mockRepo.findEntriesByCharacterId.mockResolvedValue([])
       await store.load()
 
       expect(store.size).toBe(0)
@@ -145,31 +167,30 @@ describe('CharacterVectorStore', () => {
   })
 
   describe('save', () => {
-    it('saves entries to the database', async () => {
+    it('saves added entries to the database', async () => {
       const store = new CharacterVectorStore('char-1')
       await store.addVector('v1', [1, 0], makeMetadata())
 
       await store.save()
 
-      expect(mockRepo.save).toHaveBeenCalledWith('char-1', expect.objectContaining({
-        characterId: 'char-1',
-        version: 1,
-        dimensions: 2,
-        entries: expect.arrayContaining([
-          expect.objectContaining({ id: 'v1' }),
-        ]),
-      }))
+      expect(mockRepo.addEntries).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ id: 'v1', characterId: 'char-1', embedding: [1, 0] }),
+        ])
+      )
+      expect(mockRepo.saveMeta).toHaveBeenCalledWith('char-1', 2)
     })
 
     it('skips save when not dirty and empty', async () => {
       const store = new CharacterVectorStore('char-1')
       await store.save()
 
-      expect(mockRepo.save).not.toHaveBeenCalled()
+      expect(mockRepo.addEntries).not.toHaveBeenCalled()
+      expect(mockRepo.saveMeta).not.toHaveBeenCalled()
     })
 
     it('throws on database error during save', async () => {
-      mockRepo.save.mockRejectedValue(new Error('Save failed'))
+      mockRepo.addEntries.mockRejectedValue(new Error('Save failed'))
 
       const store = new CharacterVectorStore('char-1')
       await store.addVector('v1', [1, 0], makeMetadata())
@@ -177,19 +198,50 @@ describe('CharacterVectorStore', () => {
       await expect(store.save()).rejects.toThrow('Save failed')
     })
 
-    it('clears dirty flag after successful save', async () => {
+    it('clears dirty tracking after successful save', async () => {
       const store = new CharacterVectorStore('char-1')
       await store.addVector('v1', [1, 0], makeMetadata())
 
       await store.save()
-      // Calling save again should still call repo.save (entries.size > 0)
-      // but the dirty flag was cleared
-      mockRepo.save.mockClear()
+      mockRepo.addEntries.mockClear()
+      mockRepo.saveMeta.mockClear()
+
+      // Calling save again should be a no-op (no changes tracked)
       await store.save()
-      // With dirty=false but entries.size > 0, it still saves
-      // Actually: condition is `!this.dirty && this.entries.size === 0`
-      // So if entries.size > 0, it saves even if not dirty
-      expect(mockRepo.save).toHaveBeenCalled()
+      expect(mockRepo.addEntries).not.toHaveBeenCalled()
+      expect(mockRepo.saveMeta).not.toHaveBeenCalled()
+    })
+
+    it('handles removed entries', async () => {
+      // Load existing entries
+      const entryRows = makeEntryRows('char-1', [{ id: 'v1', embedding: [1, 0] }])
+      mockRepo.findMetaByCharacterId.mockResolvedValue(makeMeta('char-1', 2))
+      mockRepo.findEntriesByCharacterId.mockResolvedValue(entryRows)
+
+      const store = new CharacterVectorStore('char-1')
+      await store.load()
+
+      // Remove
+      await store.removeVector('v1')
+      await store.save()
+
+      expect(mockRepo.removeEntries).toHaveBeenCalledWith(['v1'])
+    })
+
+    it('handles updated entries', async () => {
+      // Load existing entries
+      const entryRows = makeEntryRows('char-1', [{ id: 'v1', embedding: [1, 0] }])
+      mockRepo.findMetaByCharacterId.mockResolvedValue(makeMeta('char-1', 2))
+      mockRepo.findEntriesByCharacterId.mockResolvedValue(entryRows)
+
+      const store = new CharacterVectorStore('char-1')
+      await store.load()
+
+      // Update
+      await store.updateVector('v1', [0, 1])
+      await store.save()
+
+      expect(mockRepo.updateEntryEmbedding).toHaveBeenCalledWith('v1', [0, 1])
     })
   })
 
@@ -312,10 +364,10 @@ describe('CharacterVectorStore', () => {
 
     it('applies filter predicate', async () => {
       const store = new CharacterVectorStore('char-1')
-      await store.addVector('v1', [1, 0], makeMetadata({ memoryId: 'v1', content: 'keep' }))
-      await store.addVector('v2', [0.9, 0.1], makeMetadata({ memoryId: 'v2', content: 'skip' }))
+      await store.addVector('v1', [1, 0], makeMetadata({ memoryId: 'v1', extra: 'keep' }))
+      await store.addVector('v2', [0.9, 0.1], makeMetadata({ memoryId: 'v2', extra: 'skip' }))
 
-      const results = store.search([1, 0], 10, (meta) => meta.content === 'keep')
+      const results = store.search([1, 0], 10, (meta) => meta.extra === 'keep')
 
       expect(results).toHaveLength(1)
       expect(results[0].id).toBe('v1')
@@ -361,8 +413,11 @@ describe('CharacterVectorStore', () => {
 describe('VectorStoreManager', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    mockRepo.findByCharacterId.mockResolvedValue(null)
-    mockRepo.save.mockResolvedValue({})
+    mockRepo.findMetaByCharacterId.mockResolvedValue(null)
+    mockRepo.findEntriesByCharacterId.mockResolvedValue([])
+    mockRepo.saveMeta.mockResolvedValue(undefined)
+    mockRepo.addEntries.mockResolvedValue(undefined)
+    mockRepo.removeEntries.mockResolvedValue(0)
     mockRepo.deleteByCharacterId.mockResolvedValue(true)
   })
 
@@ -373,7 +428,7 @@ describe('VectorStoreManager', () => {
 
       expect(store).toBeDefined()
       expect(store.size).toBe(0)
-      expect(mockRepo.findByCharacterId).toHaveBeenCalledWith('char-1')
+      expect(mockRepo.findMetaByCharacterId).toHaveBeenCalledWith('char-1')
     })
 
     it('returns cached store on subsequent calls', async () => {
@@ -383,7 +438,7 @@ describe('VectorStoreManager', () => {
 
       expect(store1).toBe(store2)
       // Only one load call
-      expect(mockRepo.findByCharacterId).toHaveBeenCalledTimes(1)
+      expect(mockRepo.findMetaByCharacterId).toHaveBeenCalledTimes(1)
     })
 
     it('creates separate stores for different characters', async () => {
@@ -406,7 +461,9 @@ describe('VectorStoreManager', () => {
 
       await manager.saveAll()
 
-      expect(mockRepo.save).toHaveBeenCalledTimes(2)
+      // Both stores should have saved their entries
+      expect(mockRepo.addEntries).toHaveBeenCalledTimes(2)
+      expect(mockRepo.saveMeta).toHaveBeenCalledTimes(2)
     })
   })
 
@@ -418,14 +475,14 @@ describe('VectorStoreManager', () => {
 
       await manager.saveStore('char-1')
 
-      expect(mockRepo.save).toHaveBeenCalledTimes(1)
+      expect(mockRepo.addEntries).toHaveBeenCalledTimes(1)
     })
 
     it('does nothing for non-loaded store', async () => {
       const manager = new VectorStoreManager()
       await manager.saveStore('nonexistent')
 
-      expect(mockRepo.save).not.toHaveBeenCalled()
+      expect(mockRepo.addEntries).not.toHaveBeenCalled()
     })
   })
 

@@ -80,7 +80,7 @@ export function CharacterHeader({
             <button
               onClick={onToggleFavorite}
               disabled={togglingFavorite}
-              className="text-2xl text-amber-400 transition-transform hover:scale-110 disabled:opacity-50"
+              className="text-2xl qt-text-favorite transition-transform hover:scale-110 disabled:opacity-50"
               title={character?.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
             >
               {character?.isFavorite ? '⭐' : '☆'}
@@ -88,7 +88,7 @@ export function CharacterHeader({
             <button
               onClick={onToggleControlledBy}
               disabled={togglingControlledBy}
-              className="text-amber-400 transition-transform hover:scale-110 disabled:opacity-50"
+              className="qt-text-favorite transition-transform hover:scale-110 disabled:opacity-50"
               title={character?.controlledBy === 'user' ? 'Switch to LLM control' : 'Switch to user control'}
             >
               {character?.controlledBy === 'user' ? (

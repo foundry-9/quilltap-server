@@ -34,11 +34,6 @@ export const FolderSchema = z.object({
   // projectId: null means general files (not associated with a project)
   projectId: UUIDSchema.nullable().optional(),
 
-  // Storage
-  // mountPointId: Which mount point stores files in this folder
-  // If null, inherits from project or uses system default
-  mountPointId: UUIDSchema.nullable().optional(),
-
   // Timestamps
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

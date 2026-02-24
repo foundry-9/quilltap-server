@@ -11,7 +11,8 @@
 import { Memory, MemorySchema } from '@/lib/schemas/types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
 import { logger } from '@/lib/logger';
-import { TypedQueryFilter } from '../interfaces';
+import { TypedQueryFilter, DatabaseCollection } from '../interfaces';
+import { registerBlobColumns } from '../manager';
 
 /** Maximum allowed search query length to prevent ReDoS and excessive memory usage */
 const MAX_SEARCH_QUERY_LENGTH = 1000;
@@ -21,8 +22,24 @@ const MAX_SEARCH_QUERY_LENGTH = 1000;
  * Implements CRUD operations for memories with character-scoping and advanced search capabilities.
  */
 export class MemoriesRepository extends AbstractBaseRepository<Memory> {
+  private blobColumnsRegistered = false;
+
   constructor() {
     super('memories', MemorySchema);
+  }
+
+  /**
+   * Override getCollection to register blob columns for embedding.
+   * The embedding column stores Float32 BLOBs after the normalize-vector-storage migration.
+   * Without this registration, BLOB embeddings are not deserialized to number[] and fail
+   * Zod validation, causing memories to be silently filtered out.
+   */
+  protected async getCollection(): Promise<DatabaseCollection<Memory>> {
+    if (!this.blobColumnsRegistered) {
+      await registerBlobColumns('memories', ['embedding']);
+      this.blobColumnsRegistered = true;
+    }
+    return super.getCollection();
   }
 
   /**

@@ -1,0 +1,639 @@
+@font-face {
+  font-family: 'Raleway';
+  src: url('Raleway-Light.woff2') format('woff2');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Raleway';
+  src: url('Raleway-SemiBold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background:
+    linear-gradient(to right,
+      rgba(15, 23, 41, 0.15) 0%,
+      rgba(15, 23, 41, 0.85) 25%,
+      rgba(15, 23, 41, 0.97) 50%,
+      rgba(15, 23, 41, 0.85) 75%,
+      rgba(15, 23, 41, 0.15) 100%
+    ),
+    url('splash-bg.webp') center / cover no-repeat #0f1729;
+  color: #e0e0e0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  overflow: hidden;
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.brand-logo {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.brand-quill {
+  width: 72px;
+  height: 72px;
+  margin-right: -14px;
+  margin-bottom: 10px;
+  position: relative;
+  z-index: 1;
+  object-fit: contain;
+}
+
+.brand-name {
+  font-family: "EB Garamond", "Playfair Display", Georgia, Cambria, "Times New Roman", Times, ui-serif, serif;
+  font-size: 48px;
+  font-weight: 700;
+  color: #f0ebe3;
+  letter-spacing: 0.5px;
+}
+
+.brand-logo.pulse .brand-quill {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+
+.status-message {
+  font-size: 14px;
+  color: #a0a0a0;
+  margin-bottom: 20px;
+  text-align: center;
+  min-height: 20px;
+}
+
+.progress-container {
+  width: 280px;
+  height: 4px;
+  background: #333333;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 12px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.progress-container.visible {
+  opacity: 1;
+}
+
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #6366f1, #8b5cf6);
+  border-radius: 2px;
+  width: 0%;
+  transition: width 0.3s ease;
+}
+
+.progress-bar.indeterminate {
+  width: 30%;
+  animation: indeterminate 1.5s ease-in-out infinite;
+}
+
+@keyframes indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+
+.detail-text {
+  font-size: 12px;
+  color: #999999;
+  text-align: center;
+  min-height: 16px;
+}
+
+.detail-text.detail-info {
+  color: #7cb3f0;
+}
+
+.detail-text.detail-warn {
+  color: #e0a84e;
+}
+
+.detail-text.detail-error {
+  color: #ef6b6b;
+}
+
+.detail-text.detail-debug {
+  color: #888888;
+}
+
+.first-run-note {
+  font-size: 11px;
+  color: #555555;
+  margin-top: 16px;
+  text-align: center;
+  display: none;
+}
+
+.first-run-note.visible {
+  display: block;
+}
+
+/* Error state */
+.error-container {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.error-container.visible {
+  display: flex;
+}
+
+.error-message {
+  font-size: 13px;
+  color: #ef4444;
+  margin-bottom: 20px;
+  max-width: 360px;
+  line-height: 1.5;
+}
+
+.button-group {
+  display: flex;
+  gap: 12px;
+  -webkit-app-region: no-drag;
+}
+
+.btn {
+  padding: 8px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn-sm {
+  padding: 5px 12px;
+  font-size: 12px;
+}
+
+.btn-primary {
+  background: #6366f1;
+  color: #ffffff;
+}
+
+.btn-primary:hover {
+  background: #5558e6;
+}
+
+.btn-secondary {
+  background: #333333;
+  color: #cccccc;
+}
+
+.btn-secondary:hover {
+  background: #444444;
+}
+
+/* Normal state container */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.loading-container.hidden {
+  display: none;
+}
+
+/* Directory chooser */
+.directory-container {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 540px;
+  padding: 0 20px;
+}
+
+.directory-container.visible {
+  display: flex;
+}
+
+.directory-label {
+  font-family: 'Raleway', sans-serif;
+  font-size: 14px;
+  color: #c0a060;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 300;
+}
+
+.directory-list {
+  width: 100%;
+  max-height: 140px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+  border-radius: 6px;
+  background: #222222;
+  border: 1px solid #333333;
+  -webkit-app-region: no-drag;
+}
+
+.directory-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.directory-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.directory-list::-webkit-scrollbar-thumb {
+  background: #444444;
+  border-radius: 3px;
+}
+
+.directory-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+  gap: 8px;
+}
+
+.directory-item:hover {
+  background: #2a2a2a;
+}
+
+.directory-item.selected {
+  background: #2d2d5e;
+}
+
+.directory-item input[type="radio"] {
+  accent-color: #6366f1;
+  flex-shrink: 0;
+}
+
+.directory-item-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  gap: 1px;
+}
+
+.directory-item-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e0e0e0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.directory-item-path {
+  font-size: 10px;
+  color: #888888;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.directory-item-sizes {
+  font-size: 10px;
+  color: #777777;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.directory-item-remove {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: #666666;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: color 0.15s, background 0.15s;
+  line-height: 1;
+}
+
+.directory-item-remove:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.directory-item-edit {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: #666666;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: color 0.15s, background 0.15s;
+  line-height: 1;
+}
+
+.directory-item-edit:hover {
+  color: #8b8bf0;
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.directory-actions {
+  margin-bottom: 10px;
+  -webkit-app-region: no-drag;
+}
+
+.auto-start-row {
+  margin-bottom: 14px;
+  -webkit-app-region: no-drag;
+}
+
+.auto-start-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #888888;
+  cursor: pointer;
+}
+
+.auto-start-label input[type="checkbox"] {
+  accent-color: #6366f1;
+}
+
+/* Change directory button shown during loading */
+.btn-change-dir {
+  margin-top: 14px;
+  padding: 5px 14px;
+  border: 1px solid #444444;
+  border-radius: 5px;
+  background: #2a2a2a;
+  color: #9999cc;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  display: none;
+}
+
+.btn-change-dir.visible {
+  display: inline-block;
+}
+
+.btn-change-dir:hover {
+  background: #333355;
+  color: #bbbbee;
+  border-color: #6366f1;
+}
+
+.btn-change-dir:active {
+  transform: scale(0.97);
+}
+
+/* Runtime mode toggle */
+.runtime-mode-section {
+  width: 100%;
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.runtime-mode-buttons {
+  display: flex;
+  gap: 8px;
+  -webkit-app-region: no-drag;
+}
+
+.runtime-btn {
+  width: 250px;
+  height: 250px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 16px;
+  border: 3px solid #444444;
+  border-radius: 12px;
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s, filter 0.15s;
+  -webkit-app-region: no-drag;
+}
+
+.runtime-btn .runtime-btn-label {
+  position: relative;
+  z-index: 2;
+  text-shadow:
+    0 0 8px rgba(0, 0, 0, 0.9),
+    0 0 16px rgba(0, 0, 0, 0.7),
+    0 1px 3px rgba(0, 0, 0, 0.9);
+  background: rgba(0, 0, 0, 0.55);
+  padding: 6px 20px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(4px);
+}
+
+#runtimeDocker {
+  background-image: url('runtime-docker.webp');
+}
+
+#runtimeVM {
+  background-image: url('runtime-vm.webp');
+}
+
+.runtime-btn:hover:not(:disabled) {
+  border-color: #888888;
+}
+
+.runtime-btn.selected {
+  border-color: #6366f1;
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.5), inset 0 0 0 1px rgba(99, 102, 241, 0.3);
+}
+
+.runtime-btn.selected .runtime-btn-label {
+  background: rgba(99, 102, 241, 0.6);
+  border-color: rgba(99, 102, 241, 0.5);
+}
+
+.runtime-btn:disabled {
+  filter: grayscale(0.8) brightness(0.5);
+  cursor: not-allowed;
+}
+
+.runtime-btn:disabled .runtime-btn-label {
+  opacity: 0.6;
+}
+
+/* Danger button for destructive actions */
+.btn-danger {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.btn-danger:hover {
+  background: #b91c1c;
+}
+
+/* Delete confirmation overlay */
+.delete-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+  -webkit-app-region: no-drag;
+}
+
+.delete-overlay.visible {
+  display: flex;
+}
+
+.delete-dialog {
+  background: #2a2a2a;
+  border: 1px solid #444444;
+  border-radius: 10px;
+  padding: 20px;
+  max-width: 380px;
+  width: 90%;
+  text-align: center;
+}
+
+.delete-dialog-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #e0e0e0;
+  margin-bottom: 10px;
+}
+
+.delete-dialog-path {
+  font-size: 11px;
+  color: #999999;
+  margin-bottom: 16px;
+  word-break: break-all;
+  font-family: monospace;
+}
+
+.delete-dialog-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.delete-dialog-buttons .btn {
+  width: 100%;
+}
+
+.delete-dialog-warning {
+  font-size: 11px;
+  color: #ef4444;
+  font-weight: 500;
+}
+
+/* Rename overlay */
+.rename-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+  -webkit-app-region: no-drag;
+}
+
+.rename-overlay.visible {
+  display: flex;
+}
+
+.rename-dialog {
+  background: #2a2a2a;
+  border: 1px solid #444444;
+  border-radius: 10px;
+  padding: 20px;
+  max-width: 380px;
+  width: 90%;
+  text-align: center;
+}
+
+.rename-dialog-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #e0e0e0;
+  margin-bottom: 12px;
+}
+
+.rename-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #555555;
+  border-radius: 6px;
+  background: #1a1a1a;
+  color: #e0e0e0;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+  margin-bottom: 8px;
+}
+
+.rename-input:focus {
+  border-color: #6366f1;
+}
+
+.rename-dialog-path {
+  font-size: 11px;
+  color: #777777;
+  margin-bottom: 14px;
+  word-break: break-all;
+  font-family: monospace;
+}
+
+.rename-dialog-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}

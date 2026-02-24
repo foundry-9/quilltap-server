@@ -1,0 +1,316 @@
+'use client'
+
+import type { Virtualizer } from '@tanstack/react-virtual'
+import ToolMessage from '@/components/chat/ToolMessage'
+import type { ParticipantData } from '@/components/chat/ParticipantCard'
+import type { TurnState } from '@/lib/chat/turn-manager'
+import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
+import { showInfoToast } from '@/lib/toast'
+import type { Message, CharacterData, ChatSettings } from '../types'
+import type { SwipeState } from '../hooks/useChatData'
+import { MessageRow } from './MessageRow'
+import { PendingToolCalls } from './PendingToolCalls'
+import { EphemeralMessages as EphemeralMessagesComponent } from './EphemeralMessages'
+import { StreamingMessage } from './StreamingMessage'
+import type { PendingToolCall } from '../hooks/useSSEStreaming'
+import FileWritePermissionPrompt from '@/components/chat/FileWritePermissionPrompt'
+import type { EphemeralMessageData } from '@/components/chat/EphemeralMessage'
+import type { FileWriteApprovalState } from '../hooks/useModalState'
+
+interface VirtualizedMessageListProps {
+  messages: Message[]
+  virtualizer: Virtualizer<HTMLDivElement, Element>
+  messagesContainerRef: React.RefObject<HTMLDivElement | null>
+  messagesEndRef: React.RefObject<HTMLDivElement | null>
+  // Message display
+  editingMessageId: string | null
+  editContent: string
+  viewSourceMessageIds: Set<string>
+  swipeStates: Record<string, SwipeState>
+  setSwipeStates: React.Dispatch<React.SetStateAction<Record<string, SwipeState>>>
+  // Appearance
+  chatSettings: ChatSettings | null
+  roleplayRenderingPatterns: RenderingPattern[] | undefined
+  roleplayDialogueDetection: DialogueDetection | null | undefined
+  // Multi-char
+  isMultiChar: boolean
+  participantData: ParticipantData[]
+  turnState: TurnState
+  streaming: boolean
+  streamingContent: string
+  waitingForResponse: boolean
+  userParticipantId: string | null
+  isPaused: boolean
+  respondingParticipantId: string | null
+  // Message actions - signatures match useMessageActions return type
+  messageActions: {
+    startEdit: (message: Message) => void
+    saveEdit: (messageId: string) => Promise<void>
+    cancelEdit: () => void
+    toggleSourceView: (messageId: string) => void
+    deleteMessage: (messageId: string) => Promise<void>
+    generateSwipe: (messageId: string, fetchChat: () => Promise<void>) => void
+    switchSwipe: (groupId: string, direction: 'prev' | 'next', swipeStates: Record<string, SwipeState>, setSwipeStates: (value: any) => void) => void
+    copyMessageContent: (content: string) => void
+    resendMessage: (message: Message) => Promise<void>
+    canResendMessage: (messageId: string, index: number) => boolean
+  }
+  turnManagement: {
+    handleNudge: (participantId: string) => void | Promise<void>
+    handleQueue: (participantId: string) => void
+    handleDequeue: (participantId: string) => void
+    handleContinue: () => void
+    handleDismissEphemeral: (id: string) => void
+  }
+  // Handlers
+  setEditContent: (content: string) => void
+  onTogglePause: () => void
+  onOverrideDangerFlag: (messageId: string) => void
+  onRemoveCharacter: (participantId: string) => void
+  onReattribute: (messageId: string) => void
+  onImageClick: (filepath: string, filename: string, fileId?: string) => void
+  fetchChat: () => Promise<void>
+  // LLM logs
+  messagesWithLogs: Set<string>
+  onViewLLMLogs: (messageId: string) => void
+  // Pending tool calls
+  pendingToolCalls: PendingToolCall[]
+  // Ephemeral messages
+  ephemeralMessages: EphemeralMessageData[]
+  // File write permission
+  fileWriteApprovalState: FileWriteApprovalState | null
+  setFileWriteApprovalState: (stateOrFn: FileWriteApprovalState | null | ((prev: FileWriteApprovalState | null) => FileWriteApprovalState | null)) => void
+  chatId: string
+  triggerContinueMode: (participantId: string) => Promise<void>
+  // Streaming message display
+  getRespondingCharacter: () => CharacterData | undefined
+  shouldShowAvatars: () => boolean
+  getFirstCharacter: () => CharacterData | null | undefined
+  getMessageAvatar: (message: Message) => {
+    name: string
+    title?: string | null
+    avatarUrl?: string | null
+    defaultImage?: { id: string; filepath: string; url?: string } | null
+  } | null
+}
+
+export function VirtualizedMessageList({
+  messages,
+  virtualizer,
+  messagesContainerRef,
+  messagesEndRef,
+  editingMessageId,
+  editContent,
+  viewSourceMessageIds,
+  swipeStates,
+  setSwipeStates,
+  chatSettings,
+  roleplayRenderingPatterns,
+  roleplayDialogueDetection,
+  isMultiChar,
+  participantData,
+  turnState,
+  streaming,
+  streamingContent,
+  waitingForResponse,
+  userParticipantId,
+  isPaused,
+  respondingParticipantId,
+  messageActions,
+  turnManagement,
+  setEditContent,
+  onTogglePause,
+  onOverrideDangerFlag,
+  onRemoveCharacter,
+  onReattribute,
+  onImageClick,
+  fetchChat,
+  messagesWithLogs,
+  onViewLLMLogs,
+  pendingToolCalls,
+  ephemeralMessages,
+  fileWriteApprovalState,
+  setFileWriteApprovalState,
+  chatId,
+  triggerContinueMode,
+  getRespondingCharacter,
+  shouldShowAvatars,
+  getFirstCharacter,
+  getMessageAvatar,
+}: VirtualizedMessageListProps) {
+  return (
+    <div className="qt-chat-messages" ref={messagesContainerRef}>
+      <div className="qt-chat-messages-list">
+        {/* Virtualized messages rendering */}
+        <div
+          style={{
+            height: `${virtualizer.getTotalSize()}px`,
+            width: '100%',
+            position: 'relative',
+          }}
+        >
+          {virtualizer.getVirtualItems().map((virtualRow) => {
+            const messageIndex = virtualRow.index
+            const message = messages[messageIndex]
+            const isEditing = editingMessageId === message.id
+            const swipeState = message.swipeGroupId ? swipeStates[message.swipeGroupId] : null
+            const showResendButton = messageActions.canResendMessage(message.id, messageIndex)
+
+            if (message.role === 'TOOL') {
+              return (
+                <div
+                  key={message.id}
+                  data-index={virtualRow.index}
+                  ref={virtualizer.measureElement}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                >
+                  <ToolMessage
+                    message={message}
+                    character={getFirstCharacter() ?? undefined}
+                    onImageClick={(filepath, filename, fileId) => {
+                      onImageClick(filepath, filename, fileId)
+                    }}
+                  />
+                </div>
+              )
+            }
+
+            const messageAvatarData = shouldShowAvatars() ? getMessageAvatar(message) : null
+            const messageAvatar = messageAvatarData as any
+
+            return (
+              <div
+                key={message.id}
+                data-index={virtualRow.index}
+                ref={virtualizer.measureElement}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+              >
+                <MessageRow
+                  message={message}
+                  messageIndex={messageIndex}
+                  isEditing={isEditing}
+                  editContent={editContent}
+                  viewSourceMessageIds={viewSourceMessageIds}
+                  swipeState={swipeState}
+                  showResendButton={showResendButton}
+                  shouldShowAvatars={shouldShowAvatars()}
+                  messageAvatar={messageAvatar}
+                  renderingPatterns={roleplayRenderingPatterns}
+                  dialogueDetection={roleplayDialogueDetection}
+                  forceRender={messageIndex >= messages.length - 5}
+                  isMultiChar={isMultiChar}
+                  participantData={participantData}
+                  turnState={turnState}
+                  streaming={streaming}
+                  waitingForResponse={waitingForResponse}
+                  userParticipantId={userParticipantId}
+                  isPaused={isPaused}
+                  onTogglePause={onTogglePause}
+                  tokenDisplaySettings={chatSettings?.tokenDisplaySettings}
+                  dangerousContentSettings={chatSettings?.dangerousContentSettings}
+                  onOverrideDangerFlag={onOverrideDangerFlag}
+                  character={getFirstCharacter() ?? undefined}
+                  onEditStart={messageActions.startEdit}
+                  onEditSave={messageActions.saveEdit}
+                  onEditCancel={messageActions.cancelEdit}
+                  onEditChange={setEditContent}
+                  onToggleSourceView={messageActions.toggleSourceView}
+                  onDelete={messageActions.deleteMessage}
+                  onGenerateSwipe={(msgId) => messageActions.generateSwipe(msgId, fetchChat)}
+                  onSwitchSwipe={(groupId, dir) => messageActions.switchSwipe(groupId, dir, swipeStates, setSwipeStates)}
+                  onCopyContent={messageActions.copyMessageContent}
+                  onResend={messageActions.resendMessage}
+                  onImageClick={(filepath, filename, fileId) => {
+                    onImageClick(filepath, filename, fileId)
+                  }}
+                  onHandleNudge={turnManagement.handleNudge}
+                  onHandleQueue={turnManagement.handleQueue}
+                  onHandleDequeue={turnManagement.handleDequeue}
+                  onHandleTalkativenessChange={() => {}}
+                  onHandleRemoveCharacter={onRemoveCharacter}
+                  onHandleContinue={turnManagement.handleContinue}
+                  onReattribute={onReattribute}
+                  hasLLMLogs={messagesWithLogs.has(message.id)}
+                  onViewLLMLogs={onViewLLMLogs}
+                />
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Pending tool calls */}
+        <PendingToolCalls pendingToolCalls={pendingToolCalls} />
+
+        {/* Ephemeral messages */}
+        <EphemeralMessagesComponent
+          messages={ephemeralMessages}
+          onDismiss={turnManagement.handleDismissEphemeral}
+        />
+
+        {/* Inline file write permission prompt */}
+        {fileWriteApprovalState && (
+          <FileWritePermissionPrompt
+            request={{
+              filename: fileWriteApprovalState.pendingWrite.filename,
+              content: fileWriteApprovalState.pendingWrite.content,
+              mimeType: fileWriteApprovalState.pendingWrite.mimeType,
+              folderPath: fileWriteApprovalState.pendingWrite.folderPath,
+              projectId: fileWriteApprovalState.pendingWrite.projectId,
+            }}
+            projectName={fileWriteApprovalState.projectName}
+            chatId={chatId}
+            onApprove={async () => {
+              const participantToTrigger = fileWriteApprovalState?.respondingParticipantId
+              setFileWriteApprovalState(null)
+              await fetchChat()
+              if (participantToTrigger) {
+                setTimeout(() => {
+                  triggerContinueMode(participantToTrigger)
+                }, 500)
+              }
+            }}
+            onDeny={async () => {
+              const participantToTrigger = fileWriteApprovalState?.respondingParticipantId
+              setFileWriteApprovalState(null)
+              showInfoToast('File write denied.')
+              await fetchChat()
+              if (participantToTrigger) {
+                setTimeout(() => {
+                  triggerContinueMode(participantToTrigger)
+                }, 500)
+              }
+            }}
+            onViewDetails={() => {
+              setFileWriteApprovalState(prev => prev ? { ...prev, isOpen: true } : null)
+            }}
+          />
+        )}
+
+        {/* Streaming message */}
+        <StreamingMessage
+          streaming={streaming}
+          streamingContent={streamingContent}
+          waitingForResponse={waitingForResponse}
+          respondingCharacter={getRespondingCharacter()}
+          renderingPatterns={roleplayRenderingPatterns}
+          dialogueDetection={roleplayDialogueDetection}
+          shouldShowAvatars={shouldShowAvatars()}
+        />
+
+        <div ref={messagesEndRef} />
+      </div>
+    </div>
+  )
+}

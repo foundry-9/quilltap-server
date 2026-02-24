@@ -50,7 +50,7 @@ export function useSubsystemInfo(id: SubsystemId): ResolvedSubsystemInfo {
 }
 
 /**
- * Get resolved info for all child subsystems (the 8 cards on the Foundry hub).
+ * Get resolved info for all child subsystems (the 10 cards on the Foundry hub).
  *
  * Returns an array in the canonical display order.
  */

@@ -120,6 +120,9 @@ $DockerArgs = @(
     "-v", "${DataDir}:/app/quilltap"
 )
 
+# Pass the host-side data directory so the app can display it in the UI
+$DockerArgs += @("-e", "QUILLTAP_HOST_DATA_DIR=$DataDir")
+
 # Add host port forwarding if requested
 if ($RedirectPorts) {
     $DockerArgs += @("-e", "HOST_REDIRECT_PORTS=$RedirectPorts")

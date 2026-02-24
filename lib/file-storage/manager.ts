@@ -1,36 +1,36 @@
 /**
  * File Storage Manager Singleton
  *
- * Central orchestrator for file storage operations. Routes operations to the correct
- * backend based on mount point configuration, handles backend lifecycle management,
- * and provides high-level file operations (upload, download, delete, etc.).
- *
- * Features:
- * - Multiple storage backend support via mount points
- * - Provider plugin registration for custom backends
- * - Automatic backend instantiation with secret decryption
- * - Per-project mount point configuration (projects can specify their storage location)
- * - System default mount point for general files
- * - Consistent storage key generation
- * - Comprehensive error handling and logging
+ * Thin wrapper around LocalFileStorageBackend for local-only file storage.
+ * Provides the same public API surface for all file operations.
  *
  * @module file-storage/manager
  */
 
 import type { Readable } from 'stream';
-import type {
-  FileStorageBackend,
-  FileStorageProviderPlugin,
-  ProviderConfigField,
-} from './interfaces';
-import type { MountPoint } from './mount-point.types';
+import type { FileStorageBackend } from './interfaces';
 import { LocalFileStorageBackend } from './backends/local';
-import { decryptSecrets } from './secrets';
 import type { FileEntry } from '@/lib/schemas/file.types';
+
+/**
+ * Parameters for uploadRaw — writes content at an explicit storage key,
+ * bypassing the normal buildStorageKey() path generation.
+ */
+interface UploadRawParams {
+  /** Explicit storage key to write to */
+  storageKey: string;
+
+  /** File content */
+  content: Buffer;
+
+  /** MIME type */
+  contentType: string;
+
+  /** Optional custom metadata */
+  metadata?: Record<string, string>;
+}
+
 import { createLogger } from '@/lib/logging/create-logger';
-import { env } from '@/lib/env';
-import { mountPointsRepository } from '@/lib/database/repositories/mount-points.repository';
-import { getRepositories } from '@/lib/repositories/factory';
 import { getFilesDir } from '@/lib/paths';
 
 const logger = createLogger('file-storage:manager');
@@ -64,9 +64,6 @@ interface UploadFileParams {
   /** Optional folder path within project/general files */
   folderPath?: string;
 
-  /** Optional override for mount point selection */
-  mountPointId?: string;
-
   /** Optional custom metadata to store with file */
   metadata?: Record<string, string>;
 }
@@ -97,26 +94,6 @@ interface StorageKeyParams {
 interface UploadResult {
   /** Storage key where file was stored */
   storageKey: string;
-
-  /** Mount point ID that stored the file */
-  mountPointId: string;
-}
-
-/**
- * Available backend information for UI display
- */
-export interface AvailableBackendInfo {
-  /** Unique identifier for the provider (e.g., 'local', 's3') */
-  providerId: string;
-
-  /** Human-readable name for the provider */
-  displayName: string;
-
-  /** Description of the provider */
-  description: string;
-
-  /** Configuration fields required by this backend */
-  configFields: ProviderConfigField[];
 }
 
 // ============================================================================
@@ -126,21 +103,11 @@ export interface AvailableBackendInfo {
 /**
  * File Storage Manager Singleton
  *
- * Orchestrates file storage operations across multiple backends/mount points.
- * Provides high-level file operations and backend routing.
+ * Local-only file storage using LocalFileStorageBackend.
  */
 class FileStorageManager {
-  /** Map of mounted backend instances by mount point ID */
-  private backends: Map<string, FileStorageBackend> = new Map();
-
-  /** Map of loaded mount points by ID */
-  private mountPoints: Map<string, MountPoint> = new Map();
-
-  /** Map of registered provider plugins */
-  private providerPlugins: Map<string, FileStorageProviderPlugin> = new Map();
-
-  /** Default mount point ID (system default) */
-  private defaultMountPointId: string | null = null;
+  /** The local file storage backend */
+  private backend: FileStorageBackend | null = null;
 
   /** Whether the manager has been initialized */
   private initialized: boolean = false;
@@ -148,8 +115,7 @@ class FileStorageManager {
   /**
    * Get effective storage key for a file
    *
-   * Returns storageKey if present, falls back to s3Key for pre-mount-points files,
-   * or returns null if neither is available.
+   * Returns storageKey if present, or null if not available.
    *
    * @param file - The file entry
    * @returns The effective storage key or null
@@ -158,35 +124,36 @@ class FileStorageManager {
     if (file.storageKey) {
       return file.storageKey;
     }
-    // Fallback to s3Key for files created before mount points migration
-    if (file.s3Key) {
-      return file.s3Key;
-    }
     return null;
   }
 
   /**
    * Initialize the file storage manager
    *
-   * Loads mount points from the database, instantiates backends,
-   * and identifies default mount points.
+   * Creates the local file storage backend using the configured files directory.
    *
    * @throws {Error} If initialization fails
    */
   async initialize(): Promise<void> {
     try {
-      // Load mount points from database
-      await this.refreshMountPoints();
+      const basePath = getFilesDir();
 
-      // Identify the default mount point
-      for (const [id, mountPoint] of this.mountPoints) {
-        if (mountPoint.isDefault && !this.defaultMountPointId) {
-          this.defaultMountPointId = id;
-          break;
-        }
+      this.backend = new LocalFileStorageBackend({ basePath });
+
+      // Test connection and ensure directory exists
+      const testResult = await this.backend.testConnection();
+      if (!testResult.success) {
+        logger.warn('Local backend connection test failed', {
+          basePath,
+          message: testResult.message,
+        });
       }
 
       this.initialized = true;
+
+      logger.info('File storage manager initialized', {
+        basePath,
+      });
     } catch (error) {
       const errorMsg =
         error instanceof Error ? error.message : 'Unknown initialization error';
@@ -200,19 +167,6 @@ class FileStorageManager {
   }
 
   /**
-   * Register a file storage provider plugin
-   *
-   * Allows custom storage backends to be registered and used for mount points.
-   *
-   * @param plugin - The provider plugin to register
-   */
-  registerProviderPlugin(plugin: FileStorageProviderPlugin): void {
-    const backendId = plugin.metadata.backendId;
-
-    this.providerPlugins.set(backendId, plugin);
-  }
-
-  /**
    * Check if the manager has been initialized
    *
    * @returns True if initialized, false otherwise
@@ -223,10 +177,6 @@ class FileStorageManager {
 
   /**
    * Ensure the manager is initialized before use
-   *
-   * This provides lazy initialization for cases where the manager
-   * is accessed before explicit initialization (e.g., in different
-   * Next.js server contexts).
    */
   private async ensureInitialized(): Promise<void> {
     if (!this.initialized) {
@@ -234,282 +184,17 @@ class FileStorageManager {
     }
   }
 
-  // ========================================================================
-  // BACKEND RESOLUTION
-  // ========================================================================
-
   /**
-   * Get a backend by mount point ID
-   *
-   * Returns a cached backend instance if available, otherwise creates one.
-   *
-   * @param mountPointId - The mount point ID
-   * @returns The backend instance, or null if mount point not found
+   * Get the backend instance
    */
-  async getBackend(mountPointId: string): Promise<FileStorageBackend | null> {
-    // Ensure manager is initialized (lazy initialization for different contexts)
+  private async getBackend(): Promise<FileStorageBackend> {
     await this.ensureInitialized();
 
-    // Check if backend is already instantiated and cached
-    if (this.backends.has(mountPointId)) {
-      return this.backends.get(mountPointId) || null;
+    if (!this.backend) {
+      throw new Error('File storage backend not available. Initialize the manager first.');
     }
 
-    // Look up the mount point
-    const mountPoint = this.mountPoints.get(mountPointId);
-    if (!mountPoint) {
-      logger.warn('Mount point not found', { mountPointId });
-      return null;
-    }
-
-    // Create the backend
-    try {
-      const backend = await this.createBackendForMountPoint(mountPoint);
-      this.backends.set(mountPointId, backend);
-      return backend;
-    } catch (error) {
-      const errorMsg =
-        error instanceof Error ? error.message : 'Unknown backend creation error';
-
-      logger.error('Failed to create backend for mount point', {
-        mountPointId,
-        backendType: mountPoint.backendType,
-        error: errorMsg,
-      });
-
-      return null;
-    }
-  }
-
-  /**
-   * Get the backend for a specific file
-   *
-   * Uses the file's mountPointId if available, otherwise falls back to
-   * the project default or system default.
-   *
-   * @param file - The file entry
-   * @returns The backend instance
-   * @throws {Error} If no suitable backend is found
-   */
-  async getBackendForFile(file: FileEntry): Promise<FileStorageBackend> {
-    // Try to use the file's explicit mount point
-    if (file.mountPointId) {
-      const backend = await this.getBackend(file.mountPointId);
-      if (backend) {
-        return backend;
-      }
-    }
-
-    // Fall back to project or system default
-    const backend = await this.getBackendForProject(file.projectId || null);
-    return backend;
-  }
-
-  /**
-   * Get the backend for a project
-   *
-   * Checks if the project has a specific mount point configured, otherwise
-   * returns the system default backend.
-   *
-   * @param projectId - The project ID (null for general files)
-   * @returns The backend instance
-   * @throws {Error} If no suitable backend is found
-   */
-  async getBackendForProject(projectId: string | null): Promise<FileStorageBackend> {
-    // Check if the project has a specific mount point configured
-    if (projectId) {
-      try {
-        const project = await getRepositories().projects.findById(projectId);
-        if (project?.mountPointId) {
-          const backend = await this.getBackend(project.mountPointId);
-          if (backend) {
-            return backend;
-          }
-          logger.warn('Project mount point not found, falling back to default', {
-            projectId,
-            mountPointId: project.mountPointId,
-          });
-        }
-      } catch (error) {
-        logger.warn('Error looking up project mount point, falling back to default', {
-          projectId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-    }
-
-    // Fall back to system default
-    const backend = await this.getDefaultBackend();
-
-    if (!backend) {
-      throw new Error(
-        'No suitable backend found for project. Check mount point configuration.'
-      );
-    }
-
-    return backend;
-  }
-
-  /**
-   * Get the default backend
-   *
-   * Returns the system default backend.
-   *
-   * @returns The default backend instance
-   * @throws {Error} If no default backend is configured
-   */
-  async getDefaultBackend(): Promise<FileStorageBackend> {
-    // Ensure manager is initialized (lazy initialization for different contexts)
-    await this.ensureInitialized();
-
-    if (!this.defaultMountPointId) {
-      const errorMsg =
-        'No default mount point configured. Create a mount point and mark it as default.';
-      logger.error(errorMsg);
-      throw new Error(errorMsg);
-    }
-
-    const backend = await this.getBackend(this.defaultMountPointId);
-    if (!backend) {
-      const errorMsg = `Failed to get default backend for mount point ${this.defaultMountPointId}`;
-      logger.error(errorMsg);
-      throw new Error(errorMsg);
-    }
-    return backend;
-  }
-
-  // ========================================================================
-  // MOUNT POINT MANAGEMENT
-  // ========================================================================
-
-  /**
-   * Get all loaded mount points
-   *
-   * @returns Array of all mount points
-   */
-  getMountPoints(): MountPoint[] {
-    return Array.from(this.mountPoints.values());
-  }
-
-  /**
-   * Get a specific mount point by ID
-   *
-   * @param id - The mount point ID
-   * @returns The mount point, or null if not found
-   */
-  getMountPoint(id: string): MountPoint | null {
-    return this.mountPoints.get(id) || null;
-  }
-
-  /**
-   * Get the default mount point ID
-   *
-   * @returns The default mount point ID, or null if not set
-   */
-  getDefaultMountPointId(): string | null {
-    return this.defaultMountPointId;
-  }
-
-  /**
-   * Get the mount point ID for a specific project
-   *
-   * @param projectId - The project ID
-   * @returns The project's mount point ID, or null if not set
-   */
-  async getProjectMountPointId(projectId: string): Promise<string | null> {
-    try {
-      const project = await getRepositories().projects.findById(projectId);
-      return project?.mountPointId || null;
-    } catch (error) {
-      logger.warn('Error looking up project mount point', {
-        projectId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    }
-  }
-
-  /**
-   * Get available backend types
-   *
-   * Returns information about all available storage backends including:
-   * - Built-in local filesystem backend
-   * - Registered provider plugins (S3, etc.)
-   *
-   * Used by the settings UI to display backend options when creating mount points.
-   *
-   * @returns Array of available backend information
-   */
-  getAvailableBackends(): AvailableBackendInfo[] {
-    const backends: AvailableBackendInfo[] = [];
-
-    // Use centralized files directory as default, with env override if explicitly set
-    const defaultFilesPath = env.QUILLTAP_FILE_STORAGE_PATH && env.QUILLTAP_FILE_STORAGE_PATH !== './data/files'
-      ? env.QUILLTAP_FILE_STORAGE_PATH
-      : getFilesDir();
-
-    // Add built-in local backend
-    backends.push({
-      providerId: 'local',
-      displayName: 'Local Filesystem',
-      description: 'Store files on the local filesystem. Default path uses platform-specific data directory.',
-      configFields: [
-        {
-          name: 'basePath',
-          label: 'Base Path',
-          type: 'string',
-          required: true,
-          description: 'Directory path where files will be stored',
-          placeholder: defaultFilesPath,
-          defaultValue: defaultFilesPath,
-        },
-      ],
-    });
-
-    // Add registered provider plugins
-    for (const [backendId, plugin] of this.providerPlugins) {
-      backends.push({
-        providerId: backendId,
-        displayName: plugin.metadata.displayName,
-        description: plugin.metadata.description,
-        configFields: plugin.configSchema,
-      });
-    }
-    return backends;
-  }
-
-  /**
-   * Refresh mount points from the database
-   *
-   * Reloads all mount points and invalidates cached backends.
-   * Called during initialization and when mount points are updated.
-   *
-   * @throws {Error} If database query fails
-   */
-  async refreshMountPoints(): Promise<void> {
-    try {
-      // Load mount points from the database
-      const mountPoints = await mountPointsRepository.findAll();
-
-      // Clear existing state
-      this.mountPoints.clear();
-      this.backends.clear();
-      this.defaultMountPointId = null;
-
-      // Populate mount points map
-      for (const mp of mountPoints) {
-        this.mountPoints.set(mp.id, mp);
-      }
-    } catch (error) {
-      const errorMsg =
-        error instanceof Error ? error.message : 'Unknown database error';
-
-      logger.error('Failed to refresh mount points', {
-        error: errorMsg,
-      });
-
-      throw new Error(`Failed to refresh mount points: ${errorMsg}`);
-    }
+    return this.backend;
   }
 
   // ========================================================================
@@ -519,11 +204,10 @@ class FileStorageManager {
   /**
    * Upload a file to storage
    *
-   * Selects the appropriate backend based on mount point configuration,
-   * generates a storage key, and uploads the file.
+   * Generates a storage key and uploads the file to the local backend.
    *
    * @param params - Upload parameters
-   * @returns Upload result with storage key and mount point ID
+   * @returns Upload result with storage key
    * @throws {Error} If upload fails
    */
   async uploadFile(params: UploadFileParams): Promise<UploadResult> {
@@ -535,37 +219,10 @@ class FileStorageManager {
       contentType,
       projectId,
       folderPath,
-      mountPointId: overrideMountPointId,
       metadata,
     } = params;
     try {
-      // Select mount point (override > project > default)
-      let targetMountPointId = overrideMountPointId;
-
-      if (!targetMountPointId) {
-        const backend = await this.getBackendForProject(projectId || null);
-        // Find the mount point ID for this backend
-        for (const [id, cachedBackend] of this.backends) {
-          if (cachedBackend === backend) {
-            targetMountPointId = id;
-            break;
-          }
-        }
-
-        if (!targetMountPointId && this.defaultMountPointId) {
-          targetMountPointId = this.defaultMountPointId;
-        }
-      }
-
-      if (!targetMountPointId) {
-        throw new Error('No suitable mount point found for upload');
-      }
-
-      // Get backend
-      const backend = await this.getBackend(targetMountPointId);
-      if (!backend) {
-        throw new Error(`Failed to get backend for mount point ${targetMountPointId}`);
-      }
+      const backend = await this.getBackend();
 
       // Generate storage key
       const storageKey = this.buildStorageKey({
@@ -584,14 +241,10 @@ class FileStorageManager {
         fileId,
         filename,
         storageKey,
-        mountPointId: targetMountPointId,
         size: content.length,
       });
 
-      return {
-        storageKey,
-        mountPointId: targetMountPointId,
-      };
+      return { storageKey };
     } catch (error) {
       const errorMsg =
         error instanceof Error ? error.message : 'Unknown upload error';
@@ -610,8 +263,6 @@ class FileStorageManager {
   /**
    * Download a file from storage
    *
-   * Uses the file's mount point information to locate and download the file.
-   *
    * @param file - The file entry containing storage information
    * @returns File content as Buffer
    * @throws {Error} If download fails
@@ -623,8 +274,7 @@ class FileStorageManager {
         throw new Error('File has no storage key. Cannot download.');
       }
 
-      const backend = await this.getBackendForFile(file);
-
+      const backend = await this.getBackend();
       const content = await backend.download(effectiveStorageKey);
 
       return content;
@@ -647,8 +297,6 @@ class FileStorageManager {
   /**
    * Delete a file from storage
    *
-   * Uses the file's mount point information to locate and delete the file.
-   *
    * @param file - The file entry containing storage information
    * @throws {Error} If deletion fails
    */
@@ -662,8 +310,7 @@ class FileStorageManager {
         return;
       }
 
-      const backend = await this.getBackendForFile(file);
-
+      const backend = await this.getBackend();
       await backend.delete(effectiveStorageKey);
 
       logger.info('File deleted successfully', {
@@ -687,42 +334,79 @@ class FileStorageManager {
   }
 
   /**
+   * Upload content at an explicit storage key
+   *
+   * Unlike uploadFile(), this does NOT generate a storage key from user/project/filename.
+   * Used for writing derived data (e.g. thumbnails) at a predictable, canonical key.
+   *
+   * @param params - Upload parameters with explicit key
+   * @throws {Error} If upload fails
+   */
+  async uploadRaw(params: UploadRawParams): Promise<void> {
+    const { storageKey, content, contentType, metadata } = params;
+    try {
+      const backend = await this.getBackend();
+      await backend.upload(storageKey, content, contentType, metadata);
+
+      logger.debug('Raw upload completed', {
+        storageKey,
+        size: content.length,
+      });
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown upload error';
+
+      logger.error('Raw upload failed', {
+        storageKey,
+        error: errorMsg,
+      });
+
+      throw new Error(`Failed to upload raw content at '${storageKey}': ${errorMsg}`);
+    }
+  }
+
+  /**
+   * Delete content at an explicit storage key
+   *
+   * Counterpart to uploadRaw() — deletes data at a known key.
+   *
+   * @param storageKey - The explicit key to delete
+   * @throws {Error} If deletion fails
+   */
+  async deleteRaw(storageKey: string): Promise<void> {
+    try {
+      const backend = await this.getBackend();
+      await backend.delete(storageKey);
+
+      logger.debug('Raw delete completed', { storageKey });
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown deletion error';
+
+      logger.error('Raw delete failed', {
+        storageKey,
+        error: errorMsg,
+      });
+
+      throw new Error(`Failed to delete raw content at '${storageKey}': ${errorMsg}`);
+    }
+  }
+
+  /**
    * Get a URL for accessing a file
    *
-   * Returns a proxy URL or presigned URL based on backend capabilities and options.
+   * Returns a proxy URL for the file.
    *
    * @param file - The file entry
-   * @param options - Optional configuration (presigned URL, expiration)
    * @returns Access URL for the file
    * @throws {Error} If URL generation fails
    */
-  async getFileUrl(
-    file: FileEntry,
-    options?: { presigned?: boolean; expiresIn?: number }
-  ): Promise<string> {
+  async getFileUrl(file: FileEntry): Promise<string> {
     const effectiveStorageKey = this.getEffectiveStorageKey(file);
     try {
       if (!effectiveStorageKey) {
         throw new Error('File has no storage key. Cannot generate URL.');
       }
 
-      const backend = await this.getBackendForFile(file);
-      const metadata = backend.getMetadata();
-
-      // Try to generate presigned URL if requested and supported
-      if (options?.presigned && metadata.capabilities.presignedUrls) {
-        if (!backend.getPresignedUrl) {
-          throw new Error('Backend does not support presigned URLs');
-        }
-
-        const url = await backend.getPresignedUrl(
-          effectiveStorageKey,
-          options.expiresIn || 3600
-        );
-        return url;
-      }
-
-      // Fall back to proxy URL
+      const backend = await this.getBackend();
       const proxyUrl = backend.getProxyUrl(effectiveStorageKey);
       return proxyUrl;
     } catch (error) {
@@ -756,7 +440,7 @@ class FileStorageManager {
         return false;
       }
 
-      const backend = await this.getBackendForFile(file);
+      const backend = await this.getBackend();
       const exists = await backend.exists(effectiveStorageKey);
       return exists;
     } catch (error) {
@@ -780,9 +464,6 @@ class FileStorageManager {
   /**
    * Create a folder in storage
    *
-   * For local backends, creates an actual directory.
-   * For S3-like backends, this is a no-op since folders are virtual.
-   *
    * @param params - Folder creation parameters
    * @throws {Error} If folder creation fails
    */
@@ -790,37 +471,22 @@ class FileStorageManager {
     userId: string;
     projectId: string | null;
     folderPath: string;
-    mountPointId?: string;
   }): Promise<void> {
-    const { userId, projectId, folderPath, mountPointId } = params;
+    const { userId, projectId, folderPath } = params;
     try {
-      // Get the appropriate backend
-      let backend: FileStorageBackend;
-      if (mountPointId) {
-        const b = await this.getBackend(mountPointId);
-        if (!b) {
-          throw new Error(`Mount point not found: ${mountPointId}`);
-        }
-        backend = b;
-      } else {
-        backend = await this.getBackendForProject(projectId);
-      }
-
+      const backend = await this.getBackend();
       const metadata = backend.getMetadata();
 
-      // Check if backend supports folder operations
       if (!metadata.capabilities.folders || !backend.createFolder) {
         return;
       }
 
-      // Build the storage path for the folder
       const storagePath = this.buildFolderStoragePath({
         userId,
         projectId,
         folderPath,
       });
 
-      // Create the folder
       await backend.createFolder(storagePath);
 
       logger.info('Created folder in storage', {
@@ -847,9 +513,6 @@ class FileStorageManager {
   /**
    * Delete a folder from storage
    *
-   * For local backends, removes the actual directory (must be empty).
-   * For S3-like backends, this is a no-op since folders are virtual.
-   *
    * @param params - Folder deletion parameters
    * @throws {Error} If folder deletion fails
    */
@@ -857,37 +520,22 @@ class FileStorageManager {
     userId: string;
     projectId: string | null;
     folderPath: string;
-    mountPointId?: string;
   }): Promise<void> {
-    const { userId, projectId, folderPath, mountPointId } = params;
+    const { userId, projectId, folderPath } = params;
     try {
-      // Get the appropriate backend
-      let backend: FileStorageBackend;
-      if (mountPointId) {
-        const b = await this.getBackend(mountPointId);
-        if (!b) {
-          throw new Error(`Mount point not found: ${mountPointId}`);
-        }
-        backend = b;
-      } else {
-        backend = await this.getBackendForProject(projectId);
-      }
-
+      const backend = await this.getBackend();
       const metadata = backend.getMetadata();
 
-      // Check if backend supports folder operations
       if (!metadata.capabilities.folders || !backend.deleteFolder) {
         return;
       }
 
-      // Build the storage path for the folder
       const storagePath = this.buildFolderStoragePath({
         userId,
         projectId,
         folderPath,
       });
 
-      // Delete the folder
       await backend.deleteFolder(storagePath);
 
       logger.info('Deleted folder from storage', {
@@ -914,12 +562,7 @@ class FileStorageManager {
   /**
    * Build a storage path for a folder
    *
-   * Generates a consistent storage path based on user ID, project ID, and folder path.
-   *
    * Format: `users/{userId}/{projectId or '_general'}/{folderPath}`
-   *
-   * @param params - Path generation parameters
-   * @returns Storage path
    */
   private buildFolderStoragePath(params: {
     userId: string;
@@ -928,19 +571,16 @@ class FileStorageManager {
   }): string {
     const { userId, projectId, folderPath } = params;
 
-    // Build base path components
     const userPath = `users/${userId}`;
     const projectPath = projectId ? projectId : '_general';
-    const folder = folderPath.replace(/^\/+|\/+$/g, ''); // Remove leading/trailing slashes
+    const folder = folderPath.replace(/^\/+|\/+$/g, '');
 
-    // Build full path
     const pathParts = [userPath, projectPath];
     if (folder) {
       pathParts.push(folder);
     }
 
-    const storagePath = pathParts.join('/');
-    return storagePath;
+    return pathParts.join('/');
   }
 
   // ========================================================================
@@ -950,13 +590,7 @@ class FileStorageManager {
   /**
    * Build a storage key for a file
    *
-   * Generates a consistent storage key based on user ID, project ID, folder path,
-   * file ID, and sanitized filename.
-   *
    * Format: `users/{userId}/{projectId or '_general'}/{folderPath}{fileId}_{sanitizedFilename}`
-   *
-   * @param params - Key generation parameters
-   * @returns Storage key
    */
   buildStorageKey(params: StorageKeyParams): string {
     const {
@@ -967,128 +601,24 @@ class FileStorageManager {
       folderPath,
     } = params;
 
-    // Sanitize filename (remove path separators and special characters)
     const sanitizedFilename = filename
       .replace(/[\/\\:*?"<>|]/g, '_')
       .replace(/\s+/g, '_')
       .toLowerCase();
 
-    // Build base path components
     const userPath = `users/${userId}`;
     const projectPath = projectId ? projectId : '_general';
     const folder = folderPath
-      ? folderPath.replace(/^\/+|\/+$/g, '') // Remove leading/trailing slashes
+      ? folderPath.replace(/^\/+|\/+$/g, '')
       : '';
 
-    // Build full key
     const pathParts = [userPath, projectPath];
     if (folder) {
       pathParts.push(folder);
     }
 
-    // Combine with file ID and sanitized filename
     const key = `${pathParts.join('/')}/${fileId}_${sanitizedFilename}`;
     return key;
-  }
-
-  // ========================================================================
-  // BACKEND INSTANTIATION
-  // ========================================================================
-
-  /**
-   * Create a backend instance for a mount point
-   *
-   * Instantiates the appropriate backend based on the mount point's backend type.
-   * For 'local' backends, creates a LocalFileStorageBackend.
-   * For other types, looks up the registered provider plugin.
-   *
-   * @param mountPoint - The mount point configuration
-   * @returns Initialized backend instance
-   * @throws {Error} If backend creation fails
-   */
-  private async createBackendForMountPoint(mountPoint: MountPoint): Promise<FileStorageBackend> {
-    try {
-      // Handle built-in local backend
-      if (mountPoint.backendType === 'local') {
-        const config = mountPoint.backendConfig as { basePath?: string };
-
-        if (!config.basePath) {
-          throw new Error('Local backend configuration missing basePath');
-        }
-
-        const backend = new LocalFileStorageBackend({
-          basePath: config.basePath,
-        });
-
-        // Test connection and ensure directory exists
-        const testResult = await backend.testConnection();
-        if (!testResult.success) {
-          logger.warn('Local backend connection test failed', {
-            mountPointId: mountPoint.id,
-            basePath: config.basePath,
-            message: testResult.message,
-          });
-        } else {
-        }
-
-        logger.info('Created local file storage backend', {
-          mountPointId: mountPoint.id,
-          basePath: config.basePath,
-        });
-
-        return backend;
-      }
-
-      // Handle plugin-provided backends
-      const plugin = this.providerPlugins.get(mountPoint.backendType);
-      if (!plugin) {
-        throw new Error(
-          `Provider plugin for backend type '${mountPoint.backendType}' not registered`
-        );
-      }
-
-      // Decrypt secrets if available
-      let config = { ...mountPoint.backendConfig };
-
-      if (mountPoint.encryptedSecrets) {
-        try {
-          const secrets = decryptSecrets(mountPoint.encryptedSecrets);
-          config = { ...config, ...secrets };
-        } catch (error) {
-          const errorMsg =
-            error instanceof Error ? error.message : 'Unknown decryption error';
-
-          logger.warn('Failed to decrypt mount point secrets', {
-            mountPointId: mountPoint.id,
-            error: errorMsg,
-          });
-        }
-      }
-
-      // Create backend via plugin
-      const backend = plugin.createBackend(config);
-
-      logger.info('Created plugin-provided backend', {
-        mountPointId: mountPoint.id,
-        backendType: mountPoint.backendType,
-        displayName: plugin.metadata.displayName,
-      });
-
-      return backend;
-    } catch (error) {
-      const errorMsg =
-        error instanceof Error ? error.message : 'Unknown backend creation error';
-
-      logger.error('Failed to create backend for mount point', {
-        mountPointId: mountPoint.id,
-        backendType: mountPoint.backendType,
-        error: errorMsg,
-      });
-
-      throw new Error(
-        `Failed to create backend for mount point ${mountPoint.id}: ${errorMsg}`
-      );
-    }
   }
 }
 

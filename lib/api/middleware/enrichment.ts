@@ -8,6 +8,7 @@
 
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { Tag } from '@/lib/schemas/types';
+import { getFilePath } from './file-path';
 
 /**
  * Enriched API key info for responses
@@ -107,6 +108,53 @@ export async function enrichWithTags(
   }
 
   return enriched;
+}
+
+/**
+ * Enriched default image info for responses
+ */
+export interface EnrichedDefaultImage {
+  id: string;
+  filepath: string;
+  url: null;
+}
+
+/**
+ * Enrich an entity with default image information
+ *
+ * Common pattern for characters and projects that have a defaultImageId.
+ * Looks up the file entry and returns an API-friendly path.
+ *
+ * @param imageId - The default image file ID
+ * @param repos - Repository container for data access
+ * @returns Enriched image info or null
+ *
+ * @example
+ * ```ts
+ * const character = await repos.characters.findById(id);
+ * const defaultImage = await enrichWithDefaultImage(character.defaultImageId, repos);
+ * return { ...character, defaultImage };
+ * ```
+ */
+export async function enrichWithDefaultImage(
+  imageId: string | null | undefined,
+  repos: RepositoryContainer
+): Promise<EnrichedDefaultImage | null> {
+  if (!imageId) {
+    return null;
+  }
+
+  const fileEntry = await repos.files.findById(imageId);
+
+  if (!fileEntry) {
+    return null;
+  }
+
+  return {
+    id: fileEntry.id,
+    filepath: getFilePath(fileEntry),
+    url: null,
+  };
 }
 
 /**

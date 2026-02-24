@@ -11,6 +11,7 @@
 import { NextResponse } from 'next/server';
 import { initializePlugins } from '@/lib/startup/plugin-initialization';
 import { logger } from '@/lib/logger';
+import { serverError } from '@/lib/api/responses';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,14 +29,7 @@ export async function POST() {
       logger.error('[System Plugins v1] Plugin initialization failed', {
         errors: result.errors,
       });
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Plugin initialization failed',
-          result,
-        },
-        { status: 500 }
-      );
+      return serverError('Plugin initialization failed');
     }
 
     // Log warnings if any
@@ -51,14 +45,7 @@ export async function POST() {
     });
   } catch (error) {
     logger.error('[System Plugins v1] Error in plugin initialization endpoint', { error });
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Internal server error',
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 }
-    );
+    return serverError('Internal server error');
   }
 }
 
@@ -72,19 +59,12 @@ export async function GET() {
     const { getPluginSystemState } = await import('@/lib/startup/plugin-initialization');
     const state = getPluginSystemState();
 
-
     return NextResponse.json({
       success: true,
       state,
     });
   } catch (error) {
     logger.error('[System Plugins v1] Error getting plugin system state', { error });
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to get plugin system state',
-      },
-      { status: 500 }
-    );
+    return serverError('Failed to get plugin system state');
   }
 }

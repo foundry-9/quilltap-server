@@ -25,7 +25,6 @@ export { FoldersRepository } from './folders.repository';
 export { ImageProfilesRepository } from './image-profiles.repository';
 export { LLMLogsRepository } from './llm-logs.repository';
 export { MemoriesRepository } from './memories.repository';
-export { MountPointsRepository } from './mount-points.repository';
 export { PluginConfigRepository } from './plugin-config.repository';
 export { ProjectsRepository } from './projects.repository';
 export { PromptTemplatesRepository } from './prompt-templates.repository';
@@ -50,7 +49,6 @@ import { FoldersRepository } from './folders.repository';
 import { ImageProfilesRepository } from './image-profiles.repository';
 import { LLMLogsRepository } from './llm-logs.repository';
 import { MemoriesRepository } from './memories.repository';
-import { MountPointsRepository } from './mount-points.repository';
 import { PluginConfigRepository } from './plugin-config.repository';
 import { ProjectsRepository } from './projects.repository';
 import { PromptTemplatesRepository } from './prompt-templates.repository';
@@ -80,7 +78,6 @@ export interface RepositoryContainer {
   images: FilesRepository; // Alias for backwards compatibility
   llmLogs: LLMLogsRepository;
   memories: MemoriesRepository;
-  mountPoints: MountPointsRepository;
   pluginConfigs: PluginConfigRepository;
   projects: ProjectsRepository;
   promptTemplates: PromptTemplatesRepository;
@@ -122,7 +119,6 @@ export function createRepositories(): RepositoryContainer {
       images: filesRepo, // Alias for backwards compatibility
       llmLogs: new LLMLogsRepository(),
       memories: new MemoriesRepository(),
-      mountPoints: new MountPointsRepository(),
       pluginConfigs: new PluginConfigRepository(),
       projects: new ProjectsRepository(),
       promptTemplates: new PromptTemplatesRepository(),

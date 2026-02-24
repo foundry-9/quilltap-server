@@ -3,6 +3,7 @@
  *
  * Provides functions for calculating and formatting timestamps for system prompts.
  * Supports both real-time and fictional timestamps with auto-increment capabilities.
+ * Supports timezone-aware formatting via IANA timezone names.
  */
 
 import { logger } from '@/lib/logger'
@@ -11,24 +12,141 @@ import type { TimestampConfig, TimestampFormat } from '@/lib/schemas/types'
 export interface CalculatedTimestamp {
   /** Formatted timestamp string for display/prompt injection */
   formatted: string
-  /** ISO-8601 timestamp value */
+  /** ISO-8601 timestamp value (with timezone offset when timezone is specified) */
   isoValue: string
   /** Whether this is a fictional timestamp */
   isFictional: boolean
 }
 
 /**
- * Format patterns for different timestamp formats
+ * Date parts extracted via Intl.DateTimeFormat for a specific timezone.
+ * Used by formatCustom() and formatISO8601WithOffset() to produce
+ * timezone-correct output without shifting the Date object itself.
+ */
+interface DatePartsInTimezone {
+  year: number
+  month: number       // 0-indexed (January = 0)
+  day: number
+  dayOfWeek: number   // 0 = Sunday
+  hours: number       // 0-23
+  minutes: number
+  seconds: number
+  dayPeriod: string   // "AM" or "PM"
+}
+
+/**
+ * Extract date components in a target timezone using Intl.DateTimeFormat.
+ * This is the core mechanism for timezone-aware formatting — it reads the
+ * date as it would appear on a clock in the specified timezone.
+ *
+ * @param date - The Date to extract parts from
+ * @param timezone - IANA timezone name (e.g., "America/New_York"). If undefined, uses system default.
+ */
+function getDatePartsInTimezone(date: Date, timezone?: string): DatePartsInTimezone {
+  const options: Intl.DateTimeFormatOptions = {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+    ...(timezone ? { timeZone: timezone } : {}),
+  }
+
+  const parts = new Intl.DateTimeFormat('en-US', options).formatToParts(date)
+  const get = (type: string): string => parts.find(p => p.type === type)?.value || '0'
+
+  const hours = Number(get('hour'))
+  // Intl with hour12:false can return "24" for midnight in some locales
+  const normalizedHours = hours === 24 ? 0 : hours
+
+  return {
+    year: Number(get('year')),
+    month: Number(get('month')) - 1, // Convert to 0-indexed
+    day: Number(get('day')),
+    dayOfWeek: (() => {
+      const dayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }
+      const weekday = new Intl.DateTimeFormat('en-US', {
+        weekday: 'short',
+        ...(timezone ? { timeZone: timezone } : {}),
+      }).format(date)
+      return dayMap[weekday] ?? 0
+    })(),
+    hours: normalizedHours,
+    minutes: Number(get('minute')),
+    seconds: Number(get('second')),
+    dayPeriod: normalizedHours < 12 ? 'AM' : 'PM',
+  }
+}
+
+/**
+ * Compute the UTC offset string (e.g., "+05:30" or "-04:00") for a Date in a given timezone.
+ * Uses Intl to find what the local time is, then computes the difference from UTC.
+ */
+function getTimezoneOffset(date: Date, timezone?: string): string {
+  if (!timezone) {
+    // Use local system offset
+    const offsetMin = date.getTimezoneOffset()
+    const sign = offsetMin <= 0 ? '+' : '-'
+    const absMin = Math.abs(offsetMin)
+    const h = String(Math.floor(absMin / 60)).padStart(2, '0')
+    const m = String(absMin % 60).padStart(2, '0')
+    return `${sign}${h}:${m}`
+  }
+
+  // Get the time in the target timezone and in UTC, then compute the difference
+  const parts = getDatePartsInTimezone(date, timezone)
+  const utcParts = getDatePartsInTimezone(date, 'UTC')
+
+  // Build comparable timestamps (minutes since midnight, adjusted for day boundary)
+  const tzMinutes = parts.hours * 60 + parts.minutes
+  const utcMinutes = utcParts.hours * 60 + utcParts.minutes
+
+  // Day difference handling
+  let diff = tzMinutes - utcMinutes
+  if (parts.day !== utcParts.day) {
+    // If days differ, the timezone is ahead or behind by roughly a day
+    if (parts.day > utcParts.day || (parts.month > utcParts.month) || (parts.year > utcParts.year)) {
+      diff += 24 * 60
+    } else {
+      diff -= 24 * 60
+    }
+  }
+
+  const sign = diff >= 0 ? '+' : '-'
+  const absDiff = Math.abs(diff)
+  const h = String(Math.floor(absDiff / 60)).padStart(2, '0')
+  const m = String(absDiff % 60).padStart(2, '0')
+  return `${sign}${h}:${m}`
+}
+
+/**
+ * Format a date as ISO-8601 with timezone offset instead of always "Z".
+ * e.g., "2026-02-22T14:30:00-05:00" for America/New_York
+ */
+function formatISO8601WithTimezone(date: Date, timezone?: string): string {
+  const p = getDatePartsInTimezone(date, timezone)
+  const offset = getTimezoneOffset(date, timezone)
+
+  return `${p.year}-${String(p.month + 1).padStart(2, '0')}-${String(p.day).padStart(2, '0')}T` +
+    `${String(p.hours).padStart(2, '0')}:${String(p.minutes).padStart(2, '0')}:${String(p.seconds).padStart(2, '0')}${offset}`
+}
+
+/**
+ * Format patterns for different timestamp formats.
+ * Each format function accepts an optional timezone parameter.
  */
 const FORMAT_OPTIONS: Record<
   Exclude<TimestampFormat, 'CUSTOM'>,
-  { format: (date: Date) => string }
+  { format: (date: Date, timezone?: string) => string }
 > = {
   ISO8601: {
-    format: (date: Date) => date.toISOString(),
+    format: (date: Date, timezone?: string) =>
+      timezone ? formatISO8601WithTimezone(date, timezone) : date.toISOString(),
   },
   FRIENDLY: {
-    format: (date: Date) =>
+    format: (date: Date, timezone?: string) =>
       new Intl.DateTimeFormat('en-US', {
         year: 'numeric',
         month: 'long',
@@ -36,22 +154,25 @@ const FORMAT_OPTIONS: Record<
         hour: 'numeric',
         minute: '2-digit',
         hour12: true,
+        ...(timezone ? { timeZone: timezone } : {}),
       }).format(date),
   },
   DATE_ONLY: {
-    format: (date: Date) =>
+    format: (date: Date, timezone?: string) =>
       new Intl.DateTimeFormat('en-US', {
         year: 'numeric',
         month: 'long',
         day: 'numeric',
+        ...(timezone ? { timeZone: timezone } : {}),
       }).format(date),
   },
   TIME_ONLY: {
-    format: (date: Date) =>
+    format: (date: Date, timezone?: string) =>
       new Intl.DateTimeFormat('en-US', {
         hour: 'numeric',
         minute: '2-digit',
         hour12: true,
+        ...(timezone ? { timeZone: timezone } : {}),
       }).format(date),
   },
 }
@@ -77,8 +198,12 @@ const FORMAT_OPTIONS: Record<
  * - ss: Seconds (00-59)
  * - a: am/pm
  * - A: AM/PM
+ *
+ * @param date - The Date to format
+ * @param formatString - Custom format pattern
+ * @param timezone - Optional IANA timezone name
  */
-function formatCustom(date: Date, formatString: string): string {
+function formatCustom(date: Date, formatString: string, timezone?: string): string {
   const months = [
     'January',
     'February',
@@ -94,16 +219,18 @@ function formatCustom(date: Date, formatString: string): string {
     'December',
   ]
   const monthsShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
   const daysShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
-  const year = date.getFullYear()
-  const month = date.getMonth()
-  const day = date.getDate()
-  const dayOfWeek = date.getDay()
-  const hours = date.getHours()
-  const minutes = date.getMinutes()
-  const seconds = date.getSeconds()
+  // Use timezone-aware date parts instead of raw Date methods
+  const parts = getDatePartsInTimezone(date, timezone)
+  const year = parts.year
+  const month = parts.month
+  const day = parts.day
+  const dayOfWeek = parts.dayOfWeek
+  const hours = parts.hours
+  const minutes = parts.minutes
+  const seconds = parts.seconds
   const hours12 = hours % 12 || 12
 
   // Order matters: longer patterns must be replaced first
@@ -114,7 +241,7 @@ function formatCustom(date: Date, formatString: string): string {
     [/MMM/g, monthsShort[month]],
     [/MM/g, String(month + 1).padStart(2, '0')],
     [/M/g, String(month + 1)],
-    [/dddd/g, days[dayOfWeek]],
+    [/dddd/g, dayNames[dayOfWeek]],
     [/ddd/g, daysShort[dayOfWeek]],
     [/DD/g, String(day).padStart(2, '0')],
     [/D/g, String(day)],
@@ -137,14 +264,47 @@ function formatCustom(date: Date, formatString: string): string {
 }
 
 /**
+ * Resolve the timezone to use for timestamp formatting.
+ * Implements the fallback chain:
+ *   1. Per-chat timestampConfig.timezone
+ *   2. ChatSettings.timezone (Salon-level default)
+ *   3. QUILLTAP_TIMEZONE env var (host OS timezone from Electron)
+ *   4. undefined (system default / UTC on server)
+ *
+ * @param configTimezone - Per-chat timezone override from TimestampConfig
+ * @param chatSettingsTimezone - Salon-level default timezone from ChatSettings
+ * @returns IANA timezone name or undefined for system default
+ */
+export function resolveTimezone(
+  configTimezone?: string | null,
+  chatSettingsTimezone?: string | null
+): string | undefined {
+  if (configTimezone) {
+    logger.debug('[TimestampUtils] Using per-chat timezone', { timezone: configTimezone })
+    return configTimezone
+  }
+  if (chatSettingsTimezone) {
+    logger.debug('[TimestampUtils] Using Salon-level timezone', { timezone: chatSettingsTimezone })
+    return chatSettingsTimezone
+  }
+  const envTimezone = process.env.QUILLTAP_TIMEZONE
+  if (envTimezone) {
+    logger.debug('[TimestampUtils] Using QUILLTAP_TIMEZONE env var', { timezone: envTimezone })
+    return envTimezone
+  }
+  return undefined
+}
+
+/**
  * Calculate the current timestamp based on configuration.
  * For fictional timestamps, calculates the elapsed time since the base was set
  * and adds it to the fictional base timestamp.
  *
  * @param config - Timestamp configuration
+ * @param timezone - Optional IANA timezone name (resolved from the fallback chain by the caller)
  * @returns Calculated and formatted timestamp
  */
-export function calculateCurrentTimestamp(config: TimestampConfig): CalculatedTimestamp {
+export function calculateCurrentTimestamp(config: TimestampConfig, timezone?: string): CalculatedTimestamp {
   let timestamp: Date
   let isFictional = false
 
@@ -160,23 +320,28 @@ export function calculateCurrentTimestamp(config: TimestampConfig): CalculatedTi
     isFictional = true
 
   } else {
-    timestamp = new Date()
+    timestamp = new Date(Date.now())
   }
 
-  // Format the timestamp
+  // Format the timestamp with timezone support
   let formatted: string
   if (config.format === 'CUSTOM' && config.customFormat) {
-    formatted = formatCustom(timestamp, config.customFormat)
+    formatted = formatCustom(timestamp, config.customFormat, timezone)
   } else if (config.format === 'CUSTOM') {
     // Fall back to FRIENDLY if CUSTOM but no format string
-    formatted = FORMAT_OPTIONS.FRIENDLY.format(timestamp)
+    formatted = FORMAT_OPTIONS.FRIENDLY.format(timestamp, timezone)
   } else {
-    formatted = FORMAT_OPTIONS[config.format].format(timestamp)
+    formatted = FORMAT_OPTIONS[config.format].format(timestamp, timezone)
   }
+
+  // For the isoValue, include timezone offset when a timezone is specified
+  const isoValue = timezone
+    ? formatISO8601WithTimezone(timestamp, timezone)
+    : timestamp.toISOString()
 
   return {
     formatted,
-    isoValue: timestamp.toISOString(),
+    isoValue,
     isFictional,
   }
 }

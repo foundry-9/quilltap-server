@@ -9,7 +9,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
+import { createAuthenticatedParamsHandler, enrichProfile } from '@/lib/api/middleware';
 import { withActionDispatch } from '@/lib/api/middleware/actions';
 import { notFound, badRequest, serverError, messageResponse, successResponse } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
@@ -29,32 +29,12 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
         return notFound('Embedding profile');
       }
 
-      // Enrich with API key info
-      let apiKey = null;
-      if (profile.apiKeyId) {
-        const key = await repos.connections.findApiKeyById(profile.apiKeyId);
-        if (key) {
-          apiKey = {
-            id: key.id,
-            label: key.label,
-            provider: key.provider,
-            isActive: key.isActive,
-          };
-        }
-      }
-
-      // Get tag details
-      const tagDetails = await Promise.all(
-        profile.tags.map(async (tagId) => {
-          const tag = await repos.tags.findById(tagId);
-          return tag ? { tagId, tag } : null;
-        })
-      );
+      // Enrich with API key and tag details
+      const enriched = await enrichProfile(profile, repos);
 
       return NextResponse.json({
         ...profile,
-        apiKey,
-        tags: tagDetails.filter(Boolean),
+        ...enriched,
       });
     } catch (error) {
       logger.error('[Embedding Profiles v1] Error fetching profile', { profileId: id }, error instanceof Error ? error : undefined);
@@ -161,27 +141,8 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
         return serverError('Failed to update profile');
       }
 
-      // Enrich with API key info
-      let apiKey = null;
-      if (updatedProfile.apiKeyId) {
-        const key = await repos.connections.findApiKeyById(updatedProfile.apiKeyId);
-        if (key) {
-          apiKey = {
-            id: key.id,
-            label: key.label,
-            provider: key.provider,
-            isActive: key.isActive,
-          };
-        }
-      }
-
-      // Get tag details
-      const tagDetails = await Promise.all(
-        updatedProfile.tags.map(async (tagId) => {
-          const tag = await repos.tags.findById(tagId);
-          return tag ? { tagId, tag } : null;
-        })
-      );
+      // Enrich with API key and tag details
+      const enriched = await enrichProfile(updatedProfile, repos);
 
       logger.info('[Embedding Profiles v1] Profile updated', { profileId: id });
 
@@ -218,8 +179,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
 
       return NextResponse.json({
         ...updatedProfile,
-        apiKey,
-        tags: tagDetails.filter(Boolean),
+        ...enriched,
         reembeddingTriggered: (providerChanged || modelChanged) && updatedProfile.isDefault,
       });
     } catch (error) {

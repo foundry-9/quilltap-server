@@ -20,7 +20,6 @@ import type { SearchProviderPlugin } from '@/lib/plugins/interfaces/search-provi
 import type { ThemePlugin } from '@quilltap/plugin-types';
 import { injectPluginLoggerFactory, clearPluginLoggerFactory } from '@/lib/plugins/plugin-logger-bridge';
 import { fileStorageManager } from '@/lib/file-storage/manager';
-import type { FileStorageProviderPlugin } from '@/lib/file-storage/interfaces';
 import packageJson from '@/package.json';
 import { join } from 'node:path';
 
@@ -500,41 +499,7 @@ async function performInitialization(): Promise<PluginInitializationResult> {
       }
     }
 
-    // Initialize file storage registry from enabled plugins with FILE_BACKEND capability
-    const fileBackendPlugins = pluginRegistry.getEnabledByCapability('FILE_BACKEND');
-    if (fileBackendPlugins.length > 0) {
-      for (const loadedPlugin of fileBackendPlugins) {
-        try {
-          const mainFile = loadedPlugin.manifest.main || 'index.js';
-          const modulePath = _resolve(process.cwd(), loadedPlugin.pluginPath, mainFile);
-
-          // Use external loader for npm-installed plugins to resolve peer dependencies
-          const isExternalPlugin = loadedPlugin.source === 'npm';
-          const pluginModule = isExternalPlugin
-            ? loadExternalPluginModule(modulePath)
-            : dynamicRequire(modulePath);
-
-          if ((pluginModule as { plugin?: unknown })?.plugin) {
-            fileStorageManager.registerProviderPlugin((pluginModule as { plugin: FileStorageProviderPlugin }).plugin);
-          } else if ((pluginModule as { default?: { plugin?: unknown } })?.default?.plugin) {
-            fileStorageManager.registerProviderPlugin((pluginModule as { default: { plugin: FileStorageProviderPlugin } }).default.plugin);
-          } else {
-            logger.warn('File backend plugin module does not export a plugin object', {
-              plugin: loadedPlugin.manifest.name,
-              exports: Object.keys(pluginModule as object),
-            });
-          }
-        } catch (error) {
-          logger.error('Failed to load file backend plugin module', {
-            plugin: loadedPlugin.manifest.name,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
-      }
-    }
-
-    // Initialize the file storage manager after backend plugins are registered
-    // This loads mount points from the database and sets up the default backend
+    // Initialize the file storage manager
     try {
       await fileStorageManager.initialize();
     } catch (error) {

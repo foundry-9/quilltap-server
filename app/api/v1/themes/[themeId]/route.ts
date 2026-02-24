@@ -4,20 +4,21 @@
  * GET /api/v1/themes/:themeId?action=tokens - Get tokens for a specific theme
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { themeRegistry } from '@/lib/themes/theme-registry';
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup/plugin-initialization';
-import { withActionDispatch } from '@/lib/api/middleware/actions';
 import { logger } from '@/lib/logger';
+import { successResponse, notFound, serverError } from '@/lib/api/responses';
 
 /**
  * Handle GET ?action=tokens
  * Returns the tokens and fonts for a specific theme
  */
 async function handleGetTokens(
-  request: NextRequest,
-  themeId: string
-): Promise<NextResponse> {// Ensure plugin/theme system is initialized
+  themeId: string,
+  request: NextRequest
+): Promise<Response> {
+  // Ensure plugin/theme system is initialized
   if (!isPluginSystemInitialized()) {
     logger.info('Plugin system not initialized, initializing now', {
       context: 'theme-tokens-GET',
@@ -31,10 +32,7 @@ async function handleGetTokens(
       context: 'GET /api/v1/themes/[themeId]?action=tokens',
       themeId,
     });
-    return NextResponse.json(
-      { error: 'Theme not found' },
-      { status: 404 }
-    );
+    return notFound('Theme');
   }
 
   // Get theme data
@@ -56,7 +54,7 @@ async function handleGetTokens(
   // Include subsystem overrides (already resolved to full URLs by the registry)
   const subsystems = theme?.subsystems || undefined;
 
-  return NextResponse.json({ tokens, fonts, cssOverrides, subsystems });
+  return successResponse({ tokens, fonts, cssOverrides, subsystems });
 }
 
 /**
@@ -64,9 +62,10 @@ async function handleGetTokens(
  * Returns theme metadata
  */
 async function handleDefaultGet(
-  request: NextRequest,
-  themeId: string
-): Promise<NextResponse> {// Ensure plugin/theme system is initialized
+  themeId: string,
+  request: NextRequest
+): Promise<Response> {
+  // Ensure plugin/theme system is initialized
   if (!isPluginSystemInitialized()) {
     logger.info('Plugin system not initialized, initializing now', {
       context: 'theme-GET',
@@ -80,10 +79,7 @@ async function handleDefaultGet(
       context: 'GET /api/v1/themes/[themeId]',
       themeId,
     });
-    return NextResponse.json(
-      { error: 'Theme not found' },
-      { status: 404 }
-    );
+    return notFound('Theme');
   }
 
   // Get theme list and find this theme's metadata
@@ -91,11 +87,10 @@ async function handleDefaultGet(
   const theme = themes.find(t => t.id === themeId);
 
   if (!theme) {
-    return NextResponse.json(
-      { error: 'Theme not found' },
-      { status: 404 }
-    );
-  }return NextResponse.json({ theme });
+    return notFound('Theme');
+  }
+
+  return successResponse({ theme });
 }
 
 export async function GET(
@@ -105,16 +100,12 @@ export async function GET(
   try {
     const { themeId } = await params;
 
-    // Use action dispatch for different GET operations
-    const actionDispatcher = withActionDispatch<{ themeId: string }>(
-      {
-        tokens: async (req, _ctx, { themeId }) => handleGetTokens(req, themeId),
-      },
-      async (req, _ctx, { themeId }) => handleDefaultGet(req, themeId)
-    );
-
-    // Call the dispatcher with mock context (not using auth middleware here since themes are public)
-    return actionDispatcher(request, {} as any, { themeId });
+    // Manually dispatch based on action query param (no auth context needed for public themes)
+    const action = request.nextUrl.searchParams.get('action');
+    if (action === 'tokens') {
+      return handleGetTokens(themeId, request);
+    }
+    return handleDefaultGet(themeId, request);
   } catch (error) {
     const themeIdParam = await params.catch(() => ({ themeId: 'unknown' }));
     logger.error(
@@ -125,9 +116,6 @@ export async function GET(
       },
       error instanceof Error ? error : undefined
     );
-    return NextResponse.json(
-      { error: 'Failed to retrieve theme' },
-      { status: 500 }
-    );
+    return serverError('Failed to retrieve theme');
   }
 }

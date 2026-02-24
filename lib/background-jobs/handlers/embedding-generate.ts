@@ -66,7 +66,6 @@ export async function handleEmbeddingGenerate(job: BackgroundJob): Promise<void>
       await vectorStore.addVector(memory.id, embeddingResult.embedding, {
         memoryId: memory.id,
         characterId: memory.characterId,
-        content: memory.summary,
       });
     }
     await vectorStore.save();

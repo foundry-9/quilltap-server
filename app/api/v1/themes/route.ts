@@ -4,10 +4,10 @@
  * GET /api/v1/themes - Get list of available themes
  */
 
-import { NextResponse } from 'next/server';
 import { themeRegistry } from '@/lib/themes/theme-registry';
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup/plugin-initialization';
 import { logger } from '@/lib/logger';
+import { successResponse, serverError } from '@/lib/api/responses';
 
 /**
  * GET /api/v1/themes
@@ -44,7 +44,8 @@ export async function GET() {
 
     // Get theme list (without full tokens for efficiency)
     const themes = themeRegistry.getThemeList();
-    const stats = themeRegistry.getStats();return NextResponse.json({
+    const stats = themeRegistry.getStats();
+    return successResponse({
       themes,
       stats: {
         total: stats.total,
@@ -58,9 +59,6 @@ export async function GET() {
       { context: 'GET /api/v1/themes' },
       error instanceof Error ? error : undefined
     );
-    return NextResponse.json(
-      { error: 'Failed to retrieve themes' },
-      { status: 500 }
-    );
+    return serverError('Failed to retrieve themes');
   }
 }

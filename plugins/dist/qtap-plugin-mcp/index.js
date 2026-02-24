@@ -3483,7 +3483,7 @@ var require_schemes = __commonJS({
       urnComponent.nss = (uuidComponent.uuid || "").toLowerCase();
       return urnComponent;
     }
-    var http = (
+    var http2 = (
       /** @type {SchemeHandler} */
       {
         scheme: "http",
@@ -3492,11 +3492,11 @@ var require_schemes = __commonJS({
         serialize: httpSerialize
       }
     );
-    var https = (
+    var https2 = (
       /** @type {SchemeHandler} */
       {
         scheme: "https",
-        domainHost: http.domainHost,
+        domainHost: http2.domainHost,
         parse: httpParse,
         serialize: httpSerialize
       }
@@ -3540,8 +3540,8 @@ var require_schemes = __commonJS({
     var SCHEMES = (
       /** @type {Record<SchemeName, SchemeHandler>} */
       {
-        http,
-        https,
+        http: http2,
+        https: https2,
         ws,
         wss,
         urn,
@@ -4726,6 +4726,7 @@ var require_pattern = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     var code_1 = require_code2();
+    var util_1 = require_util();
     var codegen_1 = require_codegen();
     var error = {
       message: ({ schemaCode }) => (0, codegen_1.str)`must match pattern "${schemaCode}"`,
@@ -4738,10 +4739,18 @@ var require_pattern = __commonJS({
       $data: true,
       error,
       code(cxt) {
-        const { data, $data, schema, schemaCode, it } = cxt;
+        const { gen, data, $data, schema, schemaCode, it } = cxt;
         const u = it.opts.unicodeRegExp ? "u" : "";
-        const regExp = $data ? (0, codegen_1._)`(new RegExp(${schemaCode}, ${u}))` : (0, code_1.usePattern)(cxt, schema);
-        cxt.fail$data((0, codegen_1._)`!${regExp}.test(${data})`);
+        if ($data) {
+          const { regExp } = it.opts.code;
+          const regExpCode = regExp.code === "new RegExp" ? (0, codegen_1._)`new RegExp` : (0, util_1.useFunc)(gen, regExp);
+          const valid = gen.let("valid");
+          gen.try(() => gen.assign(valid, (0, codegen_1._)`${regExpCode}(${schemaCode}, ${u}).test(${data})`), () => gen.assign(valid, false));
+          cxt.fail$data((0, codegen_1._)`!${valid}`);
+        } else {
+          const regExp = (0, code_1.usePattern)(cxt, schema);
+          cxt.fail$data((0, codegen_1._)`!${regExp}.test(${data})`);
+        }
       }
     };
     exports2.default = def;
@@ -6982,49 +6991,22 @@ var envSchema = import_zod.z.object({
   // Production SSL (optional)
   DOMAIN: import_zod.z.string().optional(),
   SSL_EMAIL: import_zod.z.string().email().optional(),
+  // Timezone Configuration
+  // IANA timezone name from the host OS (e.g., "America/New_York")
+  // Detected automatically by Electron and passed to Lima/WSL2/Docker
+  // Docker users can set this manually: -e QUILLTAP_TIMEZONE=America/New_York
+  QUILLTAP_TIMEZONE: import_zod.z.string().optional(),
   // File Storage Configuration
   // Base directory for all Quilltap data (database, files, logs)
   // Platform defaults: Linux: ~/.quilltap, macOS: ~/Library/Application Support/Quilltap, Windows: %APPDATA%\Quilltap
-  QUILLTAP_DATA_DIR: import_zod.z.string().optional(),
-  // Path for local filesystem storage (built-in backend)
-  QUILLTAP_FILE_STORAGE_PATH: import_zod.z.string().optional().default("./data/files"),
-  // Encryption key for mount point secrets (auto-generated if not set, falls back to ENCRYPTION_MASTER_PEPPER)
-  QUILLTAP_ENCRYPTION_KEY: import_zod.z.string().min(32).optional(),
-  // S3 Configuration (optional - S3 is now a plugin, local filesystem is the default)
-  // These env vars are used to auto-create an S3 mount point during migration
-  S3_MODE: import_zod.z.enum(["embedded", "external", "disabled"]).optional().default("disabled"),
-  S3_ENDPOINT: import_zod.z.string().url().optional(),
-  S3_REGION: import_zod.z.string().optional().default("us-east-1"),
-  S3_ACCESS_KEY: import_zod.z.string().optional(),
-  S3_SECRET_KEY: import_zod.z.string().optional(),
-  S3_BUCKET: import_zod.z.string().optional().default("quilltap-files"),
-  S3_PATH_PREFIX: import_zod.z.string().optional(),
-  S3_PUBLIC_URL: import_zod.z.string().url().optional(),
-  S3_FORCE_PATH_STYLE: import_zod.z.enum(["true", "false"]).optional()
-}).refine(
-  (data) => {
-    if (data.S3_MODE === "external") {
-      if (data.S3_ACCESS_KEY && !data.S3_SECRET_KEY || !data.S3_ACCESS_KEY && data.S3_SECRET_KEY) {
-        return false;
-      }
-    }
-    return true;
-  },
-  {
-    path: ["S3_MODE"],
-    error: "S3_ACCESS_KEY and S3_SECRET_KEY must both be provided, or both omitted (for IAM role auth)"
-  }
-);
+  QUILLTAP_DATA_DIR: import_zod.z.string().optional()
+});
 var isBuildPhase = process.env.SKIP_ENV_VALIDATION === "true" || process.env.NEXT_PHASE === "phase-production-build" || process.env.NEXT_RUNTIME === void 0 && process.argv.some((arg) => arg.includes("next") && process.argv.includes("build"));
 function validateEnv() {
   if (isBuildPhase) {
     return {
       NODE_ENV: process.env.NODE_ENV || "production",
       BASE_URL: process.env.BASE_URL || "http://localhost:3000",
-      QUILLTAP_FILE_STORAGE_PATH: "./data/files",
-      S3_MODE: "disabled",
-      S3_REGION: "us-east-1",
-      S3_BUCKET: "quilltap-files",
       LOG_LEVEL: "info",
       LOG_OUTPUT: "console",
       LOG_FILE_PATH: "./logs"
@@ -7054,29 +7036,8 @@ var env = validateEnv();
 var isProduction = env.NODE_ENV === "production";
 var isDevelopment = env.NODE_ENV === "development";
 var isTest = env.NODE_ENV === "test";
-function isLocalHostname(hostname) {
-  const lowerHostname = hostname.toLowerCase();
-  return lowerHostname === "localhost" || lowerHostname === "127.0.0.1";
-}
-function extractHostname(urlString) {
-  if (!urlString) return null;
-  try {
-    const url2 = new URL(urlString);
-    return url2.hostname;
-  } catch {
-    return null;
-  }
-}
 function checkIsUserManaged() {
-  const s3Mode = env.S3_MODE;
-  if (s3Mode === "embedded") {
-    return true;
-  }
-  const s3Hostname = extractHostname(env.S3_ENDPOINT);
-  if (s3Hostname && isLocalHostname(s3Hostname)) {
-    return true;
-  }
-  return false;
+  return true;
 }
 var isUserManaged = checkIsUserManaged();
 
@@ -7084,6 +7045,9 @@ var isUserManaged = checkIsUserManaged();
 var import_path2 = __toESM(require("path"));
 var import_os = __toESM(require("os"));
 var import_fs2 = __toESM(require("fs"));
+function isLimaEnvironment() {
+  return process.env.LIMA_CONTAINER === "true";
+}
 function isDockerEnvironment() {
   if (process.env.DOCKER_CONTAINER === "true") {
     return true;
@@ -7101,6 +7065,9 @@ function isDockerEnvironment() {
   return false;
 }
 function getPlatform() {
+  if (isLimaEnvironment()) {
+    return "linux";
+  }
   if (isDockerEnvironment()) {
     return "docker";
   }
@@ -7530,7 +7497,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ../../../node_modules/openai/version.mjs
-var VERSION = "6.21.0";
+var VERSION = "6.22.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -11779,7 +11746,7 @@ var Files = class extends APIResource {
    * a JSON request with a file ID.
    */
   create(containerID, body, options) {
-    return this._client.post(path2`/containers/${containerID}/files`, multipartFormRequestOptions({ body, ...options }, this._client));
+    return this._client.post(path2`/containers/${containerID}/files`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
   }
   /**
    * Retrieve Container File
@@ -13659,7 +13626,7 @@ var Videos = class extends APIResource {
   }
 };
 
-// ../../../node_modules/openai/resources/webhooks.mjs
+// ../../../node_modules/openai/resources/webhooks/webhooks.mjs
 var _Webhooks_instances;
 var _Webhooks_validateSecret;
 var _Webhooks_getRequiredHeader;
@@ -19404,6 +19371,101 @@ var SSEClientTransport = class {
   }
 };
 
+// ../../../lib/host-rewrite.ts
+var import_node_fs = require("node:fs");
+var LOCALHOST_HOSTS = /* @__PURE__ */ new Set([
+  "localhost",
+  "127.0.0.1",
+  "[::1]",
+  "::1"
+]);
+var cachedGatewayHost;
+var rewriteLogger = logger.child({ module: "host-rewrite" });
+function isVMEnvironment() {
+  return isDockerEnvironment() || isLimaEnvironment();
+}
+function resolveHostGateway() {
+  if (cachedGatewayHost !== void 0) {
+    return cachedGatewayHost;
+  }
+  const envIP = process.env.QUILLTAP_HOST_IP;
+  if (envIP) {
+    rewriteLogger.info("Host gateway from QUILLTAP_HOST_IP", { host: envIP });
+    cachedGatewayHost = envIP;
+    return cachedGatewayHost;
+  }
+  if (isDockerEnvironment() && !isLimaEnvironment()) {
+    rewriteLogger.info("Docker environment detected \u2014 using host.docker.internal as gateway hostname");
+    cachedGatewayHost = "host.docker.internal";
+    return cachedGatewayHost;
+  }
+  try {
+    const routeTable = (0, import_node_fs.readFileSync)("/proc/net/route", "utf-8");
+    for (const line of routeTable.split("\n").slice(1)) {
+      const fields = line.trim().split("	");
+      if (fields.length >= 3 && fields[1] === "00000000") {
+        const hexGateway = fields[2];
+        const ip = [
+          parseInt(hexGateway.substring(6, 8), 16),
+          parseInt(hexGateway.substring(4, 6), 16),
+          parseInt(hexGateway.substring(2, 4), 16),
+          parseInt(hexGateway.substring(0, 2), 16)
+        ].join(".");
+        rewriteLogger.info("Host gateway IP from /proc/net/route", { ip });
+        cachedGatewayHost = ip;
+        return cachedGatewayHost;
+      }
+    }
+  } catch {
+    rewriteLogger.debug("Could not read /proc/net/route for default gateway lookup");
+  }
+  try {
+    const hosts = (0, import_node_fs.readFileSync)("/etc/hosts", "utf-8");
+    for (const line of hosts.split("\n")) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith("#") || trimmed === "") continue;
+      const parts = trimmed.split(/\s+/);
+      if (parts.length >= 2 && parts.slice(1).includes("host.docker.internal")) {
+        const ip = parts[0];
+        rewriteLogger.info("Host gateway IP from /etc/hosts (host.docker.internal)", { ip });
+        cachedGatewayHost = ip;
+        return cachedGatewayHost;
+      }
+    }
+  } catch {
+    rewriteLogger.debug("Could not read /etc/hosts for host.docker.internal lookup");
+  }
+  rewriteLogger.warn("Could not resolve host gateway \u2014 localhost URLs will not be rewritten");
+  cachedGatewayHost = null;
+  return cachedGatewayHost;
+}
+function rewriteLocalhostUrl(url2) {
+  if (!isVMEnvironment()) {
+    return url2;
+  }
+  let parsed;
+  try {
+    parsed = new URL(url2);
+  } catch {
+    return url2;
+  }
+  if (!LOCALHOST_HOSTS.has(parsed.hostname)) {
+    return url2;
+  }
+  const gatewayHost = resolveHostGateway();
+  if (!gatewayHost) {
+    return url2;
+  }
+  parsed.hostname = gatewayHost;
+  const rewritten = parsed.toString();
+  rewriteLogger.debug("Rewrote localhost URL", {
+    original: url2,
+    rewritten,
+    gatewayHost
+  });
+  return rewritten;
+}
+
 // security.ts
 function validateMCPServerUrl(url2) {
   try {
@@ -19540,6 +19602,99 @@ function parseServerConfigs(serversJson) {
 }
 
 // mcp-client.ts
+var http = __toESM(require("node:http"));
+var https = __toESM(require("node:https"));
+var import_node_stream = require("node:stream");
+var clientLogger = logger.child({ module: "mcp-client" });
+var LOCALHOST_HOSTS2 = /* @__PURE__ */ new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
+function createHostPreservingFetch(targetHostname) {
+  return async (input, init) => {
+    const url2 = new URL(typeof input === "string" ? input : input.toString());
+    const originalHost = url2.host;
+    if (LOCALHOST_HOSTS2.has(url2.hostname)) {
+      url2.hostname = targetHostname;
+    }
+    const reqHeaders = {};
+    if (init?.headers) {
+      if (init.headers instanceof Headers) {
+        init.headers.forEach((value, key) => {
+          reqHeaders[key] = value;
+        });
+      } else if (Array.isArray(init.headers)) {
+        for (const [key, value] of init.headers) {
+          reqHeaders[key] = value;
+        }
+      } else {
+        Object.assign(reqHeaders, init.headers);
+      }
+    }
+    reqHeaders["Host"] = originalHost;
+    let body = null;
+    if (init?.body) {
+      if (typeof init.body === "string") {
+        body = init.body;
+      } else if (Buffer.isBuffer(init.body)) {
+        body = init.body;
+      } else if (init.body instanceof ArrayBuffer) {
+        body = Buffer.from(init.body);
+      } else if (init.body instanceof Uint8Array) {
+        body = Buffer.from(init.body);
+      }
+    }
+    const isHttps = url2.protocol === "https:";
+    const httpModule = isHttps ? https : http;
+    return new Promise((resolve, reject) => {
+      const req = httpModule.request(
+        {
+          hostname: url2.hostname,
+          port: parseInt(url2.port) || (isHttps ? 443 : 80),
+          path: url2.pathname + url2.search,
+          method: init?.method || "GET",
+          headers: reqHeaders
+        },
+        (res) => {
+          const webStream = import_node_stream.Readable.toWeb(
+            res
+          );
+          const responseHeaders = new Headers();
+          for (const [key, value] of Object.entries(res.headers)) {
+            if (value) {
+              if (Array.isArray(value)) {
+                for (const v of value) {
+                  responseHeaders.append(key, v);
+                }
+              } else {
+                responseHeaders.set(key, value);
+              }
+            }
+          }
+          resolve(
+            new Response(webStream, {
+              status: res.statusCode ?? 500,
+              statusText: res.statusMessage ?? "",
+              headers: responseHeaders
+            })
+          );
+        }
+      );
+      req.on("error", reject);
+      if (init?.signal) {
+        if (init.signal.aborted) {
+          req.destroy();
+          reject(new DOMException("The operation was aborted.", "AbortError"));
+          return;
+        }
+        init.signal.addEventListener("abort", () => {
+          req.destroy();
+        });
+      }
+      if (body) {
+        req.write(body);
+      }
+      req.end();
+    });
+  };
+}
 var MCPClient = class {
   constructor(config) {
     this.client = null;
@@ -19602,14 +19757,37 @@ var MCPClient = class {
    * Connect to the MCP server
    *
    * Tries Streamable HTTP first, then falls back to SSE if that fails.
+   *
+   * In Docker/Lima environments, we provide a custom fetch function to the
+   * MCP SDK transports that routes traffic to the host gateway while
+   * preserving the original Host header (which MCP servers validate).
    */
   async connect() {
     if (this.state.status === "connected" || this.state.status === "ready") {
       return;
     }
     this.state.status = "connecting";
-    const url2 = new URL(this.config.url);
+    const originalUrl = this.config.url;
+    const resolvedUrl = rewriteLocalhostUrl(originalUrl);
+    const wasRewritten = resolvedUrl !== originalUrl;
+    clientLogger.debug("Connecting to MCP server", {
+      serverId: this.config.name,
+      originalUrl,
+      resolvedUrl,
+      wasRewritten
+    });
+    const url2 = new URL(originalUrl);
     const headers = this.buildHeaders();
+    let customFetch;
+    if (wasRewritten) {
+      const resolvedParsed = new URL(resolvedUrl);
+      customFetch = createHostPreservingFetch(resolvedParsed.hostname);
+      clientLogger.info("Using host-preserving fetch for VM environment", {
+        serverId: this.config.name,
+        targetHostname: resolvedParsed.hostname,
+        originalHost: url2.host
+      });
+    }
     try {
       try {
         this.client = new Client(
@@ -19619,10 +19797,18 @@ var MCPClient = class {
         this.transport = new StreamableHTTPClientTransport(url2, {
           requestInit: {
             headers
-          }
+          },
+          fetch: customFetch
         });
         await this.client.connect(this.transport);
+        clientLogger.debug("Connected via Streamable HTTP", {
+          serverId: this.config.name
+        });
       } catch (streamableError) {
+        clientLogger.debug("Streamable HTTP failed, falling back to SSE", {
+          serverId: this.config.name,
+          error: streamableError instanceof Error ? streamableError.message : String(streamableError)
+        });
         if (this.transport) {
           try {
             await this.transport.close();
@@ -19636,9 +19822,13 @@ var MCPClient = class {
         this.transport = new SSEClientTransport(url2, {
           requestInit: {
             headers
-          }
+          },
+          fetch: customFetch
         });
         await this.client.connect(this.transport);
+        clientLogger.debug("Connected via SSE", {
+          serverId: this.config.name
+        });
       }
       this.state.status = "connected";
       this.state.lastConnected = /* @__PURE__ */ new Date();
@@ -19646,7 +19836,7 @@ var MCPClient = class {
     } catch (error) {
       this.state.status = "error";
       this.state.lastError = error instanceof Error ? error.message : "Connection failed";
-      console.error("Failed to connect to MCP server", {
+      clientLogger.error("Failed to connect to MCP server", {
         serverId: this.config.name,
         error: this.state.lastError
       });
@@ -19676,7 +19866,7 @@ var MCPClient = class {
     } catch (error) {
       this.state.status = "error";
       this.state.lastError = error instanceof Error ? error.message : "Tool discovery failed";
-      console.error("Tool discovery failed", {
+      clientLogger.error("Tool discovery failed", {
         serverId: this.config.name,
         error: this.state.lastError
       });
@@ -19730,7 +19920,7 @@ var MCPClient = class {
       try {
         await this.transport.close();
       } catch (error) {
-        console.warn("Error closing transport", {
+        clientLogger.warn("Error closing transport", {
           serverId: this.config.name,
           error: error instanceof Error ? error.message : String(error)
         });
@@ -19880,6 +20070,11 @@ var MCPConnectionManager = class {
    * Connect to a single MCP server
    */
   async connectServer(config) {
+    managerLogger.debug("Connecting to MCP server", {
+      serverId: config.name,
+      url: config.url,
+      authType: config.authType
+    });
     const client = new MCPClient(config);
     try {
       await client.connect();
@@ -20126,6 +20321,7 @@ var MCPConnectionManager = class {
 var connectionManager = new MCPConnectionManager();
 
 // index.ts
+var pluginLogger = logger.child({ module: "mcp-plugin" });
 function parseConfig(toolConfig) {
   return {
     servers: typeof toolConfig.servers === "string" ? toolConfig.servers : "[]",
@@ -20149,6 +20345,7 @@ async function ensureInitialized(toolConfig) {
   const config = parseConfig(toolConfig);
   const configHash = getConfigHash(config);
   if (initialized && configHash !== lastConfigHash) {
+    pluginLogger.info("MCP config changed, re-initializing connections");
     initialized = false;
   }
   if (initialized) return true;
@@ -20156,12 +20353,13 @@ async function ensureInitialized(toolConfig) {
     return false;
   }
   try {
+    pluginLogger.debug("Initializing MCP plugin", { configHash });
     await connectionManager.initialize(config);
     initialized = true;
     lastConfigHash = configHash;
     return true;
   } catch (error) {
-    console.error("Failed to initialize MCP plugin", {
+    pluginLogger.error("Failed to initialize MCP plugin", {
       error: error instanceof Error ? error.message : String(error)
     });
     return false;
@@ -20292,7 +20490,7 @@ ${output}`;
     try {
       await connectionManager.reconfigure(parsedConfig.servers || "[]");
     } catch (error) {
-      console.error("Reconfiguration failed", {
+      pluginLogger.error("Reconfiguration failed", {
         error: error instanceof Error ? error.message : String(error)
       });
     }

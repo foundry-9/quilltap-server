@@ -9,13 +9,17 @@
  * @module components/layout/left-sidebar/sidebar-header
  */
 
-import Link from 'next/link'
 import Image from 'next/image'
 
 export function SidebarHeader() {
   return (
     <div className="qt-left-sidebar-header">
-      <Link href="/" className="qt-left-sidebar-brand" title="Home">
+      {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+      <a
+        href="/"
+        className="qt-left-sidebar-brand"
+        title="Home"
+      >
         <Image
           src="/quill.svg"
           alt="Quilltap"
@@ -25,7 +29,7 @@ export function SidebarHeader() {
           style={{ width: 'auto', height: 'auto' }}
           aria-hidden="true"
         />
-      </Link>
+      </a>
     </div>
   )
 }

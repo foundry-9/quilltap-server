@@ -202,53 +202,6 @@ QUILLTAP_USER_DISPLAY_NAME=${sourceUser.displayName}`;
     });
   });
 
-  describe('Mount point path migration', () => {
-    it('should handle tilde-prefixed mount points (~/.quilltap)', () => {
-      const tilePath = '~/.quilltap/files';
-      const expandedPath = tilePath.replace('~', '/Users/username');
-
-      expect(expandedPath).toBe('/Users/username/.quilltap/files');
-    });
-
-    it('should migrate mount points from old Linux-style paths', () => {
-      const oldPath = '/data/quilltap/files';
-      const newPath = '/Users/username/Library/Application Support/Quilltap/files';
-
-      expect(newPath).toContain('Application Support');
-    });
-
-    it('should handle already-expanded paths', () => {
-      const expandedPath = '/Users/username/.quilltap/files';
-      const isTildePath = expandedPath.startsWith('~');
-
-      expect(isTildePath).toBe(false);
-    });
-
-    it('should update mount point references in database', () => {
-      const mountPoints = [
-        { id: 'mount-1', path: '~/.quilltap/files' },
-        { id: 'mount-2', path: '/data/quilltap/files' },
-      ];
-
-      const updatedMountPoints = mountPoints.map(mp => ({
-        ...mp,
-        path: mp.path.startsWith('~') 
-          ? mp.path.replace('~', '/Users/username')
-          : mp.path.replace('/data/quilltap', '/Users/username/Library/Application Support/Quilltap'),
-      }));
-
-      expect(updatedMountPoints[0].path).toContain('/Users/username');
-      expect(updatedMountPoints[1].path).toContain('Application Support');
-    });
-
-    it('should create centralized data directory if not exists', () => {
-      const dataDir = '/Users/username/Library/Application Support/Quilltap';
-      const fileDir = `${dataDir}/files`;
-
-      expect(fileDir).toContain('Application Support');
-    });
-  });
-
   describe('Dry-run mode', () => {
     it('should preview changes without modifying data', () => {
       const dryRunMode = true;

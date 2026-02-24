@@ -19,7 +19,23 @@ export {
   runCheckpoint,
   getDatabaseStats,
   vacuumDatabase,
+  getRawDatabase,
 } from './client';
+
+// Database protection
+export {
+  runIntegrityCheck,
+  startPeriodicCheckpoints,
+  stopPeriodicCheckpoints,
+  runShutdownCheckpoint,
+  runBackupCheckpoint,
+} from './protection';
+
+// Physical backup
+export {
+  createPhysicalBackup,
+  applyRetentionPolicy,
+} from './physical-backup';
 
 // JSON column utilities
 export {
@@ -36,6 +52,8 @@ export {
   jsonArrayContains,
   jsonArrayContainsAny,
   jsonArrayLength,
+  embeddingToBlob,
+  blobToEmbedding,
 } from './json-columns';
 
 // Query translation

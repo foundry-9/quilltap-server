@@ -10,3 +10,21 @@ README.md
 features
 *.md
 .env*.local
+
+# Large directories not needed for Docker build
+out
+coverage
+electron
+dist-electron
+temp
+packages
+playwright-report
+.storybook
+storybook-static
+__tests__
+stories
+website
+lima/quilltap.yaml
+lima/*.md
+.githooks
+.claude

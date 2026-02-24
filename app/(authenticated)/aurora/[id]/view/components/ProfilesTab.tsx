@@ -74,14 +74,14 @@ export function ProfilesTab({
           </select>
           {savingConnectionProfile && (
             <div className="flex items-center gap-2 qt-text-small">
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-r-transparent"></div>
+              <div className="h-4 w-4 animate-spin rounded-full qt-spinner"></div>
               Saving...
             </div>
           )}
         </div>
         {profiles.length === 0 && (
           <p className="mt-2 text-sm text-warning">
-            No connection profiles available. <Link href="/foundry/forge" className="underline hover:no-underline">Create one in The Forge</Link>.
+            No connection profiles available. <Link href="/settings?tab=providers" className="underline hover:no-underline">Create one in AI Providers</Link>.
           </p>
         )}
       </div>
@@ -114,7 +114,7 @@ export function ProfilesTab({
           </select>
           {savingPartner && (
             <div className="flex items-center gap-2 qt-text-small">
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-r-transparent"></div>
+              <div className="h-4 w-4 animate-spin rounded-full qt-spinner"></div>
               Saving...
             </div>
           )}
@@ -145,7 +145,7 @@ export function ProfilesTab({
           </div>
           {savingImageProfile && (
             <div className="flex items-center gap-2 qt-text-small">
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-r-transparent"></div>
+              <div className="h-4 w-4 animate-spin rounded-full qt-spinner"></div>
               Saving...
             </div>
           )}
@@ -177,7 +177,7 @@ export function ProfilesTab({
           </select>
           {savingAgentMode && (
             <div className="flex items-center gap-2 qt-text-small">
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-r-transparent"></div>
+              <div className="h-4 w-4 animate-spin rounded-full qt-spinner"></div>
               Saving...
             </div>
           )}

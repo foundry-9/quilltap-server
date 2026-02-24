@@ -195,6 +195,80 @@ export function TimestampConfigCard({
             </div>
           )}
 
+          {/* Timezone Override */}
+          <div>
+            <label className="block qt-text-label mb-2">
+              Timezone
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                list="timezone-options"
+                value={currentConfig.timezone || ''}
+                onChange={(e) => {
+                  if (disabled) return
+                  onChange({ ...currentConfig, timezone: e.target.value || null })
+                }}
+                placeholder={(() => {
+                  try {
+                    return Intl.DateTimeFormat().resolvedOptions().timeZone
+                  } catch {
+                    return 'e.g., America/New_York'
+                  }
+                })()}
+                disabled={isDisabled}
+                className="flex-1 px-3 py-2 border border-border rounded bg-background qt-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (disabled) return
+                  try {
+                    const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone
+                    onChange({ ...currentConfig, timezone: browserTz })
+                  } catch {
+                    // Intl not available
+                  }
+                }}
+                disabled={isDisabled}
+                className="px-3 py-2 text-xs border border-border rounded hover:bg-accent transition-colors qt-text-secondary whitespace-nowrap"
+                title="Set to your browser's detected timezone"
+              >
+                Detect
+              </button>
+              {currentConfig.timezone && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (disabled) return
+                    onChange({ ...currentConfig, timezone: null })
+                  }}
+                  disabled={isDisabled}
+                  className="px-3 py-2 text-xs border border-border rounded hover:bg-accent transition-colors qt-text-secondary whitespace-nowrap"
+                  title="Clear timezone override (use server default)"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <datalist id="timezone-options">
+              {(() => {
+                try {
+                  return Intl.supportedValuesOf('timeZone').map((tz: string) => (
+                    <option key={tz} value={tz} />
+                  ))
+                } catch {
+                  return null
+                }
+              })()}
+            </datalist>
+            <p className="qt-text-secondary mt-1 text-xs">
+              {currentConfig.timezone
+                ? `Using timezone: ${currentConfig.timezone}`
+                : 'Using server default timezone. Set a timezone to ensure timestamps match your local time.'}
+            </p>
+          </div>
+
           {/* Auto-Prepend vs Template Variable */}
           <div>
             <label className="block qt-text-label mb-2">

@@ -52,6 +52,7 @@ interface UseChatSettingsReturn {
   handleStoryBackgroundsEnabledChange: (value: boolean) => Promise<void>
   handleStoryBackgroundsProfileChange: (profileId: string | null) => Promise<void>
   handleDangerousContentUpdate: (updates: Partial<DangerousContentSettings>) => Promise<void>
+  handleTimezoneChange: (timezone: string | null) => Promise<void>
 }
 
 export function useChatSettings(): UseChatSettingsReturn {
@@ -740,6 +741,43 @@ export function useChatSettings(): UseChatSettingsReturn {
     [showSuccess]
   )
 
+  /**
+   * Update default timezone setting
+   */
+  const handleTimezoneChange = useCallback(
+    async (timezone: string | null) => {
+      if (!settings) return
+
+      try {
+        setSaving(true)
+        setError(null)
+        setSuccess(false)
+
+        const res = await fetch('/api/v1/settings/chat', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ timezone }),
+        })
+
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Failed to update timezone')
+        }
+
+        const updatedSettings = await res.json()
+        setSettings(updatedSettings)
+        showSuccess()
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
+        console.error('Failed to update timezone', { error: errorMsg })
+        setError(errorMsg)
+      } finally {
+        setSaving(false)
+      }
+    },
+    [settings, showSuccess]
+  )
+
   return {
     settings,
     loading,
@@ -765,5 +803,6 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleStoryBackgroundsEnabledChange,
     handleStoryBackgroundsProfileChange,
     handleDangerousContentUpdate,
+    handleTimezoneChange,
   }
 }

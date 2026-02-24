@@ -24,7 +24,7 @@ export function ImageActions({
             e.stopPropagation()
             onPrev()
           }}
-          className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-white/10 hover:bg-white/20 rounded-full text-foreground transition-colors z-10"
+          className="absolute left-4 top-1/2 -translate-y-1/2 p-3 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full text-foreground transition-colors z-10"
           title="Previous image (Left Arrow)"
         >
           <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -44,7 +44,7 @@ export function ImageActions({
             e.stopPropagation()
             onNext()
           }}
-          className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-white/10 hover:bg-white/20 rounded-full text-foreground transition-colors z-10"
+          className="absolute right-4 top-1/2 -translate-y-1/2 p-3 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full text-foreground transition-colors z-10"
           title="Next image (Right Arrow)"
         >
           <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -66,7 +66,7 @@ export function ImageActions({
             e.stopPropagation()
             handleDownload()
           }}
-          className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-foreground transition-colors"
+          className="p-2 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full text-foreground transition-colors"
           title="Download"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -84,7 +84,7 @@ export function ImageActions({
             e.stopPropagation()
             onClose()
           }}
-          className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-foreground transition-colors"
+          className="p-2 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full text-foreground transition-colors"
           title="Close (Escape)"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

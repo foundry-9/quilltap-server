@@ -16,7 +16,7 @@ export default function SetupPage() {
   const [attempts, setAttempts] = useState(0);
   const [copied, setCopied] = useState(false);
 
-  /** Navigate to /setup/profile if no user character exists, otherwise / */
+  /** Navigate to /setup/profile if no user character exists, then /setup/providers if no profiles, otherwise / */
   const navigateAfterSetup = useCallback(async () => {
     try {
       const charRes = await fetch('/api/v1/characters?controlledBy=user&limit=1');
@@ -29,9 +29,26 @@ export default function SetupPage() {
         }
       }
     } catch {
+      // Non-critical — fall through to profile check
+    }
+
+    // Check if connection profiles exist; if not, redirect to provider wizard
+    try {
+      const profilesRes = await fetch('/api/v1/connection-profiles');
+      if (profilesRes.ok) {
+        const profilesData = await profilesRes.json();
+        const profiles = profilesData.profiles || [];
+        if (profiles.length === 0) {
+          window.location.href = '/setup/providers';
+          return;
+        }
+      }
+    } catch {
       // Non-critical — fall through to home
     }
-    router.push('/');
+
+    // Full page load to re-initialize session provider and all client state
+    window.location.href = '/';
   }, [router]);
 
   const checkState = useCallback(async () => {

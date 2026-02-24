@@ -25,7 +25,9 @@ export type SubsystemId =
   | 'prospero'
   | 'dangermouse'
   | 'calliope'
-  | 'lantern';
+  | 'lantern'
+  | 'pascal'
+  | 'saquel';
 
 /**
  * Static definition of a Foundry subsystem.
@@ -52,7 +54,7 @@ export interface SubsystemDefinition {
 /**
  * Default definitions for all Foundry subsystems.
  *
- * The `foundry` entry is the hub page itself; the remaining 8 entries
+ * The `foundry` entry is the hub page itself; the remaining 10 entries
  * are the child subsystem pages displayed as cards on the hub.
  */
 export const DEFAULT_SUBSYSTEM_DEFINITIONS: Record<SubsystemId, SubsystemDefinition> = {
@@ -60,87 +62,103 @@ export const DEFAULT_SUBSYSTEM_DEFINITIONS: Record<SubsystemId, SubsystemDefinit
     id: 'foundry',
     name: 'The Foundry',
     description: 'Configure and manage every aspect of your workspace',
-    href: '/foundry',
-    thumbnail: '/images/thumbnails/foundry.jpg',
-    backgroundImage: '/images/foundry.png',
+    href: '/settings',
+    thumbnail: '/images/thumbnails/foundry.webp',
+    backgroundImage: '/images/foundry.webp',
   },
   aurora: {
     id: 'aurora',
     name: 'Aurora',
     description: 'Roleplay templates and prompt configuration',
-    href: '/foundry/aurora',
-    thumbnail: '/images/thumbnails/aurora.jpg',
-    backgroundImage: '/images/aurora.png',
+    href: '/settings?tab=templates',
+    thumbnail: '/images/thumbnails/aurora.webp',
+    backgroundImage: '/images/aurora.webp',
   },
   forge: {
     id: 'forge',
     name: 'The Forge',
     description: 'API keys, connections, plugins, storage, and data management',
-    href: '/foundry/forge',
-    thumbnail: '/images/thumbnails/foundry.jpg',
-    backgroundImage: '/images/foundry.png',
+    href: '/settings?tab=providers',
+    thumbnail: '/images/thumbnails/foundry.webp',
+    backgroundImage: '/images/foundry.webp',
   },
   salon: {
     id: 'salon',
     name: 'The Salon',
     description: 'Chat behavior, avatars, compression, and automation settings',
-    href: '/foundry/salon',
-    thumbnail: '/images/thumbnails/salon.jpg',
-    backgroundImage: '/images/salon.png',
+    href: '/settings?tab=chat',
+    thumbnail: '/images/thumbnails/salon.webp',
+    backgroundImage: '/images/salon.webp',
   },
   'commonplace-book': {
     id: 'commonplace-book',
     name: 'The Commonplace Book',
     description: 'Embedding profiles and memory deduplication',
-    href: '/foundry/commonplace-book',
-    thumbnail: '/images/thumbnails/commonplace_book.jpg',
-    backgroundImage: '/images/commonplace_book.png',
+    href: '/settings?tab=memory',
+    thumbnail: '/images/thumbnails/commonplace_book.webp',
+    backgroundImage: '/images/commonplace_book.webp',
   },
   prospero: {
     id: 'prospero',
     name: 'Prospero',
     description: 'Task queue, capabilities report, and LLM logs',
-    href: '/foundry/prospero',
-    thumbnail: '/images/thumbnails/prospero.jpg',
-    backgroundImage: '/images/prospero.png',
+    href: '/settings?tab=system',
+    thumbnail: '/images/thumbnails/prospero.webp',
+    backgroundImage: '/images/prospero.webp',
   },
   dangermouse: {
     id: 'dangermouse',
     name: 'Dangermouse',
     description: 'Dangerous content detection and routing settings',
-    href: '/foundry/dangermouse',
-    thumbnail: '/images/thumbnails/dangermouse.jpg',
-    backgroundImage: '/images/dangermouse.png',
+    href: '/settings?tab=chat',
+    thumbnail: '/images/thumbnails/dangermouse.webp',
+    backgroundImage: '/images/dangermouse.webp',
   },
   calliope: {
     id: 'calliope',
     name: 'Calliope',
     description: 'Appearance, themes, and tag management',
-    href: '/foundry/calliope',
-    thumbnail: '/images/thumbnails/calliope.jpg',
-    backgroundImage: '/images/calliope.png',
+    href: '/settings?tab=appearance',
+    thumbnail: '/images/thumbnails/calliope.webp',
+    backgroundImage: '/images/calliope.webp',
   },
   lantern: {
     id: 'lantern',
     name: 'The Lantern',
     description: 'Image profiles and story background settings',
-    href: '/foundry/lantern',
-    thumbnail: '/images/thumbnails/lantern.jpg',
-    backgroundImage: '/images/lantern.png',
+    href: '/settings?tab=images',
+    thumbnail: '/images/thumbnails/lantern.webp',
+    backgroundImage: '/images/lantern.webp',
+  },
+  pascal: {
+    id: 'pascal',
+    name: 'Pascal the Croupier',
+    description: 'Random number generation, dice, and game state tracking',
+    href: '/settings?tab=chat',
+    thumbnail: '/images/thumbnails/pascal.webp',
+    backgroundImage: '/images/pascal.webp',
+  },
+  saquel: {
+    id: 'saquel',
+    name: 'Saquel Ytzama the Keeper of Secrets',
+    description: 'API key management, encryption, and secrets',
+    href: '/settings?tab=system',
+    thumbnail: '/images/thumbnails/saquel.webp',
+    backgroundImage: '/images/saquel.webp',
   },
 };
 
 /**
- * Ordered list of child subsystem IDs (excluding the hub itself).
- * This controls the display order on the Foundry hub page.
+ * Ordered list of child subsystem IDs shown as settings tabs.
+ * dangermouse, pascal, and saquel are still valid SubsystemIds
+ * (for theme compatibility) but are merged into other tabs.
  */
 export const CHILD_SUBSYSTEM_IDS: SubsystemId[] = [
-  'aurora',
   'forge',
   'salon',
-  'commonplace-book',
-  'prospero',
-  'dangermouse',
   'calliope',
+  'commonplace-book',
   'lantern',
+  'aurora',
+  'prospero',
 ];
