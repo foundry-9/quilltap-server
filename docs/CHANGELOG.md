@@ -4,6 +4,10 @@
 
 ### 3.1-dev
 
+- feat: AI Character Import — new multi-step wizard on Aurora page that generates complete characters from source material (wiki pages, documents, freeform text) using AI; extracts character basics, dialogue, system prompts, physical descriptions, pronouns, memories, and example chats via focused LLM calls; assembles validated `.qtap` export for import; supports incremental regeneration
+- feat: Added `qtap-schema-validator` — Ajv-based JSON Schema validator for `.qtap` export format (Draft 2020-12), reusable for import validation
+- feat: Added `AI_IMPORT` log type for LLM call tracking
+
 ### 3.0.0
 
 - refactor: Remove mount points, S3 support, and file storage abstraction — simplified file storage to a thin local-only `FileStorageManager` wrapping `LocalFileStorageBackend` directly; dropped `mount_points` table and `mountPointId`/`s3Key`/`s3Bucket` columns via migration; removed S3 plugin (`qtap-plugin-storage-s3`), mount-points API routes, storage settings UI, mount-points repository, and all S3 env vars; updated ~30 consumer files (API routes, services, import/export, backup/restore) to use simplified API; removed `FILE_BACKEND` plugin capability; deleted `help/file-storage-settings.md` and mount-point references from all documentation
