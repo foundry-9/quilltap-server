@@ -89,6 +89,8 @@ import { normalizeVectorStorageMigration } from './normalize-vector-storage';
 import { addProfileAllowToolUseFieldMigration } from './add-profile-allow-tool-use-field';
 // Drop mount points system (S3 + mount point abstraction removed)
 import { dropMountPointsMigration } from './drop-mount-points';
+// Move LLM logs to separate database
+import { moveLLMLogsToSeparateDbMigration } from './move-llm-logs-to-separate-db';
 
 /**
  * All available migrations.
@@ -173,6 +175,8 @@ export const migrations: Migration[] = [
   addProfileAllowToolUseFieldMigration,
   // Drop mount points system (S3 + mount point abstraction removed)
   dropMountPointsMigration,
+  // Move LLM logs to separate database
+  moveLLMLogsToSeparateDbMigration,
 ];
 
 export {
@@ -252,4 +256,6 @@ export {
   addProfileAllowToolUseFieldMigration,
   // Drop mount points system (S3 + mount point abstraction removed)
   dropMountPointsMigration,
+  // Move LLM logs to separate database
+  moveLLMLogsToSeparateDbMigration,
 };

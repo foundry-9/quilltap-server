@@ -20,6 +20,7 @@ import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { getNpmPluginsDir } from '@/lib/paths';
+import { isLLMLogsDegraded } from '@/lib/database/backends/sqlite/llm-logs-client';
 import { UuidRemapper } from './uuid-remapper';
 import type {
   BackupManifest,
@@ -943,14 +944,19 @@ export async function restore(
 
     // 14. LLM Logs
     let llmLogsRestored = 0;
-    for (const log of data.llmLogs) {
-      try {
-        const { id, createdAt, ...logData } = log;
-        await repos.llmLogs.create(logData, { id, createdAt });
-        llmLogsRestored++;
-      } catch (error) {
-        warnings.push(`Failed to restore LLM log: ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore LLM log', { logId: log.id, error });
+    if (isLLMLogsDegraded()) {
+      moduleLogger.warn('Skipping LLM logs restore — logs database is in degraded mode');
+      warnings.push('LLM logs were not restored because the logs database is in degraded mode');
+    } else {
+      for (const log of data.llmLogs) {
+        try {
+          const { id, createdAt, ...logData } = log;
+          await repos.llmLogs.create(logData, { id, createdAt });
+          llmLogsRestored++;
+        } catch (error) {
+          warnings.push(`Failed to restore LLM log: ${error instanceof Error ? error.message : String(error)}`);
+          moduleLogger.warn('Failed to restore LLM log', { logId: log.id, error });
+        }
       }
     }
 

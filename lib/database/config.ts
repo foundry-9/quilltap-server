@@ -12,6 +12,7 @@ import fs from 'fs';
 import {
   getDataDir,
   getSQLiteDatabasePath,
+  getLLMLogsDatabasePath,
   isDockerEnvironment,
 } from '@/lib/paths';
 
@@ -140,6 +141,34 @@ export function loadSQLiteConfig(): SQLiteConfig {
   });
 }
 
+
+/**
+ * Load SQLite configuration for the dedicated LLM logs database.
+ *
+ * Uses SQLITE_LLM_LOGS_PATH env var or the default path from lib/paths.ts.
+ * Same defaults as the main DB except foreign keys are disabled (the logs
+ * DB has no inter-table relationships).
+ */
+export function loadLLMLogsConfig(): SQLiteConfig {
+  const dbPath = process.env.SQLITE_LLM_LOGS_PATH || getLLMLogsDatabasePath();
+
+  // Ensure the parent directory exists
+  const dbDir = path.dirname(dbPath);
+  ensureDataDirectoryExists(dbDir);
+
+  return SQLiteConfigSchema.parse({
+    path: dbPath,
+    walMode: process.env.SQLITE_WAL_MODE !== 'false',
+    busyTimeout: process.env.SQLITE_BUSY_TIMEOUT
+      ? parseInt(process.env.SQLITE_BUSY_TIMEOUT, 10)
+      : undefined,
+    foreignKeys: false, // No FK constraints for the logs DB
+    synchronous: process.env.SQLITE_SYNCHRONOUS || undefined,
+    cacheSize: process.env.SQLITE_CACHE_SIZE
+      ? parseInt(process.env.SQLITE_CACHE_SIZE, 10)
+      : undefined,
+  });
+}
 
 /**
  * Load complete database configuration from environment

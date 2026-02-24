@@ -19,6 +19,8 @@ import { fileStorageManager } from '@/lib/file-storage/manager';
 import { getNpmPluginsDir } from '@/lib/paths';
 import { getRawDatabase } from '@/lib/database/backends/sqlite/client';
 import { runBackupCheckpoint } from '@/lib/database/backends/sqlite/protection';
+import { getRawLLMLogsDatabase } from '@/lib/database/backends/sqlite/llm-logs-client';
+import { runLLMLogsBackupCheckpoint } from '@/lib/database/backends/sqlite/llm-logs-protection';
 import type { BackupManifest, BackupData, ChatWithMessages } from './types';
 import type { ChatEvent } from '@/lib/schemas/types';
 
@@ -213,6 +215,12 @@ export async function createBackup(userId: string): Promise<{
   const rawDb = getRawDatabase();
   if (rawDb) {
     runBackupCheckpoint(rawDb);
+  }
+
+  // Also checkpoint the LLM logs database
+  const rawLLMLogsDb = getRawLLMLogsDatabase();
+  if (rawLLMLogsDb) {
+    runLLMLogsBackupCheckpoint(rawLLMLogsDb);
   }
 
   // Collect all user data

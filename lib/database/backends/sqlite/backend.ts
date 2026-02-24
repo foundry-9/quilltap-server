@@ -21,10 +21,12 @@ import {
   DeleteResult,
   SQLITE_CAPABILITIES,
 } from '../../interfaces';
-import { SQLiteConfig, loadSQLiteConfig } from '../../config';
+import { SQLiteConfig, loadSQLiteConfig, loadLLMLogsConfig } from '../../config';
 import { getSQLiteClient, closeSQLiteClient, isSQLiteConnected, setupSQLiteShutdownHandlers } from './client';
 import { runIntegrityCheck, startPeriodicCheckpoints } from './protection';
-import { createPhysicalBackup, applyRetentionPolicy } from './physical-backup';
+import { createPhysicalBackup, createLLMLogsPhysicalBackup, applyRetentionPolicy } from './physical-backup';
+import { getLLMLogsSQLiteClient, closeLLMLogsSQLiteClient } from './llm-logs-client';
+import { runLLMLogsIntegrityCheck, startLLMLogsPeriodicCheckpoints } from './llm-logs-protection';
 import { generateDDL, extractSchemaMetadata } from '../../schema-translator';
 import { buildSelectQuery, buildCountQuery, buildUpdateQuery, buildDeleteQuery, translateFilter } from './query-translator';
 import { documentToRow, rowToDocument, toJson, fromJson, fromJsonSafe, blobToEmbedding } from './json-columns';
@@ -37,7 +39,7 @@ import { logger } from '@/lib/logger';
 /**
  * SQLite implementation of DatabaseCollection
  */
-class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
+export class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
   readonly name: string;
   private db: DatabaseType;
   private jsonColumns: Set<string>;
@@ -505,6 +507,29 @@ export class SQLiteBackend implements DatabaseBackend {
           });
         });
 
+      // Initialize the dedicated LLM logs database (failure is non-fatal)
+      try {
+        const llmLogsConfig = loadLLMLogsConfig();
+        const llmLogsDb = getLLMLogsSQLiteClient(llmLogsConfig);
+
+        if (llmLogsDb) {
+          runLLMLogsIntegrityCheck(llmLogsDb);
+          startLLMLogsPeriodicCheckpoints(llmLogsDb);
+
+          // Create a physical backup of the logs DB (async, non-blocking)
+          createLLMLogsPhysicalBackup(llmLogsDb).catch((error) => {
+            logger.error('LLM logs startup physical backup failed', {
+              error: error instanceof Error ? error.message : String(error),
+            });
+          });
+        }
+      } catch (error) {
+        logger.error('Failed to initialize LLM logs database — logs will be unavailable', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        // Do NOT rethrow — main DB is fine, only logs are affected
+      }
+
       logger.info('SQLite backend connected', { path: this.config.path });
     } catch (error) {
       this._state = 'error';
@@ -520,6 +545,15 @@ export class SQLiteBackend implements DatabaseBackend {
    */
   async disconnect(): Promise<void> {
     try {
+      // Close LLM logs DB first (non-fatal)
+      try {
+        closeLLMLogsSQLiteClient();
+      } catch (error) {
+        logger.error('Error closing LLM logs database during disconnect', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
       closeSQLiteClient();
       this.db = null;
       this._state = 'disconnected';

@@ -16,7 +16,8 @@ Quilltap uses **SQLite** as its database backend. SQLite provides:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `SQLITE_PATH` | Path to SQLite database file | `~/.quilltap/data/quilltap.db` or `/app/quilltap/data/quilltap.db` (Docker) |
+| `SQLITE_PATH` | Path to main SQLite database file | `~/.quilltap/data/quilltap.db` or `/app/quilltap/data/quilltap.db` (Docker) |
+| `SQLITE_LLM_LOGS_PATH` | Path to LLM logs database file | `~/.quilltap/data/quilltap-llm-logs.db` |
 | `SQLITE_WAL_MODE` | Enable WAL mode for SQLite | `true` |
 | `SQLITE_BUSY_TIMEOUT` | Maximum wait time for database locks (milliseconds) | `5000` |
 
@@ -45,10 +46,14 @@ lib/database/
 ├── backends/
 │   └── sqlite/
 │       ├── index.ts
-│       ├── backend.ts     # SQLite backend implementation
-│       ├── client.ts      # better-sqlite3 singleton
-│       ├── json-columns.ts # JSON utilities
-│       └── query-translator.ts # Query conversion
+│       ├── backend.ts            # SQLite backend implementation
+│       ├── client.ts             # Main DB better-sqlite3 singleton
+│       ├── llm-logs-client.ts    # LLM logs DB better-sqlite3 singleton
+│       ├── protection.ts         # Main DB integrity/checkpoint lifecycle
+│       ├── llm-logs-protection.ts # LLM logs DB integrity/checkpoint lifecycle
+│       ├── physical-backup.ts    # Hot backups for both databases
+│       ├── json-columns.ts       # JSON utilities
+│       └── query-translator.ts   # Query conversion
 └── repositories/
     └── base.repository.ts  # Abstract base class
 ```
@@ -237,9 +242,24 @@ Platform-specific locations:
 
 The data directory is automatically created if it doesn't exist. For Docker, mount a host directory to `/app/quilltap` using `docker run -v /path/to/data:/app/quilltap`.
 
+## Two-Database Architecture
+
+Quilltap uses two separate SQLite database files:
+
+| Database | File | Contents | Purpose |
+|----------|------|----------|---------|
+| Main | `quilltap.db` | Characters, chats, messages, memories, projects, settings, etc. | Core application data |
+| LLM Logs | `quilltap-llm-logs.db` | LLM request/response debug logs | High-churn debug data |
+
+The LLM logs database is isolated to prevent corruption in the high-churn debug data from ever affecting the main application database. Each database has its own WAL, checkpoint lifecycle, integrity checking, and physical backup schedule.
+
+**Graceful degradation**: If the LLM logs database fails to open (corruption, permissions, etc.), the app continues normally with logging silently disabled. All repository operations have safe fallbacks (empty arrays, zero counts).
+
+The `LLMLogsRepository` overrides `getCollection()` to route all operations to the dedicated logs database instead of the main database. No other repository is affected.
+
 ## Database Protection
 
-Quilltap includes multiple layers of SQLite database protection implemented in two modules under `lib/database/backends/sqlite/`:
+Quilltap includes multiple layers of SQLite database protection implemented in modules under `lib/database/backends/sqlite/`:
 
 ### Protection Module (`protection.ts`)
 
@@ -255,12 +275,17 @@ Provides database lifecycle protection functions. All functions accept a `Databa
 
 The periodic checkpoint interval is stored on `globalThis.__quilltapCheckpointInterval` to survive Next.js hot module replacement. The interval calls `.unref()` so it doesn't prevent process exit.
 
+### LLM Logs Protection Module (`llm-logs-protection.ts`)
+
+Mirrors the main protection module for the LLM logs database. Same functions with `LLMLogs` prefix. If the integrity check fails, sets a degraded flag instead of blocking startup.
+
 ### Physical Backup Module (`physical-backup.ts`)
 
 Creates hot physical backups using better-sqlite3's `.backup()` API (wraps SQLite's Online Backup API):
 
 - **`createPhysicalBackup(db)`**: Creates a backup at `<data>/data/backups/quilltap-YYYY-MM-DDTHHmmss.db`. Async, non-blocking. Cleans up partial files on failure.
-- **`applyRetentionPolicy()`**: Scans the backups directory and applies a tiered retention policy:
+- **`createLLMLogsPhysicalBackup(db)`**: Creates a backup at `<data>/data/backups/quilltap-llm-logs-YYYY-MM-DDTHHmmss.db`. Same behavior.
+- **`applyRetentionPolicy()`**: Scans the backups directory and applies a tiered retention policy to both main and LLM logs backups:
   - All backups < 7 days old
   - 1 per week for weeks 1-4
   - 1 per month for months 1-12
@@ -269,19 +294,25 @@ Creates hot physical backups using better-sqlite3's `.backup()` API (wraps SQLit
 ### Startup Sequence
 
 In `SQLiteBackend.connect()`:
-1. Initialize database connection (`getSQLiteClient`)
+1. Initialize main database connection (`getSQLiteClient`)
 2. Register shutdown handlers (`setupSQLiteShutdownHandlers`)
 3. Run integrity check (synchronous, logs result, doesn't block)
 4. Start periodic WAL checkpoints
 5. Create physical backup + apply retention (async, non-blocking via `.then()`)
+6. Initialize LLM logs database (wrapped in try/catch — failure is non-fatal):
+   - Open connection (`getLLMLogsSQLiteClient`)
+   - Run integrity check (sets degraded flag on failure)
+   - Start periodic WAL checkpoints
+   - Create physical backup (async, non-blocking)
 
 ### Shutdown Sequence
 
-In `closeSQLiteClient()`:
-1. Stop periodic checkpoints
-2. Run TRUNCATE checkpoint (merges all WAL data)
-3. Run `PRAGMA optimize`
-4. Close database connection
+In shutdown handlers (`closeSQLiteClient` and signal handlers):
+1. Close LLM logs database (stop checkpoints, TRUNCATE checkpoint, optimize, close)
+2. Stop main DB periodic checkpoints
+3. Run main DB TRUNCATE checkpoint (merges all WAL data)
+4. Run `PRAGMA optimize` on main DB
+5. Close main database connection
 
 ### Configuration
 
