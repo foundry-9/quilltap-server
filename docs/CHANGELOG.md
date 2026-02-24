@@ -4,6 +4,7 @@
 
 ### 3.1-dev
 
+- fix: AI Character Import — add missing `createdAt`/`updatedAt` timestamps to system prompts and physical descriptions in assembled export; truncate physical description prompts to schema max lengths (350/500/750/1000 chars) since LLMs don't reliably respect character limits; fixes validation failure that prevented character creation and caused all associated memories to be skipped
 - feat: AI Character Import — new multi-step wizard on Aurora page that generates complete characters from source material (wiki pages, documents, freeform text) using AI; extracts character basics, dialogue, system prompts, physical descriptions, pronouns, memories, and example chats via focused LLM calls; assembles validated `.qtap` export for import; supports incremental regeneration
 - feat: Added `qtap-schema-validator` — Ajv-based JSON Schema validator for `.qtap` export format (Draft 2020-12), reusable for import validation
 - feat: Added `AI_IMPORT` log type for LLM call tracking
