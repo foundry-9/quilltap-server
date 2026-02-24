@@ -76,7 +76,7 @@ export type VectorIndexMeta = z.infer<typeof VectorIndexMetaSchema>;
  * Per-embedding row in `vector_entries` table.
  * The embedding is stored as a Float32 BLOB in SQLite but
  * hydrated as number[] at the application layer.
- * Accepts both number[] and Buffer for transparent BLOB storage support.
+ * Accepts number[], Buffer, or JSON string (legacy) for transparent storage support.
  */
 export const VectorEntryRowSchema = z.object({
   id: UUIDSchema,
@@ -86,6 +86,11 @@ export const VectorEntryRowSchema = z.object({
     z.instanceof(Buffer).transform((buf): number[] => {
       const f32 = new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / Float32Array.BYTES_PER_ELEMENT);
       return Array.from(f32);
+    }),
+    z.string().transform((s): number[] => {
+      const parsed = JSON.parse(s);
+      if (!Array.isArray(parsed)) throw new Error('Embedding string is not a JSON array');
+      return parsed;
     }),
   ]),
   createdAt: TimestampSchema,

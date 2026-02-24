@@ -4,6 +4,8 @@
 
 ### 3.1-dev
 
+- feat: Prompt to re-embed when switching default embedding profile — when a user saves an embedding profile with "Set as default" newly checked, a confirmation dialog now offers to queue a re-embed job for all character memories; applies to both the inline ProfileForm and the ProfileModal; uses the existing `POST /api/v1/embedding-profiles/[id]?action=reindex` endpoint
+- fix: Handle legacy TEXT-stored embeddings in Zod validation — added `z.string().transform()` arm to the embedding union in both MemorySchema and VectorEntryRowSchema so that embeddings stored as JSON text strings (legacy format) are transparently parsed to `number[]` during validation instead of failing with "expected array, received string"
 - fix: AI Character Import — add missing `createdAt`/`updatedAt` timestamps to system prompts and physical descriptions in assembled export; truncate physical description prompts to schema max lengths (350/500/750/1000 chars) since LLMs don't reliably respect character limits; fixes validation failure that prevented character creation and caused all associated memories to be skipped
 - feat: AI Character Import — new multi-step wizard on Aurora page that generates complete characters from source material (wiki pages, documents, freeform text) using AI; extracts character basics, dialogue, system prompts, physical descriptions, pronouns, memories, and example chats via focused LLM calls; assembles validated `.qtap` export for import; supports incremental regeneration
 - feat: Added `qtap-schema-validator` — Ajv-based JSON Schema validator for `.qtap` export format (Draft 2020-12), reusable for import validation
