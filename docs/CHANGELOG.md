@@ -2,7 +2,7 @@
 
 ## Recent Changes
 
-### 3.0-dev
+### 3.0.0
 
 - refactor: Remove mount points, S3 support, and file storage abstraction — simplified file storage to a thin local-only `FileStorageManager` wrapping `LocalFileStorageBackend` directly; dropped `mount_points` table and `mountPointId`/`s3Key`/`s3Bucket` columns via migration; removed S3 plugin (`qtap-plugin-storage-s3`), mount-points API routes, storage settings UI, mount-points repository, and all S3 env vars; updated ~30 consumer files (API routes, services, import/export, backup/restore) to use simplified API; removed `FILE_BACKEND` plugin capability; deleted `help/file-storage-settings.md` and mount-point references from all documentation
 - feat: Linux/amd64 Electron desktop build — added first-class Linux support to the Electron shell using Docker Engine as the runtime backend (no VM layer needed); `DockerManager` now implements `IVMManager` for seamless integration with the existing platform abstraction; `createVMManager()` factory returns `DockerManager` on Linux; splash screen hides the VM toggle on Linux since Docker is the only runtime; `startContainer()` adds `--add-host=host.docker.internal:host-gateway` on Linux so localhost services (e.g. Ollama) are reachable from inside the container; `--no-sandbox` flag handles Ubuntu 24.04+ user namespace restrictions; new `electron:build:linux` script produces AppImage and .deb packages; CI release workflow builds and uploads Linux installers; settings default to `runtimeMode: 'docker'` on Linux
