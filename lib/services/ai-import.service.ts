@@ -17,6 +17,7 @@ import { extractFileContent } from '@/lib/services/file-content-extractor';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { validateQtapExport } from '@/lib/validation/qtap-schema-validator';
 import { logger } from '@/lib/logger';
+import packageJson from '@/package.json';
 import type { ConnectionProfile } from '@/lib/schemas/types';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { QuilltapExport } from '@/lib/export/types';
@@ -904,13 +905,7 @@ export async function runAIImportStreaming(
     let exportData: QuilltapExport;
     try {
       // Get app version from package.json
-      let appVersion = '3.0.0';
-      try {
-        const pkg = require('@/../../package.json');
-        appVersion = pkg.version || appVersion;
-      } catch {
-        // Fallback to default
-      }
+      const appVersion = packageJson.version || '3.0.0';
 
       exportData = assembleQtapExport(stepResults, request.includeMemories, request.includeChats, appVersion);
       onProgress({
