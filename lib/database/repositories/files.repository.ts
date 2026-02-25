@@ -387,6 +387,37 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
   }
 
   /**
+   * Find files by exact filename within a scope (userId + projectId + folderPath)
+   * Used for detecting duplicate filenames before creating/overwriting files
+   * @param userId - The user ID for ownership verification
+   * @param projectId - The project ID (null for general files)
+   * @param folderPath - The folder path to search in
+   * @param filename - The original filename to match
+   */
+  async findByFilenameInScope(
+    userId: string,
+    projectId: string | null,
+    folderPath: string,
+    filename: string
+  ): Promise<FileEntry[]> {
+    return this.safeQuery(
+      async () => {
+        const query: Record<string, unknown> = {
+          userId,
+          originalFilename: filename,
+          folderPath,
+          ...this.createNullableFilter('projectId', projectId),
+        };
+
+        const files = await this.findByFilter(query as TypedQueryFilter<FileEntry>);
+        return files;
+      },
+      'Error finding files by filename in scope',
+      { userId, projectId, folderPath, filename }
+    );
+  }
+
+  /**
    * Find file by storage key
    * Used for serving files via proxy route with proper authentication
    * @param storageKey - The storage key to search for

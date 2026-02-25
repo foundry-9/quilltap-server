@@ -4,6 +4,9 @@
 
 ### 3.1-dev
 
+- fix: Prevent duplicate filenames — when writing a file with the same name in the same scope (user + project + folder), the existing file is now overwritten instead of creating a duplicate; preserves the original fileId so references remain valid; applies to LLM write_file tool, API write, API upload, and promote_attachment; adds `findByFilenameInScope()` repository method and shared `findAndPrepareOverwrite()` helper with 10 unit tests
+- fix: Rename `manage_files` tool ID to `file_management` for consistency with the actual tool name used by the LLM; updates tools API route, built-in tool list, schema lookup, and test assertions; removes duplicate `manage_files` entry from ToolMessage display config
+- fix: Resolve React setState-during-render warning in JsonSchemaForm — moved `handleChange` and `onChange` calls out of `setIncludedOptionals` state updater in `handleToggleOptional`
 - fix: Replace broken `require('@/../../package.json')` with static import in AI import service to eliminate Turbopack module-not-found build warning
 - chore: Release checklist fixes — removed debug console.logs from generate-image page; migrated ~22 raw Tailwind color classes to semantic qt-* theme classes across 6 components (AIImportWizard, JsonSchemaForm, setup wizard steps, ProviderIcon); added chat_settings and file_permissions tables to backup/restore with full UUID remapping; made MCP plugin self-contained by porting host-rewrite utilities to @quilltap/plugin-utils@1.4.0; added 90 new unit tests for RunToolModal, run-tool action handler, and LLM logs repository; updated API docs version to v3.1
 - fix: SillyTavern chat import UX — renamed "Import" button to "Import SillyTavern Chat" for clarity; rendered ImportWizard via portal so it appears as a proper modal overlay instead of inline at the page bottom; replaced persona-based speaker mapping with unified character mapping so all speakers (user and AI) can be mapped to any available character

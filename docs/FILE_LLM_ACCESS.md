@@ -93,6 +93,16 @@ Create or update a file. **Requires user permission.**
    - Deny
 4. After approval, permission is stored and write proceeds
 
+**Overwrite Behavior:**
+
+When writing a file with the same name as an existing file in the same scope (same user, project, and folder), the existing file is **overwritten** rather than creating a duplicate. The original file ID is preserved so any existing references (links, embeddings, etc.) remain valid. The old physical file and thumbnails are cleaned up before the new content is stored.
+
+This applies to all file creation paths:
+- LLM `write_file` tool calls
+- API `POST /api/v1/files?action=write`
+- API `POST /api/v1/files?action=upload`
+- `promote_attachment` (if a file with the same name exists at the destination)
+
 **Example:**
 ```json
 {

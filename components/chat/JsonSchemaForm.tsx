@@ -87,24 +87,28 @@ export default function JsonSchemaForm({ schema, values, onChange, onValidChange
   }, [values, onChange])
 
   const handleToggleOptional = useCallback((key: string, include: boolean) => {
-    setIncludedOptionals(prev => {
-      const next = new Set(prev)
-      if (include) {
+    if (include) {
+      setIncludedOptionals(prev => {
+        const next = new Set(prev)
         next.add(key)
-        // Set default value if available
-        const prop = schema.properties[key]
-        if (prop?.default !== undefined && values[key] === undefined) {
-          handleChange(key, prop.default)
-        }
-      } else {
-        next.delete(key)
-        // Remove the value
-        const newValues = { ...values }
-        delete newValues[key]
-        onChange(newValues)
+        return next
+      })
+      // Set default value if available (outside state updater to avoid setState-during-render)
+      const prop = schema.properties[key]
+      if (prop?.default !== undefined && values[key] === undefined) {
+        handleChange(key, prop.default)
       }
-      return next
-    })
+    } else {
+      setIncludedOptionals(prev => {
+        const next = new Set(prev)
+        next.delete(key)
+        return next
+      })
+      // Remove the value (outside state updater to avoid setState-during-render)
+      const newValues = { ...values }
+      delete newValues[key]
+      onChange(newValues)
+    }
   }, [schema.properties, values, onChange, handleChange])
 
   const renderField = (key: string, prop: SchemaProperty, isRequired: boolean) => {

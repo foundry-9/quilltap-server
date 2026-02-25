@@ -1670,7 +1670,7 @@ List files for the authenticated user.
 
 #### `POST /api/v1/files?action=write`
 
-Create a file from text content. Requires file write permission.
+Create a file from text content. Requires file write permission. If a file with the same name already exists in the same scope (user + project + folder), the existing file is overwritten and the original file ID is preserved.
 
 **Request Body**:
 
@@ -1684,11 +1684,11 @@ Create a file from text content. Requires file write permission.
 }
 ```
 
-**Response**: `201 Created`
+**Response**: `201 Created` (new file) or `200 OK` (overwrite)
 
 #### `POST /api/v1/files?action=upload`
 
-Upload a file via multipart/form-data.
+Upload a file via multipart/form-data. If a file with the same name already exists in the same scope (user + project + folder), the existing file is overwritten and the original file ID is preserved.
 
 **Request**: `multipart/form-data`
 - `file` (required) - The file to upload
@@ -1696,7 +1696,7 @@ Upload a file via multipart/form-data.
 - `folderPath` (optional) - Folder path within project
 - `tags` (optional) - JSON array of tag associations
 
-**Response**: `201 Created`
+**Response**: `201 Created` (new file) or `200 OK` (overwrite)
 
 #### `POST /api/v1/files?action=generate-thumbnails`
 
@@ -2433,8 +2433,8 @@ List all available LLM tools that can be enabled/disabled per chat.
       "unavailableReason": "Chat must be associated with a project"
     },
     {
-      "id": "manage_files",
-      "name": "Manage Files",
+      "id": "file_management",
+      "name": "File Management",
       "description": "Read, write, and manage files in the file system",
       "source": "built-in",
       "category": "files",
@@ -2461,7 +2461,7 @@ List all available LLM tools that can be enabled/disabled per chat.
 | `search_memories` | Search Memories | Search character memories | Always available |
 | `search_web` | Search Web | Web search for current info | Requires web search enabled in connection profile |
 | `project_info` | Project Info | Access project files | Chat must be in a project |
-| `manage_files` | Manage Files | File system operations | Always available |
+| `file_management` | File Management | File system operations | Always available |
 | `search_help` | Search Help | Search Quilltap documentation | Always available |
 
 **Notes:**

@@ -23,6 +23,7 @@ import {
   generateThumbnail,
   cleanupThumbnails,
 } from '@/lib/files/thumbnail-utils';
+import { findAndPrepareOverwrite } from '@/lib/files/overwrite-utils';
 
 const writeFileSchema = z.object({
   filename: z.string().min(1).max(255),
@@ -161,10 +162,21 @@ async function handleWriteFile(request: NextRequest, user: any, repos: any): Pro
     // Permission granted - proceed with write
     const contentBuffer = Buffer.from(content, 'utf-8');
     const sha256 = createHash('sha256').update(new Uint8Array(contentBuffer)).digest('hex');
-    const fileId = repos.files['generateId']();
 
     // Sanitize filename (prevent path traversal)
-    const sanitizedFilename = filename.replace(/[/\\:*?"<>|]/g, '_');// Upload to file storage
+    const sanitizedFilename = filename.replace(/[/\\:*?"<>|]/g, '_');
+
+    // Check for existing file with same name in same scope
+    const overwrite = await findAndPrepareOverwrite(repos, {
+      userId: user.id,
+      projectId: targetProjectId,
+      folderPath,
+      filename: sanitizedFilename,
+    });
+
+    const fileId = overwrite ? overwrite.fileId : repos.files['generateId']();
+
+    // Upload to file storage
     const { storageKey } = await fileStorageManager.uploadFile({
       userId: user.id,
       fileId,
@@ -173,46 +185,65 @@ async function handleWriteFile(request: NextRequest, user: any, repos: any): Pro
       contentType: mimeType,
       projectId: targetProjectId,
       folderPath,
-    });// Create file metadata in repository
-    const fileEntry = await repos.files.create({
-      id: fileId,
-      userId: user.id,
-      originalFilename: sanitizedFilename,
-      mimeType,
-      size: contentBuffer.length,
-      sha256,
-      source: 'UPLOADED',
-      category: 'FILE',
-      storageKey,
-      projectId: targetProjectId,
-      folderPath,
-      linkedTo: [],
-      tags: [],
     });
 
-    logger.info('[Files v1] File written successfully', {
-      fileId,
-      filename: sanitizedFilename,
-      userId: user.id,
-    });
+    let fileEntry;
+    if (overwrite) {
+      // Update existing file entry, preserving the original ID
+      fileEntry = await repos.files.update(fileId, {
+        sha256,
+        mimeType,
+        size: contentBuffer.length,
+        storageKey,
+      });
+
+      logger.info('[Files v1] File overwritten successfully', {
+        fileId,
+        filename: sanitizedFilename,
+        userId: user.id,
+      });
+    } else {
+      // Create new file metadata in repository
+      fileEntry = await repos.files.create({
+        id: fileId,
+        userId: user.id,
+        originalFilename: sanitizedFilename,
+        mimeType,
+        size: contentBuffer.length,
+        sha256,
+        source: 'UPLOADED',
+        category: 'FILE',
+        storageKey,
+        projectId: targetProjectId,
+        folderPath,
+        linkedTo: [],
+        tags: [],
+      });
+
+      logger.info('[Files v1] File written successfully', {
+        fileId,
+        filename: sanitizedFilename,
+        userId: user.id,
+      });
+    }
 
     return successResponse(
       {
         data: {
-          id: fileEntry.id,
-          userId: fileEntry.userId,
-          filename: fileEntry.originalFilename,
-          filepath: getFilePath(fileEntry),
-          mimeType: fileEntry.mimeType,
-          size: fileEntry.size,
-          category: fileEntry.category,
-          projectId: fileEntry.projectId,
-          folderPath: fileEntry.folderPath,
-          createdAt: fileEntry.createdAt,
-          updatedAt: fileEntry.updatedAt,
+          id: fileEntry!.id,
+          userId: fileEntry!.userId,
+          filename: fileEntry!.originalFilename,
+          filepath: getFilePath(fileEntry!),
+          mimeType: fileEntry!.mimeType,
+          size: fileEntry!.size,
+          category: fileEntry!.category,
+          projectId: fileEntry!.projectId,
+          folderPath: fileEntry!.folderPath,
+          createdAt: fileEntry!.createdAt,
+          updatedAt: fileEntry!.updatedAt,
         },
       },
-      201
+      overwrite ? 200 : 201
     );
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -268,7 +299,6 @@ async function handleUploadFile(request: NextRequest, user: any, repos: any): Pr
     const arrayBuffer = await file.arrayBuffer();
     const contentBuffer = Buffer.from(arrayBuffer);
     const sha256 = createHash('sha256').update(new Uint8Array(contentBuffer)).digest('hex');
-    const fileId = repos.files['generateId']();
 
     // Sanitize filename
     const sanitizedFilename = file.name.replace(/[/\\:*?"<>|]/g, '_');
@@ -289,6 +319,18 @@ async function handleUploadFile(request: NextRequest, user: any, repos: any): Pr
       mimeType = mimeMap[ext || ''] || 'application/octet-stream';
     }
 
+    const targetProjectId = projectId || null;
+
+    // Check for existing file with same name in same scope
+    const overwrite = await findAndPrepareOverwrite(repos, {
+      userId: user.id,
+      projectId: targetProjectId,
+      folderPath,
+      filename: sanitizedFilename,
+    });
+
+    const fileId = overwrite ? overwrite.fileId : repos.files['generateId']();
+
     // Upload to file storage
     const { storageKey } = await fileStorageManager.uploadFile({
       userId: user.id,
@@ -296,55 +338,74 @@ async function handleUploadFile(request: NextRequest, user: any, repos: any): Pr
       filename: sanitizedFilename,
       content: contentBuffer,
       contentType: mimeType,
-      projectId: projectId || null,
+      projectId: targetProjectId,
       folderPath,
     });
 
     // Build linkedTo array from tags
     const linkedTo = tags ? tags.map(t => t.tagId) : [];
 
-    // Create file metadata in repository
-    const fileEntry = await repos.files.create({
-      id: fileId,
-      userId: user.id,
-      originalFilename: sanitizedFilename,
-      mimeType,
-      size: contentBuffer.length,
-      sha256,
-      source: 'UPLOADED',
-      category: 'DOCUMENT',
-      storageKey,
-      projectId: projectId || null,
-      folderPath,
-      linkedTo,
-      tags: linkedTo,
-    });
+    let fileEntry;
+    if (overwrite) {
+      // Update existing file entry, preserving the original ID
+      fileEntry = await repos.files.update(fileId, {
+        sha256,
+        mimeType,
+        size: contentBuffer.length,
+        storageKey,
+      });
 
-    logger.info('[Files v1] File uploaded successfully', {
-      fileId,
-      filename: sanitizedFilename,
-      mimeType,
-      size: contentBuffer.length,
-      userId: user.id,
-    });
+      logger.info('[Files v1] File upload overwritten existing file', {
+        fileId,
+        filename: sanitizedFilename,
+        mimeType,
+        size: contentBuffer.length,
+        userId: user.id,
+      });
+    } else {
+      // Create new file metadata in repository
+      fileEntry = await repos.files.create({
+        id: fileId,
+        userId: user.id,
+        originalFilename: sanitizedFilename,
+        mimeType,
+        size: contentBuffer.length,
+        sha256,
+        source: 'UPLOADED',
+        category: 'DOCUMENT',
+        storageKey,
+        projectId: targetProjectId,
+        folderPath,
+        linkedTo,
+        tags: linkedTo,
+      });
+
+      logger.info('[Files v1] File uploaded successfully', {
+        fileId,
+        filename: sanitizedFilename,
+        mimeType,
+        size: contentBuffer.length,
+        userId: user.id,
+      });
+    }
 
     return successResponse(
       {
         data: {
-          id: fileEntry.id,
-          userId: fileEntry.userId,
-          filename: fileEntry.originalFilename,
-          filepath: getFilePath(fileEntry),
-          mimeType: fileEntry.mimeType,
-          size: fileEntry.size,
-          category: fileEntry.category,
-          projectId: fileEntry.projectId,
-          folderPath: fileEntry.folderPath,
-          createdAt: fileEntry.createdAt,
-          updatedAt: fileEntry.updatedAt,
+          id: fileEntry!.id,
+          userId: fileEntry!.userId,
+          filename: fileEntry!.originalFilename,
+          filepath: getFilePath(fileEntry!),
+          mimeType: fileEntry!.mimeType,
+          size: fileEntry!.size,
+          category: fileEntry!.category,
+          projectId: fileEntry!.projectId,
+          folderPath: fileEntry!.folderPath,
+          createdAt: fileEntry!.createdAt,
+          updatedAt: fileEntry!.updatedAt,
         },
       },
-      201
+      overwrite ? 200 : 201
     );
   } catch (error) {
     logger.error('[Files v1] Error uploading file', { userId: user?.id }, error instanceof Error ? error : undefined);
