@@ -7497,7 +7497,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ../../../node_modules/openai/version.mjs
-var VERSION = "6.22.0";
+var VERSION = "6.25.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -8265,7 +8265,7 @@ var Stream = class _Stream {
     this.controller = controller;
     __classPrivateFieldSet(this, _Stream_client, client, "f");
   }
-  static fromSSEResponse(response, controller, client) {
+  static fromSSEResponse(response, controller, client, synthesizeEventData) {
     let consumed = false;
     const logger2 = client ? loggerFor(client) : console;
     async function* iterator() {
@@ -8294,7 +8294,7 @@ var Stream = class _Stream {
             if (data && data.error) {
               throw new APIError(void 0, data.error, void 0, response.headers);
             }
-            yield data;
+            yield synthesizeEventData ? { event: sse.event, data } : data;
           } else {
             let data;
             try {
@@ -8521,9 +8521,9 @@ async function defaultParseResponse(client, props) {
     if (props.options.stream) {
       loggerFor(client).debug("response", response.status, response.url, response.headers, response.body);
       if (props.options.__streamClass) {
-        return props.options.__streamClass.fromSSEResponse(response, props.controller, client);
+        return props.options.__streamClass.fromSSEResponse(response, props.controller, client, props.options.__synthesizeEventData);
       }
-      return Stream.fromSSEResponse(response, props.controller, client);
+      return Stream.fromSSEResponse(response, props.controller, client, props.options.__synthesizeEventData);
     }
     if (response.status === 204) {
       return null;
@@ -10463,6 +10463,8 @@ var Speech = class extends APIResource {
   /**
    * Generates audio from the input text.
    *
+   * Returns the audio file content, or a stream of audio events.
+   *
    * @example
    * ```ts
    * const speech = await client.audio.speech.create({
@@ -10675,7 +10677,7 @@ Realtime.TranscriptionSessions = TranscriptionSessions;
 // ../../../node_modules/openai/resources/beta/chatkit/sessions.mjs
 var Sessions2 = class extends APIResource {
   /**
-   * Create a ChatKit session
+   * Create a ChatKit session.
    *
    * @example
    * ```ts
@@ -10694,7 +10696,9 @@ var Sessions2 = class extends APIResource {
     });
   }
   /**
-   * Cancel a ChatKit session
+   * Cancel an active ChatKit session and return its most recent metadata.
+   *
+   * Cancelling prevents new requests from using the issued client secret.
    *
    * @example
    * ```ts
@@ -10713,7 +10717,7 @@ var Sessions2 = class extends APIResource {
 // ../../../node_modules/openai/resources/beta/chatkit/threads.mjs
 var Threads = class extends APIResource {
   /**
-   * Retrieve a ChatKit thread
+   * Retrieve a ChatKit thread by its identifier.
    *
    * @example
    * ```ts
@@ -10728,7 +10732,7 @@ var Threads = class extends APIResource {
     });
   }
   /**
-   * List ChatKit threads
+   * List ChatKit threads with optional pagination and user filters.
    *
    * @example
    * ```ts
@@ -10746,7 +10750,7 @@ var Threads = class extends APIResource {
     });
   }
   /**
-   * Delete a ChatKit thread
+   * Delete a ChatKit thread along with its items and stored attachments.
    *
    * @example
    * ```ts
@@ -10762,7 +10766,7 @@ var Threads = class extends APIResource {
     });
   }
   /**
-   * List ChatKit thread items
+   * List items that belong to a ChatKit thread.
    *
    * @example
    * ```ts
@@ -11464,7 +11468,8 @@ var Runs = class extends APIResource {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      stream: params.stream ?? false
+      stream: params.stream ?? false,
+      __synthesizeEventData: true
     });
   }
   /**
@@ -11593,7 +11598,8 @@ var Runs = class extends APIResource {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      stream: params.stream ?? false
+      stream: params.stream ?? false,
+      __synthesizeEventData: true
     });
   }
   /**
@@ -11674,7 +11680,8 @@ var Threads2 = class extends APIResource {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      stream: body.stream ?? false
+      stream: body.stream ?? false,
+      __synthesizeEventData: true
     });
   }
   /**
@@ -12533,6 +12540,20 @@ var ClientSecrets = class extends APIResource {
   /**
    * Create a Realtime client secret with an associated session configuration.
    *
+   * Client secrets are short-lived tokens that can be passed to a client app, such
+   * as a web frontend or mobile client, which grants access to the Realtime API
+   * without leaking your main API key. You can configure a custom TTL for each
+   * client secret.
+   *
+   * You can also attach session configuration options to the client secret, which
+   * will be applied to any sessions created using that client secret, but these can
+   * also be overridden by the client connection.
+   *
+   * [Learn more about authentication with client secrets over WebRTC](https://platform.openai.com/docs/guides/realtime-webrtc).
+   *
+   * Returns the created client secret and the effective session object. The client
+   * secret is a string that looks like `ek_1234`.
+   *
    * @example
    * ```ts
    * const clientSecret =
@@ -12961,7 +12982,10 @@ var InputItems = class extends APIResource {
 // ../../../node_modules/openai/resources/responses/input-tokens.mjs
 var InputTokens = class extends APIResource {
   /**
-   * Get input token counts
+   * Returns input token counts of the request.
+   *
+   * Returns an object with `object` set to `response.input_tokens` and an
+   * `input_tokens` count.
    *
    * @example
    * ```ts
@@ -13041,7 +13065,12 @@ var Responses = class extends APIResource {
     return this._client.post(path2`/responses/${responseID}/cancel`, options);
   }
   /**
-   * Compact conversation
+   * Compact a conversation. Returns a compacted response object.
+   *
+   * Learn when and how to compact long-running conversations in the
+   * [conversation state guide](https://platform.openai.com/docs/guides/conversation-state#managing-the-context-window).
+   * For ZDR-compatible compaction details, see
+   * [Compaction (advanced)](https://platform.openai.com/docs/guides/conversation-state#compaction-advanced).
    *
    * @example
    * ```ts
@@ -13060,7 +13089,7 @@ Responses.InputTokens = InputTokens;
 // ../../../node_modules/openai/resources/skills/content.mjs
 var Content2 = class extends APIResource {
   /**
-   * Get Skill Content
+   * Download a skill zip bundle by its ID.
    */
   retrieve(skillID, options) {
     return this._client.get(path2`/skills/${skillID}/content`, {
@@ -13074,7 +13103,7 @@ var Content2 = class extends APIResource {
 // ../../../node_modules/openai/resources/skills/versions/content.mjs
 var Content3 = class extends APIResource {
   /**
-   * Get Skill Version Content
+   * Download a skill version zip bundle.
    */
   retrieve(version, params, options) {
     const { skill_id } = params;
@@ -13093,20 +13122,20 @@ var Versions = class extends APIResource {
     this.content = new Content3(this._client);
   }
   /**
-   * Create Skill Version
+   * Create a new immutable skill version.
    */
   create(skillID, body = {}, options) {
     return this._client.post(path2`/skills/${skillID}/versions`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
   }
   /**
-   * Get Skill Version
+   * Get a specific skill version.
    */
   retrieve(version, params, options) {
     const { skill_id } = params;
     return this._client.get(path2`/skills/${skill_id}/versions/${version}`, options);
   }
   /**
-   * List Skill Versions
+   * List skill versions for a skill.
    */
   list(skillID, query = {}, options) {
     return this._client.getAPIList(path2`/skills/${skillID}/versions`, CursorPage, {
@@ -13115,7 +13144,7 @@ var Versions = class extends APIResource {
     });
   }
   /**
-   * Delete Skill Version
+   * Delete a skill version.
    */
   delete(version, params, options) {
     const { skill_id } = params;
@@ -13132,31 +13161,31 @@ var Skills = class extends APIResource {
     this.versions = new Versions(this._client);
   }
   /**
-   * Create Skill
+   * Create a new skill.
    */
   create(body = {}, options) {
     return this._client.post("/skills", maybeMultipartFormRequestOptions({ body, ...options }, this._client));
   }
   /**
-   * Get Skill
+   * Get a skill by its ID.
    */
   retrieve(skillID, options) {
     return this._client.get(path2`/skills/${skillID}`, options);
   }
   /**
-   * Update Skill Default Version
+   * Update the default version pointer for a skill.
    */
   update(skillID, body, options) {
     return this._client.post(path2`/skills/${skillID}`, { body, ...options });
   }
   /**
-   * List Skills
+   * List all skills for the current project.
    */
   list(query = {}, options) {
     return this._client.getAPIList("/skills", CursorPage, { query, ...options });
   }
   /**
-   * Delete Skill
+   * Delete a skill by its ID.
    */
   delete(skillID, options) {
     return this._client.delete(path2`/skills/${skillID}`, options);
@@ -13211,12 +13240,16 @@ var Uploads = class extends APIResource {
    * For guidance on the proper filename extensions for each purpose, please follow
    * the documentation on
    * [creating a File](https://platform.openai.com/docs/api-reference/files/create).
+   *
+   * Returns the Upload object with status `pending`.
    */
   create(body, options) {
     return this._client.post("/uploads", { body, ...options });
   }
   /**
    * Cancels the Upload. No Parts may be added after an Upload is cancelled.
+   *
+   * Returns the Upload object with status `cancelled`.
    */
   cancel(uploadID, options) {
     return this._client.post(path2`/uploads/${uploadID}/cancel`, options);
@@ -13234,7 +13267,9 @@ var Uploads = class extends APIResource {
    *
    * The number of bytes uploaded upon completion must match the number of bytes
    * initially specified when creating the Upload object. No Parts may be added after
-   * an Upload is completed.
+   * an Upload is completed. Returns the Upload object with status `completed`,
+   * including an additional `file` property containing the created usable File
+   * object.
    */
   complete(uploadID, body, options) {
     return this._client.post(path2`/uploads/${uploadID}/complete`, { body, ...options });
@@ -13584,31 +13619,33 @@ VectorStores.FileBatches = FileBatches;
 // ../../../node_modules/openai/resources/videos.mjs
 var Videos = class extends APIResource {
   /**
-   * Create a video
+   * Create a new video generation job from a prompt and optional reference assets.
    */
   create(body, options) {
     return this._client.post("/videos", maybeMultipartFormRequestOptions({ body, ...options }, this._client));
   }
   /**
-   * Retrieve a video
+   * Fetch the latest metadata for a generated video.
    */
   retrieve(videoID, options) {
     return this._client.get(path2`/videos/${videoID}`, options);
   }
   /**
-   * List videos
+   * List recently generated videos for the current project.
    */
   list(query = {}, options) {
     return this._client.getAPIList("/videos", ConversationCursorPage, { query, ...options });
   }
   /**
-   * Delete a video
+   * Permanently delete a completed or failed video and its stored assets.
    */
   delete(videoID, options) {
     return this._client.delete(path2`/videos/${videoID}`, options);
   }
   /**
-   * Download video content
+   * Download the generated video bytes or a derived preview asset.
+   *
+   * Streams the rendered video content for the specified video job.
    */
   downloadContent(videoID, query = {}, options) {
     return this._client.get(path2`/videos/${videoID}/content`, {
@@ -13619,7 +13656,7 @@ var Videos = class extends APIResource {
     });
   }
   /**
-   * Create a video remix
+   * Create a remix of a completed video using a refreshed prompt.
    */
   remix(videoID, body, options) {
     return this._client.post(path2`/videos/${videoID}/remix`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
@@ -14137,6 +14174,11 @@ var OpenAI = class {
       return { bodyHeaders: void 0, body };
     } else if (typeof body === "object" && (Symbol.asyncIterator in body || Symbol.iterator in body && "next" in body && typeof body.next === "function")) {
       return { bodyHeaders: void 0, body: ReadableStreamFrom(body) };
+    } else if (typeof body === "object" && headers.values.get("content-type") === "application/x-www-form-urlencoded") {
+      return {
+        bodyHeaders: { "content-type": "application/x-www-form-urlencoded" },
+        body: this.stringifyQuery(body)
+      };
     } else {
       return __classPrivateFieldGet(this, _OpenAI_encoder, "f").call(this, { body, headers });
     }
@@ -17957,22 +17999,45 @@ async function auth(provider, options) {
   }
 }
 async function authInternal(provider, { serverUrl, authorizationCode, scope, resourceMetadataUrl, fetchFn }) {
+  const cachedState = await provider.discoveryState?.();
   let resourceMetadata;
   let authorizationServerUrl;
-  try {
-    resourceMetadata = await discoverOAuthProtectedResourceMetadata(serverUrl, { resourceMetadataUrl }, fetchFn);
-    if (resourceMetadata.authorization_servers && resourceMetadata.authorization_servers.length > 0) {
-      authorizationServerUrl = resourceMetadata.authorization_servers[0];
-    }
-  } catch {
+  let metadata2;
+  let effectiveResourceMetadataUrl = resourceMetadataUrl;
+  if (!effectiveResourceMetadataUrl && cachedState?.resourceMetadataUrl) {
+    effectiveResourceMetadataUrl = new URL(cachedState.resourceMetadataUrl);
   }
-  if (!authorizationServerUrl) {
-    authorizationServerUrl = new URL("/", serverUrl);
+  if (cachedState?.authorizationServerUrl) {
+    authorizationServerUrl = cachedState.authorizationServerUrl;
+    resourceMetadata = cachedState.resourceMetadata;
+    metadata2 = cachedState.authorizationServerMetadata ?? await discoverAuthorizationServerMetadata(authorizationServerUrl, { fetchFn });
+    if (!resourceMetadata) {
+      try {
+        resourceMetadata = await discoverOAuthProtectedResourceMetadata(serverUrl, { resourceMetadataUrl: effectiveResourceMetadataUrl }, fetchFn);
+      } catch {
+      }
+    }
+    if (metadata2 !== cachedState.authorizationServerMetadata || resourceMetadata !== cachedState.resourceMetadata) {
+      await provider.saveDiscoveryState?.({
+        authorizationServerUrl: String(authorizationServerUrl),
+        resourceMetadataUrl: effectiveResourceMetadataUrl?.toString(),
+        resourceMetadata,
+        authorizationServerMetadata: metadata2
+      });
+    }
+  } else {
+    const serverInfo = await discoverOAuthServerInfo(serverUrl, { resourceMetadataUrl: effectiveResourceMetadataUrl, fetchFn });
+    authorizationServerUrl = serverInfo.authorizationServerUrl;
+    metadata2 = serverInfo.authorizationServerMetadata;
+    resourceMetadata = serverInfo.resourceMetadata;
+    await provider.saveDiscoveryState?.({
+      authorizationServerUrl: String(authorizationServerUrl),
+      resourceMetadataUrl: effectiveResourceMetadataUrl?.toString(),
+      resourceMetadata,
+      authorizationServerMetadata: metadata2
+    });
   }
   const resource = await selectResourceURL(serverUrl, provider, resourceMetadata);
-  const metadata2 = await discoverAuthorizationServerMetadata(authorizationServerUrl, {
-    fetchFn
-  });
   let clientInformation = await Promise.resolve(provider.clientInformation());
   if (!clientInformation) {
     if (authorizationCode !== void 0) {
@@ -18226,6 +18291,26 @@ async function discoverAuthorizationServerMetadata(authorizationServerUrl, { fet
     }
   }
   return void 0;
+}
+async function discoverOAuthServerInfo(serverUrl, opts) {
+  let resourceMetadata;
+  let authorizationServerUrl;
+  try {
+    resourceMetadata = await discoverOAuthProtectedResourceMetadata(serverUrl, { resourceMetadataUrl: opts?.resourceMetadataUrl }, opts?.fetchFn);
+    if (resourceMetadata.authorization_servers && resourceMetadata.authorization_servers.length > 0) {
+      authorizationServerUrl = resourceMetadata.authorization_servers[0];
+    }
+  } catch {
+  }
+  if (!authorizationServerUrl) {
+    authorizationServerUrl = String(new URL("/", serverUrl));
+  }
+  const authorizationServerMetadata = await discoverAuthorizationServerMetadata(authorizationServerUrl, { fetchFn: opts?.fetchFn });
+  return {
+    authorizationServerUrl,
+    authorizationServerMetadata,
+    resourceMetadata
+  };
 }
 async function startAuthorization(authorizationServerUrl, { metadata: metadata2, clientInformation, redirectUrl, scope, state, resource }) {
   let authorizationUrl;

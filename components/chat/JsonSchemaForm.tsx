@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 
 /**
  * JSON Schema property definition (subset of JSON Schema we support)
@@ -51,7 +51,7 @@ export default function JsonSchemaForm({ schema, values, onChange, onValidChange
     return included
   })
 
-  const required = new Set(schema.required || [])
+  const required = useMemo(() => new Set(schema.required || []), [schema.required])
 
   // Validate whenever values change
   useEffect(() => {
