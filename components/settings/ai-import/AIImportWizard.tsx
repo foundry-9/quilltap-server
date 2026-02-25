@@ -140,7 +140,7 @@ function SourceMaterialStep({
         </div>
 
         {uploadError && (
-          <p className="qt-text-small text-red-500 mt-2">{uploadError}</p>
+          <p className="qt-text-small qt-text-destructive mt-2">{uploadError}</p>
         )}
 
         {uploadedFiles.length > 0 && (
@@ -153,7 +153,7 @@ function SourceMaterialStep({
                     e.stopPropagation();
                     onRemoveFile(file.id);
                   }}
-                  className="qt-button-ghost qt-button-sm text-red-500 hover:text-red-600 flex-shrink-0"
+                  className="qt-button-ghost qt-button-sm qt-text-destructive hover:qt-text-destructive flex-shrink-0"
                 >
                   Remove
                 </button>
@@ -213,7 +213,7 @@ function ConfigurationStep({
         {loadingProfiles ? (
           <p className="qt-text-muted">Loading profiles...</p>
         ) : profiles.length === 0 ? (
-          <p className="text-red-500">No connection profiles found. Create one in Settings first.</p>
+          <p className="qt-text-destructive">No connection profiles found. Create one in Settings first.</p>
         ) : (
           <select
             className="qt-input w-full"
@@ -307,11 +307,11 @@ function GenerationProgressStep({
   const getStatusColor = (status: StepProgress['status']): string => {
     switch (status) {
       case 'complete':
-        return 'text-green-500';
+        return 'qt-text-success';
       case 'error':
-        return 'text-yellow-500';
+        return 'qt-text-warning';
       case 'in_progress':
-        return 'text-blue-500 animate-pulse';
+        return 'qt-text-info animate-pulse';
       default:
         return 'qt-text-muted';
     }
@@ -341,7 +341,7 @@ function GenerationProgressStep({
                   <p className="qt-text-small qt-text-muted truncate">{step.snippet}</p>
                 )}
                 {step.error && (
-                  <p className="qt-text-small text-yellow-500">{step.error}</p>
+                  <p className="qt-text-small qt-text-warning">{step.error}</p>
                 )}
               </div>
             </div>
@@ -351,7 +351,7 @@ function GenerationProgressStep({
 
       {error && (
         <div className="qt-bg-destructive/10 qt-border-destructive border rounded-lg p-3 mt-4">
-          <p className="text-red-500 text-sm">{error}</p>
+          <p className="qt-text-destructive text-sm">{error}</p>
         </div>
       )}
     </div>
@@ -421,8 +421,8 @@ function ReviewStep({
   if (importResult?.success) {
     return (
       <div className="space-y-4">
-        <div className="qt-bg-success/10 border border-green-500/30 rounded-lg p-4">
-          <h3 className="qt-heading-3 text-green-500 mb-2">Import Successful!</h3>
+        <div className="qt-bg-success/10 border qt-border-success/30 rounded-lg p-4">
+          <h3 className="qt-heading-3 qt-text-success mb-2">Import Successful!</h3>
           <p className="qt-text-default">
             <strong>{basics?.name}</strong> has been imported successfully.
             {importResult.importedCount > 1 && ` (${importResult.importedCount} entities imported)`}
@@ -479,12 +479,12 @@ function ReviewStep({
         <h3 className="qt-heading-3 mb-2">Generated Content</h3>
         <div className="grid grid-cols-2 gap-2">
           {completedFields.map((field) => (
-            <div key={field} className="flex items-center gap-2 text-green-500 qt-text-small">
+            <div key={field} className="flex items-center gap-2 qt-text-success qt-text-small">
               <span>{'\u2713'}</span> {field}
             </div>
           ))}
           {failedFields.map((field) => (
-            <div key={field} className="flex items-center gap-2 text-yellow-500 qt-text-small">
+            <div key={field} className="flex items-center gap-2 qt-text-warning qt-text-small">
               <span>{'\u26A0'}</span> {field}
             </div>
           ))}
@@ -502,7 +502,7 @@ function ReviewStep({
       {/* Errors */}
       {Object.keys(errors).length > 0 && (
         <div className="qt-bg-muted rounded-lg p-3">
-          <p className="qt-text-small text-yellow-500 mb-1">
+          <p className="qt-text-small qt-text-warning mb-1">
             Some steps had issues (non-critical):
           </p>
           {Object.entries(errors)

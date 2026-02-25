@@ -1,6 +1,6 @@
 {
   "name": "@quilltap/plugin-utils",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Utility functions for Quilltap plugin development",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -30,6 +30,11 @@
       "types": "./dist/roleplay-templates/index.d.ts",
       "import": "./dist/roleplay-templates/index.mjs",
       "require": "./dist/roleplay-templates/index.js"
+    },
+    "./host-rewrite": {
+      "types": "./dist/host-rewrite.d.ts",
+      "import": "./dist/host-rewrite.mjs",
+      "require": "./dist/host-rewrite.js"
     }
   },
   "files": [

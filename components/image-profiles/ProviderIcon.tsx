@@ -230,7 +230,7 @@ export function ProviderBadge({
   iconData?: PluginIconData
   label?: string
 }) {
-  const badge = PROVIDER_BADGES[provider] || { bg: 'bg-gray-100', text: 'text-gray-800', label: provider }
+  const badge = PROVIDER_BADGES[provider] || { bg: 'qt-bg-muted', text: 'qt-text-secondary', label: provider }
   const finalLabel = label || badge.label
 
   return (

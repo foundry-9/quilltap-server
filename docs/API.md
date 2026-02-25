@@ -1,6 +1,6 @@
 # Quilltap API Documentation
 
-Complete API reference for Quilltap v2.10.
+Complete API reference for Quilltap v3.1.
 
 ## Table of Contents
 

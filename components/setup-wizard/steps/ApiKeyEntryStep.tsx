@@ -160,7 +160,7 @@ export function ApiKeyEntryStep({ state, dispatch }: ApiKeyEntryStepProps) {
                 <h3 className="font-semibold text-lg">{provider.displayName}</h3>
                 {form.validated && (
                   <svg
-                    className="w-5 h-5 text-green-500 ml-auto"
+                    className="w-5 h-5 qt-text-success ml-auto"
                     fill="currentColor"
                     viewBox="0 0 20 20"
                   >

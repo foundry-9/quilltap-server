@@ -125,6 +125,16 @@ export {
 } from './builtin-tools';
 
 // ============================================================================
+// Host URL Rewriting
+// ============================================================================
+
+export {
+  isVMEnvironment,
+  resolveHostGateway,
+  rewriteLocalhostUrl,
+} from './host-rewrite';
+
+// ============================================================================
 // Version
 // ============================================================================
 
@@ -132,4 +142,4 @@ export {
  * Version of the plugin-utils package.
  * Can be used at runtime to check compatibility.
  */
-export const PLUGIN_UTILS_VERSION = '1.3.0';
+export const PLUGIN_UTILS_VERSION = '1.4.0';

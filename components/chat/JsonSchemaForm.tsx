@@ -128,7 +128,7 @@ export default function JsonSchemaForm({ schema, values, onChange, onValidChange
             className="text-sm font-medium qt-text"
           >
             {key}
-            {isRequired && <span className="text-red-500 ml-0.5">*</span>}
+            {isRequired && <span className="qt-text-destructive ml-0.5">*</span>}
           </label>
         </div>
 

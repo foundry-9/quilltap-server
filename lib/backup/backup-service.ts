@@ -53,6 +53,8 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     projects,
     llmLogs,
     pluginConfigs,
+    chatSettingsResult,
+    filePermissions,
   ] = await Promise.all([
     repos.characters.findAll(),
     repos.chats.findAll(),
@@ -72,6 +74,10 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     repos.llmLogs.findAll(10000), // High limit to get all user logs
     // Get plugin configurations
     globalRepos.pluginConfigs.findByUserId(userId),
+    // Get chat settings (returns single object or null)
+    globalRepos.chatSettings.findByUserId(userId),
+    // Get file write permissions
+    globalRepos.filePermissions.findByUserId(userId),
   ]);
 
   // Exclude backup files from the file list - we don't want to back up old backups
@@ -105,6 +111,9 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     // Keep apiKeyId reference but note that actual keys aren't backed up
   }));
 
+  // Wrap chatSettings in an array for backup (it's a single record per user)
+  const chatSettings = chatSettingsResult ? [chatSettingsResult] : [];
+
   return {
     characters,
     chats,
@@ -120,6 +129,8 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     projects,
     llmLogs,
     pluginConfigs,
+    chatSettings,
+    filePermissions,
   };
 }
 
@@ -170,6 +181,8 @@ function createManifest(userId: string, data: Omit<BackupData, 'manifest'>): Bac
       projects: data.projects.length,
       llmLogs: data.llmLogs.length,
       pluginConfigs: data.pluginConfigs?.length || 0,
+      chatSettings: data.chatSettings?.length || 0,
+      filePermissions: data.filePermissions?.length || 0,
       npmPlugins: countNpmPlugins(),
     },
   };
@@ -254,6 +267,8 @@ export async function createBackup(userId: string): Promise<{
     await writeJsonFile(path.join(stagingDir, 'data', 'projects.json'), data.projects);
     await writeJsonFile(path.join(stagingDir, 'data', 'llm-logs.json'), data.llmLogs);
     await writeJsonFile(path.join(stagingDir, 'data', 'plugin-configs.json'), data.pluginConfigs || []);
+    await writeJsonFile(path.join(stagingDir, 'data', 'chat-settings.json'), data.chatSettings || []);
+    await writeJsonFile(path.join(stagingDir, 'data', 'file-permissions.json'), data.filePermissions || []);
 
     moduleLogger.debug('Wrote all JSON data files to staging directory');
 

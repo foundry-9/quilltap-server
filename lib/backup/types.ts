@@ -8,12 +8,14 @@
 import type {
   Character,
   ChatMetadata,
+  ChatSettings,
   Tag,
   ConnectionProfile,
   ImageProfile,
   EmbeddingProfile,
   Memory,
   FileEntry,
+  FileWritePermission,
   MessageEvent,
   PromptTemplate,
   RoleplayTemplate,
@@ -79,6 +81,10 @@ export interface BackupManifest {
     llmLogs: number;
     /** Number of PluginConfig entities (user plugin configurations) */
     pluginConfigs?: number;
+    /** Number of ChatSettings entities (user chat/display settings) */
+    chatSettings?: number;
+    /** Number of FileWritePermission entities (LLM file write permissions) */
+    filePermissions?: number;
     /** Number of npm-installed plugins backed up */
     npmPlugins?: number;
   };
@@ -140,6 +146,12 @@ export interface BackupData {
 
   /** Array of PluginConfig entities (user plugin configurations) */
   pluginConfigs?: PluginConfig[];
+
+  /** Array of ChatSettings entities (user chat/display settings) */
+  chatSettings?: ChatSettings[];
+
+  /** Array of FileWritePermission entities (LLM file write permissions) */
+  filePermissions?: FileWritePermission[];
 }
 
 // ============================================================================
@@ -238,6 +250,12 @@ export interface RestoreSummary {
 
   /** Number of PluginConfig entities restored */
   pluginConfigs?: number;
+
+  /** Number of ChatSettings entities restored */
+  chatSettings?: number;
+
+  /** Number of FileWritePermission entities restored */
+  filePermissions?: number;
 
   /** Number of npm plugins restored */
   npmPlugins?: number;
