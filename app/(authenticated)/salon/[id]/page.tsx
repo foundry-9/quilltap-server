@@ -850,6 +850,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onSearchReplaceClick={modals.openSearchReplace}
           onBulkCharacterReplaceClick={modals.openBulkReplace}
           onToolSettingsClick={modals.openToolSettings}
+          onRunToolClick={modals.openRunTool}
           onStateClick={modals.openStateEditor}
           onStopStreaming={sseStreaming.stopStreaming}
           hideStopButton={modals.showParticipantSidebar}
@@ -886,6 +887,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           closeBulkReplace={modals.closeBulkReplace}
           toolSettingsModalOpen={modals.toolSettingsModalOpen}
           closeToolSettings={modals.closeToolSettings}
+          runToolModalOpen={modals.runToolModalOpen}
+          closeRunTool={modals.closeRunTool}
           stateEditorModalOpen={modals.stateEditorModalOpen}
           closeStateEditor={modals.closeStateEditor}
           allLLMPauseModalOpen={modals.allLLMPauseModalOpen}

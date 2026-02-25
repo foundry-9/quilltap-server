@@ -78,6 +78,7 @@ interface ChatComposerProps {
   onSearchReplaceClick?: () => void
   onBulkCharacterReplaceClick?: () => void
   onToolSettingsClick?: () => void
+  onRunToolClick?: () => void
   onStateClick?: () => void
   onRegenerateBackgroundClick?: () => void
   storyBackgroundsEnabled?: boolean
@@ -148,6 +149,7 @@ export function ChatComposer({
   onSearchReplaceClick,
   onBulkCharacterReplaceClick,
   onToolSettingsClick,
+  onRunToolClick,
   onStateClick,
   onRegenerateBackgroundClick,
   storyBackgroundsEnabled = false,
@@ -471,6 +473,7 @@ export function ChatComposer({
           onSearchReplaceClick={onSearchReplaceClick}
           onBulkCharacterReplaceClick={onBulkCharacterReplaceClick}
           onToolSettingsClick={onToolSettingsClick}
+          onRunToolClick={onRunToolClick}
           onStateClick={onStateClick}
           onRegenerateBackgroundClick={onRegenerateBackgroundClick}
           chatPhotoCount={chatPhotoCount}

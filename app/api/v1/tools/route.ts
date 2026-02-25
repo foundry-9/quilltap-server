@@ -19,6 +19,30 @@ import { logger } from '@/lib/logger';
 import { successResponse, serverError } from '@/lib/api/responses';
 import { toolRegistry } from '@/lib/plugins/tool-registry';
 import { isWebSearchConfigured } from '@/lib/tools/handlers/web-search-handler';
+import {
+  imageGenerationToolDefinition,
+  memorySearchToolDefinition,
+  webSearchToolDefinition,
+  projectInfoToolDefinition,
+  fileManagementToolDefinition,
+  helpSearchToolDefinition,
+  rngToolDefinition,
+  stateToolDefinition,
+} from '@/lib/tools';
+
+/**
+ * Map from built-in tool IDs to their OpenAI-format definitions (for schema inclusion)
+ */
+const BUILT_IN_TOOL_SCHEMAS: Record<string, { function: { parameters: Record<string, unknown> } }> = {
+  generate_image: imageGenerationToolDefinition,
+  search_memories: memorySearchToolDefinition,
+  search_web: webSearchToolDefinition,
+  project_info: projectInfoToolDefinition,
+  manage_files: fileManagementToolDefinition,
+  search_help: helpSearchToolDefinition,
+  rng: rngToolDefinition,
+  state: stateToolDefinition,
+};
 
 /**
  * Built-in tool definitions (these are always available)
@@ -73,8 +97,16 @@ const BUILT_IN_TOOLS = [
     source: 'built-in' as const,
     category: 'utility',
   },
-  // Note: request_full_context is intentionally excluded - it's a safety valve
-  // that should always be available when context compression is enabled
+  {
+    id: 'state',
+    name: 'State Manager',
+    description: 'Get, set, or delete persistent key-value state for the chat',
+    source: 'built-in' as const,
+    category: 'utility',
+  },
+  // Note: request_full_context and submit_final_response are intentionally excluded
+  // - request_full_context is a safety valve that should always be available
+  // - submit_final_response is an agent-mode internal tool
 ];
 
 export interface AvailableTool {
@@ -92,6 +124,10 @@ export interface AvailableTool {
   available?: boolean;
   /** Reason why the tool is unavailable (only set when available is false) */
   unavailableReason?: string;
+  /** Whether the tool can be invoked directly by the user (false for internal-only tools) */
+  userInvocable?: boolean;
+  /** JSON Schema for the tool's parameters (only included when includeSchemas=true) */
+  parameters?: Record<string, unknown>;
 }
 
 /**
@@ -102,7 +138,14 @@ export interface AvailableTool {
 export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
   try {
     const chatId = req.nextUrl.searchParams.get('chatId');
-    const tools: AvailableTool[] = [...BUILT_IN_TOOLS];
+    const includeSchemas = req.nextUrl.searchParams.get('includeSchemas') === 'true';
+    const tools: AvailableTool[] = BUILT_IN_TOOLS.map(t => ({
+      ...t,
+      userInvocable: true,
+      ...(includeSchemas && BUILT_IN_TOOL_SCHEMAS[t.id]
+        ? { parameters: BUILT_IN_TOOL_SCHEMAS[t.id].function.parameters }
+        : {}),
+    }));
 
     // If chatId provided, get chat context for availability checks
     let chatContext: {
@@ -166,8 +209,8 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
     for (const toolDef of pluginToolDefs) {
       const toolName = toolDef.function.name;
 
-      // Skip request_full_context - it's not user-toggleable
-      if (toolName === 'request_full_context') {
+      // Skip internal-only tools
+      if (toolName === 'request_full_context' || toolName === 'submit_final_response') {
         continue;
       }
 
@@ -182,6 +225,10 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
         description: toolDef.function.description || 'Plugin-provided tool',
         source: 'plugin',
         category: 'plugin',
+        userInvocable: true,
+        ...(includeSchemas && toolDef.function.parameters
+          ? { parameters: toolDef.function.parameters as Record<string, unknown> }
+          : {}),
       });
     }
 

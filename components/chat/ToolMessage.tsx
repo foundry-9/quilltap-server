@@ -182,6 +182,21 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
       icon: '🎲',
       bgColor: 'bg-muted border border-border',
     },
+    state: {
+      displayName: 'State Manager',
+      icon: '🗃️',
+      bgColor: 'bg-muted border border-border',
+    },
+    search_help: {
+      displayName: 'Help Search',
+      icon: '📖',
+      bgColor: 'bg-muted border border-border',
+    },
+    manage_files: {
+      displayName: 'File Management',
+      icon: '📁',
+      bgColor: 'bg-muted border border-border',
+    },
   }
 
   const info = toolInfo[toolData.toolName!] || {
