@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
 import { SpeakerMapper } from './speaker-mapper'
@@ -38,7 +39,6 @@ interface ProfileOption {
  */
 interface ImportWizardProps {
   characters: EntityOption[]
-  personas: EntityOption[]
   profiles: ProfileOption[]
   onClose: () => void
   onImportComplete: (chatId: string) => void
@@ -49,7 +49,6 @@ interface ImportWizardProps {
  */
 export function ImportWizard({
   characters,
-  personas,
   profiles,
   onClose,
   onImportComplete,
@@ -94,7 +93,6 @@ export function ImportWizard({
       const defaultMappings = createDefaultMappings(
         result.speakers,
         characters,
-        personas
       )
       setMappings(defaultMappings)
 
@@ -105,7 +103,7 @@ export function ImportWizard({
       setStep('file-select')
       console.error('Error analyzing file', { error: errorMessage })
     }
-  }, [selectedFile, characters, personas])
+  }, [selectedFile, characters])
 
   /**
    * Update a single mapping
@@ -260,7 +258,6 @@ export function ImportWizard({
               speakers={parseResult?.speakers || []}
               mappings={mappings}
               characters={characters}
-              personas={personas}
               profiles={profiles}
               defaultProfileId={defaultProfileId}
               onMappingChange={handleMappingChange}
@@ -375,7 +372,9 @@ export function ImportWizard({
     }
   }
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <>
       <div className="qt-dialog-overlay p-4">
         <div className="qt-dialog max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -408,6 +407,7 @@ export function ImportWizard({
           onClose={handleMemoryDialogClose}
         />
       )}
-    </>
+    </>,
+    document.body
   )
 }
