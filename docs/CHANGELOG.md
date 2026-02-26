@@ -4,6 +4,7 @@
 
 ### 3.1-dev
 
+- ci: Add `notify-website` job to release workflow — triggers a `repository_dispatch` event to `foundry-9/quilltap-website` after GitHub Release is created, passing version, prerelease flag, and Docker image tag; uses `peter-evans/repository-dispatch@v3` with a fine-grained `CROSS_REPO_PAT`; exposes `prerelease` output from `create-release` job for downstream consumption
 - fix: WSL2 MCP localhost rewrite — MCP servers on the Windows host were unreachable from WSL2 because the `/proc/net/route` gateway IP doesn't forward to `127.0.0.1`-bound services; added WSL2-specific strategy that reads the nameserver from `/etc/resolv.conf` (which WSL2 auto-generates to point at the Windows host with special localhost forwarding); detects WSL2 via `/proc/sys/fs/binfmt_misc/WSLInterop`; mirrors fix in `@quilltap/plugin-utils`
 - fix: File browser now correctly places files in their subfolder instead of showing all files at root — files with empty `folderPath` in the database are now resolved using their `storageKey` physical path; adds `deriveFolderPathFromStorageKey()` and `resolveEffectiveFolderPath()` utilities to `folder-utils`; reconciliation now detects and corrects `folderPath` mismatches on matched files; watcher uses shared utility for consistent path derivation; filesystem sync fixes existing data permanently
 - fix: File browser folder file counts now show the correct number of contained files instead of always displaying "1 file" — derived folder counting logic had a dead code path that prevented incrementing the count beyond the first file
