@@ -130,6 +130,10 @@ export interface Chat {
   documentEditingMode?: boolean
   /** Whether agent mode is enabled for this chat */
   agentModeEnabled?: boolean | null
+  /** Resolved agent mode enabled state (from cascade: global → character → project → chat) */
+  resolvedAgentModeEnabled?: boolean
+  /** Source of the resolved agent mode setting */
+  agentModeSource?: string
   /** Project ID this chat belongs to (if any) */
   projectId?: string | null
   /** Project name for display purposes */

@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, forbidden, validationError, serverError, successResponse } from '@/lib/api/responses';
+import { resolveAgentModeSetting } from '@/lib/services/chat-message/agent-mode-resolver.service';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 
 /**
@@ -54,14 +55,43 @@ export async function handleToggleAgentMode(
       return serverError('Failed to update chat');
     }
 
+    // Resolve the cascade to return the effective state
+    let primaryCharacter = null;
+    const characterParticipant = updatedChat.participants.find(
+      (p) => p.type === 'CHARACTER' && p.characterId
+    );
+    if (characterParticipant?.characterId) {
+      try {
+        primaryCharacter = await repos.characters.findById(characterParticipant.characterId);
+      } catch {
+        // Character might have been deleted
+      }
+    }
+
+    let project = null;
+    if (updatedChat.projectId) {
+      try {
+        project = await repos.projects.findById(updatedChat.projectId);
+      } catch {
+        // Project might have been deleted
+      }
+    }
+
+    const chatSettings = await repos.chatSettings.findByUserId(user.id);
+    const resolved = resolveAgentModeSetting(updatedChat, project, primaryCharacter, chatSettings);
+
     logger.info('[Chats v1] Agent mode toggled', {
       chatId,
       agentModeEnabled: enabled,
+      resolvedAgentModeEnabled: resolved.enabled,
+      agentModeSource: resolved.enabledSource,
       chatTitle: updatedChat.title,
     });
 
     return successResponse({
       agentModeEnabled: updatedChat.agentModeEnabled,
+      resolvedAgentModeEnabled: resolved.enabled,
+      agentModeSource: resolved.enabledSource,
       message: enabled === null ? 'Agent mode set to inherit' : enabled ? 'Agent mode enabled' : 'Agent mode disabled',
     });
   } catch (error) {

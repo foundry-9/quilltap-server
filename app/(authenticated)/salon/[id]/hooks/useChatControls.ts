@@ -66,13 +66,13 @@ export function useChatControls({
   const lastAutoTriggeredRef = useRef<string | null>(null)
   const lastAllLLMPauseTurnCountRef = useRef<number>(0)
 
-  // Sync agentModeEnabled state when chat loads
-  const chatAgentModeEnabled = chat?.agentModeEnabled
+  // Sync agentModeEnabled state when chat loads, using the resolved cascade value
+  const chatResolvedAgentModeEnabled = chat?.resolvedAgentModeEnabled
   useEffect(() => {
     if (chat) {
-      setAgentModeEnabled(chatAgentModeEnabled ?? null)
+      setAgentModeEnabled(chatResolvedAgentModeEnabled ?? null)
     }
-  }, [chat, chatAgentModeEnabled])
+  }, [chat, chatResolvedAgentModeEnabled])
 
   // Sync storyBackgroundsEnabled state when chatSettings loads - handled in page via chatSettings
 
@@ -186,11 +186,11 @@ export function useChatControls({
       }
 
       const data = await res.json()
-      setAgentModeEnabled(data.agentModeEnabled)
+      setAgentModeEnabled(data.resolvedAgentModeEnabled ?? data.agentModeEnabled)
 
-      const status = data.agentModeEnabled === true
+      const status = data.resolvedAgentModeEnabled === true
         ? 'enabled'
-        : data.agentModeEnabled === false
+        : data.resolvedAgentModeEnabled === false
         ? 'disabled'
         : 'set to inherit'
 
