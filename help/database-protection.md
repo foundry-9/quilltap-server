@@ -27,7 +27,7 @@ Quilltap uses SQLite's Write-Ahead Logging (WAL) mode for better performance. Th
 
 ### Physical Database Backups
 
-Each time Quilltap starts, it creates a physical copy of both database files. These are stored in the `data/backups/` subdirectory of your data directory.
+Quilltap creates a physical copy of both database files once per day. The check happens on startup — if the most recent backup is less than 24 hours old, the backup is skipped. These are stored in the `data/backups/` subdirectory of your data directory.
 
 **Retention policy:**
 - All backups from the last 7 days are kept
@@ -82,7 +82,7 @@ Quilltap has two independent backup systems:
 | Feature | Physical Backups | Backup & Restore |
 |---------|-----------------|------------------|
 | **What it backs up** | Raw database file (byte-level copy) | All entities exported as JSON + user files |
-| **When it runs** | Automatically on every startup | Manually from The Foundry |
+| **When it runs** | Automatically once per day (on startup) | Manually from The Foundry |
 | **Includes files** | No (database only) | Yes (all uploaded files) |
 | **Format** | `.db` file | `.zip` archive |
 | **Best for** | Quick recovery from corruption | Full data portability and migration |

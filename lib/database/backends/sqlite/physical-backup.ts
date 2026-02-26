@@ -7,7 +7,7 @@
  * system that exports entities as JSON.
  *
  * Physical backups:
- * - Run automatically on each app startup (non-blocking)
+ * - Run automatically once per day (checked on startup, skipped if recent)
  * - Are stored under <data>/data/backups/
  * - Follow a retention policy: all for 7 days, weekly for 4 weeks, monthly
  *   for 12 months, yearly forever
@@ -117,6 +117,63 @@ function parseLLMLogsBackupFilename(filename: string): Date | null {
 }
 
 // ============================================================================
+// Backup interval
+// ============================================================================
+
+/** Minimum interval between automatic physical backups (24 hours). */
+const BACKUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Find the most recent backup matching a given parse function.
+ *
+ * @returns Date of the newest backup, or null if none exist
+ */
+function findMostRecentBackup(
+  parseFn: (filename: string) => Date | null,
+): Date | null {
+  const backupsDir = getBackupsDir();
+  if (!fs.existsSync(backupsDir)) return null;
+
+  let newest: Date | null = null;
+  for (const filename of fs.readdirSync(backupsDir)) {
+    const date = parseFn(filename);
+    if (date && (!newest || date.getTime() > newest.getTime())) {
+      newest = date;
+    }
+  }
+  return newest;
+}
+
+/**
+ * Check whether enough time has elapsed since the last backup.
+ */
+function shouldCreateBackup(
+  parseFn: (filename: string) => Date | null,
+  label: string,
+): boolean {
+  const lastBackup = findMostRecentBackup(parseFn);
+  if (!lastBackup) {
+    moduleLogger.debug(`No existing ${label} backups found, backup needed`);
+    return true;
+  }
+
+  const ageMs = Date.now() - lastBackup.getTime();
+  if (ageMs < BACKUP_INTERVAL_MS) {
+    moduleLogger.debug(`Recent ${label} backup exists, skipping`, {
+      lastBackup: lastBackup.toISOString(),
+      ageHours: Math.round(ageMs / (60 * 60 * 1000) * 10) / 10,
+    });
+    return false;
+  }
+
+  moduleLogger.debug(`Last ${label} backup is old enough, backup needed`, {
+    lastBackup: lastBackup.toISOString(),
+    ageHours: Math.round(ageMs / (60 * 60 * 1000) * 10) / 10,
+  });
+  return true;
+}
+
+// ============================================================================
 // Physical Backup
 // ============================================================================
 
@@ -127,12 +184,17 @@ function parseLLMLogsBackupFilename(filename: string): Date | null {
  * This creates a consistent, hot copy of the database without requiring any
  * locks or interrupting normal operations.
  *
+ * Skips the backup if the most recent one is less than 24 hours old.
  * Partial files are cleaned up on failure.
  *
  * @param db - The better-sqlite3 database instance
- * @returns The path to the created backup file, or null on failure
+ * @returns The path to the created backup file, or null if skipped/failed
  */
 export async function createPhysicalBackup(db: DatabaseType): Promise<string | null> {
+  if (!shouldCreateBackup(parseBackupFilename, 'main database')) {
+    return null;
+  }
+
   const backupsDir = getBackupsDir();
   const filename = generateBackupFilename();
   const backupPath = path.join(backupsDir, filename);
@@ -195,6 +257,10 @@ export async function createPhysicalBackup(db: DatabaseType): Promise<string | n
  * @returns The path to the created backup file, or null on failure
  */
 export async function createLLMLogsPhysicalBackup(db: DatabaseType): Promise<string | null> {
+  if (!shouldCreateBackup(parseLLMLogsBackupFilename, 'LLM logs')) {
+    return null;
+  }
+
   const backupsDir = getBackupsDir();
   const filename = generateLLMLogsBackupFilename();
   const backupPath = path.join(backupsDir, filename);
