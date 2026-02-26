@@ -124,6 +124,30 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
   }
 
   /**
+   * Find pending/processing jobs for a specific entity (by payload.entityId)
+   * Used for deduplication of entity-scoped jobs like EMBEDDING_GENERATE
+   */
+  async findPendingForEntity(entityId: string): Promise<BackgroundJob[]> {
+    return this.safeQuery(
+      async () => {
+        const results = await this.findByFilter(
+          {
+            'payload.entityId': entityId,
+            status: { $in: ['PENDING', 'PROCESSING'] },
+          } as TypedQueryFilter<BackgroundJob>,
+          {
+            sort: { priority: -1 as any, createdAt: 1 as any },
+          }
+        );
+        return results;
+      },
+      'Error finding pending jobs for entity',
+      { entityId },
+      []
+    );
+  }
+
+  /**
    * Claim the next available job atomically
    * Uses findOneAndUpdate for concurrent-safe job claiming
    */
