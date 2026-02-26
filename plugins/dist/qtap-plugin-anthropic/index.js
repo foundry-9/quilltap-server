@@ -11816,6 +11816,7 @@ OpenAI.Skills = Skills2;
 OpenAI.Videos = Videos;
 
 // node_modules/@quilltap/plugin-utils/dist/index.mjs
+var import_fs = require("fs");
 function parseAnthropicToolCalls(response) {
   const toolCalls = [];
   try {
@@ -11900,6 +11901,7 @@ function createPluginLogger(pluginName, minLevel = "debug") {
   }
   return createConsoleLoggerWithChild(pluginName, minLevel);
 }
+var rewriteLogger = createPluginLogger("host-rewrite");
 
 // provider.ts
 var logger = createPluginLogger("qtap-plugin-anthropic");

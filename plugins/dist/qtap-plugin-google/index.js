@@ -22671,6 +22671,16 @@ var Type;
   Type2["OBJECT"] = "OBJECT";
   Type2["NULL"] = "NULL";
 })(Type || (Type = {}));
+var PhishBlockThreshold;
+(function(PhishBlockThreshold2) {
+  PhishBlockThreshold2["PHISH_BLOCK_THRESHOLD_UNSPECIFIED"] = "PHISH_BLOCK_THRESHOLD_UNSPECIFIED";
+  PhishBlockThreshold2["BLOCK_LOW_AND_ABOVE"] = "BLOCK_LOW_AND_ABOVE";
+  PhishBlockThreshold2["BLOCK_MEDIUM_AND_ABOVE"] = "BLOCK_MEDIUM_AND_ABOVE";
+  PhishBlockThreshold2["BLOCK_HIGH_AND_ABOVE"] = "BLOCK_HIGH_AND_ABOVE";
+  PhishBlockThreshold2["BLOCK_HIGHER_AND_ABOVE"] = "BLOCK_HIGHER_AND_ABOVE";
+  PhishBlockThreshold2["BLOCK_VERY_HIGH_AND_ABOVE"] = "BLOCK_VERY_HIGH_AND_ABOVE";
+  PhishBlockThreshold2["BLOCK_ONLY_EXTREMELY_HIGH"] = "BLOCK_ONLY_EXTREMELY_HIGH";
+})(PhishBlockThreshold || (PhishBlockThreshold = {}));
 var ApiSpec;
 (function(ApiSpec2) {
   ApiSpec2["API_SPEC_UNSPECIFIED"] = "API_SPEC_UNSPECIFIED";
@@ -22696,16 +22706,6 @@ var HttpElementLocation;
   HttpElementLocation2["HTTP_IN_BODY"] = "HTTP_IN_BODY";
   HttpElementLocation2["HTTP_IN_COOKIE"] = "HTTP_IN_COOKIE";
 })(HttpElementLocation || (HttpElementLocation = {}));
-var PhishBlockThreshold;
-(function(PhishBlockThreshold2) {
-  PhishBlockThreshold2["PHISH_BLOCK_THRESHOLD_UNSPECIFIED"] = "PHISH_BLOCK_THRESHOLD_UNSPECIFIED";
-  PhishBlockThreshold2["BLOCK_LOW_AND_ABOVE"] = "BLOCK_LOW_AND_ABOVE";
-  PhishBlockThreshold2["BLOCK_MEDIUM_AND_ABOVE"] = "BLOCK_MEDIUM_AND_ABOVE";
-  PhishBlockThreshold2["BLOCK_HIGH_AND_ABOVE"] = "BLOCK_HIGH_AND_ABOVE";
-  PhishBlockThreshold2["BLOCK_HIGHER_AND_ABOVE"] = "BLOCK_HIGHER_AND_ABOVE";
-  PhishBlockThreshold2["BLOCK_VERY_HIGH_AND_ABOVE"] = "BLOCK_VERY_HIGH_AND_ABOVE";
-  PhishBlockThreshold2["BLOCK_ONLY_EXTREMELY_HIGH"] = "BLOCK_ONLY_EXTREMELY_HIGH";
-})(PhishBlockThreshold || (PhishBlockThreshold = {}));
 var Behavior;
 (function(Behavior2) {
   Behavior2["UNSPECIFIED"] = "UNSPECIFIED";
@@ -22899,6 +22899,12 @@ var Environment;
   Environment2["ENVIRONMENT_UNSPECIFIED"] = "ENVIRONMENT_UNSPECIFIED";
   Environment2["ENVIRONMENT_BROWSER"] = "ENVIRONMENT_BROWSER";
 })(Environment || (Environment = {}));
+var ProminentPeople;
+(function(ProminentPeople2) {
+  ProminentPeople2["PROMINENT_PEOPLE_UNSPECIFIED"] = "PROMINENT_PEOPLE_UNSPECIFIED";
+  ProminentPeople2["ALLOW_PROMINENT_PEOPLE"] = "ALLOW_PROMINENT_PEOPLE";
+  ProminentPeople2["BLOCK_PROMINENT_PEOPLE"] = "BLOCK_PROMINENT_PEOPLE";
+})(ProminentPeople || (ProminentPeople = {}));
 var EmbeddingApiType;
 (function(EmbeddingApiType2) {
   EmbeddingApiType2["PREDICT"] = "PREDICT";
@@ -24380,15 +24386,15 @@ function candidateFromMldev$1(fromObject) {
   if (fromFinishReason != null) {
     setValueByPath(toObject, ["finishReason"], fromFinishReason);
   }
-  const fromAvgLogprobs = getValueByPath(fromObject, ["avgLogprobs"]);
-  if (fromAvgLogprobs != null) {
-    setValueByPath(toObject, ["avgLogprobs"], fromAvgLogprobs);
-  }
   const fromGroundingMetadata = getValueByPath(fromObject, [
     "groundingMetadata"
   ]);
   if (fromGroundingMetadata != null) {
     setValueByPath(toObject, ["groundingMetadata"], fromGroundingMetadata);
+  }
+  const fromAvgLogprobs = getValueByPath(fromObject, ["avgLogprobs"]);
+  if (fromAvgLogprobs != null) {
+    setValueByPath(toObject, ["avgLogprobs"], fromAvgLogprobs);
   }
   const fromIndex = getValueByPath(fromObject, ["index"]);
   if (fromIndex != null) {
@@ -24934,6 +24940,10 @@ function googleMapsToMldev$4(fromObject) {
 }
 function googleSearchToMldev$4(fromObject) {
   const toObject = {};
+  const fromSearchTypes = getValueByPath(fromObject, ["searchTypes"]);
+  if (fromSearchTypes != null) {
+    setValueByPath(toObject, ["searchTypes"], fromSearchTypes);
+  }
   if (getValueByPath(fromObject, ["excludeDomains"]) !== void 0) {
     throw new Error("excludeDomains parameter is not supported in Gemini API.");
   }
@@ -24960,6 +24970,9 @@ function imageConfigToMldev$1(fromObject) {
   }
   if (getValueByPath(fromObject, ["personGeneration"]) !== void 0) {
     throw new Error("personGeneration parameter is not supported in Gemini API.");
+  }
+  if (getValueByPath(fromObject, ["prominentPeople"]) !== void 0) {
+    throw new Error("prominentPeople parameter is not supported in Gemini API.");
   }
   if (getValueByPath(fromObject, ["outputMimeType"]) !== void 0) {
     throw new Error("outputMimeType parameter is not supported in Gemini API.");
@@ -25216,6 +25229,10 @@ function toolToMldev$4(fromObject) {
   if (fromFileSearch != null) {
     setValueByPath(toObject, ["fileSearch"], fromFileSearch);
   }
+  const fromGoogleSearch = getValueByPath(fromObject, ["googleSearch"]);
+  if (fromGoogleSearch != null) {
+    setValueByPath(toObject, ["googleSearch"], googleSearchToMldev$4(fromGoogleSearch));
+  }
   const fromCodeExecution = getValueByPath(fromObject, [
     "codeExecution"
   ]);
@@ -25241,10 +25258,6 @@ function toolToMldev$4(fromObject) {
   if (fromGoogleMaps != null) {
     setValueByPath(toObject, ["googleMaps"], googleMapsToMldev$4(fromGoogleMaps));
   }
-  const fromGoogleSearch = getValueByPath(fromObject, ["googleSearch"]);
-  if (fromGoogleSearch != null) {
-    setValueByPath(toObject, ["googleSearch"], googleSearchToMldev$4(fromGoogleSearch));
-  }
   const fromGoogleSearchRetrieval = getValueByPath(fromObject, [
     "googleSearchRetrieval"
   ]);
@@ -25254,6 +25267,16 @@ function toolToMldev$4(fromObject) {
   const fromUrlContext = getValueByPath(fromObject, ["urlContext"]);
   if (fromUrlContext != null) {
     setValueByPath(toObject, ["urlContext"], fromUrlContext);
+  }
+  const fromMcpServers = getValueByPath(fromObject, ["mcpServers"]);
+  if (fromMcpServers != null) {
+    let transformedList = fromMcpServers;
+    if (Array.isArray(transformedList)) {
+      transformedList = transformedList.map((item) => {
+        return item;
+      });
+    }
+    setValueByPath(toObject, ["mcpServers"], transformedList);
   }
   return toObject;
 }
@@ -26160,6 +26183,10 @@ function googleMapsToMldev$3(fromObject) {
 }
 function googleSearchToMldev$3(fromObject) {
   const toObject = {};
+  const fromSearchTypes = getValueByPath(fromObject, ["searchTypes"]);
+  if (fromSearchTypes != null) {
+    setValueByPath(toObject, ["searchTypes"], fromSearchTypes);
+  }
   if (getValueByPath(fromObject, ["excludeDomains"]) !== void 0) {
     throw new Error("excludeDomains parameter is not supported in Gemini API.");
   }
@@ -26359,6 +26386,10 @@ function toolToMldev$3(fromObject) {
   if (fromFileSearch != null) {
     setValueByPath(toObject, ["fileSearch"], fromFileSearch);
   }
+  const fromGoogleSearch = getValueByPath(fromObject, ["googleSearch"]);
+  if (fromGoogleSearch != null) {
+    setValueByPath(toObject, ["googleSearch"], googleSearchToMldev$3(fromGoogleSearch));
+  }
   const fromCodeExecution = getValueByPath(fromObject, [
     "codeExecution"
   ]);
@@ -26384,10 +26415,6 @@ function toolToMldev$3(fromObject) {
   if (fromGoogleMaps != null) {
     setValueByPath(toObject, ["googleMaps"], googleMapsToMldev$3(fromGoogleMaps));
   }
-  const fromGoogleSearch = getValueByPath(fromObject, ["googleSearch"]);
-  if (fromGoogleSearch != null) {
-    setValueByPath(toObject, ["googleSearch"], googleSearchToMldev$3(fromGoogleSearch));
-  }
   const fromGoogleSearchRetrieval = getValueByPath(fromObject, [
     "googleSearchRetrieval"
   ]);
@@ -26397,6 +26424,16 @@ function toolToMldev$3(fromObject) {
   const fromUrlContext = getValueByPath(fromObject, ["urlContext"]);
   if (fromUrlContext != null) {
     setValueByPath(toObject, ["urlContext"], fromUrlContext);
+  }
+  const fromMcpServers = getValueByPath(fromObject, ["mcpServers"]);
+  if (fromMcpServers != null) {
+    let transformedList = fromMcpServers;
+    if (Array.isArray(transformedList)) {
+      transformedList = transformedList.map((item) => {
+        return item;
+      });
+    }
+    setValueByPath(toObject, ["mcpServers"], transformedList);
   }
   return toObject;
 }
@@ -26412,6 +26449,10 @@ function toolToVertex$2(fromObject) {
   }
   if (getValueByPath(fromObject, ["fileSearch"]) !== void 0) {
     throw new Error("fileSearch parameter is not supported in Vertex AI.");
+  }
+  const fromGoogleSearch = getValueByPath(fromObject, ["googleSearch"]);
+  if (fromGoogleSearch != null) {
+    setValueByPath(toObject, ["googleSearch"], fromGoogleSearch);
   }
   const fromCodeExecution = getValueByPath(fromObject, [
     "codeExecution"
@@ -26441,10 +26482,6 @@ function toolToVertex$2(fromObject) {
   if (fromGoogleMaps != null) {
     setValueByPath(toObject, ["googleMaps"], fromGoogleMaps);
   }
-  const fromGoogleSearch = getValueByPath(fromObject, ["googleSearch"]);
-  if (fromGoogleSearch != null) {
-    setValueByPath(toObject, ["googleSearch"], fromGoogleSearch);
-  }
   const fromGoogleSearchRetrieval = getValueByPath(fromObject, [
     "googleSearchRetrieval"
   ]);
@@ -26454,6 +26491,9 @@ function toolToVertex$2(fromObject) {
   const fromUrlContext = getValueByPath(fromObject, ["urlContext"]);
   if (fromUrlContext != null) {
     setValueByPath(toObject, ["urlContext"], fromUrlContext);
+  }
+  if (getValueByPath(fromObject, ["mcpServers"]) !== void 0) {
+    throw new Error("mcpServers parameter is not supported in Vertex AI.");
   }
   return toObject;
 }
@@ -27844,6 +27884,10 @@ function googleMapsToMldev$2(fromObject) {
 }
 function googleSearchToMldev$2(fromObject) {
   const toObject = {};
+  const fromSearchTypes = getValueByPath(fromObject, ["searchTypes"]);
+  if (fromSearchTypes != null) {
+    setValueByPath(toObject, ["searchTypes"], fromSearchTypes);
+  }
   if (getValueByPath(fromObject, ["excludeDomains"]) !== void 0) {
     throw new Error("excludeDomains parameter is not supported in Gemini API.");
   }
@@ -28359,6 +28403,10 @@ function toolToMldev$2(fromObject) {
   if (fromFileSearch != null) {
     setValueByPath(toObject, ["fileSearch"], fromFileSearch);
   }
+  const fromGoogleSearch = getValueByPath(fromObject, ["googleSearch"]);
+  if (fromGoogleSearch != null) {
+    setValueByPath(toObject, ["googleSearch"], googleSearchToMldev$2(fromGoogleSearch));
+  }
   const fromCodeExecution = getValueByPath(fromObject, [
     "codeExecution"
   ]);
@@ -28384,10 +28432,6 @@ function toolToMldev$2(fromObject) {
   if (fromGoogleMaps != null) {
     setValueByPath(toObject, ["googleMaps"], googleMapsToMldev$2(fromGoogleMaps));
   }
-  const fromGoogleSearch = getValueByPath(fromObject, ["googleSearch"]);
-  if (fromGoogleSearch != null) {
-    setValueByPath(toObject, ["googleSearch"], googleSearchToMldev$2(fromGoogleSearch));
-  }
   const fromGoogleSearchRetrieval = getValueByPath(fromObject, [
     "googleSearchRetrieval"
   ]);
@@ -28397,6 +28441,16 @@ function toolToMldev$2(fromObject) {
   const fromUrlContext = getValueByPath(fromObject, ["urlContext"]);
   if (fromUrlContext != null) {
     setValueByPath(toObject, ["urlContext"], fromUrlContext);
+  }
+  const fromMcpServers = getValueByPath(fromObject, ["mcpServers"]);
+  if (fromMcpServers != null) {
+    let transformedList = fromMcpServers;
+    if (Array.isArray(transformedList)) {
+      transformedList = transformedList.map((item) => {
+        return item;
+      });
+    }
+    setValueByPath(toObject, ["mcpServers"], transformedList);
   }
   return toObject;
 }
@@ -28412,6 +28466,10 @@ function toolToVertex$1(fromObject) {
   }
   if (getValueByPath(fromObject, ["fileSearch"]) !== void 0) {
     throw new Error("fileSearch parameter is not supported in Vertex AI.");
+  }
+  const fromGoogleSearch = getValueByPath(fromObject, ["googleSearch"]);
+  if (fromGoogleSearch != null) {
+    setValueByPath(toObject, ["googleSearch"], fromGoogleSearch);
   }
   const fromCodeExecution = getValueByPath(fromObject, [
     "codeExecution"
@@ -28441,10 +28499,6 @@ function toolToVertex$1(fromObject) {
   if (fromGoogleMaps != null) {
     setValueByPath(toObject, ["googleMaps"], fromGoogleMaps);
   }
-  const fromGoogleSearch = getValueByPath(fromObject, ["googleSearch"]);
-  if (fromGoogleSearch != null) {
-    setValueByPath(toObject, ["googleSearch"], fromGoogleSearch);
-  }
   const fromGoogleSearchRetrieval = getValueByPath(fromObject, [
     "googleSearchRetrieval"
   ]);
@@ -28454,6 +28508,9 @@ function toolToVertex$1(fromObject) {
   const fromUrlContext = getValueByPath(fromObject, ["urlContext"]);
   if (fromUrlContext != null) {
     setValueByPath(toObject, ["urlContext"], fromUrlContext);
+  }
+  if (getValueByPath(fromObject, ["mcpServers"]) !== void 0) {
+    throw new Error("mcpServers parameter is not supported in Vertex AI.");
   }
   return toObject;
 }
@@ -28592,15 +28649,15 @@ function candidateFromMldev(fromObject, rootObject) {
   if (fromFinishReason != null) {
     setValueByPath(toObject, ["finishReason"], fromFinishReason);
   }
-  const fromAvgLogprobs = getValueByPath(fromObject, ["avgLogprobs"]);
-  if (fromAvgLogprobs != null) {
-    setValueByPath(toObject, ["avgLogprobs"], fromAvgLogprobs);
-  }
   const fromGroundingMetadata = getValueByPath(fromObject, [
     "groundingMetadata"
   ]);
   if (fromGroundingMetadata != null) {
     setValueByPath(toObject, ["groundingMetadata"], fromGroundingMetadata);
+  }
+  const fromAvgLogprobs = getValueByPath(fromObject, ["avgLogprobs"]);
+  if (fromAvgLogprobs != null) {
+    setValueByPath(toObject, ["avgLogprobs"], fromAvgLogprobs);
   }
   const fromIndex = getValueByPath(fromObject, ["index"]);
   if (fromIndex != null) {
@@ -30709,6 +30766,10 @@ function googleMapsToMldev$1(fromObject, _rootObject) {
 }
 function googleSearchToMldev$1(fromObject, _rootObject) {
   const toObject = {};
+  const fromSearchTypes = getValueByPath(fromObject, ["searchTypes"]);
+  if (fromSearchTypes != null) {
+    setValueByPath(toObject, ["searchTypes"], fromSearchTypes);
+  }
   if (getValueByPath(fromObject, ["excludeDomains"]) !== void 0) {
     throw new Error("excludeDomains parameter is not supported in Gemini API.");
   }
@@ -30736,6 +30797,9 @@ function imageConfigToMldev(fromObject, _rootObject) {
   if (getValueByPath(fromObject, ["personGeneration"]) !== void 0) {
     throw new Error("personGeneration parameter is not supported in Gemini API.");
   }
+  if (getValueByPath(fromObject, ["prominentPeople"]) !== void 0) {
+    throw new Error("prominentPeople parameter is not supported in Gemini API.");
+  }
   if (getValueByPath(fromObject, ["outputMimeType"]) !== void 0) {
     throw new Error("outputMimeType parameter is not supported in Gemini API.");
   }
@@ -30759,6 +30823,12 @@ function imageConfigToVertex(fromObject, _rootObject) {
   ]);
   if (fromPersonGeneration != null) {
     setValueByPath(toObject, ["personGeneration"], fromPersonGeneration);
+  }
+  const fromProminentPeople = getValueByPath(fromObject, [
+    "prominentPeople"
+  ]);
+  if (fromProminentPeople != null) {
+    setValueByPath(toObject, ["prominentPeople"], fromProminentPeople);
   }
   const fromOutputMimeType = getValueByPath(fromObject, [
     "outputMimeType"
@@ -31487,6 +31557,10 @@ function toolToMldev$1(fromObject, rootObject) {
   if (fromFileSearch != null) {
     setValueByPath(toObject, ["fileSearch"], fromFileSearch);
   }
+  const fromGoogleSearch = getValueByPath(fromObject, ["googleSearch"]);
+  if (fromGoogleSearch != null) {
+    setValueByPath(toObject, ["googleSearch"], googleSearchToMldev$1(fromGoogleSearch));
+  }
   const fromCodeExecution = getValueByPath(fromObject, [
     "codeExecution"
   ]);
@@ -31512,10 +31586,6 @@ function toolToMldev$1(fromObject, rootObject) {
   if (fromGoogleMaps != null) {
     setValueByPath(toObject, ["googleMaps"], googleMapsToMldev$1(fromGoogleMaps));
   }
-  const fromGoogleSearch = getValueByPath(fromObject, ["googleSearch"]);
-  if (fromGoogleSearch != null) {
-    setValueByPath(toObject, ["googleSearch"], googleSearchToMldev$1(fromGoogleSearch));
-  }
   const fromGoogleSearchRetrieval = getValueByPath(fromObject, [
     "googleSearchRetrieval"
   ]);
@@ -31525,6 +31595,16 @@ function toolToMldev$1(fromObject, rootObject) {
   const fromUrlContext = getValueByPath(fromObject, ["urlContext"]);
   if (fromUrlContext != null) {
     setValueByPath(toObject, ["urlContext"], fromUrlContext);
+  }
+  const fromMcpServers = getValueByPath(fromObject, ["mcpServers"]);
+  if (fromMcpServers != null) {
+    let transformedList = fromMcpServers;
+    if (Array.isArray(transformedList)) {
+      transformedList = transformedList.map((item) => {
+        return item;
+      });
+    }
+    setValueByPath(toObject, ["mcpServers"], transformedList);
   }
   return toObject;
 }
@@ -31540,6 +31620,10 @@ function toolToVertex(fromObject, rootObject) {
   }
   if (getValueByPath(fromObject, ["fileSearch"]) !== void 0) {
     throw new Error("fileSearch parameter is not supported in Vertex AI.");
+  }
+  const fromGoogleSearch = getValueByPath(fromObject, ["googleSearch"]);
+  if (fromGoogleSearch != null) {
+    setValueByPath(toObject, ["googleSearch"], fromGoogleSearch);
   }
   const fromCodeExecution = getValueByPath(fromObject, [
     "codeExecution"
@@ -31569,10 +31653,6 @@ function toolToVertex(fromObject, rootObject) {
   if (fromGoogleMaps != null) {
     setValueByPath(toObject, ["googleMaps"], fromGoogleMaps);
   }
-  const fromGoogleSearch = getValueByPath(fromObject, ["googleSearch"]);
-  if (fromGoogleSearch != null) {
-    setValueByPath(toObject, ["googleSearch"], fromGoogleSearch);
-  }
   const fromGoogleSearchRetrieval = getValueByPath(fromObject, [
     "googleSearchRetrieval"
   ]);
@@ -31582,6 +31662,9 @@ function toolToVertex(fromObject, rootObject) {
   const fromUrlContext = getValueByPath(fromObject, ["urlContext"]);
   if (fromUrlContext != null) {
     setValueByPath(toObject, ["urlContext"], fromUrlContext);
+  }
+  if (getValueByPath(fromObject, ["mcpServers"]) !== void 0) {
+    throw new Error("mcpServers parameter is not supported in Vertex AI.");
   }
   return toObject;
 }
@@ -32126,7 +32209,7 @@ var CONTENT_TYPE_HEADER = "Content-Type";
 var SERVER_TIMEOUT_HEADER = "X-Server-Timeout";
 var USER_AGENT_HEADER = "User-Agent";
 var GOOGLE_API_CLIENT_HEADER = "x-goog-api-client";
-var SDK_VERSION = "1.42.0";
+var SDK_VERSION = "1.43.0";
 var LIBRARY_LABEL = `google-genai-sdk/${SDK_VERSION}`;
 var VERTEX_AI_API_DEFAULT_VERSION = "v1beta1";
 var GOOGLE_AI_API_DEFAULT_VERSION = "v1beta";
@@ -35021,6 +35104,10 @@ function googleMapsToMldev(fromObject) {
 }
 function googleSearchToMldev(fromObject) {
   const toObject = {};
+  const fromSearchTypes = getValueByPath(fromObject, ["searchTypes"]);
+  if (fromSearchTypes != null) {
+    setValueByPath(toObject, ["searchTypes"], fromSearchTypes);
+  }
   if (getValueByPath(fromObject, ["excludeDomains"]) !== void 0) {
     throw new Error("excludeDomains parameter is not supported in Gemini API.");
   }
@@ -35244,6 +35331,10 @@ function toolToMldev(fromObject) {
   if (fromFileSearch != null) {
     setValueByPath(toObject, ["fileSearch"], fromFileSearch);
   }
+  const fromGoogleSearch = getValueByPath(fromObject, ["googleSearch"]);
+  if (fromGoogleSearch != null) {
+    setValueByPath(toObject, ["googleSearch"], googleSearchToMldev(fromGoogleSearch));
+  }
   const fromCodeExecution = getValueByPath(fromObject, [
     "codeExecution"
   ]);
@@ -35269,10 +35360,6 @@ function toolToMldev(fromObject) {
   if (fromGoogleMaps != null) {
     setValueByPath(toObject, ["googleMaps"], googleMapsToMldev(fromGoogleMaps));
   }
-  const fromGoogleSearch = getValueByPath(fromObject, ["googleSearch"]);
-  if (fromGoogleSearch != null) {
-    setValueByPath(toObject, ["googleSearch"], googleSearchToMldev(fromGoogleSearch));
-  }
   const fromGoogleSearchRetrieval = getValueByPath(fromObject, [
     "googleSearchRetrieval"
   ]);
@@ -35282,6 +35369,16 @@ function toolToMldev(fromObject) {
   const fromUrlContext = getValueByPath(fromObject, ["urlContext"]);
   if (fromUrlContext != null) {
     setValueByPath(toObject, ["urlContext"], fromUrlContext);
+  }
+  const fromMcpServers = getValueByPath(fromObject, ["mcpServers"]);
+  if (fromMcpServers != null) {
+    let transformedList = fromMcpServers;
+    if (Array.isArray(transformedList)) {
+      transformedList = transformedList.map((item) => {
+        return item;
+      });
+    }
+    setValueByPath(toObject, ["mcpServers"], transformedList);
   }
   return toObject;
 }
@@ -36395,13 +36492,16 @@ var createPathTagFunction = (pathEncoder = encodeURIPath) => (function path3(sta
     return previousValue + currentValue + (index === params.length ? "" : encoded);
   }, "");
   const pathOnly = path4.split(/[?#]/, 1)[0];
-  const invalidSegmentPattern = /(?<=^|\/)(?:\.|%2e){1,2}(?=\/|$)/gi;
+  const invalidSegmentPattern = /(^|\/)(?:\.|%2e){1,2}(?=\/|$)/gi;
   let match;
   while ((match = invalidSegmentPattern.exec(pathOnly)) !== null) {
+    const hasLeadingSlash = match[0].startsWith("/");
+    const offset = hasLeadingSlash ? 1 : 0;
+    const cleanMatch = hasLeadingSlash ? match[0].slice(1) : match[0];
     invalidSegments.push({
-      start: match.index,
-      length: match[0].length,
-      error: `Value "${match[0]}" can't be safely passed as a path parameter`
+      start: match.index + offset,
+      length: cleanMatch.length,
+      error: `Value "${cleanMatch}" can't be safely passed as a path parameter`
     });
   }
   invalidSegments.sort((a, b) => a.start - b.start);
@@ -46171,6 +46271,7 @@ OpenAI.Skills = Skills;
 OpenAI.Videos = Videos;
 
 // node_modules/@quilltap/plugin-utils/dist/index.mjs
+var import_fs2 = require("fs");
 function parseGoogleToolCalls(response) {
   const toolCalls = [];
   try {
@@ -46257,6 +46358,7 @@ function createPluginLogger(pluginName, minLevel = "debug") {
   }
   return createConsoleLoggerWithChild(pluginName, minLevel);
 }
+var rewriteLogger = createPluginLogger("host-rewrite");
 
 // provider.ts
 var logger = createPluginLogger("qtap-plugin-google");
