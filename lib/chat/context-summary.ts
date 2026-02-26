@@ -572,7 +572,9 @@ export async function checkAndGenerateSummaryIfNeeded(
   // Check if we should consider updating the title
   const lastCheckedInterchange = chat.lastRenameCheckInterchange || 0
 
-  if (shouldCheckTitleAtInterchange(currentInterchange, lastCheckedInterchange)) {
+  const isAtTitleCheckpoint = shouldCheckTitleAtInterchange(currentInterchange, lastCheckedInterchange)
+
+  if (isAtTitleCheckpoint) {
     logger.info(`[Title Update] Checking title at interchange ${currentInterchange} for chat ${chatId}`)
 
     // Run title consideration in background (non-blocking)
@@ -588,20 +590,36 @@ export async function checkAndGenerateSummaryIfNeeded(
     })
   }
 
-  // Original summary check logic
-  const needsCheck = await chatNeedsSummary(chatId, provider, modelName)
-
-  if (needsCheck.needsSummary) {
-    logger.info(`[Context Summary] Chat ${chatId} needs summary: ${needsCheck.reason}`)
-
-    // Generate in background to not block the response
+  // Regenerate context summary on the same schedule as title/background checks,
+  // or when the token-based heuristic says we need one
+  if (isAtTitleCheckpoint && chat.contextSummary) {
+    // At a title checkpoint with an existing summary — force regeneration to keep
+    // the summary current (used by danger classification and story backgrounds)
+    logger.info(`[Context Summary] Regenerating summary at interchange ${currentInterchange} for chat ${chatId}`)
     generateContextSummaryAsync({
       userId,
       chatId,
       connectionProfile,
       cheapLLMSettings,
       availableProfiles,
+      forceRegenerate: true,
     })
+  } else {
+    // Original token-count-based summary check (for first-time generation)
+    const needsCheck = await chatNeedsSummary(chatId, provider, modelName)
+
+    if (needsCheck.needsSummary) {
+      logger.info(`[Context Summary] Chat ${chatId} needs summary: ${needsCheck.reason}`)
+
+      // Generate in background to not block the response
+      generateContextSummaryAsync({
+        userId,
+        chatId,
+        connectionProfile,
+        cheapLLMSettings,
+        availableProfiles,
+      })
+    }
   }
 }
 

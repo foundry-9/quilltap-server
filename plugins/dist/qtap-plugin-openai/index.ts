@@ -90,6 +90,9 @@ const cheapModels = {
  * The OpenAI Provider Plugin
  * Implements the LLMProviderPlugin interface for Quilltap
  */
+// Re-export moderation provider for plugin system discovery
+export { moderationPlugin } from './moderation-provider';
+
 export const plugin: LLMProviderPlugin = {
   metadata,
 

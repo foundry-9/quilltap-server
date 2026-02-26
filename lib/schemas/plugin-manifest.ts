@@ -36,6 +36,7 @@ export const PluginCapabilityEnum = z.enum([
   'ROLEPLAY_TEMPLATE',     // Provides roleplay formatting templates
   'TOOL_PROVIDER',         // Provides LLM tools (e.g., curl, calculators, etc.)
   'SEARCH_PROVIDER',       // Provides web search backend (e.g., Serper, Bing, DuckDuckGo)
+  'MODERATION_PROVIDER',   // Provides content moderation (e.g., OpenAI moderation endpoint)
 ]);
 
 export type PluginCapability = z.infer<typeof PluginCapabilityEnum>;
@@ -574,6 +575,51 @@ export const SearchProviderConfigSchema = z.object({
 
 export type SearchProviderConfig = z.infer<typeof SearchProviderConfigSchema>;
 
+/**
+ * Moderation provider plugin configuration schema
+ *
+ * Defines the configuration for content moderation provider plugins.
+ * These plugins use the MODERATION_PROVIDER capability and provide
+ * content classification backends (e.g., OpenAI moderation endpoint).
+ */
+export const ModerationProviderConfigSchema = z.object({
+  /** Internal identifier for the moderation provider (e.g., 'OPENAI') */
+  providerName: z.string().regex(/^[A-Z][A-Z0-9_]*$/),
+
+  /** Human-readable display name (e.g., 'OpenAI Moderation') */
+  displayName: z.string().min(1).max(100),
+
+  /** Short description of the moderation provider */
+  description: z.string().min(1).max(500),
+
+  /** 2-4 character abbreviation for use in icons/badges (e.g., 'OAI') */
+  abbreviation: z.string().min(2).max(4).regex(/^[A-Z0-9]+$/),
+
+  /** Color configuration using Tailwind CSS classes */
+  colors: z.object({
+    /** Background color class */
+    bg: z.string().min(1),
+    /** Text color class */
+    text: z.string().min(1),
+    /** Icon color class */
+    icon: z.string().min(1),
+  }),
+
+  /** Whether the moderation provider requires an API key */
+  requiresApiKey: z.boolean().default(true),
+
+  /** Custom label for the API key field */
+  apiKeyLabel: z.string().min(1).max(100).optional(),
+
+  /** Whether the moderation provider requires a custom base URL */
+  requiresBaseUrl: z.boolean().default(false),
+
+  /** Default base URL for the moderation provider (if customizable) */
+  baseUrlDefault: z.url().optional(),
+});
+
+export type ModerationProviderConfig = z.infer<typeof ModerationProviderConfigSchema>;
+
 // ============================================================================
 // MAIN MANIFEST SCHEMA
 // ============================================================================
@@ -694,6 +740,9 @@ export const PluginManifestSchema = z.strictObject({
 
   /** Search provider configuration (for SEARCH_PROVIDER capability plugins) */
   searchProviderConfig: SearchProviderConfigSchema.optional(),
+
+  /** Moderation provider configuration (for MODERATION_PROVIDER capability plugins) */
+  moderationProviderConfig: ModerationProviderConfigSchema.optional(),
 
   // ===== SECURITY & PERMISSIONS =====
   /** Permissions required by the plugin */

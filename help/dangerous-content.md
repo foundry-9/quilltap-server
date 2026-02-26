@@ -4,12 +4,22 @@ Dangerous Content Handling is a feature that classifies messages for sensitive o
 
 ## Overview
 
-When enabled, the system uses your configured Cheap LLM to analyze user messages before they are sent to the main LLM. Content that exceeds the configured threshold is flagged and can be:
+When enabled, the system classifies user messages before they are sent to the main LLM. Content that exceeds the configured threshold is flagged and can be:
 
 - **Detected and flagged** with warning badges (Detect Only mode)
 - **Automatically routed** to an uncensored-compatible provider (Auto-Route mode)
 
 The system is designed to be fail-safe: classification errors never block your messages.
+
+### Smart Classification
+
+Quilltap automatically selects the best available classification method:
+
+1. **OpenAI Moderation Endpoint** (preferred): If you have an OpenAI connection profile configured, Quilltap uses OpenAI's dedicated moderation endpoint automatically. This endpoint is purpose-built for content classification, is free to use with any OpenAI API key, and returns structured category scores. No additional configuration is needed — simply having an OpenAI connection profile is sufficient.
+
+2. **Cheap LLM Fallback**: If no OpenAI connection profile is available (or no moderation provider plugin is installed), Quilltap falls back to sending the content to your configured Cheap LLM with a classification prompt. This costs tokens per message and depends on the Cheap LLM's quality.
+
+The system tries the moderation provider first and transparently falls back to the Cheap LLM if needed.
 
 ## Modes
 
@@ -77,6 +87,16 @@ Common uncensored-compatible setups:
 - Self-hosted models with no content filtering
 
 ## How Classification Works
+
+### With Moderation Provider (OpenAI)
+
+1. Your message is sent to the OpenAI moderation endpoint (`/v1/moderations`)
+2. The endpoint returns structured category flags and confidence scores (e.g., `sexual: 0.92`, `violence: 0.01`)
+3. Provider-specific categories are mapped to Dangermouse categories (e.g., OpenAI's `sexual` → `nsfw`, `hate` → `hate_speech`)
+4. If any category score exceeds your threshold, or the provider flags the content, it is marked as dangerous
+5. Classification results are cached by content hash (5 minute TTL, up to 200 entries)
+
+### With Cheap LLM (Fallback)
 
 1. Your message is sent to the Cheap LLM with a classification prompt
 2. The LLM returns a JSON response with danger categories and scores
@@ -148,12 +168,13 @@ When dangerous content handling is enabled, Quilltap automatically classifies al
 
 ## Important Notes
 
-- Classification uses your Cheap LLM, adding a small token cost per scanned message
+- If you have an OpenAI connection profile, classification uses the free moderation endpoint (no token cost)
+- Without an OpenAI profile, classification falls back to your Cheap LLM, adding a small token cost per scanned message
 - Only user messages are scanned per-message, not assistant responses
 - Chat-level classification uses the compressed context summary (covers the whole conversation)
-- The system never blocks messages - if anything fails, your message goes through normally
+- The system never blocks messages — if anything fails, your message goes through normally
 - If no uncensored provider is available in Auto-Route mode, the message is sent to your regular provider with a warning
-- Classification accuracy depends on the Cheap LLM model's capabilities
+- Classification accuracy depends on the method used: the OpenAI moderation endpoint is purpose-built and highly accurate; the Cheap LLM fallback depends on the model's capabilities
 
 ## Related Topics
 

@@ -21,6 +21,7 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 var index_exports = {};
 __export(index_exports, {
   default: () => index_default,
+  moderationPlugin: () => moderationPlugin,
   plugin: () => plugin
 });
 module.exports = __toCommonJS(index_exports);
@@ -948,11 +949,11 @@ var parseLogLevel = (maybeLevel, sourceName, client) => {
 };
 function noop() {
 }
-function makeLogFn(fnLevel, logger5, logLevel) {
-  if (!logger5 || levelNumbers[fnLevel] > levelNumbers[logLevel]) {
+function makeLogFn(fnLevel, logger6, logLevel) {
+  if (!logger6 || levelNumbers[fnLevel] > levelNumbers[logLevel]) {
     return noop;
   } else {
-    return logger5[fnLevel].bind(logger5);
+    return logger6[fnLevel].bind(logger6);
   }
 }
 var noopLogger = {
@@ -963,22 +964,22 @@ var noopLogger = {
 };
 var cachedLoggers = /* @__PURE__ */ new WeakMap();
 function loggerFor(client) {
-  const logger5 = client.logger;
+  const logger6 = client.logger;
   const logLevel = client.logLevel ?? "off";
-  if (!logger5) {
+  if (!logger6) {
     return noopLogger;
   }
-  const cachedLogger = cachedLoggers.get(logger5);
+  const cachedLogger = cachedLoggers.get(logger6);
   if (cachedLogger && cachedLogger[0] === logLevel) {
     return cachedLogger[1];
   }
   const levelLogger = {
-    error: makeLogFn("error", logger5, logLevel),
-    warn: makeLogFn("warn", logger5, logLevel),
-    info: makeLogFn("info", logger5, logLevel),
-    debug: makeLogFn("debug", logger5, logLevel)
+    error: makeLogFn("error", logger6, logLevel),
+    warn: makeLogFn("warn", logger6, logLevel),
+    info: makeLogFn("info", logger6, logLevel),
+    debug: makeLogFn("debug", logger6, logLevel)
   };
-  cachedLoggers.set(logger5, [logLevel, levelLogger]);
+  cachedLoggers.set(logger6, [logLevel, levelLogger]);
   return levelLogger;
 }
 var formatRequestDetails = (details) => {
@@ -1012,7 +1013,7 @@ var Stream = class _Stream {
   }
   static fromSSEResponse(response, controller, client, synthesizeEventData) {
     let consumed = false;
-    const logger5 = client ? loggerFor(client) : console;
+    const logger6 = client ? loggerFor(client) : console;
     async function* iterator() {
       if (consumed) {
         throw new OpenAIError("Cannot iterate over a consumed stream, use `.tee()` to split the stream.");
@@ -1032,8 +1033,8 @@ var Stream = class _Stream {
             try {
               data = JSON.parse(sse.data);
             } catch (e) {
-              logger5.error(`Could not parse message into JSON:`, sse.data);
-              logger5.error(`From chunk:`, sse.raw);
+              logger6.error(`Could not parse message into JSON:`, sse.data);
+              logger6.error(`From chunk:`, sse.raw);
               throw e;
             }
             if (data && data.error) {
@@ -7026,7 +7027,7 @@ function createConsoleLoggerWithChild(prefix, minLevel = "debug", baseContext = 
     const entries = Object.entries(merged).filter(([key]) => key !== "context").map(([key, value]) => `${key}=${JSON.stringify(value)}`).join(" ");
     return entries ? ` ${entries}` : "";
   };
-  const logger5 = {
+  const logger6 = {
     debug: (message, context) => {
       if (shouldLog("debug")) {
         console.debug(`[${prefix}] ${message}${formatContext(context)}`);
@@ -7058,7 +7059,7 @@ ${error.stack || error.message}` : ""
       });
     }
   };
-  return logger5;
+  return logger6;
 }
 function createPluginLogger(pluginName, minLevel = "debug") {
   const coreFactory = getCoreLoggerFactory();
@@ -7585,8 +7586,93 @@ var OpenAIEmbeddingProvider = class {
   }
 };
 
+// moderation-provider.ts
+var logger4 = createPluginLogger("qtap-plugin-openai:moderation");
+var moderationPlugin = {
+  metadata: {
+    providerName: "OPENAI",
+    displayName: "OpenAI Moderation",
+    description: "Free content moderation via the OpenAI moderation endpoint",
+    abbreviation: "OAI",
+    colors: {
+      bg: "bg-green-100",
+      text: "text-green-800",
+      icon: "text-green-600"
+    }
+  },
+  config: {
+    requiresApiKey: true,
+    apiKeyLabel: "OpenAI API Key",
+    requiresBaseUrl: false
+  },
+  moderate: async (content, apiKey, baseUrl) => {
+    const url = baseUrl ? `${baseUrl.replace(/\/$/, "")}/v1/moderations` : "https://api.openai.com/v1/moderations";
+    logger4.debug("Calling OpenAI moderation endpoint", {
+      contentLength: content.length,
+      url
+    });
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({ input: content })
+    });
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "Unknown error");
+      logger4.error("OpenAI moderation API error", {
+        status: response.status,
+        error: errorText
+      });
+      throw new Error(`OpenAI moderation API error (${response.status}): ${errorText}`);
+    }
+    const data = await response.json();
+    if (!data.results || data.results.length === 0) {
+      logger4.warn("OpenAI moderation returned empty results");
+      return { flagged: false, categories: [] };
+    }
+    const result = data.results[0];
+    const categories = [];
+    for (const [category, flagged] of Object.entries(result.categories)) {
+      const score = result.category_scores[category] ?? 0;
+      categories.push({
+        category,
+        flagged,
+        score
+      });
+    }
+    logger4.debug("OpenAI moderation result", {
+      flagged: result.flagged,
+      categoryCount: categories.length,
+      flaggedCategories: categories.filter((c) => c.flagged).map((c) => c.category),
+      model: data.model
+    });
+    return {
+      flagged: result.flagged,
+      categories
+    };
+  },
+  validateApiKey: async (apiKey, baseUrl) => {
+    try {
+      const url = baseUrl ? `${baseUrl.replace(/\/$/, "")}/v1/moderations` : "https://api.openai.com/v1/moderations";
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({ input: "test" })
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
+};
+
 // index.ts
-var logger4 = createPluginLogger("qtap-plugin-openai");
+var logger5 = createPluginLogger("qtap-plugin-openai");
 var metadata = {
   providerName: "OPENAI",
   displayName: "OpenAI",
@@ -7666,7 +7752,7 @@ var plugin = {
       const models = await provider.getAvailableModels(apiKey);
       return models;
     } catch (error) {
-      logger4.error("Failed to fetch OpenAI models", { context: "plugin.getAvailableModels" }, error instanceof Error ? error : void 0);
+      logger5.error("Failed to fetch OpenAI models", { context: "plugin.getAvailableModels" }, error instanceof Error ? error : void 0);
       return [];
     }
   },
@@ -7679,7 +7765,7 @@ var plugin = {
       const isValid = await provider.validateApiKey(apiKey);
       return isValid;
     } catch (error) {
-      logger4.error("Error validating OpenAI API key", { context: "plugin.validateApiKey" }, error instanceof Error ? error : void 0);
+      logger5.error("Error validating OpenAI API key", { context: "plugin.validateApiKey" }, error instanceof Error ? error : void 0);
       return false;
     }
   },
@@ -7761,7 +7847,7 @@ var plugin = {
       const formattedTools = [];
       for (const tool of tools) {
         if (!("function" in tool)) {
-          logger4.warn("Skipping tool with invalid format", {
+          logger5.warn("Skipping tool with invalid format", {
             context: "plugin.formatTools"
           });
           continue;
@@ -7770,7 +7856,7 @@ var plugin = {
       }
       return formattedTools;
     } catch (error) {
-      logger4.error(
+      logger5.error(
         "Error formatting tools for OpenAI",
         { context: "plugin.formatTools" },
         error instanceof Error ? error : void 0
@@ -7790,7 +7876,7 @@ var plugin = {
       const toolCalls = parseOpenAIToolCalls(response);
       return toolCalls;
     } catch (error) {
-      logger4.error(
+      logger5.error(
         "Error parsing tool calls from OpenAI response",
         { context: "plugin.parseToolCalls" },
         error instanceof Error ? error : void 0
@@ -7802,5 +7888,6 @@ var plugin = {
 var index_default = plugin;
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
+  moderationPlugin,
   plugin
 });
