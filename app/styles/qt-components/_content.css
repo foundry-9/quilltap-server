@@ -56,6 +56,79 @@
   }
 
   /* ==========================================================================
+     SETTINGS PAGE - Background image readability
+     When a subsystem background image is shown on the settings page,
+     tabs and header text need opaque/contrasted treatments to remain legible.
+     ========================================================================== */
+
+  /**
+   * Settings page with background image - tabbed folder readability.
+   * Creates a classic tabbed-folder metaphor: the header sits above,
+   * tabs sit on top of a darkened content panel, and the active tab
+   * merges seamlessly into the panel below.
+   */
+
+  /* Frosted header banner behind title and subtitle */
+  .qt-page-container[style*="--story-background-url"] .qt-settings-header {
+    @apply rounded-lg px-4 py-4 -mx-4;
+    background: color-mix(in srgb, var(--color-background) 80%, transparent);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  /* Opaque inactive tab backgrounds */
+  .qt-page-container[style*="--story-background-url"] .qt-tab-group .qt-tab {
+    background: color-mix(in srgb, var(--color-background) 85%, var(--color-muted-foreground) 15%);
+    border-color: var(--color-border);
+  }
+
+  .qt-page-container[style*="--story-background-url"] .qt-tab-group .qt-tab:hover:not(.qt-tab-active) {
+    background: color-mix(in srgb, var(--color-background) 78%, var(--color-muted-foreground) 22%);
+  }
+
+  /* Active tab matches the panel background so it merges into it */
+  .qt-page-container[style*="--story-background-url"] .qt-tab-group .qt-tab.qt-tab-active {
+    background: color-mix(in srgb, var(--color-background) 88%, transparent);
+    border-color: var(--color-border);
+  }
+
+  .qt-page-container[style*="--story-background-url"] .qt-tab-group .qt-tab.qt-tab-active::after {
+    background: color-mix(in srgb, var(--color-background) 88%, transparent);
+  }
+
+  /* Remove gap between tabs and panel so they connect as a folder */
+  .qt-page-container[style*="--story-background-url"] .qt-tab-divider {
+    display: none;
+  }
+
+  /* Collapse the margin between tab nav wrapper and content panel */
+  .qt-page-container[style*="--story-background-url"] :has(> .qt-tab-group) {
+    margin-bottom: 0 !important;
+  }
+
+  .qt-page-container[style*="--story-background-url"] .qt-tab-group {
+    /* Nudge tabs down onto the panel border so the active tab overlaps it */
+    position: relative;
+    z-index: 1;
+    margin-bottom: -1px;
+  }
+
+  /**
+   * Settings content panel - the "folder" body below the tabs.
+   * Darkened backdrop that the background image shows through dimly,
+   * with a top border that the active tab sits on top of.
+   */
+  .qt-page-container[style*="--story-background-url"] .qt-settings-panel {
+    @apply rounded-b-lg px-4 pt-6 pb-6 -mx-4;
+    background: color-mix(in srgb, var(--color-background) 88%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--color-border);
+    border-top: 1px solid var(--color-border);
+    min-height: 40vh;
+  }
+
+  /* ==========================================================================
      BADGES - Shared base styles
      ========================================================================== */
 
