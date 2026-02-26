@@ -308,8 +308,6 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
 
         // Upload to file storage
         const { storageKey } = await fileStorageManager.uploadFile({
-          userId: user.id,
-          fileId,
           filename,
           content: imageBuffer,
           contentType: generatedImage.mimeType,

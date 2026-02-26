@@ -40,6 +40,9 @@ export interface BackupManifest {
   /** Backup format version (currently '1.0') */
   version: '1.0';
 
+  /** Backup format: 1 = old (files by category), 2 = new (files by storageKey) */
+  backupFormat?: number;
+
   /** ISO 8601 timestamp of when the backup was created */
   createdAt: string;
 

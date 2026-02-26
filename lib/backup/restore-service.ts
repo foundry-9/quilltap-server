@@ -203,15 +203,32 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
  */
 export async function getFileFromExtractedBackup(
   rootPath: string,
-  file: FileEntry
+  file: FileEntry,
+  backupFormat?: number
 ): Promise<Buffer | null> {
-  const expectedPath = path.join(rootPath, 'files', file.category, `${file.id}_${file.originalFilename}`);
+  // New format (backupFormat: 2): files stored by storageKey path
+  if (backupFormat === 2 && file.storageKey) {
+    const newFormatPath = path.join(rootPath, 'files', file.storageKey);
+    try {
+      await fs.promises.access(newFormatPath);
+      return await fs.promises.readFile(newFormatPath);
+    } catch {
+      // Fall through to old format as fallback
+    }
+  }
 
+  // Old format (backupFormat: 1 or unset): files/{CATEGORY}/{fileId}_{originalFilename}
+  const oldFormatPath = path.join(rootPath, 'files', file.category, `${file.id}_${file.originalFilename}`);
   try {
-    await fs.promises.access(expectedPath);
-    return await fs.promises.readFile(expectedPath);
+    await fs.promises.access(oldFormatPath);
+    return await fs.promises.readFile(oldFormatPath);
   } catch {
-    moduleLogger.warn('File not found in extracted backup', { expectedPath, fileId: file.id });
+    moduleLogger.warn('File not found in extracted backup', {
+      fileId: file.id,
+      triedPaths: backupFormat === 2
+        ? [path.join('files', file.storageKey || ''), path.join('files', file.category, `${file.id}_${file.originalFilename}`)]
+        : [path.join('files', file.category, `${file.id}_${file.originalFilename}`)],
+    });
     return null;
   }
 }
@@ -853,12 +870,10 @@ export async function restore(
       const file = data.files[i];
       const originalFile = parsedData.files[i]; // original IDs for disk lookup
       try {
-        const fileBuffer = await getFileFromExtractedBackup(rootPath, originalFile);
+        const fileBuffer = await getFileFromExtractedBackup(rootPath, originalFile, data.manifest?.backupFormat);
         if (fileBuffer) {
           // Upload to storage using file storage manager
           const uploadResult = await fileStorageManager.uploadFile({
-            userId: targetUserId,
-            fileId: file.id,
             filename: file.originalFilename,
             content: fileBuffer,
             contentType: file.mimeType,

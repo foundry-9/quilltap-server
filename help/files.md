@@ -419,6 +419,48 @@ Files attached to chat messages can be saved as permanent general files:
 - Make temporary attachments permanent
 - Organize files by purpose
 
+## Filesystem Sync
+
+Quilltap's file storage is backed by real directories on disk. You may add, remove, or rearrange files directly in the filesystem — much as one might reshuffle the card catalogue at a particularly well-appointed library — and Quilltap will detect the changes.
+
+### How It Works
+
+A vigilant filesystem watcher monitors your files directory at all times, rather like a tireless butler who notices when someone has rearranged the silverware. When files appear, vanish, or change on disk, the database is updated automatically:
+
+- **New files** discovered on disk appear as "untracked" in the file browser
+- **Removed files** are quietly de-catalogued from the database
+- **Changed files** have their records updated to match
+
+### Untracked Files
+
+Files found on disk without a corresponding database record are marked as **untracked**. They appear with a subtle amber indicator in both grid and list views. These are perfectly usable files — they simply arrived by some means other than the usual upload button. The AI can access them, you can preview them, and they behave in every respect like proper files, save for a faint air of mystery about their origins.
+
+### Manual Sync
+
+Should you wish to trigger an immediate reconciliation — perhaps after copying a great many files into the directory at once — click the **Sync** button (the circular arrows icon) in the file browser header. This performs a thorough scan of the entire files directory and ensures the database reflects reality with the utmost fidelity.
+
+### On-Disk Layout
+
+Files are stored in a straightforward directory structure:
+
+```
+files/
+├── _general/           # General files (not in any project)
+│   ├── documents/
+│   │   └── my-notes.txt
+│   └── my-image.png
+├── {project-id}/       # Project-specific files
+│   └── research/
+│       └── data.csv
+└── _thumbnails/        # Auto-generated image thumbnails
+```
+
+You may browse this directory at your leisure. It lives at the configured data path under the `files/` subdirectory.
+
+### Startup Reconciliation
+
+Each time Quilltap starts, it performs a comprehensive reconciliation — a sort of morning inventory, if you will — comparing every file on disk against every record in the database. Files that have appeared are catalogued; records for vanished files are retired. This ensures that even if the watcher missed something (perhaps during a period of dormancy), the slate is wiped clean at each fresh beginning.
+
 ## Troubleshooting Files
 
 ### Can't upload file

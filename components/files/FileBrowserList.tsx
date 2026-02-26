@@ -202,17 +202,24 @@ export default function FileBrowserList({
           {files.map(file => (
             <tr
               key={file.id}
-              className="border-b border-border hover:bg-muted transition-colors group"
+              className={`border-b border-border hover:bg-muted transition-colors group ${file.fileStatus === 'orphaned' ? 'bg-amber-400/5' : ''}`}
             >
               <td className="p-2 text-xl">{getFileIcon(file.mimeType)}</td>
               <td className="p-2">
-                <button
-                  onClick={() => onFileClick(file)}
-                  className="text-left font-medium hover:text-primary transition-colors truncate max-w-xs block"
-                  title={file.originalFilename || file.filename}
-                >
-                  {file.originalFilename || file.filename}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => onFileClick(file)}
+                    className="text-left font-medium hover:text-primary transition-colors truncate max-w-xs block"
+                    title={file.originalFilename || file.filename}
+                  >
+                    {file.originalFilename || file.filename}
+                  </button>
+                  {file.fileStatus === 'orphaned' && (
+                    <span className="qt-text-xs text-amber-500 px-1.5 py-0.5 rounded bg-amber-400/10 whitespace-nowrap" title="Untracked file found on disk">
+                      untracked
+                    </span>
+                  )}
+                </div>
               </td>
               <td className="p-2 hidden md:table-cell">
                 {file.linkedTo && file.linkedTo.length > 0 ? (

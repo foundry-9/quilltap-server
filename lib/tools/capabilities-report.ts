@@ -902,8 +902,6 @@ export async function generateAndSaveReport(userId: string): Promise<{
   // Upload to file storage
   const buffer = Buffer.from(markdown, 'utf-8');
   const uploadResult = await fileStorageManager.uploadFile({
-    userId,
-    fileId: reportId,
     filename,
     content: buffer,
     contentType: 'text/markdown',

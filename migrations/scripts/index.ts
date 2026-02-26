@@ -91,6 +91,12 @@ import { addProfileAllowToolUseFieldMigration } from './add-profile-allow-tool-u
 import { dropMountPointsMigration } from './drop-mount-points';
 // Move LLM logs to separate database
 import { moveLLMLogsToSeparateDbMigration } from './move-llm-logs-to-separate-db';
+// Add fileStatus field to files table
+import { addFileStatusFieldMigration } from './add-file-status-field';
+// Restructure file storage from old users/{userId}/... layout to new flat layout
+import { restructureFileStorageMigration } from './restructure-file-storage';
+// Cleanup pass for file storage restructure (category dirs, thumbnails, .DS_Store)
+import { restructureFileStorageCleanupMigration } from './restructure-file-storage-cleanup';
 
 /**
  * All available migrations.
@@ -177,6 +183,12 @@ export const migrations: Migration[] = [
   dropMountPointsMigration,
   // Move LLM logs to separate database
   moveLLMLogsToSeparateDbMigration,
+  // Add fileStatus field to files table
+  addFileStatusFieldMigration,
+  // Restructure file storage from old users/{userId}/... layout to new flat layout
+  restructureFileStorageMigration,
+  // Cleanup pass for file storage restructure (category dirs, thumbnails, .DS_Store)
+  restructureFileStorageCleanupMigration,
 ];
 
 export {
@@ -258,4 +270,10 @@ export {
   dropMountPointsMigration,
   // Move LLM logs to separate database
   moveLLMLogsToSeparateDbMigration,
+  // Add fileStatus field to files table
+  addFileStatusFieldMigration,
+  // Restructure file storage from old users/{userId}/... layout to new flat layout
+  restructureFileStorageMigration,
+  // Cleanup pass for file storage restructure
+  restructureFileStorageCleanupMigration,
 };

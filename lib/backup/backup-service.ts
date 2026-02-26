@@ -162,6 +162,7 @@ function createManifest(userId: string, data: Omit<BackupData, 'manifest'>): Bac
 
   return {
     version: '1.0',
+    backupFormat: 2,
     createdAt: new Date().toISOString(),
     userId,
     appVersion: APP_VERSION,
@@ -278,7 +279,8 @@ export async function createBackup(userId: string): Promise<{
       if (file.storageKey) {
         try {
           const fileBuffer = await fileStorageManager.downloadFile(file);
-          const fileDest = path.join(stagingDir, 'files', file.category, `${file.id}_${file.originalFilename}`);
+          // Use storageKey as path in backup (preserves real folder structure)
+          const fileDest = path.join(stagingDir, 'files', file.storageKey);
           await fs.promises.mkdir(path.dirname(fileDest), { recursive: true });
           await fs.promises.writeFile(fileDest, fileBuffer);
           filesStaged++;

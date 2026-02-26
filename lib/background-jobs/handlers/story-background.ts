@@ -444,8 +444,6 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   try {
     // Upload to file storage
     const uploadResult = await fileStorageManager.uploadFile({
-      userId: job.userId,
-      fileId,
       filename: originalFilename,
       content: buffer,
       contentType: imageData.mimeType,

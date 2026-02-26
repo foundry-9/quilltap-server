@@ -142,16 +142,9 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
 
   // Upload to storage
   const { storageKey } = await fileStorageManager.uploadFile({
-    userId,
-    fileId,
     filename: originalFilename,
     content: buffer,
     contentType: mimeType,
-    metadata: {
-      category,
-      filename: originalFilename,
-      sha256,
-    },
   });
   // Inherit tags from linked entities and merge with any explicitly provided tags
   const inheritedTags = await getInheritedTags(linkedTo, userId);

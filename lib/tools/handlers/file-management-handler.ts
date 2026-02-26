@@ -335,18 +335,16 @@ async function executeWriteFile(
     filename,
   });
 
-  const fileId = overwrite ? overwrite.fileId : repos.files['generateId']();
-
   // Upload to file storage
   const uploadResult = await fileStorageManager.uploadFile({
-    userId: context.userId,
-    fileId,
     filename,
     content: contentBuffer,
     contentType: mimeType,
     projectId: context.projectId,
     folderPath: targetFolderPath,
   });
+
+  const fileId = overwrite ? overwrite.fileId : repos.files['generateId']();
 
   let fileEntry;
   if (overwrite) {

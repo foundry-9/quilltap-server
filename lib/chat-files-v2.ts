@@ -323,17 +323,11 @@ async function uploadFileToProject(
 
   // Upload to file storage
   const { storageKey } = await fileStorageManager.uploadFile({
-    userId,
-    fileId,
     filename,
     content: buffer,
     contentType: mimeType,
     projectId: projectId || null,
     folderPath: '/',
-    metadata: {
-      category,
-      sha256,
-    },
   });
   // Inherit tags from the chat (and any other linked entities)
   const inheritedTags = await getInheritedTags(linkedTo, userId);

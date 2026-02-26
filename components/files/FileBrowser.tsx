@@ -74,6 +74,7 @@ export default function FileBrowser({
     };
   } | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isSyncing, setIsSyncing] = useState(false)
 
   // Upload functionality (only enabled when showUpload=true and projectId is provided)
   const {
@@ -346,6 +347,23 @@ export default function FileBrowser({
     }
   }, [moveModalFile, selectedFile, onFilesChange])
 
+  const handleSync = useCallback(async () => {
+    setIsSyncing(true)
+    try {
+      const res = await fetch('/api/v1/files?action=sync', { method: 'POST' })
+      if (res.ok) {
+        showSuccessToast('Filesystem sync complete')
+        fetchFiles()
+      } else {
+        throw new Error('Sync failed')
+      }
+    } catch (error) {
+      showErrorToast('Failed to sync filesystem')
+    } finally {
+      setIsSyncing(false)
+    }
+  }, [fetchFiles])
+
   const displayTitle = title || (projectId ? 'Project Files' : 'General Files')
 
   return (
@@ -378,6 +396,14 @@ export default function FileBrowser({
             title={viewMode === 'list' ? 'Grid view' : 'List view'}
           >
             {viewMode === 'list' ? '\u25A6' : '\u2630'}
+          </button>
+          <button
+            onClick={handleSync}
+            disabled={isSyncing || loading}
+            className="qt-button qt-button-secondary p-2"
+            title="Sync filesystem — scan disk for new or removed files"
+          >
+            {isSyncing ? '\u23F3' : '\u{1F504}'}
           </button>
           <button
             onClick={fetchFiles}

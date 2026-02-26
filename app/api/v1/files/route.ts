@@ -83,6 +83,7 @@ export const GET = createAuthenticatedHandler(async (request, { user, repos }) =
         folderPath: file.folderPath || '/',
         width: file.width,
         height: file.height,
+        fileStatus: file.fileStatus || 'ok',
         createdAt: file.createdAt,
         updatedAt: file.updatedAt,
       })),
@@ -120,7 +121,12 @@ export const POST = createAuthenticatedHandler(async (request, { user, repos }) 
     return handleCleanupOrphaned(request, user, repos);
   }
 
-  return badRequest(`Unknown action: ${action}. Available actions: write, upload, generate-thumbnails, cleanup-orphaned`);
+  // Handle filesystem sync (triggers immediate reconciliation)
+  if (action === 'sync') {
+    return handleSync();
+  }
+
+  return badRequest(`Unknown action: ${action}. Available actions: write, upload, generate-thumbnails, cleanup-orphaned, sync`);
 });
 
 // ============================================================================
@@ -174,12 +180,8 @@ async function handleWriteFile(request: NextRequest, user: any, repos: any): Pro
       filename: sanitizedFilename,
     });
 
-    const fileId = overwrite ? overwrite.fileId : repos.files['generateId']();
-
     // Upload to file storage
     const { storageKey } = await fileStorageManager.uploadFile({
-      userId: user.id,
-      fileId,
       filename: sanitizedFilename,
       content: contentBuffer,
       contentType: mimeType,
@@ -187,10 +189,12 @@ async function handleWriteFile(request: NextRequest, user: any, repos: any): Pro
       folderPath,
     });
 
+    const fileId = overwrite ? overwrite.fileId : repos.files['generateId']();
+
     let fileEntry;
     if (overwrite) {
       // Update existing file entry, preserving the original ID
-      fileEntry = await repos.files.update(fileId, {
+      fileEntry = await repos.files.update(overwrite.fileId, {
         sha256,
         mimeType,
         size: contentBuffer.length,
@@ -198,7 +202,7 @@ async function handleWriteFile(request: NextRequest, user: any, repos: any): Pro
       });
 
       logger.info('[Files v1] File overwritten successfully', {
-        fileId,
+        fileId: overwrite.fileId,
         filename: sanitizedFilename,
         userId: user.id,
       });
@@ -329,18 +333,16 @@ async function handleUploadFile(request: NextRequest, user: any, repos: any): Pr
       filename: sanitizedFilename,
     });
 
-    const fileId = overwrite ? overwrite.fileId : repos.files['generateId']();
-
     // Upload to file storage
     const { storageKey } = await fileStorageManager.uploadFile({
-      userId: user.id,
-      fileId,
       filename: sanitizedFilename,
       content: contentBuffer,
       contentType: mimeType,
       projectId: targetProjectId,
       folderPath,
     });
+
+    const fileId = overwrite ? overwrite.fileId : repos.files['generateId']();
 
     // Build linkedTo array from tags
     const linkedTo = tags ? tags.map(t => t.tagId) : [];
@@ -552,7 +554,7 @@ async function handleCleanupOrphaned(
     for (const file of allFiles) {
       try {
         if (file.storageKey) {
-          const exists = await fileStorageManager.fileExists(file.storageKey);
+          const exists = await fileStorageManager.storageKeyExists(file.storageKey);
           if (!exists) {
             staleRecords.push({ id: file.id, originalFilename: file.originalFilename });
           }
@@ -610,5 +612,24 @@ async function handleCleanupOrphaned(
       userId: user?.id,
     }, error instanceof Error ? error : undefined);
     return serverError('Failed to cleanup orphaned records');
+  }
+}
+
+/**
+ * Handle filesystem sync — triggers immediate reconciliation
+ */
+async function handleSync(): Promise<NextResponse> {
+  try {
+    logger.info('[Files v1] Triggering filesystem sync (reconciliation)');
+
+    const { reconcileFilesystem } = await import('@/lib/file-storage/reconciliation');
+    await reconcileFilesystem();
+
+    logger.info('[Files v1] Filesystem sync completed');
+    return successResponse({ message: 'Filesystem sync completed' });
+  } catch (error) {
+    logger.error('[Files v1] Error during filesystem sync', {},
+      error instanceof Error ? error : undefined);
+    return serverError('Failed to sync filesystem');
   }
 }

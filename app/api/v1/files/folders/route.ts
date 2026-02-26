@@ -113,7 +113,6 @@ async function ensureParentFoldersExist(
 
     try {
       await fileStorageManager.createFolder({
-        userId,
         projectId,
         folderPath: parentPath,
       });
@@ -249,7 +248,6 @@ async function handleCreateFolder(request: NextRequest, user: any, repos: any): 
     // Create storage directory for local backends
     try {
       await fileStorageManager.createFolder({
-        userId: user.id,
         projectId: projectId || null,
         folderPath: normalizedPath,
       });
@@ -436,7 +434,6 @@ async function handleDeleteFolder(request: NextRequest, user: any, repos: any): 
     // Delete from storage (for local backends)
     try {
       await fileStorageManager.deleteFolder({
-        userId: user.id,
         projectId: projectId || null,
         folderPath: normalizedPath,
       });

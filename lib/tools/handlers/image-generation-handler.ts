@@ -99,8 +99,6 @@ async function saveGeneratedImage(
 
     // Upload to file storage
     const uploadResult = await fileStorageManager.uploadFile({
-      userId,
-      fileId,
       filename: originalFilename,
       content: buffer,
       contentType: mimeType,
