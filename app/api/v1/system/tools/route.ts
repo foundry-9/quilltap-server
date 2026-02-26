@@ -80,6 +80,11 @@ function getJobTypeName(type: string): string {
     CONTEXT_SUMMARY: 'Context Summary',
     TITLE_UPDATE: 'Title Update',
     LLM_LOG_CLEANUP: 'LLM Log Cleanup',
+    EMBEDDING_GENERATE: 'Embedding Generation',
+    EMBEDDING_REFIT: 'Vocabulary Refit',
+    EMBEDDING_REINDEX_ALL: 'Re-embed All Memories',
+    STORY_BACKGROUND_GENERATION: 'Story Background',
+    CHAT_DANGER_CLASSIFICATION: 'Danger Classification',
   };
   return typeNames[type] || type;
 }
@@ -175,12 +180,36 @@ async function handleTasksQueue(req: NextRequest, context: any) {
       return new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime();
     });
 
+    // Build a character name cache for jobs that only have characterId
+    const characterNameCache = new Map<string, string>();
+    for (const job of activeJobs) {
+      const payload = job.payload as Record<string, unknown>;
+      if (payload.characterId && !payload.characterName) {
+        const charId = payload.characterId as string;
+        if (!characterNameCache.has(charId)) {
+          try {
+            const character = await repos.characters.findById(charId);
+            if (character) {
+              characterNameCache.set(charId, character.name);
+            }
+          } catch {
+            // Character lookup failed, skip
+          }
+        }
+      }
+    }
+
     let totalEstimatedTokens = 0;
     const jobDetails = activeJobs.map((job) => {
       const estimatedTokens = estimateTokensForJob(job);
       totalEstimatedTokens += estimatedTokens;
 
       const payload = job.payload as Record<string, unknown>;
+
+      // Resolve character name from payload or cache
+      const characterName = (payload.characterName as string | undefined)
+        || characterNameCache.get(payload.characterId as string)
+        || undefined;
 
       return {
         id: job.id,
@@ -195,7 +224,7 @@ async function handleTasksQueue(req: NextRequest, context: any) {
         lastError: job.lastError,
         estimatedTokens,
         chatId: payload.chatId as string | undefined,
-        characterName: payload.characterName as string | undefined,
+        characterName,
       };
     });
 
