@@ -18,6 +18,7 @@
 import { join } from 'path';
 import { createLogger } from '@/lib/logging/create-logger';
 import { getFilesDir } from '@/lib/paths';
+import { deriveFolderPathFromStorageKey } from '@/lib/files/folder-utils';
 import { scanDirectory, computeSha256, detectMimeType } from './scanner';
 
 const logger = createLogger('file-storage:reconciliation');
@@ -79,15 +80,34 @@ export async function reconcileFilesystem(): Promise<void> {
       diskKeySet.add(scannedFile.relativePath);
 
       if (dbByStorageKey.has(scannedFile.relativePath)) {
-        // Record exists — check if size needs updating
+        // Record exists — check if size or folderPath needs updating
         const dbRecord = dbByStorageKey.get(scannedFile.relativePath);
-        if (dbRecord.size !== scannedFile.size) {
+
+        // Derive expected folderPath from the storage key
+        const expectedFolderPath = deriveFolderPathFromStorageKey(scannedFile.relativePath);
+        const folderPathMismatch = (dbRecord.folderPath || '/') !== expectedFolderPath;
+
+        if (dbRecord.size !== scannedFile.size || folderPathMismatch) {
           try {
-            const sha256 = await computeSha256(join(filesDir, scannedFile.relativePath));
-            await repos.files.update(dbRecord.id, {
-              sha256,
-              size: scannedFile.size,
-            });
+            const updates: Record<string, any> = {};
+
+            if (dbRecord.size !== scannedFile.size) {
+              const sha256 = await computeSha256(join(filesDir, scannedFile.relativePath));
+              updates.sha256 = sha256;
+              updates.size = scannedFile.size;
+            }
+
+            if (folderPathMismatch) {
+              updates.folderPath = expectedFolderPath;
+              logger.debug('Correcting folderPath mismatch during reconciliation', {
+                fileId: dbRecord.id,
+                storageKey: scannedFile.relativePath,
+                oldFolderPath: dbRecord.folderPath || '(empty)',
+                newFolderPath: expectedFolderPath,
+              });
+            }
+
+            await repos.files.update(dbRecord.id, updates);
             recordsUpdated++;
           } catch (err) {
             errors++;
@@ -131,9 +151,7 @@ export async function reconcileFilesystem(): Promise<void> {
         const parts = scannedFile.relativePath.split('/');
         const projectOrGeneral = parts[0];
         const projectId = projectOrGeneral === '_general' ? null : projectOrGeneral;
-        const folderPath = parts.length > 2
-          ? '/' + parts.slice(1, parts.length - 1).join('/') + '/'
-          : '/';
+        const folderPath = deriveFolderPathFromStorageKey(scannedFile.relativePath);
 
         // Check for SHA-256 match among unmatched DB records (moved file)
         const matchedDbRecord = unmatchedDbBySha256.get(sha256);

@@ -20,6 +20,7 @@ import { relative, join, extname, basename, dirname } from 'path';
 import { createLogger } from '@/lib/logging/create-logger';
 import { getFilesDir } from '@/lib/paths';
 import { computeSha256, detectMimeType } from './scanner';
+import { deriveFolderPathFromStorageKey } from '@/lib/files/folder-utils';
 import { stat } from 'fs/promises';
 
 const logger = createLogger('file-storage:watcher');
@@ -113,9 +114,7 @@ async function handleFileAdd(filesDir: string, relativePath: string): Promise<vo
     const parts = relativePath.split('/');
     const projectOrGeneral = parts[0];
     const projectId = projectOrGeneral === '_general' ? null : projectOrGeneral;
-    const folderPath = parts.length > 2
-      ? '/' + parts.slice(1, parts.length - 1).join('/') + '/'
-      : '/';
+    const folderPath = deriveFolderPathFromStorageKey(relativePath);
 
     // Check pending unlinks for a SHA-256 match (file move: unlink + add)
     for (const [oldKey, pending] of pendingUnlinks.entries()) {

@@ -12,7 +12,7 @@ import { getActionParam } from '@/lib/api/middleware/actions';
 import { getFilePath } from '@/lib/api/middleware/file-path';
 import { logger } from '@/lib/logger';
 import { fileStorageManager } from '@/lib/file-storage/manager';
-import { normalizeFolderPath, validateFolderPath } from '@/lib/files/folder-utils';
+import { normalizeFolderPath, validateFolderPath, resolveEffectiveFolderPath } from '@/lib/files/folder-utils';
 import { createHash } from 'crypto';
 import { z } from 'zod';
 import { successResponse, badRequest, forbidden, serverError, validationError } from '@/lib/api/responses';
@@ -62,7 +62,9 @@ export const GET = createAuthenticatedHandler(async (request, { user, repos }) =
     // Filter by folder if provided
     if (folderPath) {
       const normalizedPath = normalizeFolderPath(folderPath);
-      files = files.filter((f: any) => f.folderPath === normalizedPath);
+      files = files.filter((f: any) =>
+        resolveEffectiveFolderPath(f.folderPath, f.storageKey) === normalizedPath
+      );
     }
 
     // Sort by createdAt descending
@@ -80,7 +82,7 @@ export const GET = createAuthenticatedHandler(async (request, { user, repos }) =
         category: file.category,
         description: file.description,
         projectId: file.projectId,
-        folderPath: file.folderPath || '/',
+        folderPath: resolveEffectiveFolderPath(file.folderPath, file.storageKey),
         width: file.width,
         height: file.height,
         fileStatus: file.fileStatus || 'ok',

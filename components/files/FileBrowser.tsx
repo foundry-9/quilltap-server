@@ -207,6 +207,7 @@ export default function FileBrowser({
     }
 
     // Then, derive folders from file paths (for backwards compatibility)
+    // and update file counts for all folders (including DB folders)
     for (const file of files) {
       const fileFolderPath = file.folderPath || '/'
       if (fileFolderPath.startsWith(currentFolder) && fileFolderPath !== currentFolder) {
@@ -215,26 +216,22 @@ export default function FileBrowser({
         const nextSlash = remainder.indexOf('/')
         if (nextSlash > 0) {
           const subfolder = currentFolder + remainder.slice(0, nextSlash + 1)
+          const existing = folderMap.get(subfolder)
 
-          // Only add if not already in map from DB
-          if (!folderMap.has(subfolder)) {
-            const existing = folderMap.get(subfolder)
-            if (existing) {
-              // Increment file count
+          if (existing) {
+            // DB folders already have a file count from the initial computation,
+            // so skip incrementing for those
+            if (!existing.isDbFolder) {
               existing.fileCount++
-            } else {
-              const name = subfolder.split('/').filter(Boolean).pop() || subfolder
-              folderMap.set(subfolder, {
-                path: subfolder,
-                name,
-                fileCount: 1,
-                isDbFolder: false,
-              })
             }
           } else {
-            // Already exists from DB, just update file count if needed
-            const existing = folderMap.get(subfolder)!
-            // File count already computed for DB folders
+            const name = subfolder.split('/').filter(Boolean).pop() || subfolder
+            folderMap.set(subfolder, {
+              path: subfolder,
+              name,
+              fileCount: 1,
+              isDbFolder: false,
+            })
           }
         }
       }
