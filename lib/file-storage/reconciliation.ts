@@ -7,8 +7,9 @@
  * Logic:
  * 1. Scan entire files directory (excluding _thumbnails)
  * 2. Load all file DB records
- * 3. For each file on disk: match to DB by storageKey, create orphaned record if missing
- * 4. For each DB record not on disk: delete the DB record
+ * 3. For each file on disk: match to DB by storageKey, collect unmatched
+ * 3.5. SHA-256 cross-match unmatched disk files with unmatched DB records to detect moves
+ * 4. For each DB record not on disk and not matched by cross-matching: delete
  * 5. Log summary
  *
  * @module file-storage/reconciliation
@@ -70,6 +71,9 @@ export async function reconcileFilesystem(): Promise<void> {
 
     const diskKeySet = new Set<string>();
 
+    // Collect unmatched disk files for cross-matching in step 3.5
+    const unmatchedDiskFiles: typeof filesOnlyScanned = [];
+
     // Step 3: For each file on disk, ensure a DB record exists
     for (const scannedFile of filesOnlyScanned) {
       diskKeySet.add(scannedFile.relativePath);
@@ -96,7 +100,28 @@ export async function reconcileFilesystem(): Promise<void> {
         continue;
       }
 
-      // No DB record — create one as orphaned
+      // No DB record by storageKey — collect for cross-matching
+      unmatchedDiskFiles.push(scannedFile);
+    }
+
+    // Collect unmatched DB records (on DB but not on disk)
+    const unmatchedDbRecords = allDbFiles.filter(
+      (f) => f.storageKey && !diskKeySet.has(f.storageKey)
+    );
+
+    // Step 3.5: SHA-256 cross-matching to detect file moves
+    // Build a sha256 → dbRecord map from unmatched DB records for O(1) lookups
+    const unmatchedDbBySha256 = new Map<string, any>();
+    for (const dbRecord of unmatchedDbRecords) {
+      if (dbRecord.sha256) {
+        unmatchedDbBySha256.set(dbRecord.sha256, dbRecord);
+      }
+    }
+
+    // Track which DB records got matched so we don't delete them in step 4
+    const matchedDbIds = new Set<string>();
+
+    for (const scannedFile of unmatchedDiskFiles) {
       try {
         const absolutePath = join(filesDir, scannedFile.relativePath);
         const sha256 = await computeSha256(absolutePath);
@@ -110,6 +135,30 @@ export async function reconcileFilesystem(): Promise<void> {
           ? '/' + parts.slice(1, parts.length - 1).join('/') + '/'
           : '/';
 
+        // Check for SHA-256 match among unmatched DB records (moved file)
+        const matchedDbRecord = unmatchedDbBySha256.get(sha256);
+        if (matchedDbRecord && !matchedDbIds.has(matchedDbRecord.id)) {
+          // This is a moved file — update the existing record
+          await repos.files.update(matchedDbRecord.id, {
+            storageKey: scannedFile.relativePath,
+            folderPath,
+            projectId,
+            originalFilename: scannedFile.name,
+          });
+          matchedDbIds.add(matchedDbRecord.id);
+          // Remove from map so same sha256 can't match twice
+          unmatchedDbBySha256.delete(sha256);
+          recordsUpdated++;
+
+          logger.info('Detected file move during reconciliation via sha256 match', {
+            fileId: matchedDbRecord.id,
+            oldKey: matchedDbRecord.storageKey,
+            newKey: scannedFile.relativePath,
+          });
+          continue;
+        }
+
+        // No match — create orphaned record
         await repos.files.create({
           userId,
           sha256,
@@ -128,34 +177,32 @@ export async function reconcileFilesystem(): Promise<void> {
         recordsCreated++;
       } catch (err) {
         errors++;
-        logger.warn('Failed to create orphaned record during reconciliation', {
+        logger.warn('Failed to process unmatched disk file during reconciliation', {
           storageKey: scannedFile.relativePath,
           error: err instanceof Error ? err.message : String(err),
         });
       }
     }
 
-    // Step 4: For each DB record not on disk, delete it
-    for (const dbFile of allDbFiles) {
-      if (!dbFile.storageKey) continue;
+    // Step 4: Delete DB records not on disk and not matched by cross-matching
+    for (const dbRecord of unmatchedDbRecords) {
+      if (matchedDbIds.has(dbRecord.id)) continue;
 
-      if (!diskKeySet.has(dbFile.storageKey)) {
-        try {
-          await repos.files.delete(dbFile.id);
-          recordsDeleted++;
+      try {
+        await repos.files.delete(dbRecord.id);
+        recordsDeleted++;
 
-          logger.debug('Deleted DB record for missing file', {
-            fileId: dbFile.id,
-            storageKey: dbFile.storageKey,
-            filename: dbFile.originalFilename,
-          });
-        } catch (err) {
-          errors++;
-          logger.warn('Failed to delete stale record during reconciliation', {
-            fileId: dbFile.id,
-            error: err instanceof Error ? err.message : String(err),
-          });
-        }
+        logger.debug('Deleted DB record for missing file', {
+          fileId: dbRecord.id,
+          storageKey: dbRecord.storageKey,
+          filename: dbRecord.originalFilename,
+        });
+      } catch (err) {
+        errors++;
+        logger.warn('Failed to delete stale record during reconciliation', {
+          fileId: dbRecord.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
 

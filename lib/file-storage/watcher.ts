@@ -34,6 +34,14 @@ let watcher: ReturnType<typeof chokidar.watch> | null = null;
 const debounceTimers = new Map<string, NodeJS.Timeout>();
 const DEBOUNCE_MS = 500;
 
+/** Buffer for pending unlink events to detect file moves (unlink + add pair) */
+interface PendingUnlink {
+  record: any;
+  timer: NodeJS.Timeout;
+}
+const pendingUnlinks = new Map<string, PendingUnlink>();
+const PENDING_UNLINK_MS = 3000;
+
 // ============================================================================
 // HELPERS
 // ============================================================================
@@ -108,6 +116,29 @@ async function handleFileAdd(filesDir: string, relativePath: string): Promise<vo
     const folderPath = parts.length > 2
       ? '/' + parts.slice(1, parts.length - 1).join('/') + '/'
       : '/';
+
+    // Check pending unlinks for a SHA-256 match (file move: unlink + add)
+    for (const [oldKey, pending] of pendingUnlinks.entries()) {
+      if (pending.record.sha256 === sha256) {
+        // Found a match — this is a move, not a delete + create
+        clearTimeout(pending.timer);
+        pendingUnlinks.delete(oldKey);
+
+        await repos.files.update(pending.record.id, {
+          storageKey: relativePath,
+          folderPath,
+          projectId,
+          originalFilename: name,
+        });
+
+        logger.info('Detected file move via pending unlink sha256 match', {
+          fileId: pending.record.id,
+          oldKey,
+          newKey: relativePath,
+        });
+        return;
+      }
+    }
 
     // Check if sha256 matches a record that lost its file (moved?)
     const sha256Matches = await repos.files.findBySha256(sha256);
@@ -200,7 +231,12 @@ async function handleFileChange(filesDir: string, relativePath: string): Promise
 }
 
 /**
- * Handle file removal — delete DB record
+ * Handle file removal — defer deletion to allow move detection.
+ *
+ * When a file is moved on disk, chokidar fires `unlink` then `add`.
+ * Instead of deleting immediately, we stash the record in pendingUnlinks
+ * for a short window. If a matching `add` arrives (same SHA-256),
+ * we treat it as a move and preserve all metadata.
  */
 async function handleFileUnlink(relativePath: string): Promise<void> {
   if (shouldIgnore(relativePath)) return;
@@ -216,13 +252,30 @@ async function handleFileUnlink(relativePath: string): Promise<void> {
       return;
     }
 
-    // Delete the DB record
-    await repos.files.delete(existing.id);
+    // Defer the deletion — stash in pending buffer
+    const timer = setTimeout(async () => {
+      pendingUnlinks.delete(relativePath);
+      try {
+        await repos.files.delete(existing.id);
+        logger.info('Deleted file record after on-disk removal (deferred)', {
+          fileId: existing.id,
+          storageKey: relativePath,
+          filename: existing.originalFilename,
+        });
+      } catch (err) {
+        logger.warn('Error executing deferred file deletion', {
+          relativePath,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }, PENDING_UNLINK_MS);
 
-    logger.info('Deleted file record after on-disk removal', {
+    pendingUnlinks.set(relativePath, { record: existing, timer });
+
+    logger.debug('File unlink deferred for move detection', {
       fileId: existing.id,
       storageKey: relativePath,
-      filename: existing.originalFilename,
+      pendingCount: pendingUnlinks.size,
     });
   } catch (error) {
     logger.warn('Error handling file unlink event', {
@@ -388,6 +441,33 @@ export async function stopWatcher(): Promise<void> {
     clearTimeout(timer);
   }
   debounceTimers.clear();
+
+  // Flush all pending unlinks — execute deletions immediately
+  if (pendingUnlinks.size > 0) {
+    logger.debug('Flushing pending unlinks on watcher stop', {
+      count: pendingUnlinks.size,
+    });
+
+    const { getRepositories } = await import('@/lib/database/repositories');
+    const repos = getRepositories();
+
+    for (const [storageKey, pending] of pendingUnlinks.entries()) {
+      clearTimeout(pending.timer);
+      try {
+        await repos.files.delete(pending.record.id);
+        logger.debug('Flushed pending unlink deletion', {
+          fileId: pending.record.id,
+          storageKey,
+        });
+      } catch (err) {
+        logger.warn('Error flushing pending unlink deletion', {
+          storageKey,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+    pendingUnlinks.clear();
+  }
 
   await watcher.close();
   watcher = null;
