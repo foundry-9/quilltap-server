@@ -13866,6 +13866,24 @@ function resolveHostGateway() {
     return cachedGatewayHost;
   }
   try {
+    if ((0, import_fs.existsSync)("/proc/sys/fs/binfmt_misc/WSLInterop")) {
+      const resolv = (0, import_fs.readFileSync)("/etc/resolv.conf", "utf-8");
+      for (const line of resolv.split("\n")) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith("#") || trimmed === "") continue;
+        const match = trimmed.match(/^nameserver\s+(\S+)/);
+        if (match) {
+          const ip = match[1];
+          rewriteLogger.info("WSL2 host IP from /etc/resolv.conf nameserver", { ip });
+          cachedGatewayHost = ip;
+          return cachedGatewayHost;
+        }
+      }
+    }
+  } catch {
+    rewriteLogger.debug("Could not detect WSL2 or read /etc/resolv.conf");
+  }
+  try {
     const routeTable = (0, import_fs.readFileSync)("/proc/net/route", "utf-8");
     for (const line of routeTable.split("\n").slice(1)) {
       const fields = line.trim().split("	");

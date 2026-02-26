@@ -13,7 +13,9 @@
  * 1. `QUILLTAP_HOST_IP` env var (explicit override) → rewrite to that IP
  * 2. In Docker (not Lima): rewrite `localhost` → `host.docker.internal`
  *    (Docker Desktop DNS or --add-host on Linux handles the forwarding)
- * 3. Default gateway from /proc/net/route (works in Lima and WSL2 where
+ * 2.5. In WSL2: nameserver IP from /etc/resolv.conf (WSL2 auto-generates
+ *    this to point at the Windows host with special localhost forwarding)
+ * 3. Default gateway from /proc/net/route (works in Lima where
  *    NAT networking forwards to host loopback)
  * 4. Fallback: try DNS lookup of `host.docker.internal` via /etc/hosts
  * 5. Give up gracefully — return URL unchanged
@@ -140,11 +142,38 @@ export function resolveHostGateway(): string | null {
     return cachedGatewayHost;
   }
 
-  // Strategy 3: Default gateway from /proc/net/route (Lima/WSL2)
+  // Strategy 2.5: WSL2 — use nameserver from /etc/resolv.conf
+  // WSL2 auto-generates resolv.conf with a nameserver entry pointing to
+  // the Windows host's IP on the Hyper-V virtual network. This IP has
+  // special forwarding in WSL2's networking stack that can reach services
+  // bound to 127.0.0.1 on the Windows host — unlike the /proc/net/route
+  // gateway which only reaches the Hyper-V vNIC interface.
+  //
+  // Detection: /proc/sys/fs/binfmt_misc/WSLInterop exists only in WSL2.
+  try {
+    if (existsSync('/proc/sys/fs/binfmt_misc/WSLInterop')) {
+      const resolv = readFileSync('/etc/resolv.conf', 'utf-8');
+      for (const line of resolv.split('\n')) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('#') || trimmed === '') continue;
+        const match = trimmed.match(/^nameserver\s+(\S+)/);
+        if (match) {
+          const ip = match[1];
+          rewriteLogger.info('WSL2 host IP from /etc/resolv.conf nameserver', { ip });
+          cachedGatewayHost = ip;
+          return cachedGatewayHost;
+        }
+      }
+    }
+  } catch {
+    rewriteLogger.debug('Could not detect WSL2 or read /etc/resolv.conf');
+  }
+
+  // Strategy 3: Default gateway from /proc/net/route (Lima)
   // Parse the kernel routing table directly instead of shelling out to
   // `ip route`, which is unavailable in Alpine Linux images.
   // The file format is tab-separated with hex-encoded IPs.
-  // This works for Lima and WSL2 where NAT networking forwards traffic
+  // This works for Lima where NAT networking forwards traffic
   // from the gateway IP to the host's loopback.
   try {
     const routeTable = readFileSync('/proc/net/route', 'utf-8');
