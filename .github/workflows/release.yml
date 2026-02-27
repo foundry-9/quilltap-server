@@ -329,6 +329,10 @@ jobs:
             echo "tag=dev" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Set package version to match release tag
+        working-directory: packages/quilltap
+        run: npm version "${GITHUB_REF_NAME}" --no-git-tag-version --allow-same-version
+
       - name: Publish to npm
         working-directory: packages/quilltap
         run: npm publish --tag ${{ steps.dist-tag.outputs.tag }}
