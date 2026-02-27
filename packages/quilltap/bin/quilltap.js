@@ -114,6 +114,17 @@ function openBrowser(url) {
   });
 }
 
+// Resolve a native module's directory, handling npm hoisting.
+// Returns the directory containing package.json, or null if not found.
+function resolveModuleDir(moduleName) {
+  try {
+    const pkgJson = require.resolve(moduleName + '/package.json');
+    return path.dirname(pkgJson);
+  } catch {
+    return null;
+  }
+}
+
 // Check if native modules are compiled for the current Node.js version.
 // This handles the case where npx caches the package but the user upgrades
 // Node.js — the cached native modules will have a stale NODE_MODULE_VERSION.
@@ -123,10 +134,11 @@ function ensureNativeModules() {
   // Check better-sqlite3: it lazy-loads the native .node binary only when you
   // create a Database, so a bare require('better-sqlite3') always succeeds.
   // We must load the native binding directly to detect NODE_MODULE_VERSION mismatches.
+  // Use require.resolve to find it regardless of npm hoisting.
   try {
-    const bindingsPath = path.join(
-      PACKAGE_DIR, 'node_modules', 'better-sqlite3', 'build', 'Release', 'better_sqlite3.node'
-    );
+    const modDir = resolveModuleDir('better-sqlite3');
+    if (!modDir) throw Object.assign(new Error('not found'), { code: 'MODULE_NOT_FOUND' });
+    const bindingsPath = path.join(modDir, 'build', 'Release', 'better_sqlite3.node');
     require(bindingsPath);
   } catch (err) {
     if (err.message && err.message.includes('NODE_MODULE_VERSION')) {
@@ -164,6 +176,77 @@ function ensureNativeModules() {
     console.error(`  Warning: Failed to rebuild native modules: ${err.message}`);
     console.error('  Try running: npm rebuild --prefix ' + PACKAGE_DIR);
     console.error('');
+  }
+}
+
+// Symlink native modules into the standalone directory's node_modules
+// so that standard Node.js resolution finds them without relying on NODE_PATH.
+function linkNativeModules(standaloneDir) {
+  const standaloneNodeModules = path.join(standaloneDir, 'node_modules');
+
+  // Ensure top-level node_modules exists in standalone dir
+  if (!fs.existsSync(standaloneNodeModules)) {
+    fs.mkdirSync(standaloneNodeModules, { recursive: true });
+  }
+
+  const symlinkType = process.platform === 'win32' ? 'junction' : 'dir';
+
+  // Link a single module directory into standaloneDir/node_modules/<name>
+  function linkModule(name, sourceDir) {
+    if (!sourceDir) return;
+    const targetPath = path.join(standaloneNodeModules, name);
+
+    // If already exists and points to the right place, skip
+    if (fs.existsSync(targetPath)) {
+      try {
+        const existing = fs.realpathSync(targetPath);
+        const source = fs.realpathSync(sourceDir);
+        if (existing === source) return; // already linked correctly
+      } catch {
+        // If we can't resolve, remove and re-link
+      }
+      // Remove stale link/dir
+      fs.rmSync(targetPath, { recursive: true, force: true });
+    }
+
+    // Ensure parent directory exists (for scoped packages like @img/sharp-*)
+    const parentDir = path.dirname(targetPath);
+    if (!fs.existsSync(parentDir)) {
+      fs.mkdirSync(parentDir, { recursive: true });
+    }
+
+    try {
+      fs.symlinkSync(sourceDir, targetPath, symlinkType);
+    } catch (err) {
+      // If symlink fails (e.g. permissions), try copying as fallback
+      console.error(`  Warning: Could not symlink ${name}: ${err.message}`);
+    }
+  }
+
+  // Link better-sqlite3
+  const betterSqlite3Dir = resolveModuleDir('better-sqlite3');
+  linkModule('better-sqlite3', betterSqlite3Dir);
+
+  // Link sharp
+  const sharpDir = resolveModuleDir('sharp');
+  linkModule('sharp', sharpDir);
+
+  // Link sharp's @img platform packages — they live near sharp's location
+  if (sharpDir) {
+    const sharpParent = path.dirname(sharpDir);
+
+    // If sharp is in a scoped dir or regular node_modules, look for @img there
+    const imgDir = path.join(sharpParent, '@img');
+    if (fs.existsSync(imgDir)) {
+      try {
+        const imgPackages = fs.readdirSync(imgDir).filter(name => name.startsWith('sharp-'));
+        for (const pkg of imgPackages) {
+          linkModule(`@img/${pkg}`, path.join(imgDir, pkg));
+        }
+      } catch {
+        // Non-fatal — sharp may work without explicit @img links
+      }
+    }
   }
 }
 
@@ -206,6 +289,9 @@ async function main() {
   // Ensure native modules are compiled for the current Node.js version
   ensureNativeModules();
 
+  // Symlink native modules into standalone dir so standard resolution finds them
+  linkNativeModules(standaloneDir);
+
   // Set up environment
   const env = {
     ...process.env,
@@ -218,13 +304,14 @@ async function main() {
     env.QUILLTAP_DATA_DIR = path.resolve(opts.dataDir);
   }
 
-  // Set NODE_PATH so native modules resolve from the npm package's own node_modules.
-  // The standalone output has native modules stripped — better-sqlite3 and sharp
-  // are installed as real npm dependencies so they compile for the user's platform.
+  // Set NODE_PATH as a fallback — native modules are symlinked into standaloneDir
+  // but NODE_PATH covers any other dependencies. Include the parent node_modules
+  // to handle npm hoisting (e.g. npx installs where deps are hoisted up a level).
   const packageNodeModules = path.join(PACKAGE_DIR, 'node_modules');
-  env.NODE_PATH = env.NODE_PATH
-    ? `${packageNodeModules}${path.delimiter}${env.NODE_PATH}`
-    : packageNodeModules;
+  const parentNodeModules = path.resolve(PACKAGE_DIR, '..');
+  env.NODE_PATH = [packageNodeModules, parentNodeModules, env.NODE_PATH]
+    .filter(Boolean)
+    .join(path.delimiter);
 
   const url = `http://localhost:${opts.port}`;
 

@@ -4,6 +4,7 @@
 
 ### 3.1-dev
 
+- fix: Native module resolution for `npx quilltap` — native modules (`better-sqlite3`, `sharp`, `@img/sharp-*`) are now symlinked into the standalone directory's `node_modules/` so standard Node.js resolution finds them without relying on `NODE_PATH`; `ensureNativeModules()` uses `require.resolve()` to locate modules regardless of npm hoisting; `NODE_PATH` fallback now includes the parent `node_modules/` to handle hoisted dependencies; fixes "Cannot find module 'better-sqlite3'" error when running via `npx`
 - fix: Native module version check now loads the `.node` binary directly — `better-sqlite3` lazy-loads its native binding only when a Database is created, so the previous `require('better-sqlite3')` check always succeeded without testing the actual binary; the CLI now loads the compiled `better_sqlite3.node` file directly from the package's `build/Release/` directory to reliably detect NODE_MODULE_VERSION mismatches
 - fix: BLOB column support in SQLite update path — `translateUpdate`/`buildUpdateQuery` now accept blob columns so that `updateOne`/`updateMany` write embeddings as Float32 BLOBs instead of JSON TEXT; previously the normalize-vector-storage migration's work was undone by subsequent writes; threads `blobColumns` from `SQLiteCollection` through to the query translator
 - fix: Memory cleanup POST returned 400 — the housekeeping dialog was not including `characterId` in the POST body despite the API schema requiring it; added missing field to the fetch body in `housekeeping-dialog.tsx`
