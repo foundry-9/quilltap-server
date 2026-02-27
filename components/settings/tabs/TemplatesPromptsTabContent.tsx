@@ -4,7 +4,6 @@ import { useSubsystemInfo } from '@/components/providers/theme-provider'
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import RoleplayTemplatesTab from '@/components/settings/roleplay-templates'
 import PromptsTab from '@/components/settings/prompts-tab'
-import AIImportTab from '@/components/settings/ai-import'
 
 export function TemplatesPromptsTabContent() {
   const info = useSubsystemInfo('aurora')
@@ -20,10 +19,6 @@ export function TemplatesPromptsTabContent() {
 
         <CollapsibleCard title="Prompts" description="Configure system prompts and prompt blocks">
           <PromptsTab />
-        </CollapsibleCard>
-
-        <CollapsibleCard title="AI Character Import" description="Generate characters from source material using AI">
-          <AIImportTab />
         </CollapsibleCard>
       </div>
     </div>

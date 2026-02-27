@@ -371,6 +371,7 @@ function ReviewStep({
   onImport,
   onAddMore,
   onStartOver,
+  onDone,
 }: {
   result: QuilltapExport | null;
   stepResults: Record<string, unknown> | null;
@@ -380,6 +381,7 @@ function ReviewStep({
   onImport: () => void;
   onAddMore: () => void;
   onStartOver: () => void;
+  onDone?: () => void;
 }) {
   if (!result || !stepResults) {
     return <p className="qt-text-muted">No generated data available.</p>;
@@ -438,9 +440,16 @@ function ReviewStep({
             </div>
           )}
         </div>
-        <button onClick={onStartOver} className="qt-button-primary">
-          Import Another Character
-        </button>
+        <div className="flex gap-3">
+          <button onClick={onStartOver} className="qt-button-primary">
+            Import Another Character
+          </button>
+          {onDone && (
+            <button onClick={onDone} className="qt-button-secondary">
+              Done
+            </button>
+          )}
+        </div>
       </div>
     );
   }
@@ -539,7 +548,12 @@ function ReviewStep({
 // Main Component
 // ============================================================================
 
-export default function AIImportWizard() {
+interface AIImportWizardProps {
+  onClose?: () => void;
+  onImportSuccess?: (characterId?: string) => void;
+}
+
+export default function AIImportWizard({ onClose, onImportSuccess }: AIImportWizardProps = {}) {
   const {
     currentStep,
     canProceed,
@@ -575,6 +589,11 @@ export default function AIImportWizard() {
     reset,
     addMoreMaterial,
   } = useAIImport();
+
+  const handleImport = useCallback(async () => {
+    await importCharacter();
+    onImportSuccess?.();
+  }, [importCharacter, onImportSuccess]);
 
   const stepLabels = ['Source Material', 'Configuration', 'Generation', 'Review'];
 
@@ -629,9 +648,10 @@ export default function AIImportWizard() {
           errors={generation.errors}
           importing={importing}
           importResult={importResult}
-          onImport={importCharacter}
+          onImport={handleImport}
           onAddMore={addMoreMaterial}
           onStartOver={reset}
+          onDone={onClose}
         />
       )}
 

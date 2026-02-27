@@ -1,14 +1,14 @@
 # AI Character Import
 
-> **[Open this page in Quilltap](/settings?tab=templates)**
+> **[Open this page in Quilltap](/aurora)**
 
-The AI Character Import tool lets you generate complete characters from source material like wiki pages, story documents, character sheets, or freeform notes. Instead of manually copying fields into the character editor, an AI analyzes your source material and creates a fully-populated character with descriptions, system prompts, memories, and more.
+The AI Character Import tool — known affectionately as **Summon From Lore** — lets you generate complete characters from source material like wiki pages, story documents, character sheets, or freeform notes. Instead of manually copying fields into the character editor, an AI analyzes your source material and creates a fully-populated character with descriptions, system prompts, memories, and more.
 
 ## Accessing AI Character Import
 
-1. Navigate to **Settings** > **Templates & Prompts** tab (`/settings?tab=templates`)
-2. Find the **AI Character Import** card
-3. Click to expand and start the wizard
+1. Navigate to the **Characters** page (`/aurora`)
+2. Click the **Summon From Lore** button in the toolbar
+3. The wizard opens in a large dialog overlay
 
 ## How It Works
 
