@@ -69,7 +69,8 @@ export function loadSettings(): AppSettings {
         lastDataDir: parsed.lastDataDir || defaults.lastDataDir,
         knownDataDirs,
         autoStart: typeof parsed.autoStart === 'boolean' ? parsed.autoStart : defaults.autoStart,
-        runtimeMode: process.platform === 'linux' ? 'docker'
+        runtimeMode: process.platform === 'linux'
+          ? (parsed.runtimeMode === 'npx' ? 'npx' : 'docker')
           : (parsed.runtimeMode === 'docker' ? 'docker'
             : parsed.runtimeMode === 'npx' ? 'npx' : 'vm'),
       };

@@ -329,6 +329,9 @@ window.quilltap.onDirectories(function(data) {
   currentRuntimeMode = data.runtimeMode || 'vm';
   updateRuntimeButtons();
 
+  // On Linux there is no VM mode, so fallbacks go to the other available runtime
+  var isLinux = data.platform === 'linux';
+
   // Update Docker button availability
   if (data.dockerAvailable) {
     runtimeDockerBtn.disabled = false;
@@ -336,9 +339,9 @@ window.quilltap.onDirectories(function(data) {
     runtimeDockerBtn.disabled = true;
     // Force away from Docker mode if Docker is not available
     if (currentRuntimeMode === 'docker') {
-      currentRuntimeMode = 'vm';
+      currentRuntimeMode = isLinux ? 'npx' : 'vm';
       updateRuntimeButtons();
-      window.quilltap.setRuntimeMode('vm');
+      window.quilltap.setRuntimeMode(currentRuntimeMode);
     }
   }
 
@@ -349,9 +352,9 @@ window.quilltap.onDirectories(function(data) {
     runtimeNpxBtn.disabled = true;
     // Force away from npx mode if Node.js is not available
     if (currentRuntimeMode === 'npx') {
-      currentRuntimeMode = 'vm';
+      currentRuntimeMode = isLinux ? 'docker' : 'vm';
       updateRuntimeButtons();
-      window.quilltap.setRuntimeMode('vm');
+      window.quilltap.setRuntimeMode(currentRuntimeMode);
     }
   }
 
@@ -360,12 +363,11 @@ window.quilltap.onDirectories(function(data) {
     vmLabelEl.textContent = data.vmLabel;
   }
 
-  // On Linux, hide the VM option — Docker is the only runtime
-  if (data.vmLabel === 'Docker' && data.runtimeMode === 'docker') {
+  // On Linux, hide the VM option — there is no Lima/WSL2 equivalent
+  if (data.platform === 'linux') {
     runtimeVMBtn.style.display = 'none';
-    runtimeNpxBtn.style.display = 'none';
-    runtimeDockerBtn.classList.add('selected');
     runtimeDockerBtn.style.flex = '1';
+    runtimeNpxBtn.style.flex = '1';
   }
 });
 

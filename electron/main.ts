@@ -121,6 +121,7 @@ function sendDirectoryInfo(): void {
     dockerAvailable,
     nodeAvailable,
     vmLabel: getVMLabel(),
+    platform: process.platform,
   };
 
   // Phase 1: Send immediately with empty sizes so UI renders fast
@@ -1294,6 +1295,7 @@ ipcMain.handle('splash:get-directories', (): DirectoryInfo => {
     dockerAvailable,
     nodeAvailable,
     vmLabel: getVMLabel(),
+    platform: process.platform,
   };
 });
 

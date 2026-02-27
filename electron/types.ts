@@ -50,6 +50,8 @@ export interface DirectoryInfo {
   nodeAvailable: boolean;
   /** Label for the VM button (e.g. "Lima" on macOS, "WSL2" on Windows) */
   vmLabel: string;
+  /** Host platform (darwin, win32, linux) */
+  platform: string;
 }
 
 /** Status of the VM (Lima on macOS, WSL2 on Windows) */
