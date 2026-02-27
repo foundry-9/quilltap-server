@@ -1,6 +1,6 @@
 # API Keys Settings
 
-> **[Open this page in Quilltap](/foundry/forge)**
+> **[Open this page in Quilltap](/settings?tab=providers)**
 
 The API Keys tab is where you securely store and manage authentication credentials for AI services. API keys are required to use most LLM providers and other services in Quilltap.
 

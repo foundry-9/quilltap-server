@@ -1,6 +1,6 @@
 # Plugins
 
-> **[Open this page in Quilltap](/foundry/forge)**
+> **[Open this page in Quilltap](/settings?tab=providers)**
 
 Plugins extend Quilltap's functionality by adding new features, themes, and capabilities. The Plugins tab is where you manage installed plugins, install new ones, and check for updates.
 
@@ -398,15 +398,15 @@ Some plugins may conflict with each other:
 3. Find theme you like
 4. Click Install
 5. Confirm installation
-6. Go to Calliope (`/foundry/calliope`) → Appearance
+6. Go to the **Appearance** tab in Settings (`/settings?tab=appearance`)
 7. Select new theme
 
 ### Setting Up Image Generation
 
 1. Get API key from provider (DALL-E, Stable Diffusion, etc.)
-2. Go to The Forge (`/foundry/forge`) → API Keys
+2. Go to the **AI Providers** tab in Settings (`/settings?tab=providers`) → API Keys
 3. Add API key for image service
-4. Go to The Lantern (`/foundry/lantern`) → Image Profiles
+4. Go to the **Images** tab in Settings (`/settings?tab=images`) → Image Profiles
 5. Create image profile
 6. Now ready to generate images in chats
 

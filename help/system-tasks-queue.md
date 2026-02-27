@@ -1,6 +1,6 @@
 # Managing Tasks
 
-> **[Open this page in Quilltap](/foundry)**
+> **[Open this page in Quilltap](/settings?tab=system)**
 
 The Tasks Queue shows all background jobs running in your Quilltap system. These include memory extraction, imports, exports, and other long-running operations.
 
@@ -23,7 +23,7 @@ The Tasks Queue shows all background jobs running in your Quilltap system. These
 
 ## Viewing the Tasks Queue
 
-**Go to Prospero** (`/foundry/prospero`) and expand the **Tasks Queue** card.
+**Go to the **Data & System** tab in Settings** (`/settings?tab=system`) and expand the **Tasks Queue** card.
 
 The Tasks Queue displays:
 

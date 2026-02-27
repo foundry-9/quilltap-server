@@ -16,6 +16,12 @@ jest.mock('@/lib/logging/create-logger', () => ({
     warn: jest.fn(),
     error: jest.fn(),
   })),
+  createLogger: jest.fn(() => ({
+    info: jest.fn(),
+    debug: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+  })),
 }))
 jest.mock('@/lib/chat/tool-executor')
 

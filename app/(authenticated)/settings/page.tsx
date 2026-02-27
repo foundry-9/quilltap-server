@@ -1,6 +1,7 @@
 'use client'
 
 import { Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { BrandName } from '@/components/ui/brand-name'
 import { EntityTabs } from '@/components/tabs/entity-tabs'
 import { ChatSettingsProvider } from '@/components/settings/chat-settings/ChatSettingsProvider'
@@ -11,7 +12,20 @@ import { MemorySearchTabContent } from '@/components/settings/tabs/MemorySearchT
 import { ImagesTabContent } from '@/components/settings/tabs/ImagesTabContent'
 import { TemplatesPromptsTabContent } from '@/components/settings/tabs/TemplatesPromptsTabContent'
 import { DataSystemTabContent } from '@/components/settings/tabs/DataSystemTabContent'
+import { useSubsystemInfo } from '@/components/providers/theme-provider'
 import type { Tab } from '@/components/tabs/entity-tabs'
+import type { SubsystemId } from '@/lib/foundry/subsystem-defaults'
+
+/** Map settings tab IDs to their corresponding subsystem IDs for background images */
+const TAB_SUBSYSTEM_MAP: Record<string, SubsystemId> = {
+  providers: 'forge',
+  chat: 'salon',
+  appearance: 'calliope',
+  memory: 'commonplace-book',
+  images: 'lantern',
+  templates: 'aurora',
+  system: 'prospero',
+}
 
 /** Tab icon: wrench (AI Providers) */
 function ProvidersIcon() {
@@ -123,10 +137,24 @@ function SettingsTabContent({ activeTab }: { activeTab: string }) {
   }
 }
 
+/** Resolves the background image for the active settings tab */
+function useSettingsBackground() {
+  const searchParams = useSearchParams()
+  const activeTab = searchParams.get('tab') || 'providers'
+  const subsystemId = TAB_SUBSYSTEM_MAP[activeTab] || 'forge'
+  const info = useSubsystemInfo(subsystemId)
+  return info.backgroundImage
+}
+
 export default function SettingsPage() {
+  const backgroundImage = useSettingsBackground()
+  const containerStyle = backgroundImage
+    ? { '--story-background-url': `url(${backgroundImage})` } as React.CSSProperties
+    : undefined
+
   return (
-    <div className="qt-page-container">
-      <div className="mb-8">
+    <div className="qt-page-container" style={containerStyle}>
+      <div className="qt-settings-header mb-8">
         <h1 className="qt-heading-1">Settings</h1>
         <p className="qt-text-muted mt-2">
           Configure and manage every aspect of your <BrandName /> workspace
@@ -135,7 +163,7 @@ export default function SettingsPage() {
 
       <ChatSettingsProvider>
         <Suspense fallback={<div className="text-muted-foreground">Loading...</div>}>
-          <EntityTabs tabs={SETTINGS_TABS} defaultTab="providers">
+          <EntityTabs tabs={SETTINGS_TABS} defaultTab="providers" contentClassName="qt-settings-panel">
             {(activeTab) => <SettingsTabContent activeTab={activeTab} />}
           </EntityTabs>
         </Suspense>

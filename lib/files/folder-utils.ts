@@ -56,6 +56,52 @@ export function normalizeFolderPath(path: string | undefined | null): string {
 }
 
 /**
+ * Derive folderPath from a storageKey.
+ *
+ * Storage keys follow the pattern: <projectId|_general>/[folder1/.../folderN/]<filename>
+ * The first segment is the project/scope identifier, the last segment is the filename,
+ * and any middle segments form the folder path.
+ *
+ * @param storageKey - The storage key to derive folderPath from
+ * @returns The derived folder path (e.g., "/story-backgrounds/") or "/"
+ *
+ * @example
+ * deriveFolderPathFromStorageKey("_general/story-backgrounds/image.png") // "/story-backgrounds/"
+ * deriveFolderPathFromStorageKey("_general/image.png") // "/"
+ * deriveFolderPathFromStorageKey("project123/docs/reports/file.md") // "/docs/reports/"
+ */
+export function deriveFolderPathFromStorageKey(storageKey: string | null | undefined): string {
+  if (!storageKey) return '/';
+  const parts = storageKey.split('/');
+  if (parts.length > 2) {
+    return '/' + parts.slice(1, parts.length - 1).join('/') + '/';
+  }
+  return '/';
+}
+
+/**
+ * Resolve the effective folderPath for a file.
+ *
+ * Uses the stored folderPath if it's a non-empty value, otherwise derives it from
+ * the storageKey. This handles legacy records that were created before folderPath
+ * was consistently set.
+ *
+ * @param folderPath - The stored folderPath (may be null/empty)
+ * @param storageKey - The storage key to derive from as fallback
+ * @returns The resolved folder path
+ */
+export function resolveEffectiveFolderPath(
+  folderPath: string | null | undefined,
+  storageKey: string | null | undefined
+): string {
+  if (folderPath && folderPath !== '/') return normalizeFolderPath(folderPath);
+  // If folderPath is null/empty/'/', check if storageKey implies a subfolder
+  const derived = deriveFolderPathFromStorageKey(storageKey);
+  if (derived !== '/') return derived;
+  return folderPath || '/';
+}
+
+/**
  * Get the parent folder path.
  *
  * @param path - The folder path

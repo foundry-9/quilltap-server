@@ -17,6 +17,7 @@ import { enrichParticipantDetail } from '@/lib/services/chat-enrichment.service'
 import { renderMarkdownToHtml, canPreRenderMessage } from '@/lib/services/markdown-renderer.service';
 import { logger } from '@/lib/logger';
 import { notFound, forbidden, serverError } from '@/lib/api/responses';
+import { resolveAgentModeSetting } from '@/lib/services/chat-message/agent-mode-resolver.service';
 import { handleGetAvatars, handleGetState } from '../actions';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types';
@@ -266,9 +267,10 @@ export async function handleGet(
     ).then((results) => results.filter(Boolean));
 
     let projectName: string | null = null;
+    let project = null;
     if (chatMetadata.projectId) {
       try {
-        const project = await repos.projects.findById(chatMetadata.projectId);
+        project = await repos.projects.findById(chatMetadata.projectId);
         if (project) {
           projectName = project.name;
         }
@@ -276,6 +278,22 @@ export async function handleGet(
         // Project might have been deleted
       }
     }
+
+    // Resolve agent mode through the cascade: Global → Character → Project → Chat
+    let primaryCharacter = null;
+    const characterParticipant = chatMetadata.participants.find(
+      (p) => p.type === 'CHARACTER' && p.characterId
+    );
+    if (characterParticipant?.characterId) {
+      try {
+        primaryCharacter = await repos.characters.findById(characterParticipant.characterId);
+      } catch {
+        // Character might have been deleted
+      }
+    }
+
+    const chatSettings = await repos.chatSettings.findByUserId(user.id);
+    const resolvedAgentMode = resolveAgentModeSetting(chatMetadata, project, primaryCharacter, chatSettings);
 
     const chat = {
       id: chatMetadata.id,
@@ -296,6 +314,8 @@ export async function handleGet(
       disabledTools: chatMetadata.disabledTools || [],
       disabledToolGroups: chatMetadata.disabledToolGroups || [],
       agentModeEnabled: chatMetadata.agentModeEnabled ?? false,
+      resolvedAgentModeEnabled: resolvedAgentMode.enabled,
+      agentModeSource: resolvedAgentMode.enabledSource,
     };
 
     return NextResponse.json({ chat });

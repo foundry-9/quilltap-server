@@ -373,7 +373,7 @@ Generated images are saved to your private database and are backed by your user 
 
 ### API Reference
 
-#### Generate Images: POST `/api/images/generate`
+#### Generate Images: POST `/api/v1/images?action=generate`
 
 Generate images using your configured LLM providers.
 
@@ -490,7 +490,7 @@ An error occurred during image generation or file saving.
 
 #### Image Profiles: CRUD Operations
 
-### List Profiles: GET `/api/image-profiles`
+### List Profiles: GET `/api/v1/image-profiles`
 
 List all image profiles for the current user.
 
@@ -500,13 +500,13 @@ List all image profiles for the current user.
 **Response**: Array of image profiles
 
 ```bash
-curl http://localhost:3000/api/image-profiles \
+curl http://localhost:3000/api/v1/image-profiles \
   -H "Cookie: __Secure-next-auth.session-token=..."
 ```
 
 ---
 
-### Create Profile: POST `/api/image-profiles`
+### Create Profile: POST `/api/v1/image-profiles`
 
 Create a new image profile.
 
@@ -539,7 +539,7 @@ Create a new image profile.
 **Response**: Created profile object (201)
 
 ```bash
-curl -X POST http://localhost:3000/api/image-profiles \
+curl -X POST http://localhost:3000/api/v1/image-profiles \
   -H "Content-Type: application/json" \
   -H "Cookie: __Secure-next-auth.session-token=..." \
   -d '{
@@ -554,7 +554,7 @@ curl -X POST http://localhost:3000/api/image-profiles \
 
 ---
 
-### Get Profile: GET `/api/image-profiles/[id]`
+### Get Profile: GET `/api/v1/image-profiles/[id]`
 
 Get a specific profile by ID.
 
@@ -564,13 +564,13 @@ Get a specific profile by ID.
 **Response**: Profile object with full details
 
 ```bash
-curl http://localhost:3000/api/image-profiles/abc123 \
+curl http://localhost:3000/api/v1/image-profiles/abc123 \
   -H "Cookie: __Secure-next-auth.session-token=..."
 ```
 
 ---
 
-### Update Profile: PUT `/api/image-profiles/[id]`
+### Update Profile: PUT `/api/v1/image-profiles/[id]`
 
 Update a profile.
 
@@ -592,7 +592,7 @@ Update a profile.
 **Response**: Updated profile object
 
 ```bash
-curl -X PUT http://localhost:3000/api/image-profiles/abc123 \
+curl -X PUT http://localhost:3000/api/v1/image-profiles/abc123 \
   -H "Content-Type: application/json" \
   -H "Cookie: __Secure-next-auth.session-token=..." \
   -d '{"parameters": {"quality": "hd"}}'
@@ -600,7 +600,7 @@ curl -X PUT http://localhost:3000/api/image-profiles/abc123 \
 
 ---
 
-### Delete Profile: DELETE `/api/image-profiles/[id]`
+### Delete Profile: DELETE `/api/v1/image-profiles/[id]`
 
 Delete a profile.
 
@@ -610,13 +610,13 @@ Delete a profile.
 **Response**: Success message (200)
 
 ```bash
-curl -X DELETE http://localhost:3000/api/image-profiles/abc123 \
+curl -X DELETE http://localhost:3000/api/v1/image-profiles/abc123 \
   -H "Cookie: __Secure-next-auth.session-token=..."
 ```
 
 ---
 
-#### Available Models: GET `/api/image-profiles/models`
+#### Available Models: GET `/api/v1/image-profiles?action=list-models`
 
 Get available models for a provider.
 
@@ -635,34 +635,25 @@ Get available models for a provider.
 
 ```bash
 # Without API key (returns defaults)
-curl "http://localhost:3000/api/image-profiles/models?provider=OPENAI" \
+curl "http://localhost:3000/api/v1/image-profiles?action=list-models&provider=OPENAI" \
   -H "Cookie: __Secure-next-auth.session-token=..."
 
 # With API key (validates and returns actual models)
-curl "http://localhost:3000/api/image-profiles/models?provider=OPENAI&apiKeyId=abc123" \
+curl "http://localhost:3000/api/v1/image-profiles?action=list-models&provider=OPENAI&apiKeyId=abc123" \
   -H "Cookie: __Secure-next-auth.session-token=..."
 ```
 
 ---
 
-#### Validate API Key: POST `/api/image-profiles/validate-key`
+#### Validate API Key: POST `/api/v1/image-profiles?action=validate-key`
 
 Validate an API key for image generation.
 
-**Body**: One of the following:
+**Body**:
 ```json
 {
   "provider": "OPENAI",
   "apiKeyId": "uuid-of-stored-key"
-}
-```
-
-or
-
-```json
-{
-  "provider": "OPENAI",
-  "apiKey": "sk-..."
 }
 ```
 
@@ -671,22 +662,16 @@ or
 {
   "valid": true,
   "message": "API key is valid",
-  "models": ["gpt-image-1", "dall-e-3", "dall-e-2"]
+  "modelCount": 3
 }
 ```
 
 ```bash
 # Validate stored key
-curl -X POST http://localhost:3000/api/image-profiles/validate-key \
+curl -X POST http://localhost:3000/api/v1/image-profiles?action=validate-key \
   -H "Content-Type: application/json" \
   -H "Cookie: __Secure-next-auth.session-token=..." \
   -d '{"provider": "OPENAI", "apiKeyId": "abc123"}'
-
-# Validate direct key
-curl -X POST http://localhost:3000/api/image-profiles/validate-key \
-  -H "Content-Type: application/json" \
-  -H "Cookie: __Secure-next-auth.session-token=..." \
-  -d '{"provider": "OPENAI", "apiKey": "sk-..."}'
 ```
 
 ---
@@ -703,7 +688,7 @@ async function generateImage(
     style?: 'vivid' | 'natural'
   }
 ) {
-  const response = await fetch('/api/images/generate', {
+  const response = await fetch('/api/v1/images?action=generate', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -786,56 +771,40 @@ result.images.forEach((img) => {
 
 ### Database Schema
 
-```prisma
-enum ImageProvider {
-  OPENAI          // gpt-image-1, DALL-E 3, DALL-E 2
-  GROK            // grok-2-image (xAI)
-  GOOGLE_IMAGEN   // Imagen 4, Imagen 3
-}
+The image profile data is stored in SQLite with the following structure:
 
-model ImageProfile {
-  id              String        @id @default(uuid())
-  userId          String
-  name            String
-  provider        ImageProvider
-  apiKeyId        String?
-  baseUrl         String?       // For self-hosted or custom endpoints
-  modelName       String        // e.g., "dall-e-3", "imagen-4"
-  parameters      Json          @default("{}")  // Provider-specific defaults
-  isDefault       Boolean       @default(false)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+**ImageProfile Table**:
+- `id` (TEXT PRIMARY KEY) - UUID identifier
+- `userId` (TEXT NOT NULL) - User ID (foreign key)
+- `name` (TEXT NOT NULL) - Profile name
+- `provider` (TEXT NOT NULL) - Provider type (OPENAI | GROK | GOOGLE_IMAGEN)
+- `apiKeyId` (TEXT) - Optional reference to stored API key
+- `baseUrl` (TEXT) - Optional custom endpoint URL
+- `modelName` (TEXT NOT NULL) - Model identifier (e.g., "dall-e-3", "imagen-4")
+- `parameters` (TEXT) - JSON object with provider-specific defaults
+- `isDefault` (BOOLEAN) - Whether this is the default profile
+- `isDangerousCompatible` (BOOLEAN) - Whether this provider supports uncensored content
+- `createdAt` (TEXT) - ISO timestamp
+- `updatedAt` (TEXT) - ISO timestamp
+- **Constraints**: UNIQUE(userId, name), INDEX on (userId, isDefault)
 
-  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  apiKey          ApiKey?       @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
-  tags            ImageProfileTag[]
-  chats           Chat[]
+**ImageProfileTag Table** (if applicable):
+- `id` (TEXT PRIMARY KEY) - UUID identifier
+- `imageProfileId` (TEXT NOT NULL) - Reference to ImageProfile
+- `tagId` (TEXT NOT NULL) - Reference to Tag
+- `createdAt` (TEXT) - ISO timestamp
+- **Constraints**: UNIQUE(imageProfileId, tagId)
 
-  @@unique([userId, name])
-  @@index([userId, isDefault])
-}
-
-model ImageProfileTag {
-  id              String       @id @default(uuid())
-  imageProfileId  String
-  tagId           String
-  createdAt       DateTime     @default(now())
-
-  imageProfile    ImageProfile @relation(fields: [imageProfileId], references: [id], onDelete: Cascade)
-  tag             Tag          @relation(fields: [tagId], references: [id], onDelete: Cascade)
-
-  @@unique([imageProfileId, tagId])
-}
-```
+Data is validated using Zod schemas and accessed through repository interfaces.
 
 ---
 
 ### Provider Abstraction
 
-The system uses an abstract provider interface that allows plugging in different image generation services:
+The system uses an abstract provider interface that allows plugging in different image generation services. Providers are implemented as plugins that conform to the following interface:
 
 ```typescript
-// lib/image-gen/base.ts
+// Provider interface (implemented by plugin providers)
 
 export interface ImageGenParams {
   prompt: string;
@@ -862,9 +831,7 @@ export abstract class ImageGenProvider {
 ```
 
 **Implementations**:
-- `lib/image-gen/openai.ts` - OpenAI DALL-E and GPT Image models
-- `lib/image-gen/grok.ts` - xAI Grok image generation
-- `lib/image-gen/google-imagen.ts` - Google Imagen models
+Image generation providers are implemented through the plugin system. Provider implementations are accessed via `lib/llm/plugin-factory.ts` using the `createImageProvider()` factory function, which loads provider plugins from the registry.
 
 ---
 
@@ -936,15 +903,15 @@ When a chat is used:
 
 ### File Storage
 
-Generated images are stored at:
-```
-public/uploads/generated/{userId}/{filename}
-```
+Generated images are stored using the centralized file storage manager (`lib/file-storage/manager.ts`):
 
-Accessible via:
-```
-/{image.filepath}
-```
+- Images are uploaded via `fileStorageManager.uploadFile()` with content-type and filename
+- Files are stored in the system's designated data directory based on the OS:
+  - Linux: `~/.quilltap/files/`
+  - macOS: `~/Library/Application Support/Quilltap/files/`
+  - Windows: `%APPDATA%\Quilltap\files\`
+- Images are indexed in the database with metadata (size, mime type, sha256 hash)
+- Accessible via the API route: `/api/v1/files/{fileId}`
 
 ---
 
@@ -977,7 +944,7 @@ When generating images involving characters (via `{{CharacterName}}` placeholder
    - **Stored record**: The best-matching clothing record by usageContext
    - **Default**: The first stored clothing record, or empty if none exist
 
-4. **Dangermouse Sanitization** (`sanitizeAppearancesIfNeeded()`): Resolved appearances are classified for safety. If dangerous and no uncensored image provider is available, a cheap LLM rewrites the appearance descriptions to be safe for standard providers.
+4. **Concierge Sanitization** (`sanitizeAppearancesIfNeeded()`): Resolved appearances are classified for safety. If dangerous and no uncensored image provider is available, a cheap LLM rewrites the appearance descriptions to be safe for standard providers.
 
 5. **Prompt Crafting**: The resolved (and possibly sanitized) appearances are injected into the expansion context, giving the prompt crafter focused, context-accurate data instead of raw dumps of all descriptions and clothing.
 
@@ -989,7 +956,7 @@ If all characters have at most 1 physical description and 0-1 clothing records, 
 
 - **Chat image generation** (`generate_image` tool): Fetches last 20 chat messages, resolves appearances, sanitizes, then expands prompt
 - **Story backgrounds**: Runs appearance resolution in parallel with scene context derivation
-- **Front page**: No appearance resolution (no chat context), but now includes Dangermouse prompt classification and AUTO_ROUTE provider rerouting
+- **Front page**: No appearance resolution (no chat context), but now includes Concierge prompt classification and AUTO_ROUTE provider rerouting
 
 #### Fail-Safe Behavior
 
@@ -1113,9 +1080,11 @@ Currently unlimited (depends on provider rate limits):
 
 ## Related Resources
 
-- **Database Schema**: See `prisma/schema.prisma`
-- **Implementation**: Check `app/api/image-profiles/` and `lib/image-gen/`
-- **Components**: Review `components/image-profiles/`
+- **API Endpoints**: See `app/api/v1/images/` and `app/api/v1/image-profiles/`
+- **Image Generation Tool**: Check `lib/tools/image-generation-tool.ts` and `lib/tools/handlers/image-generation-handler.ts`
+- **Tool Integration**: Review how tools are executed in chat contexts
+- **Provider Factory**: See `lib/llm/plugin-factory.ts` for provider instantiation
+- **File Storage**: Check `lib/file-storage/manager.ts` for file operations
 - **Tests**: Check `__tests__/` directory
 
 ---
@@ -1142,7 +1111,7 @@ Currently unlimited (depends on provider rate limits):
 
 ---
 
-**Last Updated**: November 2024
+**Last Updated**: February 2026 (API and architecture fixes)
 **Status**: ✅ Production Ready
 
 For more detailed information, see the individual sections above.

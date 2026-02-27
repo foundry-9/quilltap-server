@@ -93,6 +93,16 @@ Create or update a file. **Requires user permission.**
    - Deny
 4. After approval, permission is stored and write proceeds
 
+**Overwrite Behavior:**
+
+When writing a file with the same name as an existing file in the same scope (same user, project, and folder), the existing file is **overwritten** rather than creating a duplicate. The original file ID is preserved so any existing references (links, embeddings, etc.) remain valid. The old physical file and thumbnails are cleaned up before the new content is stored.
+
+This applies to all file creation paths:
+- LLM `write_file` tool calls
+- API `POST /api/v1/files?action=write`
+- API `POST /api/v1/files?action=upload`
+- `promote_attachment` (if a file with the same name exists at the destination)
+
 **Example:**
 ```json
 {
@@ -142,7 +152,7 @@ Move a message attachment to project or general files.
 
 ## File Write Permissions
 
-Permissions are stored in the `file_permissions` MongoDB collection and control when the LLM can write without asking.
+Permissions are stored in the `file_permissions` SQLite table and control when the LLM can write without asking.
 
 ### Permission Scopes
 
@@ -171,9 +181,10 @@ interface FileWritePermission {
 ### Managing Permissions
 
 Users can view and revoke permissions through:
-- Settings > File Permissions (FilePermissionsManager component)
-- API: `GET/POST /api/files/write-permission`
-- API: `DELETE /api/files/write-permission/:id`
+- Settings > File Permissions tab
+- API: `GET /api/v1/files/write-permissions` (list permissions)
+- API: `POST /api/v1/files/write-permissions` (grant permission)
+- API: `POST /api/v1/files/write-permissions?action=revoke` (revoke permission)
 
 ## Folder Organization
 
@@ -198,14 +209,23 @@ The `lib/files/folder-utils.ts` module provides:
 
 ## API Routes
 
-| Route | Methods | Description |
-|-------|---------|-------------|
-| `/api/files/write` | POST | Create new file with permission check |
-| `/api/files/write-permission` | GET, POST | List/grant permissions |
-| `/api/files/write-permission/:id` | DELETE | Revoke permission |
-| `/api/files/:id/promote` | POST | Promote attachment |
-| `/api/files/general` | GET | List general (non-project) files |
-| `/api/projects/:id/files` | GET, POST, DELETE | Project files management |
+| Route | Methods | Action | Description |
+|-------|---------|--------|-------------|
+| `/api/v1/files` | GET | - | List files (filter by projectId, folderPath, or filter=general) |
+| `/api/v1/files` | POST | `write` | Create new file with permission check |
+| `/api/v1/files` | POST | `upload` | Upload a file (multipart/form-data) |
+| `/api/v1/files` | POST | `generate-thumbnails` | Batch thumbnail generation |
+| `/api/v1/files` | POST | `cleanup-orphaned` | Cleanup orphaned DB records |
+| `/api/v1/files` | POST | `sync` | Trigger filesystem reconciliation |
+| `/api/v1/files/[id]` | GET | - | Get file details |
+| `/api/v1/files/[id]` | PUT | - | Update file metadata |
+| `/api/v1/files/[id]` | DELETE | - | Delete a file |
+| `/api/v1/files/folders` | GET | - | List folder structure |
+| `/api/v1/files/write-permissions` | GET | - | List user's file write permissions |
+| `/api/v1/files/write-permissions` | POST | - | Grant a new file write permission |
+| `/api/v1/files/write-permissions` | POST | `revoke` | Revoke a permission |
+| `/api/v1/files/write-permissions` | POST | `complete` | Complete a pending file write (approve/deny) |
+| `/api/v1/files/proxy/[...key]` | GET | - | Proxy file access |
 
 ## Security Considerations
 
@@ -218,13 +238,14 @@ The `lib/files/folder-utils.ts` module provides:
 
 ## UI Components
 
-| Component | Purpose |
-|-----------|---------|
-| `FileWriteApprovalModal` | Approval dialog for LLM write requests |
-| `FolderPicker` | Select/create folders |
-| `AttachmentPromotionMenu` | Promote attachments to files |
-| `FileBrowser` | Browse project/general files |
-| `FilePermissionsManager` | Manage granted permissions |
+| Component | Path | Purpose |
+|-----------|------|---------|
+| `FileWriteApprovalModal` | `components/chat/FileWriteApprovalModal.tsx` | Approval dialog for LLM write requests |
+| `FileWritePermissionPrompt` | `components/chat/FileWritePermissionPrompt.tsx` | UI prompt for requesting file write permissions |
+| `FolderPicker` | `components/files/FolderPicker.tsx` | Select/create folders |
+| `FileBrowser` | `components/files/FileBrowser.tsx` | Browse project/general files |
+| `FileBrowserGrid` | `components/files/FileBrowserGrid.tsx` | Grid view for file browsing |
+| `FileBrowserList` | `components/files/FileBrowserList.tsx` | List view for file browsing |
 
 ## Integration Points
 

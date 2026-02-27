@@ -15,7 +15,7 @@ interface SearchDialogProps {
   initialTypes?: SearchType[]
 }
 
-const ALL_TYPES: SearchType[] = ['chats', 'characters', 'tags', 'memories']
+const ALL_TYPES: SearchType[] = ['chats', 'characters', 'messages', 'tags', 'memories']
 const PAGE_SIZE = 20
 
 export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes }: SearchDialogProps) {
@@ -268,7 +268,7 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes 
                 value={query}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
-                placeholder="Search chats, characters, tags, memories..."
+                placeholder="Search chats, characters, messages, tags, memories..."
                 className="w-full pl-10 pr-4 py-3 text-lg border-0 bg-transparent text-foreground placeholder-muted-foreground focus:outline-none focus:ring-0"
               />
               {query && (
@@ -337,7 +337,7 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes 
               <div className="p-6 text-center qt-text-small">
                 <p>Type at least 2 characters to search</p>
                 <p className="qt-text-xs mt-1">
-                  Search across your chats, characters, tags, and memories
+                  Search across your chats, characters, messages, tags, and memories
                 </p>
               </div>
             )}

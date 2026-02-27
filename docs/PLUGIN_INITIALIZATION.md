@@ -17,7 +17,6 @@ The plugin initialization system automatically scans, validates, transpiles, and
 ┌─────────────────────────────────────────────────────────────┐
 │              instrumentation.ts (Startup)                    │
 │  - Runs migrations (MUST complete before requests)          │
-│  - Initializes MongoDB                                       │
 │  - Initializes plugins                                       │
 │  - Initializes file storage                                  │
 └─────────────────────────────────────────────────────────────┘
@@ -35,7 +34,7 @@ The plugin initialization system automatically scans, validates, transpiles, and
                               │
                               ▼ (useEffect on mount)
 ┌─────────────────────────────────────────────────────────────┐
-│     POST /api/startup/initialize-plugins                     │
+│     POST /api/v1/system/plugins/initialize                   │
 │     (API Route Handler)                                      │
 └─────────────────────────────────────────────────────────────┘
                               │
@@ -77,7 +76,6 @@ Next.js instrumentation hook that runs before the application accepts requests.
 **Features:**
 
 - Runs all data migrations (MUST complete before requests)
-- Initializes MongoDB connection
 - Initializes plugin system
 - Initializes file storage
 - Logs startup information and diagnostics
@@ -108,13 +106,13 @@ import { PluginInitializer } from '@/components/startup';
 
 ### 3. API Endpoint
 
-**File:** `app/api/startup/initialize-plugins/route.ts`
+**File:** `app/api/v1/system/plugins/initialize/route.ts`
 
 HTTP endpoint that triggers server-side initialization.
 
 **Endpoints:**
 
-#### POST `/api/startup/initialize-plugins`
+#### POST `/api/v1/system/plugins/initialize`
 
 Initializes the plugin system.
 
@@ -137,9 +135,9 @@ Initializes the plugin system.
 }
 ```
 
-#### GET `/api/startup/initialize-plugins`
+#### GET `/api/v1/system/plugins/initialize`
 
-Returns current initialization status without triggering initialization.
+Returns current plugin system state without triggering initialization.
 
 **Response:**
 
@@ -281,7 +279,7 @@ The `PluginInitializer` component mounts and calls the API:
 
 ```typescript
 useEffect(() => {
-  fetch('/api/startup/initialize-plugins', { method: 'POST' })
+  fetch('/api/v1/system/plugins/initialize', { method: 'POST' })
     .then(res => res.json())
     .then(result => {
       console.log('Plugins initialized:', result)
@@ -462,7 +460,7 @@ npm test -- provider-registry.test.ts
 3. Check the API endpoint:
 
    ```bash
-   curl http://localhost:3000/api/startup/initialize-plugins
+   curl http://localhost:3000/api/v1/system/plugins/initialize
    ```
 
 ## Performance Considerations

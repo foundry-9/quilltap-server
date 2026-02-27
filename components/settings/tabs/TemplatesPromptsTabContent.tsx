@@ -10,12 +10,7 @@ export function TemplatesPromptsTabContent() {
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-6">
-        {info.thumbnail && (
-          <img src={info.thumbnail} alt="" className="w-10 h-10 rounded-lg object-cover opacity-60" />
-        )}
-        <p className="qt-text-small qt-text-muted italic">{info.description}</p>
-      </div>
+      <p className="qt-text-small qt-text-muted italic mb-6">{info.description}</p>
 
       <div className="space-y-4">
         <CollapsibleCard title="Roleplay Templates" description="Manage templates that shape how characters interact">

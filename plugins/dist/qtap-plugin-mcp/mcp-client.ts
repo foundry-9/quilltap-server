@@ -15,8 +15,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
-import { rewriteLocalhostUrl } from '@/lib/host-rewrite';
-import { logger } from '@/lib/logger';
+import { rewriteLocalhostUrl, createPluginLogger } from '@quilltap/plugin-utils';
 import { sanitizeCustomHeaders } from './security';
 import * as http from 'node:http';
 import * as https from 'node:https';
@@ -29,7 +28,7 @@ import type {
   MCPContentBlock,
 } from './types';
 
-const clientLogger = logger.child({ module: 'mcp-client' });
+const clientLogger = createPluginLogger('mcp-client');
 
 /** Hostnames that refer to the local loopback */
 const LOCALHOST_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);

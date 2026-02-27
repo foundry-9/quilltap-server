@@ -1,6 +1,6 @@
 # Appearance Settings
 
-> **[Open this page in Quilltap](/foundry/calliope)**
+> **[Open this page in Quilltap](/settings?tab=appearance)**
 
 The Appearance settings tab is where you customize how Quilltap looks and feels. Here you can change themes, select your preferred color mode (light/dark/system), enable the theme quick-switcher, and adjust sidebar width.
 

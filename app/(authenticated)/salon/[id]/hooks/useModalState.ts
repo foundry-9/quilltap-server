@@ -47,6 +47,7 @@ export function useModalState() {
   const [searchReplaceModalOpen, setSearchReplaceModalOpen] = useState(false)
   const [bulkReplaceModalOpen, setBulkReplaceModalOpen] = useState(false)
   const [toolSettingsModalOpen, setToolSettingsModalOpen] = useState(false)
+  const [runToolModalOpen, setRunToolModalOpen] = useState(false)
   const [stateEditorModalOpen, setStateEditorModalOpen] = useState(false)
   const [allLLMPauseModalOpen, setAllLLMPauseModalOpen] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
@@ -82,6 +83,8 @@ export function useModalState() {
   const closeBulkReplace = useCallback(() => setBulkReplaceModalOpen(false), [])
   const openToolSettings = useCallback(() => setToolSettingsModalOpen(true), [])
   const closeToolSettings = useCallback(() => setToolSettingsModalOpen(false), [])
+  const openRunTool = useCallback(() => setRunToolModalOpen(true), [])
+  const closeRunTool = useCallback(() => setRunToolModalOpen(false), [])
   const openStateEditor = useCallback(() => setStateEditorModalOpen(true), [])
   const closeStateEditor = useCallback(() => setStateEditorModalOpen(false), [])
 
@@ -103,6 +106,7 @@ export function useModalState() {
     searchReplaceModalOpen,
     bulkReplaceModalOpen,
     toolSettingsModalOpen,
+    runToolModalOpen,
     stateEditorModalOpen,
     allLLMPauseModalOpen, setAllLLMPauseModalOpen,
     showPreview, setShowPreview,
@@ -129,6 +133,7 @@ export function useModalState() {
     openSearchReplace, closeSearchReplace,
     openBulkReplace, closeBulkReplace,
     openToolSettings, closeToolSettings,
+    openRunTool, closeRunTool,
     openStateEditor, closeStateEditor,
     closeLLMLogViewer,
     setLLMLogViewerOpen,

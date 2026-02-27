@@ -428,32 +428,9 @@ export const SQLITE_TABLES = [
       `CREATE INDEX IF NOT EXISTS "idx_background_jobs_scheduledAt" ON "background_jobs" ("scheduledAt")`,
     ],
   },
-  {
-    name: 'llm_logs',
-    sql: `CREATE TABLE IF NOT EXISTS "llm_logs" (
-      "id" TEXT PRIMARY KEY,
-      "userId" TEXT NOT NULL,
-      "type" TEXT NOT NULL,
-      "messageId" TEXT,
-      "chatId" TEXT,
-      "characterId" TEXT,
-      "provider" TEXT NOT NULL,
-      "modelName" TEXT NOT NULL,
-      "request" TEXT NOT NULL,
-      "response" TEXT NOT NULL,
-      "usage" TEXT,
-      "cacheUsage" TEXT,
-      "durationMs" INTEGER,
-      "createdAt" TEXT NOT NULL,
-      "updatedAt" TEXT NOT NULL
-    )`,
-    indexes: [
-      `CREATE INDEX IF NOT EXISTS "idx_llm_logs_userId" ON "llm_logs" ("userId")`,
-      `CREATE INDEX IF NOT EXISTS "idx_llm_logs_chatId" ON "llm_logs" ("chatId")`,
-      `CREATE INDEX IF NOT EXISTS "idx_llm_logs_createdAt" ON "llm_logs" ("createdAt" DESC)`,
-      `CREATE INDEX IF NOT EXISTS "idx_llm_logs_type" ON "llm_logs" ("type")`,
-    ],
-  },
+  // NOTE: llm_logs table was removed from the initial schema in v3.1.0.
+  // It now lives in a dedicated database (quilltap-llm-logs.db), created by
+  // the move-llm-logs-to-separate-db-v1 migration.
   {
     name: 'plugin_configs',
     sql: `CREATE TABLE IF NOT EXISTS "plugin_configs" (

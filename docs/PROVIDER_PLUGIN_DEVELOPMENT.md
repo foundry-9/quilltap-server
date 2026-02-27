@@ -261,6 +261,17 @@ Create `manifest.json` - this tells Quilltap about your provider:
 }
 ```
 
+> **IMPORTANT: Provider Capability Types in TypeScript**
+>
+> The published `@quilltap/plugin-types` TypeScript package **only exports `LLM_PROVIDER`** as a plugin capability. However, the internal schema supports `IMAGE_PROVIDER` and `EMBEDDING_PROVIDER` capabilities.
+>
+> **For TypeScript plugin development:**
+> - Always use `"LLM_PROVIDER"` in your manifest's `capabilities` array
+> - Indicate image/embedding support via `providerConfig.capabilities.imageGeneration` and `providerConfig.capabilities.embeddings` fields
+> - Implement the optional `createImageProvider()` and `createEmbeddingProvider()` methods in your plugin object (see [Image Generation Provider](#image-generation-provider-optional) and [Embedding Provider](#embedding-provider-optional) sections)
+>
+> Quilltap will automatically discover these capabilities at runtime based on which factory methods you implement, so you don't need separate capability declarations.
+
 ### Key Manifest Fields
 
 | Field | Description |
@@ -580,7 +591,7 @@ export function MyAIIcon({ className }: IconProps) {
 
 ## Image Generation Provider (Optional)
 
-If your provider supports image generation, add `IMAGE_PROVIDER` to capabilities and implement:
+If your provider supports image generation, set `providerConfig.capabilities.imageGeneration` to `true` and implement the factory method below. Do **not** add `IMAGE_PROVIDER` to the manifest `capabilities` array (see the note in [Plugin Manifest](#plugin-manifest) section):
 
 ```typescript
 // In src/index.ts, add to plugin object:
@@ -680,7 +691,7 @@ export class MyAIImageProvider implements ImageGenProvider {
 
 ## Embedding Provider (Optional)
 
-If your provider supports text embeddings, add `EMBEDDING_PROVIDER` to capabilities and implement an embedding provider.
+If your provider supports text embeddings, set `providerConfig.capabilities.embeddings` to `true` and implement an embedding provider. Do **not** add `EMBEDDING_PROVIDER` to the manifest `capabilities` array (see the note in [Plugin Manifest](#plugin-manifest) section).
 
 ### Embedding Provider Interface
 
@@ -692,10 +703,7 @@ There are two types of embedding providers:
 Most providers will implement `EmbeddingProvider`:
 
 ```typescript
-// In manifest.json, add to capabilities:
-"capabilities": ["LLM_PROVIDER", "EMBEDDING_PROVIDER"],
-
-// And in providerConfig.capabilities:
+// In manifest.json providerConfig.capabilities:
 "capabilities": {
   "chat": true,
   "imageGeneration": false,

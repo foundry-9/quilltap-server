@@ -12,7 +12,7 @@ Connect to MCP (Model Context Protocol) servers via SSE and expose their tools t
 
 ## Configuration
 
-Configure MCP servers in **Settings > Tools > MCP Server Connector**.
+Configure MCP servers in **Settings > Tools tab > MCP Server Connector**.
 
 ### Server Configuration Format
 

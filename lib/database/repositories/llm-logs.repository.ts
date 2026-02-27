@@ -2,14 +2,22 @@
  * LLM Logs Repository
  *
  * Backend-agnostic repository for LLMLog entities.
- * Works with SQLite through the database abstraction layer.
- * Handles CRUD operations and advanced queries for LLM request/response logging.
+ * Overrides getCollection() to route all operations to the dedicated
+ * LLM logs database (quilltap-llm-logs.db), isolating high-churn debug
+ * data from the main database.
+ *
+ * When the logs DB is in degraded mode (corruption, permissions, etc.),
+ * getCollection() throws and all safeQuery fallbacks kick in — returning
+ * empty arrays, 0 counts, etc. The rest of the app continues normally.
  */
 
 import { logger } from '@/lib/logger';
 import { LLMLog, LLMLogSchema, LLMLogType } from '@/lib/schemas/types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
-import { TypedQueryFilter, QueryOptions } from '../interfaces';
+import { DatabaseCollection, TypedQueryFilter, QueryOptions } from '../interfaces';
+import { SQLiteCollection } from '../backends/sqlite/backend';
+import { getRawLLMLogsDatabase, isLLMLogsDegraded } from '../backends/sqlite/llm-logs-client';
+import { generateDDL, extractSchemaMetadata } from '../schema-translator';
 
 /**
  * LLM Logs Repository
@@ -17,8 +25,56 @@ import { TypedQueryFilter, QueryOptions } from '../interfaces';
  * Uses AbstractBaseRepository since LLMLog schema uses Date type for timestamps.
  */
 export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
+  private llmLogsCollectionInitialized = false;
+
   constructor() {
     super('llm_logs', LLMLogSchema);
+  }
+
+  /**
+   * Override getCollection to return a collection from the dedicated LLM logs
+   * database instead of the main database.
+   */
+  protected async getCollection(): Promise<DatabaseCollection<LLMLog>> {
+    if (isLLMLogsDegraded()) {
+      throw new Error('LLM logs database is in degraded mode');
+    }
+
+    const db = getRawLLMLogsDatabase();
+    if (!db) {
+      throw new Error('LLM logs database not initialized');
+    }
+
+    // Ensure the table exists in the logs DB on first access
+    if (!this.llmLogsCollectionInitialized) {
+      try {
+        const ddlStatements = generateDDL(this.collectionName, this.schema);
+        for (const sql of ddlStatements) {
+          db.exec(sql);
+        }
+        this.llmLogsCollectionInitialized = true;
+        logger.debug('Ensured llm_logs table exists in LLM logs database');
+      } catch (error) {
+        logger.error('Failed to ensure llm_logs table in LLM logs database', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }
+    }
+
+    // Detect JSON, array, and boolean columns from schema
+    const metadata = extractSchemaMetadata(this.collectionName, this.schema);
+    const jsonColumns = metadata.fields
+      .filter(f => f.type === 'array' || f.type === 'object')
+      .map(f => f.name);
+    const arrayColumns = metadata.fields
+      .filter(f => f.type === 'array')
+      .map(f => f.name);
+    const booleanColumns = metadata.fields
+      .filter(f => f.type === 'boolean')
+      .map(f => f.name);
+
+    return new SQLiteCollection<LLMLog>(db, this.collectionName, jsonColumns, arrayColumns, booleanColumns);
   }
 
   /**

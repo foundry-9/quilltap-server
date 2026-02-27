@@ -5,8 +5,7 @@
  * for tool discovery, execution, and lifecycle management.
  */
 
-import { logger } from '@/lib/logger';
-import { getBuiltinToolNames } from '@quilltap/plugin-utils';
+import { createPluginLogger, getBuiltinToolNames } from '@quilltap/plugin-utils';
 import type { UniversalTool } from '@quilltap/plugin-types';
 import { MCPClient } from './mcp-client';
 import { parseServerConfigs } from './security';
@@ -19,7 +18,7 @@ import type {
   MCPToolCallResult,
 } from './types';
 
-const managerLogger = logger.child({ module: 'mcp-connection-manager' });
+const managerLogger = createPluginLogger('mcp-connection-manager');
 
 /**
  * Connection Manager for multiple MCP servers

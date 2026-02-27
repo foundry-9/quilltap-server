@@ -50,13 +50,18 @@ export const MemorySchema = z.object({
   tags: z.array(UUIDSchema).default([]),            // Derived from character/persona/chat tags
   importance: z.number().min(0).max(1).default(0.5), // 0-1 scale for prioritization
   // Vector embedding for semantic search.
-  // Accepts both number[] and Buffer (Float32 BLOB from SQLite) — Buffers are
-  // transformed to number[] at validation time for transparent BLOB storage support.
+  // Accepts number[], Buffer (Float32 BLOB from SQLite), or JSON string (legacy TEXT storage).
+  // All non-array forms are transformed to number[] at validation time.
   embedding: z.union([
     z.array(z.number()),
     z.instanceof(Buffer).transform((buf): number[] => {
       const f32 = new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / Float32Array.BYTES_PER_ELEMENT);
       return Array.from(f32);
+    }),
+    z.string().transform((s): number[] => {
+      const parsed = JSON.parse(s);
+      if (!Array.isArray(parsed)) throw new Error('Embedding string is not a JSON array');
+      return parsed;
     }),
   ]).nullable().optional(),
   source: MemorySourceEnum.default('MANUAL'),       // How it was created

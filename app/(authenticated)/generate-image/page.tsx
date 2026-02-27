@@ -122,11 +122,6 @@ export default function GenerateImagePage() {
         count: imageCount,
       }
 
-      console.log('[Generate Image] Request:', {
-        url: `/api/v1/image-profiles/${selectedProfileId}?action=generate`,
-        body: requestBody,
-      })
-
       const res = await fetch(`/api/v1/image-profiles/${selectedProfileId}?action=generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -134,12 +129,6 @@ export default function GenerateImagePage() {
       })
 
       const data = await res.json()
-
-      console.log('[Generate Image] Response:', {
-        status: res.status,
-        ok: res.ok,
-        data,
-      })
 
       if (!res.ok) {
         const errorMessage = data.error || data.message || 'Failed to generate image'

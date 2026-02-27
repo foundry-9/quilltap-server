@@ -104,7 +104,8 @@ The AI has these file operations:
 **write_file**
 
 - Create new files
-- Update existing files
+- Automatically overwrites if a file with the same name already exists in the same folder
+- When overwriting, the original file ID is preserved so references remain intact
 - Requires your permission
 - Example: "Save the analysis to a new file"
 

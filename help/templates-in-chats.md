@@ -271,7 +271,7 @@ Some templates include:
 **Solutions:**
 
 - Refresh Chat Settings
-- Go to Aurora (`/foundry/aurora`) → Roleplay Templates to verify it was created
+- Go to the **Templates** tab in Settings (`/settings?tab=templates`) → Roleplay Templates to verify it was created
 - Make sure you're looking in the right section
 - Try closing and reopening Chat Settings
 - Refresh the entire page

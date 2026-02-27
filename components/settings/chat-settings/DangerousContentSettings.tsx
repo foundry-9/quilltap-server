@@ -345,7 +345,8 @@ export function DangerousContentSettings({
         <div className="qt-alert-warning p-4">
           <h4 className="font-medium text-foreground mb-2">Important Notes</h4>
           <ul className="qt-text-small space-y-1 list-disc list-inside">
-            <li>Content classification uses your configured Cheap LLM, adding a small cost per message</li>
+            <li>If you have an OpenAI API key configured, the free OpenAI moderation endpoint is used automatically for classification (no token cost)</li>
+            <li>Without an OpenAI connection profile, classification falls back to your configured Cheap LLM, adding a small cost per message</li>
             <li>Classification is fail-safe: errors never block your messages</li>
             <li>To use Auto-Route, mark at least one connection profile as &quot;Uncensored-Compatible&quot; in the Connection Profiles settings</li>
             <li>If no uncensored provider is available, flagged messages are sent to your regular provider with a warning</li>

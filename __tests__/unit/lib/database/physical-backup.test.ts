@@ -3,6 +3,7 @@
  *
  * Tests cover:
  * - Physical backup creation via db.backup()
+ * - 24-hour interval check (skip if recent backup exists)
  * - Partial file cleanup on failure
  * - Retention policy (7-day/weekly/monthly/yearly buckets)
  * - Backup filename generation and parsing
@@ -81,7 +82,11 @@ describe('SQLite Physical Backup Module', () => {
 
     it('should create backups directory if it does not exist', async () => {
       const db = createMockDb();
-      (mockFs.existsSync as jest.Mock).mockReturnValueOnce(false);
+      // First existsSync: shouldCreateBackup checks backupsDir → false (no dir yet)
+      // Second existsSync: createPhysicalBackup checks backupsDir → false (still doesn't exist)
+      (mockFs.existsSync as jest.Mock)
+        .mockReturnValueOnce(false)   // shouldCreateBackup: backupsDir doesn't exist yet
+        .mockReturnValueOnce(false);  // createPhysicalBackup: backupsDir still doesn't exist
 
       await physicalBackup.createPhysicalBackup(db as never);
 
@@ -99,6 +104,28 @@ describe('SQLite Physical Backup Module', () => {
       const result = await physicalBackup.createPhysicalBackup(db as never);
 
       expect(result).toBeNull();
+    });
+
+    it('should skip backup if a recent backup exists (< 24 hours old)', async () => {
+      const db = createMockDb();
+      const recentBackup = formatBackupFilename(new Date(Date.now() - 2 * 60 * 60 * 1000)); // 2 hours ago
+      (mockFs.readdirSync as jest.Mock).mockReturnValue([recentBackup]);
+
+      const result = await physicalBackup.createPhysicalBackup(db as never);
+
+      expect(result).toBeNull();
+      expect(db.backup).not.toHaveBeenCalled();
+    });
+
+    it('should create backup if most recent backup is older than 24 hours', async () => {
+      const db = createMockDb();
+      const oldBackup = formatBackupFilename(new Date(Date.now() - 25 * 60 * 60 * 1000)); // 25 hours ago
+      (mockFs.readdirSync as jest.Mock).mockReturnValue([oldBackup]);
+
+      const result = await physicalBackup.createPhysicalBackup(db as never);
+
+      expect(result).not.toBeNull();
+      expect(db.backup).toHaveBeenCalledTimes(1);
     });
 
     it('should clean up partial file on backup failure', async () => {

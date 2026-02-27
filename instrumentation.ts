@@ -327,6 +327,19 @@ export async function register() {
       }
 
       // ================================================================
+      // PHASE 3.25: Filesystem Reconciliation (after file storage init)
+      // ================================================================
+      try {
+        const { reconcileFilesystem } = await import('./lib/file-storage/reconciliation');
+        await reconcileFilesystem();
+      } catch (reconcileError) {
+        logger.warn('Error during filesystem reconciliation, continuing startup', {
+          context: 'instrumentation.register',
+          error: reconcileError instanceof Error ? reconcileError.message : String(reconcileError),
+        });
+      }
+
+      // ================================================================
       // PHASE 3.5: Start Background Schedulers (non-critical)
       // ================================================================
       try {
@@ -336,7 +349,11 @@ export async function register() {
         const { scheduleDangerScan } = await import('./lib/background-jobs/scheduled-danger-scan');
         await scheduleDangerScan();
 
-        logger.info('Background schedulers started', {
+        // Start filesystem watcher for real-time sync
+        const { startWatcher } = await import('./lib/file-storage/watcher');
+        startWatcher();
+
+        logger.info('Background schedulers and filesystem watcher started', {
           context: 'instrumentation.register',
         });
       } catch (schedulerError) {

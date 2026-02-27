@@ -152,6 +152,16 @@ export type {
   SearchProviderPluginExport,
 } from './plugins/search-provider';
 
+export type {
+  // Moderation provider plugin types
+  ModerationProviderMetadata,
+  ModerationProviderConfigRequirements,
+  ModerationCategoryResult,
+  ModerationResult,
+  ModerationProviderPlugin,
+  ModerationProviderPluginExport,
+} from './plugins/moderation-provider';
+
 // ============================================================================
 // Common Types
 // ============================================================================
@@ -181,4 +191,4 @@ export { createConsoleLogger, createNoopLogger } from './common/logger';
  * Version of the plugin-types package.
  * Can be used at runtime to check compatibility.
  */
-export const PLUGIN_TYPES_VERSION = '1.15.1';
+export const PLUGIN_TYPES_VERSION = '1.16.0';

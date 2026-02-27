@@ -17,6 +17,7 @@
  * POST /api/v1/system/tools?action=capabilities-report-delete - Delete a specific report
  * GET /api/v1/system/tools?action=memory-dedup-preview - Preview memory deduplication
  * POST /api/v1/system/tools?action=memory-dedup - Execute memory deduplication
+ * POST /api/v1/system/tools?action=ai-import-stream - AI character import from source material (SSE)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -31,6 +32,8 @@ import { createExport, previewExport } from '@/lib/export/quilltap-export-servic
 import { previewImport, executeImport, type QuilltapExport, type ConflictStrategy } from '@/lib/import/quilltap-import-service';
 import { generateAndSaveReport } from '@/lib/tools/capabilities-report';
 import { deduplicateAllMemories } from '@/lib/tools/memory-dedup';
+import { runAIImportStreaming } from '@/lib/services/ai-import.service';
+import type { AIImportRequest, AIImportProgressEvent } from '@/lib/services/ai-import.service';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { getUserRepositories, getRepositories } from '@/lib/repositories/factory';
 import type { ExportEntityType } from '@/lib/export/types';
@@ -77,6 +80,11 @@ function getJobTypeName(type: string): string {
     CONTEXT_SUMMARY: 'Context Summary',
     TITLE_UPDATE: 'Title Update',
     LLM_LOG_CLEANUP: 'LLM Log Cleanup',
+    EMBEDDING_GENERATE: 'Embedding Generation',
+    EMBEDDING_REFIT: 'Vocabulary Refit',
+    EMBEDDING_REINDEX_ALL: 'Re-embed All Memories',
+    STORY_BACKGROUND_GENERATION: 'Story Background',
+    CHAT_DANGER_CLASSIFICATION: 'Danger Classification',
   };
   return typeNames[type] || type;
 }
@@ -172,12 +180,36 @@ async function handleTasksQueue(req: NextRequest, context: any) {
       return new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime();
     });
 
+    // Build a character name cache for jobs that only have characterId
+    const characterNameCache = new Map<string, string>();
+    for (const job of activeJobs) {
+      const payload = job.payload as Record<string, unknown>;
+      if (payload.characterId && !payload.characterName) {
+        const charId = payload.characterId as string;
+        if (!characterNameCache.has(charId)) {
+          try {
+            const character = await repos.characters.findById(charId);
+            if (character) {
+              characterNameCache.set(charId, character.name);
+            }
+          } catch {
+            // Character lookup failed, skip
+          }
+        }
+      }
+    }
+
     let totalEstimatedTokens = 0;
     const jobDetails = activeJobs.map((job) => {
       const estimatedTokens = estimateTokensForJob(job);
       totalEstimatedTokens += estimatedTokens;
 
       const payload = job.payload as Record<string, unknown>;
+
+      // Resolve character name from payload or cache
+      const characterName = (payload.characterName as string | undefined)
+        || characterNameCache.get(payload.characterId as string)
+        || undefined;
 
       return {
         id: job.id,
@@ -192,7 +224,7 @@ async function handleTasksQueue(req: NextRequest, context: any) {
         lastError: job.lastError,
         estimatedTokens,
         chatId: payload.chatId as string | undefined,
-        characterName: payload.characterName as string | undefined,
+        characterName,
       };
     });
 
@@ -957,6 +989,78 @@ async function handleMemoryDedup(req: NextRequest, context: any) {
   }
 }
 
+async function handleAIImportStream(req: NextRequest, context: any) {
+  const { user, repos } = context;
+
+  try {
+    const body = await req.json();
+
+    const request: AIImportRequest = {
+      profileId: body.profileId,
+      sourceFileIds: body.sourceFileIds || [],
+      sourceText: body.sourceText || '',
+      includeMemories: body.includeMemories ?? true,
+      includeChats: body.includeChats ?? false,
+      existingResult: body.existingResult || undefined,
+      regenerateSteps: body.regenerateSteps || undefined,
+    };
+
+    if (!request.profileId) {
+      return badRequest('Missing required field: profileId');
+    }
+
+    if (request.sourceFileIds.length === 0 && !request.sourceText.trim()) {
+      return badRequest('Must provide at least one source file or source text');
+    }
+
+    logger.info('[System Tools v1] AI Import stream starting', {
+      userId: user.id,
+      profileId: request.profileId,
+      sourceFileCount: request.sourceFileIds.length,
+      hasSourceText: !!request.sourceText.trim(),
+      includeMemories: request.includeMemories,
+      includeChats: request.includeChats,
+    });
+
+    const encoder = new TextEncoder();
+
+    const stream = new ReadableStream({
+      async start(controller) {
+        const enqueue = (event: AIImportProgressEvent) => {
+          try {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+          } catch {
+            // Stream may be closed
+          }
+        };
+
+        await runAIImportStreaming(request, user.id, repos, enqueue);
+
+        try {
+          controller.close();
+        } catch {
+          // Stream may already be closed
+        }
+      },
+    });
+
+    return new NextResponse(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'AI import failed';
+    logger.error('[System Tools v1] AI Import stream failed', {
+      userId: user.id,
+      error: errorMessage,
+    });
+    return serverError(errorMessage);
+  }
+}
+
 // ============================================================================
 // Request Handlers
 // ============================================================================
@@ -1012,9 +1116,11 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, context)
       return handleCapabilitiesReportDelete(req, context);
     case 'memory-dedup':
       return handleMemoryDedup(req, context);
+    case 'ai-import-stream':
+      return handleAIImportStream(req, context);
     default:
       return badRequest(
-        `Unknown action: ${action}. Available POST actions: delete-data, tasks-queue, export, import-preview, import-execute, capabilities-report-generate, capabilities-report-delete, memory-dedup`
+        `Unknown action: ${action}. Available POST actions: delete-data, tasks-queue, export, import-preview, import-execute, capabilities-report-generate, capabilities-report-delete, memory-dedup, ai-import-stream`
       );
   }
 });

@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { checkOwnership } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { notFound, validationError, serverError, successResponse } from '@/lib/api/responses';
+import { resolveEffectiveFolderPath } from '@/lib/files/folder-utils';
 import { addFileSchema, removeFileSchema } from '../schemas';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 
@@ -40,7 +41,7 @@ export async function handleListFiles(
         category: f.category,
         description: f.description,
         projectId: f.projectId,
-        folderPath: f.folderPath || '/',
+        folderPath: resolveEffectiveFolderPath(f.folderPath, f.storageKey),
         width: f.width,
         height: f.height,
         createdAt: f.createdAt,

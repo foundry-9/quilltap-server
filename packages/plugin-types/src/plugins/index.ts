@@ -26,6 +26,7 @@ export type {
   PluginCompatibility,
   ProviderConfig,
   SearchProviderConfig,
+  ModerationProviderConfig,
   PluginPermissions,
   PluginManifest,
   InstalledPluginInfo,
@@ -62,3 +63,12 @@ export type {
   SearchProviderPlugin,
   SearchProviderPluginExport,
 } from './search-provider';
+
+export type {
+  ModerationProviderMetadata,
+  ModerationProviderConfigRequirements,
+  ModerationCategoryResult,
+  ModerationResult,
+  ModerationProviderPlugin,
+  ModerationProviderPluginExport,
+} from './moderation-provider';

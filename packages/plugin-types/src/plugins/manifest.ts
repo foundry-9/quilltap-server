@@ -14,6 +14,7 @@ export type PluginCapability =
   | 'ROLEPLAY_TEMPLATE'
   | 'TOOL_PROVIDER'
   | 'SEARCH_PROVIDER'
+  | 'MODERATION_PROVIDER'
   | 'UTILITY';
 
 /**
@@ -101,6 +102,34 @@ export interface ProviderConfig {
     mimeTypes: string[];
     description: string;
   };
+}
+
+/**
+ * Moderation provider-specific configuration (for MODERATION_PROVIDER plugins)
+ */
+export interface ModerationProviderConfig {
+  /** Internal provider name (e.g., 'OPENAI') */
+  providerName: string;
+  /** Human-readable display name */
+  displayName: string;
+  /** Provider description */
+  description: string;
+  /** Short abbreviation (2-4 chars) */
+  abbreviation: string;
+  /** UI color configuration */
+  colors: {
+    bg: string;
+    text: string;
+    icon: string;
+  };
+  /** Whether the provider requires an API key */
+  requiresApiKey: boolean;
+  /** Label for API key input */
+  apiKeyLabel?: string;
+  /** Whether the provider requires a base URL */
+  requiresBaseUrl: boolean;
+  /** Default base URL */
+  baseUrlDefault?: string;
 }
 
 /**
@@ -208,6 +237,9 @@ export interface PluginManifest {
 
   /** Search provider configuration (for SEARCH_PROVIDER plugins) */
   searchProviderConfig?: SearchProviderConfig;
+
+  /** Moderation provider configuration (for MODERATION_PROVIDER plugins) */
+  moderationProviderConfig?: ModerationProviderConfig;
 
   /** Required permissions */
   permissions?: PluginPermissions;

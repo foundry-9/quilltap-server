@@ -74,8 +74,8 @@ All state is managed in the `useTasksQueue` hook:
 
 ## API Integration
 
-- `GET /api/tools/tasks-queue` - Fetch queue status and jobs
-- `POST /api/tools/tasks-queue` - Start/stop queue
-- `GET /api/background-jobs/{jobId}` - Fetch job details
-- `PATCH /api/background-jobs/{jobId}` - Pause/resume job
-- `DELETE /api/background-jobs/{jobId}` - Delete job
+- `GET /api/v1/system/jobs` - Fetch queue status and jobs
+- `POST /api/v1/system/jobs` - Start/stop queue
+- `GET /api/v1/system/jobs/{jobId}` - Fetch job details
+- `PATCH /api/v1/system/jobs/{jobId}` - Pause/resume job
+- `DELETE /api/v1/system/jobs/{jobId}` - Delete job
