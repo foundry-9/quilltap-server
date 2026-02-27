@@ -167,7 +167,7 @@ Previously planned (superseded):
 ## Completed in v2.10
 
 - [X] Title generation needs better guidelines (every NSFW option shouldn't preach about consent and boundaries, for example)
-- [X] More intelligent handling of empty messages from the LLM (usually some kind of error, but a plain blank often means you crossed a provider line - NSFW, content filtering)
+- [X] More intelligent handling of empty messages from the LLM (usually some kind of error, but a plain blank often means you crossed a provider line - NSFW, alternative content provision and routing)
   - [X] Image prompt generation
   - [X] Memory generation
   - [X] Context compression
