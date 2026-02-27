@@ -136,10 +136,10 @@ Edit your `package.json`:
     "@quilltap/plugin-types": "^1.0.0",
     "@quilltap/plugin-utils": "^1.0.0",
     "@quilltap/theme-storybook": "^1.0.0",
-    "@storybook/react": "^8.0.0",
-    "@storybook/react-vite": "^8.0.0",
+    "@storybook/react": "^10.1.11",
+    "@storybook/react-vite": "^10.1.11",
     "esbuild": "^0.20.0",
-    "storybook": "^8.0.0",
+    "storybook": "^10.1.11",
     "typescript": "^5.0.0"
   }
 }
@@ -677,9 +677,11 @@ Add the `subsystems` field inside `themeConfig`:
 | `salon` | The Salon |
 | `commonplace-book` | The Commonplace Book |
 | `prospero` | Prospero |
-| `dangermouse` | Dangermouse |
+| `concierge` | The Concierge |
 | `calliope` | Calliope |
 | `lantern` | The Lantern |
+| `pascal` | Pascal the Croupier |
+| `saquel` | Saquel Ytzama the Keeper of Secrets |
 
 ### Override Fields
 
@@ -1362,7 +1364,6 @@ npm run build
 ## Resources
 
 - [Quilltap Plugin Manifest Reference](./PLUGIN_MANIFEST.md)
-- [Theme Utility Classes](../features/complete/theme-utility-classes.md)
 - [@quilltap/plugin-types Package](../packages/plugin-types/README.md)
 - [@quilltap/theme-storybook Package](../packages/theme-storybook/README.md)
 - [HSL Color Picker](https://hslpicker.com/)

@@ -2,6 +2,50 @@
 
 ## Historical Changes
 
+### 2.11.0
+
+- build: Removed dead Docker infrastructure (docker-compose files, Dockerfile.allinone, Nginx/Certbot/MinIO configs)
+  - Deleted `docker-compose.yml`, `docker-compose.prod.yml`, `docker-compose.test.yml`, `Dockerfile.allinone`
+  - Removed `docker/start-allinone.sh`, `docker/init-letsencrypt.sh`, `docker/nginx.conf`
+  - Removed `build:docker:rebuild`, `start:docker`, `stop:docker` npm scripts
+- build: Added `HOST_REDIRECT_PORTS` support to Docker image for transparent host port forwarding
+  - New `docker/entrypoint.sh` script sets up socat forwarders for comma-separated port list
+  - Enables Docker users to reach host services (Ollama, LM Studio, MCP servers) at `localhost` URLs
+  - Installed socat in the production Docker image
+- feat: Added Docker startup scripts (`scripts/start-quilltap.sh` and `scripts/start-quilltap.ps1`)
+  - Platform detection sets correct default data directory (macOS, Linux, Windows)
+  - Auto-detects Ollama on port 11434 and adds it to `HOST_REDIRECT_PORTS`
+  - Supports `--data-dir`, `--port`, `--redirect-ports`, `--tag`, `--env`, `--restart`, `--dry-run`
+  - Checks for existing containers before creating duplicates
+  - `--no-auto-detect` flag to skip service detection
+- chore: Removed all authentication infrastructure (JWT, OAuth, Google sign-in)
+  - Removed `JWT_SECRET`, `AUTH_DISABLED`, `OAUTH_DISABLED`, `GOOGLE_CLIENT_*` from .env.example and docs
+  - Removed authentication sections from DEPLOYMENT.md
+  - Simplified README.md Quick Start — no configuration required for local use
+- docs: Rewrote all Docker documentation around `docker run` and startup scripts
+  - README.md Quick Start now recommends startup scripts with `docker run` as fallback
+  - Updated DEVELOPMENT.md, docs/DEPLOYMENT.md, docs/DATABASE_ABSTRACTION.md, docs/BACKUP-RESTORE.md
+  - Added reverse proxy examples (Nginx, Caddy) to DEPLOYMENT.md
+  - Added Docker user notes to help files (startup-wizard, connection-profiles, embedding-profiles)
+  - Cleaned up stale references in .env.example, package.json, knip.json, lib/paths.ts, DataDirectorySection component
+- build: Updated Docker build process to make sure Windows and macOS were covered
+- fix: Import of large .qtap files (>10MB) now works correctly
+  - Added `proxyClientMaxBodySize: '100mb'` to next.config.js to prevent proxy body truncation
+  - Frontend import now sends the original file via FormData instead of re-serializing JSON
+  - Backend import-execute endpoint now supports FormData uploads (matching import-preview)
+- fix: Corrected table names in user ID migration
+  - `prompts` → `prompt_templates`, `messages` → `chat_messages` to match actual SQLite schema
+  - Removed `memories` from migration list (no `userId` column in that table)
+- fix: Participants sidebar now always shows in chat conversation page
+  - Removed `isMultiChar` gate so sidebar renders even with zero participants
+  - Users can now add characters to chats that have no participants
+  - Updated empty state message to "Add a character to get started"
+- fix: Story background files now correctly stored in `/story-backgrounds/` folder
+  - Added `projectId` and `folderPath` to file metadata when saving generated story backgrounds
+  - Auto-create `/story-backgrounds/` folder record in database on first background generation per scope
+  - Fixed project `list-files` API response missing `folderPath` and other fields needed by FileBrowser UI
+- Started 2.11 dev branch
+
 ### 2.10.2
 
 - feat: User profile setup on first run
@@ -208,8 +252,8 @@
   - Distributed with the app in `plugins/dist/qtap-plugin-theme-old-school/`
 
 - feat: Foundry Hub restructure — unified settings and tools into `/foundry`
-  - New `/foundry` landing page with 8 subsystem navigation cards (Aurora, The Forge, The Salon, The Commonplace Book, Prospero, Dangermouse, Calliope, The Lantern)
-  - 8 new sub-routes (`/foundry/aurora`, `/foundry/forge`, `/foundry/salon`, `/foundry/commonplace-book`, `/foundry/prospero`, `/foundry/dangermouse`, `/foundry/calliope`, `/foundry/lantern`)
+  - New `/foundry` landing page with 8 subsystem navigation cards (Aurora, The Forge, The Salon, The Commonplace Book, Prospero, the Concierge, Calliope, The Lantern)
+  - 8 new sub-routes (`/foundry/aurora`, `/foundry/forge`, `/foundry/salon`, `/foundry/commonplace-book`, `/foundry/prospero`, `/foundry/concierge`, `/foundry/calliope`, `/foundry/lantern`)
   - New `CollapsibleCard` component with `qt-collapsible-card-*` CSS classes for all subsystem pages
   - Standalone wrappers for `DangerousContentSettings` and `StoryBackgroundsSettings` (self-contained with `useChatSettings()`)
   - Sidebar permanently collapsed: removed expand/collapse toggle, resize handle, and width persistence
@@ -272,10 +316,10 @@
   - New `resolveCharacterAppearances()` cheap LLM task analyzes chat context to determine what each character currently looks like
   - Clothing priority: narrative context (highest) > image prompt > stored records by usageContext > default
   - Physical descriptions selected by best-matching usageContext for current scene
-  - Dangermouse integration: appearance text classified and sanitized when no uncensored provider available
+  - Concierge integration: appearance text classified and sanitized when no uncensored provider available
   - Chat image generation (`generate_image` tool) now fetches recent messages and resolves context-aware appearances
   - Story background generation runs scene context derivation and appearance resolution in parallel
-  - Front page image generator now has Dangermouse prompt classification and AUTO_ROUTE provider rerouting
+  - Front page image generator now has Concierge prompt classification and AUTO_ROUTE provider rerouting
   - New `APPEARANCE_RESOLUTION` LLM log type for tracking appearance resolution LLM calls
   - Skip optimization: bypasses LLM call when characters have trivial data and no chat context
   - Fail-safe: all resolution and sanitization errors fall back gracefully to existing behavior

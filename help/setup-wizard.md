@@ -1,6 +1,6 @@
 # AI Stack Setup Wizard
 
-> **[Open the Setup Wizard](/foundry/forge/wizard)**
+> **[Open the Setup Wizard](/settings/wizard)**
 
 ## The Grand Tour of Your AI Establishment
 
@@ -12,7 +12,7 @@ The wizard appears in two circumstances:
 
 **First Run** — After you've set up your encryption and created your profile, the wizard materialises automatically at `/setup/providers`. It shan't let you pass without at least one working chat connection, which is really quite reasonable of it.
 
-**Return Visit** — Should you wish to add new providers, adjust your AI stack, or simply revisit your arrangements, you'll find a link to the wizard at the top of [The Forge](/foundry/forge). It pre-fills your existing configuration so you needn't start from scratch, which would be tedious beyond endurance.
+**Return Visit** — Should you wish to add new providers, adjust your AI stack, or simply revisit your arrangements, you'll find a link to the wizard at the top of [The Forge](/settings). It pre-fills your existing configuration so you needn't start from scratch, which would be tedious beyond endurance.
 
 ## The Six Steps
 

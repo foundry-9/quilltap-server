@@ -11748,7 +11748,7 @@ var require_crypto = __commonJS({
         const dataArray = new TextEncoder().encode(data);
         const signatureArray = base64js.toByteArray(_BrowserCrypto.padBase64(signature));
         const cryptoKey = await window.crypto.subtle.importKey("jwk", pubkey, algo, true, ["verify"]);
-        const result = await window.crypto.subtle.verify(algo, cryptoKey, signatureArray, dataArray);
+        const result = await window.crypto.subtle.verify(algo, cryptoKey, Buffer.from(signatureArray), dataArray);
         return result;
       }
       async sign(privateKey, data) {
@@ -11862,7 +11862,12 @@ var require_crypto2 = __commonJS({
     };
     exports2.NodeCrypto = NodeCrypto;
     function toArrayBuffer(buffer) {
-      return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+      const ab = new ArrayBuffer(buffer.length);
+      const view = new Uint8Array(ab);
+      for (let i2 = 0; i2 < buffer.length; ++i2) {
+        view[i2] = buffer[i2];
+      }
+      return ab;
     }
     function toBuffer(arrayBuffer) {
       return Buffer.from(arrayBuffer);
@@ -12250,7 +12255,7 @@ var require_package2 = __commonJS({
   "node_modules/google-auth-library/package.json"(exports2, module2) {
     module2.exports = {
       name: "google-auth-library",
-      version: "10.5.0",
+      version: "10.6.1",
       author: "Google Inc.",
       description: "Google APIs Authentication Client Library for Node.js",
       engines: {
@@ -12258,7 +12263,11 @@ var require_package2 = __commonJS({
       },
       main: "./build/src/index.js",
       types: "./build/src/index.d.ts",
-      repository: "googleapis/google-auth-library-nodejs.git",
+      repository: {
+        type: "git",
+        directory: "packages/google-auth-library-nodejs",
+        url: "https://github.com/googleapis/google-cloud-node-core.git"
+      },
       keywords: [
         "google",
         "api",
@@ -12269,10 +12278,9 @@ var require_package2 = __commonJS({
       dependencies: {
         "base64-js": "^1.3.0",
         "ecdsa-sig-formatter": "^1.0.11",
-        gaxios: "^7.0.0",
-        "gcp-metadata": "^8.0.0",
-        "google-logging-utils": "^1.0.0",
-        gtoken: "^8.0.0",
+        gaxios: "7.1.3",
+        "gcp-metadata": "8.1.2",
+        "google-logging-utils": "1.1.3",
         jws: "^4.0.0"
       },
       devDependencies: {
@@ -12280,15 +12288,15 @@ var require_package2 = __commonJS({
         "@types/jws": "^3.1.0",
         "@types/mocha": "^10.0.10",
         "@types/mv": "^2.1.0",
-        "@types/ncp": "^2.0.1",
-        "@types/node": "^22.0.0",
-        "@types/sinon": "^17.0.0",
+        "@types/ncp": "^2.0.8",
+        "@types/node": "^24.0.0",
+        "@types/sinon": "^21.0.0",
         "assert-rejects": "^1.0.0",
-        c8: "^10.0.0",
-        codecov: "^3.0.2",
-        gts: "^6.0.0",
+        c8: "^10.1.3",
+        codecov: "^3.8.3",
+        gts: "^6.0.2",
         "is-docker": "^3.0.0",
-        jsdoc: "^4.0.0",
+        jsdoc: "^4.0.4",
         "jsdoc-fresh": "^5.0.0",
         "jsdoc-region-tag": "^4.0.0",
         karma: "^6.0.0",
@@ -12303,13 +12311,13 @@ var require_package2 = __commonJS({
         mv: "^2.1.1",
         ncp: "^2.0.0",
         nock: "^14.0.5",
-        "null-loader": "^4.0.0",
+        "null-loader": "^4.0.1",
         puppeteer: "^24.0.0",
         sinon: "^21.0.0",
-        "ts-loader": "^8.0.0",
-        typescript: "5.8.2",
-        webpack: "^5.21.2",
-        "webpack-cli": "^4.0.0"
+        "ts-loader": "^9.5.2",
+        typescript: "5.8.3",
+        webpack: "^5.97.1",
+        "webpack-cli": "^6.0.1"
       },
       files: [
         "build/src",
@@ -12334,7 +12342,8 @@ var require_package2 = __commonJS({
         "predocs-test": "npm run docs",
         prelint: "cd samples; npm link ../; npm install"
       },
-      license: "Apache-2.0"
+      license: "Apache-2.0",
+      homepage: "https://github.com/googleapis/google-cloud-node-core/tree/main/packages/google-auth-library-nodejs"
     };
   }
 });
@@ -14080,642 +14089,414 @@ var require_jws = __commonJS({
   }
 });
 
-// node_modules/gtoken/build/cjs/src/index.cjs
-var require_src5 = __commonJS({
-  "node_modules/gtoken/build/cjs/src/index.cjs"(exports2) {
+// node_modules/google-auth-library/build/src/gtoken/jwsSign.js
+var require_jwsSign = __commonJS({
+  "node_modules/google-auth-library/build/src/gtoken/jwsSign.js"(exports2) {
     "use strict";
-    Object.defineProperty(exports2, "__esModule", {
-      value: true
-    });
-    exports2.GoogleToken = void 0;
-    var fs3 = _interopRequireWildcard(require("fs"));
-    var _gaxios = require_src2();
-    var jws = _interopRequireWildcard(require_jws());
-    var path3 = _interopRequireWildcard(require("path"));
-    var _util = require("util");
-    function _interopRequireWildcard(e2, t2) {
-      if ("function" == typeof WeakMap) var r2 = /* @__PURE__ */ new WeakMap(), n = /* @__PURE__ */ new WeakMap();
-      return (_interopRequireWildcard = function _interopRequireWildcard2(e3, t3) {
-        if (!t3 && e3 && e3.__esModule) return e3;
-        var o, i2, f3 = { __proto__: null, "default": e3 };
-        if (null === e3 || "object" != _typeof(e3) && "function" != typeof e3) return f3;
-        if (o = t3 ? n : r2) {
-          if (o.has(e3)) return o.get(e3);
-          o.set(e3, f3);
-        }
-        for (var _t3 in e3) "default" !== _t3 && {}.hasOwnProperty.call(e3, _t3) && ((i2 = (o = Object.defineProperty) && Object.getOwnPropertyDescriptor(e3, _t3)) && (i2.get || i2.set) ? o(f3, _t3, i2) : f3[_t3] = e3[_t3]);
-        return f3;
-      })(e2, t2);
-    }
-    function _typeof(o) {
-      "@babel/helpers - typeof";
-      return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function(o2) {
-        return typeof o2;
-      } : function(o2) {
-        return o2 && "function" == typeof Symbol && o2.constructor === Symbol && o2 !== Symbol.prototype ? "symbol" : typeof o2;
-      }, _typeof(o);
-    }
-    function _classPrivateMethodInitSpec(e2, a) {
-      _checkPrivateRedeclaration(e2, a), a.add(e2);
-    }
-    function _classPrivateFieldInitSpec(e2, t2, a) {
-      _checkPrivateRedeclaration(e2, t2), t2.set(e2, a);
-    }
-    function _checkPrivateRedeclaration(e2, t2) {
-      if (t2.has(e2)) throw new TypeError("Cannot initialize the same private elements twice on an object");
-    }
-    function _classPrivateFieldSet(s2, a, r2) {
-      return s2.set(_assertClassBrand(s2, a), r2), r2;
-    }
-    function _classPrivateFieldGet(s2, a) {
-      return s2.get(_assertClassBrand(s2, a));
-    }
-    function _assertClassBrand(e2, t2, n) {
-      if ("function" == typeof e2 ? e2 === t2 : e2.has(t2)) return arguments.length < 3 ? t2 : n;
-      throw new TypeError("Private element is not present on this object");
-    }
-    function _defineProperties(e2, r2) {
-      for (var t2 = 0; t2 < r2.length; t2++) {
-        var o = r2[t2];
-        o.enumerable = o.enumerable || false, o.configurable = true, "value" in o && (o.writable = true), Object.defineProperty(e2, _toPropertyKey(o.key), o);
-      }
-    }
-    function _createClass(e2, r2, t2) {
-      return r2 && _defineProperties(e2.prototype, r2), t2 && _defineProperties(e2, t2), Object.defineProperty(e2, "prototype", { writable: false }), e2;
-    }
-    function _classCallCheck(a, n) {
-      if (!(a instanceof n)) throw new TypeError("Cannot call a class as a function");
-    }
-    function _callSuper(t2, o, e2) {
-      return o = _getPrototypeOf(o), _possibleConstructorReturn(t2, _isNativeReflectConstruct() ? Reflect.construct(o, e2 || [], _getPrototypeOf(t2).constructor) : o.apply(t2, e2));
-    }
-    function _possibleConstructorReturn(t2, e2) {
-      if (e2 && ("object" == _typeof(e2) || "function" == typeof e2)) return e2;
-      if (void 0 !== e2) throw new TypeError("Derived constructors may only return object or undefined");
-      return _assertThisInitialized(t2);
-    }
-    function _assertThisInitialized(e2) {
-      if (void 0 === e2) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
-      return e2;
-    }
-    function _inherits(t2, e2) {
-      if ("function" != typeof e2 && null !== e2) throw new TypeError("Super expression must either be null or a function");
-      t2.prototype = Object.create(e2 && e2.prototype, { constructor: { value: t2, writable: true, configurable: true } }), Object.defineProperty(t2, "prototype", { writable: false }), e2 && _setPrototypeOf(t2, e2);
-    }
-    function _wrapNativeSuper(t2) {
-      var r2 = "function" == typeof Map ? /* @__PURE__ */ new Map() : void 0;
-      return _wrapNativeSuper = function _wrapNativeSuper2(t3) {
-        if (null === t3 || !_isNativeFunction(t3)) return t3;
-        if ("function" != typeof t3) throw new TypeError("Super expression must either be null or a function");
-        if (void 0 !== r2) {
-          if (r2.has(t3)) return r2.get(t3);
-          r2.set(t3, Wrapper);
-        }
-        function Wrapper() {
-          return _construct(t3, arguments, _getPrototypeOf(this).constructor);
-        }
-        return Wrapper.prototype = Object.create(t3.prototype, { constructor: { value: Wrapper, enumerable: false, writable: true, configurable: true } }), _setPrototypeOf(Wrapper, t3);
-      }, _wrapNativeSuper(t2);
-    }
-    function _construct(t2, e2, r2) {
-      if (_isNativeReflectConstruct()) return Reflect.construct.apply(null, arguments);
-      var o = [null];
-      o.push.apply(o, e2);
-      var p = new (t2.bind.apply(t2, o))();
-      return r2 && _setPrototypeOf(p, r2.prototype), p;
-    }
-    function _isNativeReflectConstruct() {
-      try {
-        var t2 = !Boolean.prototype.valueOf.call(Reflect.construct(Boolean, [], function() {
-        }));
-      } catch (t3) {
-      }
-      return (_isNativeReflectConstruct = function _isNativeReflectConstruct2() {
-        return !!t2;
-      })();
-    }
-    function _isNativeFunction(t2) {
-      try {
-        return -1 !== Function.toString.call(t2).indexOf("[native code]");
-      } catch (n) {
-        return "function" == typeof t2;
-      }
-    }
-    function _setPrototypeOf(t2, e2) {
-      return _setPrototypeOf = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function(t3, e3) {
-        return t3.__proto__ = e3, t3;
-      }, _setPrototypeOf(t2, e2);
-    }
-    function _getPrototypeOf(t2) {
-      return _getPrototypeOf = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function(t3) {
-        return t3.__proto__ || Object.getPrototypeOf(t3);
-      }, _getPrototypeOf(t2);
-    }
-    function _defineProperty(e2, r2, t2) {
-      return (r2 = _toPropertyKey(r2)) in e2 ? Object.defineProperty(e2, r2, { value: t2, enumerable: true, configurable: true, writable: true }) : e2[r2] = t2, e2;
-    }
-    function _toPropertyKey(t2) {
-      var i2 = _toPrimitive(t2, "string");
-      return "symbol" == _typeof(i2) ? i2 : i2 + "";
-    }
-    function _toPrimitive(t2, r2) {
-      if ("object" != _typeof(t2) || !t2) return t2;
-      var e2 = t2[Symbol.toPrimitive];
-      if (void 0 !== e2) {
-        var i2 = e2.call(t2, r2 || "default");
-        if ("object" != _typeof(i2)) return i2;
-        throw new TypeError("@@toPrimitive must return a primitive value.");
-      }
-      return ("string" === r2 ? String : Number)(t2);
-    }
-    function _regenerator() {
-      var e2, t2, r2 = "function" == typeof Symbol ? Symbol : {}, n = r2.iterator || "@@iterator", o = r2.toStringTag || "@@toStringTag";
-      function i2(r3, n2, o2, i3) {
-        var c2 = n2 && n2.prototype instanceof Generator ? n2 : Generator, u2 = Object.create(c2.prototype);
-        return _regeneratorDefine2(u2, "_invoke", (function(r4, n3, o3) {
-          var i4, c3, u3, f4 = 0, p = o3 || [], y = false, G = { p: 0, n: 0, v: e2, a: d, f: d.bind(e2, 4), d: function d2(t3, r5) {
-            return i4 = t3, c3 = 0, u3 = e2, G.n = r5, a;
-          } };
-          function d(r5, n4) {
-            for (c3 = r5, u3 = n4, t2 = 0; !y && f4 && !o4 && t2 < p.length; t2++) {
-              var o4, i5 = p[t2], d2 = G.p, l = i5[2];
-              r5 > 3 ? (o4 = l === n4) && (u3 = i5[(c3 = i5[4]) ? 5 : (c3 = 3, 3)], i5[4] = i5[5] = e2) : i5[0] <= d2 && ((o4 = r5 < 2 && d2 < i5[1]) ? (c3 = 0, G.v = n4, G.n = i5[1]) : d2 < l && (o4 = r5 < 3 || i5[0] > n4 || n4 > l) && (i5[4] = r5, i5[5] = n4, G.n = l, c3 = 0));
-            }
-            if (o4 || r5 > 1) return a;
-            throw y = true, n4;
-          }
-          return function(o4, p2, l) {
-            if (f4 > 1) throw TypeError("Generator is already running");
-            for (y && 1 === p2 && d(p2, l), c3 = p2, u3 = l; (t2 = c3 < 2 ? e2 : u3) || !y; ) {
-              i4 || (c3 ? c3 < 3 ? (c3 > 1 && (G.n = -1), d(c3, u3)) : G.n = u3 : G.v = u3);
-              try {
-                if (f4 = 2, i4) {
-                  if (c3 || (o4 = "next"), t2 = i4[o4]) {
-                    if (!(t2 = t2.call(i4, u3))) throw TypeError("iterator result is not an object");
-                    if (!t2.done) return t2;
-                    u3 = t2.value, c3 < 2 && (c3 = 0);
-                  } else 1 === c3 && (t2 = i4["return"]) && t2.call(i4), c3 < 2 && (u3 = TypeError("The iterator does not provide a '" + o4 + "' method"), c3 = 1);
-                  i4 = e2;
-                } else if ((t2 = (y = G.n < 0) ? u3 : r4.call(n3, G)) !== a) break;
-              } catch (t3) {
-                i4 = e2, c3 = 1, u3 = t3;
-              } finally {
-                f4 = 1;
-              }
-            }
-            return { value: t2, done: y };
-          };
-        })(r3, o2, i3), true), u2;
-      }
-      var a = {};
-      function Generator() {
-      }
-      function GeneratorFunction() {
-      }
-      function GeneratorFunctionPrototype() {
-      }
-      t2 = Object.getPrototypeOf;
-      var c = [][n] ? t2(t2([][n]())) : (_regeneratorDefine2(t2 = {}, n, function() {
-        return this;
-      }), t2), u = GeneratorFunctionPrototype.prototype = Generator.prototype = Object.create(c);
-      function f3(e3) {
-        return Object.setPrototypeOf ? Object.setPrototypeOf(e3, GeneratorFunctionPrototype) : (e3.__proto__ = GeneratorFunctionPrototype, _regeneratorDefine2(e3, o, "GeneratorFunction")), e3.prototype = Object.create(u), e3;
-      }
-      return GeneratorFunction.prototype = GeneratorFunctionPrototype, _regeneratorDefine2(u, "constructor", GeneratorFunctionPrototype), _regeneratorDefine2(GeneratorFunctionPrototype, "constructor", GeneratorFunction), GeneratorFunction.displayName = "GeneratorFunction", _regeneratorDefine2(GeneratorFunctionPrototype, o, "GeneratorFunction"), _regeneratorDefine2(u), _regeneratorDefine2(u, o, "Generator"), _regeneratorDefine2(u, n, function() {
-        return this;
-      }), _regeneratorDefine2(u, "toString", function() {
-        return "[object Generator]";
-      }), (_regenerator = function _regenerator2() {
-        return { w: i2, m: f3 };
-      })();
-    }
-    function _regeneratorDefine2(e2, r2, n, t2) {
-      var i2 = Object.defineProperty;
-      try {
-        i2({}, "", {});
-      } catch (e3) {
-        i2 = 0;
-      }
-      _regeneratorDefine2 = function _regeneratorDefine(e3, r3, n2, t3) {
-        if (r3) i2 ? i2(e3, r3, { value: n2, enumerable: !t3, configurable: !t3, writable: !t3 }) : e3[r3] = n2;
-        else {
-          var o = function o2(r4, n3) {
-            _regeneratorDefine2(e3, r4, function(e4) {
-              return this._invoke(r4, n3, e4);
-            });
-          };
-          o("next", 0), o("throw", 1), o("return", 2);
-        }
-      }, _regeneratorDefine2(e2, r2, n, t2);
-    }
-    function asyncGeneratorStep(n, t2, e2, r2, o, a, c) {
-      try {
-        var i2 = n[a](c), u = i2.value;
-      } catch (n2) {
-        return void e2(n2);
-      }
-      i2.done ? t2(u) : Promise.resolve(u).then(r2, o);
-    }
-    function _asyncToGenerator(n) {
-      return function() {
-        var t2 = this, e2 = arguments;
-        return new Promise(function(r2, o) {
-          var a = n.apply(t2, e2);
-          function _next(n2) {
-            asyncGeneratorStep(a, r2, o, _next, _throw, "next", n2);
-          }
-          function _throw(n2) {
-            asyncGeneratorStep(a, r2, o, _next, _throw, "throw", n2);
-          }
-          _next(void 0);
-        });
-      };
-    }
-    var readFile = fs3.readFile ? (0, _util.promisify)(fs3.readFile) : /* @__PURE__ */ _asyncToGenerator(/* @__PURE__ */ _regenerator().m(function _callee() {
-      return _regenerator().w(function(_context) {
-        while (1) switch (_context.n) {
-          case 0:
-            throw new ErrorWithCode("use key rather than keyFile.", "MISSING_CREDENTIALS");
-          case 1:
-            return _context.a(2);
-        }
-      }, _callee);
-    }));
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.buildPayloadForJwsSign = buildPayloadForJwsSign;
+    exports2.getJwsSign = getJwsSign;
+    var jws_1 = require_jws();
+    var ALG_RS256 = "RS256";
     var GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
+    function buildPayloadForJwsSign(tokenOptions) {
+      const iat = Math.floor((/* @__PURE__ */ new Date()).getTime() / 1e3);
+      const payload = {
+        iss: tokenOptions.iss,
+        scope: tokenOptions.scope,
+        aud: GOOGLE_TOKEN_URL,
+        exp: iat + 3600,
+        iat,
+        sub: tokenOptions.sub,
+        ...tokenOptions.additionalClaims
+      };
+      return payload;
+    }
+    function getJwsSign(tokenOptions) {
+      const payload = buildPayloadForJwsSign(tokenOptions);
+      return (0, jws_1.sign)({
+        header: { alg: ALG_RS256 },
+        payload,
+        secret: tokenOptions.key
+      });
+    }
+  }
+});
+
+// node_modules/google-auth-library/build/src/gtoken/getToken.js
+var require_getToken = __commonJS({
+  "node_modules/google-auth-library/build/src/gtoken/getToken.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.getToken = getToken;
+    var jwsSign_1 = require_jwsSign();
+    var GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
+    var GOOGLE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:jwt-bearer";
+    var generateRequestOptions = (tokenOptions) => {
+      return {
+        method: "POST",
+        url: GOOGLE_TOKEN_URL,
+        data: new URLSearchParams({
+          grant_type: GOOGLE_GRANT_TYPE,
+          // Grant type for JWT
+          assertion: (0, jwsSign_1.getJwsSign)(tokenOptions)
+        }),
+        responseType: "json",
+        retryConfig: {
+          httpMethodsToRetry: ["POST"]
+        }
+      };
+    };
+    async function getToken(tokenOptions) {
+      if (!tokenOptions.transporter) {
+        throw new Error("No transporter set.");
+      }
+      try {
+        const gaxiosOptions = generateRequestOptions(tokenOptions);
+        const response = await tokenOptions.transporter.request(gaxiosOptions);
+        return response.data;
+      } catch (e2) {
+        const err = e2;
+        const errorData = err.response?.data;
+        if (errorData?.error) {
+          err.message = `${errorData.error}: ${errorData.error_description}`;
+        }
+        throw err;
+      }
+    }
+  }
+});
+
+// node_modules/google-auth-library/build/src/gtoken/errorWithCode.js
+var require_errorWithCode = __commonJS({
+  "node_modules/google-auth-library/build/src/gtoken/errorWithCode.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.ErrorWithCode = void 0;
+    var ErrorWithCode = class extends Error {
+      code;
+      constructor(message, code) {
+        super(message);
+        this.code = code;
+      }
+    };
+    exports2.ErrorWithCode = ErrorWithCode;
+  }
+});
+
+// node_modules/google-auth-library/build/src/gtoken/getCredentials.js
+var require_getCredentials = __commonJS({
+  "node_modules/google-auth-library/build/src/gtoken/getCredentials.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.getCredentials = getCredentials;
+    var path3 = require("path");
+    var fs3 = require("fs");
+    var util_1 = require("util");
+    var errorWithCode_1 = require_errorWithCode();
+    var readFile = fs3.readFile ? (0, util_1.promisify)(fs3.readFile) : async () => {
+      throw new errorWithCode_1.ErrorWithCode("use key rather than keyFile.", "MISSING_CREDENTIALS");
+    };
+    var ExtensionFiles;
+    (function(ExtensionFiles2) {
+      ExtensionFiles2["JSON"] = ".json";
+      ExtensionFiles2["DER"] = ".der";
+      ExtensionFiles2["CRT"] = ".crt";
+      ExtensionFiles2["PEM"] = ".pem";
+      ExtensionFiles2["P12"] = ".p12";
+      ExtensionFiles2["PFX"] = ".pfx";
+    })(ExtensionFiles || (ExtensionFiles = {}));
+    var JsonCredentialsProvider = class {
+      keyFilePath;
+      constructor(keyFilePath) {
+        this.keyFilePath = keyFilePath;
+      }
+      /**
+       * Reads a JSON key file and extracts the private key and client email.
+       * @returns A promise that resolves with the credentials.
+       */
+      async getCredentials() {
+        const key = await readFile(this.keyFilePath, "utf8");
+        let body;
+        try {
+          body = JSON.parse(key);
+        } catch (error) {
+          const err = error;
+          throw new Error(`Invalid JSON key file: ${err.message}`);
+        }
+        const privateKey = body.private_key;
+        const clientEmail = body.client_email;
+        if (!privateKey || !clientEmail) {
+          throw new errorWithCode_1.ErrorWithCode("private_key and client_email are required.", "MISSING_CREDENTIALS");
+        }
+        return { privateKey, clientEmail };
+      }
+    };
+    var PemCredentialsProvider = class {
+      keyFilePath;
+      constructor(keyFilePath) {
+        this.keyFilePath = keyFilePath;
+      }
+      /**
+       * Reads a PEM-like key file.
+       * @returns A promise that resolves with the private key.
+       */
+      async getCredentials() {
+        const privateKey = await readFile(this.keyFilePath, "utf8");
+        return { privateKey };
+      }
+    };
+    var P12CredentialsProvider = class {
+      /**
+       * Throws an error as P12/PFX certificates are not supported.
+       * @returns A promise that rejects with an error.
+       */
+      async getCredentials() {
+        throw new errorWithCode_1.ErrorWithCode("*.p12 certificates are not supported after v6.1.2. Consider utilizing *.json format or converting *.p12 to *.pem using the OpenSSL CLI.", "UNKNOWN_CERTIFICATE_TYPE");
+      }
+    };
+    var CredentialsProviderFactory = class {
+      /**
+       * Creates a credential provider based on the key file extension.
+       * @param keyFilePath The path to the key file.
+       * @returns An instance of a class that implements ICredentialsProvider.
+       */
+      static create(keyFilePath) {
+        const keyFileExtension = path3.extname(keyFilePath);
+        switch (keyFileExtension) {
+          case ExtensionFiles.JSON:
+            return new JsonCredentialsProvider(keyFilePath);
+          case ExtensionFiles.DER:
+          case ExtensionFiles.CRT:
+          case ExtensionFiles.PEM:
+            return new PemCredentialsProvider(keyFilePath);
+          case ExtensionFiles.P12:
+          case ExtensionFiles.PFX:
+            return new P12CredentialsProvider();
+          default:
+            throw new errorWithCode_1.ErrorWithCode("Unknown certificate type. Type is determined based on file extension. Current supported extensions are *.json, and *.pem.", "UNKNOWN_CERTIFICATE_TYPE");
+        }
+      }
+    };
+    async function getCredentials(keyFilePath) {
+      const provider = CredentialsProviderFactory.create(keyFilePath);
+      return provider.getCredentials();
+    }
+  }
+});
+
+// node_modules/google-auth-library/build/src/gtoken/tokenHandler.js
+var require_tokenHandler = __commonJS({
+  "node_modules/google-auth-library/build/src/gtoken/tokenHandler.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.TokenHandler = void 0;
+    var getToken_1 = require_getToken();
+    var getCredentials_1 = require_getCredentials();
+    var TokenHandler = class {
+      /** The cached access token. */
+      token;
+      /** The expiration time of the cached access token. */
+      tokenExpiresAt;
+      /** A promise for an in-flight token request. */
+      inFlightRequest;
+      tokenOptions;
+      /**
+       * Creates an instance of TokenHandler.
+       * @param tokenOptions The options for fetching tokens.
+       * @param transporter The transporter to use for making requests.
+       */
+      constructor(tokenOptions) {
+        this.tokenOptions = tokenOptions;
+      }
+      /**
+       * Processes the credentials, loading them from a key file if necessary.
+       * This method is called before any token request.
+       */
+      async processCredentials() {
+        if (!this.tokenOptions.key && !this.tokenOptions.keyFile) {
+          throw new Error("No key or keyFile set.");
+        }
+        if (!this.tokenOptions.key && this.tokenOptions.keyFile) {
+          const credentials = await (0, getCredentials_1.getCredentials)(this.tokenOptions.keyFile);
+          this.tokenOptions.key = credentials.privateKey;
+          this.tokenOptions.email = credentials.clientEmail;
+        }
+      }
+      /**
+       * Checks if the cached token is expired or close to expiring.
+       * @returns True if the token is expiring, false otherwise.
+       */
+      isTokenExpiring() {
+        if (!this.token || !this.tokenExpiresAt) {
+          return true;
+        }
+        const now = (/* @__PURE__ */ new Date()).getTime();
+        const eagerRefreshThresholdMillis = this.tokenOptions.eagerRefreshThresholdMillis ?? 0;
+        return this.tokenExpiresAt <= now + eagerRefreshThresholdMillis;
+      }
+      /**
+       * Returns whether the token has completely expired.
+       *
+       * @returns true if the token has expired, false otherwise.
+       */
+      hasExpired() {
+        const now = (/* @__PURE__ */ new Date()).getTime();
+        if (this.token && this.tokenExpiresAt) {
+          const now2 = (/* @__PURE__ */ new Date()).getTime();
+          return now2 >= this.tokenExpiresAt;
+        }
+        return true;
+      }
+      /**
+       * Fetches an access token, using a cached one if available and not expired.
+       * @param forceRefresh If true, forces a new token to be fetched.
+       * @returns A promise that resolves with the token data.
+       */
+      async getToken(forceRefresh) {
+        await this.processCredentials();
+        if (this.inFlightRequest && !forceRefresh) {
+          return this.inFlightRequest;
+        }
+        if (this.token && !this.isTokenExpiring() && !forceRefresh) {
+          return this.token;
+        }
+        try {
+          this.inFlightRequest = (0, getToken_1.getToken)(this.tokenOptions);
+          const token = await this.inFlightRequest;
+          this.token = token;
+          this.tokenExpiresAt = (/* @__PURE__ */ new Date()).getTime() + (token.expires_in ?? 0) * 1e3;
+          return token;
+        } finally {
+          this.inFlightRequest = void 0;
+        }
+      }
+    };
+    exports2.TokenHandler = TokenHandler;
+  }
+});
+
+// node_modules/google-auth-library/build/src/gtoken/revokeToken.js
+var require_revokeToken = __commonJS({
+  "node_modules/google-auth-library/build/src/gtoken/revokeToken.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.revokeToken = revokeToken;
     var GOOGLE_REVOKE_TOKEN_URL = "https://oauth2.googleapis.com/revoke?token=";
-    var ErrorWithCode = /* @__PURE__ */ (function(_Error) {
-      function ErrorWithCode2(message, code) {
-        var _this;
-        _classCallCheck(this, ErrorWithCode2);
-        _this = _callSuper(this, ErrorWithCode2, [message]);
-        _defineProperty(_this, "code", void 0);
-        _this.code = code;
-        return _this;
+    var DEFAULT_RETRY_VALUE = true;
+    async function revokeToken(accessToken, transporter) {
+      const url = GOOGLE_REVOKE_TOKEN_URL + accessToken;
+      return await transporter.request({
+        url,
+        retry: DEFAULT_RETRY_VALUE
+      });
+    }
+  }
+});
+
+// node_modules/google-auth-library/build/src/gtoken/googleToken.js
+var require_googleToken = __commonJS({
+  "node_modules/google-auth-library/build/src/gtoken/googleToken.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.GoogleToken = void 0;
+    var gaxios_1 = require_src2();
+    var tokenHandler_1 = require_tokenHandler();
+    var revokeToken_1 = require_revokeToken();
+    var GoogleToken = class {
+      /** The configuration options for this token instance. */
+      tokenOptions;
+      /** The handler for token fetching and caching logic. */
+      tokenHandler;
+      /**
+       * Create a GoogleToken.
+       *
+       * @param options  Configuration object.
+       */
+      constructor(options) {
+        this.tokenOptions = options || {};
+        this.tokenOptions.transporter = this.tokenOptions.transporter || {
+          request: (opts) => (0, gaxios_1.request)(opts)
+        };
+        if (!this.tokenOptions.iss) {
+          this.tokenOptions.iss = this.tokenOptions.email;
+        }
+        if (typeof this.tokenOptions.scope === "object") {
+          this.tokenOptions.scope = this.tokenOptions.scope.join(" ");
+        }
+        this.tokenHandler = new tokenHandler_1.TokenHandler(this.tokenOptions);
       }
-      _inherits(ErrorWithCode2, _Error);
-      return _createClass(ErrorWithCode2);
-    })(/* @__PURE__ */ _wrapNativeSuper(Error));
-    var _inFlightRequest = /* @__PURE__ */ new WeakMap();
-    var _GoogleToken_brand = /* @__PURE__ */ new WeakSet();
-    var GoogleToken = exports2.GoogleToken = /* @__PURE__ */ (function() {
-      function GoogleToken2(_options) {
-        _classCallCheck(this, GoogleToken2);
-        _classPrivateMethodInitSpec(this, _GoogleToken_brand);
-        _defineProperty(this, "expiresAt", void 0);
-        _defineProperty(this, "key", void 0);
-        _defineProperty(this, "keyFile", void 0);
-        _defineProperty(this, "iss", void 0);
-        _defineProperty(this, "sub", void 0);
-        _defineProperty(this, "scope", void 0);
-        _defineProperty(this, "rawToken", void 0);
-        _defineProperty(this, "tokenExpires", void 0);
-        _defineProperty(this, "email", void 0);
-        _defineProperty(this, "additionalClaims", void 0);
-        _defineProperty(this, "eagerRefreshThresholdMillis", void 0);
-        _defineProperty(this, "transporter", {
-          request: function request(opts) {
-            return (0, _gaxios.request)(opts);
-          }
-        });
-        _classPrivateFieldInitSpec(this, _inFlightRequest, void 0);
-        _assertClassBrand(_GoogleToken_brand, this, _configure).call(this, _options);
+      get expiresAt() {
+        return this.tokenHandler.tokenExpiresAt;
       }
-      return _createClass(GoogleToken2, [{
-        key: "accessToken",
-        get: function get() {
-          return this.rawToken ? this.rawToken.access_token : void 0;
-        }
-      }, {
-        key: "idToken",
-        get: function get() {
-          return this.rawToken ? this.rawToken.id_token : void 0;
-        }
-      }, {
-        key: "tokenType",
-        get: function get() {
-          return this.rawToken ? this.rawToken.token_type : void 0;
-        }
-      }, {
-        key: "refreshToken",
-        get: function get() {
-          return this.rawToken ? this.rawToken.refresh_token : void 0;
-        }
-      }, {
-        key: "hasExpired",
-        value: function hasExpired() {
-          var now = (/* @__PURE__ */ new Date()).getTime();
-          if (this.rawToken && this.expiresAt) {
-            return now >= this.expiresAt;
-          } else {
-            return true;
-          }
-        }
-        /**
-         * Returns whether the token will expire within eagerRefreshThresholdMillis
-         *
-         * @return true if the token will be expired within eagerRefreshThresholdMillis, false otherwise.
-         */
-      }, {
-        key: "isTokenExpiring",
-        value: function isTokenExpiring() {
-          var _this$eagerRefreshThr;
-          var now = (/* @__PURE__ */ new Date()).getTime();
-          var eagerRefreshThresholdMillis = (_this$eagerRefreshThr = this.eagerRefreshThresholdMillis) !== null && _this$eagerRefreshThr !== void 0 ? _this$eagerRefreshThr : 0;
-          if (this.rawToken && this.expiresAt) {
-            return this.expiresAt <= now + eagerRefreshThresholdMillis;
-          } else {
-            return true;
-          }
-        }
-        /**
-         * Returns a cached token or retrieves a new one from Google.
-         *
-         * @param callback The callback function.
-         */
-      }, {
-        key: "getToken",
-        value: function getToken(callback) {
-          var opts = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {};
-          if (_typeof(callback) === "object") {
-            opts = callback;
-            callback = void 0;
-          }
-          opts = Object.assign({
-            forceRefresh: false
-          }, opts);
-          if (callback) {
-            var cb = callback;
-            _assertClassBrand(_GoogleToken_brand, this, _getTokenAsync).call(this, opts).then(function(t2) {
-              return cb(null, t2);
-            }, callback);
-            return;
-          }
-          return _assertClassBrand(_GoogleToken_brand, this, _getTokenAsync).call(this, opts);
-        }
-        /**
-         * Given a keyFile, extract the key and client email if available
-         * @param keyFile Path to a json, pem, or p12 file that contains the key.
-         * @returns an object with privateKey and clientEmail properties
-         */
-      }, {
-        key: "getCredentials",
-        value: (function() {
-          var _getCredentials = _asyncToGenerator(/* @__PURE__ */ _regenerator().m(function _callee2(keyFile) {
-            var ext, key, body, privateKey, clientEmail, _privateKey, _t;
-            return _regenerator().w(function(_context2) {
-              while (1) switch (_context2.n) {
-                case 0:
-                  ext = path3.extname(keyFile);
-                  _t = ext;
-                  _context2.n = _t === ".json" ? 1 : _t === ".der" ? 4 : _t === ".crt" ? 4 : _t === ".pem" ? 4 : _t === ".p12" ? 6 : _t === ".pfx" ? 6 : 7;
-                  break;
-                case 1:
-                  _context2.n = 2;
-                  return readFile(keyFile, "utf8");
-                case 2:
-                  key = _context2.v;
-                  body = JSON.parse(key);
-                  privateKey = body.private_key;
-                  clientEmail = body.client_email;
-                  if (!(!privateKey || !clientEmail)) {
-                    _context2.n = 3;
-                    break;
-                  }
-                  throw new ErrorWithCode("private_key and client_email are required.", "MISSING_CREDENTIALS");
-                case 3:
-                  return _context2.a(2, {
-                    privateKey,
-                    clientEmail
-                  });
-                case 4:
-                  _context2.n = 5;
-                  return readFile(keyFile, "utf8");
-                case 5:
-                  _privateKey = _context2.v;
-                  return _context2.a(2, {
-                    privateKey: _privateKey
-                  });
-                case 6:
-                  throw new ErrorWithCode("*.p12 certificates are not supported after v6.1.2. Consider utilizing *.json format or converting *.p12 to *.pem using the OpenSSL CLI.", "UNKNOWN_CERTIFICATE_TYPE");
-                case 7:
-                  throw new ErrorWithCode("Unknown certificate type. Type is determined based on file extension. Current supported extensions are *.json, and *.pem.", "UNKNOWN_CERTIFICATE_TYPE");
-                case 8:
-                  return _context2.a(2);
-              }
-            }, _callee2);
-          }));
-          function getCredentials(_x) {
-            return _getCredentials.apply(this, arguments);
-          }
-          return getCredentials;
-        })()
-      }, {
-        key: "revokeToken",
-        value: function revokeToken(callback) {
-          if (callback) {
-            _assertClassBrand(_GoogleToken_brand, this, _revokeTokenAsync).call(this).then(function() {
-              return callback();
-            }, callback);
-            return;
-          }
-          return _assertClassBrand(_GoogleToken_brand, this, _revokeTokenAsync).call(this);
-        }
-      }]);
-    })();
-    function _getTokenAsync(_x2) {
-      return _getTokenAsync2.apply(this, arguments);
-    }
-    function _getTokenAsync2() {
-      _getTokenAsync2 = _asyncToGenerator(/* @__PURE__ */ _regenerator().m(function _callee3(opts) {
-        return _regenerator().w(function(_context3) {
-          while (1) switch (_context3.n) {
-            case 0:
-              if (!(_classPrivateFieldGet(_inFlightRequest, this) && !opts.forceRefresh)) {
-                _context3.n = 1;
-                break;
-              }
-              return _context3.a(2, _classPrivateFieldGet(_inFlightRequest, this));
-            case 1:
-              _context3.p = 1;
-              _context3.n = 2;
-              return _classPrivateFieldSet(_inFlightRequest, this, _assertClassBrand(_GoogleToken_brand, this, _getTokenAsyncInner).call(this, opts));
-            case 2:
-              return _context3.a(2, _context3.v);
-            case 3:
-              _context3.p = 3;
-              _classPrivateFieldSet(_inFlightRequest, this, void 0);
-              return _context3.f(3);
-            case 4:
-              return _context3.a(2);
-          }
-        }, _callee3, this, [[1, , 3, 4]]);
-      }));
-      return _getTokenAsync2.apply(this, arguments);
-    }
-    function _getTokenAsyncInner(_x3) {
-      return _getTokenAsyncInner2.apply(this, arguments);
-    }
-    function _getTokenAsyncInner2() {
-      _getTokenAsyncInner2 = _asyncToGenerator(/* @__PURE__ */ _regenerator().m(function _callee4(opts) {
-        var creds;
-        return _regenerator().w(function(_context4) {
-          while (1) switch (_context4.n) {
-            case 0:
-              if (!(this.isTokenExpiring() === false && opts.forceRefresh === false)) {
-                _context4.n = 1;
-                break;
-              }
-              return _context4.a(2, Promise.resolve(this.rawToken));
-            case 1:
-              if (!(!this.key && !this.keyFile)) {
-                _context4.n = 2;
-                break;
-              }
-              throw new Error("No key or keyFile set.");
-            case 2:
-              if (!(!this.key && this.keyFile)) {
-                _context4.n = 4;
-                break;
-              }
-              _context4.n = 3;
-              return this.getCredentials(this.keyFile);
-            case 3:
-              creds = _context4.v;
-              this.key = creds.privateKey;
-              this.iss = creds.clientEmail || this.iss;
-              if (!creds.clientEmail) {
-                _assertClassBrand(_GoogleToken_brand, this, _ensureEmail).call(this);
-              }
-            case 4:
-              return _context4.a(2, _assertClassBrand(_GoogleToken_brand, this, _requestToken).call(this));
-          }
-        }, _callee4, this);
-      }));
-      return _getTokenAsyncInner2.apply(this, arguments);
-    }
-    function _ensureEmail() {
-      if (!this.iss) {
-        throw new ErrorWithCode("email is required.", "MISSING_CREDENTIALS");
+      /**
+       * The most recent access token obtained by this client.
+       */
+      get accessToken() {
+        return this.tokenHandler.token?.access_token;
       }
-    }
-    function _revokeTokenAsync() {
-      return _revokeTokenAsync2.apply(this, arguments);
-    }
-    function _revokeTokenAsync2() {
-      _revokeTokenAsync2 = _asyncToGenerator(/* @__PURE__ */ _regenerator().m(function _callee5() {
-        var url;
-        return _regenerator().w(function(_context5) {
-          while (1) switch (_context5.n) {
-            case 0:
-              if (this.accessToken) {
-                _context5.n = 1;
-                break;
-              }
-              throw new Error("No token to revoke.");
-            case 1:
-              url = GOOGLE_REVOKE_TOKEN_URL + this.accessToken;
-              _context5.n = 2;
-              return this.transporter.request({
-                url,
-                retry: true
-              });
-            case 2:
-              _assertClassBrand(_GoogleToken_brand, this, _configure).call(this, {
-                email: this.iss,
-                sub: this.sub,
-                key: this.key,
-                keyFile: this.keyFile,
-                scope: this.scope,
-                additionalClaims: this.additionalClaims
-              });
-            case 3:
-              return _context5.a(2);
-          }
-        }, _callee5, this);
-      }));
-      return _revokeTokenAsync2.apply(this, arguments);
-    }
-    function _configure() {
-      var options = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : {};
-      this.keyFile = options.keyFile;
-      this.key = options.key;
-      this.rawToken = void 0;
-      this.iss = options.email || options.iss;
-      this.sub = options.sub;
-      this.additionalClaims = options.additionalClaims;
-      if (_typeof(options.scope) === "object") {
-        this.scope = options.scope.join(" ");
-      } else {
-        this.scope = options.scope;
+      /**
+       * The most recent ID token obtained by this client.
+       */
+      get idToken() {
+        return this.tokenHandler.token?.id_token;
       }
-      this.eagerRefreshThresholdMillis = options.eagerRefreshThresholdMillis;
-      if (options.transporter) {
-        this.transporter = options.transporter;
+      /**
+       * The token type of the most recent access token.
+       */
+      get tokenType() {
+        return this.tokenHandler.token?.token_type;
       }
-    }
-    function _requestToken() {
-      return _requestToken2.apply(this, arguments);
-    }
-    function _requestToken2() {
-      _requestToken2 = _asyncToGenerator(/* @__PURE__ */ _regenerator().m(function _callee6() {
-        var iat, additionalClaims, payload, signedJWT, r2, _response, _response2, body, desc, _t2;
-        return _regenerator().w(function(_context6) {
-          while (1) switch (_context6.n) {
-            case 0:
-              iat = Math.floor((/* @__PURE__ */ new Date()).getTime() / 1e3);
-              additionalClaims = this.additionalClaims || {};
-              payload = Object.assign({
-                iss: this.iss,
-                scope: this.scope,
-                aud: GOOGLE_TOKEN_URL,
-                exp: iat + 3600,
-                iat,
-                sub: this.sub
-              }, additionalClaims);
-              signedJWT = jws.sign({
-                header: {
-                  alg: "RS256"
-                },
-                payload,
-                secret: this.key
-              });
-              _context6.p = 1;
-              _context6.n = 2;
-              return this.transporter.request({
-                method: "POST",
-                url: GOOGLE_TOKEN_URL,
-                data: new URLSearchParams({
-                  grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-                  assertion: signedJWT
-                }),
-                responseType: "json",
-                retryConfig: {
-                  httpMethodsToRetry: ["POST"]
-                }
-              });
-            case 2:
-              r2 = _context6.v;
-              this.rawToken = r2.data;
-              this.expiresAt = r2.data.expires_in === null || r2.data.expires_in === void 0 ? void 0 : (iat + r2.data.expires_in) * 1e3;
-              return _context6.a(2, this.rawToken);
-            case 3:
-              _context6.p = 3;
-              _t2 = _context6.v;
-              this.rawToken = void 0;
-              this.tokenExpires = void 0;
-              body = _t2.response && (_response = _t2.response) !== null && _response !== void 0 && _response.data ? (_response2 = _t2.response) === null || _response2 === void 0 ? void 0 : _response2.data : {};
-              if (body.error) {
-                desc = body.error_description ? ": ".concat(body.error_description) : "";
-                _t2.message = "".concat(body.error).concat(desc);
-              }
-              throw _t2;
-            case 4:
-              return _context6.a(2);
-          }
-        }, _callee6, this, [[1, 3]]);
-      }));
-      return _requestToken2.apply(this, arguments);
-    }
+      /**
+       * The refresh token for the current credentials.
+       */
+      get refreshToken() {
+        return this.tokenHandler.token?.refresh_token;
+      }
+      /**
+       * A boolean indicating if the current token has expired.
+       */
+      hasExpired() {
+        return this.tokenHandler.hasExpired();
+      }
+      /**
+       * A boolean indicating if the current token is expiring soon,
+       * based on the `eagerRefreshThresholdMillis` option.
+       */
+      isTokenExpiring() {
+        return this.tokenHandler.isTokenExpiring();
+      }
+      getToken(callbackOrOptions, opts = { forceRefresh: false }) {
+        let callback;
+        if (typeof callbackOrOptions === "function") {
+          callback = callbackOrOptions;
+        } else if (typeof callbackOrOptions === "object") {
+          opts = callbackOrOptions;
+        }
+        const promise = this.tokenHandler.getToken(opts.forceRefresh ?? false);
+        if (callback) {
+          promise.then((token) => callback(null, token), callback);
+        }
+        return promise;
+      }
+      revokeToken(callback) {
+        if (!this.accessToken) {
+          return Promise.reject(new Error("No token to revoke."));
+        }
+        const promise = (0, revokeToken_1.revokeToken)(this.accessToken, this.tokenOptions.transporter);
+        if (callback) {
+          promise.then(() => callback(), callback);
+        }
+        this.tokenHandler = new tokenHandler_1.TokenHandler(this.tokenOptions);
+      }
+      /**
+       * Returns the configuration options for this token instance.
+       */
+      get googleTokenOptions() {
+        return this.tokenOptions;
+      }
+    };
+    exports2.GoogleToken = GoogleToken;
   }
 });
 
@@ -14895,7 +14676,8 @@ var require_jwtclient = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.JWT = void 0;
-    var gtoken_1 = require_src5();
+    var googleToken_1 = require_googleToken();
+    var getCredentials_1 = require_getCredentials();
     var jwtaccess_1 = require_jwtaccess();
     var oauth2client_1 = require_oauth2client();
     var authclient_1 = require_authclient();
@@ -14992,7 +14774,7 @@ var require_jwtclient = __commonJS({
        * @param targetAudience the audience for the fetched ID token.
        */
       async fetchIdToken(targetAudience) {
-        const gtoken = new gtoken_1.GoogleToken({
+        const gtoken = new googleToken_1.GoogleToken({
           iss: this.email,
           sub: this.subject,
           scope: this.scopes || this.defaultScopes,
@@ -15042,8 +14824,8 @@ var require_jwtclient = __commonJS({
         }
         this.credentials = result.tokens;
         this.credentials.refresh_token = "jwt-placeholder";
-        this.key = this.gtoken.key;
-        this.email = this.gtoken.iss;
+        this.key = this.gtoken.googleTokenOptions?.key;
+        this.email = this.gtoken.googleTokenOptions?.iss;
         return result.tokens;
       }
       /**
@@ -15070,7 +14852,7 @@ var require_jwtclient = __commonJS({
        */
       createGToken() {
         if (!this.gtoken) {
-          this.gtoken = new gtoken_1.GoogleToken({
+          this.gtoken = new googleToken_1.GoogleToken({
             iss: this.email,
             sub: this.subject,
             scope: this.scopes || this.defaultScopes,
@@ -15150,7 +14932,7 @@ var require_jwtclient = __commonJS({
           return { private_key: this.key, client_email: this.email };
         } else if (this.keyFile) {
           const gtoken = this.createGToken();
-          const creds = await gtoken.getCredentials(this.keyFile);
+          const creds = await (0, getCredentials_1.getCredentials)(this.keyFile);
           return { private_key: creds.privateKey, client_email: creds.clientEmail };
         }
         throw new Error("A key or a keyFile must be provided to getCredentials.");
@@ -15214,7 +14996,8 @@ var require_refreshclient = __commonJS({
             grant_type: "refresh_token",
             refresh_token: this._refreshToken,
             target_audience: targetAudience
-          })
+          }),
+          responseType: "json"
         };
         authclient_1.AuthClient.setMethodName(opts, "fetchIdToken");
         const res = await this.transporter.request(opts);
@@ -15676,7 +15459,8 @@ var require_stscredentials = __commonJS({
           url: this.#tokenExchangeEndpoint.toString(),
           method: "POST",
           headers,
-          data: new URLSearchParams((0, util_1.removeUndefinedValuesInObject)(values))
+          data: new URLSearchParams((0, util_1.removeUndefinedValuesInObject)(values)),
+          responseType: "json"
         };
         authclient_1.AuthClient.setMethodName(opts, "exchangeToken");
         this.applyClientAuthenticationOptions(opts);
@@ -15894,7 +15678,8 @@ var require_baseexternalclient = __commonJS({
           const opts = {
             ..._BaseExternalAccountClient.RETRY_CONFIG,
             headers,
-            url: `${this.cloudResourceManagerURL.toString()}${projectNumber}`
+            url: `${this.cloudResourceManagerURL.toString()}${projectNumber}`,
+            responseType: "json"
           };
           authclient_1.AuthClient.setMethodName(opts, "getProjectId");
           const response = await this.transporter.request(opts);
@@ -16033,7 +15818,8 @@ var require_baseexternalclient = __commonJS({
           data: {
             scope: this.getScopesArray(),
             lifetime: this.serviceAccountImpersonationLifetime + "s"
-          }
+          },
+          responseType: "json"
         };
         authclient_1.AuthClient.setMethodName(opts, "getImpersonatedAccessToken");
         const response = await this.transporter.request(opts);
@@ -16179,7 +15965,8 @@ var require_urlsubjecttokensupplier = __commonJS({
           ...this.additionalGaxiosOptions,
           url: this.url,
           method: "GET",
-          headers: this.headers
+          headers: this.headers,
+          responseType: this.formatType
         };
         authclient_1.AuthClient.setMethodName(opts, "getSubjectToken");
         let subjectToken;
@@ -16694,6 +16481,7 @@ var require_defaultawssecuritycredentialssupplier = __commonJS({
           ...this.additionalGaxiosOptions,
           url: this.regionUrl,
           method: "GET",
+          responseType: "text",
           headers: metadataHeaders
         };
         authclient_1.AuthClient.setMethodName(opts, "getAwsRegion");
@@ -16734,6 +16522,7 @@ var require_defaultawssecuritycredentialssupplier = __commonJS({
           ...this.additionalGaxiosOptions,
           url: this.imdsV2SessionTokenUrl,
           method: "PUT",
+          responseType: "text",
           headers: { "x-aws-ec2-metadata-token-ttl-seconds": "300" }
         };
         authclient_1.AuthClient.setMethodName(opts, "#getImdsV2SessionToken");
@@ -16754,6 +16543,7 @@ var require_defaultawssecuritycredentialssupplier = __commonJS({
           ...this.additionalGaxiosOptions,
           url: this.securityCredentialsUrl,
           method: "GET",
+          responseType: "text",
           headers
         };
         authclient_1.AuthClient.setMethodName(opts, "#getAwsRoleName");
@@ -16773,7 +16563,8 @@ var require_defaultawssecuritycredentialssupplier = __commonJS({
         const opts = {
           ...this.additionalGaxiosOptions,
           url: `${this.securityCredentialsUrl}/${roleName}`,
-          headers
+          headers,
+          responseType: "json"
         };
         authclient_1.AuthClient.setMethodName(opts, "#retrieveAwsSecurityCredentials");
         const response = await transporter.request(opts);
@@ -17403,7 +17194,8 @@ var require_externalAccountAuthorizedUserClient = __commonJS({
           data: new URLSearchParams({
             grant_type: "refresh_token",
             refresh_token: refreshToken
-          })
+          }),
+          responseType: "json"
         };
         authclient_1.AuthClient.setMethodName(opts, "refreshToken");
         this.applyClientAuthenticationOptions(opts);
@@ -18602,9 +18394,25 @@ var require_passthrough = __commonJS({
 });
 
 // node_modules/google-auth-library/build/src/index.js
-var require_src6 = __commonJS({
+var require_src5 = __commonJS({
   "node_modules/google-auth-library/build/src/index.js"(exports2) {
     "use strict";
+    var __createBinding = exports2 && exports2.__createBinding || (Object.create ? (function(o, m2, k, k2) {
+      if (k2 === void 0) k2 = k;
+      var desc = Object.getOwnPropertyDescriptor(m2, k);
+      if (!desc || ("get" in desc ? !m2.__esModule : desc.writable || desc.configurable)) {
+        desc = { enumerable: true, get: function() {
+          return m2[k];
+        } };
+      }
+      Object.defineProperty(o, k2, desc);
+    }) : (function(o, m2, k, k2) {
+      if (k2 === void 0) k2 = k;
+      o[k2] = m2[k];
+    }));
+    var __exportStar = exports2 && exports2.__exportStar || function(m2, exports3) {
+      for (var p in m2) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports3, p)) __createBinding(exports3, m2, p);
+    };
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.GoogleAuth = exports2.auth = exports2.PassThroughClient = exports2.ExternalAccountAuthorizedUserClient = exports2.EXTERNAL_ACCOUNT_AUTHORIZED_USER_TYPE = exports2.ExecutableError = exports2.PluggableAuthClient = exports2.DownscopedClient = exports2.BaseExternalAccountClient = exports2.ExternalAccountClient = exports2.IdentityPoolClient = exports2.AwsRequestSigner = exports2.AwsClient = exports2.UserRefreshClient = exports2.LoginTicket = exports2.ClientAuthentication = exports2.OAuth2Client = exports2.CodeChallengeMethod = exports2.Impersonated = exports2.JWT = exports2.JWTAccess = exports2.IdTokenClient = exports2.IAMAuth = exports2.GCPEnv = exports2.Compute = exports2.DEFAULT_UNIVERSE = exports2.AuthClient = exports2.gaxios = exports2.gcpMetadata = void 0;
     var googleauth_1 = require_googleauth();
@@ -18708,6 +18516,7 @@ var require_src6 = __commonJS({
     Object.defineProperty(exports2, "PassThroughClient", { enumerable: true, get: function() {
       return passthrough_1.PassThroughClient;
     } });
+    __exportStar(require_googleToken(), exports2);
     var auth = new googleauth_1.GoogleAuth();
     exports2.auth = auth;
   }
@@ -22339,7 +22148,7 @@ module.exports = __toCommonJS(index_exports);
 
 // node_modules/@google/genai/dist/node/index.mjs
 var import_p_retry = __toESM(require_p_retry(), 1);
-var import_google_auth_library = __toESM(require_src6(), 1);
+var import_google_auth_library = __toESM(require_src5(), 1);
 var import_fs = require("fs");
 var fs2 = __toESM(require("fs/promises"), 1);
 var import_promises = require("fs/promises");
@@ -22862,6 +22671,16 @@ var Type;
   Type2["OBJECT"] = "OBJECT";
   Type2["NULL"] = "NULL";
 })(Type || (Type = {}));
+var PhishBlockThreshold;
+(function(PhishBlockThreshold2) {
+  PhishBlockThreshold2["PHISH_BLOCK_THRESHOLD_UNSPECIFIED"] = "PHISH_BLOCK_THRESHOLD_UNSPECIFIED";
+  PhishBlockThreshold2["BLOCK_LOW_AND_ABOVE"] = "BLOCK_LOW_AND_ABOVE";
+  PhishBlockThreshold2["BLOCK_MEDIUM_AND_ABOVE"] = "BLOCK_MEDIUM_AND_ABOVE";
+  PhishBlockThreshold2["BLOCK_HIGH_AND_ABOVE"] = "BLOCK_HIGH_AND_ABOVE";
+  PhishBlockThreshold2["BLOCK_HIGHER_AND_ABOVE"] = "BLOCK_HIGHER_AND_ABOVE";
+  PhishBlockThreshold2["BLOCK_VERY_HIGH_AND_ABOVE"] = "BLOCK_VERY_HIGH_AND_ABOVE";
+  PhishBlockThreshold2["BLOCK_ONLY_EXTREMELY_HIGH"] = "BLOCK_ONLY_EXTREMELY_HIGH";
+})(PhishBlockThreshold || (PhishBlockThreshold = {}));
 var ApiSpec;
 (function(ApiSpec2) {
   ApiSpec2["API_SPEC_UNSPECIFIED"] = "API_SPEC_UNSPECIFIED";
@@ -22887,16 +22706,6 @@ var HttpElementLocation;
   HttpElementLocation2["HTTP_IN_BODY"] = "HTTP_IN_BODY";
   HttpElementLocation2["HTTP_IN_COOKIE"] = "HTTP_IN_COOKIE";
 })(HttpElementLocation || (HttpElementLocation = {}));
-var PhishBlockThreshold;
-(function(PhishBlockThreshold2) {
-  PhishBlockThreshold2["PHISH_BLOCK_THRESHOLD_UNSPECIFIED"] = "PHISH_BLOCK_THRESHOLD_UNSPECIFIED";
-  PhishBlockThreshold2["BLOCK_LOW_AND_ABOVE"] = "BLOCK_LOW_AND_ABOVE";
-  PhishBlockThreshold2["BLOCK_MEDIUM_AND_ABOVE"] = "BLOCK_MEDIUM_AND_ABOVE";
-  PhishBlockThreshold2["BLOCK_HIGH_AND_ABOVE"] = "BLOCK_HIGH_AND_ABOVE";
-  PhishBlockThreshold2["BLOCK_HIGHER_AND_ABOVE"] = "BLOCK_HIGHER_AND_ABOVE";
-  PhishBlockThreshold2["BLOCK_VERY_HIGH_AND_ABOVE"] = "BLOCK_VERY_HIGH_AND_ABOVE";
-  PhishBlockThreshold2["BLOCK_ONLY_EXTREMELY_HIGH"] = "BLOCK_ONLY_EXTREMELY_HIGH";
-})(PhishBlockThreshold || (PhishBlockThreshold = {}));
 var Behavior;
 (function(Behavior2) {
   Behavior2["UNSPECIFIED"] = "UNSPECIFIED";
@@ -23090,6 +22899,12 @@ var Environment;
   Environment2["ENVIRONMENT_UNSPECIFIED"] = "ENVIRONMENT_UNSPECIFIED";
   Environment2["ENVIRONMENT_BROWSER"] = "ENVIRONMENT_BROWSER";
 })(Environment || (Environment = {}));
+var ProminentPeople;
+(function(ProminentPeople2) {
+  ProminentPeople2["PROMINENT_PEOPLE_UNSPECIFIED"] = "PROMINENT_PEOPLE_UNSPECIFIED";
+  ProminentPeople2["ALLOW_PROMINENT_PEOPLE"] = "ALLOW_PROMINENT_PEOPLE";
+  ProminentPeople2["BLOCK_PROMINENT_PEOPLE"] = "BLOCK_PROMINENT_PEOPLE";
+})(ProminentPeople || (ProminentPeople = {}));
 var EmbeddingApiType;
 (function(EmbeddingApiType2) {
   EmbeddingApiType2["PREDICT"] = "PREDICT";
@@ -24571,15 +24386,15 @@ function candidateFromMldev$1(fromObject) {
   if (fromFinishReason != null) {
     setValueByPath(toObject, ["finishReason"], fromFinishReason);
   }
-  const fromAvgLogprobs = getValueByPath(fromObject, ["avgLogprobs"]);
-  if (fromAvgLogprobs != null) {
-    setValueByPath(toObject, ["avgLogprobs"], fromAvgLogprobs);
-  }
   const fromGroundingMetadata = getValueByPath(fromObject, [
     "groundingMetadata"
   ]);
   if (fromGroundingMetadata != null) {
     setValueByPath(toObject, ["groundingMetadata"], fromGroundingMetadata);
+  }
+  const fromAvgLogprobs = getValueByPath(fromObject, ["avgLogprobs"]);
+  if (fromAvgLogprobs != null) {
+    setValueByPath(toObject, ["avgLogprobs"], fromAvgLogprobs);
   }
   const fromIndex = getValueByPath(fromObject, ["index"]);
   if (fromIndex != null) {
@@ -25125,6 +24940,10 @@ function googleMapsToMldev$4(fromObject) {
 }
 function googleSearchToMldev$4(fromObject) {
   const toObject = {};
+  const fromSearchTypes = getValueByPath(fromObject, ["searchTypes"]);
+  if (fromSearchTypes != null) {
+    setValueByPath(toObject, ["searchTypes"], fromSearchTypes);
+  }
   if (getValueByPath(fromObject, ["excludeDomains"]) !== void 0) {
     throw new Error("excludeDomains parameter is not supported in Gemini API.");
   }
@@ -25151,6 +24970,9 @@ function imageConfigToMldev$1(fromObject) {
   }
   if (getValueByPath(fromObject, ["personGeneration"]) !== void 0) {
     throw new Error("personGeneration parameter is not supported in Gemini API.");
+  }
+  if (getValueByPath(fromObject, ["prominentPeople"]) !== void 0) {
+    throw new Error("prominentPeople parameter is not supported in Gemini API.");
   }
   if (getValueByPath(fromObject, ["outputMimeType"]) !== void 0) {
     throw new Error("outputMimeType parameter is not supported in Gemini API.");
@@ -25407,6 +25229,10 @@ function toolToMldev$4(fromObject) {
   if (fromFileSearch != null) {
     setValueByPath(toObject, ["fileSearch"], fromFileSearch);
   }
+  const fromGoogleSearch = getValueByPath(fromObject, ["googleSearch"]);
+  if (fromGoogleSearch != null) {
+    setValueByPath(toObject, ["googleSearch"], googleSearchToMldev$4(fromGoogleSearch));
+  }
   const fromCodeExecution = getValueByPath(fromObject, [
     "codeExecution"
   ]);
@@ -25432,10 +25258,6 @@ function toolToMldev$4(fromObject) {
   if (fromGoogleMaps != null) {
     setValueByPath(toObject, ["googleMaps"], googleMapsToMldev$4(fromGoogleMaps));
   }
-  const fromGoogleSearch = getValueByPath(fromObject, ["googleSearch"]);
-  if (fromGoogleSearch != null) {
-    setValueByPath(toObject, ["googleSearch"], googleSearchToMldev$4(fromGoogleSearch));
-  }
   const fromGoogleSearchRetrieval = getValueByPath(fromObject, [
     "googleSearchRetrieval"
   ]);
@@ -25445,6 +25267,16 @@ function toolToMldev$4(fromObject) {
   const fromUrlContext = getValueByPath(fromObject, ["urlContext"]);
   if (fromUrlContext != null) {
     setValueByPath(toObject, ["urlContext"], fromUrlContext);
+  }
+  const fromMcpServers = getValueByPath(fromObject, ["mcpServers"]);
+  if (fromMcpServers != null) {
+    let transformedList = fromMcpServers;
+    if (Array.isArray(transformedList)) {
+      transformedList = transformedList.map((item) => {
+        return item;
+      });
+    }
+    setValueByPath(toObject, ["mcpServers"], transformedList);
   }
   return toObject;
 }
@@ -26351,6 +26183,10 @@ function googleMapsToMldev$3(fromObject) {
 }
 function googleSearchToMldev$3(fromObject) {
   const toObject = {};
+  const fromSearchTypes = getValueByPath(fromObject, ["searchTypes"]);
+  if (fromSearchTypes != null) {
+    setValueByPath(toObject, ["searchTypes"], fromSearchTypes);
+  }
   if (getValueByPath(fromObject, ["excludeDomains"]) !== void 0) {
     throw new Error("excludeDomains parameter is not supported in Gemini API.");
   }
@@ -26550,6 +26386,10 @@ function toolToMldev$3(fromObject) {
   if (fromFileSearch != null) {
     setValueByPath(toObject, ["fileSearch"], fromFileSearch);
   }
+  const fromGoogleSearch = getValueByPath(fromObject, ["googleSearch"]);
+  if (fromGoogleSearch != null) {
+    setValueByPath(toObject, ["googleSearch"], googleSearchToMldev$3(fromGoogleSearch));
+  }
   const fromCodeExecution = getValueByPath(fromObject, [
     "codeExecution"
   ]);
@@ -26575,10 +26415,6 @@ function toolToMldev$3(fromObject) {
   if (fromGoogleMaps != null) {
     setValueByPath(toObject, ["googleMaps"], googleMapsToMldev$3(fromGoogleMaps));
   }
-  const fromGoogleSearch = getValueByPath(fromObject, ["googleSearch"]);
-  if (fromGoogleSearch != null) {
-    setValueByPath(toObject, ["googleSearch"], googleSearchToMldev$3(fromGoogleSearch));
-  }
   const fromGoogleSearchRetrieval = getValueByPath(fromObject, [
     "googleSearchRetrieval"
   ]);
@@ -26588,6 +26424,16 @@ function toolToMldev$3(fromObject) {
   const fromUrlContext = getValueByPath(fromObject, ["urlContext"]);
   if (fromUrlContext != null) {
     setValueByPath(toObject, ["urlContext"], fromUrlContext);
+  }
+  const fromMcpServers = getValueByPath(fromObject, ["mcpServers"]);
+  if (fromMcpServers != null) {
+    let transformedList = fromMcpServers;
+    if (Array.isArray(transformedList)) {
+      transformedList = transformedList.map((item) => {
+        return item;
+      });
+    }
+    setValueByPath(toObject, ["mcpServers"], transformedList);
   }
   return toObject;
 }
@@ -26603,6 +26449,10 @@ function toolToVertex$2(fromObject) {
   }
   if (getValueByPath(fromObject, ["fileSearch"]) !== void 0) {
     throw new Error("fileSearch parameter is not supported in Vertex AI.");
+  }
+  const fromGoogleSearch = getValueByPath(fromObject, ["googleSearch"]);
+  if (fromGoogleSearch != null) {
+    setValueByPath(toObject, ["googleSearch"], fromGoogleSearch);
   }
   const fromCodeExecution = getValueByPath(fromObject, [
     "codeExecution"
@@ -26632,10 +26482,6 @@ function toolToVertex$2(fromObject) {
   if (fromGoogleMaps != null) {
     setValueByPath(toObject, ["googleMaps"], fromGoogleMaps);
   }
-  const fromGoogleSearch = getValueByPath(fromObject, ["googleSearch"]);
-  if (fromGoogleSearch != null) {
-    setValueByPath(toObject, ["googleSearch"], fromGoogleSearch);
-  }
   const fromGoogleSearchRetrieval = getValueByPath(fromObject, [
     "googleSearchRetrieval"
   ]);
@@ -26645,6 +26491,9 @@ function toolToVertex$2(fromObject) {
   const fromUrlContext = getValueByPath(fromObject, ["urlContext"]);
   if (fromUrlContext != null) {
     setValueByPath(toObject, ["urlContext"], fromUrlContext);
+  }
+  if (getValueByPath(fromObject, ["mcpServers"]) !== void 0) {
+    throw new Error("mcpServers parameter is not supported in Vertex AI.");
   }
   return toObject;
 }
@@ -28035,6 +27884,10 @@ function googleMapsToMldev$2(fromObject) {
 }
 function googleSearchToMldev$2(fromObject) {
   const toObject = {};
+  const fromSearchTypes = getValueByPath(fromObject, ["searchTypes"]);
+  if (fromSearchTypes != null) {
+    setValueByPath(toObject, ["searchTypes"], fromSearchTypes);
+  }
   if (getValueByPath(fromObject, ["excludeDomains"]) !== void 0) {
     throw new Error("excludeDomains parameter is not supported in Gemini API.");
   }
@@ -28550,6 +28403,10 @@ function toolToMldev$2(fromObject) {
   if (fromFileSearch != null) {
     setValueByPath(toObject, ["fileSearch"], fromFileSearch);
   }
+  const fromGoogleSearch = getValueByPath(fromObject, ["googleSearch"]);
+  if (fromGoogleSearch != null) {
+    setValueByPath(toObject, ["googleSearch"], googleSearchToMldev$2(fromGoogleSearch));
+  }
   const fromCodeExecution = getValueByPath(fromObject, [
     "codeExecution"
   ]);
@@ -28575,10 +28432,6 @@ function toolToMldev$2(fromObject) {
   if (fromGoogleMaps != null) {
     setValueByPath(toObject, ["googleMaps"], googleMapsToMldev$2(fromGoogleMaps));
   }
-  const fromGoogleSearch = getValueByPath(fromObject, ["googleSearch"]);
-  if (fromGoogleSearch != null) {
-    setValueByPath(toObject, ["googleSearch"], googleSearchToMldev$2(fromGoogleSearch));
-  }
   const fromGoogleSearchRetrieval = getValueByPath(fromObject, [
     "googleSearchRetrieval"
   ]);
@@ -28588,6 +28441,16 @@ function toolToMldev$2(fromObject) {
   const fromUrlContext = getValueByPath(fromObject, ["urlContext"]);
   if (fromUrlContext != null) {
     setValueByPath(toObject, ["urlContext"], fromUrlContext);
+  }
+  const fromMcpServers = getValueByPath(fromObject, ["mcpServers"]);
+  if (fromMcpServers != null) {
+    let transformedList = fromMcpServers;
+    if (Array.isArray(transformedList)) {
+      transformedList = transformedList.map((item) => {
+        return item;
+      });
+    }
+    setValueByPath(toObject, ["mcpServers"], transformedList);
   }
   return toObject;
 }
@@ -28603,6 +28466,10 @@ function toolToVertex$1(fromObject) {
   }
   if (getValueByPath(fromObject, ["fileSearch"]) !== void 0) {
     throw new Error("fileSearch parameter is not supported in Vertex AI.");
+  }
+  const fromGoogleSearch = getValueByPath(fromObject, ["googleSearch"]);
+  if (fromGoogleSearch != null) {
+    setValueByPath(toObject, ["googleSearch"], fromGoogleSearch);
   }
   const fromCodeExecution = getValueByPath(fromObject, [
     "codeExecution"
@@ -28632,10 +28499,6 @@ function toolToVertex$1(fromObject) {
   if (fromGoogleMaps != null) {
     setValueByPath(toObject, ["googleMaps"], fromGoogleMaps);
   }
-  const fromGoogleSearch = getValueByPath(fromObject, ["googleSearch"]);
-  if (fromGoogleSearch != null) {
-    setValueByPath(toObject, ["googleSearch"], fromGoogleSearch);
-  }
   const fromGoogleSearchRetrieval = getValueByPath(fromObject, [
     "googleSearchRetrieval"
   ]);
@@ -28645,6 +28508,9 @@ function toolToVertex$1(fromObject) {
   const fromUrlContext = getValueByPath(fromObject, ["urlContext"]);
   if (fromUrlContext != null) {
     setValueByPath(toObject, ["urlContext"], fromUrlContext);
+  }
+  if (getValueByPath(fromObject, ["mcpServers"]) !== void 0) {
+    throw new Error("mcpServers parameter is not supported in Vertex AI.");
   }
   return toObject;
 }
@@ -28783,15 +28649,15 @@ function candidateFromMldev(fromObject, rootObject) {
   if (fromFinishReason != null) {
     setValueByPath(toObject, ["finishReason"], fromFinishReason);
   }
-  const fromAvgLogprobs = getValueByPath(fromObject, ["avgLogprobs"]);
-  if (fromAvgLogprobs != null) {
-    setValueByPath(toObject, ["avgLogprobs"], fromAvgLogprobs);
-  }
   const fromGroundingMetadata = getValueByPath(fromObject, [
     "groundingMetadata"
   ]);
   if (fromGroundingMetadata != null) {
     setValueByPath(toObject, ["groundingMetadata"], fromGroundingMetadata);
+  }
+  const fromAvgLogprobs = getValueByPath(fromObject, ["avgLogprobs"]);
+  if (fromAvgLogprobs != null) {
+    setValueByPath(toObject, ["avgLogprobs"], fromAvgLogprobs);
   }
   const fromIndex = getValueByPath(fromObject, ["index"]);
   if (fromIndex != null) {
@@ -30900,6 +30766,10 @@ function googleMapsToMldev$1(fromObject, _rootObject) {
 }
 function googleSearchToMldev$1(fromObject, _rootObject) {
   const toObject = {};
+  const fromSearchTypes = getValueByPath(fromObject, ["searchTypes"]);
+  if (fromSearchTypes != null) {
+    setValueByPath(toObject, ["searchTypes"], fromSearchTypes);
+  }
   if (getValueByPath(fromObject, ["excludeDomains"]) !== void 0) {
     throw new Error("excludeDomains parameter is not supported in Gemini API.");
   }
@@ -30927,6 +30797,9 @@ function imageConfigToMldev(fromObject, _rootObject) {
   if (getValueByPath(fromObject, ["personGeneration"]) !== void 0) {
     throw new Error("personGeneration parameter is not supported in Gemini API.");
   }
+  if (getValueByPath(fromObject, ["prominentPeople"]) !== void 0) {
+    throw new Error("prominentPeople parameter is not supported in Gemini API.");
+  }
   if (getValueByPath(fromObject, ["outputMimeType"]) !== void 0) {
     throw new Error("outputMimeType parameter is not supported in Gemini API.");
   }
@@ -30950,6 +30823,12 @@ function imageConfigToVertex(fromObject, _rootObject) {
   ]);
   if (fromPersonGeneration != null) {
     setValueByPath(toObject, ["personGeneration"], fromPersonGeneration);
+  }
+  const fromProminentPeople = getValueByPath(fromObject, [
+    "prominentPeople"
+  ]);
+  if (fromProminentPeople != null) {
+    setValueByPath(toObject, ["prominentPeople"], fromProminentPeople);
   }
   const fromOutputMimeType = getValueByPath(fromObject, [
     "outputMimeType"
@@ -31678,6 +31557,10 @@ function toolToMldev$1(fromObject, rootObject) {
   if (fromFileSearch != null) {
     setValueByPath(toObject, ["fileSearch"], fromFileSearch);
   }
+  const fromGoogleSearch = getValueByPath(fromObject, ["googleSearch"]);
+  if (fromGoogleSearch != null) {
+    setValueByPath(toObject, ["googleSearch"], googleSearchToMldev$1(fromGoogleSearch));
+  }
   const fromCodeExecution = getValueByPath(fromObject, [
     "codeExecution"
   ]);
@@ -31703,10 +31586,6 @@ function toolToMldev$1(fromObject, rootObject) {
   if (fromGoogleMaps != null) {
     setValueByPath(toObject, ["googleMaps"], googleMapsToMldev$1(fromGoogleMaps));
   }
-  const fromGoogleSearch = getValueByPath(fromObject, ["googleSearch"]);
-  if (fromGoogleSearch != null) {
-    setValueByPath(toObject, ["googleSearch"], googleSearchToMldev$1(fromGoogleSearch));
-  }
   const fromGoogleSearchRetrieval = getValueByPath(fromObject, [
     "googleSearchRetrieval"
   ]);
@@ -31716,6 +31595,16 @@ function toolToMldev$1(fromObject, rootObject) {
   const fromUrlContext = getValueByPath(fromObject, ["urlContext"]);
   if (fromUrlContext != null) {
     setValueByPath(toObject, ["urlContext"], fromUrlContext);
+  }
+  const fromMcpServers = getValueByPath(fromObject, ["mcpServers"]);
+  if (fromMcpServers != null) {
+    let transformedList = fromMcpServers;
+    if (Array.isArray(transformedList)) {
+      transformedList = transformedList.map((item) => {
+        return item;
+      });
+    }
+    setValueByPath(toObject, ["mcpServers"], transformedList);
   }
   return toObject;
 }
@@ -31731,6 +31620,10 @@ function toolToVertex(fromObject, rootObject) {
   }
   if (getValueByPath(fromObject, ["fileSearch"]) !== void 0) {
     throw new Error("fileSearch parameter is not supported in Vertex AI.");
+  }
+  const fromGoogleSearch = getValueByPath(fromObject, ["googleSearch"]);
+  if (fromGoogleSearch != null) {
+    setValueByPath(toObject, ["googleSearch"], fromGoogleSearch);
   }
   const fromCodeExecution = getValueByPath(fromObject, [
     "codeExecution"
@@ -31760,10 +31653,6 @@ function toolToVertex(fromObject, rootObject) {
   if (fromGoogleMaps != null) {
     setValueByPath(toObject, ["googleMaps"], fromGoogleMaps);
   }
-  const fromGoogleSearch = getValueByPath(fromObject, ["googleSearch"]);
-  if (fromGoogleSearch != null) {
-    setValueByPath(toObject, ["googleSearch"], fromGoogleSearch);
-  }
   const fromGoogleSearchRetrieval = getValueByPath(fromObject, [
     "googleSearchRetrieval"
   ]);
@@ -31773,6 +31662,9 @@ function toolToVertex(fromObject, rootObject) {
   const fromUrlContext = getValueByPath(fromObject, ["urlContext"]);
   if (fromUrlContext != null) {
     setValueByPath(toObject, ["urlContext"], fromUrlContext);
+  }
+  if (getValueByPath(fromObject, ["mcpServers"]) !== void 0) {
+    throw new Error("mcpServers parameter is not supported in Vertex AI.");
   }
   return toObject;
 }
@@ -32317,7 +32209,7 @@ var CONTENT_TYPE_HEADER = "Content-Type";
 var SERVER_TIMEOUT_HEADER = "X-Server-Timeout";
 var USER_AGENT_HEADER = "User-Agent";
 var GOOGLE_API_CLIENT_HEADER = "x-goog-api-client";
-var SDK_VERSION = "1.42.0";
+var SDK_VERSION = "1.43.0";
 var LIBRARY_LABEL = `google-genai-sdk/${SDK_VERSION}`;
 var VERTEX_AI_API_DEFAULT_VERSION = "v1beta1";
 var GOOGLE_AI_API_DEFAULT_VERSION = "v1beta";
@@ -35212,6 +35104,10 @@ function googleMapsToMldev(fromObject) {
 }
 function googleSearchToMldev(fromObject) {
   const toObject = {};
+  const fromSearchTypes = getValueByPath(fromObject, ["searchTypes"]);
+  if (fromSearchTypes != null) {
+    setValueByPath(toObject, ["searchTypes"], fromSearchTypes);
+  }
   if (getValueByPath(fromObject, ["excludeDomains"]) !== void 0) {
     throw new Error("excludeDomains parameter is not supported in Gemini API.");
   }
@@ -35435,6 +35331,10 @@ function toolToMldev(fromObject) {
   if (fromFileSearch != null) {
     setValueByPath(toObject, ["fileSearch"], fromFileSearch);
   }
+  const fromGoogleSearch = getValueByPath(fromObject, ["googleSearch"]);
+  if (fromGoogleSearch != null) {
+    setValueByPath(toObject, ["googleSearch"], googleSearchToMldev(fromGoogleSearch));
+  }
   const fromCodeExecution = getValueByPath(fromObject, [
     "codeExecution"
   ]);
@@ -35460,10 +35360,6 @@ function toolToMldev(fromObject) {
   if (fromGoogleMaps != null) {
     setValueByPath(toObject, ["googleMaps"], googleMapsToMldev(fromGoogleMaps));
   }
-  const fromGoogleSearch = getValueByPath(fromObject, ["googleSearch"]);
-  if (fromGoogleSearch != null) {
-    setValueByPath(toObject, ["googleSearch"], googleSearchToMldev(fromGoogleSearch));
-  }
   const fromGoogleSearchRetrieval = getValueByPath(fromObject, [
     "googleSearchRetrieval"
   ]);
@@ -35473,6 +35369,16 @@ function toolToMldev(fromObject) {
   const fromUrlContext = getValueByPath(fromObject, ["urlContext"]);
   if (fromUrlContext != null) {
     setValueByPath(toObject, ["urlContext"], fromUrlContext);
+  }
+  const fromMcpServers = getValueByPath(fromObject, ["mcpServers"]);
+  if (fromMcpServers != null) {
+    let transformedList = fromMcpServers;
+    if (Array.isArray(transformedList)) {
+      transformedList = transformedList.map((item) => {
+        return item;
+      });
+    }
+    setValueByPath(toObject, ["mcpServers"], transformedList);
   }
   return toObject;
 }
@@ -36586,13 +36492,16 @@ var createPathTagFunction = (pathEncoder = encodeURIPath) => (function path3(sta
     return previousValue + currentValue + (index === params.length ? "" : encoded);
   }, "");
   const pathOnly = path4.split(/[?#]/, 1)[0];
-  const invalidSegmentPattern = /(?<=^|\/)(?:\.|%2e){1,2}(?=\/|$)/gi;
+  const invalidSegmentPattern = /(^|\/)(?:\.|%2e){1,2}(?=\/|$)/gi;
   let match;
   while ((match = invalidSegmentPattern.exec(pathOnly)) !== null) {
+    const hasLeadingSlash = match[0].startsWith("/");
+    const offset = hasLeadingSlash ? 1 : 0;
+    const cleanMatch = hasLeadingSlash ? match[0].slice(1) : match[0];
     invalidSegments.push({
-      start: match.index,
-      length: match[0].length,
-      error: `Value "${match[0]}" can't be safely passed as a path parameter`
+      start: match.index + offset,
+      length: cleanMatch.length,
+      error: `Value "${cleanMatch}" can't be safely passed as a path parameter`
     });
   }
   invalidSegments.sort((a, b) => a.start - b.start);
@@ -39631,7 +39540,7 @@ var safeJSON2 = (text) => {
 var sleep2 = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ../../../node_modules/openai/version.mjs
-var VERSION2 = "6.22.0";
+var VERSION2 = "6.25.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -40399,7 +40308,7 @@ var Stream4 = class _Stream {
     this.controller = controller;
     __classPrivateFieldSet(this, _Stream_client, client, "f");
   }
-  static fromSSEResponse(response, controller, client) {
+  static fromSSEResponse(response, controller, client, synthesizeEventData) {
     let consumed = false;
     const logger4 = client ? loggerFor2(client) : console;
     async function* iterator() {
@@ -40428,7 +40337,7 @@ var Stream4 = class _Stream {
             if (data && data.error) {
               throw new APIError2(void 0, data.error, void 0, response.headers);
             }
-            yield data;
+            yield synthesizeEventData ? { event: sse.event, data } : data;
           } else {
             let data;
             try {
@@ -40655,9 +40564,9 @@ async function defaultParseResponse2(client, props) {
     if (props.options.stream) {
       loggerFor2(client).debug("response", response.status, response.url, response.headers, response.body);
       if (props.options.__streamClass) {
-        return props.options.__streamClass.fromSSEResponse(response, props.controller, client);
+        return props.options.__streamClass.fromSSEResponse(response, props.controller, client, props.options.__synthesizeEventData);
       }
-      return Stream4.fromSSEResponse(response, props.controller, client);
+      return Stream4.fromSSEResponse(response, props.controller, client, props.options.__synthesizeEventData);
     }
     if (response.status === 204) {
       return null;
@@ -42597,6 +42506,8 @@ var Speech = class extends APIResource2 {
   /**
    * Generates audio from the input text.
    *
+   * Returns the audio file content, or a stream of audio events.
+   *
    * @example
    * ```ts
    * const speech = await client.audio.speech.create({
@@ -42809,7 +42720,7 @@ Realtime.TranscriptionSessions = TranscriptionSessions;
 // ../../../node_modules/openai/resources/beta/chatkit/sessions.mjs
 var Sessions2 = class extends APIResource2 {
   /**
-   * Create a ChatKit session
+   * Create a ChatKit session.
    *
    * @example
    * ```ts
@@ -42828,7 +42739,9 @@ var Sessions2 = class extends APIResource2 {
     });
   }
   /**
-   * Cancel a ChatKit session
+   * Cancel an active ChatKit session and return its most recent metadata.
+   *
+   * Cancelling prevents new requests from using the issued client secret.
    *
    * @example
    * ```ts
@@ -42847,7 +42760,7 @@ var Sessions2 = class extends APIResource2 {
 // ../../../node_modules/openai/resources/beta/chatkit/threads.mjs
 var Threads = class extends APIResource2 {
   /**
-   * Retrieve a ChatKit thread
+   * Retrieve a ChatKit thread by its identifier.
    *
    * @example
    * ```ts
@@ -42862,7 +42775,7 @@ var Threads = class extends APIResource2 {
     });
   }
   /**
-   * List ChatKit threads
+   * List ChatKit threads with optional pagination and user filters.
    *
    * @example
    * ```ts
@@ -42880,7 +42793,7 @@ var Threads = class extends APIResource2 {
     });
   }
   /**
-   * Delete a ChatKit thread
+   * Delete a ChatKit thread along with its items and stored attachments.
    *
    * @example
    * ```ts
@@ -42896,7 +42809,7 @@ var Threads = class extends APIResource2 {
     });
   }
   /**
-   * List ChatKit thread items
+   * List items that belong to a ChatKit thread.
    *
    * @example
    * ```ts
@@ -43598,7 +43511,8 @@ var Runs = class extends APIResource2 {
       body,
       ...options,
       headers: buildHeaders2([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      stream: params.stream ?? false
+      stream: params.stream ?? false,
+      __synthesizeEventData: true
     });
   }
   /**
@@ -43727,7 +43641,8 @@ var Runs = class extends APIResource2 {
       body,
       ...options,
       headers: buildHeaders2([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      stream: params.stream ?? false
+      stream: params.stream ?? false,
+      __synthesizeEventData: true
     });
   }
   /**
@@ -43808,7 +43723,8 @@ var Threads2 = class extends APIResource2 {
       body,
       ...options,
       headers: buildHeaders2([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      stream: body.stream ?? false
+      stream: body.stream ?? false,
+      __synthesizeEventData: true
     });
   }
   /**
@@ -44667,6 +44583,20 @@ var ClientSecrets = class extends APIResource2 {
   /**
    * Create a Realtime client secret with an associated session configuration.
    *
+   * Client secrets are short-lived tokens that can be passed to a client app, such
+   * as a web frontend or mobile client, which grants access to the Realtime API
+   * without leaking your main API key. You can configure a custom TTL for each
+   * client secret.
+   *
+   * You can also attach session configuration options to the client secret, which
+   * will be applied to any sessions created using that client secret, but these can
+   * also be overridden by the client connection.
+   *
+   * [Learn more about authentication with client secrets over WebRTC](https://platform.openai.com/docs/guides/realtime-webrtc).
+   *
+   * Returns the created client secret and the effective session object. The client
+   * secret is a string that looks like `ek_1234`.
+   *
    * @example
    * ```ts
    * const clientSecret =
@@ -45095,7 +45025,10 @@ var InputItems = class extends APIResource2 {
 // ../../../node_modules/openai/resources/responses/input-tokens.mjs
 var InputTokens = class extends APIResource2 {
   /**
-   * Get input token counts
+   * Returns input token counts of the request.
+   *
+   * Returns an object with `object` set to `response.input_tokens` and an
+   * `input_tokens` count.
    *
    * @example
    * ```ts
@@ -45175,7 +45108,12 @@ var Responses = class extends APIResource2 {
     return this._client.post(path2`/responses/${responseID}/cancel`, options);
   }
   /**
-   * Compact conversation
+   * Compact a conversation. Returns a compacted response object.
+   *
+   * Learn when and how to compact long-running conversations in the
+   * [conversation state guide](https://platform.openai.com/docs/guides/conversation-state#managing-the-context-window).
+   * For ZDR-compatible compaction details, see
+   * [Compaction (advanced)](https://platform.openai.com/docs/guides/conversation-state#compaction-advanced).
    *
    * @example
    * ```ts
@@ -45194,7 +45132,7 @@ Responses.InputTokens = InputTokens;
 // ../../../node_modules/openai/resources/skills/content.mjs
 var Content2 = class extends APIResource2 {
   /**
-   * Get Skill Content
+   * Download a skill zip bundle by its ID.
    */
   retrieve(skillID, options) {
     return this._client.get(path2`/skills/${skillID}/content`, {
@@ -45208,7 +45146,7 @@ var Content2 = class extends APIResource2 {
 // ../../../node_modules/openai/resources/skills/versions/content.mjs
 var Content3 = class extends APIResource2 {
   /**
-   * Get Skill Version Content
+   * Download a skill version zip bundle.
    */
   retrieve(version, params, options) {
     const { skill_id } = params;
@@ -45227,20 +45165,20 @@ var Versions = class extends APIResource2 {
     this.content = new Content3(this._client);
   }
   /**
-   * Create Skill Version
+   * Create a new immutable skill version.
    */
   create(skillID, body = {}, options) {
     return this._client.post(path2`/skills/${skillID}/versions`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
   }
   /**
-   * Get Skill Version
+   * Get a specific skill version.
    */
   retrieve(version, params, options) {
     const { skill_id } = params;
     return this._client.get(path2`/skills/${skill_id}/versions/${version}`, options);
   }
   /**
-   * List Skill Versions
+   * List skill versions for a skill.
    */
   list(skillID, query = {}, options) {
     return this._client.getAPIList(path2`/skills/${skillID}/versions`, CursorPage, {
@@ -45249,7 +45187,7 @@ var Versions = class extends APIResource2 {
     });
   }
   /**
-   * Delete Skill Version
+   * Delete a skill version.
    */
   delete(version, params, options) {
     const { skill_id } = params;
@@ -45266,31 +45204,31 @@ var Skills = class extends APIResource2 {
     this.versions = new Versions(this._client);
   }
   /**
-   * Create Skill
+   * Create a new skill.
    */
   create(body = {}, options) {
     return this._client.post("/skills", maybeMultipartFormRequestOptions({ body, ...options }, this._client));
   }
   /**
-   * Get Skill
+   * Get a skill by its ID.
    */
   retrieve(skillID, options) {
     return this._client.get(path2`/skills/${skillID}`, options);
   }
   /**
-   * Update Skill Default Version
+   * Update the default version pointer for a skill.
    */
   update(skillID, body, options) {
     return this._client.post(path2`/skills/${skillID}`, { body, ...options });
   }
   /**
-   * List Skills
+   * List all skills for the current project.
    */
   list(query = {}, options) {
     return this._client.getAPIList("/skills", CursorPage, { query, ...options });
   }
   /**
-   * Delete Skill
+   * Delete a skill by its ID.
    */
   delete(skillID, options) {
     return this._client.delete(path2`/skills/${skillID}`, options);
@@ -45345,12 +45283,16 @@ var Uploads = class extends APIResource2 {
    * For guidance on the proper filename extensions for each purpose, please follow
    * the documentation on
    * [creating a File](https://platform.openai.com/docs/api-reference/files/create).
+   *
+   * Returns the Upload object with status `pending`.
    */
   create(body, options) {
     return this._client.post("/uploads", { body, ...options });
   }
   /**
    * Cancels the Upload. No Parts may be added after an Upload is cancelled.
+   *
+   * Returns the Upload object with status `cancelled`.
    */
   cancel(uploadID, options) {
     return this._client.post(path2`/uploads/${uploadID}/cancel`, options);
@@ -45368,7 +45310,9 @@ var Uploads = class extends APIResource2 {
    *
    * The number of bytes uploaded upon completion must match the number of bytes
    * initially specified when creating the Upload object. No Parts may be added after
-   * an Upload is completed.
+   * an Upload is completed. Returns the Upload object with status `completed`,
+   * including an additional `file` property containing the created usable File
+   * object.
    */
   complete(uploadID, body, options) {
     return this._client.post(path2`/uploads/${uploadID}/complete`, { body, ...options });
@@ -45718,31 +45662,33 @@ VectorStores.FileBatches = FileBatches;
 // ../../../node_modules/openai/resources/videos.mjs
 var Videos = class extends APIResource2 {
   /**
-   * Create a video
+   * Create a new video generation job from a prompt and optional reference assets.
    */
   create(body, options) {
     return this._client.post("/videos", maybeMultipartFormRequestOptions({ body, ...options }, this._client));
   }
   /**
-   * Retrieve a video
+   * Fetch the latest metadata for a generated video.
    */
   retrieve(videoID, options) {
     return this._client.get(path2`/videos/${videoID}`, options);
   }
   /**
-   * List videos
+   * List recently generated videos for the current project.
    */
   list(query = {}, options) {
     return this._client.getAPIList("/videos", ConversationCursorPage, { query, ...options });
   }
   /**
-   * Delete a video
+   * Permanently delete a completed or failed video and its stored assets.
    */
   delete(videoID, options) {
     return this._client.delete(path2`/videos/${videoID}`, options);
   }
   /**
-   * Download video content
+   * Download the generated video bytes or a derived preview asset.
+   *
+   * Streams the rendered video content for the specified video job.
    */
   downloadContent(videoID, query = {}, options) {
     return this._client.get(path2`/videos/${videoID}/content`, {
@@ -45753,7 +45699,7 @@ var Videos = class extends APIResource2 {
     });
   }
   /**
-   * Create a video remix
+   * Create a remix of a completed video using a refreshed prompt.
    */
   remix(videoID, body, options) {
     return this._client.post(path2`/videos/${videoID}/remix`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
@@ -46271,6 +46217,11 @@ var OpenAI = class {
       return { bodyHeaders: void 0, body };
     } else if (typeof body === "object" && (Symbol.asyncIterator in body || Symbol.iterator in body && "next" in body && typeof body.next === "function")) {
       return { bodyHeaders: void 0, body: ReadableStreamFrom2(body) };
+    } else if (typeof body === "object" && headers.values.get("content-type") === "application/x-www-form-urlencoded") {
+      return {
+        bodyHeaders: { "content-type": "application/x-www-form-urlencoded" },
+        body: this.stringifyQuery(body)
+      };
     } else {
       return __classPrivateFieldGet(this, _OpenAI_encoder, "f").call(this, { body, headers });
     }
@@ -46320,6 +46271,7 @@ OpenAI.Skills = Skills;
 OpenAI.Videos = Videos;
 
 // node_modules/@quilltap/plugin-utils/dist/index.mjs
+var import_fs2 = require("fs");
 function parseGoogleToolCalls(response) {
   const toolCalls = [];
   try {
@@ -46406,6 +46358,7 @@ function createPluginLogger(pluginName, minLevel = "debug") {
   }
   return createConsoleLoggerWithChild(pluginName, minLevel);
 }
+var rewriteLogger = createPluginLogger("host-rewrite");
 
 // provider.ts
 var logger = createPluginLogger("qtap-plugin-google");
@@ -47678,9 +47631,6 @@ node-domexception/index.js:
 
 safe-buffer/index.js:
   (*! safe-buffer. MIT License. Feross Aboukhadijeh <https://feross.org/opensource> *)
-
-gtoken/build/cjs/src/index.cjs:
-  (*! regenerator-runtime -- Copyright (c) 2014-present, Facebook, Inc. -- license (MIT): https://github.com/babel/babel/blob/main/packages/babel-helpers/LICENSE *)
 
 @google/genai/dist/node/index.mjs:
 @google/genai/dist/node/index.mjs:

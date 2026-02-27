@@ -39,13 +39,17 @@ export const COMMON_THUMBNAIL_SIZES = [120, 150, 300];
 /**
  * Build the canonical storage key for a cached thumbnail.
  *
- * Format: `users/{userId}/thumbnails/{fileId}_{size}.webp`
+ * Format: `_thumbnails/{fileId}_{size}.webp`
  *
  * This MUST be the single source of truth for thumbnail cache keys.
  * Both cache reads and cache writes must use this function.
+ *
+ * @param _userId - Deprecated, kept for API compatibility (ignored)
+ * @param fileId - File UUID
+ * @param size - Thumbnail size in pixels
  */
-export function buildThumbnailStorageKey(userId: string, fileId: string, size: number): string {
-  return `users/${userId}/thumbnails/${fileId}_${size}.webp`;
+export function buildThumbnailStorageKey(_userId: string, fileId: string, size: number): string {
+  return `_thumbnails/${fileId}_${size}.webp`;
 }
 
 // ============================================================================

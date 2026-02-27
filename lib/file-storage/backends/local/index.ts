@@ -1,11 +1,13 @@
 /**
  * Local Filesystem File Storage Backend
  *
- * Implements file storage on the local filesystem with sidecar metadata files.
+ * Implements file storage on the local filesystem.
  * Supports streaming uploads/downloads, file copying, listing, and metadata retrieval.
  *
- * Files are stored at the configured basePath, with metadata stored in `.meta.json` sidecar files.
+ * Files are stored at the configured basePath.
  * Path safety is enforced to prevent directory traversal attacks.
+ *
+ * Sidecar .meta.json files have been removed — all metadata is in the database.
  *
  * @module file-storage/backends/local
  */
@@ -35,18 +37,6 @@ interface LocalBackendConfig {
   basePath: string;
 }
 
-/**
- * Sidecar metadata file structure
- */
-interface SidecarMetadata {
-  /** MIME type of the file */
-  contentType: string;
-  /** Custom metadata stored with the file */
-  metadata?: Record<string, string>;
-  /** ISO timestamp when file was uploaded */
-  uploadedAt: string;
-}
-
 // ============================================================================
 // LOCAL FILESYSTEM BACKEND IMPLEMENTATION
 // ============================================================================
@@ -56,7 +46,6 @@ interface SidecarMetadata {
  *
  * Stores files on the local filesystem with the following features:
  * - Path safety validation to prevent directory traversal
- * - Sidecar `.meta.json` files for metadata storage
  * - Streaming upload and download support
  * - File copying, deletion, and existence checks
  * - Recursive directory listing with prefix matching
@@ -149,16 +138,6 @@ export class LocalFileStorageBackend implements FileStorageBackend {
     return fullPath;
   }
 
-  /**
-   * Get the path to the sidecar metadata file
-   *
-   * @param filePath - Path to the file
-   * @returns Path to the `.meta.json` file
-   */
-  private getMetadataPath(filePath: string): string {
-    return `${filePath}.meta.json`;
-  }
-
   // ========================================================================
   // CONNECTION TEST
   // ========================================================================
@@ -216,13 +195,12 @@ export class LocalFileStorageBackend implements FileStorageBackend {
   /**
    * Upload a file to storage
    *
-   * Creates parent directories if needed, writes the file content,
-   * and stores metadata in a sidecar `.meta.json` file.
+   * Creates parent directories if needed and writes the file content.
    *
    * @param key - Storage key/path for the file
    * @param body - File content as Buffer or Readable stream
-   * @param contentType - MIME type of the file
-   * @param metadata - Optional custom metadata to store with the file
+   * @param contentType - MIME type of the file (stored in DB, not on disk)
+   * @param metadata - Optional custom metadata (stored in DB, not on disk)
    * @throws {Error} If upload fails
    */
   async upload(
@@ -251,17 +229,8 @@ export class LocalFileStorageBackend implements FileStorageBackend {
         fileContent = Buffer.concat(chunks as any[]);
       }
 
-      // Write file
+      // Write file (no sidecar — metadata lives in DB)
       await writeFile(filePath, fileContent as any);
-      // Write sidecar metadata file
-      const metadataPath = this.getMetadataPath(filePath);
-      const sidecarMetadata: SidecarMetadata = {
-        contentType,
-        metadata,
-        uploadedAt: new Date().toISOString(),
-      };
-
-      await writeFile(metadataPath, JSON.stringify(sidecarMetadata, null, 2));
     } catch (error) {
       const errorMsg =
         error instanceof Error ? error.message : 'Unknown upload error';
@@ -306,7 +275,7 @@ export class LocalFileStorageBackend implements FileStorageBackend {
   /**
    * Delete a file from storage
    *
-   * Removes the file and its sidecar metadata file (if it exists).
+   * Removes the file. Also removes any leftover .meta.json sidecar (legacy cleanup).
    * Succeeds silently if the file does not exist (idempotent).
    *
    * @param key - Storage key/path of the file
@@ -314,7 +283,6 @@ export class LocalFileStorageBackend implements FileStorageBackend {
    */
   async delete(key: string): Promise<void> {
     const filePath = this.buildSafePath(key);
-    const metadataPath = this.getMetadataPath(filePath);
 
     try {
       // Delete the file
@@ -331,17 +299,21 @@ export class LocalFileStorageBackend implements FileStorageBackend {
         }
       }
 
-      // Delete the sidecar metadata file
+      // Clean up any leftover legacy sidecar file
       try {
-        await unlink(metadataPath);
+        await unlink(`${filePath}.meta.json`);
       } catch (error) {
-        // Metadata doesn't exist, which is fine
+        // Sidecar doesn't exist, which is expected in the new format
         if (
           error instanceof Error &&
           (error as NodeJS.ErrnoException).code === 'ENOENT'
         ) {
         } else {
-          throw error;
+          // Log but don't throw for sidecar cleanup failure
+          logger.debug('Failed to clean up legacy sidecar', {
+            key,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
         }
       }
     } catch (error) {
@@ -410,7 +382,7 @@ export class LocalFileStorageBackend implements FileStorageBackend {
   /**
    * Copy a file server-side
    *
-   * Copies a file from source to destination, including its sidecar metadata.
+   * Copies a file from source to destination (no sidecar).
    *
    * @param sourceKey - Storage key of the source file
    * @param destinationKey - Storage key for the destination file
@@ -419,8 +391,6 @@ export class LocalFileStorageBackend implements FileStorageBackend {
   async copy(sourceKey: string, destinationKey: string): Promise<void> {
     const sourcePath = this.buildSafePath(sourceKey);
     const destinationPath = this.buildSafePath(destinationKey);
-    const sourceMetadataPath = this.getMetadataPath(sourcePath);
-    const destinationMetadataPath = this.getMetadataPath(destinationPath);
 
     try {
       // Ensure destination directory exists
@@ -429,18 +399,6 @@ export class LocalFileStorageBackend implements FileStorageBackend {
 
       // Copy the file
       await copyFile(sourcePath, destinationPath);
-      // Copy the sidecar metadata file
-      try {
-        await copyFile(sourceMetadataPath, destinationMetadataPath);
-      } catch (error) {
-        // Metadata doesn't exist, which is fine
-        if (
-          error instanceof Error &&
-          (error as NodeJS.ErrnoException).code !== 'ENOENT'
-        ) {
-          throw error;
-        }
-      }
     } catch (error) {
       const errorMsg =
         error instanceof Error ? error.message : 'Unknown copy error';
@@ -460,7 +418,7 @@ export class LocalFileStorageBackend implements FileStorageBackend {
   /**
    * Get metadata about a stored file
    *
-   * Reads sidecar `.meta.json` if available, otherwise uses fs.stat.
+   * Returns stat-based metadata (size, mtime). Content type comes from DB.
    *
    * @param key - Storage key of the file
    * @returns File metadata or null if not found
@@ -468,25 +426,14 @@ export class LocalFileStorageBackend implements FileStorageBackend {
    */
   async getFileMetadata(key: string): Promise<FileMetadata | null> {
     const filePath = this.buildSafePath(key);
-    const metadataPath = this.getMetadataPath(filePath);
 
     try {
       // Get file stats
       const stats = await stat(filePath);
 
-      // Try to read sidecar metadata
-      let contentType = 'application/octet-stream';
-      try {
-        const metadataContent = await readFile(metadataPath, 'utf-8');
-        const sidecarData = JSON.parse(metadataContent) as SidecarMetadata;
-        contentType = sidecarData.contentType;
-      } catch (error) {
-        // Sidecar doesn't exist, use default content type
-      }
-
       const metadata: FileMetadata = {
         size: stats.size,
-        contentType,
+        contentType: 'application/octet-stream', // Content type is in DB, not on disk
         lastModified: stats.mtime,
       };
       return metadata;
@@ -511,6 +458,7 @@ export class LocalFileStorageBackend implements FileStorageBackend {
    * List files with a given prefix
    *
    * Recursively lists all files whose keys start with the specified prefix.
+   * Filters out .meta.json sidecar files (legacy cleanup).
    *
    * @param prefix - Key prefix to match
    * @param maxKeys - Maximum number of keys to return (optional)
@@ -538,8 +486,8 @@ export class LocalFileStorageBackend implements FileStorageBackend {
               break;
             }
 
-            // Skip metadata files and hidden files
-            if (entry.name.startsWith('.')) {
+            // Skip hidden files and legacy .meta.json sidecars
+            if (entry.name.startsWith('.') || entry.name.endsWith('.meta.json')) {
               continue;
             }
 

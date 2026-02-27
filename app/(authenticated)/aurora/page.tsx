@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 // Using native img tag instead of next/image because /api/files/* routes
 // are dynamic API endpoints that can't go through Next.js image optimization
+import dynamic from 'next/dynamic'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
@@ -12,6 +13,10 @@ import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { useSidebarData } from '@/components/providers/sidebar-data-provider'
 import { CharacterDeleteDialog } from '@/components/character-delete-dialog'
 import { processTemplate } from '@/lib/templates/processor'
+
+const AIImportWizard = dynamic(() => import('@/components/settings/ai-import/AIImportWizard'), {
+  loading: () => <p className="qt-text-muted p-8 text-center">Loading wizard...</p>,
+})
 
 interface Character {
   id: string
@@ -41,6 +46,7 @@ export default function CharactersPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
+  const [aiImportDialogOpen, setAIImportDialogOpen] = useState(false)
   const [deleteDialogCharacter, setDeleteDialogCharacter] = useState<Character | null>(null)
   const { style } = useAvatarDisplay()
   const { shouldHideByIds } = useQuickHide()
@@ -219,7 +225,14 @@ export default function CharactersPage() {
             onClick={() => setImportDialogOpen(true)}
             className="qt-button character-toolbar__button inline-flex items-center rounded-lg border border-border bg-muted/70 px-4 py-2 text-sm qt-text-primary shadow-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            Import
+            Import from SillyTavern
+          </button>
+          <button
+            onClick={() => setAIImportDialogOpen(true)}
+            className="qt-button character-toolbar__button inline-flex items-center rounded-lg border border-border bg-muted/70 px-4 py-2 text-sm qt-text-primary shadow-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            title="AI generation of character from any text source"
+          >
+            Summon From Lore
           </button>
           <Link
             href="/aurora/new"
@@ -352,7 +365,7 @@ export default function CharactersPage() {
         <div className="character-import-dialog fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
             <h3 className="mb-4 text-lg font-semibold text-foreground">
-              Import Character
+              Import from SillyTavern
             </h3>
             <form onSubmit={handleImport}>
               <div className="mb-4">
@@ -383,6 +396,32 @@ export default function CharactersPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* AI Import Dialog */}
+      {aiImportDialogOpen && (
+        <div className="character-import-dialog fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-foreground">
+                Summon From Lore
+              </h3>
+              <button
+                onClick={() => setAIImportDialogOpen(false)}
+                className="inline-flex items-center justify-center rounded-lg border border-border bg-card px-3 py-1.5 text-sm qt-text-primary shadow-sm hover:bg-muted"
+              >
+                Close
+              </button>
+            </div>
+            <AIImportWizard
+              onClose={() => setAIImportDialogOpen(false)}
+              onImportSuccess={() => {
+                fetchCharacters()
+                refreshSidebar()
+              }}
+            />
           </div>
         </div>
       )}

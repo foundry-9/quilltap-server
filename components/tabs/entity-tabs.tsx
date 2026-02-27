@@ -13,10 +13,12 @@ interface EntityTabsProps {
   tabs: Tab[]
   defaultTab?: string
   persistToUrl?: boolean
+  /** Extra class name(s) applied to the tab content panel wrapper */
+  contentClassName?: string
   children: (activeTab: string) => React.ReactNode
 }
 
-export function EntityTabs({ tabs, defaultTab, persistToUrl = true, children }: EntityTabsProps) {
+export function EntityTabs({ tabs, defaultTab, persistToUrl = true, contentClassName, children }: EntityTabsProps) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -66,7 +68,7 @@ export function EntityTabs({ tabs, defaultTab, persistToUrl = true, children }: 
       </div>
 
       {/* Tab Content */}
-      <div>
+      <div className={contentClassName}>
         {children(activeTab)}
       </div>
     </div>

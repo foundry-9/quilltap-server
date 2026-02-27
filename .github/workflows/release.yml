@@ -339,6 +339,8 @@ jobs:
     name: Create GitHub Release
     runs-on: ubuntu-latest
     needs: [build-electron-mac, build-electron-win, build-electron-linux, build-standalone, push-docker-manifest]
+    outputs:
+      prerelease: ${{ steps.release-type.outputs.prerelease }}
 
     steps:
       - name: Checkout code
@@ -442,3 +444,23 @@ jobs:
             artifacts/electron-win/*.exe \
             artifacts/electron-linux/*.AppImage \
             artifacts/electron-linux/*.deb
+
+  notify-website:
+    name: Notify website of release
+    runs-on: ubuntu-latest
+    needs: [create-release, publish-npm]
+    if: always() && needs.create-release.result == 'success'
+
+    steps:
+      - name: Trigger website rebuild
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.CROSS_REPO_PAT }}
+          repository: foundry-9/quilltap-website
+          event-type: app-release
+          client-payload: >-
+            {
+              "version": "${{ github.ref_name }}",
+              "prerelease": "${{ needs.create-release.outputs.prerelease }}",
+              "docker_image": "csebold/quilltap:${{ github.ref_name }}"
+            }

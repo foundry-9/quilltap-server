@@ -5,7 +5,7 @@
  */
 
 // Main backend
-export { SQLiteBackend, createSQLiteBackend } from './backend';
+export { SQLiteBackend, SQLiteCollection, createSQLiteBackend } from './backend';
 
 // Client management
 export {
@@ -34,8 +34,26 @@ export {
 // Physical backup
 export {
   createPhysicalBackup,
+  createLLMLogsPhysicalBackup,
   applyRetentionPolicy,
 } from './physical-backup';
+
+// LLM Logs client
+export {
+  getLLMLogsSQLiteClient,
+  closeLLMLogsSQLiteClient,
+  getRawLLMLogsDatabase,
+  isLLMLogsDegraded,
+} from './llm-logs-client';
+
+// LLM Logs protection
+export {
+  runLLMLogsIntegrityCheck,
+  startLLMLogsPeriodicCheckpoints,
+  stopLLMLogsPeriodicCheckpoints,
+  runLLMLogsShutdownCheckpoint,
+  runLLMLogsBackupCheckpoint,
+} from './llm-logs-protection';
 
 // JSON column utilities
 export {

@@ -126,7 +126,6 @@ export function CollapsedNav() {
       {navItems.map((item) => {
         const Icon = item.icon
         return (
-          /* eslint-disable-next-line @next/next/no-html-link-for-pages */
           <a
             key={item.id}
             href={item.href}

@@ -1,6 +1,6 @@
 // Search component types
 
-export type SearchType = 'chats' | 'characters' | 'tags' | 'memories'
+export type SearchType = 'chats' | 'characters' | 'tags' | 'memories' | 'messages'
 
 // Match priority: 0=exact phrase, 1=all terms AND, 2=single term match
 export type MatchPriority = 0 | 1 | 2
@@ -53,7 +53,16 @@ export interface MemorySearchResult extends BaseSearchResult {
   source: 'AUTO' | 'MANUAL'
 }
 
-export type SearchResult = ChatSearchResult | CharacterSearchResult | TagSearchResult | MemorySearchResult
+export interface MessageSearchResult extends BaseSearchResult {
+  type: 'messages'
+  chatId: string
+  chatTitle: string
+  characterNames?: string[]
+  role: 'USER' | 'ASSISTANT'
+  messageId: string
+}
+
+export type SearchResult = ChatSearchResult | CharacterSearchResult | TagSearchResult | MemorySearchResult | MessageSearchResult
 
 export interface SearchResponse {
   results: SearchResult[]
@@ -71,6 +80,7 @@ export const TYPE_ICONS: Record<SearchType, string> = {
   characters: '🎭',
   tags: '🏷️',
   memories: '🧠',
+  messages: '📝',
 }
 
 export const TYPE_LABELS: Record<SearchType, string> = {
@@ -78,6 +88,7 @@ export const TYPE_LABELS: Record<SearchType, string> = {
   characters: 'Character',
   tags: 'Tag',
   memories: 'Memory',
+  messages: 'Message',
 }
 
 export const TYPE_LABELS_PLURAL: Record<SearchType, string> = {
@@ -85,4 +96,5 @@ export const TYPE_LABELS_PLURAL: Record<SearchType, string> = {
   characters: 'Characters',
   tags: 'Tags',
   memories: 'Memories',
+  messages: 'Messages',
 }

@@ -373,13 +373,12 @@ describe('CharacterVectorStore', () => {
       expect(results[0].id).toBe('v1')
     })
 
-    it('throws on query dimension mismatch', async () => {
+    it('returns empty results on query dimension mismatch', async () => {
       const store = new CharacterVectorStore('char-1')
       await store.addVector('v1', [1, 0, 0], makeMetadata())
 
-      expect(() => store.search([1, 0])).toThrow(
-        'Query vector dimension mismatch: expected 3, got 2'
-      )
+      const results = store.search([1, 0])
+      expect(results).toHaveLength(0)
     })
   })
 

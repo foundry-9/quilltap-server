@@ -74,6 +74,7 @@ export default function FileBrowser({
     };
   } | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isSyncing, setIsSyncing] = useState(false)
 
   // Upload functionality (only enabled when showUpload=true and projectId is provided)
   const {
@@ -206,6 +207,7 @@ export default function FileBrowser({
     }
 
     // Then, derive folders from file paths (for backwards compatibility)
+    // and update file counts for all folders (including DB folders)
     for (const file of files) {
       const fileFolderPath = file.folderPath || '/'
       if (fileFolderPath.startsWith(currentFolder) && fileFolderPath !== currentFolder) {
@@ -214,26 +216,22 @@ export default function FileBrowser({
         const nextSlash = remainder.indexOf('/')
         if (nextSlash > 0) {
           const subfolder = currentFolder + remainder.slice(0, nextSlash + 1)
+          const existing = folderMap.get(subfolder)
 
-          // Only add if not already in map from DB
-          if (!folderMap.has(subfolder)) {
-            const existing = folderMap.get(subfolder)
-            if (existing) {
-              // Increment file count
+          if (existing) {
+            // DB folders already have a file count from the initial computation,
+            // so skip incrementing for those
+            if (!existing.isDbFolder) {
               existing.fileCount++
-            } else {
-              const name = subfolder.split('/').filter(Boolean).pop() || subfolder
-              folderMap.set(subfolder, {
-                path: subfolder,
-                name,
-                fileCount: 1,
-                isDbFolder: false,
-              })
             }
           } else {
-            // Already exists from DB, just update file count if needed
-            const existing = folderMap.get(subfolder)!
-            // File count already computed for DB folders
+            const name = subfolder.split('/').filter(Boolean).pop() || subfolder
+            folderMap.set(subfolder, {
+              path: subfolder,
+              name,
+              fileCount: 1,
+              isDbFolder: false,
+            })
           }
         }
       }
@@ -346,6 +344,23 @@ export default function FileBrowser({
     }
   }, [moveModalFile, selectedFile, onFilesChange])
 
+  const handleSync = useCallback(async () => {
+    setIsSyncing(true)
+    try {
+      const res = await fetch('/api/v1/files?action=sync', { method: 'POST' })
+      if (res.ok) {
+        showSuccessToast('Filesystem sync complete')
+        fetchFiles()
+      } else {
+        throw new Error('Sync failed')
+      }
+    } catch (error) {
+      showErrorToast('Failed to sync filesystem')
+    } finally {
+      setIsSyncing(false)
+    }
+  }, [fetchFiles])
+
   const displayTitle = title || (projectId ? 'Project Files' : 'General Files')
 
   return (
@@ -378,6 +393,14 @@ export default function FileBrowser({
             title={viewMode === 'list' ? 'Grid view' : 'List view'}
           >
             {viewMode === 'list' ? '\u25A6' : '\u2630'}
+          </button>
+          <button
+            onClick={handleSync}
+            disabled={isSyncing || loading}
+            className="qt-button qt-button-secondary p-2"
+            title="Sync filesystem — scan disk for new or removed files"
+          >
+            {isSyncing ? '\u23F3' : '\u{1F504}'}
           </button>
           <button
             onClick={fetchFiles}

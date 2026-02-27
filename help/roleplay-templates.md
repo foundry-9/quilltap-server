@@ -1,6 +1,6 @@
 # Roleplay Templates
 
-> **[Open this page in Quilltap](/foundry/aurora)**
+> **[Open this page in Quilltap](/settings?tab=templates)**
 
 Roleplay templates define how the AI formats dialogue, actions, thoughts, and other narrative elements in your chats. They provide formatting instructions that shape how responses are structured and displayed, helping create consistent storytelling conventions.
 

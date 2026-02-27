@@ -1,8 +1,11 @@
 /**
  * Dangerous Content Gatekeeper Service
  *
- * Uses the cheap LLM to classify content for dangerous/sensitive material.
- * Follows the same cheap LLM execution pattern as lib/memory/cheap-llm-tasks.ts.
+ * Uses the cheap LLM or a dedicated moderation provider to classify content
+ * for dangerous/sensitive material. If a moderation provider plugin is available
+ * (e.g., OpenAI moderation endpoint) and an API key can be auto-detected from
+ * existing connection profiles, it is used automatically. Otherwise, falls back
+ * to the cheap LLM classification approach.
  *
  * Fail-safe: Any error returns { isDangerous: false } - never blocks the user.
  */
@@ -17,6 +20,8 @@ import { getErrorMessage } from '@/lib/errors'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
 import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
 import { createHash } from 'node:crypto'
+import { moderationProviderRegistry } from '@/lib/plugins/moderation-provider-registry'
+import type { ModerationResult } from '@/lib/plugins/interfaces/moderation-provider-plugin'
 
 const logger = createServiceLogger('DangerousContentGatekeeper')
 
@@ -130,10 +135,189 @@ async function getApiKeyForSelection(
 }
 
 /**
- * Classify content for dangerous/sensitive material using the cheap LLM
+ * OpenAI moderation category → Concierge category mapping
+ */
+const MODERATION_CATEGORY_MAP: Record<string, string> = {
+  'sexual': 'nsfw',
+  'sexual/minors': 'nsfw',
+  'violence': 'violence',
+  'violence/graphic': 'violence',
+  'hate': 'hate_speech',
+  'hate/threatening': 'hate_speech',
+  'harassment': 'hate_speech',
+  'harassment/threatening': 'hate_speech',
+  'self-harm': 'self_harm',
+  'self-harm/intent': 'self_harm',
+  'self-harm/instructions': 'self_harm',
+  'illicit': 'illegal_activity',
+  'illicit/violent': 'illegal_activity',
+}
+
+/**
+ * Human-readable labels for Concierge categories
+ */
+const CATEGORY_LABELS: Record<string, string> = {
+  'nsfw': 'Sexual/NSFW content',
+  'violence': 'Violence or graphic content',
+  'hate_speech': 'Hate speech or harassment',
+  'self_harm': 'Self-harm content',
+  'illegal_activity': 'Illegal activity',
+  'disturbing': 'Disturbing content',
+}
+
+/**
+ * Auto-detect an API key for the moderation provider by scanning connection profiles.
+ *
+ * Looks for a connection profile whose provider matches the moderation provider's
+ * providerName (e.g., 'OPENAI') and returns its decrypted API key.
+ *
+ * @returns The decrypted API key, or null if no matching profile/key is found
+ */
+async function autoDetectModerationApiKey(
+  providerName: string,
+  userId: string
+): Promise<string | null> {
+  try {
+    const repos = getRepositories()
+    const profiles = await repos.connections.findByUserId(userId)
+
+    // Find first profile matching the moderation provider name
+    const matchingProfile = profiles.find(p => p.provider === providerName)
+    if (!matchingProfile?.apiKeyId) {
+      logger.debug('[Gatekeeper] No connection profile found for moderation provider', {
+        providerName,
+      })
+      return null
+    }
+
+    const apiKey = await repos.connections.findApiKeyByIdAndUserId(matchingProfile.apiKeyId, userId)
+    if (!apiKey) {
+      logger.debug('[Gatekeeper] No API key found for matching connection profile', {
+        providerName,
+        profileId: matchingProfile.id,
+      })
+      return null
+    }
+
+    return decryptApiKey(apiKey.ciphertext, apiKey.iv, apiKey.authTag, userId)
+  } catch (error) {
+    logger.warn('[Gatekeeper] Failed to auto-detect moderation API key', {
+      providerName,
+      error: getErrorMessage(error),
+    })
+    return null
+  }
+}
+
+/**
+ * Convert a ModerationResult from a moderation provider into a DangerClassificationResult.
+ *
+ * Maps provider-specific categories (e.g., OpenAI's 'sexual', 'hate', 'violence')
+ * to Concierge categories (nsfw, hate_speech, violence, etc.), taking the highest
+ * score when multiple provider categories map to the same Concierge category.
+ */
+function mapModerationResult(
+  moderationResult: ModerationResult,
+  threshold: number
+): DangerClassificationResult {
+  // Aggregate scores by Concierge category (take max score per category)
+  const categoryScores = new Map<string, number>()
+
+  for (const cat of moderationResult.categories) {
+    const mappedCategory = MODERATION_CATEGORY_MAP[cat.category] || cat.category
+    const existing = categoryScores.get(mappedCategory) || 0
+    if (cat.score > existing) {
+      categoryScores.set(mappedCategory, cat.score)
+    }
+  }
+
+  // Build category array — only include categories with meaningful scores.
+  // OpenAI returns tiny nonzero scores (e.g. 0.0001) for irrelevant categories,
+  // so we filter to categories that are either explicitly flagged by the provider
+  // or have a score above a minimum relevance floor.
+  const RELEVANCE_FLOOR = 0.01
+  const categories: Array<{ category: string; score: number; label: string }> = []
+  for (const [category, score] of categoryScores.entries()) {
+    if (score >= RELEVANCE_FLOOR) {
+      categories.push({
+        category,
+        score,
+        label: CATEGORY_LABELS[category] || category,
+      })
+    }
+  }
+
+  // Calculate overall score from relevant categories only
+  const maxScore = categories.length > 0
+    ? Math.max(...categories.map(c => c.score))
+    : 0
+
+  return {
+    isDangerous: moderationResult.flagged || maxScore >= threshold,
+    score: maxScore,
+    categories,
+  }
+}
+
+/**
+ * Classify content using a dedicated moderation provider plugin.
+ *
+ * @returns Classification result, or null if moderation provider is not available
+ */
+async function classifyWithModerationProvider(
+  content: string,
+  userId: string,
+  settings: DangerousContentSettings,
+  chatId?: string
+): Promise<DangerClassificationResult | null> {
+  // Check if a moderation provider is registered
+  const provider = moderationProviderRegistry.getDefaultProvider()
+  if (!provider) {
+    return null
+  }
+
+  // Auto-detect an API key from connection profiles
+  const apiKey = await autoDetectModerationApiKey(provider.metadata.providerName, userId)
+  if (!apiKey) {
+    logger.debug('[Gatekeeper] No API key for moderation provider, falling back to Cheap LLM', {
+      provider: provider.metadata.providerName,
+    })
+    return null
+  }
+
+  logger.debug('[Gatekeeper] Using moderation provider for classification', {
+    provider: provider.metadata.providerName,
+    contentLength: content.length,
+    chatId,
+  })
+
+  // Call the moderation provider
+  const moderationResult = await provider.moderate(content, apiKey)
+
+  // Map to our classification result format
+  const result = mapModerationResult(moderationResult, settings.threshold)
+
+  logger.info('[Gatekeeper] Content classified via moderation provider', {
+    chatId,
+    provider: provider.metadata.providerName,
+    isDangerous: result.isDangerous,
+    score: result.score,
+    categoryCount: result.categories.length,
+    categories: result.categories.map(c => c.category),
+  })
+
+  return result
+}
+
+/**
+ * Classify content for dangerous/sensitive material.
+ *
+ * Attempts to use a dedicated moderation provider first (e.g., OpenAI moderation
+ * endpoint, which is free). If no moderation provider is available or no API key
+ * can be auto-detected, falls back to the cheap LLM classification approach.
  *
  * @param content - The text content to classify
- * @param cheapLLMSelection - The cheap LLM provider selection
+ * @param cheapLLMSelection - The cheap LLM provider selection (fallback)
  * @param userId - The user ID for API key retrieval
  * @param settings - The dangerous content settings
  * @param chatId - Optional chat ID for logging
@@ -159,6 +343,18 @@ export async function classifyContent(
     if (cached) {
       return cached
     }
+
+    // Try moderation provider first (free, purpose-built, no token cost)
+    const moderationResult = await classifyWithModerationProvider(
+      content, userId, settings, chatId
+    )
+    if (moderationResult) {
+      cacheResult(contentHash, moderationResult)
+      return moderationResult
+    }
+
+    // Fall back to cheap LLM classification
+    logger.debug('[Gatekeeper] Using Cheap LLM for classification', { chatId })
 
     // Get API key
     const apiKey = await getApiKeyForSelection(cheapLLMSelection, userId)
@@ -223,7 +419,7 @@ export async function classifyContent(
     // Cache the result
     cacheResult(contentHash, result)
 
-    logger.info('[Gatekeeper] Content classified', {
+    logger.info('[Gatekeeper] Content classified via Cheap LLM', {
       chatId,
       isDangerous: result.isDangerous,
       score: result.score,

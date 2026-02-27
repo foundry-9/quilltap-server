@@ -120,7 +120,7 @@ export function EmbeddingProviderStep({ state, dispatch }: StepProps) {
                   Free keyword-based search. No API key required. Good for basic memory retrieval.
                 </p>
               </div>
-              <span className="qt-text-xs px-2 py-0.5 rounded bg-green-500/10 text-green-600">
+              <span className="qt-text-xs px-2 py-0.5 rounded qt-bg-success/10 qt-text-success">
                 Free
               </span>
             </div>

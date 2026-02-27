@@ -1,6 +1,6 @@
 {
   "name": "qtap-plugin-theme-rains",
-  "version": "1.3.6",
+  "version": "1.3.7",
   "description": "Rains theme plugin for Quilltap - Claude-inspired warm theme with clean charcoal and parchment aesthetics",
   "main": "index.js",
   "types": "index.d.ts",

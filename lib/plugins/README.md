@@ -18,7 +18,7 @@ The Quilltap plugin system allows developers to extend Quilltap's functionality 
 
 ### Plugin Manifest Schema
 
-**Location:** `lib/json-store/schemas/plugin-manifest.ts`
+**Location:** `lib/schemas/plugin-manifest.ts`
 
 The manifest schema defines the structure of `manifest.json` files that all plugins must provide. It uses [Zod](https://zod.dev/) for runtime validation and TypeScript type generation.
 
@@ -223,5 +223,5 @@ See `plugins/qtap-plugin-template/` for a complete example of a properly structu
 ## API Documentation
 
 For detailed API documentation, see the inline TypeScript documentation in:
-- `lib/json-store/schemas/plugin-manifest.ts`
+- `lib/schemas/plugin-manifest.ts`
 - `lib/plugins/manifest-loader.ts`

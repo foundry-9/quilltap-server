@@ -108,7 +108,6 @@ export default function ChatsPage() {
   const [error, setError] = useState<string | null>(null)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [characters, setCharacters] = useState<Array<{ id: string; name: string; title?: string | null }>>([])
-  const [personas, setPersonas] = useState<Array<{ id: string; name: string; title?: string | null }>>([])
   const [profiles, setProfiles] = useState<Array<{ id: string; name: string }>>([])
   const [highlightedChatId, setHighlightedChatId] = useState<string | null>(null)
   const importedChatRef = useRef<HTMLDivElement>(null)
@@ -146,7 +145,6 @@ export default function ChatsPage() {
   useEffect(() => {
     fetchChats()
     fetchCharacters()
-    fetchPersonas()
     fetchProfiles()
   }, [])
 
@@ -189,18 +187,6 @@ export default function ChatsPage() {
     }
   }
 
-  const fetchPersonas = async () => {
-    try {
-      const res = await fetch('/api/v1/personas')
-      if (res.ok) {
-        const data = await res.json()
-        setPersonas(data.map((p: any) => ({ id: p.id, name: p.name, title: p.title })))
-      }
-    } catch (err) {
-      console.error('Failed to fetch personas:', { error: err instanceof Error ? err.message : String(err) })
-    }
-  }
-
   const fetchProfiles = async () => {
     try {
       const res = await fetch('/api/v1/connection-profiles')
@@ -235,9 +221,8 @@ export default function ChatsPage() {
   const handleImportComplete = useCallback(async (chatId: string) => {
     // Refetch all chats to get the newly imported one
     await fetchChats()
-    // Also refetch characters/personas in case new ones were created
+    // Also refetch characters in case new ones were created
     await fetchCharacters()
-    await fetchPersonas()
     // Refresh sidebar to show new chat and any new characters
     refreshSidebar()
     // Highlight the imported chat
@@ -282,7 +267,7 @@ export default function ChatsPage() {
             onClick={() => setImportDialogOpen(true)}
             className="qt-button chat-toolbar__button inline-flex items-center rounded-lg border border-border bg-muted/70 px-4 py-2 text-sm qt-text-primary shadow-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            Import
+            Import SillyTavern Chat
           </button>
           <Link
             href="/salon/new"
@@ -324,7 +309,6 @@ export default function ChatsPage() {
       {importDialogOpen && (
         <ImportWizard
           characters={characters}
-          personas={personas}
           profiles={profiles}
           onClose={() => setImportDialogOpen(false)}
           onImportComplete={handleImportComplete}

@@ -20,6 +20,7 @@ export { handleBulkReattribute } from './bulk';
 export { handleAddToolResult, handleUpdateToolSettings } from './tools';
 export { handleQueueMemories } from './memories';
 export { handleRng } from './rng';
+export { handleRunTool } from './run-tool';
 export { handleGetState, handleSetState, handleResetState } from './state';
 export { handleToggleAgentMode } from './agent-mode';
 export { handleRegenerateBackground } from './story-background';

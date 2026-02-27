@@ -409,6 +409,14 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
   ): Promise<number> {
     return this.searchOps.replaceInMessages(chatId, searchText, replaceText);
   }
+
+  async searchMessagesGlobal(
+    chatIds: string[],
+    searchText: string,
+    limit?: number
+  ): Promise<Array<{ messageId: string; content: string; chatId: string; role: string; createdAt: string }>> {
+    return this.searchOps.searchMessagesGlobal(chatIds, searchText, limit);
+  }
 }
 
 // Export singleton instance

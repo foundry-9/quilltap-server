@@ -132,10 +132,6 @@ export function ProviderWizard({ mode, onComplete, onCancel }: ProviderWizardPro
           },
         })
 
-        console.debug('[ProviderWizard] Loaded existing config for settings mode', {
-          providers: existingProviders.length,
-          profiles: config.connectionProfiles.length,
-        })
       } catch (err) {
         console.error('[ProviderWizard] Failed to load existing config', err)
       }

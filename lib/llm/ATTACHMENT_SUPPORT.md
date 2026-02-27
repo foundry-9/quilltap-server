@@ -9,8 +9,8 @@ Different LLM providers support different types of file attachments:
 - **OpenAI**: Images only (JPEG, PNG, GIF, WebP)
 - **Anthropic**: Images, PDF documents, and text files
 - **Google**: Images only (JPEG, PNG, GIF, WebP)
-- **Grok**: Images, PDF documents, and text files
-- **Ollama, OpenRouter, OpenAI-Compatible, Gab AI**: No file attachment support
+- **Grok**: Images only (JPEG, PNG, GIF, WebP)
+- **Ollama, OpenRouter, OpenAI-Compatible**: No file attachment support
 
 ## Usage
 
@@ -38,7 +38,7 @@ const openaiPDF = supportsMimeType('OPENAI', 'application/pdf')      // false
 
 // Get a human-readable description
 const description = getAttachmentSupportDescription('GROK')
-// Returns: "Images (JPEG, PNG, GIF, WEBP), PDF documents, Text files (TXT, MARKDOWN, CSV)"
+// Returns: "Images (JPEG, PNG, GIF, WEBP)"
 ```
 
 ### Working with Connection Profiles
@@ -73,11 +73,11 @@ const bestForPDF = getBestProfileForFile(allProfiles, 'application/pdf')
 ```typescript
 import { getSupportedFileTypes } from '@/lib/llm/attachment-support'
 
-const fileTypes = getSupportedFileTypes('GROK')
+const fileTypes = getSupportedFileTypes('OPENAI')
 
 console.log(fileTypes.images)     // ['image/jpeg', 'image/png', ...]
-console.log(fileTypes.documents)  // ['application/pdf']
-console.log(fileTypes.text)       // ['text/plain', 'text/markdown', 'text/csv']
+console.log(fileTypes.documents)  // []
+console.log(fileTypes.text)       // []
 console.log(fileTypes.all)        // All supported types
 ```
 
@@ -179,4 +179,4 @@ const unknown = getFileExtensionForMimeType('video/mp4')  // null
 - Ollama may support images with multimodal models (e.g., LLaVA) in the future
 - OpenRouter support depends on the underlying model being proxied
 - OpenAI-compatible providers vary by implementation
-- Grok's PDF support requires the Grok Files API (partial implementation)
+- Grok handles text and PDF files via a fallback system for better compatibility (not native support)

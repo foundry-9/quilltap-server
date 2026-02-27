@@ -6,7 +6,7 @@
  */
 
 import { QueryFilter, QueryOptions, SortSpec, UpdateSpec, UpdateOperators } from '../../interfaces';
-import { jsonExtract, jsonArrayContains, jsonArrayContainsAny, jsonArrayContainsLike, jsonArrayObjectMatch, jsonArrayObjectMatchAny, toJson } from './json-columns';
+import { jsonExtract, jsonArrayContains, jsonArrayContainsAny, jsonArrayContainsLike, jsonArrayObjectMatch, jsonArrayObjectMatchAny, toJson, embeddingToBlob } from './json-columns';
 import { logger } from '@/lib/logger';
 
 // ============================================================================
@@ -441,7 +441,8 @@ function hasUpdateOperators(update: UpdateSpec<unknown>): update is UpdateOperat
  */
 export function translateUpdate(
   update: UpdateSpec<unknown>,
-  jsonColumns: Set<string> = new Set()
+  jsonColumns: Set<string> = new Set(),
+  blobColumns: Set<string> = new Set()
 ): TranslatedUpdate {
   const setClauses: string[] = [];
   const params: unknown[] = [];
@@ -456,6 +457,10 @@ export function translateUpdate(
         if (value === undefined) {
           setClauses.push(`"${field}" = ?`);
           params.push(null);
+        } else if (blobColumns.has(field) && Array.isArray(value)) {
+          // BLOB columns: convert number[] to Float32 BLOB
+          setClauses.push(`"${field}" = ?`);
+          params.push(embeddingToBlob(value as number[]));
         } else if (jsonColumns.has(field) || (typeof value === 'object' && value !== null)) {
           setClauses.push(`"${field}" = ?`);
           params.push(toJson(value));
@@ -528,6 +533,10 @@ export function translateUpdate(
       if (value === undefined) {
         setClauses.push(`"${field}" = ?`);
         params.push(null);
+      } else if (blobColumns.has(field) && Array.isArray(value)) {
+        // BLOB columns: convert number[] to Float32 BLOB
+        setClauses.push(`"${field}" = ?`);
+        params.push(embeddingToBlob(value as number[]));
       } else if (jsonColumns.has(field) || (typeof value === 'object' && value !== null && !Array.isArray(value) && !(value instanceof Date))) {
         setClauses.push(`"${field}" = ?`);
         params.push(toJson(value));
@@ -602,10 +611,11 @@ export function buildUpdateQuery(
   filter: QueryFilter,
   update: UpdateSpec<unknown>,
   jsonColumns?: Set<string>,
-  arrayColumns?: Set<string>
+  arrayColumns?: Set<string>,
+  blobColumns?: Set<string>
 ): TranslatedQuery {
   const whereClause = translateFilter(filter, jsonColumns, arrayColumns);
-  const updateClause = translateUpdate(update, jsonColumns);
+  const updateClause = translateUpdate(update, jsonColumns, blobColumns);
 
   if (updateClause.setClauses.length === 0) {
     throw new Error('Update must specify at least one field to update');

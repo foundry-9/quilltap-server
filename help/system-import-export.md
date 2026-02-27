@@ -1,6 +1,6 @@
 # Import & Export Data
 
-> **[Open this page in Quilltap](/foundry)**
+> **[Open this page in Quilltap](/settings?tab=system)**
 
 The Import & Export tool lets you save your Quilltap data to files and load data from files back into your system.
 
@@ -28,7 +28,7 @@ Export lets you save characters, chats, memories, and templates to files in Quil
 
 **Step-by-Step:**
 
-1. **Go to The Forge** (`/foundry/forge`)
+1. **Go to the **AI Providers** tab in Settings** (`/settings?tab=providers`)
 
 2. **Find the Import / Export card**
 
@@ -85,7 +85,7 @@ Import lets you load exported data from `.quilltap` files back into your system.
 
 **Step-by-Step:**
 
-1. **Go to The Forge** (`/foundry/forge`)
+1. **Go to the **AI Providers** tab in Settings** (`/settings?tab=providers`)
 
 2. **Find the Import / Export card**
 

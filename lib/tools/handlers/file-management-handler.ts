@@ -28,6 +28,7 @@ import {
   validateFileManagementInput,
 } from '../file-management-tool';
 import { createHash } from 'crypto';
+import { findAndPrepareOverwrite } from '@/lib/files/overwrite-utils';
 
 /**
  * Context required for file management execution
@@ -266,7 +267,28 @@ async function executeWriteFile(
 ): Promise<FileWriteResult> {
   const repos = getRepositories();
   const filename = input.filename!;
-  const content = input.content!;
+  // Unescape literal JSON escape sequences that LLMs sometimes pass through
+  // as raw text instead of actual control characters (e.g. literal \n instead of newline).
+  // Only unescape if the content contains literal \n but no actual newlines,
+  // which strongly indicates the LLM sent JSON-escaped text as raw content.
+  const rawContent = input.content!;
+  const hasLiteralEscapes = typeof rawContent === 'string' && rawContent.includes('\\n');
+  const hasRealNewlines = typeof rawContent === 'string' && rawContent.includes('\n');
+  const needsUnescape = hasLiteralEscapes && !hasRealNewlines;
+  const content = needsUnescape
+    ? rawContent
+        .replace(/\\n/g, '\n')
+        .replace(/\\t/g, '\t')
+        .replace(/\\r/g, '\r')
+    : rawContent;
+  if (needsUnescape) {
+    logger.debug('Unescaped literal JSON escape sequences in file content from LLM', {
+      context: 'file-management-handler',
+      filename: input.filename,
+      contentLengthBefore: rawContent.length,
+      contentLengthAfter: content.length,
+    });
+  }
   const mimeType = input.mimeType || 'text/plain';
   const targetFolderPath = normalizeFolderPath(input.targetFolderPath || '/');
   // Validate folder path
@@ -304,12 +326,17 @@ async function executeWriteFile(
   // Permission granted - proceed with write
   const contentBuffer = Buffer.from(content, 'utf-8');
   const sha256 = createHash('sha256').update(new Uint8Array(contentBuffer)).digest('hex');
-  const fileId = repos.files['generateId'](); // Access protected method
+
+  // Check for existing file with same name in same scope
+  const overwrite = await findAndPrepareOverwrite(repos, {
+    userId: context.userId,
+    projectId: context.projectId,
+    folderPath: targetFolderPath,
+    filename,
+  });
 
   // Upload to file storage
   const uploadResult = await fileStorageManager.uploadFile({
-    userId: context.userId,
-    fileId,
     filename,
     content: contentBuffer,
     contentType: mimeType,
@@ -317,40 +344,61 @@ async function executeWriteFile(
     folderPath: targetFolderPath,
   });
 
-  // Create file entry
-  // IMPORTANT: Pass the fileId to ensure metadata matches storage path
-  const fileEntry = await repos.files.create({
-    userId: context.userId,
-    sha256,
-    originalFilename: filename,
-    mimeType,
-    size: contentBuffer.length,
-    linkedTo: [],
-    source: 'SYSTEM',
-    category: 'DOCUMENT',
-    generationPrompt: null,
-    generationModel: null,
-    generationRevisedPrompt: null,
-    description: 'Created by LLM file management tool',
-    tags: [],
-    projectId: context.projectId,
-    folderPath: targetFolderPath,
-    storageKey: uploadResult.storageKey,
-  }, { id: fileId });
+  const fileId = overwrite ? overwrite.fileId : repos.files['generateId']();
 
-  logger.info('File created successfully', {
-    context: 'file-management-handler',
-    fileId: fileEntry.id,
-    filename,
-    folderPath: targetFolderPath,
-  });
+  let fileEntry;
+  if (overwrite) {
+    // Update existing file entry, preserving the original ID
+    fileEntry = await repos.files.update(fileId, {
+      sha256,
+      mimeType,
+      size: contentBuffer.length,
+      storageKey: uploadResult.storageKey,
+      description: 'Updated by LLM file management tool',
+    });
+
+    logger.info('File overwritten successfully', {
+      context: 'file-management-handler',
+      fileId,
+      filename,
+      folderPath: targetFolderPath,
+    });
+  } else {
+    // Create new file entry
+    // IMPORTANT: Pass the fileId to ensure metadata matches storage path
+    fileEntry = await repos.files.create({
+      userId: context.userId,
+      sha256,
+      originalFilename: filename,
+      mimeType,
+      size: contentBuffer.length,
+      linkedTo: [],
+      source: 'SYSTEM',
+      category: 'DOCUMENT',
+      generationPrompt: null,
+      generationModel: null,
+      generationRevisedPrompt: null,
+      description: 'Created by LLM file management tool',
+      tags: [],
+      projectId: context.projectId,
+      folderPath: targetFolderPath,
+      storageKey: uploadResult.storageKey,
+    }, { id: fileId });
+
+    logger.info('File created successfully', {
+      context: 'file-management-handler',
+      fileId: fileEntry!.id,
+      filename,
+      folderPath: targetFolderPath,
+    });
+  }
 
   return {
     success: true,
-    fileId: fileEntry.id,
-    filename: fileEntry.originalFilename,
+    fileId: fileEntry!.id,
+    filename: fileEntry!.originalFilename,
     folderPath: targetFolderPath,
-    message: 'File created successfully.',
+    message: overwrite ? 'File updated successfully (overwrote existing file).' : 'File created successfully.',
   };
 }
 
@@ -426,6 +474,26 @@ async function executePromoteAttachment(
         message: 'Target project not found or access denied.',
       };
     }
+  }
+
+  // Check for existing file with same name in target scope
+  const overwrite = await findAndPrepareOverwrite(repos, {
+    userId: context.userId,
+    projectId: targetProjectId,
+    folderPath: targetFolderPath,
+    filename: file.originalFilename,
+  });
+
+  // If a collision was found with a different fileId, delete that colliding DB record
+  // (physical file already cleaned up by findAndPrepareOverwrite)
+  if (overwrite && overwrite.fileId !== attachmentId) {
+    await repos.files.delete(overwrite.fileId);
+    logger.info('Deleted colliding file record during promote', {
+      context: 'file-management-handler',
+      deletedFileId: overwrite.fileId,
+      promotedFileId: attachmentId,
+      filename: file.originalFilename,
+    });
   }
 
   // Update the file's project and folder
@@ -691,7 +759,7 @@ export function formatFileManagementResults(output: FileManagementToolOutput): s
       if (write.requiresPermission) {
         return `Permission required to write file "${write.filename}" to folder "${write.folderPath}". Please approve the write request.`;
       }
-      return `File "${write.filename}" created successfully in folder "${write.folderPath}".`;
+      return write.message || `File "${write.filename}" created successfully in folder "${write.folderPath}".`;
     }
 
     case 'create_folder': {

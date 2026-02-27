@@ -25,6 +25,7 @@ import {
   handleUpdateToolSettings,
   handleQueueMemories,
   handleRng,
+  handleRunTool,
   handleToggleAgentMode,
   handleRegenerateBackground,
   handleReclassifyDanger,
@@ -100,6 +101,9 @@ export async function handlePost(
     case 'rng':
       return handleRng(req, chatId, ctx);
 
+    case 'run-tool':
+      return handleRunTool(req, chatId, ctx);
+
     case 'toggle-agent-mode':
       return handleToggleAgentMode(req, chatId, ctx);
 
@@ -111,7 +115,7 @@ export async function handlePost(
 
     default:
       return badRequest(
-        `Unknown action: ${action}. Available actions: regenerate-title, add-tag, remove-tag, impersonate, stop-impersonate, set-active-speaker, turn, add-participant, update-participant, remove-participant, bulk-reattribute, get-avatars, set-avatar, remove-avatar, add-tool-result, queue-memories, update-tool-settings, rng, toggle-agent-mode, regenerate-background, reclassify-danger`
+        `Unknown action: ${action}. Available actions: regenerate-title, add-tag, remove-tag, impersonate, stop-impersonate, set-active-speaker, turn, add-participant, update-participant, remove-participant, bulk-reattribute, get-avatars, set-avatar, remove-avatar, add-tool-result, queue-memories, update-tool-settings, rng, run-tool, toggle-agent-mode, regenerate-background, reclassify-danger`
       );
   }
 }

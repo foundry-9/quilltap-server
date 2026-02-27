@@ -97,7 +97,7 @@ export default function FileBrowserGrid({
       {files.map(file => (
         <div
           key={file.id}
-          className="flex flex-col items-center gap-2 p-3 rounded-lg hover:bg-muted transition-colors group relative"
+          className={`flex flex-col items-center gap-2 p-3 rounded-lg hover:bg-muted transition-colors group relative ${file.fileStatus === 'orphaned' ? 'ring-1 ring-amber-400/50' : ''}`}
         >
           {/* Thumbnail/Icon */}
           <button
@@ -123,6 +123,11 @@ export default function FileBrowserGrid({
               <span className="qt-text-xs text-muted-foreground block">
                 {formatFileSize(file.size)}
               </span>
+              {file.fileStatus === 'orphaned' && (
+                <span className="qt-text-xs text-amber-500 block" title="Untracked file found on disk">
+                  untracked
+                </span>
+              )}
             </div>
           </button>
 

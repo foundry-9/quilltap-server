@@ -21,21 +21,41 @@ quilltap/
 │   ├── memory/               # Memory system components
 │   ├── settings/             # Settings tab components
 │   ├── tags/                 # Tag system components
-│   ├── nav/                  # Navigation components
+│   ├── layout/               # Layout wrapper components
 │   ├── providers/            # React context providers
-│   └── ui/                   # Generic UI components (Avatar, Badge, Button, etc.)
+│   ├── ui/                   # Generic UI components (Avatar, Badge, Button, etc.)
+│   ├── dashboard/            # Dashboard-specific components
+│   ├── tools/                # Tools and utilities components
+│   ├── images/               # Image handling and gallery components
+│   ├── search/               # Search interface components
+│   ├── tabs/                 # Tab navigation components
+│   ├── profile/              # User profile components
+│   ├── files/                # File management components
+│   ├── state/                # Client-side state management components
+│   ├── clothing-records/     # Character clothing/appearance records
+│   ├── physical-descriptions/ # Physical description components
+│   ├── homepage/             # Home page components
+│   └── character-delete-dialog.tsx # Character deletion confirmation dialog
 ├── electron/                 # Electron main process (launcher, VM management)
 │   ├── main.ts               # Electron entry point, orchestrates boot sequence
 │   ├── vm-manager.ts         # IVMManager interface + createVMManager() factory
 │   ├── lima-manager.ts       # macOS: Lima VM lifecycle (create, start, stop, status)
 │   ├── wsl-manager.ts        # Windows: WSL2 distro lifecycle (import, start, terminate)
+│   ├── npx-manager.ts        # Node.js runtime mode for Electron (Linux, WSL2)
+│   ├── docker-manager.ts     # Docker image/container lifecycle management
 │   ├── health-checker.ts     # Polls /api/health until app is ready
 │   ├── download-manager.ts   # Downloads rootfs tarball with progress/retry
+│   ├── disk-utils.ts         # Disk usage checks and free space validation
+│   ├── startup-log.ts        # Startup logging and boot diagnostics
+│   ├── crash-guard.ts        # Crash recovery and automatic restart handling
+│   ├── settings.ts           # Persistent Electron app settings storage
 │   ├── constants.ts          # Shared constants (ports, timeouts, platform-aware paths)
 │   ├── types.ts              # TypeScript types for Electron IPC
 │   ├── preload.ts            # Context-isolated IPC bridge for splash screen
-│   ├── splash/               # Splash screen HTML/CSS/JS
+│   ├── splash/               # Splash screen HTML/CSS/JS/images
 │   ├── resources/            # App icons (icns, ico, png) and staged Lima binaries
+│   ├── entitlements.mac.plist # macOS code signing entitlements
+│   ├── notarize.js           # macOS notarization script for release builds
 │   └── tsconfig.json         # Electron-specific TypeScript config
 ├── lima/                     # Lima/WSL2 VM configuration
 │   ├── quilltap.yaml         # Lima VM template (macOS: Alpine Linux, VZ hypervisor, mounts)
@@ -512,5 +532,4 @@ git commit --no-verify -m "bugfix: started $NEWRELEASE bug branch"
 - [Deployment Guide](docs/DEPLOYMENT.md) - Production deployment patterns
 - [Backup & Restore Guide](docs/BACKUP-RESTORE.md) - Data backup procedures
 - [Plugin Developer Guide](plugins/README.md) - Creating plugins
-- [Theme Utility Classes](features/complete/theme-utility-classes.md) - Qt-\* CSS system
 - [Roadmap](features/ROADMAP.md) - Planned features including Electron/Lima phases

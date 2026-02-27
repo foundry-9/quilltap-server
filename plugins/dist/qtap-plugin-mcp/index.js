@@ -2870,20 +2870,20 @@ var require_compile = __commonJS({
     var util_1 = require_util();
     var validate_1 = require_validate();
     var SchemaEnv = class {
-      constructor(env2) {
+      constructor(env) {
         var _a3;
         this.refs = {};
         this.dynamicAnchors = {};
         let schema;
-        if (typeof env2.schema == "object")
-          schema = env2.schema;
-        this.schema = env2.schema;
-        this.schemaId = env2.schemaId;
-        this.root = env2.root || this;
-        this.baseId = (_a3 = env2.baseId) !== null && _a3 !== void 0 ? _a3 : (0, resolve_1.normalizeId)(schema === null || schema === void 0 ? void 0 : schema[env2.schemaId || "$id"]);
-        this.schemaPath = env2.schemaPath;
-        this.localRefs = env2.localRefs;
-        this.meta = env2.meta;
+        if (typeof env.schema == "object")
+          schema = env.schema;
+        this.schema = env.schema;
+        this.schemaId = env.schemaId;
+        this.root = env.root || this;
+        this.baseId = (_a3 = env.baseId) !== null && _a3 !== void 0 ? _a3 : (0, resolve_1.normalizeId)(schema === null || schema === void 0 ? void 0 : schema[env.schemaId || "$id"]);
+        this.schemaPath = env.schemaPath;
+        this.localRefs = env.localRefs;
+        this.meta = env.meta;
         this.$async = schema === null || schema === void 0 ? void 0 : schema.$async;
         this.refs = {};
       }
@@ -3067,15 +3067,15 @@ var require_compile = __commonJS({
           baseId = (0, resolve_1.resolveUrl)(this.opts.uriResolver, baseId, schId);
         }
       }
-      let env2;
+      let env;
       if (typeof schema != "boolean" && schema.$ref && !(0, util_1.schemaHasRulesButRef)(schema, this.RULES)) {
         const $ref = (0, resolve_1.resolveUrl)(this.opts.uriResolver, baseId, schema.$ref);
-        env2 = resolveSchema.call(this, root, $ref);
+        env = resolveSchema.call(this, root, $ref);
       }
       const { schemaId } = this.opts;
-      env2 = env2 || new SchemaEnv({ schema, schemaId, root, baseId });
-      if (env2.schema !== env2.root.schema)
-        return env2;
+      env = env || new SchemaEnv({ schema, schemaId, root, baseId });
+      if (env.schema !== env.root.schema)
+        return env;
       return void 0;
     }
   }
@@ -3223,8 +3223,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path3) {
-      let input = path3;
+    function removeDotSegments(path2) {
+      let input = path2;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -3423,8 +3423,8 @@ var require_schemes = __commonJS({
         wsComponent.secure = void 0;
       }
       if (wsComponent.resourceName) {
-        const [path3, query] = wsComponent.resourceName.split("?");
-        wsComponent.path = path3 && path3 !== "/" ? path3 : void 0;
+        const [path2, query] = wsComponent.resourceName.split("?");
+        wsComponent.path = path2 && path2 !== "/" ? path2 : void 0;
         wsComponent.query = query;
         wsComponent.resourceName = void 0;
       }
@@ -4365,13 +4365,13 @@ var require_core = __commonJS({
     }, warn() {
     }, error() {
     } };
-    function getLogger(logger2) {
-      if (logger2 === false)
+    function getLogger(logger) {
+      if (logger === false)
         return noLogs;
-      if (logger2 === void 0)
+      if (logger === void 0)
         return console;
-      if (logger2.log && logger2.warn && logger2.error)
-        return logger2;
+      if (logger.log && logger.warn && logger.error)
+        return logger;
       throw new Error("logger must implement log, warn and error methods");
     }
     var KEYWORD_NAME = /^[a-z_$][a-z0-9_$:-]*$/i;
@@ -4476,8 +4476,8 @@ var require_ref = __commonJS({
       schemaType: "string",
       code(cxt) {
         const { gen, schema: $ref, it } = cxt;
-        const { baseId, schemaEnv: env2, validateName, opts, self } = it;
-        const { root } = env2;
+        const { baseId, schemaEnv: env, validateName, opts, self } = it;
+        const { root } = env;
         if (($ref === "#" || $ref === "#/") && baseId === root.baseId)
           return callRootRef();
         const schOrEnv = compile_1.resolveRef.call(self, root, baseId, $ref);
@@ -4487,8 +4487,8 @@ var require_ref = __commonJS({
           return callValidate(schOrEnv);
         return inlineRefSchema(schOrEnv);
         function callRootRef() {
-          if (env2 === root)
-            return callRef(cxt, validateName, env2, env2.$async);
+          if (env === root)
+            return callRef(cxt, validateName, env, env.$async);
           const rootName = gen.scopeValue("root", { ref: root });
           return callRef(cxt, (0, codegen_1._)`${rootName}.validate`, root, root.$async);
         }
@@ -4518,14 +4518,14 @@ var require_ref = __commonJS({
     exports2.getValidate = getValidate;
     function callRef(cxt, v, sch, $async) {
       const { gen, it } = cxt;
-      const { allErrors, schemaEnv: env2, opts } = it;
+      const { allErrors, schemaEnv: env, opts } = it;
       const passCxt = opts.passContext ? names_1.default.this : codegen_1.nil;
       if ($async)
         callAsyncRef();
       else
         callSyncRef();
       function callAsyncRef() {
-        if (!env2.$async)
+        if (!env.$async)
           throw new Error("async schema referenced by sync schema");
         const valid = gen.let("valid");
         gen.try(() => {
@@ -6786,12 +6786,12 @@ var require_dist = __commonJS({
         throw new Error(`Unknown format "${name}"`);
       return f;
     };
-    function addFormats(ajv, list, fs3, exportName) {
+    function addFormats(ajv, list, fs, exportName) {
       var _a3;
       var _b;
       (_a3 = (_b = ajv.opts.code).formats) !== null && _a3 !== void 0 ? _a3 : _b.formats = (0, codegen_1._)`require("ajv-formats/dist/formats").${exportName}`;
       for (const f of list)
-        ajv.addFormat(f, fs3[f]);
+        ajv.addFormat(f, fs[f]);
     }
     module2.exports = exports2 = formatsPlugin;
     Object.defineProperty(exports2, "__esModule", { value: true });
@@ -6806,479 +6806,6 @@ __export(index_exports, {
   plugin: () => plugin
 });
 module.exports = __toCommonJS(index_exports);
-
-// ../../../lib/logging/transports/console.ts
-var ConsoleTransport = class {
-  /**
-   * Write a log entry to the console
-   * @param logData The structured log data to write
-   */
-  write(logData) {
-    const logString = JSON.stringify(logData);
-    switch (logData.level) {
-      case "error" /* ERROR */:
-        console.error(logString);
-        break;
-      case "warn" /* WARN */:
-        console.warn(logString);
-        break;
-      case "info" /* INFO */:
-        console.info(logString);
-        break;
-      case "debug" /* DEBUG */:
-        console.debug(logString);
-        break;
-      default:
-        console.log(logString);
-    }
-  }
-};
-
-// ../../../lib/logging/transports/file.ts
-var import_fs = require("fs");
-var import_path = require("path");
-function buildRotatedLogPath(logDir, filename, rotation) {
-  const rotatedName = [filename, String(rotation)].join(".");
-  return (0, import_path.join)(logDir, rotatedName);
-}
-var FileTransport = class {
-  /**
-   * Create a new FileTransport instance
-   * @param logDir Directory where log files will be stored
-   * @param maxFileSize Maximum size of a log file in bytes (default: 10MB)
-   * @param maxFiles Maximum number of rotated files to keep (default: 5)
-   */
-  constructor(logDir, maxFileSize = 10485760, maxFiles = 5) {
-    this.fileSizes = /* @__PURE__ */ new Map();
-    this.logDir = logDir;
-    this.maxFileSize = maxFileSize;
-    this.maxFiles = maxFiles;
-    this.initPromise = this.initializeDirectory();
-  }
-  /**
-   * Initialize the log directory and track existing file sizes
-   */
-  async initializeDirectory() {
-    try {
-      await import_fs.promises.mkdir(this.logDir, { recursive: true });
-      const combinedLogPath = (0, import_path.join)(this.logDir, "combined.log");
-      const errorLogPath = (0, import_path.join)(this.logDir, "error.log");
-      try {
-        const combinedStats = await import_fs.promises.stat(combinedLogPath);
-        this.fileSizes.set("combined.log", combinedStats.size);
-      } catch {
-        this.fileSizes.set("combined.log", 0);
-      }
-      try {
-        const errorStats = await import_fs.promises.stat(errorLogPath);
-        this.fileSizes.set("error.log", errorStats.size);
-      } catch {
-        this.fileSizes.set("error.log", 0);
-      }
-    } catch (error) {
-      console.error(
-        "Failed to initialize logging directory:",
-        error instanceof Error ? error.message : String(error)
-      );
-    }
-  }
-  /**
-   * Write a log entry to the appropriate file(s)
-   * @param logData The structured log data to write
-   */
-  async write(logData) {
-    await this.initPromise;
-    const logString = JSON.stringify(logData);
-    const lineWithNewline = logString + "\n";
-    await this.writeToFile("combined.log", lineWithNewline);
-    if (logData.level === "error" /* ERROR */) {
-      await this.writeToFile("error.log", lineWithNewline);
-    }
-  }
-  /**
-   * Write a line to a specific log file with rotation support
-   * @param filename The log filename (combined.log or error.log)
-   * @param content The log line to write
-   */
-  async writeToFile(filename, content) {
-    try {
-      const filePath = (0, import_path.join)(this.logDir, filename);
-      const contentSize = Buffer.byteLength(content, "utf-8");
-      const currentSize = this.fileSizes.get(filename) || 0;
-      if (currentSize + contentSize > this.maxFileSize) {
-        await this.rotateFile(filename);
-      }
-      await import_fs.promises.appendFile(filePath, content, "utf-8");
-      const newSize = (this.fileSizes.get(filename) || 0) + contentSize;
-      this.fileSizes.set(filename, newSize);
-    } catch (error) {
-      console.error(
-        `Failed to write to ${filename}:`,
-        error instanceof Error ? error.message : String(error)
-      );
-    }
-  }
-  /**
-   * Rotate a log file when it exceeds maxFileSize
-   * Renames existing rotated files and starts fresh
-   * Old rotations beyond maxFiles are deleted
-   * @param filename The log filename to rotate
-   */
-  async rotateFile(filename) {
-    try {
-      const basePath = (0, import_path.join)(this.logDir, filename);
-      const oldestPath = buildRotatedLogPath(this.logDir, filename, this.maxFiles);
-      try {
-        await import_fs.promises.unlink(oldestPath);
-      } catch {
-      }
-      for (let i = this.maxFiles - 1; i >= 1; i--) {
-        const oldPath = buildRotatedLogPath(this.logDir, filename, i);
-        const newPath = buildRotatedLogPath(this.logDir, filename, i + 1);
-        try {
-          await import_fs.promises.rename(oldPath, newPath);
-        } catch {
-        }
-      }
-      const rotatedPath = buildRotatedLogPath(this.logDir, filename, 1);
-      try {
-        await import_fs.promises.rename(basePath, rotatedPath);
-      } catch {
-      }
-      this.fileSizes.set(filename, 0);
-    } catch (error) {
-      console.error(
-        `Failed to rotate ${filename}:`,
-        error instanceof Error ? error.message : String(error)
-      );
-    }
-  }
-};
-
-// ../../../lib/env.ts
-var import_zod = require("zod");
-var envSchema = import_zod.z.object({
-  // Node environment
-  NODE_ENV: import_zod.z.enum(["development", "production", "test"]).default("development"),
-  // Base URL for the application (used for OAuth callbacks, etc.)
-  BASE_URL: import_zod.z.string().url().optional().default("http://localhost:3000"),
-  // OAuth Providers (all optional - configured via auth plugins)
-  GOOGLE_CLIENT_ID: import_zod.z.string().optional(),
-  GOOGLE_CLIENT_SECRET: import_zod.z.string().optional(),
-  APPLE_ID: import_zod.z.string().optional(),
-  APPLE_SECRET: import_zod.z.string().optional(),
-  GITHUB_ID: import_zod.z.string().optional(),
-  GITHUB_SECRET: import_zod.z.string().optional(),
-  // NOTE: ENCRYPTION_MASTER_PEPPER is NOT in the schema.
-  // It is managed by the pepper vault (lib/startup/pepper-vault.ts) and
-  // read directly from process.env at runtime by lib/encryption.ts.
-  // See app/setup/page.tsx for the setup wizard.
-  // Rate Limiting (optional)
-  RATE_LIMIT_API_MAX: import_zod.z.string().regex(/^\d+$/).optional(),
-  RATE_LIMIT_API_WINDOW: import_zod.z.string().regex(/^\d+$/).optional(),
-  RATE_LIMIT_AUTH_MAX: import_zod.z.string().regex(/^\d+$/).optional(),
-  RATE_LIMIT_AUTH_WINDOW: import_zod.z.string().regex(/^\d+$/).optional(),
-  RATE_LIMIT_CHAT_MAX: import_zod.z.string().regex(/^\d+$/).optional(),
-  RATE_LIMIT_CHAT_WINDOW: import_zod.z.string().regex(/^\d+$/).optional(),
-  RATE_LIMIT_GENERAL_MAX: import_zod.z.string().regex(/^\d+$/).optional(),
-  RATE_LIMIT_GENERAL_WINDOW: import_zod.z.string().regex(/^\d+$/).optional(),
-  // Logging (optional)
-  LOG_LEVEL: import_zod.z.enum(["error", "warn", "info", "debug"]).optional().default("info"),
-  LOG_OUTPUT: import_zod.z.enum(["console", "file", "both"]).optional().default("console"),
-  LOG_FILE_PATH: import_zod.z.string().optional().default("./logs"),
-  LOG_FILE_MAX_SIZE: import_zod.z.string().regex(/^\d+$/).optional(),
-  LOG_FILE_MAX_FILES: import_zod.z.string().regex(/^\d+$/).optional(),
-  // Production SSL (optional)
-  DOMAIN: import_zod.z.string().optional(),
-  SSL_EMAIL: import_zod.z.string().email().optional(),
-  // Timezone Configuration
-  // IANA timezone name from the host OS (e.g., "America/New_York")
-  // Detected automatically by Electron and passed to Lima/WSL2/Docker
-  // Docker users can set this manually: -e QUILLTAP_TIMEZONE=America/New_York
-  QUILLTAP_TIMEZONE: import_zod.z.string().optional(),
-  // File Storage Configuration
-  // Base directory for all Quilltap data (database, files, logs)
-  // Platform defaults: Linux: ~/.quilltap, macOS: ~/Library/Application Support/Quilltap, Windows: %APPDATA%\Quilltap
-  QUILLTAP_DATA_DIR: import_zod.z.string().optional()
-});
-var isBuildPhase = process.env.SKIP_ENV_VALIDATION === "true" || process.env.NEXT_PHASE === "phase-production-build" || process.env.NEXT_RUNTIME === void 0 && process.argv.some((arg) => arg.includes("next") && process.argv.includes("build"));
-function validateEnv() {
-  if (isBuildPhase) {
-    return {
-      NODE_ENV: process.env.NODE_ENV || "production",
-      BASE_URL: process.env.BASE_URL || "http://localhost:3000",
-      LOG_LEVEL: "info",
-      LOG_OUTPUT: "console",
-      LOG_FILE_PATH: "./logs"
-    };
-  }
-  try {
-    const env2 = envSchema.parse(process.env);
-    return env2;
-  } catch (error) {
-    if (error instanceof import_zod.z.ZodError) {
-      const missingVars = error.issues.map((err) => {
-        return `  - ${err.path.join(".")}: ${err.message}`;
-      });
-      console.error("\u274C Environment validation failed:");
-      console.error(missingVars.join("\n"));
-      console.error("\nPlease check your .env file and ensure all required variables are set.");
-      console.error("See .env.example for reference.\n");
-      if (process.env.NODE_ENV !== "test") {
-        process.exit(1);
-      }
-      throw error;
-    }
-    throw error;
-  }
-}
-var env = validateEnv();
-var isProduction = env.NODE_ENV === "production";
-var isDevelopment = env.NODE_ENV === "development";
-var isTest = env.NODE_ENV === "test";
-function checkIsUserManaged() {
-  return true;
-}
-var isUserManaged = checkIsUserManaged();
-
-// ../../../lib/paths.ts
-var import_path2 = __toESM(require("path"));
-var import_os = __toESM(require("os"));
-var import_fs2 = __toESM(require("fs"));
-function isLimaEnvironment() {
-  return process.env.LIMA_CONTAINER === "true";
-}
-function isDockerEnvironment() {
-  if (process.env.DOCKER_CONTAINER === "true") {
-    return true;
-  }
-  try {
-    if (import_fs2.default.existsSync("/.dockerenv")) {
-      return true;
-    }
-    const appStat = import_fs2.default.statSync("/app");
-    if (appStat.isDirectory()) {
-      return true;
-    }
-  } catch {
-  }
-  return false;
-}
-function getPlatform() {
-  if (isLimaEnvironment()) {
-    return "linux";
-  }
-  if (isDockerEnvironment()) {
-    return "docker";
-  }
-  const platform = process.platform;
-  if (platform === "darwin" || platform === "win32" || platform === "linux") {
-    return platform;
-  }
-  return "linux";
-}
-function getPlatformDefaultBaseDir() {
-  const platform = getPlatform();
-  const homeDir = import_os.default.homedir();
-  switch (platform) {
-    case "docker":
-      return "/app/quilltap";
-    case "darwin":
-      return import_path2.default.join(homeDir, "Library", "Application Support", "Quilltap");
-    case "win32":
-      const appData = process.env.APPDATA || import_path2.default.join(homeDir, "AppData", "Roaming");
-      return import_path2.default.join(appData, "Quilltap");
-    case "linux":
-    default:
-      return import_path2.default.join(homeDir, ".quilltap");
-  }
-}
-function getBaseDataDirWithSource() {
-  const platform = getPlatform();
-  const platformDescriptions = {
-    docker: "Docker container default (/app/quilltap)",
-    darwin: "macOS default (~/Library/Application Support/Quilltap)",
-    win32: "Windows default (%APPDATA%\\Quilltap)",
-    linux: "Linux default (~/.quilltap)"
-  };
-  if (platform === "docker") {
-    return {
-      path: getPlatformDefaultBaseDir(),
-      source: "platform-default",
-      sourceDescription: platformDescriptions[platform]
-    };
-  }
-  const envOverride = process.env.QUILLTAP_DATA_DIR;
-  if (envOverride) {
-    const resolvedPath = envOverride.startsWith("~") ? import_path2.default.join(import_os.default.homedir(), envOverride.slice(1)) : envOverride;
-    return {
-      path: resolvedPath,
-      source: "environment",
-      sourceDescription: `QUILLTAP_DATA_DIR environment variable (${envOverride})`
-    };
-  }
-  return {
-    path: getPlatformDefaultBaseDir(),
-    source: "platform-default",
-    sourceDescription: platformDescriptions[platform]
-  };
-}
-function getBaseDataDir() {
-  return getBaseDataDirWithSource().path;
-}
-function getLogsDir() {
-  return import_path2.default.join(getBaseDataDir(), "logs");
-}
-
-// ../../../lib/logger.ts
-var LOG_LEVELS = {
-  ["error" /* ERROR */]: 0,
-  ["warn" /* WARN */]: 1,
-  ["info" /* INFO */]: 2,
-  ["debug" /* DEBUG */]: 3
-};
-var CURRENT_LEVEL = LOG_LEVELS[process.env.LOG_LEVEL || "info" /* INFO */];
-function initializeTransports() {
-  const transports = [];
-  const output = env.LOG_OUTPUT || "console";
-  if (output === "console" || output === "both") {
-    transports.push(new ConsoleTransport());
-  }
-  if (output === "file" || output === "both") {
-    const maxFileSize = env.LOG_FILE_MAX_SIZE ? Number.parseInt(env.LOG_FILE_MAX_SIZE) : void 0;
-    const maxFiles = env.LOG_FILE_MAX_FILES ? Number.parseInt(env.LOG_FILE_MAX_FILES) : void 0;
-    const logPath = env.LOG_FILE_PATH && env.LOG_FILE_PATH !== "./logs" ? env.LOG_FILE_PATH : getLogsDir();
-    transports.push(new FileTransport(
-      logPath,
-      maxFileSize,
-      maxFiles
-    ));
-  }
-  return transports;
-}
-var Logger = class _Logger {
-  constructor(context = {}, transports, minLevel) {
-    this.context = context;
-    this.transports = transports || initializeTransports();
-    this.minLevel = minLevel ? LOG_LEVELS[minLevel] : CURRENT_LEVEL;
-  }
-  /**
-   * Create a child logger with additional context
-   */
-  child(additionalContext) {
-    const levelKey = Object.keys(LOG_LEVELS).find((key) => LOG_LEVELS[key] === this.minLevel);
-    return new _Logger({ ...this.context, ...additionalContext }, this.transports, levelKey);
-  }
-  /**
-   * Log an error message
-   */
-  error(message, context, error) {
-    this.log("error" /* ERROR */, message, context, error);
-  }
-  /**
-   * Log a warning message
-   */
-  warn(message, context) {
-    this.log("warn" /* WARN */, message, context);
-  }
-  /**
-   * Log an info message
-   */
-  info(message, context) {
-    this.log("info" /* INFO */, message, context);
-  }
-  /**
-   * Log a debug message
-   */
-  debug(message, context) {
-    this.log("debug" /* DEBUG */, message, context);
-  }
-  /**
-   * Internal logging implementation
-   */
-  log(level, message, context, error) {
-    if (LOG_LEVELS[level] > this.minLevel) {
-      return;
-    }
-    const timestamp = (/* @__PURE__ */ new Date()).toISOString();
-    const logData = {
-      timestamp,
-      level,
-      message,
-      context: {
-        ...this.context,
-        ...context
-      },
-      error: error ? {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
-      } : void 0
-    };
-    for (const transport of this.transports) {
-      try {
-        const result = transport.write(logData);
-        if (result instanceof Promise) {
-          result.catch((err) => {
-            console.error("Transport write failed:", err);
-          });
-        }
-      } catch (err) {
-        console.error("Transport write failed:", err);
-      }
-    }
-  }
-  /**
-   * Log an HTTP request
-   */
-  logRequest(method, path3, statusCode, duration, context) {
-    this.info("HTTP request", {
-      method,
-      path: path3,
-      statusCode,
-      duration,
-      ...context
-    });
-  }
-  /**
-   * Log an API key operation (without exposing the key)
-   */
-  logApiKeyOperation(operation, provider, userId, success) {
-    this.info("API key operation", {
-      operation,
-      provider,
-      userId,
-      success
-    });
-  }
-  /**
-   * Log LLM API call (without exposing API key or full content)
-   */
-  logLLMCall(provider, model, tokenCount, success, duration) {
-    this.info("LLM API call", {
-      provider,
-      model,
-      tokenCount,
-      success,
-      duration
-    });
-  }
-  /**
-   * Log authentication events
-   */
-  logAuth(event, provider, userId, success) {
-    this.info("Authentication event", {
-      event,
-      provider,
-      userId,
-      success
-    });
-  }
-};
-var logger = new Logger({
-  service: "quilltap",
-  environment: process.env.NODE_ENV || "development"
-});
 
 // ../../../node_modules/openai/internal/tslib.mjs
 function __classPrivateFieldSet(receiver, state, value, kind, f) {
@@ -7497,7 +7024,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ../../../node_modules/openai/version.mjs
-var VERSION = "6.22.0";
+var VERSION = "6.25.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -8203,11 +7730,11 @@ var parseLogLevel = (maybeLevel, sourceName, client) => {
 };
 function noop() {
 }
-function makeLogFn(fnLevel, logger2, logLevel) {
-  if (!logger2 || levelNumbers[fnLevel] > levelNumbers[logLevel]) {
+function makeLogFn(fnLevel, logger, logLevel) {
+  if (!logger || levelNumbers[fnLevel] > levelNumbers[logLevel]) {
     return noop;
   } else {
-    return logger2[fnLevel].bind(logger2);
+    return logger[fnLevel].bind(logger);
   }
 }
 var noopLogger = {
@@ -8218,22 +7745,22 @@ var noopLogger = {
 };
 var cachedLoggers = /* @__PURE__ */ new WeakMap();
 function loggerFor(client) {
-  const logger2 = client.logger;
+  const logger = client.logger;
   const logLevel = client.logLevel ?? "off";
-  if (!logger2) {
+  if (!logger) {
     return noopLogger;
   }
-  const cachedLogger = cachedLoggers.get(logger2);
+  const cachedLogger = cachedLoggers.get(logger);
   if (cachedLogger && cachedLogger[0] === logLevel) {
     return cachedLogger[1];
   }
   const levelLogger = {
-    error: makeLogFn("error", logger2, logLevel),
-    warn: makeLogFn("warn", logger2, logLevel),
-    info: makeLogFn("info", logger2, logLevel),
-    debug: makeLogFn("debug", logger2, logLevel)
+    error: makeLogFn("error", logger, logLevel),
+    warn: makeLogFn("warn", logger, logLevel),
+    info: makeLogFn("info", logger, logLevel),
+    debug: makeLogFn("debug", logger, logLevel)
   };
-  cachedLoggers.set(logger2, [logLevel, levelLogger]);
+  cachedLoggers.set(logger, [logLevel, levelLogger]);
   return levelLogger;
 }
 var formatRequestDetails = (details) => {
@@ -8265,9 +7792,9 @@ var Stream = class _Stream {
     this.controller = controller;
     __classPrivateFieldSet(this, _Stream_client, client, "f");
   }
-  static fromSSEResponse(response, controller, client) {
+  static fromSSEResponse(response, controller, client, synthesizeEventData) {
     let consumed = false;
-    const logger2 = client ? loggerFor(client) : console;
+    const logger = client ? loggerFor(client) : console;
     async function* iterator() {
       if (consumed) {
         throw new OpenAIError("Cannot iterate over a consumed stream, use `.tee()` to split the stream.");
@@ -8287,14 +7814,14 @@ var Stream = class _Stream {
             try {
               data = JSON.parse(sse.data);
             } catch (e) {
-              logger2.error(`Could not parse message into JSON:`, sse.data);
-              logger2.error(`From chunk:`, sse.raw);
+              logger.error(`Could not parse message into JSON:`, sse.data);
+              logger.error(`From chunk:`, sse.raw);
               throw e;
             }
             if (data && data.error) {
               throw new APIError(void 0, data.error, void 0, response.headers);
             }
-            yield data;
+            yield synthesizeEventData ? { event: sse.event, data } : data;
           } else {
             let data;
             try {
@@ -8521,9 +8048,9 @@ async function defaultParseResponse(client, props) {
     if (props.options.stream) {
       loggerFor(client).debug("response", response.status, response.url, response.headers, response.body);
       if (props.options.__streamClass) {
-        return props.options.__streamClass.fromSSEResponse(response, props.controller, client);
+        return props.options.__streamClass.fromSSEResponse(response, props.controller, client, props.options.__synthesizeEventData);
       }
-      return Stream.fromSSEResponse(response, props.controller, client);
+      return Stream.fromSSEResponse(response, props.controller, client, props.options.__synthesizeEventData);
     }
     if (response.status === 204) {
       return null;
@@ -8913,12 +8440,12 @@ function encodeURIPath(str2) {
   return str2.replace(/[^A-Za-z0-9\-._~!$&'()*+,;=:@]+/g, encodeURIComponent);
 }
 var EMPTY = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.create(null));
-var createPathTagFunction = (pathEncoder = encodeURIPath) => function path3(statics, ...params) {
+var createPathTagFunction = (pathEncoder = encodeURIPath) => function path2(statics, ...params) {
   if (statics.length === 1)
     return statics[0];
   let postPath = false;
   const invalidSegments = [];
-  const path4 = statics.reduce((previousValue, currentValue, index) => {
+  const path3 = statics.reduce((previousValue, currentValue, index) => {
     if (/[?#]/.test(currentValue)) {
       postPath = true;
     }
@@ -8935,7 +8462,7 @@ var createPathTagFunction = (pathEncoder = encodeURIPath) => function path3(stat
     }
     return previousValue + currentValue + (index === params.length ? "" : encoded);
   }, "");
-  const pathOnly = path4.split(/[?#]/, 1)[0];
+  const pathOnly = path3.split(/[?#]/, 1)[0];
   const invalidSegmentPattern = /(?<=^|\/)(?:\.|%2e){1,2}(?=\/|$)/gi;
   let match;
   while ((match = invalidSegmentPattern.exec(pathOnly)) !== null) {
@@ -8956,12 +8483,12 @@ var createPathTagFunction = (pathEncoder = encodeURIPath) => function path3(stat
     }, "");
     throw new OpenAIError(`Path parameters result in path with invalid segments:
 ${invalidSegments.map((e) => e.error).join("\n")}
-${path4}
+${path3}
 ${underline}`);
   }
-  return path4;
+  return path3;
 };
-var path2 = /* @__PURE__ */ createPathTagFunction(encodeURIPath);
+var path = /* @__PURE__ */ createPathTagFunction(encodeURIPath);
 
 // ../../../node_modules/openai/resources/chat/completions/messages.mjs
 var Messages = class extends APIResource {
@@ -8980,7 +8507,7 @@ var Messages = class extends APIResource {
    * ```
    */
   list(completionID, query = {}, options) {
-    return this._client.getAPIList(path2`/chat/completions/${completionID}/messages`, CursorPage, { query, ...options });
+    return this._client.getAPIList(path`/chat/completions/${completionID}/messages`, CursorPage, { query, ...options });
   }
 };
 
@@ -10315,7 +9842,7 @@ var Completions = class extends APIResource {
    * ```
    */
   retrieve(completionID, options) {
-    return this._client.get(path2`/chat/completions/${completionID}`, options);
+    return this._client.get(path`/chat/completions/${completionID}`, options);
   }
   /**
    * Modify a stored chat completion. Only Chat Completions that have been created
@@ -10331,7 +9858,7 @@ var Completions = class extends APIResource {
    * ```
    */
   update(completionID, body, options) {
-    return this._client.post(path2`/chat/completions/${completionID}`, { body, ...options });
+    return this._client.post(path`/chat/completions/${completionID}`, { body, ...options });
   }
   /**
    * List stored Chat Completions. Only Chat Completions that have been stored with
@@ -10359,7 +9886,7 @@ var Completions = class extends APIResource {
    * ```
    */
   delete(completionID, options) {
-    return this._client.delete(path2`/chat/completions/${completionID}`, options);
+    return this._client.delete(path`/chat/completions/${completionID}`, options);
   }
   parse(body, options) {
     validateInputTools(body.tools);
@@ -10463,6 +9990,8 @@ var Speech = class extends APIResource {
   /**
    * Generates audio from the input text.
    *
+   * Returns the audio file content, or a stream of audio events.
+   *
    * @example
    * ```ts
    * const speech = await client.audio.speech.create({
@@ -10529,7 +10058,7 @@ var Batches = class extends APIResource {
    * Retrieves a batch.
    */
   retrieve(batchID, options) {
-    return this._client.get(path2`/batches/${batchID}`, options);
+    return this._client.get(path`/batches/${batchID}`, options);
   }
   /**
    * List your organization's batches.
@@ -10543,7 +10072,7 @@ var Batches = class extends APIResource {
    * (if any) available in the output file.
    */
   cancel(batchID, options) {
-    return this._client.post(path2`/batches/${batchID}/cancel`, options);
+    return this._client.post(path`/batches/${batchID}/cancel`, options);
   }
 };
 
@@ -10567,7 +10096,7 @@ var Assistants = class extends APIResource {
    * @deprecated
    */
   retrieve(assistantID, options) {
-    return this._client.get(path2`/assistants/${assistantID}`, {
+    return this._client.get(path`/assistants/${assistantID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -10578,7 +10107,7 @@ var Assistants = class extends APIResource {
    * @deprecated
    */
   update(assistantID, body, options) {
-    return this._client.post(path2`/assistants/${assistantID}`, {
+    return this._client.post(path`/assistants/${assistantID}`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -10602,7 +10131,7 @@ var Assistants = class extends APIResource {
    * @deprecated
    */
   delete(assistantID, options) {
-    return this._client.delete(path2`/assistants/${assistantID}`, {
+    return this._client.delete(path`/assistants/${assistantID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -10675,7 +10204,7 @@ Realtime.TranscriptionSessions = TranscriptionSessions;
 // ../../../node_modules/openai/resources/beta/chatkit/sessions.mjs
 var Sessions2 = class extends APIResource {
   /**
-   * Create a ChatKit session
+   * Create a ChatKit session.
    *
    * @example
    * ```ts
@@ -10694,7 +10223,9 @@ var Sessions2 = class extends APIResource {
     });
   }
   /**
-   * Cancel a ChatKit session
+   * Cancel an active ChatKit session and return its most recent metadata.
+   *
+   * Cancelling prevents new requests from using the issued client secret.
    *
    * @example
    * ```ts
@@ -10703,7 +10234,7 @@ var Sessions2 = class extends APIResource {
    * ```
    */
   cancel(sessionID, options) {
-    return this._client.post(path2`/chatkit/sessions/${sessionID}/cancel`, {
+    return this._client.post(path`/chatkit/sessions/${sessionID}/cancel`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options?.headers])
     });
@@ -10713,7 +10244,7 @@ var Sessions2 = class extends APIResource {
 // ../../../node_modules/openai/resources/beta/chatkit/threads.mjs
 var Threads = class extends APIResource {
   /**
-   * Retrieve a ChatKit thread
+   * Retrieve a ChatKit thread by its identifier.
    *
    * @example
    * ```ts
@@ -10722,13 +10253,13 @@ var Threads = class extends APIResource {
    * ```
    */
   retrieve(threadID, options) {
-    return this._client.get(path2`/chatkit/threads/${threadID}`, {
+    return this._client.get(path`/chatkit/threads/${threadID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options?.headers])
     });
   }
   /**
-   * List ChatKit threads
+   * List ChatKit threads with optional pagination and user filters.
    *
    * @example
    * ```ts
@@ -10746,7 +10277,7 @@ var Threads = class extends APIResource {
     });
   }
   /**
-   * Delete a ChatKit thread
+   * Delete a ChatKit thread along with its items and stored attachments.
    *
    * @example
    * ```ts
@@ -10756,13 +10287,13 @@ var Threads = class extends APIResource {
    * ```
    */
   delete(threadID, options) {
-    return this._client.delete(path2`/chatkit/threads/${threadID}`, {
+    return this._client.delete(path`/chatkit/threads/${threadID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options?.headers])
     });
   }
   /**
-   * List ChatKit thread items
+   * List items that belong to a ChatKit thread.
    *
    * @example
    * ```ts
@@ -10775,7 +10306,7 @@ var Threads = class extends APIResource {
    * ```
    */
   listItems(threadID, query = {}, options) {
-    return this._client.getAPIList(path2`/chatkit/threads/${threadID}/items`, ConversationCursorPage, { query, ...options, headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options?.headers]) });
+    return this._client.getAPIList(path`/chatkit/threads/${threadID}/items`, ConversationCursorPage, { query, ...options, headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options?.headers]) });
   }
 };
 
@@ -10798,7 +10329,7 @@ var Messages2 = class extends APIResource {
    * @deprecated The Assistants API is deprecated in favor of the Responses API
    */
   create(threadID, body, options) {
-    return this._client.post(path2`/threads/${threadID}/messages`, {
+    return this._client.post(path`/threads/${threadID}/messages`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -10811,7 +10342,7 @@ var Messages2 = class extends APIResource {
    */
   retrieve(messageID, params, options) {
     const { thread_id } = params;
-    return this._client.get(path2`/threads/${thread_id}/messages/${messageID}`, {
+    return this._client.get(path`/threads/${thread_id}/messages/${messageID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -10823,7 +10354,7 @@ var Messages2 = class extends APIResource {
    */
   update(messageID, params, options) {
     const { thread_id, ...body } = params;
-    return this._client.post(path2`/threads/${thread_id}/messages/${messageID}`, {
+    return this._client.post(path`/threads/${thread_id}/messages/${messageID}`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -10835,7 +10366,7 @@ var Messages2 = class extends APIResource {
    * @deprecated The Assistants API is deprecated in favor of the Responses API
    */
   list(threadID, query = {}, options) {
-    return this._client.getAPIList(path2`/threads/${threadID}/messages`, CursorPage, {
+    return this._client.getAPIList(path`/threads/${threadID}/messages`, CursorPage, {
       query,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -10848,7 +10379,7 @@ var Messages2 = class extends APIResource {
    */
   delete(messageID, params, options) {
     const { thread_id } = params;
-    return this._client.delete(path2`/threads/${thread_id}/messages/${messageID}`, {
+    return this._client.delete(path`/threads/${thread_id}/messages/${messageID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -10864,7 +10395,7 @@ var Steps = class extends APIResource {
    */
   retrieve(stepID, params, options) {
     const { thread_id, run_id, ...query } = params;
-    return this._client.get(path2`/threads/${thread_id}/runs/${run_id}/steps/${stepID}`, {
+    return this._client.get(path`/threads/${thread_id}/runs/${run_id}/steps/${stepID}`, {
       query,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -10877,7 +10408,7 @@ var Steps = class extends APIResource {
    */
   list(runID, params, options) {
     const { thread_id, ...query } = params;
-    return this._client.getAPIList(path2`/threads/${thread_id}/runs/${runID}/steps`, CursorPage, {
+    return this._client.getAPIList(path`/threads/${thread_id}/runs/${runID}/steps`, CursorPage, {
       query,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -10902,12 +10433,12 @@ var toFloat32Array = (base64Str) => {
 };
 
 // ../../../node_modules/openai/internal/utils/env.mjs
-var readEnv = (env2) => {
+var readEnv = (env) => {
   if (typeof globalThis.process !== "undefined") {
-    return globalThis.process.env?.[env2]?.trim() ?? void 0;
+    return globalThis.process.env?.[env]?.trim() ?? void 0;
   }
   if (typeof globalThis.Deno !== "undefined") {
-    return globalThis.Deno.env?.get?.(env2)?.trim();
+    return globalThis.Deno.env?.get?.(env)?.trim();
   }
   return void 0;
 };
@@ -11459,12 +10990,13 @@ var Runs = class extends APIResource {
   }
   create(threadID, params, options) {
     const { include, ...body } = params;
-    return this._client.post(path2`/threads/${threadID}/runs`, {
+    return this._client.post(path`/threads/${threadID}/runs`, {
       query: { include },
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      stream: params.stream ?? false
+      stream: params.stream ?? false,
+      __synthesizeEventData: true
     });
   }
   /**
@@ -11474,7 +11006,7 @@ var Runs = class extends APIResource {
    */
   retrieve(runID, params, options) {
     const { thread_id } = params;
-    return this._client.get(path2`/threads/${thread_id}/runs/${runID}`, {
+    return this._client.get(path`/threads/${thread_id}/runs/${runID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -11486,7 +11018,7 @@ var Runs = class extends APIResource {
    */
   update(runID, params, options) {
     const { thread_id, ...body } = params;
-    return this._client.post(path2`/threads/${thread_id}/runs/${runID}`, {
+    return this._client.post(path`/threads/${thread_id}/runs/${runID}`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -11498,7 +11030,7 @@ var Runs = class extends APIResource {
    * @deprecated The Assistants API is deprecated in favor of the Responses API
    */
   list(threadID, query = {}, options) {
-    return this._client.getAPIList(path2`/threads/${threadID}/runs`, CursorPage, {
+    return this._client.getAPIList(path`/threads/${threadID}/runs`, CursorPage, {
       query,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -11511,7 +11043,7 @@ var Runs = class extends APIResource {
    */
   cancel(runID, params, options) {
     const { thread_id } = params;
-    return this._client.post(path2`/threads/${thread_id}/runs/${runID}/cancel`, {
+    return this._client.post(path`/threads/${thread_id}/runs/${runID}/cancel`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -11589,11 +11121,12 @@ var Runs = class extends APIResource {
   }
   submitToolOutputs(runID, params, options) {
     const { thread_id, ...body } = params;
-    return this._client.post(path2`/threads/${thread_id}/runs/${runID}/submit_tool_outputs`, {
+    return this._client.post(path`/threads/${thread_id}/runs/${runID}/submit_tool_outputs`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      stream: params.stream ?? false
+      stream: params.stream ?? false,
+      __synthesizeEventData: true
     });
   }
   /**
@@ -11641,7 +11174,7 @@ var Threads2 = class extends APIResource {
    * @deprecated The Assistants API is deprecated in favor of the Responses API
    */
   retrieve(threadID, options) {
-    return this._client.get(path2`/threads/${threadID}`, {
+    return this._client.get(path`/threads/${threadID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -11652,7 +11185,7 @@ var Threads2 = class extends APIResource {
    * @deprecated The Assistants API is deprecated in favor of the Responses API
    */
   update(threadID, body, options) {
-    return this._client.post(path2`/threads/${threadID}`, {
+    return this._client.post(path`/threads/${threadID}`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -11664,7 +11197,7 @@ var Threads2 = class extends APIResource {
    * @deprecated The Assistants API is deprecated in favor of the Responses API
    */
   delete(threadID, options) {
-    return this._client.delete(path2`/threads/${threadID}`, {
+    return this._client.delete(path`/threads/${threadID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -11674,7 +11207,8 @@ var Threads2 = class extends APIResource {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      stream: body.stream ?? false
+      stream: body.stream ?? false,
+      __synthesizeEventData: true
     });
   }
   /**
@@ -11725,7 +11259,7 @@ var Content = class extends APIResource {
    */
   retrieve(fileID, params, options) {
     const { container_id } = params;
-    return this._client.get(path2`/containers/${container_id}/files/${fileID}/content`, {
+    return this._client.get(path`/containers/${container_id}/files/${fileID}/content`, {
       ...options,
       headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
       __binaryResponse: true
@@ -11746,20 +11280,20 @@ var Files = class extends APIResource {
    * a JSON request with a file ID.
    */
   create(containerID, body, options) {
-    return this._client.post(path2`/containers/${containerID}/files`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
+    return this._client.post(path`/containers/${containerID}/files`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
   }
   /**
    * Retrieve Container File
    */
   retrieve(fileID, params, options) {
     const { container_id } = params;
-    return this._client.get(path2`/containers/${container_id}/files/${fileID}`, options);
+    return this._client.get(path`/containers/${container_id}/files/${fileID}`, options);
   }
   /**
    * List Container files
    */
   list(containerID, query = {}, options) {
-    return this._client.getAPIList(path2`/containers/${containerID}/files`, CursorPage, {
+    return this._client.getAPIList(path`/containers/${containerID}/files`, CursorPage, {
       query,
       ...options
     });
@@ -11769,7 +11303,7 @@ var Files = class extends APIResource {
    */
   delete(fileID, params, options) {
     const { container_id } = params;
-    return this._client.delete(path2`/containers/${container_id}/files/${fileID}`, {
+    return this._client.delete(path`/containers/${container_id}/files/${fileID}`, {
       ...options,
       headers: buildHeaders([{ Accept: "*/*" }, options?.headers])
     });
@@ -11793,7 +11327,7 @@ var Containers = class extends APIResource {
    * Retrieve Container
    */
   retrieve(containerID, options) {
-    return this._client.get(path2`/containers/${containerID}`, options);
+    return this._client.get(path`/containers/${containerID}`, options);
   }
   /**
    * List Containers
@@ -11805,7 +11339,7 @@ var Containers = class extends APIResource {
    * Delete Container
    */
   delete(containerID, options) {
-    return this._client.delete(path2`/containers/${containerID}`, {
+    return this._client.delete(path`/containers/${containerID}`, {
       ...options,
       headers: buildHeaders([{ Accept: "*/*" }, options?.headers])
     });
@@ -11820,7 +11354,7 @@ var Items = class extends APIResource {
    */
   create(conversationID, params, options) {
     const { include, ...body } = params;
-    return this._client.post(path2`/conversations/${conversationID}/items`, {
+    return this._client.post(path`/conversations/${conversationID}/items`, {
       query: { include },
       body,
       ...options
@@ -11831,20 +11365,20 @@ var Items = class extends APIResource {
    */
   retrieve(itemID, params, options) {
     const { conversation_id, ...query } = params;
-    return this._client.get(path2`/conversations/${conversation_id}/items/${itemID}`, { query, ...options });
+    return this._client.get(path`/conversations/${conversation_id}/items/${itemID}`, { query, ...options });
   }
   /**
    * List all items for a conversation with the given ID.
    */
   list(conversationID, query = {}, options) {
-    return this._client.getAPIList(path2`/conversations/${conversationID}/items`, ConversationCursorPage, { query, ...options });
+    return this._client.getAPIList(path`/conversations/${conversationID}/items`, ConversationCursorPage, { query, ...options });
   }
   /**
    * Delete an item from a conversation with the given IDs.
    */
   delete(itemID, params, options) {
     const { conversation_id } = params;
-    return this._client.delete(path2`/conversations/${conversation_id}/items/${itemID}`, options);
+    return this._client.delete(path`/conversations/${conversation_id}/items/${itemID}`, options);
   }
 };
 
@@ -11864,19 +11398,19 @@ var Conversations = class extends APIResource {
    * Get a conversation
    */
   retrieve(conversationID, options) {
-    return this._client.get(path2`/conversations/${conversationID}`, options);
+    return this._client.get(path`/conversations/${conversationID}`, options);
   }
   /**
    * Update a conversation
    */
   update(conversationID, body, options) {
-    return this._client.post(path2`/conversations/${conversationID}`, { body, ...options });
+    return this._client.post(path`/conversations/${conversationID}`, { body, ...options });
   }
   /**
    * Delete a conversation. Items in the conversation will not be deleted.
    */
   delete(conversationID, options) {
-    return this._client.delete(path2`/conversations/${conversationID}`, options);
+    return this._client.delete(path`/conversations/${conversationID}`, options);
   }
 };
 Conversations.Items = Items;
@@ -11931,14 +11465,14 @@ var OutputItems = class extends APIResource {
    */
   retrieve(outputItemID, params, options) {
     const { eval_id, run_id } = params;
-    return this._client.get(path2`/evals/${eval_id}/runs/${run_id}/output_items/${outputItemID}`, options);
+    return this._client.get(path`/evals/${eval_id}/runs/${run_id}/output_items/${outputItemID}`, options);
   }
   /**
    * Get a list of output items for an evaluation run.
    */
   list(runID, params, options) {
     const { eval_id, ...query } = params;
-    return this._client.getAPIList(path2`/evals/${eval_id}/runs/${runID}/output_items`, CursorPage, { query, ...options });
+    return this._client.getAPIList(path`/evals/${eval_id}/runs/${runID}/output_items`, CursorPage, { query, ...options });
   }
 };
 
@@ -11954,20 +11488,20 @@ var Runs2 = class extends APIResource {
    * schema specified in the config of the evaluation.
    */
   create(evalID, body, options) {
-    return this._client.post(path2`/evals/${evalID}/runs`, { body, ...options });
+    return this._client.post(path`/evals/${evalID}/runs`, { body, ...options });
   }
   /**
    * Get an evaluation run by ID.
    */
   retrieve(runID, params, options) {
     const { eval_id } = params;
-    return this._client.get(path2`/evals/${eval_id}/runs/${runID}`, options);
+    return this._client.get(path`/evals/${eval_id}/runs/${runID}`, options);
   }
   /**
    * Get a list of runs for an evaluation.
    */
   list(evalID, query = {}, options) {
-    return this._client.getAPIList(path2`/evals/${evalID}/runs`, CursorPage, {
+    return this._client.getAPIList(path`/evals/${evalID}/runs`, CursorPage, {
       query,
       ...options
     });
@@ -11977,14 +11511,14 @@ var Runs2 = class extends APIResource {
    */
   delete(runID, params, options) {
     const { eval_id } = params;
-    return this._client.delete(path2`/evals/${eval_id}/runs/${runID}`, options);
+    return this._client.delete(path`/evals/${eval_id}/runs/${runID}`, options);
   }
   /**
    * Cancel an ongoing evaluation run.
    */
   cancel(runID, params, options) {
     const { eval_id } = params;
-    return this._client.post(path2`/evals/${eval_id}/runs/${runID}`, options);
+    return this._client.post(path`/evals/${eval_id}/runs/${runID}`, options);
   }
 };
 Runs2.OutputItems = OutputItems;
@@ -12010,13 +11544,13 @@ var Evals = class extends APIResource {
    * Get an evaluation by ID.
    */
   retrieve(evalID, options) {
-    return this._client.get(path2`/evals/${evalID}`, options);
+    return this._client.get(path`/evals/${evalID}`, options);
   }
   /**
    * Update certain properties of an evaluation.
    */
   update(evalID, body, options) {
-    return this._client.post(path2`/evals/${evalID}`, { body, ...options });
+    return this._client.post(path`/evals/${evalID}`, { body, ...options });
   }
   /**
    * List evaluations for a project.
@@ -12028,7 +11562,7 @@ var Evals = class extends APIResource {
    * Delete an evaluation.
    */
   delete(evalID, options) {
-    return this._client.delete(path2`/evals/${evalID}`, options);
+    return this._client.delete(path`/evals/${evalID}`, options);
   }
 };
 Evals.Runs = Runs2;
@@ -12064,7 +11598,7 @@ var Files2 = class extends APIResource {
    * Returns information about a specific file.
    */
   retrieve(fileID, options) {
-    return this._client.get(path2`/files/${fileID}`, options);
+    return this._client.get(path`/files/${fileID}`, options);
   }
   /**
    * Returns a list of files.
@@ -12076,13 +11610,13 @@ var Files2 = class extends APIResource {
    * Delete a file and remove it from all vector stores.
    */
   delete(fileID, options) {
-    return this._client.delete(path2`/files/${fileID}`, options);
+    return this._client.delete(path`/files/${fileID}`, options);
   }
   /**
    * Returns the contents of the specified file.
    */
   content(fileID, options) {
-    return this._client.get(path2`/files/${fileID}/content`, {
+    return this._client.get(path`/files/${fileID}/content`, {
       ...options,
       headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
       __binaryResponse: true
@@ -12185,7 +11719,7 @@ var Permissions = class extends APIResource {
    * ```
    */
   create(fineTunedModelCheckpoint, body, options) {
-    return this._client.getAPIList(path2`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, Page, { body, method: "post", ...options });
+    return this._client.getAPIList(path`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, Page, { body, method: "post", ...options });
   }
   /**
    * **NOTE:** This endpoint requires an [admin API key](../admin-api-keys).
@@ -12202,7 +11736,7 @@ var Permissions = class extends APIResource {
    * ```
    */
   retrieve(fineTunedModelCheckpoint, query = {}, options) {
-    return this._client.get(path2`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, {
+    return this._client.get(path`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, {
       query,
       ...options
     });
@@ -12227,7 +11761,7 @@ var Permissions = class extends APIResource {
    */
   delete(permissionID, params, options) {
     const { fine_tuned_model_checkpoint } = params;
-    return this._client.delete(path2`/fine_tuning/checkpoints/${fine_tuned_model_checkpoint}/permissions/${permissionID}`, options);
+    return this._client.delete(path`/fine_tuning/checkpoints/${fine_tuned_model_checkpoint}/permissions/${permissionID}`, options);
   }
 };
 
@@ -12256,7 +11790,7 @@ var Checkpoints2 = class extends APIResource {
    * ```
    */
   list(fineTuningJobID, query = {}, options) {
-    return this._client.getAPIList(path2`/fine_tuning/jobs/${fineTuningJobID}/checkpoints`, CursorPage, { query, ...options });
+    return this._client.getAPIList(path`/fine_tuning/jobs/${fineTuningJobID}/checkpoints`, CursorPage, { query, ...options });
   }
 };
 
@@ -12299,7 +11833,7 @@ var Jobs = class extends APIResource {
    * ```
    */
   retrieve(fineTuningJobID, options) {
-    return this._client.get(path2`/fine_tuning/jobs/${fineTuningJobID}`, options);
+    return this._client.get(path`/fine_tuning/jobs/${fineTuningJobID}`, options);
   }
   /**
    * List your organization's fine-tuning jobs
@@ -12326,7 +11860,7 @@ var Jobs = class extends APIResource {
    * ```
    */
   cancel(fineTuningJobID, options) {
-    return this._client.post(path2`/fine_tuning/jobs/${fineTuningJobID}/cancel`, options);
+    return this._client.post(path`/fine_tuning/jobs/${fineTuningJobID}/cancel`, options);
   }
   /**
    * Get status updates for a fine-tuning job.
@@ -12342,7 +11876,7 @@ var Jobs = class extends APIResource {
    * ```
    */
   listEvents(fineTuningJobID, query = {}, options) {
-    return this._client.getAPIList(path2`/fine_tuning/jobs/${fineTuningJobID}/events`, CursorPage, { query, ...options });
+    return this._client.getAPIList(path`/fine_tuning/jobs/${fineTuningJobID}/events`, CursorPage, { query, ...options });
   }
   /**
    * Pause a fine-tune job.
@@ -12355,7 +11889,7 @@ var Jobs = class extends APIResource {
    * ```
    */
   pause(fineTuningJobID, options) {
-    return this._client.post(path2`/fine_tuning/jobs/${fineTuningJobID}/pause`, options);
+    return this._client.post(path`/fine_tuning/jobs/${fineTuningJobID}/pause`, options);
   }
   /**
    * Resume a fine-tune job.
@@ -12368,7 +11902,7 @@ var Jobs = class extends APIResource {
    * ```
    */
   resume(fineTuningJobID, options) {
-    return this._client.post(path2`/fine_tuning/jobs/${fineTuningJobID}/resume`, options);
+    return this._client.post(path`/fine_tuning/jobs/${fineTuningJobID}/resume`, options);
   }
 };
 Jobs.Checkpoints = Checkpoints2;
@@ -12431,7 +11965,7 @@ var Models = class extends APIResource {
    * the owner and permissioning.
    */
   retrieve(model, options) {
-    return this._client.get(path2`/models/${model}`, options);
+    return this._client.get(path`/models/${model}`, options);
   }
   /**
    * Lists the currently available models, and provides basic information about each
@@ -12445,7 +11979,7 @@ var Models = class extends APIResource {
    * delete a model.
    */
   delete(model, options) {
-    return this._client.delete(path2`/models/${model}`, options);
+    return this._client.delete(path`/models/${model}`, options);
   }
 };
 
@@ -12474,7 +12008,7 @@ var Calls = class extends APIResource {
    * ```
    */
   accept(callID, body, options) {
-    return this._client.post(path2`/realtime/calls/${callID}/accept`, {
+    return this._client.post(path`/realtime/calls/${callID}/accept`, {
       body,
       ...options,
       headers: buildHeaders([{ Accept: "*/*" }, options?.headers])
@@ -12489,7 +12023,7 @@ var Calls = class extends APIResource {
    * ```
    */
   hangup(callID, options) {
-    return this._client.post(path2`/realtime/calls/${callID}/hangup`, {
+    return this._client.post(path`/realtime/calls/${callID}/hangup`, {
       ...options,
       headers: buildHeaders([{ Accept: "*/*" }, options?.headers])
     });
@@ -12505,7 +12039,7 @@ var Calls = class extends APIResource {
    * ```
    */
   refer(callID, body, options) {
-    return this._client.post(path2`/realtime/calls/${callID}/refer`, {
+    return this._client.post(path`/realtime/calls/${callID}/refer`, {
       body,
       ...options,
       headers: buildHeaders([{ Accept: "*/*" }, options?.headers])
@@ -12520,7 +12054,7 @@ var Calls = class extends APIResource {
    * ```
    */
   reject(callID, body = {}, options) {
-    return this._client.post(path2`/realtime/calls/${callID}/reject`, {
+    return this._client.post(path`/realtime/calls/${callID}/reject`, {
       body,
       ...options,
       headers: buildHeaders([{ Accept: "*/*" }, options?.headers])
@@ -12532,6 +12066,20 @@ var Calls = class extends APIResource {
 var ClientSecrets = class extends APIResource {
   /**
    * Create a Realtime client secret with an associated session configuration.
+   *
+   * Client secrets are short-lived tokens that can be passed to a client app, such
+   * as a web frontend or mobile client, which grants access to the Realtime API
+   * without leaking your main API key. You can configure a custom TTL for each
+   * client secret.
+   *
+   * You can also attach session configuration options to the client secret, which
+   * will be applied to any sessions created using that client secret, but these can
+   * also be overridden by the client connection.
+   *
+   * [Learn more about authentication with client secrets over WebRTC](https://platform.openai.com/docs/guides/realtime-webrtc).
+   *
+   * Returns the created client secret and the effective session object. The client
+   * secret is a string that looks like `ek_1234`.
    *
    * @example
    * ```ts
@@ -12954,14 +12502,17 @@ var InputItems = class extends APIResource {
    * ```
    */
   list(responseID, query = {}, options) {
-    return this._client.getAPIList(path2`/responses/${responseID}/input_items`, CursorPage, { query, ...options });
+    return this._client.getAPIList(path`/responses/${responseID}/input_items`, CursorPage, { query, ...options });
   }
 };
 
 // ../../../node_modules/openai/resources/responses/input-tokens.mjs
 var InputTokens = class extends APIResource {
   /**
-   * Get input token counts
+   * Returns input token counts of the request.
+   *
+   * Returns an object with `object` set to `response.input_tokens` and an
+   * `input_tokens` count.
    *
    * @example
    * ```ts
@@ -12989,7 +12540,7 @@ var Responses = class extends APIResource {
     });
   }
   retrieve(responseID, query = {}, options) {
-    return this._client.get(path2`/responses/${responseID}`, {
+    return this._client.get(path`/responses/${responseID}`, {
       query,
       ...options,
       stream: query?.stream ?? false
@@ -13011,7 +12562,7 @@ var Responses = class extends APIResource {
    * ```
    */
   delete(responseID, options) {
-    return this._client.delete(path2`/responses/${responseID}`, {
+    return this._client.delete(path`/responses/${responseID}`, {
       ...options,
       headers: buildHeaders([{ Accept: "*/*" }, options?.headers])
     });
@@ -13038,10 +12589,15 @@ var Responses = class extends APIResource {
    * ```
    */
   cancel(responseID, options) {
-    return this._client.post(path2`/responses/${responseID}/cancel`, options);
+    return this._client.post(path`/responses/${responseID}/cancel`, options);
   }
   /**
-   * Compact conversation
+   * Compact a conversation. Returns a compacted response object.
+   *
+   * Learn when and how to compact long-running conversations in the
+   * [conversation state guide](https://platform.openai.com/docs/guides/conversation-state#managing-the-context-window).
+   * For ZDR-compatible compaction details, see
+   * [Compaction (advanced)](https://platform.openai.com/docs/guides/conversation-state#compaction-advanced).
    *
    * @example
    * ```ts
@@ -13060,10 +12616,10 @@ Responses.InputTokens = InputTokens;
 // ../../../node_modules/openai/resources/skills/content.mjs
 var Content2 = class extends APIResource {
   /**
-   * Get Skill Content
+   * Download a skill zip bundle by its ID.
    */
   retrieve(skillID, options) {
-    return this._client.get(path2`/skills/${skillID}/content`, {
+    return this._client.get(path`/skills/${skillID}/content`, {
       ...options,
       headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
       __binaryResponse: true
@@ -13074,11 +12630,11 @@ var Content2 = class extends APIResource {
 // ../../../node_modules/openai/resources/skills/versions/content.mjs
 var Content3 = class extends APIResource {
   /**
-   * Get Skill Version Content
+   * Download a skill version zip bundle.
    */
   retrieve(version, params, options) {
     const { skill_id } = params;
-    return this._client.get(path2`/skills/${skill_id}/versions/${version}/content`, {
+    return this._client.get(path`/skills/${skill_id}/versions/${version}/content`, {
       ...options,
       headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
       __binaryResponse: true
@@ -13093,33 +12649,33 @@ var Versions = class extends APIResource {
     this.content = new Content3(this._client);
   }
   /**
-   * Create Skill Version
+   * Create a new immutable skill version.
    */
   create(skillID, body = {}, options) {
-    return this._client.post(path2`/skills/${skillID}/versions`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
+    return this._client.post(path`/skills/${skillID}/versions`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
   }
   /**
-   * Get Skill Version
+   * Get a specific skill version.
    */
   retrieve(version, params, options) {
     const { skill_id } = params;
-    return this._client.get(path2`/skills/${skill_id}/versions/${version}`, options);
+    return this._client.get(path`/skills/${skill_id}/versions/${version}`, options);
   }
   /**
-   * List Skill Versions
+   * List skill versions for a skill.
    */
   list(skillID, query = {}, options) {
-    return this._client.getAPIList(path2`/skills/${skillID}/versions`, CursorPage, {
+    return this._client.getAPIList(path`/skills/${skillID}/versions`, CursorPage, {
       query,
       ...options
     });
   }
   /**
-   * Delete Skill Version
+   * Delete a skill version.
    */
   delete(version, params, options) {
     const { skill_id } = params;
-    return this._client.delete(path2`/skills/${skill_id}/versions/${version}`, options);
+    return this._client.delete(path`/skills/${skill_id}/versions/${version}`, options);
   }
 };
 Versions.Content = Content3;
@@ -13132,34 +12688,34 @@ var Skills = class extends APIResource {
     this.versions = new Versions(this._client);
   }
   /**
-   * Create Skill
+   * Create a new skill.
    */
   create(body = {}, options) {
     return this._client.post("/skills", maybeMultipartFormRequestOptions({ body, ...options }, this._client));
   }
   /**
-   * Get Skill
+   * Get a skill by its ID.
    */
   retrieve(skillID, options) {
-    return this._client.get(path2`/skills/${skillID}`, options);
+    return this._client.get(path`/skills/${skillID}`, options);
   }
   /**
-   * Update Skill Default Version
+   * Update the default version pointer for a skill.
    */
   update(skillID, body, options) {
-    return this._client.post(path2`/skills/${skillID}`, { body, ...options });
+    return this._client.post(path`/skills/${skillID}`, { body, ...options });
   }
   /**
-   * List Skills
+   * List all skills for the current project.
    */
   list(query = {}, options) {
     return this._client.getAPIList("/skills", CursorPage, { query, ...options });
   }
   /**
-   * Delete Skill
+   * Delete a skill by its ID.
    */
   delete(skillID, options) {
-    return this._client.delete(path2`/skills/${skillID}`, options);
+    return this._client.delete(path`/skills/${skillID}`, options);
   }
 };
 Skills.Content = Content2;
@@ -13181,7 +12737,7 @@ var Parts = class extends APIResource {
    * [complete the Upload](https://platform.openai.com/docs/api-reference/uploads/complete).
    */
   create(uploadID, body, options) {
-    return this._client.post(path2`/uploads/${uploadID}/parts`, multipartFormRequestOptions({ body, ...options }, this._client));
+    return this._client.post(path`/uploads/${uploadID}/parts`, multipartFormRequestOptions({ body, ...options }, this._client));
   }
 };
 
@@ -13211,15 +12767,19 @@ var Uploads = class extends APIResource {
    * For guidance on the proper filename extensions for each purpose, please follow
    * the documentation on
    * [creating a File](https://platform.openai.com/docs/api-reference/files/create).
+   *
+   * Returns the Upload object with status `pending`.
    */
   create(body, options) {
     return this._client.post("/uploads", { body, ...options });
   }
   /**
    * Cancels the Upload. No Parts may be added after an Upload is cancelled.
+   *
+   * Returns the Upload object with status `cancelled`.
    */
   cancel(uploadID, options) {
-    return this._client.post(path2`/uploads/${uploadID}/cancel`, options);
+    return this._client.post(path`/uploads/${uploadID}/cancel`, options);
   }
   /**
    * Completes the
@@ -13234,10 +12794,12 @@ var Uploads = class extends APIResource {
    *
    * The number of bytes uploaded upon completion must match the number of bytes
    * initially specified when creating the Upload object. No Parts may be added after
-   * an Upload is completed.
+   * an Upload is completed. Returns the Upload object with status `completed`,
+   * including an additional `file` property containing the created usable File
+   * object.
    */
   complete(uploadID, body, options) {
-    return this._client.post(path2`/uploads/${uploadID}/complete`, { body, ...options });
+    return this._client.post(path`/uploads/${uploadID}/complete`, { body, ...options });
   }
 };
 Uploads.Parts = Parts;
@@ -13267,7 +12829,7 @@ var FileBatches = class extends APIResource {
    * Create a vector store file batch.
    */
   create(vectorStoreID, body, options) {
-    return this._client.post(path2`/vector_stores/${vectorStoreID}/file_batches`, {
+    return this._client.post(path`/vector_stores/${vectorStoreID}/file_batches`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -13278,7 +12840,7 @@ var FileBatches = class extends APIResource {
    */
   retrieve(batchID, params, options) {
     const { vector_store_id } = params;
-    return this._client.get(path2`/vector_stores/${vector_store_id}/file_batches/${batchID}`, {
+    return this._client.get(path`/vector_stores/${vector_store_id}/file_batches/${batchID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -13289,7 +12851,7 @@ var FileBatches = class extends APIResource {
    */
   cancel(batchID, params, options) {
     const { vector_store_id } = params;
-    return this._client.post(path2`/vector_stores/${vector_store_id}/file_batches/${batchID}/cancel`, {
+    return this._client.post(path`/vector_stores/${vector_store_id}/file_batches/${batchID}/cancel`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -13306,7 +12868,7 @@ var FileBatches = class extends APIResource {
    */
   listFiles(batchID, params, options) {
     const { vector_store_id, ...query } = params;
-    return this._client.getAPIList(path2`/vector_stores/${vector_store_id}/file_batches/${batchID}/files`, CursorPage, { query, ...options, headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]) });
+    return this._client.getAPIList(path`/vector_stores/${vector_store_id}/file_batches/${batchID}/files`, CursorPage, { query, ...options, headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]) });
   }
   /**
    * Wait for the given file batch to be processed.
@@ -13386,7 +12948,7 @@ var Files3 = class extends APIResource {
    * [vector store](https://platform.openai.com/docs/api-reference/vector-stores/object).
    */
   create(vectorStoreID, body, options) {
-    return this._client.post(path2`/vector_stores/${vectorStoreID}/files`, {
+    return this._client.post(path`/vector_stores/${vectorStoreID}/files`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -13397,7 +12959,7 @@ var Files3 = class extends APIResource {
    */
   retrieve(fileID, params, options) {
     const { vector_store_id } = params;
-    return this._client.get(path2`/vector_stores/${vector_store_id}/files/${fileID}`, {
+    return this._client.get(path`/vector_stores/${vector_store_id}/files/${fileID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -13407,7 +12969,7 @@ var Files3 = class extends APIResource {
    */
   update(fileID, params, options) {
     const { vector_store_id, ...body } = params;
-    return this._client.post(path2`/vector_stores/${vector_store_id}/files/${fileID}`, {
+    return this._client.post(path`/vector_stores/${vector_store_id}/files/${fileID}`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -13417,7 +12979,7 @@ var Files3 = class extends APIResource {
    * Returns a list of vector store files.
    */
   list(vectorStoreID, query = {}, options) {
-    return this._client.getAPIList(path2`/vector_stores/${vectorStoreID}/files`, CursorPage, {
+    return this._client.getAPIList(path`/vector_stores/${vectorStoreID}/files`, CursorPage, {
       query,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -13431,7 +12993,7 @@ var Files3 = class extends APIResource {
    */
   delete(fileID, params, options) {
     const { vector_store_id } = params;
-    return this._client.delete(path2`/vector_stores/${vector_store_id}/files/${fileID}`, {
+    return this._client.delete(path`/vector_stores/${vector_store_id}/files/${fileID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -13506,7 +13068,7 @@ var Files3 = class extends APIResource {
    */
   content(fileID, params, options) {
     const { vector_store_id } = params;
-    return this._client.getAPIList(path2`/vector_stores/${vector_store_id}/files/${fileID}/content`, Page, { ...options, headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]) });
+    return this._client.getAPIList(path`/vector_stores/${vector_store_id}/files/${fileID}/content`, Page, { ...options, headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]) });
   }
 };
 
@@ -13531,7 +13093,7 @@ var VectorStores = class extends APIResource {
    * Retrieves a vector store.
    */
   retrieve(vectorStoreID, options) {
-    return this._client.get(path2`/vector_stores/${vectorStoreID}`, {
+    return this._client.get(path`/vector_stores/${vectorStoreID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -13540,7 +13102,7 @@ var VectorStores = class extends APIResource {
    * Modifies a vector store.
    */
   update(vectorStoreID, body, options) {
-    return this._client.post(path2`/vector_stores/${vectorStoreID}`, {
+    return this._client.post(path`/vector_stores/${vectorStoreID}`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -13560,7 +13122,7 @@ var VectorStores = class extends APIResource {
    * Delete a vector store.
    */
   delete(vectorStoreID, options) {
-    return this._client.delete(path2`/vector_stores/${vectorStoreID}`, {
+    return this._client.delete(path`/vector_stores/${vectorStoreID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -13570,7 +13132,7 @@ var VectorStores = class extends APIResource {
    * filter.
    */
   search(vectorStoreID, body, options) {
-    return this._client.getAPIList(path2`/vector_stores/${vectorStoreID}/search`, Page, {
+    return this._client.getAPIList(path`/vector_stores/${vectorStoreID}/search`, Page, {
       body,
       method: "post",
       ...options,
@@ -13584,34 +13146,36 @@ VectorStores.FileBatches = FileBatches;
 // ../../../node_modules/openai/resources/videos.mjs
 var Videos = class extends APIResource {
   /**
-   * Create a video
+   * Create a new video generation job from a prompt and optional reference assets.
    */
   create(body, options) {
     return this._client.post("/videos", maybeMultipartFormRequestOptions({ body, ...options }, this._client));
   }
   /**
-   * Retrieve a video
+   * Fetch the latest metadata for a generated video.
    */
   retrieve(videoID, options) {
-    return this._client.get(path2`/videos/${videoID}`, options);
+    return this._client.get(path`/videos/${videoID}`, options);
   }
   /**
-   * List videos
+   * List recently generated videos for the current project.
    */
   list(query = {}, options) {
     return this._client.getAPIList("/videos", ConversationCursorPage, { query, ...options });
   }
   /**
-   * Delete a video
+   * Permanently delete a completed or failed video and its stored assets.
    */
   delete(videoID, options) {
-    return this._client.delete(path2`/videos/${videoID}`, options);
+    return this._client.delete(path`/videos/${videoID}`, options);
   }
   /**
-   * Download video content
+   * Download the generated video bytes or a derived preview asset.
+   *
+   * Streams the rendered video content for the specified video job.
    */
   downloadContent(videoID, query = {}, options) {
-    return this._client.get(path2`/videos/${videoID}/content`, {
+    return this._client.get(path`/videos/${videoID}/content`, {
       query,
       ...options,
       headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
@@ -13619,10 +13183,10 @@ var Videos = class extends APIResource {
     });
   }
   /**
-   * Create a video remix
+   * Create a remix of a completed video using a refreshed prompt.
    */
   remix(videoID, body, options) {
-    return this._client.post(path2`/videos/${videoID}/remix`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
+    return this._client.post(path`/videos/${videoID}/remix`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
   }
 };
 
@@ -13846,9 +13410,9 @@ var OpenAI = class {
     this.apiKey = token;
     return true;
   }
-  buildURL(path3, query, defaultBaseURL) {
+  buildURL(path2, query, defaultBaseURL) {
     const baseURL = !__classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_baseURLOverridden).call(this) && defaultBaseURL || this.baseURL;
-    const url2 = isAbsoluteURL(path3) ? new URL(path3) : new URL(baseURL + (baseURL.endsWith("/") && path3.startsWith("/") ? path3.slice(1) : path3));
+    const url2 = isAbsoluteURL(path2) ? new URL(path2) : new URL(baseURL + (baseURL.endsWith("/") && path2.startsWith("/") ? path2.slice(1) : path2));
     const defaultQuery = this.defaultQuery();
     if (!isEmptyObj(defaultQuery)) {
       query = { ...defaultQuery, ...query };
@@ -13872,24 +13436,24 @@ var OpenAI = class {
    */
   async prepareRequest(request, { url: url2, options }) {
   }
-  get(path3, opts) {
-    return this.methodRequest("get", path3, opts);
+  get(path2, opts) {
+    return this.methodRequest("get", path2, opts);
   }
-  post(path3, opts) {
-    return this.methodRequest("post", path3, opts);
+  post(path2, opts) {
+    return this.methodRequest("post", path2, opts);
   }
-  patch(path3, opts) {
-    return this.methodRequest("patch", path3, opts);
+  patch(path2, opts) {
+    return this.methodRequest("patch", path2, opts);
   }
-  put(path3, opts) {
-    return this.methodRequest("put", path3, opts);
+  put(path2, opts) {
+    return this.methodRequest("put", path2, opts);
   }
-  delete(path3, opts) {
-    return this.methodRequest("delete", path3, opts);
+  delete(path2, opts) {
+    return this.methodRequest("delete", path2, opts);
   }
-  methodRequest(method, path3, opts) {
+  methodRequest(method, path2, opts) {
     return this.request(Promise.resolve(opts).then((opts2) => {
-      return { method, path: path3, ...opts2 };
+      return { method, path: path2, ...opts2 };
     }));
   }
   request(options, remainingRetries = null) {
@@ -13993,8 +13557,8 @@ var OpenAI = class {
     }));
     return { response, options, controller, requestLogID, retryOfRequestLogID, startTime };
   }
-  getAPIList(path3, Page2, opts) {
-    return this.requestAPIList(Page2, opts && "then" in opts ? opts.then((opts2) => ({ method: "get", path: path3, ...opts2 })) : { method: "get", path: path3, ...opts });
+  getAPIList(path2, Page2, opts) {
+    return this.requestAPIList(Page2, opts && "then" in opts ? opts.then((opts2) => ({ method: "get", path: path2, ...opts2 })) : { method: "get", path: path2, ...opts });
   }
   requestAPIList(Page2, options) {
     const request = this.makeRequest(options, null, void 0);
@@ -14073,8 +13637,8 @@ var OpenAI = class {
   }
   async buildRequest(inputOptions, { retryCount = 0 } = {}) {
     const options = { ...inputOptions };
-    const { method, path: path3, query, defaultBaseURL } = options;
-    const url2 = this.buildURL(path3, query, defaultBaseURL);
+    const { method, path: path2, query, defaultBaseURL } = options;
+    const url2 = this.buildURL(path2, query, defaultBaseURL);
     if ("timeout" in options)
       validatePositiveInteger("timeout", options.timeout);
     options.timeout = options.timeout ?? this.timeout;
@@ -14137,6 +13701,11 @@ var OpenAI = class {
       return { bodyHeaders: void 0, body };
     } else if (typeof body === "object" && (Symbol.asyncIterator in body || Symbol.iterator in body && "next" in body && typeof body.next === "function")) {
       return { bodyHeaders: void 0, body: ReadableStreamFrom(body) };
+    } else if (typeof body === "object" && headers.values.get("content-type") === "application/x-www-form-urlencoded") {
+      return {
+        bodyHeaders: { "content-type": "application/x-www-form-urlencoded" },
+        body: this.stringifyQuery(body)
+      };
     } else {
       return __classPrivateFieldGet(this, _OpenAI_encoder, "f").call(this, { body, headers });
     }
@@ -14186,16 +13755,199 @@ OpenAI.Skills = Skills;
 OpenAI.Videos = Videos;
 
 // node_modules/@quilltap/plugin-utils/dist/index.mjs
+var import_fs = require("fs");
+function getCoreLoggerFactory() {
+  return globalThis.__quilltap_logger_factory ?? null;
+}
+function createConsoleLoggerWithChild(prefix, minLevel = "debug", baseContext = {}) {
+  const levels = ["debug", "info", "warn", "error"];
+  const shouldLog = (level) => levels.indexOf(level) >= levels.indexOf(minLevel);
+  const formatContext = (context) => {
+    const merged = { ...baseContext, ...context };
+    const entries = Object.entries(merged).filter(([key]) => key !== "context").map(([key, value]) => `${key}=${JSON.stringify(value)}`).join(" ");
+    return entries ? ` ${entries}` : "";
+  };
+  const logger = {
+    debug: (message, context) => {
+      if (shouldLog("debug")) {
+        console.debug(`[${prefix}] ${message}${formatContext(context)}`);
+      }
+    },
+    info: (message, context) => {
+      if (shouldLog("info")) {
+        console.info(`[${prefix}] ${message}${formatContext(context)}`);
+      }
+    },
+    warn: (message, context) => {
+      if (shouldLog("warn")) {
+        console.warn(`[${prefix}] ${message}${formatContext(context)}`);
+      }
+    },
+    error: (message, context, error) => {
+      if (shouldLog("error")) {
+        console.error(
+          `[${prefix}] ${message}${formatContext(context)}`,
+          error ? `
+${error.stack || error.message}` : ""
+        );
+      }
+    },
+    child: (additionalContext) => {
+      return createConsoleLoggerWithChild(prefix, minLevel, {
+        ...baseContext,
+        ...additionalContext
+      });
+    }
+  };
+  return logger;
+}
+function createPluginLogger(pluginName, minLevel = "debug") {
+  const coreFactory = getCoreLoggerFactory();
+  if (coreFactory) {
+    return coreFactory(pluginName);
+  }
+  return createConsoleLoggerWithChild(pluginName, minLevel);
+}
 var BUILTIN_TOOL_NAMES = /* @__PURE__ */ new Set([
   "generate_image",
   "search_memories",
   "search_web",
   "project_info",
   "file_management",
-  "request_full_context"
+  "request_full_context",
+  "search_help"
 ]);
 function getBuiltinToolNames() {
   return new Set(BUILTIN_TOOL_NAMES);
+}
+var LOCALHOST_HOSTS = /* @__PURE__ */ new Set([
+  "localhost",
+  "127.0.0.1",
+  "[::1]",
+  "::1"
+]);
+var cachedGatewayHost;
+var rewriteLogger = createPluginLogger("host-rewrite");
+function isLimaEnvironment() {
+  return process.env.LIMA_CONTAINER === "true";
+}
+function isDockerEnvironment() {
+  if (process.env.DOCKER_CONTAINER === "true") {
+    return true;
+  }
+  try {
+    if ((0, import_fs.existsSync)("/.dockerenv")) {
+      return true;
+    }
+    const appStat = (0, import_fs.statSync)("/app");
+    if (appStat.isDirectory()) {
+      return true;
+    }
+  } catch {
+  }
+  return false;
+}
+function isVMEnvironment() {
+  return isDockerEnvironment() || isLimaEnvironment();
+}
+function resolveHostGateway() {
+  if (cachedGatewayHost !== void 0) {
+    return cachedGatewayHost;
+  }
+  const envIP = process.env.QUILLTAP_HOST_IP;
+  if (envIP) {
+    rewriteLogger.info("Host gateway from QUILLTAP_HOST_IP", { host: envIP });
+    cachedGatewayHost = envIP;
+    return cachedGatewayHost;
+  }
+  if (isDockerEnvironment() && !isLimaEnvironment()) {
+    rewriteLogger.info("Docker environment detected \u2014 using host.docker.internal as gateway hostname");
+    cachedGatewayHost = "host.docker.internal";
+    return cachedGatewayHost;
+  }
+  try {
+    if ((0, import_fs.existsSync)("/proc/sys/fs/binfmt_misc/WSLInterop")) {
+      const resolv = (0, import_fs.readFileSync)("/etc/resolv.conf", "utf-8");
+      for (const line of resolv.split("\n")) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith("#") || trimmed === "") continue;
+        const match = trimmed.match(/^nameserver\s+(\S+)/);
+        if (match) {
+          const ip = match[1];
+          rewriteLogger.info("WSL2 host IP from /etc/resolv.conf nameserver", { ip });
+          cachedGatewayHost = ip;
+          return cachedGatewayHost;
+        }
+      }
+    }
+  } catch {
+    rewriteLogger.debug("Could not detect WSL2 or read /etc/resolv.conf");
+  }
+  try {
+    const routeTable = (0, import_fs.readFileSync)("/proc/net/route", "utf-8");
+    for (const line of routeTable.split("\n").slice(1)) {
+      const fields = line.trim().split("	");
+      if (fields.length >= 3 && fields[1] === "00000000") {
+        const hexGateway = fields[2];
+        const ip = [
+          parseInt(hexGateway.substring(6, 8), 16),
+          parseInt(hexGateway.substring(4, 6), 16),
+          parseInt(hexGateway.substring(2, 4), 16),
+          parseInt(hexGateway.substring(0, 2), 16)
+        ].join(".");
+        rewriteLogger.info("Host gateway IP from /proc/net/route", { ip });
+        cachedGatewayHost = ip;
+        return cachedGatewayHost;
+      }
+    }
+  } catch {
+    rewriteLogger.debug("Could not read /proc/net/route for default gateway lookup");
+  }
+  try {
+    const hosts = (0, import_fs.readFileSync)("/etc/hosts", "utf-8");
+    for (const line of hosts.split("\n")) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith("#") || trimmed === "") continue;
+      const parts = trimmed.split(/\s+/);
+      if (parts.length >= 2 && parts.slice(1).includes("host.docker.internal")) {
+        const ip = parts[0];
+        rewriteLogger.info("Host gateway IP from /etc/hosts (host.docker.internal)", { ip });
+        cachedGatewayHost = ip;
+        return cachedGatewayHost;
+      }
+    }
+  } catch {
+    rewriteLogger.debug("Could not read /etc/hosts for host.docker.internal lookup");
+  }
+  rewriteLogger.warn("Could not resolve host gateway \u2014 localhost URLs will not be rewritten");
+  cachedGatewayHost = null;
+  return cachedGatewayHost;
+}
+function rewriteLocalhostUrl(url2) {
+  if (!isVMEnvironment()) {
+    return url2;
+  }
+  let parsed;
+  try {
+    parsed = new URL(url2);
+  } catch {
+    return url2;
+  }
+  if (!LOCALHOST_HOSTS.has(parsed.hostname)) {
+    return url2;
+  }
+  const gatewayHost = resolveHostGateway();
+  if (!gatewayHost) {
+    return url2;
+  }
+  parsed.hostname = gatewayHost;
+  const rewritten = parsed.toString();
+  rewriteLogger.debug("Rewrote localhost URL", {
+    original: url2,
+    rewritten,
+    gatewayHost
+  });
+  return rewritten;
 }
 
 // node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-compat.js
@@ -14264,32 +14016,32 @@ function getLiteralValue(schema) {
 }
 
 // node_modules/@modelcontextprotocol/sdk/dist/esm/types.js
-var z2 = __toESM(require("zod/v4"), 1);
+var z = __toESM(require("zod/v4"), 1);
 var LATEST_PROTOCOL_VERSION = "2025-11-25";
 var SUPPORTED_PROTOCOL_VERSIONS = [LATEST_PROTOCOL_VERSION, "2025-06-18", "2025-03-26", "2024-11-05", "2024-10-07"];
 var RELATED_TASK_META_KEY = "io.modelcontextprotocol/related-task";
 var JSONRPC_VERSION = "2.0";
-var AssertObjectSchema = z2.custom((v) => v !== null && (typeof v === "object" || typeof v === "function"));
-var ProgressTokenSchema = z2.union([z2.string(), z2.number().int()]);
-var CursorSchema = z2.string();
-var TaskCreationParamsSchema = z2.looseObject({
+var AssertObjectSchema = z.custom((v) => v !== null && (typeof v === "object" || typeof v === "function"));
+var ProgressTokenSchema = z.union([z.string(), z.number().int()]);
+var CursorSchema = z.string();
+var TaskCreationParamsSchema = z.looseObject({
   /**
    * Time in milliseconds to keep task results available after completion.
    * If null, the task has unlimited lifetime until manually cleaned up.
    */
-  ttl: z2.union([z2.number(), z2.null()]).optional(),
+  ttl: z.union([z.number(), z.null()]).optional(),
   /**
    * Time in milliseconds to wait between task status requests.
    */
-  pollInterval: z2.number().optional()
+  pollInterval: z.number().optional()
 });
-var TaskMetadataSchema = z2.object({
-  ttl: z2.number().optional()
+var TaskMetadataSchema = z.object({
+  ttl: z.number().optional()
 });
-var RelatedTaskMetadataSchema = z2.object({
-  taskId: z2.string()
+var RelatedTaskMetadataSchema = z.object({
+  taskId: z.string()
 });
-var RequestMetaSchema = z2.looseObject({
+var RequestMetaSchema = z.looseObject({
   /**
    * If specified, the caller is requesting out-of-band progress notifications for this request (as represented by notifications/progress). The value of this parameter is an opaque token that will be attached to any subsequent notifications. The receiver is not obligated to provide these notifications.
    */
@@ -14299,7 +14051,7 @@ var RequestMetaSchema = z2.looseObject({
    */
   [RELATED_TASK_META_KEY]: RelatedTaskMetadataSchema.optional()
 });
-var BaseRequestParamsSchema = z2.object({
+var BaseRequestParamsSchema = z.object({
   /**
    * See [General fields: `_meta`](/specification/draft/basic/index#meta) for notes on `_meta` usage.
    */
@@ -14317,42 +14069,42 @@ var TaskAugmentedRequestParamsSchema = BaseRequestParamsSchema.extend({
   task: TaskMetadataSchema.optional()
 });
 var isTaskAugmentedRequestParams = (value) => TaskAugmentedRequestParamsSchema.safeParse(value).success;
-var RequestSchema = z2.object({
-  method: z2.string(),
+var RequestSchema = z.object({
+  method: z.string(),
   params: BaseRequestParamsSchema.loose().optional()
 });
-var NotificationsParamsSchema = z2.object({
+var NotificationsParamsSchema = z.object({
   /**
    * See [MCP specification](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/47339c03c143bb4ec01a26e721a1b8fe66634ebe/docs/specification/draft/basic/index.mdx#general-fields)
    * for notes on _meta usage.
    */
   _meta: RequestMetaSchema.optional()
 });
-var NotificationSchema = z2.object({
-  method: z2.string(),
+var NotificationSchema = z.object({
+  method: z.string(),
   params: NotificationsParamsSchema.loose().optional()
 });
-var ResultSchema = z2.looseObject({
+var ResultSchema = z.looseObject({
   /**
    * See [MCP specification](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/47339c03c143bb4ec01a26e721a1b8fe66634ebe/docs/specification/draft/basic/index.mdx#general-fields)
    * for notes on _meta usage.
    */
   _meta: RequestMetaSchema.optional()
 });
-var RequestIdSchema = z2.union([z2.string(), z2.number().int()]);
-var JSONRPCRequestSchema = z2.object({
-  jsonrpc: z2.literal(JSONRPC_VERSION),
+var RequestIdSchema = z.union([z.string(), z.number().int()]);
+var JSONRPCRequestSchema = z.object({
+  jsonrpc: z.literal(JSONRPC_VERSION),
   id: RequestIdSchema,
   ...RequestSchema.shape
 }).strict();
 var isJSONRPCRequest = (value) => JSONRPCRequestSchema.safeParse(value).success;
-var JSONRPCNotificationSchema = z2.object({
-  jsonrpc: z2.literal(JSONRPC_VERSION),
+var JSONRPCNotificationSchema = z.object({
+  jsonrpc: z.literal(JSONRPC_VERSION),
   ...NotificationSchema.shape
 }).strict();
 var isJSONRPCNotification = (value) => JSONRPCNotificationSchema.safeParse(value).success;
-var JSONRPCResultResponseSchema = z2.object({
-  jsonrpc: z2.literal(JSONRPC_VERSION),
+var JSONRPCResultResponseSchema = z.object({
+  jsonrpc: z.literal(JSONRPC_VERSION),
   id: RequestIdSchema,
   result: ResultSchema
 }).strict();
@@ -14368,32 +14120,32 @@ var ErrorCode;
   ErrorCode2[ErrorCode2["InternalError"] = -32603] = "InternalError";
   ErrorCode2[ErrorCode2["UrlElicitationRequired"] = -32042] = "UrlElicitationRequired";
 })(ErrorCode || (ErrorCode = {}));
-var JSONRPCErrorResponseSchema = z2.object({
-  jsonrpc: z2.literal(JSONRPC_VERSION),
+var JSONRPCErrorResponseSchema = z.object({
+  jsonrpc: z.literal(JSONRPC_VERSION),
   id: RequestIdSchema.optional(),
-  error: z2.object({
+  error: z.object({
     /**
      * The error type that occurred.
      */
-    code: z2.number().int(),
+    code: z.number().int(),
     /**
      * A short description of the error. The message SHOULD be limited to a concise single sentence.
      */
-    message: z2.string(),
+    message: z.string(),
     /**
      * Additional information about the error. The value of this member is defined by the sender (e.g. detailed error information, nested errors etc.).
      */
-    data: z2.unknown().optional()
+    data: z.unknown().optional()
   })
 }).strict();
 var isJSONRPCErrorResponse = (value) => JSONRPCErrorResponseSchema.safeParse(value).success;
-var JSONRPCMessageSchema = z2.union([
+var JSONRPCMessageSchema = z.union([
   JSONRPCRequestSchema,
   JSONRPCNotificationSchema,
   JSONRPCResultResponseSchema,
   JSONRPCErrorResponseSchema
 ]);
-var JSONRPCResponseSchema = z2.union([JSONRPCResultResponseSchema, JSONRPCErrorResponseSchema]);
+var JSONRPCResponseSchema = z.union([JSONRPCResultResponseSchema, JSONRPCErrorResponseSchema]);
 var EmptyResultSchema = ResultSchema.strict();
 var CancelledNotificationParamsSchema = NotificationsParamsSchema.extend({
   /**
@@ -14405,28 +14157,28 @@ var CancelledNotificationParamsSchema = NotificationsParamsSchema.extend({
   /**
    * An optional string describing the reason for the cancellation. This MAY be logged or presented to the user.
    */
-  reason: z2.string().optional()
+  reason: z.string().optional()
 });
 var CancelledNotificationSchema = NotificationSchema.extend({
-  method: z2.literal("notifications/cancelled"),
+  method: z.literal("notifications/cancelled"),
   params: CancelledNotificationParamsSchema
 });
-var IconSchema = z2.object({
+var IconSchema = z.object({
   /**
    * URL or data URI for the icon.
    */
-  src: z2.string(),
+  src: z.string(),
   /**
    * Optional MIME type for the icon.
    */
-  mimeType: z2.string().optional(),
+  mimeType: z.string().optional(),
   /**
    * Optional array of strings that specify sizes at which the icon can be used.
    * Each string should be in WxH format (e.g., `"48x48"`, `"96x96"`) or `"any"` for scalable formats like SVG.
    *
    * If not provided, the client should assume that the icon can be used at any size.
    */
-  sizes: z2.array(z2.string()).optional(),
+  sizes: z.array(z.string()).optional(),
   /**
    * Optional specifier for the theme this icon is designed for. `light` indicates
    * the icon is designed to be used with a light background, and `dark` indicates
@@ -14434,9 +14186,9 @@ var IconSchema = z2.object({
    *
    * If not provided, the client should assume the icon can be used with any theme.
    */
-  theme: z2.enum(["light", "dark"]).optional()
+  theme: z.enum(["light", "dark"]).optional()
 });
-var IconsSchema = z2.object({
+var IconsSchema = z.object({
   /**
    * Optional set of sized icons that the client can display in a user interface.
    *
@@ -14448,11 +14200,11 @@ var IconsSchema = z2.object({
    * - `image/svg+xml` - SVG images (scalable but requires security precautions)
    * - `image/webp` - WebP images (modern, efficient format)
    */
-  icons: z2.array(IconSchema).optional()
+  icons: z.array(IconSchema).optional()
 });
-var BaseMetadataSchema = z2.object({
+var BaseMetadataSchema = z.object({
   /** Intended for programmatic or logical use, but used as a display name in past specs or fallback */
-  name: z2.string(),
+  name: z.string(),
   /**
    * Intended for UI and end-user contexts — optimized to be human-readable and easily understood,
    * even by those unfamiliar with domain-specific terminology.
@@ -14461,16 +14213,16 @@ var BaseMetadataSchema = z2.object({
    * where `annotations.title` should be given precedence over using `name`,
    * if present).
    */
-  title: z2.string().optional()
+  title: z.string().optional()
 });
 var ImplementationSchema = BaseMetadataSchema.extend({
   ...BaseMetadataSchema.shape,
   ...IconsSchema.shape,
-  version: z2.string(),
+  version: z.string(),
   /**
    * An optional URL of the website for this implementation.
    */
-  websiteUrl: z2.string().optional(),
+  websiteUrl: z.string().optional(),
   /**
    * An optional human-readable description of what this implementation does.
    *
@@ -14478,23 +14230,23 @@ var ImplementationSchema = BaseMetadataSchema.extend({
    * and capabilities. For example, a server might describe the types of resources
    * or tools it provides, while a client might describe its intended use case.
    */
-  description: z2.string().optional()
+  description: z.string().optional()
 });
-var FormElicitationCapabilitySchema = z2.intersection(z2.object({
-  applyDefaults: z2.boolean().optional()
-}), z2.record(z2.string(), z2.unknown()));
-var ElicitationCapabilitySchema = z2.preprocess((value) => {
+var FormElicitationCapabilitySchema = z.intersection(z.object({
+  applyDefaults: z.boolean().optional()
+}), z.record(z.string(), z.unknown()));
+var ElicitationCapabilitySchema = z.preprocess((value) => {
   if (value && typeof value === "object" && !Array.isArray(value)) {
     if (Object.keys(value).length === 0) {
       return { form: {} };
     }
   }
   return value;
-}, z2.intersection(z2.object({
+}, z.intersection(z.object({
   form: FormElicitationCapabilitySchema.optional(),
   url: AssertObjectSchema.optional()
-}), z2.record(z2.string(), z2.unknown()).optional()));
-var ClientTasksCapabilitySchema = z2.looseObject({
+}), z.record(z.string(), z.unknown()).optional()));
+var ClientTasksCapabilitySchema = z.looseObject({
   /**
    * Present if the client supports listing tasks.
    */
@@ -14506,22 +14258,22 @@ var ClientTasksCapabilitySchema = z2.looseObject({
   /**
    * Capabilities for task creation on specific request types.
    */
-  requests: z2.looseObject({
+  requests: z.looseObject({
     /**
      * Task support for sampling requests.
      */
-    sampling: z2.looseObject({
+    sampling: z.looseObject({
       createMessage: AssertObjectSchema.optional()
     }).optional(),
     /**
      * Task support for elicitation requests.
      */
-    elicitation: z2.looseObject({
+    elicitation: z.looseObject({
       create: AssertObjectSchema.optional()
     }).optional()
   }).optional()
 });
-var ServerTasksCapabilitySchema = z2.looseObject({
+var ServerTasksCapabilitySchema = z.looseObject({
   /**
    * Present if the server supports listing tasks.
    */
@@ -14533,24 +14285,24 @@ var ServerTasksCapabilitySchema = z2.looseObject({
   /**
    * Capabilities for task creation on specific request types.
    */
-  requests: z2.looseObject({
+  requests: z.looseObject({
     /**
      * Task support for tool requests.
      */
-    tools: z2.looseObject({
+    tools: z.looseObject({
       call: AssertObjectSchema.optional()
     }).optional()
   }).optional()
 });
-var ClientCapabilitiesSchema = z2.object({
+var ClientCapabilitiesSchema = z.object({
   /**
    * Experimental, non-standard capabilities that the client supports.
    */
-  experimental: z2.record(z2.string(), AssertObjectSchema).optional(),
+  experimental: z.record(z.string(), AssertObjectSchema).optional(),
   /**
    * Present if the client supports sampling from an LLM.
    */
-  sampling: z2.object({
+  sampling: z.object({
     /**
      * Present if the client supports context inclusion via includeContext parameter.
      * If not declared, servers SHOULD only use `includeContext: "none"` (or omit it).
@@ -14568,11 +14320,11 @@ var ClientCapabilitiesSchema = z2.object({
   /**
    * Present if the client supports listing roots.
    */
-  roots: z2.object({
+  roots: z.object({
     /**
      * Whether the client supports issuing notifications for changes to the roots list.
      */
-    listChanged: z2.boolean().optional()
+    listChanged: z.boolean().optional()
   }).optional(),
   /**
    * Present if the client supports task creation.
@@ -14583,19 +14335,19 @@ var InitializeRequestParamsSchema = BaseRequestParamsSchema.extend({
   /**
    * The latest version of the Model Context Protocol that the client supports. The client MAY decide to support older versions as well.
    */
-  protocolVersion: z2.string(),
+  protocolVersion: z.string(),
   capabilities: ClientCapabilitiesSchema,
   clientInfo: ImplementationSchema
 });
 var InitializeRequestSchema = RequestSchema.extend({
-  method: z2.literal("initialize"),
+  method: z.literal("initialize"),
   params: InitializeRequestParamsSchema
 });
-var ServerCapabilitiesSchema = z2.object({
+var ServerCapabilitiesSchema = z.object({
   /**
    * Experimental, non-standard capabilities that the server supports.
    */
-  experimental: z2.record(z2.string(), AssertObjectSchema).optional(),
+  experimental: z.record(z.string(), AssertObjectSchema).optional(),
   /**
    * Present if the server supports sending log messages to the client.
    */
@@ -14607,33 +14359,33 @@ var ServerCapabilitiesSchema = z2.object({
   /**
    * Present if the server offers any prompt templates.
    */
-  prompts: z2.object({
+  prompts: z.object({
     /**
      * Whether this server supports issuing notifications for changes to the prompt list.
      */
-    listChanged: z2.boolean().optional()
+    listChanged: z.boolean().optional()
   }).optional(),
   /**
    * Present if the server offers any resources to read.
    */
-  resources: z2.object({
+  resources: z.object({
     /**
      * Whether this server supports clients subscribing to resource updates.
      */
-    subscribe: z2.boolean().optional(),
+    subscribe: z.boolean().optional(),
     /**
      * Whether this server supports issuing notifications for changes to the resource list.
      */
-    listChanged: z2.boolean().optional()
+    listChanged: z.boolean().optional()
   }).optional(),
   /**
    * Present if the server offers any tools to call.
    */
-  tools: z2.object({
+  tools: z.object({
     /**
      * Whether this server supports issuing notifications for changes to the tool list.
      */
-    listChanged: z2.boolean().optional()
+    listChanged: z.boolean().optional()
   }).optional(),
   /**
    * Present if the server supports task creation.
@@ -14644,7 +14396,7 @@ var InitializeResultSchema = ResultSchema.extend({
   /**
    * The version of the Model Context Protocol that the server wants to use. This may not match the version that the client requested. If the client cannot support this version, it MUST disconnect.
    */
-  protocolVersion: z2.string(),
+  protocolVersion: z.string(),
   capabilities: ServerCapabilitiesSchema,
   serverInfo: ImplementationSchema,
   /**
@@ -14652,32 +14404,32 @@ var InitializeResultSchema = ResultSchema.extend({
    *
    * This can be used by clients to improve the LLM's understanding of available tools, resources, etc. It can be thought of like a "hint" to the model. For example, this information MAY be added to the system prompt.
    */
-  instructions: z2.string().optional()
+  instructions: z.string().optional()
 });
 var InitializedNotificationSchema = NotificationSchema.extend({
-  method: z2.literal("notifications/initialized"),
+  method: z.literal("notifications/initialized"),
   params: NotificationsParamsSchema.optional()
 });
 var isInitializedNotification = (value) => InitializedNotificationSchema.safeParse(value).success;
 var PingRequestSchema = RequestSchema.extend({
-  method: z2.literal("ping"),
+  method: z.literal("ping"),
   params: BaseRequestParamsSchema.optional()
 });
-var ProgressSchema = z2.object({
+var ProgressSchema = z.object({
   /**
    * The progress thus far. This should increase every time progress is made, even if the total is unknown.
    */
-  progress: z2.number(),
+  progress: z.number(),
   /**
    * Total number of items to process (or total progress required), if known.
    */
-  total: z2.optional(z2.number()),
+  total: z.optional(z.number()),
   /**
    * An optional message describing the current progress.
    */
-  message: z2.optional(z2.string())
+  message: z.optional(z.string())
 });
-var ProgressNotificationParamsSchema = z2.object({
+var ProgressNotificationParamsSchema = z.object({
   ...NotificationsParamsSchema.shape,
   ...ProgressSchema.shape,
   /**
@@ -14686,7 +14438,7 @@ var ProgressNotificationParamsSchema = z2.object({
   progressToken: ProgressTokenSchema
 });
 var ProgressNotificationSchema = NotificationSchema.extend({
-  method: z2.literal("notifications/progress"),
+  method: z.literal("notifications/progress"),
   params: ProgressNotificationParamsSchema
 });
 var PaginatedRequestParamsSchema = BaseRequestParamsSchema.extend({
@@ -14706,86 +14458,86 @@ var PaginatedResultSchema = ResultSchema.extend({
    */
   nextCursor: CursorSchema.optional()
 });
-var TaskStatusSchema = z2.enum(["working", "input_required", "completed", "failed", "cancelled"]);
-var TaskSchema = z2.object({
-  taskId: z2.string(),
+var TaskStatusSchema = z.enum(["working", "input_required", "completed", "failed", "cancelled"]);
+var TaskSchema = z.object({
+  taskId: z.string(),
   status: TaskStatusSchema,
   /**
    * Time in milliseconds to keep task results available after completion.
    * If null, the task has unlimited lifetime until manually cleaned up.
    */
-  ttl: z2.union([z2.number(), z2.null()]),
+  ttl: z.union([z.number(), z.null()]),
   /**
    * ISO 8601 timestamp when the task was created.
    */
-  createdAt: z2.string(),
+  createdAt: z.string(),
   /**
    * ISO 8601 timestamp when the task was last updated.
    */
-  lastUpdatedAt: z2.string(),
-  pollInterval: z2.optional(z2.number()),
+  lastUpdatedAt: z.string(),
+  pollInterval: z.optional(z.number()),
   /**
    * Optional diagnostic message for failed tasks or other status information.
    */
-  statusMessage: z2.optional(z2.string())
+  statusMessage: z.optional(z.string())
 });
 var CreateTaskResultSchema = ResultSchema.extend({
   task: TaskSchema
 });
 var TaskStatusNotificationParamsSchema = NotificationsParamsSchema.merge(TaskSchema);
 var TaskStatusNotificationSchema = NotificationSchema.extend({
-  method: z2.literal("notifications/tasks/status"),
+  method: z.literal("notifications/tasks/status"),
   params: TaskStatusNotificationParamsSchema
 });
 var GetTaskRequestSchema = RequestSchema.extend({
-  method: z2.literal("tasks/get"),
+  method: z.literal("tasks/get"),
   params: BaseRequestParamsSchema.extend({
-    taskId: z2.string()
+    taskId: z.string()
   })
 });
 var GetTaskResultSchema = ResultSchema.merge(TaskSchema);
 var GetTaskPayloadRequestSchema = RequestSchema.extend({
-  method: z2.literal("tasks/result"),
+  method: z.literal("tasks/result"),
   params: BaseRequestParamsSchema.extend({
-    taskId: z2.string()
+    taskId: z.string()
   })
 });
 var GetTaskPayloadResultSchema = ResultSchema.loose();
 var ListTasksRequestSchema = PaginatedRequestSchema.extend({
-  method: z2.literal("tasks/list")
+  method: z.literal("tasks/list")
 });
 var ListTasksResultSchema = PaginatedResultSchema.extend({
-  tasks: z2.array(TaskSchema)
+  tasks: z.array(TaskSchema)
 });
 var CancelTaskRequestSchema = RequestSchema.extend({
-  method: z2.literal("tasks/cancel"),
+  method: z.literal("tasks/cancel"),
   params: BaseRequestParamsSchema.extend({
-    taskId: z2.string()
+    taskId: z.string()
   })
 });
 var CancelTaskResultSchema = ResultSchema.merge(TaskSchema);
-var ResourceContentsSchema = z2.object({
+var ResourceContentsSchema = z.object({
   /**
    * The URI of this resource.
    */
-  uri: z2.string(),
+  uri: z.string(),
   /**
    * The MIME type of this resource, if known.
    */
-  mimeType: z2.optional(z2.string()),
+  mimeType: z.optional(z.string()),
   /**
    * See [MCP specification](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/47339c03c143bb4ec01a26e721a1b8fe66634ebe/docs/specification/draft/basic/index.mdx#general-fields)
    * for notes on _meta usage.
    */
-  _meta: z2.record(z2.string(), z2.unknown()).optional()
+  _meta: z.record(z.string(), z.unknown()).optional()
 });
 var TextResourceContentsSchema = ResourceContentsSchema.extend({
   /**
    * The text of the item. This must only be set if the item can actually be represented as text (not binary data).
    */
-  text: z2.string()
+  text: z.string()
 });
-var Base64Schema = z2.string().refine((val) => {
+var Base64Schema = z.string().refine((val) => {
   try {
     atob(val);
     return true;
@@ -14799,38 +14551,38 @@ var BlobResourceContentsSchema = ResourceContentsSchema.extend({
    */
   blob: Base64Schema
 });
-var RoleSchema = z2.enum(["user", "assistant"]);
-var AnnotationsSchema = z2.object({
+var RoleSchema = z.enum(["user", "assistant"]);
+var AnnotationsSchema = z.object({
   /**
    * Intended audience(s) for the resource.
    */
-  audience: z2.array(RoleSchema).optional(),
+  audience: z.array(RoleSchema).optional(),
   /**
    * Importance hint for the resource, from 0 (least) to 1 (most).
    */
-  priority: z2.number().min(0).max(1).optional(),
+  priority: z.number().min(0).max(1).optional(),
   /**
    * ISO 8601 timestamp for the most recent modification.
    */
-  lastModified: z2.iso.datetime({ offset: true }).optional()
+  lastModified: z.iso.datetime({ offset: true }).optional()
 });
-var ResourceSchema = z2.object({
+var ResourceSchema = z.object({
   ...BaseMetadataSchema.shape,
   ...IconsSchema.shape,
   /**
    * The URI of this resource.
    */
-  uri: z2.string(),
+  uri: z.string(),
   /**
    * A description of what this resource represents.
    *
    * This can be used by clients to improve the LLM's understanding of available resources. It can be thought of like a "hint" to the model.
    */
-  description: z2.optional(z2.string()),
+  description: z.optional(z.string()),
   /**
    * The MIME type of this resource, if known.
    */
-  mimeType: z2.optional(z2.string()),
+  mimeType: z.optional(z.string()),
   /**
    * Optional annotations for the client.
    */
@@ -14839,25 +14591,25 @@ var ResourceSchema = z2.object({
    * See [MCP specification](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/47339c03c143bb4ec01a26e721a1b8fe66634ebe/docs/specification/draft/basic/index.mdx#general-fields)
    * for notes on _meta usage.
    */
-  _meta: z2.optional(z2.looseObject({}))
+  _meta: z.optional(z.looseObject({}))
 });
-var ResourceTemplateSchema = z2.object({
+var ResourceTemplateSchema = z.object({
   ...BaseMetadataSchema.shape,
   ...IconsSchema.shape,
   /**
    * A URI template (according to RFC 6570) that can be used to construct resource URIs.
    */
-  uriTemplate: z2.string(),
+  uriTemplate: z.string(),
   /**
    * A description of what this template is for.
    *
    * This can be used by clients to improve the LLM's understanding of available resources. It can be thought of like a "hint" to the model.
    */
-  description: z2.optional(z2.string()),
+  description: z.optional(z.string()),
   /**
    * The MIME type for all resources that match this template. This should only be included if all resources matching this template have the same type.
    */
-  mimeType: z2.optional(z2.string()),
+  mimeType: z.optional(z.string()),
   /**
    * Optional annotations for the client.
    */
@@ -14866,19 +14618,19 @@ var ResourceTemplateSchema = z2.object({
    * See [MCP specification](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/47339c03c143bb4ec01a26e721a1b8fe66634ebe/docs/specification/draft/basic/index.mdx#general-fields)
    * for notes on _meta usage.
    */
-  _meta: z2.optional(z2.looseObject({}))
+  _meta: z.optional(z.looseObject({}))
 });
 var ListResourcesRequestSchema = PaginatedRequestSchema.extend({
-  method: z2.literal("resources/list")
+  method: z.literal("resources/list")
 });
 var ListResourcesResultSchema = PaginatedResultSchema.extend({
-  resources: z2.array(ResourceSchema)
+  resources: z.array(ResourceSchema)
 });
 var ListResourceTemplatesRequestSchema = PaginatedRequestSchema.extend({
-  method: z2.literal("resources/templates/list")
+  method: z.literal("resources/templates/list")
 });
 var ListResourceTemplatesResultSchema = PaginatedResultSchema.extend({
-  resourceTemplates: z2.array(ResourceTemplateSchema)
+  resourceTemplates: z.array(ResourceTemplateSchema)
 });
 var ResourceRequestParamsSchema = BaseRequestParamsSchema.extend({
   /**
@@ -14886,97 +14638,97 @@ var ResourceRequestParamsSchema = BaseRequestParamsSchema.extend({
    *
    * @format uri
    */
-  uri: z2.string()
+  uri: z.string()
 });
 var ReadResourceRequestParamsSchema = ResourceRequestParamsSchema;
 var ReadResourceRequestSchema = RequestSchema.extend({
-  method: z2.literal("resources/read"),
+  method: z.literal("resources/read"),
   params: ReadResourceRequestParamsSchema
 });
 var ReadResourceResultSchema = ResultSchema.extend({
-  contents: z2.array(z2.union([TextResourceContentsSchema, BlobResourceContentsSchema]))
+  contents: z.array(z.union([TextResourceContentsSchema, BlobResourceContentsSchema]))
 });
 var ResourceListChangedNotificationSchema = NotificationSchema.extend({
-  method: z2.literal("notifications/resources/list_changed"),
+  method: z.literal("notifications/resources/list_changed"),
   params: NotificationsParamsSchema.optional()
 });
 var SubscribeRequestParamsSchema = ResourceRequestParamsSchema;
 var SubscribeRequestSchema = RequestSchema.extend({
-  method: z2.literal("resources/subscribe"),
+  method: z.literal("resources/subscribe"),
   params: SubscribeRequestParamsSchema
 });
 var UnsubscribeRequestParamsSchema = ResourceRequestParamsSchema;
 var UnsubscribeRequestSchema = RequestSchema.extend({
-  method: z2.literal("resources/unsubscribe"),
+  method: z.literal("resources/unsubscribe"),
   params: UnsubscribeRequestParamsSchema
 });
 var ResourceUpdatedNotificationParamsSchema = NotificationsParamsSchema.extend({
   /**
    * The URI of the resource that has been updated. This might be a sub-resource of the one that the client actually subscribed to.
    */
-  uri: z2.string()
+  uri: z.string()
 });
 var ResourceUpdatedNotificationSchema = NotificationSchema.extend({
-  method: z2.literal("notifications/resources/updated"),
+  method: z.literal("notifications/resources/updated"),
   params: ResourceUpdatedNotificationParamsSchema
 });
-var PromptArgumentSchema = z2.object({
+var PromptArgumentSchema = z.object({
   /**
    * The name of the argument.
    */
-  name: z2.string(),
+  name: z.string(),
   /**
    * A human-readable description of the argument.
    */
-  description: z2.optional(z2.string()),
+  description: z.optional(z.string()),
   /**
    * Whether this argument must be provided.
    */
-  required: z2.optional(z2.boolean())
+  required: z.optional(z.boolean())
 });
-var PromptSchema = z2.object({
+var PromptSchema = z.object({
   ...BaseMetadataSchema.shape,
   ...IconsSchema.shape,
   /**
    * An optional description of what this prompt provides
    */
-  description: z2.optional(z2.string()),
+  description: z.optional(z.string()),
   /**
    * A list of arguments to use for templating the prompt.
    */
-  arguments: z2.optional(z2.array(PromptArgumentSchema)),
+  arguments: z.optional(z.array(PromptArgumentSchema)),
   /**
    * See [MCP specification](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/47339c03c143bb4ec01a26e721a1b8fe66634ebe/docs/specification/draft/basic/index.mdx#general-fields)
    * for notes on _meta usage.
    */
-  _meta: z2.optional(z2.looseObject({}))
+  _meta: z.optional(z.looseObject({}))
 });
 var ListPromptsRequestSchema = PaginatedRequestSchema.extend({
-  method: z2.literal("prompts/list")
+  method: z.literal("prompts/list")
 });
 var ListPromptsResultSchema = PaginatedResultSchema.extend({
-  prompts: z2.array(PromptSchema)
+  prompts: z.array(PromptSchema)
 });
 var GetPromptRequestParamsSchema = BaseRequestParamsSchema.extend({
   /**
    * The name of the prompt or prompt template.
    */
-  name: z2.string(),
+  name: z.string(),
   /**
    * Arguments to use for templating the prompt.
    */
-  arguments: z2.record(z2.string(), z2.string()).optional()
+  arguments: z.record(z.string(), z.string()).optional()
 });
 var GetPromptRequestSchema = RequestSchema.extend({
-  method: z2.literal("prompts/get"),
+  method: z.literal("prompts/get"),
   params: GetPromptRequestParamsSchema
 });
-var TextContentSchema = z2.object({
-  type: z2.literal("text"),
+var TextContentSchema = z.object({
+  type: z.literal("text"),
   /**
    * The text content of the message.
    */
-  text: z2.string(),
+  text: z.string(),
   /**
    * Optional annotations for the client.
    */
@@ -14985,10 +14737,10 @@ var TextContentSchema = z2.object({
    * See [MCP specification](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/47339c03c143bb4ec01a26e721a1b8fe66634ebe/docs/specification/draft/basic/index.mdx#general-fields)
    * for notes on _meta usage.
    */
-  _meta: z2.record(z2.string(), z2.unknown()).optional()
+  _meta: z.record(z.string(), z.unknown()).optional()
 });
-var ImageContentSchema = z2.object({
-  type: z2.literal("image"),
+var ImageContentSchema = z.object({
+  type: z.literal("image"),
   /**
    * The base64-encoded image data.
    */
@@ -14996,7 +14748,7 @@ var ImageContentSchema = z2.object({
   /**
    * The MIME type of the image. Different providers may support different image types.
    */
-  mimeType: z2.string(),
+  mimeType: z.string(),
   /**
    * Optional annotations for the client.
    */
@@ -15005,10 +14757,10 @@ var ImageContentSchema = z2.object({
    * See [MCP specification](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/47339c03c143bb4ec01a26e721a1b8fe66634ebe/docs/specification/draft/basic/index.mdx#general-fields)
    * for notes on _meta usage.
    */
-  _meta: z2.record(z2.string(), z2.unknown()).optional()
+  _meta: z.record(z.string(), z.unknown()).optional()
 });
-var AudioContentSchema = z2.object({
-  type: z2.literal("audio"),
+var AudioContentSchema = z.object({
+  type: z.literal("audio"),
   /**
    * The base64-encoded audio data.
    */
@@ -15016,7 +14768,7 @@ var AudioContentSchema = z2.object({
   /**
    * The MIME type of the audio. Different providers may support different audio types.
    */
-  mimeType: z2.string(),
+  mimeType: z.string(),
   /**
    * Optional annotations for the client.
    */
@@ -15025,34 +14777,34 @@ var AudioContentSchema = z2.object({
    * See [MCP specification](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/47339c03c143bb4ec01a26e721a1b8fe66634ebe/docs/specification/draft/basic/index.mdx#general-fields)
    * for notes on _meta usage.
    */
-  _meta: z2.record(z2.string(), z2.unknown()).optional()
+  _meta: z.record(z.string(), z.unknown()).optional()
 });
-var ToolUseContentSchema = z2.object({
-  type: z2.literal("tool_use"),
+var ToolUseContentSchema = z.object({
+  type: z.literal("tool_use"),
   /**
    * The name of the tool to invoke.
    * Must match a tool name from the request's tools array.
    */
-  name: z2.string(),
+  name: z.string(),
   /**
    * Unique identifier for this tool call.
    * Used to correlate with ToolResultContent in subsequent messages.
    */
-  id: z2.string(),
+  id: z.string(),
   /**
    * Arguments to pass to the tool.
    * Must conform to the tool's inputSchema.
    */
-  input: z2.record(z2.string(), z2.unknown()),
+  input: z.record(z.string(), z.unknown()),
   /**
    * See [MCP specification](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/47339c03c143bb4ec01a26e721a1b8fe66634ebe/docs/specification/draft/basic/index.mdx#general-fields)
    * for notes on _meta usage.
    */
-  _meta: z2.record(z2.string(), z2.unknown()).optional()
+  _meta: z.record(z.string(), z.unknown()).optional()
 });
-var EmbeddedResourceSchema = z2.object({
-  type: z2.literal("resource"),
-  resource: z2.union([TextResourceContentsSchema, BlobResourceContentsSchema]),
+var EmbeddedResourceSchema = z.object({
+  type: z.literal("resource"),
+  resource: z.union([TextResourceContentsSchema, BlobResourceContentsSchema]),
   /**
    * Optional annotations for the client.
    */
@@ -15061,19 +14813,19 @@ var EmbeddedResourceSchema = z2.object({
    * See [MCP specification](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/47339c03c143bb4ec01a26e721a1b8fe66634ebe/docs/specification/draft/basic/index.mdx#general-fields)
    * for notes on _meta usage.
    */
-  _meta: z2.record(z2.string(), z2.unknown()).optional()
+  _meta: z.record(z.string(), z.unknown()).optional()
 });
 var ResourceLinkSchema = ResourceSchema.extend({
-  type: z2.literal("resource_link")
+  type: z.literal("resource_link")
 });
-var ContentBlockSchema = z2.union([
+var ContentBlockSchema = z.union([
   TextContentSchema,
   ImageContentSchema,
   AudioContentSchema,
   ResourceLinkSchema,
   EmbeddedResourceSchema
 ]);
-var PromptMessageSchema = z2.object({
+var PromptMessageSchema = z.object({
   role: RoleSchema,
   content: ContentBlockSchema
 });
@@ -15081,24 +14833,24 @@ var GetPromptResultSchema = ResultSchema.extend({
   /**
    * An optional description for the prompt.
    */
-  description: z2.string().optional(),
-  messages: z2.array(PromptMessageSchema)
+  description: z.string().optional(),
+  messages: z.array(PromptMessageSchema)
 });
 var PromptListChangedNotificationSchema = NotificationSchema.extend({
-  method: z2.literal("notifications/prompts/list_changed"),
+  method: z.literal("notifications/prompts/list_changed"),
   params: NotificationsParamsSchema.optional()
 });
-var ToolAnnotationsSchema = z2.object({
+var ToolAnnotationsSchema = z.object({
   /**
    * A human-readable title for the tool.
    */
-  title: z2.string().optional(),
+  title: z.string().optional(),
   /**
    * If true, the tool does not modify its environment.
    *
    * Default: false
    */
-  readOnlyHint: z2.boolean().optional(),
+  readOnlyHint: z.boolean().optional(),
   /**
    * If true, the tool may perform destructive updates to its environment.
    * If false, the tool performs only additive updates.
@@ -15107,7 +14859,7 @@ var ToolAnnotationsSchema = z2.object({
    *
    * Default: true
    */
-  destructiveHint: z2.boolean().optional(),
+  destructiveHint: z.boolean().optional(),
   /**
    * If true, calling the tool repeatedly with the same arguments
    * will have no additional effect on the its environment.
@@ -15116,7 +14868,7 @@ var ToolAnnotationsSchema = z2.object({
    *
    * Default: false
    */
-  idempotentHint: z2.boolean().optional(),
+  idempotentHint: z.boolean().optional(),
   /**
    * If true, this tool may interact with an "open world" of external
    * entities. If false, the tool's domain of interaction is closed.
@@ -15125,9 +14877,9 @@ var ToolAnnotationsSchema = z2.object({
    *
    * Default: true
    */
-  openWorldHint: z2.boolean().optional()
+  openWorldHint: z.boolean().optional()
 });
-var ToolExecutionSchema = z2.object({
+var ToolExecutionSchema = z.object({
   /**
    * Indicates the tool's preference for task-augmented execution.
    * - "required": Clients MUST invoke the tool as a task
@@ -15136,34 +14888,34 @@ var ToolExecutionSchema = z2.object({
    *
    * If not present, defaults to "forbidden".
    */
-  taskSupport: z2.enum(["required", "optional", "forbidden"]).optional()
+  taskSupport: z.enum(["required", "optional", "forbidden"]).optional()
 });
-var ToolSchema = z2.object({
+var ToolSchema = z.object({
   ...BaseMetadataSchema.shape,
   ...IconsSchema.shape,
   /**
    * A human-readable description of the tool.
    */
-  description: z2.string().optional(),
+  description: z.string().optional(),
   /**
    * A JSON Schema 2020-12 object defining the expected parameters for the tool.
    * Must have type: 'object' at the root level per MCP spec.
    */
-  inputSchema: z2.object({
-    type: z2.literal("object"),
-    properties: z2.record(z2.string(), AssertObjectSchema).optional(),
-    required: z2.array(z2.string()).optional()
-  }).catchall(z2.unknown()),
+  inputSchema: z.object({
+    type: z.literal("object"),
+    properties: z.record(z.string(), AssertObjectSchema).optional(),
+    required: z.array(z.string()).optional()
+  }).catchall(z.unknown()),
   /**
    * An optional JSON Schema 2020-12 object defining the structure of the tool's output
    * returned in the structuredContent field of a CallToolResult.
    * Must have type: 'object' at the root level per MCP spec.
    */
-  outputSchema: z2.object({
-    type: z2.literal("object"),
-    properties: z2.record(z2.string(), AssertObjectSchema).optional(),
-    required: z2.array(z2.string()).optional()
-  }).catchall(z2.unknown()).optional(),
+  outputSchema: z.object({
+    type: z.literal("object"),
+    properties: z.record(z.string(), AssertObjectSchema).optional(),
+    required: z.array(z.string()).optional()
+  }).catchall(z.unknown()).optional(),
   /**
    * Optional additional tool information.
    */
@@ -15176,13 +14928,13 @@ var ToolSchema = z2.object({
    * See [MCP specification](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/47339c03c143bb4ec01a26e721a1b8fe66634ebe/docs/specification/draft/basic/index.mdx#general-fields)
    * for notes on _meta usage.
    */
-  _meta: z2.record(z2.string(), z2.unknown()).optional()
+  _meta: z.record(z.string(), z.unknown()).optional()
 });
 var ListToolsRequestSchema = PaginatedRequestSchema.extend({
-  method: z2.literal("tools/list")
+  method: z.literal("tools/list")
 });
 var ListToolsResultSchema = PaginatedResultSchema.extend({
-  tools: z2.array(ToolSchema)
+  tools: z.array(ToolSchema)
 });
 var CallToolResultSchema = ResultSchema.extend({
   /**
@@ -15191,13 +14943,13 @@ var CallToolResultSchema = ResultSchema.extend({
    * If the Tool does not define an outputSchema, this field MUST be present in the result.
    * For backwards compatibility, this field is always present, but it may be empty.
    */
-  content: z2.array(ContentBlockSchema).default([]),
+  content: z.array(ContentBlockSchema).default([]),
   /**
    * An object containing structured tool output.
    *
    * If the Tool defines an outputSchema, this field MUST be present in the result, and contain a JSON object that matches the schema.
    */
-  structuredContent: z2.record(z2.string(), z2.unknown()).optional(),
+  structuredContent: z.record(z.string(), z.unknown()).optional(),
   /**
    * Whether the tool call ended in an error.
    *
@@ -15212,30 +14964,30 @@ var CallToolResultSchema = ResultSchema.extend({
    * server does not support tool calls, or any other exceptional conditions,
    * should be reported as an MCP error response.
    */
-  isError: z2.boolean().optional()
+  isError: z.boolean().optional()
 });
 var CompatibilityCallToolResultSchema = CallToolResultSchema.or(ResultSchema.extend({
-  toolResult: z2.unknown()
+  toolResult: z.unknown()
 }));
 var CallToolRequestParamsSchema = TaskAugmentedRequestParamsSchema.extend({
   /**
    * The name of the tool to call.
    */
-  name: z2.string(),
+  name: z.string(),
   /**
    * Arguments to pass to the tool.
    */
-  arguments: z2.record(z2.string(), z2.unknown()).optional()
+  arguments: z.record(z.string(), z.unknown()).optional()
 });
 var CallToolRequestSchema = RequestSchema.extend({
-  method: z2.literal("tools/call"),
+  method: z.literal("tools/call"),
   params: CallToolRequestParamsSchema
 });
 var ToolListChangedNotificationSchema = NotificationSchema.extend({
-  method: z2.literal("notifications/tools/list_changed"),
+  method: z.literal("notifications/tools/list_changed"),
   params: NotificationsParamsSchema.optional()
 });
-var ListChangedOptionsBaseSchema = z2.object({
+var ListChangedOptionsBaseSchema = z.object({
   /**
    * If true, the list will be refreshed automatically when a list changed notification is received.
    * The callback will be called with the updated list.
@@ -15244,7 +14996,7 @@ var ListChangedOptionsBaseSchema = z2.object({
    *
    * @default true
    */
-  autoRefresh: z2.boolean().default(true),
+  autoRefresh: z.boolean().default(true),
   /**
    * Debounce time in milliseconds for list changed notification processing.
    *
@@ -15253,9 +15005,9 @@ var ListChangedOptionsBaseSchema = z2.object({
    *
    * @default 300
    */
-  debounceMs: z2.number().int().nonnegative().default(300)
+  debounceMs: z.number().int().nonnegative().default(300)
 });
-var LoggingLevelSchema = z2.enum(["debug", "info", "notice", "warning", "error", "critical", "alert", "emergency"]);
+var LoggingLevelSchema = z.enum(["debug", "info", "notice", "warning", "error", "critical", "alert", "emergency"]);
 var SetLevelRequestParamsSchema = BaseRequestParamsSchema.extend({
   /**
    * The level of logging that the client wants to receive from the server. The server should send all logs at this level and higher (i.e., more severe) to the client as notifications/logging/message.
@@ -15263,7 +15015,7 @@ var SetLevelRequestParamsSchema = BaseRequestParamsSchema.extend({
   level: LoggingLevelSchema
 });
 var SetLevelRequestSchema = RequestSchema.extend({
-  method: z2.literal("logging/setLevel"),
+  method: z.literal("logging/setLevel"),
   params: SetLevelRequestParamsSchema
 });
 var LoggingMessageNotificationParamsSchema = NotificationsParamsSchema.extend({
@@ -15274,80 +15026,80 @@ var LoggingMessageNotificationParamsSchema = NotificationsParamsSchema.extend({
   /**
    * An optional name of the logger issuing this message.
    */
-  logger: z2.string().optional(),
+  logger: z.string().optional(),
   /**
    * The data to be logged, such as a string message or an object. Any JSON serializable type is allowed here.
    */
-  data: z2.unknown()
+  data: z.unknown()
 });
 var LoggingMessageNotificationSchema = NotificationSchema.extend({
-  method: z2.literal("notifications/message"),
+  method: z.literal("notifications/message"),
   params: LoggingMessageNotificationParamsSchema
 });
-var ModelHintSchema = z2.object({
+var ModelHintSchema = z.object({
   /**
    * A hint for a model name.
    */
-  name: z2.string().optional()
+  name: z.string().optional()
 });
-var ModelPreferencesSchema = z2.object({
+var ModelPreferencesSchema = z.object({
   /**
    * Optional hints to use for model selection.
    */
-  hints: z2.array(ModelHintSchema).optional(),
+  hints: z.array(ModelHintSchema).optional(),
   /**
    * How much to prioritize cost when selecting a model.
    */
-  costPriority: z2.number().min(0).max(1).optional(),
+  costPriority: z.number().min(0).max(1).optional(),
   /**
    * How much to prioritize sampling speed (latency) when selecting a model.
    */
-  speedPriority: z2.number().min(0).max(1).optional(),
+  speedPriority: z.number().min(0).max(1).optional(),
   /**
    * How much to prioritize intelligence and capabilities when selecting a model.
    */
-  intelligencePriority: z2.number().min(0).max(1).optional()
+  intelligencePriority: z.number().min(0).max(1).optional()
 });
-var ToolChoiceSchema = z2.object({
+var ToolChoiceSchema = z.object({
   /**
    * Controls when tools are used:
    * - "auto": Model decides whether to use tools (default)
    * - "required": Model MUST use at least one tool before completing
    * - "none": Model MUST NOT use any tools
    */
-  mode: z2.enum(["auto", "required", "none"]).optional()
+  mode: z.enum(["auto", "required", "none"]).optional()
 });
-var ToolResultContentSchema = z2.object({
-  type: z2.literal("tool_result"),
-  toolUseId: z2.string().describe("The unique identifier for the corresponding tool call."),
-  content: z2.array(ContentBlockSchema).default([]),
-  structuredContent: z2.object({}).loose().optional(),
-  isError: z2.boolean().optional(),
+var ToolResultContentSchema = z.object({
+  type: z.literal("tool_result"),
+  toolUseId: z.string().describe("The unique identifier for the corresponding tool call."),
+  content: z.array(ContentBlockSchema).default([]),
+  structuredContent: z.object({}).loose().optional(),
+  isError: z.boolean().optional(),
   /**
    * See [MCP specification](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/47339c03c143bb4ec01a26e721a1b8fe66634ebe/docs/specification/draft/basic/index.mdx#general-fields)
    * for notes on _meta usage.
    */
-  _meta: z2.record(z2.string(), z2.unknown()).optional()
+  _meta: z.record(z.string(), z.unknown()).optional()
 });
-var SamplingContentSchema = z2.discriminatedUnion("type", [TextContentSchema, ImageContentSchema, AudioContentSchema]);
-var SamplingMessageContentBlockSchema = z2.discriminatedUnion("type", [
+var SamplingContentSchema = z.discriminatedUnion("type", [TextContentSchema, ImageContentSchema, AudioContentSchema]);
+var SamplingMessageContentBlockSchema = z.discriminatedUnion("type", [
   TextContentSchema,
   ImageContentSchema,
   AudioContentSchema,
   ToolUseContentSchema,
   ToolResultContentSchema
 ]);
-var SamplingMessageSchema = z2.object({
+var SamplingMessageSchema = z.object({
   role: RoleSchema,
-  content: z2.union([SamplingMessageContentBlockSchema, z2.array(SamplingMessageContentBlockSchema)]),
+  content: z.union([SamplingMessageContentBlockSchema, z.array(SamplingMessageContentBlockSchema)]),
   /**
    * See [MCP specification](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/47339c03c143bb4ec01a26e721a1b8fe66634ebe/docs/specification/draft/basic/index.mdx#general-fields)
    * for notes on _meta usage.
    */
-  _meta: z2.record(z2.string(), z2.unknown()).optional()
+  _meta: z.record(z.string(), z.unknown()).optional()
 });
 var CreateMessageRequestParamsSchema = TaskAugmentedRequestParamsSchema.extend({
-  messages: z2.array(SamplingMessageSchema),
+  messages: z.array(SamplingMessageSchema),
   /**
    * The server's preferences for which model to select. The client MAY modify or omit this request.
    */
@@ -15355,7 +15107,7 @@ var CreateMessageRequestParamsSchema = TaskAugmentedRequestParamsSchema.extend({
   /**
    * An optional system prompt the server wants to use for sampling. The client MAY modify or omit this prompt.
    */
-  systemPrompt: z2.string().optional(),
+  systemPrompt: z.string().optional(),
   /**
    * A request to include context from one or more MCP servers (including the caller), to be attached to the prompt.
    * The client MAY ignore this request.
@@ -15363,15 +15115,15 @@ var CreateMessageRequestParamsSchema = TaskAugmentedRequestParamsSchema.extend({
    * Default is "none". Values "thisServer" and "allServers" are soft-deprecated. Servers SHOULD only use these values if the client
    * declares ClientCapabilities.sampling.context. These values may be removed in future spec releases.
    */
-  includeContext: z2.enum(["none", "thisServer", "allServers"]).optional(),
-  temperature: z2.number().optional(),
+  includeContext: z.enum(["none", "thisServer", "allServers"]).optional(),
+  temperature: z.number().optional(),
   /**
    * The requested maximum number of tokens to sample (to prevent runaway completions).
    *
    * The client MAY choose to sample fewer tokens than the requested maximum.
    */
-  maxTokens: z2.number().int(),
-  stopSequences: z2.array(z2.string()).optional(),
+  maxTokens: z.number().int(),
+  stopSequences: z.array(z.string()).optional(),
   /**
    * Optional metadata to pass through to the LLM provider. The format of this metadata is provider-specific.
    */
@@ -15380,7 +15132,7 @@ var CreateMessageRequestParamsSchema = TaskAugmentedRequestParamsSchema.extend({
    * Tools that the model may use during generation.
    * The client MUST return an error if this field is provided but ClientCapabilities.sampling.tools is not declared.
    */
-  tools: z2.array(ToolSchema).optional(),
+  tools: z.array(ToolSchema).optional(),
   /**
    * Controls how the model uses tools.
    * The client MUST return an error if this field is provided but ClientCapabilities.sampling.tools is not declared.
@@ -15389,14 +15141,14 @@ var CreateMessageRequestParamsSchema = TaskAugmentedRequestParamsSchema.extend({
   toolChoice: ToolChoiceSchema.optional()
 });
 var CreateMessageRequestSchema = RequestSchema.extend({
-  method: z2.literal("sampling/createMessage"),
+  method: z.literal("sampling/createMessage"),
   params: CreateMessageRequestParamsSchema
 });
 var CreateMessageResultSchema = ResultSchema.extend({
   /**
    * The name of the model that generated the message.
    */
-  model: z2.string(),
+  model: z.string(),
   /**
    * The reason why sampling stopped, if known.
    *
@@ -15407,7 +15159,7 @@ var CreateMessageResultSchema = ResultSchema.extend({
    *
    * This field is an open string to allow for provider-specific stop reasons.
    */
-  stopReason: z2.optional(z2.enum(["endTurn", "stopSequence", "maxTokens"]).or(z2.string())),
+  stopReason: z.optional(z.enum(["endTurn", "stopSequence", "maxTokens"]).or(z.string())),
   role: RoleSchema,
   /**
    * Response content. Single content block (text, image, or audio).
@@ -15418,7 +15170,7 @@ var CreateMessageResultWithToolsSchema = ResultSchema.extend({
   /**
    * The name of the model that generated the message.
    */
-  model: z2.string(),
+  model: z.string(),
   /**
    * The reason why sampling stopped, if known.
    *
@@ -15430,144 +15182,144 @@ var CreateMessageResultWithToolsSchema = ResultSchema.extend({
    *
    * This field is an open string to allow for provider-specific stop reasons.
    */
-  stopReason: z2.optional(z2.enum(["endTurn", "stopSequence", "maxTokens", "toolUse"]).or(z2.string())),
+  stopReason: z.optional(z.enum(["endTurn", "stopSequence", "maxTokens", "toolUse"]).or(z.string())),
   role: RoleSchema,
   /**
    * Response content. May be a single block or array. May include ToolUseContent if stopReason is "toolUse".
    */
-  content: z2.union([SamplingMessageContentBlockSchema, z2.array(SamplingMessageContentBlockSchema)])
+  content: z.union([SamplingMessageContentBlockSchema, z.array(SamplingMessageContentBlockSchema)])
 });
-var BooleanSchemaSchema = z2.object({
-  type: z2.literal("boolean"),
-  title: z2.string().optional(),
-  description: z2.string().optional(),
-  default: z2.boolean().optional()
+var BooleanSchemaSchema = z.object({
+  type: z.literal("boolean"),
+  title: z.string().optional(),
+  description: z.string().optional(),
+  default: z.boolean().optional()
 });
-var StringSchemaSchema = z2.object({
-  type: z2.literal("string"),
-  title: z2.string().optional(),
-  description: z2.string().optional(),
-  minLength: z2.number().optional(),
-  maxLength: z2.number().optional(),
-  format: z2.enum(["email", "uri", "date", "date-time"]).optional(),
-  default: z2.string().optional()
+var StringSchemaSchema = z.object({
+  type: z.literal("string"),
+  title: z.string().optional(),
+  description: z.string().optional(),
+  minLength: z.number().optional(),
+  maxLength: z.number().optional(),
+  format: z.enum(["email", "uri", "date", "date-time"]).optional(),
+  default: z.string().optional()
 });
-var NumberSchemaSchema = z2.object({
-  type: z2.enum(["number", "integer"]),
-  title: z2.string().optional(),
-  description: z2.string().optional(),
-  minimum: z2.number().optional(),
-  maximum: z2.number().optional(),
-  default: z2.number().optional()
+var NumberSchemaSchema = z.object({
+  type: z.enum(["number", "integer"]),
+  title: z.string().optional(),
+  description: z.string().optional(),
+  minimum: z.number().optional(),
+  maximum: z.number().optional(),
+  default: z.number().optional()
 });
-var UntitledSingleSelectEnumSchemaSchema = z2.object({
-  type: z2.literal("string"),
-  title: z2.string().optional(),
-  description: z2.string().optional(),
-  enum: z2.array(z2.string()),
-  default: z2.string().optional()
+var UntitledSingleSelectEnumSchemaSchema = z.object({
+  type: z.literal("string"),
+  title: z.string().optional(),
+  description: z.string().optional(),
+  enum: z.array(z.string()),
+  default: z.string().optional()
 });
-var TitledSingleSelectEnumSchemaSchema = z2.object({
-  type: z2.literal("string"),
-  title: z2.string().optional(),
-  description: z2.string().optional(),
-  oneOf: z2.array(z2.object({
-    const: z2.string(),
-    title: z2.string()
+var TitledSingleSelectEnumSchemaSchema = z.object({
+  type: z.literal("string"),
+  title: z.string().optional(),
+  description: z.string().optional(),
+  oneOf: z.array(z.object({
+    const: z.string(),
+    title: z.string()
   })),
-  default: z2.string().optional()
+  default: z.string().optional()
 });
-var LegacyTitledEnumSchemaSchema = z2.object({
-  type: z2.literal("string"),
-  title: z2.string().optional(),
-  description: z2.string().optional(),
-  enum: z2.array(z2.string()),
-  enumNames: z2.array(z2.string()).optional(),
-  default: z2.string().optional()
+var LegacyTitledEnumSchemaSchema = z.object({
+  type: z.literal("string"),
+  title: z.string().optional(),
+  description: z.string().optional(),
+  enum: z.array(z.string()),
+  enumNames: z.array(z.string()).optional(),
+  default: z.string().optional()
 });
-var SingleSelectEnumSchemaSchema = z2.union([UntitledSingleSelectEnumSchemaSchema, TitledSingleSelectEnumSchemaSchema]);
-var UntitledMultiSelectEnumSchemaSchema = z2.object({
-  type: z2.literal("array"),
-  title: z2.string().optional(),
-  description: z2.string().optional(),
-  minItems: z2.number().optional(),
-  maxItems: z2.number().optional(),
-  items: z2.object({
-    type: z2.literal("string"),
-    enum: z2.array(z2.string())
+var SingleSelectEnumSchemaSchema = z.union([UntitledSingleSelectEnumSchemaSchema, TitledSingleSelectEnumSchemaSchema]);
+var UntitledMultiSelectEnumSchemaSchema = z.object({
+  type: z.literal("array"),
+  title: z.string().optional(),
+  description: z.string().optional(),
+  minItems: z.number().optional(),
+  maxItems: z.number().optional(),
+  items: z.object({
+    type: z.literal("string"),
+    enum: z.array(z.string())
   }),
-  default: z2.array(z2.string()).optional()
+  default: z.array(z.string()).optional()
 });
-var TitledMultiSelectEnumSchemaSchema = z2.object({
-  type: z2.literal("array"),
-  title: z2.string().optional(),
-  description: z2.string().optional(),
-  minItems: z2.number().optional(),
-  maxItems: z2.number().optional(),
-  items: z2.object({
-    anyOf: z2.array(z2.object({
-      const: z2.string(),
-      title: z2.string()
+var TitledMultiSelectEnumSchemaSchema = z.object({
+  type: z.literal("array"),
+  title: z.string().optional(),
+  description: z.string().optional(),
+  minItems: z.number().optional(),
+  maxItems: z.number().optional(),
+  items: z.object({
+    anyOf: z.array(z.object({
+      const: z.string(),
+      title: z.string()
     }))
   }),
-  default: z2.array(z2.string()).optional()
+  default: z.array(z.string()).optional()
 });
-var MultiSelectEnumSchemaSchema = z2.union([UntitledMultiSelectEnumSchemaSchema, TitledMultiSelectEnumSchemaSchema]);
-var EnumSchemaSchema = z2.union([LegacyTitledEnumSchemaSchema, SingleSelectEnumSchemaSchema, MultiSelectEnumSchemaSchema]);
-var PrimitiveSchemaDefinitionSchema = z2.union([EnumSchemaSchema, BooleanSchemaSchema, StringSchemaSchema, NumberSchemaSchema]);
+var MultiSelectEnumSchemaSchema = z.union([UntitledMultiSelectEnumSchemaSchema, TitledMultiSelectEnumSchemaSchema]);
+var EnumSchemaSchema = z.union([LegacyTitledEnumSchemaSchema, SingleSelectEnumSchemaSchema, MultiSelectEnumSchemaSchema]);
+var PrimitiveSchemaDefinitionSchema = z.union([EnumSchemaSchema, BooleanSchemaSchema, StringSchemaSchema, NumberSchemaSchema]);
 var ElicitRequestFormParamsSchema = TaskAugmentedRequestParamsSchema.extend({
   /**
    * The elicitation mode.
    *
    * Optional for backward compatibility. Clients MUST treat missing mode as "form".
    */
-  mode: z2.literal("form").optional(),
+  mode: z.literal("form").optional(),
   /**
    * The message to present to the user describing what information is being requested.
    */
-  message: z2.string(),
+  message: z.string(),
   /**
    * A restricted subset of JSON Schema.
    * Only top-level properties are allowed, without nesting.
    */
-  requestedSchema: z2.object({
-    type: z2.literal("object"),
-    properties: z2.record(z2.string(), PrimitiveSchemaDefinitionSchema),
-    required: z2.array(z2.string()).optional()
+  requestedSchema: z.object({
+    type: z.literal("object"),
+    properties: z.record(z.string(), PrimitiveSchemaDefinitionSchema),
+    required: z.array(z.string()).optional()
   })
 });
 var ElicitRequestURLParamsSchema = TaskAugmentedRequestParamsSchema.extend({
   /**
    * The elicitation mode.
    */
-  mode: z2.literal("url"),
+  mode: z.literal("url"),
   /**
    * The message to present to the user explaining why the interaction is needed.
    */
-  message: z2.string(),
+  message: z.string(),
   /**
    * The ID of the elicitation, which must be unique within the context of the server.
    * The client MUST treat this ID as an opaque value.
    */
-  elicitationId: z2.string(),
+  elicitationId: z.string(),
   /**
    * The URL that the user should navigate to.
    */
-  url: z2.string().url()
+  url: z.string().url()
 });
-var ElicitRequestParamsSchema = z2.union([ElicitRequestFormParamsSchema, ElicitRequestURLParamsSchema]);
+var ElicitRequestParamsSchema = z.union([ElicitRequestFormParamsSchema, ElicitRequestURLParamsSchema]);
 var ElicitRequestSchema = RequestSchema.extend({
-  method: z2.literal("elicitation/create"),
+  method: z.literal("elicitation/create"),
   params: ElicitRequestParamsSchema
 });
 var ElicitationCompleteNotificationParamsSchema = NotificationsParamsSchema.extend({
   /**
    * The ID of the elicitation that completed.
    */
-  elicitationId: z2.string()
+  elicitationId: z.string()
 });
 var ElicitationCompleteNotificationSchema = NotificationSchema.extend({
-  method: z2.literal("notifications/elicitation/complete"),
+  method: z.literal("notifications/elicitation/complete"),
   params: ElicitationCompleteNotificationParamsSchema
 });
 var ElicitResultSchema = ResultSchema.extend({
@@ -15577,98 +15329,98 @@ var ElicitResultSchema = ResultSchema.extend({
    * - "decline": User explicitly decline the action
    * - "cancel": User dismissed without making an explicit choice
    */
-  action: z2.enum(["accept", "decline", "cancel"]),
+  action: z.enum(["accept", "decline", "cancel"]),
   /**
    * The submitted form data, only present when action is "accept".
    * Contains values matching the requested schema.
    * Per MCP spec, content is "typically omitted" for decline/cancel actions.
    * We normalize null to undefined for leniency while maintaining type compatibility.
    */
-  content: z2.preprocess((val) => val === null ? void 0 : val, z2.record(z2.string(), z2.union([z2.string(), z2.number(), z2.boolean(), z2.array(z2.string())])).optional())
+  content: z.preprocess((val) => val === null ? void 0 : val, z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.array(z.string())])).optional())
 });
-var ResourceTemplateReferenceSchema = z2.object({
-  type: z2.literal("ref/resource"),
+var ResourceTemplateReferenceSchema = z.object({
+  type: z.literal("ref/resource"),
   /**
    * The URI or URI template of the resource.
    */
-  uri: z2.string()
+  uri: z.string()
 });
-var PromptReferenceSchema = z2.object({
-  type: z2.literal("ref/prompt"),
+var PromptReferenceSchema = z.object({
+  type: z.literal("ref/prompt"),
   /**
    * The name of the prompt or prompt template
    */
-  name: z2.string()
+  name: z.string()
 });
 var CompleteRequestParamsSchema = BaseRequestParamsSchema.extend({
-  ref: z2.union([PromptReferenceSchema, ResourceTemplateReferenceSchema]),
+  ref: z.union([PromptReferenceSchema, ResourceTemplateReferenceSchema]),
   /**
    * The argument's information
    */
-  argument: z2.object({
+  argument: z.object({
     /**
      * The name of the argument
      */
-    name: z2.string(),
+    name: z.string(),
     /**
      * The value of the argument to use for completion matching.
      */
-    value: z2.string()
+    value: z.string()
   }),
-  context: z2.object({
+  context: z.object({
     /**
      * Previously-resolved variables in a URI template or prompt.
      */
-    arguments: z2.record(z2.string(), z2.string()).optional()
+    arguments: z.record(z.string(), z.string()).optional()
   }).optional()
 });
 var CompleteRequestSchema = RequestSchema.extend({
-  method: z2.literal("completion/complete"),
+  method: z.literal("completion/complete"),
   params: CompleteRequestParamsSchema
 });
 var CompleteResultSchema = ResultSchema.extend({
-  completion: z2.looseObject({
+  completion: z.looseObject({
     /**
      * An array of completion values. Must not exceed 100 items.
      */
-    values: z2.array(z2.string()).max(100),
+    values: z.array(z.string()).max(100),
     /**
      * The total number of completion options available. This can exceed the number of values actually sent in the response.
      */
-    total: z2.optional(z2.number().int()),
+    total: z.optional(z.number().int()),
     /**
      * Indicates whether there are additional completion options beyond those provided in the current response, even if the exact total is unknown.
      */
-    hasMore: z2.optional(z2.boolean())
+    hasMore: z.optional(z.boolean())
   })
 });
-var RootSchema = z2.object({
+var RootSchema = z.object({
   /**
    * The URI identifying the root. This *must* start with file:// for now.
    */
-  uri: z2.string().startsWith("file://"),
+  uri: z.string().startsWith("file://"),
   /**
    * An optional name for the root.
    */
-  name: z2.string().optional(),
+  name: z.string().optional(),
   /**
    * See [MCP specification](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/47339c03c143bb4ec01a26e721a1b8fe66634ebe/docs/specification/draft/basic/index.mdx#general-fields)
    * for notes on _meta usage.
    */
-  _meta: z2.record(z2.string(), z2.unknown()).optional()
+  _meta: z.record(z.string(), z.unknown()).optional()
 });
 var ListRootsRequestSchema = RequestSchema.extend({
-  method: z2.literal("roots/list"),
+  method: z.literal("roots/list"),
   params: BaseRequestParamsSchema.optional()
 });
 var ListRootsResultSchema = ResultSchema.extend({
-  roots: z2.array(RootSchema)
+  roots: z.array(RootSchema)
 });
 var RootsListChangedNotificationSchema = NotificationSchema.extend({
-  method: z2.literal("notifications/roots/list_changed"),
+  method: z.literal("notifications/roots/list_changed"),
   params: NotificationsParamsSchema.optional()
 });
-var ClientRequestSchema = z2.union([
+var ClientRequestSchema = z.union([
   PingRequestSchema,
   InitializeRequestSchema,
   CompleteRequestSchema,
@@ -15687,14 +15439,14 @@ var ClientRequestSchema = z2.union([
   ListTasksRequestSchema,
   CancelTaskRequestSchema
 ]);
-var ClientNotificationSchema = z2.union([
+var ClientNotificationSchema = z.union([
   CancelledNotificationSchema,
   ProgressNotificationSchema,
   InitializedNotificationSchema,
   RootsListChangedNotificationSchema,
   TaskStatusNotificationSchema
 ]);
-var ClientResultSchema = z2.union([
+var ClientResultSchema = z.union([
   EmptyResultSchema,
   CreateMessageResultSchema,
   CreateMessageResultWithToolsSchema,
@@ -15704,7 +15456,7 @@ var ClientResultSchema = z2.union([
   ListTasksResultSchema,
   CreateTaskResultSchema
 ]);
-var ServerRequestSchema = z2.union([
+var ServerRequestSchema = z.union([
   PingRequestSchema,
   CreateMessageRequestSchema,
   ElicitRequestSchema,
@@ -15714,7 +15466,7 @@ var ServerRequestSchema = z2.union([
   ListTasksRequestSchema,
   CancelTaskRequestSchema
 ]);
-var ServerNotificationSchema = z2.union([
+var ServerNotificationSchema = z.union([
   CancelledNotificationSchema,
   ProgressNotificationSchema,
   LoggingMessageNotificationSchema,
@@ -15725,7 +15477,7 @@ var ServerNotificationSchema = z2.union([
   TaskStatusNotificationSchema,
   ElicitationCompleteNotificationSchema
 ]);
-var ServerResultSchema = z2.union([
+var ServerResultSchema = z.union([
   EmptyResultSchema,
   InitializeResultSchema,
   CompleteResultSchema,
@@ -17608,148 +17360,148 @@ async function pkceChallenge(length) {
 }
 
 // node_modules/@modelcontextprotocol/sdk/dist/esm/shared/auth.js
-var z3 = __toESM(require("zod/v4"), 1);
-var SafeUrlSchema = z3.url().superRefine((val, ctx) => {
+var z2 = __toESM(require("zod/v4"), 1);
+var SafeUrlSchema = z2.url().superRefine((val, ctx) => {
   if (!URL.canParse(val)) {
     ctx.addIssue({
-      code: z3.ZodIssueCode.custom,
+      code: z2.ZodIssueCode.custom,
       message: "URL must be parseable",
       fatal: true
     });
-    return z3.NEVER;
+    return z2.NEVER;
   }
 }).refine((url2) => {
   const u = new URL(url2);
   return u.protocol !== "javascript:" && u.protocol !== "data:" && u.protocol !== "vbscript:";
 }, { message: "URL cannot use javascript:, data:, or vbscript: scheme" });
-var OAuthProtectedResourceMetadataSchema = z3.looseObject({
-  resource: z3.string().url(),
-  authorization_servers: z3.array(SafeUrlSchema).optional(),
-  jwks_uri: z3.string().url().optional(),
-  scopes_supported: z3.array(z3.string()).optional(),
-  bearer_methods_supported: z3.array(z3.string()).optional(),
-  resource_signing_alg_values_supported: z3.array(z3.string()).optional(),
-  resource_name: z3.string().optional(),
-  resource_documentation: z3.string().optional(),
-  resource_policy_uri: z3.string().url().optional(),
-  resource_tos_uri: z3.string().url().optional(),
-  tls_client_certificate_bound_access_tokens: z3.boolean().optional(),
-  authorization_details_types_supported: z3.array(z3.string()).optional(),
-  dpop_signing_alg_values_supported: z3.array(z3.string()).optional(),
-  dpop_bound_access_tokens_required: z3.boolean().optional()
+var OAuthProtectedResourceMetadataSchema = z2.looseObject({
+  resource: z2.string().url(),
+  authorization_servers: z2.array(SafeUrlSchema).optional(),
+  jwks_uri: z2.string().url().optional(),
+  scopes_supported: z2.array(z2.string()).optional(),
+  bearer_methods_supported: z2.array(z2.string()).optional(),
+  resource_signing_alg_values_supported: z2.array(z2.string()).optional(),
+  resource_name: z2.string().optional(),
+  resource_documentation: z2.string().optional(),
+  resource_policy_uri: z2.string().url().optional(),
+  resource_tos_uri: z2.string().url().optional(),
+  tls_client_certificate_bound_access_tokens: z2.boolean().optional(),
+  authorization_details_types_supported: z2.array(z2.string()).optional(),
+  dpop_signing_alg_values_supported: z2.array(z2.string()).optional(),
+  dpop_bound_access_tokens_required: z2.boolean().optional()
 });
-var OAuthMetadataSchema = z3.looseObject({
-  issuer: z3.string(),
+var OAuthMetadataSchema = z2.looseObject({
+  issuer: z2.string(),
   authorization_endpoint: SafeUrlSchema,
   token_endpoint: SafeUrlSchema,
   registration_endpoint: SafeUrlSchema.optional(),
-  scopes_supported: z3.array(z3.string()).optional(),
-  response_types_supported: z3.array(z3.string()),
-  response_modes_supported: z3.array(z3.string()).optional(),
-  grant_types_supported: z3.array(z3.string()).optional(),
-  token_endpoint_auth_methods_supported: z3.array(z3.string()).optional(),
-  token_endpoint_auth_signing_alg_values_supported: z3.array(z3.string()).optional(),
+  scopes_supported: z2.array(z2.string()).optional(),
+  response_types_supported: z2.array(z2.string()),
+  response_modes_supported: z2.array(z2.string()).optional(),
+  grant_types_supported: z2.array(z2.string()).optional(),
+  token_endpoint_auth_methods_supported: z2.array(z2.string()).optional(),
+  token_endpoint_auth_signing_alg_values_supported: z2.array(z2.string()).optional(),
   service_documentation: SafeUrlSchema.optional(),
   revocation_endpoint: SafeUrlSchema.optional(),
-  revocation_endpoint_auth_methods_supported: z3.array(z3.string()).optional(),
-  revocation_endpoint_auth_signing_alg_values_supported: z3.array(z3.string()).optional(),
-  introspection_endpoint: z3.string().optional(),
-  introspection_endpoint_auth_methods_supported: z3.array(z3.string()).optional(),
-  introspection_endpoint_auth_signing_alg_values_supported: z3.array(z3.string()).optional(),
-  code_challenge_methods_supported: z3.array(z3.string()).optional(),
-  client_id_metadata_document_supported: z3.boolean().optional()
+  revocation_endpoint_auth_methods_supported: z2.array(z2.string()).optional(),
+  revocation_endpoint_auth_signing_alg_values_supported: z2.array(z2.string()).optional(),
+  introspection_endpoint: z2.string().optional(),
+  introspection_endpoint_auth_methods_supported: z2.array(z2.string()).optional(),
+  introspection_endpoint_auth_signing_alg_values_supported: z2.array(z2.string()).optional(),
+  code_challenge_methods_supported: z2.array(z2.string()).optional(),
+  client_id_metadata_document_supported: z2.boolean().optional()
 });
-var OpenIdProviderMetadataSchema = z3.looseObject({
-  issuer: z3.string(),
+var OpenIdProviderMetadataSchema = z2.looseObject({
+  issuer: z2.string(),
   authorization_endpoint: SafeUrlSchema,
   token_endpoint: SafeUrlSchema,
   userinfo_endpoint: SafeUrlSchema.optional(),
   jwks_uri: SafeUrlSchema,
   registration_endpoint: SafeUrlSchema.optional(),
-  scopes_supported: z3.array(z3.string()).optional(),
-  response_types_supported: z3.array(z3.string()),
-  response_modes_supported: z3.array(z3.string()).optional(),
-  grant_types_supported: z3.array(z3.string()).optional(),
-  acr_values_supported: z3.array(z3.string()).optional(),
-  subject_types_supported: z3.array(z3.string()),
-  id_token_signing_alg_values_supported: z3.array(z3.string()),
-  id_token_encryption_alg_values_supported: z3.array(z3.string()).optional(),
-  id_token_encryption_enc_values_supported: z3.array(z3.string()).optional(),
-  userinfo_signing_alg_values_supported: z3.array(z3.string()).optional(),
-  userinfo_encryption_alg_values_supported: z3.array(z3.string()).optional(),
-  userinfo_encryption_enc_values_supported: z3.array(z3.string()).optional(),
-  request_object_signing_alg_values_supported: z3.array(z3.string()).optional(),
-  request_object_encryption_alg_values_supported: z3.array(z3.string()).optional(),
-  request_object_encryption_enc_values_supported: z3.array(z3.string()).optional(),
-  token_endpoint_auth_methods_supported: z3.array(z3.string()).optional(),
-  token_endpoint_auth_signing_alg_values_supported: z3.array(z3.string()).optional(),
-  display_values_supported: z3.array(z3.string()).optional(),
-  claim_types_supported: z3.array(z3.string()).optional(),
-  claims_supported: z3.array(z3.string()).optional(),
-  service_documentation: z3.string().optional(),
-  claims_locales_supported: z3.array(z3.string()).optional(),
-  ui_locales_supported: z3.array(z3.string()).optional(),
-  claims_parameter_supported: z3.boolean().optional(),
-  request_parameter_supported: z3.boolean().optional(),
-  request_uri_parameter_supported: z3.boolean().optional(),
-  require_request_uri_registration: z3.boolean().optional(),
+  scopes_supported: z2.array(z2.string()).optional(),
+  response_types_supported: z2.array(z2.string()),
+  response_modes_supported: z2.array(z2.string()).optional(),
+  grant_types_supported: z2.array(z2.string()).optional(),
+  acr_values_supported: z2.array(z2.string()).optional(),
+  subject_types_supported: z2.array(z2.string()),
+  id_token_signing_alg_values_supported: z2.array(z2.string()),
+  id_token_encryption_alg_values_supported: z2.array(z2.string()).optional(),
+  id_token_encryption_enc_values_supported: z2.array(z2.string()).optional(),
+  userinfo_signing_alg_values_supported: z2.array(z2.string()).optional(),
+  userinfo_encryption_alg_values_supported: z2.array(z2.string()).optional(),
+  userinfo_encryption_enc_values_supported: z2.array(z2.string()).optional(),
+  request_object_signing_alg_values_supported: z2.array(z2.string()).optional(),
+  request_object_encryption_alg_values_supported: z2.array(z2.string()).optional(),
+  request_object_encryption_enc_values_supported: z2.array(z2.string()).optional(),
+  token_endpoint_auth_methods_supported: z2.array(z2.string()).optional(),
+  token_endpoint_auth_signing_alg_values_supported: z2.array(z2.string()).optional(),
+  display_values_supported: z2.array(z2.string()).optional(),
+  claim_types_supported: z2.array(z2.string()).optional(),
+  claims_supported: z2.array(z2.string()).optional(),
+  service_documentation: z2.string().optional(),
+  claims_locales_supported: z2.array(z2.string()).optional(),
+  ui_locales_supported: z2.array(z2.string()).optional(),
+  claims_parameter_supported: z2.boolean().optional(),
+  request_parameter_supported: z2.boolean().optional(),
+  request_uri_parameter_supported: z2.boolean().optional(),
+  require_request_uri_registration: z2.boolean().optional(),
   op_policy_uri: SafeUrlSchema.optional(),
   op_tos_uri: SafeUrlSchema.optional(),
-  client_id_metadata_document_supported: z3.boolean().optional()
+  client_id_metadata_document_supported: z2.boolean().optional()
 });
-var OpenIdProviderDiscoveryMetadataSchema = z3.object({
+var OpenIdProviderDiscoveryMetadataSchema = z2.object({
   ...OpenIdProviderMetadataSchema.shape,
   ...OAuthMetadataSchema.pick({
     code_challenge_methods_supported: true
   }).shape
 });
-var OAuthTokensSchema = z3.object({
-  access_token: z3.string(),
-  id_token: z3.string().optional(),
+var OAuthTokensSchema = z2.object({
+  access_token: z2.string(),
+  id_token: z2.string().optional(),
   // Optional for OAuth 2.1, but necessary in OpenID Connect
-  token_type: z3.string(),
-  expires_in: z3.coerce.number().optional(),
-  scope: z3.string().optional(),
-  refresh_token: z3.string().optional()
+  token_type: z2.string(),
+  expires_in: z2.coerce.number().optional(),
+  scope: z2.string().optional(),
+  refresh_token: z2.string().optional()
 }).strip();
-var OAuthErrorResponseSchema = z3.object({
-  error: z3.string(),
-  error_description: z3.string().optional(),
-  error_uri: z3.string().optional()
+var OAuthErrorResponseSchema = z2.object({
+  error: z2.string(),
+  error_description: z2.string().optional(),
+  error_uri: z2.string().optional()
 });
-var OptionalSafeUrlSchema = SafeUrlSchema.optional().or(z3.literal("").transform(() => void 0));
-var OAuthClientMetadataSchema = z3.object({
-  redirect_uris: z3.array(SafeUrlSchema),
-  token_endpoint_auth_method: z3.string().optional(),
-  grant_types: z3.array(z3.string()).optional(),
-  response_types: z3.array(z3.string()).optional(),
-  client_name: z3.string().optional(),
+var OptionalSafeUrlSchema = SafeUrlSchema.optional().or(z2.literal("").transform(() => void 0));
+var OAuthClientMetadataSchema = z2.object({
+  redirect_uris: z2.array(SafeUrlSchema),
+  token_endpoint_auth_method: z2.string().optional(),
+  grant_types: z2.array(z2.string()).optional(),
+  response_types: z2.array(z2.string()).optional(),
+  client_name: z2.string().optional(),
   client_uri: SafeUrlSchema.optional(),
   logo_uri: OptionalSafeUrlSchema,
-  scope: z3.string().optional(),
-  contacts: z3.array(z3.string()).optional(),
+  scope: z2.string().optional(),
+  contacts: z2.array(z2.string()).optional(),
   tos_uri: OptionalSafeUrlSchema,
-  policy_uri: z3.string().optional(),
+  policy_uri: z2.string().optional(),
   jwks_uri: SafeUrlSchema.optional(),
-  jwks: z3.any().optional(),
-  software_id: z3.string().optional(),
-  software_version: z3.string().optional(),
-  software_statement: z3.string().optional()
+  jwks: z2.any().optional(),
+  software_id: z2.string().optional(),
+  software_version: z2.string().optional(),
+  software_statement: z2.string().optional()
 }).strip();
-var OAuthClientInformationSchema = z3.object({
-  client_id: z3.string(),
-  client_secret: z3.string().optional(),
-  client_id_issued_at: z3.number().optional(),
-  client_secret_expires_at: z3.number().optional()
+var OAuthClientInformationSchema = z2.object({
+  client_id: z2.string(),
+  client_secret: z2.string().optional(),
+  client_id_issued_at: z2.number().optional(),
+  client_secret_expires_at: z2.number().optional()
 }).strip();
 var OAuthClientInformationFullSchema = OAuthClientMetadataSchema.merge(OAuthClientInformationSchema);
-var OAuthClientRegistrationErrorSchema = z3.object({
-  error: z3.string(),
-  error_description: z3.string().optional()
+var OAuthClientRegistrationErrorSchema = z2.object({
+  error: z2.string(),
+  error_description: z2.string().optional()
 }).strip();
-var OAuthTokenRevocationRequestSchema = z3.object({
-  token: z3.string(),
-  token_type_hint: z3.string().optional()
+var OAuthTokenRevocationRequestSchema = z2.object({
+  token: z2.string(),
+  token_type_hint: z2.string().optional()
 }).strip();
 
 // node_modules/@modelcontextprotocol/sdk/dist/esm/shared/auth-utils.js
@@ -17957,22 +17709,45 @@ async function auth(provider, options) {
   }
 }
 async function authInternal(provider, { serverUrl, authorizationCode, scope, resourceMetadataUrl, fetchFn }) {
+  const cachedState = await provider.discoveryState?.();
   let resourceMetadata;
   let authorizationServerUrl;
-  try {
-    resourceMetadata = await discoverOAuthProtectedResourceMetadata(serverUrl, { resourceMetadataUrl }, fetchFn);
-    if (resourceMetadata.authorization_servers && resourceMetadata.authorization_servers.length > 0) {
-      authorizationServerUrl = resourceMetadata.authorization_servers[0];
-    }
-  } catch {
+  let metadata2;
+  let effectiveResourceMetadataUrl = resourceMetadataUrl;
+  if (!effectiveResourceMetadataUrl && cachedState?.resourceMetadataUrl) {
+    effectiveResourceMetadataUrl = new URL(cachedState.resourceMetadataUrl);
   }
-  if (!authorizationServerUrl) {
-    authorizationServerUrl = new URL("/", serverUrl);
+  if (cachedState?.authorizationServerUrl) {
+    authorizationServerUrl = cachedState.authorizationServerUrl;
+    resourceMetadata = cachedState.resourceMetadata;
+    metadata2 = cachedState.authorizationServerMetadata ?? await discoverAuthorizationServerMetadata(authorizationServerUrl, { fetchFn });
+    if (!resourceMetadata) {
+      try {
+        resourceMetadata = await discoverOAuthProtectedResourceMetadata(serverUrl, { resourceMetadataUrl: effectiveResourceMetadataUrl }, fetchFn);
+      } catch {
+      }
+    }
+    if (metadata2 !== cachedState.authorizationServerMetadata || resourceMetadata !== cachedState.resourceMetadata) {
+      await provider.saveDiscoveryState?.({
+        authorizationServerUrl: String(authorizationServerUrl),
+        resourceMetadataUrl: effectiveResourceMetadataUrl?.toString(),
+        resourceMetadata,
+        authorizationServerMetadata: metadata2
+      });
+    }
+  } else {
+    const serverInfo = await discoverOAuthServerInfo(serverUrl, { resourceMetadataUrl: effectiveResourceMetadataUrl, fetchFn });
+    authorizationServerUrl = serverInfo.authorizationServerUrl;
+    metadata2 = serverInfo.authorizationServerMetadata;
+    resourceMetadata = serverInfo.resourceMetadata;
+    await provider.saveDiscoveryState?.({
+      authorizationServerUrl: String(authorizationServerUrl),
+      resourceMetadataUrl: effectiveResourceMetadataUrl?.toString(),
+      resourceMetadata,
+      authorizationServerMetadata: metadata2
+    });
   }
   const resource = await selectResourceURL(serverUrl, provider, resourceMetadata);
-  const metadata2 = await discoverAuthorizationServerMetadata(authorizationServerUrl, {
-    fetchFn
-  });
   let clientInformation = await Promise.resolve(provider.clientInformation());
   if (!clientInformation) {
     if (authorizationCode !== void 0) {
@@ -18226,6 +18001,26 @@ async function discoverAuthorizationServerMetadata(authorizationServerUrl, { fet
     }
   }
   return void 0;
+}
+async function discoverOAuthServerInfo(serverUrl, opts) {
+  let resourceMetadata;
+  let authorizationServerUrl;
+  try {
+    resourceMetadata = await discoverOAuthProtectedResourceMetadata(serverUrl, { resourceMetadataUrl: opts?.resourceMetadataUrl }, opts?.fetchFn);
+    if (resourceMetadata.authorization_servers && resourceMetadata.authorization_servers.length > 0) {
+      authorizationServerUrl = resourceMetadata.authorization_servers[0];
+    }
+  } catch {
+  }
+  if (!authorizationServerUrl) {
+    authorizationServerUrl = String(new URL("/", serverUrl));
+  }
+  const authorizationServerMetadata = await discoverAuthorizationServerMetadata(authorizationServerUrl, { fetchFn: opts?.fetchFn });
+  return {
+    authorizationServerUrl,
+    authorizationServerMetadata,
+    resourceMetadata
+  };
 }
 async function startAuthorization(authorizationServerUrl, { metadata: metadata2, clientInformation, redirectUrl, scope, state, resource }) {
   let authorizationUrl;
@@ -19371,101 +19166,6 @@ var SSEClientTransport = class {
   }
 };
 
-// ../../../lib/host-rewrite.ts
-var import_node_fs = require("node:fs");
-var LOCALHOST_HOSTS = /* @__PURE__ */ new Set([
-  "localhost",
-  "127.0.0.1",
-  "[::1]",
-  "::1"
-]);
-var cachedGatewayHost;
-var rewriteLogger = logger.child({ module: "host-rewrite" });
-function isVMEnvironment() {
-  return isDockerEnvironment() || isLimaEnvironment();
-}
-function resolveHostGateway() {
-  if (cachedGatewayHost !== void 0) {
-    return cachedGatewayHost;
-  }
-  const envIP = process.env.QUILLTAP_HOST_IP;
-  if (envIP) {
-    rewriteLogger.info("Host gateway from QUILLTAP_HOST_IP", { host: envIP });
-    cachedGatewayHost = envIP;
-    return cachedGatewayHost;
-  }
-  if (isDockerEnvironment() && !isLimaEnvironment()) {
-    rewriteLogger.info("Docker environment detected \u2014 using host.docker.internal as gateway hostname");
-    cachedGatewayHost = "host.docker.internal";
-    return cachedGatewayHost;
-  }
-  try {
-    const routeTable = (0, import_node_fs.readFileSync)("/proc/net/route", "utf-8");
-    for (const line of routeTable.split("\n").slice(1)) {
-      const fields = line.trim().split("	");
-      if (fields.length >= 3 && fields[1] === "00000000") {
-        const hexGateway = fields[2];
-        const ip = [
-          parseInt(hexGateway.substring(6, 8), 16),
-          parseInt(hexGateway.substring(4, 6), 16),
-          parseInt(hexGateway.substring(2, 4), 16),
-          parseInt(hexGateway.substring(0, 2), 16)
-        ].join(".");
-        rewriteLogger.info("Host gateway IP from /proc/net/route", { ip });
-        cachedGatewayHost = ip;
-        return cachedGatewayHost;
-      }
-    }
-  } catch {
-    rewriteLogger.debug("Could not read /proc/net/route for default gateway lookup");
-  }
-  try {
-    const hosts = (0, import_node_fs.readFileSync)("/etc/hosts", "utf-8");
-    for (const line of hosts.split("\n")) {
-      const trimmed = line.trim();
-      if (trimmed.startsWith("#") || trimmed === "") continue;
-      const parts = trimmed.split(/\s+/);
-      if (parts.length >= 2 && parts.slice(1).includes("host.docker.internal")) {
-        const ip = parts[0];
-        rewriteLogger.info("Host gateway IP from /etc/hosts (host.docker.internal)", { ip });
-        cachedGatewayHost = ip;
-        return cachedGatewayHost;
-      }
-    }
-  } catch {
-    rewriteLogger.debug("Could not read /etc/hosts for host.docker.internal lookup");
-  }
-  rewriteLogger.warn("Could not resolve host gateway \u2014 localhost URLs will not be rewritten");
-  cachedGatewayHost = null;
-  return cachedGatewayHost;
-}
-function rewriteLocalhostUrl(url2) {
-  if (!isVMEnvironment()) {
-    return url2;
-  }
-  let parsed;
-  try {
-    parsed = new URL(url2);
-  } catch {
-    return url2;
-  }
-  if (!LOCALHOST_HOSTS.has(parsed.hostname)) {
-    return url2;
-  }
-  const gatewayHost = resolveHostGateway();
-  if (!gatewayHost) {
-    return url2;
-  }
-  parsed.hostname = gatewayHost;
-  const rewritten = parsed.toString();
-  rewriteLogger.debug("Rewrote localhost URL", {
-    original: url2,
-    rewritten,
-    gatewayHost
-  });
-  return rewritten;
-}
-
 // security.ts
 function validateMCPServerUrl(url2) {
   try {
@@ -19605,7 +19305,7 @@ function parseServerConfigs(serversJson) {
 var http = __toESM(require("node:http"));
 var https = __toESM(require("node:https"));
 var import_node_stream = require("node:stream");
-var clientLogger = logger.child({ module: "mcp-client" });
+var clientLogger = createPluginLogger("mcp-client");
 var LOCALHOST_HOSTS2 = /* @__PURE__ */ new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
 function createHostPreservingFetch(targetHostname) {
   return async (input, init) => {
@@ -20001,7 +19701,7 @@ function convertToolsWithCollisionHandling(serverTools, existingToolNames = /* @
 }
 
 // connection-manager.ts
-var managerLogger = logger.child({ module: "mcp-connection-manager" });
+var managerLogger = createPluginLogger("mcp-connection-manager");
 var MCPConnectionManager = class {
   constructor() {
     this.clients = /* @__PURE__ */ new Map();
@@ -20321,7 +20021,7 @@ var MCPConnectionManager = class {
 var connectionManager = new MCPConnectionManager();
 
 // index.ts
-var pluginLogger = logger.child({ module: "mcp-plugin" });
+var pluginLogger = createPluginLogger("mcp-plugin");
 function parseConfig(toolConfig) {
   return {
     servers: typeof toolConfig.servers === "string" ? toolConfig.servers : "[]",

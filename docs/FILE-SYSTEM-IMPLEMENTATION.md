@@ -1,304 +1,255 @@
-# Centralized File System Implementation Summary
+# File System Implementation
 
 ## Overview
 
-A complete centralized file management system has been implemented to replace the distributed file storage approach. All files are now stored in a single location with comprehensive metadata tracking.
+The file system implementation provides a robust, centralized file management system through the file storage abstraction layer. All project files are stored under a unified directory structure with comprehensive metadata tracking via the database layer.
 
-## What Was Created
+## Architecture Components
 
-### 1. Core File Manager Module
-**Location**: `lib/file-manager/index.ts`
+### 1. File Storage Manager
+**Location**: `lib/file-storage/manager.ts`
 
-Provides the centralized API for all file operations:
-- `createFile()` - Store new files with metadata
-- `findFileById()` - Retrieve file metadata
-- `findFileByHash()` - Deduplication support
-- `findFilesLinkedTo()` - Get files by entity relationship
-- `readFile()` / `readFileAsBase64()` - Read file contents
-- `updateFile()` - Update metadata
-- `deleteFile()` - Remove files
-- `getFileUrl()` - Get public URLs
-- File linking and tagging operations
-- Statistics and utilities
+Provides the core API for all file operations:
+- `buildStorageKey()` - Generate standardized storage paths
+- `createFile()` - Store new files with metadata and relationships
+- `findFileById()` - Retrieve file metadata and content
+- `deleteFile()` - Remove files with relationship cleanup
+- `listFiles()` - Query files by filters
+- Statistics and utility methods
 
-### 2. Updated Type Schemas
-**Location**: `lib/json-store/schemas/types.ts`
+### 2. Storage Interfaces
+**Location**: `lib/file-storage/interfaces.ts`
 
-New types added:
-- `FileEntry` - Comprehensive file metadata schema
+Defines contracts for file storage:
+- `FileStorageBackend` - Pluggable backend interface
+- `StorageConfig` - Configuration options
+- Type definitions for storage operations
+
+### 3. Type Schemas
+**Location**: `lib/schemas/file.types.ts`
+
+Core file types:
+- `FileEntry` - File metadata and relationships
 - `FileSource` - Enum for file origins (UPLOADED, GENERATED, IMPORTED, SYSTEM)
 - `FileCategory` - Enum for file types (IMAGE, DOCUMENT, AVATAR, ATTACHMENT, EXPORT)
-- Legacy `BinaryIndexEntry` maintained for backward compatibility
+- `FileLink` - Relationships to entities (chats, characters, messages, etc.)
 
-### 3. File Repository
-**Location**: `lib/json-store/repositories/files.repository.ts`
+### 4. Database Repository
+**Location**: `lib/database/repositories/files.repository.ts`
 
-Integrates the file manager with the JSON Store system:
-- CRUD operations on `data/files/files.jsonl`
-- Query methods for finding files
-- Relationship management (links and tags)
-- Follows existing repository patterns
+Persists file metadata to SQLite:
+- CRUD operations for file entries
+- Query methods for finding files by various criteria
+- Relationship management through the database
+- Integrates with the abstraction layer
 
-### 4. Modernized Upload Modules
-**Location**: `lib/images-v2.ts` and `lib/chat-files-v2.ts`
+### 5. Local File Storage Backend
+**Location**: `lib/file-storage/backends/local/index.ts`
 
-Updated versions of image and chat file handlers:
-- Use the new file manager under the hood
-- Return file IDs instead of paths
-- Support the `linkedTo` relationship array
-- Include SHA256 hashes
-- Automatic deduplication
+Default file storage implementation:
+- Stores files to `data/files/storage/` on the local filesystem
+- Uses UUID-based naming with original extension
+- Manages physical file operations (read, write, delete)
+- Directory management and cleanup
 
-### 5. Compatibility Layer
-**Location**: `lib/file-manager/compat.ts`
+### 6. File Scanning & Reconciliation
+**Location**: `lib/file-storage/scanner.ts` and `lib/file-storage/reconciliation.ts`
 
-Helpers for transitioning from old to new system:
-- `fileEntryToBinaryEntry()` - Convert new format to old
-- File type checking utilities
-- Display helpers (formatFileSize, labels, etc.)
-- URL compatibility functions
-
-### 6. API Route for File Serving
-**Location**: `app/api/files/[id]/route.ts`
-
-New API endpoint for serving files:
-- `GET /api/files/:id` - Retrieve file by ID
-- `DELETE /api/files/:id` - Delete file (with safety checks)
-- `PATCH /api/files/:id/unlink` - Remove entity link
-- Proper content-type headers
-- Authentication checks
-
-### 7. Migration Utility
-**Location**: `scripts/migrate-files.ts`
-
-One-time migration script:
-- Reads old `data/binaries/index.jsonl`
-- Copies files from `public/uploads/*` to `data/files/storage/`
-- Transforms metadata to new format
-- Preserves all relationships and metadata
-- Includes `--dry-run` option for testing
-- Comprehensive statistics and error reporting
-
-### 8. NPM Scripts
-**Location**: `package.json`
-
-Added migration commands:
-```json
-{
-  "migrate-files": "tsx scripts/migrate-files.ts",
-  "migrate-files:dry-run": "tsx scripts/migrate-files.ts --dry-run"
-}
-```
-
-### 9. Documentation
-
-#### File Migration Guide
-**Location**: `docs/FILE-MIGRATION.md`
-
-Complete guide covering:
-- Old vs new system comparison
-- Step-by-step migration instructions
-- API changes and code updates
-- Troubleshooting
-- Rollback procedures
-
-#### File Manager README
-**Location**: `lib/file-manager/README.md`
-
-Developer documentation:
-- Architecture overview
-- Complete API reference
-- Usage examples
-- Best practices
-- Performance considerations
-- Testing guidelines
+Utilities for managing stored files:
+- **Scanner**: Discovers and catalogs files in storage
+- **Reconciliation**: Validates database entries match physical files
+- Orphan detection and cleanup utilities
+- Safety checks before deletion
 
 ## File Storage Structure
 
-### Before
-```
-public/uploads/
-├── images/{userId}/{filename}
-├── generated/{userId}/{filename}
-└── chat-files/{chatId}/{filename}
-
-data/binaries/index.jsonl
-```
-
-### After
 ```
 data/files/
 ├── storage/
-│   └── {uuid}.{ext}
-└── files.jsonl
+│   ├── users/
+│   │   ├── {userId}/
+│   │   │   ├── {projectId}/
+│   │   │   │   └── {fileId}_{filename}     (files in project)
+│   │   │   └── _general/
+│   │   │       └── {fileId}_{filename}     (files without project)
+│   │   └── system/
+│   │       └── {fileId}_{filename}         (system files)
+│   └── plugins/
+│       └── {pluginId}/
+│           └── {fileId}_{filename}         (plugin storage)
 ```
+
+All file metadata is tracked in the SQLite database with comprehensive relationships to entities (chats, characters, messages, etc.).
 
 ## Key Features
 
-### 1. UUID-Based Naming
-Every file is named using its UUID, eliminating path conflicts and simplifying management.
+### 1. Project-Aware Storage
+Files are organized by project context when applicable:
+- Project files stored in project-specific directories
+- General (non-project) files in `_general/` folders
+- System files in dedicated `system/` directory
+- Plugin files in isolated `plugins/` namespace
 
 ### 2. Centralized Metadata
-Single JSONL database tracks all file information:
+SQLite database tracks all file information:
 - Original filename
 - MIME type
 - File size
 - Content hash (SHA256)
 - Creation/modification timestamps
-- Relationships to other entities
+- Entity relationships (chats, characters, messages, projects)
 - Generation metadata (for AI files)
-- Tags
+- User and project associations
+- Tags and categorization
 
-### 3. Relationship Tracking
-Files link to multiple entities via the `linkedTo` array:
+### 3. Entity Relationship Tracking
+Files maintain relationships to various entities:
 ```typescript
 linkedTo: [
-  "msg-abc123",     // Message
-  "chat-def456",    // Chat
-  "char-ghi789",    // Character
-  "persona-jkl012"  // Persona
+  { entityId: "msg-abc123", entityType: "message" },
+  { entityId: "chat-def456", entityType: "chat" },
+  { entityId: "char-ghi789", entityType: "character" },
+  { entityId: "proj-jkl012", entityType: "project" }
 ]
 ```
 
 ### 4. Automatic Deduplication
-Files with identical SHA256 hashes are deduplicated:
-- Only one physical copy stored
-- Multiple entities can reference the same file
-- Relationships merged automatically
+Files with identical content are deduplicated:
+- Content hash compared before storage
+- Only one physical copy maintained
+- Multiple entities can reference same file
+- Relationships merged automatically on creation
 
 ### 5. Comprehensive Classification
-Files are categorized by:
-- **Source**: Where they came from (uploaded, generated, imported, system)
-- **Category**: What they are (image, document, avatar, attachment, export)
+Files are categorized by source and type:
+- **Source**: UPLOADED, GENERATED, IMPORTED, SYSTEM
+- **Category**: IMAGE, DOCUMENT, AVATAR, ATTACHMENT, EXPORT, PROJECT
 
 ### 6. Generation Metadata
 AI-generated files include:
 - Original prompt
-- Model used
-- Revised prompt (if modified by AI)
-- Description
+- Model and provider used
+- Revised/improved prompt (if applicable)
+- Description and generation context
 
-## Migration Instructions
+## Usage Patterns
 
-### Quick Start
+### Building Storage Keys
 
-1. **Test migration (dry run)**:
-   ```bash
-   # Note: The migrate-files script was removed in v2.0. These instructions
-   # are preserved for historical reference only.
-   npm run migrate-files:dry-run
-   ```
-
-2. **Backup data**:
-   ```bash
-   cp -r public/uploads public/uploads.backup
-   cp data/binaries/index.jsonl data/binaries/index.jsonl.backup
-   ```
-
-3. **Run migration**:
-   ```bash
-   npm run migrate-files
-   ```
-
-4. **Verify results**:
-   - Check `data/files/files.jsonl`
-   - Verify files in `data/files/storage/`
-   - Review migration statistics
-
-5. **Update code**:
-   - Change imports from `lib/images.ts` to `lib/images-v2.ts`
-   - Change imports from `lib/chat-files.ts` to `lib/chat-files-v2.ts`
-   - Update API calls to use file IDs
-
-6. **Test thoroughly**:
-   - File uploads
-   - File downloads
-   - Image generation
-   - Chat attachments
-   - Character avatars
-
-7. **Clean up** (after verification):
-   ```bash
-   rm -rf public/uploads
-   rm -rf data/binaries
-   ```
-
-## Code Changes Required
-
-### Image Uploads
+Generate standardized paths for files:
 
 ```typescript
-// Before
-import { uploadImage } from '@/lib/images';
-const result = await uploadImage(file, userId);
-// { filename, filepath, mimeType, size }
+import { fileStorageManager } from '@/lib/file-storage/manager';
 
-// After
-import { uploadImage } from '@/lib/images-v2';
-const result = await uploadImage(file, userId, [characterId]);
-// { id, filename, filepath, mimeType, size, sha256 }
+// Project file in root
+const key = fileStorageManager.buildStorageKey({
+  userId: 'user-123',
+  fileId: 'file-456',
+  filename: 'document.pdf',
+  projectId: 'proj-789',
+  folderPath: '/',
+});
+// Result: users/user-123/proj-789/file-456_document.pdf
+
+// Project file in subfolder
+const key = fileStorageManager.buildStorageKey({
+  userId: 'user-123',
+  fileId: 'file-456',
+  filename: 'document.pdf',
+  projectId: 'proj-789',
+  folderPath: '/documents/',
+});
+// Result: users/user-123/proj-789/documents/file-456_document.pdf
+
+// General file (no project)
+const key = fileStorageManager.buildStorageKey({
+  userId: 'user-123',
+  fileId: 'file-456',
+  filename: 'avatar.png',
+});
+// Result: users/user-123/_general/file-456_avatar.png
 ```
 
-### Chat File Attachments
+### Creating Files
 
 ```typescript
-// Before
-import { uploadChatFile, loadChatFilesForLLM } from '@/lib/chat-files';
-const result = await uploadChatFile(file, chatId);
-const files = await loadChatFilesForLLM([{ id, filepath, ... }]);
+import { fileStorageManager } from '@/lib/file-storage/manager';
 
-// After
-import { uploadChatFile, loadChatFilesForLLM } from '@/lib/chat-files-v2';
-const result = await uploadChatFile(file, chatId, messageId);
-const files = await loadChatFilesForLLM([fileId1, fileId2]);
-```
-
-### File Manager Direct Usage
-
-```typescript
-import {
-  createFile,
-  findFileById,
-  readFileAsBase64,
-  deleteFile,
-  addFileLink,
-} from '@/lib/file-manager';
-
-// Create file
-const fileEntry = await createFile({
+const fileEntry = await fileStorageManager.createFile({
+  userId: 'user-123',
+  projectId: 'proj-789',
+  folderPath: '/documents/',
   buffer: fileBuffer,
-  originalFilename: 'avatar.png',
-  mimeType: 'image/png',
+  filename: 'report.pdf',
+  mimeType: 'application/pdf',
   source: 'UPLOADED',
-  category: 'AVATAR',
-  linkedTo: [characterId],
-  tags: [tagId],
+  category: 'DOCUMENT',
+  linkedTo: [
+    { entityId: 'chat-456', entityType: 'chat' },
+    { entityId: 'msg-789', entityType: 'message' }
+  ],
+});
+```
+
+### Querying Files
+
+```typescript
+import { fileStorageManager } from '@/lib/file-storage/manager';
+
+// Find by ID
+const file = await fileStorageManager.findFileById('file-456');
+
+// List project files
+const files = await fileStorageManager.listFiles({
+  userId: 'user-123',
+  projectId: 'proj-789',
 });
 
-// Read file
-const file = await findFileById(fileEntry.id);
-const base64 = await readFileAsBase64(fileEntry.id);
-
-// Add relationship
-await addFileLink(fileEntry.id, chatId);
-
-// Delete file
-await deleteFile(fileEntry.id);
+// Find by content hash (deduplication)
+const existing = await fileStorageManager.findFileByHash('sha256hash');
 ```
 
-## API Routes to Update
+### Deleting Files
 
-The following API routes will need updates to use the new system:
+```typescript
+// Remove file (checks for entity links)
+await fileStorageManager.deleteFile('file-456', {
+  checkEntityLinks: true,
+  cascade: false, // don't delete linked entities
+});
+```
 
-1. **Image Upload**: `app/api/images/route.ts`
-2. **Image Generation**: `app/api/images/generate/route.ts`
-3. **Chat File Upload**: `app/api/chats/[id]/files/route.ts`
-4. **Image Deletion**: `app/api/images/[id]/route.ts`
-5. **Chat File Deletion**: `app/api/chat-files/[id]/route.ts`
-6. **Character Avatar**: `app/api/characters/[id]/avatar/route.ts`
-7. **Persona Avatar**: `app/api/personas/[id]/avatar/route.ts`
-8. **Character Import**: `app/api/characters/import/route.ts`
-9. **Character Export**: `app/api/characters/[id]/export/route.ts`
+## API Routes
+
+File operations are exposed through versioned REST API routes:
+
+### File Operations
+- **POST `/api/v1/files`** - Create/upload file
+- **GET `/api/v1/files`** - List files with filters
+- **GET `/api/v1/files/[id]`** - Retrieve file metadata
+- **DELETE `/api/v1/files/[id]`** - Delete file
+- **POST `/api/v1/files/[id]?action=link`** - Add entity link
+- **POST `/api/v1/files/[id]?action=unlink`** - Remove entity link
+
+### File Proxy Access
+- **GET `/api/v1/files/proxy/[...key]`** - Serve file by storage key with access control
+
+### Folder Management
+- **GET `/api/v1/files/folders`** - List project folders
+- **POST `/api/v1/files/folders`** - Create folder
+- **DELETE `/api/v1/files/folders`** - Delete folder
+
+### File Permissions
+- **GET `/api/v1/files/write-permissions`** - Check folder write access
+
+### Image Management
+- **POST `/api/v1/images`** - Upload image
+- **GET `/api/v1/images/[id]`** - Retrieve image
+- **DELETE `/api/v1/images/[id]`** - Delete image
+
+### Chat File Operations
+- **POST `/api/v1/chats/[id]/files`** - Upload file to chat
+- **DELETE `/api/v1/chat-files/[id]`** - Delete chat file
 
 ## Benefits
 
@@ -313,89 +264,161 @@ The following API routes will need updates to use the new system:
 9. **Generation History**: Full metadata for AI-generated content
 10. **Scalable**: Ready for future enhancements (CDN, etc.)
 
-## Storage Key Structure
+## Database Schema
 
-Files are stored on the local filesystem using project-aware key paths:
+File metadata is stored in SQLite with the following key columns:
 
-### Key Format
-
-| File Type | Storage Key Format |
-|-----------|-------------------|
-| Project file at root | `users/{userId}/{projectId}/{fileId}_{filename}` |
-| Project file in folder | `users/{userId}/{projectId}/{folderPath}/{fileId}_{filename}` |
-| General file (no project) | `users/{userId}/_general/{fileId}_{filename}` |
-
-### Examples
-
+### Files Table
+```typescript
+interface FileEntry {
+  id: string;                    // UUID identifier
+  userId: string;                // Owner user ID
+  projectId?: string;            // Associated project (optional)
+  filename: string;              // Original filename
+  mimeType: string;              // MIME type
+  size: number;                  // File size in bytes
+  sha256: string;                // Content hash for deduplication
+  source: FileSource;            // UPLOADED | GENERATED | IMPORTED | SYSTEM
+  category: FileCategory;        // IMAGE | DOCUMENT | AVATAR | etc.
+  storageKey: string;            // Path in storage backend
+  linkedTo: FileLink[];          // Entity relationships
+  tags: string[];                // Tag identifiers
+  metadata?: Record<string, any>;// Additional metadata
+  generationMeta?: {             // For AI-generated files
+    prompt: string;
+    provider: string;
+    model: string;
+    revisedPrompt?: string;
+    description?: string;
+  };
+  createdAt: number;             // Timestamp
+  updatedAt: number;             // Timestamp
+}
 ```
-# Project file at root
-users/abc123/proj456/file789_report.pdf
 
-# Project file in subfolder
-users/abc123/proj456/documents/file789_report.pdf
-
-# General file (not in any project)
-users/abc123/_general/file789_avatar.png
+### FileLink Type
+```typescript
+interface FileLink {
+  entityId: string;              // ID of linked entity
+  entityType: string;            // Entity type (chat, message, character, etc.)
+}
 ```
 
-### Key Generation
+## Scanning and Reconciliation
 
-The `fileStorageManager.buildStorageKey()` method generates keys:
+The system includes utilities to manage stored files:
+
+### Scanner
+Discovers and catalogs files in storage:
 
 ```typescript
-import { fileStorageManager } from '@/lib/file-storage/manager';
+import { fileStorageScanner } from '@/lib/file-storage/scanner';
 
-const storageKey = fileStorageManager.buildStorageKey({
-  userId: 'user-123',
-  fileId: 'file-456',
-  filename: 'document.pdf',
-  projectId: 'proj-789',      // or null for general files
-  folderPath: '/documents/',  // or '/' for root
+const results = await fileStorageScanner.scan({
+  basePath: 'data/files/storage',
+  pattern: '**/*',
 });
 ```
+
+### Reconciliation
+Validates database entries match physical files:
+
+```typescript
+import { reconcileFileStorage } from '@/lib/file-storage/reconciliation';
+
+const report = await reconcileFileStorage({
+  checkOrphans: true,        // Find files without DB entries
+  checkMissing: true,        // Find DB entries without files
+  validateHashes: false,     // Verify SHA256 hashes (slow)
+  autoCleanup: false,        // Delete orphans
+});
+
+console.log(report.orphans);  // Files without DB entries
+console.log(report.missing);  // DB entries without files
+```
+
+## File Watcher
+
+Monitor storage directory for external changes:
+
+```typescript
+import { FileWatcher } from '@/lib/file-storage/watcher';
+
+const watcher = new FileWatcher('data/files/storage');
+watcher.on('add', (filePath) => console.log('File added:', filePath));
+watcher.on('remove', (filePath) => console.log('File removed:', filePath));
+await watcher.watch();
+```
+
+## Integration Points
+
+### With Projects
+Files are associated with projects through:
+- `projectId` in file metadata
+- Storage path includes project directory
+- Project deletion cascades to project files
+
+### With Chats
+Chat files linked through:
+- Entity relationship tracking
+- `linkedTo` array with `entityType: 'chat'`
+- File deletion checks for chat references
+
+### With Characters
+Character avatars and related files:
+- Category: `AVATAR` for character images
+- Entity links to character ID
+- Managed through character API endpoints
+
+### With Messages
+Message attachments tracked via:
+- `linkedTo` array with `entityType: 'message'`
+- File deletion cascade options
 
 ## Future Enhancements
 
 The system is designed to support:
 - Image optimization and resizing
 - Automatic cleanup of orphaned files
-- File versioning
+- File versioning and snapshots
 - Thumbnail generation
 - Advanced search and filtering
 - File analytics and usage tracking
+- CDN/cloud storage backends
 
-## Testing
+## Best Practices
 
-Before deploying:
+1. **Always specify userId** - Files should be associated with an owner
+2. **Use project context** - Link files to projects when applicable
+3. **Tag related files** - Use tags for logical grouping
+4. **Check relationships** - Verify entity links before deletion
+5. **Monitor storage** - Run reconciliation periodically
+6. **Hash verification** - Leverage SHA256 for deduplication
+7. **Metadata richness** - Populate metadata fields for generation info
 
-1. Run dry-run migration to verify file counts
-2. Test file uploads in development
-3. Test file downloads and viewing
-4. Test file deletion with relationship checks
-5. Verify deduplication works correctly
-6. Test character/persona avatar changes
-7. Test AI image generation
-8. Test chat file attachments
-9. Verify all existing files are accessible
-10. Test migration rollback procedure
+## Troubleshooting
 
-## Support
+### Orphaned Files
+Files exist in storage but lack database entries:
+```typescript
+const report = await reconcileFileStorage({ checkOrphans: true });
+if (report.orphans.length > 0) {
+  // Manual review or automatic cleanup
+}
+```
 
-For issues or questions:
-- Review documentation in `docs/FILE-MIGRATION.md`
-- Check file manager README in `lib/file-manager/README.md`
-- Examine migration logs for detailed error messages
-- File GitHub issues with migration statistics
+### Missing Files
+Database entries without corresponding files:
+```typescript
+const report = await reconcileFileStorage({ checkMissing: true });
+if (report.missing.length > 0) {
+  // Remove stale DB entries or restore from backup
+}
+```
 
-## Summary
-
-This implementation provides a robust, centralized file management system that:
-- Consolidates all files under `data/files/`
-- Tracks comprehensive metadata in `data/files/files.jsonl`
-- Supports relationships between files and entities
-- Handles deduplication automatically
-- Includes a complete migration path from the old system
-- Maintains backward compatibility during transition
-- Is well-documented and tested
-
-The system is production-ready and can be deployed by running the migration utility and updating code imports.
+### Hash Conflicts
+Multiple files with same content:
+```typescript
+const existing = await fileStorageManager.findFileByHash(sha256);
+// Deduplicate by using existing file instead of creating new one
+```

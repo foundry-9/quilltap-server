@@ -279,14 +279,47 @@ export async function enqueueLLMLogCleanup(
 }
 
 /**
+ * Result of enqueueing an embedding generate job
+ */
+export interface EmbeddingGenerateEnqueueResult {
+  jobId: string;
+  isNew: boolean;
+}
+
+/**
  * Enqueue an embedding generate job
+ * Skips if there's already a pending/processing job for the same entity
  */
 export async function enqueueEmbeddingGenerate(
   userId: string,
   payload: EmbeddingGeneratePayload,
   options?: EnqueueJobOptions
-): Promise<string> {
-  return enqueueJob(userId, 'EMBEDDING_GENERATE', payload as unknown as Record<string, unknown>, options);
+): Promise<EmbeddingGenerateEnqueueResult> {
+  const repos = getRepositories();
+
+  // Check for existing pending/processing embedding jobs for this entity
+  const pendingJobs = await repos.backgroundJobs.findPendingForEntity(payload.entityId);
+  const existingJob = pendingJobs.find(job => job.type === 'EMBEDDING_GENERATE');
+
+  if (existingJob) {
+    logger.debug('[EmbeddingGenerate] Reusing existing pending job for entity', {
+      context: 'background-jobs.queue',
+      entityId: payload.entityId,
+      entityType: payload.entityType,
+      existingJobId: existingJob.id,
+      existingStatus: existingJob.status,
+    });
+    return { jobId: existingJob.id, isNew: false };
+  }
+
+  const jobId = await enqueueJob(userId, 'EMBEDDING_GENERATE', payload as unknown as Record<string, unknown>, options);
+  logger.debug('[EmbeddingGenerate] Created new job for entity', {
+    context: 'background-jobs.queue',
+    entityId: payload.entityId,
+    entityType: payload.entityType,
+    jobId,
+  });
+  return { jobId, isNew: true };
 }
 
 /**

@@ -7,7 +7,7 @@ This implementation provides a complete, production-ready schema and tooling for
 ## Files Created
 
 ### Core Schema
-1. **`lib/json-store/schemas/plugin-manifest.ts`**
+1. **`lib/schemas/plugin-manifest.ts`**
    - Complete Zod schema for plugin manifest validation
    - TypeScript type definitions
    - Validation helpers
@@ -46,7 +46,7 @@ This implementation provides a complete, production-ready schema and tooling for
    - Edge case coverage
 
 ### Updates
-8. **`lib/json-store/schemas/types.ts`**
+8. **`lib/schemas/types.ts`**
    - Added export for plugin manifest schema
 
 9. **`plugins/qtap-plugin-template/manifest.json`**
@@ -97,9 +97,9 @@ The schema supports declaring 18+ plugin capabilities:
 
 ## Backend Integration
 
-The schema is located in `lib/json-store/schemas/` which is the standard location for data schemas in Quilltap. This makes it:
+The schema is located in `lib/schemas/` which is the standard location for data schemas in Quilltap. This makes it:
 
-1. **Accessible** - Available via `@/lib/json-store/schemas/plugin-manifest`
+1. **Accessible** - Available via `@/lib/schemas/plugin-manifest`
 2. **Consistent** - Follows existing schema patterns
 3. **Centralized** - Part of the unified type system
 
@@ -210,4 +210,4 @@ The plugin manifest schema is now complete and production-ready:
 - ✅ Example code
 - ✅ Template plugin updated
 
-The schema is in the right place (`lib/json-store/schemas/`) for the backend to read and use it effectively.
+The schema is in the right place (`lib/schemas/`) for the backend to read and use it effectively.

@@ -99,8 +99,6 @@ async function saveGeneratedImage(
 
     // Upload to file storage
     const uploadResult = await fileStorageManager.uploadFile({
-      userId,
-      fileId,
       filename: originalFilename,
       content: buffer,
       contentType: mimeType,
@@ -738,7 +736,7 @@ export async function executeImageGenerationTool(
               dangerSettings.uncensoredImageProfileId
             );
 
-            // Sanitize appearances through Dangermouse
+            // Sanitize appearances through the Concierge
             resolvedAppearances = await sanitizeAppearancesIfNeeded(
               resolvedAppearances,
               dangerSettings,

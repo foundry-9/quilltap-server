@@ -1,6 +1,6 @@
 {
   "name": "qtap-plugin-theme-old-school",
-  "version": "1.0.7",
+  "version": "1.0.9",
   "description": "Old School theme plugin for Quilltap - the original default theme preserved as a plugin",
   "main": "index.js",
   "types": "index.d.ts",

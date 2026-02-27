@@ -288,24 +288,6 @@ export async function* streamMessage(
     thoughtSignature: m.thoughtSignature,
   })) as LLMMessage[]
 
-  // Debug log: LLM request payload
-  const requestPayload = {
-    messages: llmMessages.map(m => ({
-      role: m.role,
-      contentLength: m.content?.length || 0,
-      hasAttachments: !!(m.attachments && m.attachments.length > 0),
-      attachmentCount: m.attachments?.length || 0,
-      name: m.name,
-      hasThoughtSignature: !!m.thoughtSignature,
-    })),
-    model: connectionProfile.modelName,
-    temperature: modelParams.temperature,
-    maxTokens: modelParams.maxTokens,
-    topP: modelParams.topP,
-    toolCount: tools.length,
-    webSearchEnabled: useNativeWebSearch,
-  }
-
   // Track timing and accumulated content
   const startTime = Date.now()
   let chunkCount = 0

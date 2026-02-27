@@ -12,7 +12,7 @@
 import { getRepositories } from '@/lib/repositories/factory'
 import { Memory } from '@/lib/schemas/types'
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
-import { findSimilarMemories } from './memory-service'
+
 import { logger } from '@/lib/logger'
 
 /**
@@ -240,72 +240,79 @@ export async function runHousekeeping(
   }
 
   // Second pass: check for duplicates/similar memories if merge is enabled
-  if (opts.mergeSimilar && opts.userId) {
+  // Uses already-stored embeddings from the vector store — no API calls needed.
+  if (opts.mergeSimilar) {
     const remainingMemories = sortedMemories.filter(m => !memoriesToDelete.includes(m.id))
+    const memoryMap = new Map(remainingMemories.map(m => [m.id, m]))
+    const deleteSet = new Set(memoriesToDelete)
 
-    for (let i = 0; i < remainingMemories.length; i++) {
-      const memory = remainingMemories[i]
+    try {
+      const vectorStore = await getCharacterVectorStore(characterId)
 
-      // Skip if already marked for deletion
-      if (memoriesToDelete.includes(memory.id)) {
-        continue
-      }
+      for (let i = 0; i < remainingMemories.length; i++) {
+        const memory = remainingMemories[i]
 
-      try {
-        // Find similar memories
-        const similar = await findSimilarMemories(
-          characterId,
-          memory.content,
-          memory.summary,
-          {
-            userId: opts.userId,
-            embeddingProfileId: opts.embeddingProfileId,
-            threshold: opts.mergeThreshold,
-          }
-        )
+        // Skip if already marked for deletion/merge
+        if (deleteSet.has(memory.id)) {
+          continue
+        }
 
-        // Check for similar memories that aren't this one
-        for (const match of similar) {
-          if (match.memory.id === memory.id) continue
-          if (memoriesToDelete.includes(match.memory.id)) continue
-          if (memoriesToMerge.some(m => m.sourceId === match.memory.id)) continue
+        // Use the stored embedding from the vector store (no API call)
+        const entry = vectorStore.getAllEntries().find(e => e.id === memory.id)
+        if (!entry) {
+          continue
+        }
+
+        // Search for similar using the existing embedding
+        const searchResults = vectorStore.search(entry.embedding, 10)
+
+        for (const match of searchResults) {
+          if (match.id === memory.id) continue
+          if (match.score < opts.mergeThreshold) continue
+          if (deleteSet.has(match.id)) continue
+          if (memoriesToMerge.some(m => m.sourceId === match.id)) continue
+
+          const matchMemory = memoryMap.get(match.id)
+          if (!matchMemory) continue
 
           // Determine which to keep (higher importance or newer if equal)
           const keepCurrent =
-            memory.importance > match.memory.importance ||
-            (memory.importance === match.memory.importance &&
-              new Date(memory.createdAt) > new Date(match.memory.createdAt))
+            memory.importance > matchMemory.importance ||
+            (memory.importance === matchMemory.importance &&
+              new Date(memory.createdAt) > new Date(matchMemory.createdAt))
 
           if (keepCurrent) {
             memoriesToMerge.push({
-              sourceId: match.memory.id,
+              sourceId: matchMemory.id,
               targetId: memory.id,
             })
-            memoriesToDelete.push(match.memory.id)
+            memoriesToDelete.push(matchMemory.id)
+            deleteSet.add(matchMemory.id)
             result.details.push({
-              memoryId: match.memory.id,
+              memoryId: matchMemory.id,
               action: 'merged',
-              reason: `Similar to memory ${memory.id} (${(match.similarity * 100).toFixed(0)}% similarity)`,
-              summary: match.memory.summary,
+              reason: `Similar to memory ${memory.id} (${(match.score * 100).toFixed(0)}% similarity)`,
+              summary: matchMemory.summary,
             })
           } else {
             memoriesToMerge.push({
               sourceId: memory.id,
-              targetId: match.memory.id,
+              targetId: matchMemory.id,
             })
             memoriesToDelete.push(memory.id)
+            deleteSet.add(memory.id)
             result.details.push({
               memoryId: memory.id,
               action: 'merged',
-              reason: `Similar to memory ${match.memory.id} (${(match.similarity * 100).toFixed(0)}% similarity)`,
+              reason: `Similar to memory ${matchMemory.id} (${(match.score * 100).toFixed(0)}% similarity)`,
               summary: memory.summary,
             })
             break // This memory is being merged, stop checking for its duplicates
           }
         }
-      } catch (error) {
-        logger.warn(`[Housekeeping] Failed to check similarity for memory ${memory.id}`, { characterId, memoryId: memory.id, error: String(error) })
       }
+    } catch (error) {
+      logger.warn('[Housekeeping] Failed to run similarity merge pass', { characterId, error: String(error) })
     }
   }
 

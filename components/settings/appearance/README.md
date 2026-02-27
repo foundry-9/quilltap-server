@@ -6,19 +6,20 @@ This module provides the UI for managing theme and color mode preferences in Qui
 
 ```
 appearance/
-├── types.ts                    # TypeScript interfaces and types
+├── types.ts                       # TypeScript interfaces and types
 ├── hooks/
 │   ├── useAppearanceSettings.ts   # Settings state management hook
-│   └── index.ts                   # Barrel export
+│   └── useThemePreview.ts         # Theme preview state hook
 ├── components/
 │   ├── ThemeCard.tsx              # Individual theme card component
 │   ├── ColorModeSelector.tsx      # Color mode selection component
 │   ├── DebugThemeInfo.tsx         # Development debug info component
-│   └── index.ts                   # Barrel export
-├── DisplayOptions.tsx         # Display options container
-├── ThemeSelector.tsx          # Theme selection container
-├── index.tsx                  # Main appearance tab component
-└── README.md                  # This file
+│   ├── ThemePreviewPanel.tsx      # Theme preview panel component
+│   └── ThemePreviewElements.tsx   # Theme preview elements component
+├── DisplayOptions.tsx             # Display options container
+├── ThemeSelector.tsx              # Theme selection container
+├── index.tsx                      # Main appearance tab component
+└── README.md                      # This file
 ```
 
 ## Features

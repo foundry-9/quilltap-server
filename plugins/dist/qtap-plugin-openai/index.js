@@ -21,6 +21,7 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 var index_exports = {};
 __export(index_exports, {
   default: () => index_default,
+  moderationPlugin: () => moderationPlugin,
   plugin: () => plugin
 });
 module.exports = __toCommonJS(index_exports);
@@ -242,7 +243,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // node_modules/openai/version.mjs
-var VERSION = "6.22.0";
+var VERSION = "6.25.0";
 
 // node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -948,11 +949,11 @@ var parseLogLevel = (maybeLevel, sourceName, client) => {
 };
 function noop() {
 }
-function makeLogFn(fnLevel, logger5, logLevel) {
-  if (!logger5 || levelNumbers[fnLevel] > levelNumbers[logLevel]) {
+function makeLogFn(fnLevel, logger6, logLevel) {
+  if (!logger6 || levelNumbers[fnLevel] > levelNumbers[logLevel]) {
     return noop;
   } else {
-    return logger5[fnLevel].bind(logger5);
+    return logger6[fnLevel].bind(logger6);
   }
 }
 var noopLogger = {
@@ -963,22 +964,22 @@ var noopLogger = {
 };
 var cachedLoggers = /* @__PURE__ */ new WeakMap();
 function loggerFor(client) {
-  const logger5 = client.logger;
+  const logger6 = client.logger;
   const logLevel = client.logLevel ?? "off";
-  if (!logger5) {
+  if (!logger6) {
     return noopLogger;
   }
-  const cachedLogger = cachedLoggers.get(logger5);
+  const cachedLogger = cachedLoggers.get(logger6);
   if (cachedLogger && cachedLogger[0] === logLevel) {
     return cachedLogger[1];
   }
   const levelLogger = {
-    error: makeLogFn("error", logger5, logLevel),
-    warn: makeLogFn("warn", logger5, logLevel),
-    info: makeLogFn("info", logger5, logLevel),
-    debug: makeLogFn("debug", logger5, logLevel)
+    error: makeLogFn("error", logger6, logLevel),
+    warn: makeLogFn("warn", logger6, logLevel),
+    info: makeLogFn("info", logger6, logLevel),
+    debug: makeLogFn("debug", logger6, logLevel)
   };
-  cachedLoggers.set(logger5, [logLevel, levelLogger]);
+  cachedLoggers.set(logger6, [logLevel, levelLogger]);
   return levelLogger;
 }
 var formatRequestDetails = (details) => {
@@ -1010,9 +1011,9 @@ var Stream = class _Stream {
     this.controller = controller;
     __classPrivateFieldSet(this, _Stream_client, client, "f");
   }
-  static fromSSEResponse(response, controller, client) {
+  static fromSSEResponse(response, controller, client, synthesizeEventData) {
     let consumed = false;
-    const logger5 = client ? loggerFor(client) : console;
+    const logger6 = client ? loggerFor(client) : console;
     async function* iterator() {
       if (consumed) {
         throw new OpenAIError("Cannot iterate over a consumed stream, use `.tee()` to split the stream.");
@@ -1032,14 +1033,14 @@ var Stream = class _Stream {
             try {
               data = JSON.parse(sse.data);
             } catch (e) {
-              logger5.error(`Could not parse message into JSON:`, sse.data);
-              logger5.error(`From chunk:`, sse.raw);
+              logger6.error(`Could not parse message into JSON:`, sse.data);
+              logger6.error(`From chunk:`, sse.raw);
               throw e;
             }
             if (data && data.error) {
               throw new APIError(void 0, data.error, void 0, response.headers);
             }
-            yield data;
+            yield synthesizeEventData ? { event: sse.event, data } : data;
           } else {
             let data;
             try {
@@ -1266,9 +1267,9 @@ async function defaultParseResponse(client, props) {
     if (props.options.stream) {
       loggerFor(client).debug("response", response.status, response.url, response.headers, response.body);
       if (props.options.__streamClass) {
-        return props.options.__streamClass.fromSSEResponse(response, props.controller, client);
+        return props.options.__streamClass.fromSSEResponse(response, props.controller, client, props.options.__synthesizeEventData);
       }
-      return Stream.fromSSEResponse(response, props.controller, client);
+      return Stream.fromSSEResponse(response, props.controller, client, props.options.__synthesizeEventData);
     }
     if (response.status === 204) {
       return null;
@@ -3208,6 +3209,8 @@ var Speech = class extends APIResource {
   /**
    * Generates audio from the input text.
    *
+   * Returns the audio file content, or a stream of audio events.
+   *
    * @example
    * ```ts
    * const speech = await client.audio.speech.create({
@@ -3420,7 +3423,7 @@ Realtime.TranscriptionSessions = TranscriptionSessions;
 // node_modules/openai/resources/beta/chatkit/sessions.mjs
 var Sessions2 = class extends APIResource {
   /**
-   * Create a ChatKit session
+   * Create a ChatKit session.
    *
    * @example
    * ```ts
@@ -3439,7 +3442,9 @@ var Sessions2 = class extends APIResource {
     });
   }
   /**
-   * Cancel a ChatKit session
+   * Cancel an active ChatKit session and return its most recent metadata.
+   *
+   * Cancelling prevents new requests from using the issued client secret.
    *
    * @example
    * ```ts
@@ -3458,7 +3463,7 @@ var Sessions2 = class extends APIResource {
 // node_modules/openai/resources/beta/chatkit/threads.mjs
 var Threads = class extends APIResource {
   /**
-   * Retrieve a ChatKit thread
+   * Retrieve a ChatKit thread by its identifier.
    *
    * @example
    * ```ts
@@ -3473,7 +3478,7 @@ var Threads = class extends APIResource {
     });
   }
   /**
-   * List ChatKit threads
+   * List ChatKit threads with optional pagination and user filters.
    *
    * @example
    * ```ts
@@ -3491,7 +3496,7 @@ var Threads = class extends APIResource {
     });
   }
   /**
-   * Delete a ChatKit thread
+   * Delete a ChatKit thread along with its items and stored attachments.
    *
    * @example
    * ```ts
@@ -3507,7 +3512,7 @@ var Threads = class extends APIResource {
     });
   }
   /**
-   * List ChatKit thread items
+   * List items that belong to a ChatKit thread.
    *
    * @example
    * ```ts
@@ -4209,7 +4214,8 @@ var Runs = class extends APIResource {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      stream: params.stream ?? false
+      stream: params.stream ?? false,
+      __synthesizeEventData: true
     });
   }
   /**
@@ -4338,7 +4344,8 @@ var Runs = class extends APIResource {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      stream: params.stream ?? false
+      stream: params.stream ?? false,
+      __synthesizeEventData: true
     });
   }
   /**
@@ -4419,7 +4426,8 @@ var Threads2 = class extends APIResource {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      stream: body.stream ?? false
+      stream: body.stream ?? false,
+      __synthesizeEventData: true
     });
   }
   /**
@@ -5278,6 +5286,20 @@ var ClientSecrets = class extends APIResource {
   /**
    * Create a Realtime client secret with an associated session configuration.
    *
+   * Client secrets are short-lived tokens that can be passed to a client app, such
+   * as a web frontend or mobile client, which grants access to the Realtime API
+   * without leaking your main API key. You can configure a custom TTL for each
+   * client secret.
+   *
+   * You can also attach session configuration options to the client secret, which
+   * will be applied to any sessions created using that client secret, but these can
+   * also be overridden by the client connection.
+   *
+   * [Learn more about authentication with client secrets over WebRTC](https://platform.openai.com/docs/guides/realtime-webrtc).
+   *
+   * Returns the created client secret and the effective session object. The client
+   * secret is a string that looks like `ek_1234`.
+   *
    * @example
    * ```ts
    * const clientSecret =
@@ -5706,7 +5728,10 @@ var InputItems = class extends APIResource {
 // node_modules/openai/resources/responses/input-tokens.mjs
 var InputTokens = class extends APIResource {
   /**
-   * Get input token counts
+   * Returns input token counts of the request.
+   *
+   * Returns an object with `object` set to `response.input_tokens` and an
+   * `input_tokens` count.
    *
    * @example
    * ```ts
@@ -5786,7 +5811,12 @@ var Responses = class extends APIResource {
     return this._client.post(path`/responses/${responseID}/cancel`, options);
   }
   /**
-   * Compact conversation
+   * Compact a conversation. Returns a compacted response object.
+   *
+   * Learn when and how to compact long-running conversations in the
+   * [conversation state guide](https://platform.openai.com/docs/guides/conversation-state#managing-the-context-window).
+   * For ZDR-compatible compaction details, see
+   * [Compaction (advanced)](https://platform.openai.com/docs/guides/conversation-state#compaction-advanced).
    *
    * @example
    * ```ts
@@ -5805,7 +5835,7 @@ Responses.InputTokens = InputTokens;
 // node_modules/openai/resources/skills/content.mjs
 var Content2 = class extends APIResource {
   /**
-   * Get Skill Content
+   * Download a skill zip bundle by its ID.
    */
   retrieve(skillID, options) {
     return this._client.get(path`/skills/${skillID}/content`, {
@@ -5819,7 +5849,7 @@ var Content2 = class extends APIResource {
 // node_modules/openai/resources/skills/versions/content.mjs
 var Content3 = class extends APIResource {
   /**
-   * Get Skill Version Content
+   * Download a skill version zip bundle.
    */
   retrieve(version, params, options) {
     const { skill_id } = params;
@@ -5838,20 +5868,20 @@ var Versions = class extends APIResource {
     this.content = new Content3(this._client);
   }
   /**
-   * Create Skill Version
+   * Create a new immutable skill version.
    */
   create(skillID, body = {}, options) {
     return this._client.post(path`/skills/${skillID}/versions`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
   }
   /**
-   * Get Skill Version
+   * Get a specific skill version.
    */
   retrieve(version, params, options) {
     const { skill_id } = params;
     return this._client.get(path`/skills/${skill_id}/versions/${version}`, options);
   }
   /**
-   * List Skill Versions
+   * List skill versions for a skill.
    */
   list(skillID, query = {}, options) {
     return this._client.getAPIList(path`/skills/${skillID}/versions`, CursorPage, {
@@ -5860,7 +5890,7 @@ var Versions = class extends APIResource {
     });
   }
   /**
-   * Delete Skill Version
+   * Delete a skill version.
    */
   delete(version, params, options) {
     const { skill_id } = params;
@@ -5877,31 +5907,31 @@ var Skills = class extends APIResource {
     this.versions = new Versions(this._client);
   }
   /**
-   * Create Skill
+   * Create a new skill.
    */
   create(body = {}, options) {
     return this._client.post("/skills", maybeMultipartFormRequestOptions({ body, ...options }, this._client));
   }
   /**
-   * Get Skill
+   * Get a skill by its ID.
    */
   retrieve(skillID, options) {
     return this._client.get(path`/skills/${skillID}`, options);
   }
   /**
-   * Update Skill Default Version
+   * Update the default version pointer for a skill.
    */
   update(skillID, body, options) {
     return this._client.post(path`/skills/${skillID}`, { body, ...options });
   }
   /**
-   * List Skills
+   * List all skills for the current project.
    */
   list(query = {}, options) {
     return this._client.getAPIList("/skills", CursorPage, { query, ...options });
   }
   /**
-   * Delete Skill
+   * Delete a skill by its ID.
    */
   delete(skillID, options) {
     return this._client.delete(path`/skills/${skillID}`, options);
@@ -5956,12 +5986,16 @@ var Uploads = class extends APIResource {
    * For guidance on the proper filename extensions for each purpose, please follow
    * the documentation on
    * [creating a File](https://platform.openai.com/docs/api-reference/files/create).
+   *
+   * Returns the Upload object with status `pending`.
    */
   create(body, options) {
     return this._client.post("/uploads", { body, ...options });
   }
   /**
    * Cancels the Upload. No Parts may be added after an Upload is cancelled.
+   *
+   * Returns the Upload object with status `cancelled`.
    */
   cancel(uploadID, options) {
     return this._client.post(path`/uploads/${uploadID}/cancel`, options);
@@ -5979,7 +6013,9 @@ var Uploads = class extends APIResource {
    *
    * The number of bytes uploaded upon completion must match the number of bytes
    * initially specified when creating the Upload object. No Parts may be added after
-   * an Upload is completed.
+   * an Upload is completed. Returns the Upload object with status `completed`,
+   * including an additional `file` property containing the created usable File
+   * object.
    */
   complete(uploadID, body, options) {
     return this._client.post(path`/uploads/${uploadID}/complete`, { body, ...options });
@@ -6329,31 +6365,33 @@ VectorStores.FileBatches = FileBatches;
 // node_modules/openai/resources/videos.mjs
 var Videos = class extends APIResource {
   /**
-   * Create a video
+   * Create a new video generation job from a prompt and optional reference assets.
    */
   create(body, options) {
     return this._client.post("/videos", maybeMultipartFormRequestOptions({ body, ...options }, this._client));
   }
   /**
-   * Retrieve a video
+   * Fetch the latest metadata for a generated video.
    */
   retrieve(videoID, options) {
     return this._client.get(path`/videos/${videoID}`, options);
   }
   /**
-   * List videos
+   * List recently generated videos for the current project.
    */
   list(query = {}, options) {
     return this._client.getAPIList("/videos", ConversationCursorPage, { query, ...options });
   }
   /**
-   * Delete a video
+   * Permanently delete a completed or failed video and its stored assets.
    */
   delete(videoID, options) {
     return this._client.delete(path`/videos/${videoID}`, options);
   }
   /**
-   * Download video content
+   * Download the generated video bytes or a derived preview asset.
+   *
+   * Streams the rendered video content for the specified video job.
    */
   downloadContent(videoID, query = {}, options) {
     return this._client.get(path`/videos/${videoID}/content`, {
@@ -6364,7 +6402,7 @@ var Videos = class extends APIResource {
     });
   }
   /**
-   * Create a video remix
+   * Create a remix of a completed video using a refreshed prompt.
    */
   remix(videoID, body, options) {
     return this._client.post(path`/videos/${videoID}/remix`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
@@ -6882,6 +6920,11 @@ var OpenAI = class {
       return { bodyHeaders: void 0, body };
     } else if (typeof body === "object" && (Symbol.asyncIterator in body || Symbol.iterator in body && "next" in body && typeof body.next === "function")) {
       return { bodyHeaders: void 0, body: ReadableStreamFrom(body) };
+    } else if (typeof body === "object" && headers.values.get("content-type") === "application/x-www-form-urlencoded") {
+      return {
+        bodyHeaders: { "content-type": "application/x-www-form-urlencoded" },
+        body: this.stringifyQuery(body)
+      };
     } else {
       return __classPrivateFieldGet(this, _OpenAI_encoder, "f").call(this, { body, headers });
     }
@@ -6931,6 +6974,7 @@ OpenAI.Skills = Skills;
 OpenAI.Videos = Videos;
 
 // node_modules/@quilltap/plugin-utils/dist/index.mjs
+var import_fs = require("fs");
 function parseOpenAIToolCalls(response) {
   const toolCalls = [];
   try {
@@ -6983,7 +7027,7 @@ function createConsoleLoggerWithChild(prefix, minLevel = "debug", baseContext = 
     const entries = Object.entries(merged).filter(([key]) => key !== "context").map(([key, value]) => `${key}=${JSON.stringify(value)}`).join(" ");
     return entries ? ` ${entries}` : "";
   };
-  const logger5 = {
+  const logger6 = {
     debug: (message, context) => {
       if (shouldLog("debug")) {
         console.debug(`[${prefix}] ${message}${formatContext(context)}`);
@@ -7015,7 +7059,7 @@ ${error.stack || error.message}` : ""
       });
     }
   };
-  return logger5;
+  return logger6;
 }
 function createPluginLogger(pluginName, minLevel = "debug") {
   const coreFactory = getCoreLoggerFactory();
@@ -7024,6 +7068,7 @@ function createPluginLogger(pluginName, minLevel = "debug") {
   }
   return createConsoleLoggerWithChild(pluginName, minLevel);
 }
+var rewriteLogger = createPluginLogger("host-rewrite");
 
 // provider.ts
 var logger = createPluginLogger("qtap-plugin-openai");
@@ -7541,8 +7586,93 @@ var OpenAIEmbeddingProvider = class {
   }
 };
 
+// moderation-provider.ts
+var logger4 = createPluginLogger("qtap-plugin-openai:moderation");
+var moderationPlugin = {
+  metadata: {
+    providerName: "OPENAI",
+    displayName: "OpenAI Moderation",
+    description: "Free content moderation via the OpenAI moderation endpoint",
+    abbreviation: "OAI",
+    colors: {
+      bg: "bg-green-100",
+      text: "text-green-800",
+      icon: "text-green-600"
+    }
+  },
+  config: {
+    requiresApiKey: true,
+    apiKeyLabel: "OpenAI API Key",
+    requiresBaseUrl: false
+  },
+  moderate: async (content, apiKey, baseUrl) => {
+    const url = baseUrl ? `${baseUrl.replace(/\/$/, "")}/v1/moderations` : "https://api.openai.com/v1/moderations";
+    logger4.debug("Calling OpenAI moderation endpoint", {
+      contentLength: content.length,
+      url
+    });
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({ input: content })
+    });
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "Unknown error");
+      logger4.error("OpenAI moderation API error", {
+        status: response.status,
+        error: errorText
+      });
+      throw new Error(`OpenAI moderation API error (${response.status}): ${errorText}`);
+    }
+    const data = await response.json();
+    if (!data.results || data.results.length === 0) {
+      logger4.warn("OpenAI moderation returned empty results");
+      return { flagged: false, categories: [] };
+    }
+    const result = data.results[0];
+    const categories = [];
+    for (const [category, flagged] of Object.entries(result.categories)) {
+      const score = result.category_scores[category] ?? 0;
+      categories.push({
+        category,
+        flagged,
+        score
+      });
+    }
+    logger4.debug("OpenAI moderation result", {
+      flagged: result.flagged,
+      categoryCount: categories.length,
+      flaggedCategories: categories.filter((c) => c.flagged).map((c) => c.category),
+      model: data.model
+    });
+    return {
+      flagged: result.flagged,
+      categories
+    };
+  },
+  validateApiKey: async (apiKey, baseUrl) => {
+    try {
+      const url = baseUrl ? `${baseUrl.replace(/\/$/, "")}/v1/moderations` : "https://api.openai.com/v1/moderations";
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({ input: "test" })
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
+};
+
 // index.ts
-var logger4 = createPluginLogger("qtap-plugin-openai");
+var logger5 = createPluginLogger("qtap-plugin-openai");
 var metadata = {
   providerName: "OPENAI",
   displayName: "OpenAI",
@@ -7622,7 +7752,7 @@ var plugin = {
       const models = await provider.getAvailableModels(apiKey);
       return models;
     } catch (error) {
-      logger4.error("Failed to fetch OpenAI models", { context: "plugin.getAvailableModels" }, error instanceof Error ? error : void 0);
+      logger5.error("Failed to fetch OpenAI models", { context: "plugin.getAvailableModels" }, error instanceof Error ? error : void 0);
       return [];
     }
   },
@@ -7635,7 +7765,7 @@ var plugin = {
       const isValid = await provider.validateApiKey(apiKey);
       return isValid;
     } catch (error) {
-      logger4.error("Error validating OpenAI API key", { context: "plugin.validateApiKey" }, error instanceof Error ? error : void 0);
+      logger5.error("Error validating OpenAI API key", { context: "plugin.validateApiKey" }, error instanceof Error ? error : void 0);
       return false;
     }
   },
@@ -7717,7 +7847,7 @@ var plugin = {
       const formattedTools = [];
       for (const tool of tools) {
         if (!("function" in tool)) {
-          logger4.warn("Skipping tool with invalid format", {
+          logger5.warn("Skipping tool with invalid format", {
             context: "plugin.formatTools"
           });
           continue;
@@ -7726,7 +7856,7 @@ var plugin = {
       }
       return formattedTools;
     } catch (error) {
-      logger4.error(
+      logger5.error(
         "Error formatting tools for OpenAI",
         { context: "plugin.formatTools" },
         error instanceof Error ? error : void 0
@@ -7746,7 +7876,7 @@ var plugin = {
       const toolCalls = parseOpenAIToolCalls(response);
       return toolCalls;
     } catch (error) {
-      logger4.error(
+      logger5.error(
         "Error parsing tool calls from OpenAI response",
         { context: "plugin.parseToolCalls" },
         error instanceof Error ? error : void 0
@@ -7758,5 +7888,6 @@ var plugin = {
 var index_default = plugin;
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
+  moderationPlugin,
   plugin
 });

@@ -9,6 +9,7 @@ import Database, { Database as DatabaseType } from 'better-sqlite3';
 import { SQLiteConfig } from '../../config';
 import { logger } from '@/lib/logger';
 import { stopPeriodicCheckpoints, runShutdownCheckpoint } from './protection';
+import { closeLLMLogsSQLiteClient } from './llm-logs-client';
 
 // ============================================================================
 // Singleton State
@@ -211,6 +212,7 @@ export function setupSQLiteShutdownHandlers(): void {
   shutdownHandlersRegistered = true;
 
   const handleShutdown = () => {
+    closeLLMLogsSQLiteClient();
     closeSQLiteClient();
   };
 

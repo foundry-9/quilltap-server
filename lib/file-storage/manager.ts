@@ -4,6 +4,14 @@
  * Thin wrapper around LocalFileStorageBackend for local-only file storage.
  * Provides the same public API surface for all file operations.
  *
+ * Storage key format (new):
+ *   {projectId}/{folderPath}/{safeOriginalFilename}    — project files
+ *   _general/{folderPath}/{safeOriginalFilename}       — general files
+ *   _thumbnails/{fileId}_{size}.webp                   — thumbnails
+ *
+ * No more users/{userId}/ prefix. No more {fileId}_ prefix on filenames.
+ * Folder paths map to real directories on disk.
+ *
  * @module file-storage/manager
  */
 
@@ -26,7 +34,7 @@ interface UploadRawParams {
   /** MIME type */
   contentType: string;
 
-  /** Optional custom metadata */
+  /** Optional custom metadata (no longer persisted as sidecar; kept for API compat) */
   metadata?: Record<string, string>;
 }
 
@@ -36,6 +44,38 @@ import { getFilesDir } from '@/lib/paths';
 const logger = createLogger('file-storage:manager');
 
 // ============================================================================
+// SAFE FILENAME UTILITY
+// ============================================================================
+
+/**
+ * Characters that are stripped from filenames for cross-platform safety.
+ * Removes path separators, control chars, and Windows-reserved characters.
+ */
+const UNSAFE_FILENAME_CHARS = /[\/\\:*?"<>|\x00-\x1f\x7f]/g;
+
+/**
+ * Make a filename safe for cross-platform filesystem storage.
+ *
+ * Keeps original casing and spaces. Strips dangerous characters
+ * like path separators and control characters.
+ *
+ * @param filename - Original filename
+ * @returns Safe filename suitable for disk storage
+ */
+export function safeFilename(filename: string): string {
+  let safe = filename.replace(UNSAFE_FILENAME_CHARS, '_');
+  // Collapse runs of underscores
+  safe = safe.replace(/_{2,}/g, '_');
+  // Trim leading/trailing underscores and dots (avoid hidden files on Unix)
+  safe = safe.replace(/^[_.]+/, '').replace(/[_.]+$/, '');
+  // Fallback for empty result
+  if (!safe) {
+    safe = 'unnamed';
+  }
+  return safe;
+}
+
+// ============================================================================
 // TYPES
 // ============================================================================
 
@@ -43,12 +83,6 @@ const logger = createLogger('file-storage:manager');
  * Parameters for the uploadFile method
  */
 interface UploadFileParams {
-  /** User ID - owner of the file */
-  userId: string;
-
-  /** File ID - unique identifier for the file */
-  fileId: string;
-
   /** Original filename */
   filename: string;
 
@@ -64,7 +98,7 @@ interface UploadFileParams {
   /** Optional folder path within project/general files */
   folderPath?: string;
 
-  /** Optional custom metadata to store with file */
+  /** Optional custom metadata (kept for API compat, not persisted to sidecar) */
   metadata?: Record<string, string>;
 }
 
@@ -72,6 +106,20 @@ interface UploadFileParams {
  * Parameters for building a storage key
  */
 interface StorageKeyParams {
+  /** Original filename */
+  filename: string;
+
+  /** Optional project ID */
+  projectId?: string | null;
+
+  /** Optional folder path */
+  folderPath?: string;
+}
+
+/**
+ * Parameters for building a legacy storage key (used by migration only)
+ */
+interface LegacyStorageKeyParams {
   /** User ID */
   userId: string;
 
@@ -176,6 +224,15 @@ class FileStorageManager {
   }
 
   /**
+   * Get the base path of the file storage directory
+   *
+   * @returns The absolute path to the files directory
+   */
+  getBasePath(): string {
+    return getFilesDir();
+  }
+
+  /**
    * Ensure the manager is initialized before use
    */
   private async ensureInitialized(): Promise<void> {
@@ -205,6 +262,7 @@ class FileStorageManager {
    * Upload a file to storage
    *
    * Generates a storage key and uploads the file to the local backend.
+   * Handles filename collisions by appending (2), (3), etc.
    *
    * @param params - Upload parameters
    * @returns Upload result with storage key
@@ -212,36 +270,41 @@ class FileStorageManager {
    */
   async uploadFile(params: UploadFileParams): Promise<UploadResult> {
     const {
-      userId,
-      fileId,
       filename,
       content,
       contentType,
       projectId,
       folderPath,
-      metadata,
     } = params;
     try {
       const backend = await this.getBackend();
 
       // Generate storage key
-      const storageKey = this.buildStorageKey({
-        userId,
-        fileId,
+      let storageKey = this.buildStorageKey({
         filename,
         projectId,
         folderPath,
       });
 
+      // Handle filename collision — append (2), (3), etc.
+      let attempt = 1;
+      while (await backend.exists(storageKey)) {
+        attempt++;
+        storageKey = this.buildStorageKeyWithSuffix({
+          filename,
+          projectId,
+          folderPath,
+        }, attempt);
+      }
+
       // Upload file
-      await backend.upload(storageKey, content, contentType, metadata);
+      await backend.upload(storageKey, content, contentType);
 
       logger.info('File uploaded successfully', {
-        userId,
-        fileId,
         filename,
         storageKey,
         size: content.length,
+        projectId: projectId || '_general',
       });
 
       return { storageKey };
@@ -250,8 +313,6 @@ class FileStorageManager {
         error instanceof Error ? error.message : 'Unknown upload error';
 
       logger.error('File upload failed', {
-        userId,
-        fileId,
         filename,
         error: errorMsg,
       });
@@ -284,7 +345,6 @@ class FileStorageManager {
 
       logger.error('File download failed', {
         fileId: file.id,
-        userId: file.userId,
         error: errorMsg,
       });
 
@@ -315,7 +375,6 @@ class FileStorageManager {
 
       logger.info('File deleted successfully', {
         fileId: file.id,
-        userId: file.userId,
       });
     } catch (error) {
       const errorMsg =
@@ -323,7 +382,6 @@ class FileStorageManager {
 
       logger.error('File deletion failed', {
         fileId: file.id,
-        userId: file.userId,
         error: errorMsg,
       });
 
@@ -336,17 +394,17 @@ class FileStorageManager {
   /**
    * Upload content at an explicit storage key
    *
-   * Unlike uploadFile(), this does NOT generate a storage key from user/project/filename.
+   * Unlike uploadFile(), this does NOT generate a storage key from project/filename.
    * Used for writing derived data (e.g. thumbnails) at a predictable, canonical key.
    *
    * @param params - Upload parameters with explicit key
    * @throws {Error} If upload fails
    */
   async uploadRaw(params: UploadRawParams): Promise<void> {
-    const { storageKey, content, contentType, metadata } = params;
+    const { storageKey, content, contentType } = params;
     try {
       const backend = await this.getBackend();
-      await backend.upload(storageKey, content, contentType, metadata);
+      await backend.upload(storageKey, content, contentType);
 
       logger.debug('Raw upload completed', {
         storageKey,
@@ -415,7 +473,6 @@ class FileStorageManager {
 
       logger.error('Failed to get file URL', {
         fileId: file.id,
-        userId: file.userId,
         error: errorMsg,
       });
 
@@ -449,11 +506,31 @@ class FileStorageManager {
 
       logger.error('Failed to check if file exists', {
         fileId: file.id,
-        userId: file.userId,
         error: errorMsg,
       });
 
       throw new Error(`Failed to check if file exists: ${errorMsg}`);
+    }
+  }
+
+  /**
+   * Check if a storage key exists in the backend
+   *
+   * @param storageKey - The storage key to check
+   * @returns True if exists, false otherwise
+   */
+  async storageKeyExists(storageKey: string): Promise<boolean> {
+    try {
+      const backend = await this.getBackend();
+      return await backend.exists(storageKey);
+    } catch (error) {
+      const errorMsg =
+        error instanceof Error ? error.message : 'Unknown existence check error';
+      logger.error('Failed to check if storage key exists', {
+        storageKey,
+        error: errorMsg,
+      });
+      throw new Error(`Failed to check if storage key exists: ${errorMsg}`);
     }
   }
 
@@ -468,11 +545,10 @@ class FileStorageManager {
    * @throws {Error} If folder creation fails
    */
   async createFolder(params: {
-    userId: string;
     projectId: string | null;
     folderPath: string;
   }): Promise<void> {
-    const { userId, projectId, folderPath } = params;
+    const { projectId, folderPath } = params;
     try {
       const backend = await this.getBackend();
       const metadata = backend.getMetadata();
@@ -482,7 +558,6 @@ class FileStorageManager {
       }
 
       const storagePath = this.buildFolderStoragePath({
-        userId,
         projectId,
         folderPath,
       });
@@ -490,7 +565,6 @@ class FileStorageManager {
       await backend.createFolder(storagePath);
 
       logger.info('Created folder in storage', {
-        userId,
         projectId,
         folderPath,
         storagePath,
@@ -500,7 +574,6 @@ class FileStorageManager {
         error instanceof Error ? error.message : 'Unknown folder creation error';
 
       logger.error('Failed to create folder in storage', {
-        userId,
         projectId,
         folderPath,
         error: errorMsg,
@@ -517,11 +590,10 @@ class FileStorageManager {
    * @throws {Error} If folder deletion fails
    */
   async deleteFolder(params: {
-    userId: string;
     projectId: string | null;
     folderPath: string;
   }): Promise<void> {
-    const { userId, projectId, folderPath } = params;
+    const { projectId, folderPath } = params;
     try {
       const backend = await this.getBackend();
       const metadata = backend.getMetadata();
@@ -531,7 +603,6 @@ class FileStorageManager {
       }
 
       const storagePath = this.buildFolderStoragePath({
-        userId,
         projectId,
         folderPath,
       });
@@ -539,7 +610,6 @@ class FileStorageManager {
       await backend.deleteFolder(storagePath);
 
       logger.info('Deleted folder from storage', {
-        userId,
         projectId,
         folderPath,
         storagePath,
@@ -549,7 +619,6 @@ class FileStorageManager {
         error instanceof Error ? error.message : 'Unknown folder deletion error';
 
       logger.error('Failed to delete folder from storage', {
-        userId,
         projectId,
         folderPath,
         error: errorMsg,
@@ -562,20 +631,18 @@ class FileStorageManager {
   /**
    * Build a storage path for a folder
    *
-   * Format: `users/{userId}/{projectId or '_general'}/{folderPath}`
+   * New format: `{projectId or '_general'}/{folderPath}`
    */
-  private buildFolderStoragePath(params: {
-    userId: string;
+  buildFolderStoragePath(params: {
     projectId: string | null;
     folderPath: string;
   }): string {
-    const { userId, projectId, folderPath } = params;
+    const { projectId, folderPath } = params;
 
-    const userPath = `users/${userId}`;
     const projectPath = projectId ? projectId : '_general';
     const folder = folderPath.replace(/^\/+|\/+$/g, '');
 
-    const pathParts = [userPath, projectPath];
+    const pathParts = [projectPath];
     if (folder) {
       pathParts.push(folder);
     }
@@ -590,9 +657,77 @@ class FileStorageManager {
   /**
    * Build a storage key for a file
    *
-   * Format: `users/{userId}/{projectId or '_general'}/{folderPath}{fileId}_{sanitizedFilename}`
+   * New format: `{projectId or '_general'}/{folderPath}/{safeFilename}`
+   *
+   * No userId prefix. No fileId prefix on filename.
+   * Real directories on disk mirror the logical folder structure.
    */
   buildStorageKey(params: StorageKeyParams): string {
+    const {
+      filename,
+      projectId,
+      folderPath,
+    } = params;
+
+    const safe = safeFilename(filename);
+    const projectPath = projectId ? projectId : '_general';
+    const folder = folderPath
+      ? folderPath.replace(/^\/+|\/+$/g, '')
+      : '';
+
+    const pathParts = [projectPath];
+    if (folder) {
+      pathParts.push(folder);
+    }
+
+    const key = `${pathParts.join('/')}/${safe}`;
+    return key;
+  }
+
+  /**
+   * Build a storage key with a collision-avoidance suffix
+   *
+   * Inserts ` (N)` before the file extension.
+   *
+   * @param params - Storage key parameters
+   * @param attempt - Collision attempt number (2, 3, 4, ...)
+   * @returns Storage key with suffix
+   */
+  private buildStorageKeyWithSuffix(params: StorageKeyParams, attempt: number): string {
+    const {
+      filename,
+      projectId,
+      folderPath,
+    } = params;
+
+    const safe = safeFilename(filename);
+    const dotIndex = safe.lastIndexOf('.');
+    let suffixed: string;
+    if (dotIndex > 0) {
+      suffixed = `${safe.slice(0, dotIndex)} (${attempt})${safe.slice(dotIndex)}`;
+    } else {
+      suffixed = `${safe} (${attempt})`;
+    }
+
+    const projectPath = projectId ? projectId : '_general';
+    const folder = folderPath
+      ? folderPath.replace(/^\/+|\/+$/g, '')
+      : '';
+
+    const pathParts = [projectPath];
+    if (folder) {
+      pathParts.push(folder);
+    }
+
+    return `${pathParts.join('/')}/${suffixed}`;
+  }
+
+  /**
+   * Build a legacy-format storage key (used only by migration)
+   *
+   * Old format: `users/{userId}/{projectId or '_general'}/{folderPath}/{fileId}_{sanitizedFilename}`
+   */
+  buildLegacyStorageKey(params: LegacyStorageKeyParams): string {
     const {
       userId,
       fileId,
@@ -640,8 +775,6 @@ class FileStorageManager {
  *
  * // Upload a file
  * const result = await fileStorageManager.uploadFile({
- *   userId: 'user-123',
- *   fileId: 'file-456',
  *   filename: 'document.pdf',
  *   content: fileBuffer,
  *   contentType: 'application/pdf',

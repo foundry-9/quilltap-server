@@ -3,7 +3,7 @@
  *
  * Orchestrates the resolution of character appearances for image generation
  * by analyzing chat context to determine what each character currently looks
- * like and is wearing. Integrates with Dangermouse for safety sanitization.
+ * like and is wearing. Integrates with the Concierge for safety sanitization.
  *
  * @module image-gen/appearance-resolution
  */
@@ -51,7 +51,7 @@ export interface ResolvedCharacterAppearance {
   clothingDescription: string
   /** How clothing was determined */
   clothingSource: 'narrative' | 'stored' | 'default'
-  /** Whether Dangermouse sanitized this appearance */
+  /** Whether the Concierge sanitized this appearance */
   wasSanitized: boolean
 }
 
@@ -233,21 +233,21 @@ export async function resolveCharacterAppearances(
 }
 
 // ============================================================================
-// DANGERMOUSE APPEARANCE SANITIZATION
+// CONCIERGE APPEARANCE SANITIZATION
 // ============================================================================
 
 /**
- * Sanitize resolved appearances through Dangermouse if needed.
+ * Sanitize resolved appearances through the Concierge if needed.
  *
  * Logic:
- * 1. If Dangermouse mode is OFF → return unchanged
+ * 1. If the Concierge mode is OFF → return unchanged
  * 2. If chat is marked dangerous AND an uncensored image provider exists → return unchanged
  * 3. Classify concatenated appearance text; if safe → return unchanged
  * 4. If dangerous AND uncensored provider available → return unchanged (will route there)
  * 5. If dangerous AND NO uncensored provider → sanitize via cheap LLM
  *
  * @param appearances - Resolved character appearances
- * @param dangerSettings - Dangermouse settings
+ * @param dangerSettings - the Concierge settings
  * @param isDangerousChat - Whether the chat is marked as dangerous
  * @param hasUncensoredImageProvider - Whether an uncensored image provider is available
  * @param cheapLLMSelection - Cheap LLM provider for classification/sanitization
@@ -264,7 +264,7 @@ export async function sanitizeAppearancesIfNeeded(
   userId: string,
   chatId?: string
 ): Promise<ResolvedCharacterAppearance[]> {
-  // 1. Dangermouse off → pass through
+  // 1. The Concierge off → pass through
   if (dangerSettings.mode === 'OFF') {
     return appearances
   }

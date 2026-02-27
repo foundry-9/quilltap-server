@@ -71,7 +71,7 @@ Legacy routes outside `/api/v1/` were removed in v2.8. Only `/api/v1/` routes ar
 
 ## Feature Names
 
-- **Dangermouse** - the dangerous content tracking/rerouting/hiding system
+- **The Concierge** - the dangerous content tracking/rerouting/hiding system
 - **The Commonplace Book** - the memory system that characters have, a self-managed RAG
 - **The Lantern** - the story backgrounds subsystem, that can send context to image providers and put them up as backgrounds for chats or projects
 - **Prospero** - the agentic and tool-using systems, and the way LLMs work — UI route: `/prospero` (was `/projects`)
@@ -130,7 +130,7 @@ Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/
   - [features/complete/PLAN-PROJECTS.md](features/complete/PLAN-PROJECTS.md) — Projects feature implementation plan: optional categorization for files and chats with focused context, system prompt injection, and character roster management — Grade: A (completed feature) — Last updated: 2026-01-23
   - [features/complete/QUILLTAP-EXPORT-IMPORT.md](features/complete/QUILLTAP-EXPORT-IMPORT.md) — Quilltap native import/export system: selective entity export/import, manifest structure, merge support, and memory association — Grade: A (completed implementation) — Last updated: 2026-01-01
   - [features/distant_future_separate_api.md](features/distant_future_separate_api.md) — Future plan to split the monolith into a Fastify API + React SPA, covering phases, risks, testing, and AWS deployment strategy — Grade: C (distant concept, not scheduled) — Last updated: 2025-12-12
-  - [features/random-numbers-plugin.md](features/random-numbers-plugin.md) — Feature request outlining a random number/choice plugin (dice, coin flip, random participant) — Grade: B (idea backlog) — Last updated: 2025-12-12
+  - [features/complete/random-numbers-plugin.md](features/complete/random-numbers-plugin.md) — Feature request outlining a random number/choice plugin (dice, coin flip, random participant) — Grade: B (idea backlog) — Last updated: 2025-12-12
   - [features/usage-tracking.md](features/usage-tracking.md) — Request for provider usage/balance tracking: per-provider notes, UX requirements, engineering tasks, and open questions — Grade: B (idea backlog) — Last updated: 2025-12-10
   - [lib/llm/ATTACHMENT_SUPPORT.md](lib/llm/ATTACHMENT_SUPPORT.md) — Reference for attachment support utilities: supported MIME types per provider, helper APIs, and usage examples — Grade: A (matches helper behavior) — Last updated: 2025-11-29
   - [packages/plugin-types/README.md](packages/plugin-types/README.md) — Documentation for the @quilltap/plugin-types npm package: installation, usage, type reference, and plugin manifest guide for third-party plugin development — Grade: A (package documentation) — Last updated: 2025-12-31
@@ -145,8 +145,8 @@ Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/
   - [plugins/dist/qtap-plugin-mcp/README.md](plugins/dist/qtap-plugin-mcp/README.md) — Documentation for the MCP Server Connector plugin: configuration, authentication, tool naming, security, and troubleshooting — Grade: A (plugin documentation) — Last updated: 2026-01-13
   - [migrations/README.md](migrations/README.md) — Documentation for the migration system: architecture, adding new migrations, running migrations, and troubleshooting — Grade: A (migration system docs) — Last updated: 2026-01-22
   - [docs/WINDOWS.md](docs/WINDOWS.md) — Windows/WSL2 troubleshooting guide: prerequisites, common issues, data locations, manual operations — Grade: A (troubleshooting guide) — Last updated: 2026-02-14
-  - [.github/workflows/release.yml](.github/workflows/release.yml) — GitHub Actions release workflow: builds rootfs tarballs (amd64/arm64), Electron installers (macOS DMG, Windows NSIS), and creates GitHub Release with all assets on version tags — Grade: A (build automation) — Last updated: 2026-02-17
-  - [electron-builder.yml](electron-builder.yml) — Electron Builder packaging config: app ID, macOS ZIP + Windows NSIS targets, resource bundling, Lima binary staging — Grade: A (build configuration) — Last updated: 2026-02-14
+  - [.github/workflows/release.yml](.github/workflows/release.yml) — GitHub Actions release workflow: builds rootfs tarballs (amd64/arm64), standalone tarball, Docker images (amd64/arm64), Electron installers (macOS DMG, Windows NSIS, Linux AppImage/deb), creates GitHub Release with all assets, publishes quilltap package to npm, and notifies website of release — Grade: A (build automation) — Last updated: 2026-02-17
+  - [electron-builder.yml](electron-builder.yml) — Electron Builder packaging config: app ID, macOS DMG + Windows NSIS targets, resource bundling, Lima binary staging — Grade: A (build configuration) — Last updated: 2026-02-14
   - [lima/quilltap.yaml](lima/quilltap.yaml) — Lima VM template: Alpine Linux 3.21, VZ hypervisor, VirtioFS mounts, OpenRC service provisioning, port forwarding — Grade: A (VM configuration) — Last updated: 2026-02-14
   - [lima/wsl-init.sh](lima/wsl-init.sh) — WSL2 init script: starts Node.js server inside WSL2 distro with data directory resolution — Grade: A (VM configuration) — Last updated: 2026-02-14
   - [electron/tsconfig.json](electron/tsconfig.json) — Electron-specific TypeScript config: ES2022 target, CommonJS modules, outputs to dist-electron/ — Grade: A (build configuration) — Last updated: 2026-02-14
@@ -188,9 +188,9 @@ Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/
 - Check for Typescript errors by running "npx tsc" rather than "npm run build"
 - **Important:** Before committing, record basic changes in `docs/CHANGELOG.md` in reverse chronological order
 - Keep the documentation above up to date, and update this file if you add more documentation, in the same format.
-- Any change to data, particularly the schemas used to read or write data either to files or to the database, should be checked to see if they need to be reflected in exports, backups, and/or the migrations/ directory.
+- Any change to data, particularly the schemas used to read or write data either to files or to the database, should be checked to see if they need to be reflected in .qtap or SillyTavern exports, the [qtap schema](./public/schemas/qtap-export.schema.json), backups, and/or the migrations/ directory.
 - Any files that exist in the app source code only because they are necessary for migrations should move to the `migrations/` directory.
-- If we make changes to anything in the `packages/` directory, we need to make sure we update package.json numbers and pause to allow the developer/human user to `npm publish` to push those packages into npmjs. We do *not* just copy things down into the appropriate directories! We wait to publish the new npm package first. You can stop everything, ask me to publish the new version, then install the new one. If that doesn't work, let's fix the NPM problem we're having, **NOT** work around it.
+- **IMPORTANT**: If we make changes to anything in the `packages/` directory, we need to make sure we update package.json numbers and pause to allow the developer/human user to `npm publish` to push those packages into npmjs. We do *not* just copy things down into the appropriate directories! We wait to publish the new npm package first. You can stop everything, ask me to publish the new version, then install the new one. If that doesn't work, let's fix the NPM problem we're having, **NOT** work around it.
 - **Version sync**: The `packages/quilltap/package.json` version must always match the version from the root `package.json` (including prerelease tags like `-dev.72`). The pre-commit hook in `.githooks/pre-commit` syncs this automatically, but if you manually bump the root version, sync `packages/quilltap/package.json` too.
 - Commits take a long time because there is a precommit script in `.githooks/pre-commit` that kills the dev server, runs lint, runs the unit tests, does a test compile with `npx tsc`, builds the plugins, and then does a full Next.js build of the app, to ensure that we're committing something that basically works.
 - Leave no stubs and "TODO" code behind unless you have agreed on it with me ahead of time
@@ -199,7 +199,8 @@ Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/
 
 ## Best Practices and Principles
 
-- respect encapsulation and single source of truth. If a feature requires duplicate code, consider inheritance
+- respect encapsulation and single source of truth
+  - If a feature requires duplicate code, consider inheritance
 - SRP
 - DRY
 - KISS

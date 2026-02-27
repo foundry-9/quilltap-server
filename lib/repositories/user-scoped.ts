@@ -216,6 +216,15 @@ class UserScopedChatsRepository extends UserScopedTaggableRepository<ChatMetadat
     if (!chat) throw new Error('Chat not found or access denied');
     return this.baseRepo.clearMessages(chatId);
   }
+
+  async searchMessagesGlobal(
+    searchText: string,
+    limit?: number
+  ): Promise<Array<{ messageId: string; content: string; chatId: string; role: string; createdAt: string }>> {
+    const chats = await this.findAll();
+    const chatIds = chats.map(c => c.id);
+    return this.baseRepo.searchMessagesGlobal(chatIds, searchText, limit);
+  }
 }
 
 /**

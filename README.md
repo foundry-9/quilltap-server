@@ -7,23 +7,29 @@ Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, 
 No subscriptions. No data harvested. No forgetting everything between sessions. No landlords.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-3.0.0--bugfix.0-yellow.svg)](package.json)
+[![Latest Stable](https://img.shields.io/github/v/release/foundry-9/quilltap?logo=github&label=stable&sort=semver&filter=!*dev*)](https://github.com/foundry-9/quilltap/releases/latest)
+[![This Version](https://img.shields.io/badge/version-3.1.0-green.svg?logo=github)](package.json)
+[![Docker Hub](https://img.shields.io/docker/v/csebold/quilltap?logo=docker&label=docker&sort=semver)](https://hub.docker.com/r/csebold/quilltap)
+[![npm](https://img.shields.io/npm/v/quilltap?logo=npm)](https://www.npmjs.com/package/quilltap)
+[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.com/channels/1476289075152556205/1476290238187049184)
 
 <p align="center">
   <img src="https://quilltap.ai/images/welcome-to-quilltap-2-8.png" alt="Welcome to Quilltap" />
 </p>
 
+**Website:** [quilltap.ai](https://quilltap.ai) · **Discord:** [Join us](https://discord.com/channels/1476289075152556205/1476290238187049184) · **Docker:** [csebold/quilltap](https://hub.docker.com/r/csebold/quilltap)
+
 ---
 
 ## What Quilltap Does
 
-**For fiction writers and worldbuilders:** Organize your notes, characters, and lore into projects. The AI can read your files, search semantically across your worldbuilding, and actually understand the context of what you're creating — not merely the last few messages before its memory gives out like a goldfish at a dinner party.
+Quilltap is three things in one application, and you can use any combination of them.
 
-**For roleplayers and gamers:** Create detailed AI characters with personalities, backstories, and voices that remain consistent across sessions. Run multi-character scenes. Roll dice and flip coins with built-in RNG. Track inventories, stats, and game state that persists as reliably as a grudge. Import your SillyTavern characters and chats.
+**A private AI desktop.** Connect to Claude, GPT, Gemini, Grok, DeepSeek, or local models through Ollama. Your conversations stay on your machine. The AI builds long-term memory across sessions and can search your project files semantically. Agent Mode lets the AI use tools iteratively — web search, image generation, file management, and any MCP server you connect.
 
-**For everyone else:** Use it as a private AI desktop. Connect to Claude, GPT, Gemini, Grok, or local models through Ollama. Your conversations stay on your machine. The AI builds long-term memory across sessions. You control everything.
+**A writer's workspace.** Organize notes, characters, and lore into projects with folders and files. The AI reads your documents, searches across your worldbuilding by meaning (not just keywords), and maintains context across conversations. Import your SillyTavern characters and chats directly.
 
-**On the horizon:** Agentic LLM tools running in a sandboxed environment — your AI assistant reading, writing, and revising documents alongside you, safely contained in its own workspace. Think of it as hiring a very well-read clerk who lives in a comfortable office inside your machine, follows instructions with enthusiasm, and never, ever loses your manuscripts.
+**A character platform.** Create AI characters with detailed personalities, backstories, and voices that stay consistent across sessions. Run multi-character scenes with turn management. Roll dice, flip coins, track inventories and game state — all persistent and all built in.
 
 *"Business in the front, party in the back... literary salon on the veranda."*
 
@@ -31,7 +37,7 @@ No subscriptions. No data harvested. No forgetting everything between sessions. 
 
 ## Why Not Just Use Claude or ChatGPT?
 
-A reasonable question, and one we encourage you to ask before installing anything. Here is the situation, presented without embellishment — well, with very little embellishment:
+A reasonable question. Here is the situation, presented without embellishment — well, with very little embellishment:
 
 | What you get with hosted AI | What you get with Quilltap |
 | --------------------------- | -------------------------- |
@@ -44,66 +50,49 @@ A reasonable question, and one we encourage you to ask before installing anythin
 
 ---
 
-## Why Not SillyTavern?
-
-SillyTavern is excellent — a pioneering achievement in maximally customized character chat. Quilltap started from a similar place but grew in a rather different direction, like a vine that was planted next to the trellis and decided it preferred the oak tree:
-
-- **Project-based organization** — files, folders, semantic search, not just chat logs
-- **LLM file access** — the AI can read and write your project files with permission
-- **Long-term memory** — semantic recall across conversations, not just within them
-- **Game mechanics** — persistent state for inventories, stats, and game tracking
-- **Built-in RNG** — dice rolls and coin flips that execute automatically when mentioned
-- **Easier configuration** — more safeguards to keep things working
-
-If you're coming from SillyTavern, Quilltap imports your characters and chats directly.
-
----
-
 ## Getting Started
 
-There are, as with most things worth doing, several paths to the same destination. We have arranged them in order of increasing difficulty, rather like a cocktail menu that begins with champagne and ends with absinthe.
+There are several paths to the same destination. Which one you choose depends on two questions: **what are you willing to install?** and **how much do you trust AI running on your machine?**
 
-### The Civilized Way: Native Desktop App (Recommended)
+That second question deserves a moment of your attention. As AI models grow more capable — reading files, writing code, using tools — the question of *where* that code executes becomes important. A virtual machine is a genuine locked room: if an AI-generated script misbehaves, it misbehaves inside a contained environment with no access to your host system. Docker provides a similar boundary, though somewhat thinner. Running directly on your machine provides no boundary at all.
 
-The simplest and most delightful way to run Quilltap is to install the desktop application. It bundles everything you need — the backend runs inside a lightweight Linux virtual machine, so you needn't trouble yourself with servers, containers, or terminal commands.
+| | Desktop App (VM) | Docker | Node.js (`npx`) |
+| --- | --- | --- | --- |
+| **You install** | macOS: Xcode CLI Tools · Windows: WSL2 · Linux: Docker Engine | Docker Desktop or Docker Engine | Node.js 24+ |
+| **First launch** | Slowest — downloads a VM image (~150 MB), boots a Linux guest | Fast — pulls the container image | Fastest — downloads app files, runs directly |
+| **AI sandbox** | ✅ Full VM isolation | ⚠️ Container isolation (good, not airtight) | ❌ No isolation (runs with your permissions) |
+| **Native window** | Yes (Electron) | Yes (Electron) or browser | Yes (Electron) or browser |
+| **Best for** | Most users — best balance of safety and convenience | Server deployments, Docker veterans, Linux users | Quick evaluation, developers, the impatient |
 
-**Step 1:** Visit the [GitHub Releases page](https://github.com/foundry-9/quilltap/releases) and download the **Latest** stable release for your platform.
+> **Our recommendation:** The desktop application with its VM backend is what we suggest for most people. It is the slowest to start and the most demanding in its prerequisites, but it is the only path that gives you a genuine sandbox around your AI. If you already have Docker, the Electron app lets you switch between VM and Docker runtimes from its splash screen — no commitment required.
 
-- **macOS:** Download the `.dmg` installer. Quilltap uses [Lima](https://lima-vm.io/) with Apple's Virtualization.framework to run its backend. Requires Xcode Command Line Tools — the app will offer to install them if they're missing.
-- **Windows:** Download the `.exe` installer. Quilltap uses WSL2, which is built into Windows 10 and 11. If WSL2 isn't already enabled, run `wsl --install` in PowerShell as Administrator and restart your computer. The app checks for this on startup and will tell you plainly if something is amiss.
+### The Civilized Way: Desktop App (Recommended)
 
-**Step 2:** Launch the app. On first run, Quilltap will:
-1. Present a splash screen where you can choose your data directory
-2. Download a small Linux guest image (~150 MB, cached for future launches)
-3. Boot the VM and start the backend
-4. Open your workspace in a native window
+Download the latest release from the [Releases page](https://github.com/foundry-9/quilltap/releases) for your platform:
 
-That's it. No configuration files, no environment variables, no incantations. Your data lives on your machine in a sensible default location, and the app tells you exactly where.
+- **macOS:** `.dmg` installer. Uses [Lima](https://lima-vm.io/) with Apple's Virtualization.framework. Requires Xcode Command Line Tools — the app will offer to install them.
+- **Windows:** `.exe` installer. Uses WSL2, built into Windows 10 and 11. If WSL2 isn't enabled, run `wsl --install` in PowerShell as Administrator and restart.
+- **Linux:** `.AppImage` (make executable and run) or `.deb` package. Requires [Docker Engine](https://docs.docker.com/engine/install/) — Linux uses Docker directly as its runtime backend.
 
-| Platform | Default Data Directory |
-| --- | --- |
-| macOS | `~/Library/Application Support/Quilltap` |
-| Windows | `%APPDATA%\Quilltap` |
+Launch the app. It presents a splash screen where you choose your data directory, downloads a small Linux guest image (~150 MB, cached), boots the backend, and opens your workspace. The setup wizard handles the rest.
 
-### The Dockworker's Route: Docker Desktop
+The desktop app manages multiple data directories from its splash screen — one for work, one for fiction, one for experiments. Each gets its own VM, so switching is a quick stop-and-start.
 
-If you prefer containers — or you're running a Linux server, or you simply enjoy the gentle hum of virtualization — Docker is a fine choice.
+### The Dockworker's Route: Docker
 
-**With the Electron app:** The desktop app includes a Docker runtime toggle right on the splash screen. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/), launch Quilltap, and switch the runtime from "VM" to "Docker." The app will pull the image and manage the container for you, same native window, different engine underneath.
+**With the Electron app:** The desktop app includes a Docker runtime toggle right on the splash screen. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/), launch Quilltap, and switch the runtime from "VM" to "Docker." Same native window, different engine underneath.
 
-**Standalone with Docker:** If you'd rather skip the Electron wrapper entirely and access Quilltap through your browser:
-
-The [csebold/quilltap](https://hub.docker.com/repository/docker/csebold/quilltap/general) image is available on Docker Hub. Use the included startup scripts for the smoothest experience:
+**Standalone with Docker:** The [csebold/quilltap](https://hub.docker.com/r/csebold/quilltap) image is available on Docker Hub. Use the included startup scripts for the smoothest experience:
 
 ```bash
 # Linux / macOS
-./scripts/start-quilltap.sh
+curl -fsSL https://raw.githubusercontent.com/foundry-9/quilltap/refs/heads/main/scripts/start-quilltap.sh | bash
 
 # Windows (PowerShell)
-.\scripts\start-quilltap.ps1
+irm https://raw.githubusercontent.com/foundry-9/quilltap/refs/heads/main/scripts/start-quilltap.ps1 | iex
 ```
 
-The scripts auto-detect your platform, set the correct data directory, and check for local services like Ollama — forwarding their ports into the container automatically.
+The scripts auto-detect your platform, set the correct data directory, and find local services like Ollama — forwarding their ports into the container automatically.
 
 Or run directly:
 
@@ -116,13 +105,32 @@ docker run -d \
   csebold/quilltap
 ```
 
-> **Timezone tip:** Set `QUILLTAP_TIMEZONE` to your IANA timezone (e.g., `America/New_York`, `Europe/London`, `Asia/Tokyo`) so timestamp injection in chats shows your local time instead of UTC. The Electron desktop app detects this automatically.
+Open [http://localhost:3000](http://localhost:3000) and the setup wizard will guide you through first-time configuration.
 
-Open [http://localhost:3000](http://localhost:3000) and you're in business. The setup wizard will guide you through first-time configuration.
+> **Timezone tip:** Set `QUILLTAP_TIMEZONE` to your IANA timezone (e.g., `America/New_York`, `Europe/London`, `Asia/Tokyo`) so timestamps in chats show your local time instead of UTC. The Electron desktop app detects this automatically.
 
-### The Adventurer's Path: From Source
+### The Shortcut: npx
 
-For developers, tinkerers, and those who read `man` pages recreationally. You will need **Node.js 22+** and **git**.
+If you have Node.js installed and want to skip installers entirely:
+
+```bash
+npx quilltap
+```
+
+First run downloads application files (~150–250 MB) and caches them locally. Subsequent launches start instantly. Supports `--port`, `--data-dir`, and `--update` flags.
+
+Or install globally:
+
+```bash
+npm install -g quilltap
+quilltap
+```
+
+> **A word of caution:** The npx path runs with your user permissions and provides no sandbox. Excellent for kicking the tires. Less excellent for leaving the AI unsupervised with your filesystem. If you start here and decide to stay, consider graduating to one of the sandboxed options.
+
+### From Source
+
+For developers, tinkerers, and those who read `man` pages recreationally:
 
 ```bash
 git clone https://github.com/foundry-9/quilltap.git
@@ -133,191 +141,75 @@ npm run dev        # Development mode with hot reload
 npm run build && npm run start   # Production build
 ```
 
-Open [http://localhost:3000](http://localhost:3000). We recommend checking out the latest release tag rather than `main` unless you enjoy living on the frontier:
-
-```bash
-git checkout $(git describe --tags --abbrev=0)
-```
-
-There is also a lightweight `npx` option for running the published package without cloning the repository:
-
-```bash
-npx quilltap                              # Just run it
-npx quilltap --port 8080                  # Custom port
-npx quilltap --data-dir /path/to/data     # Custom data directory
-```
-
-For details on building Electron installers, rootfs tarballs, and Docker images from source, see the [Development Guide](DEVELOPMENT.md).
+Requires **Node.js 24+** and **git**. See the [Development Guide](DEVELOPMENT.md) for building Electron installers, rootfs tarballs, and Docker images from source.
 
 ---
 
 ## Core Features
 
-Quilltap's features are organized into named subsystems, each with its own character and purpose — rather like the wings of a well-appointed estate. Themes can customize these names and appearances, so one person's "Prospero" is another's "The Workshop," depending on which theme strikes their fancy.
+### Projects & Files
 
-### Prospero — Projects & Files
+Organize your work into projects with custom system prompts, file uploads, and folder structures. The AI can list, read, and write your project files with permission. Files are stored on disk using their original filenames — you can browse them directly in your file manager. Semantic search finds things by meaning across your entire project. Built-in Markdown rendering with wikilink support, code highlighting, and PDF preview.
 
-Organize your work the way your brain actually works, rather than the way software usually insists it should:
+### Characters & Roleplay
 
-- **Project instructions** — Custom system prompts that apply to every chat in a project
-- **File management** — Upload documents, organize into folders, let the AI read them
-- **LLM file access** — AI can list, read, and write files with your permission
-- **Agent Mode** — Iterative tool use with self-correction, configurable max turns
-- **Semantic search** — Find things by meaning, not just keywords
-- **Markdown rendering** — Full GitHub-flavored Markdown with wikilink support
-- **Code highlighting** — Syntax highlighting for code files
-- **PDF viewer** — Built-in PDF.js for document preview
+Create AI characters with personality, backstory, system prompts, pronouns, aliases, and clothing records. Multi-character chats with a turn-order sidebar, identity reinforcement, impersonation, and swipe alternatives. The AI Character Import wizard generates complete characters from source material (wiki pages, documents, freeform text) using focused LLM calls. SillyTavern character and chat import is fully supported.
 
-### Aurora — Characters & Roleplay
+### Memory & Context
 
-Create AI personalities that feel less like chatbots and more like collaborators who have actually read your notes:
+Long-term semantic memory that persists across conversations. The Memory Gate system reinforces near-duplicates, links related memories, and inserts new ones automatically. Proactive recall lets characters analyze recent conversation for relevant memories. Built-in memory housekeeping for deduplication and cleanup. Context compression handles long conversations, and the AI can request full context reload when needed.
 
-- **AI characters** — Detailed profiles with personality, backstory, and system prompts
-- **User characters** — Represent yourself however you want
-- **Character pronouns** — He/him, she/her, they/them, or custom pronouns
-- **Character aliases** — Alternate names for characters
-- **Clothing records** — Track outfits with usage contexts
-- **Multi-character chats** — Multiple AI characters in one conversation with turn management
-- **Turn-order sidebar** — Participant sidebar with status badges and per-card settings
-- **Identity reinforcement** — Characters maintain consistent identity through system prompt reinforcement
-- **Impersonation** — Take control of any character mid-scene
-- **Swipes** — Generate alternative responses when one doesn't land
-- **AI Wizard** — Generate character details automatically, with streaming progress and document upload support
-- **SillyTavern import** — Bring your existing characters and chats
+Quilltap uses a three-model architecture for optimal cost and performance: your best model for chat, a cheap model for background tasks like memory extraction and titling, and an embedding model for semantic search.
 
-### The Commonplace Book — Memory & Context
+### Agent Mode & Tools
 
-The part where the AI actually remembers things, which is — one would think — a rather fundamental requirement for a conversational partner:
+Iterative tool use with self-correction for multi-step tasks. Built-in tools include web search (via Serper API), memory search, image generation, file management, and help search. The Run Tool feature lets you invoke any tool directly from the chat toolbar. Connect external tools through Model Context Protocol (MCP) servers, or write custom tool plugins.
 
-- **Long-term memory** — Important details persist across conversations
-- **Semantic recall** — Find memories by meaning, not exact keywords
-- **Memory Gate** — Reinforcement and linking system: REINFORCE near-duplicates, LINK related memories, INSERT new ones
-- **Proactive recall** — Characters analyze recent conversation for relevant memories
-- **Memory deduplication** — Built-in tool to find and merge duplicate memories
-- **Context compression** — Automatic summarization for long conversations
-- **Full context reload** — AI can request complete context when needed
+### Alternative Content Provision and Routing — The Concierge
 
-Quilltap uses a three-model architecture for optimal cost and performance:
+Intelligent content classification and routing with three modes: off, detect-only, or auto-route to uncensored providers. Uses OpenAI's free moderation endpoint when available, falling back to LLM-based classification. Chat-level danger flags with visual indicators and quick-hide integration.
 
-1. **Chat model** — Your primary AI for conversations (Claude, GPT-4, Gemini, etc.)
-2. **Cheap model** — Handles background tasks like memory extraction, titling, and image descriptions
-3. **Embedding model** — Powers semantic search for memories and files
+### Gaming & Interactivity — Pascal the Croupier
 
-### The Salon — Chat & Conversation
+Persistent chat state (JSON) for inventories, stats, scores, and any structured data. Project-level state shared across chats with per-chat overrides. Protected keys (underscore-prefixed) that the AI can't modify. Cryptographically secure dice rolls (d4 to d1000), coin flips, and random participant selection with auto-detection — "I roll 2d6" actually rolls.
 
-The drawing room where all the other subsystems gather for conversation:
+### Story Backgrounds — The Lantern
 
-- **Tool palette** — Chat composer gutter tools for quick access to formatting, attachments, and actions
-- **Embedded tool messages** — Tool results displayed inline within message bubbles
-- **Server-side markdown** — Pre-rendered markdown for faster message display
-- **Queue status badges** — Live background job status in the toolbar
-- **Unified chat cards** — Consistent chat card component with story background thumbnails
-
-### Pascal the Croupier — Gaming & Interactivity
-
-Every good establishment needs a house dealer. Built-in mechanics for tabletop gaming, RPGs, and interactive fiction:
-
-- **Chat State** — Persistent JSON storage for inventories, stats, scores, and any structured data
-- **State inheritance** — Project-level state shared across chats, with per-chat overrides
-- **Protected keys** — Underscore-prefixed keys (`_notes`) can't be modified by AI
-- **Random Number Generator** — Dice rolls (d4 to d1000), coin flips, and random participant selection
-- **Auto-detection** — Dice notation in messages executes automatically ("I roll 2d6" actually rolls)
-- **Cryptographically secure** — Fair, unpredictable random results
-
-### Dangermouse — Content Filtering
-
-For those occasions when discretion is the better part of valor — intelligent content classification and routing:
-
-- **Gatekeeper service** — Classifies messages for sensitive content
-- **Three modes** — Off, Detect Only, or Auto-Route to uncensored providers
-- **Chat-level classification** — Danger flags on chats with quick-hide integration
-- **Visual indicators** — DangerFlagBadge and DangerContentWrapper for clear content marking
-- **Startup scan** — Scheduled danger classification scan with context summary chaining
-
-### The Lantern — Story Backgrounds
-
-Because atmosphere is everything, and a well-lit scene deserves a proper backdrop:
-
-- **Story backgrounds** — AI-generated background images for chats based on scene context
-- **Context-aware appearance** — Character appearance resolution using clothing and physical descriptions
-- **Project backgrounds** — Story backgrounds on project detail pages
-- **Chat card thumbnails** — Chat cards display story background thumbnails
-- **Uncensored fallback** — Automatic routing for chats with dangerous content
-
-### LLM Tools
-
-Your AI can do rather more than simply talk — it has hands, after a fashion:
-
-- **Web search** — Current information via Serper API
-- **Memory search** — Query past conversations
-- **Image generation** — Create images mid-conversation (OpenAI, Google Imagen, Grok)
-- **File management** — Read/write project files
-- **Agent Mode** — Iterative tool use with self-correction for complex multi-step tasks
-- **Help search** — AI can search Quilltap's documentation to help you use features
-- **MCP connector** — Connect to Model Context Protocol servers for external tool integration
-- **Custom tools** — Extend with plugins
+AI-generated background images for chats based on scene context, with character appearance resolution using clothing and physical descriptions. Project backgrounds and chat card thumbnails. Automatic uncensored fallback routing for chats with flagged content.
 
 ---
 
 ## Supported Providers
 
-Quilltap does not insist you patronize any particular establishment. Connect to the AI services you prefer:
+Quilltap does not insist you patronize any particular establishment. Model lists are fetched at runtime from each provider's API, so you always see what's currently available.
 
-| Provider | Models | Notes |
-| ---------- | -------- | ------- |
-| **Anthropic** | Claude 4/4.5 (Opus, Sonnet, Haiku) | Image understanding, tool use |
-| **OpenAI** | GPT-5/5.1, GPT-4o series | Tool calling, GPT-Image/DALL-E |
-| **Google** | Gemini 3/2.5 Flash/Pro | Multimodal, Imagen 4 (Nano Banana), tool use |
-| **xAI** | Grok 4/4.1, Grok 3 | Native image generation |
-| **Ollama** | Llama, Phi, Mistral, etc. | Fully local, offline capable |
-| **OpenRouter** | 200+ models | Unified API, automatic pricing |
-| **OpenAI-Compatible** | LM Studio, vLLM, etc. | Any compatible endpoint |
+| Provider | Notes |
+| -------- | ----- |
+| **Anthropic** | Claude families. Image understanding, tool use. |
+| **OpenAI** | GPT families. Tool calling, image generation (GPT-Image, DALL-E). |
+| **Google** | Gemini families. Multimodal, Imagen image generation, tool use. |
+| **xAI** | Grok families. Native image generation, web search. |
+| **Ollama** | Local/offline models (Llama, Phi, Mistral, etc.). Fully local, no API key needed. |
+| **OpenRouter** | 200+ models through a unified API with automatic pricing. |
+| **OpenAI-Compatible** | LM Studio, vLLM, Together AI, Groq, and any compatible endpoint. |
 
-For best results we recommend Ollama or OpenAI for embedding, a "nano" or "lite" model for the cheap LLM, and Claude, ChatGPT, Gemini, GLM, or DeepSeek for the primary model. OpenRouter can get you access to all of these for good rates — pay one provider and get a lot — but you'll probably want to use Ollama as a local embedder if you do that.
+For best results we recommend Ollama or OpenAI for embedding, a lightweight model for the cheap LLM, and whichever primary model suits your taste and budget. OpenRouter can get you access to many providers through a single API key. Additional providers (such as Gab AI) are available as third-party plugins.
 
 ---
 
-## Calliope — Themes & Appearance
+## Themes & Appearance
 
-One's workspace ought to reflect one's sensibilities. Quilltap includes six bundled themes and supports custom theme plugins. Switch themes live without reloading — instant redecoration, no painters required.
+Switch themes live without reloading — instant redecoration, no painters required. Five bundled themes ship with the application, and the plugin system supports custom themes:
 
 | Theme | Style |
 | ----- | ----- |
-| **Professional Neutral** | Clean default look |
-| **Old School** | Classic serif typography |
-| **Art Deco** | Geometric elegance |
-| **The Great Estate** | Rich, estate-inspired design |
-| **Earl Grey** | Warm, tea-inspired palette |
-| **Rains** | Cool, atmospheric tones |
+| **Old School** | Classic slate-blue palette with professional typography |
+| **Art Deco** | Geometric elegance with navy-and-gold opulence |
+| **The Great Estate** | Warm, manor-inspired design with mahogany and gold |
+| **Earl Grey** | High-contrast dark theme with modern minimal styling |
+| **Rains** | Warm, earthy palette with cozy amber accents |
 
-Themes can override subsystem names and Foundry card images, letting each theme define its own personality for the application.
-
-## The Foundry — Settings & Architecture
-
-The engine room. The unified hub for managing all of Quilltap's subsystems:
-
-- **Foundry Hub** — Navigate to all eight subsystems from `/foundry` with themed navigation cards
-- **Collapsed sidebar** — Direct navigation to any subsystem
-- **Plugin system** — Extend with themes, providers, templates, tools, and storage via npm packages
-
-### Plugins
-
-Quilltap was built to be extended. Add capabilities via npm packages:
-
-- **LLM Providers** — Add new AI services, including chat and image generation
-- **Themes** — Custom visual styles
-- **Templates** — Roleplay formatting templates
-- **Tools** — Custom LLM capabilities
-- **Storage** — Alternative file backends
-- **Search** — Custom search providers
-
-See the plugin development guides:
-
-- [Theme Development](docs/THEME_PLUGIN_DEVELOPMENT.md)
-- [Template Development](docs/TEMPLATE_PLUGIN_DEVELOPMENT.md)
-- [Tool Development](docs/TOOL_PLUGIN_DEVELOPMENT.md)
-- [Provider Development](docs/PROVIDER_PLUGIN_DEVELOPMENT.md)
-- [Search Provider Development](docs/SEARCH_PLUGIN_DEVELOPMENT.md)
+Themes can override subsystem names and images, letting each theme define its own personality for the application.
 
 ---
 
@@ -325,31 +217,88 @@ See the plugin development guides:
 
 ### Where your data lives
 
-All Quilltap data — database, files, logs — resides in a single directory, like a well-organized study. The application tells you exactly where at the bottom of every page, because we believe you have a right to know where your own things are kept.
+All Quilltap data — database, files, logs — resides in a single directory. The application tells you exactly where at the bottom of every page.
 
-| Environment | Default Location | Override |
-| ----------- | ---------------- | -------- |
-| **Electron (macOS)** | `~/Library/Application Support/Quilltap` (shared with VM via VirtioFS) | Splash screen directory chooser or `QUILLTAP_DATA_DIR` |
-| **Electron (Windows)** | `%APPDATA%\Quilltap` (accessed from WSL2 via auto-mount) | Splash screen directory chooser or `QUILLTAP_DATA_DIR` |
+| Platform | Default Location | Override |
+| -------- | ---------------- | -------- |
+| **macOS (Electron)** | `~/Library/Application Support/Quilltap` | Splash screen directory chooser or `QUILLTAP_DATA_DIR` |
+| **Windows (Electron)** | `%APPDATA%\Quilltap` | Splash screen directory chooser or `QUILLTAP_DATA_DIR` |
 | **Linux** | `~/.quilltap` | `QUILLTAP_DATA_DIR` |
 | **Docker** | Mount a host directory to `/app/quilltap` | Volume mount (`-v`) |
 
-The Electron app lets you manage multiple data directories from its splash screen — pick one, add new ones, or switch between them. Each directory gets its own VM, so switching is a quick stop-and-start rather than a teardown.
+### What's stored
 
-### What's stored where
-
-- **Database:** SQLite file with automatic protection (integrity checks, WAL checkpoints, physical backups with tiered retention)
-- **Files:** Local filesystem
-- **API keys:** AES-256-GCM encrypted
+- **Database:** SQLite with automatic protection — integrity checks on startup, periodic WAL checkpoints, physical backups with tiered retention (daily for 7 days, weekly for 4 weeks, monthly for 12 months, yearly forever)
+- **Files:** Local filesystem using original filenames, organized by project. Real-time filesystem watcher keeps the database in sync.
+- **API keys:** AES-256-GCM encrypted at rest with a master pepper you control
 
 ### Backup options
 
-- **Full system backup** — Single ZIP file containing everything: characters, chats, files, memories, profiles, plugin configs, and installed npm plugins
+- **Full system backup** — Single ZIP file containing everything: characters, chats, files, memories, settings, and installed plugins
 - **Native export** — Selective `.qtap` format with conflict resolution for sharing specific content
 - **SillyTavern format** — Import/export for compatibility
-- **Database protection** — Automatic physical backups with tiered retention: daily for 7 days, weekly for 4 weeks, monthly for 12 months, yearly forever
 
 See [Backup & Restore](docs/BACKUP-RESTORE.md) and [Database Protection](help/database-protection.md) for details.
+
+---
+
+## For Developers
+
+Quilltap was built to be extended. The plugin system supports five extension points, all delivered as npm packages:
+
+| Plugin Type | What It Does |
+| ----------- | ------------ |
+| **LLM Provider** | Add new AI services, including chat, embedding, image generation, and moderation |
+| **Theme** | Custom visual styles with full control over the CSS token system |
+| **Template** | Roleplay formatting templates for different prompt styles |
+| **Tool** | Custom LLM capabilities (the AI can use your tool mid-conversation) |
+| **Search Provider** | Alternative web search backends (ships with Serper.dev; swap in your own) |
+
+### Architecture at a glance
+
+Quilltap is a single Next.js 16 application (App Router) that serves both the UI and API routes. The tech stack:
+
+- **Frontend:** React 19, TypeScript, Tailwind CSS 4 with a semantic `qt-*` class system for full theme overrideability
+- **Backend:** Next.js API routes, SQLite (better-sqlite3) with WAL mode, Zod schema validation
+- **Desktop:** Electron shell with platform-specific VM backends (Lima/VZ on macOS, WSL2 on Windows, Docker on Linux)
+- **Build:** GitHub Actions CI/CD with automated releases — rootfs tarballs, Electron installers (macOS DMG, Windows NSIS, Linux AppImage/deb), Docker multi-arch images, and npm package all built from a single tag push
+
+The entire provider system is plugin-based — every bundled provider (Anthropic, OpenAI, Google, xAI, Ollama, OpenRouter, OpenAI-Compatible) is a plugin with the same API surface available to third-party authors.
+
+### Getting started with development
+
+```bash
+git clone https://github.com/foundry-9/quilltap.git
+cd quilltap
+npm install
+npm run dev
+```
+
+See the plugin development guides for each extension point:
+
+- [Provider Development](docs/PROVIDER_PLUGIN_DEVELOPMENT.md)
+- [Theme Development](docs/THEME_PLUGIN_DEVELOPMENT.md)
+- [Template Development](docs/TEMPLATE_PLUGIN_DEVELOPMENT.md)
+- [Tool Development](docs/TOOL_PLUGIN_DEVELOPMENT.md)
+- [Search Provider Development](docs/SEARCH_PLUGIN_DEVELOPMENT.md)
+
+### Contributing
+
+Contributions are welcome. We ask that you open an issue to discuss major changes before submitting a PR — it is far better to align on direction before building the bridge, as anyone who has ever built a bridge in the wrong direction can attest.
+
+See the [Development Guide](DEVELOPMENT.md) for local setup, testing, and build instructions.
+
+---
+
+## Troubleshooting
+
+**Desktop app won't start (macOS):** Ensure Xcode Command Line Tools are installed — the app will prompt you if they're missing. Check Console.app for Lima-related errors. Try deleting the VM; the app will recreate it on next launch.
+
+**Desktop app won't start (Windows):** Ensure WSL2 is installed: run `wsl --install` in PowerShell as Administrator. Check if the distro exists: `wsl --list --verbose`. See the [Windows Troubleshooting Guide](docs/WINDOWS.md).
+
+**Docker container issues:** Check `docker logs quilltap`. Verify port 3000 isn't already in use. For local services (Ollama, etc.), use the startup scripts — they handle port forwarding automatically.
+
+**General:** The footer shows your data directory path and backend mode (VM/Docker/local) — useful for debugging. If none of the above resolves your predicament: [GitHub Issues](https://github.com/foundry-9/quilltap/issues).
 
 ---
 
@@ -361,56 +310,16 @@ See [Backup & Restore](docs/BACKUP-RESTORE.md) and [Database Protection](help/da
 - [Image Generation](docs/IMAGE_GENERATION.md) — Provider configuration
 - [File LLM Access](docs/FILE_LLM_ACCESS.md) — How AI reads your files
 - [Database Architecture](docs/DATABASE_ABSTRACTION.md) — SQLite backend and protection
+- [Prompt Architecture](docs/PROMPT_ARCHITECTURE.md) — How system prompts are assembled
 - [Windows Troubleshooting](docs/WINDOWS.md) — WSL2 setup and common issues
 - [Changelog](docs/CHANGELOG.md) — Release history
 - [Roadmap](features/ROADMAP.md) — What's coming
 
 ---
 
-## Troubleshooting
-
-Should things go sideways — and in software, as in life, they occasionally do — here are the most common remedies.
-
-**Electron app won't start (macOS):**
-
-- Ensure Xcode Command Line Tools are installed — the app will prompt you if they're missing
-- Check Console.app for Lima-related errors
-- Try deleting the VM: the app will recreate it on next launch
-
-**Electron app won't start (Windows):**
-
-- Ensure WSL2 is installed: run `wsl --install` in PowerShell as Administrator
-- Check if the distro exists: `wsl --list --verbose`
-- See the [Windows Troubleshooting Guide](docs/WINDOWS.md)
-
-**Docker container issues:**
-
-- Check `docker ps` and `docker logs quilltap`
-- Verify port 3000 isn't already in use
-- For localhost services (Ollama, etc.), use the startup scripts — they handle port forwarding automatically
-
-**General:**
-
-- If using a custom domain, confirm `BASE_URL` matches your actual URL
-- The footer shows your data directory path and backend mode (VM/Docker/local) — useful for debugging
-
-If none of the above resolves your predicament: [GitHub Issues](https://github.com/foundry-9/quilltap/issues)
-
----
-
 ## Tech Stack
 
-The machinery behind the curtain:
-
-Next.js 16 (App Router) · React 19 · TypeScript 5.6 · SQLite (better-sqlite3) · Tailwind CSS 4.1 · Electron · Lima/VZ (macOS) · WSL2 (Windows) · Docker
-
-3,400+ tests with Jest and Playwright, because trust is earned.
-
----
-
-## Contributing
-
-Contributions are most welcome. We ask only that you open an issue to discuss major changes before submitting a PR — it is far better to align on direction before building the bridge, as anyone who has ever built a bridge in the wrong direction can attest.
+Next.js 16 (App Router) · React 19 · TypeScript · SQLite (better-sqlite3) · Tailwind CSS 4 · Electron · Lima/VZ (macOS) · WSL2 (Windows) · Docker (Linux) · Zod · GitHub Actions
 
 ---
 
@@ -425,9 +334,10 @@ Copyright © 2025, 2026 Foundry-9 LLC
 ## Support
 
 - **Issues:** [GitHub Issues](https://github.com/foundry-9/quilltap/issues)
-- **Author:** Charles Sebold
-- **Email:** <charles.sebold@foundry-9.com>
-- **Website:** [quilltap.ai](https://quilltap.ai) | [foundry-9.com](https://foundry-9.com)
+- **Discord:** [Join us](https://discord.com/channels/1476289075152556205/1476290238187049184)
+- **Website:** [quilltap.ai](https://quilltap.ai)
+- **Author:** Charles Sebold ([charles.sebold@foundry-9.com](mailto:charles.sebold@foundry-9.com))
+- **Company:** [Foundry-9 LLC](https://foundry-9.com)
 
 ---
 
