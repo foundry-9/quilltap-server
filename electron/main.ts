@@ -20,6 +20,7 @@ import {
 import { IVMManager, createVMManager } from './vm-manager';
 import { LimaManager } from './lima-manager';
 import { DockerManager } from './docker-manager';
+import { NpxManager } from './npx-manager';
 import { DownloadManager } from './download-manager';
 import { HealthChecker } from './health-checker';
 import { SplashUpdate, DirectoryInfo, DirectorySizeInfo, RuntimeMode, DetailLevel } from './types';
@@ -45,7 +46,7 @@ if (process.platform === 'darwin') {
   try {
     /* eslint-disable quilltap/no-quilltap-misspelling -- actual macOS bundle ID */
     fs.rmSync(
-      path.join(os.homedir(), 'Library', 'Saved Application State', 'com.foundry9.quilttap.savedState'),
+      path.join(os.homedir(), 'Library', 'Saved Application State', 'com.foundry9.quilltap.savedState'),
       { recursive: true, force: true }
     );
     /* eslint-enable quilltap/no-quilltap-misspelling */
@@ -68,11 +69,13 @@ let splashWindow: BrowserWindow | null = null;
 let mainWindow: BrowserWindow | null = null;
 let vmManager: IVMManager;
 let dockerManager: DockerManager;
+let npxManager: NpxManager;
 let downloadManager: DownloadManager;
 let healthChecker: HealthChecker;
 let isQuitting = false;
 let appSettings: AppSettings;
 let dockerAvailable = false;
+let nodeAvailable = false;
 
 /** Whether we're in the auto-start countdown (can be interrupted) */
 let autoStartPending = false;
@@ -116,6 +119,7 @@ function sendDirectoryInfo(): void {
     autoStart: appSettings.autoStart,
     runtimeMode: appSettings.runtimeMode,
     dockerAvailable,
+    nodeAvailable,
     vmLabel: getVMLabel(),
   };
 
@@ -337,7 +341,7 @@ function createSplashWindow(): BrowserWindow {
   return win;
 }
 
-/** Stop the currently running backend (VM or Docker container) */
+/** Stop the currently running backend (VM, Docker container, or npx process) */
 async function stopCurrentBackend(): Promise<void> {
   if (appSettings.runtimeMode === 'docker') {
     console.log('[Main] Stopping Docker container...');
@@ -345,6 +349,13 @@ async function stopCurrentBackend(): Promise<void> {
       await dockerManager.stopContainer();
     } catch (err) {
       console.warn('[Main] Error stopping Docker container (non-fatal):', err);
+    }
+  } else if (appSettings.runtimeMode === 'npx') {
+    console.log('[Main] Stopping npx server...');
+    try {
+      await npxManager.stopServer();
+    } catch (err) {
+      console.warn('[Main] Error stopping npx server (non-fatal):', err);
     }
   } else {
     console.log('[Main] Stopping VM...');
@@ -690,12 +701,17 @@ async function startupSequence(dataDir: string): Promise<void> {
 
   // --- Production / VM mode ---
 
-  // Step 0: Stop any running Docker container to prevent port conflicts
+  // Step 0: Stop any running Docker container or npx process to prevent port conflicts
   try {
     dockerManager.setDataDir(dataDir);
     await dockerManager.stopContainer();
   } catch (err) {
     console.warn('[Main] Could not stop Docker container (non-fatal):', err);
+  }
+  try {
+    await npxManager.stopServer();
+  } catch (err) {
+    console.warn('[Main] Could not stop npx server (non-fatal):', err);
   }
 
   // Step 1: Initializing — check platform prerequisites
@@ -929,6 +945,8 @@ async function startupSequence(dataDir: string): Promise<void> {
 function routeStartup(dataDir: string): void {
   if (appSettings.runtimeMode === 'docker') {
     dockerStartupSequence(dataDir);
+  } else if (appSettings.runtimeMode === 'npx') {
+    npxStartupSequence(dataDir);
   } else {
     startupSequence(dataDir);
   }
@@ -968,7 +986,7 @@ async function dockerStartupSequence(dataDir: string): Promise<void> {
     return;
   }
 
-  // Step 2: Stop any running VM to prevent port conflicts (skip on Linux — no separate VM)
+  // Step 2: Stop any running VM or npx process to prevent port conflicts
   if (process.platform !== 'linux') {
     try {
       const vmStatus = await vmManager.checkStatus();
@@ -984,6 +1002,11 @@ async function dockerStartupSequence(dataDir: string): Promise<void> {
     } catch (err) {
       console.warn('[Main] Could not check/stop VM (non-fatal):', err);
     }
+  }
+  try {
+    await npxManager.stopServer();
+  } catch (err) {
+    console.warn('[Main] Could not stop npx server (non-fatal):', err);
   }
 
   // Step 3: Ensure the version-matched Docker image is available
@@ -1072,6 +1095,132 @@ async function dockerStartupSequence(dataDir: string): Promise<void> {
   }
 }
 
+/**
+ * Node.js/npx startup sequence. Orchestrates:
+ * 1. Verify Node.js available
+ * 2. Stop any running VM/Docker to prevent port conflicts
+ * 3. Spawn npx quilltap@{version}
+ * 4. Health check polling
+ * 5. Main window launch
+ */
+async function npxStartupSequence(dataDir: string): Promise<void> {
+  autoStartPending = false;
+
+  // Initialize startup log (overwrites any previous log)
+  initStartupLog(dataDir);
+
+  console.log(`[Main] npx startup with data directory: ${dataDir}`);
+
+  // Step 1: Verify Node.js is available
+  sendSplashUpdate({
+    phase: 'initializing',
+    message: 'Checking Node.js...',
+  });
+
+  if (!nodeAvailable) {
+    sendSplashError(
+      'Node.js >= 18 is not available.\n\n' +
+      'Install Node.js from https://nodejs.org/ and try again.',
+      true
+    );
+    return;
+  }
+
+  // Step 2: Stop any running VM or Docker container to prevent port conflicts
+  if (process.platform !== 'linux') {
+    try {
+      const vmStatus = await vmManager.checkStatus();
+      if (vmStatus.running) {
+        console.log('[Main] Stopping running VM to prevent port conflict with npx');
+        sendSplashUpdate({
+          phase: 'initializing',
+          message: 'Stopping virtual machine...',
+          detail: 'Preventing port conflict with Node.js server',
+        });
+        await vmManager.stopVM();
+      }
+    } catch (err) {
+      console.warn('[Main] Could not check/stop VM (non-fatal):', err);
+    }
+  }
+
+  try {
+    dockerManager.setDataDir(dataDir);
+    await dockerManager.stopContainer();
+  } catch (err) {
+    console.warn('[Main] Could not stop Docker container (non-fatal):', err);
+  }
+
+  // Step 3: Start the npx server
+  sendSplashUpdate({
+    phase: 'installing-npx',
+    message: 'Starting Quilltap via Node.js...',
+    detail: `npx quilltap@${APP_VERSION}`,
+  });
+
+  let startError: string | null = null;
+
+  npxManager.startServer(
+    dataDir,
+    (line) => {
+      console.log('[NpxManager] output:', line);
+      sendSplashUpdate({
+        phase: 'installing-npx',
+        message: 'Starting Quilltap via Node.js...',
+        detail: line.length > 120 ? line.substring(0, 117) + '...' : line,
+      });
+    },
+    (error) => {
+      startError = error;
+    },
+  );
+
+  // Give the process a moment to fail immediately (e.g. npx not found)
+  await new Promise(resolve => setTimeout(resolve, 2000));
+
+  if (startError) {
+    sendSplashError(`Failed to start Node.js server: ${startError}`, true);
+    return;
+  }
+
+  if (!npxManager.isRunning()) {
+    sendSplashError('Node.js server process exited unexpectedly.', true);
+    return;
+  }
+
+  // Step 4: Wait for health
+  sendSplashUpdate({
+    phase: 'waiting-health',
+    message: 'Waiting for Quilltap to start...',
+  });
+
+  const healthStatus = await healthChecker.waitForHealthy(undefined, undefined, (s) => {
+    sendSplashUpdate({
+      phase: 'waiting-health',
+      message: `Waiting for server... (attempt ${s.attempts})`,
+      detail: s.error || '',
+    });
+  });
+
+  if (healthStatus.status === 'healthy' || healthStatus.status === 'degraded') {
+    sendSplashUpdate({
+      phase: 'ready',
+      message: 'Ready!',
+    });
+
+    closeStartupLog();
+    mainWindow = createMainWindow();
+    markStartupSuccess();
+  } else {
+    sendSplashError(
+      `Server did not become healthy after ${healthStatus.attempts} attempts.\n\n` +
+      'Check that Node.js and npx are working correctly.',
+      true
+    );
+    closeStartupLog();
+  }
+}
+
 // --- App lifecycle ---
 
 app.whenReady().then(async () => {
@@ -1087,6 +1236,7 @@ app.whenReady().then(async () => {
 
   vmManager = createVMManager();
   dockerManager = new DockerManager();
+  npxManager = new NpxManager();
   downloadManager = new DownloadManager();
   healthChecker = isDev
     ? new HealthChecker('http://localhost:3000/api/health')
@@ -1095,9 +1245,12 @@ app.whenReady().then(async () => {
   // Pre-configure VM manager with last-used directory
   vmManager.setDataDir(appSettings.lastDataDir);
 
-  // Check Docker availability asynchronously (non-blocking)
+  // Check Docker and Node.js availability asynchronously (non-blocking)
   dockerAvailable = await dockerManager.isDockerAvailable();
   console.log('[Main] Docker available:', dockerAvailable);
+
+  nodeAvailable = await npxManager.isNodeAvailable();
+  console.log('[Main] Node.js available:', nodeAvailable);
 
   // Handle file downloads (backups, exports, etc.) — prompt user with a save dialog
   session.defaultSession.on('will-download', (_event, item) => {
@@ -1139,6 +1292,7 @@ ipcMain.handle('splash:get-directories', (): DirectoryInfo => {
     sizes: {},
     runtimeMode: appSettings.runtimeMode,
     dockerAvailable,
+    nodeAvailable,
     vmLabel: getVMLabel(),
   };
 });
@@ -1172,9 +1326,10 @@ ipcMain.handle('splash:select-directory', async (): Promise<string> => {
   return selectedPath;
 });
 
-/** Set the runtime mode (docker or vm) */
+/** Set the runtime mode (docker, vm, or npx) */
 ipcMain.on('splash:set-runtime-mode', (_event, mode: string) => {
-  const runtimeMode: RuntimeMode = mode === 'docker' ? 'docker' : 'vm';
+  const runtimeMode: RuntimeMode = mode === 'docker' ? 'docker'
+    : mode === 'npx' ? 'npx' : 'vm';
   console.log('[Main] Runtime mode set to:', runtimeMode);
   appSettings.runtimeMode = runtimeMode;
   saveSettings(appSettings);
@@ -1340,7 +1495,8 @@ function createShutdownWindow(): BrowserWindow {
     },
   });
 
-  const backendLabel = appSettings.runtimeMode === 'docker' ? 'container' : 'virtual machine';
+  const backendLabel = appSettings.runtimeMode === 'docker' ? 'container'
+    : appSettings.runtimeMode === 'npx' ? 'server' : 'virtual machine';
   const html = `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -1398,6 +1554,13 @@ app.on('before-quit', async (event) => {
       await dockerManager.stopContainer();
     } catch (err) {
       console.error('[Main] Error stopping Docker container:', err);
+    }
+  } else if (appSettings.runtimeMode === 'npx') {
+    console.log('[Main] Stopping npx server before quit...');
+    try {
+      await npxManager.stopServer();
+    } catch (err) {
+      console.error('[Main] Error stopping npx server:', err);
     }
   } else {
     console.log('[Main] Stopping VM before quit...');

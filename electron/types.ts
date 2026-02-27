@@ -1,5 +1,5 @@
-/** Runtime mode: VM (Lima/WSL2) or Docker */
-export type RuntimeMode = 'docker' | 'vm';
+/** Runtime mode: VM (Lima/WSL2), Docker, or Node.js (npx) */
+export type RuntimeMode = 'docker' | 'vm' | 'npx';
 
 /** Phase identifiers for splash screen state machine */
 export type SplashPhase =
@@ -11,6 +11,7 @@ export type SplashPhase =
   | 'starting-vm'
   | 'pulling-image'
   | 'starting-container'
+  | 'installing-npx'
   | 'waiting-health'
   | 'ready'
   | 'error';
@@ -45,6 +46,8 @@ export interface DirectoryInfo {
   runtimeMode: RuntimeMode;
   /** Whether Docker CLI is available on this system */
   dockerAvailable: boolean;
+  /** Whether Node.js >= 18 is available on this system */
+  nodeAvailable: boolean;
   /** Label for the VM button (e.g. "Lima" on macOS, "WSL2" on Windows) */
   vmLabel: string;
 }

@@ -12,7 +12,7 @@ export interface AppSettings {
   knownDataDirs: NamedDataDir[];
   /** Whether to auto-start with lastDataDir (skip chooser) */
   autoStart: boolean;
-  /** Runtime mode: 'docker' or 'vm' (Lima/WSL2) */
+  /** Runtime mode: 'docker', 'vm' (Lima/WSL2), or 'npx' (Node.js) */
   runtimeMode: RuntimeMode;
 }
 
@@ -70,7 +70,8 @@ export function loadSettings(): AppSettings {
         knownDataDirs,
         autoStart: typeof parsed.autoStart === 'boolean' ? parsed.autoStart : defaults.autoStart,
         runtimeMode: process.platform === 'linux' ? 'docker'
-          : (parsed.runtimeMode === 'docker' ? 'docker' : 'vm'),
+          : (parsed.runtimeMode === 'docker' ? 'docker'
+            : parsed.runtimeMode === 'npx' ? 'npx' : 'vm'),
       };
     }
   } catch (err) {
