@@ -118,19 +118,33 @@ function openBrowser(url) {
 // This handles the case where npx caches the package but the user upgrades
 // Node.js — the cached native modules will have a stale NODE_MODULE_VERSION.
 function ensureNativeModules() {
-  const nativeModules = ['better-sqlite3', 'sharp'];
   const needsRebuild = [];
 
-  for (const mod of nativeModules) {
-    try {
-      require(mod);
-    } catch (err) {
-      if (err.message && err.message.includes('NODE_MODULE_VERSION')) {
-        needsRebuild.push(mod);
-      } else if (err.code === 'MODULE_NOT_FOUND') {
-        needsRebuild.push(mod);
-      }
-      // Other errors (e.g., missing system libs) — let the server handle them
+  // Check better-sqlite3: it lazy-loads the native .node binary only when you
+  // create a Database, so a bare require('better-sqlite3') always succeeds.
+  // We must load the native binding directly to detect NODE_MODULE_VERSION mismatches.
+  try {
+    const bindingsPath = path.join(
+      PACKAGE_DIR, 'node_modules', 'better-sqlite3', 'build', 'Release', 'better_sqlite3.node'
+    );
+    require(bindingsPath);
+  } catch (err) {
+    if (err.message && err.message.includes('NODE_MODULE_VERSION')) {
+      needsRebuild.push('better-sqlite3');
+    } else if (err.code === 'MODULE_NOT_FOUND') {
+      needsRebuild.push('better-sqlite3');
+    }
+  }
+
+  // Check sharp: loads its native binding eagerly on require, but we use
+  // the same explicit-path approach for consistency and reliability.
+  try {
+    require('sharp');
+  } catch (err) {
+    if (err.message && err.message.includes('NODE_MODULE_VERSION')) {
+      needsRebuild.push('sharp');
+    } else if (err.code === 'MODULE_NOT_FOUND') {
+      needsRebuild.push('sharp');
     }
   }
 

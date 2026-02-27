@@ -4,6 +4,7 @@
 
 ### 3.1-dev
 
+- fix: Native module version check now loads the `.node` binary directly — `better-sqlite3` lazy-loads its native binding only when a Database is created, so the previous `require('better-sqlite3')` check always succeeded without testing the actual binary; the CLI now loads the compiled `better_sqlite3.node` file directly from the package's `build/Release/` directory to reliably detect NODE_MODULE_VERSION mismatches
 - fix: BLOB column support in SQLite update path — `translateUpdate`/`buildUpdateQuery` now accept blob columns so that `updateOne`/`updateMany` write embeddings as Float32 BLOBs instead of JSON TEXT; previously the normalize-vector-storage migration's work was undone by subsequent writes; threads `blobColumns` from `SQLiteCollection` through to the query translator
 - fix: Memory cleanup POST returned 400 — the housekeeping dialog was not including `characterId` in the POST body despite the API schema requiring it; added missing field to the fetch body in `housekeeping-dialog.tsx`
 - perf: Memory cleanup merge pass no longer makes N embedding API calls — rewrote the "merge similar memories" pass in housekeeping to use already-stored embeddings from the vector store instead of calling `findSimilarMemories()` per memory (which generated a new embedding via external API and fetched all memories from the DB on each iteration); preview with 125+ memories is now essentially instant
