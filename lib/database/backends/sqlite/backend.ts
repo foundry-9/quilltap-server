@@ -183,7 +183,7 @@ export class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
         return { matchedCount: 0, modifiedCount: 0, acknowledged: true };
       }
 
-      const query = buildUpdateQuery(this.name, filter as QueryFilter, update as UpdateSpec<unknown>, this.jsonColumns, this.arrayColumns);
+      const query = buildUpdateQuery(this.name, filter as QueryFilter, update as UpdateSpec<unknown>, this.jsonColumns, this.arrayColumns, this.blobColumns);
       const result = this.db.prepare(query.sql).run(...query.params);
 
       return {
@@ -205,7 +205,7 @@ export class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
    */
   async updateMany(filter: TypedQueryFilter<T>, update: UpdateSpec<T>): Promise<UpdateResult> {
     try {
-      const query = buildUpdateQuery(this.name, filter as QueryFilter, update as UpdateSpec<unknown>, this.jsonColumns, this.arrayColumns);
+      const query = buildUpdateQuery(this.name, filter as QueryFilter, update as UpdateSpec<unknown>, this.jsonColumns, this.arrayColumns, this.blobColumns);
       const result = this.db.prepare(query.sql).run(...query.params);
 
       return {
@@ -250,7 +250,7 @@ export class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
       const docId = doc.id;
 
       // Perform the update using the document's ID for precision
-      const updateQuery = buildUpdateQuery(this.name, { id: docId } as QueryFilter, update as UpdateSpec<unknown>, this.jsonColumns, this.arrayColumns);
+      const updateQuery = buildUpdateQuery(this.name, { id: docId } as QueryFilter, update as UpdateSpec<unknown>, this.jsonColumns, this.arrayColumns, this.blobColumns);
       const result = this.db.prepare(updateQuery.sql).run(...updateQuery.params);
 
       if (result.changes === 0) {
@@ -429,6 +429,15 @@ export class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
         }
       } else if (typeof value === 'number') {
         result[key] = value;
+      } else if (Buffer.isBuffer(value)) {
+        // Unexpected Buffer in a non-blob, non-JSON column — decode as Float32 BLOB.
+        // This handles timing issues where blob columns haven't been registered yet.
+        logger.debug('Buffer in non-blob column, decoding as Float32', {
+          table: this.name,
+          column: key,
+          byteLength: value.byteLength,
+        });
+        result[key] = blobToEmbedding(value);
       } else {
         // Convert null to undefined for Zod .optional() compatibility
         // (.nullable().optional() also accepts undefined, so this is safe for all schemas)
@@ -598,6 +607,7 @@ export class SQLiteBackend implements DatabaseBackend {
     const arrayColumns = this.collectionArrayColumns.get(name) || [];
     const booleanColumns = this.collectionBooleanColumns.get(name) || [];
     const blobColumns = this.collectionBlobColumns.get(name) || [];
+
     return new SQLiteCollection<T>(this.db, name, jsonColumns, arrayColumns, booleanColumns, blobColumns);
   }
 

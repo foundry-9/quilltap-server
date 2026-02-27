@@ -97,6 +97,8 @@ import { addFileStatusFieldMigration } from './add-file-status-field';
 import { restructureFileStorageMigration } from './restructure-file-storage';
 // Cleanup pass for file storage restructure (category dirs, thumbnails, .DS_Store)
 import { restructureFileStorageCleanupMigration } from './restructure-file-storage-cleanup';
+// Fix TEXT embeddings written back by update path (should be Float32 BLOBs)
+import { fixTextEmbeddingsAfterUpdateMigration } from './fix-text-embeddings-after-update';
 
 /**
  * All available migrations.
@@ -189,6 +191,8 @@ export const migrations: Migration[] = [
   restructureFileStorageMigration,
   // Cleanup pass for file storage restructure (category dirs, thumbnails, .DS_Store)
   restructureFileStorageCleanupMigration,
+  // Fix TEXT embeddings written back by update path (should be Float32 BLOBs)
+  fixTextEmbeddingsAfterUpdateMigration,
 ];
 
 export {
@@ -276,4 +280,6 @@ export {
   restructureFileStorageMigration,
   // Cleanup pass for file storage restructure
   restructureFileStorageCleanupMigration,
+  // Fix TEXT embeddings written back by update path
+  fixTextEmbeddingsAfterUpdateMigration,
 };

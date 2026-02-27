@@ -110,6 +110,8 @@ export class CharacterVectorStore implements ICharacterVectorStore {
         })
       }
 
+
+
       if (meta) {
         this.dimensions = meta.dimensions
         this.createdAt = meta.createdAt
@@ -307,11 +309,16 @@ export class CharacterVectorStore implements ICharacterVectorStore {
       return []
     }
 
-    // Validate query dimensions
+    // Validate query dimensions — log and return empty results instead of crashing.
+    // Mismatches can occur transiently when embeddings are mid-migration between formats.
     if (this.dimensions !== null && queryEmbedding.length !== this.dimensions) {
-      throw new Error(
-        `Query vector dimension mismatch: expected ${this.dimensions}, got ${queryEmbedding.length}`
-      )
+      logger.debug('Query vector dimension mismatch, returning empty results', {
+        context: 'CharacterVectorStore.search',
+        characterId: this.characterId,
+        expectedDimensions: this.dimensions,
+        queryDimensions: queryEmbedding.length,
+      })
+      return []
     }
 
     const results: VectorSearchResult[] = []
@@ -319,6 +326,18 @@ export class CharacterVectorStore implements ICharacterVectorStore {
     for (const entry of this.entries.values()) {
       // Apply filter if provided
       if (filter && !filter(entry.metadata)) {
+        continue
+      }
+
+      // Skip entries with mismatched dimensions instead of crashing
+      if (entry.embedding.length !== queryEmbedding.length) {
+        logger.debug('Skipping vector entry with mismatched dimensions during search', {
+          context: 'CharacterVectorStore.search',
+          entryId: entry.id,
+          expectedDimensions: queryEmbedding.length,
+          actualDimensions: entry.embedding.length,
+          characterId: this.characterId,
+        })
         continue
       }
 
