@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
-const { fork, exec } = require('child_process');
+const { fork, exec, execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const { getCacheDir, isCacheValid, ensureStandalone } = require('../lib/download-manager');
@@ -114,6 +114,45 @@ function openBrowser(url) {
   });
 }
 
+// Check if native modules are compiled for the current Node.js version.
+// This handles the case where npx caches the package but the user upgrades
+// Node.js — the cached native modules will have a stale NODE_MODULE_VERSION.
+function ensureNativeModules() {
+  const nativeModules = ['better-sqlite3', 'sharp'];
+  const needsRebuild = [];
+
+  for (const mod of nativeModules) {
+    try {
+      require(mod);
+    } catch (err) {
+      if (err.message && err.message.includes('NODE_MODULE_VERSION')) {
+        needsRebuild.push(mod);
+      } else if (err.code === 'MODULE_NOT_FOUND') {
+        needsRebuild.push(mod);
+      }
+      // Other errors (e.g., missing system libs) — let the server handle them
+    }
+  }
+
+  if (needsRebuild.length === 0) return;
+
+  console.log(`  Rebuilding native modules for Node.js ${process.version}...`);
+
+  try {
+    execSync(`npm rebuild ${needsRebuild.join(' ')}`, {
+      cwd: PACKAGE_DIR,
+      stdio: 'inherit',
+    });
+    console.log('  Done.');
+    console.log('');
+  } catch (err) {
+    console.error('');
+    console.error(`  Warning: Failed to rebuild native modules: ${err.message}`);
+    console.error('  Try running: npm rebuild --prefix ' + PACKAGE_DIR);
+    console.error('');
+  }
+}
+
 // Main
 async function main() {
   const opts = parseArgs(process.argv);
@@ -149,6 +188,9 @@ async function main() {
     console.error('Try running "quilltap --update" to re-download.');
     process.exit(1);
   }
+
+  // Ensure native modules are compiled for the current Node.js version
+  ensureNativeModules();
 
   // Set up environment
   const env = {
