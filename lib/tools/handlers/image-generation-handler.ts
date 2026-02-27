@@ -736,7 +736,7 @@ export async function executeImageGenerationTool(
               dangerSettings.uncensoredImageProfileId
             );
 
-            // Sanitize appearances through Dangermouse
+            // Sanitize appearances through the Concierge
             resolvedAppearances = await sanitizeAppearancesIfNeeded(
               resolvedAppearances,
               dangerSettings,

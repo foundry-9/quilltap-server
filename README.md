@@ -7,7 +7,7 @@ Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, 
 No subscriptions. No data harvested. No forgetting everything between sessions. No landlords.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-3.1.0--dev.25-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-3.1.0--dev.26-yellow.svg)](package.json)
 
 <p align="center">
   <img src="https://quilltap.ai/images/welcome-to-quilltap-2-8.png" alt="Welcome to Quilltap" />
@@ -224,7 +224,7 @@ Every good establishment needs a house dealer. Built-in mechanics for tabletop g
 - **Auto-detection** — Dice notation in messages executes automatically ("I roll 2d6" actually rolls)
 - **Cryptographically secure** — Fair, unpredictable random results
 
-### Dangermouse — Content Filtering
+### The Concierge — Content Filtering
 
 For those occasions when discretion is the better part of valor — intelligent content classification and routing:
 

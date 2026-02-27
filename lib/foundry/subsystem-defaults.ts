@@ -23,7 +23,7 @@ export type SubsystemId =
   | 'salon'
   | 'commonplace-book'
   | 'prospero'
-  | 'dangermouse'
+  | 'concierge'
   | 'calliope'
   | 'lantern'
   | 'pascal'
@@ -106,13 +106,13 @@ export const DEFAULT_SUBSYSTEM_DEFINITIONS: Record<SubsystemId, SubsystemDefinit
     thumbnail: '/images/thumbnails/prospero.webp',
     backgroundImage: '/images/prospero.webp',
   },
-  dangermouse: {
-    id: 'dangermouse',
-    name: 'Dangermouse',
+  concierge: {
+    id: 'concierge',
+    name: 'The Concierge',
     description: 'Dangerous content detection and routing settings',
     href: '/settings?tab=chat',
-    thumbnail: '/images/thumbnails/dangermouse.webp',
-    backgroundImage: '/images/dangermouse.webp',
+    thumbnail: '/images/thumbnails/concierge.webp',
+    backgroundImage: '/images/concierge.webp',
   },
   calliope: {
     id: 'calliope',
@@ -150,7 +150,7 @@ export const DEFAULT_SUBSYSTEM_DEFINITIONS: Record<SubsystemId, SubsystemDefinit
 
 /**
  * Ordered list of child subsystem IDs shown as settings tabs.
- * dangermouse, pascal, and saquel are still valid SubsystemIds
+ * concierge, pascal, and saquel are still valid SubsystemIds
  * (for theme compatibility) but are merged into other tabs.
  */
 export const CHILD_SUBSYSTEM_IDS: SubsystemId[] = [

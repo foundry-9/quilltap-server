@@ -92,7 +92,7 @@ Common uncensored-compatible setups:
 
 1. Your message is sent to the OpenAI moderation endpoint (`/v1/moderations`)
 2. The endpoint returns structured category flags and confidence scores (e.g., `sexual: 0.92`, `violence: 0.01`)
-3. Provider-specific categories are mapped to Dangermouse categories (e.g., OpenAI's `sexual` → `nsfw`, `hate` → `hate_speech`)
+3. Provider-specific categories are mapped to Concierge categories (e.g., OpenAI's `sexual` → `nsfw`, `hate` → `hate_speech`)
 4. If any category score exceeds your threshold, or the provider flags the content, it is marked as dangerous
 5. Classification results are cached by content hash (5 minute TTL, up to 200 entries)
 

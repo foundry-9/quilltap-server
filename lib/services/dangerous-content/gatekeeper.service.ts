@@ -135,7 +135,7 @@ async function getApiKeyForSelection(
 }
 
 /**
- * OpenAI moderation category → Dangermouse category mapping
+ * OpenAI moderation category → Concierge category mapping
  */
 const MODERATION_CATEGORY_MAP: Record<string, string> = {
   'sexual': 'nsfw',
@@ -154,7 +154,7 @@ const MODERATION_CATEGORY_MAP: Record<string, string> = {
 }
 
 /**
- * Human-readable labels for Dangermouse categories
+ * Human-readable labels for Concierge categories
  */
 const CATEGORY_LABELS: Record<string, string> = {
   'nsfw': 'Sexual/NSFW content',
@@ -213,14 +213,14 @@ async function autoDetectModerationApiKey(
  * Convert a ModerationResult from a moderation provider into a DangerClassificationResult.
  *
  * Maps provider-specific categories (e.g., OpenAI's 'sexual', 'hate', 'violence')
- * to Dangermouse categories (nsfw, hate_speech, violence, etc.), taking the highest
- * score when multiple provider categories map to the same Dangermouse category.
+ * to Concierge categories (nsfw, hate_speech, violence, etc.), taking the highest
+ * score when multiple provider categories map to the same Concierge category.
  */
 function mapModerationResult(
   moderationResult: ModerationResult,
   threshold: number
 ): DangerClassificationResult {
-  // Aggregate scores by Dangermouse category (take max score per category)
+  // Aggregate scores by Concierge category (take max score per category)
   const categoryScores = new Map<string, number>()
 
   for (const cat of moderationResult.categories) {

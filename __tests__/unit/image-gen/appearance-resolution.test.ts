@@ -588,7 +588,7 @@ describe('Appearance Resolution Module', () => {
     ]
 
     describe('Sanitization skipped when OFF', () => {
-      it('should return unchanged when Dangermouse mode is OFF', async () => {
+      it('should return unchanged when Concierge mode is OFF', async () => {
         const result = await sanitizeAppearancesIfNeeded(
           sampleAppearances,
           dangerOffSettings,

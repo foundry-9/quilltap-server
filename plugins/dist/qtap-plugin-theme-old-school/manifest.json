@@ -3,7 +3,7 @@
   "name": "qtap-plugin-theme-old-school",
   "title": "Old School",
   "description": "The original Quilltap default theme preserved as a plugin. Warm slate-blue palette with Inter for UI and EB Garamond for branding and long-form content. Professional, clean, and comfortable for extended sessions.",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "author": {
     "name": "Foundry-9 LLC",
     "email": "charles.sebold@foundry-9.com",
@@ -119,7 +119,7 @@
         "thumbnail": "none",
         "backgroundImage": "none"
       },
-      "dangermouse": {
+      "concierge": {
         "name": "Content Filters",
         "thumbnail": "none",
         "backgroundImage": "none"

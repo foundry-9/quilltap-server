@@ -1514,7 +1514,7 @@ async function processMessage(
   // ============================================================================
   // If the response is empty and no tool calls were made, this may be a silent
   // content refusal. Attempt to re-stream with the uncensored provider if
-  // Dangermouse is in AUTO_ROUTE mode.
+  // the Concierge is in AUTO_ROUTE mode.
   let uncensoredRetryAttempted = false
   if (
     fullResponse.trim().length === 0 &&

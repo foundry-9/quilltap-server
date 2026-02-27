@@ -119,7 +119,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   const recentMessages: ChatMessage[] = extractVisibleConversation(chatEvents).slice(-20);
 
 
-  // 7b. Resolve Dangermouse settings
+  // 7b. Resolve the Concierge settings
   const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null);
   const dangerSettings = dangerousContentResolved.settings;
   const isDangerousChat = chat.isDangerousChat === true;
@@ -258,7 +258,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   } else if (appearanceResult && !appearanceResult.llmResolved && !uncensoredLLMSelection) {
   }
 
-  // Extract appearances and apply Dangermouse sanitization
+  // Extract appearances and apply the Concierge sanitization
   let resolvedAppearances = appearanceResult?.appearances ?? null;
   if (resolvedAppearances && resolvedAppearances.length > 0) {
     try {

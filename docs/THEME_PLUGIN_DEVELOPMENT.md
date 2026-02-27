@@ -677,7 +677,7 @@ Add the `subsystems` field inside `themeConfig`:
 | `salon` | The Salon |
 | `commonplace-book` | The Commonplace Book |
 | `prospero` | Prospero |
-| `dangermouse` | Dangermouse |
+| `concierge` | the Concierge |
 | `calliope` | Calliope |
 | `lantern` | The Lantern |
 

@@ -85,7 +85,7 @@ export interface ModerationCategoryResult {
  *
  * This is the generic result type returned by all moderation providers.
  * The categories array contains provider-specific category names and scores.
- * The consuming system (Dangermouse) maps these to its own category structure.
+ * The consuming system (the Concierge) maps these to its own category structure.
  */
 export interface ModerationResult {
   /** Whether the content was flagged by the moderation provider */
@@ -103,7 +103,7 @@ export interface ModerationResult {
  * Main Moderation Provider Plugin Interface
  *
  * Plugins implementing this interface provide content moderation backends
- * for Quilltap's Dangermouse system. The moderation provider is used
+ * for Quilltap's Concierge system. The moderation provider is used
  * as an alternative to the Cheap LLM classification approach.
  *
  * @example

@@ -181,7 +181,7 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
       return badRequest('Connection profile not found');
     }
 
-    // Dangermouse integration: classify prompt and potentially reroute provider
+    // the Concierge integration: classify prompt and potentially reroute provider
     try {
       const chatSettings = await repos.chatSettings.findByUserId(user.id);
       const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null);
@@ -245,8 +245,8 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
         }
       }
     } catch (error) {
-      // Fail safe — never block on Dangermouse errors
-      logger.error('[Images v1] Dangermouse classification failed, continuing normally', {
+      // Fail safe — never block on the Concierge errors
+      logger.error('[Images v1] the Concierge classification failed, continuing normally', {
         userId: user.id,
         error: getErrorMessage(error),
       });

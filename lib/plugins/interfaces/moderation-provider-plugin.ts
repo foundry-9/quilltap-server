@@ -5,7 +5,7 @@
  * This interface ensures consistency across all moderation provider implementations
  * and provides metadata needed for UI rendering and configuration.
  *
- * Moderation providers power the Dangermouse content classification system
+ * Moderation providers power the Concierge content classification system
  * by providing pluggable backends (e.g., OpenAI moderation endpoint).
  *
  * @module plugins/interfaces/moderation-provider-plugin
@@ -86,7 +86,7 @@ export interface ModerationResult {
  * Main Moderation Provider Plugin Interface
  *
  * Plugins implementing this interface provide content moderation backends
- * for Quilltap's Dangermouse system.
+ * for Quilltap's Concierge system.
  */
 export interface ModerationProviderPlugin {
   /** Moderation provider metadata for UI display and identification */

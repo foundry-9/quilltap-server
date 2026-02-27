@@ -252,8 +252,8 @@
   - Distributed with the app in `plugins/dist/qtap-plugin-theme-old-school/`
 
 - feat: Foundry Hub restructure — unified settings and tools into `/foundry`
-  - New `/foundry` landing page with 8 subsystem navigation cards (Aurora, The Forge, The Salon, The Commonplace Book, Prospero, Dangermouse, Calliope, The Lantern)
-  - 8 new sub-routes (`/foundry/aurora`, `/foundry/forge`, `/foundry/salon`, `/foundry/commonplace-book`, `/foundry/prospero`, `/foundry/dangermouse`, `/foundry/calliope`, `/foundry/lantern`)
+  - New `/foundry` landing page with 8 subsystem navigation cards (Aurora, The Forge, The Salon, The Commonplace Book, Prospero, the Concierge, Calliope, The Lantern)
+  - 8 new sub-routes (`/foundry/aurora`, `/foundry/forge`, `/foundry/salon`, `/foundry/commonplace-book`, `/foundry/prospero`, `/foundry/concierge`, `/foundry/calliope`, `/foundry/lantern`)
   - New `CollapsibleCard` component with `qt-collapsible-card-*` CSS classes for all subsystem pages
   - Standalone wrappers for `DangerousContentSettings` and `StoryBackgroundsSettings` (self-contained with `useChatSettings()`)
   - Sidebar permanently collapsed: removed expand/collapse toggle, resize handle, and width persistence
@@ -316,10 +316,10 @@
   - New `resolveCharacterAppearances()` cheap LLM task analyzes chat context to determine what each character currently looks like
   - Clothing priority: narrative context (highest) > image prompt > stored records by usageContext > default
   - Physical descriptions selected by best-matching usageContext for current scene
-  - Dangermouse integration: appearance text classified and sanitized when no uncensored provider available
+  - Concierge integration: appearance text classified and sanitized when no uncensored provider available
   - Chat image generation (`generate_image` tool) now fetches recent messages and resolves context-aware appearances
   - Story background generation runs scene context derivation and appearance resolution in parallel
-  - Front page image generator now has Dangermouse prompt classification and AUTO_ROUTE provider rerouting
+  - Front page image generator now has Concierge prompt classification and AUTO_ROUTE provider rerouting
   - New `APPEARANCE_RESOLUTION` LLM log type for tracking appearance resolution LLM calls
   - Skip optimization: bypasses LLM call when characters have trivial data and no chat context
   - Fail-safe: all resolution and sanitization errors fall back gracefully to existing behavior

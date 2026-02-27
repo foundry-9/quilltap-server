@@ -4,7 +4,7 @@
  * Singleton registry for managing content moderation provider plugins.
  * Provides centralized access to moderation provider plugins and metadata.
  *
- * Moderation providers power the Dangermouse content classification system
+ * Moderation providers power the Concierge content classification system
  * by providing pluggable backends (e.g., OpenAI moderation endpoint).
  *
  * @module plugins/moderation-provider-registry

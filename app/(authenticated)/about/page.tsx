@@ -49,7 +49,7 @@ export default function AboutPage() {
           The platform is organized into named subsystems, each with its own character and purpose &mdash;
           rather like the wings of a well-appointed estate. Aurora (characters), The Salon (chat),
           Prospero (projects), The Commonplace Book (memory), The Lantern (story backgrounds),
-          Dangermouse (content filtering), Pascal the Croupier (gaming &amp; RNG),
+          the Concierge (content filtering), Pascal the Croupier (gaming &amp; RNG),
           Calliope (themes), and The Foundry (architecture) &mdash;
           all extensible through a plugin system.
         </p>
@@ -94,7 +94,7 @@ export default function AboutPage() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Dangermouse &ndash; Content Filtering</strong> &ndash; content classification with detection, auto-routing to uncensored providers, and quick-hide integration</span>
+            <span><strong>The Concierge &ndash; Content Filtering</strong> &ndash; content classification with detection, auto-routing to uncensored providers, and quick-hide integration</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>

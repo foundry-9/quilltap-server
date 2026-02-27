@@ -71,7 +71,7 @@ export interface CheapLLMTaskResult<T> {
 
 /**
  * Options for uncensored provider fallback when empty responses are detected
- * Only used when Dangermouse is in AUTO_ROUTE mode with an uncensored text profile configured
+ * Only used when the Concierge is in AUTO_ROUTE mode with an uncensored text profile configured
  */
 export interface UncensoredFallbackOptions {
   dangerSettings: DangerousContentSettings

@@ -977,7 +977,7 @@ When generating images involving characters (via `{{CharacterName}}` placeholder
    - **Stored record**: The best-matching clothing record by usageContext
    - **Default**: The first stored clothing record, or empty if none exist
 
-4. **Dangermouse Sanitization** (`sanitizeAppearancesIfNeeded()`): Resolved appearances are classified for safety. If dangerous and no uncensored image provider is available, a cheap LLM rewrites the appearance descriptions to be safe for standard providers.
+4. **Concierge Sanitization** (`sanitizeAppearancesIfNeeded()`): Resolved appearances are classified for safety. If dangerous and no uncensored image provider is available, a cheap LLM rewrites the appearance descriptions to be safe for standard providers.
 
 5. **Prompt Crafting**: The resolved (and possibly sanitized) appearances are injected into the expansion context, giving the prompt crafter focused, context-accurate data instead of raw dumps of all descriptions and clothing.
 
@@ -989,7 +989,7 @@ If all characters have at most 1 physical description and 0-1 clothing records, 
 
 - **Chat image generation** (`generate_image` tool): Fetches last 20 chat messages, resolves appearances, sanitizes, then expands prompt
 - **Story backgrounds**: Runs appearance resolution in parallel with scene context derivation
-- **Front page**: No appearance resolution (no chat context), but now includes Dangermouse prompt classification and AUTO_ROUTE provider rerouting
+- **Front page**: No appearance resolution (no chat context), but now includes Concierge prompt classification and AUTO_ROUTE provider rerouting
 
 #### Fail-Safe Behavior
 
