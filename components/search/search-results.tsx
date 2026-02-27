@@ -8,6 +8,7 @@ import type {
   ChatSearchResult,
   TagSearchResult,
   MemorySearchResult,
+  MessageSearchResult,
 } from './types'
 import { TYPE_ICONS, TYPE_LABELS, TYPE_LABELS_PLURAL } from './types'
 
@@ -239,6 +240,47 @@ function MemoryResultCard({ result, query, onResultClick }: { result: MemorySear
   )
 }
 
+function MessageResultCard({ result, query, onResultClick }: { result: MessageSearchResult; query: string; onResultClick?: () => void }) {
+  return (
+    <Link
+      href={result.url}
+      onClick={() => {
+        onResultClick?.()
+      }}
+      className="block p-3 hover:bg-accent rounded-lg transition-colors"
+    >
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 rounded-full bg-warning/10 flex items-center justify-center flex-shrink-0">
+          <span className="text-lg">{TYPE_ICONS.messages}</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="qt-text-primary truncate">
+              {result.chatTitle}
+            </span>
+            <span className="text-xs px-1.5 py-0.5 rounded qt-badge-message">
+              {TYPE_LABELS.messages}
+            </span>
+            <span className={`text-xs px-1.5 py-0.5 rounded ${
+              result.role === 'USER' ? 'qt-badge-info' : 'qt-badge-character'
+            }`}>
+              {result.role === 'USER' ? 'You' : 'Character'}
+            </span>
+          </div>
+          {result.characterNames && result.characterNames.length > 0 && (
+            <p className="qt-text-xs">
+              with {result.characterNames.join(', ')}
+            </p>
+          )}
+          <p className="qt-text-small mt-1 line-clamp-2">
+            <HighlightedText text={result.snippet} query={query} />
+          </p>
+        </div>
+      </div>
+    </Link>
+  )
+}
+
 // Highlight matching text
 function HighlightedText({ text, query }: { text: string; query: string }) {
   if (!query || !text) return <>{text}</>
@@ -277,7 +319,7 @@ export function SearchResults({ results, query, isLoading, onResultClick, counts
           No results found for &quot;{query}&quot;
         </p>
         <p className="qt-text-xs mt-1">
-          Try searching for characters, chats, tags, or memories
+          Try searching for characters, chats, messages, tags, or memories
         </p>
       </div>
     )
@@ -330,6 +372,8 @@ export function SearchResults({ results, query, isLoading, onResultClick, counts
                   return <TagResultCard key={key} result={result as TagSearchResult} query={query} onResultClick={onResultClick} />
                 case 'memories':
                   return <MemoryResultCard key={key} result={result as MemorySearchResult} query={query} onResultClick={onResultClick} />
+                case 'messages':
+                  return <MessageResultCard key={key} result={result as MessageSearchResult} query={query} onResultClick={onResultClick} />
                 default:
                   return null
               }

@@ -26,7 +26,7 @@ import {
 } from '@/lib/api/responses';
 import type { SearchResult, SearchType, MatchPriority } from '@/components/search/types';
 
-const VALID_TYPES: SearchType[] = ['chats', 'characters', 'tags', 'memories'];
+const VALID_TYPES: SearchType[] = ['chats', 'characters', 'tags', 'memories', 'messages'];
 
 // Helper to determine match priority
 function getMatchPriority(value: string, query: string): MatchPriority {
@@ -138,22 +138,31 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
       characters = await repos.characters.findByUserId(user.id);
     }
 
+    // Load chats if needed for chat title search or message content search
+    const needChats = requestedTypes.includes('chats') || requestedTypes.includes('messages');
+    const chats = needChats ? await repos.chats.findByUserId(user.id) : [];
+
+    // Build a chat lookup map for enriching message results
+    const chatMap = new Map(chats.map(c => [c.id, c]));
+
+    // Helper to get character names for a chat
+    const getCharacterNamesForChat = (chat: typeof chats[0]): string[] => {
+      const names: string[] = [];
+      const characterParticipants = chat.participants?.filter((p) => p.type === 'CHARACTER') || [];
+      for (const participant of characterParticipants) {
+        const char = characters.find((c) => c.id === participant.id);
+        if (char) names.push(char.name);
+      }
+      return names;
+    };
+
     // Search chats (if requested)
     if (requestedTypes.includes('chats')) {
-      const chats = await repos.chats.findByUserId(user.id);
       const matchingChats = chats.filter((c) =>
         c.title?.toLowerCase().includes(lowerQuery)
       );
 
       for (const chat of matchingChats) {
-        const characterNames: string[] = [];
-        // Get character names from participants
-        const characterParticipants = chat.participants?.filter((p) => p.type === 'CHARACTER') || [];
-        for (const participant of characterParticipants) {
-          const char = characters.find((c) => c.id === participant.id);
-          if (char) characterNames.push(char.name);
-        }
-
         allResults.push({
           id: chat.id,
           type: 'chats',
@@ -165,10 +174,41 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
           matchPriority: getMatchPriority(chat.title || '', query),
           createdAt: chat.createdAt || new Date().toISOString(),
           updatedAt: chat.updatedAt || new Date().toISOString(),
-          characterNames,
+          characterNames: getCharacterNamesForChat(chat),
           messageCount: chat.messageCount || 0,
         });
         typesFound.add('chats');
+      }
+    }
+
+    // Search message content (if requested)
+    if (requestedTypes.includes('messages')) {
+      const chatIds = chats.map(c => c.id);
+      const messageMatches = await repos.chats.searchMessagesGlobal(chatIds, query, 100);
+
+      for (const msg of messageMatches) {
+        const chat = chatMap.get(msg.chatId);
+        const chatTitle = chat?.title || 'Untitled Chat';
+        const characterNames = chat ? getCharacterNamesForChat(chat) : [];
+
+        allResults.push({
+          id: `msg-${msg.messageId}`,
+          type: 'messages',
+          name: chatTitle,
+          matchedField: 'content',
+          matchedValue: msg.content.substring(0, 200),
+          snippet: createSnippet(msg.content, query, 120),
+          url: `/salon/${msg.chatId}?msg=${msg.messageId}`,
+          matchPriority: getMatchPriority(msg.content, query),
+          createdAt: msg.createdAt || new Date().toISOString(),
+          updatedAt: msg.createdAt || new Date().toISOString(),
+          chatId: msg.chatId,
+          chatTitle,
+          characterNames,
+          role: msg.role as 'USER' | 'ASSISTANT',
+          messageId: msg.messageId,
+        });
+        typesFound.add('messages');
       }
     }
 

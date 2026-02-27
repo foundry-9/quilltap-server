@@ -811,6 +811,8 @@
   --qt-badge-tag-fg: hsl(25 95% 40%);
   --qt-badge-memory-bg: hsl(330 80% 60% / 0.15);
   --qt-badge-memory-fg: hsl(330 80% 40%);
+  --qt-badge-message-bg: hsl(45 70% 48% / 0.12);
+  --qt-badge-message-fg: hsl(45 70% 35%);
   --qt-badge-project-bg: hsl(185 80% 40% / 0.15);
   --qt-badge-project-fg: hsl(185 80% 30%);
 
@@ -997,6 +999,8 @@
   --qt-badge-tag-fg: hsl(25 95% 65%);
   --qt-badge-memory-bg: hsl(330 80% 60% / 0.3);
   --qt-badge-memory-fg: hsl(330 80% 70%);
+  --qt-badge-message-bg: hsl(45 70% 50% / 0.25);
+  --qt-badge-message-fg: hsl(45 70% 68%);
 
   /* Dark mode status badge tokens */
   --qt-badge-enabled-bg: hsl(142 76% 36% / 0.3);

@@ -148,6 +148,7 @@
   .qt-badge-chat,
   .qt-badge-tag,
   .qt-badge-memory,
+  .qt-badge-message,
   .qt-badge-project,
   .qt-badge-characters,
   .qt-badge-chats,
@@ -1275,6 +1276,14 @@
   .qt-badge-memory {
     background-color: var(--qt-badge-memory-bg);
     color: var(--qt-badge-memory-fg);
+  }
+
+  /**
+   * Message badge (amber)
+   */
+  .qt-badge-message {
+    background-color: var(--qt-badge-message-bg);
+    color: var(--qt-badge-message-fg);
   }
 
   /**
