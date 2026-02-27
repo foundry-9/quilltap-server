@@ -26,7 +26,7 @@ By default, Quilltap automatically detects RNG patterns in both your messages an
 
 For your messages, results appear as tool messages before your message. For character responses, results appear as tool messages after the response. Either way, everyone in the chat sees the outcome.
 
-**Note:** This feature can be disabled in [Chat Settings](/foundry/salon) under "Automation" if you prefer to use the manual tool palette or want to discuss dice without executing rolls.
+**Note:** This feature can be disabled in [Chat Settings](/settings?tab=chat) under "Automation" if you prefer to use the manual tool palette or want to discuss dice without executing rolls.
 
 ### From the Tool Palette
 

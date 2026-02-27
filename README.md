@@ -7,7 +7,7 @@ Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, 
 No subscriptions. No data harvested. No forgetting everything between sessions. No landlords.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-3.1.0--dev.33-yellow.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-3.1.0--dev.34-yellow.svg)](package.json)
 
 <p align="center">
   <img src="https://quilltap.ai/images/welcome-to-quilltap-2-8.png" alt="Welcome to Quilltap" />
@@ -279,16 +279,15 @@ For best results we recommend Ollama or OpenAI for embedding, a "nano" or "lite"
 
 ## Calliope — Themes & Appearance
 
-One's workspace ought to reflect one's sensibilities. Quilltap includes six bundled themes and supports custom theme plugins. Switch themes live without reloading — instant redecoration, no painters required.
+One's workspace ought to reflect one's sensibilities. Quilltap includes five bundled themes and supports custom theme plugins. Switch themes live without reloading — instant redecoration, no painters required.
 
 | Theme | Style |
 | ----- | ----- |
-| **Professional Neutral** | Clean default look |
-| **Old School** | Classic serif typography |
-| **Art Deco** | Geometric elegance |
-| **The Great Estate** | Rich, estate-inspired design |
-| **Earl Grey** | Warm, tea-inspired palette |
-| **Rains** | Cool, atmospheric tones |
+| **Old School** | Classic slate-blue palette with professional typography |
+| **Art Deco** | Geometric elegance with navy-and-gold opulence |
+| **The Great Estate** | Warm, manor-inspired design with mahogany and gold |
+| **Earl Grey** | High-contrast dark theme with modern minimal styling |
+| **Rains** | Warm, earthy palette with cozy amber accents |
 
 Themes can override subsystem names and Foundry card images, letting each theme define its own personality for the application.
 
@@ -296,7 +295,7 @@ Themes can override subsystem names and Foundry card images, letting each theme 
 
 The engine room. The unified hub for managing all of Quilltap's subsystems:
 
-- **Foundry Hub** — Navigate to all eight subsystems from `/foundry` with themed navigation cards
+- **Settings Hub** — Navigate to all subsystems from `/settings` with tabbed interface
 - **Collapsed sidebar** — Direct navigation to any subsystem
 - **Plugin system** — Extend with themes, providers, templates, tools, and storage via npm packages
 

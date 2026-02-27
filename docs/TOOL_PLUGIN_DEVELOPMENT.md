@@ -98,8 +98,8 @@ Edit your `package.json`:
   "author": "Your Name <you@example.com>",
   "license": "MIT",
   "dependencies": {
-    "@quilltap/plugin-types": "^1.6.0",
-    "@quilltap/plugin-utils": "^1.3.0"
+    "@quilltap/plugin-types": "^1.16.1",
+    "@quilltap/plugin-utils": "^1.4.1"
   },
   "devDependencies": {
     "esbuild": "^0.20.0",
@@ -198,7 +198,6 @@ Create `manifest.json` - this tells Quilltap about your tool:
   "version": "1.0.0",
   "author": {
     "name": "Your Name",
-    "email": "you@example.com",
     "url": "https://yourwebsite.com"
   },
   "license": "MIT",
@@ -223,11 +222,7 @@ Create `manifest.json` - this tells Quilltap about your tool:
     "enabledByDefault": true
   },
   "configSchema": [],
-  "permissions": {
-    "network": [],
-    "database": false,
-    "userData": false
-  }
+  "permissions": {}
 }
 ```
 
@@ -888,23 +883,48 @@ qtap-plugin-curl/
   "toolConfig": {
     "toolName": "curl",
     "displayName": "curl",
-    "description": "Make HTTP requests",
-    "requiresConfiguration": true
+    "description": "Make HTTP requests to fetch web content, APIs, or other network resources. Returns response headers and body.",
+    "requiresConfiguration": true,
+    "enabledByDefault": true
   },
   "configSchema": [
     {
       "key": "allowedUrlPatterns",
       "label": "Allowed URL Patterns",
       "type": "textarea",
-      "default": ""
+      "description": "URL patterns to allow (one per line). Supports wildcards like *.example.com or exact domains like api.github.com. Leave empty to block all requests.",
+      "default": "",
+      "required": false
     },
     {
       "key": "maxResponseSize",
-      "label": "Max Response Size",
+      "label": "Max Response Size (bytes)",
       "type": "number",
-      "default": 102400
+      "description": "Maximum response body size in bytes before truncation",
+      "default": 102400,
+      "min": 1024,
+      "max": 1048576
+    },
+    {
+      "key": "defaultTimeout",
+      "label": "Default Timeout (seconds)",
+      "type": "number",
+      "description": "Default timeout for requests in seconds",
+      "default": 30,
+      "min": 1,
+      "max": 60
+    },
+    {
+      "key": "followRedirects",
+      "label": "Follow Redirects",
+      "type": "boolean",
+      "description": "Whether to follow HTTP redirects by default",
+      "default": true
     }
-  ]
+  ],
+  "permissions": {
+    "network": ["*"]
+  }
 }
 ```
 
@@ -978,7 +998,7 @@ function formatCurlOutput(output: CurlToolOutput): string {
 
 ### Build Errors
 
-1. Ensure `@quilltap/plugin-types` is at version 1.6.0+
+1. Ensure `@quilltap/plugin-types` is at version 1.16.1+
 2. Check that esbuild.config.mjs marks dependencies as external
 3. Verify TypeScript configuration is correct
 

@@ -190,4 +190,4 @@ Previously planned (superseded):
 
 ## Completed in v2.7.0 and earlier
 
-See [CHANGELOG.md](../docs/CHANGELOG_v2.md) for details on v2.7.0 and earlier releases.
+See [CHANGELOG.md](../docs/CHANGELOG_V2.md) for details on v2.7.0 and earlier releases.

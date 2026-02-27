@@ -46,9 +46,9 @@ LLMs can access project context via `project_info` tool:
 - [x] Add `projectId` to FileEntrySchema in `lib/schemas/file.types.ts`
 - [x] Add `projectId` to MemorySchema in `lib/schemas/memory.types.ts`
 - [x] Export types from `lib/schemas/types.ts`
-- [x] Create `lib/mongodb/repositories/projects.repository.ts`
-- [x] Add projects collection indexes in `lib/mongodb/indexes.ts`
-- [x] Add projectId indexes to chats, files, memories collections
+- [x] Create `lib/database/repositories/projects.repository.ts`
+- [x] Add projects table indexes in `lib/database/migrations`
+- [x] Add projectId indexes to chats, files, memories tables
 - [x] Add UserScopedProjectsRepository in `lib/repositories/user-scoped.ts`
 
 ### Phase 2: Backend API ✅
@@ -129,16 +129,15 @@ const ProjectSchema = z.object({
 
 ### Database Indexes
 
-```typescript
-// projects collection
-{ key: { userId: 1 } }
-{ key: { userId: 1, name: 1 }, options: { unique: true } }
-{ key: { name: 'text', description: 'text' } }
+```sql
+-- projects table
+CREATE INDEX idx_projects_userId ON projects(userId);
+CREATE UNIQUE INDEX idx_projects_userId_name ON projects(userId, name);
 
-// Add to existing collections (sparse)
-chats: { key: { projectId: 1 }, options: { sparse: true } }
-files: { key: { projectId: 1 }, options: { sparse: true } }
-memories: { key: { projectId: 1 }, options: { sparse: true } }
+-- Add to existing tables
+CREATE INDEX idx_chats_projectId ON chats(projectId);
+CREATE INDEX idx_files_projectId ON files(projectId);
+CREATE INDEX idx_memories_projectId ON memories(projectId);
 ```
 
 ---
@@ -194,7 +193,7 @@ memories: { key: { projectId: 1 }, options: { sparse: true } }
 ### File Content Extraction
 
 - **PDF**: Use pdf-parse for text extraction
-- **Text/Markdown**: Direct content read from S3
+- **Text/Markdown**: Direct content read from local filesystem
 - **Images**: Return existing description or trigger cheap LLM description
 - **Code files**: Return with syntax language hint
 

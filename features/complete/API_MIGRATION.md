@@ -8,10 +8,10 @@ Migrate all non-v1 API routes to the consolidated `/api/v1/` structure using act
 
 ## Current State
 
-- **Completed**: All 159 legacy routes have been converted to deprecation stubs pointing to their v1 equivalents
-- **v1 Routes**: 65 route files under `/api/v1/`
-- **Legacy Stubs**: 157 routes converted to `movedToV1()` stubs returning 410 Gone
-- **Intentionally Kept**: 4 routes remain outside v1 (health check, plugin dispatcher, theme asset serving)
+- **Completed**: All legacy routes have been removed (not just deprecated) since v2.8
+- **v1 Routes**: 72 route files under `/api/v1/`
+- **Legacy Routes**: Completely removed, no longer in the codebase
+- **Intentionally Kept**: 3 routes remain outside v1 (health check, plugin dispatcher, theme asset serving)
 
 ## Migration Strategy
 
@@ -25,6 +25,8 @@ Migrate all non-v1 API routes to the consolidated `/api/v1/` structure using act
 ---
 
 ## Phase 1: Core Entity Extensions (High Priority)
+
+**Status: Complete** - All core entity extensions have been migrated to v1 endpoints with action dispatch patterns.
 
 Routes that extend the already-migrated core entities.
 
@@ -324,7 +326,7 @@ For each phase:
 | 8 | ~12 | High | Low |
 | 9 | ~20 | Mixed | Low |
 
-**Total**: ~109 routes to migrate (some legacy routes map to same v1 endpoints)
+**Total**: ~109 routes were to migrate (all legacy routes have been removed as of v2.8; 72 v1 routes now cover all functionality)
 
 ---
 

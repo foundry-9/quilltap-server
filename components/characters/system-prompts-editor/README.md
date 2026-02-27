@@ -15,7 +15,6 @@ system-prompts-editor/
 ├── ImportModal.tsx        # Import from templates modal (115 lines)
 ├── PreviewModal.tsx       # Preview prompt modal (68 lines)
 ├── hooks/
-│   ├── index.ts           # Hook exports
 │   └── useSystemPrompts.ts # Main hook logic (311 lines)
 └── README.md              # This file
 ```
@@ -136,12 +135,12 @@ interface PromptFormData {
 
 ## API Endpoints
 
-- `GET /api/characters/:characterId/prompts` - Fetch character prompts
-- `POST /api/characters/:characterId/prompts` - Create prompt
-- `PUT /api/characters/:characterId/prompts/:promptId` - Update prompt
-- `DELETE /api/characters/:characterId/prompts/:promptId` - Delete prompt
-- `GET /api/prompt-templates` - Fetch user templates
-- `GET /api/sample-prompts` - Fetch sample prompts
+- `GET /api/v1/characters/:characterId/prompts` - Fetch character prompts
+- `POST /api/v1/characters/:characterId/prompts` - Create prompt
+- `PUT /api/v1/characters/:characterId/prompts/:promptId` - Update prompt
+- `DELETE /api/v1/characters/:characterId/prompts/:promptId` - Delete prompt
+- `GET /api/v1/prompt-templates` - Fetch user templates
+- `GET /api/v1/sample-prompts` - Fetch sample prompts
 
 ## Logging
 

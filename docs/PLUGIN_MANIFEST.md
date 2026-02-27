@@ -10,7 +10,7 @@ Every Quilltap plugin must include a `manifest.json` file in its root directory.
 
 The authoritative schema is defined in TypeScript using Zod at:
 
-- **Schema**: `lib/json-store/schemas/plugin-manifest.ts`
+- **Schema**: `lib/schemas/plugin-manifest.ts`
 - **Loader**: `lib/plugins/manifest-loader.ts`
 - **JSON Schema**: `plugins/dist/qtap-plugin-template/schemas/plugin-manifest.schema.json`
 
@@ -129,7 +129,7 @@ The manifest is validated at runtime using Zod schemas. Invalid manifests will p
 
 - **Default**: `[]`
 - **Purpose**: Declares what functionality the plugin provides
-- **Available capabilities** (20 types):
+- **Available capabilities** (22 types):
   - `CHAT_COMMANDS` - Custom chat commands
   - `MESSAGE_PROCESSORS` - Message transformation
   - `UI_COMPONENTS` - React components
@@ -149,6 +149,9 @@ The manifest is validated at runtime using Zod schemas. Invalid manifests will p
   - `DATABASE_BACKEND` - Database replacement/augmentation
   - `UPGRADE_MIGRATION` - Database migration runner
   - `ROLEPLAY_TEMPLATE` - Roleplay formatting templates
+  - `TOOL_PROVIDER` - LLM tools (e.g., curl, calculators)
+  - `SEARCH_PROVIDER` - Web search backend (e.g., Serper, Bing, DuckDuckGo)
+  - `MODERATION_PROVIDER` - Content moderation (e.g., OpenAI moderation endpoint)
 
 **Example**:
 

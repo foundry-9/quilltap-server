@@ -174,7 +174,7 @@ Quilltap stores all application data in SQLite. The database contains tables for
 - **Users**: User accounts and authentication
 - **Characters**: Character definitions and metadata
 - **Chats**: Chat metadata and message history
-- **Files**: File metadata (actual files stored in S3)
+- **Files**: File metadata (actual files stored on local filesystem)
 - **Tags**: Tag definitions
 - **Memories**: Character memory data and relationships
 - **Connection Profiles**: LLM provider configurations
