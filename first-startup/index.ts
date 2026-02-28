@@ -223,6 +223,97 @@ export function getSeedImports(): { filename: string; data: QuilltapExport }[] {
 }
 
 // ============================================================================
+// SEED AVATARS (image files for seed characters)
+// ============================================================================
+
+/**
+ * Seed avatar data: maps character name to image file content
+ */
+export interface SeedAvatarData {
+  characterName: string;
+  filename: string;
+  content: Buffer;
+  mimeType: string;
+}
+
+/**
+ * Load avatar image files from the avatars directory.
+ * Files are expected to be named after the character (e.g., Lorian.webp).
+ *
+ * @returns Array of seed avatar data with file contents
+ */
+export function getSeedAvatars(): SeedAvatarData[] {
+  const context = 'first-startup';
+  const avatarsDir = path.join(process.cwd(), 'first-startup', 'avatars');
+
+  try {
+    if (!fs.existsSync(avatarsDir)) {
+      logger.debug('No seed avatars directory found', { context, avatarsDir });
+      return [];
+    }
+
+    const imageExtensions = ['.webp', '.png', '.jpg', '.jpeg'];
+    const files = fs.readdirSync(avatarsDir)
+      .filter(f => imageExtensions.some(ext => f.toLowerCase().endsWith(ext)))
+      .sort();
+
+    if (files.length === 0) {
+      logger.debug('No seed avatar files found', { context, avatarsDir });
+      return [];
+    }
+
+    const mimeMap: Record<string, string> = {
+      '.webp': 'image/webp',
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+    };
+
+    const avatars: SeedAvatarData[] = [];
+
+    for (const file of files) {
+      try {
+        const filePath = path.join(avatarsDir, file);
+        const ext = path.extname(file).toLowerCase();
+        const characterName = path.basename(file, ext);
+        const content = fs.readFileSync(filePath);
+        const mimeType = mimeMap[ext] || 'image/webp';
+
+        avatars.push({ characterName, filename: file, content, mimeType });
+
+        logger.debug('Loaded seed avatar file', {
+          context,
+          file,
+          characterName,
+          size: content.length,
+        });
+      } catch (fileError) {
+        logger.error('Failed to load seed avatar file', {
+          context,
+          file,
+          error: fileError instanceof Error ? fileError.message : String(fileError),
+        });
+      }
+    }
+
+    logger.debug('Loaded seed avatars', {
+      context,
+      count: avatars.length,
+      characters: avatars.map(a => a.characterName),
+    });
+
+    return avatars;
+  } catch (error) {
+    logger.error('Failed to read seed avatars directory', {
+      context,
+      avatarsDir,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return [];
+  }
+}
+
+// ============================================================================
 // EMBEDDING PROFILES
 // ============================================================================
 

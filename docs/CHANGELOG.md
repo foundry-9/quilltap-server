@@ -4,6 +4,8 @@
 
 ### 3.2-dev
 
+- feat: Seed avatar images for Lorian & Riya on first startup — avatar `.webp` files ship in `first-startup/avatars/`, are uploaded to file storage, and set as `defaultImageId` on the corresponding characters after `.qtap` import
+- fix: Remove legacy JSONL file records and storage from source tree — `public/data/files/files.jsonl` and `public/data/files/storage/` contained old development artifacts (14 file records, 1 physical image) that the `migrate-legacy-jsonl-files-v1` migration was importing into every fresh database, polluting new installs with orphaned records
 - feat: Add Lorian & Riya as seed characters with 42 memories via `.qtap` import — new `first-startup/imports/` directory holds `.qtap` bundles that are imported with `skip` conflict strategy on first startup, reusing the existing import service
 - fix: Seed data files now resolve via `process.cwd()` instead of `__dirname` — Next.js rewrites `__dirname` to `.next/dev/server/` so the JSON character files and `.qtap` imports were never found; also added `first-startup/` to `outputFileTracingIncludes` for standalone builds
 - chore: Started dev version 3.2.0

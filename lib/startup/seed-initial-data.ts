@@ -12,14 +12,18 @@
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/database/repositories';
 import { SINGLE_USER_ID } from '@/lib/auth/single-user';
+import { createHash } from 'crypto';
+import { randomUUID } from 'crypto';
 import {
   getSeedCharacters,
   prepareSeedCharacter,
   getSeedEmbeddingProfiles,
   prepareSeedEmbeddingProfile,
   getSeedImports,
+  getSeedAvatars,
 } from '@/first-startup';
 import { executeImport } from '@/lib/import/quilltap-import-service';
+import { fileStorageManager } from '@/lib/file-storage/manager';
 
 /**
  * Seed initial data if the database is empty
@@ -91,6 +95,9 @@ export async function seedInitialData(): Promise<void> {
 
     // Seed from .qtap import files (characters with memories, etc.)
     await seedFromImports(context);
+
+    // Seed avatar images for imported characters
+    await seedAvatars(repos, context);
 
     logger.info('Initial data seeding complete', { context });
   } catch (error) {
@@ -218,5 +225,128 @@ async function seedFromImports(context: string): Promise<void> {
       error: error instanceof Error ? error.message : String(error),
     });
     // Don't throw - seed import failure should not prevent startup
+  }
+}
+
+/**
+ * Seed avatar images for imported characters
+ *
+ * Loads avatar image files from first-startup/avatars/ and associates them
+ * with characters by name. Creates file entries in the database, uploads
+ * files to storage, and sets defaultImageId on the matching characters.
+ *
+ * Skips characters that already have a defaultImageId set with a valid
+ * file entry, ensuring idempotent behavior on repeated runs.
+ */
+async function seedAvatars(
+  repos: ReturnType<typeof getRepositories>,
+  context: string
+): Promise<void> {
+  try {
+    const seedAvatarData = getSeedAvatars();
+
+    if (seedAvatarData.length === 0) {
+      return;
+    }
+
+    logger.info('Seeding avatar images for characters', {
+      context,
+      avatarCount: seedAvatarData.length,
+      characters: seedAvatarData.map(a => a.characterName),
+    });
+
+    // Get all characters for the default user to match by name
+    const allCharacters = await repos.characters.findByUserId(SINGLE_USER_ID);
+
+    for (const avatar of seedAvatarData) {
+      try {
+        // Find the character by name (case-insensitive match)
+        const character = allCharacters.find(
+          c => c.name.toLowerCase() === avatar.characterName.toLowerCase()
+        );
+
+        if (!character) {
+          logger.warn('No matching character found for seed avatar', {
+            context,
+            characterName: avatar.characterName,
+          });
+          continue;
+        }
+
+        // Skip if the character already has a valid avatar file
+        if (character.defaultImageId) {
+          const existingFile = await repos.files.findById(character.defaultImageId);
+          if (existingFile) {
+            logger.debug('Character already has avatar, skipping', {
+              context,
+              characterName: character.name,
+              characterId: character.id,
+              fileId: existingFile.id,
+            });
+            continue;
+          }
+        }
+
+        // Calculate SHA256 hash for the image
+        const sha256 = createHash('sha256').update(avatar.content).digest('hex');
+
+        // Upload the file to storage
+        const { storageKey } = await fileStorageManager.uploadFile({
+          filename: avatar.filename,
+          content: avatar.content,
+          contentType: avatar.mimeType,
+        });
+
+        // Create the file entry in the database
+        const fileId = randomUUID();
+        const fileEntry = await repos.files.create({
+          userId: SINGLE_USER_ID,
+          sha256,
+          originalFilename: avatar.filename,
+          mimeType: avatar.mimeType,
+          size: avatar.content.length,
+          width: null,
+          height: null,
+          linkedTo: [character.id],
+          source: 'SYSTEM',
+          category: 'AVATAR',
+          storageKey,
+          generationPrompt: null,
+          generationModel: null,
+          generationRevisedPrompt: null,
+          description: null,
+          tags: [],
+          folderPath: '/',
+          projectId: null,
+        }, { id: fileId });
+
+        // Update the character's defaultImageId
+        await repos.characters.update(character.id, {
+          defaultImageId: fileEntry.id,
+        });
+
+        logger.info('Seeded avatar for character', {
+          context,
+          characterName: character.name,
+          characterId: character.id,
+          fileId: fileEntry.id,
+          storageKey,
+          size: avatar.content.length,
+        });
+      } catch (avatarError) {
+        logger.error('Failed to seed avatar for character', {
+          context,
+          characterName: avatar.characterName,
+          error: avatarError instanceof Error ? avatarError.message : String(avatarError),
+        });
+        // Continue with other avatars
+      }
+    }
+  } catch (error) {
+    logger.error('Error during avatar seeding', {
+      context,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    // Don't throw - avatar seeding failure should not prevent startup
   }
 }

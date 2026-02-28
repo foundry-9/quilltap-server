@@ -41,7 +41,7 @@
           }
         ],
         "avatarUrl": "",
-        "defaultImageId": "223d7c9e-cc3d-427c-a9d4-a4970445c12c",
+        "defaultImageId": null,
         "isFavorite": false,
         "npc": false,
         "talkativeness": 0.5,
@@ -93,7 +93,7 @@
           }
         ],
         "avatarUrl": "",
-        "defaultImageId": "eeeca996-b41e-4fe7-b180-fe18ded705a8",
+        "defaultImageId": null,
         "isFavorite": false,
         "npc": false,
         "talkativeness": 0.5,
