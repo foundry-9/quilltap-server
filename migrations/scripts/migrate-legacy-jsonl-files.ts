@@ -99,21 +99,6 @@ function readJsonlFile(filePath: string): LegacyFileEntry[] {
 }
 
 /**
- * Find the default mount point ID from the database
- */
-function getDefaultMountPointId(): string | null {
-  if (!sqliteTableExists('mount_points')) {
-    return null;
-  }
-
-  const results = querySQLite<{ id: string }>(
-    'SELECT id FROM mount_points WHERE isDefault = 1 LIMIT 1'
-  );
-
-  return results.length > 0 ? results[0].id : null;
-}
-
-/**
  * Get the extension from a filename
  */
 function getExtension(filename: string): string {
@@ -168,7 +153,7 @@ export const migrateLegacyJsonlFilesMigration: Migration = {
   id: 'migrate-legacy-jsonl-files-v1',
   description: 'Import legacy JSONL file entries into SQLite and copy files to centralized directory',
   introducedInVersion: '2.12.0',
-  dependsOn: ['create-mount-points-v1', 'migrate-to-centralized-data-dir-v1'],
+  dependsOn: ['migrate-to-centralized-data-dir-v1'],
 
   async shouldRun(): Promise<boolean> {
     const jsonlPath = getLegacyJsonlPath();
@@ -228,14 +213,12 @@ export const migrateLegacyJsonlFilesMigration: Migration = {
     const jsonlPath = getLegacyJsonlPath();
     const legacyStorageDir = getLegacyStorageDir();
     const filesDir = getFilesDir();
-    const mountPointId = getDefaultMountPointId();
 
     logger.info('Starting legacy JSONL files migration', {
       context: 'migration.legacy-jsonl-files',
       jsonlPath,
       legacyStorageDir,
       filesDir,
-      mountPointId,
     });
 
     const entries = readJsonlFile(jsonlPath);
@@ -249,14 +232,14 @@ export const migrateLegacyJsonlFilesMigration: Migration = {
         id, userId, sha256, originalFilename, mimeType, size,
         width, height, isPlainText, linkedTo, source, category,
         generationPrompt, generationModel, generationRevisedPrompt,
-        description, tags, projectId, folderPath, mountPointId,
-        storageKey, s3Key, s3Bucket, createdAt, updatedAt
+        description, tags, projectId, folderPath,
+        storageKey, createdAt, updatedAt
       ) VALUES (
         ?, ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?, ?,
         ?, ?, ?,
-        ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?
+        ?, ?, ?, ?,
+        ?, ?, ?
       )
     `);
 
@@ -291,10 +274,7 @@ export const migrateLegacyJsonlFilesMigration: Migration = {
           JSON.stringify(entry.tags || []),
           entry.projectId ?? null,
           entry.folderPath ?? null,
-          mountPointId,
           storageKey,
-          entry.s3Key ?? null,
-          entry.s3Bucket ?? null,
           entry.createdAt || now,
           entry.updatedAt || now,
         );
