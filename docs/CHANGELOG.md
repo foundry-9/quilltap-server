@@ -4,6 +4,7 @@
 
 ### 3.2-dev
 
+- ci: Add Discord commit notification webhook to CI workflow — sends commit message, branch, link, and author to Discord on push via `tristanbudd/discord-commit-github-action`
 - fix: First-startup race condition — page rendered without sidebar and didn't redirect to setup wizard; session provider now keeps "loading" status on 503 instead of "unauthenticated", and PepperVaultGate retries on failure instead of silently giving up
 - feat: Seed avatar images for Lorian & Riya on first startup — avatar `.webp` files ship in `first-startup/avatars/`, are uploaded to file storage, and set as `defaultImageId` on the corresponding characters after `.qtap` import
 - fix: Remove legacy JSONL file records and storage from source tree — `public/data/files/files.jsonl` and `public/data/files/storage/` contained old development artifacts (14 file records, 1 physical image) that the `migrate-legacy-jsonl-files-v1` migration was importing into every fresh database, polluting new installs with orphaned records
