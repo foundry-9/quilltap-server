@@ -9,8 +9,11 @@
  * @module first-startup
  */
 
+import fs from 'fs';
+import path from 'path';
 import { CharacterInput, EmbeddingProfile } from '@/lib/schemas/types';
-import benData from './characters/ben.json';
+import type { QuilltapExport } from '@/lib/export/types';
+import { logger } from '@/lib/logger';
 
 /**
  * Seed character data structure (without system-generated fields)
@@ -51,11 +54,64 @@ function getCurrentTimestamp(): string {
 }
 
 /**
- * Get all seed characters to be created on first startup
- * @returns Array of seed character data
+ * Load all seed character JSON files from the characters directory.
+ * Characters are loaded in alphabetical order by filename.
+ *
+ * @returns Array of seed character data loaded from JSON files
  */
 export function getSeedCharacters(): SeedCharacterData[] {
-  return [benData as SeedCharacterData];
+  const context = 'first-startup';
+  const charactersDir = path.join(process.cwd(), 'first-startup', 'characters');
+
+  try {
+    const files = fs.readdirSync(charactersDir)
+      .filter(f => f.endsWith('.json'))
+      .sort();
+
+    if (files.length === 0) {
+      logger.warn('No seed character JSON files found', { context, charactersDir });
+      return [];
+    }
+
+    const characters: SeedCharacterData[] = [];
+
+    for (const file of files) {
+      try {
+        const filePath = path.join(charactersDir, file);
+        const raw = fs.readFileSync(filePath, 'utf-8');
+        const data = JSON.parse(raw) as SeedCharacterData;
+        characters.push(data);
+
+        logger.debug('Loaded seed character file', {
+          context,
+          file,
+          characterName: data.name,
+        });
+      } catch (fileError) {
+        logger.error('Failed to load seed character file', {
+          context,
+          file,
+          error: fileError instanceof Error ? fileError.message : String(fileError),
+        });
+        // Continue loading other files
+      }
+    }
+
+    logger.debug('Loaded seed characters', {
+      context,
+      count: characters.length,
+      names: characters.map(c => c.name),
+    });
+
+    return characters;
+  } catch (error) {
+    logger.error('Failed to read seed characters directory', {
+      context,
+      charactersDir,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return [];
+  }
 }
 
 /**
@@ -91,6 +147,79 @@ export function prepareSeedCharacter(
     npc: seedData.npc ?? false,
     isFavorite: seedData.isFavorite ?? false,
   };
+}
+
+// ============================================================================
+// SEED IMPORTS (.qtap files)
+// ============================================================================
+
+/**
+ * Load all .qtap seed import files from the imports directory.
+ * Files are loaded in alphabetical order by filename.
+ *
+ * @returns Array of parsed QuilltapExport objects ready for executeImport()
+ */
+export function getSeedImports(): { filename: string; data: QuilltapExport }[] {
+  const context = 'first-startup';
+  const importsDir = path.join(process.cwd(), 'first-startup', 'imports');
+
+  try {
+    if (!fs.existsSync(importsDir)) {
+      logger.debug('No seed imports directory found', { context, importsDir });
+      return [];
+    }
+
+    const files = fs.readdirSync(importsDir)
+      .filter(f => f.endsWith('.qtap'))
+      .sort();
+
+    if (files.length === 0) {
+      logger.debug('No .qtap seed import files found', { context, importsDir });
+      return [];
+    }
+
+    const imports: { filename: string; data: QuilltapExport }[] = [];
+
+    for (const file of files) {
+      try {
+        const filePath = path.join(importsDir, file);
+        const raw = fs.readFileSync(filePath, 'utf-8');
+        const data = JSON.parse(raw) as QuilltapExport;
+        imports.push({ filename: file, data });
+
+        const counts = data.manifest?.counts;
+        logger.debug('Loaded seed import file', {
+          context,
+          file,
+          exportType: data.manifest?.exportType,
+          characters: counts?.characters ?? 0,
+          memories: counts?.memories ?? 0,
+        });
+      } catch (fileError) {
+        logger.error('Failed to load seed import file', {
+          context,
+          file,
+          error: fileError instanceof Error ? fileError.message : String(fileError),
+        });
+        // Continue loading other files
+      }
+    }
+
+    logger.debug('Loaded seed imports', {
+      context,
+      count: imports.length,
+      files: imports.map(i => i.filename),
+    });
+
+    return imports;
+  } catch (error) {
+    logger.error('Failed to read seed imports directory', {
+      context,
+      importsDir,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return [];
+  }
 }
 
 // ============================================================================

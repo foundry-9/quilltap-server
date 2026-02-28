@@ -17,7 +17,9 @@ import {
   prepareSeedCharacter,
   getSeedEmbeddingProfiles,
   prepareSeedEmbeddingProfile,
+  getSeedImports,
 } from '@/first-startup';
+import { executeImport } from '@/lib/import/quilltap-import-service';
 
 /**
  * Seed initial data if the database is empty
@@ -86,6 +88,9 @@ export async function seedInitialData(): Promise<void> {
 
     // Seed embedding profiles if none exist
     await seedEmbeddingProfiles(repos, context);
+
+    // Seed from .qtap import files (characters with memories, etc.)
+    await seedFromImports(context);
 
     logger.info('Initial data seeding complete', { context });
   } catch (error) {
@@ -158,5 +163,60 @@ async function seedEmbeddingProfiles(
       error: error instanceof Error ? error.message : String(error),
     });
     // Don't throw - this is non-critical
+  }
+}
+
+/**
+ * Seed data from .qtap import files
+ *
+ * Loads .qtap files from first-startup/imports/ and runs them through
+ * the standard import service with 'skip' conflict strategy. This allows
+ * seeding characters with their memories and other related data in a
+ * single bundle. The skip strategy ensures no duplicates on repeated runs.
+ */
+async function seedFromImports(context: string): Promise<void> {
+  try {
+    const seedImports = getSeedImports();
+
+    if (seedImports.length === 0) {
+      return;
+    }
+
+    logger.info('Seeding from .qtap import files', {
+      context,
+      fileCount: seedImports.length,
+    });
+
+    for (const { filename, data } of seedImports) {
+      try {
+        const result = await executeImport(SINGLE_USER_ID, data, {
+          conflictStrategy: 'skip',
+          includeMemories: true,
+          includeRelatedEntities: false,
+        });
+
+        logger.info('Seed import complete', {
+          context,
+          filename,
+          success: result.success,
+          imported: result.imported,
+          skipped: result.skipped,
+          warnings: result.warnings.length > 0 ? result.warnings : undefined,
+        });
+      } catch (importError) {
+        logger.error('Failed to execute seed import', {
+          context,
+          filename,
+          error: importError instanceof Error ? importError.message : String(importError),
+        });
+        // Continue with other import files
+      }
+    }
+  } catch (error) {
+    logger.error('Error during seed imports', {
+      context,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    // Don't throw - seed import failure should not prevent startup
   }
 }

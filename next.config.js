@@ -26,6 +26,7 @@ const nextConfig = {
       './node_modules/@openrouter/**/*',
       './node_modules/zod/**/*',
       './node_modules/better-sqlite3/**/*',
+      './first-startup/**/*',
     ],
   },
 
