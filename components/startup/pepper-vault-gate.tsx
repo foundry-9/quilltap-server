@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 
 type PepperState = 'resolved' | 'needs-setup' | 'needs-unlock' | 'needs-vault-storage';
 
-let gateFetched = false;
+/** Track whether the gate check has succeeded (not just attempted) */
+let gateResolved = false;
 
 /**
  * PepperVaultGate
@@ -18,30 +19,44 @@ export function PepperVaultGate() {
   const router = useRouter();
   const pathname = usePathname();
   const [showBanner, setShowBanner] = useState(false);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     // Don't check if we're already on a setup page
     if (pathname === '/setup' || pathname?.startsWith('/setup/')) {
       // Reset the flag so we re-check when navigating away from setup
-      gateFetched = false;
+      gateResolved = false;
       return;
     }
 
-    // Only fetch once per app lifecycle
-    if (gateFetched) return;
-    gateFetched = true;
+    // Only fetch once per app lifecycle (after a successful check)
+    if (gateResolved) return;
+
+    let cancelled = false;
 
     async function checkPepperState() {
       try {
         const res = await fetch('/api/v1/system/pepper-vault');
-        if (!res.ok) return;
+        if (cancelled) return;
+
+        if (!res.ok) {
+          // Server not ready yet — retry
+          scheduleRetry();
+          return;
+        }
 
         const data = await res.json();
         const state: PepperState = data.state;
 
+        // Mark as resolved so we don't re-check
+        gateResolved = true;
+
         if (state === 'needs-setup' || state === 'needs-unlock') {
           router.push('/setup');
-        } else if (state === 'needs-vault-storage') {
+          return;
+        }
+
+        if (state === 'needs-vault-storage') {
           setShowBanner(true);
         }
 
@@ -49,6 +64,7 @@ export function PepperVaultGate() {
         if (state === 'resolved' || state === 'needs-vault-storage') {
           try {
             const charRes = await fetch('/api/v1/characters?controlledBy=user&limit=1');
+            if (cancelled) return;
             if (charRes.ok) {
               const charData = await charRes.json();
               const characters = charData.characters || [];
@@ -61,12 +77,30 @@ export function PepperVaultGate() {
           }
         }
       } catch {
-        // If we can't reach the API, don't block — the server middleware
-        // will return 503 for protected routes anyway.
+        if (cancelled) return;
+        // If we can't reach the API, retry — the server may still be starting
+        scheduleRetry();
       }
     }
 
+    function scheduleRetry() {
+      if (cancelled) return;
+      retryTimerRef.current = setTimeout(() => {
+        if (!cancelled) {
+          checkPepperState();
+        }
+      }, 2000);
+    }
+
     checkPepperState();
+
+    return () => {
+      cancelled = true;
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
+    };
   }, [pathname, router]);
 
   if (!showBanner) return null;
