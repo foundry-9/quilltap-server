@@ -200,6 +200,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     setAttachedFiles,
     inputRef: inputRef as React.RefObject<HTMLTextAreaElement>,
     setFileWriteApprovalState: modals.setFileWriteApprovalState,
+    setSudoApprovalState: modals.setSudoApprovalState,
+    setWorkspaceAcknowledgementState: modals.setWorkspaceAcknowledgementState,
     getFirstCharacterParticipant: participantsWithImpersonation.getFirstCharacterParticipant,
     setPauseState: chatControls.setPauseState,
   })
@@ -901,6 +903,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           setReattributeDialogState={modals.setReattributeDialogState}
           fileWriteApprovalState={modals.fileWriteApprovalState}
           setFileWriteApprovalState={modals.setFileWriteApprovalState}
+          sudoApprovalState={modals.sudoApprovalState}
+          setSudoApprovalState={modals.setSudoApprovalState}
+          workspaceAcknowledgementState={modals.workspaceAcknowledgementState}
+          setWorkspaceAcknowledgementState={modals.setWorkspaceAcknowledgementState}
           selectLLMProfileDialogState={modals.selectLLMProfileDialogState}
           setSelectLLMProfileDialogState={modals.setSelectLLMProfileDialogState}
           isConflictDialogOpen={isConflictDialogOpen}

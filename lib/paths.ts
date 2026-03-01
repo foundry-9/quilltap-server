@@ -15,8 +15,11 @@
  * ├── data/        - Database files (SQLite)
  * ├── files/       - User file storage (default mount point)
  * ├── logs/        - Application logs
- * └── plugins/
- *     └── npm/     - npm-installed plugins
+ * ├── plugins/
+ * │   └── npm/     - npm-installed plugins
+ * └── workspace/   - Shell interactivity workspace (VM/Docker only)
+ *     ├── chats/   - Per-chat working directories
+ *     └── projects/ - Per-project working directories
  *
  * Environment variables:
  * - QUILLTAP_DATA_DIR: Overrides the base directory (non-Docker only)
@@ -316,6 +319,49 @@ export function getNpmPluginsDir(): string {
 }
 
 /**
+ * Get the workspace directory path (for shell interactivity)
+ *
+ * The workspace is a shared scratch space between the VM/container and the host.
+ * Only meaningful in Lima VM or Docker environments.
+ *
+ * @returns Workspace directory path (<base>/workspace)
+ */
+export function getWorkspaceDir(): string {
+  return path.join(getBaseDataDir(), 'workspace');
+}
+
+/**
+ * Get the workspace directory for a specific chat
+ *
+ * @param chatId - The chat ID
+ * @returns Chat workspace directory path (<base>/workspace/chats/<chatId>)
+ */
+export function getWorkspaceChatDir(chatId: string): string {
+  return path.join(getWorkspaceDir(), 'chats', chatId);
+}
+
+/**
+ * Get the workspace directory for a specific project
+ *
+ * @param projectId - The project ID
+ * @returns Project workspace directory path (<base>/workspace/projects/<projectId>)
+ */
+export function getWorkspaceProjectDir(projectId: string): string {
+  return path.join(getWorkspaceDir(), 'projects', projectId);
+}
+
+/**
+ * Check if running in a shell-capable environment (Lima VM or Docker)
+ *
+ * Shell tools are only available when running inside a sandboxed environment.
+ *
+ * @returns true if the current environment supports shell interactivity
+ */
+export function isShellEnvironment(): boolean {
+  return isLimaEnvironment() || isDockerEnvironment();
+}
+
+/**
  * Get the host-side data directory path for display purposes
  *
  * In VM/Docker environments, QUILLTAP_HOST_DATA_DIR preserves the original
@@ -355,6 +401,7 @@ export function ensureDataDirectoriesExist(): void {
     getFilesDir(),
     getLogsDir(),
     getNpmPluginsDir(),
+    getWorkspaceDir(),
   ];
 
   for (const dir of dirs) {

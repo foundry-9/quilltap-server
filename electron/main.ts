@@ -28,6 +28,7 @@ import { AppSettings, loadSettings, saveSettings, defaultNameForPath } from './s
 import { getSizesForDir } from './disk-utils';
 import { runCrashGuard, markStartupSuccess, isInSafeMode } from './crash-guard';
 import { initStartupLog, logStartup, closeStartupLog } from './startup-log';
+import { WorkspaceWatcher } from './workspace-watcher';
 
 const isDev = !!process.env.ELECTRON_DEV;
 
@@ -76,6 +77,7 @@ let isQuitting = false;
 let appSettings: AppSettings;
 let dockerAvailable = false;
 let nodeAvailable = false;
+let workspaceWatcher: WorkspaceWatcher | null = null;
 
 /** Whether we're in the auto-start countdown (can be interrupted) */
 let autoStartPending = false;
@@ -930,6 +932,18 @@ async function startupSequence(dataDir: string): Promise<void> {
     closeStartupLog();
     mainWindow = createMainWindow();
     markStartupSuccess();
+
+    // Start workspace watcher after VM/Docker is healthy
+    try {
+      const workspaceDir = path.join(dataDir, 'workspace');
+      workspaceWatcher = new WorkspaceWatcher({
+        workspaceDir,
+        log: (msg, data) => logStartup(`[WorkspaceWatcher] ${msg} ${data ? JSON.stringify(data) : ''}`),
+      });
+      workspaceWatcher.start();
+    } catch (err) {
+      logStartup(`[WorkspaceWatcher] Failed to start: ${err instanceof Error ? err.message : String(err)}`);
+    }
   } else {
     const logs = await vmManager.getLogs(20);
     sendSplashError(
@@ -1536,6 +1550,12 @@ app.on('before-quit', async (event) => {
 
   isQuitting = true;
   event.preventDefault();
+
+  // Stop workspace watcher
+  if (workspaceWatcher) {
+    workspaceWatcher.stop();
+    workspaceWatcher = null;
+  }
 
   // Close interactive windows immediately so the user can't keep clicking
   if (mainWindow && !mainWindow.isDestroyed()) {

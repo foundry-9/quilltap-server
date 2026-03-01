@@ -24,7 +24,9 @@ import { showInfoToast } from '@/lib/toast'
 import { getNextPauseThreshold } from '@/lib/chat/turn-manager'
 import type { LLMLog } from '@/lib/schemas/types'
 import type { Chat, Message } from '../types'
-import type { ReattributeDialogState, FileWriteApprovalState, SelectLLMProfileDialogState } from '../hooks/useModalState'
+import SudoApprovalModal from '@/components/chat/SudoApprovalModal'
+import WorkspaceAcknowledgementModal from '@/components/chat/WorkspaceAcknowledgementModal'
+import type { ReattributeDialogState, FileWriteApprovalState, SudoApprovalState, WorkspaceAcknowledgementState, SelectLLMProfileDialogState } from '../hooks/useModalState'
 
 interface ChatModalsProps {
   chatId: string
@@ -71,6 +73,10 @@ interface ChatModalsProps {
   setReattributeDialogState: (state: ReattributeDialogState | null) => void
   fileWriteApprovalState: FileWriteApprovalState | null
   setFileWriteApprovalState: (state: FileWriteApprovalState | null) => void
+  sudoApprovalState: SudoApprovalState | null
+  setSudoApprovalState: (state: SudoApprovalState | null) => void
+  workspaceAcknowledgementState: WorkspaceAcknowledgementState | null
+  setWorkspaceAcknowledgementState: (state: WorkspaceAcknowledgementState | null) => void
   selectLLMProfileDialogState: SelectLLMProfileDialogState | null
   setSelectLLMProfileDialogState: (state: SelectLLMProfileDialogState | null) => void
   // File conflict
@@ -128,6 +134,8 @@ export function ChatModals({
   // Complex
   reattributeDialogState, setReattributeDialogState,
   fileWriteApprovalState, setFileWriteApprovalState,
+  sudoApprovalState, setSudoApprovalState,
+  workspaceAcknowledgementState, setWorkspaceAcknowledgementState,
   selectLLMProfileDialogState, setSelectLLMProfileDialogState,
   // File conflict
   isConflictDialogOpen, cancelConflict, conflictInfo, handleConflictResolution, resolvingConflict,
@@ -377,6 +385,65 @@ export function ChatModals({
             const participantToTrigger = fileWriteApprovalState?.respondingParticipantId
             setFileWriteApprovalState(null)
             showInfoToast('File write denied.')
+            await fetchChat()
+            if (participantToTrigger) {
+              setTimeout(() => {
+                triggerContinueMode(participantToTrigger)
+              }, 500)
+            }
+          }}
+        />
+      )}
+
+      {sudoApprovalState && (
+        <SudoApprovalModal
+          isOpen={sudoApprovalState.isOpen}
+          onClose={() => setSudoApprovalState(null)}
+          chatId={chatId}
+          pendingSudoCommand={sudoApprovalState.pendingSudoCommand}
+          onApprove={async () => {
+            const participantToTrigger = sudoApprovalState?.respondingParticipantId
+            setSudoApprovalState(null)
+            await fetchChat()
+            if (participantToTrigger) {
+              setTimeout(() => {
+                triggerContinueMode(participantToTrigger)
+              }, 500)
+            }
+          }}
+          onDeny={async () => {
+            const participantToTrigger = sudoApprovalState?.respondingParticipantId
+            setSudoApprovalState(null)
+            showInfoToast('Sudo command denied.')
+            await fetchChat()
+            if (participantToTrigger) {
+              setTimeout(() => {
+                triggerContinueMode(participantToTrigger)
+              }, 500)
+            }
+          }}
+        />
+      )}
+
+      {workspaceAcknowledgementState && (
+        <WorkspaceAcknowledgementModal
+          isOpen={workspaceAcknowledgementState.isOpen}
+          onClose={() => setWorkspaceAcknowledgementState(null)}
+          chatId={chatId}
+          onAcknowledge={async () => {
+            const participantToTrigger = workspaceAcknowledgementState?.respondingParticipantId
+            setWorkspaceAcknowledgementState(null)
+            await fetchChat()
+            if (participantToTrigger) {
+              setTimeout(() => {
+                triggerContinueMode(participantToTrigger)
+              }, 500)
+            }
+          }}
+          onDismiss={async () => {
+            const participantToTrigger = workspaceAcknowledgementState?.respondingParticipantId
+            setWorkspaceAcknowledgementState(null)
+            showInfoToast('Shell tools will remain unavailable until workspace is acknowledged.')
             await fetchChat()
             if (participantToTrigger) {
               setTimeout(() => {

@@ -4,6 +4,8 @@
 
 ### 3.2-dev
 
+- feat: Shell interactivity — LLMs can execute shell commands inside Lima VM and Docker sandbox environments. Six tools: `chdir`, `exec_sync`, `exec_async`, `async_result`, `sudo_sync`, and `cp_host`. Includes workspace acknowledgement modal, sudo approval modal, Electron workspace file watcher with binary detection and OS quarantine markers, command warning system for suspicious commands, and async process registry for background commands
+- docs: Shell tools help page documents that packages installed via `apk add`/`apt-get` inside Docker containers are ephemeral and lost on restart; suggests keeping a setup script in the workspace or building a custom Docker image
 - ci: Add Discord commit notification webhook to CI workflow — sends commit message, branch, link, and author to Discord on push via `tristanbudd/discord-commit-github-action`
 - fix: First-startup race condition — page rendered without sidebar and didn't redirect to setup wizard; session provider now keeps "loading" status on 503 instead of "unauthenticated", and PepperVaultGate retries on failure instead of silently giving up
 - feat: Seed avatar images for Lorian & Riya on first startup — avatar `.webp` files ship in `first-startup/avatars/`, are uploaded to file storage, and set as `defaultImageId` on the corresponding characters after `.qtap` import

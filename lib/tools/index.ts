@@ -224,6 +224,32 @@ export {
   type StateToolContext,
 } from './handlers/state-handler';
 
+// Shell Interactivity Tools
+export {
+  shellChdirToolDefinition,
+  shellExecSyncToolDefinition,
+  shellExecAsyncToolDefinition,
+  shellAsyncResultToolDefinition,
+  shellSudoSyncToolDefinition,
+  shellCpHostToolDefinition,
+  getAllShellToolDefinitions,
+  SHELL_TOOL_NAMES,
+  isShellTool,
+  type ShellToolName,
+  type ShellToolContext,
+  type ShellToolOutput,
+  type ShellCommandResult,
+  type ShellAsyncCommandResult,
+  type ShellSessionState,
+} from './shell';
+
+export {
+  executeShellTool,
+  executeSudoCommand,
+  formatShellResults,
+  ShellError,
+} from './shell';
+
 // Plugin-Based Tool Builder (Phase 3)
 export {
   buildToolsForProvider,

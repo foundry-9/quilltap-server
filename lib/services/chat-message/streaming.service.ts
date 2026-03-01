@@ -8,6 +8,7 @@
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { createLLMProvider, type LLMMessage } from '@/lib/llm'
 import { buildToolsForProvider, checkModelSupportsTools } from '@/lib/tools'
+import { isShellEnvironment } from '@/lib/paths'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
 import { normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
@@ -198,6 +199,7 @@ export async function buildTools(
     projectInfo: !!projectId,
     requestFullContext: !!requestFullContext,
     agentMode: !!agentModeEnabled,
+    shellInteractivity: isShellEnvironment(),
     toolConfigs,
   })
 

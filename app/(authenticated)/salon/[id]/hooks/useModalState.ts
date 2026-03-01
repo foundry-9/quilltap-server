@@ -23,6 +23,25 @@ export interface FileWriteApprovalState {
   respondingParticipantId?: string
 }
 
+export interface SudoApprovalState {
+  isOpen: boolean
+  pendingSudoCommand: {
+    command: string
+    parameters?: string[]
+    timeout_ms?: number
+  }
+  /** The participant ID that made the sudo request, so we can trigger them to continue */
+  respondingParticipantId?: string
+}
+
+export interface WorkspaceAcknowledgementState {
+  isOpen: boolean
+  /** The tool name that triggered the acknowledgement requirement */
+  toolName?: string
+  /** The participant ID, so we can trigger them to continue */
+  respondingParticipantId?: string
+}
+
 export interface SelectLLMProfileDialogState {
   isOpen: boolean
   participantId: string
@@ -58,6 +77,8 @@ export function useModalState() {
   const [reattributeDialogState, setReattributeDialogState] = useState<ReattributeDialogState | null>(null)
   const [fileWriteApprovalState, setFileWriteApprovalState] = useState<FileWriteApprovalState | null>(null)
   const [selectLLMProfileDialogState, setSelectLLMProfileDialogState] = useState<SelectLLMProfileDialogState | null>(null)
+  const [sudoApprovalState, setSudoApprovalState] = useState<SudoApprovalState | null>(null)
+  const [workspaceAcknowledgementState, setWorkspaceAcknowledgementState] = useState<WorkspaceAcknowledgementState | null>(null)
 
   // LLM log viewer state
   const [llmLogViewerOpen, setLLMLogViewerOpen] = useState(false)
@@ -117,6 +138,8 @@ export function useModalState() {
     reattributeDialogState, setReattributeDialogState,
     fileWriteApprovalState, setFileWriteApprovalState,
     selectLLMProfileDialogState, setSelectLLMProfileDialogState,
+    sudoApprovalState, setSudoApprovalState,
+    workspaceAcknowledgementState, setWorkspaceAcknowledgementState,
 
     // LLM log viewer state
     llmLogViewerOpen,
