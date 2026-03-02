@@ -13,6 +13,8 @@ import { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { getRepositories } from '@/lib/repositories/factory'
 import { decryptApiKey } from '@/lib/encryption'
 import { getErrorMessage } from '@/lib/errors'
+import type { Pronouns } from '@/lib/schemas/character.types'
+import { formatNameWithPronouns } from './format-utils'
 import { logger } from '@/lib/logger'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
 import type { LLMLogType } from '@/lib/schemas/llm-log.types'
@@ -435,11 +437,12 @@ export async function extractMemoryFromMessage(
   selection: CheapLLMSelection,
   userId: string,
   uncensoredFallback?: UncensoredFallbackOptions,
-  chatId?: string
+  chatId?: string,
+  characterPronouns?: Pronouns | null
 ): Promise<CheapLLMTaskResult<MemoryCandidate>> {
   // Use clear "X says:" format to help the model distinguish speakers
   const userLabel = personaName ? `${personaName} (the user)` : 'The user'
-  const characterLabel = `${characterName} (the character)`
+  const characterLabel = `${formatNameWithPronouns(characterName, characterPronouns)} (the character)`
 
   const messages: LLMMessage[] = [
     {
@@ -522,11 +525,12 @@ export async function extractCharacterMemoryFromMessage(
   selection: CheapLLMSelection,
   userId: string,
   uncensoredFallback?: UncensoredFallbackOptions,
-  chatId?: string
+  chatId?: string,
+  characterPronouns?: Pronouns | null
 ): Promise<CheapLLMTaskResult<MemoryCandidate>> {
   // Use clear "X says:" format to help the model distinguish speakers
   const userLabel = personaName ? `${personaName} (the user)` : 'The user'
-  const characterLabel = `${characterName} (the character)`
+  const characterLabel = `${formatNameWithPronouns(characterName, characterPronouns)} (the character)`
 
   const messages: LLMMessage[] = [
     {
@@ -537,7 +541,7 @@ export async function extractCharacterMemoryFromMessage(
       role: 'user',
       content: `${context}
 
-TARGET CHARACTER: ${characterName}
+TARGET CHARACTER: ${formatNameWithPronouns(characterName, characterPronouns)}
 
 CONVERSATION TRANSCRIPT:
 
@@ -639,8 +643,13 @@ export async function extractInterCharacterMemoryFromMessage(
   selection: CheapLLMSelection,
   userId: string,
   uncensoredFallback?: UncensoredFallbackOptions,
-  chatId?: string
+  chatId?: string,
+  characterAPronouns?: Pronouns | null,
+  characterBPronouns?: Pronouns | null
 ): Promise<CheapLLMTaskResult<MemoryCandidate>> {
+  const characterALabel = formatNameWithPronouns(characterAName, characterAPronouns)
+  const characterBLabel = formatNameWithPronouns(characterBName, characterBPronouns)
+
   const messages: LLMMessage[] = [
     {
       role: 'system',
@@ -648,13 +657,13 @@ export async function extractInterCharacterMemoryFromMessage(
     },
     {
       role: 'user',
-      content: `Character A (the observer): ${characterAName}
-Character B (the subject): ${characterBName}
+      content: `Character A (the observer): ${characterALabel}
+Character B (the subject): ${characterBLabel}
 
 CONVERSATION:
-${characterAName}: ${characterAMessage}
+${characterALabel}: ${characterAMessage}
 
-${characterBName}: ${characterBMessage}`,
+${characterBLabel}: ${characterBMessage}`,
     },
   ]
 

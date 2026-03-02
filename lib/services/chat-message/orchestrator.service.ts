@@ -1779,12 +1779,19 @@ async function processMessage(
       }
 
       // Note: personaName is undefined since we only support CHARACTER type participants now
+      // Build pronouns map for multi-character chats
+      const allCharacterPronouns = isMultiCharacter
+        ? Object.fromEntries(Array.from(participantCharacters.values()).map(c => [c.name, c.pronouns ?? null]))
+        : undefined
+
       await triggerMemoryExtraction(repos, {
         characterId: character.id,
         characterName: character.name,
+        characterPronouns: character.pronouns,
         personaName: undefined,
         userCharacterId,
         allCharacterNames: isMultiCharacter ? Array.from(participantCharacters.values()).map(c => c.name) : undefined,
+        allCharacterPronouns,
         chatId,
         userMessage: isContinueMode ? '[Continue/Nudge - no user message]' : content,
         assistantMessage: cleanedResponse,

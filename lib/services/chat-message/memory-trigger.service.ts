@@ -14,6 +14,7 @@ import { resolveDangerousContentSettings } from '@/lib/services/dangerous-conten
 import { enqueueChatDangerClassification } from '@/lib/background-jobs/queue-service'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { Character, ConnectionProfile, ChatParticipantBase, MessageEvent, CheapLLMSettings } from '@/lib/schemas/types'
+import type { Pronouns } from '@/lib/schemas/character.types'
 import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
 
 const logger = createServiceLogger('MemoryTriggerService')
@@ -34,10 +35,13 @@ export async function triggerMemoryExtraction(
   options: {
     characterId: string
     characterName: string
+    characterPronouns?: Pronouns | null
     personaName?: string
     /** User character ID - who the memory is about (the user-controlled character) */
     userCharacterId?: string
     allCharacterNames?: string[]
+    /** Map of character name to pronouns for multi-character chats */
+    allCharacterPronouns?: Record<string, Pronouns | null>
     chatId: string
     userMessage: string
     assistantMessage: string
@@ -58,9 +62,11 @@ export async function triggerMemoryExtraction(
     processMessageForMemoryAsync({
       characterId: options.characterId,
       characterName: options.characterName,
+      characterPronouns: options.characterPronouns,
       personaName: options.personaName,
       userCharacterId: options.userCharacterId,
       allCharacterNames: options.allCharacterNames,
+      allCharacterPronouns: options.allCharacterPronouns,
       chatId: options.chatId,
       userMessage: options.userMessage,
       assistantMessage: options.assistantMessage,
@@ -162,9 +168,11 @@ export async function triggerInterCharacterMemory(
       processInterCharacterMemoryAsync({
         observerCharacterId: options.character.id,
         observerCharacterName: options.character.name,
+        observerCharacterPronouns: options.character.pronouns,
         observerMessage: options.assistantMessage,
         subjectCharacterId: otherCharacter.id,
         subjectCharacterName: otherCharacter.name,
+        subjectCharacterPronouns: otherCharacter.pronouns,
         subjectMessage: otherMsg.content,
         chatId: options.chatId,
         sourceMessageId: options.assistantMessageId,
