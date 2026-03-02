@@ -4,6 +4,7 @@
 
 ### 3.2-dev
 
+- fix: Chat composer textarea now auto-focuses when it's the user's turn — the page's `inputRef` was never connected to the actual textarea DOM element (ChatComposer created its own internal ref), so all post-generation focus calls were no-ops; now the page passes its ref into ChatComposer via a new `inputRef` prop, enabling focus on page load, after AI responses, and after multi-character turn cycles
 - docs: Clarify workspace path semantics in shell tool descriptions — LLMs now see explicit guidance that paths are relative to the current workspace directory, that absolute paths (leading `/`) refer to the VM root filesystem and will be rejected, and that `workspace:` prefixes in `cp_host` should use relative paths
 - feat: Shell interactivity — LLMs can execute shell commands inside Lima VM and Docker sandbox environments. Six tools: `chdir`, `exec_sync`, `exec_async`, `async_result`, `sudo_sync`, and `cp_host`. Includes workspace acknowledgement modal, sudo approval modal, Electron workspace file watcher with binary detection and OS quarantine markers, command warning system for suspicious commands, and async process registry for background commands
 - docs: Shell tools help page documents that packages installed via `apk add`/`apt-get` inside Docker containers are ephemeral and lost on restart; suggests keeping a setup script in the workspace or building a custom Docker image

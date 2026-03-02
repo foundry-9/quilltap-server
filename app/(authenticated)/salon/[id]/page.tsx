@@ -792,6 +792,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onRemoveAttachedFile={removeAttachedFile}
           pendingToolResults={pendingToolResults}
           onRemovePendingToolResult={handleRemovePendingToolResult}
+          inputRef={inputRef}
           disabled={sseStreaming.sending}
           sending={sseStreaming.sending}
           hasActiveCharacters={participantsWithImpersonation.hasActiveCharacters}
