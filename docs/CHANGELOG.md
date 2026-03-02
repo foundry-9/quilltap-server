@@ -4,6 +4,7 @@
 
 ### 3.2-dev
 
+- docs: Clarify workspace path semantics in shell tool descriptions — LLMs now see explicit guidance that paths are relative to the current workspace directory, that absolute paths (leading `/`) refer to the VM root filesystem and will be rejected, and that `workspace:` prefixes in `cp_host` should use relative paths
 - feat: Shell interactivity — LLMs can execute shell commands inside Lima VM and Docker sandbox environments. Six tools: `chdir`, `exec_sync`, `exec_async`, `async_result`, `sudo_sync`, and `cp_host`. Includes workspace acknowledgement modal, sudo approval modal, Electron workspace file watcher with binary detection and OS quarantine markers, command warning system for suspicious commands, and async process registry for background commands
 - docs: Shell tools help page documents that packages installed via `apk add`/`apt-get` inside Docker containers are ephemeral and lost on restart; suggests keeping a setup script in the workspace or building a custom Docker image
 - ci: Add Discord commit notification webhook to CI workflow — sends commit message, branch, link, and author to Discord on push via `tristanbudd/discord-commit-github-action`

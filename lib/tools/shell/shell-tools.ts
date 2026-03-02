@@ -21,14 +21,14 @@ export const shellChdirToolDefinition = {
   function: {
     name: 'chdir',
     description:
-      'Change the working directory for shell commands in this chat session. If no path is provided, resets to the default workspace directory. The directory must be within the workspace. Creates the directory if it does not exist.',
+      'Change the working directory for shell commands in this chat session. If no path is provided, resets to the default workspace directory. The directory must be within the workspace. Creates the directory if it does not exist. IMPORTANT: Paths are relative to the current workspace directory. Use "./subdir" or "subdir" to navigate within the workspace. Do NOT use absolute paths like "/something" — those refer to the VM root filesystem and will be rejected. The workspace is your sandboxed working area.',
     parameters: {
       type: 'object',
       properties: {
         path: {
           type: 'string',
           description:
-            'Path to change to, relative to the workspace root or an absolute path within the workspace. If omitted or empty, resets to the default workspace directory for this chat.',
+            'Path to change to, relative to the current workspace directory (e.g., "subdir", "./subdir", "../otherdir"). Absolute paths starting with "/" refer to the VM root filesystem, NOT the workspace root, and will be rejected unless they fall within the workspace boundary. If omitted or empty, resets to the default workspace directory for this chat.',
         },
       },
       required: [],
@@ -41,7 +41,7 @@ export const shellExecSyncToolDefinition = {
   function: {
     name: 'exec_sync',
     description:
-      'Execute a shell command synchronously and wait for it to complete. Returns stdout, stderr, exit code, and elapsed time. The command runs in the current working directory (set via chdir or the default workspace). Use for quick commands that complete within the timeout.',
+      'Execute a shell command synchronously and wait for it to complete. Returns stdout, stderr, exit code, and elapsed time. The command runs in the current working directory (set via chdir or the default workspace). Use for quick commands that complete within the timeout. IMPORTANT: File paths in your commands should be relative to the current workspace directory (e.g., "./myfile.txt" or "subdir/file.txt"). Absolute paths like "/etc/something" refer to the VM root filesystem, not the workspace.',
     parameters: {
       type: 'object',
       properties: {
@@ -72,7 +72,7 @@ export const shellExecAsyncToolDefinition = {
   function: {
     name: 'exec_async',
     description:
-      'Execute a shell command asynchronously in the background. Returns immediately with a PID that can be used with async_result to check status and retrieve output. Use for long-running commands like builds, downloads, or server processes.',
+      'Execute a shell command asynchronously in the background. Returns immediately with a PID that can be used with async_result to check status and retrieve output. Use for long-running commands like builds, downloads, or server processes. IMPORTANT: File paths in your commands should be relative to the current workspace directory (e.g., "./myfile.txt" or "subdir/file.txt"). Absolute paths like "/etc/something" refer to the VM root filesystem, not the workspace.',
     parameters: {
       type: 'object',
       properties: {
@@ -122,7 +122,7 @@ export const shellSudoSyncToolDefinition = {
   function: {
     name: 'sudo_sync',
     description:
-      'Execute a shell command with elevated (root) privileges. Requires explicit user approval before execution. Use for system administration tasks like installing packages (apk add), modifying system configuration, or managing services. The command will NOT execute until the user approves it.',
+      'Execute a shell command with elevated (root) privileges. Requires explicit user approval before execution. Use for system administration tasks like installing packages (apk add), modifying system configuration, or managing services. The command will NOT execute until the user approves it. Note: Unlike other shell tools, sudo commands may legitimately need absolute paths (e.g., "/etc/apk") since they operate on the VM system. The working directory is still the workspace.',
     parameters: {
       type: 'object',
       properties: {
@@ -153,17 +153,17 @@ export const shellCpHostToolDefinition = {
   function: {
     name: 'cp_host',
     description:
-      'Copy a file between the workspace and the Files storage area. Use "workspace:/path" format for workspace files and "files:fileId" format for Files storage entries. Workspace-to-Files copies are subject to security filters (binary executables are rejected, execute bits are stripped).',
+      'Copy a file between the workspace and the Files storage area. Use "workspace:path" format for workspace files and "files:fileId" format for Files storage entries. Workspace-to-Files copies are subject to security filters (binary executables are rejected, execute bits are stripped). IMPORTANT: The path after "workspace:" is relative to the current workspace directory (e.g., "workspace:myfile.txt", "workspace:subdir/file.txt"). Do NOT use a leading "/" after "workspace:" unless you intend an absolute VM filesystem path (which will be rejected if outside the workspace).',
     parameters: {
       type: 'object',
       properties: {
         source: {
           type: 'string',
-          description: 'Source path. Use "workspace:/relative/path" for workspace files or "files:fileId" for a file in Files storage.',
+          description: 'Source path. Use "workspace:relative/path" for workspace files (relative to current working directory) or "files:fileId" for a file in Files storage. Example: "workspace:output.txt" or "files:abc123".',
         },
         destination: {
           type: 'string',
-          description: 'Destination path. Use "workspace:/relative/path" for workspace files or "files:fileId" for creating a new entry in Files storage (use "files:" with empty ID to auto-generate).',
+          description: 'Destination path. Use "workspace:relative/path" for workspace files (relative to current working directory) or "files:" to create a new entry in Files storage with auto-generated ID. Example: "workspace:result.txt" or "files:".',
         },
       },
       required: ['source', 'destination'],
