@@ -7715,6 +7715,12 @@ var cheapModels = {
 };
 var plugin = {
   metadata,
+  icon: {
+    viewBox: "0 0 24 24",
+    paths: [
+      { d: "M12 2L3 7.5v9L12 22l9-5.5v-9L12 2z", fill: "currentColor" }
+    ]
+  },
   config,
   capabilities,
   attachmentSupport,

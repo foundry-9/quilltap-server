@@ -78,7 +78,7 @@ Most characters have a **First Message** — an introductory message the charact
 The main area where conversation happens:
 
 - **Your Messages** — Appear on one side with your avatar
-- **Character Messages** — Appear with the character's avatar and name
+- **Character Messages** — Appear with the character's avatar, name, and a small provider/model badge showing which LLM service generated the response
 - **System Messages** — Background operations like memory extraction (if enabled)
 - **Timestamps** — Show when messages were sent
 

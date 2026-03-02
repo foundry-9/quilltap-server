@@ -248,6 +248,7 @@ export default async function Home() {
         isFavorite: char.isFavorite ?? false,
         npc: char.npc ?? false,
         chatCount: characterChatCounts.get(char.id) ?? 0,
+        defaultConnectionProfileId: char.defaultConnectionProfileId || null,
       };
     })
   );

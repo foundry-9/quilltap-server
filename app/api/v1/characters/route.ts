@@ -168,6 +168,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
           defaultImage,
           isFavorite: character.isFavorite,
           controlledBy: character.controlledBy ?? 'llm',
+          defaultConnectionProfileId: character.defaultConnectionProfileId || null,
           defaultPartnerName,
           npc: character.npc ?? false,
           createdAt: character.createdAt,

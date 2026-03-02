@@ -64,6 +64,8 @@ interface SSEEvent {
     }
     requiresWorkspaceAcknowledgement?: boolean
   }
+  provider?: string
+  modelName?: string
 }
 
 /**
@@ -448,6 +450,8 @@ export function useSSEStreaming({
             content: fullContent,
             createdAt: new Date().toISOString(),
             participantId: firstCharParticipant?.id,
+            provider: data.provider || null,
+            modelName: data.modelName || null,
           }
           setMessages((prev) => [...prev, assistantMessage])
           setStreamingContent('')
@@ -555,6 +559,8 @@ export function useSSEStreaming({
               content: fullContent,
               createdAt: new Date().toISOString(),
               participantId,
+              provider: data.provider || null,
+              modelName: data.modelName || null,
             }
             setMessages(prev => [...prev, newMessage])
           }

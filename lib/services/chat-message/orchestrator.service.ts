@@ -1634,7 +1634,9 @@ async function processMessage(
       thoughtSignature,
       generatedImagePaths,
       toolMessages,
-      preGeneratedAssistantMessageId
+      preGeneratedAssistantMessageId,
+      effectiveProfile.provider,
+      effectiveProfile.modelName
     )
 
     // ============================================================================
@@ -1765,6 +1767,8 @@ async function processMessage(
       attachmentResults,
       toolsExecuted: toolMessages.length > 0,
       turn: turnInfo,
+      provider: effectiveProfile.provider,
+      modelName: effectiveProfile.modelName,
     }))
 
     // Trigger memory extraction
@@ -1882,6 +1886,8 @@ async function processMessage(
       cacheUsage,
       attachmentResults,
       toolsExecuted: true,
+      provider: effectiveProfile.provider,
+      modelName: effectiveProfile.modelName,
     }))
   } else {
     // Empty response
@@ -1901,6 +1907,8 @@ async function processMessage(
       toolsExecuted: false,
       emptyResponse: true,
       emptyResponseReason: emptyReason,
+      provider: effectiveProfile.provider,
+      modelName: effectiveProfile.modelName,
     }))
   }
 
@@ -1922,10 +1930,20 @@ async function saveAssistantMessage(
   thoughtSignature: string | undefined,
   generatedImagePaths: GeneratedImage[],
   toolMessages: ToolMessage[],
-  preGeneratedMessageId?: string
+  preGeneratedMessageId?: string,
+  provider?: string,
+  modelName?: string
 ): Promise<string> {
   const assistantMessageId = preGeneratedMessageId || crypto.randomUUID()
   const assistantAttachments = generatedImagePaths.map(img => img.id)
+
+  logger.debug('[Chat] Saving assistant message with provider info', {
+    messageId: assistantMessageId,
+    chatId,
+    provider: provider || null,
+    modelName: modelName || null,
+    characterName: character.name,
+  })
 
   const assistantMessage = {
     id: assistantMessageId,
@@ -1940,6 +1958,8 @@ async function saveAssistantMessage(
     attachments: assistantAttachments,
     thoughtSignature: thoughtSignature || null,
     participantId: characterParticipant.id,
+    provider: provider || null,
+    modelName: modelName || null,
   }
 
   await repos.chats.addMessage(chatId, assistantMessage)

@@ -112,7 +112,7 @@ This makes switching models the fastest possible action — no need to open a se
 ### Status Indicators
 
 **Control Mode:**
-- LLM icon if AI-controlled
+- LLM icon if AI-controlled, with a provider icon badge showing the current LLM service and model
 - "You" indicator if impersonated
 
 **Active/Inactive:**

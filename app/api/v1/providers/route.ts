@@ -31,6 +31,7 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
       description: plugin.metadata.description,
       abbreviation: plugin.metadata.abbreviation,
       colors: plugin.metadata.colors,
+      icon: plugin.icon || null,
       type: 'llm',
       capabilities: plugin.capabilities,
       configRequirements: plugin.config,
@@ -46,6 +47,7 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
       description: plugin.metadata.description,
       abbreviation: plugin.metadata.abbreviation,
       colors: plugin.metadata.colors,
+      icon: plugin.icon || null,
       type: 'search',
       configRequirements: {
         requiresApiKey: plugin.config.requiresApiKey,
@@ -57,10 +59,15 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
     // Combine both lists
     const allProviders = [...providerList, ...searchProviderList];
 
+    const providersWithIcons = allProviders.filter(p => p.icon !== null).length;
     logger.info('[Providers v1] Listed providers', {
       llmCount: providerList.length,
       searchCount: searchProviderList.length,
       totalCount: allProviders.length,
+    });
+    logger.debug('[Providers v1] Provider icon data included', {
+      providersWithIcons,
+      providerNames: allProviders.map(p => p.name),
     });
 
     return successResponse({

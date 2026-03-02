@@ -12,6 +12,8 @@ import { getAvatarClasses } from '@/lib/avatar-styles'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { useSidebarData } from '@/components/providers/sidebar-data-provider'
 import { CharacterDeleteDialog } from '@/components/character-delete-dialog'
+import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
+import { useConnectionProfiles } from '@/hooks/useConnectionProfiles'
 import { processTemplate } from '@/lib/templates/processor'
 
 const AIImportWizard = dynamic(() => import('@/components/settings/ai-import/AIImportWizard'), {
@@ -36,6 +38,7 @@ interface Character {
   defaultPartnerName?: string | null
   createdAt: string
   tags?: string[]
+  defaultConnectionProfileId?: string | null
   _count: {
     chats: number
   }
@@ -48,6 +51,7 @@ export default function CharactersPage() {
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [aiImportDialogOpen, setAIImportDialogOpen] = useState(false)
   const [deleteDialogCharacter, setDeleteDialogCharacter] = useState<Character | null>(null)
+  const { getProfileProvider } = useConnectionProfiles()
   const { style } = useAvatarDisplay()
   const { shouldHideByIds } = useQuickHide()
   const { refreshSidebar } = useSidebarData()
@@ -287,6 +291,12 @@ export default function CharactersPage() {
                     <p className="qt-text-small">
                       {character._count.chats} chat{character._count.chats !== 1 ? 's' : ''}
                     </p>
+                    {character.defaultConnectionProfileId && (() => {
+                      const profileInfo = getProfileProvider(character.defaultConnectionProfileId!)
+                      return profileInfo ? (
+                        <ProviderModelBadge provider={profileInfo.provider} modelName={profileInfo.modelName} size="sm" />
+                      ) : null
+                    })()}
                   </div>
                 </div>
                 <div className="flex items-center gap-1 ml-2">
