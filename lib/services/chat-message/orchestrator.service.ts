@@ -998,6 +998,7 @@ async function processMessage(
       userId,
       messageId: preGeneratedAssistantMessageId,
       chatId,
+      characterId: character.id,
     })) {
       if (chunk.content) {
         // Send streaming status on first content
@@ -1259,6 +1260,7 @@ async function processMessage(
       userId,
       messageId: preGeneratedAssistantMessageId,
       chatId,
+      characterId: character.id,
     })) {
       if (chunk.content) {
         currentResponse += chunk.content

@@ -38,6 +38,7 @@ export interface StreamOptions {
   userId?: string
   messageId?: string
   chatId?: string
+  characterId?: string
 }
 
 /**
@@ -274,7 +275,7 @@ export async function* streamMessage(
   rawResponse?: unknown
   thoughtSignature?: string
 }> {
-  const { messages, connectionProfile, apiKey, modelParams, tools, useNativeWebSearch, userId, messageId, chatId } = options
+  const { messages, connectionProfile, apiKey, modelParams, tools, useNativeWebSearch, userId, messageId, chatId, characterId } = options
 
   const provider = await createLLMProvider(
     connectionProfile.provider,
@@ -339,6 +340,7 @@ export async function* streamMessage(
           type: 'CHAT_MESSAGE',
           messageId,
           chatId,
+          characterId,
           provider: connectionProfile.provider,
           modelName: connectionProfile.modelName,
           request: {

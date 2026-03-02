@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import type { LLMLog, LLMLogType } from '@/lib/schemas/types'
 
 interface LLMInspectorEntryProps {
@@ -55,13 +55,6 @@ function formatTimestamp(ts: string | Date): string {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
-function formatJSON(data: unknown): string {
-  try {
-    return JSON.stringify(data, null, 2)
-  } catch {
-    return 'Unable to format data'
-  }
-}
 
 export default function LLMInspectorEntry({ log, isHighlighted }: Readonly<LLMInspectorEntryProps>) {
   const [expanded, setExpanded] = useState(false)
@@ -218,37 +211,21 @@ function RequestTab({ log }: { log: LLMLog }) {
       </div>
 
       <div className="space-y-1.5">
-        <h4 className="font-medium qt-text">Message Summary</h4>
+        <h4 className="font-medium qt-text">Messages</h4>
         {log.request.messages.map((msg, idx) => (
-          <div key={idx} className="qt-surface-alt p-2 rounded">
-            <div className="flex justify-between mb-1">
-              <span className="qt-text-secondary font-mono">{msg.role}</span>
-              <span className="qt-text-secondary">
-                {msg.contentLength} chars
-                {msg.hasAttachments && ' (attachments)'}
-              </span>
-            </div>
-            <p className="qt-text whitespace-pre-wrap break-words">
-              {msg.contentPreview}
-              {msg.contentLength > 500 && '...'}
-            </p>
-          </div>
+          <MessageContentBlock key={idx} role={msg.role} contentLength={msg.contentLength} hasAttachments={msg.hasAttachments}>
+            {msg.content || msg.contentPreview || ''}
+          </MessageContentBlock>
         ))}
       </div>
-
-      {log.request.fullMessages && (
-        <div>
-          <h4 className="font-medium qt-text mb-1">Full Messages (Verbose)</h4>
-          <pre className="font-mono whitespace-pre-wrap overflow-auto max-h-60 p-2 qt-surface-alt rounded">
-            {formatJSON(log.request.fullMessages)}
-          </pre>
-        </div>
-      )}
     </div>
   )
 }
 
 function ResponseTab({ log }: { log: LLMLog }) {
+  // Backward compat: use content, fall back to fullContent, then contentPreview for old entries
+  const responseContent = log.response.content || log.response.fullContent || log.response.contentPreview || ''
+
   return (
     <div className="space-y-3">
       {log.response.error ? (
@@ -264,21 +241,68 @@ function ResponseTab({ log }: { log: LLMLog }) {
 
       <div>
         <h4 className="font-medium qt-text mb-1">
-          Content Preview ({log.response.contentLength} chars)
+          Response ({log.response.contentLength} chars)
         </h4>
-        <pre className="font-mono whitespace-pre-wrap overflow-auto max-h-48 p-2 qt-surface-alt rounded">
-          {log.response.contentPreview}
-          {log.response.contentLength > 500 && '\n\n[... truncated ...]'}
-        </pre>
+        <ExpandableContent content={responseContent} />
       </div>
+    </div>
+  )
+}
 
-      {log.response.fullContent && (
-        <div>
-          <h4 className="font-medium qt-text mb-1">Full Content (Verbose)</h4>
-          <pre className="font-mono whitespace-pre-wrap overflow-auto max-h-60 p-2 qt-surface-alt rounded">
-            {log.response.fullContent}
-          </pre>
-        </div>
+/** UI truncation threshold for display (full content is stored in DB) */
+const UI_TRUNCATE_LENGTH = 500
+
+function ExpandableContent({ content }: { content: string }) {
+  const [expanded, setExpanded] = useState(false)
+  const needsTruncation = content.length > UI_TRUNCATE_LENGTH
+
+  return (
+    <div>
+      <pre className="font-mono whitespace-pre-wrap overflow-auto max-h-60 p-2 qt-surface-alt rounded">
+        {expanded || !needsTruncation ? content : content.slice(0, UI_TRUNCATE_LENGTH) + '...'}
+      </pre>
+      {needsTruncation && (
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          className="text-xs text-primary hover:underline mt-1"
+        >
+          {expanded ? 'Show less' : `Show all ${content.length.toLocaleString()} chars`}
+        </button>
+      )}
+    </div>
+  )
+}
+
+function MessageContentBlock({ role, contentLength, hasAttachments, children }: {
+  role: string
+  contentLength: number
+  hasAttachments: boolean
+  children: string
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const needsTruncation = children.length > UI_TRUNCATE_LENGTH
+
+  return (
+    <div className="qt-surface-alt p-2 rounded">
+      <div className="flex justify-between mb-1">
+        <span className="qt-text-secondary font-mono">{role}</span>
+        <span className="qt-text-secondary">
+          {contentLength} chars
+          {hasAttachments && ' (attachments)'}
+        </span>
+      </div>
+      <p className="qt-text whitespace-pre-wrap break-words">
+        {expanded || !needsTruncation ? children : children.slice(0, UI_TRUNCATE_LENGTH) + '...'}
+      </p>
+      {needsTruncation && (
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          className="text-xs text-primary hover:underline mt-1"
+        >
+          {expanded ? 'Show less' : `Show all ${contentLength.toLocaleString()} chars`}
+        </button>
       )}
     </div>
   )
