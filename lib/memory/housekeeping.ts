@@ -12,6 +12,7 @@
 import { getRepositories } from '@/lib/repositories/factory'
 import { Memory } from '@/lib/schemas/types'
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
+import { calculateEffectiveWeight } from './memory-weighting'
 
 import { logger } from '@/lib/logger'
 
@@ -319,18 +320,10 @@ export async function runHousekeeping(
   // Third pass: enforce hard cap if still over limit
   const remainingAfterDeletion = memories.filter(m => !memoriesToDelete.includes(m.id))
   if (remainingAfterDeletion.length > opts.maxMemories) {
-    // Sort by score (importance * recency factor)
+    // Use unified effective weight for retention scoring
     const scoredMemories = remainingAfterDeletion.map(m => {
-      const ageMonths = (now.getTime() - new Date(m.createdAt).getTime()) / (1000 * 60 * 60 * 24 * 30)
-      const recencyFactor = Math.max(0.1, 1 - (ageMonths / 12)) // Decays over a year
-      const accessFactor = m.lastAccessedAt
-        ? Math.max(0.1, 1 - ((now.getTime() - new Date(m.lastAccessedAt).getTime()) / (1000 * 60 * 60 * 24 * 90))) // 3 months
-        : 0.5
-      // Use reinforcedImportance and add reinforcement factor
-      const effectiveImportance = m.reinforcedImportance ?? m.importance
-      const reinforcementFactor = Math.min(1.0, Math.log2(((m.reinforcementCount ?? 1)) + 1) * 0.15)
-      const score = effectiveImportance * 0.4 + recencyFactor * 0.2 + accessFactor * 0.2 + reinforcementFactor * 0.2
-      return { memory: m, score }
+      const { effectiveWeight } = calculateEffectiveWeight(m, undefined, now)
+      return { memory: m, score: effectiveWeight }
     })
 
     scoredMemories.sort((a, b) => b.score - a.score)

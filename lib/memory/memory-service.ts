@@ -17,6 +17,7 @@ import {
   linkRelatedMemories,
   calculateReinforcedImportance,
 } from './memory-gate'
+import { calculateEffectiveWeight } from './memory-weighting'
 import type { MemoryGateOutcome } from './memory-gate'
 export type { MemoryGateOutcome } from './memory-gate'
 
@@ -72,6 +73,8 @@ export interface SemanticSearchResult {
   score: number
   /** Whether embedding was used for search */
   usedEmbedding: boolean
+  /** Effective weight combining importance with time decay (0-1) */
+  effectiveWeight?: number
 }
 
 /**
@@ -412,12 +415,18 @@ export async function searchMemoriesSemantic(
 
       let results: SemanticSearchResult[] = vectorResults
         .filter(vr => vr.score >= minScore)
-        .map(vr => ({
-          memory: memoryMap.get(vr.id)!,
-          score: vr.score,
-          usedEmbedding: true,
-        }))
-        .filter(r => r.memory) // Filter out any missing memories
+        .map(vr => {
+          const memory = memoryMap.get(vr.id)
+          if (!memory) return null
+          const { effectiveWeight } = calculateEffectiveWeight(memory)
+          return {
+            memory,
+            score: vr.score,
+            usedEmbedding: true,
+            effectiveWeight,
+          } as SemanticSearchResult
+        })
+        .filter((r): r is SemanticSearchResult => r !== null)
 
       // Apply additional filters
       if (options.minImportance !== undefined) {
@@ -426,6 +435,14 @@ export async function searchMemoriesSemantic(
       if (options.source) {
         results = results.filter(r => r.memory.source === options.source)
       }
+
+      // Combine cosine similarity with effective weight for final ranking
+      // Similarity still dominates (60%), but weight influences ordering (40%)
+      results.sort((a, b) => {
+        const finalScoreA = a.score * 0.6 + (a.effectiveWeight ?? 0) * 0.4
+        const finalScoreB = b.score * 0.6 + (b.effectiveWeight ?? 0) * 0.4
+        return finalScoreB - finalScoreA
+      })
 
       return results.slice(0, limit)
     }
@@ -484,17 +501,24 @@ async function searchMemoriesText(
     )
     score += 0.2 * (matchingKeywords.length / Math.max(memory.keywords.length, 1))
 
+    const { effectiveWeight } = calculateEffectiveWeight(memory)
+
     return {
       memory,
       score: Math.min(score, 1.0),
       usedEmbedding: false,
+      effectiveWeight,
     }
   })
 
-  // Sort by score and limit
-  return results
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit)
+  // Combine text score with effective weight for final ranking
+  results.sort((a, b) => {
+    const finalScoreA = a.score * 0.6 + (a.effectiveWeight ?? 0) * 0.4
+    const finalScoreB = b.score * 0.6 + (b.effectiveWeight ?? 0) * 0.4
+    return finalScoreB - finalScoreA
+  })
+
+  return results.slice(0, limit)
 }
 
 /**
