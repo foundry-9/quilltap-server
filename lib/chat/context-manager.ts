@@ -436,6 +436,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
             systemPromptTargetTokens: contextCompressionSettings.systemPromptTargetTokens,
             selection: cheapLLMSelection,
             userId,
+            chatId: chat.id,
             characterName: character.name,
             userName,
           }

@@ -249,7 +249,8 @@ export async function processMessageForMemory(
         ctx.personaName,
         selection,
         ctx.userId,
-        uncensoredFallback
+        uncensoredFallback,
+        ctx.chatId
       ),
       extractCharacterMemoryFromMessage(
         ctx.userMessage,
@@ -259,7 +260,8 @@ export async function processMessageForMemory(
         ctx.personaName,
         selection,
         ctx.userId,
-        uncensoredFallback
+        uncensoredFallback,
+        ctx.chatId
       ),
     ])
 
@@ -625,7 +627,8 @@ export async function processInterCharacterMemory(
       ctx.subjectMessage,
       selection,
       ctx.userId,
-      uncensoredFallback
+      uncensoredFallback,
+      ctx.chatId
     )
 
     let memoryCreated = false

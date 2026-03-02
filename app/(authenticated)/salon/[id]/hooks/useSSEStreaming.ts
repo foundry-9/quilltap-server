@@ -482,12 +482,14 @@ export function useSSEStreaming({
           : errorMessage
         showErrorToast(displayMessage || 'Failed to send message')
 
-        setMessages((prev) => prev.filter((m) => m.id !== tempUserMessageId))
+        // Don't remove the user message — the backend already saved it.
+        // Re-fetch the chat to replace the temp message with the real one.
         setStreamingContent('')
         setStreaming(false)
         setWaitingForResponse(false)
         setRespondingParticipantId(null)
         setResponseStatus(null)
+        await fetchChat()
       }
     } finally {
       setSending(false)

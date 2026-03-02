@@ -232,7 +232,8 @@ export async function generateContextSummary(
         chat.contextSummary,
         recentMessages,
         cheapLLM,
-        userId
+        userId,
+        chatId
       )
 
       if (updateResult.success && updateResult.result) {
@@ -244,7 +245,7 @@ export async function generateContextSummary(
         }
       } else {
         // Fall back to full regeneration
-        const fullResult = await summarizeChat(conversationMessages, cheapLLM, userId)
+        const fullResult = await summarizeChat(conversationMessages, cheapLLM, userId, chatId)
 
         if (fullResult.success && fullResult.result) {
           result = {
@@ -263,7 +264,7 @@ export async function generateContextSummary(
       }
     } else {
       // Generate new summary from scratch
-      const summaryResult = await summarizeChat(conversationMessages, cheapLLM, userId)
+      const summaryResult = await summarizeChat(conversationMessages, cheapLLM, userId, chatId)
 
       if (summaryResult.success && summaryResult.result) {
         result = {
@@ -321,7 +322,7 @@ export async function generateContextSummary(
 
       // Generate a title from the summary using the cheap LLM
       try {
-        const titleResult = await generateTitleFromSummary(result.summary, cheapLLM, userId)
+        const titleResult = await generateTitleFromSummary(result.summary, cheapLLM, userId, chatId)
         if (titleResult.success && titleResult.result) {
           await repos.chats.update(chatId, {
             title: titleResult.result,
@@ -478,7 +479,8 @@ async function considerTitleUpdateAsync(
       recentMessages,
       context,
       cheapLLM,
-      userId
+      userId,
+      chatId
     )
     
     if (considerationResult.success && considerationResult.result) {

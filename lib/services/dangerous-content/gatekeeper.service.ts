@@ -297,6 +297,28 @@ async function classifyWithModerationProvider(
   // Map to our classification result format
   const result = mapModerationResult(moderationResult, settings.threshold)
 
+  // Log the moderation call for Inspector visibility (fire and forget)
+  logLLMCall({
+    userId,
+    type: 'DANGER_CLASSIFICATION',
+    chatId,
+    provider: provider.metadata.providerName,
+    modelName: 'moderation',
+    request: {
+      messages: [{ role: 'user', content }],
+    },
+    response: {
+      content: JSON.stringify({
+        flagged: moderationResult.flagged,
+        categories: moderationResult.categories,
+      }),
+    },
+  }).catch(err => {
+    logger.warn('[Gatekeeper] Failed to log moderation provider call', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  })
+
   logger.info('[Gatekeeper] Content classified via moderation provider', {
     chatId,
     provider: provider.metadata.providerName,

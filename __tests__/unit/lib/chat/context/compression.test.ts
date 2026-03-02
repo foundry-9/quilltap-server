@@ -336,6 +336,7 @@ describe('Context Compression', () => {
         3000,
         options.selection,
         'test-user-id',
+        undefined,
         undefined
       )
 
@@ -344,6 +345,7 @@ describe('Context Compression', () => {
         1500,
         options.selection,
         'test-user-id',
+        undefined,
         undefined
       )
     })

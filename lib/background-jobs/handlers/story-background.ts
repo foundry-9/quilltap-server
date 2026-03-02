@@ -177,7 +177,8 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
             characterNames: validCharacters.map(c => c!.name),
           },
           cheapLLMSelection,
-          job.userId
+          job.userId,
+          payload.chatId
         )
       : Promise.resolve(null),
     // Appearance resolution
@@ -318,7 +319,8 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       provider: imageProfile.provider,
     },
     cheapLLMSelection,
-    job.userId
+    job.userId,
+    payload.chatId
   );
 
   let finalPrompt: string | undefined = craftResult.result;
@@ -354,7 +356,8 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
           provider: imageProfile.provider,
         },
         uncensoredLLMSelection,
-        job.userId
+        job.userId,
+        payload.chatId
       );
 
       if (retryResult.success && retryResult.result) {

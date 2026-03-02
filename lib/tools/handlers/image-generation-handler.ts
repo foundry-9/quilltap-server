@@ -436,7 +436,8 @@ async function expandPromptWithDescriptions(
         styleName: styleOptions?.styleName,
       },
       cheapLLMSelection,
-      userId
+      userId,
+      chatId
     );
 
     if (craftResult.success && craftResult.result) {
