@@ -131,12 +131,10 @@ function performSafeMode(): void {
 
   // 2. Remove macOS saved application state
   if (process.platform === 'darwin') {
-    /* eslint-disable quilltap/no-quilltap-misspelling -- actual macOS bundle ID */
     const savedStatePath = path.join(
       os.homedir(), 'Library', 'Saved Application State',
       'com.foundry9.quilltap.savedState'
     );
-    /* eslint-enable quilltap/no-quilltap-misspelling */
     try {
       fs.rmSync(savedStatePath, { recursive: true, force: true });
       console.log('[CrashGuard] Removed macOS saved application state');

@@ -45,12 +45,10 @@ runCrashGuard();
 if (process.platform === 'darwin') {
   app.commandLine.appendSwitch('disable-session-crashed-bubble');
   try {
-    /* eslint-disable quilltap/no-quilltap-misspelling -- actual macOS bundle ID */
     fs.rmSync(
       path.join(os.homedir(), 'Library', 'Saved Application State', 'com.foundry9.quilltap.savedState'),
       { recursive: true, force: true }
     );
-    /* eslint-enable quilltap/no-quilltap-misspelling */
   } catch {
     // Non-fatal — directory may not exist
   }
