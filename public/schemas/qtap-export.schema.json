@@ -405,6 +405,8 @@
         "allowWebSearch": { "type": "boolean" },
         "useNativeWebSearch": { "type": "boolean" },
         "isDangerousCompatible": { "type": "boolean" },
+        "allowToolUse": { "type": "boolean" },
+        "sortIndex": { "type": "integer", "minimum": 0 },
         "tags": { "type": "array", "items": { "$ref": "#/$defs/UUID" } },
         "totalTokens": { "type": "integer", "minimum": 0 },
         "totalPromptTokens": { "type": "integer", "minimum": 0 },

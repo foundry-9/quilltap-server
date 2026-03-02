@@ -607,6 +607,28 @@ Send a test message using a profile.
 }
 ```
 
+#### `POST /api/v1/connection-profiles?action=reorder`
+
+Bulk-update profile sort indices for custom ordering.
+
+**Request Body**:
+
+```json
+{
+  "order": [
+    { "id": "profile-uuid-1", "sortIndex": 0 },
+    { "id": "profile-uuid-2", "sortIndex": 1 },
+    { "id": "profile-uuid-3", "sortIndex": 2 }
+  ]
+}
+```
+
+#### `POST /api/v1/connection-profiles?action=reset-sort`
+
+Reset all profile sort indices to the default algorithm: default profile first, then non-cheap profiles alphabetically, then cheap profiles alphabetically.
+
+**Request Body**: `{}`
+
 ---
 
 ### Embedding Profiles

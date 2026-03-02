@@ -63,6 +63,9 @@ export const ConnectionProfileSchema = z.object({
   isDangerousCompatible: z.boolean().default(false),
   tags: z.array(UUIDSchema).default([]),
 
+  /** Custom sort order for display (lower numbers appear first) */
+  sortIndex: z.number().default(0),
+
   // Token usage tracking (persisted, incremented after each message)
   /** Total tokens used through this profile */
   totalTokens: z.number().default(0),

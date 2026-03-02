@@ -47,6 +47,7 @@ export interface ConnectionProfile {
   allowWebSearch?: boolean
   useNativeWebSearch?: boolean
   allowToolUse?: boolean
+  sortIndex?: number
   apiKey?: ApiKey | null
   tags?: Tag[]
   messageCount?: number

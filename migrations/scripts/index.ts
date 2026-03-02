@@ -99,6 +99,8 @@ import { restructureFileStorageMigration } from './restructure-file-storage';
 import { restructureFileStorageCleanupMigration } from './restructure-file-storage-cleanup';
 // Fix TEXT embeddings written back by update path (should be Float32 BLOBs)
 import { fixTextEmbeddingsAfterUpdateMigration } from './fix-text-embeddings-after-update';
+// Add sortIndex field to connection profiles for custom ordering
+import { addConnectionProfileSortIndexMigration } from './add-connection-profile-sort-index';
 
 /**
  * All available migrations.
@@ -193,6 +195,8 @@ export const migrations: Migration[] = [
   restructureFileStorageCleanupMigration,
   // Fix TEXT embeddings written back by update path (should be Float32 BLOBs)
   fixTextEmbeddingsAfterUpdateMigration,
+  // Add sortIndex field to connection profiles for custom ordering
+  addConnectionProfileSortIndexMigration,
 ];
 
 export {
@@ -282,4 +286,6 @@ export {
   restructureFileStorageCleanupMigration,
   // Fix TEXT embeddings written back by update path
   fixTextEmbeddingsAfterUpdateMigration,
+  // Add sortIndex field to connection profiles for custom ordering
+  addConnectionProfileSortIndexMigration,
 };
