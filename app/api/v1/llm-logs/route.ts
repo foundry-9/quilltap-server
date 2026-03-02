@@ -10,7 +10,8 @@
  *   - characterId: Filter by character ID
  *   - type: Filter by log type
  *   - standalone: Set to 'true' for logs without entity associations
- *   - limit: Max results (default 50, max 100)
+ *   - includeMessages: Set to 'true' with chatId to include logs linked via message IDs
+ *   - limit: Max results (default 50, max 100; default 500, max 500 when includeMessages=true)
  *   - offset: Pagination offset
  */
 
@@ -28,8 +29,13 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
     const characterId = url.searchParams.get('characterId');
     const type = url.searchParams.get('type') as LLMLogType | null;
     const standalone = url.searchParams.get('standalone') === 'true';
-    const limit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10), 100);
-    const offset = parseInt(url.searchParams.get('offset') || '0', 10);let logs;
+    const includeMessagesParam = url.searchParams.get('includeMessages') === 'true';
+    const limit = Math.min(
+      parseInt(url.searchParams.get('limit') || (includeMessagesParam ? '500' : '50'), 10),
+      includeMessagesParam ? 500 : 100
+    );
+    const offset = parseInt(url.searchParams.get('offset') || '0', 10);
+    let logs;
 
     // Filter by specific entity
     if (messageId) {
@@ -40,7 +46,20 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
       if (!chat || chat.userId !== user.id) {
         return notFound('Chat');
       }
-      logs = await repos.llmLogs.findByChatId(chatId);
+
+      if (includeMessagesParam) {
+        // Fetch all message IDs for this chat to find associated logs
+        const chatMessages = await repos.chats.getMessages(chatId);
+        const messageIds = chatMessages.map((m: { id: string }) => m.id);
+        logs = await repos.llmLogs.findAllForChat(chatId, messageIds);
+        logger.debug('[LLM Logs API] Fetched combined chat logs', {
+          chatId,
+          messageCount: messageIds.length,
+          logCount: logs.length,
+        });
+      } else {
+        logs = await repos.llmLogs.findByChatId(chatId);
+      }
     } else if (characterId) {
       // Verify character ownership first
       const character = await repos.characters.findById(characterId);

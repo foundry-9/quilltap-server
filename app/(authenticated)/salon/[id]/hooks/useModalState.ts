@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import type { LLMLog } from '@/lib/schemas/types'
 
 export interface ReattributeDialogState {
   isOpen: boolean
@@ -80,10 +79,6 @@ export function useModalState() {
   const [sudoApprovalState, setSudoApprovalState] = useState<SudoApprovalState | null>(null)
   const [workspaceAcknowledgementState, setWorkspaceAcknowledgementState] = useState<WorkspaceAcknowledgementState | null>(null)
 
-  // LLM log viewer state
-  const [llmLogViewerOpen, setLLMLogViewerOpen] = useState(false)
-  const [llmLogsForViewer, setLLMLogsForViewer] = useState<LLMLog[]>([])
-  const [selectedMessageIdForLogs, setSelectedMessageIdForLogs] = useState<string | null>(null)
 
   // Convenience open/close helpers
   const openGallery = useCallback(() => setGalleryOpen(true), [])
@@ -108,12 +103,6 @@ export function useModalState() {
   const closeRunTool = useCallback(() => setRunToolModalOpen(false), [])
   const openStateEditor = useCallback(() => setStateEditorModalOpen(true), [])
   const closeStateEditor = useCallback(() => setStateEditorModalOpen(false), [])
-
-  const closeLLMLogViewer = useCallback(() => {
-    setLLMLogViewerOpen(false)
-    setLLMLogsForViewer([])
-    setSelectedMessageIdForLogs(null)
-  }, [])
 
   return {
     // Simple boolean modals
@@ -141,11 +130,6 @@ export function useModalState() {
     sudoApprovalState, setSudoApprovalState,
     workspaceAcknowledgementState, setWorkspaceAcknowledgementState,
 
-    // LLM log viewer state
-    llmLogViewerOpen,
-    llmLogsForViewer, setLLMLogsForViewer,
-    selectedMessageIdForLogs, setSelectedMessageIdForLogs,
-
     // Convenience helpers
     openGallery, closeGallery,
     openChatSettings, closeChatSettings,
@@ -158,7 +142,5 @@ export function useModalState() {
     openToolSettings, closeToolSettings,
     openRunTool, closeRunTool,
     openStateEditor, closeStateEditor,
-    closeLLMLogViewer,
-    setLLMLogViewerOpen,
   }
 }

@@ -15,14 +15,12 @@ import RunToolModal from '@/components/chat/RunToolModal'
 import { SearchReplaceModal } from '@/components/tools/search-replace'
 import type { SearchReplaceResult } from '@/components/tools/search-replace/types'
 import AllLLMPauseModal from '@/components/chat/AllLLMPauseModal'
-import LLMLogViewerModal from '@/components/chat/LLMLogViewerModal'
 import FileWriteApprovalModal from '@/components/chat/FileWriteApprovalModal'
 import FileConflictDialog from '@/components/chat/FileConflictDialog'
 import SelectLLMProfileDialog from '@/components/chat/SelectLLMProfileDialog'
 import { MemoryCascadeDialog } from '@/components/ui/MemoryCascadeDialog'
 import { showInfoToast } from '@/lib/toast'
 import { getNextPauseThreshold } from '@/lib/chat/turn-manager'
-import type { LLMLog } from '@/lib/schemas/types'
 import type { Chat, Message } from '../types'
 import SudoApprovalModal from '@/components/chat/SudoApprovalModal'
 import WorkspaceAcknowledgementModal from '@/components/chat/WorkspaceAcknowledgementModal'
@@ -64,10 +62,6 @@ interface ChatModalsProps {
   closeStateEditor: () => void
   allLLMPauseModalOpen: boolean
   setAllLLMPauseModalOpen: (open: boolean) => void
-  llmLogViewerOpen: boolean
-  closeLLMLogViewer: () => void
-  llmLogsForViewer: LLMLog[]
-  selectedMessageIdForLogs: string | null
   // Complex modal states
   reattributeDialogState: ReattributeDialogState | null
   setReattributeDialogState: (state: ReattributeDialogState | null) => void
@@ -129,8 +123,6 @@ export function ChatModals({
   runToolModalOpen, closeRunTool,
   stateEditorModalOpen, closeStateEditor,
   allLLMPauseModalOpen, setAllLLMPauseModalOpen,
-  llmLogViewerOpen, closeLLMLogViewer,
-  llmLogsForViewer, selectedMessageIdForLogs,
   // Complex
   reattributeDialogState, setReattributeDialogState,
   fileWriteApprovalState, setFileWriteApprovalState,
@@ -483,12 +475,6 @@ export function ChatModals({
         />
       )}
 
-      <LLMLogViewerModal
-        isOpen={llmLogViewerOpen}
-        onClose={closeLLMLogViewer}
-        logs={llmLogsForViewer}
-        messageId={selectedMessageIdForLogs ?? undefined}
-      />
     </>
   )
 }

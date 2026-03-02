@@ -163,6 +163,44 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
   }
 
   /**
+   * Find all logs associated with a chat - both direct chatId matches and
+   * logs linked via messageIds belonging to the chat.
+   * Used by the LLM Inspector panel to show all activity for a chat.
+   * @param chatId The chat ID
+   * @param messageIds Array of message IDs belonging to the chat
+   * @param limit Maximum results (default 500)
+   * @returns Promise<LLMLog[]> Combined logs sorted by createdAt DESC
+   */
+  async findAllForChat(chatId: string, messageIds: string[], limit: number = 500): Promise<LLMLog[]> {
+    return this.safeQuery(
+      async () => {
+        const filter: TypedQueryFilter<LLMLog> = {
+          $or: [
+            { chatId },
+            ...(messageIds.length > 0 ? [{ messageId: { $in: messageIds } }] : []),
+          ],
+        };
+
+        const options: QueryOptions = {
+          sort: { createdAt: -1 },
+          limit,
+        };
+
+        const logs = await this.findByFilter(filter, options);
+        logger.debug('Found all logs for chat', {
+          chatId,
+          messageIdCount: messageIds.length,
+          logCount: logs.length,
+        });
+        return logs;
+      },
+      'Error finding all LLM logs for chat',
+      { chatId, messageIdCount: messageIds.length },
+      []
+    );
+  }
+
+  /**
    * Find logs by character ID (for character wizard operations)
    * @param characterId The character ID
    * @returns Promise<LLMLog[]> Array of logs associated with the character

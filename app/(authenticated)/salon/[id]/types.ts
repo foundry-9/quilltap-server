@@ -187,6 +187,7 @@ export interface ChatSettings {
   tagStyles?: Record<string, TagVisualStyle>
   memoryCascadePreferences?: MemoryCascadePreferences
   tokenDisplaySettings?: TokenDisplaySettings
+  llmLoggingSettings?: { enabled?: boolean; verboseMode?: boolean; retentionDays?: number }
   storyBackgroundsSettings?: StoryBackgroundsSettings
   dangerousContentSettings?: DangerousContentSettings
   createdAt: string
