@@ -4,6 +4,7 @@
 
 ### 3.2-dev
 
+- fix: Multi-character assistant prefill trailing whitespace — the `[CharacterName] ` identity anchor appended a trailing space, which Anthropic's API rejects with `final assistant content cannot end with trailing whitespace`; removed the trailing space
 - docs: Add feature plan for OpenAI Responses API migration (`features/openai-responses-api.md`) — documents phased approach to migrate `qtap-plugin-openai` from Chat Completions to Responses API, covering core migration, conversation chaining via `previous_response_id`, and enhanced server-side tools; references existing Grok plugin as implementation template
 - fix: Multi-character identity confusion — in multi-character chats, weaker LLMs could respond as the wrong character despite correct system prompts; now appends an assistant prefill message (`[CharacterName] `) to anchor the model's response identity, leveraging the existing `stripCharacterNamePrefix()` cleanup
 - fix: LLM Inspector logs no longer truncate message content to 500 chars — replaced the dual `contentPreview`/`fullMessages` structure with full content storage directly in the `messages` array; the UI still shows first 500 chars with an expandable "Show all" button; backward-compatible with existing log entries via fallback field reads

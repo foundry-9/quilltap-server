@@ -394,7 +394,7 @@ export async function buildMessageContext(
   if (isMultiCharacter) {
     formattedMessages.push({
       role: 'assistant',
-      content: `[${character.name}] `,
+      content: `[${character.name}]`,
       thoughtSignature: undefined,
       name: undefined,
     })
