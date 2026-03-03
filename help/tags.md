@@ -1,3 +1,7 @@
+---
+url: /aurora
+---
+
 # Tags
 
 > **[Open this page in Quilltap](/aurora)**

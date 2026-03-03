@@ -1,3 +1,7 @@
+---
+url: /settings?tab=system
+---
+
 # Database Protection
 
 Quilltap automatically protects your databases against corruption and data loss. These protections run silently in the background — no configuration is needed.

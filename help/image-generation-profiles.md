@@ -1,3 +1,7 @@
+---
+url: /settings?tab=images
+---
+
 # Image Generation Profiles
 
 > **[Open this page in Quilltap](/settings?tab=images)**

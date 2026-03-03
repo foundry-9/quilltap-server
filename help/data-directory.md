@@ -1,3 +1,7 @@
+---
+url: /settings?tab=system
+---
+
 # Data Directory
 
 > **[Open this page in Quilltap](/profile)**

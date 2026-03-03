@@ -1,3 +1,7 @@
+---
+url: /aurora
+---
+
 # AI Character Import
 
 > **[Open this page in Quilltap](/aurora)**

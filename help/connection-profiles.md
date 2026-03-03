@@ -1,3 +1,7 @@
+---
+url: /settings?tab=providers
+---
+
 # Connection Profiles
 
 > **[Open this page in Quilltap](/settings?tab=providers)**

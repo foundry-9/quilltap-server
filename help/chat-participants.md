@@ -1,3 +1,7 @@
+---
+url: /salon/:id
+---
+
 # Participants Sidebar
 
 > **[Open this page in Quilltap](/salon)**

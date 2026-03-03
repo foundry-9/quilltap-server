@@ -1,3 +1,7 @@
+---
+url: /settings?tab=system
+---
+
 # Backup & Restore
 
 > **[Open this page in Quilltap](/settings?tab=system)**

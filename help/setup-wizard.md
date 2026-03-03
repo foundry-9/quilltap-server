@@ -1,3 +1,7 @@
+---
+url: /settings/wizard
+---
+
 # AI Stack Setup Wizard
 
 > **[Open the Setup Wizard](/settings/wizard)**

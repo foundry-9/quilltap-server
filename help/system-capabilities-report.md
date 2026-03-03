@@ -1,3 +1,7 @@
+---
+url: /settings?tab=providers
+---
+
 # Capabilities Report
 
 > **[Open this page in Quilltap](/settings?tab=system)**

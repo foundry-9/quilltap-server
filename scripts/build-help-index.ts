@@ -24,7 +24,7 @@ import type { HelpBundle, HelpDocument } from '../lib/help-search.types'
 const EMBEDDING_MODEL = 'text-embedding-3-small'
 const HELP_DIR = join(process.cwd(), 'help')
 const OUTPUT_FILE = join(process.cwd(), 'public', 'help-bundle.msgpack.gz')
-const BUNDLE_VERSION = '2.0.0'
+const BUNDLE_VERSION = '3.0.0'
 
 /**
  * Find all Markdown files in a directory recursively
@@ -50,6 +50,32 @@ function findMarkdownFiles(dir: string): string[] {
   }
 
   return files
+}
+
+/**
+ * Parse YAML frontmatter from Markdown content
+ *
+ * Extracts the `url` field and returns the content without the frontmatter block.
+ * Uses simple regex parsing — no external dependencies needed.
+ */
+function parseFrontmatter(content: string, filePath: string): { url: string; content: string } {
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/)
+  if (!match) {
+    console.warn(`  Warning: ${filePath} has no YAML frontmatter`)
+    return { url: '', content }
+  }
+
+  const frontmatter = match[1]
+  const urlMatch = frontmatter.match(/^url:\s*(.+)$/m)
+  const url = urlMatch ? urlMatch[1].trim() : ''
+
+  if (!url) {
+    console.warn(`  Warning: ${filePath} frontmatter is missing 'url' field`)
+  }
+
+  // Strip frontmatter from content
+  const strippedContent = content.slice(match[0].length)
+  return { url, content: strippedContent }
 }
 
 /**
@@ -174,14 +200,17 @@ async function main() {
 
   for (const filePath of files) {
     const relPath = relative(process.cwd(), filePath)
-    const content = readFileSync(filePath, 'utf-8').trim()
+    const rawContent = readFileSync(filePath, 'utf-8').trim()
 
     // Skip empty files
-    if (!content) {
+    if (!rawContent) {
       console.log(`  ${relPath}: (empty, skipping)`)
       skipped.push(relPath)
       continue
     }
+
+    // Parse frontmatter and strip it from content
+    const { url, content } = parseFrontmatter(rawContent, relPath)
 
     const title = extractTitle(content, relPath)
     const id = generateDocumentId(relPath)
@@ -190,10 +219,11 @@ async function main() {
       id,
       title,
       path: relPath,
+      url,
       content,
     })
 
-    console.log(`  ${relPath}: "${title}"`)
+    console.log(`  ${relPath}: "${title}" (url: ${url || '(none)'})`)
   }
 
   console.log(`\nTotal: ${documents.length} document(s) to embed`)

@@ -1,3 +1,7 @@
+---
+url: /settings?tab=images
+---
+
 # Story Backgrounds
 
 Story Backgrounds is a feature that automatically generates atmospheric background images for your chats, creating an immersive visual context for your conversations and roleplay sessions.

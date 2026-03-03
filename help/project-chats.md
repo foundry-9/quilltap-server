@@ -1,3 +1,7 @@
+---
+url: /prospero/:id
+---
+
 # Project Chats
 
 > **[Open this page in Quilltap](/prospero)**

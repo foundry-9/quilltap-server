@@ -1,3 +1,7 @@
+---
+url: /salon/:id
+---
+
 # Shell Tools
 
 ## The Workshop at the Heart of the Machine

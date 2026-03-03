@@ -25,6 +25,9 @@
 - fix: Remove legacy JSONL file records and storage from source tree — `public/data/files/files.jsonl` and `public/data/files/storage/` contained old development artifacts (14 file records, 1 physical image) that the `migrate-legacy-jsonl-files-v1` migration was importing into every fresh database, polluting new installs with orphaned records
 - feat: Add Lorian & Riya as seed characters with 42 memories via `.qtap` import — new `first-startup/imports/` directory holds `.qtap` bundles that are imported with `skip` conflict strategy on first startup, reusing the existing import service
 - fix: Seed data files now resolve via `process.cwd()` instead of `__dirname` — Next.js rewrites `__dirname` to `.next/dev/server/` so the JSON character files and `.qtap` imports were never found; also added `first-startup/` to `outputFileTracingIncludes` for standalone builds
+- feat: Add YAML frontmatter with `url` routing to all 69 help files — each help document now maps to a UI route (e.g., `/aurora/:id/edit`, `/settings?tab=providers`, `*` for global) enabling future contextual help; updated `HelpDocument` and `HelpSearchResult` types, build script parses and strips frontmatter, help search passes `url` through to results, bumped help bundle version to 3.0.0
+- chore: Streamline pre-commit hook — removed lint, test, tsc, build, and version management steps (now handled by `/commit` command); extracted version update logic to standalone `scripts/update_version.sh`; renumbered from 12 steps to 4; removed unused `run_silent()` function
+- chore: Move documentation inventory from CLAUDE.md to `/update-documentation` command
 - chore: Started dev version 3.2.0
 
 ### 3.1.2

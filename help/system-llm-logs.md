@@ -1,3 +1,7 @@
+---
+url: /settings?tab=system
+---
+
 # LLM Logs
 
 > **[Open this page in Quilltap](/settings?tab=system)**

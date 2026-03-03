@@ -1,3 +1,7 @@
+---
+url: /settings?tab=system
+---
+
 # Managing Tasks
 
 > **[Open this page in Quilltap](/settings?tab=system)**

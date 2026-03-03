@@ -1,3 +1,7 @@
+---
+url: /setup
+---
+
 # Getting Started with Quilltap
 
 > **[Open this page in Quilltap](/)**

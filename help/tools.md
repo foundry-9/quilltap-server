@@ -1,3 +1,7 @@
+---
+url: /settings?tab=providers
+---
+
 # Tools
 
 > **[Open this page in Quilltap](/settings?tab=providers)**
