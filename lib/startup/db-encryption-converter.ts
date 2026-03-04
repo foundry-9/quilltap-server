@@ -1,16 +1,14 @@
 /**
  * Database Encryption Converter
  *
- * Converts an existing plaintext SQLite database to SQLCipher-encrypted format
- * using the ATTACH + sqlcipher_export workflow:
+ * Converts an existing plaintext SQLite database to encrypted format using
+ * PRAGMA rekey, which encrypts the database in-place:
  *
- * 1. Checkpoint WAL to merge all pending writes
+ * 1. Copy the plaintext DB to a backup file
  * 2. Open the plaintext DB (no key)
- * 3. ATTACH a new encrypted DB with the SQLCipher key
- * 4. Use sqlcipher_export() to copy all data to the encrypted DB
- * 5. DETACH and close
- * 6. Rename: original → .pre-sqlcipher.bak, encrypted → original
- * 7. Verify by reopening with the key
+ * 3. Checkpoint WAL to merge all pending writes
+ * 4. Use PRAGMA rekey to encrypt in-place
+ * 5. Close and verify by reopening with key
  *
  * IMPORTANT: This module uses only Node built-ins and better-sqlite3.
  * It avoids importing from lib/logger.ts or lib/env.ts to prevent
@@ -26,60 +24,45 @@ import { logger as migrationLogger } from '../../migrations/lib/logger';
 const log = migrationLogger.child({ context: 'db-encryption-converter' });
 
 /**
- * Convert a plaintext SQLite database to SQLCipher-encrypted format.
+ * Convert a plaintext SQLite database to encrypted format.
  *
  * The pepper is expected to be a base64-encoded 32-byte key. It is converted
- * to a hex string and used as a raw SQLCipher key (x'...' format), which
- * bypasses SQLCipher's own KDF for maximum performance.
+ * to a hex string and used as a raw key (x'...' format), which bypasses
+ * the cipher's own KDF for maximum performance.
  *
- * On success, the original plaintext DB is renamed to `<name>.pre-sqlcipher.bak`
- * and the encrypted copy takes its place. On failure, the original is left
- * untouched and the temporary file is cleaned up.
+ * On success, a backup of the original plaintext DB is kept at
+ * `<name>.pre-sqlcipher.bak`. On failure, the backup is restored.
  *
  * @param dbPath - Absolute path to the plaintext database file
  * @param pepper - Base64-encoded 32-byte encryption key
  * @throws {Error} If conversion fails at any step
  */
 export function convertDatabaseToEncrypted(dbPath: string, pepper: string): void {
-  const tmpPath = `${dbPath}.tmp`;
   const backupPath = `${dbPath}.pre-sqlcipher.bak`;
   const keyHex = Buffer.from(pepper, 'base64').toString('hex');
 
   log.info('Starting database encryption conversion', {
     dbPath,
-    tmpPath,
     backupPath,
   });
 
-  // Clean up any leftover tmp file from a previous failed attempt
-  if (fs.existsSync(tmpPath)) {
-    log.warn('Removing leftover temporary file from previous conversion attempt', { tmpPath });
-    fs.unlinkSync(tmpPath);
-  }
-
-  let plaintextDb: InstanceType<typeof Database> | null = null;
+  let db: InstanceType<typeof Database> | null = null;
 
   try {
-    // Step 1: Open the plaintext DB and checkpoint WAL
-    log.debug('Opening plaintext database and checkpointing WAL');
-    plaintextDb = new Database(dbPath);
-    plaintextDb.pragma('wal_checkpoint(TRUNCATE)');
+    // Step 1: Copy plaintext DB to backup before modifying
+    log.debug('Creating backup of plaintext database');
+    fs.copyFileSync(dbPath, backupPath);
 
-    // Step 2: ATTACH the new encrypted DB with key
-    log.debug('Attaching encrypted temporary database');
-    plaintextDb.exec(`ATTACH DATABASE '${tmpPath.replace(/'/g, "''")}' AS encrypted KEY "x'${keyHex}'""`);
+    // Step 2: Open the plaintext DB
+    log.debug('Opening plaintext database');
+    db = new Database(dbPath);
 
-    // Step 3: Export all data to the encrypted DB
-    log.debug('Exporting data to encrypted database via sqlcipher_export');
-    plaintextDb.exec(`SELECT sqlcipher_export('encrypted')`);
+    // Step 3: Checkpoint WAL and switch to DELETE journal mode (rekey requires it)
+    log.debug('Checkpointing WAL and switching to DELETE journal mode');
+    db.pragma('wal_checkpoint(TRUNCATE)');
+    db.pragma('journal_mode = DELETE');
 
-    // Step 4: Detach and close
-    log.debug('Detaching encrypted database');
-    plaintextDb.exec('DETACH DATABASE encrypted');
-    plaintextDb.close();
-    plaintextDb = null;
-
-    // Step 5: Remove WAL/SHM files for the plaintext DB (already checkpointed)
+    // Remove WAL/SHM files after switching away from WAL
     for (const suffix of ['-wal', '-shm']) {
       const walPath = dbPath + suffix;
       if (fs.existsSync(walPath)) {
@@ -88,12 +71,15 @@ export function convertDatabaseToEncrypted(dbPath: string, pepper: string): void
       }
     }
 
-    // Step 6: Rename files
-    log.debug('Renaming plaintext DB to backup and encrypted DB to primary');
-    fs.renameSync(dbPath, backupPath);
-    fs.renameSync(tmpPath, dbPath);
+    // Step 4: Encrypt the database in-place using PRAGMA rekey
+    log.debug('Encrypting database in-place via PRAGMA rekey');
+    db.pragma(`rekey = "x'${keyHex}'"`);
 
-    // Step 7: Verify by reopening with key
+    // Step 5: Close
+    db.close();
+    db = null;
+
+    // Step 6: Verify by reopening with key
     log.debug('Verifying encrypted database');
     const verifyDb = new Database(dbPath);
     verifyDb.pragma(`key = "x'${keyHex}'"`);
@@ -114,20 +100,15 @@ export function convertDatabaseToEncrypted(dbPath: string, pepper: string): void
     });
 
     // Clean up: close DB if still open
-    if (plaintextDb) {
-      try { plaintextDb.close(); } catch { /* ignore */ }
+    if (db) {
+      try { db.close(); } catch { /* ignore */ }
     }
 
-    // Clean up: remove tmp file if it exists
-    if (fs.existsSync(tmpPath)) {
-      try { fs.unlinkSync(tmpPath); } catch { /* ignore */ }
-    }
-
-    // Restore original if it was moved
-    if (!fs.existsSync(dbPath) && fs.existsSync(backupPath)) {
+    // Restore original from backup if it exists
+    if (fs.existsSync(backupPath)) {
       try {
         log.warn('Restoring original database from backup after failed conversion');
-        fs.renameSync(backupPath, dbPath);
+        fs.copyFileSync(backupPath, dbPath);
       } catch { /* ignore */ }
     }
 

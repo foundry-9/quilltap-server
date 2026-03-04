@@ -5,6 +5,7 @@
 ### 3.2-dev
 
 - feat: SQLCipher database encryption at rest — databases are now encrypted using SQLCipher; `.dbkey` file replaces in-DB pepper vault; field-level API key encryption removed (whole DB encrypted); locked mode for passphrase-protected keys; `quilltap db` CLI subcommand for querying encrypted databases
+- fix: Database encryption converter used unavailable `sqlcipher_export` function and failed in WAL journal mode — replaced with `PRAGMA rekey` (in-place encryption) after switching to DELETE journal mode
 - fix: Multi-character assistant prefill trailing whitespace — the `[CharacterName] ` identity anchor appended a trailing space, which Anthropic's API rejects with `final assistant content cannot end with trailing whitespace`; removed the trailing space
 - docs: Add feature plan for OpenAI Responses API migration (`features/openai-responses-api.md`) — documents phased approach to migrate `qtap-plugin-openai` from Chat Completions to Responses API, covering core migration, conversation chaining via `previous_response_id`, and enhanced server-side tools; references existing Grok plugin as implementation template
 - fix: Multi-character identity confusion — in multi-character chats, weaker LLMs could respond as the wrong character despite correct system prompts; now appends an assistant prefill message (`[CharacterName] `) to anchor the model's response identity, leveraging the existing `stripCharacterNamePrefix()` cleanup
