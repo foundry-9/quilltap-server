@@ -78,7 +78,10 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * Handle first-run setup: generate pepper, encrypt, write .dbkey
+ * Handle first-run setup: generate pepper, encrypt, write .dbkey.
+ *
+ * After setup, any existing plaintext databases are encrypted immediately
+ * so there is no window where data sits unencrypted on disk.
  */
 async function handleSetup(passphrase: string): Promise<NextResponse> {
   unlockLogger.info('Database key setup requested');
@@ -90,6 +93,44 @@ async function handleSetup(passphrase: string): Promise<NextResponse> {
   startupState.setPepperState('resolved');
 
   unlockLogger.info('Database key setup complete');
+
+  // Encrypt any existing plaintext databases now — on fresh installs the
+  // database is created during migrations (Phase 1) before the user runs
+  // setup, so it starts life as plaintext.  Without this, the DB would
+  // only get encrypted on the next restart (Phase -0.5b).
+  try {
+    const fs = await import('fs');
+    const { getSQLiteDatabasePath, getLLMLogsDatabasePath } = await import('@/lib/paths');
+    const { isDatabaseEncrypted } = await import('@/lib/startup/db-encryption-state');
+    const { convertDatabaseToEncrypted } = await import('@/lib/startup/db-encryption-converter');
+
+    const pepper = process.env.ENCRYPTION_MASTER_PEPPER;
+    if (pepper) {
+      // Close any open migration connections before conversion
+      try {
+        const { closeSQLite } = await import('../../../../../migrations/lib/database-utils');
+        closeSQLite();
+      } catch { /* ignore */ }
+
+      // Close the main app database singleton if open
+      try {
+        const { closeSQLiteClient } = await import('@/lib/database/backends/sqlite/client');
+        closeSQLiteClient();
+      } catch { /* ignore */ }
+
+      for (const dbPath of [getSQLiteDatabasePath(), getLLMLogsDatabasePath()]) {
+        if (fs.default.existsSync(dbPath) && !isDatabaseEncrypted(dbPath)) {
+          unlockLogger.info('Encrypting existing plaintext database after setup', { dbPath });
+          convertDatabaseToEncrypted(dbPath, pepper);
+        }
+      }
+    }
+  } catch (encErr) {
+    // Non-fatal — Phase -0.5b will retry on next restart
+    unlockLogger.warn('Post-setup database encryption failed (will retry on next restart)', {
+      error: encErr instanceof Error ? encErr.message : String(encErr),
+    });
+  }
 
   // Return the pepper once for the user to save
   return NextResponse.json({

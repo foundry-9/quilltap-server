@@ -4,6 +4,7 @@
 
 ### 3.2-dev
 
+- fix: Database encryption converter fails with "database is locked" on iCloud-synced directories — the converter now works on a temporary copy (`quilltap.db.encrypting`) instead of the original file, avoiding file coordination locks held by iCloud sync, Spotlight, or other macOS services; also encrypts databases immediately after first-run setup so there is no plaintext window between setup and next restart; closes existing DB connections before conversion during deferred startup
 - fix: Passphrase unlock fails when migrating from legacy pepper vault to `.dbkey` file — when a user had a passphrase set in the old `pepper_vault` but no `.dbkey` file existed yet, the unlock endpoint rejected the attempt because the dbkey module's internal state was `needs-setup` instead of `needs-passphrase`; the unlock handler now detects the legacy scenario and routes through `unlockPepper()`, then automatically migrates the pepper to a `.dbkey` file
 - feat: SQLCipher database encryption at rest — databases are now encrypted using SQLCipher; `.dbkey` file replaces in-DB pepper vault; field-level API key encryption removed (whole DB encrypted); locked mode for passphrase-protected keys; `quilltap db` CLI subcommand for querying encrypted databases
 - fix: Database encryption converter used unavailable `sqlcipher_export` function and failed in WAL journal mode — replaced with `PRAGMA rekey` (in-place encryption) after switching to DELETE journal mode; restores WAL mode after rekey

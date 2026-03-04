@@ -238,6 +238,14 @@ export async function register() {
       // ================================================================
       // Only runs if: pepper is resolved + DB file exists + DB is plaintext
       if (startupState.isPepperResolved() && process.env.ENCRYPTION_MASTER_PEPPER) {
+        // Close any existing database connections before encryption conversion.
+        // During deferred startup (after passphrase unlock), the pepper-vault
+        // provisioning or other code may have left connections open.
+        try {
+          const { closeSQLite } = await import('./migrations/lib/database-utils');
+          closeSQLite();
+        } catch { /* ignore — module may not be loaded yet */ }
+
         const { getSQLiteDatabasePath, getLLMLogsDatabasePath } = await import('./lib/paths');
         const { isDatabaseEncrypted } = await import('./lib/startup/db-encryption-state');
         const { convertDatabaseToEncrypted } = await import('./lib/startup/db-encryption-converter');
