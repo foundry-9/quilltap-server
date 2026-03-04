@@ -100,7 +100,12 @@ async function handleSetup(passphrase: string): Promise<NextResponse> {
 }
 
 /**
- * Handle unlock: decrypt .dbkey file with passphrase, then resume startup
+ * Handle unlock: decrypt .dbkey file with passphrase, then resume startup.
+ *
+ * Supports two scenarios:
+ * 1. Normal: .dbkey file exists with passphrase — use unlockDbKey()
+ * 2. Legacy migration: no .dbkey file but pepper_vault has passphrase — use
+ *    legacy unlockPepper(), then migrate to .dbkey format
  */
 async function handleUnlock(passphrase: string): Promise<NextResponse> {
   unlockLogger.info('Database key unlock requested');
@@ -109,10 +114,40 @@ async function handleUnlock(passphrase: string): Promise<NextResponse> {
     return badRequest('Passphrase is required to unlock');
   }
 
-  const { unlockDbKey } = await import('@/lib/startup/dbkey');
+  const { unlockDbKey, getDbKeyState, storeEnvPepperInDbKey } = await import('@/lib/startup/dbkey');
   const { startupState } = await import('@/lib/startup/startup-state');
 
-  const success = unlockDbKey(passphrase);
+  let success: boolean;
+  const dbKeyState = getDbKeyState();
+
+  // Legacy migration: startupState says needs-passphrase but dbkey module
+  // is in needs-setup (no .dbkey file). This means the pepper is in the old
+  // pepper_vault SQLite table and must be unlocked via the legacy system.
+  if (dbKeyState === 'needs-setup' && startupState.getPepperState?.() === 'needs-passphrase') {
+    unlockLogger.info('Legacy pepper vault detected — unlocking via pepper-vault migration path');
+
+    const { unlockPepper } = await import('@/lib/startup/pepper-vault');
+    success = unlockPepper(passphrase);
+
+    if (success) {
+      // Pepper is now in process.env — migrate to .dbkey file format
+      unlockLogger.info('Legacy pepper unlocked, migrating to .dbkey file');
+      try {
+        // Set dbkey state to allow storage, then write the .dbkey file
+        (global as any).__quilltapDbKeyState = 'needs-vault-storage';
+        storeEnvPepperInDbKey(passphrase);
+        unlockLogger.info('Legacy pepper migrated to .dbkey file successfully');
+      } catch (migrationError) {
+        // Migration to .dbkey failed, but pepper is unlocked — continue anyway
+        unlockLogger.warn('Failed to migrate legacy pepper to .dbkey file, continuing with unlocked pepper', {
+          error: migrationError instanceof Error ? migrationError.message : String(migrationError),
+        });
+        (global as any).__quilltapDbKeyState = 'resolved';
+      }
+    }
+  } else {
+    success = unlockDbKey(passphrase);
+  }
 
   if (!success) {
     unlockLogger.warn('Database key unlock failed: wrong passphrase');

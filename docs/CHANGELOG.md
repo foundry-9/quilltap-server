@@ -4,6 +4,7 @@
 
 ### 3.2-dev
 
+- fix: Passphrase unlock fails when migrating from legacy pepper vault to `.dbkey` file — when a user had a passphrase set in the old `pepper_vault` but no `.dbkey` file existed yet, the unlock endpoint rejected the attempt because the dbkey module's internal state was `needs-setup` instead of `needs-passphrase`; the unlock handler now detects the legacy scenario and routes through `unlockPepper()`, then automatically migrates the pepper to a `.dbkey` file
 - feat: SQLCipher database encryption at rest — databases are now encrypted using SQLCipher; `.dbkey` file replaces in-DB pepper vault; field-level API key encryption removed (whole DB encrypted); locked mode for passphrase-protected keys; `quilltap db` CLI subcommand for querying encrypted databases
 - fix: Database encryption converter used unavailable `sqlcipher_export` function and failed in WAL journal mode — replaced with `PRAGMA rekey` (in-place encryption) after switching to DELETE journal mode; restores WAL mode after rekey
 - fix: Multi-character assistant prefill trailing whitespace — the `[CharacterName] ` identity anchor appended a trailing space, which Anthropic's API rejects with `final assistant content cannot end with trailing whitespace`; removed the trailing space
