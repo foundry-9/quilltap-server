@@ -75,6 +75,10 @@ export function convertDatabaseToEncrypted(dbPath: string, pepper: string): void
     log.debug('Encrypting database in-place via PRAGMA rekey');
     db.pragma(`rekey = "x'${keyHex}'"`);
 
+    // Step 4b: Switch back to WAL journal mode
+    log.debug('Restoring WAL journal mode');
+    db.pragma('journal_mode = WAL');
+
     // Step 5: Close
     db.close();
     db = null;
