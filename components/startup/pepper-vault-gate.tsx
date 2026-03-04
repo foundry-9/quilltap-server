@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 
-type PepperState = 'resolved' | 'needs-setup' | 'needs-unlock' | 'needs-vault-storage';
+type DbKeyState = 'resolved' | 'needs-setup' | 'needs-passphrase' | 'needs-vault-storage';
 
 /** Track whether the gate check has succeeded (not just attempted) */
 let gateResolved = false;
@@ -34,9 +34,9 @@ export function PepperVaultGate() {
 
     let cancelled = false;
 
-    async function checkPepperState() {
+    async function checkDbKeyState() {
       try {
-        const res = await fetch('/api/v1/system/pepper-vault');
+        const res = await fetch('/api/v1/system/unlock');
         if (cancelled) return;
 
         if (!res.ok) {
@@ -46,12 +46,12 @@ export function PepperVaultGate() {
         }
 
         const data = await res.json();
-        const state: PepperState = data.state;
+        const state: DbKeyState = data.state;
 
         // Mark as resolved so we don't re-check
         gateResolved = true;
 
-        if (state === 'needs-setup' || state === 'needs-unlock') {
+        if (state === 'needs-setup' || state === 'needs-passphrase') {
           router.push('/setup');
           return;
         }
@@ -87,12 +87,12 @@ export function PepperVaultGate() {
       if (cancelled) return;
       retryTimerRef.current = setTimeout(() => {
         if (!cancelled) {
-          checkPepperState();
+          checkDbKeyState();
         }
       }, 2000);
     }
 
-    checkPepperState();
+    checkDbKeyState();
 
     return () => {
       cancelled = true;
@@ -108,7 +108,7 @@ export function PepperVaultGate() {
   return (
     <div className="qt-alert qt-alert-info mx-4 mt-2 flex items-center justify-between text-sm">
       <span>
-        Your encryption key is not yet stored in the vault.{' '}
+        Your encryption key is not yet stored in a .dbkey file.{' '}
         <a href="/setup" className="underline font-medium">
           Set it up now
         </a>{' '}

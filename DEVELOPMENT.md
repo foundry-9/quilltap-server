@@ -114,7 +114,7 @@ quilltap/
 ### Prerequisites
 
 - **Node.js 22+**
-- **SQLite** (automatic with better-sqlite3)
+- **SQLite with SQLCipher** (automatic with better-sqlite3-multiple-ciphers) — note that the standard `sqlite3` CLI cannot open Quilltap's encrypted database files; use `npx quilltap db` for direct database access
 - **File storage**: Local filesystem (default) or optionally S3-compatible storage
 
 For Electron development:
@@ -296,7 +296,28 @@ When making changes to a plugin, bump the patch version in its `package.json` an
 
 ### SQLite Database
 
-All application data is stored in SQLite:
+All application data is stored in SQLite, encrypted at rest using **SQLCipher** (via the `better-sqlite3-multiple-ciphers` driver, aliased as `better-sqlite3` throughout the codebase). Every database file is encrypted on disk — the standard `sqlite3` command-line tool cannot open these files. Use the built-in CLI subcommand instead:
+
+```bash
+# List tables
+npx quilltap db --tables
+
+# Run a SQL query
+npx quilltap db "SELECT COUNT(*) FROM characters;"
+
+# Interactive REPL
+npx quilltap db --repl
+
+# Query the LLM logs database
+npx quilltap db --llm-logs --tables
+
+# Use a custom data directory
+npx quilltap db --data-dir /path/to/data --tables
+```
+
+The encryption key is stored in a `.dbkey` file in the `data/` subdirectory alongside the database files. **Back up the `.dbkey` file alongside your database** — without it, the database cannot be decrypted. An optional passphrase (locked mode) can be set via environment variable to further protect the key file.
+
+The tables stored in the main database are:
 
 - **users** - User accounts (single-user mode)
 - **characters** - Character definitions and metadata (includes `controlledBy: 'llm' | 'user'` for control mode)

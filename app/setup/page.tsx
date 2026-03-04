@@ -3,11 +3,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 
-type PepperState = 'resolved' | 'needs-setup' | 'needs-unlock' | 'needs-vault-storage' | 'loading';
+type DbKeyState = 'resolved' | 'needs-setup' | 'needs-passphrase' | 'needs-vault-storage' | 'loading';
 
 export default function SetupPage() {
   const router = useRouter();
-  const [pepperState, setPepperState] = useState<PepperState>('loading');
+  const [pepperState, setDbKeyState] = useState<DbKeyState>('loading');
   const [passphrase, setPassphrase] = useState('');
   const [confirmPassphrase, setConfirmPassphrase] = useState('');
   const [generatedPepper, setGeneratedPepper] = useState('');
@@ -53,9 +53,9 @@ export default function SetupPage() {
 
   const checkState = useCallback(async () => {
     try {
-      const res = await fetch('/api/v1/system/pepper-vault');
+      const res = await fetch('/api/v1/system/unlock');
       const data = await res.json();
-      setPepperState(data.state);
+      setDbKeyState(data.state);
 
       if (data.state === 'resolved') {
         navigateAfterSetup();
@@ -84,7 +84,7 @@ export default function SetupPage() {
 
     setLoading(true);
     try {
-      const res = await fetch('/api/v1/system/pepper-vault?action=setup', {
+      const res = await fetch('/api/v1/system/unlock?action=setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ passphrase }),
@@ -98,7 +98,7 @@ export default function SetupPage() {
       }
 
       setGeneratedPepper(data.pepper);
-      setPepperState('resolved');
+      setDbKeyState('resolved');
     } catch {
       setError('Failed to complete setup');
     } finally {
@@ -116,7 +116,7 @@ export default function SetupPage() {
 
     setLoading(true);
     try {
-      const res = await fetch('/api/v1/system/pepper-vault?action=unlock', {
+      const res = await fetch('/api/v1/system/unlock?action=unlock', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ passphrase }),
@@ -158,7 +158,7 @@ export default function SetupPage() {
 
     setLoading(true);
     try {
-      const res = await fetch('/api/v1/system/pepper-vault?action=store', {
+      const res = await fetch('/api/v1/system/unlock?action=store', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ passphrase }),
@@ -280,7 +280,7 @@ export default function SetupPage() {
           </>
         )}
 
-        {pepperState === 'needs-unlock' && (
+        {pepperState === 'needs-passphrase' && (
           <>
             <h1 className="qt-heading-2">Quilltap is Locked</h1>
             <p className="qt-text-muted">
@@ -313,7 +313,7 @@ export default function SetupPage() {
           <>
             <h1 className="qt-heading-2">Secure Your Encryption Key</h1>
             <p className="qt-text-muted">
-              Your encryption key is set via environment variable. Store it in the encrypted vault
+              Your encryption key is set via environment variable. Store it in an encrypted .dbkey file
               so Quilltap can start without the environment variable in the future.
             </p>
             <div className="space-y-3">
@@ -352,7 +352,7 @@ export default function SetupPage() {
                 disabled={loading}
                 className="qt-btn flex-1 py-2"
               >
-                {loading ? 'Storing...' : 'Store in Vault'}
+                {loading ? 'Storing...' : 'Store Key File'}
               </button>
               <button
                 onClick={() => navigateAfterSetup()}

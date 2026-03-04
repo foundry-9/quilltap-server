@@ -19,7 +19,7 @@ import {
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
-import { decryptApiKey } from '@/lib/encryption';
+
 import type { LLMProviderPlugin } from '@/lib/plugins/interfaces/provider-plugin';
 import type { LoadedPlugin } from '@/lib/plugins/manifest-loader';
 import { getErrorMessage } from '@/lib/errors';
@@ -335,12 +335,7 @@ async function collectModels(userId: string): Promise<ModelInfo[]> {
       }
 
       // No cached models - fetch from provider via registry wrapper (applies URL rewriting)
-      const decryptedKey = decryptApiKey(
-        apiKeyRecord.ciphertext,
-        apiKeyRecord.iv,
-        apiKeyRecord.authTag,
-        userId
-      );
+      const decryptedKey = apiKeyRecord.key_value;
 
       const baseUrl = baseUrlByProvider.get(providerName);
 

@@ -76,6 +76,12 @@ function llmLogsDbHasTable(logsDbPath: string): boolean {
 
   try {
     const db = new Database(logsDbPath, { readonly: true });
+    // SQLCipher key must be first pragma
+    const sqlcipherKey = process.env.ENCRYPTION_MASTER_PEPPER;
+    if (sqlcipherKey) {
+      const keyHex = Buffer.from(sqlcipherKey, 'base64').toString('hex');
+      db.pragma(`key = "x'${keyHex}'"`);
+    }
     try {
       const result = db.prepare(
         `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'llm_logs'`
@@ -131,6 +137,12 @@ function runMigration(): MigrationResult {
 
     // Open (or create) the LLM logs database
     const logsDb = new Database(logsDbPath);
+    // SQLCipher key must be first pragma
+    const sqlcipherKeyMig = process.env.ENCRYPTION_MASTER_PEPPER;
+    if (sqlcipherKeyMig) {
+      const keyHex = Buffer.from(sqlcipherKeyMig, 'base64').toString('hex');
+      logsDb.pragma(`key = "x'${keyHex}'"`);
+    }
     logsDb.pragma('journal_mode = WAL');
     logsDb.pragma('busy_timeout = 5000');
 

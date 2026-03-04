@@ -1,6 +1,6 @@
 {
   "name": "quilltap",
-  "version": "3.2.0-dev.33",
+  "version": "3.2.0-dev.34",
   "private": true,
   "main": "dist-electron/main.js",
   "author": {
@@ -71,7 +71,7 @@
     "@types/sharp": "^0.31.1",
     "ajv": "^8.18.0",
     "ajv-formats": "^3.0.1",
-    "better-sqlite3": "^12.6.2",
+    "better-sqlite3": "npm:better-sqlite3-multiple-ciphers@^12.6.2",
     "chokidar": "^5.0.0",
     "jest-fetch-mock": "^3.0.3",
     "next": "^16.1.3",

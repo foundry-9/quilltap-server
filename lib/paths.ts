@@ -287,6 +287,30 @@ export function getLLMLogsDatabasePath(): string {
 }
 
 /**
+ * Get the main database key file path
+ *
+ * The .dbkey file contains the encrypted pepper used for SQLCipher database
+ * encryption. File permissions should be 0o600 (owner read/write only).
+ *
+ * @returns Database key file path (<base>/data/quilltap.dbkey)
+ */
+export function getDbKeyPath(): string {
+  return path.join(getDataDir(), 'quilltap.dbkey');
+}
+
+/**
+ * Get the LLM logs database key file path
+ *
+ * Separate .dbkey file for the LLM logs database, using the same pepper
+ * but stored independently for operational isolation.
+ *
+ * @returns LLM logs database key file path (<base>/data/quilltap-llm-logs.dbkey)
+ */
+export function getLLMLogsDbKeyPath(): string {
+  return path.join(getDataDir(), 'quilltap-llm-logs.dbkey');
+}
+
+/**
  * Get the physical database backups directory path
  *
  * Physical backups are stored alongside the database file under data/backups/.

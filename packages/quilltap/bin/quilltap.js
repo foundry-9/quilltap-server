@@ -359,4 +359,236 @@ async function main() {
   });
 }
 
-main();
+// ============================================================================
+// db subcommand — query encrypted databases directly
+// ============================================================================
+
+/**
+ * Resolve the data directory using the same platform logic as lib/paths.ts.
+ */
+function resolveDataDir(overrideDir) {
+  if (overrideDir) {
+    const resolved = overrideDir.startsWith('~')
+      ? path.join(require('os').homedir(), overrideDir.slice(1))
+      : overrideDir;
+    return path.join(resolved, 'data');
+  }
+  const os = require('os');
+  if (process.env.QUILLTAP_DATA_DIR) {
+    return path.join(process.env.QUILLTAP_DATA_DIR, 'data');
+  }
+  const home = os.homedir();
+  if (process.platform === 'darwin') return path.join(home, 'Library', 'Application Support', 'Quilltap', 'data');
+  if (process.platform === 'win32') return path.join(process.env.APPDATA || path.join(home, 'AppData', 'Roaming'), 'Quilltap', 'data');
+  return path.join(home, '.quilltap', 'data');
+}
+
+/**
+ * Read and decrypt the .dbkey file to get the SQLCipher key.
+ */
+function loadDbKey(dataDir, passphrase) {
+  const crypto = require('crypto');
+  const dbkeyPath = path.join(dataDir, 'quilltap.dbkey');
+  if (!fs.existsSync(dbkeyPath)) {
+    return null; // No .dbkey file — DB may be unencrypted
+  }
+
+  const data = JSON.parse(fs.readFileSync(dbkeyPath, 'utf8'));
+  const INTERNAL_PASSPHRASE = '__quilltap_no_passphrase__';
+  const actualPassphrase = data.hasPassphrase ? passphrase : INTERNAL_PASSPHRASE;
+
+  if (data.hasPassphrase && !passphrase) {
+    throw new Error('This database requires a passphrase. Use --passphrase <pass>');
+  }
+
+  const salt = Buffer.from(data.salt, 'hex');
+  const key = crypto.pbkdf2Sync(actualPassphrase, new Uint8Array(salt), data.kdfIterations, 32, data.kdfDigest);
+  const iv = Buffer.from(data.iv, 'hex');
+  const decipher = crypto.createDecipheriv(data.algorithm, new Uint8Array(key), new Uint8Array(iv));
+  decipher.setAuthTag(new Uint8Array(Buffer.from(data.authTag, 'hex')));
+  let plaintext = decipher.update(data.ciphertext, 'hex', 'utf8');
+  plaintext += decipher.final('utf8');
+
+  // Verify hash
+  const hash = crypto.createHash('sha256').update(plaintext).digest('hex');
+  if (hash !== data.pepperHash) {
+    throw new Error('Pepper hash mismatch — .dbkey file may be corrupt');
+  }
+
+  return plaintext;
+}
+
+function printDbHelp() {
+  console.log(`
+Quilltap Database Tool
+
+Usage: quilltap db [options] [sql]
+
+Query your encrypted Quilltap database directly.
+
+Options:
+  --tables              List all tables
+  --count <table>       Show row count for a table
+  --repl                Interactive SQL prompt
+  --llm-logs            Target the LLM logs database
+  --data-dir <path>     Override data directory
+  --passphrase <pass>   Provide passphrase for encrypted .dbkey
+  -h, --help            Show this help
+
+Examples:
+  quilltap db --tables
+  quilltap db "SELECT count(*) FROM characters"
+  quilltap db --count messages
+  quilltap db --repl
+  quilltap db --llm-logs --tables
+`);
+}
+
+async function dbCommand(args) {
+  let dataDirOverride = '';
+  let passphrase = '';
+  let useLlmLogs = false;
+  let showTables = false;
+  let countTable = '';
+  let repl = false;
+  let sql = '';
+  let showHelp = false;
+
+  let i = 0;
+  while (i < args.length) {
+    switch (args[i]) {
+      case '--data-dir': case '-d': dataDirOverride = args[++i]; break;
+      case '--passphrase': passphrase = args[++i]; break;
+      case '--llm-logs': useLlmLogs = true; break;
+      case '--tables': showTables = true; break;
+      case '--count': countTable = args[++i]; break;
+      case '--repl': repl = true; break;
+      case '--help': case '-h': showHelp = true; break;
+      default:
+        if (args[i].startsWith('-')) {
+          console.error(`Unknown option: ${args[i]}`);
+          process.exit(1);
+        }
+        sql = args[i];
+        break;
+    }
+    i++;
+  }
+
+  if (showHelp) {
+    printDbHelp();
+    process.exit(0);
+  }
+
+  const dataDir = resolveDataDir(dataDirOverride);
+  const dbFilename = useLlmLogs ? 'quilltap-llm-logs.db' : 'quilltap.db';
+  const dbPath = path.join(dataDir, dbFilename);
+
+  if (!fs.existsSync(dbPath)) {
+    console.error(`Database not found: ${dbPath}`);
+    process.exit(1);
+  }
+
+  // Load encryption key
+  let pepper;
+  try {
+    pepper = loadDbKey(dataDir, passphrase);
+  } catch (err) {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  }
+
+  // Open database
+  const Database = require('better-sqlite3');
+  const db = new Database(dbPath, { readonly: !repl });
+
+  if (pepper) {
+    const keyHex = Buffer.from(pepper, 'base64').toString('hex');
+    db.pragma(`key = "x'${keyHex}'"`);
+  }
+
+  try {
+    // Verify database is readable
+    db.prepare('SELECT 1').get();
+  } catch (err) {
+    console.error(`Cannot open database: ${err.message}`);
+    console.error('The database may be encrypted with a different key, or the .dbkey file may be missing.');
+    db.close();
+    process.exit(1);
+  }
+
+  try {
+    if (showTables) {
+      const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all();
+      for (const t of tables) console.log(t.name);
+    } else if (countTable) {
+      const row = db.prepare(`SELECT count(*) as count FROM "${countTable}"`).get();
+      console.log(row.count);
+    } else if (sql) {
+      const stmt = db.prepare(sql);
+      if (stmt.reader) {
+        const rows = stmt.all();
+        if (rows.length === 0) {
+          console.log('(no results)');
+        } else {
+          console.table(rows);
+        }
+      } else {
+        const info = stmt.run();
+        console.log(`Changes: ${info.changes}`);
+      }
+    } else if (repl) {
+      const readline = require('readline');
+      const rl = readline.createInterface({ input: process.stdin, output: process.stdout, prompt: 'quilltap> ' });
+      console.log(`Connected to ${dbPath}`);
+      console.log('Type .tables, .schema <table>, or SQL. Ctrl+D to exit.\n');
+      rl.prompt();
+      rl.on('line', (line) => {
+        const trimmed = line.trim();
+        if (!trimmed) { rl.prompt(); return; }
+        try {
+          if (trimmed === '.tables') {
+            const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all();
+            for (const t of tables) console.log(t.name);
+          } else if (trimmed.startsWith('.schema')) {
+            const table = trimmed.split(/\s+/)[1];
+            if (!table) { console.log('Usage: .schema <table>'); }
+            else {
+              const row = db.prepare("SELECT sql FROM sqlite_master WHERE name = ?").get(table);
+              console.log(row ? row.sql : `Table '${table}' not found`);
+            }
+          } else {
+            const stmt = db.prepare(trimmed);
+            if (stmt.reader) {
+              const rows = stmt.all();
+              if (rows.length === 0) console.log('(no results)');
+              else console.table(rows);
+            } else {
+              const info = stmt.run();
+              console.log(`Changes: ${info.changes}`);
+            }
+          }
+        } catch (err) {
+          console.error(`Error: ${err.message}`);
+        }
+        rl.prompt();
+      });
+      rl.on('close', () => {
+        db.close();
+        process.exit(0);
+      });
+      return; // Don't close db yet — REPL is interactive
+    } else {
+      printDbHelp();
+    }
+  } finally {
+    if (!repl) db.close();
+  }
+}
+
+// Route to subcommand or main
+if (process.argv[2] === 'db') {
+  dbCommand(process.argv.slice(3));
+} else {
+  main();
+}

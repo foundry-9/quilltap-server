@@ -101,6 +101,10 @@ import { restructureFileStorageCleanupMigration } from './restructure-file-stora
 import { fixTextEmbeddingsAfterUpdateMigration } from './fix-text-embeddings-after-update';
 // Add sortIndex field to connection profiles for custom ordering
 import { addConnectionProfileSortIndexMigration } from './add-connection-profile-sort-index';
+// Drop encryption columns from api_keys (ciphertext → key_value, drop iv/authTag)
+import { dropApiKeyEncryptionColumnsMigration } from './drop-api-key-encryption-columns';
+// Drop pepper_vault table (encryption simplified)
+import { dropPepperVaultMigration } from './drop-pepper-vault';
 
 /**
  * All available migrations.
@@ -197,6 +201,10 @@ export const migrations: Migration[] = [
   fixTextEmbeddingsAfterUpdateMigration,
   // Add sortIndex field to connection profiles for custom ordering
   addConnectionProfileSortIndexMigration,
+  // Drop encryption columns from api_keys (ciphertext → key_value, drop iv/authTag)
+  dropApiKeyEncryptionColumnsMigration,
+  // Drop pepper_vault table (encryption simplified)
+  dropPepperVaultMigration,
 ];
 
 export {
@@ -288,4 +296,8 @@ export {
   fixTextEmbeddingsAfterUpdateMigration,
   // Add sortIndex field to connection profiles for custom ordering
   addConnectionProfileSortIndexMigration,
+  // Drop encryption columns from api_keys (ciphertext → key_value, drop iv/authTag)
+  dropApiKeyEncryptionColumnsMigration,
+  // Drop pepper_vault table (encryption simplified)
+  dropPepperVaultMigration,
 };

@@ -6,6 +6,49 @@ url: /settings?tab=system
 
 Quilltap automatically protects your databases against corruption and data loss. These protections run silently in the background — no configuration is needed.
 
+## Encryption at Rest
+
+Your databases are not merely tucked away in a drawer, as one might store a perfectly ordinary biscuit tin — they are *locked inside a vault*, the combination to which only Quilltap itself possesses. Every database file Quilltap creates is encrypted on disk using **SQLCipher**, an industry-standard encryption extension for SQLite that has been scrutinising secrets since before most current programming languages were born.
+
+### What This Means for You
+
+**The files are unreadable without the key.** Should some uninvited personage — a snooping sibling, an overcurious IT department, or the sort of fellow who goes through other people's filing cabinets at parties — gain access to your data directory, they would find nothing but a rather elegant arrangement of entirely meaningless bytes. The standard `sqlite3` command-line tool, which one might otherwise employ to peek at the raw data, cannot open these files; it simply throws up its hands in polite bewilderment.
+
+**Backups are also encrypted.** The physical backup files Quilltap creates are byte-for-byte copies of the encrypted database. They are equally unreadable without the key. This is, on balance, rather the point.
+
+### The Key File
+
+The encryption key is stored in a file called **`.dbkey`** in the `data/` subdirectory of your data directory — for example, `~/Library/Application Support/Quilltap/data/.dbkey` on macOS. This file is managed entirely by Quilltap; you need not concern yourself with its contents under ordinary circumstances.
+
+> **Back up your `.dbkey` file alongside your database.** If you copy your database to another machine without the `.dbkey` file, the database will be as useful as a very expensive paperweight. When backing up your data directory, ensure the `.dbkey` file travels with it.
+
+### Locked Mode (Optional Passphrase Protection)
+
+For those who require a second bolt on the door, Quilltap supports **locked mode**: the `.dbkey` file itself may be protected with a passphrase. When a passphrase is set, Quilltap cannot open the database at startup until the passphrase is supplied — the application will wait at the locked screen, like a very well-trained butler who knows better than to admit anyone without the password.
+
+Locked mode is configured via environment variable. Consult the [Data & System settings](/settings?tab=system) for details.
+
+### Accessing the Database Directly
+
+Since the standard `sqlite3` CLI cannot open encrypted databases, Quilltap provides its own subcommand for direct database queries — useful for troubleshooting, migrations, and the occasional moment of diagnostic curiosity:
+
+```bash
+# List all tables
+npx quilltap db --tables
+
+# Run a query
+npx quilltap db "SELECT COUNT(*) FROM characters;"
+
+# Interactive REPL
+npx quilltap db --repl
+
+# Query the LLM logs database instead
+npx quilltap db --llm-logs --tables
+
+# Use a custom data directory
+npx quilltap db --data-dir /path/to/data --tables
+```
+
 ## Two-Database Architecture
 
 Quilltap stores your data across two separate database files:

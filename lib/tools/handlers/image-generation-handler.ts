@@ -6,7 +6,7 @@
 import { createHash } from 'node:crypto';
 import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
-import { decryptApiKey } from '@/lib/encryption';
+
 import type { FileCategory, FileSource } from '@/lib/schemas/types';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
 import { getImageProviderConstraints } from '@/lib/plugins/provider-registry';
@@ -218,7 +218,7 @@ async function loadAndValidateProfile(
       apiKey = await repos.connections.findApiKeyByIdAndUserId(imageProfile.apiKeyId, userId);
     }
 
-    if (!apiKey?.ciphertext) {
+    if (!apiKey?.key_value) {
       return {
         success: false,
         output: {
@@ -250,23 +250,8 @@ async function generateImagesWithProvider(
 ): Promise<GeneratedImageResult[]> {
   const provider = createImageProvider(imageProfile.provider);
 
-  // Decrypt the API key
-  let decryptedKey: string;
-  try {
-    decryptedKey = decryptApiKey(
-      imageProfile.apiKey.ciphertext,
-      imageProfile.apiKey.iv,
-      imageProfile.apiKey.authTag,
-      imageProfile.userId
-    );
-  } catch (error) {
-    logger.error('Failed to decrypt API key:', {}, error as Error);
-    throw new ImageGenerationError(
-      'ENCRYPTION_ERROR',
-      'Failed to decrypt API key',
-      getErrorMessage(error)
-    );
-  }
+  // Get the API key
+  const decryptedKey: string = imageProfile.apiKey.key_value;
 
   // Merge parameters (profile defaults + user input)
   const mergedParams = mergeParameters(
@@ -606,15 +591,9 @@ export async function executeImageGenerationTool(
 
           // If AUTO_ROUTE, reroute the image provider
           if (dangerSettings.mode === 'AUTO_ROUTE') {
-            const decryptedKey = decryptApiKey(
-              imageProfile.apiKey.ciphertext,
-              imageProfile.apiKey.iv,
-              imageProfile.apiKey.authTag,
-              imageProfile.userId
-            );
             const routeResult = await resolveImageProviderForDangerousContent(
               imageProfile,
-              decryptedKey,
+              imageProfile.apiKey.key_value,
               dangerSettings,
               context.userId
             );
@@ -802,15 +781,9 @@ export async function executeImageGenerationTool(
           });
 
           if (dangerSettings.mode === 'AUTO_ROUTE' && effectiveImageProfile === imageProfile) {
-            const decryptedKey = decryptApiKey(
-              imageProfile.apiKey.ciphertext,
-              imageProfile.apiKey.iv,
-              imageProfile.apiKey.authTag,
-              imageProfile.userId
-            );
             const routeResult = await resolveImageProviderForDangerousContent(
               imageProfile,
-              decryptedKey,
+              imageProfile.apiKey.key_value,
               dangerSettings,
               context.userId
             );
@@ -912,7 +885,7 @@ export async function validateImageProfile(
       apiKey = await repos.connections.findApiKeyByIdAndUserId(profile.apiKeyId, userId);
     }
 
-    if (!apiKey?.ciphertext) {
+    if (!apiKey?.key_value) {
       return {
         valid: false,
         error: 'Profile does not have a valid API key',

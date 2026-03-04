@@ -18,16 +18,48 @@ export async function register() {
   // Only run in Node.js runtime (not Edge Runtime)
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     // ================================================================
-    // PHASE -0.5: Pepper Vault (before env validation in logger import)
+    // PHASE -0.5a: Database Key Provisioning (before env validation)
     // ================================================================
     // Must run before logger/env imports since those now allow optional pepper.
-    // Uses standalone migration logger and database utils.
+    // Uses standalone migration logger and file-based .dbkey system.
+    let dbKeyState: string = 'needs-setup';
     if (process.env.SKIP_ENV_VALIDATION !== 'true' &&
         process.env.NEXT_PHASE !== 'phase-production-build') {
-      const { provisionPepper } = await import('./lib/startup/pepper-vault');
-      const pepperState = await provisionPepper();
+      const { provisionDbKey } = await import('./lib/startup/dbkey');
+      dbKeyState = await provisionDbKey();
+
+      // If dbkey returned needs-setup, check if there's an old pepper_vault
+      // table in the plaintext DB that we can extract from
+      if (dbKeyState === 'needs-setup') {
+        try {
+          const { getSQLiteDatabasePath } = await import('./lib/paths');
+          const fs = await import('fs');
+          const dbPath = getSQLiteDatabasePath();
+
+          if (fs.default.existsSync(dbPath)) {
+            // Try to extract pepper from old pepper_vault using legacy system
+            const { provisionPepper } = await import('./lib/startup/pepper-vault');
+            const legacyState = await provisionPepper();
+
+            if (legacyState === 'resolved' || legacyState === 'needs-vault-storage') {
+              // Successfully extracted pepper from old vault — write .dbkey file
+              const { storeEnvPepperInDbKey, getDbKeyState } = await import('./lib/startup/dbkey');
+              // Override the state to allow storage
+              (global as any).__quilltapDbKeyState = 'needs-vault-storage';
+              storeEnvPepperInDbKey('');
+              dbKeyState = 'resolved';
+            } else if (legacyState === 'needs-unlock') {
+              // Old vault has a passphrase — user needs to unlock via old system first
+              dbKeyState = 'needs-passphrase';
+            }
+          }
+        } catch {
+          // Legacy extraction failed — fall through to normal setup flow
+        }
+      }
+
       // Store state temporarily on global for transfer to startupState after import
-      (global as any).__quilltapPepperState = pepperState;
+      (global as any).__quilltapPepperState = dbKeyState;
     }
 
     // Use dynamic import for logger to avoid Edge Runtime issues
@@ -37,6 +69,16 @@ export async function register() {
     // Transfer pepper state from global to startupState
     if ((global as any).__quilltapPepperState) {
       startupState.setPepperState((global as any).__quilltapPepperState);
+    }
+
+    // If in locked mode, stop here and wait for passphrase via unlock endpoint
+    if (startupState.isLockedMode()) {
+      startupState.setPhase('locked');
+      logger.info('Server entering locked mode — passphrase required to proceed', {
+        context: 'instrumentation.register',
+        dbKeyState: startupState.getPepperState(),
+      });
+      return;
     }
 
     logger.info('Server starting - initializing services', {
@@ -187,6 +229,64 @@ export async function register() {
                 });
               }
             }
+          }
+        }
+      }
+
+      // ================================================================
+      // PHASE -0.5b: DB Encryption Conversion (plaintext → SQLCipher)
+      // ================================================================
+      // Only runs if: pepper is resolved + DB file exists + DB is plaintext
+      if (startupState.isPepperResolved() && process.env.ENCRYPTION_MASTER_PEPPER) {
+        const { getSQLiteDatabasePath, getLLMLogsDatabasePath } = await import('./lib/paths');
+        const { isDatabaseEncrypted } = await import('./lib/startup/db-encryption-state');
+        const { convertDatabaseToEncrypted } = await import('./lib/startup/db-encryption-converter');
+        const fsMod = await import('fs');
+
+        const mainDbPath = getSQLiteDatabasePath();
+        const llmLogsDbPath = getLLMLogsDatabasePath();
+        const pepper = process.env.ENCRYPTION_MASTER_PEPPER;
+
+        // Convert main database if it exists and is plaintext
+        if (fsMod.default.existsSync(mainDbPath) && !isDatabaseEncrypted(mainDbPath)) {
+          logger.info('Phase -0.5b: Converting main database to encrypted format', {
+            context: 'instrumentation.register',
+            dbPath: mainDbPath,
+          });
+
+          try {
+            convertDatabaseToEncrypted(mainDbPath, pepper);
+            logger.info('Main database encryption conversion complete', {
+              context: 'instrumentation.register',
+            });
+          } catch (convErr) {
+            logger.error('Main database encryption conversion FAILED', {
+              context: 'instrumentation.register',
+              error: convErr instanceof Error ? convErr.message : String(convErr),
+            });
+            // Fatal — can't proceed with inconsistent encryption state
+            process.exit(1);
+          }
+        }
+
+        // Convert LLM logs database if it exists and is plaintext
+        if (fsMod.default.existsSync(llmLogsDbPath) && !isDatabaseEncrypted(llmLogsDbPath)) {
+          logger.info('Phase -0.5b: Converting LLM logs database to encrypted format', {
+            context: 'instrumentation.register',
+            dbPath: llmLogsDbPath,
+          });
+
+          try {
+            convertDatabaseToEncrypted(llmLogsDbPath, pepper);
+            logger.info('LLM logs database encryption conversion complete', {
+              context: 'instrumentation.register',
+            });
+          } catch (convErr) {
+            logger.warn('LLM logs database encryption conversion failed — continuing', {
+              context: 'instrumentation.register',
+              error: convErr instanceof Error ? convErr.message : String(convErr),
+            });
+            // Non-fatal for LLM logs — they're expendable
           }
         }
       }

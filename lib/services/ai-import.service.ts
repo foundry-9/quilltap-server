@@ -10,7 +10,7 @@
  */
 
 import { createLLMProvider } from '@/lib/llm';
-import { decryptApiKey } from '@/lib/encryption';
+
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup';
 import { providerRegistry } from '@/lib/plugins/provider-registry';
 import { extractFileContent } from '@/lib/services/file-content-extractor';
@@ -637,7 +637,7 @@ export async function runAIImportStreaming(
     if (profile.apiKeyId) {
       const keyRecord = await repos.connections.findApiKeyByIdAndUserId(profile.apiKeyId, userId);
       if (keyRecord) {
-        apiKey = decryptApiKey(keyRecord.ciphertext, keyRecord.iv, keyRecord.authTag, userId);
+        apiKey = keyRecord.key_value;
       }
     }
 

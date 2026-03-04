@@ -8,7 +8,7 @@ No subscriptions. No data harvested. No forgetting everything between sessions. 
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Latest Stable](https://img.shields.io/github/v/release/foundry-9/quilltap?logo=github&label=stable&sort=semver&filter=!*dev*)](https://github.com/foundry-9/quilltap/releases/latest)
-[![This Version](https://img.shields.io/badge/version-3.2.0--dev.33-yellow.svg?logo=github)](package.json)
+[![This Version](https://img.shields.io/badge/version-3.2.0--dev.34-yellow.svg?logo=github)](package.json)
 [![Docker Hub](https://img.shields.io/docker/v/csebold/quilltap?logo=docker&label=docker&sort=semver)](https://hub.docker.com/r/csebold/quilltap)
 [![npm](https://img.shields.io/npm/v/quilltap?logo=npm)](https://www.npmjs.com/package/quilltap)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.com/channels/1476289075152556205/1476290238187049184)
@@ -228,9 +228,9 @@ All Quilltap data — database, files, logs — resides in a single directory. T
 
 ### What's stored
 
-- **Database:** SQLite with automatic protection — integrity checks on startup, periodic WAL checkpoints, physical backups with tiered retention (daily for 7 days, weekly for 4 weeks, monthly for 12 months, yearly forever)
+- **Database:** SQLite encrypted at rest with SQLCipher — every database file is encrypted on disk; integrity checks on startup, periodic WAL checkpoints, physical backups with tiered retention (daily for 7 days, weekly for 4 weeks, monthly for 12 months, yearly forever); standard `sqlite3` CLI cannot open encrypted files, use `npx quilltap db` instead
 - **Files:** Local filesystem using original filenames, organized by project. Real-time filesystem watcher keeps the database in sync.
-- **API keys:** AES-256-GCM encrypted at rest with a master pepper you control
+- **API keys:** Stored in the encrypted database (whole-database SQLCipher encryption replaces the former field-level AES-256-GCM encryption)
 
 ### Backup options
 
@@ -259,7 +259,7 @@ Quilltap was built to be extended. The plugin system supports five extension poi
 Quilltap is a single Next.js 16 application (App Router) that serves both the UI and API routes. The tech stack:
 
 - **Frontend:** React 19, TypeScript, Tailwind CSS 4 with a semantic `qt-*` class system for full theme overrideability
-- **Backend:** Next.js API routes, SQLite (better-sqlite3) with WAL mode, Zod schema validation
+- **Backend:** Next.js API routes, SQLite with SQLCipher encryption (better-sqlite3-multiple-ciphers) with WAL mode, Zod schema validation
 - **Desktop:** Electron shell with platform-specific VM backends (Lima/VZ on macOS, WSL2 on Windows, Docker on Linux)
 - **Build:** GitHub Actions CI/CD with automated releases — rootfs tarballs, Electron installers (macOS DMG, Windows NSIS, Linux AppImage/deb), Docker multi-arch images, and npm package all built from a single tag push
 
@@ -319,7 +319,7 @@ See the [Development Guide](DEVELOPMENT.md) for local setup, testing, and build 
 
 ## Tech Stack
 
-Next.js 16 (App Router) · React 19 · TypeScript · SQLite (better-sqlite3) · Tailwind CSS 4 · Electron · Lima/VZ (macOS) · WSL2 (Windows) · Docker (Linux) · Zod · GitHub Actions
+Next.js 16 (App Router) · React 19 · TypeScript · SQLite with SQLCipher (better-sqlite3-multiple-ciphers) · Tailwind CSS 4 · Electron · Lima/VZ (macOS) · WSL2 (Windows) · Docker (Linux) · Zod · GitHub Actions
 
 ---
 
@@ -346,7 +346,7 @@ Copyright © 2025, 2026 Foundry-9 LLC
 
 Quilltap stands on the shoulders of these excellent open source projects, and is grateful for the view:
 
-**Core:** React, Next.js, TypeScript, better-sqlite3, Zod
+**Core:** React, Next.js, TypeScript, better-sqlite3-multiple-ciphers (SQLCipher), Zod
 
 **AI & LLM:** OpenAI SDK, Anthropic SDK, Google Generative AI SDK, xAI/Grok SDK, Model Context Protocol SDK
 

@@ -535,7 +535,7 @@ function buildAppMenu(win: BrowserWindow): void {
 }
 
 /** Create the main application window */
-function createMainWindow(): BrowserWindow {
+function createMainWindow(urlPath?: string): BrowserWindow {
   const win = new BrowserWindow({
     width: MAIN_WIDTH,
     height: MAIN_HEIGHT,
@@ -548,14 +548,14 @@ function createMainWindow(): BrowserWindow {
     },
   });
 
-  const url = isDev
+  const baseUrl = isDev
     ? 'http://localhost:3000'
     : `http://localhost:${HOST_PORT}`;
+  const url = urlPath ? `${baseUrl}${urlPath}` : baseUrl;
 
   // Intercept new-window requests (target="_blank", window.open)
   win.webContents.setWindowOpenHandler(({ url: targetUrl }) => {
-    const appOrigin = isDev ? 'http://localhost:3000' : `http://localhost:${HOST_PORT}`;
-    if (targetUrl.startsWith(appOrigin)) {
+    if (targetUrl.startsWith(baseUrl)) {
       // Same-origin URLs (images, files) can't be opened externally — block them.
       // The frontend handles these with in-app preview modals when running in Electron.
       console.log('[Main] Blocked same-origin new-window request:', targetUrl);
@@ -569,8 +569,7 @@ function createMainWindow(): BrowserWindow {
 
   // Prevent the main window from navigating away to external URLs
   win.webContents.on('will-navigate', (event, navUrl) => {
-    const appOrigin = isDev ? 'http://localhost:3000' : `http://localhost:${HOST_PORT}`;
-    if (!navUrl.startsWith(appOrigin)) {
+    if (!navUrl.startsWith(baseUrl)) {
       event.preventDefault();
       console.log('[Main] Blocked in-window navigation to external URL:', navUrl);
       shell.openExternal(navUrl);
@@ -689,6 +688,13 @@ async function startupSequence(dataDir: string): Promise<void> {
 
     if (status.status === 'healthy' || status.status === 'degraded') {
       mainWindow = createMainWindow();
+      markStartupSuccess();
+      return;
+    }
+
+    if (status.status === 'locked') {
+      // Server is in locked mode — load the setup/unlock page
+      mainWindow = createMainWindow('/setup');
       markStartupSuccess();
       return;
     }
@@ -921,6 +927,14 @@ async function startupSequence(dataDir: string): Promise<void> {
     });
   });
 
+  if (healthStatus.status === 'locked') {
+    sendSplashUpdate({ phase: 'ready', message: 'Database locked — passphrase required' });
+    closeStartupLog();
+    mainWindow = createMainWindow('/setup');
+    markStartupSuccess();
+    return;
+  }
+
   if (healthStatus.status === 'healthy' || healthStatus.status === 'degraded') {
     sendSplashUpdate({
       phase: 'ready',
@@ -1089,7 +1103,12 @@ async function dockerStartupSequence(dataDir: string): Promise<void> {
     });
   });
 
-  if (healthStatus.status === 'healthy' || healthStatus.status === 'degraded') {
+  if (healthStatus.status === 'locked') {
+    sendSplashUpdate({ phase: 'ready', message: 'Database locked — passphrase required' });
+    closeStartupLog();
+    mainWindow = createMainWindow('/setup');
+    markStartupSuccess();
+  } else if (healthStatus.status === 'healthy' || healthStatus.status === 'degraded') {
     sendSplashUpdate({
       phase: 'ready',
       message: 'Ready!',
@@ -1215,7 +1234,12 @@ async function npxStartupSequence(dataDir: string): Promise<void> {
     });
   });
 
-  if (healthStatus.status === 'healthy' || healthStatus.status === 'degraded') {
+  if (healthStatus.status === 'locked') {
+    sendSplashUpdate({ phase: 'ready', message: 'Database locked — passphrase required' });
+    closeStartupLog();
+    mainWindow = createMainWindow('/setup');
+    markStartupSuccess();
+  } else if (healthStatus.status === 'healthy' || healthStatus.status === 'degraded') {
     sendSplashUpdate({
       phase: 'ready',
       message: 'Ready!',

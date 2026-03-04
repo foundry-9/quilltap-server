@@ -45,6 +45,13 @@ function getMetaConnection(): DatabaseType | null {
     // Open/create the database
     const db = new Database(dbPath);
 
+    // SQLCipher key MUST be the first pragma before any other operations.
+    const sqlcipherKey = process.env.ENCRYPTION_MASTER_PEPPER;
+    if (sqlcipherKey) {
+      const keyHex = Buffer.from(sqlcipherKey, 'base64').toString('hex');
+      db.pragma(`key = "x'${keyHex}'"`);
+    }
+
     // Basic pragmas for safety
     db.pragma('foreign_keys = ON');
     db.pragma('journal_mode = WAL');

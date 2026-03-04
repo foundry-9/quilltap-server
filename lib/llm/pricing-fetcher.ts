@@ -8,7 +8,7 @@
 
 import { Provider, ConnectionProfile } from '@/lib/schemas/types'
 import { getRepositories } from '@/lib/repositories/factory'
-import { decryptApiKey } from '@/lib/encryption'
+
 import { logger } from '@/lib/logger'
 import {
   ModelPricing,
@@ -289,17 +289,7 @@ async function getApiKeyForProvider(
   const apiKeyRecord = await repos.connections.findApiKeyByIdAndUserId(profile.apiKeyId!, userId)
   if (!apiKeyRecord) return null
 
-  try {
-    const apiKey = decryptApiKey(
-      apiKeyRecord.ciphertext,
-      apiKeyRecord.iv,
-      apiKeyRecord.authTag,
-      userId
-    )
-    return { apiKey, baseUrl: profile.baseUrl || undefined }
-  } catch {
-    return null
-  }
+  return { apiKey: apiKeyRecord.key_value, baseUrl: profile.baseUrl || undefined }
 }
 
 /**

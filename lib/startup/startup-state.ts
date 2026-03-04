@@ -21,10 +21,16 @@
 
 import { logger } from '@/lib/logger';
 import type { UpgradeResults } from '@/lib/plugins/upgrader';
-import type { PepperState } from './pepper-vault';
+import type { DbKeyState } from './dbkey';
+
+/**
+ * @deprecated Use DbKeyState from './dbkey' instead
+ */
+export type PepperState = DbKeyState;
 
 export type StartupPhase =
   | 'pending'
+  | 'locked'
   | 'migrations'
   | 'seeding'
   | 'plugin-updates'
@@ -44,8 +50,10 @@ interface StartupStateData {
   pluginUpgrades: UpgradeResults | null;
   /** Whether upgrade notifications have been sent to the client */
   upgradesNotified: boolean;
-  /** Pepper vault state */
-  pepperState: PepperState;
+  /** Database key state */
+  pepperState: DbKeyState;
+  /** Whether the server is in locked mode (waiting for passphrase) */
+  isLockedMode: boolean;
 }
 
 // Extend globalThis type for our startup state
@@ -74,6 +82,7 @@ function getGlobalState(): StartupStateData {
       pluginUpgrades: null,
       upgradesNotified: false,
       pepperState: isTest ? 'resolved' : 'needs-setup',
+      isLockedMode: false,
     };
   }
   return global.__quilltapStartupState;
@@ -232,16 +241,23 @@ export const startupState = {
   },
 
   /**
-   * Set the pepper vault state
+   * Set the database key state
    */
-  setPepperState(state: PepperState): void {
-    getGlobalState().pepperState = state;
+  setPepperState(state: DbKeyState): void {
+    const globalState = getGlobalState();
+    globalState.pepperState = state;
+    // Enter locked mode if passphrase is needed
+    if (state === 'needs-passphrase') {
+      globalState.isLockedMode = true;
+    } else if (state === 'resolved') {
+      globalState.isLockedMode = false;
+    }
   },
 
   /**
-   * Get the pepper vault state
+   * Get the database key state
    */
-  getPepperState(): PepperState {
+  getPepperState(): DbKeyState {
     return getGlobalState().pepperState;
   },
 
@@ -253,6 +269,16 @@ export const startupState = {
   isPepperResolved(): boolean {
     const state = getGlobalState().pepperState;
     return state === 'resolved' || state === 'needs-vault-storage';
+  },
+
+  /**
+   * Check if the server is in locked mode (waiting for passphrase).
+   *
+   * In locked mode, most API routes return 423 Locked and the server
+   * only responds to health checks, unlock endpoints, and setup pages.
+   */
+  isLockedMode(): boolean {
+    return getGlobalState().isLockedMode;
   },
 
   /**
@@ -341,6 +367,7 @@ export const startupState = {
       pluginUpgrades: null,
       upgradesNotified: false,
       pepperState: 'needs-setup',
+      isLockedMode: false,
     };
     setReadyPromise(undefined);
     setReadyResolve(undefined);

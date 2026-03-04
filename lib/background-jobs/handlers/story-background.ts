@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto';
 import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
-import { decryptApiKey } from '@/lib/encryption';
+
 import { createImageProvider } from '@/lib/llm/plugin-factory';
 import { craftStoryBackgroundPrompt, deriveSceneContext, extractVisibleConversation, type ChatMessage } from '@/lib/memory/cheap-llm-tasks';
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig, type CheapLLMSelection } from '@/lib/llm/cheap-llm';
@@ -64,7 +64,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   }
 
   const apiKey = await repos.connections.findApiKeyByIdAndUserId(imageProfile.apiKeyId, job.userId);
-  if (!apiKey?.ciphertext) {
+  if (!apiKey?.key_value) {
     logger.warn('[StoryBackground] API key not found or invalid, skipping generation', {
       context: 'background-jobs.story-background',
       jobId: job.id,
@@ -388,21 +388,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   // 10. Generate the image
   const provider = createImageProvider(imageProfile.provider);
 
-  let decryptedKey: string;
-  try {
-    decryptedKey = decryptApiKey(
-      apiKey.ciphertext,
-      apiKey.iv,
-      apiKey.authTag,
-      job.userId
-    );
-  } catch (error) {
-    logger.error('[StoryBackground] Failed to decrypt API key', {
-      context: 'background-jobs.story-background',
-      jobId: job.id,
-    }, error as Error);
-    throw new Error('Failed to decrypt API key');
-  }
+  const decryptedKey = apiKey.key_value;
 
   let generationResponse;
   try {

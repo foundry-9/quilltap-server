@@ -12,7 +12,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedHandler, AuthenticatedContext, enrichWithApiKey, enrichWithTags } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
-import { decryptApiKey } from '@/lib/encryption';
 import { supportsImageGeneration } from '@/lib/llm/image-capable';
 import { createLLMProvider } from '@/lib/llm';
 import { requiresBaseUrl, testProviderConnection, validateProviderConfig } from '@/lib/plugins/provider-validation';
@@ -256,7 +255,7 @@ async function handleTestConnection(req: NextRequest, context: AuthenticatedCont
         return notFound('API key');
       }
 
-      decryptedKey = decryptApiKey(apiKey.ciphertext, apiKey.iv, apiKey.authTag, user.id);
+      decryptedKey = apiKey.key_value;
     }
 
     // Validate configuration
@@ -333,7 +332,7 @@ async function handleTestMessage(req: NextRequest, context: AuthenticatedContext
         return notFound('API key');
       }
 
-      decryptedKey = decryptApiKey(apiKey.ciphertext, apiKey.iv, apiKey.authTag, user.id);
+      decryptedKey = apiKey.key_value;
     }
 
     // Validate configuration

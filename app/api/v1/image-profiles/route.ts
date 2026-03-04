@@ -14,7 +14,6 @@ import { getActionParam } from '@/lib/api/middleware/actions';
 import { successResponse, created, notFound, badRequest, serverError } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
-import { decryptApiKey } from '@/lib/encryption';
 import { providerRegistry } from '@/lib/plugins/provider-registry';
 
 /**
@@ -143,13 +142,7 @@ async function handleListModels(req: NextRequest, context: AuthenticatedContext)
       }
 
       try {
-        const decryptedKey = decryptApiKey(
-          apiKey.ciphertext,
-          apiKey.iv,
-          apiKey.authTag,
-          context.user.id
-        );
-        models = await imageProvider.getAvailableModels(decryptedKey);
+        models = await imageProvider.getAvailableModels(apiKey.key_value);
       } catch (error) {
         logger.error('[Image Profiles v1] Failed to get models with API key', { provider }, error instanceof Error ? error : undefined);
         models = imageProvider.supportedModels;
@@ -266,23 +259,9 @@ async function handleValidateKey(req: NextRequest, context: AuthenticatedContext
       });
     }
 
-    // Decrypt the API key
-    let decryptedKey: string;
-    try {
-      decryptedKey = decryptApiKey(
-        apiKey.ciphertext,
-        apiKey.iv,
-        apiKey.authTag,
-        context.user.id
-      );
-    } catch (error) {
-      logger.error('[Image Profiles v1] Failed to decrypt API key', { apiKeyId }, error instanceof Error ? error : undefined);
-      return NextResponse.json({ valid: false, message: 'Failed to decrypt API key' });
-    }
-
     // Validate by attempting to get models
     try {
-      const models = await imageProvider.getAvailableModels(decryptedKey);
+      const models = await imageProvider.getAvailableModels(apiKey.key_value);
       
       if (models && models.length > 0) {
         logger.info('[Image Profiles v1] API key validated successfully', { provider, modelCount: models.length });

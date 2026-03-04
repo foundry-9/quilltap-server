@@ -11,7 +11,7 @@ import { createLLMProvider } from '@/lib/llm'
 import { LLMMessage, LLMResponse } from '@/lib/llm/base'
 import { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { getRepositories } from '@/lib/repositories/factory'
-import { decryptApiKey } from '@/lib/encryption'
+
 import { getErrorMessage } from '@/lib/errors'
 import type { Pronouns } from '@/lib/schemas/character.types'
 import { formatNameWithPronouns } from './format-utils'
@@ -151,7 +151,7 @@ async function getApiKeyForSelection(
     return null
   }
 
-  return decryptApiKey(apiKey.ciphertext, apiKey.iv, apiKey.authTag, userId)
+  return apiKey.key_value
 }
 
 /**

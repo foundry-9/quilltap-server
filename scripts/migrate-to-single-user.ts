@@ -190,6 +190,12 @@ function getDatabase(): DatabaseType {
   }
 
   const db = new Database(dbPath);
+  // SQLCipher key must be first pragma
+  const sqlcipherKey = process.env.ENCRYPTION_MASTER_PEPPER;
+  if (sqlcipherKey) {
+    const keyHex = Buffer.from(sqlcipherKey, 'base64').toString('hex');
+    db.pragma(`key = "x'${keyHex}'"`);
+  }
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = OFF'); // Disable during migration to avoid constraint issues
   db.pragma('busy_timeout = 5000');

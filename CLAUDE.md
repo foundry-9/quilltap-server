@@ -17,7 +17,7 @@ This project is spelled "Quilltap", as in "quill" + "tap", **NOT** "Quilttap", a
 - **Language**: TypeScript
 - **Package Manager**: npm
 - **Testing**: Jest and coverage tools (Istanbul/nyc), Playwright
-- **Data Storage**: SQLite with zero external dependencies. Uses `better-sqlite3` driver directly. Data models are defined as TypeScript interfaces with Zod schemas.
+- **Data Storage**: SQLite with SQLCipher encryption at rest. Uses `better-sqlite3-multiple-ciphers` driver (aliased as `better-sqlite3`). Data models are defined as TypeScript interfaces with Zod schemas.
 - **File Storage**: local filesystem only
 - **AI and LLM Services**: OpenAI, Anthropic, xAI/Grok, Google, OpenRouter
 - **Design Documentation**: Storybook
@@ -115,10 +115,13 @@ Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/
     - `logs/`
 - I am using "npm run dev" to work on this while we're working, so the base URL is probably `http://localhost:3000/` if you want to try something.
 - You should track what's going on with the running "npm run dev" process, which is nearly always running while we're working on this, by tailing or searching the `logs/combined.log` file. You can figure out what time it is (I think it's using universal time, not local time), and then look for things that we just tried by working through that log.
-- To access SQLite directly, use: `sqlite3 /path/to/quilltap.db`. Examples:
-  - List tables: `sqlite3 /path/to/quilltap.db ".tables"`
-  - Check record count: `sqlite3 /path/to/quilltap.db "SELECT COUNT(*) FROM TABLENAME;"`
-  - Query with filter: `sqlite3 /path/to/quilltap.db "SELECT * FROM TABLENAME WHERE field = 'value';"`
+- Databases are encrypted with SQLCipher. The standard `sqlite3` CLI cannot open them. Use the Quilltap CLI instead:
+  - List tables: `npx quilltap db --tables`
+  - Check record count: `npx quilltap db "SELECT COUNT(*) FROM TABLENAME;"`
+  - Query with filter: `npx quilltap db "SELECT * FROM TABLENAME WHERE field = 'value';"`
+  - Interactive REPL: `npx quilltap db --repl`
+  - Query LLM logs DB: `npx quilltap db --llm-logs --tables`
+  - Custom data dir: `npx quilltap db --data-dir /path/to/data --tables`
 - This is built in Next.js 16+, so don't look in middleware.ts, but consider proxy.ts, for things you would expect there.
 - When creating or modifying API routes, always use the `/api/v1/` structure with action dispatch patterns. Don't create new routes outside `/api/v1/`. Use the middleware from `@/lib/api/middleware` and response helpers from `@/lib/api/responses`.
 - If asked to fix linting errors, do not change out HTML `<img>` tags for Next.js `<Image>` tags; there is a reason that we don't use them sometimes, usually related to their being pulled in via APIs so Next.js can't know what it's going to display.

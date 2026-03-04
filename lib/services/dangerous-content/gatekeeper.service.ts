@@ -15,7 +15,7 @@ import { createLLMProvider } from '@/lib/llm'
 import type { LLMMessage } from '@/lib/llm/base'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { getRepositories } from '@/lib/repositories/factory'
-import { decryptApiKey } from '@/lib/encryption'
+
 import { getErrorMessage } from '@/lib/errors'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
 import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
@@ -131,7 +131,7 @@ async function getApiKeyForSelection(
     return null
   }
 
-  return decryptApiKey(apiKey.ciphertext, apiKey.iv, apiKey.authTag, userId)
+  return apiKey.key_value
 }
 
 /**
@@ -199,7 +199,7 @@ async function autoDetectModerationApiKey(
       return null
     }
 
-    return decryptApiKey(apiKey.ciphertext, apiKey.iv, apiKey.authTag, userId)
+    return apiKey.key_value
   } catch (error) {
     logger.warn('[Gatekeeper] Failed to auto-detect moderation API key', {
       providerName,

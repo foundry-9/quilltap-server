@@ -42,6 +42,18 @@ export function getSQLiteClient(config: SQLiteConfig): DatabaseType {
       // verbose: process.env.NODE_ENV === 'development' ? console.log : undefined,
     });
 
+    // SQLCipher key MUST be the first pragma before any other operations.
+    // The pepper is a 32-byte base64 string; we convert to raw hex for SQLCipher's
+    // raw key format (x'...') which bypasses SQLCipher's own KDF.
+    const sqlcipherKey = process.env.ENCRYPTION_MASTER_PEPPER;
+    if (sqlcipherKey) {
+      const keyHex = Buffer.from(sqlcipherKey, 'base64').toString('hex');
+      sqliteDatabase.pragma(`key = "x'${keyHex}'"`);
+      logger.debug('SQLCipher key set on main database', {
+        context: 'sqlite-client',
+      });
+    }
+
     // Configure pragmas
     configurePragmas(sqliteDatabase, config);
 
