@@ -395,27 +395,43 @@ function loadDbKey(dataDir, passphrase) {
 
   const data = JSON.parse(fs.readFileSync(dbkeyPath, 'utf8'));
   const INTERNAL_PASSPHRASE = '__quilltap_no_passphrase__';
-  const actualPassphrase = data.hasPassphrase ? passphrase : INTERNAL_PASSPHRASE;
 
-  if (data.hasPassphrase && !passphrase) {
+  // Strip legacy hasPassphrase field if present
+  if ('hasPassphrase' in data) {
+    delete data.hasPassphrase;
+    fs.writeFileSync(dbkeyPath, JSON.stringify(data, null, 2), { mode: 0o600 });
+  }
+
+  // Helper to attempt decryption with a given passphrase
+  function tryDecrypt(pass) {
+    const salt = Buffer.from(data.salt, 'hex');
+    const key = crypto.pbkdf2Sync(pass, new Uint8Array(salt), data.kdfIterations, 32, data.kdfDigest);
+    const iv = Buffer.from(data.iv, 'hex');
+    const decipher = crypto.createDecipheriv(data.algorithm, new Uint8Array(key), new Uint8Array(iv));
+    decipher.setAuthTag(new Uint8Array(Buffer.from(data.authTag, 'hex')));
+    let plaintext = decipher.update(data.ciphertext, 'hex', 'utf8');
+    plaintext += decipher.final('utf8');
+
+    const hash = crypto.createHash('sha256').update(plaintext).digest('hex');
+    if (hash !== data.pepperHash) {
+      throw new Error('Pepper hash mismatch');
+    }
+    return plaintext;
+  }
+
+  // Try internal passphrase first (no user passphrase case)
+  try {
+    return tryDecrypt(INTERNAL_PASSPHRASE);
+  } catch {
+    // Internal passphrase failed — need user passphrase
+  }
+
+  // User passphrase required
+  if (!passphrase) {
     throw new Error('This database requires a passphrase. Use --passphrase <pass>');
   }
 
-  const salt = Buffer.from(data.salt, 'hex');
-  const key = crypto.pbkdf2Sync(actualPassphrase, new Uint8Array(salt), data.kdfIterations, 32, data.kdfDigest);
-  const iv = Buffer.from(data.iv, 'hex');
-  const decipher = crypto.createDecipheriv(data.algorithm, new Uint8Array(key), new Uint8Array(iv));
-  decipher.setAuthTag(new Uint8Array(Buffer.from(data.authTag, 'hex')));
-  let plaintext = decipher.update(data.ciphertext, 'hex', 'utf8');
-  plaintext += decipher.final('utf8');
-
-  // Verify hash
-  const hash = crypto.createHash('sha256').update(plaintext).digest('hex');
-  if (hash !== data.pepperHash) {
-    throw new Error('Pepper hash mismatch — .dbkey file may be corrupt');
-  }
-
-  return plaintext;
+  return tryDecrypt(passphrase);
 }
 
 function printDbHelp() {

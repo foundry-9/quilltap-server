@@ -49,8 +49,8 @@ export type DbKeyState =
  * The JSON structure of the `quilltap.dbkey` file on disk.
  *
  * Contains all cryptographic parameters needed to decrypt the pepper,
- * plus a hash for verification and a flag indicating whether the user
- * set a passphrase.
+ * plus a hash for verification. The file is intentionally opaque — it does
+ * not reveal whether a user passphrase was used.
  */
 interface DbKeyFileData {
   /** Schema version for forward compatibility */
@@ -73,8 +73,6 @@ interface DbKeyFileData {
   authTag: string;
   /** SHA-256 hash of the plaintext pepper for verification (hex-encoded) */
   pepperHash: string;
-  /** Whether the user set a custom passphrase (false = internal passphrase) */
-  hasPassphrase: boolean;
 }
 
 // ============================================================================
@@ -186,13 +184,10 @@ function encryptPepper(pepper: string, passphrase: string): DbKeyFileData {
   ciphertext += cipher.final('hex');
   const authTag = cipher.getAuthTag();
 
-  const hasPassphrase = passphrase !== INTERNAL_PASSPHRASE;
-
   log.debug('Pepper encrypted successfully', {
     saltLength: salt.length,
     ivLength: iv.length,
     ciphertextLength: ciphertext.length,
-    hasPassphrase,
   });
 
   return {
@@ -206,7 +201,6 @@ function encryptPepper(pepper: string, passphrase: string): DbKeyFileData {
     ciphertext,
     authTag: authTag.toString('hex'),
     pepperHash: hashPepper(pepper),
-    hasPassphrase,
   };
 }
 
@@ -228,7 +222,6 @@ function decryptPepperFromFile(data: DbKeyFileData, passphrase: string): string 
     algorithm: data.algorithm,
     kdf: data.kdf,
     kdfIterations: data.kdfIterations,
-    hasPassphrase: data.hasPassphrase,
   });
 
   try {
@@ -295,11 +288,21 @@ function readDbKeyFile(filePath: string): DbKeyFileData | null {
     }
 
     const content = fs.readFileSync(filePath, 'utf8');
-    const data = JSON.parse(content) as DbKeyFileData;
+    const raw = JSON.parse(content);
+
+    // Strip legacy hasPassphrase field if present — it leaks whether a
+    // user passphrase was set. Rewrite the file without it.
+    if ('hasPassphrase' in raw) {
+      log.info('Stripping legacy hasPassphrase flag from .dbkey file', { path: filePath });
+      delete raw.hasPassphrase;
+      const cleaned = JSON.stringify(raw, null, 2);
+      fs.writeFileSync(filePath, cleaned, { mode: 0o600 });
+    }
+
+    const data = raw as DbKeyFileData;
 
     log.debug('.dbkey file read successfully', {
       version: data.version,
-      hasPassphrase: data.hasPassphrase,
       algorithm: data.algorithm,
     });
 
@@ -443,28 +446,21 @@ export async function provisionDbKey(): Promise<DbKeyState> {
     }
 
     // Case 3: No env var + .dbkey file exists
+    // Always try the internal passphrase first. If it works, no user passphrase
+    // was set. If it fails, assume a user passphrase is required.
     if (!envPepper && fileData) {
-      if (!fileData.hasPassphrase) {
-        // No passphrase — decrypt silently with internal passphrase
-        log.debug('Attempting silent decryption with internal passphrase');
-        const pepper = decryptPepperFromFile(fileData, INTERNAL_PASSPHRASE);
+      log.debug('Attempting silent decryption with internal passphrase');
+      const pepper = decryptPepperFromFile(fileData, INTERNAL_PASSPHRASE);
 
-        if (pepper && hashPepper(pepper) === fileData.pepperHash) {
-          log.info('DbKey resolved: decrypted from .dbkey file (no passphrase)');
-          process.env.ENCRYPTION_MASTER_PEPPER = pepper;
-          setCurrentState('resolved');
-          return 'resolved';
-        }
-
-        log.error('Failed to decrypt stored pepper without passphrase — .dbkey file may be corrupt', {
-          dbKeyPath,
-        });
-        setCurrentState('needs-setup');
-        return 'needs-setup';
+      if (pepper && hashPepper(pepper) === fileData.pepperHash) {
+        log.info('DbKey resolved: decrypted from .dbkey file (no passphrase)');
+        process.env.ENCRYPTION_MASTER_PEPPER = pepper;
+        setCurrentState('resolved');
+        return 'resolved';
       }
 
-      // Has passphrase — need user to unlock
-      log.info('DbKey stored with passphrase, unlock required');
+      // Internal passphrase failed — user passphrase required
+      log.info('Internal passphrase did not decrypt .dbkey, user passphrase required');
       setCurrentState('needs-passphrase');
       return 'needs-passphrase';
     }
@@ -504,10 +500,9 @@ export function setupDbKey(passphrase: string): { pepper: string } {
   }
 
   const pepper = generatePepper();
-  const hasPassphrase = passphrase.length > 0;
-  const actualPassphrase = hasPassphrase ? passphrase : INTERNAL_PASSPHRASE;
+  const actualPassphrase = passphrase.length > 0 ? passphrase : INTERNAL_PASSPHRASE;
 
-  log.debug('Encrypting new pepper', { hasPassphrase });
+  log.debug('Encrypting new pepper');
   const fileData = encryptPepper(pepper, actualPassphrase);
 
   const dbKeyPath = getDbKeyPath();
@@ -518,7 +513,6 @@ export function setupDbKey(passphrase: string): { pepper: string } {
   setCurrentState('resolved');
 
   log.info('Database key setup complete', {
-    hasPassphrase,
     dbKeyPath,
     pepperHashPrefix: fileData.pepperHash.substring(0, 12),
   });
@@ -602,10 +596,9 @@ export function storeEnvPepperInDbKey(passphrase: string): void {
     throw new Error('No pepper in environment to store');
   }
 
-  const hasPassphrase = passphrase.length > 0;
-  const actualPassphrase = hasPassphrase ? passphrase : INTERNAL_PASSPHRASE;
+  const actualPassphrase = passphrase.length > 0 ? passphrase : INTERNAL_PASSPHRASE;
 
-  log.debug('Encrypting env pepper for storage', { hasPassphrase });
+  log.debug('Encrypting env pepper for storage');
   const fileData = encryptPepper(pepper, actualPassphrase);
 
   const dbKeyPath = getDbKeyPath();
@@ -614,7 +607,6 @@ export function storeEnvPepperInDbKey(passphrase: string): void {
   setCurrentState('resolved');
 
   log.info('Pepper stored in .dbkey file', {
-    hasPassphrase,
     dbKeyPath,
     pepperHashPrefix: fileData.pepperHash.substring(0, 12),
   });

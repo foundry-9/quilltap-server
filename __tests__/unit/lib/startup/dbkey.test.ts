@@ -117,7 +117,7 @@ describe('Database Key Manager (dbkey)', () => {
       expect(stored).toHaveProperty('iv');
       expect(stored).toHaveProperty('authTag');
       expect(stored).toHaveProperty('pepperHash');
-      expect(stored).toHaveProperty('hasPassphrase', false);
+      expect(stored).not.toHaveProperty('hasPassphrase');
       expect(stored.version).toBe(1);
       expect(stored.algorithm).toBe('aes-256-gcm');
       expect(stored.kdf).toBe('pbkdf2');
@@ -132,7 +132,7 @@ describe('Database Key Manager (dbkey)', () => {
       expect(result.pepper).toHaveLength(44);
 
       const stored = JSON.parse(mockFiles[MOCK_DBKEY_PATH]);
-      expect(stored).toHaveProperty('hasPassphrase', true);
+      expect(stored).not.toHaveProperty('hasPassphrase');
       expect(stored).toHaveProperty('pepperHash');
     });
   });
@@ -318,7 +318,7 @@ describe('Database Key Manager (dbkey)', () => {
       expect(MOCK_DBKEY_PATH in mockFiles).toBe(true);
 
       const stored = JSON.parse(mockFiles[MOCK_DBKEY_PATH]);
-      expect(stored).toHaveProperty('hasPassphrase', true);
+      expect(stored).not.toHaveProperty('hasPassphrase');
     });
 
     it('stores env pepper without a passphrase', async () => {
@@ -330,7 +330,7 @@ describe('Database Key Manager (dbkey)', () => {
 
       expect(dbkey.getDbKeyState()).toBe('resolved');
       const stored = JSON.parse(mockFiles[MOCK_DBKEY_PATH]);
-      expect(stored).toHaveProperty('hasPassphrase', false);
+      expect(stored).not.toHaveProperty('hasPassphrase');
     });
 
     it('throws if not in needs-vault-storage state', async () => {
