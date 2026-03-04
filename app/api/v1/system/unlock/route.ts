@@ -5,6 +5,7 @@
  * POST /api/v1/system/unlock?action=setup - First-run setup
  * POST /api/v1/system/unlock?action=unlock - Unlock with passphrase
  * POST /api/v1/system/unlock?action=store - Store env var pepper in .dbkey file
+ * POST /api/v1/system/unlock?action=change-passphrase - Change the .dbkey passphrase
  *
  * This endpoint is unauthenticated because it must be accessible before
  * the app is fully operational (during locked mode and initial setup).
@@ -51,7 +52,7 @@ export async function POST(request: NextRequest) {
   const action = request.nextUrl.searchParams.get('action');
 
   if (!action) {
-    return badRequest('Missing action parameter. Use ?action=setup, ?action=unlock, or ?action=store');
+    return badRequest('Missing action parameter. Use ?action=setup, ?action=unlock, ?action=store, or ?action=change-passphrase');
   }
 
   try {
@@ -65,6 +66,8 @@ export async function POST(request: NextRequest) {
         return handleUnlock(passphrase);
       case 'store':
         return handleStore(passphrase);
+      case 'change-passphrase':
+        return handleChangePassphrase(body);
       default:
         return badRequest(`Unknown action: ${action}`);
     }
@@ -235,5 +238,37 @@ async function handleStore(passphrase: string): Promise<NextResponse> {
   startupState.setPepperState('resolved');
 
   unlockLogger.info('Pepper stored in .dbkey file successfully');
+  return NextResponse.json({ success: true });
+}
+
+/**
+ * Handle change-passphrase: re-wrap the pepper in a new .dbkey with a different passphrase.
+ *
+ * Requires the app to be in 'resolved' state (unlocked).
+ * Accepts { oldPassphrase, newPassphrase } — either can be empty string
+ * (empty = no passphrase / internal sentinel).
+ */
+async function handleChangePassphrase(body: Record<string, unknown>): Promise<NextResponse> {
+  unlockLogger.info('Passphrase change requested');
+
+  const { getDbKeyState, changePassphrase } = await import('@/lib/startup/dbkey');
+  const state = getDbKeyState();
+
+  if (state !== 'resolved') {
+    unlockLogger.warn('Cannot change passphrase: app not unlocked', { state });
+    return badRequest('Application must be unlocked before changing the passphrase');
+  }
+
+  const oldPassphrase = typeof body.oldPassphrase === 'string' ? body.oldPassphrase : '';
+  const newPassphrase = typeof body.newPassphrase === 'string' ? body.newPassphrase : '';
+
+  const result = changePassphrase(oldPassphrase, newPassphrase);
+
+  if (!result.success) {
+    unlockLogger.warn('Passphrase change failed', { error: result.error });
+    return unauthorized(result.error || 'Passphrase change failed');
+  }
+
+  unlockLogger.info('Passphrase changed successfully');
   return NextResponse.json({ success: true });
 }

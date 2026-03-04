@@ -28,6 +28,14 @@ For those who require a second bolt on the door, Quilltap supports **locked mode
 
 Locked mode is configured via environment variable. Consult the [Data & System settings](/settings?tab=system) for details.
 
+### Changing or Removing Your Passphrase
+
+Should you wish to rotate your passphrase — an exercise in security hygiene that the prudent practitioner undertakes with the same regularity as winding a pocket watch — you may do so from **Settings > Data & System > Encryption Passphrase**. This operation re-wraps the encryption key inside a fresh `.dbkey` file; it does *not* re-encrypt the database itself (there is no need, as the underlying key remains unchanged).
+
+You may also *remove* a passphrase entirely, should you decide that the convenience of automatic unlocking outweighs the additional protection. Simply leave the "New Passphrase" field empty when changing. Conversely, you may *add* a passphrase where none existed before by leaving the "Current Passphrase" field empty and providing a new one.
+
+After changing your passphrase, the new passphrase will be required the next time Quilltap starts.
+
 ### Accessing the Database Directly
 
 Since the standard `sqlite3` CLI cannot open encrypted databases, Quilltap provides its own subcommand for direct database queries — useful for troubleshooting, migrations, and the occasional moment of diagnostic curiosity:

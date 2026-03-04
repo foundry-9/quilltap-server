@@ -100,8 +100,9 @@ const PBKDF2_DIGEST = 'sha256';
 /**
  * Internal passphrase used when the user opts out of setting a custom one.
  * Matches the convention from pepper-vault.ts.
+ * Exported so the unlock route can use it for passphrase change operations.
  */
-const INTERNAL_PASSPHRASE = '__quilltap_no_passphrase__';
+export const INTERNAL_PASSPHRASE = '__quilltap_no_passphrase__';
 
 /** .dbkey file name for the main database */
 const DBKEY_FILENAME = 'quilltap.dbkey';
@@ -568,6 +569,76 @@ export function unlockDbKey(passphrase: string): boolean {
 
   log.info('Database key unlocked successfully');
   return true;
+}
+
+/**
+ * Change the passphrase that protects the .dbkey file(s).
+ *
+ * This does NOT re-encrypt the database — it only re-wraps the pepper
+ * (the actual DB encryption key) in a new .dbkey file with new PBKDF2
+ * parameters derived from the new passphrase.
+ *
+ * Both the main and LLM logs .dbkey files are updated atomically (same
+ * pepper, new passphrase wrapping) to keep them in sync.
+ *
+ * @param oldPassphrase - The current passphrase (empty string = no passphrase set)
+ * @param newPassphrase - The desired new passphrase (empty string = remove passphrase)
+ * @returns Object with `success` boolean and optional `error` message
+ */
+export function changePassphrase(
+  oldPassphrase: string,
+  newPassphrase: string
+): { success: boolean; error?: string } {
+  log.info('Passphrase change requested');
+
+  if (getCurrentState() !== 'resolved') {
+    const currentState = getCurrentState();
+    log.error('Cannot change passphrase in current state', { currentState });
+    return { success: false, error: `Cannot change passphrase in state: ${currentState}` };
+  }
+
+  const dbKeyPath = getDbKeyPath();
+  const fileData = readDbKeyFile(dbKeyPath);
+
+  if (!fileData) {
+    log.error('No .dbkey file found during passphrase change', { dbKeyPath });
+    return { success: false, error: 'No .dbkey file found' };
+  }
+
+  // Determine the actual old passphrase (empty string → internal sentinel)
+  const actualOldPassphrase = oldPassphrase.length > 0 ? oldPassphrase : INTERNAL_PASSPHRASE;
+
+  // Verify the old passphrase can decrypt the pepper
+  log.debug('Verifying old passphrase');
+  const pepper = decryptPepperFromFile(fileData, actualOldPassphrase);
+
+  if (!pepper) {
+    log.warn('Passphrase change failed: old passphrase incorrect');
+    return { success: false, error: 'Current passphrase is incorrect' };
+  }
+
+  // Verify hash as additional safety check
+  if (hashPepper(pepper) !== fileData.pepperHash) {
+    log.error('Passphrase change failed: pepper hash mismatch after decryption');
+    return { success: false, error: 'Pepper verification failed' };
+  }
+
+  // Re-encrypt with the new passphrase
+  const actualNewPassphrase = newPassphrase.length > 0 ? newPassphrase : INTERNAL_PASSPHRASE;
+
+  log.debug('Re-encrypting pepper with new passphrase');
+  const newFileData = encryptPepper(pepper, actualNewPassphrase);
+
+  // Write both .dbkey files (main + LLM logs) with the new wrapping
+  writeDbKeyFile(dbKeyPath, newFileData);
+  log.info('Main .dbkey file updated with new passphrase', { dbKeyPath });
+
+  const llmLogsDbKeyPath = getLLMLogsDbKeyPath();
+  writeDbKeyFile(llmLogsDbKeyPath, newFileData);
+  log.info('LLM logs .dbkey file updated with new passphrase', { path: llmLogsDbKeyPath });
+
+  log.info('Passphrase change completed successfully');
+  return { success: true };
 }
 
 /**
