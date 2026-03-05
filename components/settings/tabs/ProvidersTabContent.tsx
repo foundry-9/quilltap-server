@@ -28,7 +28,7 @@ export function ProvidersTabContent() {
       <div className="space-y-4">
         <Link
           href="/settings/wizard"
-          className="qt-card block p-4 hover:qt-bg-hover transition-colors"
+          className="qt-card block p-4 hover:qt-bg-surface-alt transition-colors"
         >
           <div className="flex items-center justify-between">
             <div>

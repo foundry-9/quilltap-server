@@ -51,44 +51,38 @@ export async function seedInitialData(): Promise<void> {
       return;
     }
 
-    // Get seed characters
+    logger.info('Seeding initial data for first startup', { context });
+
+    // Get seed characters from JSON files (if any)
     const seedCharacters = getSeedCharacters();
 
-    if (seedCharacters.length === 0) {
-      logger.warn('No seed characters defined', { context });
-      return;
-    }
+    if (seedCharacters.length > 0) {
+      // Create each seed character
+      for (const seedData of seedCharacters) {
+        try {
+          const characterData = prepareSeedCharacter(seedData, SINGLE_USER_ID);
+          const created = await repos.characters.create(characterData);
 
-    logger.info('Seeding initial data for first startup', {
-      context,
-      characterCount: seedCharacters.length,
-    });
-
-    // Create each seed character
-    for (const seedData of seedCharacters) {
-      try {
-        const characterData = prepareSeedCharacter(seedData, SINGLE_USER_ID);
-        const created = await repos.characters.create(characterData);
-
-        logger.info('Seeded initial character', {
-          context,
-          characterId: created.id,
-          characterName: created.name,
-        });
-      } catch (charError) {
-        logger.error('Failed to seed character', {
-          context,
-          characterName: seedData.name,
-          error: charError instanceof Error ? charError.message : String(charError),
-        });
-        // Continue with other characters even if one fails
+          logger.info('Seeded initial character', {
+            context,
+            characterId: created.id,
+            characterName: created.name,
+          });
+        } catch (charError) {
+          logger.error('Failed to seed character', {
+            context,
+            characterName: seedData.name,
+            error: charError instanceof Error ? charError.message : String(charError),
+          });
+          // Continue with other characters even if one fails
+        }
       }
-    }
 
-    logger.info('Character seeding complete', {
-      context,
-      seededCount: seedCharacters.length,
-    });
+      logger.info('Character seeding complete', {
+        context,
+        seededCount: seedCharacters.length,
+      });
+    }
 
     // Seed embedding profiles if none exist
     await seedEmbeddingProfiles(repos, context);
