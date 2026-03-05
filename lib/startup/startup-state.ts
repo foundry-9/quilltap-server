@@ -54,6 +54,10 @@ interface StartupStateData {
   pepperState: DbKeyState;
   /** Whether the server is in locked mode (waiting for passphrase) */
   isLockedMode: boolean;
+  /** Migration warnings to surface to the user */
+  migrationWarnings: string[];
+  /** Whether migration warning notifications have been sent to the client */
+  migrationWarningsNotified: boolean;
 }
 
 // Extend globalThis type for our startup state
@@ -61,6 +65,7 @@ declare global {
   var __quilltapStartupState: StartupStateData | undefined;
   var __quilltapStartupReadyPromise: Promise<void> | undefined;
   var __quilltapStartupReadyResolve: (() => void) | undefined;
+  var __quilltapMigrationWarnings: string[] | undefined;
 }
 
 /**
@@ -83,8 +88,17 @@ function getGlobalState(): StartupStateData {
       upgradesNotified: false,
       pepperState: isTest ? 'resolved' : 'needs-setup',
       isLockedMode: false,
+      migrationWarnings: [],
+      migrationWarningsNotified: false,
     };
   }
+
+  // Absorb any migration warnings pushed to the global before startup state was created
+  if (global.__quilltapMigrationWarnings && global.__quilltapMigrationWarnings.length > 0) {
+    global.__quilltapStartupState.migrationWarnings.push(...global.__quilltapMigrationWarnings);
+    global.__quilltapMigrationWarnings = [];
+  }
+
   return global.__quilltapStartupState;
 }
 
@@ -282,6 +296,48 @@ export const startupState = {
   },
 
   /**
+   * Add a migration warning to surface to the user
+   */
+  addMigrationWarning(message: string): void {
+    const state = getGlobalState();
+    state.migrationWarnings.push(message);
+    logger.debug('Migration warning added', {
+      context: 'startup-state.addMigrationWarning',
+      message,
+    });
+  },
+
+  /**
+   * Get all migration warnings
+   */
+  getMigrationWarnings(): string[] {
+    return [...getGlobalState().migrationWarnings];
+  },
+
+  /**
+   * Check if there are any migration warnings
+   */
+  hasMigrationWarnings(): boolean {
+    return getGlobalState().migrationWarnings.length > 0;
+  },
+
+  /**
+   * Check if there are un-notified migration warnings
+   */
+  hasUnnotifiedMigrationWarnings(): boolean {
+    const state = getGlobalState();
+    return !state.migrationWarningsNotified && state.migrationWarnings.length > 0;
+  },
+
+  /**
+   * Mark migration warnings as notified
+   */
+  markMigrationWarningsNotified(): void {
+    const state = getGlobalState();
+    state.migrationWarningsNotified = true;
+  },
+
+  /**
    * Wait for the server to be ready
    * Returns immediately if already ready
    * Times out after maxWaitMs (default 30 seconds)
@@ -368,7 +424,10 @@ export const startupState = {
       upgradesNotified: false,
       pepperState: 'needs-setup',
       isLockedMode: false,
+      migrationWarnings: [],
+      migrationWarningsNotified: false,
     };
+    global.__quilltapMigrationWarnings = [];
     setReadyPromise(undefined);
     setReadyResolve(undefined);
   },

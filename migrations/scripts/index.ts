@@ -103,6 +103,8 @@ import { fixTextEmbeddingsAfterUpdateMigration } from './fix-text-embeddings-aft
 import { addConnectionProfileSortIndexMigration } from './add-connection-profile-sort-index';
 // Drop encryption columns from api_keys (ciphertext → key_value, drop iv/authTag)
 import { dropApiKeyEncryptionColumnsMigration } from './drop-api-key-encryption-columns';
+// Decrypt API key values left as ciphertext after column rename
+import { decryptApiKeyValuesMigration } from './decrypt-api-key-values';
 // Drop pepper_vault table (encryption simplified)
 import { dropPepperVaultMigration } from './drop-pepper-vault';
 
@@ -203,6 +205,8 @@ export const migrations: Migration[] = [
   addConnectionProfileSortIndexMigration,
   // Drop encryption columns from api_keys (ciphertext → key_value, drop iv/authTag)
   dropApiKeyEncryptionColumnsMigration,
+  // Decrypt API key values left as ciphertext after column rename
+  decryptApiKeyValuesMigration,
   // Drop pepper_vault table (encryption simplified)
   dropPepperVaultMigration,
 ];
@@ -298,6 +302,8 @@ export {
   addConnectionProfileSortIndexMigration,
   // Drop encryption columns from api_keys (ciphertext → key_value, drop iv/authTag)
   dropApiKeyEncryptionColumnsMigration,
+  // Decrypt API key values left as ciphertext after column rename
+  decryptApiKeyValuesMigration,
   // Drop pepper_vault table (encryption simplified)
   dropPepperVaultMigration,
 };

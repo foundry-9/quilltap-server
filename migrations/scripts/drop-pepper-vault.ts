@@ -80,7 +80,7 @@ export const dropPepperVaultMigration: Migration = {
   id: 'drop-pepper-vault-v1',
   description: 'Drop the pepper_vault table (encryption simplified)',
   introducedInVersion: '3.2.0',
-  dependsOn: ['drop-api-key-encryption-columns-v1'],
+  dependsOn: ['drop-api-key-encryption-columns-v1', 'decrypt-api-key-values-v1'],
 
   async shouldRun(): Promise<boolean> {
     if (!isSQLiteBackend()) {
