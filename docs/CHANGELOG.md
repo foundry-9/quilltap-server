@@ -2,6 +2,8 @@
 
 ## Recent Changes
 
+### 3.3-dev
+
 ### 3.2.0
 
 - docs: Update README — expand plugin types table from 5 to 7 (add Image Provider and Embedding Provider); update package.json description; add `engines` field requiring Node.js >= 24.0.0
