@@ -244,11 +244,13 @@ See [Backup & Restore](docs/BACKUP-RESTORE.md) and [Database Protection](help/da
 
 ## For Developers
 
-Quilltap was built to be extended. The plugin system supports five extension points, all delivered as npm packages:
+Quilltap was built to be extended. The plugin system supports seven extension points, all delivered as npm packages:
 
 | Plugin Type | What It Does |
 | ----------- | ------------ |
-| **LLM Provider** | Add new AI services, including chat, embedding, image generation, and moderation |
+| **LLM Provider** | Add new AI chat services with tool use, streaming, and multimodal support |
+| **Image Provider** | Image generation backends (bundled: OpenAI/DALL-E, Google Imagen, xAI/Grok) |
+| **Embedding Provider** | Semantic search and memory embedding (bundled: OpenAI, Ollama, built-in) |
 | **Theme** | Custom visual styles with full control over the CSS token system |
 | **Template** | Roleplay formatting templates for different prompt styles |
 | **Tool** | Custom LLM capabilities (the AI can use your tool mid-conversation) |
