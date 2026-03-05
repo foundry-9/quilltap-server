@@ -6,6 +6,7 @@
 
 ### 3.2.1
 
+- fix: Release workflow tag filter used regex syntax (`+`) invalid in GitHub Actions glob patterns — replaced with correct glob pattern and added `validate-tag` job with proper regex validation; all build jobs now gate on tag validation; made Discord notification job non-blocking (`continue-on-error`); Linux Electron build now waits for rootfs like other platforms
 - fix: `npx quilltap` fails with "sqlite not accessible after retries" because npm hoisting resolves the `better-sqlite3` alias to plain `better-sqlite3` instead of `better-sqlite3-multiple-ciphers` (SQLCipher) — the CLI package now depends on `better-sqlite3-multiple-ciphers` by its real name, resolves it explicitly in `ensureNativeModules()` and `linkNativeModules()`, and symlinks it as `better-sqlite3` for the standalone server; the `quilltap db` subcommand also prefers the SQLCipher build
 - fix: Migration retry loop silently swallows all database connection errors — `waitForDatabaseReady()` now logs the actual error on each attempt so failures are diagnosable
 - fix: `getSQLiteDatabase()` caches a half-initialized connection when pragma setup fails — subsequent retries return the same broken instance instead of retrying; now closes the connection on error so retries start fresh

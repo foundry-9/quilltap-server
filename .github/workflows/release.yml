@@ -3,7 +3,11 @@ name: Release
 on:
   push:
     tags:
-      - '[0-9]+.[0-9]+.[0-9]+*'  # e.g., 3.0.0, 3.1.0-beta.1
+      # Matches:
+      # - 3.2.1
+      # - 3.2.0-dev.21
+      # - 3.2.0-beta.1
+      - '[0-9]*.[0-9]*.[0-9]*'
 
 permissions:
   contents: write
@@ -12,8 +16,20 @@ env:
   DOCKER_IMAGE: csebold/quilltap
 
 jobs:
+  validate-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate tag format
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if [[ ! "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Tag '$TAG' is not valid semver-ish (expected 1.2.3 or 1.2.3-dev.21)"
+            exit 1
+          fi
+
   build-rootfs:
     name: Build rootfs (${{ matrix.arch }})
+    needs: validate-tag
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
@@ -50,6 +66,7 @@ jobs:
 
   build-standalone:
     name: Build standalone tarball
+    needs: validate-tag
     runs-on: ubuntu-latest
 
     steps:
@@ -77,6 +94,7 @@ jobs:
 
   build-docker:
     name: Build Docker (${{ matrix.arch }})
+    needs: validate-tag
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
@@ -277,6 +295,7 @@ jobs:
 
   build-electron-linux:
     name: Build Electron (Linux)
+    needs: build-rootfs
     runs-on: ubuntu-latest
 
     steps:
@@ -472,6 +491,7 @@ jobs:
   github-releases-to-discord:
     runs-on: ubuntu-latest
     needs: create-release
+    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v3
