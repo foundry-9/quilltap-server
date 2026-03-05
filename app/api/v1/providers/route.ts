@@ -65,11 +65,6 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
       searchCount: searchProviderList.length,
       totalCount: allProviders.length,
     });
-    logger.debug('[Providers v1] Provider icon data included', {
-      providersWithIcons,
-      providerNames: allProviders.map(p => p.name),
-    });
-
     return successResponse({
       providers: allProviders,
       count: allProviders.length,

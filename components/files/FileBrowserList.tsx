@@ -114,7 +114,7 @@ export default function FileBrowserList({
     <div className="w-full overflow-x-auto">
       <table className="w-full border-collapse">
         <thead>
-          <tr className="border-b border-border">
+          <tr className="border-b qt-border-default">
             <th className="text-left p-2 w-12"></th>
             <th className="text-left p-2">
               <SortableHeader
@@ -159,10 +159,10 @@ export default function FileBrowserList({
           {currentFolder !== '/' && (
             <tr
               onClick={onGoUp}
-              className="border-b border-border hover:bg-muted cursor-pointer transition-colors"
+              className="border-b qt-border-default hover:qt-bg-surface-alt cursor-pointer transition-colors"
             >
               <td className="p-2 text-xl">{'\u{1F4C1}'}</td>
-              <td className="p-2 font-medium text-muted-foreground">..</td>
+              <td className="p-2 font-medium qt-text-secondary">..</td>
               <td className="p-2 hidden md:table-cell"></td>
               <td className="p-2 hidden sm:table-cell"></td>
               <td className="p-2 hidden lg:table-cell"></td>
@@ -176,22 +176,22 @@ export default function FileBrowserList({
             <tr
               key={folder.path}
               onClick={() => onFolderClick(folder.path)}
-              className="border-b border-border hover:bg-muted cursor-pointer transition-colors"
+              className="border-b qt-border-default hover:qt-bg-surface-alt cursor-pointer transition-colors"
             >
               <td className="p-2 text-xl">{'\u{1F4C1}'}</td>
               <td className="p-2">
                 <span className="font-medium">{folder.name}</span>
               </td>
-              <td className="p-2 hidden md:table-cell text-muted-foreground">
+              <td className="p-2 hidden md:table-cell qt-text-secondary">
                 {folder.fileCount} file{folder.fileCount !== 1 ? 's' : ''}
               </td>
-              <td className="p-2 hidden sm:table-cell text-muted-foreground">
+              <td className="p-2 hidden sm:table-cell qt-text-secondary">
                 Folder
               </td>
-              <td className="p-2 hidden lg:table-cell text-muted-foreground">
+              <td className="p-2 hidden lg:table-cell qt-text-secondary">
                 --
               </td>
-              <td className="p-2 hidden sm:table-cell text-muted-foreground">
+              <td className="p-2 hidden sm:table-cell qt-text-secondary">
                 --
               </td>
               <td className="p-2"></td>
@@ -202,7 +202,7 @@ export default function FileBrowserList({
           {files.map(file => (
             <tr
               key={file.id}
-              className={`border-b border-border hover:bg-muted transition-colors group ${file.fileStatus === 'orphaned' ? 'bg-amber-400/5' : ''}`}
+              className={`border-b qt-border-default hover:qt-bg-surface-alt transition-colors group ${file.fileStatus === 'orphaned' ? 'qt-bg-warning/5' : ''}`}
             >
               <td className="p-2 text-xl">{getFileIcon(file.mimeType)}</td>
               <td className="p-2">
@@ -215,7 +215,7 @@ export default function FileBrowserList({
                     {file.originalFilename || file.filename}
                   </button>
                   {file.fileStatus === 'orphaned' && (
-                    <span className="qt-text-xs text-amber-500 px-1.5 py-0.5 rounded bg-amber-400/10 whitespace-nowrap" title="Untracked file found on disk">
+                    <span className="qt-text-xs qt-text-warning px-1.5 py-0.5 rounded qt-bg-warning/10 whitespace-nowrap" title="Untracked file found on disk">
                       untracked
                     </span>
                   )}
@@ -223,20 +223,20 @@ export default function FileBrowserList({
               </td>
               <td className="p-2 hidden md:table-cell">
                 {file.linkedTo && file.linkedTo.length > 0 ? (
-                  <span className="qt-text-xs text-muted-foreground">
+                  <span className="qt-text-xs qt-text-secondary">
                     {file.linkedTo.length} link{file.linkedTo.length !== 1 ? 's' : ''}
                   </span>
                 ) : (
-                  <span className="qt-text-xs text-muted-foreground">--</span>
+                  <span className="qt-text-xs qt-text-secondary">--</span>
                 )}
               </td>
-              <td className="p-2 hidden sm:table-cell text-muted-foreground qt-text-small">
+              <td className="p-2 hidden sm:table-cell qt-text-secondary qt-text-small">
                 {getFileTypeLabel(file.mimeType)}
               </td>
-              <td className="p-2 hidden lg:table-cell text-muted-foreground qt-text-small">
+              <td className="p-2 hidden lg:table-cell qt-text-secondary qt-text-small">
                 {formatFileSize(file.size)}
               </td>
-              <td className="p-2 hidden sm:table-cell text-muted-foreground qt-text-small">
+              <td className="p-2 hidden sm:table-cell qt-text-secondary qt-text-small">
                 {formatFileDate(file.createdAt)}
               </td>
               <td className="p-2">
@@ -271,7 +271,7 @@ export default function FileBrowserList({
           {/* Empty state */}
           {isEmpty && (
             <tr>
-              <td colSpan={7} className="p-8 text-center text-muted-foreground">
+              <td colSpan={7} className="p-8 text-center qt-text-secondary">
                 <div className="text-5xl mb-3">{'\u{1F4C2}'}</div>
                 <p className="text-lg">No files yet</p>
                 <p className="qt-text-small">Upload files to get started</p>

@@ -182,12 +182,6 @@ export async function scanDirectory(
 
   await walk(startDir, prefix);
 
-  logger.debug('Directory scan complete', {
-    basePath,
-    relativeTo: relativeTo || '(root)',
-    entriesFound: results.length,
-  });
-
   return results;
 }
 

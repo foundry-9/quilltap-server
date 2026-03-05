@@ -113,7 +113,7 @@ quilltap/
 
 ### Prerequisites
 
-- **Node.js 22+**
+- **Node.js 24+**
 - **SQLite with SQLCipher** (automatic with better-sqlite3-multiple-ciphers) — note that the standard `sqlite3` CLI cannot open Quilltap's encrypted database files; use `npx quilltap db` for direct database access
 - **File storage**: Local filesystem (default) or optionally S3-compatible storage
 
@@ -411,7 +411,8 @@ In development, logs are written to `logs/combined.log` and `logs/error.log`. Us
 9. If we updated any packages (in `packages/`), make sure that those are published to npmjs and properly installed in any NPM package.json files that exist throughout the application, including other packages, plugins, and the primary one at the root level
 10. Verify that the backup/restore system includes everything that can be backed up (usually everything but things that are so secret they need to be encrypted, like API keys)
 11. Make sure that lint/test/build in Github Actions are working
-12. Check the following Markdown files to be sure they are up-to-date:
+12. Remove all log.debug calls made during this development cycle (i.e., since the last release)
+13. Check the following Markdown files to be sure they are up-to-date:
     - [README](README.md)
     - [Changelog](docs/CHANGELOG.md)
     - [API Documentation](docs/API.md)
@@ -553,4 +554,5 @@ git commit --no-verify -m "bugfix: started $NEWRELEASE bug branch"
 - [Deployment Guide](docs/DEPLOYMENT.md) - Production deployment patterns
 - [Backup & Restore Guide](docs/BACKUP-RESTORE.md) - Data backup procedures
 - [Plugin Developer Guide](plugins/README.md) - Creating plugins
+- [Database Encryption](docs/DATABASE_ENCRYPTION.md) - SQLCipher encryption architecture, .dbkey file management, and passphrase handling
 - [Roadmap](features/ROADMAP.md) - Planned features including Electron/Lima phases

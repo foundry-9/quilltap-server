@@ -147,7 +147,7 @@ async function openLinuxFileBrowser(dirPath: string): Promise<void> {
       await execFileAsync(cmd, [dirPath]);
       return;
     } catch {
-      logger.debug(`File manager '${cmd}' not available, trying next`, { dirPath });
+      // File manager not available, trying next
     }
   }
 

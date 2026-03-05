@@ -52,11 +52,6 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
         const chatMessages = await repos.chats.getMessages(chatId);
         const messageIds = chatMessages.map((m: { id: string }) => m.id);
         logs = await repos.llmLogs.findAllForChat(chatId, messageIds);
-        logger.debug('[LLM Logs API] Fetched combined chat logs', {
-          chatId,
-          messageCount: messageIds.length,
-          logCount: logs.length,
-        });
       } else {
         logs = await repos.llmLogs.findByChatId(chatId);
       }

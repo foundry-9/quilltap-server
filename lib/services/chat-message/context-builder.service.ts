@@ -398,10 +398,6 @@ export async function buildMessageContext(
       thoughtSignature: undefined,
       name: undefined,
     })
-    logger.debug('Added assistant prefill for multi-character identity anchoring', {
-      characterName: character.name,
-      chatId: chat.id,
-    })
   }
 
   return {

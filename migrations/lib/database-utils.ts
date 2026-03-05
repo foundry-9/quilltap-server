@@ -115,7 +115,6 @@ export function getSQLiteDatabase(): DatabaseType {
   if (sqlcipherKey) {
     const keyHex = Buffer.from(sqlcipherKey, 'base64').toString('hex');
     sqliteDb.pragma(`key = "x'${keyHex}'"`);
-    logger.debug('SQLCipher key set on migration database');
   }
 
   // Configure pragmas

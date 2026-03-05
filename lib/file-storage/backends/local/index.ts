@@ -310,10 +310,6 @@ export class LocalFileStorageBackend implements FileStorageBackend {
         ) {
         } else {
           // Log but don't throw for sidecar cleanup failure
-          logger.debug('Failed to clean up legacy sidecar', {
-            key,
-            error: error instanceof Error ? error.message : 'Unknown error',
-          });
         }
       }
     } catch (error) {

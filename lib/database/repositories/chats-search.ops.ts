@@ -138,12 +138,6 @@ export class ChatSearchReplaceOps {
           });
         }
 
-        logger.debug('Global message search completed (SQLite)', {
-          chatCount: chatIds.length,
-          resultCount: results.length,
-          queryLength: searchText.length,
-        });
-
         return results;
       } else {
         // Legacy data compatibility: iterate through each chat's embedded messages
@@ -171,12 +165,6 @@ export class ChatSearchReplaceOps {
             }
           }
         }
-
-        logger.debug('Global message search completed (legacy)', {
-          chatCount: chatIds.length,
-          resultCount: results.length,
-          queryLength: searchText.length,
-        });
 
         return results;
       }

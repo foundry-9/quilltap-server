@@ -11,18 +11,18 @@ interface LLMInspectorEntryProps {
 type TabType = 'request' | 'response' | 'usage'
 
 const TYPE_BADGE_CLASSES: Record<string, string> = {
-  CHAT_MESSAGE: 'bg-primary/15 text-primary',
-  TOOL_CONTINUATION: 'bg-primary/15 text-primary',
-  MEMORY_EXTRACTION: 'bg-info/15 text-info',
-  TITLE_GENERATION: 'bg-secondary/50 text-secondary-foreground',
-  SUMMARIZATION: 'bg-secondary/50 text-secondary-foreground',
-  CONTEXT_COMPRESSION: 'bg-secondary/50 text-secondary-foreground',
-  IMAGE_PROMPT_CRAFTING: 'bg-warning/15 text-warning',
-  IMAGE_DESCRIPTION: 'bg-warning/15 text-warning',
-  APPEARANCE_RESOLUTION: 'bg-warning/15 text-warning',
-  DANGER_CLASSIFICATION: 'bg-destructive/15 text-destructive',
-  CHARACTER_WIZARD: 'bg-success/15 text-success',
-  AI_IMPORT: 'bg-success/15 text-success',
+  CHAT_MESSAGE: 'qt-bg-primary/15 qt-text-primary',
+  TOOL_CONTINUATION: 'qt-bg-primary/15 qt-text-primary',
+  MEMORY_EXTRACTION: 'qt-bg-info/15 qt-text-info',
+  TITLE_GENERATION: 'qt-bg-secondary/50 qt-text-secondary',
+  SUMMARIZATION: 'qt-bg-secondary/50 qt-text-secondary',
+  CONTEXT_COMPRESSION: 'qt-bg-secondary/50 qt-text-secondary',
+  IMAGE_PROMPT_CRAFTING: 'qt-bg-warning/15 qt-text-warning',
+  IMAGE_DESCRIPTION: 'qt-bg-warning/15 qt-text-warning',
+  APPEARANCE_RESOLUTION: 'qt-bg-warning/15 qt-text-warning',
+  DANGER_CLASSIFICATION: 'qt-bg-destructive/15 qt-text-destructive',
+  CHARACTER_WIZARD: 'qt-bg-success/15 qt-text-success',
+  AI_IMPORT: 'qt-bg-success/15 qt-text-success',
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -60,7 +60,7 @@ export default function LLMInspectorEntry({ log, isHighlighted }: Readonly<LLMIn
   const [expanded, setExpanded] = useState(false)
   const [activeTab, setActiveTab] = useState<TabType>('request')
 
-  const badgeClass = TYPE_BADGE_CLASSES[log.type] || 'bg-muted text-muted-foreground'
+  const badgeClass = TYPE_BADGE_CLASSES[log.type] || 'qt-bg-muted qt-text-secondary'
   const typeLabel = TYPE_LABELS[log.type] || log.type
 
   return (
@@ -118,7 +118,7 @@ export default function LLMInspectorEntry({ log, isHighlighted }: Readonly<LLMIn
 
         {/* Error indicator */}
         {log.response.error && (
-          <span className="text-destructive flex-shrink-0" title={log.response.error}>
+          <span className="qt-text-destructive flex-shrink-0" title={log.response.error}>
             <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
             </svg>
@@ -229,12 +229,12 @@ function ResponseTab({ log }: { log: LLMLog }) {
   return (
     <div className="space-y-3">
       {log.response.error ? (
-        <div className="p-2 bg-destructive/10 border border-destructive/20 rounded">
-          <h4 className="font-medium text-destructive mb-1">Error</h4>
+        <div className="p-2 qt-bg-destructive/10 border border-destructive/20 rounded">
+          <h4 className="font-medium qt-text-destructive mb-1">Error</h4>
           <p className="qt-text">{log.response.error}</p>
         </div>
       ) : (
-        <div className="p-2 bg-success/10 border border-success/20 rounded">
+        <div className="p-2 qt-bg-success/10 border border-success/20 rounded">
           <p className="qt-text font-medium">Request completed successfully</p>
         </div>
       )}

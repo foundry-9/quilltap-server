@@ -81,12 +81,6 @@ export function getSeedCharacters(): SeedCharacterData[] {
         const raw = fs.readFileSync(filePath, 'utf-8');
         const data = JSON.parse(raw) as SeedCharacterData;
         characters.push(data);
-
-        logger.debug('Loaded seed character file', {
-          context,
-          file,
-          characterName: data.name,
-        });
       } catch (fileError) {
         logger.error('Failed to load seed character file', {
           context,
@@ -96,12 +90,6 @@ export function getSeedCharacters(): SeedCharacterData[] {
         // Continue loading other files
       }
     }
-
-    logger.debug('Loaded seed characters', {
-      context,
-      count: characters.length,
-      names: characters.map(c => c.name),
-    });
 
     return characters;
   } catch (error) {
@@ -165,7 +153,6 @@ export function getSeedImports(): { filename: string; data: QuilltapExport }[] {
 
   try {
     if (!fs.existsSync(importsDir)) {
-      logger.debug('No seed imports directory found', { context, importsDir });
       return [];
     }
 
@@ -174,7 +161,6 @@ export function getSeedImports(): { filename: string; data: QuilltapExport }[] {
       .sort();
 
     if (files.length === 0) {
-      logger.debug('No .qtap seed import files found', { context, importsDir });
       return [];
     }
 
@@ -186,15 +172,6 @@ export function getSeedImports(): { filename: string; data: QuilltapExport }[] {
         const raw = fs.readFileSync(filePath, 'utf-8');
         const data = JSON.parse(raw) as QuilltapExport;
         imports.push({ filename: file, data });
-
-        const counts = data.manifest?.counts;
-        logger.debug('Loaded seed import file', {
-          context,
-          file,
-          exportType: data.manifest?.exportType,
-          characters: counts?.characters ?? 0,
-          memories: counts?.memories ?? 0,
-        });
       } catch (fileError) {
         logger.error('Failed to load seed import file', {
           context,
@@ -204,12 +181,6 @@ export function getSeedImports(): { filename: string; data: QuilltapExport }[] {
         // Continue loading other files
       }
     }
-
-    logger.debug('Loaded seed imports', {
-      context,
-      count: imports.length,
-      files: imports.map(i => i.filename),
-    });
 
     return imports;
   } catch (error) {
@@ -248,7 +219,6 @@ export function getSeedAvatars(): SeedAvatarData[] {
 
   try {
     if (!fs.existsSync(avatarsDir)) {
-      logger.debug('No seed avatars directory found', { context, avatarsDir });
       return [];
     }
 
@@ -258,7 +228,6 @@ export function getSeedAvatars(): SeedAvatarData[] {
       .sort();
 
     if (files.length === 0) {
-      logger.debug('No seed avatar files found', { context, avatarsDir });
       return [];
     }
 
@@ -280,13 +249,6 @@ export function getSeedAvatars(): SeedAvatarData[] {
         const mimeType = mimeMap[ext] || 'image/webp';
 
         avatars.push({ characterName, filename: file, content, mimeType });
-
-        logger.debug('Loaded seed avatar file', {
-          context,
-          file,
-          characterName,
-          size: content.length,
-        });
       } catch (fileError) {
         logger.error('Failed to load seed avatar file', {
           context,
@@ -296,11 +258,6 @@ export function getSeedAvatars(): SeedAvatarData[] {
       }
     }
 
-    logger.debug('Loaded seed avatars', {
-      context,
-      count: avatars.length,
-      characters: avatars.map(a => a.characterName),
-    });
 
     return avatars;
   } catch (error) {

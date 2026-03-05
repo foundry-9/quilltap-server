@@ -17,12 +17,15 @@ A complete backup includes everything needed to recreate your Quilltap environme
 - All chat histories and messages
 - All memories and memory data
 - All files you've uploaded (images, documents, attachments)
+- All folder structures you've created
 - Projects and their settings
 
 **Profiles & Settings**
-- Connection profiles (API key references - keys need re-entry after restore)
+- Connection profiles (API key references — keys need re-entry after restore)
 - Image generation profiles
 - Embedding profiles
+- Chat display and behavior settings
+- File write permissions (LLM file access grants)
 - Plugin configurations (per-plugin settings)
 
 **Templates & Organization**
@@ -35,9 +38,18 @@ A complete backup includes everything needed to recreate your Quilltap environme
 - Plugin-specific configurations
 
 **Logs & History**
-- LLM request/response logs
+- LLM request/response logs (the Inspector's records)
 
-**Not included:** Running background jobs, temporary data, or built-in plugins (they come with Quilltap).
+**Not Included in Backups**
+
+Certain data is intentionally excluded from backups:
+
+- **API keys** — encrypted with device-specific keys and cannot be transferred between instances. You will need to re-enter your API keys in your connection, image, and embedding profiles after a restore.
+- **Encryption key (.dbkey file)** — the master encryption key for your database is not included for security. Keep your `.dbkey` file backed up separately if you use database encryption.
+- **Embedding vectors and search indices** — these are regenerated automatically after restore. Semantic search in the Commonplace Book may be temporarily unavailable until reindexing completes.
+- **Background jobs** — any in-flight or queued tasks (embedding generation, memory extraction, etc.) are not preserved. They will be re-triggered as needed.
+- **Built-in plugins** — these ship with Quilltap and do not need backing up.
+- **Cached provider model lists** — while included in backups for convenience, these are refreshed automatically from your providers.
 
 ## Creating a Backup
 

@@ -271,12 +271,6 @@ async function seedAvatars(
         if (character.defaultImageId) {
           const existingFile = await repos.files.findById(character.defaultImageId);
           if (existingFile) {
-            logger.debug('Character already has avatar, skipping', {
-              context,
-              characterName: character.name,
-              characterId: character.id,
-              fileId: existingFile.id,
-            });
             continue;
           }
         }

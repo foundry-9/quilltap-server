@@ -184,18 +184,11 @@ async function autoDetectModerationApiKey(
     // Find first profile matching the moderation provider name
     const matchingProfile = profiles.find(p => p.provider === providerName)
     if (!matchingProfile?.apiKeyId) {
-      logger.debug('[Gatekeeper] No connection profile found for moderation provider', {
-        providerName,
-      })
       return null
     }
 
     const apiKey = await repos.connections.findApiKeyByIdAndUserId(matchingProfile.apiKeyId, userId)
     if (!apiKey) {
-      logger.debug('[Gatekeeper] No API key found for matching connection profile', {
-        providerName,
-        profileId: matchingProfile.id,
-      })
       return null
     }
 
@@ -285,12 +278,6 @@ async function classifyWithModerationProvider(
     return null
   }
 
-  logger.debug('[Gatekeeper] Using moderation provider for classification', {
-    provider: provider.metadata.providerName,
-    contentLength: content.length,
-    chatId,
-  })
-
   // Call the moderation provider
   const moderationResult = await provider.moderate(content, apiKey)
 
@@ -376,8 +363,6 @@ export async function classifyContent(
     }
 
     // Fall back to cheap LLM classification
-    logger.debug('[Gatekeeper] Using Cheap LLM for classification', { chatId })
-
     // Get API key
     const apiKey = await getApiKeyForSelection(cheapLLMSelection, userId)
     if (apiKey === null) {

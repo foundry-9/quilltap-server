@@ -1946,14 +1946,6 @@ async function saveAssistantMessage(
   const assistantMessageId = preGeneratedMessageId || crypto.randomUUID()
   const assistantAttachments = generatedImagePaths.map(img => img.id)
 
-  logger.debug('[Chat] Saving assistant message with provider info', {
-    messageId: assistantMessageId,
-    chatId,
-    provider: provider || null,
-    modelName: modelName || null,
-    characterName: character.name,
-  })
-
   const assistantMessage = {
     id: assistantMessageId,
     type: 'message' as const,

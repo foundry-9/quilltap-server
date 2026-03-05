@@ -352,11 +352,6 @@ async function buildSourceContext(
     const result = await extractFileContent(file);
     if (result.success && result.content) {
       parts.push(`=== Source File: ${file.originalFilename} ===\n${result.content}`);
-      logger.debug('[AIImport] Extracted content from file', {
-        fileId,
-        filename: file.originalFilename,
-        contentLength: result.content.length,
-      });
     } else {
       logger.warn('[AIImport] Failed to extract file content', {
         fileId,
@@ -377,12 +372,6 @@ async function buildSourceContext(
   }
 
   const context = parts.join('\n\n');
-  logger.debug('[AIImport] Built source context', {
-    fileCount: sourceFileIds.length,
-    hasSourceText: !!sourceText.trim(),
-    hasAnalysis: !!analysis,
-    totalLength: context.length,
-  });
 
   return context;
 }
@@ -693,9 +682,6 @@ export async function runAIImportStreaming(
           step: 'analyzing',
           snippet: (analysis.characterName as string) || 'Analysis complete',
         });
-        logger.debug('[AIImport] Analysis step complete', {
-          characterName: analysis.characterName,
-        });
       } catch (error) {
         const msg = error instanceof Error ? error.message : 'Analysis failed';
         errors.analyzing = msg;
@@ -724,9 +710,6 @@ export async function runAIImportStreaming(
           type: 'step_complete',
           step: 'character_basics',
           snippet: stepResults.character_basics?.name || 'Basics generated',
-        });
-        logger.debug('[AIImport] Character basics step complete', {
-          name: stepResults.character_basics?.name,
         });
       } catch (error) {
         const msg = error instanceof Error ? error.message : 'Character basics failed';
@@ -759,7 +742,6 @@ export async function runAIImportStreaming(
           step: 'first_message',
           snippet: getSnippet(stepResults.first_message?.firstMessage || ''),
         });
-        logger.debug('[AIImport] First message step complete');
       } catch (error) {
         const msg = error instanceof Error ? error.message : 'First message failed';
         errors.first_message = msg;
@@ -783,9 +765,6 @@ export async function runAIImportStreaming(
           type: 'step_complete',
           step: 'system_prompts',
           snippet: `${stepResults.system_prompts?.length || 0} prompt(s) generated`,
-        });
-        logger.debug('[AIImport] System prompts step complete', {
-          count: stepResults.system_prompts?.length,
         });
       } catch (error) {
         const msg = error instanceof Error ? error.message : 'System prompts failed';
@@ -811,7 +790,6 @@ export async function runAIImportStreaming(
           step: 'physical_descriptions',
           snippet: getSnippet(stepResults.physical_descriptions?.shortPrompt || ''),
         });
-        logger.debug('[AIImport] Physical descriptions step complete');
       } catch (error) {
         const msg = error instanceof Error ? error.message : 'Physical descriptions failed';
         errors.physical_descriptions = msg;
@@ -836,7 +814,6 @@ export async function runAIImportStreaming(
           step: 'pronouns',
           snippet: `${stepResults.pronouns?.subject}/${stepResults.pronouns?.object}/${stepResults.pronouns?.possessive}`,
         });
-        logger.debug('[AIImport] Pronouns step complete', { pronouns: stepResults.pronouns });
       } catch (error) {
         const msg = error instanceof Error ? error.message : 'Pronouns failed';
         errors.pronouns = msg;
@@ -860,9 +837,6 @@ export async function runAIImportStreaming(
           type: 'step_complete',
           step: 'memories',
           snippet: `${stepResults.memories?.length || 0} memories generated`,
-        });
-        logger.debug('[AIImport] Memories step complete', {
-          count: stepResults.memories?.length,
         });
       } catch (error) {
         const msg = error instanceof Error ? error.message : 'Memories failed';
@@ -888,10 +862,6 @@ export async function runAIImportStreaming(
           step: 'chats',
           snippet: stepResults.chats?.title || 'Chat generated',
         });
-        logger.debug('[AIImport] Chats step complete', {
-          title: stepResults.chats?.title,
-          messageCount: stepResults.chats?.messages?.length,
-        });
       } catch (error) {
         const msg = error instanceof Error ? error.message : 'Chat generation failed';
         errors.chats = msg;
@@ -913,7 +883,6 @@ export async function runAIImportStreaming(
         step: 'assembly',
         snippet: `${charName} assembled`,
       });
-      logger.debug('[AIImport] Assembly step complete', { characterName: charName });
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Assembly failed';
       errors.assembly = msg;
@@ -936,7 +905,6 @@ export async function runAIImportStreaming(
 
     if (validationResult.valid) {
       onProgress({ type: 'step_complete', step: 'validation', snippet: 'Validation passed' });
-      logger.debug('[AIImport] Validation passed');
     } else {
       logger.warn('[AIImport] Validation failed, attempting repair', {
         errorCount: validationResult.errors.length,

@@ -53,7 +53,6 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
           db.exec(sql);
         }
         this.llmLogsCollectionInitialized = true;
-        logger.debug('Ensured llm_logs table exists in LLM logs database');
       } catch (error) {
         logger.error('Failed to ensure llm_logs table in LLM logs database', {
           error: error instanceof Error ? error.message : String(error),
@@ -187,11 +186,6 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
         };
 
         const logs = await this.findByFilter(filter, options);
-        logger.debug('Found all logs for chat', {
-          chatId,
-          messageIdCount: messageIds.length,
-          logCount: logs.length,
-        });
         return logs;
       },
       'Error finding all LLM logs for chat',

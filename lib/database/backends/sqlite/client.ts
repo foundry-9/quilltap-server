@@ -49,9 +49,6 @@ export function getSQLiteClient(config: SQLiteConfig): DatabaseType {
     if (sqlcipherKey) {
       const keyHex = Buffer.from(sqlcipherKey, 'base64').toString('hex');
       sqliteDatabase.pragma(`key = "x'${keyHex}'"`);
-      logger.debug('SQLCipher key set on main database', {
-        context: 'sqlite-client',
-      });
     }
 
     // Configure pragmas

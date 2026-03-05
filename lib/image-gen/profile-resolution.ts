@@ -7,7 +7,6 @@
  */
 
 import type { ChatMetadata, ChatSettings } from '@/lib/schemas/types';
-import { logger } from '@/lib/logger';
 
 /** Minimal profile shape returned by findById/findDefault */
 interface ProfileResult {
@@ -48,11 +47,6 @@ export async function resolveImageProfileForChat(
   if (chat.imageProfileId) {
     const profile = await repos.imageProfiles.findById(chat.imageProfileId);
     if (profile && profile.userId === userId && profile.apiKeyId) {
-      logger.debug('[ImageProfileResolution] Using chat-level image profile', {
-        context: 'image-gen.profile-resolution',
-        chatId: chat.id,
-        profileId: profile.id,
-      });
       return profile.id;
     }
   }
@@ -62,11 +56,6 @@ export async function resolveImageProfileForChat(
   if (storyBackgroundsSettings?.defaultImageProfileId) {
     const profile = await repos.imageProfiles.findById(storyBackgroundsSettings.defaultImageProfileId);
     if (profile && profile.userId === userId && profile.apiKeyId) {
-      logger.debug('[ImageProfileResolution] Using story backgrounds default profile', {
-        context: 'image-gen.profile-resolution',
-        chatId: chat.id,
-        profileId: profile.id,
-      });
       return profile.id;
     }
   }
@@ -74,17 +63,8 @@ export async function resolveImageProfileForChat(
   // Third, try the user's default image profile
   const defaultProfile = await repos.imageProfiles.findDefault(userId);
   if (defaultProfile && defaultProfile.apiKeyId) {
-    logger.debug('[ImageProfileResolution] Using user default image profile', {
-      context: 'image-gen.profile-resolution',
-      chatId: chat.id,
-      profileId: defaultProfile.id,
-    });
     return defaultProfile.id;
   }
 
-  logger.debug('[ImageProfileResolution] No suitable image profile found', {
-    context: 'image-gen.profile-resolution',
-    chatId: chat.id,
-  });
   return null;
 }

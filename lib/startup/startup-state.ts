@@ -301,10 +301,6 @@ export const startupState = {
   addMigrationWarning(message: string): void {
     const state = getGlobalState();
     state.migrationWarnings.push(message);
-    logger.debug('Migration warning added', {
-      context: 'startup-state.addMigrationWarning',
-      message,
-    });
   },
 
   /**

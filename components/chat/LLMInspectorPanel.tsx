@@ -106,7 +106,7 @@ export default function LLMInspectorPanel({
       <button
         type="button"
         onClick={onRefresh}
-        className="text-muted-foreground hover:text-foreground transition-colors p-1"
+        className="qt-text-secondary hover:qt-text transition-colors p-1"
         aria-label="Refresh logs"
         title="Refresh logs"
       >
