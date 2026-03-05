@@ -2,7 +2,7 @@
 
 ## Recent Changes
 
-### 3.2-dev
+### 3.2.0
 
 - docs: Update README — expand plugin types table from 5 to 7 (add Image Provider and Embedding Provider); update package.json description; add `engines` field requiring Node.js >= 24.0.0
 - chore: Release prep for v3.2.0 — ran full development checklist; removed unused file (`ai-import/index.tsx`), dependencies (`@aws-sdk/client-s3`, `svgo`), and stale jest mock mappings; converted raw Tailwind color classes to `qt-*` semantic theme classes across 7 components (LLMInspectorEntry, LLMInspectorPanel, RunToolModal, ParticipantSidebar, FileBrowserGrid, FileBrowserList, ProviderIcon); added `folders` table to backup/restore system so user folder structures are preserved; removed ~85 development `logger.debug` calls from 30 files; updated API docs to v3.2 with System Unlock and Migration Warnings endpoint documentation; added DATABASE_ENCRYPTION.md link to DEVELOPMENT.md; refreshed DEAD-CODE-REPORT.md; expanded backup help docs with comprehensive included/excluded data list
