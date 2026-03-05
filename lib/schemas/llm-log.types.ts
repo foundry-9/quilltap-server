@@ -36,7 +36,8 @@ export type LLMLogType = z.infer<typeof LLMLogTypeEnum>;
 
 export const LLMLogMessageSummarySchema = z.object({
   role: z.string(),
-  contentPreview: z.string(), // First 500 chars
+  content: z.string(), // Full message content
+  contentPreview: z.string().optional(), // Deprecated: old truncated field, kept for backward compat
   contentLength: z.number(),
   hasAttachments: z.boolean().default(false),
 });
@@ -52,7 +53,7 @@ export const LLMLogRequestSummarySchema = z.object({
   temperature: z.number().nullable().optional(),
   maxTokens: z.number().nullable().optional(),
   toolCount: z.number().default(0),
-  fullMessages: z.any().nullable().optional(), // JSON only if verbose logging enabled
+  fullMessages: z.any().nullable().optional(), // Deprecated: kept for backward compat with old log entries
 });
 export type LLMLogRequestSummary = z.infer<typeof LLMLogRequestSummarySchema>;
 
@@ -61,9 +62,10 @@ export type LLMLogRequestSummary = z.infer<typeof LLMLogRequestSummarySchema>;
 // ============================================================================
 
 export const LLMLogResponseSummarySchema = z.object({
-  contentPreview: z.string(), // First 500 chars
+  content: z.string(), // Full response content
+  contentPreview: z.string().optional(), // Deprecated: old truncated field, kept for backward compat
   contentLength: z.number(),
-  fullContent: z.string().nullable().optional(), // Only if verbose logging enabled
+  fullContent: z.string().nullable().optional(), // Deprecated: kept for backward compat with old log entries
   error: z.string().nullable().optional(),
 });
 export type LLMLogResponseSummary = z.infer<typeof LLMLogResponseSummarySchema>;

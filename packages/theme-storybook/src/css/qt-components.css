@@ -872,6 +872,77 @@
 }
 
 /* ==========================================================================
+   SLIDE-OVER PANELS
+   ========================================================================== */
+
+.qt-slide-over-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  background-color: var(--qt-dialog-backdrop);
+  opacity: 0;
+  transition: opacity 200ms ease;
+  pointer-events: none;
+}
+
+.qt-slide-over-overlay[data-open="true"] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.qt-slide-over-panel {
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 55;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--qt-dialog-bg);
+  border-left: 1px solid var(--qt-dialog-border);
+  box-shadow: var(--qt-dialog-shadow);
+  transform: translateX(100%);
+  transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.qt-slide-over-panel[data-open="true"] {
+  transform: translateX(0);
+}
+
+.qt-slide-over-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--qt-dialog-border);
+}
+
+.qt-inspector-entry {
+  transition: all 150ms ease;
+  border-radius: var(--qt-card-radius);
+  background: var(--qt-card-bg);
+  border: 1px solid color-mix(in srgb, var(--qt-card-border) calc(var(--qt-card-border-opacity, 1) * 100%), transparent);
+}
+
+.qt-inspector-entry:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+
+.qt-inspector-entry-highlight {
+  animation: qt-inspector-highlight 2s ease-out;
+}
+
+@keyframes qt-inspector-highlight {
+  0% {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 60%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0px transparent;
+  }
+}
+
+/* ==========================================================================
    TAB COMPONENTS
    ========================================================================== */
 

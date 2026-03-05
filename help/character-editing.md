@@ -1,3 +1,7 @@
+---
+url: /aurora/:id/edit
+---
+
 # Editing Characters
 
 > **[Open this page in Quilltap](/aurora)**

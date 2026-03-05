@@ -75,9 +75,11 @@ export interface DownloadProgress {
 
 /** Health endpoint polling status */
 export interface HealthStatus {
-  status: 'healthy' | 'degraded' | 'unhealthy' | 'unreachable';
+  status: 'healthy' | 'degraded' | 'unhealthy' | 'unreachable' | 'locked';
   attempts: number;
   error?: string;
+  /** Present when status is 'locked' — the database key state */
+  dbKeyState?: string;
 }
 
 /** Log level for color-coding detail text on the splash screen */

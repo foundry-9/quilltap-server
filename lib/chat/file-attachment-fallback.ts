@@ -8,7 +8,7 @@
 
 import { profileSupportsMimeType } from '@/lib/llm/connection-profile-utils'
 import { createLLMProvider } from '@/lib/llm'
-import { decryptApiKey } from '@/lib/encryption'
+
 import type { ConnectionProfile } from '@/lib/schemas/types'
 import type { FileAttachment } from '@/lib/llm/base'
 import { logger } from '@/lib/logger'
@@ -196,12 +196,7 @@ export async function generateImageDescription(
     if (imageDescProfile.apiKeyId) {
       const apiKey = await repos.connections.findApiKeyByIdAndUserId(imageDescProfile.apiKeyId, userId)
       if (apiKey) {
-        apiKeyValue = decryptApiKey(
-          apiKey.ciphertext,
-          apiKey.iv,
-          apiKey.authTag,
-          userId
-        )
+        apiKeyValue = apiKey.key_value
       }
     }
 

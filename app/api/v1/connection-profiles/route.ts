@@ -5,12 +5,13 @@
  * POST /api/v1/connection-profiles - Create a new profile
  * POST /api/v1/connection-profiles?action=test-connection - Test connection settings
  * POST /api/v1/connection-profiles?action=test-message - Send test message
+ * POST /api/v1/connection-profiles?action=reorder - Bulk update sort indices
+ * POST /api/v1/connection-profiles?action=reset-sort - Reset sort order to default
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedHandler, AuthenticatedContext, enrichWithApiKey, enrichWithTags } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
-import { decryptApiKey } from '@/lib/encryption';
 import { supportsImageGeneration } from '@/lib/llm/image-capable';
 import { createLLMProvider } from '@/lib/llm';
 import { requiresBaseUrl, testProviderConnection, validateProviderConfig } from '@/lib/plugins/provider-validation';
@@ -77,12 +78,14 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
       );
     }
 
-    // Sort by default first, then by creation date
+    // Sort by sortIndex ascending, then by name alphabetically for ties
     enrichedProfiles.sort((a, b) => {
-      if (a.isDefault !== b.isDefault) {
-        return b.isDefault ? 1 : -1;
+      const aIndex = a.sortIndex ?? 0;
+      const bIndex = b.sortIndex ?? 0;
+      if (aIndex !== bIndex) {
+        return aIndex - bIndex;
       }
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      return a.name.localeCompare(b.name);
     });
 
     // If sortByCharacter is specified, sort by matching tags
@@ -182,14 +185,20 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     }
 
     // If setting as default, unset other defaults
+    const existingProfiles = await repos.connections.findByUserId(user.id);
     if (isDefault) {
-      const existingProfiles = await repos.connections.findByUserId(user.id);
       for (const existingProfile of existingProfiles) {
         if (existingProfile.isDefault) {
           await repos.connections.update(existingProfile.id, { isDefault: false });
         }
       }
     }
+
+    // Auto-assign sortIndex to max existing + 1
+    const maxSortIndex = existingProfiles.reduce(
+      (max, p) => Math.max(max, (p as any).sortIndex ?? 0),
+      -1
+    );
 
     // Create profile
     const profile = await repos.connections.create({
@@ -207,6 +216,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       useNativeWebSearch,
       allowToolUse,
       tags: [],
+      sortIndex: maxSortIndex + 1,
       totalTokens: 0,
       totalPromptTokens: 0,
       totalCompletionTokens: 0,
@@ -245,7 +255,7 @@ async function handleTestConnection(req: NextRequest, context: AuthenticatedCont
         return notFound('API key');
       }
 
-      decryptedKey = decryptApiKey(apiKey.ciphertext, apiKey.iv, apiKey.authTag, user.id);
+      decryptedKey = apiKey.key_value;
     }
 
     // Validate configuration
@@ -322,7 +332,7 @@ async function handleTestMessage(req: NextRequest, context: AuthenticatedContext
         return notFound('API key');
       }
 
-      decryptedKey = decryptApiKey(apiKey.ciphertext, apiKey.iv, apiKey.authTag, user.id);
+      decryptedKey = apiKey.key_value;
     }
 
     // Validate configuration
@@ -411,6 +421,104 @@ async function handleTestMessage(req: NextRequest, context: AuthenticatedContext
 }
 
 /**
+ * Reorder profiles - bulk update sort indices
+ */
+async function handleReorder(req: NextRequest, context: AuthenticatedContext) {
+  const { user, repos } = context;
+
+  try {
+    const body = await req.json();
+    const { order } = body;
+
+    if (!Array.isArray(order)) {
+      return badRequest('order must be an array of { id, sortIndex } objects');
+    }
+
+    // Validate each entry
+    for (const entry of order) {
+      if (!entry.id || typeof entry.sortIndex !== 'number') {
+        return badRequest('Each entry must have id (string) and sortIndex (number)');
+      }
+    }
+
+    // Verify all profiles belong to user
+    const userProfiles = await repos.connections.findByUserId(user.id);
+    const userProfileIds = new Set(userProfiles.map((p) => p.id));
+
+    for (const entry of order) {
+      if (!userProfileIds.has(entry.id)) {
+        return notFound('Connection profile');
+      }
+    }
+
+    // Bulk update sort indices
+    for (const entry of order) {
+      await repos.connections.update(entry.id, { sortIndex: entry.sortIndex } as any);
+    }
+
+    logger.info('[Connection Profiles v1] Profile sort order updated', {
+      profileCount: order.length,
+    });
+
+    return NextResponse.json({ success: true, updated: order.length });
+  } catch (error) {
+    logger.error('[Connection Profiles v1] Error reordering profiles', {}, error instanceof Error ? error : undefined);
+    return serverError('Failed to reorder profiles');
+  }
+}
+
+/**
+ * Reset sort order to default: default first, then non-cheap alphabetically, then cheap alphabetically
+ */
+async function handleResetSort(req: NextRequest, context: AuthenticatedContext) {
+  const { user, repos } = context;
+
+  try {
+    const profiles = await repos.connections.findByUserId(user.id);
+
+    // Sort into default order
+    let sortIndex = 0;
+    const updates: Array<{ id: string; sortIndex: number }> = [];
+
+    // Default profile first
+    const defaultProfile = profiles.find((p) => p.isDefault);
+    if (defaultProfile) {
+      updates.push({ id: defaultProfile.id, sortIndex: sortIndex++ });
+    }
+
+    // Non-cheap, non-default profiles alphabetically
+    const regularProfiles = profiles
+      .filter((p) => !p.isDefault && !p.isCheap)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    for (const profile of regularProfiles) {
+      updates.push({ id: profile.id, sortIndex: sortIndex++ });
+    }
+
+    // Cheap profiles alphabetically
+    const cheapProfiles = profiles
+      .filter((p) => !p.isDefault && p.isCheap)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    for (const profile of cheapProfiles) {
+      updates.push({ id: profile.id, sortIndex: sortIndex++ });
+    }
+
+    // Apply updates
+    for (const update of updates) {
+      await repos.connections.update(update.id, { sortIndex: update.sortIndex } as any);
+    }
+
+    logger.info('[Connection Profiles v1] Profile sort order reset to default', {
+      profileCount: updates.length,
+    });
+
+    return NextResponse.json({ success: true, updated: updates.length });
+  } catch (error) {
+    logger.error('[Connection Profiles v1] Error resetting sort order', {}, error instanceof Error ? error : undefined);
+    return serverError('Failed to reset sort order');
+  }
+}
+
+/**
  * POST /api/v1/connection-profiles - Action dispatch or create
  */
 export const POST = createAuthenticatedHandler(async (req, context) => {
@@ -421,6 +529,10 @@ export const POST = createAuthenticatedHandler(async (req, context) => {
       return handleTestConnection(req, context);
     case 'test-message':
       return handleTestMessage(req, context);
+    case 'reorder':
+      return handleReorder(req, context);
+    case 'reset-sort':
+      return handleResetSort(req, context);
     default:
       return handleCreate(req, context);
   }

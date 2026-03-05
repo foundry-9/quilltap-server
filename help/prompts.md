@@ -1,3 +1,7 @@
+---
+url: /settings?tab=templates
+---
+
 # Prompts
 
 > **[Open this page in Quilltap](/settings?tab=templates)**

@@ -5,6 +5,7 @@ If an LLM can run tools (or pseudo-tools), and it's running in a Docker image or
 ## Features
 
 - Sandboxed (it can't completely hose the VM unless you give it the power to do so)
+  - That means this only works in Docker or VM environments, not Node or local
 - Capable of sudo commands (again, each one needs to be gated by the user)
   - Can install and update `apk` packages (assuming we're still on Alpine)
 - uses a special mounted directory in the data directory, like `~/.quilltap/workspace`

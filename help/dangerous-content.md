@@ -1,3 +1,7 @@
+---
+url: /settings?tab=chat
+---
+
 # Dangerous Content Handling
 
 Dangerous Content Handling is a feature that classifies messages for sensitive or potentially policy-violating content and optionally routes them to uncensored-compatible LLM providers.

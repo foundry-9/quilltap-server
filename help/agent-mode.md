@@ -1,3 +1,7 @@
+---
+url: /salon/:id
+---
+
 # Agent Mode
 
 Agent Mode is a powerful feature that allows the AI to work iteratively on complex tasks, using tools multiple times to gather information, verify results, and refine its answer before delivering a final response.

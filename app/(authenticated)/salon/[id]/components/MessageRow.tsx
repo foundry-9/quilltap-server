@@ -8,6 +8,7 @@ import { formatMessageTime } from '@/lib/format-time'
 import { TokenBadge } from '@/components/chat/TokenBadge'
 import { DangerFlagBadge } from '@/components/chat/DangerFlagBadge'
 import { DangerContentWrapper } from '@/components/chat/DangerContentWrapper'
+import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
 import type { Message, TokenDisplaySettings, DangerousContentSettings, CharacterData } from '../types'
 import type { TurnState } from '@/lib/chat/turn-manager'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
@@ -160,6 +161,7 @@ function MessageRowInner({
             showTitle
             className="flex flex-col items-center w-32 gap-1"
           />
+          <ProviderModelBadge provider={message.provider} modelName={message.modelName} size="xs" />
         </div>
       )}
       <div className="qt-chat-message-body group">

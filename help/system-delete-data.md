@@ -1,3 +1,7 @@
+---
+url: /settings?tab=system
+---
+
 # Deleting Your Data
 
 > **[Open this page in Quilltap](/settings?tab=system)**

@@ -117,10 +117,10 @@ export function ProviderSelectionStep({ state, dispatch }: ProviderSelectionStep
               key={provider.id}
               type="button"
               onClick={() => handleToggle(provider.id)}
-              className={`qt-card w-full p-4 text-left transition-all ${
+              className={`w-full p-4 text-left rounded-lg transition-all ${
                 isSelected
-                  ? 'ring-2 ring-[var(--qt-color-primary)] qt-bg-active'
-                  : 'hover:qt-bg-hover'
+                  ? 'qt-option-selected'
+                  : 'qt-option-unselected'
               }`}
             >
               <div className="flex items-start gap-3">

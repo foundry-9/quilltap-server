@@ -57,6 +57,14 @@ export function getLLMLogsSQLiteClient(config: SQLiteConfig): DatabaseType | nul
   try {
     const db = new Database(config.path);
 
+    // SQLCipher key MUST be the first pragma before any other operations.
+    const sqlcipherKey = process.env.ENCRYPTION_MASTER_PEPPER;
+    if (sqlcipherKey) {
+      const keyHex = Buffer.from(sqlcipherKey, 'base64').toString('hex');
+      db.pragma(`key = "x'${keyHex}'"`);
+      moduleLogger.debug('SQLCipher key set on LLM logs database');
+    }
+
     // Configure pragmas (no foreign keys for the logs DB)
     if (config.walMode) {
       db.pragma('journal_mode = WAL');

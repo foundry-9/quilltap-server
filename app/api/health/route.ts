@@ -119,6 +119,21 @@ export async function GET() {
   const healthLogger = logger.child({ module: 'health' });
   const startTime = Date.now();
 
+  // Locked mode: return 423 without touching the database
+  try {
+    const { startupState } = await import('@/lib/startup/startup-state');
+    if (startupState.isLockedMode()) {
+      return NextResponse.json({
+        status: 'locked',
+        dbKeyState: startupState.getPepperState(),
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+      }, { status: 423 });
+    }
+  } catch {
+    // startupState not yet initialized — continue with normal health check
+  }
+
   try {
     const timestamp = new Date().toISOString();
     const uptime = process.uptime();

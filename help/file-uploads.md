@@ -1,3 +1,7 @@
+---
+url: /files
+---
+
 # Uploading Files
 
 > **[Open this page in Quilltap](/files)**

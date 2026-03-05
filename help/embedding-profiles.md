@@ -1,3 +1,7 @@
+---
+url: /settings?tab=memory
+---
+
 # Embedding Provider Profiles
 
 > **[Open this page in Quilltap](/settings?tab=memory)**

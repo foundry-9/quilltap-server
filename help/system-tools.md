@@ -1,3 +1,7 @@
+---
+url: /settings?tab=system
+---
+
 # System Tools
 
 > **[Open this page in Quilltap](/settings?tab=system)**

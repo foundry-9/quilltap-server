@@ -9,7 +9,7 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { getRepositories } from '@/lib/repositories/factory'
-import { decryptApiKey } from '@/lib/encryption'
+
 import { getErrorMessage } from '@/lib/errors'
 import type { ConnectionProfile, ImageProfile } from '@/lib/schemas/types'
 import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
@@ -264,9 +264,9 @@ async function decryptProfileApiKey(
     const apiKey = await repos.connections.findApiKeyByIdAndUserId(profile.apiKeyId, userId)
     if (!apiKey) return null
 
-    return decryptApiKey(apiKey.ciphertext, apiKey.iv, apiKey.authTag, userId)
+    return apiKey.key_value
   } catch (error) {
-    logger.warn('[DangerousContent] Failed to decrypt API key for profile', {
+    logger.warn('[DangerousContent] Failed to retrieve API key for profile', {
       profileId: profile.id,
       error: getErrorMessage(error),
     })
@@ -288,9 +288,9 @@ async function decryptImageProfileApiKey(
     const apiKey = await repos.connections.findApiKeyByIdAndUserId(profile.apiKeyId, userId)
     if (!apiKey) return null
 
-    return decryptApiKey(apiKey.ciphertext, apiKey.iv, apiKey.authTag, userId)
+    return apiKey.key_value
   } catch (error) {
-    logger.warn('[DangerousContent] Failed to decrypt image profile API key', {
+    logger.warn('[DangerousContent] Failed to retrieve image profile API key', {
       profileId: profile.id,
       error: getErrorMessage(error),
     })

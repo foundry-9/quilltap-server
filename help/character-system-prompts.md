@@ -1,3 +1,7 @@
+---
+url: /aurora/:id/edit
+---
+
 # Character System Prompts
 
 > **[Open this page in Quilltap](/aurora)**

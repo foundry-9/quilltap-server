@@ -25,6 +25,7 @@ export interface MemorySearchResult {
   content: string
   importance: number
   relevanceScore: number
+  effectiveWeight?: number
   createdAt: string
   source: 'AUTO' | 'MANUAL'
 }

@@ -1,3 +1,7 @@
+---
+url: /settings?tab=chat
+---
+
 # Chat Settings
 
 > **[Open this page in Quilltap](/settings?tab=chat)**

@@ -16,6 +16,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { useSidebarDataOptional } from '@/components/providers/sidebar-data-provider'
 import Avatar from '@/components/ui/Avatar'
+import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import CreateNPCDialog from './CreateNPCDialog'
 
@@ -473,6 +474,14 @@ export default function AddCharacterDialog({
                       ))}
                     </optgroup>
                   </select>
+                  {selectedConnectionProfileId && selectedConnectionProfileId !== USER_IMPERSONATION_VALUE && (() => {
+                    const selectedProfile = connectionProfiles.find(p => p.id === selectedConnectionProfileId)
+                    return selectedProfile?.provider ? (
+                      <div className="mt-1">
+                        <ProviderModelBadge provider={selectedProfile.provider} modelName={selectedProfile.modelName} size="sm" />
+                      </div>
+                    ) : null
+                  })()}
                   {connectionProfiles.length === 0 && (
                     <p className="text-sm text-warning mt-1">
                       No connection profiles available. Create one in Settings to use LLM control.

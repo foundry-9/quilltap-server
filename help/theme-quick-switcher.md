@@ -1,3 +1,7 @@
+---
+url: /settings?tab=appearance
+---
+
 # Theme Quick-Switcher
 
 > **[Open this page in Quilltap](/settings?tab=appearance)**

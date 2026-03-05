@@ -1,3 +1,7 @@
+---
+url: /salon/:id
+---
+
 # Random Number Generator (RNG) Tool
 
 The RNG tool lets you roll dice, flip coins, or randomly select a chat participant. Results appear as permanent messages in the chat, visible to all characters.

@@ -5,7 +5,6 @@
 
 import { POST } from '@/app/api/v1/images/route'
 import { getServerSession } from '@/lib/auth/session'
-import { decryptApiKey } from '@/lib/encryption'
 import { createLLMProvider } from '@/lib/llm'
 import { getRepositories, getRepositoriesSafe } from '@/lib/repositories/factory'
 import { fileStorageManager } from '@/lib/file-storage/manager'
@@ -20,7 +19,6 @@ const mockRepos = createMockRepositoryContainer()
 // @/lib/file-storage/manager, and @/lib/files/tag-inheritance are defined in jest.setup.ts
 
 const mockGetServerSession = jest.mocked(getServerSession)
-const mockDecryptApiKey = jest.mocked(decryptApiKey)
 const mockCreateLLMProvider = jest.mocked(createLLMProvider)
 const mockGetRepositories = jest.mocked(getRepositories)
 const mockGetRepositoriesSafe = jest.mocked(getRepositoriesSafe)
@@ -197,16 +195,13 @@ describe('POST /api/v1/images?action=generate', () => {
       userId: 'test-user-id',
       provider: 'OPENAI',
       label: 'Test Key',
-      ciphertext: 'encrypted-key',
-      iv: 'iv',
-      authTag: 'tag',
+      key_value: 'sk-test-api-key',
       isActive: true,
       lastUsed: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     } as any)
 
-    mockDecryptApiKey.mockReturnValueOnce('sk-test-api-key')
 
     const mockProvider = {
       supportsImageGeneration: true,
@@ -292,16 +287,13 @@ describe('POST /api/v1/images?action=generate', () => {
       userId: 'test-user-id',
       provider: 'OPENAI',
       label: 'Test Key',
-      ciphertext: 'encrypted-key',
-      iv: 'iv',
-      authTag: 'tag',
+      key_value: 'sk-test-api-key',
       isActive: true,
       lastUsed: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     } as any)
 
-    mockDecryptApiKey.mockReturnValueOnce('sk-test-api-key')
 
     const mockProvider = {
       supportsImageGeneration: true,
@@ -380,16 +372,13 @@ describe('POST /api/v1/images?action=generate', () => {
       userId: 'test-user-id',
       provider: 'OPENAI',
       label: 'Test Key',
-      ciphertext: 'encrypted-key',
-      iv: 'iv',
-      authTag: 'tag',
+      key_value: 'sk-test-api-key',
       isActive: true,
       lastUsed: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     } as any)
 
-    mockDecryptApiKey.mockReturnValueOnce('sk-test-api-key')
 
     const mockProvider = {
       supportsImageGeneration: true,

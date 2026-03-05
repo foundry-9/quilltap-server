@@ -48,6 +48,7 @@ import {
   VirtualizedMessageList,
   ChatModals,
 } from './components'
+import LLMInspectorPanel from '@/components/chat/LLMInspectorPanel'
 
 export default function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -152,10 +153,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const llmLogs = useLLMLogs({
     chatId: id,
     messages,
-    setLLMLogsForViewer: modals.setLLMLogsForViewer,
-    setSelectedMessageIdForLogs: modals.setSelectedMessageIdForLogs,
-    setLLMLogViewerOpen: modals.setLLMLogViewerOpen,
   })
+  // Extract stable references for use in effects
+  const { toggleInspector, inspectorOpen } = llmLogs
 
   // --- Chat controls hook ---
   const chatControls = useChatControls({
@@ -200,6 +200,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     setAttachedFiles,
     inputRef: inputRef as React.RefObject<HTMLTextAreaElement>,
     setFileWriteApprovalState: modals.setFileWriteApprovalState,
+    setSudoApprovalState: modals.setSudoApprovalState,
+    setWorkspaceAcknowledgementState: modals.setWorkspaceAcknowledgementState,
     getFirstCharacterParticipant: participantsWithImpersonation.getFirstCharacterParticipant,
     setPauseState: chatControls.setPauseState,
   })
@@ -477,16 +479,35 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     return () => globalThis.window?.removeEventListener('resize', handleResize)
   }, [resizeTextarea])
 
-  // Focus textarea when generation completes
+  // Focus textarea when generation completes + refresh LLM logs
   useEffect(() => {
     const isGenerating = sseStreaming.streaming || sseStreaming.waitingForResponse || sseStreaming.sending
     if (wasGeneratingRef.current && !isGenerating) {
       setTimeout(() => {
         inputRef.current?.focus({ preventScroll: true })
       }, 100)
+      // Refresh LLM logs after generation completes
+      llmLogs.refreshLogs()
     }
     wasGeneratingRef.current = isGenerating
-  }, [sseStreaming.streaming, sseStreaming.waitingForResponse, sseStreaming.sending])
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- llmLogs.refreshLogs is stable (useCallback)
+  }, [sseStreaming.streaming, sseStreaming.waitingForResponse, sseStreaming.sending, llmLogs.refreshLogs])
+
+  // Keyboard shortcut: Cmd+Shift+L / Ctrl+Shift+L to toggle inspector
+  const llmLoggingEnabled = chatSettings?.llmLoggingSettings?.enabled !== false
+  useEffect(() => {
+    if (!llmLoggingEnabled) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'L') {
+        e.preventDefault()
+        toggleInspector()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [llmLoggingEnabled, toggleInspector])
 
   // --- Toolbar setup ---
   const { setLeftContent, setRightContent } = usePageToolbar()
@@ -581,22 +602,46 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- llmCharacterKey is a stable string proxy for the llmCharacters array
   }, [chat?.projectId, chat?.projectName, chat?.title, llmCharacterKey, setLeftContent, storyBackgroundUrl, storyBackgroundFileId, storyBackgroundFilename, setModalImage])
 
-  // Set cost summary in toolbar right section
+  // Set cost summary and inspector button in toolbar right section
   useEffect(() => {
-    if (chatSettings?.tokenDisplaySettings?.showChatTotals) {
+    const showChatTotals = chatSettings?.tokenDisplaySettings?.showChatTotals
+    const showInspectorButton = chatSettings?.llmLoggingSettings?.enabled !== false
+
+    if (showChatTotals || showInspectorButton) {
       setRightContent(
-        <ChatCostSummary
-          chatId={id}
-          show={chatSettings.tokenDisplaySettings.showChatTotals}
-          variant="compact"
-          refreshKey={messages.length}
-        />
+        <div className="flex items-center gap-2">
+          {showInspectorButton && (
+            <button
+              type="button"
+              onClick={toggleInspector}
+              className={`p-1.5 rounded transition-colors ${
+                inspectorOpen
+                  ? 'bg-primary/15 text-primary'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+              title="LLM Inspector (Cmd+Shift+L)"
+              aria-label="Toggle LLM Inspector"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </button>
+          )}
+          {showChatTotals && (
+            <ChatCostSummary
+              chatId={id}
+              show={showChatTotals}
+              variant="compact"
+              refreshKey={messages.length}
+            />
+          )}
+        </div>
       )
     } else {
       setRightContent(null)
     }
     return () => setRightContent(null)
-  }, [id, chatSettings?.tokenDisplaySettings?.showChatTotals, setRightContent, messages.length])
+  }, [id, chatSettings?.tokenDisplaySettings?.showChatTotals, chatSettings?.llmLoggingSettings?.enabled, setRightContent, messages.length, toggleInspector, inspectorOpen])
 
   // --- UI helpers ---
   const shouldShowAvatars = useCallback(() => {
@@ -790,6 +835,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onRemoveAttachedFile={removeAttachedFile}
           pendingToolResults={pendingToolResults}
           onRemovePendingToolResult={handleRemovePendingToolResult}
+          inputRef={inputRef}
           disabled={sseStreaming.sending}
           sending={sseStreaming.sending}
           hasActiveCharacters={participantsWithImpersonation.hasActiveCharacters}
@@ -893,14 +939,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           closeStateEditor={modals.closeStateEditor}
           allLLMPauseModalOpen={modals.allLLMPauseModalOpen}
           setAllLLMPauseModalOpen={modals.setAllLLMPauseModalOpen}
-          llmLogViewerOpen={modals.llmLogViewerOpen}
-          closeLLMLogViewer={modals.closeLLMLogViewer}
-          llmLogsForViewer={modals.llmLogsForViewer}
-          selectedMessageIdForLogs={modals.selectedMessageIdForLogs}
           reattributeDialogState={modals.reattributeDialogState}
           setReattributeDialogState={modals.setReattributeDialogState}
           fileWriteApprovalState={modals.fileWriteApprovalState}
           setFileWriteApprovalState={modals.setFileWriteApprovalState}
+          sudoApprovalState={modals.sudoApprovalState}
+          setSudoApprovalState={modals.setSudoApprovalState}
+          workspaceAcknowledgementState={modals.workspaceAcknowledgementState}
+          setWorkspaceAcknowledgementState={modals.setWorkspaceAcknowledgementState}
           selectLLMProfileDialogState={modals.selectLLMProfileDialogState}
           setSelectLLMProfileDialogState={modals.setSelectLLMProfileDialogState}
           isConflictDialogOpen={isConflictDialogOpen}
@@ -924,6 +970,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           triggerContinueMode={sseStreaming.triggerContinueMode}
         />
       </div>
+
+      <LLMInspectorPanel
+        isOpen={llmLogs.inspectorOpen}
+        onClose={llmLogs.closeInspector}
+        chatId={id}
+        logs={llmLogs.allChatLogs}
+        loading={llmLogs.loading}
+        scrollToMessageId={llmLogs.inspectorScrollToMessageId}
+        onRefresh={llmLogs.refreshLogs}
+        loggingEnabled={chatSettings?.llmLoggingSettings?.enabled !== false}
+      />
 
       {modals.showParticipantSidebar && (
         <ParticipantSidebar

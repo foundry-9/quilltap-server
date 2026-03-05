@@ -1,3 +1,6 @@
+import { forwardRef } from 'react'
+import { useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { ProfileCard as BaseProfileCard, ProfileCardBadge } from '@/components/ui/ProfileCard'
 import { TagBadge } from '@/components/tags/tag-badge'
 import { MissingApiKeyBadge } from '@/components/ui/MissingApiKeyBadge'
@@ -18,10 +21,34 @@ interface ProfileCardProps {
 }
 
 /**
- * Individual profile card component
- * Displays profile information and action buttons
+ * Drag handle icon (6-dot grip)
  */
-export function ProfileCard({
+const DragHandle = forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement>>(
+  function DragHandle(props, ref) {
+    return (
+      <button
+        ref={ref}
+        className="cursor-grab active:cursor-grabbing p-1 rounded hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors touch-none"
+        aria-label="Drag to reorder"
+        {...props}
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <circle cx="5" cy="3" r="1.5" />
+          <circle cx="11" cy="3" r="1.5" />
+          <circle cx="5" cy="8" r="1.5" />
+          <circle cx="11" cy="8" r="1.5" />
+          <circle cx="5" cy="13" r="1.5" />
+          <circle cx="11" cy="13" r="1.5" />
+        </svg>
+      </button>
+    )
+  }
+)
+
+/**
+ * Inner profile card content (shared between sortable and non-sortable versions)
+ */
+function ProfileCardContent({
   profile,
   cheapDefaultProfileId,
   providerRequiresApiKey = true,
@@ -124,5 +151,39 @@ export function ProfileCard({
         </div>
       )}
     </BaseProfileCard>
+  )
+}
+
+/**
+ * Sortable profile card component
+ * Wraps profile content with @dnd-kit sortable behavior and a drag handle
+ */
+export function ProfileCard(props: ProfileCardProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: props.profile.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : undefined,
+    zIndex: isDragging ? 10 : undefined,
+  }
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} className="relative">
+      <div className="absolute left-0 top-3 -ml-1 z-10">
+        <DragHandle ref={setActivatorNodeRef} {...listeners} />
+      </div>
+      <div className="pl-6">
+        <ProfileCardContent {...props} />
+      </div>
+    </div>
   )
 }

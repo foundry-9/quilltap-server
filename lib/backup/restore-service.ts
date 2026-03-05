@@ -39,6 +39,7 @@ import type {
   Memory,
   FileEntry,
   FileWritePermission,
+  Folder,
   ChatParticipantBase,
   PhysicalDescription,
   ClothingRecord,
@@ -161,6 +162,8 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
     const chatSettings = await readJsonFileOptional<ChatSettings[]>(rootPath, 'data/chat-settings.json', []);
     // File write permissions are optional for backwards compatibility with older backups
     const filePermissions = await readJsonFileOptional<FileWritePermission[]>(rootPath, 'data/file-permissions.json', []);
+    // Folders are optional for backwards compatibility with older backups
+    const folders = await readJsonFileOptional<Folder[]>(rootPath, 'data/folders.json', []);
 
     moduleLogger.info('Parsed backup ZIP', {
       version: manifest.version,
@@ -186,6 +189,7 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
       pluginConfigs,
       chatSettings,
       filePermissions,
+      folders,
     };
 
     return { data, extractDir, rootFolder };
@@ -281,6 +285,7 @@ export async function previewRestore(zipPath: string): Promise<RestoreSummary> {
       pluginConfigs: data.pluginConfigs?.length || 0,
       chatSettings: data.chatSettings?.length || 0,
       filePermissions: data.filePermissions?.length || 0,
+      folders: data.folders?.length || 0,
       npmPlugins: npmPluginCount,
       warnings: [],
     };
@@ -300,7 +305,7 @@ async function deleteUserData(userId: string): Promise<void> {
   const globalRepos = getRepositories();
 
   // Get all entities to delete
-  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, promptTemplates, roleplayTemplates, projects, llmLogs, chatSettings, filePermissions] =
+  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, promptTemplates, roleplayTemplates, projects, llmLogs, chatSettings, filePermissions, folders] =
     await Promise.all([
       repos.characters.findAll(),
       repos.chats.findAll(),
@@ -315,6 +320,7 @@ async function deleteUserData(userId: string): Promise<void> {
       repos.llmLogs.findAll(10000), // High limit to get all user logs
       globalRepos.chatSettings.findByUserId(userId),
       globalRepos.filePermissions.findByUserId(userId),
+      globalRepos.folders.findByUserId(userId),
     ]);
 
   // Delete memories for each character first
@@ -339,6 +345,7 @@ async function deleteUserData(userId: string): Promise<void> {
     ...llmLogs.map((log) => repos.llmLogs.delete(log.id)),
     ...(chatSettings ? [globalRepos.chatSettings.delete(chatSettings.id)] : []),
     ...filePermissions.map((fp) => globalRepos.filePermissions.delete(fp.id)),
+    ...folders.map((f) => globalRepos.folders.delete(f.id)),
   ]);
 
   // Delete files from storage
@@ -372,6 +379,7 @@ async function deleteUserData(userId: string): Promise<void> {
       llmLogs: llmLogs.length,
       chatSettings: chatSettings ? 1 : 0,
       filePermissions: filePermissions.length,
+      folders: folders.length,
     },
   });
 }
@@ -759,6 +767,12 @@ function remapBackupData(
     userId: targetUserId,
   })) as FileWritePermission[];
 
+  // Remap folders
+  const remappedFolders = (data.folders || []).map((folder) => ({
+    ...remapper.remapFields(folder, ['id', 'parentFolderId', 'projectId']),
+    userId: targetUserId,
+  })) as Folder[];
+
   return {
     manifest: data.manifest,
     characters: remappedCharacters,
@@ -777,6 +791,7 @@ function remapBackupData(
     pluginConfigs: remappedPluginConfigs,
     chatSettings: remappedChatSettings,
     filePermissions: remappedFilePermissions,
+    folders: remappedFolders,
   };
 }
 
@@ -1077,7 +1092,20 @@ export async function restore(
       }
     }
 
-    // 18. NPM Plugins (copy from extracted dir to plugins/npm directory)
+    // 18. Folders
+    let foldersRestored = 0;
+    for (const folder of data.folders || []) {
+      try {
+        const { id, createdAt, updatedAt, ...folderData } = folder;
+        await globalRepos.folders.create({ ...folderData, userId: targetUserId }, { id: folder.id });
+        foldersRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore folder "${folder.name}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore folder', { folderId: folder.id, error });
+      }
+    }
+
+    // 19. NPM Plugins (copy from extracted dir to plugins/npm directory)
     let npmPluginsRestored = 0;
     const npmPluginsSrcDir = path.join(rootPath, 'plugins', 'npm');
 
@@ -1138,6 +1166,7 @@ export async function restore(
       pluginConfigs: pluginConfigsRestored,
       chatSettings: chatSettingsRestored,
       filePermissions: filePermissionsRestored,
+      folders: foldersRestored,
       npmPlugins: npmPluginsRestored,
       warnings,
     };

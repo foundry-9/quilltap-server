@@ -41,10 +41,6 @@ export class VectorIndicesRepository {
     await registerBlobColumns('memories', ['embedding']);
 
     this.initialized = true;
-
-    logger.debug('VectorIndicesRepository initialized', {
-      context: 'VectorIndicesRepository.ensureInitialized',
-    });
   }
 
   /**

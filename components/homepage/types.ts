@@ -72,6 +72,8 @@ export interface HomepageCharacter {
   isFavorite: boolean
   npc: boolean
   chatCount: number
+  /** Default connection profile ID for showing provider badge */
+  defaultConnectionProfileId?: string | null
 }
 
 /** Props for WelcomeSection */

@@ -86,9 +86,12 @@ function CustomSessionProvider({
       if (!response.ok) {
         if (response.status === 503) {
           // Server not ready (e.g., pepper vault setup needed)
-          // Set as unauthenticated so the UI isn't stuck on "Loading..."
+          // Keep status as "loading" so the UI shows a loading state
+          // rather than rendering without sidebar. The PepperVaultGate
+          // will redirect to /setup if needed, and our retry interval
+          // will pick up once the server is ready.
           setSession(null);
-          setStatus("unauthenticated");
+          setStatus("loading");
           setServerNotReady(true);
           return null;
         }

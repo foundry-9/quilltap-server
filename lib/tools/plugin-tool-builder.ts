@@ -26,6 +26,7 @@ import {
   helpSearchToolDefinition,
   rngToolDefinition,
   stateToolDefinition,
+  getAllShellToolDefinitions,
 } from '@/lib/tools';
 import type { UniversalTool, ImageProviderConstraints } from '@/lib/plugins/interfaces';
 
@@ -141,6 +142,9 @@ export interface BuildToolsOptions {
   /** Whether to enable submit_final_response tool (for agent mode) */
   agentMode?: boolean;
 
+  /** Whether to enable shell interactivity tools (only in VM/Docker environments) */
+  shellInteractivity?: boolean;
+
   /** Whether to include tools from the tool registry (plugin tools) */
   includePluginTools?: boolean;
 
@@ -192,6 +196,7 @@ export async function buildToolsForProvider(
       helpSearch: options.helpSearch,
       rng: options.rng,
       state: options.state,
+      shellInteractivity: options.shellInteractivity,
       includePluginTools: options.includePluginTools,
     },
   });
@@ -257,6 +262,15 @@ export async function buildToolsForProvider(
   if (options.agentMode) {
     universalTools.push(submitFinalResponseToolDefinition as UniversalTool);
     logger_.debug('Added submit_final_response tool to universal tools (agent mode)');
+  }
+
+  // Add shell interactivity tools if enabled (only in VM/Docker environments)
+  if (options.shellInteractivity) {
+    const shellTools = getAllShellToolDefinitions();
+    universalTools.push(...(shellTools as UniversalTool[]));
+    logger_.debug('Added shell interactivity tools to universal tools', {
+      count: shellTools.length,
+    });
   }
 
   // Add plugin tools if enabled (defaults to true when not specified)

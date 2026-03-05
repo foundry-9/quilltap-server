@@ -1,3 +1,7 @@
+---
+url: /settings?tab=providers
+---
+
 # API Keys Settings
 
 > **[Open this page in Quilltap](/settings?tab=providers)**

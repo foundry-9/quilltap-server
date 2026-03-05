@@ -6,9 +6,6 @@
 jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
 }))
-jest.mock('@/lib/encryption', () => ({
-  decryptApiKey: jest.fn(),
-}))
 jest.mock('@/lib/plugins/provider-registry', () => ({
   providerRegistry: {
     createEmbeddingProvider: jest.fn(),
@@ -21,7 +18,6 @@ jest.mock('@quilltap/plugin-types', () => ({
 
 import * as embeddingService from '@/lib/embedding/embedding-service'
 import { getRepositories } from '@/lib/repositories/factory'
-import { decryptApiKey } from '@/lib/encryption'
 import { providerRegistry } from '@/lib/plugins/provider-registry'
 import { isLocalEmbeddingProvider } from '@quilltap/plugin-types'
 import type { EmbeddingProfile } from '@/lib/schemas/types'
@@ -40,7 +36,6 @@ const {
 } = embeddingService
 
 const mockGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>
-const mockDecryptApiKey = decryptApiKey as jest.MockedFunction<typeof decryptApiKey>
 const mockIsLocalEmbeddingProvider = isLocalEmbeddingProvider as jest.MockedFunction<typeof isLocalEmbeddingProvider>
 const mockCreateEmbeddingProvider = providerRegistry.createEmbeddingProvider as jest.MockedFunction<typeof providerRegistry.createEmbeddingProvider>
 const mockGetProvider = providerRegistry.getProvider as jest.MockedFunction<typeof providerRegistry.getProvider>
@@ -103,11 +98,8 @@ describe('embedding service', () => {
   it('calls OpenAI embeddings API when provider is OPENAI', async () => {
     const profile = makeProfile()
     mockRepos.connections.findApiKeyByIdAndUserId.mockResolvedValue({
-      ciphertext: 'cipher',
-      iv: 'iv',
-      authTag: 'tag',
+      key_value: 'sk-test',
     })
-    mockDecryptApiKey.mockReturnValue('sk-test')
 
     const mockProvider = createMockEmbeddingProvider([0.1, 0.2, 0.3])
     mockCreateEmbeddingProvider.mockReturnValue(mockProvider as any)
@@ -172,11 +164,8 @@ describe('embedding service', () => {
     mockRepos.embeddingProfiles.findDefault.mockResolvedValue(profile)
 
     mockRepos.connections.findApiKeyByIdAndUserId.mockResolvedValue({
-      ciphertext: 'cipher',
-      iv: 'iv',
-      authTag: 'tag',
+      key_value: 'sk-test',
     })
-    mockDecryptApiKey.mockReturnValue('sk-test')
 
     const mockProvider = createMockEmbeddingProvider([0.2, 0.1])
     mockCreateEmbeddingProvider.mockReturnValue(mockProvider as any)

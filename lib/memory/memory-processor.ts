@@ -10,10 +10,12 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { extractMemoryFromMessage, extractCharacterMemoryFromMessage, extractInterCharacterMemoryFromMessage, MemoryCandidate, UncensoredFallbackOptions } from './cheap-llm-tasks'
 import { getCheapLLMProvider, CheapLLMConfig, CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { ConnectionProfile, CheapLLMSettings, Memory } from '@/lib/schemas/types'
+import type { Pronouns } from '@/lib/schemas/character.types'
 import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
 import { createMemoryWithGate } from './memory-service'
 import type { MemoryGateOutcome } from './memory-gate'
 import { logger } from '@/lib/logger'
+import { formatNameWithPronouns } from './format-utils'
 
 /**
  * Context for memory extraction
@@ -23,12 +25,16 @@ export interface MemoryExtractionContext {
   characterId: string
   /** Character name for context */
   characterName: string
+  /** Character pronouns for context */
+  characterPronouns?: Pronouns | null
   /** Persona name if available (deprecated - use userCharacterId instead) */
   personaName?: string
   /** User character ID - who the memory is about (the user-controlled character in the chat) */
   userCharacterId?: string
   /** All character names in a multi-character chat (for clear identity context) */
   allCharacterNames?: string[]
+  /** Map of character name to pronouns for multi-character chats */
+  allCharacterPronouns?: Record<string, Pronouns | null>
   /** Chat ID for source reference */
   chatId: string
   /** User message content */
@@ -57,12 +63,16 @@ export interface InterCharacterMemoryContext {
   observerCharacterId: string
   /** The observer character's name */
   observerCharacterName: string
+  /** The observer character's pronouns */
+  observerCharacterPronouns?: Pronouns | null
   /** What the observer said in this exchange */
   observerMessage: string
   /** The character being observed (subject of the memory) */
   subjectCharacterId: string
   /** The subject character's name */
   subjectCharacterName: string
+  /** The subject character's pronouns */
+  subjectCharacterPronouns?: Pronouns | null
   /** What the subject said in this exchange */
   subjectMessage: string
   /** Chat ID for source reference */
@@ -136,17 +146,20 @@ function buildExtractionContext(ctx: MemoryExtractionContext): string {
     parts.push('- USER: The human participant')
   }
 
-  // Character(s) identification
+  // Character(s) identification with pronouns
   if (ctx.allCharacterNames && ctx.allCharacterNames.length > 1) {
-    // Multi-character chat - list all characters
+    // Multi-character chat - list all characters with pronouns
     parts.push('- CHARACTERS (AI characters in this chat):')
     for (const name of ctx.allCharacterNames) {
+      const pronouns = ctx.allCharacterPronouns?.[name]
+      const nameWithPronouns = formatNameWithPronouns(name, pronouns)
       const marker = name === ctx.characterName ? ' (currently responding)' : ''
-      parts.push(`  * ${name}${marker}`)
+      parts.push(`  * ${nameWithPronouns}${marker}`)
     }
   } else {
-    // Single character chat
-    parts.push(`- CHARACTER: ${ctx.characterName} (an AI character)`)
+    // Single character chat with pronouns
+    const nameWithPronouns = formatNameWithPronouns(ctx.characterName, ctx.characterPronouns)
+    parts.push(`- CHARACTER: ${nameWithPronouns} (an AI character)`)
   }
 
   return parts.join('\n')
@@ -249,7 +262,9 @@ export async function processMessageForMemory(
         ctx.personaName,
         selection,
         ctx.userId,
-        uncensoredFallback
+        uncensoredFallback,
+        ctx.chatId,
+        ctx.characterPronouns
       ),
       extractCharacterMemoryFromMessage(
         ctx.userMessage,
@@ -259,7 +274,9 @@ export async function processMessageForMemory(
         ctx.personaName,
         selection,
         ctx.userId,
-        uncensoredFallback
+        uncensoredFallback,
+        ctx.chatId,
+        ctx.characterPronouns
       ),
     ])
 
@@ -625,7 +642,10 @@ export async function processInterCharacterMemory(
       ctx.subjectMessage,
       selection,
       ctx.userId,
-      uncensoredFallback
+      uncensoredFallback,
+      ctx.chatId,
+      ctx.observerCharacterPronouns,
+      ctx.subjectCharacterPronouns
     )
 
     let memoryCreated = false

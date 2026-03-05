@@ -25,6 +25,8 @@ interface ChatComposerProps {
   pendingToolResults: PendingToolResult[]
   /** Remove a pending tool result */
   onRemovePendingToolResult: (id: string) => void
+  /** External ref for the textarea, enabling parent components to focus it */
+  inputRef?: React.MutableRefObject<HTMLTextAreaElement | null>
   disabled: boolean
   sending: boolean
   hasActiveCharacters: boolean
@@ -131,6 +133,7 @@ export function ChatComposer({
   roleplayTemplateId,
   documentEditingMode,
   onToggleDocumentEditingMode,
+  inputRef: externalInputRef,
   agentModeEnabled = false,
   onAgentModeToggle,
   onSubmit,
@@ -160,6 +163,15 @@ export function ChatComposer({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const toolPaletteToggleRef = useRef<HTMLButtonElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  // Callback ref that assigns the textarea element to both our internal ref
+  // and the parent's external ref, so parent can focus the textarea directly
+  const textareaRefCallback = useCallback((node: HTMLTextAreaElement | null) => {
+    inputRef.current = node
+    if (externalInputRef) {
+      externalInputRef.current = node
+    }
+  }, [externalInputRef])
   // Track the last external input value to detect when parent clears it
   const lastExternalInputRef = useRef(input)
   // Debounce timer for parent state updates
@@ -569,7 +581,7 @@ export function ChatComposer({
             </div>
           ) : (
             <textarea
-              ref={inputRef}
+              ref={textareaRefCallback}
               defaultValue={input}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}

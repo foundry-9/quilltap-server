@@ -639,8 +639,8 @@ describe('ParticipantCard', () => {
       const props = createDefaultProps()
       render(<ParticipantCard {...props} />)
 
-      const llmIndicator = screen.getByTitle('openai: gpt-4-turbo')
-      expect(llmIndicator).toBeInTheDocument()
+      const llmIndicators = screen.getAllByTitle('openai: gpt-4-turbo')
+      expect(llmIndicators.length).toBeGreaterThan(0)
     })
 
     it('slider has proper range attributes', () => {

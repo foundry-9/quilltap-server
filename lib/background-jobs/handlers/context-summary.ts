@@ -79,7 +79,8 @@ export async function handleContextSummary(job: BackgroundJob): Promise<void> {
     currentSummary,
     newMessages,
     cheapLLMSelection,
-    job.userId
+    job.userId,
+    payload.chatId
   );
 
   if (!result.success) {

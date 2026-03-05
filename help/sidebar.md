@@ -1,3 +1,7 @@
+---
+url: *
+---
+
 # Left Sidebar
 
 > **[Open this page in Quilltap](/)**

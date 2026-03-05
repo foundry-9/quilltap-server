@@ -67,8 +67,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
               zipPath,
               error: err.message,
             });
-          } else {
-            logger.debug('[System Backup v1] Cleaned up backup zip after download', { zipPath });
           }
           // Also try to remove the parent temp directory
           const tempDir = path.dirname(zipPath);

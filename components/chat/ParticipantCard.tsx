@@ -17,6 +17,7 @@
 
 import { useState, useRef } from 'react'
 import Avatar from '@/components/ui/Avatar'
+import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
 import type { TurnOrderStatus } from '@/lib/chat/turn-manager'
 
 // Special constant for user impersonation selection
@@ -292,9 +293,16 @@ export function ParticipantCard({
             )}
             {/* Show LLM badge for LLM-controlled that could be impersonated */}
             {!isUserParticipant && !isImpersonating && participant.controlledBy === 'llm' && (
-              <span className="qt-badge-secondary text-xs opacity-60">
-                AI
-              </span>
+              <>
+                <span className="qt-badge-secondary text-xs opacity-60">
+                  AI
+                </span>
+                <ProviderModelBadge
+                  provider={participant.connectionProfile?.provider}
+                  modelName={participant.connectionProfile?.modelName}
+                  size="sm"
+                />
+              </>
             )}
           </div>
 
@@ -326,8 +334,12 @@ export function ParticipantCard({
           ) : (
             /* Fallback: plain-text LLM indicator when no dropdown */
             isCharacter && participant.connectionProfile && (
-              <div className="qt-participant-card-status mt-1 truncate" title={`${participant.connectionProfile.provider}: ${participant.connectionProfile.modelName}`}>
-                {participant.connectionProfile.modelName || participant.connectionProfile.name}
+              <div className="qt-participant-card-status mt-1 truncate flex items-center gap-1" title={`${participant.connectionProfile.provider}: ${participant.connectionProfile.modelName}`}>
+                <ProviderModelBadge
+                  provider={participant.connectionProfile.provider}
+                  modelName={participant.connectionProfile.modelName || participant.connectionProfile.name}
+                  size="sm"
+                />
               </div>
             )
           )}

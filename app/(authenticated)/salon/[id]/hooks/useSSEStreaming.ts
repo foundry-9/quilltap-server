@@ -6,7 +6,7 @@ import { getErrorMessage } from '@/lib/error-utils'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import type { ChatParticipantBase } from '@/lib/schemas/types'
 import type { Message, MessageAttachment, Chat, PendingToolResult } from '../types'
-import type { FileWriteApprovalState } from './useModalState'
+import type { FileWriteApprovalState, SudoApprovalState, WorkspaceAcknowledgementState } from './useModalState'
 
 export interface PendingToolCall {
   id: string
@@ -56,7 +56,16 @@ interface SSEEvent {
       folderPath?: string
       projectId?: string | null
     }
+    requiresSudoApproval?: boolean
+    pendingSudoCommand?: {
+      command: string
+      parameters?: string[]
+      timeout_ms?: number
+    }
+    requiresWorkspaceAcknowledgement?: boolean
   }
+  provider?: string
+  modelName?: string
 }
 
 /**
@@ -93,6 +102,8 @@ interface UseSSEStreamingParams {
   setAttachedFiles: (files: any[]) => void
   inputRef: React.RefObject<HTMLTextAreaElement | null>
   setFileWriteApprovalState: (state: FileWriteApprovalState | null) => void
+  setSudoApprovalState: (state: SudoApprovalState | null) => void
+  setWorkspaceAcknowledgementState: (state: WorkspaceAcknowledgementState | null) => void
   getFirstCharacterParticipant: () => import('../types').Participant | undefined
   setPauseState: (paused: boolean) => void
 }
@@ -115,6 +126,8 @@ export function useSSEStreaming({
   setAttachedFiles,
   inputRef,
   setFileWriteApprovalState,
+  setSudoApprovalState,
+  setWorkspaceAcknowledgementState,
   getFirstCharacterParticipant,
   setPauseState,
 }: UseSSEStreamingParams) {
@@ -358,7 +371,7 @@ export function useSSEStreaming({
           }
         },
         onToolResult: (data) => {
-          const { index, name, success, result, requiresPermission, pendingWrite } = data.toolResult!
+          const { index, name, success, result, requiresPermission, pendingWrite, requiresSudoApproval, pendingSudoCommand, requiresWorkspaceAcknowledgement } = data.toolResult!
 
           setPendingToolCalls(prev => prev.map((tc, idx) =>
             (index !== undefined && idx === index) || (index === undefined && tc.name === name)
@@ -377,6 +390,26 @@ export function useSSEStreaming({
                 projectId: pendingWrite.projectId ?? chat?.projectId ?? null,
               },
               projectName: chat?.projectName ?? undefined,
+              respondingParticipantId: respondingParticipantId ?? undefined,
+            })
+          }
+
+          if (requiresSudoApproval && pendingSudoCommand) {
+            setSudoApprovalState({
+              isOpen: true,
+              pendingSudoCommand: {
+                command: pendingSudoCommand.command,
+                parameters: pendingSudoCommand.parameters,
+                timeout_ms: pendingSudoCommand.timeout_ms,
+              },
+              respondingParticipantId: respondingParticipantId ?? undefined,
+            })
+          }
+
+          if (requiresWorkspaceAcknowledgement) {
+            setWorkspaceAcknowledgementState({
+              isOpen: true,
+              toolName: name,
               respondingParticipantId: respondingParticipantId ?? undefined,
             })
           }
@@ -417,6 +450,8 @@ export function useSSEStreaming({
             content: fullContent,
             createdAt: new Date().toISOString(),
             participantId: firstCharParticipant?.id,
+            provider: data.provider || null,
+            modelName: data.modelName || null,
           }
           setMessages((prev) => [...prev, assistantMessage])
           setStreamingContent('')
@@ -447,12 +482,14 @@ export function useSSEStreaming({
           : errorMessage
         showErrorToast(displayMessage || 'Failed to send message')
 
-        setMessages((prev) => prev.filter((m) => m.id !== tempUserMessageId))
+        // Don't remove the user message — the backend already saved it.
+        // Re-fetch the chat to replace the temp message with the real one.
         setStreamingContent('')
         setStreaming(false)
         setWaitingForResponse(false)
         setRespondingParticipantId(null)
         setResponseStatus(null)
+        await fetchChat()
       }
     } finally {
       setSending(false)
@@ -460,7 +497,7 @@ export function useSSEStreaming({
       setResponseStatus(null)
       focusInput()
     }
-  }, [chatId, sending, isPaused, chat, respondingParticipantId, setMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, inputRef, setFileWriteApprovalState, readSSEStream, extractErrorMessage, focusInput])
+  }, [chatId, sending, isPaused, chat, respondingParticipantId, setMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, inputRef, setFileWriteApprovalState, setSudoApprovalState, setWorkspaceAcknowledgementState, readSSEStream, extractErrorMessage, focusInput])
 
   /**
    * Trigger continue mode - request AI to generate a response from a specific participant.
@@ -524,6 +561,8 @@ export function useSSEStreaming({
               content: fullContent,
               createdAt: new Date().toISOString(),
               participantId,
+              provider: data.provider || null,
+              modelName: data.modelName || null,
             }
             setMessages(prev => [...prev, newMessage])
           }

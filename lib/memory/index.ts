@@ -35,6 +35,9 @@ export {
   type MemoryProcessingResult,
 } from './memory-processor'
 
+// Format Utilities
+export { formatNameWithPronouns } from './format-utils'
+
 // Housekeeping (Sprint 6: Memory Cleanup)
 export {
   runHousekeeping,

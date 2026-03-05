@@ -60,13 +60,17 @@ export const TimestampSchema = z.iso.datetime().or(z.date()).transform(d => {
 // JSON field (flexible structure)
 export const JsonSchema = z.record(z.string(), z.unknown());
 
-// Encryption fields (AES-256-GCM)
+/**
+ * @deprecated Field-level encryption has been replaced by database-level encryption (SQLCipher).
+ * API keys now use the `key_value` field directly. This schema is retained only for migration compatibility.
+ */
 export const EncryptedFieldSchema = z.object({
   ciphertext: z.string(),
   iv: z.string(),
   authTag: z.string(),
 });
 
+/** @deprecated See EncryptedFieldSchema */
 export type EncryptedField = z.infer<typeof EncryptedFieldSchema>;
 
 // Hex color validation

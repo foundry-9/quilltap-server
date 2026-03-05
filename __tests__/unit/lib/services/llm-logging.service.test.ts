@@ -156,16 +156,17 @@ describe('llm-logging.service', () => {
           durationMs: 1234,
           request: expect.objectContaining({
             messageCount: 2,
-            fullMessages: [
-              { role: 'system', content: 'System prompt' },
-              { role: 'user', content: 'Hello world' },
+            messages: [
+              { role: 'system', content: 'System prompt', contentLength: 13, hasAttachments: false },
+              { role: 'user', content: 'Hello world', contentLength: 11, hasAttachments: false },
             ],
             temperature: 0.7,
             maxTokens: 200,
             toolCount: 1,
           }),
           response: expect.objectContaining({
-            fullContent: 'Hi there!',
+            content: 'Hi there!',
+            contentLength: 9,
             error: null,
           }),
           usage: {

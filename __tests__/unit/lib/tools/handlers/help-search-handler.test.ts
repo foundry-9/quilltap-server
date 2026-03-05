@@ -62,6 +62,7 @@ function createTestBundle(documentCount: number = 3, dimensions: number = 1536):
       id: `doc-${i}`,
       title: `Help Document ${i}`,
       path: `help/doc-${i}.md`,
+      url: `/test/doc-${i}`,
       content: `This is the content of help document ${i}. It contains helpful information about topic ${i} and embedding profiles configuration.`,
       embedding,
     })
@@ -441,6 +442,7 @@ describe('formatHelpSearchResults', () => {
         id: 'doc-1',
         title: 'Test Help Document',
         path: 'help/test.md',
+        url: '/test',
         score: 0.85,
         content: 'This is the content of the test document.',
       },
@@ -452,6 +454,7 @@ describe('formatHelpSearchResults', () => {
     expect(formatted).toContain('[Help Document 1]')
     expect(formatted).toContain('Title: Test Help Document')
     expect(formatted).toContain('Path: help/test.md')
+    expect(formatted).toContain('URL: /test')
     expect(formatted).toContain('Relevance: High')
     expect(formatted).toContain('This is the content of the test document.')
   })
@@ -462,6 +465,7 @@ describe('formatHelpSearchResults', () => {
         id: 'doc-1',
         title: 'First Document',
         path: 'help/first.md',
+        url: '/first',
         score: 0.9,
         content: 'First content.',
       },
@@ -469,6 +473,7 @@ describe('formatHelpSearchResults', () => {
         id: 'doc-2',
         title: 'Second Document',
         path: 'help/second.md',
+        url: '/second',
         score: 0.5,
         content: 'Second content.',
       },
@@ -476,6 +481,7 @@ describe('formatHelpSearchResults', () => {
         id: 'doc-3',
         title: 'Third Document',
         path: 'help/third.md',
+        url: '/third',
         score: 0.2,
         content: 'Third content.',
       },
@@ -498,6 +504,7 @@ describe('formatHelpSearchResults', () => {
         id: 'doc-1',
         title: 'High Score',
         path: 'help/high.md',
+        url: '/high',
         score: 0.75,
         content: 'Content.',
       },
@@ -513,6 +520,7 @@ describe('formatHelpSearchResults', () => {
         id: 'doc-1',
         title: 'Medium Score',
         path: 'help/medium.md',
+        url: '/medium',
         score: 0.5,
         content: 'Content.',
       },
@@ -528,6 +536,7 @@ describe('formatHelpSearchResults', () => {
         id: 'doc-1',
         title: 'Low Score',
         path: 'help/low.md',
+        url: '/low',
         score: 0.2,
         content: 'Content.',
       },
@@ -544,6 +553,7 @@ describe('formatHelpSearchResults', () => {
         id: 'doc-1',
         title: 'Long Content',
         path: 'help/long.md',
+        url: '/long',
         score: 0.8,
         content: longContent,
       },
@@ -564,6 +574,7 @@ describe('formatHelpSearchResults', () => {
         id: 'doc-1',
         title: 'Short Content',
         path: 'help/short.md',
+        url: '/short',
         score: 0.8,
         content: shortContent,
       },
@@ -581,6 +592,7 @@ describe('formatHelpSearchResults', () => {
         id: 'doc-1',
         title: 'First',
         path: 'help/first.md',
+        url: '/first',
         score: 0.8,
         content: 'First content.',
       },
@@ -588,6 +600,7 @@ describe('formatHelpSearchResults', () => {
         id: 'doc-2',
         title: 'Second',
         path: 'help/second.md',
+        url: '/second',
         score: 0.6,
         content: 'Second content.',
       },
@@ -604,6 +617,7 @@ describe('formatHelpSearchResults', () => {
         id: 'doc-1',
         title: 'Test',
         path: 'help/test.md',
+        url: '/test',
         score: 0.8,
         content: 'Content.',
       },

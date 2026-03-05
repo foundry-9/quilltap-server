@@ -1,3 +1,7 @@
+---
+url: /salon/:id
+---
+
 # Turn Manager
 
 > **[Open this page in Quilltap](/salon)**

@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import type { LLMLog } from '@/lib/schemas/types'
 
 export interface ReattributeDialogState {
   isOpen: boolean
@@ -20,6 +19,25 @@ export interface FileWriteApprovalState {
   }
   projectName?: string
   /** The participant ID that made the write request, so we can trigger them to continue */
+  respondingParticipantId?: string
+}
+
+export interface SudoApprovalState {
+  isOpen: boolean
+  pendingSudoCommand: {
+    command: string
+    parameters?: string[]
+    timeout_ms?: number
+  }
+  /** The participant ID that made the sudo request, so we can trigger them to continue */
+  respondingParticipantId?: string
+}
+
+export interface WorkspaceAcknowledgementState {
+  isOpen: boolean
+  /** The tool name that triggered the acknowledgement requirement */
+  toolName?: string
+  /** The participant ID, so we can trigger them to continue */
   respondingParticipantId?: string
 }
 
@@ -58,11 +76,9 @@ export function useModalState() {
   const [reattributeDialogState, setReattributeDialogState] = useState<ReattributeDialogState | null>(null)
   const [fileWriteApprovalState, setFileWriteApprovalState] = useState<FileWriteApprovalState | null>(null)
   const [selectLLMProfileDialogState, setSelectLLMProfileDialogState] = useState<SelectLLMProfileDialogState | null>(null)
+  const [sudoApprovalState, setSudoApprovalState] = useState<SudoApprovalState | null>(null)
+  const [workspaceAcknowledgementState, setWorkspaceAcknowledgementState] = useState<WorkspaceAcknowledgementState | null>(null)
 
-  // LLM log viewer state
-  const [llmLogViewerOpen, setLLMLogViewerOpen] = useState(false)
-  const [llmLogsForViewer, setLLMLogsForViewer] = useState<LLMLog[]>([])
-  const [selectedMessageIdForLogs, setSelectedMessageIdForLogs] = useState<string | null>(null)
 
   // Convenience open/close helpers
   const openGallery = useCallback(() => setGalleryOpen(true), [])
@@ -88,12 +104,6 @@ export function useModalState() {
   const openStateEditor = useCallback(() => setStateEditorModalOpen(true), [])
   const closeStateEditor = useCallback(() => setStateEditorModalOpen(false), [])
 
-  const closeLLMLogViewer = useCallback(() => {
-    setLLMLogViewerOpen(false)
-    setLLMLogsForViewer([])
-    setSelectedMessageIdForLogs(null)
-  }, [])
-
   return {
     // Simple boolean modals
     galleryOpen, setGalleryOpen,
@@ -117,11 +127,8 @@ export function useModalState() {
     reattributeDialogState, setReattributeDialogState,
     fileWriteApprovalState, setFileWriteApprovalState,
     selectLLMProfileDialogState, setSelectLLMProfileDialogState,
-
-    // LLM log viewer state
-    llmLogViewerOpen,
-    llmLogsForViewer, setLLMLogsForViewer,
-    selectedMessageIdForLogs, setSelectedMessageIdForLogs,
+    sudoApprovalState, setSudoApprovalState,
+    workspaceAcknowledgementState, setWorkspaceAcknowledgementState,
 
     // Convenience helpers
     openGallery, closeGallery,
@@ -135,7 +142,5 @@ export function useModalState() {
     openToolSettings, closeToolSettings,
     openRunTool, closeRunTool,
     openStateEditor, closeStateEditor,
-    closeLLMLogViewer,
-    setLLMLogViewerOpen,
   }
 }

@@ -68,11 +68,6 @@ export const moderationPlugin: ModerationProviderPlugin = {
       ? `${baseUrl.replace(/\/$/, '')}/v1/moderations`
       : 'https://api.openai.com/v1/moderations';
 
-    logger.debug('Calling OpenAI moderation endpoint', {
-      contentLength: content.length,
-      url,
-    });
-
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -110,13 +105,6 @@ export const moderationPlugin: ModerationProviderPlugin = {
         score,
       });
     }
-
-    logger.debug('OpenAI moderation result', {
-      flagged: result.flagged,
-      categoryCount: categories.length,
-      flaggedCategories: categories.filter(c => c.flagged).map(c => c.category),
-      model: data.model,
-    });
 
     return {
       flagged: result.flagged,

@@ -31,7 +31,7 @@ export class HealthChecker {
         onProgress(status);
       }
 
-      if (status.status === 'healthy' || status.status === 'degraded') {
+      if (status.status === 'healthy' || status.status === 'degraded' || status.status === 'locked') {
         return status;
       }
 
@@ -62,9 +62,14 @@ export class HealthChecker {
             const data = JSON.parse(body);
             const status = data.status === 'healthy' ? 'healthy'
               : data.status === 'degraded' ? 'degraded'
+              : data.status === 'locked' ? 'locked'
               : 'unhealthy';
 
-            resolve({ status, attempts: attempt });
+            resolve({
+              status,
+              attempts: attempt,
+              dbKeyState: data.status === 'locked' ? data.dbKeyState : undefined,
+            });
           } catch {
             resolve({
               status: 'unhealthy',

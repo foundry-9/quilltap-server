@@ -1,3 +1,7 @@
+---
+url: /profile
+---
+
 # Profile Settings
 
 > **[Open this page in Quilltap](/profile)**

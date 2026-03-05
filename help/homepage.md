@@ -1,3 +1,7 @@
+---
+url: /
+---
+
 # Homepage
 
 > **[Open this page in Quilltap](/)**

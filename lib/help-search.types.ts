@@ -15,6 +15,8 @@ export interface HelpDocument {
   title: string
   /** Relative path to the Markdown file */
   path: string
+  /** URL route this help document is associated with */
+  url: string
   /** Full document content */
   content: string
   /** Embedding vector */

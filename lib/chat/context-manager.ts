@@ -141,7 +141,7 @@ export interface BuiltContext {
   /** Warnings generated during context building */
   warnings: string[]
   /** Debug info: the actual memories that were included */
-  debugMemories?: Array<{ summary: string; importance: number; score: number }>
+  debugMemories?: Array<{ summary: string; importance: number; score: number; effectiveWeight: number }>
   /** Debug info: the conversation summary that was included */
   debugSummary?: string
   /** Debug info: the system prompt that was built (may be compressed) */
@@ -436,6 +436,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
             systemPromptTargetTokens: contextCompressionSettings.systemPromptTargetTokens,
             selection: cheapLLMSelection,
             userId,
+            chatId: chat.id,
             characterName: character.name,
             userName,
           }

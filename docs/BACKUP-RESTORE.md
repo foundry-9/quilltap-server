@@ -99,7 +99,7 @@ Files are stored on the local filesystem:
 
 **Important:**
 
-- `ENCRYPTION_MASTER_PEPPER` in `.env` - Master encryption key (required to decrypt API keys)
+- `quilltap.dbkey` and `quilltap-llm-logs.dbkey` in the data directory — these `.dbkey` files contain the encrypted database key (pepper). Without them, the databases cannot be opened. See [Database Encryption](DATABASE_ENCRYPTION.md) for details.
 - SQLite database file path configuration
 - File storage directory path
 
@@ -201,18 +201,20 @@ cp quilltap-backup-*.db /mnt/nas/quilltap-backups/
 
 ### Encryption & Security
 
-**Protect your backups:**
+Quilltap databases are encrypted at rest with SQLCipher. Physical backup files (`.db`) are already encrypted — they cannot be opened without the pepper stored in the `.dbkey` files. For additional protection or for logical backup ZIP files:
 
 ```bash
-# Encrypt SQLite backup with GPG
-gpg --symmetric --cipher-algo AES256 -o quilltap-backup.db.gpg quilltap-backup.db
+# Encrypt a logical backup ZIP with GPG
+gpg --symmetric --cipher-algo AES256 -o quilltap-backup.zip.gpg quilltap-backup.zip
 
 # Encrypt with OpenSSL
-openssl enc -aes-256-cbc -in quilltap-backup.db -out quilltap-backup.db.enc
+openssl enc -aes-256-cbc -in quilltap-backup.zip -out quilltap-backup.zip.enc
 
 # Verify backup integrity
-sha256sum quilltap-backup.db > quilltap-backup.db.sha256
+sha256sum quilltap-backup.zip > quilltap-backup.zip.sha256
 ```
+
+**Important:** Always back up the `.dbkey` files alongside your database files. Without the `.dbkey` file (or the passphrase used to protect it), physical database backups are unrecoverable.
 
 ## Restore Procedures
 
@@ -292,11 +294,19 @@ cp quilltap-backup-YYYYMMDD.db /path/to/quilltap.db
 
 ### Check Backup Integrity
 
-```bash
-# Verify SQLite database file is valid
-sqlite3 quilltap-backup-YYYYMMDD.db "SELECT COUNT(*) FROM users;"
+Since databases are encrypted with SQLCipher, the standard `sqlite3` CLI cannot open them. Use the Quilltap CLI instead:
 
-# For compressed backups
+```bash
+# Verify database file is valid (requires .dbkey file in the data directory)
+npx quilltap db "SELECT COUNT(*) FROM users;"
+
+# For a specific data directory
+npx quilltap db --data-dir /path/to/backup-data "SELECT COUNT(*) FROM users;"
+
+# If the .dbkey is passphrase-protected
+npx quilltap db --passphrase <pass> "SELECT COUNT(*) FROM users;"
+
+# For compressed backups, verify archive integrity first
 tar -tzf quilltap-backup-YYYYMMDD.db.tar.gz | head
 
 # Verify checksum
@@ -305,49 +315,54 @@ sha256sum -c quilltap-backup-YYYYMMDD.db.sha256
 
 ### Test Restore (Optional Environment)
 
-Before restoring to production, test on a separate SQLite database:
+Before restoring to production, test with a separate data directory. Both the `.dbkey` files and database files must be present:
 
 ```bash
-# Create a test copy
-cp quilltap-backup-YYYYMMDD.db quilltap-test.db
+# Create a test directory with copies of the backup
+mkdir /tmp/quilltap-test
+cp quilltap-backup-YYYYMMDD.db /tmp/quilltap-test/data/quilltap.db
+cp quilltap.dbkey /tmp/quilltap-test/quilltap.dbkey
 
 # Verify data
-sqlite3 quilltap-test.db "SELECT COUNT(*) FROM users;"
-sqlite3 quilltap-test.db "SELECT COUNT(*) FROM characters;"
+npx quilltap db --data-dir /tmp/quilltap-test "SELECT COUNT(*) FROM users;"
+npx quilltap db --data-dir /tmp/quilltap-test "SELECT COUNT(*) FROM characters;"
 
-# If verification succeeds, use this backup for restoration
-rm quilltap-test.db
+# Clean up
+rm -rf /tmp/quilltap-test
 ```
 
 ## Recovery Scenarios
 
 ### Lost Encryption Key
 
-**Without `ENCRYPTION_MASTER_PEPPER`:**
+**Without the `.dbkey` file:**
 
-All encrypted API keys and authentication tokens become unrecoverable. You will need to:
+If the `.dbkey` file is lost or corrupted and you don't have a backup of it, the encrypted database files cannot be opened. You will need to:
 
-1. Restore from a backup made while you had the key
-2. Set `ENCRYPTION_MASTER_PEPPER` to the original value
-3. Users can log back in and re-add their API keys
+1. Restore the `.dbkey` file from a backup, OR
+2. Restore both the `.dbkey` file and database files from a backup made at the same time
+3. Re-add API keys and other configuration as needed
 
 **Prevention:**
 
 ```bash
-# Backup encryption key separately
-echo $ENCRYPTION_MASTER_PEPPER > /secure/location/encryption-pepper.txt
-chmod 600 /secure/location/encryption-pepper.txt
+# Back up the .dbkey files alongside your database
+cp ~/Library/Application\ Support/Quilltap/quilltap.dbkey /secure/location/
+cp ~/Library/Application\ Support/Quilltap/quilltap-llm-logs.dbkey /secure/location/
+chmod 600 /secure/location/*.dbkey
 ```
+
+If you set a custom passphrase on the `.dbkey` file, you must also remember the passphrase. See [Database Encryption](DATABASE_ENCRYPTION.md) for details.
 
 ### Corrupted SQLite Database
 
 If SQLite database is corrupted:
 
 ```bash
-# Check database integrity
-sqlite3 /path/to/quilltap.db "PRAGMA integrity_check;"
+# Check database integrity (uses the Quilltap CLI since databases are encrypted)
+npx quilltap db "PRAGMA integrity_check;"
 
-# If corrupted, restore from backup
+# If corrupted, restore from backup (include the .dbkey file if restoring to a fresh location)
 cp quilltap-backup-YYYYMMDD.db /path/to/quilltap.db
 
 # Restart the application
@@ -463,10 +478,12 @@ echo "Latest backup is current: $AGE days old"
    docker stop quilltap
    ```
 
-3. **Restore encryption key (if needed):**
+3. **Restore `.dbkey` files (if needed):**
 
    ```bash
-   export ENCRYPTION_MASTER_PEPPER=$(cat /secure/location/encryption-pepper.txt)
+   cp /secure/location/quilltap.dbkey /app/quilltap/quilltap.dbkey
+   cp /secure/location/quilltap-llm-logs.dbkey /app/quilltap/quilltap-llm-logs.dbkey
+   chmod 600 /app/quilltap/*.dbkey
    ```
 
 4. **Restore SQLite database:**
@@ -551,12 +568,12 @@ docker logs -f quilltap
 ### Verification Failures
 
 ```bash
-# Check SQLite database validity
-sqlite3 /path/to/quilltap.db "PRAGMA integrity_check;"
+# Check SQLite database validity (requires .dbkey file)
+npx quilltap db "PRAGMA integrity_check;"
 
 # Verify table counts
-sqlite3 /path/to/quilltap.db "SELECT COUNT(*) FROM users;"
-sqlite3 /path/to/quilltap.db "SELECT COUNT(*) FROM characters;"
+npx quilltap db "SELECT COUNT(*) FROM users;"
+npx quilltap db "SELECT COUNT(*) FROM characters;"
 
 # Check file storage connectivity
 ls -la /path/to/quilltap/files/

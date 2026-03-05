@@ -285,7 +285,7 @@ export default function RunToolModal({
                           <div className="font-medium qt-text">{tool.name}</div>
                           <div className="text-xs qt-text-secondary mt-0.5">
                             {isUnavailable ? (
-                              <span className="text-amber-500">{tool.unavailableReason}</span>
+                              <span className="qt-text-warning">{tool.unavailableReason}</span>
                             ) : (
                               tool.description
                             )}

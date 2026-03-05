@@ -98,13 +98,13 @@ function createMockLog(overrides: Partial<LLMLog> = {}): LLMLog {
     modelName: 'gpt-4',
     request: {
       messageCount: 5,
-      messages: [{ role: 'user', contentPreview: 'Hello', contentLength: 5, hasAttachments: false }],
+      messages: [{ role: 'user', content: 'Hello', contentLength: 5, hasAttachments: false }],
       temperature: 0.7,
       maxTokens: 1000,
       toolCount: 0,
     },
     response: {
-      contentPreview: 'Hi there!',
+      content: 'Hi there!',
       contentLength: 9,
     },
     usage: {
@@ -384,11 +384,11 @@ describe('LLMLogsRepository', () => {
         modelName: 'gpt-4',
         request: {
           messageCount: 1,
-          messages: [{ role: 'user', contentPreview: 'Hi', contentLength: 2, hasAttachments: false }],
+          messages: [{ role: 'user', content: 'Hi', contentLength: 2, hasAttachments: false }],
           toolCount: 0,
         },
         response: {
-          contentPreview: 'Hello!',
+          content: 'Hello!',
           contentLength: 6,
         },
         usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },

@@ -176,6 +176,43 @@ export function useConnectionProfiles() {
     [] // deleteOp.execute and fetchProfiles are stable
   )
 
+  const reorderProfiles = useCallback(
+    async (order: Array<{ id: string; sortIndex: number }>) => {
+      try {
+        const result = await fetchJson('/api/v1/connection-profiles?action=reorder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order }),
+        })
+        if (!result.ok) {
+          throw new Error(result.error || 'Failed to reorder profiles')
+        }
+        await fetchProfiles()
+      } catch (err) {
+        console.error('Failed to reorder profiles', { error: getErrorMessage(err) })
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [] // fetchProfiles is stable
+  )
+
+  const resetSort = useCallback(async () => {
+    try {
+      const result = await fetchJson('/api/v1/connection-profiles?action=reset-sort', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      if (!result.ok) {
+        throw new Error(result.error || 'Failed to reset sort order')
+      }
+      await fetchProfiles()
+    } catch (err) {
+      console.error('Failed to reset sort order', { error: getErrorMessage(err) })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // fetchProfiles is stable
+
   return {
     profiles,
     apiKeys,
@@ -189,5 +226,7 @@ export function useConnectionProfiles() {
     fetchChatSettings,
     handleDelete,
     triggerAutoAssociate,
+    reorderProfiles,
+    resetSort,
   }
 }
