@@ -108,20 +108,27 @@ export function getSQLiteDatabase(): DatabaseType {
 
   ensureSQLiteDataDir();
   const dbPath = getSQLitePath();
-  sqliteDb = new Database(dbPath);
+  const db = new Database(dbPath);
 
-  // SQLCipher key MUST be the first pragma before any other operations.
-  const sqlcipherKey = process.env.ENCRYPTION_MASTER_PEPPER;
-  if (sqlcipherKey) {
-    const keyHex = Buffer.from(sqlcipherKey, 'base64').toString('hex');
-    sqliteDb.pragma(`key = "x'${keyHex}'"`);
+  try {
+    // SQLCipher key MUST be the first pragma before any other operations.
+    const sqlcipherKey = process.env.ENCRYPTION_MASTER_PEPPER;
+    if (sqlcipherKey) {
+      const keyHex = Buffer.from(sqlcipherKey, 'base64').toString('hex');
+      db.pragma(`key = "x'${keyHex}'"`);
+    }
+
+    // Configure pragmas
+    db.pragma('journal_mode = WAL');
+    db.pragma('foreign_keys = ON');
+    db.pragma('busy_timeout = 5000');
+  } catch (error) {
+    // Close the partially-initialized connection so retries start fresh
+    try { db.close(); } catch { /* ignore close errors */ }
+    throw error;
   }
 
-  // Configure pragmas
-  sqliteDb.pragma('journal_mode = WAL');
-  sqliteDb.pragma('foreign_keys = ON');
-  sqliteDb.pragma('busy_timeout = 5000');
-
+  sqliteDb = db;
   return sqliteDb;
 }
 
@@ -201,6 +208,13 @@ export async function waitForDatabaseReady(
       db.prepare('SELECT 1').get();
       return true;
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.warn(`sqlite connection attempt ${attempt}/${maxRetries} failed`, {
+        context: 'migrations.database-utils',
+        attempt,
+        maxRetries,
+        error: errorMessage,
+      });
       if (attempt < maxRetries) {
         await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
       }

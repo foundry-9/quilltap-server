@@ -33,7 +33,7 @@
     "README.md"
   ],
   "dependencies": {
-    "better-sqlite3": "npm:better-sqlite3-multiple-ciphers@^12.6.2",
+    "better-sqlite3-multiple-ciphers": "^12.6.2",
     "sharp": "^0.34.5",
     "tar": "^7.4.3"
   },
