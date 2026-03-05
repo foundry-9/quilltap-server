@@ -199,11 +199,6 @@ class ModerationProviderRegistry {
     }
 
     const resolvedUrl = baseUrl ? rewriteLocalhostUrl(baseUrl) : baseUrl;
-    this.logger.debug('Validating moderation provider API key with URL rewriting', {
-      provider: name,
-      originalUrl: baseUrl,
-      resolvedUrl,
-    });
     return plugin.validateApiKey(apiKey, resolvedUrl);
   }
 

@@ -192,6 +192,36 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
       icon: '📖',
       bgColor: 'bg-muted border border-border',
     },
+    chdir: {
+      displayName: 'Change Directory',
+      icon: '📂',
+      bgColor: 'bg-muted border border-border',
+    },
+    exec_sync: {
+      displayName: 'Shell Command',
+      icon: '🔧',
+      bgColor: 'bg-muted border border-border',
+    },
+    exec_async: {
+      displayName: 'Background Command',
+      icon: '🔧',
+      bgColor: 'bg-muted border border-border',
+    },
+    async_result: {
+      displayName: 'Process Status',
+      icon: '🔧',
+      bgColor: 'bg-muted border border-border',
+    },
+    sudo_sync: {
+      displayName: 'Sudo Command',
+      icon: '🔐',
+      bgColor: 'bg-muted border border-border',
+    },
+    cp_host: {
+      displayName: 'File Transfer',
+      icon: '📋',
+      bgColor: 'bg-muted border border-border',
+    },
   }
 
   const info = toolInfo[toolData.toolName!] || {

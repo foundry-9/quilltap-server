@@ -99,6 +99,14 @@ import { restructureFileStorageMigration } from './restructure-file-storage';
 import { restructureFileStorageCleanupMigration } from './restructure-file-storage-cleanup';
 // Fix TEXT embeddings written back by update path (should be Float32 BLOBs)
 import { fixTextEmbeddingsAfterUpdateMigration } from './fix-text-embeddings-after-update';
+// Add sortIndex field to connection profiles for custom ordering
+import { addConnectionProfileSortIndexMigration } from './add-connection-profile-sort-index';
+// Drop encryption columns from api_keys (ciphertext → key_value, drop iv/authTag)
+import { dropApiKeyEncryptionColumnsMigration } from './drop-api-key-encryption-columns';
+// Decrypt API key values left as ciphertext after column rename
+import { decryptApiKeyValuesMigration } from './decrypt-api-key-values';
+// Drop pepper_vault table (encryption simplified)
+import { dropPepperVaultMigration } from './drop-pepper-vault';
 
 /**
  * All available migrations.
@@ -193,6 +201,14 @@ export const migrations: Migration[] = [
   restructureFileStorageCleanupMigration,
   // Fix TEXT embeddings written back by update path (should be Float32 BLOBs)
   fixTextEmbeddingsAfterUpdateMigration,
+  // Add sortIndex field to connection profiles for custom ordering
+  addConnectionProfileSortIndexMigration,
+  // Drop encryption columns from api_keys (ciphertext → key_value, drop iv/authTag)
+  dropApiKeyEncryptionColumnsMigration,
+  // Decrypt API key values left as ciphertext after column rename
+  decryptApiKeyValuesMigration,
+  // Drop pepper_vault table (encryption simplified)
+  dropPepperVaultMigration,
 ];
 
 export {
@@ -282,4 +298,12 @@ export {
   restructureFileStorageCleanupMigration,
   // Fix TEXT embeddings written back by update path
   fixTextEmbeddingsAfterUpdateMigration,
+  // Add sortIndex field to connection profiles for custom ordering
+  addConnectionProfileSortIndexMigration,
+  // Drop encryption columns from api_keys (ciphertext → key_value, drop iv/authTag)
+  dropApiKeyEncryptionColumnsMigration,
+  // Decrypt API key values left as ciphertext after column rename
+  decryptApiKeyValuesMigration,
+  // Drop pepper_vault table (encryption simplified)
+  dropPepperVaultMigration,
 };

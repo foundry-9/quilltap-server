@@ -9,8 +9,11 @@
  * @module first-startup
  */
 
+import fs from 'fs';
+import path from 'path';
 import { CharacterInput, EmbeddingProfile } from '@/lib/schemas/types';
-import benData from './characters/ben.json';
+import type { QuilltapExport } from '@/lib/export/types';
+import { logger } from '@/lib/logger';
 
 /**
  * Seed character data structure (without system-generated fields)
@@ -51,11 +54,52 @@ function getCurrentTimestamp(): string {
 }
 
 /**
- * Get all seed characters to be created on first startup
- * @returns Array of seed character data
+ * Load all seed character JSON files from the characters directory.
+ * Characters are loaded in alphabetical order by filename.
+ *
+ * @returns Array of seed character data loaded from JSON files
  */
 export function getSeedCharacters(): SeedCharacterData[] {
-  return [benData as SeedCharacterData];
+  const context = 'first-startup';
+  const charactersDir = path.join(process.cwd(), 'first-startup', 'characters');
+
+  try {
+    const files = fs.readdirSync(charactersDir)
+      .filter(f => f.endsWith('.json'))
+      .sort();
+
+    if (files.length === 0) {
+      logger.warn('No seed character JSON files found', { context, charactersDir });
+      return [];
+    }
+
+    const characters: SeedCharacterData[] = [];
+
+    for (const file of files) {
+      try {
+        const filePath = path.join(charactersDir, file);
+        const raw = fs.readFileSync(filePath, 'utf-8');
+        const data = JSON.parse(raw) as SeedCharacterData;
+        characters.push(data);
+      } catch (fileError) {
+        logger.error('Failed to load seed character file', {
+          context,
+          file,
+          error: fileError instanceof Error ? fileError.message : String(fileError),
+        });
+        // Continue loading other files
+      }
+    }
+
+    return characters;
+  } catch (error) {
+    logger.error('Failed to read seed characters directory', {
+      context,
+      charactersDir,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return [];
+  }
 }
 
 /**
@@ -91,6 +135,139 @@ export function prepareSeedCharacter(
     npc: seedData.npc ?? false,
     isFavorite: seedData.isFavorite ?? false,
   };
+}
+
+// ============================================================================
+// SEED IMPORTS (.qtap files)
+// ============================================================================
+
+/**
+ * Load all .qtap seed import files from the imports directory.
+ * Files are loaded in alphabetical order by filename.
+ *
+ * @returns Array of parsed QuilltapExport objects ready for executeImport()
+ */
+export function getSeedImports(): { filename: string; data: QuilltapExport }[] {
+  const context = 'first-startup';
+  const importsDir = path.join(process.cwd(), 'first-startup', 'imports');
+
+  try {
+    if (!fs.existsSync(importsDir)) {
+      return [];
+    }
+
+    const files = fs.readdirSync(importsDir)
+      .filter(f => f.endsWith('.qtap'))
+      .sort();
+
+    if (files.length === 0) {
+      return [];
+    }
+
+    const imports: { filename: string; data: QuilltapExport }[] = [];
+
+    for (const file of files) {
+      try {
+        const filePath = path.join(importsDir, file);
+        const raw = fs.readFileSync(filePath, 'utf-8');
+        const data = JSON.parse(raw) as QuilltapExport;
+        imports.push({ filename: file, data });
+      } catch (fileError) {
+        logger.error('Failed to load seed import file', {
+          context,
+          file,
+          error: fileError instanceof Error ? fileError.message : String(fileError),
+        });
+        // Continue loading other files
+      }
+    }
+
+    return imports;
+  } catch (error) {
+    logger.error('Failed to read seed imports directory', {
+      context,
+      importsDir,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return [];
+  }
+}
+
+// ============================================================================
+// SEED AVATARS (image files for seed characters)
+// ============================================================================
+
+/**
+ * Seed avatar data: maps character name to image file content
+ */
+export interface SeedAvatarData {
+  characterName: string;
+  filename: string;
+  content: Buffer;
+  mimeType: string;
+}
+
+/**
+ * Load avatar image files from the avatars directory.
+ * Files are expected to be named after the character (e.g., Lorian.webp).
+ *
+ * @returns Array of seed avatar data with file contents
+ */
+export function getSeedAvatars(): SeedAvatarData[] {
+  const context = 'first-startup';
+  const avatarsDir = path.join(process.cwd(), 'first-startup', 'avatars');
+
+  try {
+    if (!fs.existsSync(avatarsDir)) {
+      return [];
+    }
+
+    const imageExtensions = ['.webp', '.png', '.jpg', '.jpeg'];
+    const files = fs.readdirSync(avatarsDir)
+      .filter(f => imageExtensions.some(ext => f.toLowerCase().endsWith(ext)))
+      .sort();
+
+    if (files.length === 0) {
+      return [];
+    }
+
+    const mimeMap: Record<string, string> = {
+      '.webp': 'image/webp',
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+    };
+
+    const avatars: SeedAvatarData[] = [];
+
+    for (const file of files) {
+      try {
+        const filePath = path.join(avatarsDir, file);
+        const ext = path.extname(file).toLowerCase();
+        const characterName = path.basename(file, ext);
+        const content = fs.readFileSync(filePath);
+        const mimeType = mimeMap[ext] || 'image/webp';
+
+        avatars.push({ characterName, filename: file, content, mimeType });
+      } catch (fileError) {
+        logger.error('Failed to load seed avatar file', {
+          context,
+          file,
+          error: fileError instanceof Error ? fileError.message : String(fileError),
+        });
+      }
+    }
+
+
+    return avatars;
+  } catch (error) {
+    logger.error('Failed to read seed avatars directory', {
+      context,
+      avatarsDir,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return [];
+  }
 }
 
 // ============================================================================

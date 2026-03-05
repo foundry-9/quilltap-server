@@ -1,3 +1,7 @@
+---
+url: /files
+---
+
 # File Organization and Folder Management
 
 > **[Open this page in Quilltap](/files)**

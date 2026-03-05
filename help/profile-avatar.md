@@ -1,3 +1,7 @@
+---
+url: /profile
+---
+
 # Choosing a Profile Avatar
 
 > **[Open this page in Quilltap](/profile)**

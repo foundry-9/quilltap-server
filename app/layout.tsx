@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "@/components/providers/session-provider";
-import { PluginInitializer, PluginUpgradeNotifier } from "@/components/startup";
+import { PluginInitializer, PluginUpgradeNotifier, MigrationWarningNotifier } from "@/components/startup";
 import { PepperVaultGate } from "@/components/startup/pepper-vault-gate";
 import { AppLayout } from "@/components/layout/app-layout";
 
@@ -22,6 +22,7 @@ export default function RootLayout({
         <Providers>
           <PluginInitializer />
           <PluginUpgradeNotifier />
+          <MigrationWarningNotifier />
           <AppLayout>
             {children}
           </AppLayout>

@@ -90,15 +90,7 @@ export async function executeMemorySearchTool(
       }
     )
 
-    // Update access time for retrieved memories
-    for (const result of searchResults) {
-      try {
-        await repos.memories.updateAccessTime(context.characterId, result.memory.id)
-      } catch (err) {
-        // Non-critical, just log
-        logger.warn(`[MemorySearch] Failed to update access time for memory ${result.memory.id}`, { characterId: context.characterId, memoryId: result.memory.id, userId: context.userId, error: String(err) })
-      }
-    }
+    // Note: lastAccessedAt is already updated by searchMemoriesSemantic on retrieval
 
     // Convert to output format
     const memories: MemorySearchResult[] = searchResults.map(result => ({
@@ -107,6 +99,7 @@ export async function executeMemorySearchTool(
       content: result.memory.content,
       importance: result.memory.importance,
       relevanceScore: result.score,
+      effectiveWeight: result.effectiveWeight,
       createdAt: result.memory.createdAt,
       source: result.memory.source,
     }))

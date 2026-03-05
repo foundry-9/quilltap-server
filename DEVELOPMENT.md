@@ -113,8 +113,8 @@ quilltap/
 
 ### Prerequisites
 
-- **Node.js 22+**
-- **SQLite** (automatic with better-sqlite3)
+- **Node.js 24+**
+- **SQLite with SQLCipher** (automatic with better-sqlite3-multiple-ciphers) — note that the standard `sqlite3` CLI cannot open Quilltap's encrypted database files; use `npx quilltap db` for direct database access
 - **File storage**: Local filesystem (default) or optionally S3-compatible storage
 
 For Electron development:
@@ -296,7 +296,28 @@ When making changes to a plugin, bump the patch version in its `package.json` an
 
 ### SQLite Database
 
-All application data is stored in SQLite:
+All application data is stored in SQLite, encrypted at rest using **SQLCipher** (via the `better-sqlite3-multiple-ciphers` driver, aliased as `better-sqlite3` throughout the codebase). Every database file is encrypted on disk — the standard `sqlite3` command-line tool cannot open these files. Use the built-in CLI subcommand instead:
+
+```bash
+# List tables
+npx quilltap db --tables
+
+# Run a SQL query
+npx quilltap db "SELECT COUNT(*) FROM characters;"
+
+# Interactive REPL
+npx quilltap db --repl
+
+# Query the LLM logs database
+npx quilltap db --llm-logs --tables
+
+# Use a custom data directory
+npx quilltap db --data-dir /path/to/data --tables
+```
+
+The encryption key is stored in a `.dbkey` file in the `data/` subdirectory alongside the database files. **Back up the `.dbkey` file alongside your database** — without it, the database cannot be decrypted. An optional passphrase (locked mode) can be set via environment variable to further protect the key file.
+
+The tables stored in the main database are:
 
 - **users** - User accounts (single-user mode)
 - **characters** - Character definitions and metadata (includes `controlledBy: 'llm' | 'user'` for control mode)
@@ -390,7 +411,8 @@ In development, logs are written to `logs/combined.log` and `logs/error.log`. Us
 9. If we updated any packages (in `packages/`), make sure that those are published to npmjs and properly installed in any NPM package.json files that exist throughout the application, including other packages, plugins, and the primary one at the root level
 10. Verify that the backup/restore system includes everything that can be backed up (usually everything but things that are so secret they need to be encrypted, like API keys)
 11. Make sure that lint/test/build in Github Actions are working
-12. Check the following Markdown files to be sure they are up-to-date:
+12. Remove all log.debug calls made during this development cycle (i.e., since the last release)
+13. Check the following Markdown files to be sure they are up-to-date:
     - [README](README.md)
     - [Changelog](docs/CHANGELOG.md)
     - [API Documentation](docs/API.md)
@@ -532,4 +554,5 @@ git commit --no-verify -m "bugfix: started $NEWRELEASE bug branch"
 - [Deployment Guide](docs/DEPLOYMENT.md) - Production deployment patterns
 - [Backup & Restore Guide](docs/BACKUP-RESTORE.md) - Data backup procedures
 - [Plugin Developer Guide](plugins/README.md) - Creating plugins
+- [Database Encryption](docs/DATABASE_ENCRYPTION.md) - SQLCipher encryption architecture, .dbkey file management, and passphrase handling
 - [Roadmap](features/ROADMAP.md) - Planned features including Electron/Lima phases

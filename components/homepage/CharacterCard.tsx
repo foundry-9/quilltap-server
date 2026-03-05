@@ -11,6 +11,8 @@ import { useState } from 'react'
 import Link from 'next/link'
 import Avatar from '@/components/ui/Avatar'
 import { QuickChatDialog } from '@/components/dashboard/QuickChatDialog'
+import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
+import { useConnectionProfiles } from '@/hooks/useConnectionProfiles'
 import type { HomepageCharacter } from './types'
 
 interface CharacterCardProps {
@@ -19,13 +21,17 @@ interface CharacterCardProps {
 
 export function CharacterCard({ character }: CharacterCardProps) {
   const [showDialog, setShowDialog] = useState(false)
+  const { getProfileProvider } = useConnectionProfiles()
+  const profileInfo = character.defaultConnectionProfileId
+    ? getProfileProvider(character.defaultConnectionProfileId)
+    : null
 
   return (
     <>
-      <div className="flex flex-col items-center p-3 rounded-lg border border-border bg-card hover:border-primary hover:qt-shadow-md transition-all">
+      <div className="flex flex-col items-center p-3 h-full rounded-lg border border-border bg-card hover:border-primary hover:qt-shadow-md transition-all">
         <Link
           href={`/aurora/${character.id}/view`}
-          className="flex flex-col items-center gap-2 hover:opacity-80 transition-opacity"
+          className="flex flex-col items-center gap-2 flex-grow hover:opacity-80 transition-opacity"
         >
           <Avatar
             name={character.name}
@@ -39,11 +45,14 @@ export function CharacterCard({ character }: CharacterCardProps) {
             <p className="qt-card-subtitle line-clamp-2 italic min-h-[2.5rem]">
               {character.title || '\u00A0'}
             </p>
+            {profileInfo && (
+              <ProviderModelBadge provider={profileInfo.provider} modelName={profileInfo.modelName} size="sm" />
+            )}
           </div>
         </Link>
         <button
           onClick={() => setShowDialog(true)}
-          className="mt-2 w-full qt-button-success qt-button-sm"
+          className="mt-auto pt-2 w-full qt-button-success qt-button-sm"
           title={`Start a chat with ${character.name}`}
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

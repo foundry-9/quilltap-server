@@ -8,6 +8,7 @@
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { createLLMProvider, type LLMMessage } from '@/lib/llm'
 import { buildToolsForProvider, checkModelSupportsTools } from '@/lib/tools'
+import { isShellEnvironment } from '@/lib/paths'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
 import { normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
@@ -37,6 +38,7 @@ export interface StreamOptions {
   userId?: string
   messageId?: string
   chatId?: string
+  characterId?: string
 }
 
 /**
@@ -198,6 +200,7 @@ export async function buildTools(
     projectInfo: !!projectId,
     requestFullContext: !!requestFullContext,
     agentMode: !!agentModeEnabled,
+    shellInteractivity: isShellEnvironment(),
     toolConfigs,
   })
 
@@ -272,7 +275,7 @@ export async function* streamMessage(
   rawResponse?: unknown
   thoughtSignature?: string
 }> {
-  const { messages, connectionProfile, apiKey, modelParams, tools, useNativeWebSearch, userId, messageId, chatId } = options
+  const { messages, connectionProfile, apiKey, modelParams, tools, useNativeWebSearch, userId, messageId, chatId, characterId } = options
 
   const provider = await createLLMProvider(
     connectionProfile.provider,
@@ -337,6 +340,7 @@ export async function* streamMessage(
           type: 'CHAT_MESSAGE',
           messageId,
           chatId,
+          characterId,
           provider: connectionProfile.provider,
           modelName: connectionProfile.modelName,
           request: {
@@ -454,6 +458,8 @@ export function encodeDoneEvent(
     }
     emptyResponse?: boolean
     emptyResponseReason?: string
+    provider?: string
+    modelName?: string
   }
 ): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify({ done: true, ...data })}\n\n`)

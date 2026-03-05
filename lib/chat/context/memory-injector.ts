@@ -7,6 +7,7 @@
 
 import type { Provider, Memory } from '@/lib/schemas/types'
 import { estimateTokens } from '@/lib/tokens/token-counter'
+import { calculateEffectiveWeight, formatRelativeAge } from '@/lib/memory/memory-weighting'
 import type { SemanticSearchResult } from '@/lib/memory/memory-service'
 
 /**
@@ -16,6 +17,7 @@ export interface DebugMemoryInfo {
   summary: string
   importance: number
   score: number
+  effectiveWeight: number
 }
 
 /**
@@ -64,17 +66,24 @@ export function formatMemoriesForContext(
   let memoriesUsed = 0
   const debugMemories: DebugMemoryInfo[] = []
 
-  // Sort by relevance score (highest first)
-  const sortedMemories = [...memories].sort((a, b) => {
-    // First by score, then by importance
-    const scoreDiff = b.score - a.score
-    if (Math.abs(scoreDiff) > 0.1) return scoreDiff
-    return b.memory.importance - a.memory.importance
+  // Calculate effective weights and sort by weight (primary), score (tiebreaker)
+  const memoriesWithWeight = memories.map(r => ({
+    ...r,
+    weight: r.effectiveWeight ?? calculateEffectiveWeight(r.memory).effectiveWeight,
+  }))
+
+  const sortedMemories = memoriesWithWeight.sort((a, b) => {
+    const weightDiff = b.weight - a.weight
+    if (Math.abs(weightDiff) > 0.05) return weightDiff
+    return b.score - a.score
   })
 
-  for (const { memory, score } of sortedMemories) {
-    // Use summary for context (more concise)
-    const memoryLine = `- ${memory.summary}`
+  const now = new Date()
+
+  for (const { memory, score, weight } of sortedMemories) {
+    // Use summary with relative age label for temporal context
+    const age = formatRelativeAge(memory, now)
+    const memoryLine = `- [${age}] ${memory.summary}`
     const lineTokens = estimateTokens(memoryLine + '\n', provider)
 
     if (currentTokens + lineTokens > maxTokens) {
@@ -88,6 +97,7 @@ export function formatMemoriesForContext(
       summary: memory.summary,
       importance: memory.importance,
       score,
+      effectiveWeight: weight,
     })
   }
 
@@ -132,13 +142,17 @@ export function formatInterCharacterMemoriesForContext(
     }
   }
 
-  // Sort memories within each character by importance
+  // Sort memories within each character by effective weight
   for (const [characterId, charMemories] of memoriesByCharacter) {
     const characterName = characterNames.get(characterId) || 'Unknown'
-    const sortedMemories = [...charMemories].sort((a, b) => b.importance - a.importance)
+    const sortedMemories = [...charMemories]
+      .map(m => ({ memory: m, weight: calculateEffectiveWeight(m).effectiveWeight }))
+      .sort((a, b) => b.weight - a.weight)
 
-    for (const memory of sortedMemories) {
-      const memoryLine = `- About ${characterName}: ${memory.summary}`
+    const now = new Date()
+    for (const { memory } of sortedMemories) {
+      const age = formatRelativeAge(memory, now)
+      const memoryLine = `- About ${characterName}: [${age}] ${memory.summary}`
       const lineTokens = estimateTokens(memoryLine + '\n', provider)
 
       if (currentTokens + lineTokens > maxTokens) {

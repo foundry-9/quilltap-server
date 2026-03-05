@@ -15,7 +15,7 @@ import {
 } from '../web-search-tool'
 import { logger } from '@/lib/logger'
 import { searchProviderRegistry } from '@/lib/plugins/search-provider-registry'
-import { decryptApiKey } from '@/lib/encryption'
+
 import { getUserRepositories } from '@/lib/repositories/user-scoped'
 
 // ============================================================================
@@ -101,15 +101,7 @@ async function getSearchProviderApiKey(
       return null
     }
 
-    // Decrypt the API key
-    const decryptedKey = decryptApiKey(
-      apiKeyRecord.ciphertext,
-      apiKeyRecord.iv,
-      apiKeyRecord.authTag,
-      userId
-    )
-
-    return decryptedKey
+    return apiKeyRecord.key_value
   } catch (error) {
     logger.error('Failed to retrieve API key for search provider', {
       provider: providerName,

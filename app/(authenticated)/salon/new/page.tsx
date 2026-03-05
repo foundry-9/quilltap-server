@@ -8,6 +8,7 @@ import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
 import { TimestampConfigCard } from '@/components/settings/chat-settings/components/TimestampConfigCard'
 import { useSidebarData } from '@/components/providers/sidebar-data-provider'
+import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
 import type { TimestampConfig } from '@/lib/schemas/types'
 
 interface Character {
@@ -504,6 +505,14 @@ export default function NewChatPage() {
                                   </option>
                                 ))}
                               </select>
+                              {sc.connectionProfileId && sc.controlledBy !== 'user' && (() => {
+                                const selectedProfile = profiles.find(p => p.id === sc.connectionProfileId)
+                                return selectedProfile?.provider ? (
+                                  <div className="mt-1">
+                                    <ProviderModelBadge provider={selectedProfile.provider} modelName={selectedProfile.modelName} size="sm" />
+                                  </div>
+                                ) : null
+                              })()}
                             </div>
                             {sc.character.systemPrompts && sc.character.systemPrompts.length > 0 && (
                               <div className="mt-2">

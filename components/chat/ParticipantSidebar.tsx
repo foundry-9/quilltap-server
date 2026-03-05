@@ -413,7 +413,7 @@ export function ParticipantSidebar({
         <div className="qt-chat-sidebar-add">
           <button
             onClick={onAddCharacter}
-            className="w-full py-2 px-4 text-sm font-medium rounded-lg border border-dashed border-border text-muted-foreground hover:bg-muted hover:text-foreground transition-colors flex items-center justify-center gap-2"
+            className="w-full py-2 px-4 text-sm font-medium rounded-lg border border-dashed qt-border-default qt-text-secondary hover:qt-bg-surface-alt hover:qt-text transition-colors flex items-center justify-center gap-2"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />

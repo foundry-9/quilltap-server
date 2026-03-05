@@ -1,3 +1,7 @@
+---
+url: /salon/:id
+---
+
 # Message Actions
 
 > **[Open this page in Quilltap](/salon)**

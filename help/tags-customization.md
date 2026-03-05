@@ -1,3 +1,7 @@
+---
+url: /aurora
+---
+
 # Tag Customization
 
 > **[Open this page in Quilltap](/settings?tab=appearance)**

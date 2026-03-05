@@ -110,6 +110,13 @@ export function getSQLiteDatabase(): DatabaseType {
   const dbPath = getSQLitePath();
   sqliteDb = new Database(dbPath);
 
+  // SQLCipher key MUST be the first pragma before any other operations.
+  const sqlcipherKey = process.env.ENCRYPTION_MASTER_PEPPER;
+  if (sqlcipherKey) {
+    const keyHex = Buffer.from(sqlcipherKey, 'base64').toString('hex');
+    sqliteDb.pragma(`key = "x'${keyHex}'"`);
+  }
+
   // Configure pragmas
   sqliteDb.pragma('journal_mode = WAL');
   sqliteDb.pragma('foreign_keys = ON');

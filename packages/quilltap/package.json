@@ -1,6 +1,6 @@
 {
   "name": "quilltap",
-  "version": "3.1.1-bugfix.17",
+  "version": "3.2.0-dev.44",
   "description": "Self-hosted AI workspace for writers, worldbuilders, and roleplayers. Run with npx quilltap.",
   "author": {
     "name": "Charles Sebold",
@@ -33,7 +33,7 @@
     "README.md"
   ],
   "dependencies": {
-    "better-sqlite3": "^12.6.2",
+    "better-sqlite3": "npm:better-sqlite3-multiple-ciphers@^12.6.2",
     "sharp": "^0.34.5",
     "tar": "^7.4.3"
   },

@@ -1,3 +1,7 @@
+---
+url: /salon/:id
+---
+
 # Multi-Character Chats
 
 > **[Open this page in Quilltap](/salon)**

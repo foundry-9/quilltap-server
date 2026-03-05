@@ -1,3 +1,7 @@
+---
+url: /settings
+---
+
 # Settings
 
 > **[Open this page in Quilltap](/settings)**

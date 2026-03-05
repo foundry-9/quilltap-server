@@ -1,3 +1,7 @@
+---
+url: /settings?tab=system
+---
+
 # Plugins
 
 > **[Open this page in Quilltap](/settings?tab=providers)**

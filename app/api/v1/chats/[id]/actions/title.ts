@@ -64,7 +64,7 @@ export async function handleRegenerateTitle(
       return badRequest('No messages in chat to generate title from');
     }
 
-    const result = await titleChat(conversationMessages, undefined, cheapLLM, user.id);
+    const result = await titleChat(conversationMessages, undefined, cheapLLM, user.id, chatId);
 
     if (!result.success || !result.result) {
       logger.error('[Chats v1] Title generation failed', { chatId, error: result.error });

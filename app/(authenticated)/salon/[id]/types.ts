@@ -27,6 +27,10 @@ export interface Message {
   toolCalls?: Message[]
   /** Server-side pre-rendered HTML for simple messages (no tools, no attachments) */
   renderedHtml?: string | null
+  /** Provider that generated this message (e.g., 'openai', 'anthropic') */
+  provider?: string | null
+  /** Model name that generated this message (e.g., 'gpt-4o', 'claude-sonnet-4-20250514') */
+  modelName?: string | null
   /** Danger flags from content classification */
   dangerFlags?: Array<{
     category: string
@@ -183,6 +187,7 @@ export interface ChatSettings {
   tagStyles?: Record<string, TagVisualStyle>
   memoryCascadePreferences?: MemoryCascadePreferences
   tokenDisplaySettings?: TokenDisplaySettings
+  llmLoggingSettings?: { enabled?: boolean; verboseMode?: boolean; retentionDays?: number }
   storyBackgroundsSettings?: StoryBackgroundsSettings
   dangerousContentSettings?: DangerousContentSettings
   createdAt: string

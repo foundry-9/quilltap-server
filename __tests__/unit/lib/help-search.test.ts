@@ -32,6 +32,7 @@ function createTestBundle(documentCount: number = 3, dimensions: number = 4): He
       id: `doc-${i}`,
       title: `Document ${i}`,
       path: `help/doc-${i}.md`,
+      url: `/test/doc-${i}`,
       content: `This is the content of document ${i}. It contains helpful information about topic ${i}.`,
       embedding,
     })
@@ -206,6 +207,7 @@ describe('HelpSearch', () => {
         expect(doc).toHaveProperty('id')
         expect(doc).toHaveProperty('title')
         expect(doc).toHaveProperty('path')
+        expect(doc).toHaveProperty('url')
         expect(doc).toHaveProperty('content')
         expect(doc).not.toHaveProperty('embedding')
       }
@@ -228,6 +230,7 @@ describe('HelpSearch', () => {
         expect(item).toHaveProperty('id')
         expect(item).toHaveProperty('title')
         expect(item).toHaveProperty('path')
+        expect(item).toHaveProperty('url')
         expect(item).not.toHaveProperty('content')
         expect(item).not.toHaveProperty('embedding')
       }

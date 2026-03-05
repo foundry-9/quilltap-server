@@ -262,6 +262,8 @@ export async function handleGet(
             attachments,
             debugMemoryLogs: event.debugMemoryLogs || undefined,
             renderedHtml,
+            provider: event.provider || null,
+            modelName: event.modelName || null,
           };
         })
     ).then((results) => results.filter(Boolean));

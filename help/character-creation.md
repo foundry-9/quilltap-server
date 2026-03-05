@@ -1,3 +1,7 @@
+---
+url: /aurora/new
+---
+
 # Creating Characters
 
 > **[Open this page in Quilltap](/aurora)**

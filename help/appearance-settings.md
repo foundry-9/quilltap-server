@@ -1,3 +1,7 @@
+---
+url: /settings?tab=appearance
+---
+
 # Appearance Settings
 
 > **[Open this page in Quilltap](/settings?tab=appearance)**

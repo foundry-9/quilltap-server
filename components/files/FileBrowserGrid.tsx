@@ -54,15 +54,15 @@ export default function FileBrowserGrid({
       {currentFolder !== '/' && (
         <button
           onClick={onGoUp}
-          className="flex flex-col items-center gap-2 p-3 rounded-lg hover:bg-muted transition-colors group"
+          className="flex flex-col items-center gap-2 p-3 rounded-lg hover:qt-bg-surface-alt transition-colors group"
         >
           <div
-            className="flex items-center justify-center bg-muted rounded-lg text-3xl"
+            className="flex items-center justify-center qt-bg-muted rounded-lg text-3xl"
             style={{ width: thumbnailSize, height: thumbnailSize }}
           >
             {'\u{1F4C1}'} {/* folder icon */}
           </div>
-          <span className="qt-text-small text-muted-foreground">..</span>
+          <span className="qt-text-small qt-text-secondary">..</span>
         </button>
       )}
 
@@ -71,10 +71,10 @@ export default function FileBrowserGrid({
         <button
           key={folder.path}
           onClick={() => onFolderClick(folder.path)}
-          className="flex flex-col items-center gap-2 p-3 rounded-lg hover:bg-muted transition-colors group"
+          className="flex flex-col items-center gap-2 p-3 rounded-lg hover:qt-bg-surface-alt transition-colors group"
         >
           <div
-            className="flex items-center justify-center bg-muted rounded-lg text-3xl"
+            className="flex items-center justify-center qt-bg-muted rounded-lg text-3xl"
             style={{ width: thumbnailSize, height: thumbnailSize }}
           >
             {'\u{1F4C1}'} {/* folder icon */}
@@ -86,7 +86,7 @@ export default function FileBrowserGrid({
             >
               {folder.name}
             </span>
-            <span className="qt-text-xs text-muted-foreground block">
+            <span className="qt-text-xs qt-text-secondary block">
               {folder.fileCount} file{folder.fileCount !== 1 ? 's' : ''}
             </span>
           </div>
@@ -97,7 +97,7 @@ export default function FileBrowserGrid({
       {files.map(file => (
         <div
           key={file.id}
-          className={`flex flex-col items-center gap-2 p-3 rounded-lg hover:bg-muted transition-colors group relative ${file.fileStatus === 'orphaned' ? 'ring-1 ring-amber-400/50' : ''}`}
+          className={`flex flex-col items-center gap-2 p-3 rounded-lg hover:qt-bg-surface-alt transition-colors group relative ${file.fileStatus === 'orphaned' ? 'ring-1 qt-border-warning/50' : ''}`}
         >
           {/* Thumbnail/Icon */}
           <button
@@ -120,11 +120,11 @@ export default function FileBrowserGrid({
               >
                 {file.originalFilename || file.filename}
               </span>
-              <span className="qt-text-xs text-muted-foreground block">
+              <span className="qt-text-xs qt-text-secondary block">
                 {formatFileSize(file.size)}
               </span>
               {file.fileStatus === 'orphaned' && (
-                <span className="qt-text-xs text-amber-500 block" title="Untracked file found on disk">
+                <span className="qt-text-xs qt-text-warning block" title="Untracked file found on disk">
                   untracked
                 </span>
               )}
@@ -161,7 +161,7 @@ export default function FileBrowserGrid({
 
       {/* Empty state */}
       {isEmpty && (
-        <div className="col-span-full flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
+        <div className="col-span-full flex flex-col items-center justify-center py-12 text-center qt-text-secondary">
           <div className="text-5xl mb-3">{'\u{1F4C2}'}</div>
           <p className="text-lg">No files yet</p>
           <p className="qt-text-small">Upload files to get started</p>

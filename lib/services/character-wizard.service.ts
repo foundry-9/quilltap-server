@@ -6,7 +6,7 @@
  */
 
 import { createLLMProvider } from '@/lib/llm';
-import { decryptApiKey } from '@/lib/encryption';
+
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup';
 import { providerRegistry } from '@/lib/plugins/provider-registry';
 import { profileSupportsMimeType } from '@/lib/llm/connection-profile-utils';
@@ -503,7 +503,7 @@ export async function runCharacterWizard(
   if (primaryProfile.apiKeyId) {
     const apiKey = await repos.connections.findApiKeyByIdAndUserId(primaryProfile.apiKeyId, userId);
     if (apiKey) {
-      primaryApiKey = decryptApiKey(apiKey.ciphertext, apiKey.iv, apiKey.authTag, userId);
+      primaryApiKey = apiKey.key_value;
     }
   }
 
@@ -542,7 +542,7 @@ export async function runCharacterWizard(
       if (secondaryProfile.apiKeyId) {
         const apiKey = await repos.connections.findApiKeyByIdAndUserId(secondaryProfile.apiKeyId, userId);
         if (apiKey) {
-          visionApiKey = decryptApiKey(apiKey.ciphertext, apiKey.iv, apiKey.authTag, userId);
+          visionApiKey = apiKey.key_value;
         }
       }
 
@@ -724,7 +724,7 @@ export async function runCharacterWizardStreaming(
     if (primaryProfile.apiKeyId) {
       const apiKey = await repos.connections.findApiKeyByIdAndUserId(primaryProfile.apiKeyId, userId);
       if (apiKey) {
-        primaryApiKey = decryptApiKey(apiKey.ciphertext, apiKey.iv, apiKey.authTag, userId);
+        primaryApiKey = apiKey.key_value;
       }
     }
 
@@ -763,7 +763,7 @@ export async function runCharacterWizardStreaming(
         if (secondaryProfile.apiKeyId) {
           const apiKey = await repos.connections.findApiKeyByIdAndUserId(secondaryProfile.apiKeyId, userId);
           if (apiKey) {
-            visionApiKey = decryptApiKey(apiKey.ciphertext, apiKey.iv, apiKey.authTag, userId);
+            visionApiKey = apiKey.key_value;
           }
         }
 

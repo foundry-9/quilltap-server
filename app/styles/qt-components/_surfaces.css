@@ -389,4 +389,80 @@
   .qt-collapsible-card-body {
     padding: var(--qt-card-padding);
   }
+
+  /* ==========================================================================
+     SLIDE-OVER PANELS
+     ========================================================================== */
+
+  /**
+   * Slide-over overlay/backdrop
+   * z-[55] keeps it above chat content but below BaseModal's z-[60]
+   */
+  .qt-slide-over-overlay {
+    @apply fixed inset-0 z-[55];
+    background: var(--qt-dialog-backdrop);
+    opacity: 0;
+    transition: opacity 200ms ease;
+    pointer-events: none;
+  }
+
+  .qt-slide-over-overlay[data-open="true"] {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /**
+   * Slide-over panel - slides in from the right edge
+   */
+  .qt-slide-over-panel {
+    @apply fixed right-0 top-0 z-[55] h-full;
+    @apply flex flex-col;
+    background: var(--qt-dialog-bg);
+    border-left: 1px solid var(--qt-dialog-border);
+    box-shadow: var(--qt-dialog-shadow);
+    transform: translateX(100%);
+    transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .qt-slide-over-panel[data-open="true"] {
+    transform: translateX(0);
+  }
+
+  /**
+   * Slide-over header
+   */
+  .qt-slide-over-header {
+    @apply flex items-center justify-between px-4 py-3 flex-shrink-0;
+    border-bottom: 1px solid var(--qt-dialog-border);
+  }
+
+  /**
+   * Inspector entry card
+   */
+  .qt-inspector-entry {
+    @apply transition-all duration-150;
+    border-radius: var(--qt-card-radius);
+    background: var(--qt-card-bg);
+    border: 1px solid color-mix(in srgb, var(--qt-card-border) calc(var(--qt-card-border-opacity) * 100%), transparent);
+  }
+
+  .qt-inspector-entry:hover {
+    border-color: color-mix(in srgb, var(--color-primary) 30%, transparent);
+  }
+
+  /**
+   * Inspector entry highlight animation for scroll-to
+   */
+  .qt-inspector-entry-highlight {
+    animation: qt-inspector-highlight 2s ease-out;
+  }
+
+  @keyframes qt-inspector-highlight {
+    0% {
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 60%, transparent);
+    }
+    100% {
+      box-shadow: 0 0 0 0px transparent;
+    }
+  }
 }

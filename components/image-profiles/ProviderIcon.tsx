@@ -53,15 +53,15 @@ interface ProviderIconProps {
 
 // Provider-specific defaults (used when no custom icon data provided)
 const PROVIDER_DEFAULTS: Record<string, { color: string; abbrev: string }> = {
-  OPENAI: { color: 'text-green-600', abbrev: 'OAI' },
-  GROK: { color: 'text-purple-600', abbrev: 'XAI' },
-  GOOGLE_IMAGEN: { color: 'text-blue-600', abbrev: 'GGL' },
-  GOOGLE: { color: 'text-blue-600', abbrev: 'GGL' },
-  OPENROUTER: { color: 'text-orange-600', abbrev: 'OR' },
-  ETERNAL_AI: { color: 'text-purple-600', abbrev: 'EAI' },
-  ANTHROPIC: { color: 'text-amber-600', abbrev: 'ANT' },
-  OLLAMA: { color: 'text-gray-600', abbrev: 'OLL' },
-  OPENAI_COMPATIBLE: { color: 'text-slate-600', abbrev: 'OAC' },
+  OPENAI: { color: 'qt-text-success', abbrev: 'OAI' },
+  GROK: { color: 'qt-text-primary', abbrev: 'XAI' },
+  GOOGLE_IMAGEN: { color: 'qt-text-info', abbrev: 'GGL' },
+  GOOGLE: { color: 'qt-text-info', abbrev: 'GGL' },
+  OPENROUTER: { color: 'qt-text-warning', abbrev: 'OR' },
+  ETERNAL_AI: { color: 'qt-text-primary', abbrev: 'EAI' },
+  ANTHROPIC: { color: 'qt-text-warning', abbrev: 'ANT' },
+  OLLAMA: { color: 'qt-text-secondary', abbrev: 'OLL' },
+  OPENAI_COMPATIBLE: { color: 'qt-text-secondary', abbrev: 'OAC' },
 }
 
 /**
@@ -177,7 +177,7 @@ export function ProviderIcon({
   colorClass,
 }: ProviderIconProps) {
   const defaults = PROVIDER_DEFAULTS[provider] || {
-    color: 'text-gray-600',
+    color: 'qt-text-secondary',
     abbrev: provider.slice(0, 3).toUpperCase()
   }
 
@@ -217,8 +217,8 @@ const PROVIDER_BADGES: Record<string, { bg: string; text: string; label: string 
   OPENROUTER: { bg: 'qt-bg-warning/10', text: 'text-warning', label: 'OpenRouter' },
   ETERNAL_AI: { bg: 'qt-bg-primary/10', text: 'text-primary', label: 'Eternal AI' },
   ANTHROPIC: { bg: 'qt-bg-warning/10', text: 'text-warning', label: 'Anthropic' },
-  OLLAMA: { bg: 'bg-muted', text: 'text-muted-foreground', label: 'Ollama' },
-  OPENAI_COMPATIBLE: { bg: 'bg-muted', text: 'text-muted-foreground', label: 'OpenAI Compatible' },
+  OLLAMA: { bg: 'qt-bg-muted', text: 'qt-text-secondary', label: 'Ollama' },
+  OPENAI_COMPATIBLE: { bg: 'qt-bg-muted', text: 'qt-text-secondary', label: 'OpenAI Compatible' },
 }
 
 export function ProviderBadge({

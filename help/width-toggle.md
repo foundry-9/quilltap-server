@@ -1,3 +1,7 @@
+---
+url: *
+---
+
 # Width Toggle Button
 
 > **[Open this page in Quilltap](/)**

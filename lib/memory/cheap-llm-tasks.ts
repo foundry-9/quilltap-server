@@ -11,8 +11,10 @@ import { createLLMProvider } from '@/lib/llm'
 import { LLMMessage, LLMResponse } from '@/lib/llm/base'
 import { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { getRepositories } from '@/lib/repositories/factory'
-import { decryptApiKey } from '@/lib/encryption'
+
 import { getErrorMessage } from '@/lib/errors'
+import type { Pronouns } from '@/lib/schemas/character.types'
+import { formatNameWithPronouns } from './format-utils'
 import { logger } from '@/lib/logger'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
 import type { LLMLogType } from '@/lib/schemas/llm-log.types'
@@ -149,7 +151,7 @@ async function getApiKeyForSelection(
     return null
   }
 
-  return decryptApiKey(apiKey.ciphertext, apiKey.iv, apiKey.authTag, userId)
+  return apiKey.key_value
 }
 
 /**
@@ -434,11 +436,13 @@ export async function extractMemoryFromMessage(
   personaName: string | undefined,
   selection: CheapLLMSelection,
   userId: string,
-  uncensoredFallback?: UncensoredFallbackOptions
+  uncensoredFallback?: UncensoredFallbackOptions,
+  chatId?: string,
+  characterPronouns?: Pronouns | null
 ): Promise<CheapLLMTaskResult<MemoryCandidate>> {
   // Use clear "X says:" format to help the model distinguish speakers
   const userLabel = personaName ? `${personaName} (the user)` : 'The user'
-  const characterLabel = `${characterName} (the character)`
+  const characterLabel = `${formatNameWithPronouns(characterName, characterPronouns)} (the character)`
 
   const messages: LLMMessage[] = [
     {
@@ -494,7 +498,7 @@ ${characterLabel} says:
       }
     },
     'memory-extraction-user',
-    undefined,
+    chatId,
     undefined,
     uncensoredFallback
   )
@@ -520,11 +524,13 @@ export async function extractCharacterMemoryFromMessage(
   personaName: string | undefined,
   selection: CheapLLMSelection,
   userId: string,
-  uncensoredFallback?: UncensoredFallbackOptions
+  uncensoredFallback?: UncensoredFallbackOptions,
+  chatId?: string,
+  characterPronouns?: Pronouns | null
 ): Promise<CheapLLMTaskResult<MemoryCandidate>> {
   // Use clear "X says:" format to help the model distinguish speakers
   const userLabel = personaName ? `${personaName} (the user)` : 'The user'
-  const characterLabel = `${characterName} (the character)`
+  const characterLabel = `${formatNameWithPronouns(characterName, characterPronouns)} (the character)`
 
   const messages: LLMMessage[] = [
     {
@@ -535,7 +541,7 @@ export async function extractCharacterMemoryFromMessage(
       role: 'user',
       content: `${context}
 
-TARGET CHARACTER: ${characterName}
+TARGET CHARACTER: ${formatNameWithPronouns(characterName, characterPronouns)}
 
 CONVERSATION TRANSCRIPT:
 
@@ -582,7 +588,7 @@ ${characterLabel} says:
       }
     },
     'memory-extraction-character',
-    undefined,
+    chatId,
     undefined,
     uncensoredFallback
   )
@@ -636,8 +642,14 @@ export async function extractInterCharacterMemoryFromMessage(
   characterBMessage: string,
   selection: CheapLLMSelection,
   userId: string,
-  uncensoredFallback?: UncensoredFallbackOptions
+  uncensoredFallback?: UncensoredFallbackOptions,
+  chatId?: string,
+  characterAPronouns?: Pronouns | null,
+  characterBPronouns?: Pronouns | null
 ): Promise<CheapLLMTaskResult<MemoryCandidate>> {
+  const characterALabel = formatNameWithPronouns(characterAName, characterAPronouns)
+  const characterBLabel = formatNameWithPronouns(characterBName, characterBPronouns)
+
   const messages: LLMMessage[] = [
     {
       role: 'system',
@@ -645,13 +657,13 @@ export async function extractInterCharacterMemoryFromMessage(
     },
     {
       role: 'user',
-      content: `Character A (the observer): ${characterAName}
-Character B (the subject): ${characterBName}
+      content: `Character A (the observer): ${characterALabel}
+Character B (the subject): ${characterBLabel}
 
 CONVERSATION:
-${characterAName}: ${characterAMessage}
+${characterALabel}: ${characterAMessage}
 
-${characterBName}: ${characterBMessage}`,
+${characterBLabel}: ${characterBMessage}`,
     },
   ]
 
@@ -690,7 +702,7 @@ ${characterBName}: ${characterBMessage}`,
       }
     },
     'memory-extraction-inter-character',
-    undefined,
+    chatId,
     undefined,
     uncensoredFallback
   )
@@ -715,7 +727,8 @@ Respond with only the summary text, no additional formatting.`
 export async function summarizeChat(
   messages: ChatMessage[],
   selection: CheapLLMSelection,
-  userId: string
+  userId: string,
+  chatId?: string
 ): Promise<CheapLLMTaskResult<string>> {
   // Format messages for the prompt
   const conversationText = messages
@@ -738,7 +751,8 @@ export async function summarizeChat(
     llmMessages,
     userId,
     (content: string): string => content.trim(),
-    'summarize-chat'
+    'summarize-chat',
+    chatId
   )
 }
 
@@ -880,7 +894,8 @@ export async function titleChat(
   messages: ChatMessage[],
   existingTitle: string | undefined,
   selection: CheapLLMSelection,
-  userId: string
+  userId: string,
+  chatId?: string
 ): Promise<CheapLLMTaskResult<string>> {
   // Use up to 100 messages, weighted toward the end of the conversation.
   // Older messages are truncated aggressively; recent messages get full text.
@@ -930,7 +945,8 @@ export async function titleChat(
       }
       return title
     },
-    'title-chat'
+    'title-chat',
+    chatId
   )
 }
 
@@ -945,7 +961,8 @@ export async function titleChat(
 export async function generateTitleFromSummary(
   summary: string,
   selection: CheapLLMSelection,
-  userId: string
+  userId: string,
+  chatId?: string
 ): Promise<CheapLLMTaskResult<string>> {
   const llmMessages: LLMMessage[] = [
     {
@@ -973,7 +990,8 @@ export async function generateTitleFromSummary(
       }
       return title
     },
-    'title-from-summary'
+    'title-from-summary',
+    chatId
   )
 }
 
@@ -1017,7 +1035,8 @@ export async function considerTitleUpdate(
   recentMessages: ChatMessage[],
   existingSummaryOrTitle: string | null,
   selection: CheapLLMSelection,
-  userId: string
+  userId: string,
+  chatId?: string
 ): Promise<CheapLLMTaskResult<{ needsNewTitle: boolean; reason: string; suggestedTitle: string | null }>> {
   // Format recent messages
   const conversationText = recentMessages
@@ -1079,7 +1098,8 @@ export async function considerTitleUpdate(
         }
       }
     },
-    'consider-title-update'
+    'consider-title-update',
+    chatId
   )
 }
 
@@ -1104,7 +1124,8 @@ export async function updateContextSummary(
   currentSummary: string,
   newMessages: ChatMessage[],
   selection: CheapLLMSelection,
-  userId: string
+  userId: string,
+  chatId?: string
 ): Promise<CheapLLMTaskResult<string>> {
   const newMessagesText = newMessages
     .map(m => `${m.role.toUpperCase()}: ${m.content}`)
@@ -1130,7 +1151,8 @@ ${newMessagesText}`,
     llmMessages,
     userId,
     (content: string): string => content.trim(),
-    'update-context-summary'
+    'update-context-summary',
+    chatId
   )
 }
 
@@ -1154,7 +1176,8 @@ Respond with only the description text.`
 export async function describeAttachment(
   attachment: Attachment,
   selection: CheapLLMSelection,
-  userId: string
+  userId: string,
+  chatId?: string
 ): Promise<CheapLLMTaskResult<string>> {
   // Check if we have image data
   if (!attachment.data) {
@@ -1195,7 +1218,8 @@ export async function describeAttachment(
       llmMessages,
       userId,
       (content: string): string => content.trim(),
-      'describe-attachment'
+      'describe-attachment',
+      chatId
     )
   }
 
@@ -1221,7 +1245,8 @@ export async function batchExtractMemories(
   exchanges: Array<{ userMessage: string; assistantMessage: string }>,
   context: string,
   selection: CheapLLMSelection,
-  userId: string
+  userId: string,
+  chatId?: string
 ): Promise<CheapLLMTaskResult<MemoryCandidate[]>> {
   // Format all exchanges for batch processing
   const exchangesText = exchanges
@@ -1295,7 +1320,8 @@ ${exchangesText}`,
         return []
       }
     },
-    'batch-memory-extraction'
+    'batch-memory-extraction',
+    chatId
   )
 }
 
@@ -1396,7 +1422,8 @@ export interface ImagePromptExpansionContext {
 export async function craftImagePrompt(
   expansionContext: ImagePromptExpansionContext,
   selection: CheapLLMSelection,
-  userId: string
+  userId: string,
+  chatId?: string
 ): Promise<CheapLLMTaskResult<string>> {
   // Format placeholder data for the LLM
   const placeholderDetails = expansionContext.placeholders
@@ -1482,7 +1509,8 @@ Create the final image prompt (maximize detail while staying under the limit):`,
 
       return prompt
     },
-    'craft-image-prompt'
+    'craft-image-prompt',
+    chatId
   )
 }
 
@@ -1548,7 +1576,8 @@ export interface DeriveSceneContextInput {
 export async function deriveSceneContext(
   input: DeriveSceneContextInput,
   selection: CheapLLMSelection,
-  userId: string
+  userId: string,
+  chatId?: string
 ): Promise<CheapLLMTaskResult<string>> {
   // Format recent messages for the prompt
   const messageText = input.recentMessages
@@ -1600,7 +1629,8 @@ Based on this conversation, describe the scene these characters might be in:`,
 
       return result
     },
-    'derive-scene-context'
+    'derive-scene-context',
+    chatId
   )
 }
 
@@ -1769,7 +1799,8 @@ export interface StoryBackgroundPromptContext {
 export async function craftStoryBackgroundPrompt(
   context: StoryBackgroundPromptContext,
   selection: CheapLLMSelection,
-  userId: string
+  userId: string,
+  chatId?: string
 ): Promise<CheapLLMTaskResult<string>> {
   // Build character descriptions section
   const characterSection = context.characters.length > 0
@@ -1816,7 +1847,8 @@ Create the atmospheric background prompt:`,
 
       return prompt
     },
-    'craft-story-background-prompt'
+    'craft-story-background-prompt',
+    chatId
   )
 }
 
@@ -1914,7 +1946,8 @@ export async function compressConversationHistory(
   targetTokens: number,
   selection: CheapLLMSelection,
   userId: string,
-  uncensoredFallback?: UncensoredFallbackOptions
+  uncensoredFallback?: UncensoredFallbackOptions,
+  chatId?: string
 ): Promise<CheapLLMTaskResult<CompressionResult>> {
   // Format messages for compression
   const conversationText = messages
@@ -1959,7 +1992,7 @@ export async function compressConversationHistory(
       }
     },
     'compress-conversation-history',
-    undefined,
+    chatId,
     undefined,
     uncensoredFallback
   )
@@ -1979,7 +2012,8 @@ export async function compressSystemPrompt(
   targetTokens: number,
   selection: CheapLLMSelection,
   userId: string,
-  uncensoredFallback?: UncensoredFallbackOptions
+  uncensoredFallback?: UncensoredFallbackOptions,
+  chatId?: string
 ): Promise<CheapLLMTaskResult<CompressionResult>> {
   // Estimate original token count
   const originalTokens = Math.ceil(systemPrompt.length / 4)
@@ -2014,7 +2048,7 @@ export async function compressSystemPrompt(
       }
     },
     'compress-system-prompt',
-    undefined,
+    chatId,
     undefined,
     uncensoredFallback
   )

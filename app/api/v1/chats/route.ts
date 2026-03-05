@@ -10,7 +10,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { buildChatContext, type ChatContext } from '@/lib/chat/initialize';
-import { decryptApiKey } from '@/lib/encryption';
 import { generateGreetingMessage } from '@/lib/chat/initial-greeting';
 import { buildFirstMessageContext } from '@/lib/chat/first-message-context';
 import { logger } from '@/lib/logger';
@@ -258,12 +257,7 @@ async function autoGenerateFirstMessage(
       return '';
     }
 
-    try {
-      apiKey = decryptApiKey(storedKey.ciphertext, storedKey.iv, storedKey.authTag, userId);
-    } catch (error) {
-      logger.error('[Chats v1] Failed to decrypt API key for greeting generation', {}, error instanceof Error ? error : undefined);
-      return '';
-    }
+    apiKey = storedKey.key_value;
   }
 
   const rawParameters = connectionProfile.parameters as Record<string, unknown> | undefined;

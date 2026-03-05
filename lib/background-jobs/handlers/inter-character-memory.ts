@@ -55,7 +55,9 @@ export async function handleInterCharacterMemory(job: BackgroundJob): Promise<vo
     payload.subjectCharacterName,
     payload.subjectMessage,
     cheapLLMSelection,
-    job.userId
+    job.userId,
+    undefined,
+    payload.chatId
   );
 
   if (!result.success) {

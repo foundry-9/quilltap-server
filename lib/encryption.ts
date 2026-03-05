@@ -1,159 +1,21 @@
 /**
- * Encryption Service for API Keys
- * Phase 0.3: Core Infrastructure
+ * Encryption Service
  *
- * Uses AES-256-GCM with per-user encryption keys
- * Keys are derived from user ID + master pepper for security
+ * Field-level API key encryption has been removed in favour of
+ * database-level encryption (SQLCipher). This module now provides:
+ *
+ *  - maskApiKey()            — redact keys for display
+ *  - Passphrase-based encryption for import/export files
+ *  - Passphrase-based HMAC signing for export integrity verification
  */
 
 import crypto from 'crypto'
-import { logger } from '@/lib/logger'
 
 const ALGORITHM = 'aes-256-gcm'
 const KEY_LENGTH = 32 // 256 bits
 const IV_LENGTH = 16 // 128 bits
 const PBKDF2_ITERATIONS = 100000
 const PBKDF2_DIGEST = 'sha256'
-
-/**
- * Get the master pepper lazily from process.env.
- *
- * The pepper may be set at startup via env var, or provisioned later
- * by the pepper vault setup wizard. Reading from process.env each time
- * ensures we pick up the pepper whenever it becomes available.
- */
-function getMasterPepper(): string {
-  const pepper = process.env.ENCRYPTION_MASTER_PEPPER || ''
-  if (!pepper) {
-    throw new Error(
-      'Encryption pepper not configured. Complete setup at /setup'
-    )
-  }
-  if (pepper.length < 32) {
-    logger.warn(
-      'ENCRYPTION_MASTER_PEPPER should be at least 32 characters for security',
-      { context: 'encryption.init', pepperLength: pepper.length }
-    )
-  }
-  return pepper
-}
-
-/**
- * Derive a user-specific encryption key
- * Key is derived from user ID + master pepper using PBKDF2
- * This allows the user to access their keys via OAuth login
- *
- * @param userId - The user's unique ID
- * @returns Buffer containing the derived encryption key
- */
-function deriveUserKey(userId: string): Buffer {
-  return crypto.pbkdf2Sync(
-    userId,
-    getMasterPepper(),
-    PBKDF2_ITERATIONS,
-    KEY_LENGTH,
-    PBKDF2_DIGEST
-  )
-}
-
-/**
- * Encrypt API key with user-specific key
- * Uses AES-256-GCM for authenticated encryption
- *
- * @param apiKey - The plaintext API key to encrypt
- * @param userId - The user's unique ID
- * @returns Object containing encrypted data, IV, and auth tag
- */
-export function encryptApiKey(apiKey: string, userId: string) {
-  if (!apiKey) {
-    throw new Error('API key cannot be empty')
-  }
-  if (!userId) {
-    throw new Error('User ID cannot be empty')
-  }
-
-  const key = deriveUserKey(userId)
-  const iv = crypto.randomBytes(IV_LENGTH)
-  const cipher = crypto.createCipheriv(ALGORITHM, new Uint8Array(key), new Uint8Array(iv))
-
-  let encrypted = cipher.update(apiKey, 'utf8', 'hex')
-  encrypted += cipher.final('hex')
-
-  const authTag = cipher.getAuthTag()
-
-  return {
-    encrypted,
-    iv: iv.toString('hex'),
-    authTag: authTag.toString('hex'),
-  }
-}
-
-/**
- * Decrypt API key with user-specific key
- * Verifies authentication tag to ensure data integrity
- *
- * @param encrypted - The encrypted API key (hex string)
- * @param iv - The initialization vector (hex string)
- * @param authTag - The authentication tag (hex string)
- * @param userId - The user's unique ID
- * @returns The decrypted plaintext API key
- * @throws Error if decryption fails or auth tag is invalid
- */
-export function decryptApiKey(
-  encrypted: string,
-  iv: string,
-  authTag: string,
-  userId: string
-): string {
-  if (!encrypted || !iv || !authTag || !userId) {
-    throw new Error('All parameters are required for decryption')
-  }
-
-  try {
-    const key = deriveUserKey(userId)
-    const decipher = crypto.createDecipheriv(
-      ALGORITHM,
-      new Uint8Array(key),
-      new Uint8Array(Buffer.from(iv, 'hex'))
-    )
-
-    decipher.setAuthTag(new Uint8Array(Buffer.from(authTag, 'hex')))
-
-    let decrypted = decipher.update(encrypted, 'hex', 'utf8')
-    decrypted += decipher.final('utf8')
-
-    return decrypted
-  } catch (error) {
-    // Don't expose internal error details
-    throw new Error('Failed to decrypt API key. Invalid key or corrupted data.')
-  }
-}
-
-/**
- * Test if encryption/decryption is working correctly
- * Used for system health checks
- *
- * @returns true if encryption is working, false otherwise
- */
-export function testEncryption(): boolean {
-  try {
-    const testUserId = 'test-user-id'
-    const testApiKey = 'test-api-key-12345'
-
-    const encrypted = encryptApiKey(testApiKey, testUserId)
-    const decrypted = decryptApiKey(
-      encrypted.encrypted,
-      encrypted.iv,
-      encrypted.authTag,
-      testUserId
-    )
-
-    return decrypted === testApiKey
-  } catch (error) {
-    logger.error('Encryption test failed', { context: 'encryption.testEncryption' }, error instanceof Error ? error : undefined)
-    return false
-  }
-}
 
 /**
  * Mask an API key for display purposes
@@ -173,27 +35,6 @@ export function maskApiKey(apiKey: string): string {
   const masked = '••••'
 
   return `${prefix}${masked}${suffix}`
-}
-
-/**
- * Generic encrypt function that wraps encryptApiKey
- * Used for encrypting any sensitive data (TOTP secrets, backup codes, etc.)
- */
-export function encryptData(data: string, userId: string) {
-  return encryptApiKey(data, userId)
-}
-
-/**
- * Generic decrypt function that wraps decryptApiKey
- * Used for decrypting any sensitive data (TOTP secrets, backup codes, etc.)
- */
-export function decryptData(
-  encrypted: string,
-  iv: string,
-  authTag: string,
-  userId: string
-): string {
-  return decryptApiKey(encrypted, iv, authTag, userId)
 }
 
 // ============================================================================
@@ -301,52 +142,31 @@ export function decryptWithPassphrase<T>(
 }
 
 /**
- * Sign data using HMAC-SHA256 with user's derived key
- * Used for integrity verification on import/export
+ * Sign data with a passphrase-derived HMAC key.
+ * Used for export file integrity verification.
  *
  * @param data - String data to sign (typically the encrypted payload JSON)
- * @param userId - User ID to derive signing key
+ * @param passphrase - User-provided passphrase
  * @returns Hex-encoded HMAC signature
  */
-export function signData(data: string, userId: string): string {
-  if (!data || !userId) {
-    throw new Error('Data and userId are required for signing')
-  }
-
-  const key = deriveUserKey(userId)
-  const hmac = crypto.createHmac('sha256', new Uint8Array(key))
-  hmac.update(data)
-
-  const signature = hmac.digest('hex')
-
-  return signature
+export function signWithPassphrase(data: string, passphrase: string): string {
+  const key = deriveKeyFromPassphrase(passphrase, Buffer.from('quilltap-export-signing'))
+  return crypto.createHmac('sha256', new Uint8Array(key)).update(data).digest('hex')
 }
 
 /**
- * Verify HMAC-SHA256 signature
- * Used to verify data integrity on import
+ * Verify data signature with a passphrase-derived HMAC key.
  *
  * @param data - String data that was signed
  * @param signature - Hex-encoded HMAC signature to verify
- * @param userId - User ID to derive signing key
+ * @param passphrase - User-provided passphrase
  * @returns true if signature is valid, false otherwise
  */
-export function verifySignature(data: string, signature: string, userId: string): boolean {
-  if (!data || !signature || !userId) {
-
-    return false
-  }
-
+export function verifyWithPassphrase(data: string, signature: string, passphrase: string): boolean {
   try {
-    const expectedSignature = signData(data, userId)
-    const isValid = crypto.timingSafeEqual(
-      new Uint8Array(Buffer.from(signature, 'hex')),
-      new Uint8Array(Buffer.from(expectedSignature, 'hex'))
-    )
-
-    return isValid
-  } catch (error) {
-
+    const expected = signWithPassphrase(data, passphrase)
+    return crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(signature, 'hex'))
+  } catch {
     return false
   }
 }

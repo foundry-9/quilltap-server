@@ -10,6 +10,7 @@ import { LLMLoggingSettingsComponent } from '@/components/settings/chat-settings
 import { TasksQueueCard } from '@/components/tools/tasks-queue-card'
 import LLMLogsCard from '@/components/tools/llm-logs-card'
 import { DeleteDataCard } from '@/components/tools/delete-data-card'
+import { ChangePassphraseCard } from '@/components/settings/ChangePassphraseCard'
 
 export function DataSystemTabContent() {
   const info = useSubsystemInfo('prospero')
@@ -25,6 +26,10 @@ export function DataSystemTabContent() {
       <p className="qt-text-small qt-text-muted italic mb-6">{info.description}</p>
 
       <div className="space-y-4">
+        <CollapsibleCard title="Encryption Passphrase" description="Change or remove the passphrase protecting your encryption key">
+          <ChangePassphraseCard />
+        </CollapsibleCard>
+
         <CollapsibleCard title="Plugins" description="Install and manage plugins">
           <PluginsTab />
         </CollapsibleCard>

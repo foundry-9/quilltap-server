@@ -17,8 +17,7 @@ const config: Config = {
     '^openid-client$': '<rootDir>/__mocks__/openid-client.ts',
     '^@openrouter/sdk$': '<rootDir>/__mocks__/@openrouter/sdk.ts',
     '^better-sqlite3$': '<rootDir>/__mocks__/better-sqlite3.ts',
-    '^@aws-sdk/client-s3$': '<rootDir>/__mocks__/@aws-sdk/client-s3.ts',
-    '^@aws-sdk/s3-request-presigner$': '<rootDir>/__mocks__/@aws-sdk/s3-request-presigner.ts',
+
     '^openai$': '<rootDir>/__mocks__/openai.ts',
     '^@anthropic-ai/sdk$': '<rootDir>/__mocks__/@anthropic-ai/sdk.ts',
     '^@google/generative-ai$': '<rootDir>/__mocks__/@google/generative-ai.ts',

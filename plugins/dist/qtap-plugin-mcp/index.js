@@ -7024,7 +7024,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ../../../node_modules/openai/version.mjs
-var VERSION = "6.25.0";
+var VERSION = "6.26.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -7606,6 +7606,11 @@ function stringify(object5, opts = {}) {
     }
   }
   return joined.length > 0 ? prefix + joined : "";
+}
+
+// ../../../node_modules/openai/internal/utils/query.mjs
+function stringifyQuery(query) {
+  return stringify(query, { arrayFormat: "brackets" });
 }
 
 // ../../../node_modules/openai/internal/utils/bytes.mjs
@@ -11727,19 +11732,32 @@ var Permissions = class extends APIResource {
    * Organization owners can use this endpoint to view all permissions for a
    * fine-tuned model checkpoint.
    *
-   * @example
-   * ```ts
-   * const permission =
-   *   await client.fineTuning.checkpoints.permissions.retrieve(
-   *     'ft-AF1WoRqd3aJAHsqc9NY7iL8F',
-   *   );
-   * ```
+   * @deprecated Retrieve is deprecated. Please swap to the paginated list method instead.
    */
   retrieve(fineTunedModelCheckpoint, query = {}, options) {
     return this._client.get(path`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, {
       query,
       ...options
     });
+  }
+  /**
+   * **NOTE:** This endpoint requires an [admin API key](../admin-api-keys).
+   *
+   * Organization owners can use this endpoint to view all permissions for a
+   * fine-tuned model checkpoint.
+   *
+   * @example
+   * ```ts
+   * // Automatically fetches more pages as needed.
+   * for await (const permissionListResponse of client.fineTuning.checkpoints.permissions.list(
+   *   'ft-AF1WoRqd3aJAHsqc9NY7iL8F',
+   * )) {
+   *   // ...
+   * }
+   * ```
+   */
+  list(fineTunedModelCheckpoint, query = {}, options) {
+    return this._client.getAPIList(path`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, ConversationCursorPage, { query, ...options });
   }
   /**
    * **NOTE:** This endpoint requires an [admin API key](../admin-api-keys).
@@ -12602,7 +12620,7 @@ var Responses = class extends APIResource {
    * @example
    * ```ts
    * const compactedResponse = await client.responses.compact({
-   *   model: 'gpt-5.2',
+   *   model: 'gpt-5.4',
    * });
    * ```
    */
@@ -13377,7 +13395,7 @@ var OpenAI = class {
     return buildHeaders([{ Authorization: `Bearer ${this.apiKey}` }]);
   }
   stringifyQuery(query) {
-    return stringify(query, { arrayFormat: "brackets" });
+    return stringifyQuery(query);
   }
   getUserAgent() {
     return `${this.constructor.name}/JS ${VERSION}`;
@@ -13620,7 +13638,7 @@ var OpenAI = class {
         timeoutMillis = Date.parse(retryAfterHeader) - Date.now();
       }
     }
-    if (!(timeoutMillis && 0 <= timeoutMillis && timeoutMillis < 60 * 1e3)) {
+    if (timeoutMillis === void 0) {
       const maxRetries = options.maxRetries ?? this.maxRetries;
       timeoutMillis = this.calculateDefaultRetryTimeoutMillis(retriesRemaining, maxRetries);
     }

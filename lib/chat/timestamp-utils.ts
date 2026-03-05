@@ -6,7 +6,6 @@
  * Supports timezone-aware formatting via IANA timezone names.
  */
 
-import { logger } from '@/lib/logger'
 import type { TimestampConfig, TimestampFormat } from '@/lib/schemas/types'
 
 export interface CalculatedTimestamp {
@@ -280,16 +279,13 @@ export function resolveTimezone(
   chatSettingsTimezone?: string | null
 ): string | undefined {
   if (configTimezone) {
-    logger.debug('[TimestampUtils] Using per-chat timezone', { timezone: configTimezone })
     return configTimezone
   }
   if (chatSettingsTimezone) {
-    logger.debug('[TimestampUtils] Using Salon-level timezone', { timezone: chatSettingsTimezone })
     return chatSettingsTimezone
   }
   const envTimezone = process.env.QUILLTAP_TIMEZONE
   if (envTimezone) {
-    logger.debug('[TimestampUtils] Using QUILLTAP_TIMEZONE env var', { timezone: envTimezone })
     return envTimezone
   }
   return undefined

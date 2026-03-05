@@ -1,3 +1,7 @@
+---
+url: /prospero/:id
+---
+
 # Project Characters
 
 > **[Open this page in Quilltap](/prospero)**

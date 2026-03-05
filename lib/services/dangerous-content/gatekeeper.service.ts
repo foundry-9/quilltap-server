@@ -15,7 +15,7 @@ import { createLLMProvider } from '@/lib/llm'
 import type { LLMMessage } from '@/lib/llm/base'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { getRepositories } from '@/lib/repositories/factory'
-import { decryptApiKey } from '@/lib/encryption'
+
 import { getErrorMessage } from '@/lib/errors'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
 import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
@@ -131,7 +131,7 @@ async function getApiKeyForSelection(
     return null
   }
 
-  return decryptApiKey(apiKey.ciphertext, apiKey.iv, apiKey.authTag, userId)
+  return apiKey.key_value
 }
 
 /**
@@ -184,22 +184,15 @@ async function autoDetectModerationApiKey(
     // Find first profile matching the moderation provider name
     const matchingProfile = profiles.find(p => p.provider === providerName)
     if (!matchingProfile?.apiKeyId) {
-      logger.debug('[Gatekeeper] No connection profile found for moderation provider', {
-        providerName,
-      })
       return null
     }
 
     const apiKey = await repos.connections.findApiKeyByIdAndUserId(matchingProfile.apiKeyId, userId)
     if (!apiKey) {
-      logger.debug('[Gatekeeper] No API key found for matching connection profile', {
-        providerName,
-        profileId: matchingProfile.id,
-      })
       return null
     }
 
-    return decryptApiKey(apiKey.ciphertext, apiKey.iv, apiKey.authTag, userId)
+    return apiKey.key_value
   } catch (error) {
     logger.warn('[Gatekeeper] Failed to auto-detect moderation API key', {
       providerName,
@@ -285,17 +278,33 @@ async function classifyWithModerationProvider(
     return null
   }
 
-  logger.debug('[Gatekeeper] Using moderation provider for classification', {
-    provider: provider.metadata.providerName,
-    contentLength: content.length,
-    chatId,
-  })
-
   // Call the moderation provider
   const moderationResult = await provider.moderate(content, apiKey)
 
   // Map to our classification result format
   const result = mapModerationResult(moderationResult, settings.threshold)
+
+  // Log the moderation call for Inspector visibility (fire and forget)
+  logLLMCall({
+    userId,
+    type: 'DANGER_CLASSIFICATION',
+    chatId,
+    provider: provider.metadata.providerName,
+    modelName: 'moderation',
+    request: {
+      messages: [{ role: 'user', content }],
+    },
+    response: {
+      content: JSON.stringify({
+        flagged: moderationResult.flagged,
+        categories: moderationResult.categories,
+      }),
+    },
+  }).catch(err => {
+    logger.warn('[Gatekeeper] Failed to log moderation provider call', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  })
 
   logger.info('[Gatekeeper] Content classified via moderation provider', {
     chatId,
@@ -354,8 +363,6 @@ export async function classifyContent(
     }
 
     // Fall back to cheap LLM classification
-    logger.debug('[Gatekeeper] Using Cheap LLM for classification', { chatId })
-
     // Get API key
     const apiKey = await getApiKeyForSelection(cheapLLMSelection, userId)
     if (apiKey === null) {

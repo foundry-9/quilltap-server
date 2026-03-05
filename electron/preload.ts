@@ -48,4 +48,9 @@ contextBridge.exposeInMainWorld('quilltap', {
   /** Open a path in the host's file browser */
   openPath: (dirPath: string): Promise<void> =>
     ipcRenderer.invoke('app:open-path', dirPath),
+
+  // --- Workspace ---
+  /** Explicitly apply quarantine markers to a workspace file */
+  applyQuarantine: (filePath: string): Promise<boolean> =>
+    ipcRenderer.invoke('workspace:apply-quarantine', filePath),
 });

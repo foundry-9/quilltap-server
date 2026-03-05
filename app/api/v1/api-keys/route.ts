@@ -13,7 +13,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { withCollectionActionDispatch, getActionParam } from '@/lib/api/middleware/actions';
 import { getUserRepositories } from '@/lib/repositories/factory';
-import { encryptApiKey, maskApiKey, decryptApiKey, encryptWithPassphrase, decryptWithPassphrase, signData, verifySignature } from '@/lib/encryption';
+import { maskApiKey, encryptWithPassphrase, decryptWithPassphrase, signWithPassphrase, verifyWithPassphrase } from '@/lib/encryption';
 import { Provider } from '@/lib/schemas/types';
 import { getAllAvailableProviders } from '@/lib/llm';
 import { logger } from '@/lib/logger';
@@ -80,7 +80,7 @@ export const GET = createAuthenticatedHandler(async (req, { user }) => {
       lastUsed: key.lastUsed,
       createdAt: key.createdAt,
       updatedAt: key.updatedAt,
-      keyPreview: maskApiKey(key.ciphertext.substring(0, 32)),
+      keyPreview: maskApiKey(key.key_value.substring(0, 32)),
     }));
 
     const response = NextResponse.json({
@@ -124,18 +124,13 @@ async function handleCreate(req: NextRequest, user: { id: string }) {
       return badRequest('API key is required');
     }
 
-    // Encrypt the API key
-    const encrypted = encryptApiKey(apiKey, user.id);
-
     const repos = getUserRepositories(user.id);
 
     // Store in database
     const newKey = await repos.connections.createApiKey({
       provider: provider as Provider,
       label: label.trim(),
-      ciphertext: encrypted.encrypted,
-      iv: encrypted.iv,
-      authTag: encrypted.authTag,
+      key_value: apiKey,
       isActive: true,
     });
 
@@ -220,29 +215,12 @@ async function handleExport(req: NextRequest, user: { id: string }) {
       return badRequest('No API keys to export');
     }
 
-    // Decrypt each key and build the payload
-    const decryptedKeys: ExportPayload['keys'] = [];
-
-    for (const key of apiKeys) {
-      try {
-        const decryptedApiKey = decryptApiKey(key.ciphertext, key.iv, key.authTag, user.id);
-        decryptedKeys.push({
-          provider: key.provider,
-          label: key.label,
-          apiKey: decryptedApiKey,
-        });
-      } catch (error) {
-        logger.error('[API Keys v1] Failed to decrypt key during export', {
-          keyId: key.id,
-          provider: key.provider,
-        }, error instanceof Error ? error : undefined);
-        // Skip keys that fail to decrypt
-      }
-    }
-
-    if (decryptedKeys.length === 0) {
-      return serverError('Failed to decrypt any API keys');
-    }
+    // Build the payload from plaintext keys
+    const decryptedKeys: ExportPayload['keys'] = apiKeys.map((key) => ({
+      provider: key.provider,
+      label: key.label,
+      apiKey: key.key_value,
+    }));
 
     const payload: ExportPayload = { keys: decryptedKeys };
 
@@ -255,7 +233,7 @@ async function handleExport(req: NextRequest, user: { id: string }) {
       iv: encrypted.iv,
       authTag: encrypted.authTag,
     });
-    const signature = signData(payloadJson, user.id);
+    const signature = signWithPassphrase(payloadJson, passphrase);
 
     // Build the export file
     const exportFile = {
@@ -374,11 +352,8 @@ async function handleImport(req: NextRequest, user: { id: string }) {
             continue;
           } else if (handling === 'replace') {
             // Update existing key
-            const encrypted = encryptApiKey(key.apiKey, user.id);
             await repos.connections.updateApiKey(existing.id, {
-              ciphertext: encrypted.encrypted,
-              iv: encrypted.iv,
-              authTag: encrypted.authTag,
+              key_value: key.apiKey,
             });
             newKeyIds.push(existing.id);
             result.replaced++;
@@ -386,9 +361,6 @@ async function handleImport(req: NextRequest, user: { id: string }) {
           }
           // For 'rename', fall through to create with modified label
         }
-
-        // Encrypt the key with user's encryption
-        const encrypted = encryptApiKey(key.apiKey, user.id);
 
         // Determine label (may be modified for rename)
         let label = key.label;
@@ -409,9 +381,7 @@ async function handleImport(req: NextRequest, user: { id: string }) {
         const newKey = await repos.connections.createApiKey({
           provider: key.provider as Provider,
           label,
-          ciphertext: encrypted.encrypted,
-          iv: encrypted.iv,
-          authTag: encrypted.authTag,
+          key_value: key.apiKey,
           isActive: true,
         });
 
@@ -499,7 +469,7 @@ async function handleImportPreview(req: NextRequest, user: { id: string }) {
       iv: importFile.payload.iv,
       authTag: importFile.payload.authTag,
     });
-    const signatureValid = verifySignature(payloadJson, importFile.signature, user.id);
+    const signatureValid = verifyWithPassphrase(payloadJson, importFile.signature, passphrase);
 
     if (!signatureValid) {
       logger.warn('[API Keys v1] Import file signature verification failed', { userId: user.id });

@@ -55,6 +55,12 @@ import {
   formatSubmitFinalResponseResults,
   type SubmitFinalResponseToolContext,
 } from '@/lib/tools/handlers/submit-final-response-handler';
+import {
+  executeShellTool,
+  formatShellResults,
+  isShellTool,
+  type ShellToolContext,
+} from '@/lib/tools/shell';
 
 export interface ToolCallRequest {
   name: string;
@@ -78,6 +84,16 @@ export interface ToolResult {
     folderPath?: string;
     projectId?: string | null;
   };
+  /** For sudo_sync: indicates user approval is required */
+  requiresSudoApproval?: boolean;
+  /** For sudo_sync: the pending command details */
+  pendingSudoCommand?: {
+    command: string;
+    parameters?: string[];
+    timeout_ms?: number;
+  };
+  /** For shell tools: indicates workspace acknowledgement is required */
+  requiresWorkspaceAcknowledgement?: boolean;
   metadata?: {
     provider?: string;
     model?: string;
@@ -207,6 +223,13 @@ const BUILT_IN_TOOLS = new Set([
   'rng',
   'state',
   'submit_final_response',
+  // Shell interactivity tools
+  'chdir',
+  'exec_sync',
+  'exec_async',
+  'async_result',
+  'sudo_sync',
+  'cp_host',
 ]);
 
 export async function executeToolCallWithContext(
@@ -617,6 +640,51 @@ export async function executeToolCallWithContext(
           confidence: result.confidence,
         } : null,
         error: result.success ? undefined : result.message,
+      };
+    }
+
+    // Handle shell interactivity tools
+    if (isShellTool(toolCall.name)) {
+      const shellContext: ShellToolContext = {
+        userId,
+        chatId,
+        projectId: context.projectId,
+        characterId,
+      };
+
+      const result = await executeShellTool(toolCall.name, toolCall.arguments, shellContext);
+
+      // Handle sudo approval requirement
+      if (result.requiresSudoApproval) {
+        return {
+          toolName: toolCall.name,
+          success: false,
+          result: null,
+          error: 'Sudo command requires user approval',
+          requiresSudoApproval: true,
+          pendingSudoCommand: result.pendingSudoCommand,
+        };
+      }
+
+      // Handle workspace acknowledgement requirement
+      if (result.requiresWorkspaceAcknowledgement) {
+        return {
+          toolName: toolCall.name,
+          success: false,
+          result: null,
+          error: 'Workspace acknowledgement required',
+          requiresWorkspaceAcknowledgement: true,
+        };
+      }
+
+      return {
+        toolName: toolCall.name,
+        success: result.success,
+        result: result.success ? {
+          formattedText: formatShellResults(result),
+          ...result.result,
+        } : null,
+        error: result.success ? undefined : result.error,
       };
     }
 

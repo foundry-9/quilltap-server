@@ -150,10 +150,11 @@ export class HelpSearch {
       return []
     }
 
-    return this.bundle.documents.map(({ id, title, path, content }) => ({
+    return this.bundle.documents.map(({ id, title, path, url, content }) => ({
       id,
       title,
       path,
+      url,
       content,
     }))
   }
@@ -161,15 +162,16 @@ export class HelpSearch {
   /**
    * Get all document titles and paths for listing
    */
-  listDocuments(): Array<{ id: string; title: string; path: string }> {
+  listDocuments(): Array<{ id: string; title: string; path: string; url: string }> {
     if (!this.bundle) {
       return []
     }
 
-    return this.bundle.documents.map(({ id, title, path }) => ({
+    return this.bundle.documents.map(({ id, title, path, url }) => ({
       id,
       title,
       path,
+      url,
     }))
   }
 }

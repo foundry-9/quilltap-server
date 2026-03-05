@@ -12,7 +12,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedParamsHandler, getActionParam } from '@/lib/api/middleware';
 import { badRequest, notFound, serverError, validationError } from '@/lib/api/responses';
 import { createLLMProvider } from '@/lib/llm';
-import { decryptApiKey } from '@/lib/encryption';
 import { deleteMemoriesBySourceMessagesWithVectors, deleteMemoriesBySourceMessageWithVectors, deleteMemoryWithVector } from '@/lib/memory/memory-service';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
@@ -340,12 +339,7 @@ async function handleGenerateSwipe(
   if (profile.apiKeyId) {
     const apiKeyRecord = await repos.connections.findApiKeyByIdAndUserId(profile.apiKeyId, userId);
     if (apiKeyRecord) {
-      apiKey = decryptApiKey(
-        apiKeyRecord.ciphertext,
-        apiKeyRecord.iv,
-        apiKeyRecord.authTag,
-        userId
-      );
+      apiKey = apiKeyRecord.key_value;
     }
   }
 

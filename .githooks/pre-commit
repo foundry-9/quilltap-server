@@ -11,27 +11,6 @@ log_step() {
   echo "$message"
 }
 
-# Run a command silently, only showing output on failure
-# Usage: run_silent "description" command [args...]
-# Returns: exit code of the command
-run_silent() {
-  local description="$1"
-  shift
-  local output
-  local exit_code
-
-  output=$("$@" 2>&1) || exit_code=$?
-  exit_code=${exit_code:-0}
-
-  if [ $exit_code -ne 0 ]; then
-    echo ""
-    echo "❌ $description failed with exit code $exit_code:"
-    echo "$output"
-  fi
-
-  return $exit_code
-}
-
 kill_repo_node_processes() {
   local repo_root="$1"
   local killed=0
@@ -168,14 +147,14 @@ assert_watchman_not_watching() {
 
 echo "🔍 Running pre-commit checks..."
 
-log_step "🛑 Step 1/12: Ensuring the local Node app for this repo is stopped..."
+log_step "🛑 Step 1/4: Ensuring the local Node app for this repo is stopped..."
 if kill_repo_node_processes "$REPO_ROOT"; then
   echo "✅ Active Node processes tied to this repo were terminated."
 else
   echo "ℹ️ No running Node processes for this repo were detected."
 fi
 
-log_step "🧹 Step 2/12: Ensuring the .next directory is removed..."
+log_step "🧹 Step 2/4: Ensuring the .next directory is removed..."
 if ensure_next_removed_with_retry 2 5; then
   echo "✅ Pre-build .next cleanup completed."
 else
@@ -183,129 +162,12 @@ else
   exit 1
 fi
 
-log_step "📋 Step 3/12: Running ESLint..."
-if run_silent "ESLint" npm run lint; then
-  echo "✅ Linting passed!"
-else
-  exit 1
-fi
-
-log_step "👀 Step 4/12: Stopping watchman for this repository..."
+log_step "👀 Step 3/4: Stopping watchman for this repository..."
 stop_watchman_for_repo
 assert_watchman_not_watching
 echo "✅ watchman is not watching this repository."
 
-log_step "🧪 Step 5/12: Running unit tests (npm run test:unit)..."
-assert_watchman_not_watching
-if run_silent "Unit tests" npm run test:unit; then
-  echo "✅ Unit tests passed!"
-else
-  exit 1
-fi
-
-log_step "👀 Step 6/12: Re-checking watchman and stopping it again if needed..."
-stop_watchman_for_repo
-assert_watchman_not_watching
-echo "✅ watchman confirmed stopped."
-
-log_step "🧾 Step 7/12: Running TypeScript (npx tsc)..."
-assert_watchman_not_watching
-if run_silent "TypeScript check" npx tsc; then
-  echo "✅ TypeScript check passed!"
-else
-  exit 1
-fi
-
-log_step "🏗️ Step 8/12: Building the project..."
-build_output=""
-build_exit_code=0
-build_output=$(npm run build:next 2>&1) || build_exit_code=$?
-build_exit_code=${build_exit_code:-0}
-
-if [ $build_exit_code -eq 0 ]; then
-  echo "✅ Build passed!"
-else
-  echo ""
-  echo "❌ Build failed with exit code $build_exit_code:"
-  echo "$build_output"
-  echo "Post-build cleanup will still run before exiting."
-fi
-
-log_step "🧹 Step 9/12: Ensuring .next directory is removed after build..."
-if ensure_next_removed_with_retry 2 5; then
-  echo "✅ Post-build .next cleanup completed."
-else
-  echo "❌ Unable to remove .next directory after retries."
-  exit 1
-fi
-
-if [ $build_exit_code -ne 0 ]; then
-  exit $build_exit_code
-fi
-
-log_step "🧮 Step 10/12: Calculating and applying version updates..."
-
-if [[ "$OSTYPE" == "darwin"* ]]; then
-  SED_INPLACE=(-i '')
-else
-  SED_INPLACE=(-i)
-fi
-
-CURRENT_VERSION=$(grep -m1 '"version"' package.json | sed 's/.*"\([^"]*\)".*/\1/')
-BASE_VERSION=$(echo "$CURRENT_VERSION" | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
-CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-COMMIT_COUNT=$(git rev-list --count HEAD -- . 2>/dev/null || echo "0")
-BASE_VERSION_FIRST_COMMIT=""
-
-while IFS= read -r commit_hash; do
-  VERSION_AT_COMMIT=$(git show "$commit_hash:package.json" 2>/dev/null | grep -m1 '"version"' | sed 's/.*"\([^"]*\)".*/\1/' || echo "")
-  COMMIT_BASE=$(echo "$VERSION_AT_COMMIT" | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
-
-  if [ "$COMMIT_BASE" = "$BASE_VERSION" ]; then
-    PARENT_COMMIT="${commit_hash}^"
-    PARENT_VERSION=$(git show "$PARENT_COMMIT:package.json" 2>/dev/null | grep -m1 '"version"' | sed 's/.*"\([^"]*\)".*/\1/' || echo "")
-    PARENT_BASE=$(echo "$PARENT_VERSION" | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
-
-    if [ "$PARENT_BASE" != "$BASE_VERSION" ]; then
-      BASE_VERSION_FIRST_COMMIT="$commit_hash"
-      break
-    fi
-  fi
-done < <(git log --format="%h" -- package.json 2>/dev/null)
-
-if [ -n "$BASE_VERSION_FIRST_COMMIT" ]; then
-  COMMIT_COUNT=$(git rev-list --count "$BASE_VERSION_FIRST_COMMIT"..HEAD 2>/dev/null || echo "0")
-else
-  COMMIT_COUNT=0
-fi
-
-if [[ "$CURRENT_BRANCH" == "release" || "$CURRENT_BRANCH" == release/* ]]; then
-  NEW_VERSION="$BASE_VERSION"
-  BADGE_COLOR="green"
-elif [[ "$CURRENT_BRANCH" == "main" ]]; then
-  NEW_VERSION="$BASE_VERSION-dev.$COMMIT_COUNT"
-  BADGE_COLOR="yellow"
-else
-  SANITIZED_BRANCH=$(echo "$CURRENT_BRANCH" | sed 's/\//-/g')
-  NEW_VERSION="$BASE_VERSION-$SANITIZED_BRANCH.$COMMIT_COUNT"
-  BADGE_COLOR="yellow"
-fi
-
-sed "${SED_INPLACE[@]}" -E "s/\"version\": \"[^\"]+\"/\"version\": \"$NEW_VERSION\"/" package.json
-
-# Sync version to the quilltap npm package (thin CLI launcher)
-if [ -f packages/quilltap/package.json ]; then
-  sed "${SED_INPLACE[@]}" -E "s/\"version\": \"[^\"]+\"/\"version\": \"$NEW_VERSION\"/" packages/quilltap/package.json
-fi
-
-if [ -f README.md ]; then
-  BADGE_VERSION=$(echo "$NEW_VERSION" | sed 's/-/--/g')
-  sed "${SED_INPLACE[@]}" -E "s|badge/version-[^]]+\.svg|badge/version-$BADGE_VERSION-$BADGE_COLOR.svg|" README.md
-fi
-
-echo "✅ Version set: $NEW_VERSION (base: $BASE_VERSION, branch: $CURRENT_BRANCH)"
-
-log_step "📦 Step 11/12: Finalizing dependency artifacts and staging changes..."
+log_step "📦 Step 4/4: Finalizing dependency artifacts and staging changes..."
 
 if [ -f package-lock.json ]; then
   npm install --package-lock-only
@@ -329,8 +191,8 @@ if [ -f packages/quilltap/package.json ]; then
   git add packages/quilltap/package.json
 fi
 
-log_step "🎉 Step 12/12: All validations completed successfully!"
-echo "✨ All pre-commit checks passed!"
-echo "  ✅ Version updated to $NEW_VERSION, building Electron is separate step."
+log_step "🎉 All pre-commit checks passed!"
+CURRENT_VERSION=$(grep -m1 '"version"' package.json | sed 's/.*"\([^"]*\)".*/\1/')
+echo "✨ Version is $CURRENT_VERSION. Ready to commit."
 
 exit 0

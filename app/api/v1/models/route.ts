@@ -16,7 +16,6 @@ import {
   notFound,
 } from '@/lib/api/responses';
 import { providerRegistry } from '@/lib/plugins/provider-registry';
-import { decryptApiKey } from '@/lib/encryption';
 import { createLLMProvider } from '@/lib/llm';
 import { requiresBaseUrl, requiresApiKey } from '@/lib/plugins/provider-validation';
 import { z } from 'zod';
@@ -100,12 +99,7 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
         return notFound('API key not found');
       }
 
-      decryptedKey = decryptApiKey(
-        apiKey.ciphertext,
-        apiKey.iv,
-        apiKey.authTag,
-        user.id
-      );
+      decryptedKey = apiKey.key_value;
     }
 
     // Validate baseUrl requirements

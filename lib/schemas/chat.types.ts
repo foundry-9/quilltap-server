@@ -75,6 +75,10 @@ export const MessageEventSchema = z.object({
   renderedHtml: z.string().nullable().optional(),
   // Danger content flags from gatekeeper classification
   dangerFlags: z.array(DangerFlagSchema).nullable().optional(),
+  /** Provider that generated this message (e.g., 'openai', 'anthropic') */
+  provider: z.string().nullable().optional(),
+  /** Model name that generated this message (e.g., 'gpt-4o', 'claude-sonnet-4-20250514') */
+  modelName: z.string().nullable().optional(),
 });
 
 export type MessageEvent = z.infer<typeof MessageEventSchema>;

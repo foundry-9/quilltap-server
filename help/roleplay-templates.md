@@ -1,3 +1,7 @@
+---
+url: /settings?tab=templates
+---
+
 # Roleplay Templates
 
 > **[Open this page in Quilltap](/settings?tab=templates)**
