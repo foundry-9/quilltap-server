@@ -131,20 +131,21 @@ function resolveModuleDir(moduleName) {
 function ensureNativeModules() {
   const needsRebuild = [];
 
-  // Check better-sqlite3: it lazy-loads the native .node binary only when you
-  // create a Database, so a bare require('better-sqlite3') always succeeds.
+  // Check better-sqlite3-multiple-ciphers (provides SQLCipher encryption support).
+  // The main app depends on this via an npm alias as 'better-sqlite3', so we must
+  // ensure the SQLCipher-capable version is available and link it as 'better-sqlite3'.
   // We must load the native binding directly to detect NODE_MODULE_VERSION mismatches.
-  // Use require.resolve to find it regardless of npm hoisting.
   try {
-    const modDir = resolveModuleDir('better-sqlite3');
+    const modDir = resolveModuleDir('better-sqlite3-multiple-ciphers')
+                || resolveModuleDir('better-sqlite3');
     if (!modDir) throw Object.assign(new Error('not found'), { code: 'MODULE_NOT_FOUND' });
     const bindingsPath = path.join(modDir, 'build', 'Release', 'better_sqlite3.node');
     require(bindingsPath);
   } catch (err) {
     if (err.message && err.message.includes('NODE_MODULE_VERSION')) {
-      needsRebuild.push('better-sqlite3');
+      needsRebuild.push('better-sqlite3-multiple-ciphers');
     } else if (err.code === 'MODULE_NOT_FOUND') {
-      needsRebuild.push('better-sqlite3');
+      needsRebuild.push('better-sqlite3-multiple-ciphers');
     }
   }
 
@@ -223,8 +224,10 @@ function linkNativeModules(standaloneDir) {
     }
   }
 
-  // Link better-sqlite3
-  const betterSqlite3Dir = resolveModuleDir('better-sqlite3');
+  // Link better-sqlite3-multiple-ciphers as 'better-sqlite3' (the app imports it
+  // via npm alias). Prefer the SQLCipher build; fall back to plain better-sqlite3.
+  const betterSqlite3Dir = resolveModuleDir('better-sqlite3-multiple-ciphers')
+                        || resolveModuleDir('better-sqlite3');
   linkModule('better-sqlite3', betterSqlite3Dir);
 
   // Link sharp
@@ -514,8 +517,13 @@ async function dbCommand(args) {
     process.exit(1);
   }
 
-  // Open database
-  const Database = require('better-sqlite3');
+  // Open database — prefer SQLCipher-capable build
+  let Database;
+  try {
+    Database = require('better-sqlite3-multiple-ciphers');
+  } catch {
+    Database = require('better-sqlite3');
+  }
   const db = new Database(dbPath, { readonly: !repl });
 
   if (pepper) {
