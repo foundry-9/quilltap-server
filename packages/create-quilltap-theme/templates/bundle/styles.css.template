@@ -1,0 +1,33 @@
+/**
+ * {{DISPLAY_NAME}} - CSS Overrides
+ *
+ * Custom CSS overrides for the {{DISPLAY_NAME}} theme.
+ * These styles are applied on top of the design tokens defined in tokens.json.
+ *
+ * Available CSS custom properties (set from tokens.json):
+ *   --qt-bg, --qt-fg, --qt-primary, --qt-accent, etc.
+ *   --qt-font-sans, --qt-font-serif, --qt-font-mono
+ *   --qt-radius-sm, --qt-radius-md, --qt-radius-lg
+ *   --qt-shadow-sm, --qt-shadow-md, --qt-shadow-lg
+ *
+ * Tips:
+ * - Use qt-* CSS custom properties for theme-aware styling
+ * - Override specific components by targeting their qt-* class names
+ * - Keep overrides minimal; prefer tokens.json for color/spacing changes
+ */
+
+/* Example: custom heading styles */
+/*
+.qt-heading {
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+*/
+
+/* Example: custom card styling */
+/*
+.qt-card {
+  border: 2px solid var(--qt-border);
+  box-shadow: var(--qt-shadow-md);
+}
+*/

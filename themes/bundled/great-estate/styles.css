@@ -1,0 +1,892 @@
+/**
+ * The Great Estate Theme — Quilltap
+ * "Warm gold and mahogany, like a manor house library at golden hour."
+ *
+ * Palette: Mahogany (20) + Gold (43) + Cream (38)
+ * UI font: Inter (clean sans-serif)
+ * Heading font: Playfair Display (classic serif)
+ *
+ * Fonts are self-hosted via the manifest.json themeConfig.fonts array
+ * and served by the Quilltap theme font API.
+ *
+ * Design Philosophy:
+ * The Great Estate channels the quiet confidence of a manor house library —
+ * mahogany shelves, leather-bound spines, afternoon sun through tall windows.
+ * The palette is warm and grounded: deep browns, burnished golds, and cream.
+ * A subtle carbon-fibre texture overlay adds tactile depth. Playfair Display
+ * headings evoke engraved bookplates; Inter body text keeps everything legible.
+ * Light mode is cream parchment and warm wood; dark mode is deep walnut and
+ * candlelit gold.
+ */
+
+/* ============================================================================
+   ROOT BASELINE — SHARED BETWEEN MODES
+   ============================================================================ */
+[data-theme="great-estate"] {
+  -webkit-font-smoothing: antialiased;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+}
+
+/* ============================================================================
+   QT-* VARIABLE OVERRIDES — SHARED (BOTH MODES)
+   ============================================================================ */
+[data-theme="great-estate"],
+[data-theme="great-estate"].dark,
+[data-theme="great-estate"].light {
+
+  /* ==========================================================================
+     FONT STACKS
+     ========================================================================== */
+  --theme-font-sans: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --theme-font-serif: "Playfair Display", Georgia, Cambria, "Times New Roman", Times, serif;
+  --theme-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --theme-font-brand: "Playfair Display", Georgia, serif;
+  --theme-font-chat-user: Inter, sans-serif;
+
+  /* ==========================================================================
+     ESTATE DECORATIVE TOKENS (theme-specific)
+     ========================================================================== */
+  --estate-gold: hsl(43 75% 55%);
+  --estate-gold-light: hsl(43 65% 70%);
+  --estate-gold-dark: hsl(43 70% 40%);
+  --estate-brown: hsl(20 45% 25%);
+  --estate-brown-mid: hsl(20 30% 35%);
+  --estate-cream: hsl(38 25% 95%);
+
+  /* ==========================================================================
+     BUTTON VARIABLES
+     ========================================================================== */
+  --qt-button-radius: var(--radius-lg);
+  --qt-button-padding-x: 1.25rem;
+  --qt-button-padding-y: 0.5rem;
+  --qt-button-font-size: 0.8125rem;
+  --qt-button-font-weight: 600;
+  --qt-button-transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  --qt-button-primary-bg: linear-gradient(135deg, hsl(43 75% 52%), hsl(43 70% 42%));
+  --qt-button-primary-fg: hsl(20 30% 8%);
+  --qt-button-primary-hover-bg: linear-gradient(135deg, hsl(43 80% 58%), hsl(43 75% 48%));
+  --qt-button-primary-shadow: 0 4px 14px -4px hsl(20 30% 10% / 0.2);
+
+  --qt-button-secondary-bg: var(--color-secondary);
+  --qt-button-secondary-fg: var(--color-secondary-foreground);
+  --qt-button-secondary-border: var(--color-border);
+  --qt-button-secondary-hover-bg: color-mix(in srgb, var(--color-secondary) 80%, black);
+
+  --qt-button-ghost-bg: transparent;
+  --qt-button-ghost-fg: var(--color-foreground);
+  --qt-button-ghost-hover-bg: var(--color-muted);
+
+  --qt-button-destructive-bg: var(--color-destructive);
+  --qt-button-destructive-fg: var(--color-destructive-foreground);
+  --qt-button-destructive-hover-bg: color-mix(in srgb, var(--color-destructive) 90%, black);
+
+  --qt-button-success-bg: var(--color-success);
+  --qt-button-success-fg: var(--color-success-foreground);
+  --qt-button-success-hover-bg: color-mix(in srgb, var(--color-success) 85%, black);
+
+  --qt-button-warning-bg: var(--color-warning);
+  --qt-button-warning-fg: var(--color-warning-foreground);
+  --qt-button-warning-hover-bg: color-mix(in srgb, var(--color-warning) 85%, black);
+
+  /* ==========================================================================
+     STATUS TOKENS
+     ========================================================================== */
+  --qt-status-success-bg: color-mix(in srgb, var(--color-success) 85%, transparent);
+  --qt-status-success-fg: var(--color-success-foreground);
+  --qt-status-success-border: var(--color-success);
+
+  --qt-status-warning-bg: color-mix(in srgb, var(--color-warning) 85%, transparent);
+  --qt-status-warning-fg: var(--color-warning-foreground);
+  --qt-status-warning-border: var(--color-warning);
+
+  --qt-status-info-bg: color-mix(in srgb, var(--color-info) 85%, transparent);
+  --qt-status-info-fg: var(--color-info-foreground);
+  --qt-status-info-border: var(--color-info);
+
+  --qt-status-danger-bg: color-mix(in srgb, var(--color-destructive) 85%, transparent);
+  --qt-status-danger-fg: var(--color-destructive-foreground);
+  --qt-status-danger-border: var(--color-destructive);
+
+  /* ==========================================================================
+     ALERT TOKENS
+     ========================================================================== */
+  --qt-alert-success-bg: hsl(142 65% 38% / 0.1);
+  --qt-alert-success-fg: hsl(142 65% 30%);
+  --qt-alert-success-border: hsl(142 65% 38% / 0.3);
+
+  --qt-alert-warning-bg: hsl(43 75% 55% / 0.12);
+  --qt-alert-warning-fg: hsl(43 70% 32%);
+  --qt-alert-warning-border: hsl(43 75% 55% / 0.35);
+
+  --qt-alert-error-bg: hsl(0 60% 48% / 0.1);
+  --qt-alert-error-fg: hsl(0 60% 35%);
+  --qt-alert-error-border: hsl(0 60% 48% / 0.3);
+
+  --qt-alert-info-bg: hsl(210 70% 50% / 0.1);
+  --qt-alert-info-fg: hsl(210 70% 32%);
+  --qt-alert-info-border: hsl(210 70% 50% / 0.3);
+
+  /* ==========================================================================
+     CARD VARIABLES
+     ========================================================================== */
+  --qt-card-radius: var(--radius-lg);
+  --qt-card-padding: 1.5rem;
+  --qt-card-bg: var(--color-card);
+  --qt-card-fg: var(--color-card-foreground);
+  --qt-card-border: var(--estate-gold);
+  --qt-card-border-opacity: 0.5;
+  --qt-card-shadow: 0 1px 3px hsl(20 30% 10% / 0.10), 0 1px 2px hsl(20 30% 10% / 0.06);
+  --qt-card-shadow-hover: 0 4px 12px hsl(20 30% 10% / 0.14), 0 0 8px hsl(43 75% 55% / 0.08);
+  --qt-card-transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  --qt-entity-card-radius: var(--radius-xl);
+  --qt-entity-card-bg: color-mix(in srgb, var(--color-card) 90%, transparent);
+
+  /* ==========================================================================
+     INPUT VARIABLES
+     ========================================================================== */
+  --qt-input-radius: var(--radius-md);
+  --qt-input-padding-x: 0.75rem;
+  --qt-input-padding-y: 0.5rem;
+  --qt-input-bg: var(--color-background);
+  --qt-input-fg: var(--color-foreground);
+  --qt-input-border: var(--color-input);
+  --qt-input-placeholder: var(--color-muted-foreground);
+  --qt-input-focus-ring: var(--color-ring);
+  --qt-input-transition: colors 150ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ==========================================================================
+     NAVBAR VARIABLES
+     ========================================================================== */
+  --qt-navbar-height: 4rem;
+  --qt-navbar-bg: var(--color-background);
+  --qt-navbar-border: var(--color-border);
+  --qt-navbar-blur: blur(8px);
+  --qt-navbar-shadow: none;
+
+  --qt-navbar-link-padding-x: 0.75rem;
+  --qt-navbar-link-padding-y: 0.5rem;
+  --qt-navbar-link-radius: var(--radius-md);
+  --qt-navbar-link-fg: var(--color-foreground);
+  --qt-navbar-link-hover-bg: var(--color-muted);
+  --qt-navbar-link-active-bg: var(--color-muted);
+
+  /* ==========================================================================
+     CONTENT AREA VARIABLES
+     ========================================================================== */
+  --qt-content-bg: var(--color-card);
+  --qt-content-fg: var(--color-card-foreground);
+  --qt-content-scroll-bg: var(--color-background);
+
+  /* ==========================================================================
+     TYPOGRAPHY VARIABLES
+     ========================================================================== */
+  --qt-heading-font: var(--theme-font-brand);
+  --qt-text-secondary-fg: var(--color-muted-foreground);
+
+  /* ==========================================================================
+     SIDEBAR VARIABLES
+     ========================================================================== */
+  --qt-sidebar-width: 16rem;
+  --qt-sidebar-bg: var(--color-sidebar-background);
+  --qt-sidebar-border: var(--color-sidebar-border);
+  --qt-sidebar-fg: var(--color-sidebar-foreground);
+  --qt-sidebar-muted: var(--color-sidebar-muted);
+
+  --qt-sidebar-item-padding-x: 0.75rem;
+  --qt-sidebar-item-padding-y: 0.5rem;
+  --qt-sidebar-item-radius: var(--radius-md);
+  --qt-sidebar-item-hover-bg: hsl(43 75% 55% / 0.08);
+  --qt-sidebar-item-active-bg: hsl(43 75% 55% / 0.12);
+  --qt-sidebar-item-active-border: var(--estate-gold);
+
+  /* ==========================================================================
+     LEFT SIDEBAR VARIABLES (App Navigation)
+     ========================================================================== */
+  --qt-left-sidebar-width: 16rem;
+  --qt-left-sidebar-min-width: 16rem;
+  --qt-left-sidebar-max-width: 32rem;
+  --qt-left-sidebar-collapsed-width: 4rem;
+  --qt-left-sidebar-resize-handle-width: 4px;
+  --qt-left-sidebar-bg: var(--estate-brown);
+  --qt-left-sidebar-border: var(--estate-gold-dark);
+  --qt-left-sidebar-transition: width 200ms ease, transform 300ms ease;
+
+  --qt-left-sidebar-header-height: 4rem;
+  --qt-left-sidebar-footer-height: auto;
+
+  --qt-left-sidebar-section-padding: 0.75rem;
+  --qt-left-sidebar-section-gap: 0.25rem;
+  --qt-left-sidebar-section-title-fg: var(--estate-gold-light);
+
+  --qt-left-sidebar-item-gap: 0.5rem;
+  --qt-left-sidebar-item-icon-size: 1.25rem;
+
+  --qt-left-sidebar-overlay-bg: rgb(0 0 0 / 0.5);
+  --qt-left-sidebar-overlay-z: 40;
+  --qt-left-sidebar-z: 50;
+
+  /* ==========================================================================
+     APP HEADER VARIABLES
+     ========================================================================== */
+  --qt-app-header-height: 4rem;
+  --qt-app-header-bg: var(--color-background);
+  --qt-app-header-border: var(--color-border);
+  --qt-app-header-blur: blur(8px);
+
+  /* ==========================================================================
+     PANEL/DIALOG/POPOVER VARIABLES
+     ========================================================================== */
+  --qt-panel-radius: var(--radius-lg);
+  --qt-panel-bg: var(--color-card);
+  --qt-panel-border: var(--color-border);
+  --qt-panel-shadow: 0 10px 25px -5px hsl(20 30% 10% / 0.15);
+
+  --qt-dialog-radius: var(--radius-lg);
+  --qt-dialog-bg: var(--color-background);
+  --qt-dialog-border: var(--estate-gold);
+  --qt-dialog-shadow: 0 25px 50px -12px hsl(20 30% 10% / 0.3);
+  --qt-dialog-backdrop: rgb(0 0 0 / 0.55);
+
+  --qt-popover-radius: var(--radius-md);
+  --qt-popover-bg: var(--color-popover);
+  --qt-popover-fg: var(--color-popover-foreground);
+  --qt-popover-border: var(--color-border);
+  --qt-popover-shadow: 0 10px 25px -5px hsl(20 30% 10% / 0.15);
+
+  /* ==========================================================================
+     CHAT VARIABLES
+     ========================================================================== */
+  --qt-chat-message-radius: var(--radius-lg);
+  --qt-chat-message-padding: 1rem;
+  --qt-chat-message-shadow: 0 2px 8px -2px hsl(20 30% 10% / 0.1);
+
+  --qt-chat-user-bg: var(--color-chat-user);
+  --qt-chat-user-fg: var(--color-chat-user-foreground);
+  --qt-chat-user-border: hsl(20 40% 30% / 0.3);
+  --qt-chat-user-font: var(--theme-font-chat-user);
+
+  --qt-chat-assistant-bg: var(--color-muted);
+  --qt-chat-assistant-fg: var(--color-foreground);
+  --qt-chat-assistant-border: var(--color-border);
+  --qt-chat-assistant-font: var(--theme-font-serif);
+
+  --qt-chat-composer-bg: var(--color-background);
+  --qt-chat-composer-border: var(--color-border);
+  --qt-chat-composer-radius: var(--radius-lg);
+  --qt-chat-composer-padding-x: 1.25rem;
+  --qt-chat-composer-padding-y: 1rem;
+
+  --qt-chat-toolbar-gap: 0.5rem;
+  --qt-chat-toolbar-button-bg: var(--color-muted);
+  --qt-chat-toolbar-button-fg: var(--color-muted-foreground);
+  --qt-chat-toolbar-button-hover-bg: color-mix(in srgb, var(--color-muted) 85%, transparent);
+  --qt-chat-toolbar-button-border: var(--color-border);
+
+  --qt-chat-attachment-border: var(--color-border);
+  --qt-chat-attachment-hover-border: var(--estate-gold);
+  --qt-chat-attachment-overlay: rgb(0 0 0 / 0.25);
+
+  --qt-chat-message-row-max-width: 800px;
+  --qt-page-max-width: 75rem;
+  --qt-card-grid-auto-min: 550px;
+
+  --qt-chat-sidebar-width: 20rem;
+  --qt-chat-sidebar-collapsed-width: 4rem;
+  --qt-chat-sidebar-bg: var(--color-card);
+  --qt-chat-sidebar-border: var(--color-border);
+  --qt-chat-sidebar-header-border: var(--color-border);
+  --qt-chat-sidebar-muted: var(--color-muted-foreground);
+  --qt-chat-sidebar-heading: var(--color-foreground);
+
+  /* Response status indicator */
+  --qt-response-status-bg: color-mix(in srgb, var(--color-muted) 60%, transparent);
+  --qt-response-status-fg: var(--color-muted-foreground);
+  --qt-response-status-border: var(--color-border);
+
+  --qt-response-status-compressing-fg: hsl(210 70% 50%);
+  --qt-response-status-gathering-fg: hsl(43 75% 55%);
+  --qt-response-status-building-fg: hsl(43 70% 42%);
+  --qt-response-status-sending-fg: hsl(210 70% 50%);
+  --qt-response-status-streaming-fg: hsl(142 65% 38%);
+  --qt-response-status-tool-fg: hsl(43 75% 55%);
+
+  --qt-participant-card-radius: var(--radius-lg);
+  --qt-participant-card-bg: var(--color-card);
+  --qt-participant-card-border: var(--color-border);
+  --qt-participant-card-active-border: var(--estate-gold);
+  --qt-participant-card-active-shadow: 0 0 10px hsl(43 75% 55% / 0.2);
+
+  /* ==========================================================================
+     ROLEPLAY ANNOTATION VARIABLES
+     ========================================================================== */
+  --qt-rp-dialogue-color: var(--color-foreground);
+  --qt-rp-dialogue-bg: transparent;
+
+  --qt-rp-narration-color: hsl(43 50% 72%);
+  --qt-rp-narration-bg: hsl(20 30% 12% / 0.85);
+  --qt-rp-narration-style: normal;
+  --qt-rp-narration-padding: 0.125rem 0.375rem;
+  --qt-rp-narration-radius: 0.25rem;
+
+  --qt-rp-inner-monologue-color: hsl(280 70% 72%);
+  --qt-rp-inner-monologue-bg: hsl(280 25% 12% / 0.85);
+  --qt-rp-inner-monologue-style: italic;
+  --qt-rp-inner-monologue-padding: 0.125rem 0.375rem;
+  --qt-rp-inner-monologue-radius: 0.25rem;
+
+  --qt-rp-ooc-color: hsl(43 85% 65%);
+  --qt-rp-ooc-bg: hsl(20 25% 8%);
+  --qt-rp-ooc-font: var(--theme-font-mono);
+  --qt-rp-ooc-padding: 0.125rem 0.375rem;
+  --qt-rp-ooc-radius: 0.25rem;
+
+  --qt-rp-button-narration-bg: hsl(20 25% 22%);
+  --qt-rp-button-narration-fg: hsl(43 50% 72%);
+  --qt-rp-button-internal-bg: hsl(280 55% 48%);
+  --qt-rp-button-internal-fg: hsl(0 0% 100%);
+  --qt-rp-button-ooc-bg: hsl(43 70% 42%);
+  --qt-rp-button-ooc-fg: hsl(20 30% 8%);
+
+  /* ==========================================================================
+     BADGE VARIABLES
+     ========================================================================== */
+  --qt-badge-radius: 2px;
+  --qt-badge-padding-x: 0.75rem;
+  --qt-badge-padding-y: 0.25rem;
+  --qt-badge-font-size: 0.75rem;
+  --qt-badge-font-weight: 600;
+
+  --qt-badge-primary-bg: var(--color-primary);
+  --qt-badge-primary-fg: var(--color-primary-foreground);
+
+  --qt-badge-secondary-bg: var(--color-secondary);
+  --qt-badge-secondary-fg: var(--color-secondary-foreground);
+
+  --qt-badge-outline-bg: transparent;
+  --qt-badge-outline-fg: var(--color-foreground);
+  --qt-badge-outline-border: var(--color-border);
+
+  /* Entity-type badge colors — warm-tinted variants */
+  --qt-badge-character-bg: hsl(20 45% 25% / 0.15);
+  --qt-badge-character-fg: hsl(20 45% 38%);
+  --qt-badge-persona-bg: hsl(43 75% 55% / 0.15);
+  --qt-badge-persona-fg: hsl(43 70% 35%);
+  --qt-badge-chat-bg: hsl(142 65% 38% / 0.15);
+  --qt-badge-chat-fg: hsl(142 65% 30%);
+  --qt-badge-tag-bg: hsl(25 85% 53% / 0.15);
+  --qt-badge-tag-fg: hsl(25 85% 40%);
+  --qt-badge-memory-bg: hsl(330 70% 55% / 0.15);
+  --qt-badge-memory-fg: hsl(330 70% 40%);
+  --qt-badge-message-bg: hsl(45 65% 48% / 0.12);
+  --qt-badge-message-fg: hsl(45 65% 35%);
+  --qt-badge-project-bg: hsl(43 75% 55% / 0.12);
+  --qt-badge-project-fg: hsl(43 70% 35%);
+
+  /* Status badge colors */
+  --qt-badge-enabled-bg: hsl(142 65% 38% / 0.15);
+  --qt-badge-enabled-fg: hsl(142 65% 30%);
+  --qt-badge-disabled-bg: var(--color-muted);
+  --qt-badge-disabled-fg: var(--color-muted-foreground);
+  --qt-badge-related-bg: hsl(43 75% 55% / 0.15);
+  --qt-badge-related-fg: hsl(43 70% 35%);
+  --qt-badge-manual-bg: hsl(43 75% 55% / 0.15);
+  --qt-badge-manual-fg: hsl(43 70% 35%);
+  --qt-badge-auto-bg: var(--color-muted);
+  --qt-badge-auto-fg: var(--color-muted-foreground);
+
+  /* Plugin source badge colors */
+  --qt-badge-source-included-bg: hsl(43 75% 55% / 0.15);
+  --qt-badge-source-included-fg: hsl(43 70% 35%);
+  --qt-badge-source-npm-bg: hsl(0 60% 48% / 0.15);
+  --qt-badge-source-npm-fg: hsl(0 60% 40%);
+  --qt-badge-source-git-bg: hsl(20 45% 25% / 0.15);
+  --qt-badge-source-git-fg: hsl(20 45% 38%);
+  --qt-badge-source-manual-bg: var(--color-muted);
+  --qt-badge-source-manual-fg: var(--color-muted-foreground);
+
+  /* Capability badge colors */
+  --qt-badge-capability-bg: hsl(20 45% 25% / 0.1);
+  --qt-badge-capability-fg: hsl(20 45% 38%);
+
+  /* Queue status badge colors */
+  --qt-queue-badge-radius: var(--radius-sm);
+  --qt-queue-badge-padding-x: 0.375rem;
+  --qt-queue-badge-padding-y: 0.125rem;
+  --qt-queue-badge-font-size: 0.6875rem;
+  --qt-queue-badge-font-weight: 600;
+  --qt-queue-badge-group-gap: 1px;
+  --qt-queue-badge-group-radius: var(--radius-md);
+
+  --qt-queue-badge-memory-bg: hsl(20 35% 25%);
+  --qt-queue-badge-memory-fg: hsl(43 75% 55%);
+  --qt-queue-badge-summary-bg: hsl(142 65% 38%);
+  --qt-queue-badge-summary-fg: hsl(0 0% 100%);
+  --qt-queue-badge-danger-bg: hsl(0 60% 48%);
+  --qt-queue-badge-danger-fg: hsl(0 0% 100%);
+  --qt-queue-badge-story-bg: hsl(20 25% 22%);
+  --qt-queue-badge-story-fg: hsl(43 50% 72%);
+  --qt-queue-badge-idle-opacity: 0.4;
+
+  /* ==========================================================================
+     AVATAR VARIABLES
+     ========================================================================== */
+  --qt-avatar-radius: 2px;
+  --qt-avatar-size: 2.5rem;
+  --qt-avatar-size-sm: 2rem;
+  --qt-avatar-size-lg: 3rem;
+  --qt-avatar-size-xl: 4rem;
+  --qt-avatar-bg: var(--color-muted);
+  --qt-avatar-fg: var(--color-muted-foreground);
+  --qt-avatar-border: var(--estate-gold-dark);
+
+  /* ==========================================================================
+     CODE BLOCK VARIABLES
+     ========================================================================== */
+  --qt-code-radius: var(--radius-md);
+  --qt-code-bg: var(--color-muted);
+  --qt-code-fg: var(--color-foreground);
+  --qt-code-border: var(--color-border);
+  --qt-code-font: var(--theme-font-mono);
+
+  /* ==========================================================================
+     LINK VARIABLES
+     ========================================================================== */
+  --qt-link-color: var(--estate-gold-dark);
+  --qt-link-hover-color: var(--estate-gold);
+  --qt-link-decoration: underline;
+  --qt-link-decoration-hover: underline;
+
+  /* ==========================================================================
+     FOOTER VARIABLES
+     ========================================================================== */
+  --qt-footer-bg: var(--color-background);
+  --qt-footer-border: var(--color-border);
+  --qt-footer-fg: var(--color-muted-foreground);
+  --qt-footer-link-hover: var(--estate-gold);
+
+  /* ==========================================================================
+     BRAND VARIABLES
+     ========================================================================== */
+  --qt-brand-fg: var(--estate-gold);
+
+  /* ==========================================================================
+     AUTH PAGE VARIABLES
+     ========================================================================== */
+  --qt-auth-page-bg: linear-gradient(to bottom right, hsl(20 25% 8%), hsl(20 22% 14%));
+  --qt-auth-card-bg: var(--color-card);
+  --qt-auth-card-fg: var(--color-card-foreground);
+  --qt-auth-title-fg: var(--estate-gold);
+  --qt-auth-subtitle-fg: var(--color-muted-foreground);
+  --qt-auth-label-fg: var(--color-foreground);
+  --qt-auth-hint-fg: var(--color-muted-foreground);
+  --qt-auth-footer-fg: var(--color-muted-foreground);
+  --qt-auth-divider-color: var(--color-border);
+
+  /* ==========================================================================
+     HIGHLIGHT VARIABLES (Search result highlighting)
+     ========================================================================== */
+  --qt-highlight-bg: hsl(43 75% 55%);
+  --qt-highlight-fg: hsl(20 30% 8%);
+  --qt-highlight-radius: 0.125rem;
+  --qt-highlight-padding-x: 0.125rem;
+  --qt-highlight-font-weight: 500;
+
+  /* ==========================================================================
+     FILTER CHIP VARIABLES
+     ========================================================================== */
+  --qt-filter-chip-radius: 2px;
+  --qt-filter-chip-padding-x: 0.5rem;
+  --qt-filter-chip-padding-y: 0.25rem;
+  --qt-filter-chip-font-size: 0.75rem;
+  --qt-filter-chip-font-weight: 500;
+  --qt-filter-chip-transition: all 150ms ease;
+
+  --qt-filter-chip-active-bg: var(--color-primary);
+  --qt-filter-chip-active-fg: var(--color-primary-foreground);
+  --qt-filter-chip-active-border: transparent;
+
+  --qt-filter-chip-inactive-bg: var(--color-muted);
+  --qt-filter-chip-inactive-fg: var(--color-muted-foreground);
+  --qt-filter-chip-inactive-border: transparent;
+  --qt-filter-chip-inactive-hover-bg: color-mix(in srgb, var(--color-muted) 80%, var(--color-foreground) 5%);
+
+  /* ==========================================================================
+     TAB VARIABLES
+     ========================================================================== */
+  --qt-tab-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  --qt-tab-padding-x: 1rem;
+  --qt-tab-padding-y: 0.625rem;
+  --qt-tab-font-size: 0.8125rem;
+  --qt-tab-font-weight: 500;
+  --qt-tab-gap: 0.5rem;
+  --qt-tab-transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  --qt-tab-bg: var(--color-muted);
+  --qt-tab-fg: var(--color-muted-foreground);
+  --qt-tab-border: transparent;
+  --qt-tab-hover-bg: color-mix(in srgb, var(--color-muted) 80%, var(--color-foreground) 5%);
+  --qt-tab-hover-fg: var(--color-foreground);
+
+  --qt-tab-active-bg: var(--color-card);
+  --qt-tab-active-fg: var(--estate-gold-dark);
+  --qt-tab-active-border: var(--color-border);
+
+  --qt-tab-group-gap: 0.25rem;
+  --qt-tab-divider-color: var(--color-border);
+
+  /* ==========================================================================
+     OVERLAY VARIABLES
+     ========================================================================== */
+  --qt-overlay-bg: hsl(20 28% 5% / 0.9);
+  --qt-overlay-medium-bg: hsl(20 28% 5% / 0.6);
+  --qt-overlay-light-bg: hsl(20 25% 8% / 0.2);
+  --qt-overlay-caption-bg: hsl(20 28% 5% / 0.55);
+  --qt-overlay-btn-bg: hsl(43 75% 55% / 0.1);
+  --qt-overlay-btn-hover-bg: hsl(43 75% 55% / 0.22);
+  --qt-overlay-fg: var(--estate-cream);
+  --qt-overlay-muted-fg: hsl(38 18% 88% / 0.7);
+
+  /* ==========================================================================
+     SPINNER VARIABLES
+     ========================================================================== */
+  --qt-spinner-track: color-mix(in srgb, var(--estate-gold) 20%, transparent);
+  --qt-spinner-indicator: var(--estate-gold);
+
+  /* ==========================================================================
+     FAVORITE VARIABLES
+     ========================================================================== */
+  --qt-favorite-color: var(--estate-gold);
+
+  /* ==========================================================================
+     TOGGLE VARIABLES
+     ========================================================================== */
+  --qt-toggle-knob-bg: var(--estate-cream);
+
+  /* ==========================================================================
+     WARNING BOX VARIABLES
+     ========================================================================== */
+  --qt-warning-box-bg: hsl(43 75% 55% / 0.1);
+  --qt-warning-box-border: hsl(20 35% 30% / 0.35);
+  --qt-warning-box-fg: hsl(43 70% 40%);
+}
+
+/* ============================================================================
+   DARK MODE OVERRIDES
+   Deep walnut + candlelit gold
+   ============================================================================ */
+[data-theme="great-estate"].dark {
+  /* Estate tokens — brighter gold for dark backgrounds */
+  --estate-gold: hsl(43 80% 58%);
+  --estate-gold-light: hsl(43 72% 66%);
+  --estate-gold-dark: hsl(43 68% 38%);
+  --estate-brown: hsl(20 30% 8%);
+  --estate-brown-mid: hsl(20 22% 18%);
+  --estate-cream: hsl(38 18% 88%);
+
+  /* Card shadows — true black + faint gold edge glow */
+  --qt-card-shadow: 0 1px 3px hsl(0 0% 0% / 0.35), 0 0 1px hsl(43 50% 80% / 0.06);
+  --qt-card-shadow-hover: 0 4px 12px hsl(0 0% 0% / 0.45), 0 0 6px hsl(43 75% 55% / 0.1);
+  --qt-card-border-opacity: 0.7;
+
+  /* Sidebar — darkest brown with gold accents */
+  --qt-left-sidebar-bg: hsl(20 28% 5%);
+  --qt-left-sidebar-border: hsl(43 65% 30%);
+
+  /* Input backgrounds — black per user spec */
+  --qt-input-bg: hsl(0 0% 0%);
+
+  /* Brighter primary button for dark mode */
+  --qt-button-primary-bg: linear-gradient(135deg, hsl(43 80% 58%), hsl(43 75% 48%));
+  --qt-button-primary-hover-bg: linear-gradient(135deg, hsl(43 85% 64%), hsl(43 80% 54%));
+
+  /* Alert tokens — brighter for dark backgrounds */
+  --qt-alert-success-bg: hsl(142 65% 38% / 0.2);
+  --qt-alert-success-fg: hsl(142 65% 62%);
+  --qt-alert-success-border: hsl(142 65% 38% / 0.5);
+
+  --qt-alert-warning-bg: hsl(43 75% 55% / 0.2);
+  --qt-alert-warning-fg: hsl(43 75% 68%);
+  --qt-alert-warning-border: hsl(43 75% 55% / 0.5);
+
+  --qt-alert-error-bg: hsl(0 60% 48% / 0.2);
+  --qt-alert-error-fg: hsl(0 60% 68%);
+  --qt-alert-error-border: hsl(0 60% 48% / 0.5);
+
+  --qt-alert-info-bg: hsl(210 70% 50% / 0.2);
+  --qt-alert-info-fg: hsl(210 70% 68%);
+  --qt-alert-info-border: hsl(210 70% 50% / 0.5);
+
+  /* Entity badge tokens — brighter for dark backgrounds */
+  --qt-badge-character-bg: hsl(20 45% 35% / 0.3);
+  --qt-badge-character-fg: hsl(20 55% 68%);
+  --qt-badge-persona-bg: hsl(43 75% 55% / 0.25);
+  --qt-badge-persona-fg: hsl(43 75% 68%);
+  --qt-badge-chat-bg: hsl(142 65% 38% / 0.3);
+  --qt-badge-chat-fg: hsl(142 65% 62%);
+  --qt-badge-tag-bg: hsl(25 85% 53% / 0.3);
+  --qt-badge-tag-fg: hsl(25 85% 65%);
+  --qt-badge-memory-bg: hsl(330 70% 55% / 0.3);
+  --qt-badge-memory-fg: hsl(330 70% 68%);
+  --qt-badge-message-bg: hsl(45 65% 50% / 0.25);
+  --qt-badge-message-fg: hsl(45 65% 68%);
+  --qt-badge-project-bg: hsl(43 75% 55% / 0.2);
+  --qt-badge-project-fg: hsl(43 75% 68%);
+
+  /* Status badge tokens */
+  --qt-badge-enabled-bg: hsl(142 65% 38% / 0.3);
+  --qt-badge-enabled-fg: hsl(142 65% 62%);
+  --qt-badge-related-bg: hsl(43 75% 55% / 0.25);
+  --qt-badge-related-fg: hsl(43 75% 68%);
+  --qt-badge-manual-bg: hsl(43 75% 55% / 0.25);
+  --qt-badge-manual-fg: hsl(43 75% 68%);
+
+  /* Plugin source badge tokens */
+  --qt-badge-source-included-bg: hsl(43 75% 55% / 0.25);
+  --qt-badge-source-included-fg: hsl(43 75% 68%);
+  --qt-badge-source-npm-bg: hsl(0 60% 48% / 0.3);
+  --qt-badge-source-npm-fg: hsl(0 60% 68%);
+  --qt-badge-source-git-bg: hsl(20 45% 35% / 0.3);
+  --qt-badge-source-git-fg: hsl(20 55% 68%);
+
+  /* Capability badge tokens */
+  --qt-badge-capability-bg: hsl(20 45% 35% / 0.2);
+  --qt-badge-capability-fg: hsl(20 55% 68%);
+
+  /* Queue status badge tokens */
+  --qt-queue-badge-memory-bg: hsl(20 35% 30%);
+  --qt-queue-badge-memory-fg: hsl(43 80% 62%);
+  --qt-queue-badge-summary-bg: hsl(142 60% 42%);
+  --qt-queue-badge-danger-bg: hsl(0 60% 52%);
+  --qt-queue-badge-story-bg: hsl(20 22% 25%);
+  --qt-queue-badge-story-fg: hsl(43 60% 68%);
+
+  /* Response status — brighter for dark mode */
+  --qt-response-status-bg: color-mix(in srgb, var(--color-muted) 40%, transparent);
+  --qt-response-status-compressing-fg: hsl(210 70% 68%);
+  --qt-response-status-gathering-fg: hsl(43 80% 62%);
+  --qt-response-status-building-fg: hsl(43 75% 58%);
+  --qt-response-status-sending-fg: hsl(210 70% 68%);
+  --qt-response-status-streaming-fg: hsl(142 65% 62%);
+  --qt-response-status-tool-fg: hsl(43 80% 62%);
+
+  /* Links — gold in dark mode */
+  --qt-link-color: var(--estate-gold);
+  --qt-link-hover-color: var(--estate-gold-light);
+
+  /* Auth page — deeper brown gradient */
+  --qt-auth-page-bg: linear-gradient(to bottom right, hsl(20 28% 4%), hsl(20 24% 9%));
+  --qt-auth-title-fg: var(--estate-gold);
+
+  /* Highlight — gold remains strong */
+  --qt-highlight-bg: hsl(43 80% 50%);
+  --qt-highlight-fg: hsl(20 30% 8%);
+}
+
+/* ============================================================================
+   THE GREAT ESTATE DECORATIVE STYLES
+   These are visual enhancements applied on top of the token system.
+   ============================================================================ */
+
+/* ============================================================================
+   BODY BACKGROUND - Manor House Library
+   ============================================================================ */
+[data-theme="great-estate"] body {
+  position: relative;
+  min-height: 100vh;
+  background-image: url('/api/themes/assets/qtap-plugin-theme-great-estate/textures/background.webp');
+  background-size: cover;
+  background-position: center center;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+}
+
+/* Ensure background shows through main containers */
+[data-theme="great-estate"] .bg-background {
+  background: transparent !important;
+}
+
+[data-theme="great-estate"] .qt-app-layout {
+  background: transparent;
+}
+
+[data-theme="great-estate"] .qt-app-main {
+  background: transparent;
+}
+
+[data-theme="great-estate"] .qt-page,
+[data-theme="great-estate"] .qt-page-with-navbar {
+  background: transparent;
+}
+
+[data-theme="great-estate"] .qt-content {
+  background: transparent;
+}
+
+[data-theme="great-estate"] .qt-content-scroll {
+  background: transparent;
+}
+
+[data-theme="great-estate"] .qt-auth-page {
+  background: transparent;
+}
+
+[data-theme="great-estate"] .qt-page-container {
+  background: transparent;
+}
+
+/* ============================================================================
+   STORY BACKGROUND OVERRIDE
+   When a built-in story background is active, yield to it:
+   drop the theme background image, restore solid theme colors on containers,
+   and let the story background's ::before pseudo-element dominate.
+   ============================================================================ */
+[data-theme="great-estate"] body:has([style*="--story-background-url"]) {
+  background-image: none;
+  background-color: var(--color-background);
+}
+
+[data-theme="great-estate"] body:has([style*="--story-background-url"]) .bg-background {
+  background: var(--color-background) !important;
+}
+
+[data-theme="great-estate"] body:has([style*="--story-background-url"]) .qt-app-layout {
+  background: var(--color-background);
+}
+
+[data-theme="great-estate"] body:has([style*="--story-background-url"]) .qt-app-main {
+  background: var(--color-background);
+}
+
+[data-theme="great-estate"] body:has([style*="--story-background-url"]) .qt-content {
+  background: var(--qt-content-bg);
+}
+
+[data-theme="great-estate"] body:has([style*="--story-background-url"]) .qt-content-scroll {
+  background: var(--qt-content-scroll-bg);
+}
+
+/* Hide texture overlay when story background is active */
+[data-theme="great-estate"] body:has([style*="--story-background-url"])::after {
+  display: none;
+}
+
+/* --- Carbon-fibre texture overlay (on top of background image) --- */
+[data-theme="great-estate"] body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: url("/api/themes/assets/qtap-plugin-theme-great-estate/textures/carbon-fibre.png");
+  background-repeat: repeat;
+  opacity: 0.04;
+}
+
+[data-theme="great-estate"].dark body::after {
+  opacity: 0.06;
+}
+
+/* --- Heading typography: Playfair Display serif showcase --- */
+[data-theme="great-estate"] h1,
+[data-theme="great-estate"] h2,
+[data-theme="great-estate"] h3 {
+  font-family: var(--theme-font-brand);
+  letter-spacing: 0.04em;
+  text-transform: capitalize;
+  font-weight: 700;
+  color: var(--estate-gold-dark);
+}
+
+[data-theme="great-estate"].dark h1,
+[data-theme="great-estate"].dark h2,
+[data-theme="great-estate"].dark h3 {
+  color: var(--estate-gold);
+}
+
+/* --- Gold border accent on cards --- */
+[data-theme="great-estate"] [class*="card"],
+[data-theme="great-estate"] [class*="Card"] {
+  border-color: color-mix(in srgb, var(--estate-gold) calc(var(--qt-card-border-opacity) * 100%), transparent);
+}
+
+/* --- Chat message border accents --- */
+[data-theme="great-estate"] [data-role="assistant"] {
+  border-left: 3px solid var(--estate-gold);
+}
+
+[data-theme="great-estate"] [data-role="user"] {
+  border-right: 3px solid var(--estate-brown-mid);
+}
+
+/* --- Sidebar active item: gold left border --- */
+[data-theme="great-estate"] [data-sidebar] [aria-current="page"],
+[data-theme="great-estate"] [data-sidebar] .active {
+  border-left: 3px solid var(--estate-gold);
+  color: var(--estate-gold);
+}
+
+/* --- Scrollbar styling (webkit) --- */
+[data-theme="great-estate"] ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+[data-theme="great-estate"] ::-webkit-scrollbar-track {
+  background: var(--color-background);
+}
+
+[data-theme="great-estate"] ::-webkit-scrollbar-thumb {
+  background: var(--estate-gold-dark);
+  border-radius: 2px;
+  border: 1px solid var(--color-background);
+}
+
+[data-theme="great-estate"] ::-webkit-scrollbar-thumb:hover {
+  background: var(--estate-gold);
+}
+
+/* --- Selection colors --- */
+[data-theme="great-estate"] ::selection {
+  background: hsl(43 75% 55% / 0.3);
+  color: var(--color-foreground);
+}
+
+/* --- Button letter-spacing for the Estate feel --- */
+[data-theme="great-estate"] button {
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.8125rem;
+}
+
+/* --- Input styling --- */
+[data-theme="great-estate"] input,
+[data-theme="great-estate"] textarea,
+[data-theme="great-estate"] select {
+  border-radius: var(--radius-md);
+}
+
+/* --- Focus ring: gold glow --- */
+[data-theme="great-estate"] :focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+  box-shadow: 0 0 6px hsl(43 75% 55% / 0.25);
+}
+
+/* --- Dialog/modal: gold border accent --- */
+[data-theme="great-estate"] [role="dialog"] {
+  border: 1px solid color-mix(in srgb, var(--estate-gold) 40%, transparent);
+}
+
+/* ============================================================================
+   REDUCED MOTION
+   ============================================================================ */
+@media (prefers-reduced-motion: reduce) {
+  [data-theme="great-estate"] * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

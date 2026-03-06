@@ -1,0 +1,1403 @@
+/**
+ * Earl Grey Theme - Sophisticated styling with Light/Dark Mode Support
+ *
+ * Dark mode: ChatGPT-inspired high contrast with pure black sidebar
+ * Light mode: Clean, minimal white aesthetic with subtle grey accents
+ *
+ * This theme uses the qt-* semantic class system for consistent,
+ * themeable component styling.
+ */
+
+/* ============================================================================
+   ROOT BASELINE - SHARED BETWEEN MODES
+   ============================================================================ */
+[data-theme="earl-grey"] {
+  /* Tailwind/Browser Reset - Essential only */
+  -webkit-locale: "en-US";
+  direction: ltr;
+  border: 0 solid;
+  box-sizing: border-box;
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+  tab-size: 4;
+  font-feature-settings: normal;
+  font-variation-settings: normal;
+  -webkit-tap-highlight-color: transparent;
+  padding: 0;
+  margin: 0;
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  height: 100dvh;
+
+  /* Tailwind Transform/Ring Defaults */
+  --tw-border-spacing-x: 0;
+  --tw-border-spacing-y: 0;
+  --tw-translate-x: 0;
+  --tw-translate-y: 0;
+  --tw-rotate: 0;
+  --tw-skew-x: 0;
+  --tw-skew-y: 0;
+  --tw-scale-x: 1;
+  --tw-scale-y: 1;
+  --tw-ring-inset: ;
+  --tw-ring-offset-width: 0px;
+  --tw-ring-offset-shadow: 0 0 #0000;
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-shadow: 0 0 #0000;
+  --tw-shadow-colored: 0 0 #0000;
+
+  /* Scrollbar */
+  scrollbar-width: thin;
+
+  /* ============================================================================
+     FONT STACKS (SHARED)
+     ============================================================================ */
+  --default-font-family: "Rethink Sans", ui-sans-serif, system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
+  --default-mono-font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  --font-anthropic-sans: var(--theme-font-sans, var(--default-font-family));
+  --font-anthropic-serif: var(--theme-font-serif, var(--default-font-family));
+  --font-open-dyslexic: var(--theme-font-serif, var(--default-font-family));
+  --font-jetbrains: var(--theme-font-mono, var(--default-mono-font-family));
+  --font-ui: var(--font-anthropic-sans);
+  --font-ui-serif: var(--font-anthropic-serif);
+  --font-sans-serif: var(--font-ui);
+  --font-serif: var(--font-ui-serif);
+  --font-system: var(--default-font-family);
+  --font-dyslexia: var(--font-open-dyslexic), "Comic Sans MS", var(--default-font-family);
+  --font-mono: var(--font-jetbrains);
+  --font-user-message: var(--font-sans-serif);
+  --font-claude-response: var(--font-serif);
+  font-family: var(--font-ui);
+
+  /* Accent Colors - Blue brand (shared between modes) */
+  --accent-brand: 211 100% 50%;
+  --accent-main-000: 211 100% 50%;
+  --accent-main-100: 211 100% 50%;
+  --accent-main-200: 210 70.9% 51.6%;
+  --accent-main-900: 211 55.9% 24.6%;
+
+  /* Pro/Purple Accent (shared) */
+  --accent-pro-000: 251 84.6% 74.5%;
+  --accent-pro-100: 251 40.2% 54.1%;
+  --accent-pro-200: 251 40% 45.1%;
+  --accent-pro-900: 250 25.3% 19.4%;
+
+  /* Secondary Accent (shared) */
+  --accent-secondary-000: 211 100% 70%;
+  --accent-secondary-100: 211 100% 50%;
+  --accent-secondary-200: 211 100% 50%;
+  --accent-secondary-900: 211 55.9% 24.6%;
+
+  /* Always Colors */
+  --always-white: 0 0% 100%;
+  --always-black: 0 0% 0%;
+}
+
+/* ============================================================================
+   DARK MODE (DEFAULT)
+   ============================================================================ */
+[data-theme="earl-grey"],
+[data-theme="earl-grey"].dark {
+  color-scheme: dark;
+
+  /* Ring color for dark mode */
+  --tw-ring-offset-color: #000;
+  --tw-ring-color: hsl(var(--accent-secondary-100) / 1);
+
+  /* Core surfaces - Black/Charcoal/Gray */
+  --bg-sidebar: 0 0% 0%;        /* #000000 - Pure black sidebar */
+  --bg-main: 0 0% 13%;          /* #212121 - Dark charcoal main */
+  --bg-input: 0 0% 18.4%;       /* #2f2f2f - Distinct input bg */
+  --bg-hover: 0 0% 18.4%;       /* #2f2f2f - Hover state */
+
+  /* Background Tones */
+  --bg-000: 0 0% 18.4%;         /* #2f2f2f - Raised surfaces */
+  --bg-100: 0 0% 13%;           /* #212121 - Main area */
+  --bg-200: 0 0% 6%;            /* Darker than main */
+  --bg-300: 0 0% 0%;            /* #000000 - Deepest/sidebar */
+  --bg-400: 0 0% 0%;
+  --bg-500: 0 0% 0%;
+
+  /* Border - Subtle white overlay */
+  --border-100: 0 0% 100%;
+  --border-200: 0 0% 100%;
+  --border-300: 0 0% 100%;
+  --border-400: 0 0% 100%;
+
+  /* Status Colors */
+  --danger-000: 0 98.4% 75.1%;
+  --danger-100: 0 67% 59.6%;
+  --danger-200: 0 67% 59.6%;
+  --danger-900: 0 46.5% 27.8%;
+
+  --success-000: 142 71% 55%;
+  --success-100: 142 71% 45%;
+  --success-200: 142 71% 45%;
+  --success-900: 142 76.6% 22%;
+
+  --warning-000: 45 93% 57%;
+  --warning-100: 45 93% 47%;
+  --warning-200: 45 93% 47%;
+  --warning-900: 45 94.8% 20%;
+
+  /* Theme Color Mappings - for qt-* utility classes */
+  --theme-success: hsl(var(--success-100));
+  --theme-success-foreground: hsl(var(--oncolor-100));
+  --theme-warning: hsl(var(--warning-100));
+  --theme-warning-foreground: hsl(var(--always-black));
+  --theme-destructive: hsl(var(--danger-100));
+  --theme-destructive-foreground: hsl(var(--oncolor-100));
+  --theme-info: hsl(var(--accent-secondary-100));
+  --theme-info-foreground: hsl(var(--oncolor-100));
+
+  /* On-Color Text */
+  --oncolor-100: 0 0% 100%;
+  --oncolor-200: 0 0% 100%;
+  --oncolor-300: 0 0% 100%;
+
+  /* Pictogram Tones */
+  --pictogram-100: 0 0% 29.2%;
+  --pictogram-200: 0 0% 23.3%;
+  --pictogram-300: 0 0% 18.4%;
+  --pictogram-400: 0 0% 13%;
+
+  /* Text Colors - High contrast */
+  --text-000: 0 0% 100%;        /* #ffffff - Primary */
+  --text-100: 0 0% 100%;
+  --text-200: 0 0% 70.6%;       /* #b4b4b4 - Secondary */
+  --text-300: 0 0% 70.6%;
+  --text-400: 0 0% 40%;         /* #666666 - Tertiary */
+  --text-500: 0 0% 40%;
+
+  /* Scrollbar for dark mode */
+  scrollbar-color: hsl(var(--border-300) / 0.2) transparent;
+
+  /* Surface & Shadow Variables - Dark */
+  --surface-base: hsl(var(--bg-100));
+  --surface-raised: hsl(var(--bg-000));
+  --surface-muted: hsl(var(--bg-200));
+  --surface-deep: hsl(var(--bg-300));
+  --stroke-soft: hsl(var(--border-300) / 0.1);
+  --stroke-strong: hsl(var(--border-100) / 0.2);
+  --card-shadow: 0 4px 12px hsl(var(--always-black) / 0.2);
+  --chat-shadow: 0 4px 12px hsl(var(--always-black) / 0.2);
+
+  /* ================================================================
+     QT-CARD COMPONENT TOKENS - Dark Mode
+     Black shadows for depth plus faint light edge for definition
+     ================================================================ */
+  --qt-card-shadow: 0 1px 3px hsl(0 0% 0% / 0.3), 0 0 1px hsl(0 0% 100% / 0.05);
+  --qt-card-shadow-hover: 0 4px 12px hsl(0 0% 0% / 0.4), 0 0 1px hsl(0 0% 100% / 0.08);
+  --qt-card-border-opacity: 0.7;
+  --qt-card-bg: var(--color-card);
+  --qt-card-border: var(--color-border);
+
+  /* Apply base colors */
+  background-color: hsl(var(--bg-100));
+  color: hsl(var(--text-000));
+  border-color: hsl(var(--border-100) / 0.1);
+  outline-color: hsl(var(--accent-secondary-100));
+}
+
+/* ============================================================================
+   LIGHT MODE - ChatGPT-inspired clean white aesthetic
+   ============================================================================ */
+[data-theme="earl-grey"].light {
+  color-scheme: light;
+
+  /* Ring color for light mode */
+  --tw-ring-offset-color: #fff;
+  --tw-ring-color: hsl(var(--accent-secondary-100) / 0.5);
+
+  /* Core surfaces - White/Light Grey */
+  --bg-sidebar: 0 0% 98%;       /* #F9F9F9 - Very light grey sidebar */
+  --bg-main: 0 0% 100%;         /* #FFFFFF - Pure white main */
+  --bg-input: 0 0% 96%;         /* #F4F4F4 - Input field grey */
+  --bg-hover: 0 0% 93%;         /* #ECECEC - Hover state */
+
+  /* Background Tones - Light mode */
+  --bg-000: 0 0% 100%;          /* #FFFFFF - Cards/raised surfaces */
+  --bg-100: 0 0% 100%;          /* #FFFFFF - Main area */
+  --bg-200: 0 0% 98%;           /* #F9F9F9 - Sidebar */
+  --bg-300: 0 0% 96%;           /* #F4F4F4 - Inputs */
+  --bg-400: 0 0% 93%;           /* #ECECEC - Hover */
+  --bg-500: 0 0% 90%;
+
+  /* Border - Subtle grey */
+  --border-100: 0 0% 90%;       /* #E5E5E5 */
+  --border-200: 0 0% 85%;
+  --border-300: 0 0% 80%;
+  --border-400: 0 0% 75%;
+
+  /* Status Colors - Adjusted for light bg */
+  --danger-000: 0 70% 55%;
+  --danger-100: 0 67% 50%;
+  --danger-200: 0 65% 45%;
+  --danger-900: 0 30% 95%;
+
+  --success-000: 142 71% 45%;
+  --success-100: 142 71% 40%;
+  --success-200: 142 65% 35%;
+  --success-900: 142 30% 95%;
+
+  --warning-000: 45 93% 47%;
+  --warning-100: 45 93% 42%;
+  --warning-200: 45 90% 38%;
+  --warning-900: 45 40% 95%;
+
+  /* Theme Color Mappings - for qt-* utility classes (light mode) */
+  --theme-success: hsl(var(--success-100));
+  --theme-success-foreground: hsl(var(--oncolor-100));
+  --theme-warning: hsl(var(--warning-100));
+  --theme-warning-foreground: hsl(var(--always-black));
+  --theme-destructive: hsl(var(--danger-100));
+  --theme-destructive-foreground: hsl(var(--oncolor-100));
+  --theme-info: hsl(var(--accent-secondary-100));
+  --theme-info-foreground: hsl(var(--oncolor-100));
+
+  /* On-Color Text - Light mode */
+  --oncolor-100: 0 0% 100%;
+  --oncolor-200: 0 0% 100%;
+  --oncolor-300: 0 0% 5%;
+
+  /* Pictogram Tones - Light mode */
+  --pictogram-100: 0 0% 93%;
+  --pictogram-200: 0 0% 90%;
+  --pictogram-300: 0 0% 85%;
+  --pictogram-400: 0 0% 80%;
+
+  /* Text Colors - Near black */
+  --text-000: 0 0% 5%;          /* #0D0D0D - Primary */
+  --text-100: 0 0% 5%;
+  --text-200: 0 0% 40%;         /* #676767 - Secondary */
+  --text-300: 0 0% 40%;
+  --text-400: 240 5% 56%;       /* #8E8EA0 - Placeholder (slight blue tint) */
+  --text-500: 0 0% 60%;
+
+  /* Scrollbar for light mode */
+  scrollbar-color: hsl(var(--border-300) / 0.4) transparent;
+
+  /* Surface & Shadow Variables - Light */
+  --surface-base: hsl(var(--bg-100));
+  --surface-raised: hsl(var(--bg-000));
+  --surface-muted: hsl(var(--bg-200));
+  --surface-deep: hsl(var(--bg-300));
+  --stroke-soft: hsl(var(--always-black) / 0.05);
+  --stroke-strong: hsl(var(--always-black) / 0.1);
+  --card-shadow: 0 1px 3px hsl(var(--always-black) / 0.08);
+  --chat-shadow: none;
+
+  /* ================================================================
+     QT-CARD COMPONENT TOKENS - Light Mode
+     These integrate with the .qt-homepage-section card system
+     ================================================================ */
+  --qt-card-shadow: 0 1px 3px hsl(0 0% 12% / 0.08), 0 1px 2px hsl(0 0% 12% / 0.05);
+  --qt-card-shadow-hover: 0 4px 12px hsl(0 0% 12% / 0.12), 0 2px 4px hsl(0 0% 12% / 0.06);
+  --qt-card-border-opacity: 0.55;
+  --qt-card-bg: var(--color-card);
+  --qt-card-border: var(--color-border);
+
+  /* Apply base colors */
+  background-color: hsl(var(--bg-100));
+  color: hsl(var(--text-000));
+  border-color: hsl(var(--border-100));
+  outline-color: hsl(var(--accent-secondary-100));
+}
+
+/* ============================================================================
+   QT-* VARIABLE OVERRIDES - SHARED STRUCTURE
+   Both modes use these, with colors coming from the mode-specific palette
+   ============================================================================ */
+[data-theme="earl-grey"],
+[data-theme="earl-grey"].dark,
+[data-theme="earl-grey"].light {
+  /* Button Variables - Pill shapes */
+  --qt-button-radius: 20px;
+  --qt-button-primary-shadow: none;
+
+  --qt-button-ghost-bg: transparent;
+  --qt-button-ghost-fg: hsl(var(--text-200));
+  --qt-button-ghost-hover-bg: hsl(var(--bg-hover));
+
+  --qt-button-destructive-bg: hsl(var(--danger-100));
+  --qt-button-destructive-fg: hsl(var(--oncolor-100));
+  --qt-button-destructive-hover-bg: hsl(var(--danger-000));
+
+  /* Copy Button Variables */
+  --qt-copy-button-bg: hsl(var(--bg-300) / 0.9);
+  --qt-copy-button-text: hsl(var(--text-200));
+  --qt-copy-button-border: hsl(var(--border-300) / 0.2);
+  --qt-copy-button-hover-bg: hsl(var(--bg-hover));
+  --qt-copy-button-hover-text: hsl(var(--text-000));
+  --qt-copy-button-hover-border: hsl(var(--border-300) / 0.3);
+  --qt-copy-button-success-bg: hsl(var(--success-100) / 0.9);
+  --qt-copy-button-success-text: hsl(var(--oncolor-100));
+  --qt-copy-button-success-border: hsl(var(--success-100) / 0.5);
+
+  /* Status tokens */
+  --qt-status-success-bg: hsl(var(--success-900) / 0.4);
+  --qt-status-success-fg: hsl(var(--success-100));
+  --qt-status-success-border: hsl(var(--success-100) / 0.4);
+
+  --qt-status-warning-bg: hsl(var(--warning-900) / 0.4);
+  --qt-status-warning-fg: hsl(var(--warning-100));
+  --qt-status-warning-border: hsl(var(--warning-100) / 0.4);
+
+  --qt-status-info-bg: hsl(var(--accent-secondary-900) / 0.35);
+  --qt-status-info-fg: hsl(var(--accent-secondary-100));
+  --qt-status-info-border: hsl(var(--accent-secondary-100) / 0.4);
+
+  --qt-status-danger-bg: hsl(var(--danger-900) / 0.4);
+  --qt-status-danger-fg: hsl(var(--danger-100));
+  --qt-status-danger-border: hsl(var(--danger-100) / 0.4);
+
+  /* Card Variables - Minimal shadow, subtle border */
+  --qt-card-radius: 10px;
+  --qt-card-bg: hsl(var(--bg-000));
+  --qt-card-fg: hsl(var(--text-000));
+  --qt-card-border: var(--stroke-soft);
+  --qt-card-border-opacity: 1;
+  --qt-card-shadow: var(--card-shadow);
+  --qt-card-shadow-hover: 0 4px 12px hsl(var(--always-black) / 0.15);
+
+  /* Input Variables - Distinct background, high radius */
+  --qt-input-radius: 8px;
+  --qt-input-bg: hsl(var(--bg-300));
+  --qt-input-fg: hsl(var(--text-000));
+  --qt-input-border: transparent;
+  --qt-input-placeholder: hsl(var(--text-400));
+  --qt-input-focus-ring: hsl(var(--border-300) / 0.3);
+
+  /* Navbar Variables */
+  --qt-navbar-height: 4rem;
+  --qt-navbar-bg: hsl(var(--bg-100));
+  --qt-navbar-border: var(--stroke-soft);
+  --qt-navbar-blur: none;
+  --qt-navbar-shadow: none;
+  --qt-navbar-link-padding-x: 0.75rem;
+  --qt-navbar-link-padding-y: 0.625rem;
+  --qt-navbar-link-radius: 8px;
+  --qt-navbar-link-fg: hsl(var(--text-200));
+  --qt-navbar-link-hover-bg: hsl(var(--bg-hover));
+  --qt-navbar-link-active-bg: hsl(var(--bg-hover));
+
+  /* Sidebar Variables */
+  --qt-sidebar-width: 260px;
+  --qt-sidebar-bg: hsl(var(--bg-sidebar));
+  --qt-sidebar-border: transparent;
+  --qt-sidebar-item-padding-x: 12px;
+  --qt-sidebar-item-padding-y: 10px;
+  --qt-sidebar-item-radius: 8px;
+  --qt-sidebar-item-hover-bg: hsl(var(--bg-hover));
+  --qt-sidebar-item-active-bg: hsl(var(--bg-hover));
+  --qt-sidebar-item-active-border: transparent;
+
+  /* Left Sidebar Variables */
+  --qt-left-sidebar-bg: hsl(var(--bg-sidebar));
+  --qt-left-sidebar-border: transparent;
+
+  /* Panel/Dialog/Popover Variables */
+  --qt-panel-radius: 10px;
+  --qt-panel-bg: hsl(var(--bg-000));
+  --qt-panel-border: var(--stroke-soft);
+  --qt-panel-shadow: var(--card-shadow);
+
+  --qt-dialog-radius: 10px;
+  --qt-dialog-bg: hsl(var(--bg-000));
+  --qt-dialog-border: var(--stroke-soft);
+  --qt-dialog-shadow: 0 4px 12px hsl(var(--always-black) / 0.15);
+  --qt-dialog-backdrop: hsl(var(--always-black) / 0.5);
+
+  --qt-popover-radius: 10px;
+  --qt-popover-bg: hsl(var(--bg-000));
+  --qt-popover-fg: hsl(var(--text-000));
+  --qt-popover-border: var(--stroke-soft);
+  --qt-popover-shadow: var(--card-shadow);
+
+  /* Chat Variables - High curvature composer */
+  --qt-chat-message-radius: 10px;
+  --qt-chat-message-padding: 1rem;
+  --qt-chat-message-shadow: none;
+
+  --qt-chat-user-bg: transparent;
+  --qt-chat-user-fg: hsl(var(--text-000));
+  --qt-chat-user-border: transparent;
+  --qt-chat-user-font: var(--font-user-message);
+
+  --qt-chat-assistant-bg: transparent;
+  --qt-chat-assistant-fg: hsl(var(--text-000));
+  --qt-chat-assistant-border: transparent;
+  --qt-chat-assistant-font: var(--font-claude-response);
+
+  --qt-chat-composer-bg: hsl(var(--bg-300));
+  --qt-chat-composer-border: transparent;
+  --qt-chat-composer-radius: 26px;
+  --qt-chat-composer-padding-x: 1rem;
+  --qt-chat-composer-padding-y: 0.875rem;
+
+  --qt-chat-toolbar-gap: 0.75rem;
+  --qt-chat-toolbar-button-bg: transparent;
+  --qt-chat-toolbar-button-fg: hsl(var(--text-000));
+  --qt-chat-toolbar-button-hover-bg: hsl(var(--bg-hover));
+  --qt-chat-toolbar-button-border: transparent;
+
+  --qt-chat-attachment-border: var(--stroke-strong);
+  --qt-chat-attachment-hover-border: hsl(var(--accent-brand) / 0.4);
+  --qt-chat-attachment-overlay: rgb(0 0 0 / 0.55);
+
+  --qt-chat-sidebar-width: 260px;
+  --qt-chat-sidebar-bg: hsl(var(--bg-sidebar));
+  --qt-chat-sidebar-border: transparent;
+  --qt-chat-sidebar-header-border: var(--stroke-soft);
+  --qt-chat-sidebar-muted: hsl(var(--text-400));
+  --qt-chat-sidebar-heading: hsl(var(--text-000));
+
+  --qt-participant-card-radius: 8px;
+  --qt-participant-card-bg: transparent;
+  --qt-participant-card-border: transparent;
+  --qt-participant-card-active-border: hsl(var(--accent-brand));
+  --qt-participant-card-active-shadow: none;
+
+  /* Badge Variables - Pill style */
+  --qt-badge-radius: 20px;
+  --qt-badge-padding-x: 0.75rem;
+  --qt-badge-padding-y: 0.25rem;
+  --qt-badge-font-size: 0.8rem;
+  --qt-badge-font-weight: 600;
+
+  --qt-badge-secondary-bg: hsl(var(--bg-300));
+  --qt-badge-secondary-fg: hsl(var(--text-000));
+  --qt-badge-secondary-border: transparent;
+  --qt-badge-outline-bg: transparent;
+  --qt-badge-outline-fg: hsl(var(--text-100));
+  --qt-badge-outline-border: hsl(var(--border-300) / 0.3);
+
+  /* Highlight Variables - Blue accent for search highlights */
+  --qt-highlight-bg: hsl(var(--accent-secondary-100) / 0.2);
+  --qt-highlight-fg: hsl(var(--text-000));
+  --qt-highlight-radius: 0.125rem;
+  --qt-highlight-padding-x: 0.125rem;
+  --qt-highlight-font-weight: 500;
+
+  /* Filter Chip Variables */
+  --qt-filter-chip-active-border: transparent;
+  --qt-filter-chip-inactive-bg: hsl(var(--bg-300));
+  --qt-filter-chip-inactive-fg: hsl(var(--text-200));
+  --qt-filter-chip-inactive-border: transparent;
+  --qt-filter-chip-inactive-hover-bg: hsl(var(--bg-hover));
+
+  /* Avatar Variables */
+  --qt-avatar-radius: 9999px;
+  --qt-avatar-size: 2.5rem;
+  --qt-avatar-size-sm: 2rem;
+  --qt-avatar-size-lg: 3rem;
+  --qt-avatar-size-xl: 4rem;
+  --qt-avatar-bg: hsl(var(--bg-300));
+  --qt-avatar-fg: hsl(var(--text-000));
+  --qt-avatar-border: transparent;
+
+  /* Code Block Variables */
+  --qt-code-radius: 8px;
+  --qt-code-bg: hsl(var(--bg-sidebar));
+  --qt-code-fg: hsl(var(--text-000));
+  --qt-code-border: transparent;
+  --qt-code-font: var(--font-mono);
+
+  /* Link Variables */
+  --qt-link-color: hsl(var(--accent-secondary-100));
+  --qt-link-hover-color: hsl(var(--accent-secondary-000));
+  --qt-link-decoration: none;
+  --qt-link-decoration-hover: underline;
+
+  /* Footer Variables */
+  --qt-footer-bg: hsl(var(--bg-100));
+  --qt-footer-border: var(--stroke-soft);
+  --qt-footer-fg: hsl(var(--text-400));
+  --qt-footer-link-hover: hsl(var(--text-000));
+
+  /* Brand Variables */
+  --qt-brand-fg: hsl(var(--text-000));
+
+  /* Content Area Variables */
+  --qt-content-bg: hsl(var(--bg-100));
+  --qt-content-fg: hsl(var(--text-000));
+  --qt-content-scroll-bg: hsl(var(--bg-100));
+
+  /* Typography Variables */
+  --qt-heading-font: var(--font-sans-serif);
+  --qt-text-secondary-fg: hsl(var(--text-200));
+
+  /* Empty State Variables */
+  --qt-empty-state-icon-color: hsl(var(--text-400));
+  --qt-empty-state-title-color: hsl(var(--text-000));
+  --qt-empty-state-description-color: hsl(var(--text-200));
+
+  /* Mobile Tool Palette Variables */
+  --qt-mobile-composer-input-min-height: 2.5rem;
+  --qt-mobile-tool-palette-max-height: 50vh;
+  --qt-mobile-tool-palette-bg: hsl(var(--bg-000));
+  --qt-mobile-tool-palette-border: var(--stroke-soft);
+
+  /* Auth Page Variables */
+  --qt-auth-page-bg: hsl(var(--bg-100));
+  --qt-auth-card-bg: hsl(var(--bg-000));
+  --qt-auth-card-fg: hsl(var(--text-000));
+  --qt-auth-title-fg: hsl(var(--text-000));
+  --qt-auth-subtitle-fg: hsl(var(--text-200));
+  --qt-auth-label-fg: hsl(var(--text-000));
+  --qt-auth-hint-fg: hsl(var(--text-200));
+  --qt-auth-footer-fg: hsl(var(--text-200));
+  --qt-auth-divider-color: var(--stroke-soft);
+
+  /* Tab Variables */
+  --qt-tab-radius: 8px;
+  --qt-tab-padding-x: 1rem;
+  --qt-tab-padding-y: 0.625rem;
+  --qt-tab-gap: 2px;
+  --qt-tab-group-gap: 0;
+  --qt-tab-bg: transparent;
+  --qt-tab-fg: hsl(var(--text-400));
+  --qt-tab-border: transparent;
+  --qt-tab-hover-bg: hsl(var(--bg-hover));
+  --qt-tab-hover-fg: hsl(var(--text-000));
+  --qt-tab-active-bg: hsl(var(--bg-hover));
+  --qt-tab-active-fg: hsl(var(--text-000));
+  --qt-tab-active-border: transparent;
+  --qt-tab-divider-color: transparent;
+
+  /* Roleplay Annotation Variables */
+  --qt-rp-dialogue-color: hsl(var(--text-000));
+  --qt-rp-dialogue-bg: transparent;
+
+  --qt-rp-narration-color: hsl(var(--text-200));
+  --qt-rp-narration-bg: hsl(var(--bg-300));
+  --qt-rp-narration-style: normal;
+  --qt-rp-narration-padding: 0.125rem 0.375rem;
+  --qt-rp-narration-radius: 4px;
+
+  --qt-rp-inner-monologue-style: italic;
+  --qt-rp-inner-monologue-padding: 0.125rem 0.375rem;
+  --qt-rp-inner-monologue-radius: 4px;
+
+  --qt-rp-ooc-font: var(--font-mono);
+  --qt-rp-ooc-padding: 0.125rem 0.375rem;
+  --qt-rp-ooc-radius: 4px;
+
+  --qt-rp-button-narration-bg: hsl(var(--pictogram-100));
+  --qt-rp-button-narration-fg: hsl(var(--text-000));
+  --qt-rp-button-internal-bg: hsl(var(--accent-pro-100));
+  --qt-rp-button-internal-fg: hsl(var(--oncolor-100));
+
+  /* DevConsole Variables */
+  --qt-devconsole-bg: hsl(var(--bg-100));
+  --qt-devconsole-header-bg: hsl(var(--bg-sidebar));
+  --qt-devconsole-tabs-bg: hsl(var(--bg-sidebar));
+  --qt-devconsole-content-bg: hsl(var(--bg-100));
+  --qt-devconsole-footer-bg: hsl(var(--bg-sidebar));
+  --qt-devconsole-border: var(--stroke-soft);
+
+  /* ================================================================
+     ALERT TOKENS
+     ================================================================ */
+  --qt-alert-success-bg: hsl(142 76% 36% / 0.1);
+  --qt-alert-success-fg: hsl(142 76% 30%);
+  --qt-alert-success-border: hsl(142 76% 36% / 0.3);
+
+  --qt-alert-warning-bg: hsl(38 92% 50% / 0.1);
+  --qt-alert-warning-fg: hsl(38 92% 30%);
+  --qt-alert-warning-border: hsl(38 92% 50% / 0.3);
+
+  --qt-alert-error-bg: hsl(0 84% 60% / 0.1);
+  --qt-alert-error-fg: hsl(0 84% 35%);
+  --qt-alert-error-border: hsl(0 84% 60% / 0.3);
+
+  --qt-alert-info-bg: hsl(199 89% 48% / 0.1);
+  --qt-alert-info-fg: hsl(199 89% 30%);
+  --qt-alert-info-border: hsl(199 89% 48% / 0.3);
+
+  /* ================================================================
+     BUTTON TOKENS (size, weight, transition, success, warning)
+     ================================================================ */
+  --qt-button-padding-x: 1rem;
+  --qt-button-padding-y: 0.5rem;
+  --qt-button-font-size: 0.875rem;
+  --qt-button-font-weight: 500;
+  --qt-button-transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  --qt-button-success-bg: var(--color-success);
+  --qt-button-success-fg: var(--color-success-foreground);
+  --qt-button-success-hover-bg: color-mix(in srgb, var(--color-success) 85%, black);
+
+  --qt-button-warning-bg: var(--color-warning);
+  --qt-button-warning-fg: var(--color-warning-foreground);
+  --qt-button-warning-hover-bg: color-mix(in srgb, var(--color-warning) 85%, black);
+
+  /* ================================================================
+     CARD TOKENS (padding, transition, entity card)
+     ================================================================ */
+  --qt-card-padding: 1.5rem;
+  --qt-card-transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  --qt-entity-card-radius: calc(var(--radius-lg) * 1.25);
+  --qt-entity-card-bg: color-mix(in srgb, var(--color-card) 90%, transparent);
+
+  /* ================================================================
+     INPUT TOKENS (padding, transition)
+     ================================================================ */
+  --qt-input-padding-x: 0.75rem;
+  --qt-input-padding-y: 0.5rem;
+  --qt-input-transition: colors 150ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ================================================================
+     APP HEADER TOKENS
+     ================================================================ */
+  --qt-app-header-height: 4rem;
+  --qt-app-header-bg: var(--color-background);
+  --qt-app-header-border: var(--color-border);
+  --qt-app-header-blur: blur(8px);
+
+  /* ================================================================
+     SIDEBAR TOKENS (foreground, muted)
+     ================================================================ */
+  --qt-sidebar-fg: var(--color-sidebar-foreground);
+  --qt-sidebar-muted: var(--color-sidebar-muted);
+
+  /* ================================================================
+     LEFT SIDEBAR TOKENS (dimensions, sections, items, overlay)
+     ================================================================ */
+  --qt-left-sidebar-width: 16rem;
+  --qt-left-sidebar-min-width: 16rem;
+  --qt-left-sidebar-max-width: 32rem;
+  --qt-left-sidebar-collapsed-width: 4rem;
+  --qt-left-sidebar-resize-handle-width: 4px;
+  --qt-left-sidebar-transition: width 200ms ease, transform 300ms ease;
+
+  --qt-left-sidebar-header-height: 4rem;
+  --qt-left-sidebar-footer-height: auto;
+
+  --qt-left-sidebar-section-padding: 0.75rem;
+  --qt-left-sidebar-section-gap: 0.25rem;
+  --qt-left-sidebar-section-title-fg: var(--color-sidebar-muted);
+
+  --qt-left-sidebar-item-gap: 0.5rem;
+  --qt-left-sidebar-item-icon-size: 1.25rem;
+
+  --qt-left-sidebar-overlay-bg: rgb(0 0 0 / 0.5);
+  --qt-left-sidebar-overlay-z: 40;
+  --qt-left-sidebar-z: 50;
+
+  /* ================================================================
+     CHAT TOKENS (layout dimensions)
+     ================================================================ */
+  --qt-chat-message-row-max-width: 800px;
+  --qt-page-max-width: 75rem;
+  --qt-card-grid-auto-min: 550px;
+  --qt-chat-sidebar-collapsed-width: 4rem;
+
+  /* ================================================================
+     RESPONSE STATUS TOKENS
+     ================================================================ */
+  --qt-response-status-bg: color-mix(in srgb, var(--color-muted) 60%, transparent);
+  --qt-response-status-fg: var(--color-muted-foreground);
+  --qt-response-status-border: var(--color-border);
+
+  --qt-response-status-compressing-fg: var(--qt-status-info-fg);
+  --qt-response-status-gathering-fg: hsl(270 70% 60%);
+  --qt-response-status-building-fg: hsl(38 92% 50%);
+  --qt-response-status-sending-fg: var(--qt-status-info-fg);
+  --qt-response-status-streaming-fg: hsl(142 76% 36%);
+  --qt-response-status-tool-fg: hsl(270 70% 60%);
+
+  /* ================================================================
+     BADGE TOKENS (entity, status, source, capability)
+     ================================================================ */
+  --qt-badge-character-bg: hsl(217 91% 60% / 0.15);
+  --qt-badge-character-fg: hsl(217 91% 45%);
+  --qt-badge-persona-bg: hsl(270 70% 60% / 0.15);
+  --qt-badge-persona-fg: hsl(270 70% 45%);
+  --qt-badge-chat-bg: hsl(142 76% 36% / 0.15);
+  --qt-badge-chat-fg: hsl(142 76% 30%);
+  --qt-badge-tag-bg: hsl(25 95% 53% / 0.15);
+  --qt-badge-tag-fg: hsl(25 95% 40%);
+  --qt-badge-memory-bg: hsl(330 80% 60% / 0.15);
+  --qt-badge-memory-fg: hsl(330 80% 40%);
+  --qt-badge-message-bg: hsl(45 70% 48% / 0.12);
+  --qt-badge-message-fg: hsl(45 70% 35%);
+  --qt-badge-project-bg: hsl(185 80% 40% / 0.15);
+  --qt-badge-project-fg: hsl(185 80% 30%);
+
+  --qt-badge-enabled-bg: hsl(142 76% 36% / 0.15);
+  --qt-badge-enabled-fg: hsl(142 76% 30%);
+  --qt-badge-disabled-bg: var(--color-muted);
+  --qt-badge-disabled-fg: var(--color-muted-foreground);
+  --qt-badge-related-bg: hsl(270 70% 60% / 0.15);
+  --qt-badge-related-fg: hsl(270 70% 45%);
+  --qt-badge-manual-bg: hsl(270 70% 60% / 0.15);
+  --qt-badge-manual-fg: hsl(270 70% 45%);
+  --qt-badge-auto-bg: var(--color-muted);
+  --qt-badge-auto-fg: var(--color-muted-foreground);
+
+  --qt-badge-source-included-bg: hsl(270 70% 60% / 0.15);
+  --qt-badge-source-included-fg: hsl(270 70% 45%);
+  --qt-badge-source-npm-bg: hsl(0 84% 60% / 0.15);
+  --qt-badge-source-npm-fg: hsl(0 84% 40%);
+  --qt-badge-source-git-bg: hsl(25 95% 53% / 0.15);
+  --qt-badge-source-git-fg: hsl(25 95% 40%);
+  --qt-badge-source-manual-bg: var(--color-muted);
+  --qt-badge-source-manual-fg: var(--color-muted-foreground);
+
+  --qt-badge-capability-bg: hsl(217 91% 60% / 0.1);
+  --qt-badge-capability-fg: hsl(217 91% 45%);
+
+  /* ================================================================
+     QUEUE BADGE TOKENS
+     ================================================================ */
+  --qt-queue-badge-radius: var(--radius-sm);
+  --qt-queue-badge-padding-x: 0.375rem;
+  --qt-queue-badge-padding-y: 0.125rem;
+  --qt-queue-badge-font-size: 0.6875rem;
+  --qt-queue-badge-font-weight: 600;
+  --qt-queue-badge-group-gap: 1px;
+  --qt-queue-badge-group-radius: var(--radius-md);
+
+  --qt-queue-badge-memory-bg: hsl(217 91% 50%);
+  --qt-queue-badge-memory-fg: hsl(0 0% 100%);
+  --qt-queue-badge-summary-bg: hsl(142 76% 36%);
+  --qt-queue-badge-summary-fg: hsl(0 0% 100%);
+  --qt-queue-badge-danger-bg: hsl(0 84% 50%);
+  --qt-queue-badge-danger-fg: hsl(0 0% 100%);
+  --qt-queue-badge-story-bg: hsl(220 15% 35%);
+  --qt-queue-badge-story-fg: hsl(0 0% 100%);
+  --qt-queue-badge-idle-opacity: 0.4;
+
+  /* ================================================================
+     FILTER CHIP TOKENS (size, weight, transition)
+     ================================================================ */
+  --qt-filter-chip-radius: 9999px;
+  --qt-filter-chip-padding-x: 0.5rem;
+  --qt-filter-chip-padding-y: 0.25rem;
+  --qt-filter-chip-font-size: 0.75rem;
+  --qt-filter-chip-font-weight: 500;
+  --qt-filter-chip-transition: all 150ms ease;
+
+  /* ================================================================
+     TAB TOKENS (font, weight, transition)
+     ================================================================ */
+  --qt-tab-font-size: 0.875rem;
+  --qt-tab-font-weight: 500;
+  --qt-tab-transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ================================================================
+     OVERLAY VARIABLES
+     ================================================================ */
+  --qt-overlay-bg: hsl(0 0% 5% / 0.9);
+  --qt-overlay-medium-bg: hsl(0 0% 5% / 0.6);
+  --qt-overlay-light-bg: hsl(0 0% 5% / 0.2);
+  --qt-overlay-caption-bg: hsl(0 0% 5% / 0.55);
+  --qt-overlay-btn-bg: hsl(0 0% 100% / 0.08);
+  --qt-overlay-btn-hover-bg: hsl(0 0% 100% / 0.18);
+  --qt-overlay-fg: hsl(0 0% 100%);
+  --qt-overlay-muted-fg: hsl(0 0% 100% / 0.7);
+
+  /* ================================================================
+     SPINNER VARIABLES
+     ================================================================ */
+  --qt-spinner-track: hsl(var(--accent-brand) / 0.2);
+  --qt-spinner-indicator: hsl(var(--accent-brand));
+
+  /* ================================================================
+     FAVORITE VARIABLES
+     ================================================================ */
+  --qt-favorite-color: hsl(45 96% 58%);
+
+  /* ================================================================
+     WARNING BOX VARIABLES
+     ================================================================ */
+  --qt-warning-box-bg: hsl(var(--warning-900) / 0.15);
+  --qt-warning-box-border: hsl(var(--warning-100) / 0.3);
+  --qt-warning-box-fg: hsl(var(--warning-100));
+}
+
+/* ============================================================================
+   DARK MODE SPECIFIC OVERRIDES
+   ============================================================================ */
+[data-theme="earl-grey"].dark {
+  /* Primary Button - White pill with black text (dark mode) */
+  --qt-button-primary-bg: hsl(var(--always-white));
+  --qt-button-primary-fg: hsl(var(--always-black));
+  --qt-button-primary-hover-bg: hsl(var(--always-white) / 0.9);
+
+  --qt-button-secondary-bg: hsl(var(--bg-000));
+  --qt-button-secondary-fg: hsl(var(--text-000));
+  --qt-button-secondary-border: hsl(var(--border-300) / 0.2);
+  --qt-button-secondary-hover-bg: hsl(var(--bg-000) / 0.8);
+
+  /* Badge Primary - White on dark */
+  --qt-badge-primary-bg: hsl(var(--always-white));
+  --qt-badge-primary-fg: hsl(var(--always-black));
+
+  /* Filter Chip - White active */
+  --qt-filter-chip-active-bg: hsl(var(--always-white));
+  --qt-filter-chip-active-fg: hsl(var(--always-black));
+
+  /* Inner monologue - Purple tint */
+  --qt-rp-inner-monologue-color: hsl(var(--accent-pro-000));
+  --qt-rp-inner-monologue-bg: hsl(var(--accent-pro-900) / 0.85);
+
+  /* OOC styling - Green terminal */
+  --qt-rp-ooc-color: hsl(120 100% 60%);
+  --qt-rp-ooc-bg: hsl(0 0% 5%);
+  --qt-rp-button-ooc-bg: hsl(120 100% 20%);
+  --qt-rp-button-ooc-fg: hsl(120 100% 75%);
+
+  /* DevConsole colors - Dark mode */
+  --qt-log-error-bg: hsl(0 45% 12%);
+  --qt-log-error-fg: hsl(var(--danger-000));
+  --qt-log-error-border: hsl(var(--danger-100));
+  --qt-log-error-details-bg: hsl(0 40% 10%);
+  --qt-log-error-stack-fg: hsl(var(--danger-000) / 0.85);
+
+  --qt-log-warn-bg: hsl(45 45% 12%);
+  --qt-log-warn-fg: hsl(var(--warning-000));
+  --qt-log-warn-border: hsl(var(--warning-100));
+
+  --qt-log-info-bg: hsl(211 45% 12%);
+  --qt-log-info-fg: hsl(var(--accent-secondary-000));
+  --qt-log-info-border: hsl(var(--accent-secondary-100));
+
+  --qt-log-debug-bg: hsl(var(--bg-000));
+  --qt-log-debug-fg: hsl(var(--text-400));
+  --qt-log-debug-border: hsl(var(--border-300) / 0.2);
+
+  --qt-log-default-bg: hsl(var(--bg-000));
+  --qt-log-default-fg: hsl(var(--text-200));
+  --qt-log-default-border: hsl(var(--border-300) / 0.1);
+
+  --qt-debug-outgoing-bg: hsl(211 40% 14%);
+  --qt-debug-outgoing-border: hsl(var(--accent-secondary-100));
+  --qt-debug-outgoing-fg: hsl(var(--accent-secondary-000));
+  --qt-debug-incoming-bg: hsl(142 40% 12%);
+  --qt-debug-incoming-border: hsl(var(--success-100));
+  --qt-debug-incoming-fg: hsl(var(--success-000));
+
+  --qt-debug-cyan-bg: hsl(190 40% 12%);
+  --qt-debug-cyan-fg: hsl(190 85% 70%);
+  --qt-debug-cyan-hover: hsl(190 40% 16%);
+  --qt-debug-cyan-border: hsl(190 45% 28%);
+  --qt-debug-cyan-content-bg: hsl(190 40% 9%);
+  --qt-debug-cyan-meta: hsl(190 85% 65%);
+
+  --qt-debug-violet-bg: hsl(var(--accent-pro-900) / 0.8);
+  --qt-debug-violet-fg: hsl(var(--accent-pro-000));
+  --qt-debug-violet-hover: hsl(251 40% 18%);
+  --qt-debug-violet-border: hsl(251 45% 32%);
+  --qt-debug-violet-content-bg: hsl(251 40% 10%);
+  --qt-debug-violet-meta: hsl(var(--accent-pro-000) / 0.9);
+
+  --qt-debug-emerald-bg: hsl(152 40% 12%);
+  --qt-debug-emerald-fg: hsl(152 75% 65%);
+  --qt-debug-emerald-hover: hsl(152 40% 16%);
+  --qt-debug-emerald-border: hsl(152 45% 28%);
+  --qt-debug-emerald-content-bg: hsl(152 40% 9%);
+  --qt-debug-emerald-meta: hsl(152 75% 60%);
+
+  --qt-debug-amber-bg: hsl(var(--warning-900) / 0.6);
+  --qt-debug-amber-fg: hsl(var(--warning-000));
+  --qt-debug-amber-hover: hsl(45 45% 16%);
+  --qt-debug-amber-border: hsl(45 50% 28%);
+  --qt-debug-amber-content-bg: hsl(45 40% 9%);
+  --qt-debug-amber-meta: hsl(var(--warning-000) / 0.9);
+
+  --qt-debug-purple-bg: hsl(280 40% 14%);
+  --qt-debug-purple-fg: hsl(280 80% 75%);
+  --qt-debug-purple-hover: hsl(280 40% 18%);
+  --qt-debug-purple-border: hsl(280 45% 32%);
+  --qt-debug-purple-content-bg: hsl(280 40% 10%);
+  --qt-debug-purple-meta: hsl(280 80% 70%);
+
+  --qt-debug-indigo-bg: hsl(239 40% 16%);
+  --qt-debug-indigo-fg: hsl(239 75% 78%);
+  --qt-debug-indigo-hover: hsl(239 40% 22%);
+  --qt-debug-indigo-border: hsl(239 50% 45%);
+  --qt-debug-indigo-content-bg: hsl(239 40% 11%);
+  --qt-debug-indigo-meta: hsl(239 75% 68%);
+
+  /* Dark mode alert tokens - brighter for dark backgrounds */
+  --qt-alert-success-bg: hsl(142 76% 36% / 0.2);
+  --qt-alert-success-fg: hsl(142 76% 65%);
+  --qt-alert-success-border: hsl(142 76% 36% / 0.5);
+
+  --qt-alert-warning-bg: hsl(38 92% 50% / 0.2);
+  --qt-alert-warning-fg: hsl(38 92% 70%);
+  --qt-alert-warning-border: hsl(38 92% 50% / 0.5);
+
+  --qt-alert-error-bg: hsl(0 84% 60% / 0.2);
+  --qt-alert-error-fg: hsl(0 84% 70%);
+  --qt-alert-error-border: hsl(0 84% 60% / 0.5);
+
+  --qt-alert-info-bg: hsl(199 89% 48% / 0.2);
+  --qt-alert-info-fg: hsl(199 89% 70%);
+  --qt-alert-info-border: hsl(199 89% 48% / 0.5);
+
+  /* Dark mode entity badge tokens - brighter for dark backgrounds */
+  --qt-badge-character-bg: hsl(217 91% 60% / 0.3);
+  --qt-badge-character-fg: hsl(217 91% 70%);
+  --qt-badge-persona-bg: hsl(270 70% 60% / 0.3);
+  --qt-badge-persona-fg: hsl(270 70% 70%);
+  --qt-badge-chat-bg: hsl(142 76% 36% / 0.3);
+  --qt-badge-chat-fg: hsl(142 76% 65%);
+  --qt-badge-tag-bg: hsl(25 95% 53% / 0.3);
+  --qt-badge-tag-fg: hsl(25 95% 65%);
+  --qt-badge-memory-bg: hsl(330 80% 60% / 0.3);
+  --qt-badge-memory-fg: hsl(330 80% 70%);
+  --qt-badge-message-bg: hsl(45 70% 50% / 0.25);
+  --qt-badge-message-fg: hsl(45 70% 68%);
+
+  /* Dark mode status badge tokens */
+  --qt-badge-enabled-bg: hsl(142 76% 36% / 0.3);
+  --qt-badge-enabled-fg: hsl(142 76% 65%);
+  --qt-badge-related-bg: hsl(270 70% 60% / 0.3);
+  --qt-badge-related-fg: hsl(270 70% 70%);
+  --qt-badge-manual-bg: hsl(270 70% 60% / 0.3);
+  --qt-badge-manual-fg: hsl(270 70% 70%);
+
+  /* Dark mode plugin source badge tokens */
+  --qt-badge-source-included-bg: hsl(270 70% 60% / 0.3);
+  --qt-badge-source-included-fg: hsl(270 70% 70%);
+  --qt-badge-source-npm-bg: hsl(0 84% 60% / 0.3);
+  --qt-badge-source-npm-fg: hsl(0 84% 70%);
+  --qt-badge-source-git-bg: hsl(25 95% 53% / 0.3);
+  --qt-badge-source-git-fg: hsl(25 95% 65%);
+
+  /* Dark mode capability badge tokens */
+  --qt-badge-capability-bg: hsl(217 91% 60% / 0.2);
+  --qt-badge-capability-fg: hsl(217 91% 70%);
+
+  /* Dark mode queue status badge tokens */
+  --qt-queue-badge-memory-bg: hsl(217 91% 55%);
+  --qt-queue-badge-summary-bg: hsl(142 76% 40%);
+  --qt-queue-badge-danger-bg: hsl(0 84% 55%);
+  --qt-queue-badge-story-bg: hsl(220 15% 45%);
+
+  /* Dark mode response status tokens */
+  --qt-response-status-bg: color-mix(in srgb, var(--color-muted) 40%, transparent);
+  --qt-response-status-fg: var(--color-muted-foreground);
+  --qt-response-status-compressing-fg: hsl(199 89% 70%);
+  --qt-response-status-gathering-fg: hsl(270 70% 70%);
+  --qt-response-status-building-fg: hsl(38 92% 65%);
+  --qt-response-status-sending-fg: hsl(199 89% 70%);
+  --qt-response-status-streaming-fg: hsl(142 76% 65%);
+  --qt-response-status-tool-fg: hsl(270 70% 70%);
+
+  /* Toggle knob - white on dark */
+  --qt-toggle-knob-bg: hsl(var(--always-white));
+}
+
+/* ============================================================================
+   LIGHT MODE SPECIFIC OVERRIDES
+   ============================================================================ */
+[data-theme="earl-grey"].light {
+  /* Primary Button - Black pill with white text (light mode - inverted) */
+  --qt-button-primary-bg: hsl(var(--always-black));
+  --qt-button-primary-fg: hsl(var(--always-white));
+  --qt-button-primary-hover-bg: hsl(0 0% 15%);
+
+  --qt-button-secondary-bg: hsl(var(--bg-300));
+  --qt-button-secondary-fg: hsl(var(--text-000));
+  --qt-button-secondary-border: transparent;
+  --qt-button-secondary-hover-bg: hsl(var(--bg-hover));
+
+  /* Badge Primary - Black on light */
+  --qt-badge-primary-bg: hsl(var(--always-black));
+  --qt-badge-primary-fg: hsl(var(--always-white));
+
+  /* Filter Chip - Black active */
+  --qt-filter-chip-active-bg: hsl(var(--always-black));
+  --qt-filter-chip-active-fg: hsl(var(--always-white));
+
+  /* Inner monologue - Lighter purple for light mode */
+  --qt-rp-inner-monologue-color: hsl(var(--accent-pro-100));
+  --qt-rp-inner-monologue-bg: hsl(var(--accent-pro-900));
+
+  /* OOC styling - Green on light */
+  --qt-rp-ooc-color: hsl(120 60% 30%);
+  --qt-rp-ooc-bg: hsl(120 30% 95%);
+  --qt-rp-button-ooc-bg: hsl(120 40% 90%);
+  --qt-rp-button-ooc-fg: hsl(120 60% 25%);
+
+  /* Sidebar border - Subtle in light mode */
+  --qt-sidebar-border: hsl(var(--border-100));
+
+  /* Toggle knob - dark on light */
+  --qt-toggle-knob-bg: hsl(var(--bg-000));
+
+  /* DevConsole colors - Light mode */
+  --qt-log-error-bg: hsl(0 50% 97%);
+  --qt-log-error-fg: hsl(var(--danger-100));
+  --qt-log-error-border: hsl(var(--danger-100) / 0.3);
+  --qt-log-error-details-bg: hsl(0 45% 95%);
+  --qt-log-error-stack-fg: hsl(var(--danger-100) / 0.85);
+
+  --qt-log-warn-bg: hsl(45 60% 97%);
+  --qt-log-warn-fg: hsl(var(--warning-100));
+  --qt-log-warn-border: hsl(var(--warning-100) / 0.3);
+
+  --qt-log-info-bg: hsl(211 60% 97%);
+  --qt-log-info-fg: hsl(var(--accent-secondary-100));
+  --qt-log-info-border: hsl(var(--accent-secondary-100) / 0.3);
+
+  --qt-log-debug-bg: hsl(var(--bg-300));
+  --qt-log-debug-fg: hsl(var(--text-400));
+  --qt-log-debug-border: hsl(var(--border-100));
+
+  --qt-log-default-bg: hsl(var(--bg-300) / 0.5);
+  --qt-log-default-fg: hsl(var(--text-200));
+  --qt-log-default-border: hsl(var(--border-100));
+
+  --qt-debug-outgoing-bg: hsl(211 60% 97%);
+  --qt-debug-outgoing-border: hsl(var(--accent-secondary-100) / 0.4);
+  --qt-debug-outgoing-fg: hsl(var(--accent-secondary-100));
+  --qt-debug-incoming-bg: hsl(142 50% 97%);
+  --qt-debug-incoming-border: hsl(var(--success-100) / 0.4);
+  --qt-debug-incoming-fg: hsl(var(--success-100));
+
+  --qt-debug-cyan-bg: hsl(190 50% 97%);
+  --qt-debug-cyan-fg: hsl(190 65% 35%);
+  --qt-debug-cyan-hover: hsl(190 50% 94%);
+  --qt-debug-cyan-border: hsl(190 45% 75%);
+  --qt-debug-cyan-content-bg: hsl(190 50% 98%);
+  --qt-debug-cyan-meta: hsl(190 65% 40%);
+
+  --qt-debug-violet-bg: hsl(var(--accent-pro-900));
+  --qt-debug-violet-fg: hsl(var(--accent-pro-100));
+  --qt-debug-violet-hover: hsl(251 35% 92%);
+  --qt-debug-violet-border: hsl(251 45% 78%);
+  --qt-debug-violet-content-bg: hsl(251 35% 98%);
+  --qt-debug-violet-meta: hsl(var(--accent-pro-100));
+
+  --qt-debug-emerald-bg: hsl(152 50% 97%);
+  --qt-debug-emerald-fg: hsl(152 60% 35%);
+  --qt-debug-emerald-hover: hsl(152 50% 94%);
+  --qt-debug-emerald-border: hsl(152 45% 75%);
+  --qt-debug-emerald-content-bg: hsl(152 50% 98%);
+  --qt-debug-emerald-meta: hsl(152 60% 40%);
+
+  --qt-debug-amber-bg: hsl(var(--warning-900));
+  --qt-debug-amber-fg: hsl(var(--warning-100));
+  --qt-debug-amber-hover: hsl(45 60% 94%);
+  --qt-debug-amber-border: hsl(45 55% 75%);
+  --qt-debug-amber-content-bg: hsl(45 60% 98%);
+  --qt-debug-amber-meta: hsl(var(--warning-100));
+
+  --qt-debug-purple-bg: hsl(280 50% 97%);
+  --qt-debug-purple-fg: hsl(280 60% 45%);
+  --qt-debug-purple-hover: hsl(280 50% 94%);
+  --qt-debug-purple-border: hsl(280 45% 78%);
+  --qt-debug-purple-content-bg: hsl(280 50% 98%);
+  --qt-debug-purple-meta: hsl(280 60% 50%);
+
+  --qt-debug-indigo-bg: hsl(239 50% 97%);
+  --qt-debug-indigo-fg: hsl(239 60% 50%);
+  --qt-debug-indigo-hover: hsl(239 50% 94%);
+  --qt-debug-indigo-border: hsl(239 50% 78%);
+  --qt-debug-indigo-content-bg: hsl(239 50% 98%);
+  --qt-debug-indigo-meta: hsl(239 60% 55%);
+}
+
+/* ============================================================================
+   COMPONENT CLASS OVERRIDES (BOTH MODES)
+   ============================================================================ */
+
+/* Body/App Shell */
+[data-theme="earl-grey"] body,
+[data-theme="earl-grey"] .app-shell {
+  background: hsl(var(--bg-100));
+  color: hsl(var(--text-000));
+}
+
+/* Primary Button */
+[data-theme="earl-grey"] .qt-button-primary {
+  font-weight: 600;
+  border: none;
+}
+
+/* Icon buttons - Circular with subtle opacity */
+[data-theme="earl-grey"] .qt-chat-toolbar-button {
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.6;
+  transition: opacity 0.2s, background-color 0.2s;
+}
+
+[data-theme="earl-grey"] .qt-chat-toolbar-button:hover {
+  opacity: 1;
+}
+
+/* Card hover - Subtle */
+[data-theme="earl-grey"] .qt-card:hover,
+[data-theme="earl-grey"] .qt-card-interactive:hover {
+  background: hsl(var(--bg-hover));
+}
+
+/* Sidebar items - Clean hover */
+[data-theme="earl-grey"] .qt-sidebar-item:hover {
+  background: hsl(var(--bg-hover));
+}
+
+[data-theme="earl-grey"] .qt-sidebar-item-active {
+  background: hsl(var(--bg-hover));
+}
+
+/* Chat composer - Focus state with subtle ring */
+[data-theme="earl-grey"] .qt-chat-composer:focus-within {
+  box-shadow: 0 0 0 1px hsl(var(--always-black) / 0.1);
+}
+
+/* Navbar links */
+[data-theme="earl-grey"] .qt-navbar-link,
+[data-theme="earl-grey"] .qt-navbar-link-active {
+  color: hsl(var(--text-200));
+}
+
+[data-theme="earl-grey"] .qt-navbar-link:hover {
+  color: hsl(var(--text-000));
+  background: hsl(var(--bg-hover));
+}
+
+/* Entity type badges - Subtle colored backgrounds */
+[data-theme="earl-grey"] .qt-badge-character {
+  background: hsl(211 50% 92%);
+  color: hsl(211 80% 45%);
+}
+
+[data-theme="earl-grey"] .qt-badge-persona {
+  background: hsl(280 45% 92%);
+  color: hsl(280 60% 50%);
+}
+
+[data-theme="earl-grey"] .qt-badge-chat {
+  background: hsl(142 45% 92%);
+  color: hsl(142 60% 35%);
+}
+
+[data-theme="earl-grey"] .qt-badge-tag {
+  background: hsl(30 50% 92%);
+  color: hsl(30 70% 40%);
+}
+
+[data-theme="earl-grey"] .qt-badge-memory {
+  background: hsl(330 45% 92%);
+  color: hsl(330 55% 45%);
+}
+
+[data-theme="earl-grey"] .qt-badge-project {
+  background: hsl(185 45% 92%);
+  color: hsl(185 60% 35%);
+}
+
+/* Dashboard count badges */
+[data-theme="earl-grey"] .qt-badge-characters {
+  background: hsl(211 50% 92%);
+  color: hsl(211 80% 45%);
+}
+
+[data-theme="earl-grey"] .qt-badge-chats {
+  background: hsl(142 45% 92%);
+  color: hsl(142 60% 35%);
+}
+
+[data-theme="earl-grey"] .qt-badge-personas {
+  background: hsl(280 45% 92%);
+  color: hsl(280 60% 50%);
+}
+
+/* Dark mode badge overrides */
+[data-theme="earl-grey"].dark .qt-badge-character {
+  background: hsl(211 40% 15%);
+  color: hsl(211 80% 70%);
+}
+
+[data-theme="earl-grey"].dark .qt-badge-persona {
+  background: hsl(280 40% 15%);
+  color: hsl(280 75% 70%);
+}
+
+[data-theme="earl-grey"].dark .qt-badge-chat {
+  background: hsl(142 40% 12%);
+  color: hsl(142 70% 60%);
+}
+
+[data-theme="earl-grey"].dark .qt-badge-tag {
+  background: hsl(30 45% 15%);
+  color: hsl(30 80% 65%);
+}
+
+[data-theme="earl-grey"].dark .qt-badge-memory {
+  background: hsl(330 40% 15%);
+  color: hsl(330 70% 70%);
+}
+
+[data-theme="earl-grey"].dark .qt-badge-project {
+  background: hsl(185 40% 12%);
+  color: hsl(185 70% 65%);
+}
+
+[data-theme="earl-grey"].dark .qt-badge-characters {
+  background: hsl(211 40% 15%);
+  color: hsl(211 80% 70%);
+}
+
+[data-theme="earl-grey"].dark .qt-badge-chats {
+  background: hsl(142 40% 12%);
+  color: hsl(142 70% 60%);
+}
+
+[data-theme="earl-grey"].dark .qt-badge-personas {
+  background: hsl(280 40% 15%);
+  color: hsl(280 75% 70%);
+}
+
+/* Status badges */
+[data-theme="earl-grey"] .qt-badge-enabled {
+  background: hsl(var(--success-900));
+  color: hsl(var(--success-100));
+}
+
+[data-theme="earl-grey"] .qt-badge-disabled {
+  background: hsl(var(--bg-300));
+  color: hsl(var(--text-400));
+}
+
+/* Alert overrides */
+[data-theme="earl-grey"] .qt-alert-error {
+  background: hsl(var(--danger-900) / 0.3);
+  border-color: hsl(var(--danger-100) / 0.3);
+  color: hsl(var(--danger-100));
+}
+
+[data-theme="earl-grey"] .qt-alert-warning {
+  background: hsl(var(--warning-900) / 0.3);
+  border-color: hsl(var(--warning-100) / 0.3);
+  color: hsl(var(--warning-100));
+}
+
+[data-theme="earl-grey"] .qt-alert-success {
+  background: hsl(var(--success-900) / 0.3);
+  border-color: hsl(var(--success-100) / 0.3);
+  color: hsl(var(--success-100));
+}
+
+[data-theme="earl-grey"] .qt-alert-info {
+  background: hsl(var(--accent-main-900) / 0.25);
+  border-color: hsl(var(--accent-main-100) / 0.3);
+  color: hsl(var(--accent-secondary-100));
+}
+
+/* Input focus states */
+[data-theme="earl-grey"] .qt-input:focus,
+[data-theme="earl-grey"] .qt-textarea:focus,
+[data-theme="earl-grey"] .qt-select:focus {
+  box-shadow: 0 0 0 1px hsl(var(--always-black) / 0.1);
+}
+
+/* Wikilinks - Blue accent matching theme */
+[data-theme="earl-grey"] .qt-wikilink {
+  color: hsl(var(--accent-secondary-100));
+  background: hsl(var(--accent-secondary-100) / 0.1);
+}
+
+[data-theme="earl-grey"] .qt-wikilink:hover {
+  background: hsl(var(--accent-secondary-100) / 0.2);
+}
+
+[data-theme="earl-grey"] .qt-wikilink-broken {
+  color: hsl(var(--text-400));
+  background: hsl(var(--bg-300));
+}
+
+/* File preview panel - Sidebar color for contrast */
+[data-theme="earl-grey"] .qt-file-preview-panel {
+  background: hsl(var(--bg-sidebar) / 0.5);
+}
+
+/* Section headers - Uppercase tertiary text */
+[data-theme="earl-grey"] .qt-sidebar-section-title {
+  color: hsl(var(--text-400));
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ============================================================================
+   SCROLLBARS - Minimal
+   ============================================================================ */
+[data-theme="earl-grey"] ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+[data-theme="earl-grey"] ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+[data-theme="earl-grey"] ::-webkit-scrollbar-thumb {
+  background: hsl(var(--border-300) / 0.25);
+  border-radius: 999px;
+}
+
+[data-theme="earl-grey"] ::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--border-300) / 0.4);
+}
+
+/* ============================================================================
+   SELECTION & FOCUS
+   ============================================================================ */
+[data-theme="earl-grey"] ::selection {
+  background: hsl(var(--accent-secondary-100) / 0.2);
+  color: hsl(var(--text-000));
+}
+
+[data-theme="earl-grey"] :focus-visible {
+  outline: 2px solid hsl(var(--border-300) / 0.3);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+/* ============================================================================
+   ANIMATIONS - Smooth, minimal
+   ============================================================================ */
+[data-theme="earl-grey"] * {
+  transition-duration: 0.15s;
+  transition-timing-function: ease;
+}
+
+@keyframes earl-grey-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+[data-theme="earl-grey"] .message-enter {
+  animation: earl-grey-fade-in 0.2s ease-out forwards;
+}
+
+/* ============================================================================
+   REDUCED MOTION
+   ============================================================================ */
+@media (prefers-reduced-motion: reduce) {
+  [data-theme="earl-grey"] * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

@@ -748,6 +748,128 @@ export async function loadInstalledBundles(): Promise<LoadedBundleTheme[]> {
 }
 
 /**
+ * Load theme bundles from a specific directory (e.g., app-bundled themes).
+ * Same logic as loadInstalledBundles but reads from a given directory path
+ * rather than the user data themes directory.
+ */
+export async function loadBundledThemesFromDir(dir: string): Promise<LoadedBundleTheme[]> {
+  const loaded: LoadedBundleTheme[] = [];
+
+  bundleLogger.debug('Loading bundled themes from directory', { dir });
+
+  // Check directory exists
+  try {
+    await fs.access(dir);
+  } catch {
+    bundleLogger.debug('Bundled themes directory does not exist', { dir });
+    return loaded;
+  }
+
+  let entries: string[];
+  try {
+    const dirEntries = await fs.readdir(dir, { withFileTypes: true });
+    entries = dirEntries
+      .filter(e => e.isDirectory() && !e.name.startsWith('.'))
+      .map(e => e.name);
+  } catch (err) {
+    bundleLogger.warn('Failed to read bundled themes directory', { error: getErrorMessage(err) });
+    return loaded;
+  }
+
+  for (const themeDir of entries) {
+    const themePath = path.join(dir, themeDir);
+    const themeJsonPath = path.join(themePath, 'theme.json');
+
+    try {
+      await fs.access(themeJsonPath);
+
+      const manifestData = await fs.readFile(themeJsonPath, 'utf-8');
+      const manifestJson = JSON.parse(manifestData);
+      const manifestResult = safeValidateQtapThemeManifest(manifestJson);
+
+      if (!manifestResult.success) {
+        bundleLogger.warn('Invalid theme.json in bundled theme', {
+          themeDir,
+          errors: manifestResult.errors.issues.map(e => e.message),
+        });
+        continue;
+      }
+
+      const manifest = manifestResult.data;
+
+      // Load tokens
+      let tokens: ThemeTokens;
+      if (manifest.tokens) {
+        tokens = manifest.tokens;
+      } else if (manifest.tokensPath) {
+        const tokensPath = path.join(themePath, manifest.tokensPath);
+        const tokensData = await fs.readFile(tokensPath, 'utf-8');
+        const tokensJson = JSON.parse(tokensData);
+        const tokensResult = safeValidateThemeTokens(tokensJson);
+        if (!tokensResult.success) {
+          bundleLogger.warn('Invalid tokens in bundled theme', {
+            themeId: manifest.id,
+            errors: tokensResult.errors.issues.map(e => e.message),
+          });
+          continue;
+        }
+        tokens = tokensResult.data;
+      } else {
+        bundleLogger.warn('No tokens found in bundled theme', { themeId: manifest.id });
+        continue;
+      }
+
+      // Load CSS overrides
+      let cssOverrides: string | undefined;
+      if (manifest.stylesPath) {
+        try {
+          cssOverrides = await fs.readFile(
+            path.join(themePath, manifest.stylesPath),
+            'utf-8'
+          );
+        } catch {
+          bundleLogger.warn('CSS overrides file not found in bundled theme', {
+            themeId: manifest.id,
+            stylesPath: manifest.stylesPath,
+          });
+        }
+      }
+
+      const indexEntry: ThemeBundleIndexEntry = {
+        id: manifest.id,
+        version: manifest.version,
+        installedAt: new Date().toISOString(),
+        source: 'file' as const,
+        sourceUrl: null,
+        registrySource: null,
+        signatureVerified: false,
+      };
+
+      loaded.push({
+        manifest,
+        tokens,
+        cssOverrides,
+        installPath: themePath,
+        indexEntry,
+      });
+
+      bundleLogger.debug('Loaded bundled theme', {
+        themeId: manifest.id,
+        version: manifest.version,
+      });
+    } catch (err) {
+      bundleLogger.warn('Failed to load bundled theme', {
+        themeDir,
+        error: getErrorMessage(err),
+      });
+    }
+  }
+
+  bundleLogger.info('Bundled themes loaded', { count: loaded.length });
+  return loaded;
+}
+
+/**
  * Export an installed theme as a .qtap-theme bundle
  */
 export async function exportThemeAsBundle(

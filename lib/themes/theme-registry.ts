@@ -18,8 +18,9 @@ import { safeValidateThemeTokens } from './types';
 import { DEFAULT_THEME_TOKENS, DEFAULT_THEME_METADATA } from './default-tokens';
 import { mergeThemeTokens, themeTokensToCSS } from './utils';
 import { getErrorMessage } from '@/lib/errors';
-import { loadInstalledBundles } from './bundle-loader';
+import { loadInstalledBundles, loadBundledThemesFromDir } from './bundle-loader';
 import type { LoadedBundleTheme } from './bundle-loader';
+import { getBundledThemesDir } from '@/lib/paths';
 import type { ThemePlugin, EmbeddedFont } from '@quilltap/plugin-types';
 
 // ============================================================================
@@ -114,6 +115,9 @@ export interface LoadedTheme {
 
   /** Absolute path to bundle directory (for bundle themes) */
   bundlePath?: string;
+
+  /** Whether this theme source format is deprecated */
+  deprecated?: boolean;
 }
 
 /**
@@ -232,12 +236,19 @@ class ThemeRegistry {
       this.registerDefaultTheme();
     }
 
-    // Get enabled theme plugins
+    // Get enabled theme plugins (deprecated — bundles are the preferred format)
     const themePlugins = getEnabledPluginsByCapability('THEME');
+    if (themePlugins.length > 0) {
+      logger.warn('npm-based theme plugins are deprecated; use .qtap-theme bundles instead', {
+        pluginCount: themePlugins.length,
+        plugins: themePlugins.map(p => p.manifest.name),
+      });
+    }
     // Load each theme plugin
     for (const plugin of themePlugins) {
       try {
         await this.loadThemeFromPlugin(plugin);
+        logger.info(`Theme "${plugin.manifest.name}" loaded as npm plugin (deprecated — use .qtap-theme bundles instead)`);
       } catch (error) {
         const errorMessage = getErrorMessage(error);
         logger.error('Failed to load theme from plugin', {
@@ -393,6 +404,7 @@ class ThemeRegistry {
       pluginName: plugin.manifest.name,
       isDefault: false,
       source: 'plugin',
+      deprecated: true,
       fonts: fonts.length > 0 ? fonts : undefined,
       subsystems,
     };
@@ -565,6 +577,7 @@ class ThemeRegistry {
       pluginName: plugin.manifest.name,
       isDefault: false,
       source: 'plugin',
+      deprecated: true,
       fonts: fonts.length > 0 ? fonts : undefined,
       subsystems,
     };
@@ -578,10 +591,32 @@ class ThemeRegistry {
   // ============================================================================
 
   /**
-   * Load theme bundles from the themes directory
-   * Called during initialize() after loading plugin themes
+   * Load theme bundles from the bundled themes directory (shipped with the app)
+   * and then from user-installed bundles in the data directory.
+   * Called during initialize() after loading plugin themes.
    */
   private async loadThemeBundles(): Promise<void> {
+    // First, load bundled themes shipped with the app
+    try {
+      const bundledDir = getBundledThemesDir();
+      const bundledThemes = await loadBundledThemesFromDir(bundledDir);
+      for (const bundle of bundledThemes) {
+        try {
+          this.registerBundleTheme(bundle);
+        } catch (error) {
+          logger.error('Failed to register bundled theme', {
+            themeId: bundle.manifest.id,
+            error: getErrorMessage(error),
+          });
+        }
+      }
+    } catch (error) {
+      logger.debug('No bundled themes directory found or error loading', {
+        error: getErrorMessage(error),
+      });
+    }
+
+    // Then, load user-installed bundles (these can override bundled themes)
     try {
       const bundles = await loadInstalledBundles();
 
@@ -857,6 +892,7 @@ class ThemeRegistry {
         pluginName: theme.pluginName,
         isDefault: theme.isDefault,
         source: theme.source,
+        deprecated: theme.deprecated || false,
       })),
       errors: this.state.errors,
       stats: this.getStats(),
@@ -877,6 +913,7 @@ class ThemeRegistry {
     tags: string[];
     isDefault: boolean;
     source: ThemeSource;
+    deprecated?: boolean;
     previewColors?: {
       light: { background: string; primary: string; secondary: string; accent: string };
       dark: { background: string; primary: string; secondary: string; accent: string };
@@ -928,6 +965,7 @@ class ThemeRegistry {
         tags: theme.tags,
         isDefault: theme.isDefault,
         source: theme.source,
+        deprecated: theme.deprecated || false,
         // Include just the preview colors needed for theme cards
         previewColors: {
           light: {

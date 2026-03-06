@@ -19,6 +19,8 @@ export interface ThemeSummary {
   isDefault?: boolean;
   /** How this theme was loaded: 'plugin', 'bundle', or 'default' */
   source?: 'plugin' | 'bundle' | 'default';
+  /** Whether this theme's format is deprecated (plugin themes) */
+  deprecated?: boolean;
   previewColors?: {
     light: { background: string; primary: string; secondary: string; accent: string };
     dark: { background: string; primary: string; secondary: string; accent: string };

@@ -57,6 +57,7 @@ function parseArgs(argv) {
         opts.help = true;
         break;
       default:
+        // Allow subcommands to pass through (they're handled before parseArgs)
         console.error(`Unknown argument: ${args[i]}`);
         console.error('Run "quilltap --help" for usage information.');
         process.exit(1);
@@ -72,6 +73,10 @@ function printHelp() {
 Quilltap - Self-hosted AI workspace
 
 Usage: quilltap [options]
+
+Subcommands:
+  db                            Query encrypted databases
+  themes                        Manage theme bundles
 
 Options:
   -p, --port <number>     Port to listen on (default: 3000)
@@ -613,6 +618,9 @@ async function dbCommand(args) {
 // Route to subcommand or main
 if (process.argv[2] === 'db') {
   dbCommand(process.argv.slice(3));
+} else if (process.argv[2] === 'themes') {
+  const { themesCommand } = require('../lib/theme-commands');
+  themesCommand(process.argv.slice(3));
 } else {
   main();
 }

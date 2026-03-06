@@ -94,10 +94,10 @@ function getMutedTextColor(bgColor: string): string {
 /**
  * Get source badge label
  */
-function getSourceBadge(source?: string): string | null {
+function getSourceBadge(source?: string, deprecated?: boolean): { label: string; deprecated: boolean } | null {
   switch (source) {
-    case 'bundle': return 'Bundle';
-    case 'plugin': return 'Plugin';
+    case 'bundle': return { label: 'Bundle', deprecated: false };
+    case 'plugin': return { label: 'Plugin', deprecated: deprecated ?? true };
     default: return null;
   }
 }
@@ -198,10 +198,11 @@ export function ThemeCard({
           <div className="flex items-center gap-2">
             {/* Source badge */}
             {(() => {
-              const badge = isDefault ? 'Built-in' : getSourceBadge(theme?.source)
+              const badge = isDefault ? { label: 'Built-in', deprecated: false } : getSourceBadge(theme?.source, theme?.deprecated)
               return badge ? (
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-muted text-muted-foreground">
-                  {badge}
+                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${badge.deprecated ? 'bg-warning/15 text-warning' : 'bg-muted text-muted-foreground'}`}>
+                  {badge.label}
+                  {badge.deprecated && ' (deprecated)'}
                 </span>
               ) : null
             })()}
@@ -356,16 +357,17 @@ export function ThemeCard({
         <div className="flex items-center gap-1">
           {/* Source badge */}
           {(() => {
-            const badge = isDefault ? 'Built-in' : getSourceBadge(theme?.source)
+            const badge = isDefault ? { label: 'Built-in', deprecated: false } : getSourceBadge(theme?.source, theme?.deprecated)
             return badge ? (
               <span
                 className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
                 style={{
-                  backgroundColor: `${cardTextColor}15`,
-                  color: cardTextColor,
+                  backgroundColor: badge.deprecated ? 'rgba(234, 179, 8, 0.15)' : `${cardTextColor}15`,
+                  color: badge.deprecated ? '#eab308' : cardTextColor,
                 }}
               >
-                {badge}
+                {badge.label}
+                {badge.deprecated && ' (deprecated)'}
               </span>
             ) : null
           })()}

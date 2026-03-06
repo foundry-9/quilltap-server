@@ -343,6 +343,15 @@ export function getThemeBundleCacheDir(): string {
 }
 
 /**
+ * Get the bundled themes directory path (shipped with the app)
+ *
+ * @returns Bundled themes directory path (themes/bundled/ in app source)
+ */
+export function getBundledThemesDir(): string {
+  return path.join(process.cwd(), 'themes', 'bundled');
+}
+
+/**
  * Get the plugins directory path
  *
  * @returns Plugins directory path (<base>/plugins)

@@ -1,0 +1,46 @@
+# {{DISPLAY_NAME}}
+
+A custom theme for Quilltap.
+
+## Format
+
+This is a `.qtap-theme` bundle — a simple directory (or zip archive) containing design tokens, CSS overrides, and optional font files. No build tools, npm packages, or JavaScript code required.
+
+## Structure
+
+```
+{{THEME_ID}}/
+├── theme.json      # Theme manifest with metadata
+├── tokens.json     # Design tokens (colors, typography, spacing, effects)
+├── styles.css      # CSS overrides (optional)
+├── fonts/          # Custom font files (optional)
+└── README.md       # This file
+```
+
+## Editing
+
+- **Colors**: Edit `tokens.json` → `colors.light` and `colors.dark` sections
+- **Typography**: Edit `tokens.json` → `typography` section
+- **Spacing/Radius**: Edit `tokens.json` → `spacing` section
+- **Component styles**: Edit `styles.css` for custom CSS overrides
+- **Custom fonts**: Add `.woff2` files to `fonts/` and reference them in `theme.json`
+
+## Installing
+
+### From directory
+Zip this directory and upload the `.qtap-theme` file in Quilltap Settings > Appearance > Install Theme.
+
+### From CLI
+```bash
+# Pack as .qtap-theme
+cd {{THEME_ID}} && zip -r ../{{THEME_ID}}.qtap-theme .
+
+# Install
+quilltap themes install {{THEME_ID}}.qtap-theme
+```
+
+## Validating
+
+```bash
+quilltap themes validate {{THEME_ID}}.qtap-theme
+```

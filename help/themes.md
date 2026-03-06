@@ -269,14 +269,11 @@ When viewing theme options:
 
 ## Custom Themes
 
-### Installing Theme Plugins
+### Installing Theme Plugins (Deprecated)
 
-Custom themes can be distributed as npm packages:
+> **Note:** npm-based theme plugins are deprecated. We recommend using `.qtap-theme` bundles instead — they require no build tools or npm packages.
 
-1. Follow your plugin manager's instructions
-2. Install the theme plugin
-3. Restart Quilltap (if required)
-4. The new theme appears in your theme list
+Custom themes were historically distributed as npm packages. Existing plugin themes still work, but new themes should use the bundle format. Plugin themes are marked with a "(deprecated)" badge in the theme selector.
 
 ### Installing Theme Bundles
 
@@ -289,12 +286,50 @@ The simplest way to install a custom theme:
 
 ### Creating Your Own Theme
 
-You can create custom themes as either npm plugins or `.qtap-theme` bundles:
+The recommended way to create a theme is the `.qtap-theme` bundle format:
 
-- **Bundles (recommended)** — Create a `theme.json` with your design tokens, add CSS and fonts, and zip it as a `.qtap-theme` file. No build tools required.
-- **Plugins** — Use the theme development guide for full programmatic control over theming.
+```bash
+npx create-quilltap-theme my-theme
+```
 
-See the [Theme Plugin Development Guide](docs/THEME_PLUGIN_DEVELOPMENT.md) for details.
+This scaffolds a directory with `theme.json`, `tokens.json`, `styles.css`, and a `fonts/` folder — no build tools, no npm packages, no TypeScript. Just edit JSON and CSS, then zip and install.
+
+For the legacy npm plugin format (deprecated), use:
+
+```bash
+npx create-quilltap-theme my-theme --plugin
+```
+
+See the [Theme Plugin Development Guide](docs/THEME_PLUGIN_DEVELOPMENT.md) for details on the plugin format.
+
+### Managing Themes via CLI
+
+The `quilltap themes` CLI provides commands for managing theme bundles from the terminal:
+
+```bash
+# List all installed themes (default, plugins, bundles)
+npx quilltap themes list
+
+# Validate a .qtap-theme file before installing
+npx quilltap themes validate my-theme.qtap-theme
+
+# Install a .qtap-theme bundle
+npx quilltap themes install my-theme.qtap-theme
+
+# Install from a URL
+npx quilltap themes install https://example.com/my-theme.qtap-theme
+
+# Uninstall a bundle theme
+npx quilltap themes uninstall my-theme
+
+# Export any theme as a .qtap-theme file
+npx quilltap themes export earl-grey --output ./my-export.qtap-theme
+
+# Scaffold a new theme (delegates to create-quilltap-theme)
+npx quilltap themes create sunset
+```
+
+The `validate` command checks bundle structure, file types, size limits, and manifest schema without installing. Use it to verify your bundle before distributing it.
 
 ## Tips for Theme Selection
 
