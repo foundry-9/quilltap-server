@@ -18,6 +18,7 @@
 import { useAppearanceSettings } from './hooks/useAppearanceSettings'
 import { DisplayOptions } from './DisplayOptions'
 import { ThemeSelector } from './ThemeSelector'
+import { ThemeBrowser } from './components/ThemeBrowser'
 import { DebugThemeInfo } from './components/DebugThemeInfo'
 
 /**
@@ -96,6 +97,9 @@ export default function AppearanceTab() {
         onThemeSelect={handleThemeSelect}
         onRefreshThemes={refreshThemes}
       />
+
+      {/* Theme Browser - browse and install from registries */}
+      <ThemeBrowser onRefreshThemes={refreshThemes} />
 
       {/* Debug Info (development only) */}
       {process.env.NODE_ENV === 'development' && (

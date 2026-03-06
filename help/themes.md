@@ -331,6 +331,60 @@ npx quilltap themes create sunset
 
 The `validate` command checks bundle structure, file types, size limits, and manifest schema without installing. Use it to verify your bundle before distributing it.
 
+### Theme Registries
+
+Theme registries are remote indexes of themes that you can browse, search, and install from. Think of them as curated theme catalogs.
+
+#### Browsing Themes in the UI
+
+1. Open **Settings** > **Appearance**
+2. Scroll down to the **Browse Themes** section
+3. Search for themes by name, tag, or description
+4. Click **Install** on any theme to download and install it
+5. Verified themes show a checkmark badge (signature verified against the registry's public key)
+
+#### Managing Registries via CLI
+
+```bash
+# List configured registries
+npx quilltap themes registry list
+
+# Add a registry source
+npx quilltap themes registry add https://example.com/registry.json --name "My Registry"
+
+# Add a registry with signature verification
+npx quilltap themes registry add https://example.com/registry.json --key ed25519:BASE64KEY
+
+# Remove a registry
+npx quilltap themes registry remove "My Registry"
+
+# Refresh all registry indexes
+npx quilltap themes registry refresh
+
+# Search for themes across registries
+npx quilltap themes search "dark modern"
+
+# Check for theme updates
+npx quilltap themes update
+
+# Update a specific theme
+npx quilltap themes update my-theme
+```
+
+#### For Registry Operators
+
+If you host your own theme registry, the CLI provides tools for signing:
+
+```bash
+# Generate an Ed25519 keypair
+npx quilltap themes registry keygen --output ./keys
+
+# Sign a registry directory
+npx quilltap themes registry sign ./my-registry --key ed25519:PRIVATE_KEY
+```
+
+Registry indexes are JSON files listing available themes with download URLs, SHA-256 hashes, and optional Ed25519 signatures for integrity verification.
+
 ## Tips for Theme Selection
 
 1. **Try different themes** — Spend time with each to find your favorite

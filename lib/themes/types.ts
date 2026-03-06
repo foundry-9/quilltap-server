@@ -398,6 +398,103 @@ export const ThemeBundleIndexSchema = z.object({
 export type ThemeBundleIndex = z.infer<typeof ThemeBundleIndexSchema>;
 
 // ============================================================================
+// REGISTRY TYPES
+// ============================================================================
+
+/**
+ * Registry source configuration (stored in sources.json)
+ */
+export const RegistrySourceSchema = z.object({
+  name: z.string().min(1).max(100).describe('Display name for the registry'),
+  url: z.string().url().describe('URL of the registry index JSON'),
+  enabled: z.boolean().default(true).describe('Whether this source is active'),
+  publicKey: z.string().optional().describe('Ed25519 public key for signature verification'),
+  trusted: z.boolean().default(false).describe('Whether this source is trusted (official)'),
+  addedAt: z.string().describe('ISO timestamp when source was added'),
+  lastFetched: z.string().nullable().default(null).describe('ISO timestamp of last fetch'),
+});
+
+export type RegistrySource = z.infer<typeof RegistrySourceSchema>;
+
+/**
+ * Registry sources file schema (sources.json)
+ */
+export const RegistrySourcesSchema = z.object({
+  version: z.literal(1),
+  sources: z.array(RegistrySourceSchema),
+});
+
+export type RegistrySources = z.infer<typeof RegistrySourcesSchema>;
+
+/**
+ * Preview colors for registry theme entries
+ */
+export const RegistryPreviewColorsSchema = z.object({
+  light: z.object({
+    background: z.string(),
+    primary: z.string(),
+  }),
+  dark: z.object({
+    background: z.string(),
+    primary: z.string(),
+  }).optional(),
+});
+
+export type RegistryPreviewColors = z.infer<typeof RegistryPreviewColorsSchema>;
+
+/**
+ * A theme entry in a registry index
+ */
+export const RegistryThemeSchema = z.object({
+  id: z.string().regex(/^[a-z][a-z0-9-]*$/),
+  name: z.string().min(1).max(100),
+  version: z.string(),
+  author: z.union([z.string(), z.object({ name: z.string() })]),
+  description: z.string().max(500).optional(),
+  tags: z.array(z.string()).optional(),
+  supportsDarkMode: z.boolean().default(true),
+  compatibility: ThemeCompatibilitySchema.optional(),
+  downloadUrl: z.string().url(),
+  sha256: z.string().describe('SHA-256 hash of the download file'),
+  size: z.number().optional().describe('File size in bytes'),
+  previewUrl: z.string().url().optional(),
+  previewColors: RegistryPreviewColorsSchema.optional(),
+  signature: z.string().optional().describe('Ed25519 signature of the bundle'),
+  publishedAt: z.string(),
+  updatedAt: z.string().optional(),
+});
+
+export type RegistryTheme = z.infer<typeof RegistryThemeSchema>;
+
+/**
+ * Registry index format (fetched from registry URL)
+ */
+export const RegistryIndexSchema = z.object({
+  registry: z.object({
+    name: z.string(),
+    url: z.string().url(),
+    version: z.literal(1),
+  }),
+  themes: z.array(RegistryThemeSchema),
+  signature: z.string().optional().describe('Ed25519 signature of the themes array'),
+});
+
+export type RegistryIndex = z.infer<typeof RegistryIndexSchema>;
+
+/**
+ * Theme update information
+ */
+export interface ThemeUpdate {
+  themeId: string;
+  currentVersion: string;
+  availableVersion: string;
+  registryName: string;
+  registryUrl: string;
+  downloadUrl: string;
+  sha256: string;
+}
+
+// ============================================================================
 // USER THEME PREFERENCE
 // ============================================================================
 
