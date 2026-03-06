@@ -1,12 +1,13 @@
 /**
  * Theme Font File API Route
  *
- * Serves font files from theme plugins.
+ * Serves font files from theme plugins and theme bundles.
  * Path format: /api/themes/fonts/{pluginName}/{fontPath}
  *
- * Example: /api/themes/fonts/qtap-plugin-theme-rains/fonts/FiraCode-Regular.woff2
+ * For plugin themes: /api/themes/fonts/qtap-plugin-theme-rains/fonts/FiraCode-Regular.woff2
+ * For bundle themes: /api/themes/fonts/bundle:{themeId}/fonts/MyFont.woff2
  *
- * Security: Only serves files from registered theme plugins with valid font definitions.
+ * Security: Only serves files from registered theme plugins/bundles with valid font definitions.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -51,9 +52,23 @@ export async function GET(
       );
     }
 
-    // First segment is plugin name, rest is the font path within the plugin
-    const [pluginName, ...fontPathSegments] = pathSegments;
-    const relativeFontPath = fontPathSegments.join('/');// Ensure plugin/theme system is initialized
+    // First segment is plugin name (or "bundle:" prefix for bundle themes), rest is the font path
+    let pluginName: string;
+    let fontPathSegments: string[];
+
+    // Handle "bundle:" prefix - URL encoding may split it across segments
+    if (pathSegments[0] === 'bundle' && pathSegments.length >= 3) {
+      pluginName = `bundle:${pathSegments[1]}`;
+      fontPathSegments = pathSegments.slice(2);
+    } else if (pathSegments[0].startsWith('bundle:') || pathSegments[0].startsWith('bundle%3A')) {
+      pluginName = decodeURIComponent(pathSegments[0]);
+      fontPathSegments = pathSegments.slice(1);
+    } else {
+      [pluginName, ...fontPathSegments] = pathSegments;
+    }
+    const relativeFontPath = fontPathSegments.join('/');
+
+    // Ensure plugin/theme system is initialized
     if (!isPluginSystemInitialized()) {
       logger.info('Plugin system not initialized, initializing now', {
         context: 'themes-fonts-GET',

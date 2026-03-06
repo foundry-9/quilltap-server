@@ -1,9 +1,9 @@
 /**
  * Theme Registry
  *
- * Singleton registry for managing loaded theme plugins.
- * Handles loading theme tokens from plugin files, theme inheritance,
- * and provides access to available themes.
+ * Singleton registry for managing loaded theme plugins and theme bundles.
+ * Handles loading theme tokens from plugin files and .qtap-theme bundles,
+ * theme inheritance, and provides access to available themes.
  *
  * @module themes/theme-registry
  */
@@ -18,6 +18,8 @@ import { safeValidateThemeTokens } from './types';
 import { DEFAULT_THEME_TOKENS, DEFAULT_THEME_METADATA } from './default-tokens';
 import { mergeThemeTokens, themeTokensToCSS } from './utils';
 import { getErrorMessage } from '@/lib/errors';
+import { loadInstalledBundles } from './bundle-loader';
+import type { LoadedBundleTheme } from './bundle-loader';
 import type { ThemePlugin, EmbeddedFont } from '@quilltap/plugin-types';
 
 // ============================================================================
@@ -47,6 +49,11 @@ export interface LoadedThemeFont {
   /** Embedded font data (base64 or data URL) */
   embeddedData?: string;
 }
+
+/**
+ * Theme source type
+ */
+export type ThemeSource = 'plugin' | 'bundle' | 'default';
 
 /**
  * A loaded theme with all its data
@@ -85,7 +92,7 @@ export interface LoadedTheme {
   /** Theme tags for categorization */
   tags: string[];
 
-  /** Source plugin name */
+  /** Source plugin name or bundle prefix */
   pluginName: string;
 
   /** Whether this is the built-in default theme */
@@ -101,6 +108,12 @@ export interface LoadedTheme {
     thumbnail?: string;
     backgroundImage?: string;
   }>;
+
+  /** How this theme was loaded */
+  source: ThemeSource;
+
+  /** Absolute path to bundle directory (for bundle themes) */
+  bundlePath?: string;
 }
 
 /**
@@ -239,6 +252,9 @@ class ThemeRegistry {
       }
     }
 
+    // Load theme bundles (.qtap-theme)
+    await this.loadThemeBundles();
+
     this.state.initialized = true;
     this.state.lastInitTime = new Date();
   }
@@ -258,6 +274,7 @@ class ThemeRegistry {
       tags: [...DEFAULT_THEME_METADATA.tags],
       pluginName: 'built-in',
       isDefault: true,
+      source: 'default',
     };
 
     this.state.themes.set('default', defaultTheme);
@@ -375,6 +392,7 @@ class ThemeRegistry {
       tags: themePlugin.metadata.tags || [],
       pluginName: plugin.manifest.name,
       isDefault: false,
+      source: 'plugin',
       fonts: fonts.length > 0 ? fonts : undefined,
       subsystems,
     };
@@ -546,12 +564,141 @@ class ThemeRegistry {
       tags: themeConfig.tags || plugin.manifest.keywords || [],
       pluginName: plugin.manifest.name,
       isDefault: false,
+      source: 'plugin',
       fonts: fonts.length > 0 ? fonts : undefined,
       subsystems,
     };
 
     // Register the theme
     this.state.themes.set(themeId, loadedTheme);
+  }
+
+  // ============================================================================
+  // BUNDLE THEME LOADING
+  // ============================================================================
+
+  /**
+   * Load theme bundles from the themes directory
+   * Called during initialize() after loading plugin themes
+   */
+  private async loadThemeBundles(): Promise<void> {
+    try {
+      const bundles = await loadInstalledBundles();
+
+      for (const bundle of bundles) {
+        try {
+          this.registerBundleTheme(bundle);
+        } catch (error) {
+          const errorMessage = getErrorMessage(error);
+          logger.error('Failed to register bundle theme', {
+            themeId: bundle.manifest.id,
+            error: errorMessage,
+          });
+          this.state.errors.push({
+            themeId: bundle.manifest.id,
+            pluginName: `bundle:${bundle.manifest.id}`,
+            error: errorMessage,
+          });
+        }
+      }
+    } catch (error) {
+      logger.warn('Failed to load theme bundles', {
+        error: getErrorMessage(error),
+      });
+    }
+  }
+
+  /**
+   * Register a loaded bundle theme into the registry
+   */
+  registerBundleTheme(bundle: LoadedBundleTheme): void {
+    const { manifest, tokens, cssOverrides, installPath } = bundle;
+    const themeId = manifest.id;
+
+    // Handle theme inheritance
+    let finalTokens = tokens;
+    if (manifest.extendsTheme) {
+      const baseTheme = this.state.themes.get(manifest.extendsTheme);
+      if (baseTheme) {
+        finalTokens = mergeThemeTokens(baseTheme.tokens, tokens);
+      } else {
+        finalTokens = mergeThemeTokens(DEFAULT_THEME_TOKENS, tokens);
+        logger.warn('Base theme not found for bundle inheritance', {
+          themeId,
+          baseTheme: manifest.extendsTheme,
+        });
+      }
+    }
+
+    // Build font entries
+    const fonts: LoadedThemeFont[] = [];
+    if (manifest.fonts && manifest.fonts.length > 0) {
+      for (const fontDef of manifest.fonts) {
+        const fontPath = path.join(installPath, fontDef.src);
+        fonts.push({
+          family: fontDef.family,
+          filePath: fontPath,
+          weight: fontDef.weight || '400',
+          style: fontDef.style || 'normal',
+          display: fontDef.display || 'swap',
+          pluginName: `bundle:${themeId}`,
+          src: fontDef.src,
+        });
+      }
+    }
+
+    // Resolve subsystem overrides
+    const subsystems = resolveSubsystemOverrides(
+      manifest.subsystems as Record<string, { name?: string; description?: string; thumbnail?: string; backgroundImage?: string }> | undefined,
+      `bundle:${themeId}`
+    );
+
+    const loadedTheme: LoadedTheme = {
+      id: themeId,
+      name: manifest.name,
+      description: manifest.description,
+      version: manifest.version,
+      author: manifest.author,
+      supportsDarkMode: manifest.supportsDarkMode,
+      tokens: finalTokens,
+      cssOverrides,
+      previewImage: manifest.previewImage,
+      previewImagePath: manifest.previewImage
+        ? path.join(installPath, manifest.previewImage)
+        : undefined,
+      tags: manifest.tags || [],
+      pluginName: `bundle:${themeId}`,
+      isDefault: false,
+      source: 'bundle',
+      bundlePath: installPath,
+      fonts: fonts.length > 0 ? fonts : undefined,
+      subsystems,
+    };
+
+    this.state.themes.set(themeId, loadedTheme);
+
+    logger.info('Theme registered successfully (bundle)', {
+      themeId,
+      name: loadedTheme.name,
+      version: loadedTheme.version,
+      supportsDarkMode: loadedTheme.supportsDarkMode,
+      fontCount: fonts.length,
+    });
+  }
+
+  /**
+   * Unregister a theme from the registry (for hot-unloading after uninstall)
+   */
+  unregisterTheme(themeId: string): boolean {
+    const theme = this.state.themes.get(themeId);
+    if (!theme) return false;
+    if (theme.isDefault) {
+      logger.warn('Cannot unregister default theme');
+      return false;
+    }
+    this.state.themes.delete(themeId);
+    logger.info('Theme unregistered', { themeId });
+    return true;
   }
 
   // ============================================================================
@@ -709,6 +856,7 @@ class ThemeRegistry {
         tags: theme.tags,
         pluginName: theme.pluginName,
         isDefault: theme.isDefault,
+        source: theme.source,
       })),
       errors: this.state.errors,
       stats: this.getStats(),
@@ -728,6 +876,7 @@ class ThemeRegistry {
     previewImage?: string;
     tags: string[];
     isDefault: boolean;
+    source: ThemeSource;
     previewColors?: {
       light: { background: string; primary: string; secondary: string; accent: string };
       dark: { background: string; primary: string; secondary: string; accent: string };
@@ -778,6 +927,7 @@ class ThemeRegistry {
         previewImage: theme.previewImage,
         tags: theme.tags,
         isDefault: theme.isDefault,
+        source: theme.source,
         // Include just the preview colors needed for theme cards
         previewColors: {
           light: {

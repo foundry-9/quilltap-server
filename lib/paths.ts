@@ -17,6 +17,8 @@
  * ├── logs/        - Application logs
  * ├── plugins/
  * │   └── npm/     - npm-installed plugins
+ * ├── themes/       - Theme bundles (.qtap-theme)
+ * │   └── .cache/   - Registry cache
  * └── workspace/   - Shell interactivity workspace (VM/Docker only)
  *     ├── chats/   - Per-chat working directories
  *     └── projects/ - Per-project working directories
@@ -323,6 +325,24 @@ export function getBackupsDir(): string {
 }
 
 /**
+ * Get the themes directory path (for .qtap-theme bundles)
+ *
+ * @returns Themes directory path (<base>/themes)
+ */
+export function getThemesDir(): string {
+  return path.join(getBaseDataDir(), 'themes');
+}
+
+/**
+ * Get the theme bundle cache directory path
+ *
+ * @returns Theme bundle cache path (<base>/themes/.cache)
+ */
+export function getThemeBundleCacheDir(): string {
+  return path.join(getThemesDir(), '.cache');
+}
+
+/**
  * Get the plugins directory path
  *
  * @returns Plugins directory path (<base>/plugins)
@@ -425,6 +445,7 @@ export function ensureDataDirectoriesExist(): void {
     getFilesDir(),
     getLogsDir(),
     getNpmPluginsDir(),
+    getThemesDir(),
     getWorkspaceDir(),
   ];
 

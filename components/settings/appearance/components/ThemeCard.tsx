@@ -91,6 +91,17 @@ function getMutedTextColor(bgColor: string): string {
 /**
  * Individual theme card with preview and selection state
  */
+/**
+ * Get source badge label
+ */
+function getSourceBadge(source?: string): string | null {
+  switch (source) {
+    case 'bundle': return 'Bundle';
+    case 'plugin': return 'Plugin';
+    default: return null;
+  }
+}
+
 export function ThemeCard({
   theme,
   isActive,
@@ -98,6 +109,8 @@ export function ThemeCard({
   disabled,
   isExpanded = false,
   onToggleExpand,
+  onUninstall,
+  onExport,
 }: ThemeCardProps) {
   const isDefault = theme === null
   const themeId = isDefault ? 'default' : theme.id
@@ -183,6 +196,41 @@ export function ThemeCard({
             )}
           </div>
           <div className="flex items-center gap-2">
+            {/* Source badge */}
+            {(() => {
+              const badge = isDefault ? 'Built-in' : getSourceBadge(theme?.source)
+              return badge ? (
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-muted text-muted-foreground">
+                  {badge}
+                </span>
+              ) : null
+            })()}
+            {/* Export button */}
+            {onExport && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onExport(); }}
+                className="qt-button-ghost qt-button-sm text-xs"
+                title="Export as .qtap-theme"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+              </button>
+            )}
+            {/* Uninstall button (bundle themes only) */}
+            {onUninstall && !isActive && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onUninstall(); }}
+                className="qt-button-ghost qt-button-sm text-xs text-destructive hover:text-destructive"
+                title="Uninstall theme"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            )}
             {!isActive && (
               <button
                 type="button"
@@ -302,10 +350,25 @@ export function ThemeCard({
         </div>
       )}
 
-      {/* Bottom row with mode badges and preview button */}
+      {/* Bottom row with source badge, mode badges and preview button */}
       <div className="flex items-center justify-between w-full mt-3">
-        {/* Mode Support Badges */}
+        {/* Source + Mode Badges */}
         <div className="flex items-center gap-1">
+          {/* Source badge */}
+          {(() => {
+            const badge = isDefault ? 'Built-in' : getSourceBadge(theme?.source)
+            return badge ? (
+              <span
+                className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
+                style={{
+                  backgroundColor: `${cardTextColor}15`,
+                  color: cardTextColor,
+                }}
+              >
+                {badge}
+              </span>
+            ) : null
+          })()}
           {/* Light mode badge - all themes support light */}
           <span
             className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"

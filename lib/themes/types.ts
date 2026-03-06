@@ -299,6 +299,105 @@ export const ThemeManifestSchema = z.object({
 export type ThemeManifest = z.infer<typeof ThemeManifestSchema>;
 
 // ============================================================================
+// QTAP THEME BUNDLE MANIFEST
+// ============================================================================
+
+/**
+ * Compatibility specification for theme bundles
+ */
+export const ThemeCompatibilitySchema = z.object({
+  quilltapVersion: z.string().optional().describe('Semver range for Quilltap compatibility (e.g., ">=3.3.0")'),
+});
+
+export type ThemeCompatibility = z.infer<typeof ThemeCompatibilitySchema>;
+
+/**
+ * .qtap-theme bundle manifest schema (theme.json)
+ *
+ * This is the manifest format for standalone .qtap-theme bundles,
+ * which are logic-free zip archives containing CSS, JSON tokens, and fonts.
+ */
+export const QtapThemeManifestSchema = z.object({
+  $schema: z.string().optional().describe('JSON Schema URL for validation'),
+  format: z.literal('qtap-theme').describe('Must be "qtap-theme"'),
+  formatVersion: z.literal(1).describe('Format version (currently 1)'),
+
+  // Theme identity
+  id: z.string().regex(/^[a-z][a-z0-9-]*$/).describe('Theme identifier (lowercase, hyphens)'),
+  name: z.string().min(1).max(100).describe('Display name'),
+  description: z.string().max(500).optional().describe('Theme description'),
+  version: z.string().describe('Semantic version'),
+  author: z.union([
+    z.string(),
+    z.object({
+      name: z.string(),
+      email: z.email().optional(),
+      url: z.url().optional(),
+    }),
+  ]).describe('Theme author'),
+  license: z.string().optional().describe('SPDX license identifier'),
+
+  // Compatibility
+  compatibility: ThemeCompatibilitySchema.optional().describe('Version compatibility requirements'),
+
+  // Theme features
+  supportsDarkMode: z.boolean().default(true).describe('Whether theme provides dark mode'),
+  tags: z.array(z.string()).optional().describe('Theme tags for categorization'),
+  extendsTheme: z.string().optional().describe('ID of theme to extend/inherit from'),
+
+  // Preview
+  previewImage: z.string().optional().describe('Relative path to preview image'),
+
+  // Tokens - inline or path reference
+  tokens: ThemeTokensSchema.optional().describe('Inline theme design tokens'),
+  tokensPath: z.string().optional().describe('Relative path to tokens JSON file'),
+
+  // Styles
+  stylesPath: z.string().optional().describe('Relative path to CSS overrides file'),
+
+  // Fonts
+  fonts: z.array(FontDefinitionSchema).optional().describe('Custom font definitions'),
+
+  // Subsystem overrides
+  subsystems: z.record(z.string(), z.object({
+    name: z.string().optional(),
+    description: z.string().optional(),
+    thumbnail: z.string().optional(),
+    backgroundImage: z.string().optional(),
+  })).optional().describe('Subsystem display overrides'),
+}).refine(
+  (data) => data.tokens || data.tokensPath,
+  { message: 'Either "tokens" or "tokensPath" must be provided' }
+);
+
+export type QtapThemeManifest = z.infer<typeof QtapThemeManifestSchema>;
+
+/**
+ * Theme bundle index entry
+ */
+export const ThemeBundleIndexEntrySchema = z.object({
+  id: z.string(),
+  version: z.string(),
+  installedAt: z.string(),
+  source: z.enum(['file', 'url', 'registry']),
+  sourceUrl: z.string().nullable(),
+  registrySource: z.string().nullable(),
+  signatureVerified: z.boolean(),
+});
+
+export type ThemeBundleIndexEntry = z.infer<typeof ThemeBundleIndexEntrySchema>;
+
+/**
+ * Theme bundle index file schema (themes-index.json)
+ */
+export const ThemeBundleIndexSchema = z.object({
+  version: z.literal(1),
+  themes: z.array(ThemeBundleIndexEntrySchema),
+});
+
+export type ThemeBundleIndex = z.infer<typeof ThemeBundleIndexSchema>;
+
+// ============================================================================
 // USER THEME PREFERENCE
 // ============================================================================
 
@@ -388,6 +487,38 @@ export function safeValidateThemeManifest(data: unknown):
     return { success: true, data: result.data };
   }
   logger.warn('Theme manifest validation failed', {
+    errorCount: result.error.issues.length,
+    errors: result.error.issues.map(e => ({
+      path: e.path.join('.'),
+      message: e.message,
+    })),
+  });
+  return { success: false, errors: result.error };
+}
+
+/**
+ * Validates a .qtap-theme bundle manifest
+ * @param data - The manifest data to validate
+ * @returns Validated manifest
+ * @throws ZodError if validation fails
+ */
+export function validateQtapThemeManifest(data: unknown): QtapThemeManifest {
+  return QtapThemeManifestSchema.parse(data);
+}
+
+/**
+ * Safely validates a .qtap-theme bundle manifest
+ * @param data - The manifest data to validate
+ * @returns Success or error result
+ */
+export function safeValidateQtapThemeManifest(data: unknown):
+  | { success: true; data: QtapThemeManifest }
+  | { success: false; errors: z.ZodError } {
+  const result = QtapThemeManifestSchema.safeParse(data);
+  if (result.success) {
+    return { success: true, data: result.data };
+  }
+  logger.warn('Qtap theme manifest validation failed', {
     errorCount: result.error.issues.length,
     errors: result.error.issues.map(e => ({
       path: e.path.join('.'),

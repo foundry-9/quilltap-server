@@ -67,6 +67,7 @@ export default function AppearanceTab() {
     handleThemeSelect,
     handleColorModeChange,
     handleNavThemeSelectorChange,
+    refreshThemes,
   } = useAppearanceSettings()
 
   // Loading state
@@ -93,6 +94,7 @@ export default function AppearanceTab() {
         availableThemes={availableThemes}
         isLoading={isLoading}
         onThemeSelect={handleThemeSelect}
+        onRefreshThemes={refreshThemes}
       />
 
       {/* Debug Info (development only) */}

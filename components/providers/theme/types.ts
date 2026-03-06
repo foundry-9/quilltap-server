@@ -17,6 +17,8 @@ export interface ThemeSummary {
   supportsDarkMode: boolean;
   tags?: string[];
   isDefault?: boolean;
+  /** How this theme was loaded: 'plugin', 'bundle', or 'default' */
+  source?: 'plugin' | 'bundle' | 'default';
   previewColors?: {
     light: { background: string; primary: string; secondary: string; accent: string };
     dark: { background: string; primary: string; secondary: string; accent: string };

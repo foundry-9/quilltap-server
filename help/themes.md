@@ -6,7 +6,7 @@ url: /settings?tab=appearance
 
 > **[Open this page in Quilltap](/settings?tab=appearance)**
 
-Themes control the overall look and feel of Quilltap, including colors, fonts, and visual styling. You can switch between the built-in default theme and custom themes installed as plugins, and customize your preferred color mode (light, dark, or system).
+Themes control the overall look and feel of Quilltap, including colors, fonts, and visual styling. You can switch between the built-in default theme and custom themes installed as plugins or `.qtap-theme` bundles, and customize your preferred color mode (light, dark, or system).
 
 ## What Are Themes?
 
@@ -17,7 +17,7 @@ A theme is a complete visual design for Quilltap that includes:
 - **Component styles** — Visual appearance of buttons, cards, inputs, and other UI elements
 - **Dark mode support** — Some themes provide separate styling for light and dark modes
 
-Quilltap comes with a built-in default theme and can be extended with custom themes installed as plugins.
+Quilltap comes with a built-in default theme and can be extended with custom themes installed as plugins or uploaded as `.qtap-theme` bundles.
 
 ## Available Themes
 
@@ -42,6 +42,46 @@ Additional themes can be installed as plugins to provide alternative visual styl
 - Additional customization options
 
 Check your installed plugins to see available themes.
+
+### Theme Bundles (.qtap-theme)
+
+Theme bundles are a simpler way to distribute and install themes. A `.qtap-theme` file is a zip archive containing:
+
+- **theme.json** — Theme manifest with metadata and design tokens
+- **CSS files** — Optional style overrides
+- **Font files** — Custom fonts (.woff2, .ttf, etc.)
+- **Image assets** — Preview images and other assets
+
+Theme bundles require no build tools, npm packages, or JavaScript code -- they are purely declarative, containing only static assets and configuration.
+
+#### Installing a Theme Bundle
+
+1. Open **Settings** from the sidebar
+2. Go to the **Appearance** tab
+3. Click the **Install Theme** button
+4. Select a `.qtap-theme` file from your computer
+5. The theme appears in your theme list immediately
+
+#### Uninstalling a Theme Bundle
+
+Bundle themes can be uninstalled from the Appearance settings:
+
+1. Find the bundle theme in your theme list (marked with a "Bundle" badge)
+2. Expand its preview
+3. Click the trash icon to uninstall
+4. The theme is removed from your system
+
+Note: Plugin themes and the built-in default theme cannot be uninstalled from this interface.
+
+#### Exporting a Theme
+
+Any installed theme (including plugin themes and the default) can be exported as a `.qtap-theme` bundle:
+
+1. Find the theme in your theme list
+2. Expand its preview
+3. Click the download/export icon
+4. Save the `.qtap-theme` file to your computer
+5. Share it with others or use it as a starting point for a new theme
 
 ## Color Modes
 
@@ -231,21 +271,28 @@ When viewing theme options:
 
 ### Installing Theme Plugins
 
-Custom themes are distributed as npm packages:
+Custom themes can be distributed as npm packages:
 
 1. Follow your plugin manager's instructions
 2. Install the theme plugin
 3. Restart Quilltap (if required)
 4. The new theme appears in your theme list
 
+### Installing Theme Bundles
+
+The simplest way to install a custom theme:
+
+1. Obtain a `.qtap-theme` file
+2. Open **Settings** > **Appearance**
+3. Click **Install Theme** and select the file
+4. The theme is instantly available
+
 ### Creating Your Own Theme
 
-If you're a developer, you can create custom themes:
+You can create custom themes as either npm plugins or `.qtap-theme` bundles:
 
-- Use the theme development guide (see documentation)
-- Define custom colors, fonts, and component styles
-- Publish as an npm package for distribution
-- Share with the community
+- **Bundles (recommended)** — Create a `theme.json` with your design tokens, add CSS and fonts, and zip it as a `.qtap-theme` file. No build tools required.
+- **Plugins** — Use the theme development guide for full programmatic control over theming.
 
 See the [Theme Plugin Development Guide](docs/THEME_PLUGIN_DEVELOPMENT.md) for details.
 

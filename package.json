@@ -1,6 +1,6 @@
 {
   "name": "quilltap",
-  "version": "3.3.0-dev.14",
+  "version": "3.3.0-dev.15",
   "private": true,
   "main": "dist-electron/main.js",
   "author": {
@@ -71,6 +71,7 @@
     "@quilltap/theme-storybook": "^1.0.20",
     "@tanstack/react-virtual": "^3.13.18",
     "@types/sharp": "^0.31.1",
+    "@types/yauzl": "^2.10.3",
     "ajv": "^8.18.0",
     "ajv-formats": "^3.0.1",
     "better-sqlite3": "npm:better-sqlite3-multiple-ciphers@^12.6.2",
@@ -92,6 +93,7 @@
     "remark-rehype": "^11.1.2",
     "sharp": "^0.34.5",
     "unified": "^11.0.5",
+    "yauzl": "^3.2.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {

@@ -1,0 +1,276 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quilltap.ai/schemas/qtap-theme.schema.json",
+  "title": "Quilltap Theme Bundle Manifest",
+  "description": "Schema for theme.json in .qtap-theme bundle files",
+  "type": "object",
+  "required": ["format", "formatVersion", "id", "name", "version", "author"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema URL for validation"
+    },
+    "format": {
+      "type": "string",
+      "const": "qtap-theme",
+      "description": "Must be 'qtap-theme'"
+    },
+    "formatVersion": {
+      "type": "integer",
+      "const": 1,
+      "description": "Format version (currently 1)"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "Theme identifier (lowercase letters, numbers, hyphens)"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "description": "Display name"
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "Theme description"
+    },
+    "version": {
+      "type": "string",
+      "description": "Semantic version (e.g., '1.0.0')"
+    },
+    "author": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "required": ["name"],
+          "properties": {
+            "name": { "type": "string" },
+            "email": { "type": "string", "format": "email" },
+            "url": { "type": "string", "format": "uri" }
+          }
+        }
+      ],
+      "description": "Theme author"
+    },
+    "license": {
+      "type": "string",
+      "description": "SPDX license identifier"
+    },
+    "compatibility": {
+      "type": "object",
+      "properties": {
+        "quilltapVersion": {
+          "type": "string",
+          "description": "Semver range for Quilltap compatibility (e.g., '>=3.3.0')"
+        }
+      }
+    },
+    "supportsDarkMode": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether theme provides dark mode colors"
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Theme tags for categorization"
+    },
+    "extendsTheme": {
+      "type": "string",
+      "description": "ID of theme to extend/inherit from"
+    },
+    "previewImage": {
+      "type": "string",
+      "description": "Relative path to preview image"
+    },
+    "tokens": {
+      "$ref": "#/$defs/ThemeTokens",
+      "description": "Inline theme design tokens"
+    },
+    "tokensPath": {
+      "type": "string",
+      "description": "Relative path to tokens JSON file"
+    },
+    "stylesPath": {
+      "type": "string",
+      "description": "Relative path to CSS overrides file"
+    },
+    "fonts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/FontDefinition" },
+      "description": "Custom font definitions"
+    },
+    "subsystems": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "thumbnail": { "type": "string" },
+          "backgroundImage": { "type": "string" }
+        }
+      },
+      "description": "Subsystem display overrides"
+    }
+  },
+  "anyOf": [
+    { "required": ["tokens"] },
+    { "required": ["tokensPath"] }
+  ],
+  "$defs": {
+    "ColorPalette": {
+      "type": "object",
+      "required": [
+        "background", "foreground",
+        "primary", "primaryForeground",
+        "secondary", "secondaryForeground",
+        "muted", "mutedForeground",
+        "accent", "accentForeground",
+        "destructive", "destructiveForeground",
+        "card", "cardForeground",
+        "popover", "popoverForeground",
+        "border", "input", "ring"
+      ],
+      "properties": {
+        "background": { "type": "string" },
+        "foreground": { "type": "string" },
+        "primary": { "type": "string" },
+        "primaryForeground": { "type": "string" },
+        "secondary": { "type": "string" },
+        "secondaryForeground": { "type": "string" },
+        "muted": { "type": "string" },
+        "mutedForeground": { "type": "string" },
+        "accent": { "type": "string" },
+        "accentForeground": { "type": "string" },
+        "destructive": { "type": "string" },
+        "destructiveForeground": { "type": "string" },
+        "card": { "type": "string" },
+        "cardForeground": { "type": "string" },
+        "popover": { "type": "string" },
+        "popoverForeground": { "type": "string" },
+        "border": { "type": "string" },
+        "input": { "type": "string" },
+        "ring": { "type": "string" },
+        "success": { "type": "string" },
+        "successForeground": { "type": "string" },
+        "warning": { "type": "string" },
+        "warningForeground": { "type": "string" },
+        "info": { "type": "string" },
+        "infoForeground": { "type": "string" },
+        "chatUser": { "type": "string" },
+        "chatUserForeground": { "type": "string" }
+      }
+    },
+    "ThemeTokens": {
+      "type": "object",
+      "required": ["colors"],
+      "properties": {
+        "colors": {
+          "type": "object",
+          "required": ["light", "dark"],
+          "properties": {
+            "light": { "$ref": "#/$defs/ColorPalette" },
+            "dark": { "$ref": "#/$defs/ColorPalette" }
+          }
+        },
+        "typography": {
+          "type": "object",
+          "properties": {
+            "fontSans": { "type": "string" },
+            "fontSerif": { "type": "string" },
+            "fontMono": { "type": "string" },
+            "fontSizeXs": { "type": "string" },
+            "fontSizeSm": { "type": "string" },
+            "fontSizeBase": { "type": "string" },
+            "fontSizeLg": { "type": "string" },
+            "fontSizeXl": { "type": "string" },
+            "fontSize2xl": { "type": "string" },
+            "fontSize3xl": { "type": "string" },
+            "fontSize4xl": { "type": "string" },
+            "lineHeightTight": { "type": "string" },
+            "lineHeightNormal": { "type": "string" },
+            "lineHeightRelaxed": { "type": "string" },
+            "fontWeightNormal": { "type": "string" },
+            "fontWeightMedium": { "type": "string" },
+            "fontWeightSemibold": { "type": "string" },
+            "fontWeightBold": { "type": "string" },
+            "letterSpacingTight": { "type": "string" },
+            "letterSpacingNormal": { "type": "string" },
+            "letterSpacingWide": { "type": "string" }
+          }
+        },
+        "spacing": {
+          "type": "object",
+          "properties": {
+            "radiusSm": { "type": "string" },
+            "radiusMd": { "type": "string" },
+            "radiusLg": { "type": "string" },
+            "radiusXl": { "type": "string" },
+            "radiusFull": { "type": "string" },
+            "spacing1": { "type": "string" },
+            "spacing2": { "type": "string" },
+            "spacing3": { "type": "string" },
+            "spacing4": { "type": "string" },
+            "spacing5": { "type": "string" },
+            "spacing6": { "type": "string" },
+            "spacing8": { "type": "string" },
+            "spacing10": { "type": "string" },
+            "spacing12": { "type": "string" },
+            "spacing16": { "type": "string" }
+          }
+        },
+        "effects": {
+          "type": "object",
+          "properties": {
+            "shadowSm": { "type": "string" },
+            "shadowMd": { "type": "string" },
+            "shadowLg": { "type": "string" },
+            "shadowXl": { "type": "string" },
+            "transitionFast": { "type": "string" },
+            "transitionNormal": { "type": "string" },
+            "transitionSlow": { "type": "string" },
+            "transitionEasing": { "type": "string" },
+            "focusRingWidth": { "type": "string" },
+            "focusRingOffset": { "type": "string" }
+          }
+        }
+      }
+    },
+    "FontDefinition": {
+      "type": "object",
+      "required": ["family", "src"],
+      "properties": {
+        "family": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Font family name"
+        },
+        "src": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Font file path relative to bundle root"
+        },
+        "weight": {
+          "type": "string",
+          "description": "Font weight (e.g., '400', '700', '400 700')"
+        },
+        "style": {
+          "type": "string",
+          "description": "Font style (e.g., 'normal', 'italic')"
+        },
+        "display": {
+          "type": "string",
+          "enum": ["auto", "block", "swap", "fallback", "optional"],
+          "default": "swap",
+          "description": "Font display strategy"
+        }
+      }
+    }
+  }
+}
