@@ -456,6 +456,7 @@ export function useSSEStreaming({
           setMessages((prev) => [...prev, assistantMessage])
           setStreamingContent('')
           setStreaming(false)
+          setWaitingForResponse(false)
           setRespondingParticipantId(null)
           scrollOnStreamComplete()
           await fetchChat()
@@ -493,6 +494,7 @@ export function useSSEStreaming({
       }
     } finally {
       setSending(false)
+      setWaitingForResponse(false)
       abortControllerRef.current = null
       setResponseStatus(null)
       focusInput()

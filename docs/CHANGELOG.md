@@ -4,6 +4,8 @@
 
 ### 3.3-dev
 
+- fix: Chat UI shows phantom "waiting for response" state after a character finishes replying — `waitingForResponse` was never cleared in the `onDone` happy path of SSE streaming, so if the done event arrived without a prior content chunk the typing indicator and participant sidebar active glow would persist indefinitely; now explicitly reset in both the completion handler and the `finally` block
+
 ### 3.2.1
 
 - fix: Release workflow tag filter used regex syntax (`+`) invalid in GitHub Actions glob patterns — replaced with correct glob pattern and added `validate-tag` job with proper regex validation; all build jobs now gate on tag validation; made Discord notification job non-blocking (`continue-on-error`); Linux Electron build now waits for rootfs like other platforms
