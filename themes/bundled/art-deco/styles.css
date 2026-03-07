@@ -693,7 +693,7 @@
 [data-theme="art-deco"] body {
   position: relative;
   min-height: 100vh;
-  background-image: url('/api/themes/assets/qtap-plugin-theme-art-deco/textures/background-light.webp');
+  background-image: url('/api/themes/assets/bundle:art-deco/textures/background-light.webp');
   background-size: cover;
   background-position: center center;
   background-attachment: fixed;
@@ -703,7 +703,7 @@
 [data-theme="art-deco"].dark body {
   background-image:
     linear-gradient(hsl(222 47% 7% / 0.55), hsl(222 47% 7% / 0.55)),
-    url('/api/themes/assets/qtap-plugin-theme-art-deco/textures/background-dark.webp');
+    url('/api/themes/assets/bundle:art-deco/textures/background-dark.webp');
 }
 
 /* Ensure background shows through main containers */

@@ -696,7 +696,7 @@
 [data-theme="great-estate"] body {
   position: relative;
   min-height: 100vh;
-  background-image: url('/api/themes/assets/qtap-plugin-theme-great-estate/textures/background.webp');
+  background-image: url('/api/themes/assets/bundle:great-estate/textures/background.webp');
   background-size: cover;
   background-position: center center;
   background-attachment: fixed;
@@ -780,7 +780,7 @@
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background-image: url("/api/themes/assets/qtap-plugin-theme-great-estate/textures/carbon-fibre.png");
+  background-image: url("/api/themes/assets/bundle:great-estate/textures/carbon-fibre.png");
   background-repeat: repeat;
   opacity: 0.04;
 }
