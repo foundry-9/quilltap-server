@@ -7104,8 +7104,9 @@ var GrokProvider = class {
     this.supportsWebSearch = true;
   }
   /**
-   * Format messages from LLMMessage format to Responses API format
-   * Handles text, image attachments, and role conversion
+   * Format messages from LLMMessage format to Responses API format.
+   * Grok uses 'system' role directly in the input array — the `instructions`
+   * parameter is NOT supported by xAI and will cause an error.
    */
   formatMessagesForResponsesAPI(messages) {
     const sent = [];
@@ -7198,16 +7199,20 @@ ${textContent}`
       return {
         type: "function",
         name: fn.name,
-        description: fn.description,
+        description: fn.description ?? void 0,
         parameters: fn.parameters,
         strict: false
       };
     });
   }
   /**
-   * Extract text content from Responses API response
+   * Extract text content from Responses API response.
+   * Used as fallback when output_text may not be populated by xAI.
    */
   extractTextFromResponse(response) {
+    if (response.output_text) {
+      return response.output_text;
+    }
     let text = "";
     for (const item of response.output) {
       if (item.type === "message") {
@@ -7221,7 +7226,9 @@ ${textContent}`
     return text;
   }
   /**
-   * Build raw response object compatible with OpenAI format for tool parsing
+   * Build raw response object compatible with Chat Completions format.
+   * This ensures the tool call parser, Inspector, and chat log storage
+   * all continue to work without changes.
    */
   buildRawResponse(response) {
     const toolCalls = [];
@@ -7252,9 +7259,9 @@ ${textContent}`
         finish_reason: toolCalls.length > 0 ? "tool_calls" : "stop"
       }],
       usage: {
-        prompt_tokens: response.usage.input_tokens,
-        completion_tokens: response.usage.output_tokens,
-        total_tokens: response.usage.total_tokens
+        prompt_tokens: response.usage?.input_tokens ?? 0,
+        completion_tokens: response.usage?.output_tokens ?? 0,
+        total_tokens: response.usage?.total_tokens ?? 0
       }
     };
   }
@@ -7267,75 +7274,84 @@ ${textContent}`
         return "tool_calls";
       }
     }
-    if (response.status === "completed") {
-      return "stop";
-    }
-    if (response.status === "incomplete") {
-      return response.incomplete_details?.reason || "length";
-    }
-    if (response.status === "failed") {
-      return "error";
-    }
+    if (response.status === "completed") return "stop";
+    if (response.status === "incomplete") return response.incomplete_details?.reason || "length";
+    if (response.status === "failed") return "error";
     return "stop";
   }
   async sendMessage(params, apiKey) {
     if (!apiKey) {
       throw new Error("Grok provider requires an API key");
     }
+    const client = new OpenAI({
+      apiKey,
+      baseURL: this.baseUrl
+    });
     const { input, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
-    const requestBody = {
+    logger.debug("Preparing Responses API request", {
+      context: "GrokProvider.sendMessage",
+      model: params.model,
+      messageCount: input.length
+    });
+    const requestParams = {
       model: params.model,
       input,
       store: false,
       // Stateless operation - Quilltap manages history locally
       temperature: params.temperature ?? 0.7,
       max_output_tokens: params.maxTokens ?? 4096,
-      top_p: params.topP ?? 1
+      top_p: params.topP ?? 1,
+      stream: false
     };
     if (params.stop) {
-      requestBody.stop = Array.isArray(params.stop) ? params.stop : [params.stop];
+      requestParams.stop = Array.isArray(params.stop) ? params.stop : [params.stop];
     }
     const tools = [];
     if (params.webSearchEnabled) {
       tools.push({ type: "web_search" });
       tools.push({ type: "x_search" });
-      requestBody.include = ["citations"];
+      requestParams.include = ["citations"];
     }
     if (params.tools && params.tools.length > 0) {
       const functionTools = this.formatToolsForResponsesAPI(params.tools);
       tools.push(...functionTools);
     }
     if (tools.length > 0) {
-      requestBody.tools = tools;
+      requestParams.tools = tools;
     }
-    const response = await fetch(`${this.baseUrl}/responses`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`
-      },
-      body: JSON.stringify(requestBody)
+    logger.debug("Sending Responses API request", {
+      context: "GrokProvider.sendMessage",
+      model: params.model,
+      toolCount: tools.length
     });
-    if (!response.ok) {
-      const errorText = await response.text();
-      logger.error("Responses API request failed", {
+    const response = await client.responses.create(requestParams);
+    if (response.error) {
+      logger.error("Responses API returned error", {
         context: "GrokProvider.sendMessage",
-        status: response.status,
-        error: errorText
+        code: response.error.code,
+        message: response.error.message
       });
-      throw new Error(`Grok API error (${response.status}): ${errorText}`);
+      throw new Error(`Grok API error: ${response.error.message}`);
     }
-    const data = await response.json();
-    const text = this.extractTextFromResponse(data);
-    const finishReason = this.getFinishReason(data);
-    const raw = this.buildRawResponse(data);
+    const text = this.extractTextFromResponse(response);
+    const finishReason = this.getFinishReason(response);
+    const raw = this.buildRawResponse(response);
+    logger.debug("Responses API request completed", {
+      context: "GrokProvider.sendMessage",
+      model: response.model,
+      status: response.status,
+      finishReason,
+      inputTokens: response.usage?.input_tokens,
+      outputTokens: response.usage?.output_tokens,
+      cachedTokens: response.usage?.input_tokens_details?.cached_tokens
+    });
     return {
       content: text,
       finishReason,
       usage: {
-        promptTokens: data.usage.input_tokens,
-        completionTokens: data.usage.output_tokens,
-        totalTokens: data.usage.total_tokens
+        promptTokens: response.usage?.input_tokens ?? 0,
+        completionTokens: response.usage?.output_tokens ?? 0,
+        totalTokens: response.usage?.total_tokens ?? 0
       },
       raw,
       attachmentResults
@@ -7345,8 +7361,17 @@ ${textContent}`
     if (!apiKey) {
       throw new Error("Grok provider requires an API key");
     }
+    const client = new OpenAI({
+      apiKey,
+      baseURL: this.baseUrl
+    });
     const { input, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
-    const requestBody = {
+    logger.debug("Preparing streaming Responses API request", {
+      context: "GrokProvider.streamMessage",
+      model: params.model,
+      messageCount: input.length
+    });
+    const requestParams = {
       model: params.model,
       input,
       store: false,
@@ -7356,106 +7381,69 @@ ${textContent}`
       stream: true
     };
     if (params.stop) {
-      requestBody.stop = Array.isArray(params.stop) ? params.stop : [params.stop];
+      requestParams.stop = Array.isArray(params.stop) ? params.stop : [params.stop];
     }
     const tools = [];
     if (params.webSearchEnabled) {
       tools.push({ type: "web_search" });
       tools.push({ type: "x_search" });
-      requestBody.include = ["citations"];
+      requestParams.include = ["citations"];
     }
     if (params.tools && params.tools.length > 0) {
       const functionTools = this.formatToolsForResponsesAPI(params.tools);
       tools.push(...functionTools);
     }
     if (tools.length > 0) {
-      requestBody.tools = tools;
+      requestParams.tools = tools;
     }
-    const response = await fetch(`${this.baseUrl}/responses`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`
-      },
-      body: JSON.stringify(requestBody)
+    logger.debug("Sending streaming Responses API request", {
+      context: "GrokProvider.streamMessage",
+      model: params.model
     });
-    if (!response.ok) {
-      const errorText = await response.text();
-      logger.error("Streaming Responses API request failed", {
-        context: "GrokProvider.streamMessage",
-        status: response.status,
-        error: errorText
-      });
-      throw new Error(`Grok API error (${response.status}): ${errorText}`);
-    }
-    if (!response.body) {
-      throw new Error("No response body received from Grok API");
-    }
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    let accumulatedContent = "";
+    const stream = await client.responses.create(requestParams);
     let finalResponse = null;
-    const functionCallArgs = /* @__PURE__ */ new Map();
-    const functionCallItems = /* @__PURE__ */ new Map();
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const data = line.slice(6).trim();
-            if (data === "[DONE]") {
-              continue;
-            }
-            try {
-              const event = JSON.parse(data);
-              if (event.type === "response.output_text.delta") {
-                const delta = event.delta;
-                accumulatedContent += delta;
-                yield {
-                  content: delta,
-                  done: false
-                };
-              } else if (event.type === "response.output_item.added") {
-                const addedEvent = event;
-                if (addedEvent.item.type === "function_call") {
-                  functionCallItems.set(addedEvent.item.id, addedEvent.item);
-                  functionCallArgs.set(addedEvent.item.id, "");
-                }
-              } else if (event.type === "response.function_call_arguments.delta") {
-                const fcDelta = event;
-                const existing = functionCallArgs.get(fcDelta.item_id) || "";
-                functionCallArgs.set(fcDelta.item_id, existing + fcDelta.delta);
-              } else if (event.type === "response.completed") {
-                finalResponse = event.response;
-              }
-            } catch (parseError) {
-            }
-          }
+    for await (const event of stream) {
+      if (event.type === "response.output_text.delta") {
+        yield {
+          content: event.delta,
+          done: false
+        };
+      } else if (event.type === "response.output_item.added") {
+        if (event.item.type === "function_call") {
+          logger.debug("Function call started", {
+            context: "GrokProvider.streamMessage",
+            itemId: event.item.id,
+            name: event.item.name
+          });
         }
+      } else if (event.type === "response.completed") {
+        finalResponse = event.response;
+        logger.debug("Stream completed", {
+          context: "GrokProvider.streamMessage",
+          status: finalResponse.status,
+          inputTokens: finalResponse.usage?.input_tokens,
+          outputTokens: finalResponse.usage?.output_tokens,
+          cachedTokens: finalResponse.usage?.input_tokens_details?.cached_tokens
+        });
       }
-    } finally {
-      reader.releaseLock();
     }
     if (finalResponse) {
       const raw = this.buildRawResponse(finalResponse);
-      const finishReason = this.getFinishReason(finalResponse);
       yield {
         content: "",
         done: true,
         usage: {
-          promptTokens: finalResponse.usage.input_tokens,
-          completionTokens: finalResponse.usage.output_tokens,
-          totalTokens: finalResponse.usage.total_tokens
+          promptTokens: finalResponse.usage?.input_tokens ?? 0,
+          completionTokens: finalResponse.usage?.output_tokens ?? 0,
+          totalTokens: finalResponse.usage?.total_tokens ?? 0
         },
         attachmentResults,
         rawResponse: raw
       };
     } else {
+      logger.warn("Stream ended without response.completed event", {
+        context: "GrokProvider.streamMessage"
+      });
       yield {
         content: "",
         done: true,
