@@ -7108,51 +7108,168 @@ var OpenAIProvider = class {
     this.supportsImageGeneration = true;
     this.supportsWebSearch = true;
   }
-  formatMessagesWithAttachments(messages) {
+  /**
+   * Format messages from LLMMessage format to Responses API input format.
+   * The first system message is extracted as top-level instructions.
+   * Additional system messages become 'developer' role messages.
+   */
+  formatMessagesForResponsesAPI(messages) {
     const sent = [];
     const failed = [];
     const filteredMessages = messages.filter((m) => m.role !== "tool");
-    const formattedMessages = filteredMessages.map((msg) => {
-      if (!msg.attachments || msg.attachments.length === 0) {
+    let instructions;
+    const inputMessages = [];
+    for (const msg of filteredMessages) {
+      if (msg.role === "system" && instructions === void 0) {
+        instructions = msg.content;
+      } else {
+        inputMessages.push(msg);
+      }
+    }
+    const input = inputMessages.map((msg) => {
+      if (msg.role === "system") {
         return {
-          role: msg.role,
+          type: "message",
+          role: "developer",
+          content: msg.content
+        };
+      }
+      if (msg.role === "assistant") {
+        return {
+          type: "message",
+          role: "assistant",
           content: msg.content
         };
       }
       const content = [];
       if (msg.content) {
-        content.push({ type: "text", text: msg.content });
+        content.push({ type: "input_text", text: msg.content });
       }
-      for (const attachment of msg.attachments) {
-        if (!this.supportedMimeTypes.includes(attachment.mimeType)) {
-          failed.push({
-            id: attachment.id,
-            error: `Unsupported file type: ${attachment.mimeType}. OpenAI supports: ${this.supportedMimeTypes.join(", ")}`
-          });
-          continue;
-        }
-        if (!attachment.data) {
-          failed.push({
-            id: attachment.id,
-            error: "File data not loaded"
-          });
-          continue;
-        }
-        content.push({
-          type: "image_url",
-          image_url: {
-            url: `data:${attachment.mimeType};base64,${attachment.data}`,
-            detail: "auto"
+      if (msg.attachments && msg.attachments.length > 0) {
+        for (const attachment of msg.attachments) {
+          if (!this.supportedMimeTypes.includes(attachment.mimeType)) {
+            failed.push({
+              id: attachment.id,
+              error: `Unsupported file type: ${attachment.mimeType}. OpenAI supports: ${this.supportedMimeTypes.join(", ")}`
+            });
+            continue;
           }
-        });
-        sent.push(attachment.id);
+          if (!attachment.data) {
+            failed.push({
+              id: attachment.id,
+              error: "File data not loaded"
+            });
+            continue;
+          }
+          content.push({
+            type: "input_image",
+            image_url: `data:${attachment.mimeType};base64,${attachment.data}`,
+            detail: "auto"
+          });
+          sent.push(attachment.id);
+        }
+      }
+      if (content.length === 0) {
+        content.push({ type: "input_text", text: "" });
       }
       return {
-        role: msg.role,
-        content: content.length > 0 ? content : msg.content
+        type: "message",
+        role: "user",
+        content
       };
     });
-    return { messages: formattedMessages, attachmentResults: { sent, failed } };
+    return { input, instructions, attachmentResults: { sent, failed } };
+  }
+  /**
+   * Convert Chat Completions-format tools to Responses API function tools
+   */
+  formatToolsForResponsesAPI(tools) {
+    if (!tools || tools.length === 0) return [];
+    return tools.map((tool) => {
+      const chatTool = tool;
+      const fn = chatTool.function;
+      return {
+        type: "function",
+        name: fn.name,
+        description: fn.description ?? void 0,
+        parameters: fn.parameters,
+        strict: false
+      };
+    });
+  }
+  /**
+   * Build raw response object compatible with Chat Completions format.
+   * This ensures the streaming service, tool call parser, Inspector,
+   * and chat log storage all continue to work without changes.
+   */
+  buildRawResponse(response) {
+    const toolCalls = [];
+    for (const item of response.output) {
+      if (item.type === "function_call") {
+        toolCalls.push({
+          id: item.call_id,
+          type: "function",
+          function: {
+            name: item.name,
+            arguments: item.arguments
+          }
+        });
+      }
+    }
+    return {
+      id: response.id,
+      object: "chat.completion",
+      created: response.created_at,
+      model: response.model,
+      choices: [{
+        index: 0,
+        message: {
+          role: "assistant",
+          content: response.output_text,
+          tool_calls: toolCalls.length > 0 ? toolCalls : void 0
+        },
+        finish_reason: toolCalls.length > 0 ? "tool_calls" : "stop"
+      }],
+      usage: {
+        prompt_tokens: response.usage?.input_tokens ?? 0,
+        completion_tokens: response.usage?.output_tokens ?? 0,
+        total_tokens: response.usage?.total_tokens ?? 0
+      }
+    };
+  }
+  /**
+   * Determine finish reason from response
+   */
+  getFinishReason(response) {
+    for (const item of response.output) {
+      if (item.type === "function_call") {
+        return "tool_calls";
+      }
+    }
+    if (response.status === "completed") return "stop";
+    if (response.status === "incomplete") return response.incomplete_details?.reason || "length";
+    if (response.status === "failed") return "error";
+    return "stop";
+  }
+  /**
+   * Build the text format configuration for structured output
+   */
+  buildTextConfig(responseFormat) {
+    if (!responseFormat) return void 0;
+    if (responseFormat.type === "json_object") {
+      return { format: { type: "json_object" } };
+    }
+    if (responseFormat.type === "json_schema" && responseFormat.jsonSchema) {
+      return {
+        format: {
+          type: "json_schema",
+          name: responseFormat.jsonSchema.name || "response",
+          schema: responseFormat.jsonSchema.schema,
+          strict: responseFormat.jsonSchema.strict ?? true
+        }
+      };
+    }
+    return void 0;
   }
   async sendMessage(params, apiKey) {
     const isReasoning = isReasoningModel(params.model);
@@ -7160,42 +7277,89 @@ var OpenAIProvider = class {
       apiKey,
       dangerouslyAllowBrowser: process.env.NODE_ENV === "test"
     });
-    const { messages, attachmentResults } = this.formatMessagesWithAttachments(params.messages);
+    const { input, instructions, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
+    logger.debug("Preparing Responses API request", {
+      context: "OpenAIProvider.sendMessage",
+      model: params.model,
+      isReasoning,
+      messageCount: input.length,
+      hasInstructions: !!instructions,
+      hasTools: !!(params.tools && params.tools.length > 0),
+      webSearchEnabled: !!params.webSearchEnabled
+    });
     const requestParams = {
       model: params.model,
-      messages,
-      max_completion_tokens: params.maxTokens ?? 4096
+      input,
+      store: false,
+      // Stateless operation - Quilltap manages history locally
+      max_output_tokens: params.maxTokens ?? 4096,
+      stream: false
     };
+    if (instructions) {
+      requestParams.instructions = instructions;
+    }
     if (!isReasoning) {
       requestParams.top_p = params.topP ?? 1;
-      requestParams.stop = params.stop;
       if (params.temperature !== void 0) {
         requestParams.temperature = params.temperature;
       }
     } else {
       const minTokensForReasoning = 4096;
       if ((params.maxTokens ?? 0) < minTokensForReasoning) {
-        requestParams.max_completion_tokens = minTokensForReasoning;
+        requestParams.max_output_tokens = minTokensForReasoning;
       }
     }
-    if (params.tools && params.tools.length > 0) {
-      requestParams.tools = params.tools;
-      requestParams.tool_choice = "auto";
-    }
+    const tools = [];
     if (params.webSearchEnabled) {
-      requestParams.web_search_options = {};
+      tools.push({ type: "web_search_preview" });
+      requestParams.include = ["web_search_call.action.sources"];
     }
-    const response = await client.chat.completions.create(requestParams);
-    const choice = response.choices[0];
+    if (params.tools && params.tools.length > 0) {
+      const functionTools = this.formatToolsForResponsesAPI(params.tools);
+      tools.push(...functionTools);
+    }
+    if (tools.length > 0) {
+      requestParams.tools = tools;
+    }
+    const textConfig = this.buildTextConfig(params.responseFormat);
+    if (textConfig) {
+      requestParams.text = textConfig;
+    }
+    logger.debug("Sending Responses API request", {
+      context: "OpenAIProvider.sendMessage",
+      model: params.model,
+      toolCount: tools.length
+    });
+    const response = await client.responses.create(requestParams);
+    if (response.error) {
+      logger.error("Responses API returned error", {
+        context: "OpenAIProvider.sendMessage",
+        code: response.error.code,
+        message: response.error.message
+      });
+      throw new Error(`OpenAI API error: ${response.error.message}`);
+    }
+    const finishReason = this.getFinishReason(response);
+    const raw = this.buildRawResponse(response);
+    logger.debug("Responses API request completed", {
+      context: "OpenAIProvider.sendMessage",
+      model: response.model,
+      status: response.status,
+      finishReason,
+      inputTokens: response.usage?.input_tokens,
+      outputTokens: response.usage?.output_tokens,
+      cachedTokens: response.usage?.input_tokens_details?.cached_tokens,
+      reasoningTokens: response.usage?.output_tokens_details?.reasoning_tokens
+    });
     return {
-      content: choice.message.content ?? "",
-      finishReason: choice.finish_reason,
+      content: response.output_text,
+      finishReason,
       usage: {
-        promptTokens: response.usage?.prompt_tokens ?? 0,
-        completionTokens: response.usage?.completion_tokens ?? 0,
+        promptTokens: response.usage?.input_tokens ?? 0,
+        completionTokens: response.usage?.output_tokens ?? 0,
         totalTokens: response.usage?.total_tokens ?? 0
       },
-      raw: response,
+      raw,
       attachmentResults
     };
   }
@@ -7205,14 +7369,24 @@ var OpenAIProvider = class {
       apiKey,
       dangerouslyAllowBrowser: process.env.NODE_ENV === "test"
     });
-    const { messages, attachmentResults } = this.formatMessagesWithAttachments(params.messages);
+    const { input, instructions, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
+    logger.debug("Preparing streaming Responses API request", {
+      context: "OpenAIProvider.streamMessage",
+      model: params.model,
+      isReasoning,
+      messageCount: input.length,
+      hasInstructions: !!instructions
+    });
     const requestParams = {
       model: params.model,
-      messages,
-      max_completion_tokens: params.maxTokens ?? 4096,
-      stream: true,
-      stream_options: { include_usage: true }
+      input,
+      store: false,
+      max_output_tokens: params.maxTokens ?? 4096,
+      stream: true
     };
+    if (instructions) {
+      requestParams.instructions = instructions;
+    }
     if (!isReasoning) {
       requestParams.top_p = params.topP ?? 1;
       if (params.temperature !== void 0) {
@@ -7221,98 +7395,84 @@ var OpenAIProvider = class {
     } else {
       const minTokensForReasoning = 4096;
       if ((params.maxTokens ?? 0) < minTokensForReasoning) {
-        requestParams.max_completion_tokens = minTokensForReasoning;
+        requestParams.max_output_tokens = minTokensForReasoning;
       }
+    }
+    const tools = [];
+    if (params.webSearchEnabled) {
+      tools.push({ type: "web_search_preview" });
+      requestParams.include = ["web_search_call.action.sources"];
     }
     if (params.tools && params.tools.length > 0) {
-      requestParams.tools = params.tools;
-      requestParams.tool_choice = "auto";
+      const functionTools = this.formatToolsForResponsesAPI(params.tools);
+      tools.push(...functionTools);
     }
-    if (params.webSearchEnabled) {
-      requestParams.web_search_options = {};
+    if (tools.length > 0) {
+      requestParams.tools = tools;
     }
-    const stream = await client.chat.completions.create(requestParams);
-    let fullMessage = {
-      choices: [
-        {
-          message: {
-            role: "assistant",
-            content: "",
-            tool_calls: []
-          },
-          finish_reason: null
-        }
-      ],
-      usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
-    };
-    let chunkCount = 0;
-    let finishReasonSeen = false;
-    let usageSeen = false;
-    for await (const chunk of stream) {
-      chunkCount++;
-      const delta = chunk.choices?.[0]?.delta;
-      const content = delta?.content;
-      const finishReason = chunk.choices[0]?.finish_reason;
-      const hasUsage = chunk.usage;
-      if (content) {
-        fullMessage.choices[0].message.content += content;
-      }
-      if (delta?.tool_calls) {
-        for (const toolCall of delta.tool_calls) {
-          const index = toolCall.index ?? 0;
-          if (!fullMessage.choices[0].message.tool_calls[index]) {
-            fullMessage.choices[0].message.tool_calls[index] = {
-              id: "",
-              type: "function",
-              function: { name: "", arguments: "" }
-            };
-          }
-          if (toolCall.id) fullMessage.choices[0].message.tool_calls[index].id = toolCall.id;
-          if (toolCall.function?.name) fullMessage.choices[0].message.tool_calls[index].function.name = toolCall.function.name;
-          if (toolCall.function?.arguments) fullMessage.choices[0].message.tool_calls[index].function.arguments += toolCall.function.arguments;
-        }
-      }
-      if (finishReason) {
-        fullMessage.choices[0].finish_reason = finishReason;
-        finishReasonSeen = true;
-      }
-      if (hasUsage) {
-        fullMessage.usage = chunk.usage;
-        usageSeen = true;
-      }
-      const isFinalChunk = finishReasonSeen && usageSeen;
-      const isToolCallsChunk = finishReasonSeen && finishReason === "tool_calls";
-      if (content && !isFinalChunk && !isToolCallsChunk) {
+    const textConfig = this.buildTextConfig(params.responseFormat);
+    if (textConfig) {
+      requestParams.text = textConfig;
+    }
+    logger.debug("Sending streaming Responses API request", {
+      context: "OpenAIProvider.streamMessage",
+      model: params.model
+    });
+    const stream = await client.responses.create(requestParams);
+    let finalResponse = null;
+    for await (const event of stream) {
+      if (event.type === "response.output_text.delta") {
         yield {
-          content,
+          content: event.delta,
           done: false
         };
+      } else if (event.type === "response.output_item.added") {
+        if (event.item.type === "function_call") {
+          logger.debug("Function call started", {
+            context: "OpenAIProvider.streamMessage",
+            itemId: event.item.id,
+            name: event.item.name
+          });
+        }
+      } else if (event.type === "response.completed") {
+        finalResponse = event.response;
+        logger.debug("Stream completed", {
+          context: "OpenAIProvider.streamMessage",
+          status: finalResponse.status,
+          inputTokens: finalResponse.usage?.input_tokens,
+          outputTokens: finalResponse.usage?.output_tokens,
+          cachedTokens: finalResponse.usage?.input_tokens_details?.cached_tokens,
+          reasoningTokens: finalResponse.usage?.output_tokens_details?.reasoning_tokens
+        });
       }
-      if (finishReasonSeen && finishReason === "tool_calls" && !usageSeen) {
-        yield {
-          content: "",
-          done: true,
-          usage: {
-            promptTokens: fullMessage.usage?.prompt_tokens ?? 0,
-            completionTokens: fullMessage.usage?.completion_tokens ?? 0,
-            totalTokens: fullMessage.usage?.total_tokens ?? 0
-          },
-          attachmentResults,
-          rawResponse: fullMessage
-        };
-      } else if (finishReasonSeen && usageSeen) {
-        yield {
-          content: "",
-          done: true,
-          usage: {
-            promptTokens: fullMessage.usage?.prompt_tokens ?? 0,
-            completionTokens: fullMessage.usage?.completion_tokens ?? 0,
-            totalTokens: fullMessage.usage?.total_tokens ?? 0
-          },
-          attachmentResults,
-          rawResponse: fullMessage
-        };
-      }
+    }
+    if (finalResponse) {
+      const raw = this.buildRawResponse(finalResponse);
+      yield {
+        content: "",
+        done: true,
+        usage: {
+          promptTokens: finalResponse.usage?.input_tokens ?? 0,
+          completionTokens: finalResponse.usage?.output_tokens ?? 0,
+          totalTokens: finalResponse.usage?.total_tokens ?? 0
+        },
+        attachmentResults,
+        rawResponse: raw
+      };
+    } else {
+      logger.warn("Stream ended without response.completed event", {
+        context: "OpenAIProvider.streamMessage"
+      });
+      yield {
+        content: "",
+        done: true,
+        usage: {
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0
+        },
+        attachmentResults
+      };
     }
   }
   async validateApiKey(apiKey) {
@@ -7329,8 +7489,9 @@ var OpenAIProvider = class {
     try {
       const client = new OpenAI({ apiKey });
       const models = await client.models.list();
-      const gptModels = models.data.filter((m) => m.id.includes("gpt")).map((m) => m.id).sort();
-      return gptModels;
+      const chatModelPrefixes = ["gpt-4", "gpt-5", "o1", "o3", "o4"];
+      const chatModels = models.data.filter((m) => chatModelPrefixes.some((prefix) => m.id.startsWith(prefix))).map((m) => m.id).sort();
+      return chatModels;
     } catch (error) {
       logger.error("Failed to fetch OpenAI models", { context: "OpenAIProvider.getAvailableModels" }, error instanceof Error ? error : void 0);
       return [];
