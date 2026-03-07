@@ -1,5 +1,23 @@
 # Quilltap Theme Plugin Development Guide
 
+> **Deprecated:** npm-based theme plugins are deprecated as of Quilltap 3.3. The recommended way to create and distribute themes is the **`.qtap-theme` bundle format** — declarative zip archives containing JSON tokens, CSS, fonts, and images with no build tools required.
+>
+> To create a new theme using the bundle format:
+>
+> ```bash
+> npx create-quilltap-theme my-theme
+> ```
+>
+> This scaffolds a bundle directory with `theme.json`, `tokens.json`, `styles.css`, and a `fonts/` folder. Edit, zip, and install — no npm, esbuild, or TypeScript needed.
+>
+> Manage themes via CLI: `npx quilltap themes list|install|uninstall|validate|export|create|search|update`
+>
+> Browse and install themes from registries in **Settings > Appearance > Browse Themes**.
+>
+> The guide below is preserved for maintaining existing npm plugin themes.
+
+---
+
 This guide walks you through creating a Quilltap theme plugin from scratch, from an empty directory to publishing on npm.
 
 ## Quick Start
@@ -7,7 +25,7 @@ This guide walks you through creating a Quilltap theme plugin from scratch, from
 Use the scaffolding tool to create a new theme plugin in seconds:
 
 ```bash
-npm init quilltap-theme my-theme
+npm init quilltap-theme my-theme --plugin
 ```
 
 This creates a complete, ready-to-customize theme plugin. See [create-quilltap-theme](../packages/create-quilltap-theme/README.md) for more options.

@@ -12,6 +12,7 @@ appearance/
 │   └── useThemePreview.ts         # Theme preview state hook
 ├── components/
 │   ├── ThemeCard.tsx              # Individual theme card component
+│   ├── ThemeBrowser.tsx           # Registry browser for discovering/installing themes
 │   ├── ColorModeSelector.tsx      # Color mode selection component
 │   ├── DebugThemeInfo.tsx         # Development debug info component
 │   ├── ThemePreviewPanel.tsx      # Theme preview panel component
@@ -31,9 +32,22 @@ appearance/
 
 ### Theme Selection
 - Default theme with preview
-- Plugin-provided themes
+- Bundled themes (Art Deco, Earl Grey, Great Estate, Old School, Rains)
+- User-installed bundle themes (.qtap-theme format)
+- Legacy plugin-provided themes (deprecated, shown with badge)
 - Live preview of color swatches
 - Dark mode support badges
+- Source badges ("Built-in" / "Bundle" / "Plugin (deprecated)")
+- Install Theme button for uploading .qtap-theme files
+- Uninstall button for user-installed bundle themes
+- Export button for any theme
+
+### Theme Browser (Registry)
+- Browse themes from configured remote registries
+- Search by name, tag, or description
+- Install directly from registries
+- Verified/unverified badges (Ed25519 signature verification)
+- Registry source management (add/remove/toggle)
 
 ### Display Options
 - Quick theme access toggle (nav selector)

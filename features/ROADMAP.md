@@ -104,7 +104,7 @@ Previously planned (superseded):
 
 - [ ] Ability to have simplified architecture for:
   - [ ] connection profiles/images/embedding
-  - [ ] themes
+  - [X] themes — `.qtap-theme` bundle format (Phases 1-3 complete: bundle loader, CLI, bundled themes, registry with Ed25519 signatures)
   - [ ] API
 
 ### Chat & Conversation (The Salon)
@@ -152,6 +152,11 @@ Previously planned (superseded):
 
 ### Calliope: Themes & UI
 
+- [X] `.qtap-theme` bundle format for theme distribution (no npm/build tools required)
+- [X] CLI theme management (`quilltap themes list/install/uninstall/validate/export/create`)
+- [X] Theme registry system with Ed25519 signatures and browser UI
+- [X] All bundled themes converted from npm plugins to `.qtap-theme` bundles
+- [X] Deprecated and removed npm theme plugin directories
 - [ ] Get theme-storybook to match the app for everything
 
 ### Virgil: Setup & Onboarding

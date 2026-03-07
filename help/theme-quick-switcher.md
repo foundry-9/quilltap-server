@@ -92,8 +92,9 @@ The menu closes when you:
 The quick-switcher shows:
 
 - **Default theme** — Always available, at the top
-- **Installed plugin themes** — Any custom themes you've installed
-- **Message if none** — "Install theme plugins for more options" if you only have the default
+- **Bundled themes** — Five themes ship with Quilltap (Art Deco, Earl Grey, Great Estate, Old School, Rains)
+- **Installed bundle themes** — Any `.qtap-theme` bundles you've installed
+- **Legacy plugin themes** — Any npm-based theme plugins (deprecated)
 
 ### Choosing a Theme
 
@@ -168,7 +169,7 @@ The quick-switcher menu is organized as:
 ┌─────────────────────┐
 │ Default Theme       │ ← Default theme always first
 │ ─────────────────── │
-│ Great Estate        │ ← Plugin themes (if any)
+│ Great Estate        │ ← Bundled & installed themes
 │ Rains               │
 │ Earl Grey           │
 │ ─────────────────── │

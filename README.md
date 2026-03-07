@@ -199,7 +199,7 @@ For best results we recommend Ollama or OpenAI for embedding, a lightweight mode
 
 ## Themes & Appearance
 
-Switch themes live without reloading — instant redecoration, no painters required. Five bundled themes ship with the application, and the plugin system supports custom themes:
+Switch themes live without reloading — instant redecoration, no painters required. Five bundled themes ship with the application:
 
 | Theme | Style |
 | ----- | ----- |
@@ -208,6 +208,8 @@ Switch themes live without reloading — instant redecoration, no painters requi
 | **The Great Estate** | Warm, manor-inspired design with mahogany and gold |
 | **Earl Grey** | High-contrast dark theme with modern minimal styling |
 | **Rains** | Warm, earthy palette with cozy amber accents |
+
+Themes are distributed as `.qtap-theme` bundles — declarative archives containing JSON design tokens, CSS, fonts, and images. No build tools, no npm packages, no TypeScript — just edit and install. Create your own with `npx create-quilltap-theme my-theme`, manage from the CLI with `npx quilltap themes`, or browse and install from theme registries in Settings with Ed25519 signature verification.
 
 Themes can override subsystem names and images, letting each theme define its own personality for the application.
 
@@ -251,7 +253,7 @@ Quilltap was built to be extended. The plugin system supports seven extension po
 | **LLM Provider** | Add new AI chat services with tool use, streaming, and multimodal support |
 | **Image Provider** | Image generation backends (bundled: OpenAI/DALL-E, Google Imagen, xAI/Grok) |
 | **Embedding Provider** | Semantic search and memory embedding (bundled: OpenAI, Ollama, built-in) |
-| **Theme** | Custom visual styles with full control over the CSS token system |
+| **Theme** | Custom visual styles via `.qtap-theme` bundles or legacy npm plugins |
 | **Template** | Roleplay formatting templates for different prompt styles |
 | **Tool** | Custom LLM capabilities (the AI can use your tool mid-conversation) |
 | **Search Provider** | Alternative web search backends (ships with Serper.dev; swap in your own) |
@@ -279,7 +281,7 @@ npm run dev
 See the plugin development guides for each extension point:
 
 - [Provider Development](docs/PROVIDER_PLUGIN_DEVELOPMENT.md)
-- [Theme Development](docs/THEME_PLUGIN_DEVELOPMENT.md)
+- [Theme Development](docs/THEME_PLUGIN_DEVELOPMENT.md) (legacy plugin format; new themes use `.qtap-theme` bundles)
 - [Template Development](docs/TEMPLATE_PLUGIN_DEVELOPMENT.md)
 - [Tool Development](docs/TOOL_PLUGIN_DEVELOPMENT.md)
 - [Search Provider Development](docs/SEARCH_PLUGIN_DEVELOPMENT.md)

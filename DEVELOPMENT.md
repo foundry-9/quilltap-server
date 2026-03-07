@@ -365,23 +365,37 @@ Plugins are self-contained modules in `plugins/src/` that provide:
 
 - **LLM Providers** - Connect to AI services (OpenAI, Anthropic, Google, etc.)
 - **Storage Backends** - S3-compatible file storage
-- **Themes** - Visual theme packs
+- **Themes** - Visual theme packs (deprecated as plugins; use `.qtap-theme` bundles instead)
 - **Roleplay Templates** - Message formatting templates
 - **Tool Providers** - Custom LLM tools (MCP connector, etc.)
 
 See [plugins/README.md](plugins/README.md) for the plugin developer guide.
 
-For theme plugin development, use the scaffolding CLI and Storybook:
+### Theme Development
+
+Themes are now distributed as `.qtap-theme` bundles — declarative zip archives containing JSON tokens, CSS, fonts, and images. No npm, esbuild, or TypeScript required.
 
 ```bash
-# Create a new theme plugin
-npm init quilltap-theme my-theme
+# Create a new theme (bundle format, recommended)
+npx create-quilltap-theme my-theme
 
-# Run Storybook to preview theme changes
-npm run storybook
+# Create a legacy npm plugin theme (deprecated)
+npx create-quilltap-theme my-theme --plugin
 ```
 
-See [docs/THEME_PLUGIN_DEVELOPMENT.md](docs/THEME_PLUGIN_DEVELOPMENT.md) for the complete theme development guide.
+Manage themes via CLI:
+
+```bash
+npx quilltap themes list              # List all installed themes
+npx quilltap themes validate my.qtap-theme  # Validate a bundle
+npx quilltap themes install my.qtap-theme   # Install a bundle
+npx quilltap themes export earl-grey        # Export any theme as a bundle
+npx quilltap themes search "dark"           # Search registries
+```
+
+Bundled themes ship in `themes/bundled/`. User-installed themes go to `<dataDir>/themes/<themeId>/`.
+
+See [docs/THEME_PLUGIN_DEVELOPMENT.md](docs/THEME_PLUGIN_DEVELOPMENT.md) for the legacy plugin format guide.
 
 ## Logging
 

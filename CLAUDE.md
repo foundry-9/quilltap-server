@@ -89,12 +89,33 @@ Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/
 - **Details for things already implemented** are in [the README](README.md)
 - **Roadmap for future development** is in the files in the `features/` directory, with completed development in `features/complete/`
 
-## qt-\* CSS tokens and semantic classes for themes
+## Themes
+
+### Theme Distribution
+
+- **Bundle format (.qtap-theme)** is the primary and recommended way to distribute themes — declarative zip archives containing JSON tokens, CSS, fonts, and images with no build tools required
+- **Plugin format (npm)** is deprecated — existing plugin themes still work but new themes should use bundles
+- All 5 bundled themes (Art Deco, Earl Grey, Great Estate, Old School, Rains) ship as `.qtap-theme` bundle directories in `themes/bundled/` — the old `plugins/dist/qtap-plugin-theme-*` directories have been removed
+- Theme bundles are stored at `<dataDir>/themes/<themeId>/` with an index at `<dataDir>/themes/themes-index.json`
+- Theme registries allow browsing/installing themes from remote sources with Ed25519 signature verification
+- `create-quilltap-theme` v2.0.0+ defaults to bundle format; use `--plugin` for legacy npm plugin format
+
+### Theme Architecture
+
+- Theme registry is a singleton at `lib/themes/theme-registry.ts` with three source types: `'default'`, `'plugin'`, `'bundle'`
+- Bundle loader at `lib/themes/bundle-loader.ts` handles validation, install, uninstall, and loading
+- Registry client at `lib/themes/registry-client.ts` manages remote sources with caching and signature verification
+- Ed25519 crypto at `lib/themes/crypto.ts` for signing/verifying registries and bundles
+- Bundle manifest schema: `QtapThemeManifestSchema` in `lib/themes/types.ts`; JSON Schema at `public/schemas/qtap-theme.schema.json`
+- Asset/font serving routes at `app/api/themes/assets/` and `app/api/themes/fonts/` handle both plugin and bundle paths (bundle paths use `bundle:<themeId>` prefix)
+- CLI: `npx quilltap themes` subcommands (list/install/uninstall/validate/export/create/search/update/registry)
+
+### qt-* CSS tokens and semantic classes
 
 - Themes and styling should depend primarily on the `qt-*` semantic utility classes that we have defined. When possible, use those and update those with Tailwind and other things. That way the themes will always be able to override changes. **IMPORTANT:** If you add new Tailwind classes, then almost certainly you should be adding them to the `qt-*` utility classes instead, and then apply those classes to the components you want to change.
-- qt-* significant changes need to be appropriately reflected in the stylebook, the [theme-stylebook](/packages/theme-storybook) package, and maybe in the [create-quilltap-theme](/packages/create-quilltap-theme) package, as well as updating the bundled themes as necessary.
+- qt-* significant changes need to be appropriately reflected in the stylebook, the [theme-storybook](/packages/theme-storybook) package, and maybe in the [create-quilltap-theme](/packages/create-quilltap-theme) package, as well as updating the bundled themes as necessary.
   - **packages**: find in [packages/](/packages/)
-  - **plugins**: bundled theme plugins are in [plugins/dist/qtap-plugin-theme-*](/plugins/dist/)
+  - **bundled themes**: shipped in [themes/bundled/](/themes/bundled/)
 
 ## Claude-specific instructions
 
