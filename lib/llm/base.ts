@@ -108,6 +108,8 @@ export interface LLMParams {
   responseFormat?: ResponseFormat
   // Provider-specific parameters from profile (e.g., fallbackModels, providerPreferences)
   profileParameters?: Record<string, unknown>
+  // Previous response ID for conversation chaining (OpenAI Responses API)
+  previousResponseId?: string
 }
 
 // Cache usage statistics (OpenRouter, Anthropic)

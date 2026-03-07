@@ -39,6 +39,8 @@ export interface StreamOptions {
   messageId?: string
   chatId?: string
   characterId?: string
+  /** Previous response ID for conversation chaining (OpenAI Responses API) */
+  previousResponseId?: string
 }
 
 /**
@@ -275,7 +277,7 @@ export async function* streamMessage(
   rawResponse?: unknown
   thoughtSignature?: string
 }> {
-  const { messages, connectionProfile, apiKey, modelParams, tools, useNativeWebSearch, userId, messageId, chatId, characterId } = options
+  const { messages, connectionProfile, apiKey, modelParams, tools, useNativeWebSearch, userId, messageId, chatId, characterId, previousResponseId } = options
 
   const provider = await createLLMProvider(
     connectionProfile.provider,
@@ -309,6 +311,7 @@ export async function* streamMessage(
       tools: tools.length > 0 ? tools : undefined,
       webSearchEnabled: useNativeWebSearch,
       profileParameters: modelParams,
+      previousResponseId,
     },
     apiKey
   )) {

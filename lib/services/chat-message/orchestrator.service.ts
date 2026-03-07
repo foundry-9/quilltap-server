@@ -980,6 +980,28 @@ async function processMessage(
   // Pre-generate assistant message ID so logs can reference it
   const preGeneratedAssistantMessageId = crypto.randomUUID()
 
+  // Extract previous response ID for conversation chaining (OpenAI Responses API)
+  // This allows OpenAI to use its internal cache, reducing input token costs
+  let previousResponseId: string | undefined
+  if (effectiveProfile.provider === 'OPENAI') {
+    // Find the last assistant message with a Responses API ID
+    for (let i = existingMessages.length - 1; i >= 0; i--) {
+      const msg = existingMessages[i]
+      if (msg.type === 'message' && msg.role === 'ASSISTANT' && msg.rawResponse) {
+        const raw = msg.rawResponse as Record<string, unknown>
+        if (typeof raw.id === 'string' && raw.id.startsWith('resp_')) {
+          previousResponseId = raw.id
+          logger.debug('Found previous response ID for conversation chaining', {
+            chatId,
+            previousResponseId,
+            messageId: msg.id,
+          })
+          break
+        }
+      }
+    }
+  }
+
   // Send status update for sending to LLM
   safeEnqueue(controller, encodeStatusEvent(encoder, {
     stage: 'sending',
@@ -1003,6 +1025,7 @@ async function processMessage(
       messageId: preGeneratedAssistantMessageId,
       chatId,
       characterId: character.id,
+      previousResponseId,
     })) {
       if (chunk.content) {
         // Send streaming status on first content

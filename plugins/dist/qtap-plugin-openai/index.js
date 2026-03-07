@@ -7181,6 +7181,20 @@ var OpenAIProvider = class {
     return { input, instructions, attachmentResults: { sent, failed } };
   }
   /**
+   * Extract only the last user message from the input for use with previous_response_id.
+   * When chaining, OpenAI reconstructs the conversation from the previous response,
+   * so we only need to send the new user message.
+   */
+  extractLastUserMessage(input) {
+    for (let i = input.length - 1; i >= 0; i--) {
+      const item = input[i];
+      if ("role" in item && item.role === "user") {
+        return [item];
+      }
+    }
+    return input.length > 0 ? [input[input.length - 1]] : [];
+  }
+  /**
    * Convert Chat Completions-format tools to Responses API function tools
    */
   formatToolsForResponsesAPI(tools) {
@@ -7271,29 +7285,16 @@ var OpenAIProvider = class {
     }
     return void 0;
   }
-  async sendMessage(params, apiKey) {
+  /**
+   * Build the common request parameters shared between sendMessage and streamMessage
+   */
+  buildBaseRequestParams(params, input, instructions) {
     const isReasoning = isReasoningModel(params.model);
-    const client = new OpenAI({
-      apiKey,
-      dangerouslyAllowBrowser: process.env.NODE_ENV === "test"
-    });
-    const { input, instructions, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
-    logger.debug("Preparing Responses API request", {
-      context: "OpenAIProvider.sendMessage",
-      model: params.model,
-      isReasoning,
-      messageCount: input.length,
-      hasInstructions: !!instructions,
-      hasTools: !!(params.tools && params.tools.length > 0),
-      webSearchEnabled: !!params.webSearchEnabled
-    });
     const requestParams = {
       model: params.model,
       input,
       store: false,
-      // Stateless operation - Quilltap manages history locally
-      max_output_tokens: params.maxTokens ?? 4096,
-      stream: false
+      max_output_tokens: params.maxTokens ?? 4096
     };
     if (instructions) {
       requestParams.instructions = instructions;
@@ -7315,8 +7316,7 @@ var OpenAIProvider = class {
       requestParams.include = ["web_search_call.action.sources"];
     }
     if (params.tools && params.tools.length > 0) {
-      const functionTools = this.formatToolsForResponsesAPI(params.tools);
-      tools.push(...functionTools);
+      tools.push(...this.formatToolsForResponsesAPI(params.tools));
     }
     if (tools.length > 0) {
       requestParams.tools = tools;
@@ -7325,10 +7325,83 @@ var OpenAIProvider = class {
     if (textConfig) {
       requestParams.text = textConfig;
     }
+    return requestParams;
+  }
+  /**
+   * Build LLMResponse from a Responses API response
+   */
+  buildLLMResponse(response, attachmentResults) {
+    return {
+      content: response.output_text,
+      finishReason: this.getFinishReason(response),
+      usage: {
+        promptTokens: response.usage?.input_tokens ?? 0,
+        completionTokens: response.usage?.output_tokens ?? 0,
+        totalTokens: response.usage?.total_tokens ?? 0
+      },
+      raw: this.buildRawResponse(response),
+      attachmentResults
+    };
+  }
+  async sendMessage(params, apiKey) {
+    const client = new OpenAI({
+      apiKey,
+      dangerouslyAllowBrowser: process.env.NODE_ENV === "test"
+    });
+    const { input, instructions, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
+    logger.debug("Preparing Responses API request", {
+      context: "OpenAIProvider.sendMessage",
+      model: params.model,
+      isReasoning: isReasoningModel(params.model),
+      messageCount: input.length,
+      hasInstructions: !!instructions,
+      hasPreviousResponseId: !!params.previousResponseId
+    });
+    const baseParams = this.buildBaseRequestParams(params, input, instructions);
+    if (params.previousResponseId) {
+      try {
+        const chainedInput = this.extractLastUserMessage(input);
+        const chainedParams = {
+          ...baseParams,
+          input: chainedInput,
+          previous_response_id: params.previousResponseId,
+          stream: false
+        };
+        logger.debug("Attempting conversation chaining", {
+          context: "OpenAIProvider.sendMessage",
+          previousResponseId: params.previousResponseId,
+          chainedInputCount: chainedInput.length,
+          fullInputCount: input.length
+        });
+        const response2 = await client.responses.create(chainedParams);
+        if (response2.error) {
+          throw new Error(`OpenAI API error: ${response2.error.message}`);
+        }
+        logger.debug("Conversation chaining succeeded", {
+          context: "OpenAIProvider.sendMessage",
+          model: response2.model,
+          status: response2.status,
+          inputTokens: response2.usage?.input_tokens,
+          outputTokens: response2.usage?.output_tokens,
+          cachedTokens: response2.usage?.input_tokens_details?.cached_tokens
+        });
+        return this.buildLLMResponse(response2, attachmentResults);
+      } catch (error) {
+        logger.warn("Conversation chaining failed, falling back to full input", {
+          context: "OpenAIProvider.sendMessage",
+          previousResponseId: params.previousResponseId,
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    }
+    const requestParams = {
+      ...baseParams,
+      stream: false
+    };
     logger.debug("Sending Responses API request", {
       context: "OpenAIProvider.sendMessage",
       model: params.model,
-      toolCount: tools.length
+      inputCount: input.length
     });
     const response = await client.responses.create(requestParams);
     if (response.error) {
@@ -7339,86 +7412,67 @@ var OpenAIProvider = class {
       });
       throw new Error(`OpenAI API error: ${response.error.message}`);
     }
-    const finishReason = this.getFinishReason(response);
-    const raw = this.buildRawResponse(response);
     logger.debug("Responses API request completed", {
       context: "OpenAIProvider.sendMessage",
       model: response.model,
       status: response.status,
-      finishReason,
       inputTokens: response.usage?.input_tokens,
       outputTokens: response.usage?.output_tokens,
       cachedTokens: response.usage?.input_tokens_details?.cached_tokens,
       reasoningTokens: response.usage?.output_tokens_details?.reasoning_tokens
     });
-    return {
-      content: response.output_text,
-      finishReason,
-      usage: {
-        promptTokens: response.usage?.input_tokens ?? 0,
-        completionTokens: response.usage?.output_tokens ?? 0,
-        totalTokens: response.usage?.total_tokens ?? 0
-      },
-      raw,
-      attachmentResults
-    };
+    return this.buildLLMResponse(response, attachmentResults);
   }
   async *streamMessage(params, apiKey) {
-    const isReasoning = isReasoningModel(params.model);
     const client = new OpenAI({
       apiKey,
       dangerouslyAllowBrowser: process.env.NODE_ENV === "test"
     });
     const { input, instructions, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
+    const baseParams = this.buildBaseRequestParams(params, input, instructions);
     logger.debug("Preparing streaming Responses API request", {
       context: "OpenAIProvider.streamMessage",
       model: params.model,
-      isReasoning,
       messageCount: input.length,
-      hasInstructions: !!instructions
+      hasPreviousResponseId: !!params.previousResponseId
     });
-    const requestParams = {
-      model: params.model,
-      input,
-      store: false,
-      max_output_tokens: params.maxTokens ?? 4096,
-      stream: true
-    };
-    if (instructions) {
-      requestParams.instructions = instructions;
-    }
-    if (!isReasoning) {
-      requestParams.top_p = params.topP ?? 1;
-      if (params.temperature !== void 0) {
-        requestParams.temperature = params.temperature;
+    let useChaining = !!params.previousResponseId;
+    let stream = null;
+    if (useChaining) {
+      try {
+        const chainedInput = this.extractLastUserMessage(input);
+        const chainedParams = {
+          ...baseParams,
+          input: chainedInput,
+          previous_response_id: params.previousResponseId,
+          stream: true
+        };
+        logger.debug("Attempting streaming conversation chaining", {
+          context: "OpenAIProvider.streamMessage",
+          previousResponseId: params.previousResponseId,
+          chainedInputCount: chainedInput.length
+        });
+        stream = await client.responses.create(chainedParams);
+      } catch (error) {
+        logger.warn("Streaming conversation chaining failed, falling back to full input", {
+          context: "OpenAIProvider.streamMessage",
+          previousResponseId: params.previousResponseId,
+          error: error instanceof Error ? error.message : String(error)
+        });
+        useChaining = false;
       }
-    } else {
-      const minTokensForReasoning = 4096;
-      if ((params.maxTokens ?? 0) < minTokensForReasoning) {
-        requestParams.max_output_tokens = minTokensForReasoning;
-      }
     }
-    const tools = [];
-    if (params.webSearchEnabled) {
-      tools.push({ type: "web_search_preview" });
-      requestParams.include = ["web_search_call.action.sources"];
+    if (!stream) {
+      const requestParams = {
+        ...baseParams,
+        stream: true
+      };
+      logger.debug("Sending streaming Responses API request", {
+        context: "OpenAIProvider.streamMessage",
+        model: params.model
+      });
+      stream = await client.responses.create(requestParams);
     }
-    if (params.tools && params.tools.length > 0) {
-      const functionTools = this.formatToolsForResponsesAPI(params.tools);
-      tools.push(...functionTools);
-    }
-    if (tools.length > 0) {
-      requestParams.tools = tools;
-    }
-    const textConfig = this.buildTextConfig(params.responseFormat);
-    if (textConfig) {
-      requestParams.text = textConfig;
-    }
-    logger.debug("Sending streaming Responses API request", {
-      context: "OpenAIProvider.streamMessage",
-      model: params.model
-    });
-    const stream = await client.responses.create(requestParams);
     let finalResponse = null;
     for await (const event of stream) {
       if (event.type === "response.output_text.delta") {
@@ -7439,6 +7493,7 @@ var OpenAIProvider = class {
         logger.debug("Stream completed", {
           context: "OpenAIProvider.streamMessage",
           status: finalResponse.status,
+          usedChaining: useChaining,
           inputTokens: finalResponse.usage?.input_tokens,
           outputTokens: finalResponse.usage?.output_tokens,
           cachedTokens: finalResponse.usage?.input_tokens_details?.cached_tokens,
