@@ -934,6 +934,13 @@ describe('Context Manager', () => {
       expect(result).toContain('User or any other character')
     })
 
+    it('instructs LLM not to prefix response with character name', () => {
+      const result = buildIdentityReinforcement('Friday', 'Alex')
+      expect(result).toContain('Do not prefix or label your response with your name')
+      expect(result).toContain('[Friday]')
+      expect(result).toContain('Friday:')
+    })
+
     it('lists other participant names in multi-character mode', () => {
       const result = buildIdentityReinforcement('Artemis', 'Alex', ['Luna', 'Orion'])
       expect(result).toContain('Luna')

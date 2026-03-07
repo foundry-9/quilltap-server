@@ -4,6 +4,7 @@
 
 ### 3.3-dev
 
+- fix: Identity reinforcement now instructs the LLM not to prefix responses with the character's name (e.g., `[Friday]` or `Friday:`), reducing unwanted name labels in chat output
 - fix: Context compression only fires once then never re-compresses — `triggerAsyncCompression` considered the cache valid for up to 50 messages, so compression would run at message 6 and not again until message 56; additionally, mismatched message count domains between the orchestrator (all message events) and the compression cache (visible USER/ASSISTANT messages only) caused the dynamic window to grow to 40+ messages instead of the configured 5; now re-compresses every `windowSize` messages and uses consistent visible message counts throughout
 - docs: Update all theme documentation to reflect bundle-first architecture — CLAUDE.md, README.md, DEVELOPMENT.md, THEME_PLUGIN_DEVELOPMENT.md (deprecation notice), appearance README, create-quilltap-theme README/CHANGELOG (v2.0.0), quilltap CLI README (theme commands), theme-quick-switcher help, ROADMAP (completed items), and documentation inventory
 - chore: Remove deprecated npm theme plugin directories (`plugins/dist/qtap-plugin-theme-*`) — all 5 themes (Art Deco, Earl Grey, Great Estate, Old School, Rains) are now loaded exclusively from their `.qtap-theme` bundle equivalents in `themes/bundled/`
