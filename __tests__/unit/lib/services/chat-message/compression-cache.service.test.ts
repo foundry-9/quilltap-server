@@ -202,6 +202,78 @@ describe('Compression Cache Service', () => {
       expect(mockApplyContextCompression).not.toHaveBeenCalled()
     })
 
+    it('re-triggers compression when windowSize or more new messages accumulate', async () => {
+      const compressionResult = makeCompressionResult()
+      mockApplyContextCompression.mockResolvedValue(compressionResult)
+
+      // First trigger with 6 messages, windowSize=2
+      const options = makeAsyncOptions()
+      triggerAsyncCompression(options)
+
+      // Wait for completion
+      await new Promise(resolve => setTimeout(resolve, 10))
+
+      // Reset mock
+      mockApplyContextCompression.mockClear()
+      mockApplyContextCompression.mockResolvedValue(makeCompressionResult({
+        compressionDetails: {
+          originalMessageCount: 8,
+          compressedMessageCount: 6,
+          windowMessageCount: 2,
+          totalSavings: 800,
+        },
+      }))
+
+      // Trigger again with 2 more messages (equals windowSize=2) — should re-compress
+      const updatedOptions = makeAsyncOptions({
+        messages: [
+          { role: 'user', content: 'Hello' },
+          { role: 'assistant', content: 'Hi there!' },
+          { role: 'user', content: 'How are you?' },
+          { role: 'assistant', content: 'I am doing well!' },
+          { role: 'user', content: 'Great to hear' },
+          { role: 'assistant', content: 'Thanks!' },
+          { role: 'user', content: 'New message 1' },
+          { role: 'assistant', content: 'New response 1' },
+        ],
+      })
+      triggerAsyncCompression(updatedOptions)
+
+      // Should have triggered re-compression because messagesSinceCache (2) >= windowSize (2)
+      expect(mockApplyContextCompression).toHaveBeenCalled()
+    })
+
+    it('does not re-trigger when fewer than windowSize new messages', async () => {
+      const compressionResult = makeCompressionResult()
+      mockApplyContextCompression.mockResolvedValue(compressionResult)
+
+      // First trigger with 6 messages, windowSize=2
+      const options = makeAsyncOptions()
+      triggerAsyncCompression(options)
+
+      // Wait for completion
+      await new Promise(resolve => setTimeout(resolve, 10))
+
+      // Reset mock
+      mockApplyContextCompression.mockClear()
+
+      // Trigger again with only 1 more message (less than windowSize=2) — should NOT re-compress
+      const updatedOptions = makeAsyncOptions({
+        messages: [
+          { role: 'user', content: 'Hello' },
+          { role: 'assistant', content: 'Hi there!' },
+          { role: 'user', content: 'How are you?' },
+          { role: 'assistant', content: 'I am doing well!' },
+          { role: 'user', content: 'Great to hear' },
+          { role: 'assistant', content: 'Thanks!' },
+          { role: 'user', content: 'New message' },
+        ],
+      })
+      triggerAsyncCompression(updatedOptions)
+
+      expect(mockApplyContextCompression).not.toHaveBeenCalled()
+    })
+
     it('stores cache entry with promise while in-flight', () => {
       // Create a promise that we control
       let resolveCompression: (result: ContextCompressionResult) => void

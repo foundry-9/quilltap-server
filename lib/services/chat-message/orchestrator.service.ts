@@ -668,7 +668,11 @@ async function processMessage(
         characterId: character.id,
       }))
 
-      const actualMessageCount = existingMessages.filter(m => m.type === 'message').length
+      // Count only visible USER/ASSISTANT messages to match what triggerAsyncCompression
+      // uses (via extractVisibleConversation). Using a broader filter (type === 'message')
+      // inflates the count and causes the dynamic window to grow excessively.
+      const visibleMessages = extractVisibleConversation(existingMessages)
+      const actualMessageCount = visibleMessages.length
       const result = await getCachedCompression(chatId, actualMessageCount)
       if (result) {
         logger.info('Using cached compression from async pre-computation', {

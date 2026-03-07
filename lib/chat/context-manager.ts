@@ -471,6 +471,10 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       finalSystemPrompt
     )
 
+    // Only keep window messages (the ones that weren't compressed)
+    // Extract visible messages first since we need the count for dynamic window sizing
+    const visibleMessages = extractVisibleConversation(existingMessages)
+
     // Calculate effective window size
     // When using a fallback cache (older compression), we need to include all
     // messages since the compression point, not just the standard windowSize.
@@ -479,26 +483,22 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     const { cachedCompressionMessageCount } = options
 
     let effectiveWindowSize = standardWindowSize
-    if (cachedCompressionMessageCount !== undefined && cachedCompressionMessageCount < existingMessages.length) {
-      // Cache was computed for fewer messages than we have now
+    if (cachedCompressionMessageCount !== undefined && cachedCompressionMessageCount < visibleMessages.length) {
+      // Cache was computed for fewer visible messages than we have now
       // The compressed history covers messages up to (cachedCount - standardWindowSize)
       // So we need to include all messages after that point
-      // effectiveWindowSize = currentCount - (cachedCount - standardWindowSize)
-      //                     = currentCount - cachedCount + standardWindowSize
-      const messagesSinceCache = existingMessages.length - cachedCompressionMessageCount
+      // Use visibleMessages.length to match the count domain used by triggerAsyncCompression
+      const messagesSinceCache = visibleMessages.length - cachedCompressionMessageCount
       effectiveWindowSize = standardWindowSize + messagesSinceCache
 
       logger.info('[ContextManager] Using dynamic window size for fallback cache', {
         standardWindowSize,
         cachedMessageCount: cachedCompressionMessageCount,
-        currentMessageCount: existingMessages.length,
+        currentVisibleMessageCount: visibleMessages.length,
         messagesSinceCache,
         effectiveWindowSize,
       })
     }
-
-    // Only keep window messages (the ones that weren't compressed)
-    const visibleMessages = extractVisibleConversation(existingMessages)
     const { windowMessages } = splitMessagesForCompression(
       visibleMessages,
       effectiveWindowSize

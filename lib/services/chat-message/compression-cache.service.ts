@@ -206,7 +206,20 @@ export function triggerAsyncCompression(options: AsyncCompressionOptions): void 
   // Check if we already have a valid cache entry
   const existingEntry = compressionCache.get(chatId)
   if (existingEntry && isCacheValid(existingEntry, messages.length, systemPromptHash)) {
-    return
+    // Even if cache structure is valid, re-compress when enough new messages
+    // have accumulated. Without this, the "dynamic window" grows unbounded
+    // (effective window = windowSize + messagesSinceCache), defeating compression.
+    const messagesSinceCache = messages.length - existingEntry.messageCount
+    if (messagesSinceCache < compressionOptions.windowSize) {
+      return
+    }
+    logger.info('[CompressionCache] Cache valid but stale, re-compressing to incorporate new messages', {
+      chatId,
+      cachedMessageCount: existingEntry.messageCount,
+      currentMessageCount: messages.length,
+      messagesSinceCache,
+      windowSize: compressionOptions.windowSize,
+    })
   }
 
   logger.info('[CompressionCache] Starting async pre-compression', {
