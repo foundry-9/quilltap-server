@@ -264,6 +264,7 @@ export async function handleGet(
             renderedHtml,
             provider: event.provider || null,
             modelName: event.modelName || null,
+            targetParticipantIds: event.targetParticipantIds || null,
           };
         })
     ).then((results) => results.filter(Boolean));

@@ -456,6 +456,12 @@
   --qt-chat-assistant-border: var(--stroke-soft);
   --qt-chat-assistant-font: var(--font-claude-response);
 
+  /* Chat: Whisper messages — stormy indigo, like rain on dark glass */
+  --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 55%, hsl(240 25% 28%) 45%);
+  --qt-chat-whisper-fg: var(--qt-chat-assistant-fg);
+  --qt-chat-whisper-border: hsl(240 20% 40%);
+  --qt-chat-whisper-label-fg: hsl(240 18% 55%);
+
   --qt-chat-composer-bg: hsl(var(--bg-000));
   --qt-chat-composer-border: var(--stroke-strong);
   --qt-chat-composer-radius: var(--radius-md);
@@ -1059,6 +1065,12 @@
 
   /* Toggle knob - dark warm on light */
   --qt-toggle-knob-bg: hsl(30 10% 15%);
+
+  /* Whisper — warm slate-blue for light mode */
+  --qt-chat-whisper-bg: hsl(240 18% 90%);
+  --qt-chat-whisper-fg: hsl(240 15% 25%);
+  --qt-chat-whisper-border: hsl(240 15% 72%);
+  --qt-chat-whisper-label-fg: hsl(240 12% 50%);
 
   /* Overlay - warm brown tints for light mode */
   --qt-overlay-bg: hsl(35 15% 10% / 0.85);

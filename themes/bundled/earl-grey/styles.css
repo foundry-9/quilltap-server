@@ -430,6 +430,12 @@
   --qt-chat-assistant-border: transparent;
   --qt-chat-assistant-font: var(--font-claude-response);
 
+  /* Chat: Whisper messages — muted lavender, tea-steeped secrets */
+  --qt-chat-whisper-bg: hsl(270 15% 22%);
+  --qt-chat-whisper-fg: hsl(270 10% 82%);
+  --qt-chat-whisper-border: hsl(270 20% 35%);
+  --qt-chat-whisper-label-fg: hsl(270 15% 55%);
+
   --qt-chat-composer-bg: hsl(var(--bg-300));
   --qt-chat-composer-border: transparent;
   --qt-chat-composer-radius: 26px;
@@ -1025,6 +1031,12 @@
   --qt-rp-ooc-bg: hsl(120 30% 95%);
   --qt-rp-button-ooc-bg: hsl(120 40% 90%);
   --qt-rp-button-ooc-fg: hsl(120 60% 25%);
+
+  /* Whisper — lighter lavender for light mode */
+  --qt-chat-whisper-bg: hsl(270 20% 90%);
+  --qt-chat-whisper-fg: hsl(270 15% 25%);
+  --qt-chat-whisper-border: hsl(270 25% 72%);
+  --qt-chat-whisper-label-fg: hsl(270 20% 55%);
 
   /* Sidebar border - Subtle in light mode */
   --qt-sidebar-border: hsl(var(--border-100));

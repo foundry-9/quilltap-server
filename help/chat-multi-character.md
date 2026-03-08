@@ -282,6 +282,28 @@ Set which image service to use when this character generates images:
 1. Configure in character settings within the chat
 2. Each character can use different image services
 
+## Whispers
+
+In the bustling parlour of a multi-character chat—where three or more distinguished personalities hold court—one occasionally finds oneself in need of a *private word*. This is where whispers come in, much like those delicious asides one overhears (or, more properly, does *not* overhear) at a particularly eventful garden party.
+
+### How Whispers Work
+
+A whisper is a message visible only to its sender and its intended recipient. All other characters in the chat remain blissfully unaware of its contents, rather like a note passed under the table at a dinner party hosted by someone with excellent taste and questionable associates.
+
+**For AI Characters:** Characters with native tool-calling abilities will discover the `whisper` tool at their disposal. They may use it to send private asides, secret warnings, or clandestine plans to a specific character by name or alias.
+
+**For You, the Distinguished Reader:** When participating in a chat with three or more characters, you will find a small speech-bubble icon beside each character in the participant sidebar. Clicking it opens a whisper dialog—a discreet little window where you may compose your private communique.
+
+### Visibility
+
+- **Default:** Whispers between AI characters are hidden from the chat display, preserving the illusion that some things are, in fact, private.
+- **Show All Whispers:** A toggle in the chat header lets you peek behind the curtain and see all whispers, including those between characters. These "overheard" whispers appear with a distinctive faded style, as if glimpsed through a frosted window.
+- **Your Whispers:** Whispers you send, or whispers addressed to characters you control, are always visible to you.
+
+### Context and Memory
+
+The machinery behind the curtain is equally discreet. When assembling context for an AI character's next response, whispers addressed to *other* characters are filtered out entirely—your scheming villain will never accidentally reference a secret plan whispered between two heroes. The Commonplace Book memory system likewise respects whisper privacy, ensuring that memories extracted from whispered messages are attributed only to the participants involved.
+
 ## Best Practices
 
 ### Scene Management

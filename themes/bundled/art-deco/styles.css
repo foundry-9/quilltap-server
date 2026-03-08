@@ -274,6 +274,12 @@
   --qt-chat-assistant-font: var(--theme-font-serif);
   --qt-chat-assistant-font-weight: 500;
 
+  /* Chat: Whisper messages — midnight violet with gold accents */
+  --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 55%, hsl(270 35% 30%) 45%);
+  --qt-chat-whisper-fg: var(--qt-chat-assistant-fg);
+  --qt-chat-whisper-border: hsl(270 40% 45%);
+  --qt-chat-whisper-label-fg: hsl(270 30% 55%);
+
   --qt-chat-composer-bg: var(--color-background);
   --qt-chat-composer-border: var(--color-border);
   --qt-chat-composer-radius: var(--radius-lg);
@@ -668,6 +674,11 @@
   --qt-response-status-sending-fg: hsl(210 80% 70%);
   --qt-response-status-streaming-fg: hsl(142 76% 65%);
   --qt-response-status-tool-fg: hsl(43 90% 65%);
+
+  /* Whisper — deeper violet for dark mode */
+  --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 50%, hsl(270 40% 18%) 50%);
+  --qt-chat-whisper-border: hsl(270 45% 38%);
+  --qt-chat-whisper-label-fg: hsl(270 50% 70%);
 
   /* Links — gold in dark mode */
   --qt-link-color: var(--deco-gold);

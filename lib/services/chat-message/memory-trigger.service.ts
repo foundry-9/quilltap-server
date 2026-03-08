@@ -151,6 +151,15 @@ export async function triggerInterCharacterMemory(
       .filter(msg => {
         return msg.role === 'ASSISTANT' && msg.participantId && msg.participantId !== options.characterParticipantId
       })
+      .filter(msg => {
+        // Skip whisper messages not involving this character
+        const targetIds = (msg as any).targetParticipantIds
+        if (targetIds && Array.isArray(targetIds) && targetIds.length > 0) {
+          // Only include if this character is the sender or target
+          return msg.participantId === options.characterParticipantId || targetIds.includes(options.characterParticipantId)
+        }
+        return true // Public message
+      })
       .slice(-5) // Look at last 5 assistant messages from others
 
     for (const otherMsg of otherCharacterMessages) {

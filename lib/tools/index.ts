@@ -203,6 +203,25 @@ export {
   type RngToolContext,
 } from './handlers/rng-handler';
 
+// Whisper Tool (Private Messages in Multi-Character Chats)
+export {
+  whisperToolDefinition,
+  anthropicWhisperToolDefinition,
+  getOpenAIWhisperTool,
+  getAnthropicWhisperTool,
+  getGoogleWhisperTool,
+  validateWhisperInput,
+  type WhisperToolInput,
+  type WhisperToolOutput,
+} from './whisper-tool';
+
+export {
+  executeWhisperTool,
+  formatWhisperResults,
+  WhisperError,
+  type WhisperToolContext,
+} from './handlers/whisper-handler';
+
 // State (Persistent State Management) Tool
 export {
   stateToolDefinition,

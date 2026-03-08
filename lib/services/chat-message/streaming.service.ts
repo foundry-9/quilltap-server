@@ -134,7 +134,9 @@ export async function buildTools(
   /** List of disabled group patterns (e.g., "plugin:mcp", "plugin:mcp:subgroup:filesystem") */
   disabledToolGroups?: string[],
   /** Whether agent mode is enabled (enables submit_final_response tool) */
-  agentModeEnabled?: boolean
+  agentModeEnabled?: boolean,
+  /** Whether this is a multi-character chat (enables whisper tool) */
+  isMultiCharacter?: boolean
 ): Promise<{
   tools: unknown[]
   modelSupportsNativeTools: boolean
@@ -202,6 +204,7 @@ export async function buildTools(
     projectInfo: !!projectId,
     requestFullContext: !!requestFullContext,
     agentMode: !!agentModeEnabled,
+    whisper: !!isMultiCharacter,
     shellInteractivity: isShellEnvironment(),
     toolConfigs,
   })

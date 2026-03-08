@@ -56,6 +56,8 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
         const stream = await handleSendMessage(repos, id, user.id, {
           content: parsed.content,
           fileIds: parsed.fileIds,
+          pendingToolResults: parsed.pendingToolResults,
+          targetParticipantIds: parsed.targetParticipantIds,
           continueMode: false,
         });
 

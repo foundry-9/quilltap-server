@@ -107,6 +107,8 @@ import { dropApiKeyEncryptionColumnsMigration } from './drop-api-key-encryption-
 import { decryptApiKeyValuesMigration } from './decrypt-api-key-values';
 // Drop pepper_vault table (encryption simplified)
 import { dropPepperVaultMigration } from './drop-pepper-vault';
+// Add whisper target field to chat_messages
+import { addWhisperTargetFieldMigration } from './add-whisper-target-field';
 
 /**
  * All available migrations.
@@ -209,6 +211,8 @@ export const migrations: Migration[] = [
   decryptApiKeyValuesMigration,
   // Drop pepper_vault table (encryption simplified)
   dropPepperVaultMigration,
+  // Add whisper target field to chat_messages
+  addWhisperTargetFieldMigration,
 ];
 
 export {
@@ -306,4 +310,6 @@ export {
   decryptApiKeyValuesMigration,
   // Drop pepper_vault table (encryption simplified)
   dropPepperVaultMigration,
+  // Add whisper target field to chat_messages
+  addWhisperTargetFieldMigration,
 };

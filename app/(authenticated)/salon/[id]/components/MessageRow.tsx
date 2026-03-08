@@ -77,6 +77,10 @@ interface MessageRowProps {
   onHandleRemoveCharacter: (participantId: string) => void
   onHandleContinue: () => void
   onReattribute?: (messageId: string) => void
+  /** Mapping of participant IDs to display names for whisper labels */
+  participantNames?: Record<string, string>
+  /** Whether this message is a whisper being shown via "show all" and the user is not sender/target */
+  isOverheardWhisper?: boolean
 }
 
 function getImageAttachments(message: Message) {
@@ -128,7 +132,11 @@ function MessageRowInner({
   onHandleRemoveCharacter,
   onHandleContinue,
   onReattribute,
+  participantNames,
+  isOverheardWhisper = false,
 }: MessageRowProps) {
+  const isWhisper = !!(message.targetParticipantIds && message.targetParticipantIds.length > 0)
+
   const messageRowClasses = ['qt-chat-message-row']
   if (message.role === 'USER') {
     messageRowClasses.push('qt-chat-message-row-user')
@@ -170,7 +178,7 @@ function MessageRowInner({
             message.role === 'USER'
               ? 'qt-chat-message-user'
               : 'qt-chat-message-assistant'
-          }`}
+          }${isWhisper ? ' qt-chat-message-whisper' : ''}${isOverheardWhisper ? ' qt-chat-message-whisper-overheard' : ''}`}
         >
           {isEditing ? (
             <div className="space-y-2">
@@ -197,6 +205,14 @@ function MessageRowInner({
             </div>
           ) : (
             <>
+              {/* Whisper label */}
+              {isWhisper && (
+                <div className="qt-chat-whisper-label">
+                  whispered to {message.targetParticipantIds!.map(
+                    id => participantNames?.[id] || 'unknown'
+                  ).join(', ')}
+                </div>
+              )}
               {/* Embedded tool calls - shown at top of message */}
               {message.toolCalls && message.toolCalls.length > 0 && (
                 <div className="mb-3 space-y-2">
@@ -635,6 +651,10 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
   if (prevDangerFlags.length !== nextDangerFlags.length) return false
   if (prev.dangerousContentSettings?.displayMode !== next.dangerousContentSettings?.displayMode) return false
   if (prev.dangerousContentSettings?.showWarningBadges !== next.dangerousContentSettings?.showWarningBadges) return false
+
+  // Whisper props
+  if (prev.isOverheardWhisper !== next.isOverheardWhisper) return false
+  if (prev.participantNames !== next.participantNames) return false
 
   // Props are equal, skip re-render
   return true

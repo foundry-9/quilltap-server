@@ -22,6 +22,8 @@ export interface MessageWithParticipant {
   participantId?: string | null
   /** When the message was created (for history access filtering) */
   createdAt?: string
+  /** Target participant IDs for whisper messages */
+  targetParticipantIds?: string[] | null
 }
 
 /**
@@ -51,6 +53,33 @@ export function filterMessagesByHistoryAccess(
   })
 
   return filteredMessages
+}
+
+/**
+ * Filter whisper messages from context
+ * A whisper is only visible to the sender and the target(s)
+ * Public messages (no targetParticipantIds) are always visible
+ */
+export function filterWhisperMessages(
+  messages: MessageWithParticipant[],
+  respondingParticipantId: string
+): MessageWithParticipant[] {
+  return messages.filter(msg => {
+    // Public message - always include
+    if (!msg.targetParticipantIds || msg.targetParticipantIds.length === 0) {
+      return true
+    }
+    // Sender can see their own whispers
+    if (msg.participantId === respondingParticipantId) {
+      return true
+    }
+    // Target can see whispers directed at them
+    if (msg.targetParticipantIds.includes(respondingParticipantId)) {
+      return true
+    }
+    // Not involved - exclude
+    return false
+  })
 }
 
 /**

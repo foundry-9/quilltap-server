@@ -133,6 +133,8 @@ export const sendMessageSchema = z.object({
   fileIds: z.array(z.string()).optional(),
   /** Pending tool results to be saved as TOOL messages before the user message */
   pendingToolResults: z.array(pendingToolResultSchema).optional(),
+  /** Target participant IDs for whisper messages */
+  targetParticipantIds: z.array(z.string()).nullable().optional(),
 }).superRefine((data, ctx) => {
   if (data.content.trim().length === 0 &&
       (!data.fileIds || data.fileIds.length === 0) &&
@@ -194,11 +196,15 @@ async function processMessage(
   }
 
   // Resolve responding participant
+  // For whisper messages, the target participant should respond (not the default first character)
+  const respondingId = options.respondingParticipantId
+    || (options.targetParticipantIds?.length ? options.targetParticipantIds[0] : undefined)
+
   const participantResult = await resolveRespondingParticipant(
     repos,
     chat,
     userId,
-    options.respondingParticipantId,
+    respondingId,
     isContinueMode
   )
 
@@ -571,6 +577,7 @@ async function processMessage(
       createdAt: now,
       attachments: options.fileIds || [],
       participantId: userParticipantId,
+      targetParticipantIds: options.targetParticipantIds || null,
     }
 
     await repos.chats.addMessage(chatId, userMessage)
@@ -630,7 +637,8 @@ async function processMessage(
     compressionEnabled, // requestFullContext - enable the tool when compression is active
     chat.disabledTools ?? [],
     chat.disabledToolGroups ?? [],
-    agentMode.enabled // agentModeEnabled - enables submit_final_response tool
+    agentMode.enabled, // agentModeEnabled - enables submit_final_response tool
+    isMultiCharacter // isMultiCharacter - enables whisper tool
   )
 
   const usePseudoTools = checkShouldUsePseudoTools(modelSupportsNativeTools)

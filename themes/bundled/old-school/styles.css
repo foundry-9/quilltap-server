@@ -255,6 +255,12 @@
   --qt-chat-assistant-border: var(--color-border);
   --qt-chat-assistant-font: var(--font-serif);
 
+  /* Chat: Whisper messages — soft violet, classic and understated */
+  --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, hsl(270 45% 55%) 40%);
+  --qt-chat-whisper-fg: var(--qt-chat-assistant-fg);
+  --qt-chat-whisper-border: hsl(270 45% 55%);
+  --qt-chat-whisper-label-fg: hsl(270 40% 48%);
+
   --qt-chat-composer-bg: var(--color-background);
   --qt-chat-composer-border: var(--color-border);
   --qt-chat-composer-radius: var(--radius-lg);
@@ -621,6 +627,11 @@
   --qt-queue-badge-summary-bg: hsl(142 76% 40%);
   --qt-queue-badge-danger-bg: hsl(0 84% 55%);
   --qt-queue-badge-story-bg: hsl(220 15% 45%);
+
+  /* Whisper — brighter violet for dark mode */
+  --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 55%, hsl(270 40% 35%) 45%);
+  --qt-chat-whisper-border: hsl(270 40% 45%);
+  --qt-chat-whisper-label-fg: hsl(270 50% 72%);
 
   /* Response status indicator - brighter for dark mode */
   --qt-response-status-bg: color-mix(in srgb, var(--color-muted) 40%, transparent);

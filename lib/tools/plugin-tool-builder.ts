@@ -26,6 +26,7 @@ import {
   helpSearchToolDefinition,
   rngToolDefinition,
   stateToolDefinition,
+  whisperToolDefinition,
   getAllShellToolDefinitions,
 } from '@/lib/tools';
 import type { UniversalTool, ImageProviderConstraints } from '@/lib/plugins/interfaces';
@@ -139,6 +140,9 @@ export interface BuildToolsOptions {
   /** Whether to enable state (persistent state management) tool (enabled by default) */
   state?: boolean;
 
+  /** Whether to enable whisper tool (for multi-character private messaging) */
+  whisper?: boolean;
+
   /** Whether to enable submit_final_response tool (for agent mode) */
   agentMode?: boolean;
 
@@ -196,6 +200,7 @@ export async function buildToolsForProvider(
       helpSearch: options.helpSearch,
       rng: options.rng,
       state: options.state,
+      whisper: options.whisper,
       shellInteractivity: options.shellInteractivity,
       includePluginTools: options.includePluginTools,
     },
@@ -256,6 +261,12 @@ export async function buildToolsForProvider(
   if (options.state !== false) {
     universalTools.push(stateToolDefinition as UniversalTool);
     logger_.debug('Added state tool to universal tools');
+  }
+
+  // Add whisper tool if enabled (multi-character chats only)
+  if (options.whisper) {
+    universalTools.push(whisperToolDefinition as UniversalTool);
+    logger_.debug('Added whisper tool to universal tools');
   }
 
   // Add submit_final_response tool if agent mode is enabled

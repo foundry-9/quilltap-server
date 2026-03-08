@@ -50,6 +50,8 @@ interface ParticipantSidebarProps {
   onAddCharacter?: () => void
   onRemoveCharacter?: (participantId: string) => void // Phase 6: Remove character from chat
   onStopStreaming?: () => void // Stop/interrupt current generation
+  /** Callback when user wants to whisper to a participant */
+  onWhisper?: (participantId: string) => void
   // Impersonation support (Characters Not Personas)
   impersonatingParticipantIds?: string[] // Participant IDs the user is impersonating
   activeTypingParticipantId?: string | null // Which impersonated character is currently "active" for typing
@@ -80,6 +82,7 @@ export function ParticipantSidebar({
   onAddCharacter,
   onRemoveCharacter,
   onStopStreaming,
+  onWhisper,
   impersonatingParticipantIds = [],
   activeTypingParticipantId,
   onImpersonate,
@@ -159,6 +162,11 @@ export function ParticipantSidebar({
   // Count active characters (not including personas)
   const activeCharacterCount = useMemo(() => {
     return participants.filter(p => p.type === 'CHARACTER' && p.isActive).length
+  }, [participants])
+
+  // Count all active participants (characters + personas) for whisper eligibility
+  const activeParticipantCount = useMemo(() => {
+    return participants.filter(p => p.isActive).length
   }, [participants])
 
 
@@ -403,6 +411,7 @@ export function ParticipantSidebar({
               onActiveChange={onParticipantSettingsChange
                 ? (pId, active) => onParticipantSettingsChange(pId, { isActive: active })
                 : undefined}
+              onWhisper={activeParticipantCount >= 3 ? onWhisper : undefined}
             />
           )
         })}

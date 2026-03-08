@@ -18,6 +18,7 @@
   .qt-chat-message,
   .qt-chat-message-user,
   .qt-chat-message-assistant,
+  .qt-chat-message-whisper,
   .qt-chat-message-system {
     @apply relative;
     @apply transition-all duration-200;
@@ -55,6 +56,27 @@
     border: 1px solid var(--qt-chat-assistant-border);
     font-family: var(--qt-chat-assistant-font);
     font-weight: var(--qt-chat-assistant-font-weight);
+  }
+
+  /**
+   * Whisper message - private messages between characters, not heard by all
+   */
+  .qt-chat-message-whisper {
+    background: var(--qt-chat-whisper-bg);
+    color: var(--qt-chat-whisper-fg);
+    border: 2px dashed var(--qt-chat-whisper-border);
+    font-style: italic;
+  }
+
+  .qt-chat-whisper-label {
+    font-size: 0.75rem;
+    color: var(--qt-chat-whisper-label-fg);
+    font-style: italic;
+    margin-bottom: 0.25rem;
+  }
+
+  .qt-chat-message-whisper-overheard {
+    opacity: 0.6;
   }
 
   /**

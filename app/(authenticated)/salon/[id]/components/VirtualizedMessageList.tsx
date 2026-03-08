@@ -92,6 +92,10 @@ interface VirtualizedMessageListProps {
     avatarUrl?: string | null
     defaultImage?: { id: string; filepath: string; url?: string } | null
   } | null
+  /** Mapping of participant IDs to display names for whisper labels */
+  participantNames?: Record<string, string>
+  /** Set of participant IDs controlled by the user */
+  userParticipantIdSet?: Set<string>
 }
 
 export function VirtualizedMessageList({
@@ -137,7 +141,20 @@ export function VirtualizedMessageList({
   shouldShowAvatars,
   getFirstCharacter,
   getMessageAvatar,
+  participantNames,
+  userParticipantIdSet,
 }: VirtualizedMessageListProps) {
+  // Resolve per-message character from participantData, falling back to first character
+  const getCharacterForMessage = (message: Message): CharacterData | undefined => {
+    if (message.participantId) {
+      const participant = participantData.find(p => p.id === message.participantId)
+      if (participant?.character) {
+        return participant.character as CharacterData
+      }
+    }
+    return getFirstCharacter() ?? undefined
+  }
+
   return (
     <div className="qt-chat-messages" ref={messagesContainerRef}>
       <div className="qt-chat-messages-list">
@@ -172,7 +189,7 @@ export function VirtualizedMessageList({
                 >
                   <ToolMessage
                     message={message}
-                    character={getFirstCharacter() ?? undefined}
+                    character={getCharacterForMessage(message)}
                     onImageClick={(filepath, filename, fileId) => {
                       onImageClick(filepath, filename, fileId)
                     }}
@@ -221,7 +238,7 @@ export function VirtualizedMessageList({
                   tokenDisplaySettings={chatSettings?.tokenDisplaySettings}
                   dangerousContentSettings={chatSettings?.dangerousContentSettings}
                   onOverrideDangerFlag={onOverrideDangerFlag}
-                  character={getFirstCharacter() ?? undefined}
+                  character={getCharacterForMessage(message)}
                   onEditStart={messageActions.startEdit}
                   onEditSave={messageActions.saveEdit}
                   onEditCancel={messageActions.cancelEdit}
@@ -244,6 +261,13 @@ export function VirtualizedMessageList({
                   onReattribute={onReattribute}
                   hasLLMLogs={messagesWithLogs.has(message.id)}
                   onViewLLMLogs={onViewLLMLogs}
+                  participantNames={participantNames}
+                  isOverheardWhisper={
+                    !!(message.targetParticipantIds?.length) &&
+                    !!(userParticipantIdSet) &&
+                    !(message.participantId && userParticipantIdSet.has(message.participantId)) &&
+                    !message.targetParticipantIds.some(id => userParticipantIdSet.has(id))
+                  }
                 />
               </div>
             )

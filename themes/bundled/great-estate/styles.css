@@ -273,6 +273,12 @@
   --qt-chat-assistant-border: var(--color-border);
   --qt-chat-assistant-font: var(--theme-font-serif);
 
+  /* Chat: Whisper messages — dusty plum, like a whispered secret in the library */
+  --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 55%, hsl(280 25% 35%) 45%);
+  --qt-chat-whisper-fg: var(--qt-chat-assistant-fg);
+  --qt-chat-whisper-border: hsl(280 30% 42%);
+  --qt-chat-whisper-label-fg: hsl(280 25% 50%);
+
   --qt-chat-composer-bg: var(--color-background);
   --qt-chat-composer-border: var(--color-border);
   --qt-chat-composer-radius: var(--radius-lg);
@@ -671,6 +677,11 @@
   --qt-response-status-sending-fg: hsl(210 70% 68%);
   --qt-response-status-streaming-fg: hsl(142 65% 62%);
   --qt-response-status-tool-fg: hsl(43 80% 62%);
+
+  /* Whisper — deeper plum for dark mode */
+  --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 50%, hsl(280 30% 15%) 50%);
+  --qt-chat-whisper-border: hsl(280 35% 32%);
+  --qt-chat-whisper-label-fg: hsl(280 40% 65%);
 
   /* Links — gold in dark mode */
   --qt-link-color: var(--estate-gold);

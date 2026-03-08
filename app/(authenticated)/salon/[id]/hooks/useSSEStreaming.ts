@@ -588,9 +588,12 @@ export function useSSEStreaming({
       setResponseStatus(null)
       abortControllerRef.current = null
       scrollOnStreamComplete()
+      // Re-fetch chat to pick up side-channel messages (e.g. whisper tool writes)
+      await fetchChat()
+      notifyQueueChange()
       focusInput()
     }
-  }, [chatId, streaming, waitingForResponse, isPaused, participantsAsBase, hasActiveCharacters, setMessages, setEphemeralMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput])
+  }, [chatId, streaming, waitingForResponse, isPaused, participantsAsBase, hasActiveCharacters, setMessages, setEphemeralMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat])
 
   const stopStreaming = useCallback(() => {
     if (abortControllerRef.current) {

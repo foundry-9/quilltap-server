@@ -56,6 +56,11 @@ import {
   type SubmitFinalResponseToolContext,
 } from '@/lib/tools/handlers/submit-final-response-handler';
 import {
+  executeWhisperTool,
+  formatWhisperResults,
+  type WhisperToolContext,
+} from '@/lib/tools/handlers/whisper-handler';
+import {
   executeShellTool,
   formatShellResults,
   isShellTool,
@@ -223,6 +228,7 @@ const BUILT_IN_TOOLS = new Set([
   'rng',
   'state',
   'submit_final_response',
+  'whisper',
   // Shell interactivity tools
   'chdir',
   'exec_sync',
@@ -640,6 +646,38 @@ export async function executeToolCallWithContext(
           confidence: result.confidence,
         } : null,
         error: result.success ? undefined : result.message,
+      };
+    }
+
+    // Handle whisper (private message in multi-character chats)
+    if (toolCall.name === 'whisper') {
+      if (!context.callingParticipantId) {
+        return {
+          toolName: 'whisper',
+          success: false,
+          result: null,
+          error: 'Whisper requires a multi-character chat context',
+        };
+      }
+
+      const whisperContext: WhisperToolContext = {
+        userId,
+        chatId,
+        callingParticipantId: context.callingParticipantId,
+      };
+
+      const result = await executeWhisperTool(toolCall.arguments, whisperContext);
+      const formattedResult = formatWhisperResults(result);
+
+      return {
+        toolName: 'whisper',
+        success: result.success,
+        result: result.success ? {
+          formattedText: formattedResult,
+          targetName: result.targetName,
+          targetParticipantId: result.targetParticipantId,
+        } : null,
+        error: result.success ? undefined : result.error,
       };
     }
 

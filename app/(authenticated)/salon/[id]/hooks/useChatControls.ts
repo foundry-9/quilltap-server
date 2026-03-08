@@ -7,7 +7,6 @@ import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
 import type { ChatParticipantBase } from '@/lib/schemas/types'
 import type { TurnState } from '@/lib/chat/turn-manager'
-import { shouldPauseForAllLLM } from '@/lib/chat/turn-manager'
 import type { Chat, Message } from '../types'
 
 interface UseChatControlsParams {
@@ -21,8 +20,8 @@ interface UseChatControlsParams {
   effectiveNextSpeakerId: string | null
   userParticipantId: string | null
   turnState: TurnState
-  streaming: boolean
-  waitingForResponse: boolean
+  /** Ref to check if streaming is active (avoids circular dependency with SSE hook) */
+  streamingRef: React.MutableRefObject<boolean>
   isPaused: boolean
   setIsPaused: (paused: boolean) => void
   fetchChat: () => Promise<void>
@@ -44,8 +43,7 @@ export function useChatControls({
   effectiveNextSpeakerId,
   userParticipantId,
   turnState,
-  streaming,
-  waitingForResponse,
+  streamingRef,
   isPaused,
   setIsPaused,
   fetchChat,
@@ -256,7 +254,7 @@ export function useChatControls({
     const participant = participantData.find(p => p.id === participantId)
     const characterName = participant?.character?.name || 'This character'
 
-    if ((streaming || waitingForResponse) && turnState.lastSpeakerId === participantId) {
+    if (streamingRef.current && turnState.lastSpeakerId === participantId) {
       showErrorToast(`Cannot remove ${characterName} while they are generating a response. Please wait for them to finish.`)
       return
     }
@@ -301,7 +299,7 @@ export function useChatControls({
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to remove character')
     }
-  }, [chatId, participantData, fetchChat, streaming, waitingForResponse, turnState.lastSpeakerId, participantsAsBase, setEphemeralMessages, setTurnState])
+  }, [chatId, participantData, fetchChat, streamingRef, turnState.lastSpeakerId, participantsAsBase, setEphemeralMessages, setTurnState])
 
   // Handle connection profile change from participant sidebar
   const handleConnectionProfileChange = useCallback(async (
@@ -370,38 +368,6 @@ export function useChatControls({
   const handleAllLLMStop = useCallback(() => {
     setPauseState(true)
   }, [setPauseState])
-
-  // Auto-trigger next character in multi-character mode
-  useEffect(() => {
-    if (!isMultiChar) return
-    if (isPaused) return
-    if (userStoppedStreamRef.current) return
-    if (streaming || waitingForResponse) return
-    if (!effectiveNextSpeakerId) {
-      lastAutoTriggeredRef.current = null
-      return
-    }
-
-    if (effectiveNextSpeakerId === userParticipantId) return
-
-    // Check if we should pause for all-LLM chat threshold
-    if (isAllLLM && shouldPauseForAllLLM(allLLMTurnCount) && allLLMTurnCount > lastAllLLMPauseTurnCountRef.current) {
-      lastAllLLMPauseTurnCountRef.current = allLLMTurnCount
-      setPauseState(true)
-      showInfoToast(`Auto-paused after ${allLLMTurnCount} turns. Click Resume to continue.`)
-      return
-    }
-
-    if (lastAutoTriggeredRef.current === effectiveNextSpeakerId) return
-
-    lastAutoTriggeredRef.current = effectiveNextSpeakerId
-
-    const timeoutId = setTimeout(() => {
-      triggerContinueModeRef.current(effectiveNextSpeakerId)
-    }, 100)
-
-    return () => clearTimeout(timeoutId)
-  }, [isMultiChar, isPaused, streaming, waitingForResponse, userParticipantId, isAllLLM, allLLMTurnCount, setPauseState, effectiveNextSpeakerId, triggerContinueModeRef])
 
   return {
     documentEditingMode,

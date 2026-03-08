@@ -266,6 +266,12 @@
   --qt-chat-assistant-font: var(--font-sans);
   --qt-chat-assistant-font-weight: inherit;
 
+  /* Chat: Whisper messages */
+  --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #9b8ec4 40%);
+  --qt-chat-whisper-fg: var(--qt-chat-assistant-fg);
+  --qt-chat-whisper-border: #9b8ec4;
+  --qt-chat-whisper-label-fg: #7c6fa0;
+
   --qt-chat-composer-bg: var(--color-background);
   --qt-chat-composer-border: var(--color-border);
   --qt-chat-composer-radius: var(--radius-lg);
@@ -635,6 +641,11 @@
   --qt-queue-badge-summary-bg: hsl(152 50% 42%);
   --qt-queue-badge-danger-bg: hsl(0 60% 52%);
   --qt-queue-badge-story-bg: hsl(225 12% 44%);
+
+  /* Chat: Whisper messages — dark mode */
+  --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #6b5b95 40%);
+  --qt-chat-whisper-border: #6b5b95;
+  --qt-chat-whisper-label-fg: #a89cc8;
 
   /* Response status — brighter indicators */
   --qt-response-status-bg: color-mix(in srgb, var(--color-muted) 40%, transparent);

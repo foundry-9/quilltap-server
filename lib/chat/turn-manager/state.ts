@@ -51,10 +51,17 @@ export function calculateTurnStateFromHistory(
   }
 
   // Track ASSISTANT messages since last user message
+  // Skip whisper messages — they don't count as "speaking" for turn order
   const startIndex = lastUserMessageIndex + 1;
   for (let i = startIndex; i < messages.length; i++) {
     const msg = messages[i];
     if (msg.role === 'ASSISTANT' && msg.participantId) {
+      // Whisper messages (targetParticipantIds set) don't affect turn order
+      const isWhisper = 'targetParticipantIds' in msg
+        && Array.isArray(msg.targetParticipantIds)
+        && msg.targetParticipantIds.length > 0;
+      if (isWhisper) continue;
+
       if (!state.spokenSinceUserTurn.includes(msg.participantId)) {
         state.spokenSinceUserTurn.push(msg.participantId);
       }
@@ -85,6 +92,12 @@ export function updateTurnStateAfterMessage(
       newState.queue = newState.queue.filter(id => id !== userParticipantId);
     }
   } else if (message.role === 'ASSISTANT' && message.participantId) {
+    // Whisper messages don't affect turn order
+    const isWhisper = 'targetParticipantIds' in message
+      && Array.isArray(message.targetParticipantIds)
+      && message.targetParticipantIds.length > 0;
+    if (isWhisper) return currentState;
+
     // Character spoke
     const participantId = message.participantId;
 

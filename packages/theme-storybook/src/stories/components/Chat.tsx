@@ -95,6 +95,33 @@ export const Chat: React.FC = () => {
         </div>
       </section>
 
+      {/* Whisper Messages */}
+      <section style={{ marginBottom: '2rem' }}>
+        <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
+          Whisper Messages
+        </h3>
+        <p style={{ color: 'var(--color-muted-foreground)', marginBottom: '1rem' }}>
+          Private messages visible only to sender and recipient. Overheard whispers have a faded style.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: '32rem' }}>
+          {/* Regular whisper */}
+          <div className="qt-chat-message-row qt-chat-message-row-assistant" style={{ marginBottom: '0.5rem' }}>
+            <div className="qt-chat-message-body qt-chat-message-assistant qt-chat-message-whisper">
+              <div className="qt-chat-whisper-label">whispered to Elena</div>
+              <p>I don&apos;t trust the merchant. Meet me at the tavern tonight—alone.</p>
+            </div>
+          </div>
+
+          {/* Overheard whisper */}
+          <div className="qt-chat-message-row qt-chat-message-row-assistant" style={{ marginBottom: '0.5rem' }}>
+            <div className="qt-chat-message-body qt-chat-message-assistant qt-chat-message-whisper qt-chat-message-whisper-overheard">
+              <div className="qt-chat-whisper-label">whispered to Marcus</div>
+              <p>Keep an eye on the door. We may need a quick exit.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Chat Input */}
       <section style={{ marginBottom: '2rem' }}>
         <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>

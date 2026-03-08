@@ -38,6 +38,7 @@ import {
 } from './context/memory-injector'
 import {
   filterMessagesByHistoryAccess,
+  filterWhisperMessages,
   getParticipantName,
   attributeMessagesForCharacter,
   findUserParticipantName,
@@ -73,6 +74,7 @@ export {
   formatInterCharacterMemoriesForContext,
   formatSummaryForContext,
   filterMessagesByHistoryAccess,
+  filterWhisperMessages,
   getParticipantName,
   attributeMessagesForCharacter,
   selectRecentMessages,
@@ -667,6 +669,9 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     // 5a. Filter messages by history access
     const filteredMessages = filterMessagesByHistoryAccess(messagesWithParticipants, respondingParticipant)
 
+    // 5a-bis. Filter whisper messages not visible to this participant
+    const whisperFiltered = filterWhisperMessages(filteredMessages, respondingParticipant.id)
+
     // 5b. Prepend join scenario if participant has one and doesn't have history access
     let joinScenarioContent = ''
     if (!respondingParticipant.hasHistoryAccess && respondingParticipant.joinScenario) {
@@ -676,7 +681,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
 
     // 5c. Attribute messages for the responding character's perspective
     const attributedMessages = attributeMessagesForCharacter(
-      filteredMessages,
+      whisperFiltered,
       respondingParticipant.id,
       participantCharacters,
       allParticipants

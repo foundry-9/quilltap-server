@@ -84,6 +84,8 @@ export interface SendMessageOptions {
   respondingParticipantId?: string
   /** Pending tool results to be saved as TOOL messages before the user message */
   pendingToolResults?: PendingToolResultInput[]
+  /** Target participant IDs for whisper messages (null = visible to all) */
+  targetParticipantIds?: string[] | null
 }
 
 /**

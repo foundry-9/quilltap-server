@@ -79,6 +79,8 @@ export const MessageEventSchema = z.object({
   provider: z.string().nullable().optional(),
   /** Model name that generated this message (e.g., 'gpt-4o', 'claude-sonnet-4-20250514') */
   modelName: z.string().nullable().optional(),
+  /** Target participant IDs for whisper messages (null = public message, array = private to sender and targets) */
+  targetParticipantIds: z.array(UUIDSchema).nullable().optional(),
 });
 
 export type MessageEvent = z.infer<typeof MessageEventSchema>;

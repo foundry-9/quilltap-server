@@ -176,7 +176,7 @@ export async function loadAndProcessFiles(
  * Build conversation messages for context
  */
 export function buildConversationMessages(
-  existingMessages: Array<{ type: string; role?: string; content?: string; id?: string; thoughtSignature?: string | null; participantId?: string | null; createdAt?: string }>,
+  existingMessages: Array<{ type: string; role?: string; content?: string; id?: string; thoughtSignature?: string | null; participantId?: string | null; targetParticipantIds?: string[] | null; createdAt?: string }>,
   isMultiCharacter: boolean
 ): {
   conversationMessages: Array<{ role: string; content: string; id?: string; thoughtSignature?: string | null }>
@@ -253,6 +253,7 @@ export function buildConversationMessages(
           id: msg.id,
           thoughtSignature: msg.role === 'ASSISTANT' ? msg.thoughtSignature : undefined,
           participantId: msg.participantId,
+          targetParticipantIds: (msg as any).targetParticipantIds || null,
           createdAt: msg.createdAt,
         }
       })
@@ -267,7 +268,7 @@ export function buildConversationMessages(
  */
 export async function buildMessageContext(
   options: BuildMessageContextOptions,
-  existingMessages: Array<{ type: string; role?: string; content?: string; id?: string; thoughtSignature?: string | null; participantId?: string | null; createdAt?: string }>,
+  existingMessages: Array<{ type: string; role?: string; content?: string; id?: string; thoughtSignature?: string | null; participantId?: string | null; targetParticipantIds?: string[] | null; createdAt?: string }>,
   attachmentsToSend: unknown[]
 ): Promise<MessageContextResult> {
   const {
