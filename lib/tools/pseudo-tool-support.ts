@@ -25,7 +25,7 @@ export interface PseudoToolConfig {
 /**
  * Options for tool mode override on connection profiles
  */
-export type ToolMode = 'auto' | 'native' | 'pseudo'
+export type ToolMode = 'auto' | 'native' | 'pseudo' | 'text-block'
 
 /**
  * Check if a model supports native tool/function calling
@@ -84,7 +84,7 @@ export async function checkModelSupportsTools(
  * Determine if pseudo-tools should be used for this request
  *
  * @param supportsNativeTools - Whether the model supports native function calling
- * @param profileOverride - Optional override from connection profile ('auto', 'native', 'pseudo')
+ * @param profileOverride - Optional override from connection profile ('auto', 'native', 'pseudo', 'text-block')
  * @returns true if pseudo-tools should be used, false for native tools
  */
 export function shouldUsePseudoTools(
@@ -100,11 +100,41 @@ export function shouldUsePseudoTools(
 
     return true
   }
+  if (profileOverride === 'text-block') {
+    // text-block mode handles tools separately, not via legacy pseudo-tools
+    return false
+  }
 
   // Auto mode: use pseudo-tools only if model doesn't support native tools
   const usePseudo = !supportsNativeTools
 
   return usePseudo
+}
+
+/**
+ * Determine if text-block tools should be used for this request
+ *
+ * Text-block tools are the preferred text-based tool format for models
+ * that lack native function calling, supporting all tools with named parameters.
+ *
+ * @param supportsNativeTools - Whether the model supports native function calling
+ * @param profileOverride - Optional override from connection profile
+ * @returns true if text-block tools should be used
+ */
+export function shouldUseTextBlockTools(
+  supportsNativeTools: boolean,
+  profileOverride?: ToolMode
+): boolean {
+  // Explicit overrides take precedence
+  if (profileOverride === 'text-block') {
+    return true
+  }
+  if (profileOverride === 'native' || profileOverride === 'pseudo') {
+    return false
+  }
+
+  // Auto mode: prefer text-block over legacy pseudo when model lacks native tools
+  return !supportsNativeTools
 }
 
 /**

@@ -279,6 +279,7 @@ export {
 export {
   checkModelSupportsTools,
   shouldUsePseudoTools,
+  shouldUseTextBlockTools,
   buildPseudoToolConfig,
   type PseudoToolConfig,
   type ToolMode,
@@ -311,3 +312,18 @@ export {
   mapXMLToolName,
   type ParsedXMLTool,
 } from './xml-tool-parser';
+
+// Text-Block Tool Call Parser (rich text-based tool invocation for all tools)
+export {
+  parseTextBlockCalls,
+  convertTextBlockToToolCallRequest,
+  stripTextBlockMarkers,
+  hasTextBlockMarkers,
+  mapTextBlockToolName,
+  type ParsedTextBlock,
+} from './text-block-parser';
+
+export {
+  buildTextBlockInstructions,
+  type TextBlockPromptOptions,
+} from './text-block-prompt';

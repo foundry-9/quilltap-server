@@ -48,6 +48,7 @@ export interface LogLLMCallParams {
   response: {
     content: string;
     error?: string;
+    toolCalls?: Array<{ name: string; arguments: Record<string, unknown> }>;
   };
   usage?: {
     promptTokens?: number;
@@ -129,11 +130,20 @@ function summarizeResponse(
   response: LogLLMCallParams['response'],
   _verboseMode: boolean
 ): LLMLogResponseSummary {
-  return {
+  const summary: LLMLogResponseSummary = {
     content: response.content || '',
     contentLength: response.content?.length || 0,
     error: response.error ?? null,
   };
+
+  if (response.toolCalls && response.toolCalls.length > 0) {
+    summary.toolCalls = response.toolCalls.map(tc => ({
+      name: tc.name,
+      arguments: tc.arguments,
+    }));
+  }
+
+  return summary;
 }
 
 /**

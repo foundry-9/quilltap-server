@@ -67,6 +67,10 @@ export const LLMLogResponseSummarySchema = z.object({
   contentLength: z.number(),
   fullContent: z.string().nullable().optional(), // Deprecated: kept for backward compat with old log entries
   error: z.string().nullable().optional(),
+  toolCalls: z.array(z.object({
+    name: z.string(),
+    arguments: z.record(z.string(), z.unknown()),
+  })).optional(), // Native tool calls from the LLM response
 });
 export type LLMLogResponseSummary = z.infer<typeof LLMLogResponseSummarySchema>;
 

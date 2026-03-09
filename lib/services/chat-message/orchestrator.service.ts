@@ -59,12 +59,19 @@ import {
   stripPseudoToolMarkersFromResponse,
   determineEnabledToolOptions,
   logPseudoToolUsage,
+  checkShouldUseTextBlockTools,
+  buildTextBlockSystemInstructions,
+  parseTextBlocksFromResponse,
+  stripTextBlockMarkersFromResponse,
+  determineTextBlockToolOptions,
+  logTextBlockToolUsage,
 } from './pseudo-tool.service'
 import {
   parseXMLToolCalls,
   convertXMLToToolCallRequest,
   stripXMLToolMarkers,
   hasXMLToolMarkers,
+  hasTextBlockMarkers,
 } from '@/lib/tools'
 import {
   triggerMemoryExtraction,
@@ -76,6 +83,7 @@ import {
 import { trackMessageTokenUsage } from '@/lib/services/token-tracking.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { isRecoverableRequestError, isToolUnsupportedError } from '@/lib/llm/errors'
+import { countMessagesTokens } from '@/lib/tokens/token-counter'
 import { attemptRequestLimitRecovery } from './recovery.service'
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG } from '@/lib/llm/cheap-llm'
 import { extractMemorySearchKeywords, stripToolArtifacts, extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks'
@@ -641,12 +649,22 @@ async function processMessage(
     isMultiCharacter // isMultiCharacter - enables whisper tool
   )
 
-  const usePseudoTools = checkShouldUsePseudoTools(modelSupportsNativeTools)
-  const actualTools = usePseudoTools ? [] : tools
+  const useTextBlockTools = checkShouldUseTextBlockTools(modelSupportsNativeTools)
+  const usePseudoTools = !useTextBlockTools && checkShouldUsePseudoTools(modelSupportsNativeTools)
+  const actualTools = (usePseudoTools || useTextBlockTools) ? [] : tools
 
-  // Build tool instructions (pseudo-tool instructions or native tool rules)
+  // Build tool instructions (text-block, pseudo-tool, or native tool rules)
   let toolInstructions: string | undefined
-  if (usePseudoTools) {
+  if (useTextBlockTools) {
+    const textBlockOptions = determineTextBlockToolOptions(
+      imageProfileId,
+      effectiveProfile.allowWebSearch,
+      isMultiCharacter,
+      !!chat.projectId
+    )
+    toolInstructions = buildTextBlockSystemInstructions(textBlockOptions)
+    logTextBlockToolUsage(effectiveProfile.provider, effectiveProfile.modelName, textBlockOptions)
+  } else if (usePseudoTools) {
     toolInstructions = buildPseudoToolSystemInstructions(enabledToolOptions)
     logPseudoToolUsage(effectiveProfile.provider, effectiveProfile.modelName, enabledToolOptions)
   } else if (actualTools.length > 0) {
@@ -975,6 +993,42 @@ async function processMessage(
   // Send fallback processing info if any
   if (fileProcessing.fallbackResults.length > 0) {
     controller.enqueue(encodeFallbackInfo(encoder, fileProcessing.fallbackResults))
+  }
+
+  // ============================================================================
+  // Pre-Send Context Validation
+  // ============================================================================
+  // Verify that the assembled payload fits within the model's context window
+  // BEFORE sending to the API. This prevents silent failures with small models
+  // that can't handle the payload even after compression.
+  const estimatedInputTokens = countMessagesTokens(
+    formattedMessages.map(m => ({ content: m.content, role: m.role }))
+  )
+  const modelContextLimit = builtContext.budget.totalLimit
+  const responseReserve = builtContext.budget.responseReserve
+  const safeInputLimit = modelContextLimit - responseReserve - Math.ceil(modelContextLimit * 0.10)
+
+  if (estimatedInputTokens > safeInputLimit) {
+    logger.warn('Context exceeds model safe input limit, payload may be rejected', {
+      chatId,
+      characterName: character.name,
+      provider: effectiveProfile.provider,
+      model: effectiveProfile.modelName,
+      estimatedInputTokens,
+      safeInputLimit,
+      modelContextLimit,
+      responseReserve,
+      compressionApplied: builtContext.compressionApplied ?? false,
+      overage: estimatedInputTokens - safeInputLimit,
+    })
+
+    // Send a warning status to the client so the user knows what happened
+    safeEnqueue(controller, encodeStatusEvent(encoder, {
+      stage: 'warning',
+      message: `Context (~${Math.round(estimatedInputTokens / 1000)}k tokens) may exceed ${effectiveProfile.modelName} limit (~${Math.round(safeInputLimit / 1000)}k tokens)`,
+      characterName: character.name,
+      characterId: character.id,
+    }))
   }
 
   // Stream the response
@@ -1468,6 +1522,88 @@ async function processMessage(
       fullResponse = strippedResponse + (strippedResponse.trim() && continuationResponse.trim() ? '\n\n' : '') + continuationResponse
       // Strip any remaining XML markers from the continuation
       fullResponse = stripXMLToolMarkers(fullResponse)
+    }
+  }
+
+  // Process text-block tool calls (runs for ALL providers, like XML parsing)
+  // Text-block format: [[TOOL_NAME param="value"]]content[[/TOOL_NAME]]
+  if (fullResponse && hasTextBlockMarkers(fullResponse)) {
+    const textBlockToolCalls = parseTextBlocksFromResponse(fullResponse)
+
+    if (textBlockToolCalls.length > 0) {
+      logger.info('Detected text-block tool calls in response', {
+        count: textBlockToolCalls.length,
+        tools: textBlockToolCalls.map(tc => tc.name),
+      })
+
+      // Send tool executing status for each detected tool
+      for (const toolCall of textBlockToolCalls) {
+        safeEnqueue(controller, encodeStatusEvent(encoder, {
+          stage: 'tool_executing',
+          message: `Running ${toolCall.name}...`,
+          toolName: toolCall.name,
+          characterName: character.name,
+          characterId: character.id,
+        }))
+      }
+
+      const results = await processToolCalls(textBlockToolCalls, toolContext, controller, encoder)
+      toolMessages = [...toolMessages, ...results.toolMessages]
+      generatedImagePaths = [...generatedImagePaths, ...results.generatedImagePaths]
+
+      const strippedResponse = stripTextBlockMarkersFromResponse(fullResponse)
+
+      // Add stripped response and tool results to conversation
+      currentMessages = [...formattedMessages]
+      if (strippedResponse.trim()) {
+        currentMessages.push({
+          role: 'assistant' as const,
+          content: strippedResponse,
+          thoughtSignature,
+          name: undefined,
+        })
+      }
+
+      for (const toolMsg of results.toolMessages) {
+        currentMessages.push({
+          role: 'user' as const,
+          content: `[Tool Result: ${toolMsg.toolName}]\n${toolMsg.content}`,
+          thoughtSignature: undefined,
+          name: undefined,
+        })
+      }
+
+      // Continue conversation with tool results
+      let continuationResponse = ''
+      for await (const chunk of streamMessage({
+        messages: currentMessages,
+        connectionProfile: effectiveProfile,
+        apiKey: effectiveApiKey,
+        modelParams,
+        tools: useTextBlockTools ? [] : actualTools,
+        useNativeWebSearch: useNativeWebSearch && !useTextBlockTools,
+        userId,
+        messageId: preGeneratedAssistantMessageId,
+        chatId,
+      })) {
+        if (chunk.content) {
+          continuationResponse += chunk.content
+          controller.enqueue(encodeContentChunk(encoder, chunk.content))
+        }
+
+        if (chunk.done) {
+          usage = chunk.usage || null
+          cacheUsage = chunk.cacheUsage || null
+          rawResponse = chunk.rawResponse
+          if (chunk.thoughtSignature) {
+            thoughtSignature = chunk.thoughtSignature
+          }
+        }
+      }
+
+      fullResponse = strippedResponse + (strippedResponse.trim() && continuationResponse.trim() ? '\n\n' : '') + continuationResponse
+      // Strip any remaining text-block markers from the continuation
+      fullResponse = stripTextBlockMarkersFromResponse(fullResponse)
     }
   }
 

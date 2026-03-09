@@ -10,8 +10,31 @@ import {
   WhisperToolOutput,
   validateWhisperInput,
 } from '../whisper-tool';
+import { stripTextBlockMarkers } from '../text-block-parser';
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
+
+/**
+ * Sanitize whisper message content.
+ *
+ * LLMs sometimes double-encode tool calls — e.g., calling the native whisper
+ * tool but placing [[WHISPER to="X"]]content[[/WHISPER]] markers inside the
+ * message argument. This strips those markers so the saved content is clean.
+ */
+function sanitizeWhisperMessage(message: string): string {
+  let cleaned = stripTextBlockMarkers(message)
+
+  // If stripping left us with nothing (the entire message was a marker),
+  // try extracting just the content from inside the markers
+  if (!cleaned.trim() && message.trim()) {
+    const contentMatch = message.match(/\[\[\w+[^\]]*\]\]([\s\S]*?)\[\[\/\w+\]\]/i)
+    if (contentMatch) {
+      cleaned = contentMatch[1].trim()
+    }
+  }
+
+  return cleaned.trim() || message.trim()
+}
 
 /**
  * Context required for whisper tool execution
@@ -129,6 +152,16 @@ export async function executeWhisperTool(
       };
     }
 
+    // Sanitize message content — LLMs sometimes double-encode tool calls
+    const cleanMessage = sanitizeWhisperMessage(message);
+    if (cleanMessage !== message) {
+      logger.debug('Sanitized whisper message (stripped markers)', {
+        context: 'whisper-handler',
+        originalLength: message.length,
+        cleanedLength: cleanMessage.length,
+      });
+    }
+
     // Save the whisper as a new ASSISTANT message with targetParticipantIds
     const whisperMessageId = crypto.randomUUID();
     const now = new Date().toISOString();
@@ -137,7 +170,7 @@ export async function executeWhisperTool(
       type: 'message',
       id: whisperMessageId,
       role: 'ASSISTANT',
-      content: message,
+      content: cleanMessage,
       participantId: context.callingParticipantId,
       targetParticipantIds: [resolvedTarget.participantId],
       createdAt: now,
