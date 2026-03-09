@@ -432,7 +432,7 @@ export class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
       } else if (Buffer.isBuffer(value)) {
         // Unexpected Buffer in a non-blob, non-JSON column — decode as Float32 BLOB.
         // This handles timing issues where blob columns haven't been registered yet.
-        logger.debug('Buffer in non-blob column, decoding as Float32', {
+        logger.trace('Buffer in non-blob column, decoding as Float32', {
           table: this.name,
           column: key,
           byteLength: value.byteLength,

@@ -146,14 +146,17 @@ export function mapTextBlockToolName(name: string): string {
 /**
  * Parse named parameters from a tag's attribute string.
  * Supports both double and single quotes: param="value" or param='value'
+ * Also handles backslash-escaped quotes: param=\"value\" (common LLM artifact)
  */
 function parseTagParams(attrString: string): Record<string, string> {
   const params: Record<string, string> = {}
-  // Match param="value" or param='value'
-  const paramPattern = /(\w+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g
+  // Match param="value", param='value', or param=\"value\" (backslash-escaped quotes)
+  const paramPattern = /(\w+)\s*=\s*(?:\\?"([^"\\]*(?:\\.[^"\\]*)*)\\?"|'([^']*)')/g
   let match
   while ((match = paramPattern.exec(attrString)) !== null) {
-    params[match[1]] = match[2] ?? match[3]
+    const value = match[2] ?? match[3]
+    // Unescape any remaining backslash-escaped characters
+    params[match[1]] = value ? value.replace(/\\(.)/g, '$1') : value
   }
   return params
 }
@@ -174,7 +177,8 @@ export function parseTextBlockCalls(response: string): ParsedTextBlock[] {
   // Content form: [[TOOL_NAME params]]content[[/TOOL_NAME]]
   // Tool name: word characters (letters, digits, underscore)
   // Non-greedy content match to prevent spanning across blocks
-  const contentPattern = /\[\[(\w+)((?:\s+\w+\s*=\s*(?:"[^"]*"|'[^']*'))*)\s*\]\]([\s\S]*?)\[\[\/\1\]\]/gi
+  // Supports both normal quotes and backslash-escaped quotes (LLM artifact)
+  const contentPattern = /\[\[(\w+)((?:\s+\w+\s*=\s*(?:\\?"[^"\\]*(?:\\.[^"\\]*)*\\?"|'[^']*'))*)\s*\]\]([\s\S]*?)\[\[\/\1\]\]/gi
   let match
   while ((match = contentPattern.exec(response)) !== null) {
     const toolName = match[1]
@@ -192,7 +196,7 @@ export function parseTextBlockCalls(response: string): ParsedTextBlock[] {
   }
 
   // Self-closing form: [[TOOL_NAME params /]]
-  const selfClosingPattern = /\[\[(\w+)((?:\s+\w+\s*=\s*(?:"[^"]*"|'[^']*'))*)\s*\/\]\]/gi
+  const selfClosingPattern = /\[\[(\w+)((?:\s+\w+\s*=\s*(?:\\?"[^"\\]*(?:\\.[^"\\]*)*\\?"|'[^']*'))*)\s*\/\]\]/gi
   while ((match = selfClosingPattern.exec(response)) !== null) {
     // Skip if this overlaps with a content-form match
     const startIdx = match.index
@@ -301,11 +305,11 @@ export function convertTextBlockToToolCallRequest(parsed: ParsedTextBlock): Tool
 export function stripTextBlockMarkers(response: string): string {
   let stripped = response
 
-  // Remove content-form blocks: [[TOOL]]content[[/TOOL]]
-  stripped = stripped.replace(/\[\[\w+(?:\s+\w+\s*=\s*(?:"[^"]*"|'[^']*'))*\s*\]\][\s\S]*?\[\[\/\w+\]\]/gi, '')
+  // Remove content-form blocks: [[TOOL]]content[[/TOOL]] (including backslash-escaped quotes)
+  stripped = stripped.replace(/\[\[\w+(?:\s+\w+\s*=\s*(?:\\?"[^"\\]*(?:\\.[^"\\]*)*\\?"|'[^']*'))*\s*\]\][\s\S]*?\[\[\/\w+\]\]/gi, '')
 
-  // Remove self-closing blocks: [[TOOL params /]]
-  stripped = stripped.replace(/\[\[\w+(?:\s+\w+\s*=\s*(?:"[^"]*"|'[^']*'))*\s*\/\]\]/gi, '')
+  // Remove self-closing blocks: [[TOOL params /]] (including backslash-escaped quotes)
+  stripped = stripped.replace(/\[\[\w+(?:\s+\w+\s*=\s*(?:\\?"[^"\\]*(?:\\.[^"\\]*)*\\?"|'[^']*'))*\s*\/\]\]/gi, '')
 
   // Clean up whitespace artifacts
   stripped = stripped
@@ -323,5 +327,6 @@ export function stripTextBlockMarkers(response: string): string {
 export function hasTextBlockMarkers(response: string): boolean {
   // Look for opening text-block tags: [[WORD with optional params]]
   // Must contain word chars (not just any bracket content) to avoid false positives
-  return /\[\[\w+[\s\w="'\/]*\]\]/i.test(response)
+  // Also matches backslash-escaped quotes: [[WORD param=\"value\"]]
+  return /\[\[\w+[\s\w="'\\\/]*\]\]/i.test(response)
 }

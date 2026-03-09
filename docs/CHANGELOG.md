@@ -4,6 +4,8 @@
 
 ### 3.3-dev
 
+- fix: Whisper text-block markers shown in plain text when LLM outputs backslash-escaped quotes — text-block parser regex now accepts `\"value\"` in addition to `"value"` and `'value'` for parameter values; all four regex sites updated (content pattern, self-closing pattern, marker stripping, marker detection)
+- feat: Add `TRACE` log level below `DEBUG` for high-volume diagnostic messages — demoted the per-row "Buffer in non-blob column" log from `debug` to `trace` to reduce log noise from embedding column reads
 - fix: `npm run build` fails with "file is not a database" — Next.js pre-rendered the homepage and dashboard layout during build, triggering SQLCipher database access without the encryption key; added `export const dynamic = 'force-dynamic'` to `app/page.tsx` and `app/dashboard/layout.tsx` to prevent build-time rendering of pages that require database access
 - fix: `useEffect` missing dependency lint warning in salon chat page — consolidated individual `chatControls.*` property references into single `chatControls` dependency
 - chore: npm dependency upgrades across the project
