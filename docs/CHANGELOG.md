@@ -4,6 +4,7 @@
 
 ### 3.3-dev
 
+- chore: Rename root package from `quilltap` to `@foundry-9/quilltap` to resolve name collision with the published `quilltap` CLI package — `npx quilltap db` now works from the project root directory without needing to `cd` elsewhere first
 - fix: Whisper messages saved with raw text-block markers when LLM double-encodes — DeepSeek (and potentially other models) called the native whisper tool but placed `[[WHISPER to="X"]]content[[/WHISPER]]` markers inside the message argument; whisper handler now sanitizes message content by stripping text-block markers before saving; also extracts inner content when the entire message is a single marker block
 - fix: LLM logs missing native tool call data — `llm_logs` response summary now includes optional `toolCalls` field capturing tool names and arguments from LLM responses, improving debuggability of tool call flows
 - feat: **Whispers** — Private messaging in multi-character chats. LLM characters can use the `whisper` tool to send private messages visible only to the sender and target. Users can whisper via a button in the participant sidebar. Whispers are filtered from uninvolved characters' context and hidden by default in the UI, with a "show all whispers" toggle for visibility. New `targetParticipantIds` field on messages, database migration, context filtering, memory privacy, CSS tokens across all 5 bundled themes, WhisperDialog component, and participant sidebar whisper button (3+ character chats)

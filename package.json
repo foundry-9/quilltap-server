@@ -1,5 +1,5 @@
 {
-  "name": "quilltap",
+  "name": "@foundry-9/quilltap",
   "version": "3.3.0-dev.25",
   "private": true,
   "main": "dist-electron/main.js",
