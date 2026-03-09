@@ -1812,47 +1812,47 @@ async function processMessage(
   }
 
   // ============================================================================
-  // Uncensored Retry for Empty Responses
+  // Empty Response Retry Logic
   // ============================================================================
-  // If the response is empty and no tool calls were made, this may be a silent
-  // content refusal. Attempt to re-stream with the uncensored provider if
-  // the Concierge is in AUTO_ROUTE mode.
+  // If the response is empty and no tool calls were made, the behavior depends
+  // on whether the content was flagged as dangerous by the Concierge:
+  //
+  // Content PASSED moderation (or moderation not run):
+  //   1. Retry with the SAME provider (likely a transient issue)
+  //   2. If still empty and AUTO_ROUTE with uncensored provider available,
+  //      fail over to uncensored provider
+  //
+  // Content FLAGGED as dangerous:
+  //   1. Immediately fail over to uncensored provider (the LLM's own safety
+  //      filter likely triggered the empty response)
   let uncensoredRetryAttempted = false
+  let sameProviderRetryAttempted = false
+  const contentWasFlaggedDangerous = dangerFlags && dangerFlags.length > 0
   if (
     fullResponse.trim().length === 0 &&
-    toolMessages.length === 0 &&
-    dangerSettings.mode === 'AUTO_ROUTE' &&
-    !effectiveProfile.isDangerousCompatible &&
-    dangerSettings.uncensoredTextProfileId
+    toolMessages.length === 0
   ) {
-    uncensoredRetryAttempted = true
-    logger.warn('[DangerousContent] Empty response detected, attempting uncensored retry', {
-      chatId,
-      originalProvider: effectiveProfile.provider,
-      originalModel: effectiveProfile.modelName,
-    })
+    // --- Same-provider retry for content that passed moderation ---
+    if (!contentWasFlaggedDangerous) {
+      sameProviderRetryAttempted = true
+      logger.warn('[EmptyResponse] Empty response from provider that passed moderation, retrying same provider', {
+        chatId,
+        provider: effectiveProfile.provider,
+        model: effectiveProfile.modelName,
+      })
 
-    try {
-      const routeResult = await resolveProviderForDangerousContent(
-        effectiveProfile,
-        effectiveApiKey,
-        dangerSettings,
-        userId
-      )
+      safeEnqueue(controller, encodeStatusEvent(encoder, {
+        stage: 'retrying',
+        message: 'Empty response received — retrying...',
+        characterName: character.name,
+        characterId: character.id,
+      }))
 
-      if (routeResult.rerouted) {
-        safeEnqueue(controller, encodeStatusEvent(encoder, {
-          stage: 'rerouting',
-          message: 'Retrying with uncensored provider...',
-          characterName: character.name,
-          characterId: character.id,
-        }))
-
-        // Re-stream with uncensored provider
+      try {
         for await (const chunk of streamMessage({
           messages: formattedMessages,
-          connectionProfile: routeResult.connectionProfile,
-          apiKey: routeResult.apiKey,
+          connectionProfile: effectiveProfile,
+          apiKey: effectiveApiKey,
           modelParams,
           tools: actualTools,
           useNativeWebSearch,
@@ -1886,30 +1886,122 @@ async function processMessage(
         }
 
         if (fullResponse.trim().length > 0) {
-          effectiveProfile = routeResult.connectionProfile
-          effectiveApiKey = routeResult.apiKey
-
-          logger.info('[DangerousContent] Uncensored retry succeeded', {
+          logger.info('[EmptyResponse] Same-provider retry succeeded', {
             chatId,
-            uncensoredProvider: routeResult.connectionProfile.provider,
-            uncensoredModel: routeResult.connectionProfile.modelName,
+            provider: effectiveProfile.provider,
+            model: effectiveProfile.modelName,
             responseLength: fullResponse.length,
           })
         } else {
-          logger.error('[DangerousContent] Both safe and uncensored providers returned empty', {
+          logger.warn('[EmptyResponse] Same-provider retry also returned empty', {
             chatId,
-            safeProvider: connectionProfile.provider,
-            safeModel: connectionProfile.modelName,
-            uncensoredProvider: routeResult.connectionProfile.provider,
-            uncensoredModel: routeResult.connectionProfile.modelName,
+            provider: effectiveProfile.provider,
+            model: effectiveProfile.modelName,
           })
         }
+      } catch (retryError) {
+        logger.error('[EmptyResponse] Same-provider retry failed', {
+          chatId,
+          error: retryError instanceof Error ? retryError.message : String(retryError),
+        })
       }
-    } catch (retryError) {
-      logger.error('[DangerousContent] Uncensored retry failed', {
+    }
+
+    // --- Uncensored failover (immediate if flagged dangerous, after same-provider retry otherwise) ---
+    if (
+      fullResponse.trim().length === 0 &&
+      dangerSettings.mode === 'AUTO_ROUTE' &&
+      !effectiveProfile.isDangerousCompatible &&
+      dangerSettings.uncensoredTextProfileId
+    ) {
+      uncensoredRetryAttempted = true
+      logger.warn('[DangerousContent] Empty response detected, attempting uncensored retry', {
         chatId,
-        error: retryError instanceof Error ? retryError.message : String(retryError),
+        originalProvider: effectiveProfile.provider,
+        originalModel: effectiveProfile.modelName,
+        contentWasFlaggedDangerous,
+        sameProviderRetryAttempted,
       })
+
+      try {
+        const routeResult = await resolveProviderForDangerousContent(
+          effectiveProfile,
+          effectiveApiKey,
+          dangerSettings,
+          userId
+        )
+
+        if (routeResult.rerouted) {
+          safeEnqueue(controller, encodeStatusEvent(encoder, {
+            stage: 'rerouting',
+            message: 'Retrying with uncensored provider...',
+            characterName: character.name,
+            characterId: character.id,
+          }))
+
+          // Re-stream with uncensored provider
+          for await (const chunk of streamMessage({
+            messages: formattedMessages,
+            connectionProfile: routeResult.connectionProfile,
+            apiKey: routeResult.apiKey,
+            modelParams,
+            tools: actualTools,
+            useNativeWebSearch,
+            userId,
+            messageId: preGeneratedAssistantMessageId,
+            chatId,
+          })) {
+            if (chunk.content) {
+              if (!hasStartedStreaming) {
+                safeEnqueue(controller, encodeStatusEvent(encoder, {
+                  stage: 'streaming',
+                  message: `${character.name} is responding...`,
+                  characterName: character.name,
+                  characterId: character.id,
+                }))
+                hasStartedStreaming = true
+              }
+              fullResponse += chunk.content
+              controller.enqueue(encodeContentChunk(encoder, chunk.content))
+            }
+
+            if (chunk.done) {
+              usage = chunk.usage || null
+              cacheUsage = chunk.cacheUsage || null
+              attachmentResults = chunk.attachmentResults || null
+              rawResponse = chunk.rawResponse
+              if (chunk.thoughtSignature) {
+                thoughtSignature = chunk.thoughtSignature
+              }
+            }
+          }
+
+          if (fullResponse.trim().length > 0) {
+            effectiveProfile = routeResult.connectionProfile
+            effectiveApiKey = routeResult.apiKey
+
+            logger.info('[DangerousContent] Uncensored retry succeeded', {
+              chatId,
+              uncensoredProvider: routeResult.connectionProfile.provider,
+              uncensoredModel: routeResult.connectionProfile.modelName,
+              responseLength: fullResponse.length,
+            })
+          } else {
+            logger.error('[DangerousContent] Both safe and uncensored providers returned empty', {
+              chatId,
+              safeProvider: connectionProfile.provider,
+              safeModel: connectionProfile.modelName,
+              uncensoredProvider: routeResult.connectionProfile.provider,
+              uncensoredModel: routeResult.connectionProfile.modelName,
+            })
+          }
+        }
+      } catch (retryError) {
+        logger.error('[DangerousContent] Uncensored retry failed', {
+          chatId,
+          error: retryError instanceof Error ? retryError.message : String(retryError),
+        })
+      }
     }
   }
 
@@ -2215,11 +2307,19 @@ async function processMessage(
     }
   } else {
     // Empty response
-    const emptyReason = uncensoredRetryAttempted
-      ? 'The AI model returned an empty response, and retrying with an uncensored provider also returned empty. This may indicate the content was filtered by both providers.'
-      : 'The AI model returned an empty response. This is a known issue with some providers. Please try resending your message.'
+    let emptyReason: string
+    if (uncensoredRetryAttempted && sameProviderRetryAttempted) {
+      emptyReason = 'The AI model returned an empty response after retrying, and an uncensored provider also returned empty. This may indicate the content was filtered by both providers.'
+    } else if (uncensoredRetryAttempted) {
+      emptyReason = 'The AI model returned an empty response, and retrying with an uncensored provider also returned empty. This may indicate the content was filtered by both providers.'
+    } else if (sameProviderRetryAttempted) {
+      emptyReason = 'The AI model returned an empty response twice. This may be a temporary issue with the provider. Please try resending your message.'
+    } else {
+      emptyReason = 'The AI model returned an empty response. This is a known issue with some providers. Please try resending your message.'
+    }
     logger.warn(`Empty response for chat ${chatId}`, {
       uncensoredRetryAttempted,
+      sameProviderRetryAttempted,
       provider: effectiveProfile.provider,
       model: effectiveProfile.modelName,
     })

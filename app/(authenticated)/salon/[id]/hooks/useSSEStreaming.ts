@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback } from 'react'
-import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toast'
+import { showSuccessToast, showErrorToast, showWarningToast, showInfoToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import type { ChatParticipantBase } from '@/lib/schemas/types'
@@ -198,6 +198,10 @@ export function useSSEStreaming({
         // Handle status updates
         if (data.status) {
           setResponseStatus(data.status)
+          // Show warning toast when retrying due to empty response
+          if (data.status.stage === 'retrying') {
+            showWarningToast(data.status.message)
+          }
         }
 
         // Handle content chunks
