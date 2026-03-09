@@ -52,6 +52,9 @@ import {
 import LLMInspectorPanel from '@/components/chat/LLMInspectorPanel'
 import { WhisperDialog } from '@/components/chat/WhisperDialog'
 
+/** Max auto-trigger retries per participant before pausing the chat */
+const MAX_AUTO_TRIGGER_RETRIES = 2
+
 export default function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   useAvatarDisplay()
@@ -264,6 +267,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     if (sseStreaming.streaming || sseStreaming.waitingForResponse) return
     if (!participantsWithImpersonation.effectiveNextSpeakerId) {
       chatControls.lastAutoTriggeredRef.current = null
+      chatControls.autoTriggerRetryCountRef.current = 0
+      chatControls.autoTriggerRetryParticipantRef.current = null
       return
     }
 
@@ -280,10 +285,33 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
     if (chatControls.lastAutoTriggeredRef.current === nextId) return
 
-    chatControls.lastAutoTriggeredRef.current = nextId
+    // Track retries per participant to prevent infinite loops on persistent failures
+    if (chatControls.autoTriggerRetryParticipantRef.current !== nextId) {
+      chatControls.autoTriggerRetryCountRef.current = 0
+      chatControls.autoTriggerRetryParticipantRef.current = nextId
+    }
 
-    const timeoutId = setTimeout(() => {
-      triggerContinueModeRef.current(nextId)
+    if (chatControls.autoTriggerRetryCountRef.current >= MAX_AUTO_TRIGGER_RETRIES) {
+      console.warn('[AutoTrigger] Max retries reached for participant, pausing chat', { nextId, retries: chatControls.autoTriggerRetryCountRef.current })
+      chatControls.setPauseState(true)
+      showInfoToast('Character failed to respond after multiple attempts. Chat paused — use Nudge to retry.')
+      return
+    }
+
+    chatControls.autoTriggerRetryCountRef.current++
+    chatControls.lastAutoTriggeredRef.current = nextId
+    console.debug('[AutoTrigger] Triggering participant', { nextId, attempt: chatControls.autoTriggerRetryCountRef.current })
+
+    const timeoutId = setTimeout(async () => {
+      try {
+        await triggerContinueModeRef.current(nextId)
+      } finally {
+        // Reset so the effect can re-evaluate on the next render cycle.
+        // If the trigger produced a message, effectiveNextSpeakerId will change
+        // and the retry counter won't apply. If it failed silently (e.g. empty
+        // response), the effect will retry with the counter incremented.
+        chatControls.lastAutoTriggeredRef.current = null
+      }
     }, 100)
 
     return () => clearTimeout(timeoutId)
@@ -967,6 +995,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             clearDraft,
             chatControls.lastAutoTriggeredRef,
             chatControls.userStoppedStreamRef,
+            chatControls.autoTriggerRetryCountRef,
+            chatControls.autoTriggerRetryParticipantRef,
           )}
           onFileSelect={handleFileSelect}
           onAttachFileClick={() => {}}

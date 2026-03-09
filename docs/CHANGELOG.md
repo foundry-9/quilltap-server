@@ -4,6 +4,7 @@
 
 ### 3.3-dev
 
+- fix: Multi-character chat auto-trigger permanently stalls when a character's turn fails silently — the `lastAutoTriggeredRef` guard prevented re-triggering the same participant even if no message was produced (e.g. empty LLM response, timing race on streaming state); the ref is now reset after `triggerContinueMode` completes (success or failure), with a per-participant retry counter (max 2 attempts) that pauses the chat and shows a toast on exhaustion instead of silently blocking forever
 - fix: Whisper text-block markers shown in plain text when LLM outputs backslash-escaped quotes — text-block parser regex now accepts `\"value\"` in addition to `"value"` and `'value'` for parameter values; all four regex sites updated (content pattern, self-closing pattern, marker stripping, marker detection)
 - feat: Add `TRACE` log level below `DEBUG` for high-volume diagnostic messages — demoted the per-row "Buffer in non-blob column" log from `debug` to `trace` to reduce log noise from embedding column reads
 - fix: `npm run build` fails with "file is not a database" — Next.js pre-rendered the homepage and dashboard layout during build, triggering SQLCipher database access without the encryption key; added `export const dynamic = 'force-dynamic'` to `app/page.tsx` and `app/dashboard/layout.tsx` to prevent build-time rendering of pages that require database access

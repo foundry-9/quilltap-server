@@ -249,12 +249,16 @@ export function useSSEStreaming({
     clearDraft: () => void,
     lastAutoTriggeredRef: React.MutableRefObject<string | null>,
     userStoppedStreamRef: React.MutableRefObject<boolean>,
+    autoTriggerRetryCountRef?: React.MutableRefObject<number>,
+    autoTriggerRetryParticipantRef?: React.MutableRefObject<string | null>,
   ) => {
     e.preventDefault()
     if ((!input.trim() && attachedFiles.length === 0 && pendingToolResults.length === 0) || sending) return
 
-    // Reset auto-trigger ref when user sends a message
+    // Reset auto-trigger refs when user sends a message
     lastAutoTriggeredRef.current = null
+    if (autoTriggerRetryCountRef) autoTriggerRetryCountRef.current = 0
+    if (autoTriggerRetryParticipantRef) autoTriggerRetryParticipantRef.current = null
     if (!isPaused) {
       userStoppedStreamRef.current = false
     }
