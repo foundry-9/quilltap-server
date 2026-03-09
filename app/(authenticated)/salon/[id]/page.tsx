@@ -287,7 +287,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }, 100)
 
     return () => clearTimeout(timeoutId)
-  }, [participantsWithImpersonation.isMultiChar, isPaused, sseStreaming.streaming, sseStreaming.waitingForResponse, participantsWithImpersonation.userParticipantId, participantsWithImpersonation.isAllLLM, participantsWithImpersonation.allLLMTurnCount, participantsWithImpersonation.effectiveNextSpeakerId, chatControls.setPauseState, chatControls.userStoppedStreamRef, chatControls.lastAutoTriggeredRef, triggerContinueModeRef])
+  }, [participantsWithImpersonation.isMultiChar, isPaused, sseStreaming.streaming, sseStreaming.waitingForResponse, participantsWithImpersonation.userParticipantId, participantsWithImpersonation.isAllLLM, participantsWithImpersonation.allLLMTurnCount, participantsWithImpersonation.effectiveNextSpeakerId, chatControls, triggerContinueModeRef])
 
   // --- Virtualizer ---
   const getItemKey = useCallback((index: number) => {

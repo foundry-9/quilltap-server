@@ -4,6 +4,9 @@
 
 ### 3.3-dev
 
+- fix: `npm run build` fails with "file is not a database" — Next.js pre-rendered the homepage and dashboard layout during build, triggering SQLCipher database access without the encryption key; added `export const dynamic = 'force-dynamic'` to `app/page.tsx` and `app/dashboard/layout.tsx` to prevent build-time rendering of pages that require database access
+- fix: `useEffect` missing dependency lint warning in salon chat page — consolidated individual `chatControls.*` property references into single `chatControls` dependency
+- chore: npm dependency upgrades across the project
 - chore: Rename root package from `quilltap` to `@foundry-9/quilltap` to resolve name collision with the published `quilltap` CLI package — `npx quilltap db` now works from the project root directory without needing to `cd` elsewhere first
 - fix: Whisper messages saved with raw text-block markers when LLM double-encodes — DeepSeek (and potentially other models) called the native whisper tool but placed `[[WHISPER to="X"]]content[[/WHISPER]]` markers inside the message argument; whisper handler now sanitizes message content by stripping text-block markers before saving; also extracts inner content when the entire message is a single marker block
 - fix: LLM logs missing native tool call data — `llm_logs` response summary now includes optional `toolCalls` field capturing tool names and arguments from LLM responses, improving debuggability of tool call flows

@@ -16,7 +16,8 @@ import type {
   HomepageCharacter,
 } from "@/components/homepage";
 
-// Revalidate on every request
+// Never pre-render during build - requires database access
+export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function Home() {
