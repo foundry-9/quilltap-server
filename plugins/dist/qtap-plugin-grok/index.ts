@@ -302,6 +302,8 @@ export const plugin: LLMProviderPlugin = {
   getImageProviderConstraints: (): ImageProviderConstraints => {
     return GROK_IMAGE_CONSTRAINTS;
   },
+
+  // Text tool call detection not needed — models use native function calling correctly
 };
 
 export default plugin;

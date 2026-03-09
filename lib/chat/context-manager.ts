@@ -212,10 +212,10 @@ export interface BuildContextOptions {
   messagesWithParticipants?: MessageWithParticipant[]
 
   // ============================================================================
-  // Tool Instructions (native tool rules or pseudo-tool instructions)
+  // Tool Instructions (native tool rules or text-block tool instructions)
   // ============================================================================
 
-  /** Tool instructions injected into system prompt (native tool rules or pseudo-tool instructions) */
+  /** Tool instructions injected into system prompt (native tool rules or text-block tool instructions) */
   toolInstructions?: string
 
   // ============================================================================
@@ -310,7 +310,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     allParticipants,
     participantCharacters,
     messagesWithParticipants,
-    // Tool instructions (native tool rules or pseudo-tool instructions)
+    // Tool instructions (native tool rules or text-block tool instructions)
     toolInstructions,
     // Project context
     projectContext,

@@ -43,7 +43,7 @@ export function buildSystemPrompt(
   otherParticipants?: OtherParticipantInfo[],
   /** Roleplay template to prepend (formatting instructions) */
   roleplayTemplate?: { systemPrompt: string } | null,
-  /** Tool instructions (native tool rules or pseudo-tool instructions) */
+  /** Tool instructions (native tool rules or text-block tool instructions) */
   toolInstructions?: string,
   /** Selected system prompt ID from character's systemPrompts array */
   selectedSystemPromptId?: string | null,
@@ -89,7 +89,7 @@ export function buildSystemPrompt(
     parts.push(processedRoleplayPrompt)
   }
 
-  // Tool instructions (native tool rules or pseudo-tool instructions)
+  // Tool instructions (native tool rules or text-block tool instructions)
   // Added after roleplay template so tool usage instructions are seen early
   // Note: These typically don't contain {{char}}/{{user}} but process anyway for consistency
   if (toolInstructions) {

@@ -7,6 +7,7 @@
  * - Claude-style: <function_calls><invoke name="..."><parameter name="...">value</parameter></invoke></function_calls>
  * - Generic: <tool_call><name>...</name><arguments><query>...</query></arguments></tool_call>
  * - Function call: <function_call name="..."><param name="...">value</param></function_call>
+ * - Tool use: <tool_use><name>...</name><arguments>...</arguments></tool_use> (Gemini)
  */
 
 import { logger } from '@/lib/logger'
@@ -26,7 +27,7 @@ export interface ParsedXMLTool {
   /** End index in the original text */
   endIndex: number
   /** Which XML format was detected */
-  format: 'deepseek' | 'claude' | 'generic' | 'function_call'
+  format: 'deepseek' | 'claude' | 'generic' | 'function_call' | 'tool_use'
 }
 
 /**
@@ -248,6 +249,100 @@ function parseFunctionCallFormat(response: string): ParsedXMLTool[] {
 }
 
 /**
+ * Parse <tool_use> format (Gemini and others)
+ *
+ * Handles multiple sub-formats:
+ * - Bare JSON: <tool_use>{"name":"fn","input":{"query":"val"}}</tool_use> (Gemini's primary format)
+ * - XML children: <tool_use><name>fn</name><arguments><query>val</query></arguments></tool_use>
+ * - JSON in arguments: <tool_use><name>fn</name><arguments>{"query":"val"}</arguments></tool_use>
+ * - Attributed: <tool_use name="fn"><arguments>...</arguments></tool_use>
+ */
+function parseToolUseFormat(response: string): ParsedXMLTool[] {
+  const results: ParsedXMLTool[] = []
+
+  // Pattern for <tool_use> with optional name attribute
+  const toolUsePattern = /<tool_use(?:\s+name=["']([^"']+)["'])?\s*>([\s\S]*?)<\/tool_use>/gi
+
+  let match
+  while ((match = toolUsePattern.exec(response)) !== null) {
+    const attrName = match[1]
+    const content = match[2]
+    const startIndex = match.index
+
+    // First, try parsing the entire content as a JSON blob (Gemini's primary format):
+    // <tool_use>{"name": "tool_name", "input": {...}}</tool_use>
+    const trimmedContent = content.trim()
+    if (trimmedContent.startsWith('{')) {
+      try {
+        const jsonBlob = JSON.parse(trimmedContent)
+        if (typeof jsonBlob === 'object' && jsonBlob !== null && jsonBlob.name) {
+          const args = jsonBlob.input || jsonBlob.arguments || jsonBlob.parameters || {}
+          results.push({
+            toolName: mapXMLToolName(jsonBlob.name),
+            arguments: typeof args === 'object' && args !== null ? args : {},
+            fullMatch: match[0],
+            startIndex,
+            endIndex: startIndex + match[0].length,
+            format: 'tool_use',
+          })
+          continue
+        }
+      } catch {
+        // Not valid JSON, fall through to XML parsing
+      }
+    }
+
+    // Extract name from attribute or child element
+    let toolName = attrName
+    if (!toolName) {
+      const nameMatch = /<name>([^<]+)<\/name>/i.exec(content)
+      if (!nameMatch) continue
+      toolName = nameMatch[1].trim()
+    }
+
+    const args: Record<string, unknown> = {}
+
+    // Extract arguments block (try <arguments>, <input>, or <parameters>)
+    const argsMatch = /<(?:arguments|input|parameters)>([\s\S]*?)<\/(?:arguments|input|parameters)>/i.exec(content)
+    if (argsMatch) {
+      const argsContent = argsMatch[1].trim()
+
+      // Try JSON first (Gemini often emits JSON inside <arguments>)
+      if (argsContent.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(argsContent)
+          if (typeof parsed === 'object' && parsed !== null) {
+            Object.assign(args, parsed)
+          }
+        } catch {
+          // Not valid JSON, fall through to XML parsing
+        }
+      }
+
+      // If no args parsed from JSON, try XML child elements
+      if (Object.keys(args).length === 0) {
+        const argPattern = /<(\w+)>([^<]*)<\/\1>/gi
+        let argMatch
+        while ((argMatch = argPattern.exec(argsContent)) !== null) {
+          args[argMatch[1]] = argMatch[2].trim()
+        }
+      }
+    }
+
+    results.push({
+      toolName: mapXMLToolName(toolName),
+      arguments: args,
+      fullMatch: match[0],
+      startIndex,
+      endIndex: startIndex + match[0].length,
+      format: 'tool_use',
+    })
+  }
+
+  return results
+}
+
+/**
  * Parse all XML tool calls from response text
  * Checks all supported formats and returns unified results
  *
@@ -261,6 +356,7 @@ export function parseXMLToolCalls(response: string): ParsedXMLTool[] {
   allResults.push(...parseFunctionCallsFormat(response))
   allResults.push(...parseToolCallFormat(response))
   allResults.push(...parseFunctionCallFormat(response))
+  allResults.push(...parseToolUseFormat(response))
 
   // Deduplicate by startIndex (in case multiple patterns match the same block)
   const seen = new Set<number>()
@@ -343,6 +439,9 @@ export function stripXMLToolMarkers(response: string): string {
   // Remove <function_call ...>...</function_call> blocks
   stripped = stripped.replace(/<function_call\s+[^>]*>[\s\S]*?<\/function_call>/gi, '')
 
+  // Remove <tool_use>...</tool_use> blocks
+  stripped = stripped.replace(/<tool_use[\s>][\s\S]*?<\/tool_use>/gi, '')
+
   // Clean up any double spaces or newlines left behind
   stripped = stripped
     .replace(/\n{3,}/g, '\n\n')  // Collapse multiple newlines
@@ -360,6 +459,7 @@ export function hasXMLToolMarkers(response: string): boolean {
   return (
     /<function_calls>/i.test(response) ||
     /<tool_call>/i.test(response) ||
-    /<function_call\s+/i.test(response)
+    /<function_call\s+/i.test(response) ||
+    /<tool_use[\s>]/i.test(response)
   )
 }

@@ -8114,6 +8114,7 @@ var plugin = {
       return [];
     }
   }
+  // Text tool call detection not needed — models use native function calling correctly
 };
 var index_default = plugin;
 // Annotate the CommonJS export names for ESM import in node:

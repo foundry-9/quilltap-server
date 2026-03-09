@@ -71,17 +71,11 @@ export {
   type StreamChunkCallback,
 } from './streaming.service'
 
-// Pseudo-tools and native tool instructions
+// Tool mode support and native tool instructions
 export {
-  checkShouldUsePseudoTools,
-  buildPseudoToolSystemInstructions,
   buildNativeToolSystemInstructions,
-  parsePseudoToolsFromResponse,
-  stripPseudoToolMarkersFromResponse,
   determineEnabledToolOptions,
-  logPseudoToolUsage,
   type EnabledToolOptions,
-  type PseudoToolCall,
 } from './pseudo-tool.service'
 
 // Memory Triggers

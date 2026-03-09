@@ -1,19 +1,15 @@
 /**
- * Pseudo-Tool Service
+ * Tool Mode Support Service
  *
- * Handles pseudo-tool logic for models without native function calling support.
- * Parses text-based tool markers and converts them to standard tool calls.
+ * Handles tool mode determination and instructions for models with and without
+ * native function calling support. Provides text-block tool support for models
+ * that lack native function calling.
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import {
-  shouldUsePseudoTools,
   shouldUseTextBlockTools,
-  buildPseudoToolInstructions,
   buildNativeToolInstructions,
-  parsePseudoToolCalls,
-  convertToToolCallRequest,
-  stripPseudoToolMarkers,
   parseTextBlockCalls,
   convertTextBlockToToolCallRequest,
   stripTextBlockMarkers,
@@ -22,7 +18,7 @@ import {
   type TextBlockPromptOptions,
 } from '@/lib/tools'
 
-const logger = createServiceLogger('PseudoToolService')
+const logger = createServiceLogger('ToolModeService')
 
 /**
  * Tool options for enabling/disabling specific tools
@@ -34,63 +30,12 @@ export interface EnabledToolOptions {
 }
 
 /**
- * Parsed pseudo-tool call
- */
-export interface PseudoToolCall {
-  name: string
-  arguments: Record<string, unknown>
-}
-
-/**
- * Check if pseudo-tools should be used for a model
- */
-export function checkShouldUsePseudoTools(modelSupportsNativeTools: boolean): boolean {
-  return shouldUsePseudoTools(modelSupportsNativeTools)
-}
-
-/**
- * Build pseudo-tool instructions to inject into system prompt
- */
-export function buildPseudoToolSystemInstructions(
-  enabledToolOptions: EnabledToolOptions
-): string {
-  return buildPseudoToolInstructions(enabledToolOptions)
-}
-
-/**
  * Build native tool instructions to inject into system prompt
  * Guides models with native function calling to actually invoke tools
  * rather than narrating tool usage in prose.
  */
 export function buildNativeToolSystemInstructions(): string {
   return buildNativeToolInstructions(true)
-}
-
-/**
- * Parse pseudo-tool calls from response text
- */
-export function parsePseudoToolsFromResponse(
-  response: string
-): Array<{ name: string; arguments: Record<string, unknown> }> {
-  const pseudoToolCalls = parsePseudoToolCalls(response)
-
-  if (pseudoToolCalls.length > 0) {
-    logger.info('Detected pseudo-tool markers in response', {
-      count: pseudoToolCalls.length,
-      tools: pseudoToolCalls.map(p => p.toolName),
-    })
-  }
-
-  return pseudoToolCalls.map(convertToToolCallRequest)
-}
-
-/**
- * Strip pseudo-tool markers from response for storage/display
- */
-export function stripPseudoToolMarkersFromResponse(response: string): string {
-  const strippedResponse = stripPseudoToolMarkers(response)
-
-  return strippedResponse
 }
 
 /**
@@ -105,23 +50,6 @@ export function determineEnabledToolOptions(
     memorySearch: true, // Always enable memory search
     webSearch: allowWebSearch,
   }
-}
-
-/**
- * Log pseudo-tool usage info
- */
-export function logPseudoToolUsage(
-  provider: string,
-  model: string,
-  enabledTools: EnabledToolOptions
-): void {
-  logger.info('Using pseudo-tools (model does not support native function calling)', {
-    provider,
-    model,
-    enabledTools: Object.entries(enabledTools)
-      .filter(([, enabled]) => enabled)
-      .map(([name]) => name),
-  })
 }
 
 // ============================================================================

@@ -195,6 +195,97 @@ This is incomplete...
       expect(parsed).toHaveLength(1)
       expect(parsed[0].arguments.exact).toBe(true)
     })
+
+    it('parses Gemini <tool_use> with bare JSON content', () => {
+      const response = `*I adjust my cuffs.* "Understood, Charlie."
+
+<tool_use>
+{"name": "submit_final_response", "input": {"response": "Here is my final response text."}}
+</tool_use>`
+      const parsed = parseXMLToolCalls(response)
+      expect(parsed).toHaveLength(1)
+      expect(parsed[0].toolName).toBe('submit_final_response')
+      expect(parsed[0].arguments).toEqual({ response: 'Here is my final response text.' })
+      expect(parsed[0].format).toBe('tool_use')
+    })
+
+    it('parses <tool_use> with XML child elements', () => {
+      const response = `
+<tool_use>
+<name>search_memories</name>
+<arguments>
+<query>previous conversation about cats</query>
+<limit>5</limit>
+</arguments>
+</tool_use>
+`
+      const parsed = parseXMLToolCalls(response)
+      expect(parsed).toHaveLength(1)
+      expect(parsed[0].toolName).toBe('search_memories')
+      expect(parsed[0].arguments).toEqual({
+        query: 'previous conversation about cats',
+        limit: '5',
+      })
+      expect(parsed[0].format).toBe('tool_use')
+    })
+
+    it('parses <tool_use> with JSON inside <arguments>', () => {
+      const response = `
+<tool_use>
+<name>generate_image</name>
+<arguments>{"prompt": "a cat sitting on a windowsill"}</arguments>
+</tool_use>
+`
+      const parsed = parseXMLToolCalls(response)
+      expect(parsed).toHaveLength(1)
+      expect(parsed[0].toolName).toBe('generate_image')
+      expect(parsed[0].arguments).toEqual({ prompt: 'a cat sitting on a windowsill' })
+      expect(parsed[0].format).toBe('tool_use')
+    })
+
+    it('parses <tool_use> with name attribute', () => {
+      const response = `
+<tool_use name="search_web">
+<arguments>{"query": "weather today"}</arguments>
+</tool_use>
+`
+      const parsed = parseXMLToolCalls(response)
+      expect(parsed).toHaveLength(1)
+      expect(parsed[0].toolName).toBe('search_web')
+      expect(parsed[0].arguments).toEqual({ query: 'weather today' })
+      expect(parsed[0].format).toBe('tool_use')
+    })
+
+    it('parses <tool_use> with <input> instead of <arguments>', () => {
+      const response = `
+<tool_use>
+<name>search_memories</name>
+<input>{"query": "favorite food"}</input>
+</tool_use>
+`
+      const parsed = parseXMLToolCalls(response)
+      expect(parsed).toHaveLength(1)
+      expect(parsed[0].toolName).toBe('search_memories')
+      expect(parsed[0].arguments).toEqual({ query: 'favorite food' })
+    })
+
+    it('handles multiple <tool_use> blocks', () => {
+      const response = `
+<tool_use>
+{"name": "search_memories", "input": {"query": "test"}}
+</tool_use>
+
+Some text in between.
+
+<tool_use>
+{"name": "generate_image", "input": {"prompt": "a sunset"}}
+</tool_use>
+`
+      const parsed = parseXMLToolCalls(response)
+      expect(parsed).toHaveLength(2)
+      expect(parsed[0].toolName).toBe('search_memories')
+      expect(parsed[1].toolName).toBe('generate_image')
+    })
   })
 
   describe('convertXMLToToolCallRequest', () => {
@@ -341,6 +432,18 @@ Middle text
       const stripped = stripXMLToolMarkers(response)
       expect(stripped).toBe('Text more')
     })
+
+    it('removes tool_use format', () => {
+      const response = 'Before <tool_use>\n{"name": "test", "input": {}}\n</tool_use> After'
+      const stripped = stripXMLToolMarkers(response)
+      expect(stripped).toBe('Before After')
+    })
+
+    it('removes tool_use with name attribute', () => {
+      const response = 'Text <tool_use name="test"><arguments>{"q":"v"}</arguments></tool_use> more'
+      const stripped = stripXMLToolMarkers(response)
+      expect(stripped).toBe('Text more')
+    })
   })
 
   describe('hasXMLToolMarkers', () => {
@@ -354,6 +457,14 @@ Middle text
 
     it('returns true for function_call format', () => {
       expect(hasXMLToolMarkers('<function_call name="test"></function_call>')).toBe(true)
+    })
+
+    it('returns true for tool_use format', () => {
+      expect(hasXMLToolMarkers('<tool_use>{"name":"test"}</tool_use>')).toBe(true)
+    })
+
+    it('returns true for tool_use with attribute', () => {
+      expect(hasXMLToolMarkers('<tool_use name="test"><arguments>{}</arguments></tool_use>')).toBe(true)
     })
 
     it('returns false for plain text', () => {

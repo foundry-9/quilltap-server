@@ -332,7 +332,7 @@ export async function buildMessageContext(
     allParticipants: isMultiCharacter ? chat.participants : undefined,
     participantCharacters: isMultiCharacter ? participantCharacters : undefined,
     messagesWithParticipants: isMultiCharacter ? messagesWithParticipants : undefined,
-    // Tool instructions (native tool rules or pseudo-tool instructions)
+    // Tool instructions (native tool rules or text-block tool instructions)
     toolInstructions,
     // Timestamp injection
     timestampConfig,

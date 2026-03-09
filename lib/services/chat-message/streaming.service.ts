@@ -52,7 +52,6 @@ export interface StreamDebugInfo {
   modelParams: Record<string, unknown>
   messages: Array<{ role: string; contentLength: number; hasAttachments: boolean }>
   tools: unknown[]
-  usePseudoTools: boolean
   enabledToolOptions?: Record<string, boolean>
   fallbackResults?: FallbackResult[]
 }
@@ -124,7 +123,6 @@ export async function buildTools(
   imageProfileId: string | null,
   imageProfile: ImageProfile | null,
   userId: string,
-  usePseudoTools: boolean,
   /** Project ID if chat is associated with a project (enables project_info tool) */
   projectId?: string | null,
   /** Whether context compression is enabled (enables request_full_context tool) */
@@ -155,11 +153,6 @@ export async function buildTools(
 
   // Native web search requires both the profile setting AND provider support
   const useNativeWebSearch = connectionProfile.useNativeWebSearch && provider.supportsWebSearch
-
-  if (usePseudoTools) {
-
-    return { tools: [], modelSupportsNativeTools, useNativeWebSearch }
-  }
 
   // Profile-level tool override - if allowToolUse is explicitly false, skip all tools
   if (connectionProfile.allowToolUse === false) {
@@ -384,7 +377,7 @@ export function encodeDebugInfo(
   encoder: TextEncoder,
   debugInfo: StreamDebugInfo
 ): Uint8Array {
-  const { builtContext, connectionProfile, modelParams, messages, tools, usePseudoTools, enabledToolOptions } = debugInfo
+  const { builtContext, connectionProfile, modelParams, messages, tools } = debugInfo
 
   const llmRequestDetails = {
     provider: connectionProfile.provider,
@@ -395,12 +388,6 @@ export function encodeDebugInfo(
     messageCount: messages.length,
     hasTools: tools.length > 0,
     tools: tools.length > 0 ? tools : undefined,
-    usePseudoTools,
-    pseudoToolsEnabled: usePseudoTools && enabledToolOptions
-      ? Object.entries(enabledToolOptions)
-          .filter(([, enabled]) => enabled)
-          .map(([name]) => name)
-      : undefined,
     messages: messages,
     contextManagement: {
       tokenUsage: builtContext.tokenUsage,

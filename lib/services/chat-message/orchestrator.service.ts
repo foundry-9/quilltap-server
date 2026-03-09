@@ -55,13 +55,8 @@ import {
   safeClose,
 } from './streaming.service'
 import {
-  checkShouldUsePseudoTools,
-  buildPseudoToolSystemInstructions,
   buildNativeToolSystemInstructions,
-  parsePseudoToolsFromResponse,
-  stripPseudoToolMarkersFromResponse,
   determineEnabledToolOptions,
-  logPseudoToolUsage,
   checkShouldUseTextBlockTools,
   buildTextBlockSystemInstructions,
   parseTextBlocksFromResponse,
@@ -70,12 +65,9 @@ import {
   logTextBlockToolUsage,
 } from './pseudo-tool.service'
 import {
-  parseXMLToolCalls,
-  convertXMLToToolCallRequest,
-  stripXMLToolMarkers,
-  hasXMLToolMarkers,
   hasTextBlockMarkers,
 } from '@/lib/tools'
+import { getProvider } from '@/lib/plugins/provider-registry'
 import {
   triggerMemoryExtraction,
   triggerInterCharacterMemory,
@@ -751,7 +743,7 @@ async function processMessage(
     await repos.chats.update(chatId, { forceToolsOnNextMessage: false })
   }
 
-  // Check for pseudo-tools
+  // Check tool options
   const enabledToolOptions = determineEnabledToolOptions(
     imageProfileId,
     effectiveProfile.allowWebSearch
@@ -764,7 +756,6 @@ async function processMessage(
     imageProfileId,
     imageProfile,
     userId,
-    false, // Will check pseudo-tools after
     chat.projectId ?? undefined, // projectId - enables project_info tool
     compressionEnabled, // requestFullContext - enable the tool when compression is active
     chat.disabledTools ?? [],
@@ -774,10 +765,9 @@ async function processMessage(
   )
 
   const useTextBlockTools = checkShouldUseTextBlockTools(modelSupportsNativeTools)
-  const usePseudoTools = !useTextBlockTools && checkShouldUsePseudoTools(modelSupportsNativeTools)
-  const actualTools = (usePseudoTools || useTextBlockTools) ? [] : tools
+  const actualTools = useTextBlockTools ? [] : tools
 
-  // Build tool instructions (text-block, pseudo-tool, or native tool rules)
+  // Build tool instructions (text-block or native tool rules)
   let toolInstructions: string | undefined
   if (useTextBlockTools) {
     const textBlockOptions = determineTextBlockToolOptions(
@@ -788,9 +778,6 @@ async function processMessage(
     )
     toolInstructions = buildTextBlockSystemInstructions(textBlockOptions)
     logTextBlockToolUsage(effectiveProfile.provider, effectiveProfile.modelName, textBlockOptions)
-  } else if (usePseudoTools) {
-    toolInstructions = buildPseudoToolSystemInstructions(enabledToolOptions)
-    logPseudoToolUsage(effectiveProfile.provider, effectiveProfile.modelName, enabledToolOptions)
   } else if (actualTools.length > 0) {
     toolInstructions = buildNativeToolSystemInstructions()
   }
@@ -1110,7 +1097,6 @@ async function processMessage(
       hasAttachments: !!m.attachments?.length,
     })),
     tools: actualTools,
-    usePseudoTools,
     enabledToolOptions: enabledToolOptions as unknown as Record<string, boolean>,
   }))
 
@@ -1295,7 +1281,7 @@ async function processMessage(
           }
         }
 
-        logger.info('Tool-unsupported retry succeeded. Consider configuring pseudo-tools for this model.', {
+        logger.info('Tool-unsupported retry succeeded. Consider configuring text-block tools for this model.', {
           chatId,
           provider: effectiveProfile.provider,
           model: effectiveProfile.modelName,
@@ -1569,22 +1555,21 @@ async function processMessage(
     }
   }
 
-  // Process XML tool calls (runs for ALL providers, regardless of pseudo-tool mode)
-  // This catches LLMs that spontaneously emit XML-style function calls (e.g., DeepSeek)
-  if (fullResponse && hasXMLToolMarkers(fullResponse)) {
-    const xmlToolCalls = parseXMLToolCalls(fullResponse)
+  // Process text tool calls via provider plugin (catches spontaneous XML emissions)
+  // Each plugin knows which formats its models emit (e.g., DeepSeek <function_calls>, Gemini <tool_use>)
+  const providerPlugin = getProvider(effectiveProfile.provider)
+  if (fullResponse && providerPlugin?.hasTextToolMarkers?.(fullResponse)) {
+    const textToolCallRequests = providerPlugin.parseTextToolCalls?.(fullResponse) ?? []
 
-    if (xmlToolCalls.length > 0) {
-      const xmlToolCallRequests = xmlToolCalls.map(convertXMLToToolCallRequest)
-
-      logger.info('Detected XML tool calls in response', {
-        count: xmlToolCallRequests.length,
-        tools: xmlToolCallRequests.map(tc => tc.name),
-        formats: xmlToolCalls.map(tc => tc.format),
+    if (textToolCallRequests.length > 0) {
+      logger.info('Detected text tool calls in response (via plugin)', {
+        count: textToolCallRequests.length,
+        tools: textToolCallRequests.map(tc => tc.name),
+        provider: effectiveProfile.provider,
       })
 
       // Send tool executing status for each detected tool
-      for (const toolCall of xmlToolCallRequests) {
+      for (const toolCall of textToolCallRequests) {
         safeEnqueue(controller, encodeStatusEvent(encoder, {
           stage: 'tool_executing',
           message: `Running ${toolCall.name}...`,
@@ -1594,11 +1579,11 @@ async function processMessage(
         }))
       }
 
-      const results = await processToolCalls(xmlToolCallRequests, toolContext, controller, encoder)
+      const results = await processToolCalls(textToolCallRequests, toolContext, controller, encoder)
       toolMessages = [...toolMessages, ...results.toolMessages]
       generatedImagePaths = [...generatedImagePaths, ...results.generatedImagePaths]
 
-      const strippedResponse = stripXMLToolMarkers(fullResponse)
+      const strippedResponse = providerPlugin.stripTextToolMarkers?.(fullResponse) ?? fullResponse
 
       // Add stripped response and tool results to conversation
       currentMessages = [...formattedMessages]
@@ -1649,8 +1634,10 @@ async function processMessage(
       }
 
       fullResponse = strippedResponse + (strippedResponse.trim() && continuationResponse.trim() ? '\n\n' : '') + continuationResponse
-      // Strip any remaining XML markers from the continuation
-      fullResponse = stripXMLToolMarkers(fullResponse)
+      // Strip any remaining text tool markers from the continuation
+      if (providerPlugin.stripTextToolMarkers) {
+        fullResponse = providerPlugin.stripTextToolMarkers(fullResponse)
+      }
     }
   }
 
@@ -1733,81 +1720,6 @@ async function processMessage(
       fullResponse = strippedResponse + (strippedResponse.trim() && continuationResponse.trim() ? '\n\n' : '') + continuationResponse
       // Strip any remaining text-block markers from the continuation
       fullResponse = stripTextBlockMarkersFromResponse(fullResponse)
-    }
-  }
-
-  // Process pseudo-tools
-  if (usePseudoTools && fullResponse) {
-    const pseudoToolCalls = parsePseudoToolsFromResponse(fullResponse)
-
-    if (pseudoToolCalls.length > 0) {
-      // Send tool executing status for each detected tool
-      for (const toolCall of pseudoToolCalls) {
-        safeEnqueue(controller, encodeStatusEvent(encoder, {
-          stage: 'tool_executing',
-          message: `Running ${toolCall.name}...`,
-          toolName: toolCall.name,
-          characterName: character.name,
-          characterId: character.id,
-        }))
-      }
-
-      const results = await processToolCalls(pseudoToolCalls, toolContext, controller, encoder)
-      toolMessages = [...toolMessages, ...results.toolMessages]
-      generatedImagePaths = [...generatedImagePaths, ...results.generatedImagePaths]
-
-      const strippedResponse = stripPseudoToolMarkersFromResponse(fullResponse)
-
-      // Add stripped response and tool results to conversation
-      currentMessages = [...formattedMessages]
-      if (strippedResponse.trim()) {
-        currentMessages.push({
-          role: 'assistant' as const,
-          content: strippedResponse,
-          thoughtSignature,
-          name: undefined,
-        })
-      }
-
-      for (const toolMsg of results.toolMessages) {
-        currentMessages.push({
-          role: 'user' as const,
-          content: `[Tool Result: ${toolMsg.toolName}]\n${toolMsg.content}`,
-          thoughtSignature: undefined,
-          name: undefined,
-        })
-      }
-
-      // Continue conversation with tool results
-      let continuationResponse = ''
-      for await (const chunk of streamMessage({
-        messages: currentMessages,
-        connectionProfile: effectiveProfile,
-        apiKey: effectiveApiKey,
-        modelParams,
-        tools: [],
-        useNativeWebSearch: useNativeWebSearch && !usePseudoTools,
-        userId,
-        messageId: preGeneratedAssistantMessageId,
-        chatId,
-      })) {
-        if (chunk.content) {
-          continuationResponse += chunk.content
-          controller.enqueue(encodeContentChunk(encoder, chunk.content))
-        }
-
-        if (chunk.done) {
-          usage = chunk.usage || null
-          cacheUsage = chunk.cacheUsage || null
-          rawResponse = chunk.rawResponse
-          if (chunk.thoughtSignature) {
-            thoughtSignature = chunk.thoughtSignature
-          }
-        }
-      }
-
-      fullResponse = strippedResponse + (strippedResponse.trim() && continuationResponse.trim() ? '\n\n' : '') + continuationResponse
-      fullResponse = stripPseudoToolMarkersFromResponse(fullResponse)
     }
   }
 

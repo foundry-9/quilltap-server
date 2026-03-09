@@ -47424,6 +47424,135 @@ var GoogleImagenProvider = class {
   }
 };
 
+// node_modules/@quilltap/plugin-utils/dist/tools/index.mjs
+var TOOL_NAME_ALIASES = {
+  // Direct mappings
+  "search_memories": "search_memories",
+  "generate_image": "generate_image",
+  "search_web": "search_web",
+  // Memory tool aliases
+  "memory": "search_memories",
+  "memory_search": "search_memories",
+  "search_memory": "search_memories",
+  "memories": "search_memories",
+  // Image tool aliases
+  "image": "generate_image",
+  "create_image": "generate_image",
+  "image_generation": "generate_image",
+  "gen_image": "generate_image",
+  // Web search aliases
+  "search": "search_web",
+  "web_search": "search_web",
+  "websearch": "search_web",
+  "web": "search_web"
+};
+function normalizeToolName(name) {
+  const normalized = name.toLowerCase().trim();
+  return TOOL_NAME_ALIASES[normalized] || name;
+}
+function convertToToolCallRequest(parsed) {
+  switch (parsed.toolName) {
+    case "search_memories":
+      return {
+        name: "search_memories",
+        arguments: {
+          query: parsed.arguments.query || parsed.arguments.search || Object.values(parsed.arguments)[0] || "",
+          limit: parsed.arguments.limit
+        }
+      };
+    case "generate_image":
+      return {
+        name: "generate_image",
+        arguments: {
+          prompt: parsed.arguments.prompt || parsed.arguments.description || Object.values(parsed.arguments)[0] || ""
+        }
+      };
+    case "search_web":
+      return {
+        name: "search_web",
+        arguments: {
+          query: parsed.arguments.query || parsed.arguments.search || Object.values(parsed.arguments)[0] || ""
+        }
+      };
+    default:
+      return {
+        name: parsed.toolName,
+        arguments: parsed.arguments
+      };
+  }
+}
+function parseToolUseFormat(response) {
+  const results = [];
+  const toolUsePattern = /<tool_use(?:\s+name=["']([^"']+)["'])?\s*>([\s\S]*?)<\/tool_use>/gi;
+  let match;
+  while ((match = toolUsePattern.exec(response)) !== null) {
+    const attrName = match[1];
+    const content = match[2];
+    const startIndex = match.index;
+    const trimmedContent = content.trim();
+    if (trimmedContent.startsWith("{")) {
+      try {
+        const jsonBlob = JSON.parse(trimmedContent);
+        if (typeof jsonBlob === "object" && jsonBlob !== null && jsonBlob.name) {
+          const args2 = jsonBlob.input || jsonBlob.arguments || jsonBlob.parameters || {};
+          results.push({
+            toolName: normalizeToolName(jsonBlob.name),
+            arguments: typeof args2 === "object" && args2 !== null ? args2 : {},
+            fullMatch: match[0],
+            startIndex,
+            endIndex: startIndex + match[0].length,
+            format: "tool_use"
+          });
+          continue;
+        }
+      } catch {
+      }
+    }
+    let toolName = attrName;
+    if (!toolName) {
+      const nameMatch = /<name>([^<]+)<\/name>/i.exec(content);
+      if (!nameMatch) continue;
+      toolName = nameMatch[1].trim();
+    }
+    const args = {};
+    const argsMatch = /<(?:arguments|input|parameters)>([\s\S]*?)<\/(?:arguments|input|parameters)>/i.exec(content);
+    if (argsMatch) {
+      const argsContent = argsMatch[1].trim();
+      if (argsContent.startsWith("{")) {
+        try {
+          const parsed = JSON.parse(argsContent);
+          if (typeof parsed === "object" && parsed !== null) {
+            Object.assign(args, parsed);
+          }
+        } catch {
+        }
+      }
+      if (Object.keys(args).length === 0) {
+        const argPattern = /<(\w+)>([^<]*)<\/\1>/gi;
+        let argMatch;
+        while ((argMatch = argPattern.exec(argsContent)) !== null) {
+          args[argMatch[1]] = argMatch[2].trim();
+        }
+      }
+    }
+    results.push({
+      toolName: normalizeToolName(toolName),
+      arguments: args,
+      fullMatch: match[0],
+      startIndex,
+      endIndex: startIndex + match[0].length,
+      format: "tool_use"
+    });
+  }
+  return results;
+}
+function hasToolUseMarkers(response) {
+  return /<tool_use[\s>]/i.test(response);
+}
+function stripToolUseMarkers(response) {
+  return response.replace(/<tool_use[\s>][\s\S]*?<\/tool_use>/gi, "");
+}
+
 // index.ts
 var logger3 = createPluginLogger("qtap-plugin-google");
 var metadata = {
@@ -47718,6 +47847,41 @@ var plugin = {
       );
       return [];
     }
+  },
+  /**
+   * Detect spontaneous tool_use XML markers in Gemini text responses
+   */
+  hasTextToolMarkers(text) {
+    return hasToolUseMarkers(text);
+  },
+  /**
+   * Parse spontaneous tool_use XML from Gemini text responses
+   */
+  parseTextToolCalls(text) {
+    try {
+      const parsed = parseToolUseFormat(text);
+      if (parsed.length > 0) {
+        logger3.debug("Detected spontaneous tool_use XML in Gemini response", {
+          context: "google.parseTextToolCalls",
+          count: parsed.length,
+          tools: parsed.map((p) => p.toolName)
+        });
+      }
+      return parsed.map(convertToToolCallRequest);
+    } catch (error) {
+      logger3.error(
+        "Error parsing text tool calls",
+        { context: "google.parseTextToolCalls" },
+        error instanceof Error ? error : void 0
+      );
+      return [];
+    }
+  },
+  /**
+   * Strip spontaneous tool_use XML markers from Gemini text responses
+   */
+  stripTextToolMarkers(text) {
+    return stripToolUseMarkers(text).replace(/\n{3,}/g, "\n\n").replace(/  +/g, " ").trim();
   }
 };
 var index_default = plugin;

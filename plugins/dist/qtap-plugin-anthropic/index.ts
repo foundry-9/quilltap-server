@@ -292,6 +292,8 @@ export const plugin: LLMProviderPlugin = {
       return [];
     }
   },
+
+  // Text tool call detection not needed — models use native function calling correctly
 };
 
 export default plugin;

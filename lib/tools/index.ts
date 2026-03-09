@@ -275,33 +275,16 @@ export {
   type BuildToolsOptions,
 } from './plugin-tool-builder';
 
-// Pseudo-Tool Support (for models without native function calling)
+// Tool Support (for checking model capabilities and tool mode)
 export {
   checkModelSupportsTools,
-  shouldUsePseudoTools,
   shouldUseTextBlockTools,
-  buildPseudoToolConfig,
-  type PseudoToolConfig,
   type ToolMode,
 } from './pseudo-tool-support';
 
 export {
-  buildPseudoToolInstructions,
-  type PseudoToolOptions,
-} from './pseudo-tool-prompt'
-
-export {
   buildNativeToolInstructions,
 } from './native-tool-prompt';
-
-export {
-  parsePseudoToolCalls,
-  convertToToolCallRequest,
-  stripPseudoToolMarkers,
-  hasPseudoToolMarkers,
-  type ParsedPseudoTool,
-  type ToolCallRequest,
-} from './pseudo-tool-parser';
 
 // XML Tool Call Parser (for LLMs that emit XML-style tool calls)
 export {
