@@ -61,9 +61,6 @@ export function useChatControls({
 
   // Refs
   const userStoppedStreamRef = useRef<boolean>(false)
-  const lastAutoTriggeredRef = useRef<string | null>(null)
-  const autoTriggerRetryCountRef = useRef<number>(0)
-  const autoTriggerRetryParticipantRef = useRef<string | null>(null)
   const lastAllLLMPauseTurnCountRef = useRef<number>(0)
 
   // Sync agentModeEnabled state when chat loads, using the resolved cascade value
@@ -377,9 +374,6 @@ export function useChatControls({
     storyBackgroundsEnabled, setStoryBackgroundsEnabled,
     connectionProfiles,
     userStoppedStreamRef,
-    lastAutoTriggeredRef,
-    autoTriggerRetryCountRef,
-    autoTriggerRetryParticipantRef,
     setPauseState,
     togglePause,
     handleToggleDocumentEditingMode,

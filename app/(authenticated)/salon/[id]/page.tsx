@@ -22,7 +22,6 @@ import {
   calculateTurnStateFromHistory,
   selectNextSpeaker,
   isAllLLMChat,
-  shouldPauseForAllLLM,
 } from '@/lib/chat/turn-manager'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
 
@@ -52,9 +51,6 @@ import {
 import LLMInspectorPanel from '@/components/chat/LLMInspectorPanel'
 import { WhisperDialog } from '@/components/chat/WhisperDialog'
 
-/** Max auto-trigger retries per participant before pausing the chat */
-const MAX_AUTO_TRIGGER_RETRIES = 2
-
 export default function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   useAvatarDisplay()
@@ -63,7 +59,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const chatDataHook = useChatData(id)
   const { chat, messages, loading, error, chatSettings, swipeStates, chatPhotoCount, chatMemoryCount } = chatDataHook
   const { setChat, setMessages, setSwipeStates } = chatDataHook
-  const { fetchChat, fetchChatSettings, fetchChatPhotoCount, fetchChatMemoryCount, persistTurnState } = chatDataHook
+  const { fetchChat, fetchChatSettings, fetchChatPhotoCount, fetchChatMemoryCount } = chatDataHook
 
   // --- Story background ---
   const {
@@ -258,65 +254,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   triggerContinueModeRef.current = sseStreaming.triggerContinueMode
   streamingRef.current = sseStreaming.streaming || sseStreaming.waitingForResponse
 
-  // Auto-trigger next character in multi-character mode
-  // This effect lives at the page level so it has access to sseStreaming state
-  useEffect(() => {
-    if (!participantsWithImpersonation.isMultiChar) return
-    if (isPaused) return
-    if (chatControls.userStoppedStreamRef.current) return
-    if (sseStreaming.streaming || sseStreaming.waitingForResponse) return
-    if (!participantsWithImpersonation.effectiveNextSpeakerId) {
-      chatControls.lastAutoTriggeredRef.current = null
-      chatControls.autoTriggerRetryCountRef.current = 0
-      chatControls.autoTriggerRetryParticipantRef.current = null
-      return
-    }
-
-    const nextId = participantsWithImpersonation.effectiveNextSpeakerId
-    if (nextId === participantsWithImpersonation.userParticipantId) return
-
-    if (participantsWithImpersonation.isAllLLM
-      && shouldPauseForAllLLM(participantsWithImpersonation.allLLMTurnCount)
-      && participantsWithImpersonation.allLLMTurnCount > 0) {
-      chatControls.setPauseState(true)
-      showInfoToast(`Auto-paused after ${participantsWithImpersonation.allLLMTurnCount} turns. Click Resume to continue.`)
-      return
-    }
-
-    if (chatControls.lastAutoTriggeredRef.current === nextId) return
-
-    // Track retries per participant to prevent infinite loops on persistent failures
-    if (chatControls.autoTriggerRetryParticipantRef.current !== nextId) {
-      chatControls.autoTriggerRetryCountRef.current = 0
-      chatControls.autoTriggerRetryParticipantRef.current = nextId
-    }
-
-    if (chatControls.autoTriggerRetryCountRef.current >= MAX_AUTO_TRIGGER_RETRIES) {
-      console.warn('[AutoTrigger] Max retries reached for participant, pausing chat', { nextId, retries: chatControls.autoTriggerRetryCountRef.current })
-      chatControls.setPauseState(true)
-      showInfoToast('Character failed to respond after multiple attempts. Chat paused — use Nudge to retry.')
-      return
-    }
-
-    chatControls.autoTriggerRetryCountRef.current++
-    chatControls.lastAutoTriggeredRef.current = nextId
-    console.debug('[AutoTrigger] Triggering participant', { nextId, attempt: chatControls.autoTriggerRetryCountRef.current })
-
-    const timeoutId = setTimeout(async () => {
-      try {
-        await triggerContinueModeRef.current(nextId)
-      } finally {
-        // Reset so the effect can re-evaluate on the next render cycle.
-        // If the trigger produced a message, effectiveNextSpeakerId will change
-        // and the retry counter won't apply. If it failed silently (e.g. empty
-        // response), the effect will retry with the counter incremented.
-        chatControls.lastAutoTriggeredRef.current = null
-      }
-    }, 100)
-
-    return () => clearTimeout(timeoutId)
-  }, [participantsWithImpersonation.isMultiChar, isPaused, sseStreaming.streaming, sseStreaming.waitingForResponse, participantsWithImpersonation.userParticipantId, participantsWithImpersonation.isAllLLM, participantsWithImpersonation.allLLMTurnCount, participantsWithImpersonation.effectiveNextSpeakerId, chatControls, triggerContinueModeRef])
-
   // --- Virtualizer ---
   const getItemKey = useCallback((index: number) => {
     return visibleMessages[index]?.id ?? index
@@ -482,15 +419,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
     setTurnSelectionResult(result)
   }, [messages, participantsWithImpersonation.participantsAsBase, participantsWithImpersonation.userParticipantId, participantsWithImpersonation.charactersMap, chat?.lastTurnParticipantId])
-
-  // --- Persist turn state ---
-  useEffect(() => {
-    if (!participantsWithImpersonation.isMultiChar) return
-    if (sseStreaming.streaming || sseStreaming.waitingForResponse) return
-    if (turnSelectionResult === null) return
-
-    persistTurnState(turnSelectionResult.nextSpeakerId)
-  }, [participantsWithImpersonation.isMultiChar, sseStreaming.streaming, sseStreaming.waitingForResponse, turnSelectionResult, persistTurnState])
 
   // --- Handle scroll-to-message from memory provenance navigation ---
   useEffect(() => {
@@ -993,10 +921,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             pendingToolResults,
             setPendingToolResults,
             clearDraft,
-            chatControls.lastAutoTriggeredRef,
             chatControls.userStoppedStreamRef,
-            chatControls.autoTriggerRetryCountRef,
-            chatControls.autoTriggerRetryParticipantRef,
           )}
           onFileSelect={handleFileSelect}
           onAttachFileClick={() => {}}

@@ -249,6 +249,8 @@ export const ChatMetadataSchema = z.object({
   activeTypingParticipantId: UUIDSchema.nullable().optional(),
   /** Turns since last user input or pause (for all-LLM pause logic) */
   allLLMPauseTurnCount: z.number().default(0),
+  /** Server-side turn queue for chained responses (JSON array of participant IDs) */
+  turnQueue: z.string().default('[]'),
 
   /** Whether document editing mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
   documentEditingMode: z.boolean().default(false),
@@ -348,6 +350,8 @@ export const ChatMetadataBaseSchema = z.object({
   impersonatingParticipantIds: z.array(UUIDSchema).default([]),
   activeTypingParticipantId: UUIDSchema.nullable().optional(),
   allLLMPauseTurnCount: z.number().default(0),
+  /** Server-side turn queue for chained responses (JSON array of participant IDs) */
+  turnQueue: z.string().default('[]'),
   /** Whether document editing mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
   documentEditingMode: z.boolean().default(false),
 

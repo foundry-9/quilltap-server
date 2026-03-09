@@ -48,6 +48,9 @@ import {
   encodeErrorEvent,
   encodeKeepAlive,
   encodeStatusEvent,
+  encodeTurnStartEvent,
+  encodeTurnCompleteEvent,
+  encodeChainCompleteEvent,
   safeEnqueue,
   safeClose,
 } from './streaming.service'
@@ -107,6 +110,11 @@ import {
   generateIterationSummary,
   type ResolvedAgentMode,
 } from './agent-mode-resolver.service'
+import {
+  shouldChainNext,
+  persistTurnParticipantId,
+  DEFAULT_CHAIN_CONFIG,
+} from './turn-orchestrator.service'
 import {
   resolveDangerousContentSettings,
 } from '@/lib/services/dangerous-content/resolver.service'
@@ -176,12 +184,128 @@ export async function handleSendMessage(
   return new ReadableStream({
     async start(controller) {
       try {
-        await processMessage(repos, chatId, userId, options, controller, encoder)
+        const result = await processMessage(repos, chatId, userId, options, controller, encoder)
+
+        // Server-side chain orchestration for multi-character chats
+        // After the first character responds, chain subsequent character responses
+        // in the same SSE stream instead of requiring client round-trips
+        if (result.isMultiCharacter && result.hasContent && !result.isPaused) {
+          const chainStartTime = Date.now()
+          let chainDepth = 0
+
+          while (true) {
+            const decision = await shouldChainNext(
+              repos,
+              chatId,
+              result.userParticipantId,
+              chainDepth,
+              chainStartTime,
+              DEFAULT_CHAIN_CONFIG
+            )
+
+            logger.debug('[TurnOrchestrator] Chain decision', {
+              chatId,
+              chainDepth,
+              decision: { chain: decision.chain, reason: decision.reason, participantId: decision.participantId },
+            })
+
+            if (!decision.chain || !decision.participantId) {
+              // Persist the final turn state
+              const finalNextSpeaker = decision.participantId || null
+              await persistTurnParticipantId(repos, chatId, finalNextSpeaker)
+
+              // Send chain complete event
+              safeEnqueue(controller, encodeChainCompleteEvent(encoder, {
+                reason: decision.reason as 'user_turn' | 'paused' | 'max_depth' | 'max_time' | 'error' | 'no_next_speaker' | 'cycle_complete',
+                nextSpeakerId: finalNextSpeaker,
+                chainDepth,
+              }))
+              break
+            }
+
+            chainDepth++
+
+            // Send turn start event
+            safeEnqueue(controller, encodeTurnStartEvent(encoder, {
+              participantId: decision.participantId,
+              characterName: decision.characterName || 'Unknown',
+              chainDepth,
+            }))
+
+            // Process the chained response using continue mode
+            try {
+              const chainResult = await processMessage(
+                repos,
+                chatId,
+                userId,
+                {
+                  continueMode: true,
+                  respondingParticipantId: decision.participantId,
+                },
+                controller,
+                encoder
+              )
+
+              // Send turn complete event
+              safeEnqueue(controller, encodeTurnCompleteEvent(encoder, {
+                participantId: decision.participantId,
+                messageId: chainResult.messageId || '',
+                chainDepth,
+              }))
+
+              // If the chained response had no content (empty response), stop chaining
+              if (!chainResult.hasContent) {
+                logger.info('[TurnOrchestrator] Chain stopped: empty response', { chatId, chainDepth })
+                await persistTurnParticipantId(repos, chatId, null)
+                safeEnqueue(controller, encodeChainCompleteEvent(encoder, {
+                  reason: 'error',
+                  nextSpeakerId: null,
+                  chainDepth,
+                }))
+                break
+              }
+            } catch (chainError) {
+              logger.error('[TurnOrchestrator] Chain error, stopping', {
+                chatId,
+                chainDepth,
+                error: chainError instanceof Error ? chainError.message : String(chainError),
+              })
+
+              // Pause chat on chain error
+              await repos.chats.update(chatId, { isPaused: true })
+              await persistTurnParticipantId(repos, chatId, null)
+              safeEnqueue(controller, encodeChainCompleteEvent(encoder, {
+                reason: 'error',
+                nextSpeakerId: null,
+                chainDepth,
+              }))
+              break
+            }
+          }
+        }
+
+        safeClose(controller)
       } catch (error) {
         handleStreamError(error, controller, encoder)
       }
     },
   })
+}
+
+/**
+ * Result returned by processMessage for chain orchestration
+ */
+interface ProcessMessageResult {
+  /** Whether the chat has multiple characters */
+  isMultiCharacter: boolean
+  /** Whether the response had content (non-empty) */
+  hasContent: boolean
+  /** The assistant message ID (if content was generated) */
+  messageId: string | null
+  /** User participant ID for turn calculations */
+  userParticipantId: string | null
+  /** Whether the chat is paused */
+  isPaused: boolean
 }
 
 /**
@@ -194,7 +318,7 @@ async function processMessage(
   options: SendMessageOptions,
   controller: ReadableStreamDefaultController<Uint8Array>,
   encoder: TextEncoder
-): Promise<void> {
+): Promise<ProcessMessageResult> {
   const isContinueMode = options.continueMode === true
 
   // Get chat metadata
@@ -1218,9 +1342,14 @@ async function processMessage(
           messageId: recoveryResult.messageId,
           isStaticFallback: recoveryResult.isStaticFallback,
         })
-        // Close the stream - recovery has handled everything
-        safeClose(controller)
-        return
+        // Recovery has handled everything - return without chaining
+        return {
+          isMultiCharacter,
+          hasContent: true,
+          messageId: recoveryResult.messageId || null,
+          userParticipantId,
+          isPaused: chat.isPaused,
+        }
       }
 
       // Recovery failed, re-throw the original error
@@ -2047,6 +2176,13 @@ async function processMessage(
         chatSettings: memoryChatSettings,
       })
     }
+    return {
+      isMultiCharacter,
+      hasContent: true,
+      messageId: assistantMessageId,
+      userParticipantId,
+      isPaused: chat.isPaused,
+    }
   } else if (toolMessages.length > 0) {
     // Save tool messages even without text response
     const toolSaveResult = await saveToolMessages(
@@ -2069,6 +2205,14 @@ async function processMessage(
       provider: effectiveProfile.provider,
       modelName: effectiveProfile.modelName,
     }))
+
+    return {
+      isMultiCharacter,
+      hasContent: true,
+      messageId: toolSaveResult.firstToolMessageId || null,
+      userParticipantId,
+      isPaused: chat.isPaused,
+    }
   } else {
     // Empty response
     const emptyReason = uncensoredRetryAttempted
@@ -2090,10 +2234,15 @@ async function processMessage(
       provider: effectiveProfile.provider,
       modelName: effectiveProfile.modelName,
     }))
-  }
 
-  // Close stream
-  safeClose(controller)
+    return {
+      isMultiCharacter,
+      hasContent: false,
+      messageId: null,
+      userParticipantId,
+      isPaused: chat.isPaused,
+    }
+  }
 }
 
 /**

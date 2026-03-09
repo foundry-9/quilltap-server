@@ -159,6 +159,36 @@ export interface NextSpeakerInfo {
 }
 
 /**
+ * SSE event: A chained turn is starting for a new character
+ */
+export interface TurnStartEvent {
+  turnStart: true
+  participantId: string
+  characterName: string
+  chainDepth: number
+}
+
+/**
+ * SSE event: A chained turn completed for a character
+ */
+export interface TurnCompleteEvent {
+  turnComplete: true
+  participantId: string
+  messageId: string
+  chainDepth: number
+}
+
+/**
+ * SSE event: The chain of turns has finished
+ */
+export interface ChainCompleteEvent {
+  chainComplete: true
+  reason: 'user_turn' | 'paused' | 'max_depth' | 'max_time' | 'error' | 'no_next_speaker' | 'cycle_complete'
+  nextSpeakerId: string | null
+  chainDepth: number
+}
+
+/**
  * Data sent to the client via SSE stream
  */
 export interface StreamChunkData {
@@ -191,6 +221,9 @@ export interface StreamChunkData {
     usedImageDescriptionLLM: boolean
     error?: string
   }>
+  turnStart?: TurnStartEvent
+  turnComplete?: TurnCompleteEvent
+  chainComplete?: ChainCompleteEvent
 }
 
 /**

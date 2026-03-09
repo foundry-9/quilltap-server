@@ -508,6 +508,40 @@ export function encodeStatusEvent(
 }
 
 /**
+ * Encode a turn start event (chained character about to respond)
+ */
+export function encodeTurnStartEvent(
+  encoder: TextEncoder,
+  data: { participantId: string; characterName: string; chainDepth: number }
+): Uint8Array {
+  return encoder.encode(`data: ${JSON.stringify({ turnStart: true, ...data })}\n\n`)
+}
+
+/**
+ * Encode a turn complete event (chained character finished responding)
+ */
+export function encodeTurnCompleteEvent(
+  encoder: TextEncoder,
+  data: { participantId: string; messageId: string; chainDepth: number }
+): Uint8Array {
+  return encoder.encode(`data: ${JSON.stringify({ turnComplete: true, ...data })}\n\n`)
+}
+
+/**
+ * Encode a chain complete event (all chained turns done)
+ */
+export function encodeChainCompleteEvent(
+  encoder: TextEncoder,
+  data: {
+    reason: 'user_turn' | 'paused' | 'max_depth' | 'max_time' | 'error' | 'no_next_speaker' | 'cycle_complete'
+    nextSpeakerId: string | null
+    chainDepth: number
+  }
+): Uint8Array {
+  return encoder.encode(`data: ${JSON.stringify({ chainComplete: true, ...data })}\n\n`)
+}
+
+/**
  * Safely enqueue data to a stream controller
  * Returns true if successful, false if the controller is already closed
  */

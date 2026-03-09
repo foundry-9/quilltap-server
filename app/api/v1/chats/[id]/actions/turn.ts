@@ -84,6 +84,18 @@ export async function handleTurnAction(
 
     const nextSpeakerResult = selectNextSpeaker(chat.participants, charactersMap, turnState, userParticipantId);
 
+    // Persist turn queue and last turn participant to database
+    await repos.chats.update(chatId, {
+      turnQueue: JSON.stringify(turnState.queue),
+      lastTurnParticipantId: nextSpeakerResult.nextSpeakerId ?? null,
+    });
+    logger.debug('[Chats v1] Persisted turn state', {
+      chatId,
+      action: turnAction,
+      queue: turnState.queue,
+      nextSpeakerId: nextSpeakerResult.nextSpeakerId,
+    });
+
     const affectedCharacter = participant.characterId ? charactersMap.get(participant.characterId) : null;return NextResponse.json({
       success: true,
       action: turnAction,

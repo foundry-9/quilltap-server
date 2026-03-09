@@ -66,6 +66,21 @@ interface SSEEvent {
   }
   provider?: string
   modelName?: string
+  turnStart?: {
+    participantId: string
+    characterName: string
+    chainDepth: number
+  }
+  turnComplete?: {
+    participantId: string
+    messageId: string
+    chainDepth: number
+  }
+  chainComplete?: {
+    reason: string
+    nextSpeakerId: string | null
+    chainDepth: number
+  }
 }
 
 /**
@@ -161,6 +176,9 @@ export function useSSEStreaming({
       onToolsDetected?: (data: SSEEvent) => void
       onToolResult?: (data: SSEEvent) => void
       onDone: (fullContent: string, data: SSEEvent) => void | Promise<void>
+      onTurnStart?: (event: { participantId: string; characterName: string; chainDepth: number }) => void
+      onTurnComplete?: (event: { participantId: string; messageId: string; chainDepth: number }) => void | Promise<void>
+      onChainComplete?: (event: { reason: string; nextSpeakerId: string | null; chainDepth: number }) => void | Promise<void>
     }
   ): Promise<string> => {
     const decoder = new TextDecoder()
@@ -216,6 +234,27 @@ export function useSSEStreaming({
           setResponseStatus(null)
           await opts.onDone(fullContent, data)
         }
+
+        // Handle turn start (chained character about to respond)
+        if (data.turnStart) {
+          fullContent = ''
+          setStreamingContent('')
+          setStreaming(false)
+          setWaitingForResponse(true)
+          if (data.turnStart.participantId) {
+            opts.onTurnStart?.(data.turnStart)
+          }
+        }
+
+        // Handle turn complete (chained character finished)
+        if (data.turnComplete) {
+          await opts.onTurnComplete?.(data.turnComplete)
+        }
+
+        // Handle chain complete (all chained turns done)
+        if (data.chainComplete) {
+          await opts.onChainComplete?.(data.chainComplete)
+        }
       }
     }
 
@@ -247,18 +286,12 @@ export function useSSEStreaming({
     pendingToolResults: PendingToolResult[],
     setPendingToolResults: (results: PendingToolResult[]) => void,
     clearDraft: () => void,
-    lastAutoTriggeredRef: React.MutableRefObject<string | null>,
     userStoppedStreamRef: React.MutableRefObject<boolean>,
-    autoTriggerRetryCountRef?: React.MutableRefObject<number>,
-    autoTriggerRetryParticipantRef?: React.MutableRefObject<string | null>,
   ) => {
     e.preventDefault()
     if ((!input.trim() && attachedFiles.length === 0 && pendingToolResults.length === 0) || sending) return
 
-    // Reset auto-trigger refs when user sends a message
-    lastAutoTriggeredRef.current = null
-    if (autoTriggerRetryCountRef) autoTriggerRetryCountRef.current = 0
-    if (autoTriggerRetryParticipantRef) autoTriggerRetryParticipantRef.current = null
+    // Reset user-stopped flag when user sends a message
     if (!isPaused) {
       userStoppedStreamRef.current = false
     }
@@ -470,6 +503,28 @@ export function useSSEStreaming({
             setPendingToolCalls([])
           }, 3000)
         },
+        onTurnStart: (event) => {
+          setRespondingParticipantId(event.participantId)
+          setStreamingContent('')
+          setWaitingForResponse(true)
+          setStreaming(false)
+        },
+        onTurnComplete: async (event) => {
+          setStreamingContent('')
+          setStreaming(false)
+          setWaitingForResponse(false)
+          await fetchChat()
+        },
+        onChainComplete: async (event) => {
+          setStreamingContent('')
+          setStreaming(false)
+          setWaitingForResponse(false)
+          setRespondingParticipantId(null)
+          scrollOnStreamComplete()
+          await fetchChat()
+          notifyQueueChange()
+          focusInput()
+        },
       })
     } catch (err) {
       const isAbort = err instanceof Error && err.name === 'AbortError'
@@ -576,6 +631,28 @@ export function useSSEStreaming({
           setEphemeralMessages(prev =>
             prev.filter(em => em.participantId !== participantId)
           )
+        },
+        onTurnStart: (event) => {
+          setRespondingParticipantId(event.participantId)
+          setStreamingContent('')
+          setWaitingForResponse(true)
+          setStreaming(false)
+        },
+        onTurnComplete: async (event) => {
+          setStreamingContent('')
+          setStreaming(false)
+          setWaitingForResponse(false)
+          await fetchChat()
+        },
+        onChainComplete: async (event) => {
+          setStreamingContent('')
+          setStreaming(false)
+          setWaitingForResponse(false)
+          setRespondingParticipantId(null)
+          scrollOnStreamComplete()
+          await fetchChat()
+          notifyQueueChange()
+          focusInput()
         },
       })
     } catch (err) {

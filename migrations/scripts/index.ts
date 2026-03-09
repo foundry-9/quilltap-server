@@ -109,6 +109,8 @@ import { decryptApiKeyValuesMigration } from './decrypt-api-key-values';
 import { dropPepperVaultMigration } from './drop-pepper-vault';
 // Add whisper target field to chat_messages
 import { addWhisperTargetFieldMigration } from './add-whisper-target-field';
+// Add turn queue field to chats for server-side turn management
+import { addTurnQueueFieldMigration } from './add-turn-queue-field';
 
 /**
  * All available migrations.
@@ -213,6 +215,8 @@ export const migrations: Migration[] = [
   dropPepperVaultMigration,
   // Add whisper target field to chat_messages
   addWhisperTargetFieldMigration,
+  // Add turn queue field to chats for server-side turn management
+  addTurnQueueFieldMigration,
 ];
 
 export {
@@ -312,4 +316,6 @@ export {
   dropPepperVaultMigration,
   // Add whisper target field to chat_messages
   addWhisperTargetFieldMigration,
+  // Add turn queue field to chats for server-side turn management
+  addTurnQueueFieldMigration,
 };
