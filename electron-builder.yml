@@ -30,6 +30,7 @@ files:
   - "!.githooks/**/*"
 afterSign: electron/notarize.js
 mac:
+  artifactName: "${productName}-${version}-${arch}.${ext}"
   category: public.app-category.productivity
   notarize: false  # We handle notarization in afterSign hook (electron/notarize.js)
   target:
@@ -48,6 +49,7 @@ mac:
     - from: electron/resources/lima/
       to: lima/
 win:
+  artifactName: "${productName}-${version}-${arch}.${ext}"
   azureSignOptions:
     publisherName: "Charles Sebold"
     endpoint: "https://cus.codesigning.azure.net/"
@@ -65,6 +67,7 @@ nsis:
   createStartMenuShortcut: true
   shortcutName: Quilltap
 linux:
+  artifactName: "${productName}-${version}-${arch}.${ext}"
   target:
     - target: AppImage
       arch:
