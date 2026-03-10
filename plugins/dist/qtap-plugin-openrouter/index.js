@@ -20169,7 +20169,8 @@ function parseOpenAIToolCalls(response) {
           try {
             toolCalls.push({
               name: tc.function.name,
-              arguments: JSON.parse(argsStr)
+              arguments: JSON.parse(argsStr),
+              callId: tc.id || void 0
             });
           } catch {
             continue;
