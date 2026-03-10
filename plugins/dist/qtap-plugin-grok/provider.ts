@@ -45,26 +45,55 @@ export class GrokProvider implements LLMProvider {
     const sent: string[] = [];
     const failed: { id: string; error: string }[] = [];
 
-    // Filter out 'tool' role messages as Grok Responses API doesn't support them directly
-    const filteredMessages = messages.filter(m => m.role !== 'tool');
+    const input: ResponsesInputItem[] = [];
 
-    const input: ResponsesInputItem[] = filteredMessages.map((msg) => {
+    for (const msg of messages) {
+      // Tool result messages → function_call_output items
+      if (msg.role === 'tool') {
+        if (!msg.toolCallId) {
+          logger.debug('Skipping tool message without toolCallId', {
+            context: 'GrokProvider.formatMessagesForResponsesAPI',
+          });
+          continue;
+        }
+        input.push({
+          type: 'function_call_output',
+          call_id: msg.toolCallId,
+          output: msg.content,
+        } as ResponsesInputItem);
+        continue;
+      }
+
       // System messages stay as 'system' role (xAI doesn't support 'developer' or 'instructions')
       if (msg.role === 'system') {
-        return {
+        input.push({
           type: 'message' as const,
           role: 'system' as const,
           content: msg.content,
-        };
+        });
+        continue;
       }
 
-      // Assistant messages are simple strings
+      // Assistant messages — may include tool calls
       if (msg.role === 'assistant') {
-        return {
+        // Always emit the text content as a message
+        input.push({
           type: 'message' as const,
           role: 'assistant' as const,
           content: msg.content,
-        };
+        });
+        // If the assistant invoked tools, emit function_call items
+        if (msg.toolCalls && msg.toolCalls.length > 0) {
+          for (const tc of msg.toolCalls) {
+            input.push({
+              type: 'function_call',
+              call_id: tc.id,
+              name: tc.function.name,
+              arguments: tc.function.arguments,
+            } as ResponsesInputItem);
+          }
+        }
+        continue;
       }
 
       // User messages need content array format
@@ -130,12 +159,12 @@ export class GrokProvider implements LLMProvider {
         content.push({ type: 'input_text', text: '' });
       }
 
-      return {
+      input.push({
         type: 'message' as const,
         role: 'user' as const,
         content,
-      };
-    });
+      });
+    }
 
     return { input, attachmentResults: { sent, failed } };
   }

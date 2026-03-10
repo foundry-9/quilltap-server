@@ -19,6 +19,7 @@ import {
   type AnthropicToolDefinition,
   type ToolCallRequest,
 } from '@quilltap/plugin-utils'
+import { hasAnyXMLToolMarkers, parseAllXMLAsToolCalls, stripAllXMLToolMarkers } from '@quilltap/plugin-utils/tools'
 
 const logger = createPluginLogger('qtap-plugin-anthropic')
 
@@ -293,7 +294,38 @@ export const plugin: LLMProviderPlugin = {
     }
   },
 
-  // Text tool call detection not needed — models use native function calling correctly
+  /**
+   * Detect spontaneous XML tool markers in response text
+   * Defense-in-depth: native tool calling is preferred, but detect XML fallback if it occurs
+   */
+  hasTextToolMarkers(text: string): boolean {
+    return hasAnyXMLToolMarkers(text);
+  },
+
+  parseTextToolCalls(text: string): ToolCallRequest[] {
+    try {
+      const results = parseAllXMLAsToolCalls(text);
+      if (results.length > 0) {
+        logger.debug('Detected spontaneous XML tool calls in Anthropic response', {
+          context: 'anthropic.parseTextToolCalls',
+          count: results.length,
+          tools: results.map(r => r.name),
+        });
+      }
+      return results;
+    } catch (error) {
+      logger.error(
+        'Error parsing text tool calls',
+        { context: 'anthropic.parseTextToolCalls' },
+        error instanceof Error ? error : undefined
+      );
+      return [];
+    }
+  },
+
+  stripTextToolMarkers(text: string): string {
+    return stripAllXMLToolMarkers(text);
+  },
 };
 
 export default plugin;

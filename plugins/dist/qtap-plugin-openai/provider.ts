@@ -55,14 +55,11 @@ export class OpenAIProvider implements LLMProvider {
     const sent: string[] = [];
     const failed: { id: string; error: string }[] = [];
 
-    // Filter out 'tool' role messages as Responses API doesn't support them directly
-    const filteredMessages = messages.filter(m => m.role !== 'tool');
-
     // Extract the first system message as top-level instructions
     let instructions: string | undefined;
     const inputMessages: LLMMessage[] = [];
 
-    for (const msg of filteredMessages) {
+    for (const msg of messages) {
       if (msg.role === 'system' && instructions === undefined) {
         instructions = msg.content;
       } else {
@@ -70,23 +67,55 @@ export class OpenAIProvider implements LLMProvider {
       }
     }
 
-    const input: ResponsesInputItem[] = inputMessages.map((msg) => {
+    const input: ResponsesInputItem[] = [];
+
+    for (const msg of inputMessages) {
       // Additional system messages become 'developer' role in Responses API
       if (msg.role === 'system') {
-        return {
+        input.push({
           type: 'message' as const,
           role: 'developer' as const,
           content: msg.content,
-        };
+        });
+        continue;
       }
 
-      // Assistant messages are simple strings
+      // Tool result messages become function_call_output items
+      if (msg.role === 'tool') {
+        if (msg.toolCallId) {
+          input.push({
+            type: 'function_call_output' as const,
+            call_id: msg.toolCallId,
+            output: msg.content,
+          });
+        } else {
+          logger.debug('Skipping tool message without toolCallId', {
+            context: 'OpenAIProvider.formatMessagesForResponsesAPI',
+          });
+        }
+        continue;
+      }
+
+      // Assistant messages: emit text content + any tool calls as separate items
       if (msg.role === 'assistant') {
-        return {
+        input.push({
           type: 'message' as const,
           role: 'assistant' as const,
           content: msg.content,
-        };
+        });
+
+        // Emit function_call items for each tool call
+        if (msg.toolCalls && msg.toolCalls.length > 0) {
+          for (const tc of msg.toolCalls) {
+            input.push({
+              type: 'function_call' as const,
+              call_id: tc.id,
+              name: tc.function.name,
+              arguments: tc.function.arguments,
+            } as ResponsesInputItem);
+          }
+        }
+        continue;
       }
 
       // User messages need content array format for image support
@@ -129,12 +158,12 @@ export class OpenAIProvider implements LLMProvider {
         content.push({ type: 'input_text', text: '' });
       }
 
-      return {
+      input.push({
         type: 'message' as const,
         role: 'user' as const,
         content,
-      };
-    });
+      });
+    }
 
     return { input, instructions, attachmentResults: { sent, failed } };
   }

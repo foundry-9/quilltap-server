@@ -109,6 +109,8 @@ export interface ToolCallRequest {
   name: string;
   /** Parsed arguments object */
   arguments: Record<string, unknown>;
+  /** Provider-assigned call ID for correlating results to calls (optional for backward compat) */
+  callId?: string;
 }
 
 /**

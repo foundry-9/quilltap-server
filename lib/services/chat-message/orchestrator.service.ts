@@ -1430,24 +1430,41 @@ async function processMessage(
     generatedImagePaths = [...generatedImagePaths, ...results.generatedImagePaths]
 
     // Add assistant message with tool call to conversation
+    // Include toolCalls metadata so providers can reconstruct the native assistant turn
+    const hasCallIds = toolCalls.some(tc => tc.callId)
+    const assistantToolCalls = hasCallIds
+      ? toolCalls.filter(tc => tc.callId).map(tc => ({
+          id: tc.callId!,
+          type: 'function' as const,
+          function: { name: tc.name, arguments: JSON.stringify(tc.arguments) },
+        }))
+      : undefined
+
     if (currentResponse && currentResponse.trim().length > 0) {
       currentMessages = [
         ...currentMessages,
-        { role: 'assistant' as const, content: currentResponse, thoughtSignature, name: undefined }
+        { role: 'assistant' as const, content: currentResponse, thoughtSignature, name: undefined, toolCalls: assistantToolCalls }
       ]
     } else {
       currentMessages = [
         ...currentMessages,
-        { role: 'assistant' as const, content: '[Tool call made]', thoughtSignature, name: undefined }
+        { role: 'assistant' as const, content: '', thoughtSignature, name: undefined, toolCalls: assistantToolCalls }
       ]
     }
 
-    // Add tool results as user messages
+    // Add tool results — use native 'tool' role when callId is available, text fallback otherwise
     for (const toolMsg of results.toolMessages) {
-      currentMessages = [
-        ...currentMessages,
-        { role: 'user' as const, content: `[Tool Result: ${toolMsg.toolName}]\n${toolMsg.content}`, thoughtSignature: undefined, name: undefined }
-      ]
+      if (toolMsg.callId) {
+        currentMessages = [
+          ...currentMessages,
+          { role: 'tool' as const, content: toolMsg.content, toolCallId: toolMsg.callId, name: toolMsg.toolName, thoughtSignature: undefined }
+        ]
+      } else {
+        currentMessages = [
+          ...currentMessages,
+          { role: 'user' as const, content: `[Tool Result: ${toolMsg.toolName}]\n${toolMsg.content}`, thoughtSignature: undefined, name: undefined }
+        ]
+      }
     }
 
     // Continue conversation with tool results

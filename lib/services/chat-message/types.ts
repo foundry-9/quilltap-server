@@ -107,6 +107,8 @@ export interface ToolMessage {
   success: boolean
   content: string
   arguments?: Record<string, unknown>
+  /** Provider-assigned call ID for native tool result formatting */
+  callId?: string
   metadata?: {
     provider?: string
     model?: string

@@ -1,6 +1,6 @@
 {
   "name": "qtap-plugin-openrouter",
-  "version": "1.0.19",
+  "version": "1.0.20",
   "description": "OpenRouter provider plugin for Quilltap",
   "main": "index.js",
   "types": "index.d.ts",

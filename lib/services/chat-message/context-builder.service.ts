@@ -79,6 +79,8 @@ export interface MessageContextResult {
     attachments?: unknown[]
     name?: string
     thoughtSignature?: string
+    toolCallId?: string
+    toolCalls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>
   }>
   isInitialMessage: boolean
 }

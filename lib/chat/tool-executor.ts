@@ -70,6 +70,8 @@ import {
 export interface ToolCallRequest {
   name: string;
   arguments: Record<string, unknown>;
+  /** Provider-assigned call ID for correlating results to calls */
+  callId?: string;
 }
 
 export interface ToolResult {
@@ -781,6 +783,7 @@ export function detectToolCalls(
             toolCalls.push({
               name: toolCall.function.name,
               arguments: JSON.parse(toolCall.function.arguments || '{}'),
+              callId: toolCall.id || undefined,
             });
           }
         }
@@ -794,6 +797,7 @@ export function detectToolCalls(
           toolCalls.push({
             name: block.name,
             arguments: block.input || {},
+            callId: block.id || undefined,
           });
         }
       }
@@ -814,13 +818,14 @@ export function detectToolCalls(
             toolCalls.push({
               name: toolCall.function.name,
               arguments: JSON.parse(toolCall.function.arguments || '{}'),
+              callId: toolCall.id || undefined,
             });
           }
         }
       }
     }
 
-    // Google/Gemini format
+    // Google/Gemini format (no call IDs — uses function name for correlation)
     if (provider === 'GOOGLE' && (response as any)?.candidates?.[0]?.content?.parts) {
       const parts = (response as any).candidates[0].content.parts;
       for (const part of parts) {

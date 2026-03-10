@@ -19,6 +19,7 @@ import {
   type OpenAIToolDefinition,
   type ToolCallRequest,
 } from '@quilltap/plugin-utils';
+import { hasAnyXMLToolMarkers, parseAllXMLAsToolCalls, stripAllXMLToolMarkers } from '@quilltap/plugin-utils/tools';
 
 const logger = createPluginLogger('qtap-plugin-grok');
 
@@ -303,7 +304,38 @@ export const plugin: LLMProviderPlugin = {
     return GROK_IMAGE_CONSTRAINTS;
   },
 
-  // Text tool call detection not needed — models use native function calling correctly
+  /**
+   * Detect spontaneous XML tool markers in response text
+   * Some models may emit XML tool markup instead of using native function calling
+   */
+  hasTextToolMarkers(text: string): boolean {
+    return hasAnyXMLToolMarkers(text);
+  },
+
+  parseTextToolCalls(text: string): ToolCallRequest[] {
+    try {
+      const results = parseAllXMLAsToolCalls(text);
+      if (results.length > 0) {
+        logger.debug('Detected spontaneous XML tool calls in Grok response', {
+          context: 'grok.parseTextToolCalls',
+          count: results.length,
+          tools: results.map(r => r.name),
+        });
+      }
+      return results;
+    } catch (error) {
+      logger.error(
+        'Error parsing text tool calls',
+        { context: 'grok.parseTextToolCalls' },
+        error instanceof Error ? error : undefined
+      );
+      return [];
+    }
+  },
+
+  stripTextToolMarkers(text: string): string {
+    return stripAllXMLToolMarkers(text);
+  },
 };
 
 export default plugin;

@@ -29,6 +29,8 @@ export interface StreamOptions {
     attachments?: unknown[]
     name?: string
     thoughtSignature?: string
+    toolCallId?: string
+    toolCalls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>
   }>
   connectionProfile: ConnectionProfile
   apiKey: string
@@ -282,11 +284,13 @@ export async function* streamMessage(
 
   // Cast messages to LLMMessage[] - the role type is constrained to valid values
   const llmMessages = messages.map(m => ({
-    role: m.role as 'system' | 'user' | 'assistant',
+    role: m.role as 'system' | 'user' | 'assistant' | 'tool',
     content: m.content,
     attachments: m.attachments,
     name: m.name,
     thoughtSignature: m.thoughtSignature,
+    toolCallId: m.toolCallId,
+    toolCalls: m.toolCalls,
   })) as LLMMessage[]
 
   // Track timing and accumulated content

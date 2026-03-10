@@ -69,6 +69,7 @@ export function parseOpenAIToolCalls(response: unknown): ToolCallRequest[] {
     if (toolCallsArray && Array.isArray(toolCallsArray) && toolCallsArray.length > 0) {
       for (const toolCall of toolCallsArray) {
         const tc = toolCall as {
+          id?: string;
           type?: string;
           function?: { name: string; arguments: string };
         };
@@ -89,6 +90,7 @@ export function parseOpenAIToolCalls(response: unknown): ToolCallRequest[] {
             toolCalls.push({
               name: tc.function.name,
               arguments: JSON.parse(argsStr),
+              callId: tc.id || undefined,
             });
           } catch {
             // JSON parse failed (e.g., incomplete JSON during streaming)
@@ -136,12 +138,13 @@ export function parseAnthropicToolCalls(response: unknown): ToolCallRequest[] {
     }
 
     for (const block of resp.content) {
-      const b = block as { type?: string; name?: string; input?: Record<string, unknown> };
+      const b = block as { type?: string; id?: string; name?: string; input?: Record<string, unknown> };
 
       if (b.type === 'tool_use' && b.name) {
         toolCalls.push({
           name: b.name,
           arguments: b.input || {},
+          callId: b.id || undefined,
         });
       }
     }

@@ -46739,7 +46739,7 @@ var GoogleProvider = class {
         } catch {
           responseData = { result: msg.content };
         }
-        const functionName = msg.toolCallId || "unknown_function";
+        const functionName = msg.name || msg.toolCallId || "unknown_function";
         pendingToolResponses.push({
           functionResponse: {
             name: functionName,

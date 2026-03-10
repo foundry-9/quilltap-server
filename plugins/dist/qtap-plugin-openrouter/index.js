@@ -20271,10 +20271,22 @@ var OpenRouterProvider = class {
       httpReferer: process.env.BASE_URL || "http://localhost:3000",
       xTitle: "Quilltap"
     });
-    const messages = params.messages.filter((m) => m.role !== "tool").map((m) => ({
-      role: m.role,
-      content: m.content
-    }));
+    const messages = params.messages.filter((m) => !(m.role === "tool" && !m.toolCallId)).map((m) => {
+      if (m.role === "tool" && m.toolCallId) {
+        return { role: "tool", tool_call_id: m.toolCallId, content: m.content };
+      }
+      if (m.role === "assistant" && m.toolCalls && m.toolCalls.length > 0) {
+        return {
+          role: "assistant",
+          content: m.content || null,
+          tool_calls: m.toolCalls.map((tc) => ({ id: tc.id, type: tc.type, function: tc.function }))
+        };
+      }
+      return {
+        role: m.role,
+        content: m.content
+      };
+    });
     const requestParams = {
       model: params.model,
       messages,
@@ -20354,10 +20366,22 @@ var OpenRouterProvider = class {
       httpReferer: process.env.BASE_URL || "http://localhost:3000",
       xTitle: "Quilltap"
     });
-    const messages = params.messages.filter((m) => m.role !== "tool").map((m) => ({
-      role: m.role,
-      content: m.content
-    }));
+    const messages = params.messages.filter((m) => !(m.role === "tool" && !m.toolCallId)).map((m) => {
+      if (m.role === "tool" && m.toolCallId) {
+        return { role: "tool", tool_call_id: m.toolCallId, content: m.content };
+      }
+      if (m.role === "assistant" && m.toolCalls && m.toolCalls.length > 0) {
+        return {
+          role: "assistant",
+          content: m.content || null,
+          tool_calls: m.toolCalls.map((tc) => ({ id: tc.id, type: tc.type, function: tc.function }))
+        };
+      }
+      return {
+        role: m.role,
+        content: m.content
+      };
+    });
     const input = fromChatMessages(messages);
     const requestParams = {
       model: params.model,
@@ -20477,10 +20501,22 @@ var OpenRouterProvider = class {
    * This method bypasses the SDK and calls the OpenRouter API directly.
    */
   async *streamWithTools(params, apiKey, attachmentResults) {
-    const messages = params.messages.filter((m) => m.role !== "tool").map((m) => ({
-      role: m.role,
-      content: m.content
-    }));
+    const messages = params.messages.filter((m) => !(m.role === "tool" && !m.toolCallId)).map((m) => {
+      if (m.role === "tool" && m.toolCallId) {
+        return { role: "tool", tool_call_id: m.toolCallId, content: m.content };
+      }
+      if (m.role === "assistant" && m.toolCalls && m.toolCalls.length > 0) {
+        return {
+          role: "assistant",
+          content: m.content || null,
+          tool_calls: m.toolCalls.map((tc) => ({ id: tc.id, type: tc.type, function: tc.function }))
+        };
+      }
+      return {
+        role: m.role,
+        content: m.content
+      };
+    });
     const tools = params.tools.map((tool) => ({
       type: "function",
       function: {

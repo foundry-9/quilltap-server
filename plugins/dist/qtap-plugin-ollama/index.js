@@ -7114,10 +7114,33 @@ var OllamaProvider = class {
   }
   async sendMessage(params, apiKey) {
     const attachmentResults = this.collectAttachmentFailures(params);
-    const messages = params.messages.map((m) => ({
-      role: m.role,
-      content: m.content
-    }));
+    const messages = params.messages.filter((m) => {
+      if (m.role === "tool" && !m.toolCallId) return false;
+      return true;
+    }).map((m) => {
+      if (m.role === "tool" && m.toolCallId) {
+        return {
+          role: "tool",
+          tool_call_id: m.toolCallId,
+          content: m.content
+        };
+      }
+      if (m.role === "assistant" && m.toolCalls && m.toolCalls.length > 0) {
+        return {
+          role: "assistant",
+          content: m.content || null,
+          tool_calls: m.toolCalls.map((tc) => ({
+            id: tc.id,
+            type: tc.type,
+            function: tc.function
+          }))
+        };
+      }
+      return {
+        role: m.role,
+        content: m.content
+      };
+    });
     const requestBody = {
       model: params.model,
       messages,
@@ -7162,10 +7185,33 @@ var OllamaProvider = class {
   }
   async *streamMessage(params, apiKey) {
     const attachmentResults = this.collectAttachmentFailures(params);
-    const messages = params.messages.map((m) => ({
-      role: m.role,
-      content: m.content
-    }));
+    const messages = params.messages.filter((m) => {
+      if (m.role === "tool" && !m.toolCallId) return false;
+      return true;
+    }).map((m) => {
+      if (m.role === "tool" && m.toolCallId) {
+        return {
+          role: "tool",
+          tool_call_id: m.toolCallId,
+          content: m.content
+        };
+      }
+      if (m.role === "assistant" && m.toolCalls && m.toolCalls.length > 0) {
+        return {
+          role: "assistant",
+          content: m.content || null,
+          tool_calls: m.toolCalls.map((tc) => ({
+            id: tc.id,
+            type: tc.type,
+            function: tc.function
+          }))
+        };
+      }
+      return {
+        role: m.role,
+        content: m.content
+      };
+    });
     const requestBody = {
       model: params.model,
       messages,

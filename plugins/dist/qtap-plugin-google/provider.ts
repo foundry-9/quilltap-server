@@ -352,8 +352,8 @@ export class GoogleProvider implements LLMProvider {
           responseData = { result: msg.content };
         }
 
-        // Use toolCallId as the function name, or extract from content if available
-        const functionName = msg.toolCallId || 'unknown_function';
+        // Google uses function name (not call ID) for correlation
+        const functionName = msg.name || msg.toolCallId || 'unknown_function';
 
         pendingToolResponses.push({
           functionResponse: {

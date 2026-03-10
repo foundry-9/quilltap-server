@@ -7020,7 +7020,8 @@ function parseOpenAIToolCalls(response) {
           try {
             toolCalls.push({
               name: tc.function.name,
-              arguments: JSON.parse(argsStr)
+              arguments: JSON.parse(argsStr),
+              callId: tc.id || void 0
             });
           } catch {
             continue;
@@ -7111,21 +7112,47 @@ var GrokProvider = class {
   formatMessagesForResponsesAPI(messages) {
     const sent = [];
     const failed = [];
-    const filteredMessages = messages.filter((m) => m.role !== "tool");
-    const input = filteredMessages.map((msg) => {
+    const input = [];
+    for (const msg of messages) {
+      if (msg.role === "tool") {
+        if (!msg.toolCallId) {
+          logger.debug("Skipping tool message without toolCallId", {
+            context: "GrokProvider.formatMessagesForResponsesAPI"
+          });
+          continue;
+        }
+        input.push({
+          type: "function_call_output",
+          call_id: msg.toolCallId,
+          output: msg.content
+        });
+        continue;
+      }
       if (msg.role === "system") {
-        return {
+        input.push({
           type: "message",
           role: "system",
           content: msg.content
-        };
+        });
+        continue;
       }
       if (msg.role === "assistant") {
-        return {
+        input.push({
           type: "message",
           role: "assistant",
           content: msg.content
-        };
+        });
+        if (msg.toolCalls && msg.toolCalls.length > 0) {
+          for (const tc of msg.toolCalls) {
+            input.push({
+              type: "function_call",
+              call_id: tc.id,
+              name: tc.function.name,
+              arguments: tc.function.arguments
+            });
+          }
+        }
+        continue;
       }
       const content = [];
       if (msg.content) {
@@ -7180,12 +7207,12 @@ ${textContent}`
       if (content.length === 0) {
         content.push({ type: "input_text", text: "" });
       }
-      return {
+      input.push({
         type: "message",
         role: "user",
         content
-      };
-    });
+      });
+    }
     return { input, attachmentResults: { sent, failed } };
   }
   /**
@@ -7573,6 +7600,282 @@ var GrokImageProvider = class {
   }
 };
 
+// node_modules/@quilltap/plugin-utils/dist/tools/index.mjs
+var TOOL_NAME_ALIASES = {
+  // Direct mappings
+  "search_memories": "search_memories",
+  "generate_image": "generate_image",
+  "search_web": "search_web",
+  // Memory tool aliases
+  "memory": "search_memories",
+  "memory_search": "search_memories",
+  "search_memory": "search_memories",
+  "memories": "search_memories",
+  // Image tool aliases
+  "image": "generate_image",
+  "create_image": "generate_image",
+  "image_generation": "generate_image",
+  "gen_image": "generate_image",
+  // Web search aliases
+  "search": "search_web",
+  "web_search": "search_web",
+  "websearch": "search_web",
+  "web": "search_web"
+};
+function normalizeToolName(name) {
+  const normalized = name.toLowerCase().trim();
+  return TOOL_NAME_ALIASES[normalized] || name;
+}
+function convertToToolCallRequest(parsed) {
+  switch (parsed.toolName) {
+    case "search_memories":
+      return {
+        name: "search_memories",
+        arguments: {
+          query: parsed.arguments.query || parsed.arguments.search || Object.values(parsed.arguments)[0] || "",
+          limit: parsed.arguments.limit
+        }
+      };
+    case "generate_image":
+      return {
+        name: "generate_image",
+        arguments: {
+          prompt: parsed.arguments.prompt || parsed.arguments.description || Object.values(parsed.arguments)[0] || ""
+        }
+      };
+    case "search_web":
+      return {
+        name: "search_web",
+        arguments: {
+          query: parsed.arguments.query || parsed.arguments.search || Object.values(parsed.arguments)[0] || ""
+        }
+      };
+    default:
+      return {
+        name: parsed.toolName,
+        arguments: parsed.arguments
+      };
+  }
+}
+function parseFunctionCallsFormat(response) {
+  const results = [];
+  const functionCallsPattern = /<function_calls>([\s\S]*?)<\/function_calls>/gi;
+  let wrapperMatch;
+  while ((wrapperMatch = functionCallsPattern.exec(response)) !== null) {
+    const wrapperContent = wrapperMatch[1];
+    const wrapperStartIndex = wrapperMatch.index;
+    const contentOffset = wrapperStartIndex + "<function_calls>".length;
+    const invokePattern = /<invoke\s+name=["']([^"']+)["']>([\s\S]*?)<\/invoke>/gi;
+    let invokeMatch;
+    while ((invokeMatch = invokePattern.exec(wrapperContent)) !== null) {
+      const toolName = invokeMatch[1];
+      const paramContent = invokeMatch[2];
+      const invokeStartIndex = contentOffset + invokeMatch.index;
+      const invokeEndIndex = invokeStartIndex + invokeMatch[0].length;
+      const args = {};
+      let format = "claude";
+      const deepseekParamPattern = /<parameter\s+name=["']([^"']+)["']\s+string=["']([^"']*)["'][^>]*>([^<]*)<\/parameter>/gi;
+      let paramMatch;
+      while ((paramMatch = deepseekParamPattern.exec(paramContent)) !== null) {
+        const paramName = paramMatch[1];
+        const stringAttr = paramMatch[2];
+        const value = paramMatch[3].trim();
+        if (stringAttr === "false") {
+          const numVal = Number(value);
+          if (!isNaN(numVal)) {
+            args[paramName] = numVal;
+          } else if (value === "true") {
+            args[paramName] = true;
+          } else if (value === "false") {
+            args[paramName] = false;
+          } else {
+            args[paramName] = value;
+          }
+        } else {
+          args[paramName] = value;
+        }
+        format = "deepseek";
+      }
+      if (Object.keys(args).length === 0) {
+        const claudeParamPattern = /<parameter\s+name=["']([^"']+)["']>([^<]*)<\/parameter>/gi;
+        while ((paramMatch = claudeParamPattern.exec(paramContent)) !== null) {
+          args[paramMatch[1]] = paramMatch[2].trim();
+        }
+      }
+      const antmlParamPattern = /<parameter\s+name=["']([^"']+)["']>([^<]*)<\/antml:parameter>/gi;
+      while ((paramMatch = antmlParamPattern.exec(paramContent)) !== null) {
+        args[paramMatch[1]] = paramMatch[2].trim();
+      }
+      results.push({
+        toolName: normalizeToolName(toolName),
+        arguments: args,
+        fullMatch: invokeMatch[0],
+        startIndex: invokeStartIndex,
+        endIndex: invokeEndIndex,
+        format
+      });
+    }
+  }
+  return results;
+}
+function parseToolCallFormat(response) {
+  const results = [];
+  const toolCallPattern = /<tool_call>([\s\S]*?)<\/tool_call>/gi;
+  let match;
+  while ((match = toolCallPattern.exec(response)) !== null) {
+    const content = match[1];
+    const startIndex = match.index;
+    const nameMatch = /<name>([^<]+)<\/name>/i.exec(content);
+    if (!nameMatch) continue;
+    const toolName = nameMatch[1].trim();
+    const args = {};
+    const argsMatch = /<arguments>([\s\S]*?)<\/arguments>/i.exec(content);
+    if (argsMatch) {
+      const argsContent = argsMatch[1];
+      const argPattern = /<(\w+)>([^<]*)<\/\1>/gi;
+      let argMatch;
+      while ((argMatch = argPattern.exec(argsContent)) !== null) {
+        args[argMatch[1]] = argMatch[2].trim();
+      }
+    }
+    results.push({
+      toolName: normalizeToolName(toolName),
+      arguments: args,
+      fullMatch: match[0],
+      startIndex,
+      endIndex: startIndex + match[0].length,
+      format: "generic"
+    });
+  }
+  return results;
+}
+function parseFunctionCallFormat(response) {
+  const results = [];
+  const functionCallPattern = /<function_call\s+name=["']([^"']+)["']>([\s\S]*?)<\/function_call>/gi;
+  let match;
+  while ((match = functionCallPattern.exec(response)) !== null) {
+    const toolName = match[1];
+    const content = match[2];
+    const startIndex = match.index;
+    const args = {};
+    const paramPattern = /<param\s+name=["']([^"']+)["']>([^<]*)<\/param>/gi;
+    let paramMatch;
+    while ((paramMatch = paramPattern.exec(content)) !== null) {
+      args[paramMatch[1]] = paramMatch[2].trim();
+    }
+    const parameterPattern = /<parameter\s+name=["']([^"']+)["']>([^<]*)<\/parameter>/gi;
+    while ((paramMatch = parameterPattern.exec(content)) !== null) {
+      args[paramMatch[1]] = paramMatch[2].trim();
+    }
+    results.push({
+      toolName: normalizeToolName(toolName),
+      arguments: args,
+      fullMatch: match[0],
+      startIndex,
+      endIndex: startIndex + match[0].length,
+      format: "function_call"
+    });
+  }
+  return results;
+}
+function parseToolUseFormat(response) {
+  const results = [];
+  const toolUsePattern = /<tool_use(?:\s+name=["']([^"']+)["'])?\s*>([\s\S]*?)<\/tool_use>/gi;
+  let match;
+  while ((match = toolUsePattern.exec(response)) !== null) {
+    const attrName = match[1];
+    const content = match[2];
+    const startIndex = match.index;
+    const trimmedContent = content.trim();
+    if (trimmedContent.startsWith("{")) {
+      try {
+        const jsonBlob = JSON.parse(trimmedContent);
+        if (typeof jsonBlob === "object" && jsonBlob !== null && jsonBlob.name) {
+          const args2 = jsonBlob.input || jsonBlob.arguments || jsonBlob.parameters || {};
+          results.push({
+            toolName: normalizeToolName(jsonBlob.name),
+            arguments: typeof args2 === "object" && args2 !== null ? args2 : {},
+            fullMatch: match[0],
+            startIndex,
+            endIndex: startIndex + match[0].length,
+            format: "tool_use"
+          });
+          continue;
+        }
+      } catch {
+      }
+    }
+    let toolName = attrName;
+    if (!toolName) {
+      const nameMatch = /<name>([^<]+)<\/name>/i.exec(content);
+      if (!nameMatch) continue;
+      toolName = nameMatch[1].trim();
+    }
+    const args = {};
+    const argsMatch = /<(?:arguments|input|parameters)>([\s\S]*?)<\/(?:arguments|input|parameters)>/i.exec(content);
+    if (argsMatch) {
+      const argsContent = argsMatch[1].trim();
+      if (argsContent.startsWith("{")) {
+        try {
+          const parsed = JSON.parse(argsContent);
+          if (typeof parsed === "object" && parsed !== null) {
+            Object.assign(args, parsed);
+          }
+        } catch {
+        }
+      }
+      if (Object.keys(args).length === 0) {
+        const argPattern = /<(\w+)>([^<]*)<\/\1>/gi;
+        let argMatch;
+        while ((argMatch = argPattern.exec(argsContent)) !== null) {
+          args[argMatch[1]] = argMatch[2].trim();
+        }
+      }
+    }
+    results.push({
+      toolName: normalizeToolName(toolName),
+      arguments: args,
+      fullMatch: match[0],
+      startIndex,
+      endIndex: startIndex + match[0].length,
+      format: "tool_use"
+    });
+  }
+  return results;
+}
+function parseAllXMLFormats(response) {
+  const allResults = [];
+  allResults.push(...parseFunctionCallsFormat(response));
+  allResults.push(...parseToolCallFormat(response));
+  allResults.push(...parseFunctionCallFormat(response));
+  allResults.push(...parseToolUseFormat(response));
+  const seen = /* @__PURE__ */ new Set();
+  const deduped = allResults.filter((result) => {
+    if (seen.has(result.startIndex)) {
+      return false;
+    }
+    seen.add(result.startIndex);
+    return true;
+  });
+  deduped.sort((a, b) => a.startIndex - b.startIndex);
+  return deduped;
+}
+function parseAllXMLAsToolCalls(response) {
+  return parseAllXMLFormats(response).map(convertToToolCallRequest);
+}
+function hasAnyXMLToolMarkers(response) {
+  return /<function_calls>/i.test(response) || /<tool_call>/i.test(response) || /<function_call\s+/i.test(response) || /<tool_use[\s>]/i.test(response);
+}
+function stripAllXMLToolMarkers(response) {
+  let stripped = response;
+  stripped = stripped.replace(/<function_calls>[\s\S]*?<\/function_calls>/gi, "");
+  stripped = stripped.replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, "");
+  stripped = stripped.replace(/<function_call\s+[^>]*>[\s\S]*?<\/function_call>/gi, "");
+  stripped = stripped.replace(/<tool_use[\s>][\s\S]*?<\/tool_use>/gi, "");
+  stripped = stripped.replace(/\n{3,}/g, "\n\n").replace(/  +/g, " ").trim();
+  return stripped;
+}
+
 // index.ts
 var logger3 = createPluginLogger("qtap-plugin-grok");
 var GROK_IMAGE_CONSTRAINTS = {
@@ -7801,8 +8104,37 @@ var plugin = {
    */
   getImageProviderConstraints: () => {
     return GROK_IMAGE_CONSTRAINTS;
+  },
+  /**
+   * Detect spontaneous XML tool markers in response text
+   * Some models may emit XML tool markup instead of using native function calling
+   */
+  hasTextToolMarkers(text) {
+    return hasAnyXMLToolMarkers(text);
+  },
+  parseTextToolCalls(text) {
+    try {
+      const results = parseAllXMLAsToolCalls(text);
+      if (results.length > 0) {
+        logger3.debug("Detected spontaneous XML tool calls in Grok response", {
+          context: "grok.parseTextToolCalls",
+          count: results.length,
+          tools: results.map((r) => r.name)
+        });
+      }
+      return results;
+    } catch (error) {
+      logger3.error(
+        "Error parsing text tool calls",
+        { context: "grok.parseTextToolCalls" },
+        error instanceof Error ? error : void 0
+      );
+      return [];
+    }
+  },
+  stripTextToolMarkers(text) {
+    return stripAllXMLToolMarkers(text);
   }
-  // Text tool call detection not needed — models use native function calling correctly
 };
 var index_default = plugin;
 // Annotate the CommonJS export names for ESM import in node:
