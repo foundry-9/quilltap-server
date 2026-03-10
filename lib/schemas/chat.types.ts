@@ -39,6 +39,29 @@ export const DangerFlagSchema = z.object({
 export type DangerFlag = z.infer<typeof DangerFlagSchema>;
 
 // ============================================================================
+// SCENE STATE
+// ============================================================================
+
+export const SceneStateCharacterSchema = z.object({
+  characterId: z.string(),
+  characterName: z.string(),
+  action: z.string(),
+  appearance: z.string().nullable(),
+  clothing: z.string().nullable(),
+});
+
+export type SceneStateCharacter = z.infer<typeof SceneStateCharacterSchema>;
+
+export const SceneStateSchema = z.object({
+  location: z.string(),
+  characters: z.array(SceneStateCharacterSchema),
+  updatedAt: TimestampSchema,
+  updatedAtMessageCount: z.number(),
+});
+
+export type SceneState = z.infer<typeof SceneStateSchema>;
+
+// ============================================================================
 // MESSAGE EVENTS
 // ============================================================================
 
@@ -106,6 +129,7 @@ export const SystemEventTypeEnum = z.enum([
   'IMAGE_PROMPT_CRAFTING',
   'CONTEXT_COMPRESSION',
   'DANGER_CLASSIFICATION',
+  'SCENE_STATE_TRACKING',
 ]);
 
 export type SystemEventType = z.infer<typeof SystemEventTypeEnum>;
@@ -313,6 +337,9 @@ export const ChatMetadataSchema = z.object({
   /** Message count at which danger was last classified (to detect changes for re-check) */
   dangerClassifiedAtMessageCount: z.number().nullable().optional(),
 
+  /** Scene state tracker: structured summary of current scene (location, character actions, appearance, clothing) */
+  sceneState: JsonSchema.nullable().optional(),
+
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 }).refine(
@@ -412,6 +439,9 @@ export const ChatMetadataBaseSchema = z.object({
   dangerClassifiedAt: TimestampSchema.nullable().optional(),
   /** Message count at which danger was last classified (to detect changes for re-check) */
   dangerClassifiedAtMessageCount: z.number().nullable().optional(),
+
+  /** Scene state tracker: structured summary of current scene (location, character actions, appearance, clothing) */
+  sceneState: JsonSchema.nullable().optional(),
 
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

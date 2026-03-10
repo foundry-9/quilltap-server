@@ -111,6 +111,8 @@ import { dropPepperVaultMigration } from './drop-pepper-vault';
 import { addWhisperTargetFieldMigration } from './add-whisper-target-field';
 // Add turn queue field to chats for server-side turn management
 import { addTurnQueueFieldMigration } from './add-turn-queue-field';
+// Add scene state tracking field to chats
+import { addSceneStateFieldMigration } from './add-scene-state-field';
 
 /**
  * All available migrations.
@@ -217,6 +219,8 @@ export const migrations: Migration[] = [
   addWhisperTargetFieldMigration,
   // Add turn queue field to chats for server-side turn management
   addTurnQueueFieldMigration,
+  // Add scene state tracking field to chats
+  addSceneStateFieldMigration,
 ];
 
 export {
@@ -318,4 +322,6 @@ export {
   addWhisperTargetFieldMigration,
   // Add turn queue field to chats for server-side turn management
   addTurnQueueFieldMigration,
+  // Add scene state tracking field to chats
+  addSceneStateFieldMigration,
 };

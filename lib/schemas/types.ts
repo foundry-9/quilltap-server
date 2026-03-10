@@ -141,6 +141,8 @@ export type {
 // ============================================================================
 export {
   DangerFlagSchema,
+  SceneStateCharacterSchema,
+  SceneStateSchema,
   MessageEventSchema,
   ContextSummaryEventSchema,
   SystemEventTypeEnum,
@@ -156,6 +158,8 @@ export {
 
 export type {
   DangerFlag,
+  SceneStateCharacter,
+  SceneState,
   MessageEvent,
   ContextSummaryEvent,
   SystemEventType,

@@ -74,6 +74,7 @@ import {
   triggerUserControlledCharacterMemory,
   triggerContextSummaryCheck,
   triggerChatDangerClassification,
+  triggerSceneStateTracking,
 } from './memory-trigger.service'
 import { trackMessageTokenUsage } from '@/lib/services/token-tracking.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
@@ -273,6 +274,38 @@ export async function handleSendMessage(
               }))
               break
             }
+          }
+        }
+
+        // Trigger scene state tracking once after the complete chain
+        if (result.isMultiCharacter && result.hasContent) {
+          try {
+            const chainChat = await repos.chats.findById(chatId)
+            if (chainChat) {
+              const chatSettings = await repos.chatSettings.findByUserId(userId)
+              if (chatSettings?.cheapLLMSettings) {
+                const chainCharacterIds = chainChat.participants
+                  .filter(p => p.isActive && p.characterId)
+                  .map(p => p.characterId)
+                const chainConnectionProfile = await repos.connections.findById(
+                  chainChat.participants[0]?.connectionProfileId || ''
+                )
+                if (chainConnectionProfile) {
+                  await triggerSceneStateTracking(repos, {
+                    chatId,
+                    userId,
+                    connectionProfile: chainConnectionProfile,
+                    chatSettings: { cheapLLMSettings: chatSettings.cheapLLMSettings },
+                    characterIds: chainCharacterIds,
+                  })
+                }
+              }
+            }
+          } catch (error) {
+            logger.warn('[TurnOrchestrator] Failed to trigger scene state tracking after chain', {
+              chatId,
+              error: error instanceof Error ? error.message : String(error),
+            })
           }
         }
 
@@ -2197,6 +2230,19 @@ async function processMessage(
         connectionProfile,
         chatSettings: memoryChatSettings,
       })
+
+      // Trigger scene state tracking (single-character chats only;
+      // multi-character chats trigger once after the chain completes)
+      if (!isMultiCharacter) {
+        const participantCharacterIds = Array.from(participantCharacters.values()).map(c => c.id)
+        await triggerSceneStateTracking(repos, {
+          chatId,
+          userId,
+          connectionProfile,
+          chatSettings: memoryChatSettings,
+          characterIds: participantCharacterIds,
+        })
+      }
     }
     return {
       isMultiCharacter,

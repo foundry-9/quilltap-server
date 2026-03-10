@@ -120,6 +120,7 @@ function mapTaskTypeToLogType(taskType?: string): LLMLogType {
     'memory-keyword-extraction': 'MEMORY_EXTRACTION',
     'resolve-character-appearances': 'APPEARANCE_RESOLUTION',
     'sanitize-appearance': 'APPEARANCE_RESOLUTION',
+    'scene-state-tracking': 'SCENE_STATE_TRACKING',
   }
   return mapping[taskType || ''] || 'SUMMARIZATION'
 }
@@ -1631,6 +1632,219 @@ Based on this conversation, describe the scene these characters might be in:`,
     },
     'derive-scene-context',
     chatId
+  )
+}
+
+// ============================================================================
+// SCENE STATE TRACKING
+// ============================================================================
+
+/**
+ * Input for scene state tracking
+ */
+export interface SceneStateInput {
+  /** Previous scene state JSON (null for first turn) */
+  previousSceneState: Record<string, unknown> | null
+  /** Character baseline data (defaults only — conversation overrides these) */
+  characters: Array<{
+    characterId: string
+    characterName: string
+    physicalDescription: string
+    clothingDescription: string
+    scenario?: string
+  }>
+  /** Messages since last scene state update (or all messages for first turn) */
+  recentMessages: ChatMessage[]
+  /** Current message count for tracking */
+  messageCount: number
+  /** Chat-level scenario/system prompt that establishes the opening scene */
+  chatScenario?: string
+}
+
+/**
+ * Scene state tracking prompt for first turn
+ * Analyzes conversation and character data to produce a structured scene state
+ */
+const SCENE_STATE_FIRST_TURN_PROMPT = `You are a scene state tracker for a roleplay chat. Read the scenario setup and conversation, then produce a structured JSON snapshot of the current scene.
+
+Output ONLY valid JSON with this exact schema:
+{
+  "location": "where the scene takes place right now",
+  "characters": [
+    {
+      "characterId": "the character's ID (from baselines)",
+      "characterName": "the character's name",
+      "action": "what the character is doing right now",
+      "appearance": "what the character currently looks like",
+      "clothing": "what the character is currently wearing, or null"
+    }
+  ]
+}
+
+CRITICAL RULES — read carefully:
+- The CONVERSATION and SCENARIO are the primary authority. Character baselines are only defaults.
+- If the scenario or conversation describes a character wearing something specific, USE THAT, not the baseline clothing.
+- If the scenario or conversation describes a character's appearance differently from baseline, USE THAT.
+- If a character undresses, is described as nude/naked, or removes clothing in the narrative, clothing should reflect that accurately — do not fall back to baseline clothing.
+- Baselines are ONLY used when the conversation gives NO information about a character's current state.
+- location: concise (1-2 sentences). Derive from scenario and conversation context.
+- action: what the character is doing RIGHT NOW at the end of the conversation.
+- appearance/clothing: complete snapshot of current state. Use null ONLY if absolutely no information exists (not even baselines).
+- Be concise and accurate. Output ONLY the JSON object.`
+
+/**
+ * Scene state tracking prompt for subsequent turns
+ * Updates the scene state based on new messages
+ */
+const SCENE_STATE_UPDATE_PROMPT = `You are a scene state tracker for a roleplay chat. Given the previous scene state and new messages, produce an updated scene state.
+
+Output ONLY valid JSON with this exact schema:
+{
+  "location": "where the scene takes place right now",
+  "characters": [
+    {
+      "characterId": "the character's ID",
+      "characterName": "the character's name",
+      "action": "what the character is doing right now",
+      "appearance": "what the character currently looks like",
+      "clothing": "what the character is currently wearing, or null"
+    }
+  ]
+}
+
+CRITICAL RULES — read carefully:
+- The NEW MESSAGES are the primary authority. They override the previous state.
+- If new messages describe a character changing clothes, undressing, or altering appearance, UPDATE those fields.
+- If a character is described as nude/naked or removes clothing, reflect that accurately — do not revert to previous clothing.
+- Every field is a COMPLETE snapshot, not a diff.
+- If nothing changed for a field, carry it forward from the previous state.
+- Update location if the scene has moved.
+- Update action to reflect what each character is doing NOW at the end of the new messages.
+- Be concise and accurate. Output ONLY the JSON object.`
+
+/**
+ * Updates scene state based on conversation messages
+ *
+ * Tracks the current state of a scene including location, character actions,
+ * appearance, and clothing. On the first turn, establishes the initial state.
+ * On subsequent turns, updates based on new messages.
+ *
+ * @param input - Scene state input including messages, character data, and previous state
+ * @param selection - The cheap LLM provider selection
+ * @param userId - The user ID for API key retrieval
+ * @param chatId - Optional chat ID for logging
+ * @returns Updated scene state as structured JSON
+ */
+export async function updateSceneState(
+  input: SceneStateInput,
+  selection: CheapLLMSelection,
+  userId: string,
+  chatId?: string,
+  uncensoredFallback?: UncensoredFallbackOptions
+): Promise<CheapLLMTaskResult<Record<string, unknown>>> {
+  // Format recent messages for the prompt
+  const messageText = input.recentMessages
+    .map(m => {
+      const speaker = m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Character' : 'System'
+      // Truncate long messages to keep context manageable
+      const content = m.content.length > 500 ? m.content.substring(0, 500) + '...' : m.content
+      return `${speaker}: ${content}`
+    })
+    .join('\n\n')
+
+  // Build character baseline section
+  const characterBaselines = input.characters
+    .map(char => {
+      return `${char.characterName} (ID: ${char.characterId}):
+  - Appearance: ${char.physicalDescription}
+  - Clothing: ${char.clothingDescription}${char.scenario ? `\n  - Scenario context: ${char.scenario}` : ''}`
+    })
+    .join('\n\n')
+
+  let llmMessages: LLMMessage[]
+
+  // Build optional scenario section
+  const scenarioSection = input.chatScenario
+    ? `\nScenario / Opening Setup:\n${input.chatScenario}\n`
+    : ''
+
+  if (input.previousSceneState === null) {
+    // First turn: establish initial scene state
+    llmMessages = [
+      {
+        role: 'system',
+        content: SCENE_STATE_FIRST_TURN_PROMPT,
+      },
+      {
+        role: 'user',
+        content: `Character Baselines (defaults only — the conversation and scenario override these):
+${characterBaselines}
+${scenarioSection}
+Conversation (the primary source of truth):
+${messageText}
+
+Based on the scenario and conversation above, what is the current scene state?`,
+      },
+    ]
+  } else {
+    // Subsequent turns: update scene state with new messages only
+    llmMessages = [
+      {
+        role: 'system',
+        content: SCENE_STATE_UPDATE_PROMPT,
+      },
+      {
+        role: 'user',
+        content: `Previous Scene State:
+${JSON.stringify(input.previousSceneState, null, 2)}
+
+New Messages (the primary source of truth — these override previous state where applicable):
+${messageText}
+
+Update the scene state based on these new messages:`,
+      },
+    ]
+  }
+
+  return executeCheapLLMTask(
+    selection,
+    llmMessages,
+    userId,
+    (content: string): Record<string, unknown> => {
+      let cleanContent = content.trim()
+
+      // Empty or near-empty response = content refusal
+      if (!cleanContent || cleanContent.length < 10) {
+        logger.warn('[SceneStateTracking] Empty or near-empty LLM response, likely content refusal', {
+          contentLength: cleanContent.length,
+          content: cleanContent.substring(0, 100),
+        })
+        throw new Error('Empty LLM response (likely content refusal)')
+      }
+
+      // Remove markdown code blocks if present
+      if (cleanContent.startsWith('```json')) {
+        cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
+      } else if (cleanContent.startsWith('```')) {
+        cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
+      }
+
+      const parsed = JSON.parse(cleanContent)
+
+      // Validate the parsed result has meaningful content
+      if (!parsed.location || parsed.location === 'Unknown' || parsed.location === 'unknown') {
+        logger.warn('[SceneStateTracking] LLM returned unknown location, likely content refusal', {
+          location: parsed.location,
+          characterCount: parsed.characters?.length,
+        })
+      }
+
+      return parsed
+    },
+    'scene-state-tracking',
+    chatId,
+    undefined,
+    uncensoredFallback
   )
 }
 

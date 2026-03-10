@@ -13,11 +13,12 @@ When enabled, Quilltap generates a landscape scene image featuring your characte
 ### Generation Process
 
 1. **Trigger**: Background generation happens automatically after chat title updates (both automatic and manual)
-2. **Prompt Creation**: The system uses a cheap LLM to craft an atmospheric scene prompt based on:
-   - The chat title (which describes the current scene/situation)
-   - Character physical descriptions from your character cards
-3. **Image Generation**: The prompt is sent to your configured image generation profile
-4. **Display**: The generated image appears as a semi-transparent background (30% opacity) behind your chat content
+2. **Scene Understanding**: The system determines the current scene in one of two ways:
+   - **Scene State Tracker** (preferred): After every chat turn, a lightweight background task automatically tracks the current scene — where characters are, what they're doing, and what they look like. When this data is fresh (within 5 messages), the Lantern uses it directly, saving an extra LLM call.
+   - **On-demand derivation** (fallback): If no recent scene state exists, the system reads your recent messages and asks a cheap LLM to describe the scene, much as a particularly attentive stage manager might.
+3. **Prompt Creation**: The system uses a cheap LLM to craft an atmospheric scene prompt based on the scene context and character appearances
+4. **Image Generation**: The prompt is sent to your configured image generation profile
+5. **Display**: The generated image appears as a semi-transparent background (30% opacity) behind your chat content
 
 ## Enabling Story Backgrounds
 
