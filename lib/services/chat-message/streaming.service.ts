@@ -443,6 +443,7 @@ export function encodeDoneEvent(
   encoder: TextEncoder,
   data: {
     messageId: string | null
+    participantId?: string | null
     usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null
     cacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | null
     attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null

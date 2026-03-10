@@ -75,10 +75,12 @@ export const setActiveSpeakerSchema = z.object({
   participantId: z.uuid(),
 });
 
-export const turnActionSchema = z.object({
-  action: z.enum(['nudge', 'queue', 'dequeue']),
-  participantId: z.uuid(),
-});
+export const turnActionSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('nudge'), participantId: z.uuid() }),
+  z.object({ action: z.literal('queue'), participantId: z.uuid() }),
+  z.object({ action: z.literal('dequeue'), participantId: z.uuid() }),
+  z.object({ action: z.literal('query') }),
+]);
 
 export const persistTurnSchema = z.object({
   lastTurnParticipantId: z.uuid().nullable(),

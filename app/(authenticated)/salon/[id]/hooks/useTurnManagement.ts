@@ -2,13 +2,14 @@
 
 import { useCallback, useMemo } from 'react'
 import { showErrorToast, showInfoToast } from '@/lib/toast'
+import type {
+  TurnState,
+  TurnSelectionResult,
+} from '@/lib/chat/turn-manager'
 import {
-  type TurnState,
-  type TurnSelectionResult,
   nudgeParticipant,
   addToQueue,
   removeFromQueue,
-  selectNextSpeaker,
 } from '@/lib/chat/turn-manager'
 import type { ChatParticipantBase, Character } from '@/lib/schemas/types'
 import type { EphemeralMessageData } from '@/components/chat/EphemeralMessage'
@@ -17,13 +18,94 @@ import type { ParticipantData } from '@/components/chat/ParticipantCard'
 
 export interface TurnManagementActions {
   handleNudge: (participantId: string) => void | Promise<void>
-  handleQueue: (participantId: string) => void
-  handleDequeue: (participantId: string) => void
-  handleContinue: () => void
+  handleQueue: (participantId: string) => void | Promise<void>
+  handleDequeue: (participantId: string) => void | Promise<void>
+  handleContinue: () => void | Promise<void>
   handleDismissEphemeral: (ephemeralId: string) => void
 }
 
+/**
+ * Server response from the turn action API
+ */
+interface TurnActionResponse {
+  success: boolean
+  action: string
+  turn: {
+    nextSpeakerId: string | null
+    nextSpeakerName: string | null
+    nextSpeakerControlledBy: string | null
+    reason: string
+    explanation: string
+    cycleComplete: boolean
+    isUsersTurn: boolean
+  }
+  state: {
+    queue: string[]
+  }
+  participant?: {
+    id: string
+    name: string
+    queuePosition: number
+  }
+}
+
+/**
+ * Call the backend turn action API to persist state changes
+ */
+async function callTurnAction(
+  chatId: string,
+  action: 'nudge' | 'queue' | 'dequeue' | 'query',
+  participantId?: string,
+): Promise<TurnActionResponse | null> {
+  try {
+    const body: Record<string, string> = { action }
+    if (participantId) {
+      body.participantId = participantId
+    }
+
+    const res = await fetch(`/api/v1/chats/${chatId}?action=turn`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}))
+      throw new Error(errorData.error || `Turn action failed (${res.status})`)
+    }
+
+    return await res.json()
+  } catch (error) {
+    console.error('[TurnManagement] API call failed', { action, participantId, error })
+    return null
+  }
+}
+
+/**
+ * Update local turn state from server response
+ */
+function applyServerResponse(
+  response: TurnActionResponse,
+  setTurnState: (state: TurnState) => void,
+  setTurnSelectionResult: (result: TurnSelectionResult | null) => void,
+  currentTurnState: TurnState,
+) {
+  // Update queue from server's authoritative state
+  setTurnState({
+    ...currentTurnState,
+    queue: response.state.queue,
+  })
+
+  // Update selection result from server
+  setTurnSelectionResult({
+    nextSpeakerId: response.turn.nextSpeakerId,
+    reason: response.turn.reason as TurnSelectionResult['reason'],
+    cycleComplete: response.turn.cycleComplete,
+  })
+}
+
 export function useTurnManagement(
+  chatId: string,
   participantsAsBase: ChatParticipantBase[],
   charactersMap: Map<string, Character>,
   turnState: TurnState,
@@ -63,80 +145,73 @@ export function useTurnManagement(
     const ephemeral = createEphemeralMessage('nudge', participantId, participantName)
     setEphemeralMessages([...ephemeralMessages, ephemeral])
 
-    // Update turn state
+    // Optimistic local update for immediate UI feedback
     const newTurnState = nudgeParticipant(turnState, participantId)
     setTurnState(newTurnState)
 
-    // Recalculate next speaker
-    if (participantsAsBase.length > 0) {
-      const result = selectNextSpeaker(
-        participantsAsBase,
-        charactersMap,
-        newTurnState,
-        userParticipantId
-      )
-      setTurnSelectionResult(result)
+    // Persist to backend
+    const response = await callTurnAction(chatId, 'nudge', participantId)
+    if (response) {
+      applyServerResponse(response, setTurnState, setTurnSelectionResult, turnState)
     }
 
     // Trigger immediate response generation
     triggerContinueMode(participantId)
-  }, [turnState, participantsAsBase, charactersMap, userParticipantId, participantData, ephemeralMessages, setTurnState, setTurnSelectionResult, setEphemeralMessages, triggerContinueMode, isPaused, onUnpause])
+  }, [chatId, turnState, participantsAsBase, participantData, ephemeralMessages, setTurnState, setTurnSelectionResult, setEphemeralMessages, triggerContinueMode, isPaused, onUnpause])
 
-  const handleQueue = useCallback((participantId: string) => {
+  const handleQueue = useCallback(async (participantId: string) => {
+    // Optimistic local update for immediate UI feedback
     const newTurnState = addToQueue(turnState, participantId)
     setTurnState(newTurnState)
 
-    // Recalculate next speaker
-    if (participantsAsBase.length > 0) {
-      const result = selectNextSpeaker(
-        participantsAsBase,
-        charactersMap,
-        newTurnState,
-        userParticipantId
-      )
-      setTurnSelectionResult(result)
+    // Persist to backend and get authoritative state
+    const response = await callTurnAction(chatId, 'queue', participantId)
+    if (response) {
+      applyServerResponse(response, setTurnState, setTurnSelectionResult, turnState)
     }
-  }, [turnState, participantsAsBase, charactersMap, userParticipantId, setTurnState, setTurnSelectionResult])
+  }, [chatId, turnState, setTurnState, setTurnSelectionResult])
 
-  const handleDequeue = useCallback((participantId: string) => {
+  const handleDequeue = useCallback(async (participantId: string) => {
+    // Optimistic local update for immediate UI feedback
     const newTurnState = removeFromQueue(turnState, participantId)
     setTurnState(newTurnState)
 
-    // Recalculate next speaker
-    if (participantsAsBase.length > 0) {
-      const result = selectNextSpeaker(
-        participantsAsBase,
-        charactersMap,
-        newTurnState,
-        userParticipantId
-      )
-      setTurnSelectionResult(result)
+    // Persist to backend and get authoritative state
+    const response = await callTurnAction(chatId, 'dequeue', participantId)
+    if (response) {
+      applyServerResponse(response, setTurnState, setTurnSelectionResult, turnState)
     }
-  }, [turnState, participantsAsBase, charactersMap, userParticipantId, setTurnState, setTurnSelectionResult])
+  }, [chatId, turnState, setTurnState, setTurnSelectionResult])
 
-  const handleContinue = useCallback(() => {
+  const handleContinue = useCallback(async () => {
     // Edge case: No active characters
     if (!hasActiveCharacters) {
       showErrorToast('No characters available. Add a character to continue.')
       return
     }
 
-    // Get the next character to speak
-    const result = selectNextSpeaker(participantsAsBase, charactersMap, turnState, userParticipantId)
+    // Query the server for the authoritative next speaker
+    const response = await callTurnAction(chatId, 'query')
 
-    if (result.nextSpeakerId && result.nextSpeakerId !== userParticipantId) {
-      // Verify the selected participant is LLM-controlled before triggering
-      const nextParticipant = participantsAsBase.find(p => p.id === result.nextSpeakerId)
-      if (nextParticipant?.controlledBy === 'user') {
-        // User-controlled character was selected (likely from queue) - can't auto-generate
+    if (!response) {
+      showErrorToast('Failed to determine next speaker. Please try again.')
+      return
+    }
+
+    applyServerResponse(response, setTurnState, setTurnSelectionResult, turnState)
+
+    const { nextSpeakerId, nextSpeakerControlledBy } = response.turn
+
+    if (nextSpeakerId && nextSpeakerId !== userParticipantId) {
+      if (nextSpeakerControlledBy === 'user') {
         showInfoToast("It's a user-controlled character's turn. Type a message as them.")
         return
       }
-      triggerContinueMode(result.nextSpeakerId)
+      triggerContinueMode(nextSpeakerId)
     } else {
       showInfoToast('No characters available to speak. Try adding or activating a character.')
     }
-  }, [participantsAsBase, charactersMap, turnState, userParticipantId, hasActiveCharacters, triggerContinueMode])
+  }, [chatId, hasActiveCharacters, userParticipantId, turnState, setTurnState, setTurnSelectionResult, triggerContinueMode])
 
   const handleDismissEphemeral = useCallback((ephemeralId: string) => {
     setEphemeralMessages(ephemeralMessages.filter(em => em.id !== ephemeralId))

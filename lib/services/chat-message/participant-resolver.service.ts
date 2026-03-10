@@ -76,11 +76,27 @@ export async function resolveRespondingParticipant(
       p => p.id === requestedRespondingParticipantId && p.type === 'CHARACTER' && p.isActive && p.characterId
     )
     if (!characterParticipant) {
-      logger.warn('Requested responding participant not found or inactive', {
+      if (isContinueMode) {
+        // During continue mode (including chained turns), a mismatched participant
+        // is worse than an error — it would save content under the wrong character.
+        // Throw so the chain loop can handle it gracefully.
+        logger.error('Requested responding participant not found or inactive during continue mode', {
+          chatId: chat.id,
+          requestedParticipantId: requestedRespondingParticipantId,
+          activeParticipants: chat.participants
+            .filter(p => p.type === 'CHARACTER' && p.isActive)
+            .map(p => ({ id: p.id, characterId: p.characterId })),
+        })
+        throw new Error(
+          `Requested participant ${requestedRespondingParticipantId} not found or inactive in chat ${chat.id}`
+        )
+      }
+
+      logger.warn('Requested responding participant not found or inactive, falling back', {
         chatId: chat.id,
         requestedParticipantId: requestedRespondingParticipantId,
       })
-      // Fall back to first active character
+      // Fall back to first active character (only for non-continue mode)
       characterParticipant = chat.participants.find(
         p => p.type === 'CHARACTER' && p.isActive && p.characterId
       )

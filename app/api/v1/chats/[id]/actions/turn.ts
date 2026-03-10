@@ -24,7 +24,7 @@ import type { AuthenticatedContext } from '@/lib/api/middleware';
 import type { ChatMetadata, MessageEvent, Character } from '@/lib/schemas/types';
 
 /**
- * Process a turn action (nudge, queue, or dequeue)
+ * Process a turn action (nudge, queue, dequeue, or query)
  */
 export async function handleTurnAction(
   req: NextRequest,
@@ -34,15 +34,19 @@ export async function handleTurnAction(
 ): Promise<NextResponse> {
   try {
     const body = await req.json();
-    const { action: turnAction, participantId } = turnActionSchema.parse(body);
+    const parsed = turnActionSchema.parse(body);
+    const turnAction = parsed.action;
+    const participantId = 'participantId' in parsed ? parsed.participantId : undefined;
 
-
-    const participant = chat.participants.find((p) => p.id === participantId);
-    if (!participant) {
-      return notFound('Participant');
-    }
-    if (!participant.isActive) {
-      return badRequest('Participant is not active');
+    // For non-query actions, validate the target participant
+    if (turnAction !== 'query') {
+      const participant = chat.participants.find((p) => p.id === participantId);
+      if (!participant) {
+        return notFound('Participant');
+      }
+      if (!participant.isActive) {
+        return badRequest('Participant is not active');
+      }
     }
 
     const userParticipant = findUserParticipant(chat.participants);
@@ -61,13 +65,16 @@ export async function handleTurnAction(
 
     switch (turnAction) {
       case 'nudge':
-        turnState = nudgeParticipant(turnState, participantId);
+        turnState = nudgeParticipant(turnState, participantId!);
         break;
       case 'queue':
-        turnState = addToQueue(turnState, participantId);
+        turnState = addToQueue(turnState, participantId!);
         break;
       case 'dequeue':
-        turnState = removeFromQueue(turnState, participantId);
+        turnState = removeFromQueue(turnState, participantId!);
+        break;
+      case 'query':
+        // Read-only: just compute next speaker from current state
         break;
     }
 
@@ -84,28 +91,35 @@ export async function handleTurnAction(
 
     const nextSpeakerResult = selectNextSpeaker(chat.participants, charactersMap, turnState, userParticipantId);
 
-    // Persist turn queue and last turn participant to database
-    await repos.chats.update(chatId, {
-      turnQueue: JSON.stringify(turnState.queue),
-      lastTurnParticipantId: nextSpeakerResult.nextSpeakerId ?? null,
-    });
-    logger.debug('[Chats v1] Persisted turn state', {
-      chatId,
-      action: turnAction,
-      queue: turnState.queue,
-      nextSpeakerId: nextSpeakerResult.nextSpeakerId,
-    });
+    // Persist turn queue and last turn participant for state-modifying actions
+    if (turnAction !== 'query') {
+      await repos.chats.update(chatId, {
+        turnQueue: JSON.stringify(turnState.queue),
+        lastTurnParticipantId: nextSpeakerResult.nextSpeakerId ?? null,
+      });
+      logger.debug('[Chats v1] Persisted turn state', {
+        chatId,
+        action: turnAction,
+        queue: turnState.queue,
+        nextSpeakerId: nextSpeakerResult.nextSpeakerId,
+      });
+    }
 
-    const affectedCharacter = participant.characterId ? charactersMap.get(participant.characterId) : null;return NextResponse.json({
+    // Determine the next speaker's character info
+    const nextSpeakerParticipant = nextSpeakerResult.nextSpeakerId
+      ? chat.participants.find(p => p.id === nextSpeakerResult.nextSpeakerId)
+      : null;
+    const nextSpeakerCharacter = nextSpeakerParticipant?.characterId
+      ? charactersMap.get(nextSpeakerParticipant.characterId)
+      : null;
+
+    const response: Record<string, unknown> = {
       success: true,
       action: turnAction,
-      participant: {
-        id: participantId,
-        name: affectedCharacter?.name ?? 'Unknown',
-        queuePosition: getQueuePosition(turnState, participantId),
-      },
       turn: {
         nextSpeakerId: nextSpeakerResult.nextSpeakerId,
+        nextSpeakerName: nextSpeakerCharacter?.name ?? null,
+        nextSpeakerControlledBy: nextSpeakerParticipant?.controlledBy ?? null,
         reason: nextSpeakerResult.reason,
         explanation: getSelectionExplanation(nextSpeakerResult),
         cycleComplete: nextSpeakerResult.cycleComplete,
@@ -114,7 +128,22 @@ export async function handleTurnAction(
       state: {
         queue: turnState.queue,
       },
-    });
+    };
+
+    // Include affected participant info for non-query actions
+    if (participantId) {
+      const affectedCharacter = chat.participants.find(p => p.id === participantId);
+      const affectedCharacterData = affectedCharacter?.characterId
+        ? charactersMap.get(affectedCharacter.characterId)
+        : null;
+      response.participant = {
+        id: participantId,
+        name: affectedCharacterData?.name ?? 'Unknown',
+        queuePosition: getQueuePosition(turnState, participantId),
+      };
+    }
+
+    return NextResponse.json(response);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return validationError(error);

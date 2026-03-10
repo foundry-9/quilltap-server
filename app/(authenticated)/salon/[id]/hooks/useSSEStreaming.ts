@@ -507,12 +507,15 @@ export function useSSEStreaming({
             return
           }
 
+          // Use server-provided participantId if available (authoritative)
+          const resolvedParticipantId = data.participantId || currentParticipantId
+
           const assistantMessage: Message = {
             id: data.messageId!,
             role: 'ASSISTANT',
             content: fullContent,
             createdAt: new Date().toISOString(),
-            participantId: currentParticipantId,
+            participantId: resolvedParticipantId,
             provider: data.provider || null,
             modelName: data.modelName || null,
           }
@@ -533,12 +536,15 @@ export function useSSEStreaming({
           // Intermediate done during a chain — add temp message but don't reset state
           if (data.emptyResponse || !fullContent) return
 
+          // Use server-provided participantId if available (authoritative)
+          const resolvedParticipantId = data.participantId || currentParticipantId
+
           const assistantMessage: Message = {
             id: data.messageId!,
             role: 'ASSISTANT',
             content: fullContent,
             createdAt: new Date().toISOString(),
-            participantId: currentParticipantId,
+            participantId: resolvedParticipantId,
             provider: data.provider || null,
             modelName: data.modelName || null,
           }
@@ -662,12 +668,15 @@ export function useSSEStreaming({
           setResponseStatus(null)
 
           if (fullContent.trim()) {
+            // Use server-provided participantId if available (authoritative)
+            const resolvedParticipantId = data.participantId || currentParticipantId
+
             const newMessage: Message = {
               id: data.messageId || `continue-${Date.now()}`,
               role: 'ASSISTANT',
               content: fullContent,
               createdAt: new Date().toISOString(),
-              participantId: currentParticipantId,
+              participantId: resolvedParticipantId,
               provider: data.provider || null,
               modelName: data.modelName || null,
             }
@@ -682,12 +691,15 @@ export function useSSEStreaming({
           // Intermediate done during a chain — add temp message but don't reset state
           if (!fullContent.trim()) return
 
+          // Use server-provided participantId if available (authoritative)
+          const resolvedParticipantId = data.participantId || currentParticipantId
+
           const newMessage: Message = {
             id: data.messageId || `continue-chain-${Date.now()}`,
             role: 'ASSISTANT',
             content: fullContent,
             createdAt: new Date().toISOString(),
-            participantId: currentParticipantId,
+            participantId: resolvedParticipantId,
             provider: data.provider || null,
             modelName: data.modelName || null,
           }

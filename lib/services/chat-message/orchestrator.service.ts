@@ -2085,6 +2085,7 @@ async function processMessage(
     // Send done event
     controller.enqueue(encodeDoneEvent(encoder, {
       messageId: assistantMessageId,
+      participantId: characterParticipant.id,
       usage,
       cacheUsage,
       attachmentResults,
@@ -2219,6 +2220,7 @@ async function processMessage(
 
     controller.enqueue(encodeDoneEvent(encoder, {
       messageId: toolSaveResult.firstToolMessageId,
+      participantId: characterParticipant.id,
       usage,
       cacheUsage,
       attachmentResults,
@@ -2254,6 +2256,7 @@ async function processMessage(
     })
     controller.enqueue(encodeDoneEvent(encoder, {
       messageId: null,
+      participantId: characterParticipant.id,
       usage,
       cacheUsage,
       attachmentResults,

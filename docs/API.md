@@ -1312,14 +1312,48 @@ Re-attribute multiple messages from one participant to another in a single opera
 
 #### `POST /api/v1/chats/[id]?action=turn`
 
-Update turn state for multi-character chat.
+Update turn state for multi-character chat, or query the next speaker.
 
-**Request Body**:
+**Request Body** (for `nudge`, `queue`, `dequeue`):
 
 ```json
 {
-  "action": "nudge" | "queue" | "dequeue" | "continue",
+  "action": "nudge" | "queue" | "dequeue",
   "participantId": "participant-uuid"
+}
+```
+
+**Request Body** (for `query` — read-only, does not modify state):
+
+```json
+{
+  "action": "query"
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "success": true,
+  "action": "queue",
+  "turn": {
+    "nextSpeakerId": "participant-uuid" | null,
+    "nextSpeakerName": "Alice" | null,
+    "nextSpeakerControlledBy": "llm" | "user" | null,
+    "reason": "queue" | "weighted_selection" | "only_character" | "user_turn" | "cycle_complete",
+    "explanation": "Selected from queue",
+    "cycleComplete": false,
+    "isUsersTurn": false
+  },
+  "state": {
+    "queue": ["participant-uuid-1", "participant-uuid-2"]
+  },
+  "participant": {
+    "id": "participant-uuid",
+    "name": "Alice",
+    "queuePosition": 1
+  }
 }
 ```
 

@@ -329,6 +329,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   // --- Turn management hook ---
   const turnManagement = useTurnManagement(
+    id,
     participantsWithImpersonation.participantsAsBase,
     participantsWithImpersonation.charactersMap,
     turnState,
