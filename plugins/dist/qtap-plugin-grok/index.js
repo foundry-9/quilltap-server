@@ -7548,8 +7548,14 @@ var logger2 = createPluginLogger("qtap-plugin-grok");
 var GrokImageProvider = class {
   constructor() {
     this.provider = "GROK";
-    this.supportedModels = ["grok-2-image"];
+    this.supportedModels = ["grok-imagine-image", "grok-imagine-image-pro", "grok-2-image"];
     this.baseUrl = "https://api.x.ai/v1";
+  }
+  /**
+   * Check if the model is a Grok Imagine model (vs legacy grok-2-image)
+   */
+  isImagineModel(model) {
+    return model.startsWith("grok-imagine-");
   }
   async generateImage(params, apiKey) {
     if (!apiKey) {
@@ -7559,8 +7565,9 @@ var GrokImageProvider = class {
       apiKey,
       baseURL: this.baseUrl
     });
+    const model = params.model ?? "grok-imagine-image";
     const requestParams = {
-      model: params.model ?? "grok-2-image",
+      model,
       prompt: params.prompt,
       n: params.n ?? 1,
       response_format: "b64_json"
@@ -7568,6 +7575,15 @@ var GrokImageProvider = class {
     if (params.aspectRatio) {
       requestParams.aspect_ratio = params.aspectRatio;
     }
+    if (this.isImagineModel(model) && model.endsWith("-pro")) {
+      requestParams.resolution = "2k";
+    }
+    logger2.debug("Generating image with Grok", {
+      context: "GrokImageProvider.generateImage",
+      model,
+      aspectRatio: params.aspectRatio,
+      resolution: requestParams.resolution
+    });
     const response = await client.images.generate(requestParams);
     if (!("data" in response) || !response.data || !Array.isArray(response.data)) {
       logger2.error("Invalid response from Grok Images API", { context: "GrokImageProvider.generateImage" });
@@ -7879,9 +7895,9 @@ function stripAllXMLToolMarkers(response) {
 // index.ts
 var logger3 = createPluginLogger("qtap-plugin-grok");
 var GROK_IMAGE_CONSTRAINTS = {
-  maxPromptBytes: 1024,
-  promptConstraintWarning: "IMPORTANT: Grok has a strict limit of 1024 bytes for image generation prompts. Keep your prompt concise and under this limit.",
-  supportedAspectRatios: ["1:1", "4:3", "3:4", "16:9", "9:16"]
+  maxPromptBytes: 8e3,
+  promptConstraintWarning: "Grok Imagine models support prompts up to approximately 8000 characters. Keep your prompt within this limit.",
+  supportedAspectRatios: ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3", "2:1", "1:2", "19.5:9", "9:19.5", "20:9", "9:20"]
 };
 var metadata = {
   providerName: "GROK",
@@ -8035,8 +8051,24 @@ var plugin = {
         supportsTools: true
       },
       {
+        id: "grok-imagine-image",
+        name: "Grok Imagine",
+        contextWindow: 8e3,
+        maxOutputTokens: 1024,
+        supportsImages: false,
+        supportsTools: false
+      },
+      {
+        id: "grok-imagine-image-pro",
+        name: "Grok Imagine Pro",
+        contextWindow: 8e3,
+        maxOutputTokens: 1024,
+        supportsImages: false,
+        supportsTools: false
+      },
+      {
         id: "grok-2-image",
-        name: "Grok 2 Image",
+        name: "Grok 2 Image (Legacy)",
         contextWindow: 2048,
         maxOutputTokens: 1024,
         supportsImages: false,

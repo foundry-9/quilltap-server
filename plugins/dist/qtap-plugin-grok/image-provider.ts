@@ -1,7 +1,7 @@
 /**
  * Grok Image Generation Provider Implementation for Quilltap Plugin
  *
- * Supports: grok-2-image
+ * Supports: grok-imagine-image, grok-imagine-image-pro, grok-2-image (legacy)
  * API: POST /v1/images/generations (compatible with OpenAI SDK)
  */
 
@@ -14,9 +14,16 @@ const logger = createPluginLogger('qtap-plugin-grok');
 
 export class GrokImageProvider implements ImageGenProviderBase {
   readonly provider = 'GROK';
-  readonly supportedModels = ['grok-2-image'];
+  readonly supportedModels = ['grok-imagine-image', 'grok-imagine-image-pro', 'grok-2-image'];
 
   private baseUrl = 'https://api.x.ai/v1';
+
+  /**
+   * Check if the model is a Grok Imagine model (vs legacy grok-2-image)
+   */
+  private isImagineModel(model: string): boolean {
+    return model.startsWith('grok-imagine-');
+  }
 
   async generateImage(params: ImageGenParams, apiKey: string): Promise<ImageGenResponse> {
     if (!apiKey) {
@@ -28,9 +35,11 @@ export class GrokImageProvider implements ImageGenProviderBase {
       baseURL: this.baseUrl,
     });
 
+    const model = params.model ?? 'grok-imagine-image';
+
     // Build request params - Grok uses aspect_ratio instead of size
-    const requestParams: Images.ImageGenerateParams & { aspect_ratio?: string } = {
-      model: params.model ?? 'grok-2-image',
+    const requestParams: Images.ImageGenerateParams & { aspect_ratio?: string; resolution?: string } = {
+      model,
       prompt: params.prompt,
       n: params.n ?? 1,
       response_format: 'b64_json',
@@ -40,6 +49,19 @@ export class GrokImageProvider implements ImageGenProviderBase {
     if (params.aspectRatio) {
       requestParams.aspect_ratio = params.aspectRatio;
     }
+
+    // Imagine models support a resolution parameter ('1k' or '2k')
+    // Pro defaults to higher quality; we set '2k' for pro if no explicit choice
+    if (this.isImagineModel(model) && model.endsWith('-pro')) {
+      requestParams.resolution = '2k';
+    }
+
+    logger.debug('Generating image with Grok', {
+      context: 'GrokImageProvider.generateImage',
+      model,
+      aspectRatio: params.aspectRatio,
+      resolution: requestParams.resolution,
+    });
 
     const response = await client.images.generate(requestParams);
 

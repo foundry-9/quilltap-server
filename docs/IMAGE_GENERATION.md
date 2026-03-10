@@ -73,7 +73,7 @@ Pick one of these image generation services:
 |----------|----------|--------|---|
 | **OpenAI** | Photo-realistic, detailed | dall-e-3, dall-e-2, gpt-image-1 | Quality, Style, Size |
 | **Google Imagen** | Natural, diverse | imagen-4.0, imagen-3.0 | Aspect Ratio, Negative Prompt |
-| **Grok (xAI)** | Creative, experimental | grok-2-image | (Prompt-based) |
+| **Grok (xAI)** | Creative, experimental | grok-imagine-image, grok-imagine-image-pro | Aspect Ratio |
 
 ---
 
@@ -130,16 +130,19 @@ Negative Prompt: blurry, low quality, distorted
 #### Grok (xAI)
 
 **Supported Models**:
-- `grok-2-image` - xAI's image generation model
+- `grok-imagine-image` - xAI's standard image generation model
+- `grok-imagine-image-pro` - Higher quality output at 2K resolution
+- `grok-2-image` - Legacy model (deprecated)
 
 **Parameters**:
-- Minimal configuration - most control is via the prompt itself
+- **Aspect Ratio**: 1:1, 4:3, 3:4, 16:9, 9:16, 3:2, 2:3, 2:1, 1:2, 19.5:9, 9:19.5, 20:9, 9:20
+- Prompts up to ~8000 characters supported
 
 **Example Profile**:
 ```
 Name: Grok Image Gen
 Provider: Grok
-Model: grok-2-image
+Model: grok-imagine-image
 ```
 
 ---
@@ -1101,7 +1104,7 @@ Currently unlimited (depends on provider rate limits):
 |----------|----------|--------|
 | OpenAI | Photo-realistic | dall-e-3, dall-e-2 |
 | Google Imagen | Natural, diverse | imagen-4.0, imagen-3.0 |
-| Grok | Creative | grok-2-image |
+| Grok | Creative | grok-imagine-image, grok-imagine-image-pro |
 
 ### Common Workflows
 - **Change Profile**: Chat settings → Select different profile
