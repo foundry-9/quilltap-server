@@ -45,16 +45,18 @@ export function buildToolHierarchy(availableTools: AvailableTool[]): ToolGroup[]
   for (const tool of availableTools) {
     if (tool.source === 'built-in') {
       builtInTools.push(tool)
-    } else if (tool.pluginName) {
+    } else if (tool.pluginName || tool.source === 'plugin') {
+      // Use pluginName if available, fall back to tool id for ungrouped plugin tools
+      const effectivePluginName = tool.pluginName || tool.id
       // Get or create plugin group
-      if (!pluginGroups.has(tool.pluginName)) {
-        pluginGroups.set(tool.pluginName, {
-          displayName: tool.pluginName.charAt(0).toUpperCase() + tool.pluginName.slice(1),
+      if (!pluginGroups.has(effectivePluginName)) {
+        pluginGroups.set(effectivePluginName, {
+          displayName: effectivePluginName.charAt(0).toUpperCase() + effectivePluginName.slice(1),
           subgroups: new Map(),
           directTools: [],
         })
       }
-      const group = pluginGroups.get(tool.pluginName)!
+      const group = pluginGroups.get(effectivePluginName)!
 
       if (tool.subgroupId) {
         // Add to subgroup

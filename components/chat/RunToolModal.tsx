@@ -31,6 +31,7 @@ const CATEGORY_INFO: Record<string, { label: string; icon: string }> = {
   files: { label: 'Files', icon: '📁' },
   help: { label: 'Help', icon: '📖' },
   utility: { label: 'Utility', icon: '🔧' },
+  shell: { label: 'Shell', icon: '💻' },
   plugin: { label: 'Plugin', icon: '🔌' },
 }
 
