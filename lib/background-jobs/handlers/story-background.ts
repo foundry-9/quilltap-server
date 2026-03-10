@@ -323,8 +323,17 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   const characterDescriptions = validCharacters.map(char => {
     const resolved = resolvedAppearances?.find(a => a.characterId === char!.id);
 
+    // Derive a gender prefix from standard pronouns so image generators know the character's sex
+    let genderPrefix = '';
+    const pronouns = char!.pronouns;
+    if (pronouns) {
+      const subj = pronouns.subject.toLowerCase();
+      if (subj === 'he') genderPrefix = 'A man. ';
+      else if (subj === 'she') genderPrefix = 'A woman. ';
+    }
+
     if (resolved) {
-      const descParts = [resolved.physicalDescription];
+      const descParts = [genderPrefix + resolved.physicalDescription];
       if (resolved.clothingDescription) {
         descParts.push(`Wearing: ${resolved.clothingDescription}`);
       }
@@ -337,7 +346,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     // Fallback: simple first-description logic
     const primary = char!.physicalDescriptions?.[0];
     const primaryOutfit = char!.clothingRecords?.[0];
-    const descParts = [primary?.mediumPrompt || primary?.shortPrompt || char!.name];
+    const descParts = [genderPrefix + (primary?.mediumPrompt || primary?.shortPrompt || char!.name)];
     if (primaryOutfit?.description) {
       descParts.push(`Wearing: ${primaryOutfit.description}`);
     }

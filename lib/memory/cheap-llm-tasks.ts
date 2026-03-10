@@ -1346,6 +1346,7 @@ Your task is to write a SINGLE COHERENT PARAGRAPH that:
 
 CRITICAL WRITING GUIDELINES:
 - Write in a cinematic, descriptive style suitable for image generation
+- If a person's gender is specified (e.g., [man] or [woman]), ALWAYS refer to them using that gender term (e.g., "a man with...", "a woman with...")
 - Introduce people with phrases like "A young woman with...", "Beside her, a middle-aged man with..."
 - NEVER just concatenate descriptions - write flowing prose that a human would write
 - Use transitional phrases to connect people: "sitting on the lap of", "next to", "holding hands with", etc.
@@ -1383,6 +1384,8 @@ export interface ImagePromptExpansionContext {
   placeholders: Array<{
     placeholder: string
     name: string
+    /** Gender derived from pronouns: 'male', 'female', or undefined */
+    gender?: string
     usageContext?: string
     tiers: {
       short?: string
@@ -1429,7 +1432,12 @@ export async function craftImagePrompt(
   // Format placeholder data for the LLM
   const placeholderDetails = expansionContext.placeholders
     .map(p => {
-      const parts: string[] = [`${p.placeholder} (${p.name}):`];
+      const genderHint = p.gender === 'male' ? ' [man]' : p.gender === 'female' ? ' [woman]' : '';
+      const parts: string[] = [`${p.placeholder} (${p.name}${genderHint}):`];
+
+      if (p.gender) {
+        parts.push(`  Gender: ${p.gender === 'male' ? 'man' : 'woman'} — always refer to this person as a ${p.gender === 'male' ? 'man' : 'woman'} in the prompt`);
+      }
 
       if (p.usageContext) {
         parts.push(`  Usage context: ${p.usageContext}`);
@@ -1973,6 +1981,7 @@ Your task is to create a SINGLE image generation prompt that:
 CRITICAL GUIDELINES:
 - This is for a BACKGROUND image, not a portrait - the scene/environment is primary
 - Characters should be toward the left and right of the frame, not centered
+- If a character description begins with a gender term like "A man" or "A woman", always include that term when describing the character in the prompt
 - Characters should be described briefly, focusing on visual traits (hair color, clothing style, notable features)
 - Focus on atmospheric qualities: lighting, weather, time of day, mood
 - Include environmental details: location type, architectural elements, nature
@@ -2022,11 +2031,9 @@ export async function craftStoryBackgroundPrompt(
     : '\nNo specific characters to include - create an atmospheric scene matching the context.'
 
   // Provider-specific length guidance
-  let lengthGuidance = 'Keep the prompt under 700 characters.'
-  if (context.provider === 'OPENAI') {
-    lengthGuidance = 'Keep the prompt under 1000 characters for optimal DALL-E 3 results.'
-  } else if (context.provider === 'GROK') {
-    lengthGuidance = 'Keep the prompt under 600 characters for Grok image generation.'
+  let lengthGuidance = 'Keep the prompt under 1200 characters.'
+  if (context.provider === 'GROK') {
+    lengthGuidance = 'Keep the prompt under 1000 characters for Grok image generation.'
   }
 
   const llmMessages: LLMMessage[] = [

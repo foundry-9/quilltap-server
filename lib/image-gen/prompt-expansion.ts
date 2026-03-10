@@ -7,6 +7,7 @@
 
 import { getRepositories } from '@/lib/repositories/factory';
 import { PhysicalDescription, ClothingRecord, ImageProvider } from '@/lib/schemas/types';
+import type { Pronouns } from '@/lib/schemas/character.types';
 import type { ResolvedCharacterAppearance } from '@/lib/image-gen/appearance-resolution';
 
 /**
@@ -25,6 +26,8 @@ export interface PlaceholderInfo {
   descriptions?: PhysicalDescription[];
   /** All available clothing records for this entity */
   clothingRecords?: ClothingRecord[];
+  /** Character pronouns (for gender hints in image prompts) */
+  pronouns?: Pronouns | null;
 }
 
 /**
@@ -32,7 +35,7 @@ export interface PlaceholderInfo {
  */
 const PROVIDER_LIMITS: Record<ImageProvider, number> = {
   OPENAI: 4000,           // DALL-E 3
-  GROK: 700,              // Grok (conservative estimate)
+  GROK: 1000,             // Grok
   GOOGLE_IMAGEN: 1920,    // ~480 tokens at 4 chars/token
 };
 
@@ -92,6 +95,7 @@ export async function resolvePlaceholders(
       let entityId: string | undefined;
       let entityType: 'character' | 'user' = 'user';
       let resolvedName = name;
+      let pronouns: Pronouns | null = null;
 
       // If we have a calling participant, use that
       if (callingParticipantId && chat) {
@@ -107,6 +111,7 @@ export async function resolvePlaceholders(
               entityId = character.id;
               entityType = 'character';
               resolvedName = character.name;
+              pronouns = character.pronouns ?? null;
             }
           }
         }
@@ -121,6 +126,7 @@ export async function resolvePlaceholders(
             entityId = character.id;
             entityType = 'character';
             resolvedName = character.name;
+            pronouns = character.pronouns ?? null;
           }
         }
       }
@@ -132,6 +138,7 @@ export async function resolvePlaceholders(
         entityId,
         descriptions,
         clothingRecords: clothing,
+        pronouns,
       });
       continue;
     }
@@ -143,6 +150,7 @@ export async function resolvePlaceholders(
       let entityId: string | undefined;
       let entityType: 'character' | 'user' = 'character';
       let resolvedName = name;
+      let pronouns: Pronouns | null = null;
 
       if (chat) {
         // Find the "other" participant - the one with different controlledBy or the user-controlled one
@@ -182,6 +190,7 @@ export async function resolvePlaceholders(
               entityId = character.id;
               entityType = 'character';
               resolvedName = character.name;
+              pronouns = character.pronouns ?? null;
             }
           }
         }
@@ -194,6 +203,7 @@ export async function resolvePlaceholders(
         entityId,
         descriptions,
         clothingRecords: clothing,
+        pronouns,
       });
       continue;
     }
@@ -213,6 +223,7 @@ export async function resolvePlaceholders(
         entityId: character.id,
         descriptions: character.physicalDescriptions || [],
         clothingRecords: character.clothingRecords || [],
+        pronouns: character.pronouns ?? null,
       });
       continue;
     }
@@ -314,6 +325,7 @@ export function buildExpansionContext(
   placeholders: Array<{
     placeholder: string;
     name: string;
+    gender?: string;
     usageContext?: string;
     tiers: {
       short?: string;
@@ -331,6 +343,14 @@ export function buildExpansionContext(
   provider: string;
 } {
   const placeholderData = resolvedPlaceholders.map(placeholder => {
+    // Derive gender hint from standard pronouns
+    let gender: string | undefined;
+    if (placeholder.pronouns) {
+      const subj = placeholder.pronouns.subject.toLowerCase();
+      if (subj === 'he') gender = 'male';
+      else if (subj === 'she') gender = 'female';
+    }
+
     // Check if we have a resolved appearance for this character
     const resolved = resolvedAppearances?.find(
       a => a.characterId === placeholder.entityId
@@ -341,6 +361,7 @@ export function buildExpansionContext(
       return {
         placeholder: placeholder.placeholder,
         name: placeholder.name,
+        gender,
         usageContext: resolved.physicalDescriptionName,
         tiers: {
           // Put the resolved description in the 'complete' tier so the
@@ -368,6 +389,7 @@ export function buildExpansionContext(
     return {
       placeholder: placeholder.placeholder,
       name: placeholder.name,
+      gender,
       usageContext: tiers?.usageContext,
       tiers: {
         short: tiers?.short,
