@@ -44,51 +44,6 @@ export const whisperToolDefinition = {
   },
 };
 
-export const anthropicWhisperToolDefinition = {
-  name: 'whisper',
-  description:
-    'Send a private whisper to a specific character. Only you and the target can see this message. Other characters in the chat will not see it. Use this for secrets, private asides, or confidential communication.',
-  input_schema: {
-    type: 'object' as const,
-    properties: {
-      target: {
-        type: 'string',
-        description: 'The name or alias of the character you want to whisper to.',
-      },
-      message: {
-        type: 'string',
-        description: 'The private message content to send.',
-      },
-    },
-    required: ['target', 'message'],
-  },
-};
-
-/**
- * Helper to get tool definition in OpenAI format
- */
-export function getOpenAIWhisperTool() {
-  return whisperToolDefinition;
-}
-
-/**
- * Helper to get tool definition in Anthropic format
- */
-export function getAnthropicWhisperTool() {
-  return anthropicWhisperToolDefinition;
-}
-
-/**
- * Helper to get Google/Gemini format tool definition
- */
-export function getGoogleWhisperTool() {
-  return {
-    name: anthropicWhisperToolDefinition.name,
-    description: anthropicWhisperToolDefinition.description,
-    parameters: anthropicWhisperToolDefinition.input_schema,
-  };
-}
-
 /**
  * Helper to validate tool input parameters
  */

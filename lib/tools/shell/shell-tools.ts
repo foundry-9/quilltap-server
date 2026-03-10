@@ -172,51 +172,6 @@ export const shellCpHostToolDefinition = {
 };
 
 // ============================================================================
-// Anthropic format definitions
-// ============================================================================
-
-function toAnthropicSchema(params: Record<string, unknown>) {
-  const { type: _type, ...rest } = params;
-  return { type: 'object' as const, ...rest };
-}
-
-export const anthropicShellChdirToolDefinition = {
-  name: shellChdirToolDefinition.function.name,
-  description: shellChdirToolDefinition.function.description,
-  input_schema: toAnthropicSchema(shellChdirToolDefinition.function.parameters),
-};
-
-export const anthropicShellExecSyncToolDefinition = {
-  name: shellExecSyncToolDefinition.function.name,
-  description: shellExecSyncToolDefinition.function.description,
-  input_schema: toAnthropicSchema(shellExecSyncToolDefinition.function.parameters),
-};
-
-export const anthropicShellExecAsyncToolDefinition = {
-  name: shellExecAsyncToolDefinition.function.name,
-  description: shellExecAsyncToolDefinition.function.description,
-  input_schema: toAnthropicSchema(shellExecAsyncToolDefinition.function.parameters),
-};
-
-export const anthropicShellAsyncResultToolDefinition = {
-  name: shellAsyncResultToolDefinition.function.name,
-  description: shellAsyncResultToolDefinition.function.description,
-  input_schema: toAnthropicSchema(shellAsyncResultToolDefinition.function.parameters),
-};
-
-export const anthropicShellSudoSyncToolDefinition = {
-  name: shellSudoSyncToolDefinition.function.name,
-  description: shellSudoSyncToolDefinition.function.description,
-  input_schema: toAnthropicSchema(shellSudoSyncToolDefinition.function.parameters),
-};
-
-export const anthropicShellCpHostToolDefinition = {
-  name: shellCpHostToolDefinition.function.name,
-  description: shellCpHostToolDefinition.function.description,
-  input_schema: toAnthropicSchema(shellCpHostToolDefinition.function.parameters),
-};
-
-// ============================================================================
 // Helpers
 // ============================================================================
 

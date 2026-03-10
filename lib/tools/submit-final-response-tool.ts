@@ -73,67 +73,6 @@ export const submitFinalResponseToolDefinition = {
 }
 
 /**
- * Tool definition compatible with Anthropic's tool_use format
- */
-export const anthropicSubmitFinalResponseToolDefinition = {
-  name: 'submit_final_response',
-  description:
-    'Signal completion of agent mode processing and submit the final response to the user. ' +
-    'Call this tool when you have gathered all necessary information, verified your results, ' +
-    'and are ready to deliver a comprehensive answer. The response parameter should contain ' +
-    'your complete, polished answer. Do not call other tools after calling this one.',
-  input_schema: {
-    type: 'object' as const,
-    properties: {
-      response: {
-        type: 'string',
-        description:
-          'The final response to deliver to the user. This should be your complete, well-formatted answer ' +
-          'incorporating all information gathered from tool use.',
-      },
-      summary: {
-        type: 'string',
-        description:
-          'Optional brief summary of what you accomplished (e.g., "Searched 3 files and found the bug in config.ts").',
-      },
-      confidence: {
-        type: 'number',
-        minimum: 0,
-        maximum: 1,
-        description:
-          'Optional confidence level (0-1) in your response. Use 0.9+ when highly confident, 0.5-0.9 for moderate confidence, below 0.5 when uncertain.',
-      },
-    },
-    required: ['response'],
-  },
-}
-
-/**
- * Helper to get tool definition in OpenAI format
- */
-export function getOpenAISubmitFinalResponseTool() {
-  return submitFinalResponseToolDefinition
-}
-
-/**
- * Helper to get tool definition in Anthropic format
- */
-export function getAnthropicSubmitFinalResponseTool() {
-  return anthropicSubmitFinalResponseToolDefinition
-}
-
-/**
- * Helper to get Google/Gemini format tool definition
- */
-export function getGoogleSubmitFinalResponseTool() {
-  return {
-    name: anthropicSubmitFinalResponseToolDefinition.name,
-    description: anthropicSubmitFinalResponseToolDefinition.description,
-    parameters: anthropicSubmitFinalResponseToolDefinition.input_schema,
-  }
-}
-
-/**
  * Helper to validate tool input parameters
  */
 export function validateSubmitFinalResponseInput(

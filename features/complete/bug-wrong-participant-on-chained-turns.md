@@ -1,12 +1,20 @@
 # Bug: Wrong participantId Saved on Chained Multi-Character Turns
 
-## Status: Open
+## Status: Fixed (2026-03-09)
 
 ## Summary
 
-In multi-character chats, messages are sometimes saved with the wrong `participantId`. The content is clearly from one character (e.g., Riya), but the database stores it under another character's participant ID (e.g., Lorian). The UI then correctly displays the wrong avatar/name because the stored data is wrong.
+In multi-character chats, messages were sometimes saved with the wrong `participantId`. The content was clearly from one character (e.g., Riya), but the database stored it under another character's participant ID (e.g., Lorian). The UI then correctly displayed the wrong avatar/name because the stored data was wrong.
 
-This may be a regression or incomplete fix from commit `69a9bcf6` ("fix: multi-char chat streaming shows wrong character avatar during chained turns").
+This was caused by the participant ID going stale between iterations of the chained turn loop, and was fixed by commit `d0390558` ("feat: server-side turn management for multi-character chats").
+
+### Resolution
+
+The fix moved turn orchestration server-side with explicit participant ID passing at each stage:
+
+1. **Chaining loop** (`orchestrator.service.ts`) — `shouldChainNext()` returns the next speaker's `participantId`, which is explicitly passed to `processMessage()` as `respondingParticipantId`
+2. **Strict validation** (`participant-resolver.service.ts`) — During continue mode (chained turns), a mismatched participant throws an error rather than silently falling back to a default character
+3. **Correct ID at save time** (`orchestrator.service.ts`) — The assistant message is created using the resolved and validated participant ID
 
 ## Evidence
 

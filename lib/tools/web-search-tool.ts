@@ -67,59 +67,6 @@ export const webSearchToolDefinition = {
   },
 }
 
-/**
- * Tool definition compatible with Anthropic's tool_use format
- */
-export const anthropicWebSearchToolDefinition = {
-  name: 'search_web',
-  description:
-    'Search the web for current information, recent events, real-time data, or facts beyond your training data. Use this when you need up-to-date information about news, current events, recent developments, or when the user asks about something that requires real-time or recent data. This tool provides access to current web search results.',
-  input_schema: {
-    type: 'object' as const,
-    properties: {
-      query: {
-        type: 'string',
-        description:
-          'The search query to execute. Be specific and use keywords that will help find relevant information. Examples: "latest news about AI", "current weather in Tokyo", "recent developments in quantum computing"',
-        minLength: 1,
-        maxLength: 500,
-      },
-      maxResults: {
-        type: 'integer',
-        minimum: 1,
-        maximum: 10,
-        description: 'Maximum number of search results to retrieve. Default is 5.',
-        default: 5,
-      },
-    },
-    required: ['query'],
-  },
-}
-
-/**
- * Helper to get tool definition in OpenAI format
- */
-export function getOpenAIWebSearchTool() {
-  return webSearchToolDefinition
-}
-
-/**
- * Helper to get tool definition in Anthropic format
- */
-export function getAnthropicWebSearchTool() {
-  return anthropicWebSearchToolDefinition
-}
-
-/**
- * Helper to get Google/Gemini format tool definition
- */
-export function getGoogleWebSearchTool() {
-  return {
-    name: anthropicWebSearchToolDefinition.name,
-    description: anthropicWebSearchToolDefinition.description,
-    parameters: anthropicWebSearchToolDefinition.input_schema,
-  }
-}
 
 /**
  * Helper to validate tool input parameters

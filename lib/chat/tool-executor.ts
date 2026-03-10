@@ -125,80 +125,6 @@ export interface ToolExecutionContext {
 }
 
 /**
- * Formatted tool result for inclusion in conversation context.
- *
- * NOTE: This interface and formatToolResult() are currently unused.
- * The chat system uses context-builder.service.ts and orchestrator.service.ts
- * to format tool results as user messages with "[Tool Result: name]" prefix.
- * Kept for potential future use if native tool result formats are needed.
- */
-export interface FormattedToolResult {
-  role: 'user' | 'tool';
-  content: string;
-  /** Tool call ID for native tool result format (Google, OpenAI) */
-  toolCallId?: string;
-}
-
-/**
- * Format tool result for inclusion in conversation context.
- * Different LLM providers may have different formats.
- *
- * NOTE: This function is currently unused in production code.
- * Tool result formatting is handled by context-builder.service.ts which
- * converts TOOL messages to user messages with "[Tool Result: name]" prefix.
- * This function is preserved for potential future native format support.
- *
- * @param toolResult - The executed tool result
- * @param provider - The LLM provider name (GOOGLE, ANTHROPIC, OPENAI, etc.)
- * @returns Formatted message for inclusion in conversation
- */
-export function formatToolResult(
-  toolResult: ToolResult,
-  provider: string
-): FormattedToolResult {
-  const resultText = toolResult.success
-    ? JSON.stringify(toolResult.result, null, 2)
-    : `Error: ${toolResult.error || 'Unknown error'}${toolResult.message ? ` - ${toolResult.message}` : ''}`;
-
-  // Different providers have different native formats
-  switch (provider) {
-    case 'GOOGLE':
-      // Google uses functionResponse format - pass as tool role with toolCallId
-      // The Google provider will convert this to proper functionResponse parts
-      return {
-        role: 'tool',
-        content: resultText,
-        toolCallId: toolResult.toolName,
-      };
-
-    case 'ANTHROPIC':
-      // Anthropic's native format uses tool_result content blocks
-      // For now, use text-based format (works but not optimal)
-      return {
-        role: 'user',
-        content: `Tool Result: ${toolResult.toolName}\n\n${resultText}`,
-      };
-
-    case 'OPENAI':
-    case 'GROK':
-    case 'OPENROUTER':
-      // OpenAI-compatible providers' native format uses tool role with tool_call_id
-      // For now, use text-based format (works but not optimal)
-      return {
-        role: 'user',
-        content: `Tool Result: ${toolResult.toolName}\n\n${resultText}`,
-      };
-
-    default:
-      // Default to text-based format for unknown providers
-      return {
-        role: 'user',
-        content: `Tool Result: ${toolResult.toolName}\n\n${resultText}`,
-      };
-  }
-}
-
-/**
  * Execute a tool call (legacy signature for backwards compatibility)
  */
 export async function executeToolCall(
@@ -747,98 +673,20 @@ export async function executeToolCallWithContext(
 
 /**
  * Detect tool calls in LLM response
- * Uses plugin's parseToolCalls method when available, with fallback to legacy detection
+ * Delegates to the provider plugin's parseToolCalls method
  */
 export function detectToolCalls(
   response: unknown,
   provider: string
 ): ToolCallRequest[] {
-
   try {
-    // Try to use plugin's parseToolCalls method
     const plugin = providerRegistry.getProvider(provider)
     if (plugin?.parseToolCalls) {
-
-      const toolCalls = plugin.parseToolCalls(response)
-
-      return toolCalls
+      return plugin.parseToolCalls(response)
     }
 
-    // Fallback to legacy detection for backwards compatibility
-
-    const toolCalls: ToolCallRequest[] = [];
-
-    // OpenAI format - supports both direct tool_calls and nested in choices[0].message
-    if (provider === 'OPENAI') {
-      let toolCallsArray = (response as any)?.tool_calls;
-
-      // Check nested structure from streaming responses
-      if (!toolCallsArray && (response as any)?.choices?.[0]?.message?.tool_calls) {
-        toolCallsArray = (response as any).choices[0].message.tool_calls;
-      }
-
-      if (toolCallsArray && toolCallsArray.length > 0) {
-        for (const toolCall of toolCallsArray) {
-          if (toolCall.type === 'function' && toolCall.function) {
-            toolCalls.push({
-              name: toolCall.function.name,
-              arguments: JSON.parse(toolCall.function.arguments || '{}'),
-              callId: toolCall.id || undefined,
-            });
-          }
-        }
-      }
-    }
-
-    // Anthropic format
-    if (provider === 'ANTHROPIC' && (response as any)?.content) {
-      for (const block of (response as any).content) {
-        if (block.type === 'tool_use') {
-          toolCalls.push({
-            name: block.name,
-            arguments: block.input || {},
-            callId: block.id || undefined,
-          });
-        }
-      }
-    }
-
-    // Grok format (similar to OpenAI)
-    if (provider === 'GROK') {
-      let toolCallsArray = (response as any)?.tool_calls;
-
-      // Check nested structure from streaming responses
-      if (!toolCallsArray && (response as any)?.choices?.[0]?.message?.tool_calls) {
-        toolCallsArray = (response as any).choices[0].message.tool_calls;
-      }
-
-      if (toolCallsArray && toolCallsArray.length > 0) {
-        for (const toolCall of toolCallsArray) {
-          if (toolCall.type === 'function' && toolCall.function) {
-            toolCalls.push({
-              name: toolCall.function.name,
-              arguments: JSON.parse(toolCall.function.arguments || '{}'),
-              callId: toolCall.id || undefined,
-            });
-          }
-        }
-      }
-    }
-
-    // Google/Gemini format (no call IDs — uses function name for correlation)
-    if (provider === 'GOOGLE' && (response as any)?.candidates?.[0]?.content?.parts) {
-      const parts = (response as any).candidates[0].content.parts;
-      for (const part of parts) {
-        if (part.functionCall) {
-          toolCalls.push({
-            name: part.functionCall.name,
-            arguments: part.functionCall.args || {},
-          });
-        }
-      }
-    }
-
-    return toolCalls;
+    logger.warn('No provider plugin found for tool call parsing', { context: 'tool-executor', provider })
+    return []
   } catch (error) {
     logger.error('Error detecting tool calls', { context: 'tool-executor', provider }, error instanceof Error ? error : undefined);
     return [];

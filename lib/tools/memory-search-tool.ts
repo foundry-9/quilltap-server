@@ -81,67 +81,6 @@ export const memorySearchToolDefinition = {
   },
 }
 
-/**
- * Tool definition compatible with Anthropic's tool_use format
- */
-export const anthropicMemorySearchToolDefinition = {
-  name: 'search_memories',
-  description:
-    'Search your memories for specific information about the user, past conversations, or facts you should remember. Use this when you need to recall details about past interactions, user preferences, important events, or anything you have previously learned about the user. This helps you provide more personalized and contextually aware responses.',
-  input_schema: {
-    type: 'object' as const,
-    properties: {
-      query: {
-        type: 'string',
-        description:
-          'What to search for in your memories. Be specific about the topic, person, event, or detail you want to recall. Examples: "user\'s favorite food", "their birthday", "what happened last time we talked about work", "their pet\'s name"',
-        minLength: 1,
-        maxLength: 500,
-      },
-      limit: {
-        type: 'integer',
-        minimum: 1,
-        maximum: 20,
-        description: 'Maximum number of memories to retrieve. Default is 5.',
-        default: 5,
-      },
-      minImportance: {
-        type: 'number',
-        minimum: 0,
-        maximum: 1,
-        description:
-          'Minimum importance score (0-1) for returned memories. Higher values return only the most important memories. Default is 0.',
-        default: 0,
-      },
-    },
-    required: ['query'],
-  },
-}
-
-/**
- * Helper to get tool definition in OpenAI format
- */
-export function getOpenAIMemorySearchTool() {
-  return memorySearchToolDefinition
-}
-
-/**
- * Helper to get tool definition in Anthropic format
- */
-export function getAnthropicMemorySearchTool() {
-  return anthropicMemorySearchToolDefinition
-}
-
-/**
- * Helper to get Google/Gemini format tool definition
- */
-export function getGoogleMemorySearchTool() {
-  return {
-    name: anthropicMemorySearchToolDefinition.name,
-    description: anthropicMemorySearchToolDefinition.description,
-    parameters: anthropicMemorySearchToolDefinition.input_schema,
-  }
-}
 
 /**
  * Helper to validate tool input parameters
