@@ -214,14 +214,14 @@ export default function SetupPage() {
             <pre className="qt-code-block p-3 text-sm break-all whitespace-pre-wrap select-all">{generatedPepper}</pre>
             <button
               onClick={handleCopy}
-              className="qt-btn absolute top-2 right-2 text-xs px-2 py-1"
+              className="qt-button qt-button-ghost absolute top-2 right-2 text-xs px-2 py-1"
             >
               {copied ? 'Copied!' : 'Copy'}
             </button>
           </div>
           <button
             onClick={() => navigateAfterSetup()}
-            className="qt-btn w-full py-2"
+            className="qt-button qt-button-primary w-full py-2"
           >
             Continue to Quilltap
           </button>
@@ -273,7 +273,7 @@ export default function SetupPage() {
             <button
               onClick={handleSetup}
               disabled={loading}
-              className="qt-btn w-full py-2"
+              className="qt-button qt-button-primary w-full py-2"
             >
               {loading ? 'Setting up...' : passphrase ? 'Set Up with Passphrase' : 'Set Up without Passphrase'}
             </button>
@@ -302,7 +302,7 @@ export default function SetupPage() {
             <button
               onClick={handleUnlock}
               disabled={loading || attempts >= 3}
-              className="qt-btn w-full py-2"
+              className="qt-button qt-button-primary w-full py-2"
             >
               {loading ? 'Unlocking...' : 'Unlock'}
             </button>
@@ -350,13 +350,13 @@ export default function SetupPage() {
               <button
                 onClick={handleStore}
                 disabled={loading}
-                className="qt-btn flex-1 py-2"
+                className="qt-button qt-button-primary flex-1 py-2"
               >
                 {loading ? 'Storing...' : 'Store Key File'}
               </button>
               <button
                 onClick={() => navigateAfterSetup()}
-                className="qt-btn flex-1 py-2 opacity-60"
+                className="qt-button qt-button-secondary flex-1 py-2 opacity-60"
               >
                 Skip for Now
               </button>

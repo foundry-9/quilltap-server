@@ -175,7 +175,7 @@ export default function RunToolModal({
       <button
         type="button"
         onClick={handleBack}
-        className="qt-btn qt-btn-secondary"
+        className="qt-button qt-button-secondary"
         disabled={executing}
       >
         Back
@@ -184,7 +184,7 @@ export default function RunToolModal({
         <button
           type="button"
           onClick={onClose}
-          className="qt-btn qt-btn-secondary"
+          className="qt-button qt-button-secondary"
           disabled={executing}
         >
           Cancel
@@ -192,7 +192,7 @@ export default function RunToolModal({
         <button
           type="button"
           onClick={handleExecute}
-          className="qt-btn qt-btn-primary"
+          className="qt-button qt-button-primary"
           disabled={executing || (hasSchema && !formValid)}
         >
           {executing ? (
@@ -212,7 +212,7 @@ export default function RunToolModal({
       <button
         type="button"
         onClick={onClose}
-        className="qt-btn qt-btn-secondary"
+        className="qt-button qt-button-secondary"
       >
         Cancel
       </button>

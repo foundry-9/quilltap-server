@@ -116,7 +116,7 @@ export function PepperVaultGate() {
       </span>
       <button
         onClick={() => setShowBanner(false)}
-        className="qt-btn text-xs px-2 py-1 ml-4"
+        className="qt-button qt-button-ghost text-xs px-2 py-1 ml-4"
         aria-label="Dismiss"
       >
         Dismiss

@@ -112,14 +112,14 @@ export function WhisperDialog({
         <div className="qt-dialog-footer">
           <button
             onClick={onClose}
-            className="qt-btn qt-btn-ghost"
+            className="qt-button qt-button-secondary"
             disabled={sending}
           >
             Cancel
           </button>
           <button
             onClick={handleSend}
-            className="qt-btn qt-btn-primary"
+            className="qt-button qt-button-primary"
             disabled={!message.trim() || sending}
           >
             {sending ? 'Sending...' : 'Whisper'}

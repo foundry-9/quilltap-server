@@ -806,13 +806,22 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       <div className="qt-chat-main">
         {/* Whisper toggle - shown in multi-character chats */}
         {participantsWithImpersonation.isMultiChar && (
-          <div className="flex justify-end px-4 py-1">
+          <div className="flex items-center justify-end gap-2 px-4 py-1">
+            <span className="qt-text-secondary text-xs">All Whispers</span>
             <button
               onClick={() => setShowAllWhispers(!showAllWhispers)}
-              className="qt-btn qt-btn-ghost qt-btn-sm"
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                showAllWhispers ? 'bg-primary' : 'qt-bg-muted'
+              }`}
+              role="switch"
+              aria-checked={showAllWhispers}
               title={showAllWhispers ? 'Hide private whispers' : 'Show all whispers'}
             >
-              {showAllWhispers ? 'Whispers visible' : 'Whispers hidden'}
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full qt-bg-toggle-knob transition-transform ${
+                  showAllWhispers ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
             </button>
           </div>
         )}
