@@ -301,9 +301,15 @@ async function hashDirectoryFiles(
 /**
  * The official Quilltap registry public key.
  * This key is used to verify the official theme registry.
- * TODO: Replace with actual production key when registry launches.
+ *
+ * Configurable via environment variable so deployments can set/rotate
+ * the trusted key without code changes.
  */
-export const OFFICIAL_REGISTRY_PUBLIC_KEY = '';
+export const OFFICIAL_REGISTRY_PUBLIC_KEY = (
+  process.env.QTAP_OFFICIAL_REGISTRY_PUBLIC_KEY
+  ?? process.env.QUILLTAP_OFFICIAL_REGISTRY_PUBLIC_KEY
+  ?? ''
+).trim();
 
 /**
  * Official registry URL

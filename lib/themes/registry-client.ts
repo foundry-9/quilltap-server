@@ -153,6 +153,8 @@ export async function loadSources(): Promise<RegistrySources> {
 
     // Persist the bootstrapped sources
     await saveSources(sources);
+  } else {
+    registryLogger.debug('Skipping official registry bootstrap: no official public key configured');
   }
 
   return sources;
