@@ -332,7 +332,7 @@ export function DeleteDataCard() {
                       value={confirmText}
                       onChange={(e) => setConfirmText(e.target.value.toUpperCase())}
                       placeholder="Type DELETE to confirm"
-                      className="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                      className="qt-input"
                       autoFocus
                     />
                     {error && (
