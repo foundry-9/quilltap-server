@@ -35,7 +35,7 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
   }
 
   try {
-    const { searchParams } = new URL(req.url);
+    const { searchParams } = req.nextUrl;
     const sortByCharacter = searchParams.get('sortByCharacter');
 
 
@@ -113,7 +113,7 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
  */
 async function handleListModels(req: NextRequest, context: AuthenticatedContext) {
   try {
-    const { searchParams } = new URL(req.url);
+    const { searchParams } = req.nextUrl;
     const provider = searchParams.get('provider');
     const apiKeyId = searchParams.get('apiKeyId');
 

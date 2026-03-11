@@ -23,18 +23,18 @@ import type { LLMLogType } from '@/lib/schemas/types';
 
 export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
   try {
-    const url = new URL(req.url);
-    const messageId = url.searchParams.get('messageId');
-    const chatId = url.searchParams.get('chatId');
-    const characterId = url.searchParams.get('characterId');
-    const type = url.searchParams.get('type') as LLMLogType | null;
-    const standalone = url.searchParams.get('standalone') === 'true';
-    const includeMessagesParam = url.searchParams.get('includeMessages') === 'true';
+    const { searchParams } = req.nextUrl;
+    const messageId = searchParams.get('messageId');
+    const chatId = searchParams.get('chatId');
+    const characterId = searchParams.get('characterId');
+    const type = searchParams.get('type') as LLMLogType | null;
+    const standalone = searchParams.get('standalone') === 'true';
+    const includeMessagesParam = searchParams.get('includeMessages') === 'true';
     const limit = Math.min(
-      parseInt(url.searchParams.get('limit') || (includeMessagesParam ? '500' : '50'), 10),
+      parseInt(searchParams.get('limit') || (includeMessagesParam ? '500' : '50'), 10),
       includeMessagesParam ? 500 : 100
     );
-    const offset = parseInt(url.searchParams.get('offset') || '0', 10);
+    const offset = parseInt(searchParams.get('offset') || '0', 10);
     let logs;
 
     // Filter by specific entity

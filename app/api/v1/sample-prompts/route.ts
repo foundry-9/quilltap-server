@@ -131,7 +131,7 @@ const SAMPLE_PROMPTS = {
 
 export const GET = createAuthenticatedHandler(async (req, context) => {
   try {
-    const { searchParams } = new URL(req.url);
+    const { searchParams } = req.nextUrl;
     const category = searchParams.get('category');
     const all = searchParams.get('all');
 

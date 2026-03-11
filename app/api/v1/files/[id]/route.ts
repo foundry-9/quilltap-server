@@ -175,7 +175,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
     }
 
     // Check for force and dissociate parameters
-    const { searchParams } = new URL(req.url);
+    const { searchParams } = req.nextUrl;
     const force = searchParams.get('force') === 'true';
     const dissociate = searchParams.get('dissociate') === 'true';
 

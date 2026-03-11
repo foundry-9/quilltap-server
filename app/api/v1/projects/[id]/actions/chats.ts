@@ -29,7 +29,7 @@ export async function handleListChats(
     }
 
     // Parse pagination params
-    const { searchParams } = new URL(req.url);
+    const { searchParams } = req.nextUrl;
     const limit = parseInt(searchParams.get('limit') || '20', 10);
     const offset = parseInt(searchParams.get('offset') || '0', 10);
 
