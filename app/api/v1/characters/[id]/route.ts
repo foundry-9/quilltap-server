@@ -24,7 +24,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { createAuthenticatedParamsHandler, checkOwnership, AuthenticatedContext, enrichWithDefaultImage, getFilePath } from '@/lib/api/middleware';
-import { getActionParam } from '@/lib/api/middleware/actions';
+import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { executeCascadeDelete, getCascadeDeletePreview } from '@/lib/cascade-delete';
 import { exportSTCharacter, createSTCharacterPNG } from '@/lib/sillytavern/character';
 import { readImageBuffer } from '@/lib/images-v2';
@@ -82,6 +82,12 @@ const setDefaultPartnerSchema = z.object({
   partnerId: z.uuid().nullable(),
 });
 
+const CHARACTER_GET_ACTIONS = ['export', 'chats', 'cascade-preview', 'default-partner', 'get-tags'] as const;
+type CharacterGetAction = typeof CHARACTER_GET_ACTIONS[number];
+
+const CHARACTER_POST_ACTIONS = ['favorite', 'avatar', 'add-tag', 'remove-tag', 'toggle-controlled-by', 'set-default-partner'] as const;
+type CharacterPostAction = typeof CHARACTER_POST_ACTIONS[number];
+
 // ============================================================================
 // GET Handler
 // ============================================================================
@@ -95,15 +101,37 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
     return notFound('Character');
   }
 
-  switch (action) {
-    // Export character
-    case 'export': {
+  const handleDefaultGet = async (): Promise<NextResponse> => {
+    try {
+      const defaultImage = await enrichWithDefaultImage(character.defaultImageId, repos);
+      const chats = await repos.chats.findByCharacterId(id);
+
+      const enrichedCharacter = {
+        ...character,
+        defaultImage,
+        _count: {
+          chats: chats.length,
+        },
+      };
+
+      return NextResponse.json({ character: enrichedCharacter });
+    } catch (error) {
+      logger.error('[Characters v1] Error fetching character', { characterId: id }, error instanceof Error ? error : undefined);
+      return serverError('Failed to fetch character');
+    }
+  };
+
+  if (!action || !isValidAction(action, CHARACTER_GET_ACTIONS)) {
+    return handleDefaultGet();
+  }
+
+  const actionHandlers: Record<CharacterGetAction, () => Promise<NextResponse>> = {
+    export: async () => {
       try {
         const { searchParams } = req.nextUrl;
         const format = searchParams.get('format') || 'json';
 
         if (format === 'png') {
-          // Get avatar buffer if character has an avatar
           let avatarBuffer: Buffer | undefined;
           if (character.defaultImageId) {
             try {
@@ -113,11 +141,9 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
                 characterId: id,
                 imageId: character.defaultImageId,
               });
-              // Will use generated placeholder
             }
           }
 
-          // Create PNG with embedded character data (uses placeholder if no avatar)
           const pngBuffer = await createSTCharacterPNG(character, avatarBuffer);
 
           return new NextResponse(new Uint8Array(pngBuffer), {
@@ -126,74 +152,57 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
               'Content-Disposition': `attachment; filename="${character.name}.png"`,
             },
           });
-        } else {
-          const stCharacter = exportSTCharacter(character);
-          return new NextResponse(JSON.stringify(stCharacter, null, 2), {
-            headers: {
-              'Content-Type': 'application/json',
-              'Content-Disposition': `attachment; filename="${character.name}.json"`,
-            },
-          });
         }
+
+        const stCharacter = exportSTCharacter(character);
+        return new NextResponse(JSON.stringify(stCharacter, null, 2), {
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Disposition': `attachment; filename="${character.name}.json"`,
+          },
+        });
       } catch (error) {
         logger.error('[Characters v1] Error exporting character', { characterId: id }, error instanceof Error ? error : undefined);
         return serverError('Failed to export character');
       }
-    }
-
-    // List recent chats with this character
-    case 'chats': {
+    },
+    chats: async () => {
       try {
         const { searchParams } = req.nextUrl;
         const search = searchParams.get('search')?.toLowerCase() || '';
         const limit = parseInt(searchParams.get('limit') || '10', 10);
         const offset = parseInt(searchParams.get('offset') || '0', 10);
 
-        // Get chats with this character
         const allChats = await repos.chats.findByCharacterId(id);
-
-        // Filter by user
         const userChats = allChats.filter((chat) => chat.userId === user.id);
 
-        // Pre-fetch messages for search, enrichment, and sorting by last message
         const chatsWithMessages = await Promise.all(
           userChats.map(async (chat) => {
             const allMessages = await repos.chats.getMessages(chat.id);
-            // Calculate the timestamp of the last message
             const messageTimestamps = allMessages
               .filter((msg) => msg.type === 'message')
               .map((msg) => new Date(msg.createdAt).getTime());
             const lastMessageAt = messageTimestamps.length > 0
               ? new Date(Math.max(...messageTimestamps)).toISOString()
-              : chat.updatedAt; // Fallback to chat updatedAt if no messages
+              : chat.updatedAt;
             return { chat, messages: allMessages, lastMessageAt };
           })
         );
 
-        // Sort by last message timestamp descending
-        chatsWithMessages.sort((a, b) =>
-          new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
-        );
+        chatsWithMessages.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
 
-        // Apply search filter if provided
         let filteredChats = chatsWithMessages;
         if (search) {
           filteredChats = chatsWithMessages.filter(({ chat, messages }) => {
-            // Search in title
             if (chat.title?.toLowerCase().includes(search)) {
               return true;
             }
-            // Search in message content
-            return messages.some(msg =>
-              msg.type === 'message' && msg.content.toLowerCase().includes(search)
-            );
+            return messages.some(msg => msg.type === 'message' && msg.content.toLowerCase().includes(search));
           });
         }
 
-        // Apply pagination
         const paginatedChats = filteredChats.slice(offset, offset + limit);
 
-        // Collect unique project IDs from chats
         const projectIds = new Set<string>();
         for (const { chat } of paginatedChats) {
           if (chat.projectId) {
@@ -201,7 +210,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
           }
         }
 
-        // Fetch all projects at once
         const projectMap = new Map<string, { id: string; name: string }>();
         for (const projectId of projectIds) {
           const project = await repos.projects.findById(projectId);
@@ -209,10 +217,9 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
             projectMap.set(projectId, { id: project.id, name: project.name });
           }
         }
-        // Enrich chats with related data
+
         const enrichedChats = await Promise.all(
           paginatedChats.map(async ({ chat, messages, lastMessageAt }) => {
-            // Get tags
             const tagData = await Promise.all(
               (chat.tags || []).map(async (tagId) => {
                 const tag = await repos.tags.findById(tagId);
@@ -220,10 +227,8 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
               })
             );
 
-            // Get all messages and count only visible bubbles (USER/ASSISTANT) for badge
             const messageCount = messages.filter((msg) => msg.type === 'message' && msg.role !== 'SYSTEM' && msg.role !== 'TOOL').length;
 
-            // Get last 3 messages for preview
             const recentMessages = messages
               .filter((msg) => msg.type === 'message')
               .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -235,10 +240,8 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
                 createdAt: msg.createdAt,
               }));
 
-            // Get project info if chat belongs to a project
             const project = chat.projectId ? projectMap.get(chat.projectId) || null : null;
 
-            // Get story background if available
             let storyBackground = null;
             if (chat.storyBackgroundImageId) {
               const bgFile = await repos.files.findById(chat.storyBackgroundImageId);
@@ -277,10 +280,8 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
         logger.error('[Characters v1] Error fetching character chats', { characterId: id }, error instanceof Error ? error : undefined);
         return serverError('Failed to fetch chats');
       }
-    }
-
-    // Get cascade delete preview
-    case 'cascade-preview': {
+    },
+    'cascade-preview': async () => {
       try {
         const preview = await getCascadeDeletePreview(id);
 
@@ -307,10 +308,8 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
         logger.error('[Characters v1] Error generating cascade delete preview', { characterId: id }, error instanceof Error ? error : undefined);
         return serverError('Failed to generate preview');
       }
-    }
-
-    // Get default partner
-    case 'default-partner': {
+    },
+    'default-partner': async () => {
       try {
         return NextResponse.json({
           partnerId: character.defaultPartnerId || null,
@@ -319,12 +318,9 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
         logger.error('[Characters v1] Error fetching default partner', { characterId: id }, error instanceof Error ? error : undefined);
         return serverError('Failed to fetch default partner');
       }
-    }
-
-    // Get character tags
-    case 'get-tags': {
+    },
+    'get-tags': async () => {
       try {
-        // Get tag details for each tag ID
         const tagDetails = await Promise.all(
           (character.tags || []).map(async (tagId) => {
             const tag = await repos.tags.findById(tagId);
@@ -332,40 +328,16 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
           })
         );
 
-        // Filter out null values (tags that no longer exist)
         const validTags = tagDetails.filter(Boolean);
-
         return NextResponse.json({ tags: validTags });
       } catch (error) {
         logger.error('[Characters v1] Error fetching character tags', { characterId: id }, error instanceof Error ? error : undefined);
         return serverError('Failed to fetch character tags');
       }
-    }
+    },
+  };
 
-    // Default: get character
-    default: {
-      try {
-        // Get default image
-        const defaultImage = await enrichWithDefaultImage(character.defaultImageId, repos);
-
-        // Get chat count
-        const chats = await repos.chats.findByCharacterId(id);
-
-        const enrichedCharacter = {
-          ...character,
-          defaultImage,
-          _count: {
-            chats: chats.length,
-          },
-        };
-
-        return NextResponse.json({ character: enrichedCharacter });
-      } catch (error) {
-        logger.error('[Characters v1] Error fetching character', { characterId: id }, error instanceof Error ? error : undefined);
-        return serverError('Failed to fetch character');
-      }
-    }
-  }
+  return actionHandlers[action]();
 });
 
 // ============================================================================
@@ -458,8 +430,12 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
     return notFound('Character');
   }
 
-  switch (action) {
-    case 'favorite': {
+  if (!isValidAction(action, CHARACTER_POST_ACTIONS)) {
+    return badRequest(`Unknown action: ${action}. Available actions: ${CHARACTER_POST_ACTIONS.join(', ')}`);
+  }
+
+  const actionHandlers: Record<CharacterPostAction, () => Promise<NextResponse>> = {
+    favorite: async () => {
       try {
         const updatedCharacter = await repos.characters.setFavorite(id, !character.isFavorite);
         logger.info('[Characters v1] Favorite toggled', {
@@ -471,9 +447,9 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
         logger.error('[Characters v1] Error toggling favorite', { characterId: id }, error instanceof Error ? error : undefined);
         return serverError('Failed to toggle favorite');
       }
-    }
+    },
 
-    case 'avatar': {
+    avatar: async () => {
       try {
         const body = await req.json();
         const { imageId } = avatarSchema.parse(body);
@@ -520,9 +496,9 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
         logger.error('[Characters v1] Error updating avatar', { characterId: id }, error instanceof Error ? error : undefined);
         return serverError('Failed to update character avatar');
       }
-    }
+    },
 
-    case 'add-tag': {
+    'add-tag': async () => {
       try {
         const body = await req.json();
         const validatedData = addTagSchema.parse(body);
@@ -553,9 +529,9 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
         logger.error('[Characters v1] Error adding tag', { characterId: id }, error instanceof Error ? error : undefined);
         return serverError('Failed to add tag to character');
       }
-    }
+    },
 
-    case 'remove-tag': {
+    'remove-tag': async () => {
       try {
         const body = await req.json();
         const validatedData = removeTagSchema.parse(body);
@@ -575,9 +551,9 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
         logger.error('[Characters v1] Error removing tag', { characterId: id }, error instanceof Error ? error : undefined);
         return serverError('Failed to remove tag from character');
       }
-    }
+    },
 
-    case 'toggle-controlled-by': {
+    'toggle-controlled-by': async () => {
       try {
         // Toggle the controlledBy property
         const newControlledBy = character.controlledBy === 'user' ? 'llm' : 'user';
@@ -590,9 +566,9 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
         logger.error('[Characters v1] Error toggling controlledBy', { characterId: id }, error instanceof Error ? error : undefined);
         return serverError('Failed to toggle controlled-by');
       }
-    }
+    },
 
-    case 'set-default-partner': {
+    'set-default-partner': async () => {
       try {
         const body = await req.json();
         const { partnerId } = setDefaultPartnerSchema.parse(body);
@@ -631,9 +607,8 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
         logger.error('[Characters v1] Error updating default partner', { characterId: id }, error instanceof Error ? error : undefined);
         return serverError('Failed to update default partner');
       }
-    }
+    },
+  };
 
-    default:
-      return badRequest(`Unknown action: ${action}. Available actions: favorite, avatar, add-tag, remove-tag, toggle-controlled-by, set-default-partner`);
-  }
+  return actionHandlers[action]();
 });

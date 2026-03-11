@@ -4,6 +4,7 @@
 
 ### 3.3-dev
 
+- refactor: Complete API action-dispatch cleanup in `characters/[id]` by replacing both GET and POST `switch (action)` blocks with typed action maps + `isValidAction` allowlists, preserving default character-fetch behavior for unknown/no GET actions and explicit bad-request behavior for invalid POST actions; all `switch (action)` dispatches in `/api/v1` are now removed
 - refactor: Continue API action-dispatch cleanup by replacing `switch (action)` with typed action maps in api-keys collection POST, plugins/[name] POST, chats/[id] POST handler, and characters collection POST; added explicit action allowlists with `isValidAction` while preserving existing default create behavior where applicable
 - refactor: Continue API action-dispatch cleanup by replacing `switch (action)` with typed action maps in all project `[id]` method handlers (`handlers/get.ts`, `post.ts`, `put.ts`, `delete.ts`) using explicit action allowlists and `isValidAction` guards while preserving default CRUD fallbacks
 - refactor: Continue API action-dispatch cleanup by replacing `switch (action)` with typed action maps in files/folders POST and files/write-permissions POST; added `isValidAction` allowlists while preserving existing default grant/create semantics
