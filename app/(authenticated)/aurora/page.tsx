@@ -50,6 +50,8 @@ export default function CharactersPage() {
   const [error, setError] = useState<string | null>(null)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [aiImportDialogOpen, setAIImportDialogOpen] = useState(false)
+  const [resetBuiltinsDialogOpen, setResetBuiltinsDialogOpen] = useState(false)
+  const [resetBuiltinsInProgress, setResetBuiltinsInProgress] = useState(false)
   const [deleteDialogCharacter, setDeleteDialogCharacter] = useState<Character | null>(null)
   const { getProfileProvider } = useConnectionProfiles()
   const { style } = useAvatarDisplay()
@@ -204,6 +206,31 @@ export default function CharactersPage() {
     }
   }
 
+  const handleResetBuiltins = async () => {
+    setResetBuiltinsInProgress(true)
+
+    try {
+      const res = await fetch('/api/v1/characters?action=reset-builtins', {
+        method: 'POST',
+      })
+
+      if (!res.ok) {
+        throw new Error('Failed to reset built-in characters')
+      }
+
+      await res.json()
+      await fetchCharacters()
+      refreshSidebar()
+      setResetBuiltinsDialogOpen(false)
+      showSuccessToast('Built-in characters reset successfully.')
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to reset built-in characters')
+      console.error('Failed to reset built-in characters', { error: err instanceof Error ? err.message : String(err) })
+    } finally {
+      setResetBuiltinsInProgress(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -225,6 +252,13 @@ export default function CharactersPage() {
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/60 pb-6">
         <h1 className="text-3xl font-semibold leading-tight">Characters</h1>
         <div className="flex flex-wrap gap-3">
+          <button
+            onClick={() => setResetBuiltinsDialogOpen(true)}
+            className="qt-button character-toolbar__button inline-flex items-center rounded-lg border border-border bg-muted/70 px-4 py-2 text-sm qt-text-primary shadow-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            title="Reset built-in characters to first-run defaults"
+          >
+            Reset Built-in Characters
+          </button>
           <button
             onClick={() => setImportDialogOpen(true)}
             className="qt-button character-toolbar__button inline-flex items-center rounded-lg border border-border bg-muted/70 px-4 py-2 text-sm qt-text-primary shadow-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -406,6 +440,38 @@ export default function CharactersPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Built-ins Dialog */}
+      {resetBuiltinsDialogOpen && (
+        <div className="character-import-dialog fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
+            <h3 className="mb-3 text-lg font-semibold text-foreground">
+              Reset Built-in Characters
+            </h3>
+            <p className="mb-5 qt-text-small">
+              This will delete existing Lorian and Riya records if present, then re-import their first-run versions.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setResetBuiltinsDialogOpen(false)}
+                disabled={resetBuiltinsInProgress}
+                className="inline-flex items-center rounded-lg border border-border bg-card px-4 py-2 text-sm qt-text-primary shadow-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleResetBuiltins}
+                disabled={resetBuiltinsInProgress}
+                className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {resetBuiltinsInProgress ? 'Resetting...' : 'Reset Built-ins'}
+              </button>
+            </div>
           </div>
         </div>
       )}

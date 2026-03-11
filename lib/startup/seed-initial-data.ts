@@ -234,10 +234,18 @@ async function seedFromImports(context: string): Promise<void> {
  */
 async function seedAvatars(
   repos: ReturnType<typeof getRepositories>,
-  context: string
+  context: string,
+  targetCharacterNames?: string[]
 ): Promise<void> {
   try {
-    const seedAvatarData = getSeedAvatars();
+    const normalizedTargetNames = targetCharacterNames?.map(name => name.toLowerCase());
+    const seedAvatarData = getSeedAvatars().filter(avatar => {
+      if (!normalizedTargetNames || normalizedTargetNames.length === 0) {
+        return true;
+      }
+
+      return normalizedTargetNames.includes(avatar.characterName.toLowerCase());
+    });
 
     if (seedAvatarData.length === 0) {
       return;
@@ -337,4 +345,12 @@ async function seedAvatars(
     });
     // Don't throw - avatar seeding failure should not prevent startup
   }
+}
+
+export async function reseedAvatarsForCharacters(
+  characterNames: string[],
+  context = 'reseed-avatars'
+): Promise<void> {
+  const repos = getRepositories();
+  await seedAvatars(repos, context, characterNames);
 }

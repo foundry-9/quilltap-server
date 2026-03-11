@@ -8,6 +8,17 @@ url: /aurora
 
 This guide covers character deletion, relationships, partnerships, NPCs, and other management tasks.
 
+## Reset Built-in Characters
+
+On the Characters page toolbar, click **Reset Built-in Characters** to restore the first-run editions of **Lorian** and **Riya**.
+
+What this action does:
+
+- Finds existing Lorian and Riya records, if present
+- Removes existing Lorian and/or Riya records
+- Re-imports the built-in first-run Lorian and Riya dossiers
+- Reuses prior character IDs when those records existed, keeping linked references steady
+
 ## Deleting Characters
 
 ### When to Delete

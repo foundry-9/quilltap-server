@@ -6,6 +6,7 @@
  * POST /api/v1/characters?action=ai-wizard - AI wizard generation
  * POST /api/v1/characters?action=import - Import SillyTavern character
  * POST /api/v1/characters?action=quick-create - Quick create minimal character
+ * POST /api/v1/characters?action=reset-builtins - Reset built-in characters
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -16,6 +17,10 @@ import { runCharacterWizard, runCharacterWizardStreaming, type WizardRequest, ty
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { badRequest, serverError, notFound, validationError } from '@/lib/api/responses';
+import { executeCascadeDelete } from '@/lib/cascade-delete';
+import { getSeedImports } from '@/first-startup';
+import { executeImport } from '@/lib/import/quilltap-import-service';
+import { reseedAvatarsForCharacters } from '@/lib/startup/seed-initial-data';
 
 // ============================================================================
 // Schemas
@@ -112,6 +117,169 @@ const wizardRequestSchema = z.object({
   ),
   characterId: z.uuid().optional(),
 });
+
+const BUILTIN_CHARACTER_NAMES = ['Lorian', 'Riya'] as const;
+
+function findBuiltinCharacterIds(seedImportData: unknown): Record<string, string> {
+  if (!seedImportData || typeof seedImportData !== 'object') {
+    return {};
+  }
+
+  const dataContainer = (seedImportData as { data?: unknown }).data;
+  if (!dataContainer || typeof dataContainer !== 'object') {
+    return {};
+  }
+
+  const seedCharacters = (dataContainer as { characters?: unknown }).characters;
+  if (!Array.isArray(seedCharacters)) {
+    return {};
+  }
+
+  const seedIdByName: Record<string, string> = {};
+
+  for (const entry of seedCharacters) {
+    if (!entry || typeof entry !== 'object') {
+      continue;
+    }
+
+    const name = (entry as { name?: unknown }).name;
+    const id = (entry as { id?: unknown }).id;
+
+    if (typeof name === 'string' && typeof id === 'string') {
+      seedIdByName[name] = id;
+    }
+  }
+
+  return seedIdByName;
+}
+
+function replaceMappedIdsRecursively(value: unknown, idMapping: Map<string, string>): unknown {
+  if (typeof value === 'string') {
+    return idMapping.get(value) ?? value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => replaceMappedIdsRecursively(item, idMapping));
+  }
+
+  if (value && typeof value === 'object') {
+    const next: Record<string, unknown> = {};
+    for (const [key, nestedValue] of Object.entries(value)) {
+      next[key] = replaceMappedIdsRecursively(nestedValue, idMapping);
+    }
+    return next;
+  }
+
+  return value;
+}
+
+async function handleResetBuiltins(_req: NextRequest, context: AuthenticatedContext) {
+  const { user, repos } = context;
+  const actionContext = 'characters-reset-builtins';
+
+  try {
+    const allCharacters = await repos.characters.findByUserId(user.id);
+    const existingByName = new Map(
+      allCharacters
+        .filter(character => BUILTIN_CHARACTER_NAMES.some(name => name.toLowerCase() === character.name.toLowerCase()))
+        .map(character => [character.name.toLowerCase(), character])
+    );
+
+    const preservedIds: Record<string, string | null> = {
+      Lorian: existingByName.get('lorian')?.id ?? null,
+      Riya: existingByName.get('riya')?.id ?? null,
+    };
+
+    logger.info('[Characters v1] Reset built-ins started', {
+      context: actionContext,
+      userId: user.id,
+      preservedIds,
+    });
+
+    const deletedCharacters: string[] = [];
+
+    for (const characterName of BUILTIN_CHARACTER_NAMES) {
+      const existingCharacter = existingByName.get(characterName.toLowerCase());
+      if (!existingCharacter) {
+        continue;
+      }
+
+      const deleteResult = await executeCascadeDelete(existingCharacter.id, {
+        deleteExclusiveChats: false,
+        deleteExclusiveImages: false,
+      });
+
+      if (!deleteResult.success) {
+        logger.error('[Characters v1] Failed deleting built-in character during reset', {
+          context: actionContext,
+          characterName,
+          characterId: existingCharacter.id,
+        });
+        return serverError(`Failed to delete ${characterName} during reset`);
+      }
+
+      deletedCharacters.push(existingCharacter.id);
+    }
+
+    const seedImport = getSeedImports().find(entry => entry.filename === 'lorian-and-riya.qtap');
+    if (!seedImport) {
+      logger.error('[Characters v1] Built-in seed import missing', { context: actionContext });
+      return badRequest('Built-in character seed data is unavailable');
+    }
+
+    const seedIdByName = findBuiltinCharacterIds(seedImport.data);
+
+    const idMapping = new Map<string, string>();
+    for (const characterName of BUILTIN_CHARACTER_NAMES) {
+      const originalSeedId = seedIdByName[characterName];
+      const preservedId = preservedIds[characterName];
+
+      if (originalSeedId && preservedId && originalSeedId !== preservedId) {
+        idMapping.set(originalSeedId, preservedId);
+      }
+    }
+
+    const remappedImportData = replaceMappedIdsRecursively(seedImport.data, idMapping);
+    const importResult = await executeImport(user.id, remappedImportData as typeof seedImport.data, {
+      conflictStrategy: 'skip',
+      includeMemories: true,
+      includeRelatedEntities: false,
+    });
+
+    await reseedAvatarsForCharacters([...BUILTIN_CHARACTER_NAMES], actionContext);
+
+    const refreshedCharacters = await repos.characters.findByUserId(user.id);
+    const postResetIds: Record<string, string | null> = {
+      Lorian: refreshedCharacters.find(character => character.name.toLowerCase() === 'lorian')?.id ?? null,
+      Riya: refreshedCharacters.find(character => character.name.toLowerCase() === 'riya')?.id ?? null,
+    };
+
+    logger.info('[Characters v1] Reset built-ins completed', {
+      context: actionContext,
+      userId: user.id,
+      deletedCharacterIds: deletedCharacters,
+      preservedIds,
+      postResetIds,
+      importResult,
+      remappedIdCount: idMapping.size,
+    });
+
+    return NextResponse.json({
+      success: true,
+      deletedCharacterIds: deletedCharacters,
+      preservedIds,
+      postResetIds,
+      remappedIdCount: idMapping.size,
+      importResult,
+    });
+  } catch (error) {
+    logger.error('[Characters v1] Error resetting built-ins', {
+      context: actionContext,
+      userId: user.id,
+    }, error instanceof Error ? error : undefined);
+    return serverError('Failed to reset built-in characters');
+  }
+}
 
 // ============================================================================
 // GET Handler
@@ -482,6 +650,8 @@ export const POST = createAuthenticatedHandler(async (req, context) => {
       return handleImport(req, context);
     case 'quick-create':
       return handleQuickCreate(req, context);
+    case 'reset-builtins':
+      return handleResetBuiltins(req, context);
     default:
       return handleCreate(req, context);
   }
