@@ -10,7 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedParamsHandler, checkOwnership } from '@/lib/api/middleware';
-import { getActionParam } from '@/lib/api/middleware/actions';
+import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { getFilePath } from '@/lib/api/middleware/file-path';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { logger } from '@/lib/logger';
@@ -37,6 +37,9 @@ const promoteFileSchema = z.object({
   targetProjectId: z.uuid().nullable().optional(),
   folderPath: z.string().optional(),
 });
+
+const FILE_POST_ACTIONS = ['move', 'promote'] as const;
+type FilePostAction = typeof FILE_POST_ACTIONS[number];
 
 // ============================================================================
 // GET Handler - Download file or get thumbnail
@@ -271,18 +274,16 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
     return notFound('File');
   }
 
-  switch (action) {
-    case 'move': {
-      return handleMoveFile(req, user, repos, fileId, file);
-    }
-
-    case 'promote': {
-      return handlePromoteFile(req, user, repos, fileId, file);
-    }
-
-    default:
-      return badRequest(`Unknown action: ${action}. Available actions: move, promote`);
+  if (!isValidAction(action, FILE_POST_ACTIONS)) {
+    return badRequest(`Unknown action: ${action}. Available actions: ${FILE_POST_ACTIONS.join(', ')}`);
   }
+
+  const actionHandlers: Record<FilePostAction, () => Promise<NextResponse>> = {
+    move: () => handleMoveFile(req, user, repos, fileId, file),
+    promote: () => handlePromoteFile(req, user, repos, fileId, file),
+  };
+
+  return actionHandlers[action]();
 });
 
 // ============================================================================

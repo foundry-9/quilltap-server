@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api/middleware';
-import { getActionParam } from '@/lib/api/middleware/actions';
+import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { buildChatContext, type ChatContext } from '@/lib/chat/initialize';
 import { generateGreetingMessage } from '@/lib/chat/initial-greeting';
 import { buildFirstMessageContext } from '@/lib/chat/first-message-context';
@@ -33,6 +33,8 @@ import {
 } from '@/lib/import/sillytavern-import-service';
 
 type Repos = RepositoryContainer;
+const CHAT_POST_ACTIONS = ['import'] as const;
+type ChatPostAction = typeof CHAT_POST_ACTIONS[number];
 
 // ============================================================================
 // Schemas
@@ -592,10 +594,17 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
 export const POST = createAuthenticatedHandler(async (req, context) => {
   const action = getActionParam(req);
 
-  switch (action) {
-    case 'import':
-      return handleImport(req, context);
-    default:
-      return handleCreate(req, context);
+  if (!action) {
+    return handleCreate(req, context);
   }
+
+  if (!isValidAction(action, CHAT_POST_ACTIONS)) {
+    return badRequest(`Unknown action: ${action}. Available actions: ${CHAT_POST_ACTIONS.join(', ')}`);
+  }
+
+  const actionHandlers: Record<ChatPostAction, () => Promise<NextResponse>> = {
+    import: () => handleImport(req, context),
+  };
+
+  return actionHandlers[action]();
 });
