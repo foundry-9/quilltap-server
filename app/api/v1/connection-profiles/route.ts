@@ -11,7 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedHandler, AuthenticatedContext, enrichWithApiKey, enrichWithTags } from '@/lib/api/middleware';
-import { getActionParam } from '@/lib/api/middleware/actions';
+import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { supportsImageGeneration } from '@/lib/llm/image-capable';
 import { createLLMProvider } from '@/lib/llm';
 import { requiresBaseUrl, testProviderConnection, validateProviderConfig } from '@/lib/plugins/provider-validation';
@@ -44,6 +44,9 @@ const testMessageSchema = z.object({
     })
     .optional(),
 });
+
+  const CONNECTION_PROFILE_POST_ACTIONS = ['test-connection', 'test-message', 'reorder', 'reset-sort'] as const;
+  type ConnectionProfilePostAction = typeof CONNECTION_PROFILE_POST_ACTIONS[number];
 
 /**
  * GET /api/v1/connection-profiles
@@ -524,16 +527,16 @@ async function handleResetSort(req: NextRequest, context: AuthenticatedContext) 
 export const POST = createAuthenticatedHandler(async (req, context) => {
   const action = getActionParam(req);
 
-  switch (action) {
-    case 'test-connection':
-      return handleTestConnection(req, context);
-    case 'test-message':
-      return handleTestMessage(req, context);
-    case 'reorder':
-      return handleReorder(req, context);
-    case 'reset-sort':
-      return handleResetSort(req, context);
-    default:
-      return handleCreate(req, context);
+  if (!action || !isValidAction(action, CONNECTION_PROFILE_POST_ACTIONS)) {
+    return handleCreate(req, context);
   }
+
+  const actionHandlers: Record<ConnectionProfilePostAction, () => Promise<NextResponse>> = {
+    'test-connection': () => handleTestConnection(req, context),
+    'test-message': () => handleTestMessage(req, context),
+    reorder: () => handleReorder(req, context),
+    'reset-sort': () => handleResetSort(req, context),
+  };
+
+  return actionHandlers[action]();
 });

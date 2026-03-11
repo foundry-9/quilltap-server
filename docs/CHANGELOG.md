@@ -4,6 +4,7 @@
 
 ### 3.3-dev
 
+- refactor: Continue API action-dispatch cleanup by replacing `switch (action)` with typed action maps in connection-profiles collection POST, connection-profiles/[id] POST, and images/[id] POST; added `isValidAction` guards and explicit action allowlists for stronger, type-safe dispatch behavior
 - refactor: Continue API action-dispatch cleanup by replacing `switch (action)` in chats collection POST and files item POST with typed action maps + `isValidAction`; standardized middleware action query parsing in `lib/api/middleware/actions.ts` to use `req.nextUrl.searchParams` (`getActionParam`, `getQueryParamsWithoutAction`)
 - refactor: Complete `qt-input`/`qt-select` migration for remaining raw Tailwind input/select elements — memory-list flex-row selects now use `qt-select w-auto` to preserve flex layout, character-conversations-tab search input uses `qt-input pl-10`, delete-data-card confirmation input and image-upload-dialog URL input use `qt-input`; zero raw `border border-input bg-background` input patterns remain in components
 - refactor: Complete `req.nextUrl.searchParams` standardization across the remaining 9 API route files (messages, messages/[id], projects/[id]/actions/chats, llm-logs, files/[id], sample-prompts, image-profiles); fixed llm-logs unit-test mock to include `nextUrl` — all API routes in `/api/v1/` now consistently use `req.nextUrl.searchParams` with zero `new URL(req.url)` instances remaining

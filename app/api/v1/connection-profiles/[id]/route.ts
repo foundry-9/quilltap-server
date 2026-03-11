@@ -10,7 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedParamsHandler, AuthenticatedContext } from '@/lib/api/middleware';
-import { getActionParam } from '@/lib/api/middleware/actions';
+import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, forbidden, badRequest, serverError, validationError } from '@/lib/api/responses';
@@ -27,6 +27,9 @@ const addTagSchema = z.object({
 const removeTagSchema = z.object({
   tagId: z.uuid(),
 });
+
+const CONNECTION_PROFILE_ITEM_POST_ACTIONS = ['add-tag', 'remove-tag'] as const;
+type ConnectionProfileItemPostAction = typeof CONNECTION_PROFILE_ITEM_POST_ACTIONS[number];
 
 /**
  * Helper to enrich profile with API key info
@@ -285,8 +288,12 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       return forbidden();
     }
 
-    switch (action) {
-      case 'add-tag': {
+    if (!isValidAction(action, CONNECTION_PROFILE_ITEM_POST_ACTIONS)) {
+      return badRequest(`Unknown action: ${action}. Available actions: ${CONNECTION_PROFILE_ITEM_POST_ACTIONS.join(', ')}`);
+    }
+
+    const actionHandlers: Record<ConnectionProfileItemPostAction, () => Promise<NextResponse>> = {
+      'add-tag': async () => {
         try {
           const body = await req.json();
           const validatedData = addTagSchema.parse(body);
@@ -316,9 +323,8 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
           logger.error('[Connection Profiles v1] Error adding tag', { profileId: id }, error instanceof Error ? error : undefined);
           return serverError('Failed to add tag to connection profile');
         }
-      }
-
-      case 'remove-tag': {
+      },
+      'remove-tag': async () => {
         try {
           const body = await req.json();
           const validatedData = removeTagSchema.parse(body);
@@ -339,10 +345,9 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
           logger.error('[Connection Profiles v1] Error removing tag', { profileId: id }, error instanceof Error ? error : undefined);
           return serverError('Failed to remove tag from connection profile');
         }
-      }
+      },
+    };
 
-      default:
-        return badRequest(`Unknown action: ${action}. Available actions: add-tag, remove-tag`);
-    }
+    return actionHandlers[action]();
   }
 );
