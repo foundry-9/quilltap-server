@@ -16,7 +16,7 @@ import { badRequest, serverError, successResponse } from '@/lib/api/responses';
 // ============================================================================
 
 export const GET = createAuthenticatedHandler(async (req, context) => {
-  const { searchParams } = new URL(req.url);
+  const { searchParams } = req.nextUrl;
   const type = searchParams.get('type') || 'characters';
   const { repos, user } = context;
 

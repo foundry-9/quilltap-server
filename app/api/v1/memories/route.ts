@@ -87,10 +87,10 @@ const rebuildIndexSchema = z.object({
 
 export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
   const action = getActionParam(req);
-  const url = new URL(req.url);
-  const characterId = url.searchParams.get('characterId');
-  const chatId = url.searchParams.get('chatId');
-  const messageId = url.searchParams.get('messageId');
+  const { searchParams } = req.nextUrl;
+  const characterId = searchParams.get('characterId');
+  const chatId = searchParams.get('chatId');
+  const messageId = searchParams.get('messageId');
 
   // Handle action-based GET requests
   if (action === 'housekeep') {
@@ -180,8 +180,7 @@ export const PUT = createAuthenticatedHandler(async (req, { user, repos }) => {
 // =============================================================================
 
 export const DELETE = createAuthenticatedHandler(async (req, { user, repos }) => {
-  const url = new URL(req.url);
-  const chatId = url.searchParams.get('chatId');
+  const chatId = req.nextUrl.searchParams.get('chatId');
 
   if (!chatId) {
     return badRequest('Query parameter required: chatId');
@@ -209,12 +208,12 @@ async function listMemoriesByCharacter(
   }
 
   // Get query params for filtering
-  const url = new URL(req.url);
-  const search = url.searchParams.get('search');
-  const minImportance = url.searchParams.get('minImportance');
-  const source = url.searchParams.get('source');
-  const sortBy = url.searchParams.get('sortBy') || 'createdAt';
-  const sortOrder = url.searchParams.get('sortOrder') || 'desc';
+  const { searchParams } = req.nextUrl;
+  const search = searchParams.get('search');
+  const minImportance = searchParams.get('minImportance');
+  const source = searchParams.get('source');
+  const sortBy = searchParams.get('sortBy') || 'createdAt';
+  const sortOrder = searchParams.get('sortOrder') || 'desc';
 
   // Get memories
   let memories = await repos.memories.findByCharacterId(characterId);
@@ -526,32 +525,32 @@ async function handleHousekeepPreview(
   }
 
   // Parse options from query params
-  const url = new URL(req.url);
+  const { searchParams } = req.nextUrl;
   const options: HousekeepingOptions = { userId: user.id };
 
-  if (url.searchParams.has('maxMemories')) {
-    const val = parseInt(url.searchParams.get('maxMemories')!, 10);
+  if (searchParams.has('maxMemories')) {
+    const val = parseInt(searchParams.get('maxMemories')!, 10);
     if (isNaN(val) || val < 1 || val > 100000) {
       return badRequest('maxMemories must be an integer between 1 and 100000');
     }
     options.maxMemories = val;
   }
-  if (url.searchParams.has('maxAgeMonths')) {
-    const val = parseInt(url.searchParams.get('maxAgeMonths')!, 10);
+  if (searchParams.has('maxAgeMonths')) {
+    const val = parseInt(searchParams.get('maxAgeMonths')!, 10);
     if (isNaN(val) || val < 1 || val > 1200) {
       return badRequest('maxAgeMonths must be an integer between 1 and 1200');
     }
     options.maxAgeMonths = val;
   }
-  if (url.searchParams.has('minImportance')) {
-    const val = parseFloat(url.searchParams.get('minImportance')!);
+  if (searchParams.has('minImportance')) {
+    const val = parseFloat(searchParams.get('minImportance')!);
     if (isNaN(val) || val < 0 || val > 1) {
       return badRequest('minImportance must be a number between 0 and 1');
     }
     options.minImportance = val;
   }
-  if (url.searchParams.has('mergeSimilar')) {
-    options.mergeSimilar = url.searchParams.get('mergeSimilar') === 'true';
+  if (searchParams.has('mergeSimilar')) {
+    options.mergeSimilar = searchParams.get('mergeSimilar') === 'true';
   }
 
   // Get embedding profile from chat settings

@@ -99,7 +99,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
     // Export character
     case 'export': {
       try {
-        const { searchParams } = new URL(req.url);
+        const { searchParams } = req.nextUrl;
         const format = searchParams.get('format') || 'json';
 
         if (format === 'png') {
@@ -144,7 +144,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
     // List recent chats with this character
     case 'chats': {
       try {
-        const { searchParams } = new URL(req.url);
+        const { searchParams } = req.nextUrl;
         const search = searchParams.get('search')?.toLowerCase() || '';
         const limit = parseInt(searchParams.get('limit') || '10', 10);
         const offset = parseInt(searchParams.get('offset') || '0', 10);
@@ -413,7 +413,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
     }
 
     // Parse cascade options
-    const { searchParams } = new URL(req.url);
+    const { searchParams } = req.nextUrl;
     const cascadeChats = searchParams.get('cascadeChats') === 'true';
     const cascadeImages = searchParams.get('cascadeImages') === 'true';
 

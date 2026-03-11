@@ -290,7 +290,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
 
     let characters = await repos.characters.findByUserId(user.id);
 
-    const { searchParams } = new URL(req.url);
+    const { searchParams } = req.nextUrl;
 
     // Filter by NPC status
     const npcFilter = searchParams.get('npc');

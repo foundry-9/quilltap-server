@@ -51,7 +51,7 @@ const testMessageSchema = z.object({
  */
 export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
   try {
-    const { searchParams } = new URL(req.url);
+    const { searchParams } = req.nextUrl;
     const sortByCharacter = searchParams.get('sortByCharacter');
     const imageCapable = searchParams.get('imageCapable') === 'true';// Get all connection profiles for user
     let profiles = await repos.connections.findByUserId(user.id);

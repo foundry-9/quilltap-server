@@ -58,11 +58,14 @@ let GET: typeof import('@/app/api/v1/ui/sidebar/route').GET
 /**
  * Helper to create a mock NextRequest
  */
-const createRequest = (type: 'characters' | 'chats' = 'characters'): NextRequest =>
-  ({
-    url: `https://localhost:3000/api/v1/ui/sidebar?type=${type}`,
+const createRequest = (type: 'characters' | 'chats' = 'characters'): NextRequest => {
+  const href = `https://localhost:3000/api/v1/ui/sidebar?type=${type}`;
+  return ({
+    url: href,
+    nextUrl: new URL(href),
     json: async () => ({}),
-  }) as unknown as NextRequest
+  }) as unknown as NextRequest;
+}
 
 // Mock session data
 const mockSession = {
