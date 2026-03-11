@@ -21,6 +21,8 @@ export const dynamic = 'force-dynamic';
 
 const unlockLogger = logger.child({ module: 'api-unlock' });
 
+type UnlockAction = 'setup' | 'unlock' | 'store' | 'change-passphrase';
+
 /**
  * GET /api/v1/system/unlock
  *
@@ -55,22 +57,17 @@ export async function POST(request: NextRequest) {
     return badRequest('Missing action parameter. Use ?action=setup, ?action=unlock, ?action=store, or ?action=change-passphrase');
   }
 
-  try {
-    const body = await request.json();
-    const passphrase = typeof body.passphrase === 'string' ? body.passphrase : '';
+  if (!isUnlockAction(action)) {
+    return badRequest(`Unknown action: ${action}`);
+  }
 
-    switch (action) {
-      case 'setup':
-        return handleSetup(passphrase);
-      case 'unlock':
-        return handleUnlock(passphrase);
-      case 'store':
-        return handleStore(passphrase);
-      case 'change-passphrase':
-        return handleChangePassphrase(body);
-      default:
-        return badRequest(`Unknown action: ${action}`);
-    }
+  const body = await parseRequestBody(request);
+  if (body instanceof NextResponse) {
+    return body;
+  }
+
+  try {
+    return dispatchUnlockAction(action, body);
   } catch (error) {
     unlockLogger.error('Error in database key action', {
       action,
@@ -78,6 +75,40 @@ export async function POST(request: NextRequest) {
     });
     return serverError(error instanceof Error ? error.message : 'Internal server error');
   }
+}
+
+function isUnlockAction(action: string): action is UnlockAction {
+  return action === 'setup'
+    || action === 'unlock'
+    || action === 'store'
+    || action === 'change-passphrase';
+}
+
+async function parseRequestBody(request: NextRequest): Promise<Record<string, unknown> | NextResponse> {
+  try {
+    const body = await request.json();
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return badRequest('Request body must be a JSON object');
+    }
+    return body as Record<string, unknown>;
+  } catch {
+    return badRequest('Invalid JSON body');
+  }
+}
+
+function getPassphrase(body: Record<string, unknown>): string {
+  return typeof body.passphrase === 'string' ? body.passphrase : '';
+}
+
+function dispatchUnlockAction(action: UnlockAction, body: Record<string, unknown>): Promise<NextResponse> {
+  const actionHandlers: Record<UnlockAction, () => Promise<NextResponse>> = {
+    setup: () => handleSetup(getPassphrase(body)),
+    unlock: () => handleUnlock(getPassphrase(body)),
+    store: () => handleStore(getPassphrase(body)),
+    'change-passphrase': () => handleChangePassphrase(body),
+  };
+
+  return actionHandlers[action]();
 }
 
 /**

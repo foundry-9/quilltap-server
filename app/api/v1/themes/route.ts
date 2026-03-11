@@ -18,6 +18,7 @@ import { themeRegistry } from '@/lib/themes/theme-registry';
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup/plugin-initialization';
 import { logger } from '@/lib/logger';
 import { successResponse, badRequest, serverError, created } from '@/lib/api/responses';
+import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { installThemeBundle, installThemeBundleFromUrl, loadInstalledBundles } from '@/lib/themes/bundle-loader';
 import {
   getSources,
@@ -31,6 +32,11 @@ import {
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+
+const THEME_GET_ACTIONS = ['registry', 'registry-sources', 'updates'] as const;
+type ThemeGetAction = typeof THEME_GET_ACTIONS[number];
+const THEME_POST_ACTIONS = ['install', 'install-from-url', 'add-source', 'remove-source', 'refresh', 'install-registry'] as const;
+type ThemePostAction = typeof THEME_POST_ACTIONS[number];
 
 async function ensureInitialized() {
   if (!isPluginSystemInitialized()) {
@@ -49,22 +55,25 @@ export async function GET(request: NextRequest) {
   try {
     await ensureInitialized();
 
-    const action = request.nextUrl.searchParams.get('action');
+    const action = getActionParam(request);
 
-    switch (action) {
-      case 'registry':
-        return handleGetRegistry(request);
-      case 'registry-sources':
-        return handleGetRegistrySources();
-      case 'updates':
-        return handleGetUpdates();
-      case null:
-        return handleGetThemes();
-      default:
-        return badRequest(`Unknown action: ${action}`, {
-          availableActions: ['registry', 'registry-sources', 'updates'],
-        });
+    if (!action) {
+      return handleGetThemes();
     }
+
+    if (!isValidAction(action, THEME_GET_ACTIONS)) {
+      return badRequest(`Unknown action: ${action}`, {
+        availableActions: [...THEME_GET_ACTIONS],
+      });
+    }
+
+    const actionHandlers: Record<ThemeGetAction, () => Promise<Response>> = {
+      registry: () => handleGetRegistry(request),
+      'registry-sources': () => handleGetRegistrySources(),
+      updates: () => handleGetUpdates(),
+    };
+
+    return actionHandlers[action]();
   } catch (error) {
     logger.error(
       'Failed to get themes',
@@ -132,27 +141,30 @@ export async function POST(request: NextRequest) {
   try {
     await ensureInitialized();
 
-    const action = request.nextUrl.searchParams.get('action');
+    const action = getActionParam(request);
 
-    switch (action) {
-      case 'install':
-        return handleInstall(request);
-      case 'install-from-url':
-        return handleInstallFromUrl(request);
-      case 'add-source':
-        return handleAddSource(request);
-      case 'remove-source':
-        return handleRemoveSource(request);
-      case 'refresh':
-        return handleRefresh();
-      case 'install-registry':
-        return handleInstallFromRegistryAction(request);
-      default:
-        return badRequest(
-          action ? `Unknown action: ${action}` : 'Action parameter required',
-          { availableActions: ['install', 'install-from-url', 'add-source', 'remove-source', 'refresh', 'install-registry'] }
-        );
+    if (!action) {
+      return badRequest('Action parameter required', {
+        availableActions: [...THEME_POST_ACTIONS],
+      });
     }
+
+    if (!isValidAction(action, THEME_POST_ACTIONS)) {
+      return badRequest(`Unknown action: ${action}`, {
+        availableActions: [...THEME_POST_ACTIONS],
+      });
+    }
+
+    const actionHandlers: Record<ThemePostAction, () => Promise<Response>> = {
+      install: () => handleInstall(request),
+      'install-from-url': () => handleInstallFromUrl(request),
+      'add-source': () => handleAddSource(request),
+      'remove-source': () => handleRemoveSource(request),
+      refresh: () => handleRefresh(),
+      'install-registry': () => handleInstallFromRegistryAction(request),
+    };
+
+    return actionHandlers[action]();
   } catch (error) {
     logger.error(
       'Failed to process theme action',

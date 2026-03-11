@@ -89,6 +89,20 @@ class ProviderRegistry {
     this.state.providers.set(providerName, plugin);
   }
 
+  private requireProvider(name: string): LLMProviderPlugin {
+    const plugin = this.getProvider(name);
+    if (!plugin) {
+      const error = `Provider '${name}' not found in registry`;
+      this.logger.error(error);
+      throw new Error(error);
+    }
+    return plugin;
+  }
+
+  private resolveBaseUrl(baseUrl?: string): string | undefined {
+    return baseUrl ? rewriteLocalhostUrl(baseUrl) : baseUrl;
+  }
+
   /**
    * Get a specific provider plugin by name
    *
@@ -96,7 +110,7 @@ class ProviderRegistry {
    * @returns The provider plugin or null if not found
    */
   getProvider(name: string): LLMProviderPlugin | null {
-    return this.state.providers.get(name) || null;
+    return this.state.providers.get(name) ?? null;
   }
 
   /**
@@ -138,15 +152,10 @@ class ProviderRegistry {
    * @throws Error if provider not found or creation fails
    */
   createLLMProvider(name: string, baseUrl?: string): LLMProvider {
-    const plugin = this.getProvider(name);
-    if (!plugin) {
-      const error = `Provider '${name}' not found in registry`;
-      this.logger.error(error);
-      throw new Error(error);
-    }
+    const plugin = this.requireProvider(name);
 
     try {
-      const resolvedUrl = baseUrl ? rewriteLocalhostUrl(baseUrl) : baseUrl;
+      const resolvedUrl = this.resolveBaseUrl(baseUrl);
       return plugin.createProvider(resolvedUrl);
     } catch (error) {
       this.logger.error('Failed to create LLM provider', {
@@ -166,12 +175,7 @@ class ProviderRegistry {
    * @throws Error if provider not found, doesn't support image generation, or creation fails
    */
   createImageProvider(name: string, baseUrl?: string): ImageGenProvider {
-    const plugin = this.getProvider(name);
-    if (!plugin) {
-      const error = `Provider '${name}' not found in registry`;
-      this.logger.error(error);
-      throw new Error(error);
-    }
+    const plugin = this.requireProvider(name);
 
     if (!plugin.capabilities.imageGeneration) {
       const error = `Provider '${name}' does not support image generation`;
@@ -186,7 +190,7 @@ class ProviderRegistry {
     }
 
     try {
-      const resolvedUrl = baseUrl ? rewriteLocalhostUrl(baseUrl) : baseUrl;
+      const resolvedUrl = this.resolveBaseUrl(baseUrl);
       return plugin.createImageProvider(resolvedUrl);
     } catch (error) {
       this.logger.error('Failed to create image provider', {
@@ -206,12 +210,7 @@ class ProviderRegistry {
    * @throws Error if provider not found, doesn't support embeddings, or creation fails
    */
   createEmbeddingProvider(name: string, baseUrl?: string): EmbeddingProvider | LocalEmbeddingProvider {
-    const plugin = this.getProvider(name);
-    if (!plugin) {
-      const error = `Provider '${name}' not found in registry`;
-      this.logger.error(error);
-      throw new Error(error);
-    }
+    const plugin = this.requireProvider(name);
 
     if (!plugin.capabilities.embeddings) {
       const error = `Provider '${name}' does not support embeddings`;
@@ -226,7 +225,7 @@ class ProviderRegistry {
     }
 
     try {
-      const resolvedUrl = baseUrl ? rewriteLocalhostUrl(baseUrl) : baseUrl;
+      const resolvedUrl = this.resolveBaseUrl(baseUrl);
       return plugin.createEmbeddingProvider(resolvedUrl);
     } catch (error) {
       this.logger.error('Failed to create embedding provider', {
@@ -355,14 +354,8 @@ class ProviderRegistry {
    * @throws Error if provider not found
    */
   async validateApiKey(name: string, apiKey: string, baseUrl?: string): Promise<boolean> {
-    const plugin = this.getProvider(name);
-    if (!plugin) {
-      const error = `Provider '${name}' not found in registry`;
-      this.logger.error(error);
-      throw new Error(error);
-    }
-
-    const resolvedUrl = baseUrl ? rewriteLocalhostUrl(baseUrl) : baseUrl;
+    const plugin = this.requireProvider(name);
+    const resolvedUrl = this.resolveBaseUrl(baseUrl);
     return plugin.validateApiKey(apiKey, resolvedUrl);
   }
 
@@ -376,18 +369,13 @@ class ProviderRegistry {
    * @throws Error if provider not found
    */
   async getAvailableModels(name: string, apiKey: string, baseUrl?: string): Promise<string[]> {
-    const plugin = this.getProvider(name);
-    if (!plugin) {
-      const error = `Provider '${name}' not found in registry`;
-      this.logger.error(error);
-      throw new Error(error);
-    }
+    const plugin = this.requireProvider(name);
 
     if (!plugin.getAvailableModels) {
       return [];
     }
 
-    const resolvedUrl = baseUrl ? rewriteLocalhostUrl(baseUrl) : baseUrl;
+    const resolvedUrl = this.resolveBaseUrl(baseUrl);
     return plugin.getAvailableModels(apiKey, resolvedUrl);
   }
 

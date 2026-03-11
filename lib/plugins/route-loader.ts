@@ -7,7 +7,7 @@
  */
 
 import { logger } from '@/lib/logger';
-import { pluginRegistry, getEnabledPluginsByCapability } from './registry';
+import { getEnabledPluginsByCapability } from './registry';
 import type { LoadedPlugin } from './manifest-loader';
 import type { APIRoute } from '@/lib/schemas/plugin-manifest';
 import path from 'node:path';
@@ -91,11 +91,7 @@ export function findPluginRoute(path: string, method: string): PluginRouteInfo |
       routeInfo.plugin.enabled &&
       routeInfo.route.methods.includes(method as APIRoute['methods'][number])
   );
-
-  if (matchedRoute) {
-    return matchedRoute;
-  }
-  return null;
+  return matchedRoute ?? null;
 }
 
 /**

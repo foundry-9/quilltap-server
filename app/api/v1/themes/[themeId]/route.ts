@@ -12,11 +12,15 @@ import { themeRegistry } from '@/lib/themes/theme-registry';
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup/plugin-initialization';
 import { logger } from '@/lib/logger';
 import { successResponse, notFound, badRequest, serverError, messageResponse } from '@/lib/api/responses';
+import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { uninstallThemeBundle, exportThemeAsBundle } from '@/lib/themes/bundle-loader';
 import type { QtapThemeManifest } from '@/lib/themes/types';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+
+const THEME_ITEM_GET_ACTIONS = ['tokens', 'export'] as const;
+type ThemeItemGetAction = typeof THEME_ITEM_GET_ACTIONS[number];
 
 async function ensureInitialized() {
   if (!isPluginSystemInitialized()) {
@@ -148,19 +152,24 @@ export async function GET(
     await ensureInitialized();
     const { themeId } = await params;
 
-    const action = request.nextUrl.searchParams.get('action');
-    switch (action) {
-      case 'tokens':
-        return handleGetTokens(themeId);
-      case 'export':
-        return handleExport(themeId);
-      case null:
-        return handleDefaultGet(themeId);
-      default:
-        return badRequest(`Unknown action: ${action}`, {
-          availableActions: ['tokens', 'export'],
-        });
+    const action = getActionParam(request);
+
+    if (!action) {
+      return handleDefaultGet(themeId);
     }
+
+    if (!isValidAction(action, THEME_ITEM_GET_ACTIONS)) {
+      return badRequest(`Unknown action: ${action}`, {
+        availableActions: [...THEME_ITEM_GET_ACTIONS],
+      });
+    }
+
+    const actionHandlers: Record<ThemeItemGetAction, () => Promise<Response>> = {
+      tokens: () => handleGetTokens(themeId),
+      export: () => handleExport(themeId),
+    };
+
+    return actionHandlers[action]();
   } catch (error) {
     logger.error(
       'Failed to get theme',
