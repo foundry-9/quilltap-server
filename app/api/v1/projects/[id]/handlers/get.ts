@@ -10,7 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getActionParam } from '@/lib/api/middleware/actions';
+import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import {
   handleGetDefault,
   handleListCharacters,
@@ -20,6 +20,9 @@ import {
   handleGetBackground,
 } from '../actions';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
+
+const PROJECT_GET_ACTIONS = ['list-characters', 'list-chats', 'list-files', 'get-state', 'get-background'] as const;
+type ProjectGetAction = typeof PROJECT_GET_ACTIONS[number];
 
 /**
  * GET handler for individual project
@@ -31,18 +34,17 @@ export async function handleGet(
 ): Promise<NextResponse> {
   const action = getActionParam(req);
 
-  switch (action) {
-    case 'list-characters':
-      return handleListCharacters(projectId, ctx);
-    case 'list-chats':
-      return handleListChats(req, projectId, ctx);
-    case 'list-files':
-      return handleListFiles(projectId, ctx);
-    case 'get-state':
-      return handleGetState(projectId, ctx);
-    case 'get-background':
-      return handleGetBackground(projectId, ctx);
-    default:
-      return handleGetDefault(projectId, ctx);
+  if (!action || !isValidAction(action, PROJECT_GET_ACTIONS)) {
+    return handleGetDefault(projectId, ctx);
   }
+
+  const actionHandlers: Record<ProjectGetAction, () => Promise<NextResponse>> = {
+    'list-characters': () => handleListCharacters(projectId, ctx),
+    'list-chats': () => handleListChats(req, projectId, ctx),
+    'list-files': () => handleListFiles(projectId, ctx),
+    'get-state': () => handleGetState(projectId, ctx),
+    'get-background': () => handleGetBackground(projectId, ctx),
+  };
+
+  return actionHandlers[action]();
 }
