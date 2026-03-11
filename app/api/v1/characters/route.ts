@@ -11,7 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedHandler, AuthenticatedContext, enrichWithDefaultImage } from '@/lib/api/middleware';
-import { getActionParam } from '@/lib/api/middleware/actions';
+import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { importSTCharacter, parseSTCharacterPNG } from '@/lib/sillytavern/character';
 import { runCharacterWizard, runCharacterWizardStreaming, type WizardRequest, type WizardProgressEvent } from '@/lib/services/character-wizard.service';
 import { z } from 'zod';
@@ -21,6 +21,9 @@ import { executeCascadeDelete } from '@/lib/cascade-delete';
 import { getSeedImports } from '@/first-startup';
 import { executeImport } from '@/lib/import/quilltap-import-service';
 import { reseedAvatarsForCharacters } from '@/lib/startup/seed-initial-data';
+
+const CHARACTERS_POST_ACTIONS = ['ai-wizard', 'ai-wizard-stream', 'import', 'quick-create', 'reset-builtins'] as const;
+type CharactersPostAction = typeof CHARACTERS_POST_ACTIONS[number];
 
 // ============================================================================
 // Schemas
@@ -641,18 +644,17 @@ async function handleAiWizardStream(req: NextRequest, context: AuthenticatedCont
 export const POST = createAuthenticatedHandler(async (req, context) => {
   const action = getActionParam(req);
 
-  switch (action) {
-    case 'ai-wizard':
-      return handleAiWizard(req, context);
-    case 'ai-wizard-stream':
-      return handleAiWizardStream(req, context);
-    case 'import':
-      return handleImport(req, context);
-    case 'quick-create':
-      return handleQuickCreate(req, context);
-    case 'reset-builtins':
-      return handleResetBuiltins(req, context);
-    default:
-      return handleCreate(req, context);
+  if (!action || !isValidAction(action, CHARACTERS_POST_ACTIONS)) {
+    return handleCreate(req, context);
   }
+
+  const actionHandlers: Record<CharactersPostAction, () => Promise<NextResponse>> = {
+    'ai-wizard': () => handleAiWizard(req, context),
+    'ai-wizard-stream': () => handleAiWizardStream(req, context),
+    import: () => handleImport(req, context),
+    'quick-create': () => handleQuickCreate(req, context),
+    'reset-builtins': () => handleResetBuiltins(req, context),
+  };
+
+  return actionHandlers[action]();
 });

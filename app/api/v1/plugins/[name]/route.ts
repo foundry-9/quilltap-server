@@ -13,7 +13,10 @@ import { pluginRegistry } from '@/lib/plugins/registry';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses';
-import { getActionParam } from '@/lib/api/middleware/actions';
+import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
+
+const PLUGIN_POST_ACTIONS = ['set-config'] as const;
+type PluginPostAction = typeof PLUGIN_POST_ACTIONS[number];
 
 // ============================================================================
 // Schemas
@@ -269,13 +272,15 @@ export const POST = createAuthenticatedParamsHandler<{ name: string }>(
   async (req: NextRequest, context, { name }) => {
     const action = getActionParam(req);
 
-
-    switch (action) {
-      case 'set-config':
-        return handleSetConfig(req, context, name);
-      default:
-        return badRequest(`Unknown action: ${action}. Available actions: set-config`);
+    if (!isValidAction(action, PLUGIN_POST_ACTIONS)) {
+      return badRequest(`Unknown action: ${action}. Available actions: ${PLUGIN_POST_ACTIONS.join(', ')}`);
     }
+
+    const actionHandlers: Record<PluginPostAction, () => Promise<NextResponse>> = {
+      'set-config': () => handleSetConfig(req, context, name),
+    };
+
+    return actionHandlers[action]();
   }
 );
 

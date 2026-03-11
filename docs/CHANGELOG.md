@@ -4,6 +4,7 @@
 
 ### 3.3-dev
 
+- refactor: Continue API action-dispatch cleanup by replacing `switch (action)` with typed action maps in api-keys collection POST, plugins/[name] POST, chats/[id] POST handler, and characters collection POST; added explicit action allowlists with `isValidAction` while preserving existing default create behavior where applicable
 - refactor: Continue API action-dispatch cleanup by replacing `switch (action)` with typed action maps in all project `[id]` method handlers (`handlers/get.ts`, `post.ts`, `put.ts`, `delete.ts`) using explicit action allowlists and `isValidAction` guards while preserving default CRUD fallbacks
 - refactor: Continue API action-dispatch cleanup by replacing `switch (action)` with typed action maps in files/folders POST and files/write-permissions POST; added `isValidAction` allowlists while preserving existing default grant/create semantics
 - refactor: Continue API action-dispatch cleanup by replacing `switch (action)` with typed action maps in connection-profiles collection POST, connection-profiles/[id] POST, and images/[id] POST; added `isValidAction` guards and explicit action allowlists for stronger, type-safe dispatch behavior
