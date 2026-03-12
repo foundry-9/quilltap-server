@@ -4,6 +4,7 @@
 
 ### 3.3-dev
 
+- ci: Fix Docker multi-arch manifest creation failing when per-arch images include attestation layers — replace `docker manifest create`/`push` with `docker buildx imagetools create` which correctly handles OCI image indexes containing SBOM and SLSA provenance attestations
 - chore: Regenerate `runtime-docker.webp` Electron splash image from updated PNG source at 500×500 q80
 - ci: Add Docker supply chain attestations (SLSA provenance + SBOM) to release workflow using `docker/build-push-action` with Buildx; upgrade all GitHub Actions to Node 24 runtime versions (`actions/checkout@v6`, `actions/setup-node@v6`, `actions/upload-artifact@v7`, `actions/download-artifact@v8`, `docker/login-action@v4`, `docker/setup-buildx-action@v4`, `docker/build-push-action@v7`, `peter-evans/repository-dispatch@v4`); replace non-functional `SethCohen/github-releases-to-discord` with `tsickert/discord-webhook@v7.0.0`
 - refactor: Align default `--qt-input-padding-y` to `0.5rem` (was `0.4375rem`) matching all bundled themes; migrate remaining raw Tailwind input/select styling in speaker-mapper (4 selects → `qt-select`) and RngDropdown (2 inputs → clean `qt-input`); visual consistency audit of all 5 bundled themes confirms complete `--qt-input-*` variable coverage
