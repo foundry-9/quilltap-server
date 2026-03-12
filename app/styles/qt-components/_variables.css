@@ -139,7 +139,7 @@
      ========================================================================== */
   --qt-input-radius: var(--radius-md);
   --qt-input-padding-x: 0.75rem;
-  --qt-input-padding-y: 0.4375rem;
+  --qt-input-padding-y: 0.5rem;
   --qt-input-bg: var(--color-background);
   --qt-input-fg: var(--color-foreground);
   --qt-input-border: var(--color-input);

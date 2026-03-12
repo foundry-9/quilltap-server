@@ -313,7 +313,7 @@ export function RngDropdown({
                     onChange={e => setCustomRolls(e.target.value)}
                     min={1}
                     max={100}
-                    className="w-14 px-2 py-1 text-sm rounded border qt-input"
+                    className="w-14 qt-input"
                     placeholder="Rolls"
                   />
                   <span className="text-sm">d</span>
@@ -323,7 +323,7 @@ export function RngDropdown({
                     onChange={e => setCustomSides(e.target.value)}
                     min={2}
                     max={1000}
-                    className="w-16 px-2 py-1 text-sm rounded border qt-input"
+                    className="w-16 qt-input"
                     placeholder="Sides"
                   />
                 </div>

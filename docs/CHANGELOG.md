@@ -4,6 +4,7 @@
 
 ### 3.3-dev
 
+- refactor: Align default `--qt-input-padding-y` to `0.5rem` (was `0.4375rem`) matching all bundled themes; migrate remaining raw Tailwind input/select styling in speaker-mapper (4 selects → `qt-select`) and RngDropdown (2 inputs → clean `qt-input`); visual consistency audit of all 5 bundled themes confirms complete `--qt-input-*` variable coverage
 - ci: Consolidate Docker Hub auth to use single `DOCKERHUB_TOKEN` for both `foundry9/quilltap` and `csebold/quilltap` image pushes, removing separate `DOCKERHUB_F9_TOKEN` login steps
 - ci: Switch primary Docker image to `foundry9/quilltap` — all docs, scripts, Electron constants, and about page now reference org image; `csebold/quilltap` remains as secondary mirror
 - refactor: Resolve theme registry crypto TODO by replacing hardcoded empty `OFFICIAL_REGISTRY_PUBLIC_KEY` with environment-configured key loading (`QTAP_OFFICIAL_REGISTRY_PUBLIC_KEY` / `QUILLTAP_OFFICIAL_REGISTRY_PUBLIC_KEY`) and adding explicit debug logging when official source bootstrap is skipped due missing key
