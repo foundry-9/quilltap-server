@@ -146,7 +146,7 @@ The application will be available at [https://localhost:3000](https://localhost:
 
 ```bash
 # Run from Docker Hub
-docker run -d --name quilltap -p 3000:3000 -v ~/.quilltap:/app/quilltap csebold/quilltap
+docker run -d --name quilltap -p 3000:3000 -v ~/.quilltap:/app/quilltap foundry9/quilltap
 
 # View logs
 docker logs -f quilltap

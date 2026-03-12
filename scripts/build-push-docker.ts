@@ -15,7 +15,7 @@
 import { execSync } from 'child_process';
 import { join } from 'path';
 
-const IMAGE = 'csebold/quilltap';
+const IMAGE = 'foundry9/quilltap';
 
 // Read version from package.json
 const packageJson = require(join(__dirname, '..', 'package.json'));

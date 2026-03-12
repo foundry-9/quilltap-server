@@ -42,7 +42,7 @@ docker run -d \
   --name quilltap \
   -p 3000:3000 \
   -v /path/to/data:/app/quilltap \
-  csebold/quilltap
+  foundry9/quilltap
 ```
 
 Open `http://localhost:3000` and you're running. On first launch, you'll be guided through a setup wizard that generates your encryption key automatically.
@@ -58,7 +58,7 @@ docker run -d \
   -p 3000:3000 \
   -v /home/quilltap/data:/app/quilltap \
   -e BASE_URL="https://yourdomain.com" \
-  csebold/quilltap
+  foundry9/quilltap
 ```
 
 **CRITICAL SECURITY NOTES:**
@@ -130,7 +130,7 @@ docker run -d \
   -p 3000:3000 \
   -v /path/to/data:/app/quilltap \
   --add-host=host.docker.internal:host-gateway \
-  csebold/quilltap
+  foundry9/quilltap
 ```
 
 On **macOS and Windows**, Docker Desktop provides `host.docker.internal` automatically — no extra flags needed.
@@ -145,7 +145,7 @@ docker run -d \
   -p 3000:3000 \
   -v /path/to/data:/app/quilltap \
   -e QUILLTAP_HOST_IP="192.168.1.100" \
-  csebold/quilltap
+  foundry9/quilltap
 ```
 
 This override works in all environments (Docker, Lima, WSL2).
@@ -322,7 +322,7 @@ See [Backup & Restore Guide](BACKUP-RESTORE.md) for detailed procedures.
 
 ```bash
 # Pull latest image
-docker pull csebold/quilltap:latest
+docker pull foundry9/quilltap:latest
 
 # Stop and remove old container
 docker stop quilltap
@@ -335,7 +335,7 @@ docker run -d \
   -p 3000:3000 \
   -v /home/quilltap/data:/app/quilltap \
   -e BASE_URL="https://yourdomain.com" \
-  csebold/quilltap:latest
+  foundry9/quilltap:latest
 
 # Verify it's working
 docker logs -f quilltap
@@ -348,7 +348,7 @@ curl https://yourdomain.com/api/health
 # If something goes wrong, use the previous image tag
 docker stop quilltap
 docker rm quilltap
-docker run -d --name quilltap ... csebold/quilltap:previous-version
+docker run -d --name quilltap ... foundry9/quilltap:previous-version
 ```
 
 ## Troubleshooting

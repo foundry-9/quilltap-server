@@ -23,7 +23,7 @@ set -euo pipefail
 #   QUILLTAP_CONTAINER_NAME     Container name
 #   QUILLTAP_IMAGE_TAG          Image tag
 
-IMAGE="csebold/quilltap"
+IMAGE="foundry9/quilltap"
 
 # Detect platform and set default data directory
 detect_defaults() {

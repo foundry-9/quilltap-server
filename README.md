@@ -8,8 +8,8 @@ No subscriptions. No data harvested. No forgetting everything between sessions. 
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Latest Stable](https://img.shields.io/github/v/release/foundry-9/quilltap?logo=github&label=stable&sort=semver&filter=!*dev*)](https://github.com/foundry-9/quilltap/releases/latest)
-[![This Version](https://img.shields.io/badge/version-3.3.0--dev.57-yellow.svg?logo=github)](package.json)
-[![Docker Hub](https://img.shields.io/docker/v/csebold/quilltap?logo=docker&label=docker&sort=semver)](https://hub.docker.com/r/csebold/quilltap)
+[![This Version](https://img.shields.io/badge/version-3.3.0--dev.59-yellow.svg?logo=github)](package.json)
+[![Docker Hub](https://img.shields.io/docker/v/foundry9/quilltap?logo=docker&label=docker&sort=semver)](https://hub.docker.com/r/foundry9/quilltap)
 [![npm](https://img.shields.io/npm/v/quilltap?logo=npm)](https://www.npmjs.com/package/quilltap)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.com/channels/1476289075152556205/1476290238187049184)
 
@@ -17,7 +17,7 @@ No subscriptions. No data harvested. No forgetting everything between sessions. 
   <img src="https://quilltap.ai/images/welcome-to-quilltap-2-8.png" alt="Welcome to Quilltap" />
 </p>
 
-**Website:** [quilltap.ai](https://quilltap.ai) · **Discord:** [Join us](https://discord.com/channels/1476289075152556205/1476290238187049184) · **Docker:** [csebold/quilltap](https://hub.docker.com/r/csebold/quilltap)
+**Website:** [quilltap.ai](https://quilltap.ai) · **Discord:** [Join us](https://discord.com/channels/1476289075152556205/1476290238187049184) · **Docker:** [foundry9/quilltap](https://hub.docker.com/r/foundry9/quilltap)
 
 ---
 
@@ -82,7 +82,7 @@ The desktop app manages multiple data directories from its splash screen — one
 
 **With the Electron app:** The desktop app includes a Docker runtime toggle right on the splash screen. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/), launch Quilltap, and switch the runtime from "VM" to "Docker." Same native window, different engine underneath.
 
-**Standalone with Docker:** The [csebold/quilltap](https://hub.docker.com/r/csebold/quilltap) image is available on Docker Hub. Use the included startup scripts for the smoothest experience:
+**Standalone with Docker:** The [foundry9/quilltap](https://hub.docker.com/r/foundry9/quilltap) image is available on Docker Hub. Use the included startup scripts for the smoothest experience:
 
 ```bash
 # Linux / macOS
@@ -102,7 +102,7 @@ docker run -d \
   -p 3000:3000 \
   -e QUILLTAP_TIMEZONE=America/New_York \
   -v /path/to/your/data:/app/quilltap \
-  csebold/quilltap
+  foundry9/quilltap
 ```
 
 Open [http://localhost:3000](http://localhost:3000) and the setup wizard will guide you through first-time configuration.

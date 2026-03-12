@@ -113,7 +113,7 @@ quilltap themes registry add <url>      # Add a registry source
 ## Other Ways to Run Quilltap
 
 - **Electron desktop app** (macOS, Windows) - [Download](https://github.com/foundry-9/quilltap/releases)
-- **Docker** - `docker run -d -p 3000:3000 -v /path/to/data:/app/quilltap csebold/quilltap`
+- **Docker** - `docker run -d -p 3000:3000 -v /path/to/data:/app/quilltap foundry9/quilltap`
 
 ## Links
 

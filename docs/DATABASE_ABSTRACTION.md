@@ -32,7 +32,7 @@ All databases are encrypted at rest using **SQLCipher** via the `better-sqlite3-
 
 Run Quilltap with a persistent data volume:
 ```bash
-docker run -d --name quilltap -p 3000:3000 -v /path/to/data:/app/quilltap csebold/quilltap
+docker run -d --name quilltap -p 3000:3000 -v /path/to/data:/app/quilltap foundry9/quilltap
 ```
 
 The SQLite database is stored at `/app/quilltap/data/quilltap.db` inside the container.

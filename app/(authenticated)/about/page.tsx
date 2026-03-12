@@ -42,12 +42,12 @@ export default function AboutPage() {
             />
           </a>
           <a
-            href="https://hub.docker.com/r/csebold/quilltap"
+            href="https://hub.docker.com/r/foundry9/quilltap"
             target="_blank"
             rel="noopener noreferrer"
           >
             <img
-              src="https://img.shields.io/docker/v/csebold/quilltap?logo=docker&label=docker&sort=semver"
+              src="https://img.shields.io/docker/v/foundry9/quilltap?logo=docker&label=docker&sort=semver"
               alt="Docker Hub"
             />
           </a>

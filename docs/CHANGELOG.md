@@ -4,7 +4,7 @@
 
 ### 3.3-dev
 
-- ci: Push Docker images to both `csebold/quilltap` and `foundry9/quilltap` on Docker Hub — separate login steps for personal and org tokens (`DOCKERHUB_F9_TOKEN`); both repos get per-arch images, multi-arch manifests, and `latest`/`dev` tags; release notes updated to show org image as primary
+- ci: Switch primary Docker image to `foundry9/quilltap` — all docs, scripts, Electron constants, and about page now reference org image; `csebold/quilltap` remains as secondary mirror; release workflow pushes to org first with `DOCKERHUB_F9_TOKEN`, then personal with `DOCKERHUB_TOKEN`
 - refactor: Resolve theme registry crypto TODO by replacing hardcoded empty `OFFICIAL_REGISTRY_PUBLIC_KEY` with environment-configured key loading (`QTAP_OFFICIAL_REGISTRY_PUBLIC_KEY` / `QUILLTAP_OFFICIAL_REGISTRY_PUBLIC_KEY`) and adding explicit debug logging when official source bootstrap is skipped due missing key
 - refactor: Continue `qt-*` UI normalization by replacing duplicated raw input Tailwind chains with `qt-input` in tag-editor and search-bar components, while preserving compact sizing/icon padding via utility overrides (`py-1`, `w-48 lg:w-64`, `pl-9`, etc.)
 - refactor: Complete API action-dispatch cleanup in `characters/[id]` by replacing both GET and POST `switch (action)` blocks with typed action maps + `isValidAction` allowlists, preserving default character-fetch behavior for unknown/no GET actions and explicit bad-request behavior for invalid POST actions; all `switch (action)` dispatches in `/api/v1` are now removed
