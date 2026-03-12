@@ -111,13 +111,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Log in to Docker Hub (org)
+      - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_F9_TOKEN }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push org image
+      - name: Build and push images
         run: |
           TAG="${GITHUB_REF_NAME}"
           docker build \
@@ -126,16 +126,6 @@ jobs:
             --tag "${DOCKER_IMAGE_ALT}:${TAG}-${{ matrix.arch }}" \
             .
           docker push "${DOCKER_IMAGE}:${TAG}-${{ matrix.arch }}"
-
-      - name: Log in to Docker Hub (personal)
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Push personal image
-        run: |
-          TAG="${GITHUB_REF_NAME}"
           docker push "${DOCKER_IMAGE_ALT}:${TAG}-${{ matrix.arch }}"
 
   push-docker-manifest:
@@ -144,54 +134,30 @@ jobs:
     needs: build-docker
 
     steps:
-      - name: Log in to Docker Hub (org)
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_F9_TOKEN }}
-
-      - name: Create and push org manifest
-        run: |
-          TAG="${GITHUB_REF_NAME}"
-          IMAGE="${DOCKER_IMAGE}"
-
-          TAGS="${IMAGE}:${TAG}"
-          if [[ "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            TAGS="${TAGS} ${IMAGE}:latest"
-          else
-            TAGS="${TAGS} ${IMAGE}:dev"
-          fi
-
-          for MANIFEST_TAG in $TAGS; do
-            docker manifest create "$MANIFEST_TAG" \
-              "${IMAGE}:${TAG}-amd64" \
-              "${IMAGE}:${TAG}-arm64"
-            docker manifest push "$MANIFEST_TAG"
-          done
-
-      - name: Log in to Docker Hub (personal)
+      - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Create and push personal manifest
+      - name: Create and push manifests
         run: |
           TAG="${GITHUB_REF_NAME}"
-          IMAGE="${DOCKER_IMAGE_ALT}"
 
-          TAGS="${IMAGE}:${TAG}"
-          if [[ "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            TAGS="${TAGS} ${IMAGE}:latest"
-          else
-            TAGS="${TAGS} ${IMAGE}:dev"
-          fi
+          for IMAGE in "${DOCKER_IMAGE}" "${DOCKER_IMAGE_ALT}"; do
+            TAGS="${IMAGE}:${TAG}"
+            if [[ "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              TAGS="${TAGS} ${IMAGE}:latest"
+            else
+              TAGS="${TAGS} ${IMAGE}:dev"
+            fi
 
-          for MANIFEST_TAG in $TAGS; do
-            docker manifest create "$MANIFEST_TAG" \
-              "${IMAGE}:${TAG}-amd64" \
-              "${IMAGE}:${TAG}-arm64"
-            docker manifest push "$MANIFEST_TAG"
+            for MANIFEST_TAG in $TAGS; do
+              docker manifest create "$MANIFEST_TAG" \
+                "${IMAGE}:${TAG}-amd64" \
+                "${IMAGE}:${TAG}-arm64"
+              docker manifest push "$MANIFEST_TAG"
+            done
           done
 
   build-electron-mac:
