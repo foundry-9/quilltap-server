@@ -44,10 +44,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '24'
           cache: 'npm'
@@ -59,7 +59,7 @@ jobs:
         run: npx tsx scripts/build-rootfs.ts --platform ${{ matrix.platform }}
 
       - name: Upload rootfs artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rootfs-${{ matrix.arch }}
           path: quilltap-linux-${{ matrix.arch }}.tar.gz
@@ -72,10 +72,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '24'
           cache: 'npm'
@@ -87,7 +87,7 @@ jobs:
         run: npx tsx scripts/build-standalone-tarball.ts
 
       - name: Upload standalone artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: standalone
           path: quilltap-standalone-*.tar.gz
@@ -97,6 +97,10 @@ jobs:
     name: Build Docker (${{ matrix.arch }})
     needs: validate-tag
     runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     strategy:
       matrix:
         include:
@@ -109,24 +113,36 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push images
-        run: |
-          TAG="${GITHUB_REF_NAME}"
-          docker build \
-            --target production \
-            --tag "${DOCKER_IMAGE}:${TAG}-${{ matrix.arch }}" \
-            --tag "${DOCKER_IMAGE_ALT}:${TAG}-${{ matrix.arch }}" \
-            .
-          docker push "${DOCKER_IMAGE}:${TAG}-${{ matrix.arch }}"
-          docker push "${DOCKER_IMAGE_ALT}:${TAG}-${{ matrix.arch }}"
+      - name: Build and push to primary registry
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: production
+          push: true
+          tags: ${{ env.DOCKER_IMAGE }}:${{ github.ref_name }}-${{ matrix.arch }}
+          sbom: true
+          provenance: mode=max
+
+      - name: Build and push to alt registry
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: production
+          push: true
+          tags: ${{ env.DOCKER_IMAGE_ALT }}:${{ github.ref_name }}-${{ matrix.arch }}
+          sbom: true
+          provenance: mode=max
 
   push-docker-manifest:
     name: Push Docker multi-arch manifest
@@ -135,7 +151,7 @@ jobs:
 
     steps:
       - name: Log in to Docker Hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -167,10 +183,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '24'
           cache: 'npm'
@@ -179,7 +195,7 @@ jobs:
         run: npm ci
 
       - name: Download arm64 rootfs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: rootfs-arm64
           path: /tmp/rootfs
@@ -257,7 +273,7 @@ jobs:
           rm -f "$APPLE_API_KEY" || true
 
       - name: Upload macOS installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: electron-mac
           path: out/*.dmg
@@ -270,10 +286,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '24'
           cache: 'npm'
@@ -290,7 +306,7 @@ jobs:
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
 
       - name: Upload Windows installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: electron-win
           path: out/*.exe
@@ -303,10 +319,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '24'
           cache: 'npm'
@@ -318,7 +334,7 @@ jobs:
         run: npm run electron:build:linux
 
       - name: Upload Linux installers
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: electron-linux
           path: |
@@ -333,10 +349,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
@@ -370,12 +386,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
 
@@ -480,7 +496,7 @@ jobs:
 
     steps:
       - name: Trigger website rebuild
-        uses: peter-evans/repository-dispatch@v3
+        uses: peter-evans/repository-dispatch@v4
         with:
           token: ${{ secrets.CROSS_REPO_PAT }}
           repository: foundry9/quilltap-website
@@ -498,9 +514,11 @@ jobs:
     needs: create-release
     continue-on-error: true
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: GitHub Releases to Discord
-        uses: SethCohen/github-releases-to-discord@v1
+      - name: Notify Discord of release
+        uses: tsickert/discord-webhook@v7.0.0
         with:
-          webhook_url: ${{ secrets.DISCORD_WEBHOOK_RELEASE_URL }}
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK_RELEASE_URL }}
+          embed-title: "Quilltap ${{ github.ref_name }} Released"
+          embed-url: "https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}"
+          embed-description: "A new version of Quilltap has been published. See the release notes for details."
+          embed-color: 5814783
