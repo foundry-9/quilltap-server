@@ -14,6 +14,7 @@ permissions:
 
 env:
   DOCKER_IMAGE: csebold/quilltap
+  DOCKER_IMAGE_ORG: foundry9/quilltap
 
 jobs:
   validate-tag:
@@ -110,20 +111,32 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Log in to Docker Hub
+      - name: Log in to Docker Hub (personal)
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push platform image
+      - name: Push personal image
         run: |
           TAG="${GITHUB_REF_NAME}"
           docker build \
             --target production \
             --tag "${DOCKER_IMAGE}:${TAG}-${{ matrix.arch }}" \
+            --tag "${DOCKER_IMAGE_ORG}:${TAG}-${{ matrix.arch }}" \
             .
           docker push "${DOCKER_IMAGE}:${TAG}-${{ matrix.arch }}"
+
+      - name: Log in to Docker Hub (org)
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_F9_TOKEN }}
+
+      - name: Push org image
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          docker push "${DOCKER_IMAGE_ORG}:${TAG}-${{ matrix.arch }}"
 
   push-docker-manifest:
     name: Push Docker multi-arch manifest
@@ -131,29 +144,53 @@ jobs:
     needs: build-docker
 
     steps:
-      - name: Log in to Docker Hub
+      - name: Log in to Docker Hub (personal)
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Create and push manifest
+      - name: Create and push personal manifest
         run: |
           TAG="${GITHUB_REF_NAME}"
+          IMAGE="${DOCKER_IMAGE}"
 
-          # Determine which tags to create
-          TAGS="${DOCKER_IMAGE}:${TAG}"
+          TAGS="${IMAGE}:${TAG}"
           if [[ "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            TAGS="${TAGS} ${DOCKER_IMAGE}:latest"
+            TAGS="${TAGS} ${IMAGE}:latest"
           else
-            TAGS="${TAGS} ${DOCKER_IMAGE}:dev"
+            TAGS="${TAGS} ${IMAGE}:dev"
           fi
 
-          # Create and push a manifest for each tag
           for MANIFEST_TAG in $TAGS; do
             docker manifest create "$MANIFEST_TAG" \
-              "${DOCKER_IMAGE}:${TAG}-amd64" \
-              "${DOCKER_IMAGE}:${TAG}-arm64"
+              "${IMAGE}:${TAG}-amd64" \
+              "${IMAGE}:${TAG}-arm64"
+            docker manifest push "$MANIFEST_TAG"
+          done
+
+      - name: Log in to Docker Hub (org)
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_F9_TOKEN }}
+
+      - name: Create and push org manifest
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          IMAGE="${DOCKER_IMAGE_ORG}"
+
+          TAGS="${IMAGE}:${TAG}"
+          if [[ "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            TAGS="${TAGS} ${IMAGE}:latest"
+          else
+            TAGS="${TAGS} ${IMAGE}:dev"
+          fi
+
+          for MANIFEST_TAG in $TAGS; do
+            docker manifest create "$MANIFEST_TAG" \
+              "${IMAGE}:${TAG}-amd64" \
+              "${IMAGE}:${TAG}-arm64"
             docker manifest push "$MANIFEST_TAG"
           done
 
@@ -448,10 +485,11 @@ jobs:
           ### Docker
 
           ```bash
-          docker pull csebold/quilltap:${TAG}
+          docker pull foundry9/quilltap:${TAG}
+          # or: docker pull csebold/quilltap:${TAG}
           ```
 
-          Or download the `quilltap-linux-<arch>.tar.gz` rootfs tarball for use with Lima. See the [README](https://github.com/foundry-9/quilltap#readme) for setup instructions.
+          Or download the `quilltap-linux-<arch>.tar.gz` rootfs tarball for use with Lima. See the [README](https://github.com/foundry9/quilltap#readme) for setup instructions.
           BODY
 
           sed -i 's/^          //' /tmp/release-body.md
@@ -479,13 +517,14 @@ jobs:
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.CROSS_REPO_PAT }}
-          repository: foundry-9/quilltap-website
+          repository: foundry9/quilltap-website
           event-type: app-release
           client-payload: >-
             {
               "version": "${{ github.ref_name }}",
               "prerelease": "${{ needs.create-release.outputs.prerelease }}",
-              "docker_image": "csebold/quilltap:${{ github.ref_name }}"
+              "docker_image": "foundry9/quilltap:${{ github.ref_name }}",
+              "docker_image_alt": "csebold/quilltap:${{ github.ref_name }}"
             }
 
   github-releases-to-discord:
