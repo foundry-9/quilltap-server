@@ -156,6 +156,7 @@ Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/
 - The pre-commit hook in `.githooks/pre-commit` kills the dev server, cleans .next, stops watchman, and stages dependency artifacts. Linting, testing, type-checking, and version updates are handled by the [/commit](/.claude/commands/commit.md) command before the actual commit.
 - Leave no stubs and "TODO" code behind unless you have agreed on it with me ahead of time
 - All user-visible changes **MUST** be documented in help files found in `help/*.md`
+- Help files have a `url` field in their frontmatter and an "In-Chat Navigation" section with an exact `help_navigate` tool call. When creating or modifying help files, ensure the `url` frontmatter points to the correct page (with `?tab=` and `&section=` parameters for settings deep-linking), and that the "In-Chat Navigation" section contains the matching `help_navigate(url: "...")` call.
 - All writing for users is to be in the style of "steampunk + roaring 20s + Great Gatsby + Wodehouse + Lemony Snicket"
 
 ## Best Practices and Principles

@@ -426,4 +426,10 @@ While using the settings:
 
 Characters with help tools enabled can read your roleplay template configuration during a conversation using the `help_settings` tool with `category: "templates"`. This returns the list of your templates (names, descriptions, and default status) and which template is set as the default for new chats. Ask a help-tools-enabled character something like "What roleplay templates do I have?" and it will produce the inventory.
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=templates&section=roleplay-templates")`
+
 The Roleplay Templates settings give you complete control over how your chats are formatted—take advantage of them to create the perfect style for your creative work!

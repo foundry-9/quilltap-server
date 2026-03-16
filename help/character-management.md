@@ -546,6 +546,12 @@ If you want to create a variation of existing character:
 - Testing character variations
 - Creating character template
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/aurora")`
+
 ## Related Topics
 
 - [Characters Overview](characters.md) — About characters

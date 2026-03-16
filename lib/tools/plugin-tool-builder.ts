@@ -25,6 +25,7 @@ import {
   submitFinalResponseToolDefinition,
   helpSearchToolDefinition,
   helpSettingsToolDefinition,
+  helpNavigateToolDefinition,
   rngToolDefinition,
   stateToolDefinition,
   whisperToolDefinition,
@@ -138,6 +139,9 @@ export interface BuildToolsOptions {
   /** Whether to enable help settings tool (gated by character help tools setting) */
   helpSettings?: boolean;
 
+  /** Whether to enable help navigate tool (gated by character help tools setting) */
+  helpNavigate?: boolean;
+
   /** Whether to enable RNG (random number generator) tool (enabled by default) */
   rng?: boolean;
 
@@ -203,6 +207,7 @@ export async function buildToolsForProvider(
       agentMode: options.agentMode,
       helpSearch: options.helpSearch,
       helpSettings: options.helpSettings,
+      helpNavigate: options.helpNavigate,
       rng: options.rng,
       state: options.state,
       whisper: options.whisper,
@@ -260,6 +265,12 @@ export async function buildToolsForProvider(
   if (options.helpSettings) {
     universalTools.push(helpSettingsToolDefinition as UniversalTool);
     logger_.debug('Added help settings tool to universal tools');
+  }
+
+  // Add help navigate tool if enabled (gated by character help tools setting)
+  if (options.helpNavigate) {
+    universalTools.push(helpNavigateToolDefinition as UniversalTool);
+    logger_.debug('Added help navigate tool to universal tools');
   }
 
   // Add RNG tool if enabled (defaults to true when not specified)

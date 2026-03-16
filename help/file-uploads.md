@@ -498,6 +498,12 @@ If accessing Quilltap on mobile:
 - Verify file integrity if downloading
 - Keep backups of critical files
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/files")`
+
 ## Related Topics
 
 - [File Management](files.md) — Browse and manage uploaded files

@@ -536,6 +536,12 @@ Gets confusing and hard to navigate
 - Split very large folders into subfolders
 - Use search/filter instead of browsing huge folders
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/files")`
+
 ## Related Topics
 
 - [File Management](files.md) — Browse and manage files

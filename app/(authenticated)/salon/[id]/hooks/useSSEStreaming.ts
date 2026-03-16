@@ -477,6 +477,11 @@ export function useSSEStreaming({
             })
           }
 
+          // Handle help_navigate: navigate the current window to the target URL
+          if (name === 'help_navigate' && success && result?.navigationUrl) {
+            window.location.href = result.navigationUrl
+          }
+
           if (name === 'generate_image') {
             if (success) {
               const imageCount = result?.images?.length || 1

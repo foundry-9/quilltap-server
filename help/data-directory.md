@@ -87,6 +87,12 @@ Your data directory contains everything Quilltap needs. To create a backup:
 
 For more comprehensive backup strategies, see the Backup and Restore documentation.
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=system")`
+
 ## Related Topics
 
 - [Your Profile](profile.md) - Overview of the profile page

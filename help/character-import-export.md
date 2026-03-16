@@ -483,6 +483,12 @@ This makes it easy to:
 3. Be careful importing same file twice
 4. Always check before bulk import
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/aurora")`
+
 ## Related Topics
 
 - [Characters Overview](characters.md) — About the character system

@@ -409,6 +409,12 @@ The machinery behind the curtain is equally discreet. When assembling context fo
 - Refresh the page if needed
 - Wait for current response to complete
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/salon/:id")`
+
 ## Related Pages
 
 - [Chats Overview](chats.md) — Basic chat functionality

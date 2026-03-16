@@ -75,6 +75,12 @@ Each service connects through its own API key, and the wizard ensures all the pl
 
 **For Ollama, only downloaded models appear** — The wizard shows models already available on your system. To add more, run `ollama pull <model-name>` in your terminal before returning to the wizard.
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings/wizard")`
+
 ## See Also
 
 - [Getting Started with Quilltap](startup-wizard.md) — The complete first-run guide

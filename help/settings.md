@@ -143,6 +143,12 @@ Characters with help tools enabled can read your current settings aloud during a
 
 To use it, simply ask a help-tools-enabled character something like "What are my current settings?" or "Show me my connection profiles," and the character will consult the appropriate category on your behalf.
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings")`
+
 ## Troubleshooting
 
 ### Can't find a setting?

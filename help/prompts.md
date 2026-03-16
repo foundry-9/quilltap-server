@@ -397,6 +397,12 @@ Writing Aids:
 - Clear chat history
 - Try different connection profile
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=templates&section=prompts")`
+
 ## Related Settings
 
 - **Connection Profiles** — Quality of LLM affects how well prompts are followed

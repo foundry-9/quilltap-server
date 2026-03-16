@@ -486,6 +486,12 @@ The sidebar updates in real-time:
 - Watch turn indicators to follow conversation
 - Use pause to prevent missed content
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/salon/:id")`
+
 ## Related Pages
 
 - [Chats Overview](chats.md) — Basic chat functionality

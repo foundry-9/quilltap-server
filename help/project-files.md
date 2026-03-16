@@ -337,6 +337,12 @@ Good file names help the AI find content:
 - Refresh and try again
 - Check file associations
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/prospero/:id")`
+
 ## Related Pages
 
 - [Projects Overview](projects.md) — Main project documentation

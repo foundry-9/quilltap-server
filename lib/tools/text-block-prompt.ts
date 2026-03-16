@@ -34,6 +34,8 @@ export interface TextBlockPromptOptions {
   helpSearch?: boolean
   /** Enable help settings tool */
   helpSettings?: boolean
+  /** Enable help navigate tool */
+  helpNavigate?: boolean
   /** Enable create note tool */
   createNote?: boolean
 }
@@ -129,6 +131,13 @@ Format: [[HELP_SEARCH]]how do I use memories[[/HELP_SEARCH]]`)
 Read instance settings to understand and assist with the current configuration. API keys are never shown.
 Format: [[HELP_SETTINGS category="overview" /]]
 Categories: overview, chat, connections, embeddings, images, appearance, templates, system`)
+  }
+
+  if (options.helpNavigate) {
+    toolDocs.push(`
+### Help Navigate
+Navigate the user's browser to a specific Quilltap page or settings section.
+Format: [[HELP_NAVIGATE url="/settings?tab=chat&section=dangerous-content" /]]`)
   }
 
   if (options.createNote) {

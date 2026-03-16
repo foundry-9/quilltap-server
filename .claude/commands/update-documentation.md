@@ -4,7 +4,7 @@ Read the source code and keep the documentation up to date.
 
 - **Documentation for Everything**
 
-  - [help/](help/) - User documentation for every page and every visible feature - **IMPORTANT**: If anything in this directory is updated that we must run `npm run build:help` and add the changes from that process to the list of files to be committed
+  - [help/](help/) - User documentation for every page and every visible feature - **IMPORTANT**: If anything in this directory is updated we must run `npm run build:help` and add the changes from that process to the list of files to be committed. Every help file must have a `url` field in its frontmatter pointing to the relevant page (using `?tab=` and `&section=` for settings deep-linking) and an "In-Chat Navigation" section with the exact `help_navigate(url: "...")` tool call matching that URL.
   - [.githooks/README.md](.githooks/README.md) — Documents the custom Git hook directory, especially the pre-commit script that stops processes, cleans build artifacts, and stages dependency changes, and how to configure/disable hooks — Grade: A (current dev workflow) — Last updated: 2026-03-03
   - [DEAD-CODE-REPORT.md](DEAD-CODE-REPORT.md) — Dead code analysis report with cleanup history, known false positives, and remaining low-priority items — Grade: A (reflects cleanup completed 2025-12-27) — Last updated: 2025-12-27
   - [DEVELOPMENT.md](DEVELOPMENT.md) — Contributor guide covering repo structure, prerequisites, running the app (Electron, Docker, and local), Electron/Lima VM development workflow, testing, linting, logging, data storage, and plugin development pointers — Grade: A (primary contributor reference) — Last updated: 2026-03-03

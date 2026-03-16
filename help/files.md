@@ -559,6 +559,12 @@ Each time Quilltap starts, it performs a comprehensive reconciliation — a sort
 - Close unused tabs/apps
 - Check internet connection
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/files")`
+
 ## Related Pages
 
 - **Projects** — Manage project-specific files

@@ -418,6 +418,12 @@ Access these in Chat Settings if available.
 - **Lower talkativeness** — Some characters speak less often
 - **Pause between cycles** — Read before continuing
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/salon/:id")`
+
 ## Related Pages
 
 - [Chats Overview](chats.md) — Basic chat functionality

@@ -330,6 +330,12 @@ See [Using Tools](tools-usage.md) for tool details.
 - Try different search terms
 - Check recently deleted if available
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/salon")`
+
 ## Related Pages
 
 - [Multi-Character Chats](chat-multi-character.md) — Conversations with multiple AI characters

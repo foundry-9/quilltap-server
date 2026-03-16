@@ -62,6 +62,8 @@ const TEXT_BLOCK_TOOL_NAME_MAP: Record<string, string> = {
   'help_search': 'help_search',
   'search_help': 'help_search',  // Backward compatibility alias
   'help_settings': 'help_settings',
+  'help_navigate': 'help_navigate',
+  'navigate': 'help_navigate',  // Common alias
 
   // Common aliases
   'memory': 'search_memories',

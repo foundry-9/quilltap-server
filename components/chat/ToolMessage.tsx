@@ -197,6 +197,11 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
       icon: '⚙️',
       bgColor: 'bg-muted border border-border',
     },
+    help_navigate: {
+      displayName: 'Navigation',
+      icon: '🧭',
+      bgColor: 'bg-muted border border-border',
+    },
     chdir: {
       displayName: 'Change Directory',
       icon: '📂',

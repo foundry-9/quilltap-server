@@ -522,6 +522,12 @@ If you can't remember character name:
 - "detective" → finds any character with Detective in name or title
 - Partial matches work
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/aurora")`
+
 ## Related Topics
 
 - [Characters Overview](characters.md) — About the characters system

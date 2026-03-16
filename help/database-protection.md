@@ -144,3 +144,9 @@ Quilltap has two independent backup systems:
 | **Location** | `data/backups/` | Downloaded to your computer |
 
 For the most complete protection, use both: let physical backups run automatically, and periodically create a manual backup via Backup & Restore.
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=system")`

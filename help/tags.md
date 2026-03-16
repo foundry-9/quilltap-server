@@ -217,3 +217,9 @@ Use tags as search filters to find content faster:
 5. **Combine with visual styles** — Use distinctive colors and emojis for quick visual identification
 
 Tags are flexible and personal—develop a tagging system that works for your creative workflow!
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/aurora")`

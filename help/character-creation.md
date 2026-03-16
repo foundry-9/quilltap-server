@@ -528,6 +528,12 @@ Clothing records describe what your character wears in different situations. The
 
 Clothing records appear in the system prompt as a `## Clothing / Outfits` section and are included in image generation context.
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/aurora/new")`
+
 ## Related Topics
 
 - [Characters](characters.md) — Characters overview

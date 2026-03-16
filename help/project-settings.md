@@ -285,6 +285,12 @@ Most settings save automatically or with explicit save:
 - Refresh page
 - New chats will use new settings
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/prospero/:id")`
+
 ## Related Pages
 
 - [Projects Overview](projects.md) — Main project documentation

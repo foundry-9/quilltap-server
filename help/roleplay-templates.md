@@ -419,4 +419,10 @@ Plugin templates:
 6. **Share what works** — Share successful templates as plugins
 7. **Backup important templates** — Save copies before major edits
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=templates&section=roleplay-templates")`
+
 Roleplay templates are powerful tools for standardizing your creative writing—invest time in creating the perfect format for your style!

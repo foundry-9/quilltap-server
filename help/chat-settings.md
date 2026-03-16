@@ -417,6 +417,12 @@ Most settings save automatically as you make changes. You'll see:
 
 Characters with help tools enabled can read your current chat settings during a conversation using the `help_settings` tool with `category: "chat"`. This returns your token display, context compression, memory cascade, timestamp, agent mode, dangerous content, automation, and LLM logging settings. Simply ask a help-tools-enabled character something like "What are my chat settings?" and it will look them up for you.
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=chat")`
+
 ## Related Settings
 
 - **Connection Profiles** — Choose which LLM to use

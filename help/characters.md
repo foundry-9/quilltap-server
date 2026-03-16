@@ -429,6 +429,12 @@ Load character created elsewhere:
 
 See [Importing and Exporting Characters](character-import-export.md) for guides.
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/aurora")`
+
 ## Related Pages
 
 - [Creating Characters](character-creation.md) — Step-by-step guide to creating new characters with templates and AI Wizard

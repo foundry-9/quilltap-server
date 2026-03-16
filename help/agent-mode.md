@@ -137,6 +137,12 @@ If the agent isn't using enough iterations:
 
 Characters with help tools enabled can read your current agent mode configuration during a conversation using the `help_settings` tool with `category: "chat"`. The chat category includes your agent mode settings (enabled status and maximum turns) alongside other chat preferences. Ask a help-tools-enabled character something like "What are my agent mode settings?" and it will check for you.
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/salon/:id")`
+
 ## Related Topics
 
 - [Tools](/help/tools) - Learn about the tools available to AI agents

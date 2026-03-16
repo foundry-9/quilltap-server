@@ -83,6 +83,12 @@ Three actions are available:
 - **Iterate.** Use "Add More & Regenerate" to refine results by adding more context.
 - **Memories improve roleplay.** Generated memories give the character knowledge to draw on during conversations.
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/aurora")`
+
 ## Related Topics
 
 - [Character Creation](character-creation.md) — Manual character creation

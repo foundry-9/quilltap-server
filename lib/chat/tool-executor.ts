@@ -46,6 +46,11 @@ import {
   type HelpSettingsToolContext,
 } from '@/lib/tools/handlers/help-settings-handler';
 import {
+  executeHelpNavigateTool,
+  formatHelpNavigateResults,
+  type HelpNavigateToolContext,
+} from '@/lib/tools/handlers/help-navigate-handler';
+import {
   executeRngTool,
   formatRngResults,
   type RngToolContext,
@@ -159,6 +164,7 @@ const BUILT_IN_TOOLS = new Set([
   'request_full_context',
   'help_search',
   'help_settings',
+  'help_navigate',
   'rng',
   'state',
   'submit_final_response',
@@ -521,6 +527,29 @@ export async function executeToolCallWithContext(
           formattedText: formattedResult,
           category: result.category,
           data: result.data,
+        } : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle help_navigate (navigate user's browser to a Quilltap page)
+    if (toolCall.name === 'help_navigate') {
+      const helpNavContext: HelpNavigateToolContext = {
+        userId,
+      };
+
+      const result = await executeHelpNavigateTool(toolCall.arguments, helpNavContext);
+
+      const formattedResult = result.success
+        ? formatHelpNavigateResults(result)
+        : result.error || 'Failed to navigate';
+
+      return {
+        toolName: 'help_navigate',
+        success: result.success,
+        result: result.success ? {
+          formattedText: formattedResult,
+          navigationUrl: result.url,
         } : null,
         error: result.success ? undefined : result.error,
       };

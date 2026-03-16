@@ -128,6 +128,12 @@ To configure which tools the AI can use in your current chat:
 
 For more details, see [Configuring Chat Tools](tools-settings.md).
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=providers")`
+
 ## Related Topics
 
 - [Configuring Chat Tools](tools-settings.md) - How to enable/disable tools for your chat

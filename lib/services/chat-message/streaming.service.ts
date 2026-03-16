@@ -203,6 +203,7 @@ export async function buildTools(
     agentMode: !!agentModeEnabled,
     helpSearch: !!helpToolsEnabled,
     helpSettings: !!helpToolsEnabled,
+    helpNavigate: !!helpToolsEnabled,
     whisper: !!isMultiCharacter,
     shellInteractivity: isShellEnvironment(),
     toolConfigs,

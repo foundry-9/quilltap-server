@@ -61,3 +61,9 @@ Tool results created through Run Tool are marked as **user-initiated** and appea
 - Image generation results include any generated images as attachments
 
 This is particularly useful when you wish to provide the AI with specific information — a memory search result, a file's contents, or a fresh set of dice rolls — without having to ask it to fetch the information itself.
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/salon/:id")`

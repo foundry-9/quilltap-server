@@ -279,3 +279,9 @@ For precise control:
 - Test on the devices you use most
 
 The Tags customization system is flexible—experiment to find a setup that works perfectly for your workflow!
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/aurora")`

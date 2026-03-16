@@ -286,6 +286,12 @@ A complete data deletion removes:
 - Backups are deleted if not manually kept
 - Some audit trails may be kept for compliance
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=system&section=delete-all-data")`
+
 ## Related Topics
 
 - [System Tools](system-tools.md) - Overview of all system tools

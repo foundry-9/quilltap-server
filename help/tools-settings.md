@@ -196,6 +196,12 @@ If a tool you need is unavailable, the dialog shows the reason. Take the suggest
 - The AI will find alternative ways to help you
 - You can re-enable it anytime
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=providers")`
+
 ## Related Topics
 
 - [Tools Overview](tools.md) - Understand what tools are and how they work

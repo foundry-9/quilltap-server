@@ -85,6 +85,12 @@ Projects can display backgrounds in different ways:
 
 Characters with help tools enabled can read your story backgrounds configuration during a conversation using the `help_settings` tool with `category: "images"`. This returns your image generation profiles and story background settings. Ask a help-tools-enabled character something like "Are story backgrounds enabled?" and it will consult the records.
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=images&section=story-backgrounds")`
+
 ## Related Topics
 
 - [Image Generation Profiles](/help/image-generation-profiles)

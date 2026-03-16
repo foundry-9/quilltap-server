@@ -452,6 +452,12 @@ For local development or plugins not on NPM:
 
 Characters with help tools enabled can read your system-level settings during a conversation using the `help_settings` tool with `category: "system"`. This returns your LLM logging configuration and timezone settings. For a broader picture of what is configured across all categories, the `help_settings` tool with `category: "overview"` provides a high-level summary. Ask a help-tools-enabled character something like "What are my system settings?" and it will have a look.
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=system&section=plugins")`
+
 ## Plugin Resources
 
 ### Finding Plugins

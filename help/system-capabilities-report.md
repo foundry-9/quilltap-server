@@ -316,6 +316,12 @@ A capabilities report includes:
 - Good for team documentation
 - Can send to external support
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=providers&section=capabilities-report")`
+
 ## Related Topics
 
 - [System Tools](system-tools.md) - Overview of all system tools

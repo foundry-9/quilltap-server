@@ -133,6 +133,12 @@ RNG results are saved as tool messages in the chat history. They:
 - Play simple games with characters
 - Add randomness to story elements
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/salon/:id")`
+
 ## Related Topics
 
 - [Tools](tools.md) - Overview of all Quilltap tools

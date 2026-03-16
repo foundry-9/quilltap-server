@@ -435,4 +435,10 @@ Every time you log in, Quilltap remembers your theme selections.
 - Try switching themes again
 - Check the browser console for errors
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=appearance&section=appearance")`
+
 Themes are a powerful way to personalize Quilltap and make it work for your creative style and environment!

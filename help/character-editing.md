@@ -558,6 +558,12 @@ If character has different modes:
 - Test each variant thoroughly
 - Keep consistent core personality
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/aurora/:id/edit")`
+
 ## Related Topics
 
 - [Character Creation](character-creation.md) — Creating new characters

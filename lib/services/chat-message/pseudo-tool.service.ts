@@ -77,6 +77,7 @@ export interface TextBlockEnabledToolOptions extends EnabledToolOptions {
   projectInfo: boolean
   helpSearch: boolean
   helpSettings: boolean
+  helpNavigate: boolean
   createNote: boolean
 }
 
@@ -101,6 +102,7 @@ export function determineTextBlockToolOptions(
     projectInfo: hasProject,
     helpSearch: !!helpToolsEnabled,
     helpSettings: !!helpToolsEnabled,
+    helpNavigate: !!helpToolsEnabled,
     createNote: true,
   }
 }
@@ -122,6 +124,7 @@ export function buildTextBlockSystemInstructions(
     projectInfo: enabledOptions.projectInfo,
     helpSearch: enabledOptions.helpSearch,
     helpSettings: enabledOptions.helpSettings,
+    helpNavigate: enabledOptions.helpNavigate,
     createNote: enabledOptions.createNote,
   }
   return buildTextBlockInstructions(options)

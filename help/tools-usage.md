@@ -254,6 +254,12 @@ Some responses involve a sequence of tool calls:
 - Enable Project Info to learn from your project context
 - Keep Search Memories on to reference past learnings
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/salon/:id")`
+
 ## Related Topics
 
 - [Tools Overview](tools.md) - What tools are and how they work

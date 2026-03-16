@@ -167,6 +167,20 @@ export {
   type HelpSettingsToolContext,
 } from './handlers/help-settings-handler';
 
+// Help Navigate Tool
+export {
+  helpNavigateToolDefinition,
+  validateHelpNavigateInput,
+  type HelpNavigateToolInput,
+  type HelpNavigateToolOutput,
+} from './help-navigate-tool';
+
+export {
+  executeHelpNavigateTool,
+  formatHelpNavigateResults,
+  type HelpNavigateToolContext,
+} from './handlers/help-navigate-handler';
+
 // RNG (Random Number Generator) Tool
 export {
   rngToolDefinition,

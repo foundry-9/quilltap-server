@@ -213,6 +213,12 @@ Certain data is intentionally excluded from backups:
 - Don't share backup files - they contain all your data
 - Consider encrypting sensitive backups
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=system&section=backup-restore")`
+
 ## Related Topics
 
 - [System Tools](system-tools.md) - Overview of all system tools

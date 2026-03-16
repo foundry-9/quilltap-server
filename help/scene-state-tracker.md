@@ -41,6 +41,12 @@ For chats classified as dangerous by the Concierge, the scene tracker automatica
 - Jobs are deduplicated: if a tracking job is already pending for a chat, new triggers reuse it rather than creating duplicates
 - In multi-character chats, the tracker fires once after the entire response chain completes, not after each individual character's turn
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=chat")`
+
 ## Related Topics
 
 - [Story Backgrounds](/help/story-backgrounds)

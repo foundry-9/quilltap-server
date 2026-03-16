@@ -507,6 +507,12 @@ Path bar shows quick navigation:
 - Try refreshing page
 - Check file still exists
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/files")`
+
 ## Related Topics
 
 - [File Management](files.md) — Browse and manage all files

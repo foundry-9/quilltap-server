@@ -184,6 +184,12 @@ When dangerous content handling is enabled, Quilltap automatically classifies al
 
 Characters with help tools enabled can read your current dangerous content configuration during a conversation using the `help_settings` tool with `category: "chat"`. The chat category includes your dangerous content handling settings alongside other chat preferences. Ask a help-tools-enabled character something like "What are my dangerous content settings?" and it will look them up.
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=chat&section=dangerous-content")`
+
 ## Related Topics
 
 - [Chat Settings](/help/chat-settings) - Configure global chat behavior

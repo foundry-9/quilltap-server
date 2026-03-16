@@ -318,4 +318,10 @@ Your quick-switcher settings are automatically saved:
 
 Every preference you set via the quick-switcher is saved to your account.
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=appearance&section=appearance")`
+
 The theme quick-switcher is designed for convenience—use it to keep theming controls at your fingertips!

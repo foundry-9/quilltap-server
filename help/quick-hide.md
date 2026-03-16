@@ -224,3 +224,9 @@ Your quick-hide settings are automatically saved:
 - Share your workspace with others without affecting their quick-hide preferences
 
 The quick-hide feature is essential for managing large character rosters and complex projects. Use it to keep your workspace organized and focused!
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/salon/:id")`

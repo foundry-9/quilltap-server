@@ -563,6 +563,12 @@ Now that you're set up, explore more of Quilltap:
 
 ---
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/setup")`
+
 ## Getting Help
 
 If you run into issues:

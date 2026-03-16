@@ -348,6 +348,12 @@ The quality of generated images depends on:
 
 Characters with help tools enabled can read your configured image profiles and story background settings during a conversation using the `help_settings` tool with `category: "images"`. This returns each profile's name, provider, model, and default status, plus your story backgrounds configuration --- but never your API keys. Ask a help-tools-enabled character something like "What image profiles do I have?" and it will oblige.
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=images&section=image-profiles")`
+
 ## Related Settings
 
 - **API Keys** — Store credentials for image providers

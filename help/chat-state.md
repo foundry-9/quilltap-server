@@ -158,6 +158,12 @@ The state tool supports dot notation and array indexing:
 - `inventory[0].name` - Access property of array item
 - `scores.Alice` - Access property with string key
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/salon/:id")`
+
 ## Related Features
 
 - [Tool Palette](/help/tool-palette) - Access the State button and other tools
