@@ -1684,7 +1684,7 @@ Output ONLY valid JSON with this exact schema:
       "characterName": "the character's name",
       "action": "what the character is doing right now",
       "appearance": "what the character currently looks like",
-      "clothing": "what the character is currently wearing, or null"
+      "clothing": "describe current clothing state — see rules below"
     }
   ]
 }
@@ -1697,7 +1697,8 @@ CRITICAL RULES — read carefully:
 - Baselines are ONLY used when the conversation gives NO information about a character's current state.
 - location: concise (1-2 sentences). Derive from scenario and conversation context.
 - action: what the character is doing RIGHT NOW at the end of the conversation.
-- appearance/clothing: complete snapshot of current state. Use null ONLY if absolutely no information exists (not even baselines).
+- appearance: complete snapshot of current state. Use baseline if the conversation provides no appearance info.
+- clothing: ALWAYS provide a string describing the current clothing state. NEVER use null. Examples: "nude", "shirtless, wearing jeans", "red cocktail dress", "partially undressed — wearing only underwear". If the character has undressed or is naked, say so explicitly (e.g. "nude", "naked", "undressed"). Only use the baseline clothing if the conversation has not described any clothing changes. If neither the conversation nor the baseline provides clothing info, use "unknown".
 - Be concise and accurate. Output ONLY the JSON object.`
 
 /**
@@ -1715,7 +1716,7 @@ Output ONLY valid JSON with this exact schema:
       "characterName": "the character's name",
       "action": "what the character is doing right now",
       "appearance": "what the character currently looks like",
-      "clothing": "what the character is currently wearing, or null"
+      "clothing": "describe current clothing state — see rules below"
     }
   ]
 }
@@ -1728,6 +1729,8 @@ CRITICAL RULES — read carefully:
 - If nothing changed for a field, carry it forward from the previous state.
 - Update location if the scene has moved.
 - Update action to reflect what each character is doing NOW at the end of the new messages.
+- clothing: ALWAYS provide a string describing the current clothing state. NEVER use null. Examples: "nude", "shirtless, wearing jeans", "red cocktail dress", "partially undressed — wearing only underwear". If a character has undressed or is naked, say so explicitly. If the previous state had clothing as null or missing, check the character baselines and new messages to determine the current clothing state.
+- Character baselines are provided for reference — use them to fill in null or missing fields from the previous state, but the new messages always take priority.
 - Be concise and accurate. Output ONLY the JSON object.`
 
 /**
@@ -1750,13 +1753,12 @@ export async function updateSceneState(
   chatId?: string,
   uncensoredFallback?: UncensoredFallbackOptions
 ): Promise<CheapLLMTaskResult<Record<string, unknown>>> {
-  // Format recent messages for the prompt
+  // Format recent messages for the prompt — no truncation for scene state tracking,
+  // because clothing/appearance details often appear deep in longer messages
   const messageText = input.recentMessages
     .map(m => {
       const speaker = m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Character' : 'System'
-      // Truncate long messages to keep context manageable
-      const content = m.content.length > 500 ? m.content.substring(0, 500) + '...' : m.content
-      return `${speaker}: ${content}`
+      return `${speaker}: ${m.content}`
     })
     .join('\n\n')
 
@@ -1795,7 +1797,7 @@ Based on the scenario and conversation above, what is the current scene state?`,
       },
     ]
   } else {
-    // Subsequent turns: update scene state with new messages only
+    // Subsequent turns: update scene state with new messages + baselines for recovery
     llmMessages = [
       {
         role: 'system',
@@ -1803,7 +1805,10 @@ Based on the scenario and conversation above, what is the current scene state?`,
       },
       {
         role: 'user',
-        content: `Previous Scene State:
+        content: `Character Baselines (defaults only — use these to fill in gaps where the previous state has null or missing fields):
+${characterBaselines}
+
+Previous Scene State:
 ${JSON.stringify(input.previousSceneState, null, 2)}
 
 New Messages (the primary source of truth — these override previous state where applicable):

@@ -200,8 +200,14 @@ export async function resolveCharacterAppearances(
         characterName: char.characterName,
         physicalDescription: physDesc,
         physicalDescriptionName: primary?.name || 'scene-state',
-        clothingDescription: sceneChar?.clothing || char.clothingRecords[0]?.description || '',
-        clothingSource: 'narrative' as const,
+        // If scene state has clothing info, use it. If clothing is explicitly null/empty
+        // (e.g. character undressed), do NOT fall back to stored clothing records —
+        // that would incorrectly redress the character in their default outfit.
+        // Only fall back to stored records if the character wasn't found in scene state at all.
+        clothingDescription: sceneChar
+          ? (sceneChar.clothing || '')
+          : (char.clothingRecords[0]?.description || ''),
+        clothingSource: sceneChar ? 'narrative' as const : 'default' as const,
         wasSanitized: false,
       }
     })

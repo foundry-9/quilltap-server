@@ -4,6 +4,7 @@
 
 ### 3.3-dev
 
+- fix: Scene state tracker now correctly tracks clothing — LLM prompts no longer offer `null` as a clothing option (must always describe the state, e.g. "nude", "partially undressed", etc.); removed 500-character message truncation in scene state tracking so clothing details in longer messages aren't lost; appearance resolution no longer silently falls back to default stored clothing when scene state has null clothing (which would incorrectly redress undressed characters); update prompts now include character baselines so the LLM can recover from previously-null clothing fields
 - feat: `quilltap db` CLI now supports interactive passphrase prompt with hidden input and `QUILLTAP_DB_PASSPHRASE` environment variable, in addition to the existing `--passphrase` flag — avoids exposing secrets in shell history
 - ci: Fix Docker multi-arch manifest creation failing when per-arch images include attestation layers — replace `docker manifest create`/`push` with `docker buildx imagetools create` which correctly handles OCI image indexes containing SBOM and SLSA provenance attestations
 - chore: Regenerate `runtime-docker.webp` Electron splash image from updated PNG source at 500×500 q80
