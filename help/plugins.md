@@ -448,6 +448,10 @@ For local development or plugins not on NPM:
 - **Connection Profiles** — If plugin adds new providers
 - **Roleplay Templates** — If plugin adds templates
 
+## In-Chat Settings Access
+
+Characters with help tools enabled can read your system-level settings during a conversation using the `help_settings` tool with `category: "system"`. This returns your LLM logging configuration and timezone settings. For a broader picture of what is configured across all categories, the `help_settings` tool with `category: "overview"` provides a high-level summary. Ask a help-tools-enabled character something like "What are my system settings?" and it will have a look.
+
 ## Plugin Resources
 
 ### Finding Plugins

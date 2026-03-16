@@ -180,6 +180,10 @@ When dangerous content handling is enabled, Quilltap automatically classifies al
 - If no uncensored provider is available in Auto-Route mode, the message is sent to your regular provider with a warning
 - Classification accuracy depends on the method used: the OpenAI moderation endpoint is purpose-built and highly accurate; the Cheap LLM fallback depends on the model's capabilities
 
+## In-Chat Settings Access
+
+Characters with help tools enabled can read your current dangerous content configuration during a conversation using the `help_settings` tool with `category: "chat"`. The chat category includes your dangerous content handling settings alongside other chat preferences. Ask a help-tools-enabled character something like "What are my dangerous content settings?" and it will look them up.
+
 ## Related Topics
 
 - [Chat Settings](/help/chat-settings) - Configure global chat behavior

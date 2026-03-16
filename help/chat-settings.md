@@ -413,6 +413,10 @@ Most settings save automatically as you make changes. You'll see:
 - Some providers don't support vision
 - Try updating to a newer model that supports vision
 
+## In-Chat Settings Access
+
+Characters with help tools enabled can read your current chat settings during a conversation using the `help_settings` tool with `category: "chat"`. This returns your token display, context compression, memory cascade, timestamp, agent mode, dangerous content, automation, and LLM logging settings. Simply ask a help-tools-enabled character something like "What are my chat settings?" and it will look them up for you.
+
 ## Related Settings
 
 - **Connection Profiles** — Choose which LLM to use

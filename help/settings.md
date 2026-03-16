@@ -128,6 +128,21 @@ All changes are saved automatically. You need not hunt for a "Save" button --- m
 
 If you have bookmarks or links to the old `/foundry` subsystem pages, they will automatically redirect to the appropriate Settings tab. No link left behind, as they say.
 
+## In-Chat Settings Access
+
+Characters with help tools enabled can read your current settings aloud during a conversation, rather like a well-informed secretary who has memorized the contents of every filing cabinet. The `help_settings` tool accepts a `category` parameter with the following values:
+
+- **`overview`** — A high-level summary of all configured profiles, counts, and key preferences
+- **`chat`** — Token display, context compression, memory cascade, timestamps, agent mode, and content settings
+- **`connections`** — Your configured LLM providers and models (API keys are never disclosed)
+- **`embeddings`** — Embedding and memory search profiles
+- **`images`** — Image generation profiles and story background settings
+- **`appearance`** — Theme preference, avatar settings, and sidebar width
+- **`templates`** — Roleplay templates and the current default
+- **`system`** — Plugin list and logging settings
+
+To use it, simply ask a help-tools-enabled character something like "What are my current settings?" or "Show me my connection profiles," and the character will consult the appropriate category on your behalf.
+
 ## Troubleshooting
 
 ### Can't find a setting?

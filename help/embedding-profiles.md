@@ -379,6 +379,10 @@ Some installations support additional providers:
 - Check Ollama is running (if using local)
 - Restart chat and try again
 
+## In-Chat Settings Access
+
+Characters with help tools enabled can read your configured embedding profiles during a conversation using the `help_settings` tool with `category: "embeddings"`. This returns each profile's name, provider, model, and dimensions --- but never your API keys. Ask a help-tools-enabled character something like "What embedding profiles do I have set up?" and it will consult the records.
+
 ## Related Settings
 
 - **API Keys** — Store credentials for cloud embedding providers (OpenAI)

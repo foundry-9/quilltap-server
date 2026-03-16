@@ -209,6 +209,25 @@ Some responses involve a sequence of tool calls:
 - Over time, it uses tools more intelligently
 - Let it experiment with different tool combinations
 
+### For Settings Help
+
+**Enable these first:**
+
+- Help tools must be enabled on the character (in the character's Profiles tab)
+
+**Best practices:**
+
+- Ask about specific setting categories for focused results
+- The tool accepts categories: overview, chat, connections, embeddings, images, appearance, templates, system
+- API keys and credentials are never disclosed
+
+**Example requests:**
+
+- "What connection profiles do I have configured?"
+- "Show me my chat settings"
+- "What are my current appearance settings?"
+- "Give me an overview of my settings"
+
 ## Pro Tips
 
 **For Research Tasks:**

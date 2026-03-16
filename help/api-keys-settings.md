@@ -223,6 +223,10 @@ You can store multiple keys from the same provider. This is useful for:
 - You can have different profiles use different keys
 - No key is selected by default — you choose per profile
 
+## In-Chat Settings Access
+
+Characters with help tools enabled can read your configured connection, embedding, and image profiles during a conversation using the `help_settings` tool (with categories `"connections"`, `"embeddings"`, or `"images"` respectively). These reports show which profiles exist and which providers and models they use --- but API keys and credentials are never disclosed, not even partially. Ask a help-tools-enabled character something like "What providers do I have set up?" and it will produce a summary.
+
 ## Related Settings
 
 - **Connection Profiles** — Use API keys to create LLM connections

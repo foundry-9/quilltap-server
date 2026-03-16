@@ -422,4 +422,8 @@ While using the settings:
 7. **Backup important** — Keep copies of templates you use frequently
 8. **Iterate** — Templates improve with testing and refinement
 
+## In-Chat Settings Access
+
+Characters with help tools enabled can read your roleplay template configuration during a conversation using the `help_settings` tool with `category: "templates"`. This returns the list of your templates (names, descriptions, and default status) and which template is set as the default for new chats. Ask a help-tools-enabled character something like "What roleplay templates do I have?" and it will produce the inventory.
+
 The Roleplay Templates settings give you complete control over how your chats are formatted—take advantage of them to create the perfect style for your creative work!

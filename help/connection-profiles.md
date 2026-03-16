@@ -343,6 +343,10 @@ Check your provider's documentation for details on file types and sizes.
 - Add at least one API key
 - Return to Connection Profiles
 
+## In-Chat Settings Access
+
+Characters with help tools enabled can read your configured connection profiles during a conversation using the `help_settings` tool with `category: "connections"`. This returns each profile's name, provider, model, and configuration --- but never your API keys or credentials. Ask a help-tools-enabled character something like "What connection profiles do I have?" and it will produce the list.
+
 ## Related Settings
 
 - **API Keys** — Store credentials for connection profiles
