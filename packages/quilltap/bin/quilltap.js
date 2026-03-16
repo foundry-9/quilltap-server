@@ -392,9 +392,58 @@ function resolveDataDir(overrideDir) {
 }
 
 /**
- * Read and decrypt the .dbkey file to get the SQLCipher key.
+ * Prompt for a passphrase interactively with hidden input.
+ * Returns a promise that resolves to the entered passphrase.
  */
-function loadDbKey(dataDir, passphrase) {
+function promptPassphrase(prompt) {
+  return new Promise((resolve, reject) => {
+    const readline = require('readline');
+    if (!process.stdin.isTTY) {
+      reject(new Error('This database requires a passphrase. Use --passphrase <pass> or set QUILLTAP_DB_PASSPHRASE'));
+      return;
+    }
+    process.stdout.write(prompt || 'Passphrase: ');
+    const rl = readline.createInterface({ input: process.stdin, terminal: false });
+    // Disable echo by switching stdin to raw mode
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    let passphrase = '';
+    const onData = (ch) => {
+      const c = ch.toString();
+      if (c === '\n' || c === '\r' || c === '\u0004') {
+        // Enter or Ctrl+D — done
+        process.stdin.setRawMode(false);
+        process.stdin.removeListener('data', onData);
+        process.stdin.pause();
+        rl.close();
+        process.stdout.write('\n');
+        resolve(passphrase);
+      } else if (c === '\u0003') {
+        // Ctrl+C — abort
+        process.stdin.setRawMode(false);
+        process.stdin.removeListener('data', onData);
+        process.stdin.pause();
+        rl.close();
+        process.stdout.write('\n');
+        process.exit(130);
+      } else if (c === '\u007F' || c === '\b') {
+        // Backspace
+        if (passphrase.length > 0) {
+          passphrase = passphrase.slice(0, -1);
+        }
+      } else {
+        passphrase += c;
+      }
+    };
+    process.stdin.on('data', onData);
+  });
+}
+
+/**
+ * Read and decrypt the .dbkey file to get the SQLCipher key.
+ * If passphrase is needed and not provided, prompts interactively.
+ */
+async function loadDbKey(dataDir, passphrase) {
   const crypto = require('crypto');
   const dbkeyPath = path.join(dataDir, 'quilltap.dbkey');
   if (!fs.existsSync(dbkeyPath)) {
@@ -434,9 +483,17 @@ function loadDbKey(dataDir, passphrase) {
     // Internal passphrase failed — need user passphrase
   }
 
-  // User passphrase required
+  // Check environment variable if no CLI passphrase provided
+  if (!passphrase && process.env.QUILLTAP_DB_PASSPHRASE) {
+    passphrase = process.env.QUILLTAP_DB_PASSPHRASE;
+  }
+
+  // Prompt interactively if still no passphrase
   if (!passphrase) {
-    throw new Error('This database requires a passphrase. Use --passphrase <pass>');
+    passphrase = await promptPassphrase('Database passphrase: ');
+    if (!passphrase) {
+      throw new Error('No passphrase provided');
+    }
   }
 
   return tryDecrypt(passphrase);
@@ -459,12 +516,17 @@ Options:
   --passphrase <pass>   Provide passphrase for encrypted .dbkey
   -h, --help            Show this help
 
+If a passphrase is required and not provided via --passphrase, the tool
+will check the QUILLTAP_DB_PASSPHRASE environment variable, then prompt
+interactively (with hidden input) if a TTY is available.
+
 Examples:
   quilltap db --tables
   quilltap db "SELECT count(*) FROM characters"
   quilltap db --count messages
   quilltap db --repl
   quilltap db --llm-logs --tables
+  QUILLTAP_DB_PASSPHRASE=secret quilltap db --tables
 `);
 }
 
@@ -516,7 +578,7 @@ async function dbCommand(args) {
   // Load encryption key
   let pepper;
   try {
-    pepper = loadDbKey(dataDir, passphrase);
+    pepper = await loadDbKey(dataDir, passphrase);
   } catch (err) {
     console.error(`Error: ${err.message}`);
     process.exit(1);
