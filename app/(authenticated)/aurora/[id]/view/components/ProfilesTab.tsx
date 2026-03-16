@@ -16,10 +16,12 @@ interface ProfilesTabProps {
   savingPartner: boolean
   savingImageProfile?: boolean
   savingAgentMode?: boolean
+  savingHelpTools?: boolean
   onConnectionProfileChange: (profileId: string) => void
   onPartnerChange: (partnerId: string) => void
   onImageProfileChange: (profileId: string | null) => void
   onAgentModeChange: (enabled: boolean | null) => void
+  onHelpToolsChange: (enabled: boolean | null) => void
 }
 
 export function ProfilesTab({
@@ -33,10 +35,12 @@ export function ProfilesTab({
   savingPartner,
   savingImageProfile,
   savingAgentMode,
+  savingHelpTools,
   onConnectionProfileChange,
   onPartnerChange,
   onImageProfileChange,
   onAgentModeChange,
+  onHelpToolsChange,
 }: ProfilesTabProps) {
   // Check if this character is user-controlled (disable partner selection if so)
   const isUserControlled = character?.controlledBy === 'user'
@@ -176,6 +180,38 @@ export function ProfilesTab({
             <option value="disabled">Disabled by default</option>
           </select>
           {savingAgentMode && (
+            <div className="flex items-center gap-2 qt-text-small">
+              <div className="h-4 w-4 animate-spin rounded-full qt-spinner"></div>
+              Saving...
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Help Tools Section */}
+      <div className="character-section-card rounded-lg border border-border bg-card p-6">
+        <h2 className="text-lg font-semibold text-foreground mb-2">
+          Help Tools
+        </h2>
+        <p className="qt-text-small mb-4">
+          Control whether help tools are available for this character.
+          When enabled, the character can search Quilltap documentation and read instance settings to assist users with configuration.
+        </p>
+        <div className="flex items-center gap-3">
+          <select
+            value={character?.defaultHelpToolsEnabled === null || character?.defaultHelpToolsEnabled === undefined ? 'inherit' : character.defaultHelpToolsEnabled ? 'enabled' : 'disabled'}
+            onChange={(e) => {
+              const value = e.target.value
+              onHelpToolsChange(value === 'inherit' ? null : value === 'enabled')
+            }}
+            disabled={savingHelpTools}
+            className="flex-1 max-w-xs rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+          >
+            <option value="inherit">Inherit from global settings (disabled)</option>
+            <option value="enabled">Enabled</option>
+            <option value="disabled">Disabled</option>
+          </select>
+          {savingHelpTools && (
             <div className="flex items-center gap-2 qt-text-small">
               <div className="h-4 w-4 animate-spin rounded-full qt-spinner"></div>
               Saving...

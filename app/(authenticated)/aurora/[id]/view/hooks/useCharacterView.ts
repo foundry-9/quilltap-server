@@ -32,6 +32,7 @@ interface UseCharacterViewReturn {
   togglingFavorite: boolean
   togglingControlledBy: boolean
   savingAgentMode: boolean
+  savingHelpTools: boolean
   fetchCharacter: () => Promise<void>
   fetchTags: () => Promise<void>
   fetchProfiles: () => Promise<void>
@@ -47,6 +48,7 @@ interface UseCharacterViewReturn {
   handleSaveDefaultPartner: (partnerId: string) => Promise<void>
   handleSaveImageProfile: (profileId: string | null) => Promise<void>
   handleSaveAgentMode: (enabled: boolean | null) => Promise<void>
+  handleSaveHelpTools: (enabled: boolean | null) => Promise<void>
   handleToggleNpc: () => Promise<void>
   handleToggleFavorite: () => Promise<void>
   handleToggleControlledBy: () => Promise<void>
@@ -71,6 +73,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
   const [togglingFavorite, setTogglingFavorite] = useState(false)
   const [togglingControlledBy, setTogglingControlledBy] = useState(false)
   const [savingAgentMode, setSavingAgentMode] = useState(false)
+  const [savingHelpTools, setSavingHelpTools] = useState(false)
 
   // Get the default partner for template highlighting ({{user}} replacement)
   // This uses the new default conversation partner system instead of old personas
@@ -355,6 +358,35 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     }
   }
 
+  const handleSaveHelpTools = async (enabled: boolean | null) => {
+    setSavingHelpTools(true)
+    try {
+      const res = await fetch(`/api/v1/characters/${characterId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ defaultHelpToolsEnabled: enabled }),
+      })
+      if (!res.ok) throw new Error('Failed to update help tools setting')
+
+      // Update local state
+      if (character) {
+        setCharacter({ ...character, defaultHelpToolsEnabled: enabled })
+      }
+      const message = enabled === null
+        ? 'Help tools set to inherit from global (disabled)'
+        : enabled
+          ? 'Help tools enabled'
+          : 'Help tools disabled'
+      showSuccessToast(message)
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to update help tools')
+      console.error('Failed to save help tools', { error: err instanceof Error ? err.message : String(err) })
+      await fetchCharacter() // Revert to server state
+    } finally {
+      setSavingHelpTools(false)
+    }
+  }
+
   const handleToggleNpc = async () => {
     if (!character) return
     setTogglingNpc(true)
@@ -436,6 +468,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     togglingFavorite,
     togglingControlledBy,
     savingAgentMode,
+    savingHelpTools,
     fetchCharacter,
     fetchTags,
     fetchProfiles,
@@ -451,6 +484,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     handleSaveDefaultPartner,
     handleSaveImageProfile,
     handleSaveAgentMode,
+    handleSaveHelpTools,
     handleToggleNpc,
     handleToggleFavorite,
     handleToggleControlledBy,

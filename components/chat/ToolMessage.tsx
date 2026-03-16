@@ -187,9 +187,14 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
       icon: '🗃️',
       bgColor: 'bg-muted border border-border',
     },
-    search_help: {
+    help_search: {
       displayName: 'Help Search',
       icon: '📖',
+      bgColor: 'bg-muted border border-border',
+    },
+    help_settings: {
+      displayName: 'Settings Reader',
+      icon: '⚙️',
       bgColor: 'bg-muted border border-border',
     },
     chdir: {

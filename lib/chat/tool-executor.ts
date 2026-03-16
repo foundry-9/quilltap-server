@@ -41,6 +41,11 @@ import {
   type HelpSearchToolContext,
 } from '@/lib/tools/handlers/help-search-handler';
 import {
+  executeHelpSettingsTool,
+  formatHelpSettingsResults,
+  type HelpSettingsToolContext,
+} from '@/lib/tools/handlers/help-settings-handler';
+import {
   executeRngTool,
   formatRngResults,
   type RngToolContext,
@@ -152,7 +157,8 @@ const BUILT_IN_TOOLS = new Set([
   'project_info',
   'file_management',
   'request_full_context',
-  'search_help',
+  'help_search',
+  'help_settings',
   'rng',
   'state',
   'submit_final_response',
@@ -469,8 +475,8 @@ export async function executeToolCallWithContext(
       };
     }
 
-    // Handle search_help (help documentation search)
-    if (toolCall.name === 'search_help') {
+    // Handle help_search (help documentation search)
+    if (toolCall.name === 'help_search') {
       // Execute help search tool
       const helpContext: HelpSearchToolContext = {
         userId,
@@ -484,13 +490,37 @@ export async function executeToolCallWithContext(
         : result.error || 'No help documentation found';
 
       return {
-        toolName: 'search_help',
+        toolName: 'help_search',
         success: result.success,
         result: result.success ? {
           formattedText: formattedResult,
           results: result.results,
           totalFound: result.totalFound,
           query: result.query,
+        } : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle help_settings (settings reader for help characters)
+    if (toolCall.name === 'help_settings') {
+      const helpSettingsContext: HelpSettingsToolContext = {
+        userId,
+      };
+
+      const result = await executeHelpSettingsTool(toolCall.arguments, helpSettingsContext);
+
+      const formattedResult = result.success && result.data
+        ? formatHelpSettingsResults(result)
+        : result.error || 'Failed to read settings';
+
+      return {
+        toolName: 'help_settings',
+        success: result.success,
+        result: result.success ? {
+          formattedText: formattedResult,
+          category: result.category,
+          data: result.data,
         } : null,
         error: result.success ? undefined : result.error,
       };

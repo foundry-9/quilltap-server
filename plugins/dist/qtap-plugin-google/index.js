@@ -436,7 +436,7 @@ var require_package = __commonJS({
   "node_modules/gaxios/package.json"(exports2, module2) {
     module2.exports = {
       name: "gaxios",
-      version: "7.1.3",
+      version: "7.1.4",
       description: "A simple common HTTP client specifically for Google APIs and services.",
       main: "build/cjs/src/index.js",
       types: "build/cjs/src/index.d.ts",
@@ -495,18 +495,18 @@ var require_package = __commonJS({
         "@types/mocha": "^10.0.10",
         "@types/multiparty": "4.2.1",
         "@types/mv": "^2.1.0",
-        "@types/ncp": "^2.0.1",
-        "@types/node": "^22.0.0",
-        "@types/sinon": "^17.0.0",
-        "@types/tmp": "0.2.6",
+        "@types/ncp": "^2.0.8",
+        "@types/node": "^22.13.1",
+        "@types/sinon": "^17.0.3",
+        "@types/tmp": "^0.2.6",
         assert: "^2.0.0",
         browserify: "^17.0.0",
-        c8: "^10.0.0",
+        c8: "^10.1.3",
         cors: "^2.8.5",
         express: "^5.0.0",
-        gts: "^6.0.0",
+        gts: "^6.0.2",
         "is-docker": "^3.0.0",
-        jsdoc: "^4.0.0",
+        jsdoc: "^4.0.4",
         "jsdoc-fresh": "^5.0.0",
         "jsdoc-region-tag": "^4.0.0",
         karma: "^6.0.0",
@@ -522,23 +522,22 @@ var require_package = __commonJS({
         multiparty: "^4.2.1",
         mv: "^2.1.1",
         ncp: "^2.0.0",
-        nock: "^14.0.0-beta.13",
-        "null-loader": "^4.0.0",
+        nock: "^14.0.5",
+        "null-loader": "^4.0.1",
         "pack-n-play": "^4.0.0",
         puppeteer: "^24.0.0",
         sinon: "^21.0.0",
         "stream-browserify": "^3.0.0",
         tmp: "0.2.5",
         "ts-loader": "^9.5.2",
-        typescript: "^5.8.3",
-        webpack: "^5.35.0",
+        typescript: "5.8.3",
+        webpack: "^5.97.1",
         "webpack-cli": "^6.0.1"
       },
       dependencies: {
         extend: "^3.0.2",
         "https-proxy-agent": "^7.0.1",
-        "node-fetch": "^3.3.2",
-        rimraf: "^5.0.1"
+        "node-fetch": "^3.3.2"
       },
       homepage: "https://github.com/googleapis/google-cloud-node-core/tree/main/packages/gaxios"
     };
@@ -12255,7 +12254,7 @@ var require_package2 = __commonJS({
   "node_modules/google-auth-library/package.json"(exports2, module2) {
     module2.exports = {
       name: "google-auth-library",
-      version: "10.6.1",
+      version: "10.6.2",
       author: "Google Inc.",
       description: "Google APIs Authentication Client Library for Node.js",
       engines: {
@@ -12278,7 +12277,7 @@ var require_package2 = __commonJS({
       dependencies: {
         "base64-js": "^1.3.0",
         "ecdsa-sig-formatter": "^1.0.11",
-        gaxios: "7.1.3",
+        gaxios: "^7.1.4",
         "gcp-metadata": "8.1.2",
         "google-logging-utils": "1.1.3",
         jws: "^4.0.0"
@@ -27740,6 +27739,13 @@ var Files = class extends BaseModule {
     }
   }
 };
+function audioTranscriptionConfigToMldev$1(fromObject) {
+  const toObject = {};
+  if (getValueByPath(fromObject, ["languageCodes"]) !== void 0) {
+    throw new Error("languageCodes parameter is not supported in Gemini API.");
+  }
+  return toObject;
+}
 function authConfigToMldev$2(fromObject) {
   const toObject = {};
   const fromApiKey = getValueByPath(fromObject, ["apiKey"]);
@@ -28114,13 +28120,13 @@ function liveConnectConfigToMldev$1(fromObject, parentObject) {
     "inputAudioTranscription"
   ]);
   if (parentObject !== void 0 && fromInputAudioTranscription != null) {
-    setValueByPath(parentObject, ["setup", "inputAudioTranscription"], fromInputAudioTranscription);
+    setValueByPath(parentObject, ["setup", "inputAudioTranscription"], audioTranscriptionConfigToMldev$1(fromInputAudioTranscription));
   }
   const fromOutputAudioTranscription = getValueByPath(fromObject, [
     "outputAudioTranscription"
   ]);
   if (parentObject !== void 0 && fromOutputAudioTranscription != null) {
-    setValueByPath(parentObject, ["setup", "outputAudioTranscription"], fromOutputAudioTranscription);
+    setValueByPath(parentObject, ["setup", "outputAudioTranscription"], audioTranscriptionConfigToMldev$1(fromOutputAudioTranscription));
   }
   const fromRealtimeInputConfig = getValueByPath(fromObject, [
     "realtimeInputConfig"
@@ -32391,7 +32397,7 @@ var CONTENT_TYPE_HEADER = "Content-Type";
 var SERVER_TIMEOUT_HEADER = "X-Server-Timeout";
 var USER_AGENT_HEADER = "User-Agent";
 var GOOGLE_API_CLIENT_HEADER = "x-goog-api-client";
-var SDK_VERSION = "1.44.0";
+var SDK_VERSION = "1.45.0";
 var LIBRARY_LABEL = `google-genai-sdk/${SDK_VERSION}`;
 var VERTEX_AI_API_DEFAULT_VERSION = "v1beta1";
 var GOOGLE_AI_API_DEFAULT_VERSION = "v1beta";
@@ -35162,6 +35168,13 @@ var Operations = class extends BaseModule {
     }
   }
 };
+function audioTranscriptionConfigToMldev(fromObject) {
+  const toObject = {};
+  if (getValueByPath(fromObject, ["languageCodes"]) !== void 0) {
+    throw new Error("languageCodes parameter is not supported in Gemini API.");
+  }
+  return toObject;
+}
 function authConfigToMldev(fromObject) {
   const toObject = {};
   const fromApiKey = getValueByPath(fromObject, ["apiKey"]);
@@ -35412,13 +35425,13 @@ function liveConnectConfigToMldev(fromObject, parentObject) {
     "inputAudioTranscription"
   ]);
   if (parentObject !== void 0 && fromInputAudioTranscription != null) {
-    setValueByPath(parentObject, ["setup", "inputAudioTranscription"], fromInputAudioTranscription);
+    setValueByPath(parentObject, ["setup", "inputAudioTranscription"], audioTranscriptionConfigToMldev(fromInputAudioTranscription));
   }
   const fromOutputAudioTranscription = getValueByPath(fromObject, [
     "outputAudioTranscription"
   ]);
   if (parentObject !== void 0 && fromOutputAudioTranscription != null) {
-    setValueByPath(parentObject, ["setup", "outputAudioTranscription"], fromOutputAudioTranscription);
+    setValueByPath(parentObject, ["setup", "outputAudioTranscription"], audioTranscriptionConfigToMldev(fromOutputAudioTranscription));
   }
   const fromRealtimeInputConfig = getValueByPath(fromObject, [
     "realtimeInputConfig"
@@ -36460,6 +36473,17 @@ var FallbackEncoder = ({ headers, body }) => {
     body: JSON.stringify(body)
   };
 };
+function stringifyQuery(query) {
+  return Object.entries(query).filter(([_, value]) => typeof value !== "undefined").map(([key, value]) => {
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+      return `${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
+    }
+    if (value === null) {
+      return `${encodeURIComponent(key)}=`;
+    }
+    throw new GeminiNextGenAPIClientError(`Cannot stringify type ${typeof value}; Expected string, number, boolean, or null. If you need to pass nested query parameters, you can manually encode them, e.g. { query: { 'foo[key1]': value1, 'foo[key2]': value2 } }, and please open a GitHub issue requesting better support for your use case.`);
+  }).join("&");
+}
 var VERSION = "0.0.1";
 var checkFileSupport = () => {
   var _a4;
@@ -37368,15 +37392,7 @@ var BaseGeminiNextGenAPIClient = class _BaseGeminiNextGenAPIClient {
    * Basic re-implementation of `qs.stringify` for primitive types.
    */
   stringifyQuery(query) {
-    return Object.entries(query).filter(([_, value]) => typeof value !== "undefined").map(([key, value]) => {
-      if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-        return `${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
-      }
-      if (value === null) {
-        return `${encodeURIComponent(key)}=`;
-      }
-      throw new GeminiNextGenAPIClientError(`Cannot stringify type ${typeof value}; Expected string, number, boolean, or null. If you need to pass nested query parameters, you can manually encode them, e.g. { query: { 'foo[key1]': value1, 'foo[key2]': value2 } }, and please open a GitHub issue requesting better support for your use case.`);
-    }).join("&");
+    return stringifyQuery(query);
   }
   getUserAgent() {
     return `${this.constructor.name}/JS ${VERSION}`;
@@ -37391,8 +37407,9 @@ var BaseGeminiNextGenAPIClient = class _BaseGeminiNextGenAPIClient {
     const baseURL = !this.baseURLOverridden() && defaultBaseURL || this.baseURL;
     const url = isAbsoluteURL(path3) ? new URL(path3) : new URL(baseURL + (baseURL.endsWith("/") && path3.startsWith("/") ? path3.slice(1) : path3));
     const defaultQuery = this.defaultQuery();
-    if (!isEmptyObj(defaultQuery)) {
-      query = Object.assign(Object.assign({}, defaultQuery), query);
+    const pathQuery = Object.fromEntries(url.searchParams);
+    if (!isEmptyObj(defaultQuery) || !isEmptyObj(pathQuery)) {
+      query = Object.assign(Object.assign(Object.assign({}, pathQuery), defaultQuery), query);
     }
     if (typeof query === "object" && query && !Array.isArray(query)) {
       url.search = this.stringifyQuery(query);
@@ -37590,7 +37607,7 @@ var BaseGeminiNextGenAPIClient = class _BaseGeminiNextGenAPIClient {
         timeoutMillis = Date.parse(retryAfterHeader) - Date.now();
       }
     }
-    if (!(timeoutMillis && 0 <= timeoutMillis && timeoutMillis < 60 * 1e3)) {
+    if (timeoutMillis === void 0) {
       const maxRetries = (_b = options.maxRetries) !== null && _b !== void 0 ? _b : this.maxRetries;
       timeoutMillis = this.calculateDefaultRetryTimeoutMillis(retriesRemaining, maxRetries);
     }
@@ -39632,7 +39649,7 @@ var safeJSON2 = (text) => {
 var sleep2 = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ../../../node_modules/openai/version.mjs
-var VERSION2 = "6.27.0";
+var VERSION2 = "6.29.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -40217,7 +40234,7 @@ function stringify(object, opts = {}) {
 }
 
 // ../../../node_modules/openai/internal/utils/query.mjs
-function stringifyQuery(query) {
+function stringifyQuery2(query) {
   return stringify(query, { arrayFormat: "brackets" });
 }
 
@@ -42610,7 +42627,7 @@ var Speech = class extends APIResource2 {
    * const speech = await client.audio.speech.create({
    *   input: 'input',
    *   model: 'string',
-   *   voice: 'ash',
+   *   voice: 'string',
    * });
    *
    * const content = await speech.blob();
@@ -45775,7 +45792,7 @@ var Videos = class extends APIResource2 {
    * Create a new video generation job from a prompt and optional reference assets.
    */
   create(body, options) {
-    return this._client.post("/videos", maybeMultipartFormRequestOptions({ body, ...options }, this._client));
+    return this._client.post("/videos", multipartFormRequestOptions({ body, ...options }, this._client));
   }
   /**
    * Fetch the latest metadata for a generated video.
@@ -45796,6 +45813,12 @@ var Videos = class extends APIResource2 {
     return this._client.delete(path2`/videos/${videoID}`, options);
   }
   /**
+   * Create a character from an uploaded video.
+   */
+  createCharacter(body, options) {
+    return this._client.post("/videos/characters", multipartFormRequestOptions({ body, ...options }, this._client));
+  }
+  /**
    * Download the generated video bytes or a derived preview asset.
    *
    * Streams the rendered video content for the specified video job.
@@ -45807,6 +45830,25 @@ var Videos = class extends APIResource2 {
       headers: buildHeaders2([{ Accept: "application/binary" }, options?.headers]),
       __binaryResponse: true
     });
+  }
+  /**
+   * Create a new video generation job by editing a source video or existing
+   * generated video.
+   */
+  edit(body, options) {
+    return this._client.post("/videos/edits", multipartFormRequestOptions({ body, ...options }, this._client));
+  }
+  /**
+   * Create an extension of a completed video.
+   */
+  extend(body, options) {
+    return this._client.post("/videos/extensions", multipartFormRequestOptions({ body, ...options }, this._client));
+  }
+  /**
+   * Fetch a character.
+   */
+  getCharacter(characterID, options) {
+    return this._client.get(path2`/videos/characters/${characterID}`, options);
   }
   /**
    * Create a remix of a completed video using a refreshed prompt.
@@ -46003,7 +46045,7 @@ var OpenAI = class {
     return buildHeaders2([{ Authorization: `Bearer ${this.apiKey}` }]);
   }
   stringifyQuery(query) {
-    return stringifyQuery(query);
+    return stringifyQuery2(query);
   }
   getUserAgent() {
     return `${this.constructor.name}/JS ${VERSION2}`;
@@ -46040,8 +46082,9 @@ var OpenAI = class {
     const baseURL = !__classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_baseURLOverridden).call(this) && defaultBaseURL || this.baseURL;
     const url = isAbsoluteURL2(path3) ? new URL(path3) : new URL(baseURL + (baseURL.endsWith("/") && path3.startsWith("/") ? path3.slice(1) : path3));
     const defaultQuery = this.defaultQuery();
-    if (!isEmptyObj2(defaultQuery)) {
-      query = { ...defaultQuery, ...query };
+    const pathQuery = Object.fromEntries(url.searchParams);
+    if (!isEmptyObj2(defaultQuery) || !isEmptyObj2(pathQuery)) {
+      query = { ...pathQuery, ...defaultQuery, ...query };
     }
     if (typeof query === "object" && query && !Array.isArray(query)) {
       url.search = this.stringifyQuery(query);

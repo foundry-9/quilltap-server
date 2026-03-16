@@ -782,6 +782,9 @@ async function processMessage(
     effectiveProfile.allowWebSearch
   )
 
+  // Resolve help tools enabled from character (default: disabled)
+  const helpToolsEnabled = character?.defaultHelpToolsEnabled === true
+
   // Build tools (include request_full_context when compression is enabled, submit_final_response when agent mode is enabled)
   // Always pass disabledTools and disabledToolGroups for filtering
   const { tools, modelSupportsNativeTools, useNativeWebSearch } = await buildTools(
@@ -794,7 +797,8 @@ async function processMessage(
     chat.disabledTools ?? [],
     chat.disabledToolGroups ?? [],
     agentMode.enabled, // agentModeEnabled - enables submit_final_response tool
-    isMultiCharacter // isMultiCharacter - enables whisper tool
+    isMultiCharacter, // isMultiCharacter - enables whisper tool
+    helpToolsEnabled // helpToolsEnabled - enables help_search and help_settings tools
   )
 
   const useTextBlockTools = checkShouldUseTextBlockTools(modelSupportsNativeTools)
@@ -807,7 +811,8 @@ async function processMessage(
       imageProfileId,
       effectiveProfile.allowWebSearch,
       isMultiCharacter,
-      !!chat.projectId
+      !!chat.projectId,
+      helpToolsEnabled
     )
     toolInstructions = buildTextBlockSystemInstructions(textBlockOptions)
     logTextBlockToolUsage(effectiveProfile.provider, effectiveProfile.modelName, textBlockOptions)

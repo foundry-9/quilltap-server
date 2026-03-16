@@ -112,6 +112,9 @@ export const CharacterSchema = z.object({
   /** Default agent mode enabled state for chats with this character (null = inherit from global) */
   defaultAgentModeEnabled: z.boolean().nullable().optional(),
 
+  /** Default help tools enabled state for chats with this character (null = inherit from global, default disabled) */
+  defaultHelpToolsEnabled: z.boolean().nullable().optional(),
+
   // Relationships
   personaLinks: z.array(z.object({
     personaId: UUIDSchema,

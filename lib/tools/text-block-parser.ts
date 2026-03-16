@@ -60,6 +60,8 @@ const TEXT_BLOCK_TOOL_NAME_MAP: Record<string, string> = {
   'project_info': 'project_info',
   'file_management': 'file_management',
   'help_search': 'help_search',
+  'search_help': 'help_search',  // Backward compatibility alias
+  'help_settings': 'help_settings',
 
   // Common aliases
   'memory': 'search_memories',
@@ -79,6 +81,7 @@ const TEXT_BLOCK_TOOL_NAME_MAP: Record<string, string> = {
   'random': 'rng',
 
   'help': 'help_search',
+  'settings': 'help_settings',
 
   'files': 'file_management',
   'file': 'file_management',
@@ -119,6 +122,10 @@ const PARAM_ALIAS_MAP: Record<string, Record<string, string>> = {
   help_search: {
     'search': 'query',
     'q': 'query',
+  },
+  help_settings: {
+    'section': 'category',
+    'type': 'category',
   },
 }
 

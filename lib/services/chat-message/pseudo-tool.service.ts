@@ -76,6 +76,7 @@ export interface TextBlockEnabledToolOptions extends EnabledToolOptions {
   fileManagement: boolean
   projectInfo: boolean
   helpSearch: boolean
+  helpSettings: boolean
   createNote: boolean
 }
 
@@ -87,6 +88,7 @@ export function determineTextBlockToolOptions(
   allowWebSearch: boolean,
   isMultiCharacter: boolean,
   hasProject: boolean,
+  helpToolsEnabled?: boolean,
 ): TextBlockEnabledToolOptions {
   return {
     imageGeneration: !!imageProfileId,
@@ -97,7 +99,8 @@ export function determineTextBlockToolOptions(
     rng: true,
     fileManagement: hasProject,
     projectInfo: hasProject,
-    helpSearch: true,
+    helpSearch: !!helpToolsEnabled,
+    helpSettings: !!helpToolsEnabled,
     createNote: true,
   }
 }
@@ -118,6 +121,7 @@ export function buildTextBlockSystemInstructions(
     fileManagement: enabledOptions.fileManagement,
     projectInfo: enabledOptions.projectInfo,
     helpSearch: enabledOptions.helpSearch,
+    helpSettings: enabledOptions.helpSettings,
     createNote: enabledOptions.createNote,
   }
   return buildTextBlockInstructions(options)

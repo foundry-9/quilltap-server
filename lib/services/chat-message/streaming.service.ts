@@ -136,7 +136,9 @@ export async function buildTools(
   /** Whether agent mode is enabled (enables submit_final_response tool) */
   agentModeEnabled?: boolean,
   /** Whether this is a multi-character chat (enables whisper tool) */
-  isMultiCharacter?: boolean
+  isMultiCharacter?: boolean,
+  /** Whether help tools are enabled for this character (enables help_search and help_settings) */
+  helpToolsEnabled?: boolean
 ): Promise<{
   tools: unknown[]
   modelSupportsNativeTools: boolean
@@ -199,6 +201,8 @@ export async function buildTools(
     projectInfo: !!projectId,
     requestFullContext: !!requestFullContext,
     agentMode: !!agentModeEnabled,
+    helpSearch: !!helpToolsEnabled,
+    helpSettings: !!helpToolsEnabled,
     whisper: !!isMultiCharacter,
     shellInteractivity: isShellEnvironment(),
     toolConfigs,

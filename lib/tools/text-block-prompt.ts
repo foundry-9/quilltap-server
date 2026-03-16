@@ -32,6 +32,8 @@ export interface TextBlockPromptOptions {
   projectInfo?: boolean
   /** Enable help search tool */
   helpSearch?: boolean
+  /** Enable help settings tool */
+  helpSettings?: boolean
   /** Enable create note tool */
   createNote?: boolean
 }
@@ -119,6 +121,14 @@ Format: [[PROJECT_INFO action="search_files"]]search query[[/PROJECT_INFO]]`)
 ### Help Search
 Search the help documentation for information about features and capabilities.
 Format: [[HELP_SEARCH]]how do I use memories[[/HELP_SEARCH]]`)
+  }
+
+  if (options.helpSettings) {
+    toolDocs.push(`
+### Help Settings
+Read instance settings to understand and assist with the current configuration. API keys are never shown.
+Format: [[HELP_SETTINGS category="overview" /]]
+Categories: overview, chat, connections, embeddings, images, appearance, templates, system`)
   }
 
   if (options.createNote) {

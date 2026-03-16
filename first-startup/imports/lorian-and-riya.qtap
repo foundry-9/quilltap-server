@@ -46,6 +46,7 @@
         "npc": false,
         "talkativeness": 0.5,
         "controlledBy": "llm",
+        "defaultHelpToolsEnabled": true,
         "personaLinks": [],
         "aliases": [],
         "pronouns": {
@@ -98,6 +99,7 @@
         "npc": false,
         "talkativeness": 0.5,
         "controlledBy": "llm",
+        "defaultHelpToolsEnabled": true,
         "personaLinks": [],
         "aliases": [],
         "pronouns": {

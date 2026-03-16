@@ -43,7 +43,7 @@ export interface HelpSearchToolOutput {
 export const helpSearchToolDefinition = {
   type: 'function',
   function: {
-    name: 'search_help',
+    name: 'help_search',
     description:
       'Search Quilltap help documentation for features, settings, configuration, or usage guidance. Use this when the user asks about how to use Quilltap, configure settings, troubleshoot issues, or understand features. This helps you provide accurate documentation-based answers.',
     parameters: {

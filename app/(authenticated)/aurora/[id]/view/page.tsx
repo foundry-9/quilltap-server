@@ -69,6 +69,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     handleSaveDefaultPartner,
     handleSaveImageProfile,
     handleSaveAgentMode,
+    handleSaveHelpTools,
     handleToggleNpc,
     handleToggleFavorite,
     handleToggleControlledBy,
@@ -76,6 +77,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     togglingFavorite,
     togglingControlledBy,
     savingAgentMode,
+    savingHelpTools,
   } = useCharacterView(id)
 
   const { creatingChat, handleCreateChat } = useChatCreation()
@@ -225,6 +227,8 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
             onPartnerChange={handlePartnerSave}
             onImageProfileChange={handleImageProfileSave}
             onAgentModeChange={handleSaveAgentMode}
+            savingHelpTools={savingHelpTools}
+            onHelpToolsChange={handleSaveHelpTools}
           />
         )
 

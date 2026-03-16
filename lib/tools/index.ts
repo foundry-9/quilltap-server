@@ -151,6 +151,22 @@ export {
   type HelpSearchToolContext,
 } from './handlers/help-search-handler';
 
+// Help Settings Tool
+export {
+  helpSettingsToolDefinition,
+  validateHelpSettingsInput,
+  type HelpSettingsCategory,
+  type HelpSettingsToolInput,
+  type HelpSettingsToolOutput,
+} from './help-settings-tool';
+
+export {
+  executeHelpSettingsTool,
+  formatHelpSettingsResults,
+  HelpSettingsError,
+  type HelpSettingsToolContext,
+} from './handlers/help-settings-handler';
+
 // RNG (Random Number Generator) Tool
 export {
   rngToolDefinition,

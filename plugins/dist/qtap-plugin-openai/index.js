@@ -243,7 +243,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // node_modules/openai/version.mjs
-var VERSION = "6.27.0";
+var VERSION = "6.29.0";
 
 // node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -3221,7 +3221,7 @@ var Speech = class extends APIResource {
    * const speech = await client.audio.speech.create({
    *   input: 'input',
    *   model: 'string',
-   *   voice: 'ash',
+   *   voice: 'string',
    * });
    *
    * const content = await speech.blob();
@@ -6386,7 +6386,7 @@ var Videos = class extends APIResource {
    * Create a new video generation job from a prompt and optional reference assets.
    */
   create(body, options) {
-    return this._client.post("/videos", maybeMultipartFormRequestOptions({ body, ...options }, this._client));
+    return this._client.post("/videos", multipartFormRequestOptions({ body, ...options }, this._client));
   }
   /**
    * Fetch the latest metadata for a generated video.
@@ -6407,6 +6407,12 @@ var Videos = class extends APIResource {
     return this._client.delete(path`/videos/${videoID}`, options);
   }
   /**
+   * Create a character from an uploaded video.
+   */
+  createCharacter(body, options) {
+    return this._client.post("/videos/characters", multipartFormRequestOptions({ body, ...options }, this._client));
+  }
+  /**
    * Download the generated video bytes or a derived preview asset.
    *
    * Streams the rendered video content for the specified video job.
@@ -6418,6 +6424,25 @@ var Videos = class extends APIResource {
       headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
       __binaryResponse: true
     });
+  }
+  /**
+   * Create a new video generation job by editing a source video or existing
+   * generated video.
+   */
+  edit(body, options) {
+    return this._client.post("/videos/edits", multipartFormRequestOptions({ body, ...options }, this._client));
+  }
+  /**
+   * Create an extension of a completed video.
+   */
+  extend(body, options) {
+    return this._client.post("/videos/extensions", multipartFormRequestOptions({ body, ...options }, this._client));
+  }
+  /**
+   * Fetch a character.
+   */
+  getCharacter(characterID, options) {
+    return this._client.get(path`/videos/characters/${characterID}`, options);
   }
   /**
    * Create a remix of a completed video using a refreshed prompt.
@@ -6651,8 +6676,9 @@ var OpenAI = class {
     const baseURL = !__classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_baseURLOverridden).call(this) && defaultBaseURL || this.baseURL;
     const url = isAbsoluteURL(path2) ? new URL(path2) : new URL(baseURL + (baseURL.endsWith("/") && path2.startsWith("/") ? path2.slice(1) : path2));
     const defaultQuery = this.defaultQuery();
-    if (!isEmptyObj(defaultQuery)) {
-      query = { ...defaultQuery, ...query };
+    const pathQuery = Object.fromEntries(url.searchParams);
+    if (!isEmptyObj(defaultQuery) || !isEmptyObj(pathQuery)) {
+      query = { ...pathQuery, ...defaultQuery, ...query };
     }
     if (typeof query === "object" && query && !Array.isArray(query)) {
       url.search = this.stringifyQuery(query);

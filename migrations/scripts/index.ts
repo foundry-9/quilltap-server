@@ -113,6 +113,8 @@ import { addWhisperTargetFieldMigration } from './add-whisper-target-field';
 import { addTurnQueueFieldMigration } from './add-turn-queue-field';
 // Add scene state tracking field to chats
 import { addSceneStateFieldMigration } from './add-scene-state-field';
+// Add help tools field to characters
+import { addHelpToolsFieldMigration } from './add-help-tools-field';
 
 /**
  * All available migrations.
@@ -221,6 +223,8 @@ export const migrations: Migration[] = [
   addTurnQueueFieldMigration,
   // Add scene state tracking field to chats
   addSceneStateFieldMigration,
+  // Add help tools field to characters
+  addHelpToolsFieldMigration,
 ];
 
 export {
@@ -324,4 +328,6 @@ export {
   addTurnQueueFieldMigration,
   // Add scene state tracking field to chats
   addSceneStateFieldMigration,
+  // Add help tools field to characters
+  addHelpToolsFieldMigration,
 };

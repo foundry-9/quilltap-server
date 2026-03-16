@@ -19,6 +19,39 @@ What this action does:
 - Re-imports the built-in first-run Lorian and Riya dossiers
 - Reuses prior character IDs when those records existed, keeping linked references steady
 
+## Help Tools
+
+Certain characters may be granted the privilege of peering behind the curtain — reading your Quilltap settings and searching the documentation on your behalf, rather like a well-informed butler who knows where everything is kept.
+
+### What Help Tools Do
+
+When enabled for a character, two tools become available:
+
+- **Help Search** — searches the Quilltap help documentation to find guidance on features, settings, and usage
+- **Help Settings** — reads your instance configuration (connection profiles, themes, templates, and the like) so the character can understand your current setup and offer informed advice
+
+**Important:** API keys, passphrases, and other secrets are *never* revealed through Help Settings. The tool shows only safe, non-sensitive configuration details.
+
+### Enabling Help Tools
+
+1. Open a character in **Aurora** (`/aurora`)
+2. Navigate to the **Profiles** tab
+3. Find the **Help Tools** section
+4. Select **Enabled** from the dropdown
+5. The setting saves automatically
+
+By default, **Lorian** and **Riya** arrive with help tools enabled — they are, after all, your designated guides to the establishment. All other characters have help tools disabled by default.
+
+### The Help Tools Toggle
+
+The toggle offers three positions:
+
+| Setting | Meaning |
+|---------|---------|
+| **Inherit from global settings** | Uses the global default (currently: disabled) |
+| **Enabled** | Help tools are available for this character |
+| **Disabled** | Help tools are explicitly turned off |
+
 ## Deleting Characters
 
 ### When to Delete

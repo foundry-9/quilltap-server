@@ -50,6 +50,7 @@ export interface Character {
   isFavorite?: boolean
   npc?: boolean
   defaultAgentModeEnabled?: boolean | null
+  defaultHelpToolsEnabled?: boolean | null
   aliases?: string[]
   pronouns?: { subject: string; object: string; possessive: string } | null
   defaultImage?: {

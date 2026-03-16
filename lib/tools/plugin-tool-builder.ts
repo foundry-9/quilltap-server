@@ -24,6 +24,7 @@ import {
   requestFullContextToolDefinition,
   submitFinalResponseToolDefinition,
   helpSearchToolDefinition,
+  helpSettingsToolDefinition,
   rngToolDefinition,
   stateToolDefinition,
   whisperToolDefinition,
@@ -131,8 +132,11 @@ export interface BuildToolsOptions {
   /** Whether to enable request_full_context tool (enabled when context compression is active) */
   requestFullContext?: boolean;
 
-  /** Whether to enable help search tool (enabled by default) */
+  /** Whether to enable help search tool (gated by character help tools setting) */
   helpSearch?: boolean;
+
+  /** Whether to enable help settings tool (gated by character help tools setting) */
+  helpSettings?: boolean;
 
   /** Whether to enable RNG (random number generator) tool (enabled by default) */
   rng?: boolean;
@@ -198,6 +202,7 @@ export async function buildToolsForProvider(
       requestFullContext: options.requestFullContext,
       agentMode: options.agentMode,
       helpSearch: options.helpSearch,
+      helpSettings: options.helpSettings,
       rng: options.rng,
       state: options.state,
       whisper: options.whisper,
@@ -245,10 +250,16 @@ export async function buildToolsForProvider(
     universalTools.push(requestFullContextToolDefinition as UniversalTool);
   }
 
-  // Add help search tool if enabled (defaults to true when not specified)
-  if (options.helpSearch !== false) {
+  // Add help search tool if enabled (gated by character help tools setting)
+  if (options.helpSearch) {
     universalTools.push(helpSearchToolDefinition as UniversalTool);
     logger_.debug('Added help search tool to universal tools');
+  }
+
+  // Add help settings tool if enabled (gated by character help tools setting)
+  if (options.helpSettings) {
+    universalTools.push(helpSettingsToolDefinition as UniversalTool);
+    logger_.debug('Added help settings tool to universal tools');
   }
 
   // Add RNG tool if enabled (defaults to true when not specified)
