@@ -4,7 +4,7 @@ url: /aurora
 
 # Tag Customization
 
-> **[Open this page in Quilltap](/settings?tab=appearance)**
+> **[Open this page in Quilltap](/settings?tab=appearance&section=tags)**
 
 The Tags customization tab in your Settings is where you control how tags look and function throughout Quilltap. Here you can customize every aspect of your tags' appearance and set up which tags are available for quick-hide.
 

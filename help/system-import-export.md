@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=system
+url: /settings?tab=system&section=import-export
 ---
 
 # Import & Export Data
 
-> **[Open this page in Quilltap](/settings?tab=system)**
+> **[Open this page in Quilltap](/settings?tab=system&section=import-export)**
 
 The Import & Export tool lets you save your Quilltap data to files and load data from files back into your system.
 

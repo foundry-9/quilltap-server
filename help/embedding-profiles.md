@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=memory
+url: /settings?tab=memory&section=embedding-profiles
 ---
 
 # Embedding Provider Profiles
 
-> **[Open this page in Quilltap](/settings?tab=memory)**
+> **[Open this page in Quilltap](/settings?tab=memory&section=embedding-profiles)**
 
 Embedding Provider Profiles configure services that transform text into numerical representations (embeddings) for semantic search. Embeddings enable Quilltap to intelligently search through memories and find relevant context based on meaning, not just keywords.
 
@@ -84,7 +84,7 @@ The profiles list shows:
 
 For cloud providers only:
 
-1. Go to the **AI Providers** tab in Settings (`/settings?tab=providers`) and expand **API Keys**
+1. Go to the **AI Providers** tab in Settings (`/settings?tab=providers&section=api-keys`) and expand **API Keys**
 2. Click **Add API Key**
 3. Select "OpenAI" (or relevant provider)
 4. Enter your API key

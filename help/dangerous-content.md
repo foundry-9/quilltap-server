@@ -1,5 +1,5 @@
 ---
-url: /settings?tab=chat
+url: /settings?tab=chat&section=dangerous-content
 ---
 
 # Dangerous Content Handling
@@ -41,7 +41,7 @@ Messages are scanned, and flagged content is automatically rerouted to an uncens
 
 ## Configuration
 
-Navigate to the **Chat** tab in Settings (`/settings?tab=chat`) and expand **Dangerous Content Handling** to configure:
+Navigate to the **Chat** tab in Settings (`/settings?tab=chat&section=dangerous-content`) and expand **Dangerous Content Handling** to configure:
 
 ### Detection Threshold
 
@@ -78,7 +78,7 @@ Additional instructions appended to the content classifier's system prompt. Use 
 
 To use Auto-Route mode, you need at least one connection profile marked as uncensored-compatible:
 
-1. Go to the **AI Providers** tab in Settings (`/settings?tab=providers`) and expand **Connection Profiles**
+1. Go to the **AI Providers** tab in Settings (`/settings?tab=providers&section=connection-profiles`) and expand **Connection Profiles**
 2. Edit or create a profile that connects to an uncensored-compatible model
 3. Check the **"Uncensored-compatible"** checkbox
 4. Save the profile
@@ -129,7 +129,7 @@ Overriding a message's danger flags marks all flags as user-overridden and remov
 
 ## Image Prompt Expansion
 
-When an image prompt is flagged as dangerous, the system can use a separate uncensored LLM for prompt expansion (the step where character placeholders are resolved into visual descriptions). Configure this in the **Chat** tab in Settings (`/settings?tab=chat`) under **Cheap LLM Settings** > "Image Prompt Expansion LLM (Uncensored - Optional)." If not set, the standard cheap LLM is always used for prompt expansion.
+When an image prompt is flagged as dangerous, the system can use a separate uncensored LLM for prompt expansion (the step where character placeholders are resolved into visual descriptions). Configure this in the **Chat** tab in Settings (`/settings?tab=chat&section=dangerous-content`) under **Cheap LLM Settings** > "Image Prompt Expansion LLM (Uncensored - Optional)." If not set, the standard cheap LLM is always used for prompt expansion.
 
 ## Chat-Level Classification
 

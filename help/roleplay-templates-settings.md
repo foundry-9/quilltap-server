@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=templates
+url: /settings?tab=templates&section=roleplay-templates
 ---
 
 # Roleplay Templates Settings
 
-> **[Open this page in Quilltap](/settings?tab=templates)**
+> **[Open this page in Quilltap](/settings?tab=templates&section=roleplay-templates)**
 
 The Roleplay Templates settings tab is where you manage all your templates, set defaults, and customize formatting rules for your roleplay sessions. Here you can view built-in templates, create custom ones, and organize your formatting conventions.
 

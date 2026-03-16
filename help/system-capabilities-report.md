@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=providers
+url: /settings?tab=providers&section=capabilities-report
 ---
 
 # Capabilities Report
 
-> **[Open this page in Quilltap](/settings?tab=system)**
+> **[Open this page in Quilltap](/settings?tab=providers&section=capabilities-report)**
 
 The Capabilities Report tool generates detailed documentation of your Quilltap system's configuration, installed providers, and capabilities.
 

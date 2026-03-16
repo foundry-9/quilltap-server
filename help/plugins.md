@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=system
+url: /settings?tab=system&section=plugins
 ---
 
 # Plugins
 
-> **[Open this page in Quilltap](/settings?tab=providers)**
+> **[Open this page in Quilltap](/settings?tab=system&section=plugins)**
 
 Plugins extend Quilltap's functionality by adding new features, themes, and capabilities. The Plugins tab is where you manage installed plugins, install new ones, and check for updates.
 

@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=appearance
+url: /settings?tab=appearance&section=appearance
 ---
 
 # Themes
 
-> **[Open this page in Quilltap](/settings?tab=appearance)**
+> **[Open this page in Quilltap](/settings?tab=appearance&section=appearance)**
 
 Themes control the overall look and feel of Quilltap, including colors, fonts, and visual styling. You can switch between the built-in default theme and custom themes installed as plugins or `.qtap-theme` bundles, and customize your preferred color mode (light, dark, or system).
 

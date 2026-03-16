@@ -14,7 +14,7 @@ The Settings page is the central bureau of operations for your Quilltap estate -
 2. You will arrive at the Settings page with the **AI Providers** tab selected by default
 3. Click any tab to view and manage its settings
 
-You may also navigate directly to a specific tab by appending `?tab=` to the URL --- for example, `/settings?tab=chat` will open the Chat tab directly.
+You may also navigate directly to a specific tab by appending `?tab=` to the URL --- for example, `/settings?tab=chat` will open the Chat tab directly. To jump straight to a particular section within a tab, add `&section=` as well --- for example, `/settings?tab=chat&section=dangerous-content` will open the Chat tab and scroll directly to the Dangerous Content section with its accordion already open.
 
 ## The Seven Tabs
 

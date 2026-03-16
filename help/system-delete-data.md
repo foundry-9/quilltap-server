@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=system
+url: /settings?tab=system&section=delete-all-data
 ---
 
 # Deleting Your Data
 
-> **[Open this page in Quilltap](/settings?tab=system)**
+> **[Open this page in Quilltap](/settings?tab=system&section=delete-all-data)**
 
 The Delete All Data tool permanently removes your entire Quilltap account and all associated data.
 

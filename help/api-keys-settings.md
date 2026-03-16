@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=providers
+url: /settings?tab=providers&section=api-keys
 ---
 
 # API Keys Settings
 
-> **[Open this page in Quilltap](/settings?tab=providers)**
+> **[Open this page in Quilltap](/settings?tab=providers&section=api-keys)**
 
 The API Keys tab is where you securely store and manage authentication credentials for AI services. API keys are required to use most LLM providers and other services in Quilltap.
 

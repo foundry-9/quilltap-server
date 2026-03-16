@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=appearance
+url: /settings?tab=appearance&section=appearance
 ---
 
 # Theme Quick-Switcher
 
-> **[Open this page in Quilltap](/settings?tab=appearance)**
+> **[Open this page in Quilltap](/settings?tab=appearance&section=appearance)**
 
 The theme quick-switcher is a convenient sidebar button that gives you instant access to switch between themes and color modes (light/dark/system). It's an optional feature that you can enable or disable based on your preferences.
 

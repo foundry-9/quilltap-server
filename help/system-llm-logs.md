@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=system
+url: /settings?tab=system&section=llm-logs
 ---
 
 # LLM Logs
 
-> **[Open this page in Quilltap](/settings?tab=system)**
+> **[Open this page in Quilltap](/settings?tab=system&section=llm-logs)**
 
 The LLM Logs tool shows detailed records of all AI model interactions and API calls in your Quilltap system.
 
@@ -89,7 +89,7 @@ After you send a message and receive a response, the Inspector automatically ref
 
 ## Accessing LLM Logs from Settings
 
-**Go to the **Data & System** tab in Settings** (`/settings?tab=system`) and expand the **LLM Logs** card.
+**Go to the **Data & System** tab in Settings** (`/settings?tab=system&section=llm-logs`) and expand the **LLM Logs** card.
 
 The card shows:
 
