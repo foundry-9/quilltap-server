@@ -4,6 +4,7 @@
 
 ### 3.3-dev
 
+- docs: Clarify `remove-old-dev-tags` Claude command — add `git fetch --tags` step, specify `version` field in `package.json`, spell out pattern parsing logic, add "nothing to do" guard, and use generic `{label}` instead of hardcoded `dev`
 - feat: **Auto-Lock Idle Timer** — optional automatic locking after configurable minutes of inactivity when a user passphrase is set; adds `AutoLockSettingsSchema` to chat settings, `lockDbKey()`/`getHasUserPassphrase()` to dbkey module, `POST ?action=lock` endpoint on unlock API, dedicated `/unlock` page for re-entry (distinct from `/setup`), `AutoLockProvider` headless component for DOM activity tracking with 60s interval checks and 1-minute warning toast, settings UI card in Data & System tab, `PepperVaultGate` auto-lock awareness via sessionStorage, and database migration for the new column
 - docs: minor update to CLAUDE.md to highlight the term "instances" about different home directories
 - feat: **Per-instance window bounds persistence** — Electron main window now remembers its size, position, and maximized state across restarts, stored per data directory so each instance has independent window geometry; saved bounds are validated against connected displays on launch to prevent off-screen restoration
