@@ -220,7 +220,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // node_modules/@anthropic-ai/sdk/version.mjs
-var VERSION = "0.78.0";
+var VERSION = "0.79.0";
 
 // node_modules/@anthropic-ai/sdk/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -437,6 +437,19 @@ var FallbackEncoder = ({ headers, body }) => {
     body: JSON.stringify(body)
   };
 };
+
+// node_modules/@anthropic-ai/sdk/internal/utils/query.mjs
+function stringifyQuery(query) {
+  return Object.entries(query).filter(([_, value]) => typeof value !== "undefined").map(([key, value]) => {
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+      return `${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
+    }
+    if (value === null) {
+      return `${encodeURIComponent(key)}=`;
+    }
+    throw new AnthropicError(`Cannot stringify type ${typeof value}; Expected string, number, boolean, or null. If you need to pass nested query parameters, you can manually encode them, e.g. { query: { 'foo[key1]': value1, 'foo[key2]': value2 } }, and please open a GitHub issue requesting better support for your use case.`);
+  }).join("&");
+}
 
 // node_modules/@anthropic-ai/sdk/internal/utils/bytes.mjs
 function concatBytes(buffers) {
@@ -4497,15 +4510,7 @@ var BaseAnthropic = class {
    * Basic re-implementation of `qs.stringify` for primitive types.
    */
   stringifyQuery(query) {
-    return Object.entries(query).filter(([_, value]) => typeof value !== "undefined").map(([key, value]) => {
-      if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-        return `${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
-      }
-      if (value === null) {
-        return `${encodeURIComponent(key)}=`;
-      }
-      throw new AnthropicError(`Cannot stringify type ${typeof value}; Expected string, number, boolean, or null. If you need to pass nested query parameters, you can manually encode them, e.g. { query: { 'foo[key1]': value1, 'foo[key2]': value2 } }, and please open a GitHub issue requesting better support for your use case.`);
-    }).join("&");
+    return stringifyQuery(query);
   }
   getUserAgent() {
     return `${this.constructor.name}/JS ${VERSION}`;
@@ -4520,8 +4525,9 @@ var BaseAnthropic = class {
     const baseURL = !__classPrivateFieldGet(this, _BaseAnthropic_instances, "m", _BaseAnthropic_baseURLOverridden).call(this) && defaultBaseURL || this.baseURL;
     const url = isAbsoluteURL(path3) ? new URL(path3) : new URL(baseURL + (baseURL.endsWith("/") && path3.startsWith("/") ? path3.slice(1) : path3));
     const defaultQuery = this.defaultQuery();
-    if (!isEmptyObj(defaultQuery)) {
-      query = { ...defaultQuery, ...query };
+    const pathQuery = Object.fromEntries(url.searchParams);
+    if (!isEmptyObj(defaultQuery) || !isEmptyObj(pathQuery)) {
+      query = { ...pathQuery, ...defaultQuery, ...query };
     }
     if (typeof query === "object" && query && !Array.isArray(query)) {
       url.search = this.stringifyQuery(query);
@@ -4733,7 +4739,7 @@ var BaseAnthropic = class {
         timeoutMillis = Date.parse(retryAfterHeader) - Date.now();
       }
     }
-    if (!(timeoutMillis && 0 <= timeoutMillis && timeoutMillis < 60 * 1e3)) {
+    if (timeoutMillis === void 0) {
       const maxRetries = options.maxRetries ?? this.maxRetries;
       timeoutMillis = this.calculateDefaultRetryTimeoutMillis(retriesRemaining, maxRetries);
     }
@@ -5085,7 +5091,7 @@ var safeJSON2 = (text) => {
 var sleep2 = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ../../../node_modules/openai/version.mjs
-var VERSION2 = "6.29.0";
+var VERSION2 = "6.31.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser2 = () => {
@@ -5670,7 +5676,7 @@ function stringify(object, opts = {}) {
 }
 
 // ../../../node_modules/openai/internal/utils/query.mjs
-function stringifyQuery(query) {
+function stringifyQuery2(query) {
   return stringify(query, { arrayFormat: "brackets" });
 }
 
@@ -11481,7 +11487,7 @@ var OpenAI = class {
     return buildHeaders2([{ Authorization: `Bearer ${this.apiKey}` }]);
   }
   stringifyQuery(query) {
-    return stringifyQuery(query);
+    return stringifyQuery2(query);
   }
   getUserAgent() {
     return `${this.constructor.name}/JS ${VERSION2}`;

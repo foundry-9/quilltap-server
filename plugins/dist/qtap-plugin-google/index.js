@@ -39649,7 +39649,7 @@ var safeJSON2 = (text) => {
 var sleep2 = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ../../../node_modules/openai/version.mjs
-var VERSION2 = "6.29.0";
+var VERSION2 = "6.31.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {

@@ -11,7 +11,7 @@
     "clean": "rm -f index.js"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.78.0",
+    "@anthropic-ai/sdk": "^0.79.0",
     "@quilltap/plugin-utils": "^1.5.1"
   },
   "devDependencies": {
