@@ -17,9 +17,7 @@
     "plugins/**",
     "migrations/lib/**",
     "electron/**",
-    "**/*.d.ts",
-    "**/*.stories.tsx",
-    ".storybook/**"
+    "**/*.d.ts"
   ],
   "ignoreDependencies": [
     "@types/*",

@@ -83,6 +83,96 @@ export const Badges: React.FC = () => {
         </div>
       </section>
 
+      {/* Entity Type Badges */}
+      <section style={{ marginBottom: '2rem' }}>
+        <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
+          Entity Type Badges
+        </h3>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
+          <span className="qt-badge qt-badge-character">Character</span>
+          <span className="qt-badge qt-badge-persona">Persona</span>
+          <span className="qt-badge qt-badge-chat">Chat</span>
+          <span className="qt-badge qt-badge-tag">Tag</span>
+          <span className="qt-badge qt-badge-memory">Memory</span>
+        </div>
+      </section>
+
+      {/* State Badges */}
+      <section style={{ marginBottom: '2rem' }}>
+        <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
+          State Badges
+        </h3>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
+          <span className="qt-badge qt-badge-enabled">Enabled</span>
+          <span className="qt-badge qt-badge-disabled">Disabled</span>
+          <span className="qt-badge qt-badge-related">Related</span>
+          <span className="qt-badge qt-badge-manual">Manual</span>
+          <span className="qt-badge qt-badge-auto">Auto</span>
+        </div>
+      </section>
+
+      {/* Plugin Source Badges */}
+      <section style={{ marginBottom: '2rem' }}>
+        <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
+          Plugin Source Badges
+        </h3>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
+          <span className="qt-badge qt-badge-source-included">Included</span>
+          <span className="qt-badge qt-badge-source-npm">NPM</span>
+          <span className="qt-badge qt-badge-source-git">Git</span>
+          <span className="qt-badge qt-badge-source-manual">Manual</span>
+        </div>
+      </section>
+
+      {/* Tag Badges */}
+      <section style={{ marginBottom: '2rem' }}>
+        <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
+          Tag Badges
+        </h3>
+        <div style={{ marginBottom: '1.5rem' }}>
+          <p style={{ color: 'var(--color-muted-foreground)', marginBottom: '0.75rem', fontSize: '0.875rem' }}>
+            Basic tags
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
+            <span className="qt-tag-badge">Fantasy</span>
+            <span className="qt-tag-badge">Sci-Fi</span>
+            <span className="qt-tag-badge">Romance</span>
+          </div>
+        </div>
+        <div style={{ marginBottom: '1.5rem' }}>
+          <p style={{ color: 'var(--color-muted-foreground)', marginBottom: '0.75rem', fontSize: '0.875rem' }}>
+            Emoji tag
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
+            <span className="qt-tag-badge qt-tag-badge-emoji">Adventure</span>
+          </div>
+        </div>
+        <div style={{ marginBottom: '1.5rem' }}>
+          <p style={{ color: 'var(--color-muted-foreground)', marginBottom: '0.75rem', fontSize: '0.875rem' }}>
+            Removable tag
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
+            <span className="qt-tag-badge">
+              Fantasy
+              <button className="qt-tag-badge-remove">×</button>
+            </span>
+          </div>
+        </div>
+        <div>
+          <p style={{ color: 'var(--color-muted-foreground)', marginBottom: '0.75rem', fontSize: '0.875rem' }}>
+            Small tags in card context
+          </p>
+          <div className="qt-card" style={{ maxWidth: '24rem' }}>
+            <div className="qt-card-body">
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <span className="qt-tag-badge qt-tag-badge-sm">Fantasy</span>
+                <span className="qt-tag-badge qt-tag-badge-sm">Sci-Fi</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Badge Usage Examples */}
       <section>
         <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>

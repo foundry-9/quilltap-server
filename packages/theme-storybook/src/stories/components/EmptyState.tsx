@@ -1,16 +1,21 @@
-import type { Meta, StoryObj } from '@storybook/react';
-import React from 'react';
-
 /**
- * Empty state component stories.
- * Uses the qt-empty-state-* classes.
+ * Empty State Story Component
+ *
+ * Displays empty state variants for theme development.
  */
 
-const EmptyStateShowcase: React.FC = () => {
+import React from 'react';
+
+export const EmptyState: React.FC = () => {
   return (
-    <div className="space-y-8">
-      <section>
-        <h3 className="text-lg font-semibold mb-4">Basic Empty State</h3>
+    <div style={{ padding: '1.5rem' }}>
+      <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '1.5rem' }}>Empty States</h2>
+
+      {/* Basic Empty State */}
+      <section style={{ marginBottom: '2rem' }}>
+        <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
+          Basic Empty State
+        </h3>
         <div className="qt-empty-state">
           <div className="qt-empty-state-icon">
             <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -24,8 +29,11 @@ const EmptyStateShowcase: React.FC = () => {
         </div>
       </section>
 
-      <section>
-        <h3 className="text-lg font-semibold mb-4">Empty State with Action</h3>
+      {/* Empty State with Action */}
+      <section style={{ marginBottom: '2rem' }}>
+        <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
+          Empty State with Action
+        </h3>
         <div className="qt-empty-state">
           <div className="qt-empty-state-icon">
             <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -44,8 +52,11 @@ const EmptyStateShowcase: React.FC = () => {
         </div>
       </section>
 
-      <section>
-        <h3 className="text-lg font-semibold mb-4">Search Empty State</h3>
+      {/* Search Empty State */}
+      <section style={{ marginBottom: '2rem' }}>
+        <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
+          Search Empty State
+        </h3>
         <div className="qt-empty-state">
           <div className="qt-empty-state-icon">
             <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -64,8 +75,11 @@ const EmptyStateShowcase: React.FC = () => {
         </div>
       </section>
 
+      {/* Error Empty State */}
       <section>
-        <h3 className="text-lg font-semibold mb-4">Error Empty State</h3>
+        <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
+          Error Empty State
+        </h3>
         <div className="qt-empty-state">
           <div className="qt-empty-state-icon text-red-500">
             <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -85,45 +99,4 @@ const EmptyStateShowcase: React.FC = () => {
       </section>
     </div>
   );
-};
-
-const meta: Meta<typeof EmptyStateShowcase> = {
-  title: 'Content/EmptyState',
-  component: EmptyStateShowcase,
-};
-
-export default meta;
-type Story = StoryObj<typeof EmptyStateShowcase>;
-
-export const AllEmptyStates: Story = {};
-
-export const Basic: Story = {
-  render: () => (
-    <div className="qt-empty-state">
-      <div className="qt-empty-state-icon">
-        <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-        </svg>
-      </div>
-      <h4 className="qt-empty-state-title">No items</h4>
-      <p className="qt-empty-state-description">Nothing to show here yet.</p>
-    </div>
-  ),
-};
-
-export const WithAction: Story = {
-  render: () => (
-    <div className="qt-empty-state">
-      <div className="qt-empty-state-icon">
-        <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
-        </svg>
-      </div>
-      <h4 className="qt-empty-state-title">Create something new</h4>
-      <p className="qt-empty-state-description">Get started by creating your first item.</p>
-      <div className="qt-empty-state-action">
-        <button className="qt-button qt-button-primary">Create</button>
-      </div>
-    </div>
-  ),
 };

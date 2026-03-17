@@ -26,7 +26,6 @@ files:
   - "!plugins/**/*"
   - "!packages/**/*"
   - "!__tests__/**/*"
-  - "!.storybook/**/*"
   - "!.githooks/**/*"
 afterSign: electron/notarize.js
 mac:

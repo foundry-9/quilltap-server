@@ -44,7 +44,6 @@ These are flagged by knip but are actually used:
 
 | Item | How It's Used |
 |------|---------------|
-| `@quilltap/theme-storybook` (dep) | Our own npm package used for Storybook theme development |
 | `@electron/notarize` (devDep) | Used by `electron/notarize.js` (Electron is in knip ignore list) |
 
 ---

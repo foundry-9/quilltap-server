@@ -18,22 +18,26 @@ export const Inputs: React.FC = () => {
         </h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: '24rem' }}>
           <div>
-            <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem', fontWeight: 500 }}>
-              Default
-            </label>
+            <label className="qt-label">Default</label>
             <input className="qt-input" type="text" placeholder="Enter text..." />
           </div>
           <div>
-            <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem', fontWeight: 500 }}>
-              With Value
-            </label>
+            <label className="qt-label">With Hint</label>
+            <input className="qt-input" type="text" placeholder="Enter email..." />
+            <span className="qt-hint">We&apos;ll never share your email.</span>
+          </div>
+          <div>
+            <label className="qt-label">With Value</label>
             <input className="qt-input" type="text" defaultValue="Sample text" />
           </div>
           <div>
-            <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem', fontWeight: 500 }}>
-              Disabled
-            </label>
+            <label className="qt-label">Disabled</label>
             <input className="qt-input" type="text" placeholder="Disabled input" disabled />
+          </div>
+          <div>
+            <label className="qt-label">With Error</label>
+            <input className="qt-input qt-input-error" type="text" placeholder="Invalid input" />
+            <span className="qt-hint" style={{ color: 'var(--color-destructive)' }}>This field is required.</span>
           </div>
         </div>
       </section>
@@ -44,9 +48,7 @@ export const Inputs: React.FC = () => {
           Textarea
         </h3>
         <div style={{ maxWidth: '24rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem', fontWeight: 500 }}>
-            Message
-          </label>
+          <label className="qt-label">Message</label>
           <textarea
             className="qt-input qt-textarea"
             placeholder="Enter your message..."
@@ -61,15 +63,57 @@ export const Inputs: React.FC = () => {
           Select
         </h3>
         <div style={{ maxWidth: '24rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem', fontWeight: 500 }}>
-            Choose an option
-          </label>
+          <label className="qt-label">Choose an option</label>
           <select className="qt-input qt-select">
             <option value="">Select an option...</option>
             <option value="1">Option 1</option>
             <option value="2">Option 2</option>
             <option value="3">Option 3</option>
           </select>
+        </div>
+      </section>
+
+      {/* Checkboxes & Radios */}
+      <section style={{ marginBottom: '2rem' }}>
+        <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
+          Checkboxes & Radios
+        </h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxWidth: '24rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <input type="checkbox" id="check1" className="qt-checkbox" />
+            <label htmlFor="check1" style={{ margin: 0 }}>Checkbox option</label>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <input type="checkbox" id="check2" className="qt-checkbox" defaultChecked />
+            <label htmlFor="check2" style={{ margin: 0 }}>Checked checkbox</label>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <input type="checkbox" id="check3" className="qt-checkbox" disabled />
+            <label htmlFor="check3" style={{ margin: 0, color: 'var(--color-muted-foreground)' }}>Disabled checkbox</label>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
+            <input type="radio" name="radio" id="radio1" className="qt-radio" />
+            <label htmlFor="radio1" style={{ margin: 0 }}>Radio option 1</label>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <input type="radio" name="radio" id="radio2" className="qt-radio" defaultChecked />
+            <label htmlFor="radio2" style={{ margin: 0 }}>Radio option 2</label>
+          </div>
+        </div>
+      </section>
+
+      {/* Links */}
+      <section style={{ marginBottom: '2rem' }}>
+        <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
+          Links
+        </h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <div>
+            <a href="#" className="qt-link">Default link</a>
+          </div>
+          <div>
+            <a href="#" className="qt-link-subtle">Subtle link</a>
+          </div>
         </div>
       </section>
 
@@ -85,21 +129,15 @@ export const Inputs: React.FC = () => {
           </div>
           <div className="qt-card-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div>
-              <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem', fontWeight: 500 }}>
-                Name
-              </label>
+              <label className="qt-label">Name</label>
               <input className="qt-input" type="text" placeholder="Your name" />
             </div>
             <div>
-              <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem', fontWeight: 500 }}>
-                Email
-              </label>
+              <label className="qt-label">Email</label>
               <input className="qt-input" type="email" placeholder="you@example.com" />
             </div>
             <div>
-              <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem', fontWeight: 500 }}>
-                Message
-              </label>
+              <label className="qt-label">Message</label>
               <textarea className="qt-input qt-textarea" placeholder="Your message..." style={{ minHeight: '5rem' }} />
             </div>
           </div>

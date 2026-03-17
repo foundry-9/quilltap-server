@@ -72,6 +72,27 @@ export const Cards: React.FC = () => {
         </div>
       </section>
 
+      {/* Card Grid */}
+      <section style={{ marginBottom: '2rem' }}>
+        <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
+          Card Grid
+        </h3>
+        <div className="qt-card-grid-3">
+          <div className="qt-card" style={{ padding: '1rem' }}>
+            <h4 style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Card 1</h4>
+            <p style={{ fontSize: '0.875rem', color: 'var(--color-muted-foreground)' }}>Grid card content</p>
+          </div>
+          <div className="qt-card" style={{ padding: '1rem' }}>
+            <h4 style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Card 2</h4>
+            <p style={{ fontSize: '0.875rem', color: 'var(--color-muted-foreground)' }}>Grid card content</p>
+          </div>
+          <div className="qt-card" style={{ padding: '1rem' }}>
+            <h4 style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Card 3</h4>
+            <p style={{ fontSize: '0.875rem', color: 'var(--color-muted-foreground)' }}>Grid card content</p>
+          </div>
+        </div>
+      </section>
+
       {/* Panels */}
       <section style={{ marginBottom: '2rem' }}>
         <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>

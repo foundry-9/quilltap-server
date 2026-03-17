@@ -87,6 +87,15 @@ export const ColorPalette: React.FC = () => {
     { name: 'Chat User Foreground', variable: '--color-chat-user-foreground', description: 'User message text' },
   ];
 
+  const componentTokens: ColorSwatchProps[] = [
+    { name: 'Button Primary BG', variable: '--qt-button-primary-bg', description: 'Primary button background' },
+    { name: 'Button Primary Hover', variable: '--qt-button-primary-hover-bg', description: 'Primary button hover' },
+    { name: 'Card BG', variable: '--qt-card-bg', description: 'Card background' },
+    { name: 'Card Border', variable: '--qt-card-border', description: 'Card border' },
+    { name: 'Input BG', variable: '--qt-input-bg', description: 'Input background' },
+    { name: 'Input Border', variable: '--qt-input-border', description: 'Input border' },
+  ];
+
   return (
     <div style={{ padding: '1.5rem' }}>
       <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '1.5rem' }}>Color Palette</h2>
@@ -98,6 +107,7 @@ export const ColorPalette: React.FC = () => {
       <ColorGroup title="Semantic Colors" colors={semanticColors} />
       <ColorGroup title="Status Colors" colors={statusColors} />
       <ColorGroup title="Chat Colors" colors={chatColors} />
+      <ColorGroup title="Component Tokens" colors={componentTokens} />
     </div>
   );
 };
