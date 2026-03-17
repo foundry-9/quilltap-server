@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { app } from 'electron';
 import { DEFAULT_DATA_DIR } from './constants';
-import { NamedDataDir, RuntimeMode } from './types';
+import { NamedDataDir, RuntimeMode, WindowBounds } from './types';
 
 /** Persisted application settings for data directory management */
 export interface AppSettings {
@@ -93,5 +93,21 @@ export function saveSettings(settings: AppSettings): void {
     console.log('[Settings] Saved settings to', filePath);
   } catch (err) {
     console.error('[Settings] Failed to save settings:', err);
+  }
+}
+
+/** Get the saved window bounds for a specific data directory */
+export function getWindowBounds(settings: AppSettings, dirPath: string): WindowBounds | undefined {
+  const entry = settings.knownDataDirs.find((d) => d.path === dirPath);
+  return entry?.windowBounds;
+}
+
+/** Save window bounds for a specific data directory and persist to disk */
+export function saveWindowBounds(settings: AppSettings, dirPath: string, bounds: WindowBounds): void {
+  const entry = settings.knownDataDirs.find((d) => d.path === dirPath);
+  if (entry) {
+    entry.windowBounds = bounds;
+    saveSettings(settings);
+    console.log('[Settings] Saved window bounds for', dirPath, bounds);
   }
 }

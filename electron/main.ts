@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, screen, session, shell } from 'electron';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -23,8 +23,8 @@ import { DockerManager } from './docker-manager';
 import { NpxManager } from './npx-manager';
 import { DownloadManager } from './download-manager';
 import { HealthChecker } from './health-checker';
-import { SplashUpdate, DirectoryInfo, DirectorySizeInfo, RuntimeMode, DetailLevel } from './types';
-import { AppSettings, loadSettings, saveSettings, defaultNameForPath } from './settings';
+import { SplashUpdate, DirectoryInfo, DirectorySizeInfo, RuntimeMode, DetailLevel, WindowBounds } from './types';
+import { AppSettings, loadSettings, saveSettings, saveWindowBounds, getWindowBounds, defaultNameForPath } from './settings';
 import { getSizesForDir } from './disk-utils';
 import { runCrashGuard, markStartupSuccess, isInSafeMode } from './crash-guard';
 import { initStartupLog, logStartup, closeStartupLog } from './startup-log';
@@ -534,11 +534,53 @@ function buildAppMenu(win: BrowserWindow): void {
   Menu.setApplicationMenu(menu);
 }
 
+/** Validate that saved window bounds are still visible on a connected display */
+function validateBounds(bounds: WindowBounds): WindowBounds | null {
+  const displays = screen.getAllDisplays();
+  // Check that at least part of the window is on a visible display
+  const x = bounds.x ?? 0;
+  const y = bounds.y ?? 0;
+  const visible = displays.some((display) => {
+    const { x: dx, y: dy, width: dw, height: dh } = display.bounds;
+    // Window is "visible" if at least 100px of it overlaps a display
+    return (
+      x + bounds.width > dx + 100 &&
+      x < dx + dw - 100 &&
+      y + bounds.height > dy + 100 &&
+      y < dy + dh - 100
+    );
+  });
+  if (!visible) {
+    console.log('[Main] Saved window bounds are off-screen, using defaults');
+    return null;
+  }
+  return bounds;
+}
+
+/** Save the current main window bounds to the active data directory's settings */
+function persistWindowBounds(win: BrowserWindow): void {
+  if (win.isDestroyed()) return;
+  const isMaximized = win.isMaximized();
+  // When maximized, preserve the pre-maximized bounds so we restore to the right size
+  const normalBounds = win.getNormalBounds();
+  const bounds: WindowBounds = {
+    ...normalBounds,
+    isMaximized,
+  };
+  if (bounds.width && bounds.height) {
+    saveWindowBounds(appSettings, appSettings.lastDataDir, bounds);
+  }
+}
+
 /** Create the main application window */
 function createMainWindow(urlPath?: string): BrowserWindow {
-  const win = new BrowserWindow({
-    width: MAIN_WIDTH,
-    height: MAIN_HEIGHT,
+  // Restore saved bounds for this data directory, or fall back to defaults
+  const dirBounds = getWindowBounds(appSettings, appSettings.lastDataDir);
+  const saved = dirBounds ? validateBounds(dirBounds) : null;
+
+  const winOptions: Electron.BrowserWindowConstructorOptions = {
+    width: saved?.width ?? MAIN_WIDTH,
+    height: saved?.height ?? MAIN_HEIGHT,
     show: false,
     title: 'Quilltap',
     webPreferences: {
@@ -546,7 +588,28 @@ function createMainWindow(urlPath?: string): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
     },
-  });
+  };
+  if (saved?.x !== undefined && saved?.y !== undefined) {
+    winOptions.x = saved.x;
+    winOptions.y = saved.y;
+  }
+
+  const win = new BrowserWindow(winOptions);
+
+  if (saved?.isMaximized) {
+    win.maximize();
+  }
+
+  // Persist bounds on resize, move, maximize, and unmaximize
+  let boundsTimer: ReturnType<typeof setTimeout> | null = null;
+  const debouncedPersist = () => {
+    if (boundsTimer) clearTimeout(boundsTimer);
+    boundsTimer = setTimeout(() => persistWindowBounds(win), 500);
+  };
+  win.on('resize', debouncedPersist);
+  win.on('move', debouncedPersist);
+  win.on('maximize', () => persistWindowBounds(win));
+  win.on('unmaximize', () => persistWindowBounds(win));
 
   const baseUrl = isDev
     ? 'http://localhost:3000'

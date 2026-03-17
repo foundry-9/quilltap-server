@@ -16,12 +16,23 @@ export type SplashPhase =
   | 'ready'
   | 'error';
 
+/** Saved window bounds for restore on next launch */
+export interface WindowBounds {
+  width: number;
+  height: number;
+  x?: number;
+  y?: number;
+  isMaximized?: boolean;
+}
+
 /** A data directory with a human-readable name */
 export interface NamedDataDir {
   /** Absolute file path */
   path: string;
   /** Human-readable display name */
   name: string;
+  /** Remembered main window bounds for this instance */
+  windowBounds?: WindowBounds;
 }
 
 /** Disk usage information for a single data directory */
