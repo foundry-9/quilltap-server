@@ -6,10 +6,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, and anyone who wants an AI assistant that actually knows what they're working on. Connect to any LLM provider, organize your work into projects with persistent files and context, create characters with real personalities, and build a private AI environment that learns and remembers.
 
-### Spelling **IMPORTANT**
-
-This project is spelled "Quilltap", as in "quill" + "tap", **NOT** "Quilttap", as in "quilt" + "tap". There is a linting rule to keep you from using that word. Please, please, never call anything in this system "quilttap" because that is **WRONG.**
-
 ## Technology Stack
 
 - **Frontend Framework**: React via Next.js
@@ -69,21 +65,6 @@ export const POST = createContextHandler<{ id: string }>(
 
 Legacy routes outside `/api/v1/` were removed in v2.8. Only `/api/v1/` routes are supported. A few non-v1 routes remain for specific purposes: `/api/health` (health check), `/api/plugin-routes/[...path]` (plugin dispatcher), and `/api/themes/*` (asset serving).
 
-## Feature Names
-
-- **The Concierge** - the dangerous content tracking/rerouting/hiding system
-- **The Commonplace Book** - the memory system that characters have, a self-managed RAG
-- **The Lantern** - the story backgrounds subsystem, that can send context to image providers and put them up as backgrounds for chats or projects
-- **Prospero** - the agentic and tool-using systems, and the way LLMs work — UI route: `/prospero` (was `/projects`)
-- **Aurora** - the complex character model and how it interacts with the prompts — UI route: `/aurora` (was `/characters`)
-- **Calliope** - the UX/UI and themes systems
-- **The Foundry** - the architecture underneath, plugins and packages and services — UI route: `/settings` (was `/foundry`, `/tools`); all settings now live on a single tabbed page with 7 tabs
-- **The Salon** - the chat interface — UI route: `/salon` (was `/chats`)
-- **Pascal the Croupier** - the RNG and game state tracking system — merged into Chat tab at `/settings?tab=chat`
-- **Saquel Ytzama, the Keeper of Secrets** - the encryption, API key management, and secrets system — merged into Data & System tab at `/settings?tab=system`
-
-Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/chats`, `/api/v1/projects`). Old UI routes (`/foundry/*`) redirect to the appropriate `/settings` tab.
-
 ## Current State
 
 - **Details for things already implemented** are in [the README](README.md)
@@ -117,23 +98,56 @@ Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/
   - **packages**: find in [packages/](/packages/)
   - **bundled themes**: shipped in [themes/bundled/](/themes/bundled/)
 
+## Other Quilltap conventions
+
+- "instances" are the self-contained base-level directories to which you point Quilltap when you run it.
+  - Default instance for files depends on OS and category:
+    - OS
+      - Linux: ~/.quilltap/
+      - macOS: ~/Library/Application Support/Quilltap/
+      - Windows: %APPDATA%\Quilltap\
+      - Docker: /app/quilltap/
+      - Lima VM: /data/quilltap/ (VirtioFS mount of macOS path)
+      - WSL2: Accessed via /mnt/c/.../AppData/Roaming/Quilltap/ (Windows path passed as env var)
+    - Category
+      - `data/`
+      - `files/`
+      - `logs/`
+  - Other instances can exist
+    - specified by `QUILLTAP_DATA_DIR` environment variable (non-Docker)
+    - `QUILLTAP_HOST_DATA_DIR` environment variable passed to Docker so that it can display it in the UI
+    - CLI specification of instance directory
+      - `npx quilltap --data-dir /custom/path`
+      - `npx quilltap -d /custom/path`
+      - `docker run -v /custom/path:/app/quilltap foundry9/quilltap`
+      - The following can also use `QUILLTAP_DATA_DIR`:
+        - `./scripts/start-quilltap.sh -d /custom/path`
+        - `.\scripts\start-quilltap.ps1 -DataDir "D:\custom\path"`
+
+### Spelling **IMPORTANT**
+
+This project is spelled "Quilltap", as in "quill" + "tap", **NOT** "Quilttap", as in "quilt" + "tap". There is a linting rule to keep you from using that word. Please, please, never call anything in this system "quilttap" because that is **WRONG.**
+
+### Feature Names
+
+- **The Concierge** - the dangerous content tracking/rerouting/hiding system
+- **The Commonplace Book** - the memory system that characters have, a self-managed RAG
+- **The Lantern** - the story backgrounds subsystem, that can send context to image providers and put them up as backgrounds for chats or projects
+- **Prospero** - the agentic and tool-using systems, and the way LLMs work — UI route: `/prospero` (was `/projects`)
+- **Aurora** - the complex character model and how it interacts with the prompts — UI route: `/aurora` (was `/characters`)
+- **Calliope** - the UX/UI and themes systems
+- **The Foundry** - the architecture underneath, plugins and packages and services — UI route: `/settings` (was `/foundry`, `/tools`); all settings now live on a single tabbed page with 7 tabs
+- **The Salon** - the chat interface — UI route: `/salon` (was `/chats`)
+- **Pascal the Croupier** - the RNG and game state tracking system — merged into Chat tab at `/settings?tab=chat`
+- **Saquel Ytzama, the Keeper of Secrets** - the encryption, API key management, and secrets system — merged into Data & System tab at `/settings?tab=system`
+
+Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/chats`, `/api/v1/projects`). Old UI routes (`/foundry/*`) redirect to the appropriate `/settings` tab.
+
 ## Claude-specific instructions
 
 - If you have access to Opus and agents, then plan work in Opus for a change of any significant size and delegate it to agents running Haiku with specific instructions. If you can't use Opus then use Sonnet to plan. Feel free to aggressively agentize the work.
 - For every new feature and all existing functionality that is updated or touched in the backend, make sure that there are debug logs being fired for everything, and appropriate levels of logging for everything else, using the built-in logging system in this app
 - I am developing this in macOS, so take BSD versions of tools into account, and the fact that I have installed homebrew's coreutils and gnu-sed so that you can use GNU versions of things with "g"-prefixed utilities if you need them.
-- Default location for files depends on OS and category:
-  - OS
-    - Linux: ~/.quilltap/
-    - macOS: ~/Library/Application Support/Quilltap/
-    - Windows: %APPDATA%\Quilltap\
-    - Docker: /app/quilltap/
-    - Lima VM: /data/quilltap/ (VirtioFS mount of macOS path)
-    - WSL2: Accessed via /mnt/c/.../AppData/Roaming/Quilltap/ (Windows path passed as env var)
-  - Category
-    - `data/`
-    - `files/`
-    - `logs/`
 - I am using "npm run dev" to work on this while we're working, so the base URL is probably `http://localhost:3000/` if you want to try something.
 - You should track what's going on with the running "npm run dev" process, which is nearly always running while we're working on this, by tailing or searching the `logs/combined.log` file. You can figure out what time it is (I think it's using universal time, not local time), and then look for things that we just tried by working through that log.
 - Databases are encrypted with SQLCipher. The standard `sqlite3` CLI cannot open them. Use the Quilltap CLI instead:

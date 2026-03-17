@@ -4,6 +4,7 @@
 
 ### 3.3-dev
 
+- docs: minor update to CLAUDE.md to highlight the term "instances" about different home directories
 - feat: **Per-instance window bounds persistence** — Electron main window now remembers its size, position, and maximized state across restarts, stored per data directory so each instance has independent window geometry; saved bounds are validated against connected displays on launch to prevent off-screen restoration
 - feat: **Help Navigate tool** — new `help_navigate` tool allows help characters to navigate the user's browser to a specific Quilltap page, including settings deep-linking with `?tab=` and `&section=` parameters; gated by the same `helpToolsEnabled` flag as `help_search` and `help_settings`; all 66 help files updated with "In-Chat Navigation" sections containing the exact tool call; commit/documentation instructions updated to require URL and navigation guidance in help files
 - feat: **Settings section deep-linking** — URLs can now include a `&section=` parameter (e.g., `/settings?tab=chat&section=dangerous-content`) to automatically open a specific CollapsibleCard accordion and scroll it into view; `CollapsibleCard` gains `sectionId` and `forceOpen` props; `EntityTabs` clears the `section` param on tab switch; all help files updated with section-specific URLs for direct navigation to the relevant accordion
