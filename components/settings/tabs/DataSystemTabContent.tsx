@@ -11,6 +11,7 @@ import { TasksQueueCard } from '@/components/tools/tasks-queue-card'
 import LLMLogsCard from '@/components/tools/llm-logs-card'
 import { DeleteDataCard } from '@/components/tools/delete-data-card'
 import { ChangePassphraseCard } from '@/components/settings/ChangePassphraseCard'
+import { AutoLockSettingsCard } from '@/components/settings/AutoLockSettingsCard'
 import { useSettingsSection } from './useSettingsSection'
 
 export function DataSystemTabContent() {
@@ -30,6 +31,10 @@ export function DataSystemTabContent() {
       <div className="space-y-4">
         <CollapsibleCard title="Encryption Passphrase" description="Change or remove the passphrase protecting your encryption key" sectionId="encryption-passphrase" forceOpen={activeSection === 'encryption-passphrase'}>
           <ChangePassphraseCard />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Auto-Lock" description="Automatically lock Quilltap after a period of inactivity" sectionId="auto-lock" forceOpen={activeSection === 'auto-lock'}>
+          <AutoLockSettingsCard />
         </CollapsibleCard>
 
         <CollapsibleCard title="Plugins" description="Install and manage plugins" sectionId="plugins" forceOpen={activeSection === 'plugins'}>

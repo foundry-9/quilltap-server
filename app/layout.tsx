@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "@/components/providers/session-provider";
+import { AutoLockProvider } from "@/components/providers/auto-lock-provider";
 import { PluginInitializer, PluginUpgradeNotifier, MigrationWarningNotifier } from "@/components/startup";
 import { PepperVaultGate } from "@/components/startup/pepper-vault-gate";
 import { AppLayout } from "@/components/layout/app-layout";
@@ -20,6 +21,7 @@ export default function RootLayout({
       <body className="font-sans" suppressHydrationWarning>
         <PepperVaultGate />
         <Providers>
+          <AutoLockProvider />
           <PluginInitializer />
           <PluginUpgradeNotifier />
           <MigrationWarningNotifier />

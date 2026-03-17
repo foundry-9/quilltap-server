@@ -22,8 +22,8 @@ export function PepperVaultGate() {
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    // Don't check if we're already on a setup page
-    if (pathname === '/setup' || pathname?.startsWith('/setup/')) {
+    // Don't check if we're already on a setup page or unlock page
+    if (pathname === '/setup' || pathname?.startsWith('/setup/') || pathname === '/unlock') {
       // Reset the flag so we re-check when navigating away from setup
       gateResolved = false;
       return;
@@ -52,7 +52,13 @@ export function PepperVaultGate() {
         gateResolved = true;
 
         if (state === 'needs-setup' || state === 'needs-passphrase') {
-          router.push('/setup');
+          // If there's an auto-lock return key in sessionStorage, this is a
+          // re-lock from the idle timer — go to /unlock instead of /setup
+          if (state === 'needs-passphrase' && typeof window !== 'undefined' && sessionStorage.getItem('quilltap-autolock-return')) {
+            router.push('/unlock');
+          } else {
+            router.push('/setup');
+          }
           return;
         }
 
