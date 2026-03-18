@@ -25,6 +25,7 @@ import {
 import { CHARACTER_TABS } from './constants'
 import { SearchReplaceModal } from '@/components/tools/search-replace'
 import type { SearchReplaceResult } from '@/components/tools/search-replace/types'
+import { CharacterOptimizerModal } from '@/components/characters/optimizer'
 
 export default function ViewCharacterPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -35,6 +36,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
 
   const [showChatDialog, setShowChatDialog] = useState(false)
   const [showSearchReplaceModal, setShowSearchReplaceModal] = useState(false)
+  const [showOptimizerModal, setShowOptimizerModal] = useState(false)
   const [dataRefreshKey, setDataRefreshKey] = useState(0)
   const [selectedProfileId, setSelectedProfileId] = useState<string>('')
   const [selectedUserCharacterId, setSelectedUserCharacterId] = useState<string>('')
@@ -304,6 +306,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           onToggleNpc={handleToggleNpc}
           onToggleFavorite={handleToggleFavorite}
           onToggleControlledBy={handleToggleControlledBy}
+          onOptimize={() => setShowOptimizerModal(true)}
           onSearchReplace={() => setShowSearchReplaceModal(true)}
           togglingNpc={togglingNpc}
           togglingFavorite={togglingFavorite}
@@ -343,6 +346,21 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
             }
           }}
           onCreateChat={handleCreateChatClick}
+        />
+      )}
+
+      {/* Character Optimizer Modal */}
+      {showOptimizerModal && (
+        <CharacterOptimizerModal
+          characterId={id}
+          characterName={character?.name || 'Character'}
+          profiles={profiles}
+          defaultConnectionProfileId={character?.defaultConnectionProfileId}
+          onClose={() => setShowOptimizerModal(false)}
+          onApplied={() => {
+            fetchCharacter()
+            setShowOptimizerModal(false)
+          }}
         />
       )}
 

@@ -23,7 +23,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import { createAuthenticatedParamsHandler, checkOwnership, AuthenticatedContext, enrichWithDefaultImage, getFilePath } from '@/lib/api/middleware';
+import { createAuthenticatedParamsHandler, checkOwnership, enrichWithDefaultImage, getFilePath } from '@/lib/api/middleware';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { executeCascadeDelete, getCascadeDeletePreview } from '@/lib/cascade-delete';
 import { exportSTCharacter, createSTCharacterPNG } from '@/lib/sillytavern/character';
@@ -32,6 +32,8 @@ import { z } from 'zod';
 import { PronounsSchema } from '@/lib/schemas/character.types';
 import { logger } from '@/lib/logger';
 import { notFound, forbidden, badRequest, serverError, validationError } from '@/lib/api/responses';
+import { runCharacterOptimizer } from '@/lib/services/character-optimizer.service';
+import type { OptimizerProgressEvent } from '@/lib/services/character-optimizer.service';
 
 // ============================================================================
 // Schemas
@@ -83,10 +85,14 @@ const setDefaultPartnerSchema = z.object({
   partnerId: z.uuid().nullable(),
 });
 
+const optimizeStreamSchema = z.object({
+  connectionProfileId: z.string().uuid(),
+});
+
 const CHARACTER_GET_ACTIONS = ['export', 'chats', 'cascade-preview', 'default-partner', 'get-tags'] as const;
 type CharacterGetAction = typeof CHARACTER_GET_ACTIONS[number];
 
-const CHARACTER_POST_ACTIONS = ['favorite', 'avatar', 'add-tag', 'remove-tag', 'toggle-controlled-by', 'set-default-partner'] as const;
+const CHARACTER_POST_ACTIONS = ['favorite', 'avatar', 'add-tag', 'remove-tag', 'toggle-controlled-by', 'set-default-partner', 'optimize-stream'] as const;
 type CharacterPostAction = typeof CHARACTER_POST_ACTIONS[number];
 
 // ============================================================================
@@ -419,6 +425,67 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
 });
 
 // ============================================================================
+// POST Handler - Helper Functions
+// ============================================================================
+
+async function handleOptimizeStream(
+  req: NextRequest,
+  user: any,
+  repos: any,
+  characterId: string
+): Promise<NextResponse> {
+
+  try {
+    const body = await req.json();
+    const { connectionProfileId } = optimizeStreamSchema.parse(body);
+
+    logger.info('[Characters v1] Character optimizer starting (streaming)', {
+      userId: user.id,
+      characterId,
+      connectionProfileId,
+    });
+
+    const encoder = new TextEncoder();
+
+    const stream = new ReadableStream({
+      async start(controller) {
+        const enqueue = (event: OptimizerProgressEvent) => {
+          try {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+          } catch {
+            // Stream may be closed
+          }
+        };
+
+        await runCharacterOptimizer(characterId, connectionProfileId, user.id, repos, enqueue);
+
+        try {
+          controller.close();
+        } catch {
+          // Stream may already be closed
+        }
+      },
+    });
+
+    return new NextResponse(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return validationError(error);
+    }
+
+    const errorMessage = error instanceof Error ? error.message : 'Optimization failed';
+    logger.error('[Characters v1] Character optimizer stream failed', { characterId, error: errorMessage });
+    return serverError(errorMessage);
+  }
+}
+
+// ============================================================================
 // POST Handler - Actions
 // ============================================================================
 
@@ -609,6 +676,8 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
         return serverError('Failed to update default partner');
       }
     },
+
+    'optimize-stream': () => handleOptimizeStream(req, user, repos, id),
   };
 
   return actionHandlers[action]();
