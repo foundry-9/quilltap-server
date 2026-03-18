@@ -1268,7 +1268,16 @@ async function embeddedStartupSequence(dataDir: string): Promise<void> {
   }
 
   if (!embeddedManager.isRunning()) {
-    sendSplashError('Server process exited unexpectedly.', true);
+    const exitCode = embeddedManager.getLastExitCode();
+    const recentLines = embeddedManager.getRecentOutput(10);
+    const details = recentLines.length > 0
+      ? recentLines.join('\n')
+      : 'No output captured';
+    const codeStr = exitCode !== null ? ` (exit code ${exitCode})` : '';
+    sendSplashError(
+      `Server process exited unexpectedly${codeStr}.\n\n${details}`,
+      true,
+    );
     return;
   }
 

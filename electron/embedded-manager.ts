@@ -39,9 +39,32 @@ function resolveServerPath(): string {
  */
 export class EmbeddedManager {
   private childProcess: ChildProcess | null = null;
+  /** Circular buffer of the last N output lines (stdout + stderr) for crash diagnostics */
+  private recentOutput: string[] = [];
+  private static readonly MAX_RECENT_LINES = 50;
+  /** Exit code from the last process exit (null if still running or killed by signal) */
+  private lastExitCode: number | null = null;
 
   constructor() {
     console.log('[EmbeddedManager] Initialized — will use Electron Node.js runtime');
+  }
+
+  /** Push a line into the recent output buffer, evicting oldest if full */
+  private pushOutput(line: string): void {
+    this.recentOutput.push(line);
+    if (this.recentOutput.length > EmbeddedManager.MAX_RECENT_LINES) {
+      this.recentOutput.shift();
+    }
+  }
+
+  /** Get the last N lines of output for diagnostics */
+  getRecentOutput(count: number = 20): string[] {
+    return this.recentOutput.slice(-count);
+  }
+
+  /** Get the exit code from the last process run */
+  getLastExitCode(): number | null {
+    return this.lastExitCode;
   }
 
   /**
@@ -57,6 +80,10 @@ export class EmbeddedManager {
       console.warn('[EmbeddedManager] Server already running — stopping first');
       this.stopServer();
     }
+
+    // Reset diagnostics for this run
+    this.recentOutput = [];
+    this.lastExitCode = null;
 
     let serverPath: string;
     try {
@@ -74,6 +101,15 @@ export class EmbeddedManager {
     // Detect the host OS timezone to pass through to the server
     const hostTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+    // Resolve the modules directory. The build script renames node_modules to
+    // _modules because electron-builder has a hardcoded node_modules exclusion
+    // for extraResources. We set NODE_PATH so require() finds them regardless.
+    const serverDir = path.dirname(serverPath);
+    const modulesDir = fs.existsSync(path.join(serverDir, '_modules'))
+      ? path.join(serverDir, '_modules')
+      : path.join(serverDir, 'node_modules');
+    console.log(`[EmbeddedManager] Modules dir: ${modulesDir}`);
+
     this.childProcess = spawn(process.execPath, [serverPath], {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: {
@@ -86,6 +122,8 @@ export class EmbeddedManager {
         QUILLTAP_DATA_DIR: dataDir,
         QUILLTAP_TIMEZONE: hostTimezone,
         NODE_OPTIONS: '--max-old-space-size=2048',
+        // Module resolution: point NODE_PATH to _modules (renamed from node_modules)
+        NODE_PATH: modulesDir,
         // Preserve PATH for native module resolution
         PATH: process.env.PATH || '',
         // Preserve HOME for various lookups
@@ -103,27 +141,37 @@ export class EmbeddedManager {
     });
 
     this.childProcess.stdout?.on('data', (data: Buffer) => {
-      const text = data.toString();
-      if (onOutput) {
-        text.split('\n').filter(Boolean).forEach(onOutput);
+      const lines = data.toString().split('\n').filter(Boolean);
+      for (const line of lines) {
+        this.pushOutput(line);
+        if (onOutput) onOutput(line);
       }
     });
 
     this.childProcess.stderr?.on('data', (data: Buffer) => {
-      const text = data.toString();
-      if (onOutput) {
-        text.split('\n').filter(Boolean).forEach(onOutput);
+      const lines = data.toString().split('\n').filter(Boolean);
+      for (const line of lines) {
+        this.pushOutput(`[stderr] ${line}`);
+        if (onOutput) onOutput(line);
       }
     });
 
     this.childProcess.on('error', (err) => {
       console.error('[EmbeddedManager] spawn error:', err.message);
+      this.pushOutput(`[spawn error] ${err.message}`);
       if (onError) onError(err.message);
       this.childProcess = null;
     });
 
     this.childProcess.on('close', (code) => {
+      this.lastExitCode = code;
       console.log(`[EmbeddedManager] Process exited with code ${code}`);
+      if (code !== 0 && code !== null) {
+        console.error('[EmbeddedManager] Last output lines:');
+        for (const line of this.getRecentOutput(10)) {
+          console.error(`  ${line}`);
+        }
+      }
       this.childProcess = null;
     });
   }

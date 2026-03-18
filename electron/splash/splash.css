@@ -167,8 +167,13 @@ body {
   font-size: 13px;
   color: #ef4444;
   margin-bottom: 20px;
-  max-width: 360px;
+  max-width: 400px;
   line-height: 1.5;
+  white-space: pre-wrap;
+  text-align: left;
+  max-height: 200px;
+  overflow-y: auto;
+  word-break: break-word;
 }
 
 .button-group {

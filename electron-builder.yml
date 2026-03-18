@@ -34,6 +34,9 @@ npmRebuild: false
 afterSign: electron/notarize.js
 extraResources:
   # Embedded server: Next.js standalone output + static assets + public files + plugins
+  # NOTE: node_modules is renamed to _modules in the staging step because
+  # electron-builder has a hardcoded node_modules exclusion for extraResources.
+  # The embedded server sets NODE_PATH to find _modules at runtime.
   - from: .electron-server-staging/
     to: server/
     filter:

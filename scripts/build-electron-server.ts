@@ -27,10 +27,10 @@ const IS_WINDOWS = process.platform === 'win32';
 
 const skipBuild = process.argv.includes('--skip-build');
 
-function run(cmd: string, description: string, env?: NodeJS.ProcessEnv): void {
+function run(cmd: string, description: string, env?: NodeJS.ProcessEnv, cwd?: string): void {
   console.log(`> ${description}`);
   try {
-    execSync(cmd, { stdio: 'inherit', cwd: PROJECT_ROOT, env: env || process.env });
+    execSync(cmd, { stdio: 'inherit', cwd: cwd || PROJECT_ROOT, env: env || process.env });
   } catch {
     console.error(`Failed: ${description}`);
     process.exit(1);
@@ -86,17 +86,24 @@ function getNextBuildEnv(): NodeJS.ProcessEnv {
   };
 }
 
-// Read root version
+// Read root version and Electron version
 const rootPackage = JSON.parse(readFileSync(join(PROJECT_ROOT, 'package.json'), 'utf-8'));
 const version: string = rootPackage.version;
 
+// Resolve installed Electron version for native module rebuild targeting
+const electronPackage = JSON.parse(
+  readFileSync(join(PROJECT_ROOT, 'node_modules', 'electron', 'package.json'), 'utf-8')
+);
+const electronVersion: string = electronPackage.version;
+
 console.log('==> Building Electron embedded server');
-console.log(`    Version: ${version}`);
-console.log(`    Output:  ${STAGING_DIR}`);
+console.log(`    Version:  ${version}`);
+console.log(`    Electron: ${electronVersion}`);
+console.log(`    Output:   ${STAGING_DIR}`);
 console.log('');
 
 // Step 1: Clean staging directory
-console.log('==> Step 1/7: Cleaning staging directory');
+console.log('==> Step 1/8: Cleaning staging directory');
 if (existsSync(STAGING_DIR)) {
   rmSync(STAGING_DIR, { recursive: true, force: true });
 }
@@ -104,15 +111,15 @@ mkdirSync(STAGING_DIR, { recursive: true });
 
 if (!skipBuild) {
   // Step 2: Build plugins
-  console.log('==> Step 2/7: Building plugins');
+  console.log('==> Step 2/8: Building plugins');
   run('npm run build:plugins', 'Building plugins');
 
   // Step 3: Build Next.js standalone
-  console.log('==> Step 3/7: Building Next.js (standalone output)');
+  console.log('==> Step 3/8: Building Next.js (standalone output)');
   run('npx next build --webpack', 'Building Next.js', getNextBuildEnv());
 } else {
-  console.log('==> Step 2/7: Skipping plugin build (--skip-build)');
-  console.log('==> Step 3/7: Skipping Next.js build (--skip-build)');
+  console.log('==> Step 2/8: Skipping plugin build (--skip-build)');
+  console.log('==> Step 3/8: Skipping Next.js build (--skip-build)');
 }
 
 // Verify standalone output exists
@@ -122,7 +129,7 @@ if (!existsSync(NEXT_STANDALONE)) {
 }
 
 // Step 4: Copy standalone output + static assets + public files + plugins
-console.log('==> Step 4/7: Copying standalone output to staging');
+console.log('==> Step 4/8: Copying standalone output to staging');
 copyDir(NEXT_STANDALONE, STAGING_DIR);
 
 console.log('    Copying .next/static/');
@@ -145,7 +152,7 @@ if (existsSync(PLUGINS_DIST)) {
 }
 
 // Step 5: Clean unnecessary files (but keep native modules intact)
-console.log('==> Step 5/7: Cleaning unnecessary files');
+console.log('==> Step 5/8: Cleaning unnecessary files');
 const standaloneNodeModules = join(STAGING_DIR, 'node_modules');
 if (existsSync(standaloneNodeModules)) {
   const cleanDir = (dir: string): void => {
@@ -171,14 +178,55 @@ if (existsSync(standaloneNodeModules)) {
 }
 
 // Step 6: Rebuild native modules against Electron's Node ABI
-console.log('==> Step 6/7: Rebuilding native modules for Electron');
+console.log('==> Step 6/8: Rebuilding native modules for Electron');
+
+// Verify better-sqlite3 exists in staging before rebuild
+const bsqlPath = join(STAGING_DIR, 'node_modules', 'better-sqlite3');
+const bsqlNodeFile = join(bsqlPath, 'build', 'Release', 'better_sqlite3.node');
+if (!existsSync(bsqlPath)) {
+  console.error('    ERROR: better-sqlite3 NOT found in staging node_modules');
+  console.error('    Check outputFileTracingIncludes in next.config.js');
+  process.exit(1);
+}
+if (!existsSync(join(bsqlPath, 'binding.gyp'))) {
+  console.error('    ERROR: binding.gyp NOT found in better-sqlite3 — cannot rebuild');
+  process.exit(1);
+}
+console.log('    better-sqlite3 found with binding.gyp');
+
+// electron-rebuild can't find this module because the npm alias means the
+// directory is named "better-sqlite3" but the package.json says
+// "better-sqlite3-multiple-ciphers". Use node-gyp directly with Electron headers.
+const electronDistUrl = 'https://electronjs.org/headers';
+const targetArch = process.arch;
+
+console.log(`    Rebuilding better-sqlite3 for Electron ${electronVersion} (${targetArch})`);
+console.log(`    Using Electron headers from ${electronDistUrl}`);
+
+// node-gyp rebuild targeting Electron's Node ABI
 run(
-  `npx electron-rebuild --module-dir "${STAGING_DIR}" --force`,
-  'Rebuilding native modules against Electron Node ABI'
+  [
+    'npx node-gyp rebuild',
+    '--release',
+    `--target=${electronVersion}`,
+    `--arch=${targetArch}`,
+    `--dist-url=${electronDistUrl}`,
+    '--build-from-source',
+  ].join(' '),
+  'Rebuilding better-sqlite3 against Electron Node ABI',
+  { ...process.env, HOME: process.env.HOME || '' },
+  bsqlPath,  // run from the module directory
 );
 
+// Verify the native binary was rebuilt
+if (!existsSync(bsqlNodeFile)) {
+  console.error('    ERROR: better-sqlite3.node not found after rebuild');
+  process.exit(1);
+}
+console.log('    ✓ better-sqlite3.node rebuilt successfully');
+
 // Step 7: Resolve any remaining symlinks (electron-rebuild or npm may create them)
-console.log('==> Step 7/7: Resolving symlinks in staging directory');
+console.log('==> Step 7/8: Resolving symlinks in staging directory');
 let symlinkCount = 0;
 function resolveSymlinks(dir: string): void {
   if (!existsSync(dir)) return;
@@ -205,6 +253,24 @@ function resolveSymlinks(dir: string): void {
 }
 resolveSymlinks(STAGING_DIR);
 console.log(`    Resolved ${symlinkCount} symlink(s)`);
+
+// Step 8: Rename node_modules to _modules
+// electron-builder has a hardcoded exclusion for "node_modules" in extraResources.
+// Renaming to "_modules" bypasses this filter. The embedded server sets NODE_PATH
+// to point to this directory so require() still resolves modules correctly.
+console.log('==> Step 8/8: Renaming node_modules to _modules (electron-builder workaround)');
+const stagingNodeModules = join(STAGING_DIR, 'node_modules');
+const stagingModules = join(STAGING_DIR, '_modules');
+if (existsSync(stagingNodeModules)) {
+  if (existsSync(stagingModules)) {
+    rmSync(stagingModules, { recursive: true, force: true });
+  }
+  cpSync(stagingNodeModules, stagingModules, { recursive: true, dereference: true });
+  rmSync(stagingNodeModules, { recursive: true, force: true });
+  console.log('    ✓ node_modules → _modules');
+} else {
+  console.warn('    WARNING: no node_modules found in staging');
+}
 
 // Summary
 const totalSize = dirSize(STAGING_DIR);
