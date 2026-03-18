@@ -1,4 +1,8 @@
-FROM node:22-alpine AS base
+# Build base — includes native-module compilation tools (NOT used in production)
+FROM node:22-alpine AS build-base
+
+# Upgrade all Alpine packages to latest security patches
+RUN apk upgrade --no-cache
 
 # Upgrade npm to latest version (fixes "Invalid Version" bug in npm 10.x)
 RUN npm install -g npm@latest
@@ -6,15 +10,22 @@ RUN npm install -g npm@latest
 # Install build dependencies for native modules (better-sqlite3)
 RUN apk add --no-cache python3 make g++
 
-# Install dependencies only when needed
-FROM base AS deps
+# Install all dependencies (for building)
+FROM build-base AS deps
 WORKDIR /app
 
 COPY package.json package-lock.json ./
 RUN npm ci
 
+# Install production-only dependencies (for the final image)
+FROM build-base AS deps-prod
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev && npm rebuild
+
 # Development stage
-FROM base AS development
+FROM build-base AS development
 WORKDIR /app
 
 # Copy package files
@@ -43,7 +54,7 @@ EXPOSE 3000
 CMD ["npm", "run", "dev"]
 
 # Build stage
-FROM base AS builder
+FROM build-base AS builder
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
@@ -61,9 +72,12 @@ RUN rm -rf /app/plugins/dist/*/node_modules
 # NODE_OPTIONS caps V8 heap to prevent OOM-kills in memory-constrained containers
 RUN SKIP_ENV_VALIDATION=true NODE_OPTIONS="--max-old-space-size=3072" npx next build --webpack
 
-# Production stage
-FROM base AS production
+# Production stage — clean image WITHOUT build tools (python3/make/g++/binutils)
+FROM node:22-alpine AS production
 WORKDIR /app
+
+# Upgrade all Alpine packages to latest security patches
+RUN apk upgrade --no-cache
 
 ENV NODE_ENV=production
 ENV DOCKER_CONTAINER=true
@@ -87,14 +101,13 @@ COPY --from=builder --chown=nextjs:nodejs /app/plugins/dist ./plugins/dist
 # Copy package files for native module dependencies
 COPY package.json package-lock.json ./
 
-# Install zip/unzip for backup/restore
-RUN apk add --no-cache zip unzip
+# Install zip for backup/restore and common tools for LLM shell agent use
+# (busybox provides unzip, avoiding CVE-2008-0888 in alpine/unzip)
+# All packages pulled from the already-upgraded Alpine index (see apk upgrade above)
+RUN apk add --no-cache zip git curl wget jq
 
-# Install only production dependencies (including better-sqlite3)
-RUN npm ci --omit=dev
-
-# Rebuild native modules for the current Alpine Linux platform
-RUN npm rebuild
+# Copy pre-compiled production node_modules from build stage (native modules already built)
+COPY --from=deps-prod /app/node_modules ./node_modules
 
 # Copy entrypoint script
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
@@ -121,7 +134,8 @@ COPY lima/wsl-init.sh /usr/local/bin/wsl-init.sh
 RUN chmod +x /usr/local/bin/wsl-init.sh
 
 # Pre-install runtime dependencies (Lima YAML does this at provision time)
-RUN apk add --no-cache libstdc++ libgcc zip unzip
+# Note: busybox provides unzip; we only need the zip package
+RUN apk add --no-cache libstdc++ libgcc zip
 
 # Set environment defaults
 RUN printf 'export LIMA_CONTAINER=true\nexport NODE_ENV=production\nexport PORT=5050\nexport HOSTNAME=0.0.0.0\nexport NODE_OPTIONS="--max-old-space-size=2048"\n' \
