@@ -419,7 +419,11 @@ export async function provisionDbKey(): Promise<DbKeyState> {
 
       if (envHash === fileData.pepperHash) {
         log.info('DbKey resolved: env var matches stored hash');
-        global.__quilltapHasUserPassphrase = false;
+        // Only set passphrase flag if not already determined (e.g., by unlockDbKey)
+        if (global.__quilltapHasUserPassphrase === undefined) {
+          // Env var was provided directly — no passphrase was needed
+          global.__quilltapHasUserPassphrase = false;
+        }
         setCurrentState('resolved');
         return 'resolved';
       }

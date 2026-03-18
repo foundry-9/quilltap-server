@@ -12,6 +12,11 @@ export default function UnlockPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [attempts, setAttempts] = useState(0);
+  const [isAutoLockReturn, setIsAutoLockReturn] = useState(false);
+
+  useEffect(() => {
+    setIsAutoLockReturn(!!sessionStorage.getItem('quilltap-autolock-return'));
+  }, []);
 
   const returnToApp = useCallback(() => {
     const returnUrl = typeof window !== 'undefined'
@@ -101,11 +106,13 @@ export default function UnlockPage() {
   return (
     <div className="qt-auth-page flex items-center justify-center min-h-screen p-4">
       <div className="qt-card max-w-lg w-full p-6 space-y-4">
-        <h1 className="qt-heading-2">The Establishment Has Been Secured</h1>
+        <h1 className="qt-heading-2">
+          {isAutoLockReturn ? 'The Establishment Has Been Secured' : 'Quilltap Awaits Your Credentials'}
+        </h1>
         <p className="qt-text-muted">
-          Quilltap has locked itself after a period of inactivity, much as a conscientious
-          butler secures the silver when the household retires for the evening. Kindly
-          supply your passphrase to resume where you left off.
+          {isAutoLockReturn
+            ? 'Quilltap has locked itself after a period of inactivity, much as a conscientious butler secures the silver when the household retires for the evening. Kindly supply your passphrase to resume where you left off.'
+            : 'Your encryption key is protected by a passphrase, rather like a safe-deposit box that requires both key and signature. Kindly supply it so the establishment may open for the day.'}
         </p>
         <div>
           <label className="qt-text-label block mb-1">Passphrase</label>
@@ -128,9 +135,11 @@ export default function UnlockPage() {
         >
           {loading ? 'Unlocking...' : 'Unlock'}
         </button>
-        <p className="qt-text-xs qt-text-muted text-center">
-          This lock was triggered by the auto-lock idle timer. Your work remains exactly as you left it.
-        </p>
+        {isAutoLockReturn && (
+          <p className="qt-text-xs qt-text-muted text-center">
+            This lock was triggered by the auto-lock idle timer. Your work remains exactly as you left it.
+          </p>
+        )}
       </div>
     </div>
   );

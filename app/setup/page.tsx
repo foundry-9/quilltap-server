@@ -13,7 +13,6 @@ export default function SetupPage() {
   const [generatedPepper, setGeneratedPepper] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [attempts, setAttempts] = useState(0);
   const [copied, setCopied] = useState(false);
 
   /** Navigate to /setup/profile if no user character exists, then /setup/providers if no profiles, otherwise / */
@@ -59,11 +58,14 @@ export default function SetupPage() {
 
       if (data.state === 'resolved') {
         navigateAfterSetup();
+      } else if (data.state === 'needs-passphrase') {
+        // Passphrase unlock is handled by /unlock, not /setup
+        router.push('/unlock');
       }
     } catch {
       setError('Failed to check pepper vault status');
     }
-  }, [navigateAfterSetup]);
+  }, [navigateAfterSetup, router]);
 
   useEffect(() => {
     checkState();
@@ -101,43 +103,6 @@ export default function SetupPage() {
       setDbKeyState('resolved');
     } catch {
       setError('Failed to complete setup');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleUnlock = async () => {
-    setError('');
-
-    if (!passphrase) {
-      setError('Passphrase is required');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const res = await fetch('/api/v1/system/unlock?action=unlock', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ passphrase }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        const newAttempts = attempts + 1;
-        setAttempts(newAttempts);
-        if (newAttempts >= 3) {
-          setError('Too many failed attempts. You can set ENCRYPTION_MASTER_PEPPER as an environment variable instead.');
-        } else {
-          setError(data.error || 'Unlock failed');
-        }
-        return;
-      }
-
-      await navigateAfterSetup();
-    } catch {
-      setError('Failed to unlock');
     } finally {
       setLoading(false);
     }
@@ -276,35 +241,6 @@ export default function SetupPage() {
               className="qt-button qt-button-primary w-full py-2"
             >
               {loading ? 'Setting up...' : passphrase ? 'Set Up with Passphrase' : 'Set Up without Passphrase'}
-            </button>
-          </>
-        )}
-
-        {pepperState === 'needs-passphrase' && (
-          <>
-            <h1 className="qt-heading-2">Quilltap is Locked</h1>
-            <p className="qt-text-muted">
-              Enter the passphrase you set during setup to unlock Quilltap.
-            </p>
-            <div>
-              <label className="qt-text-label block mb-1">Passphrase</label>
-              <input
-                type="password"
-                value={passphrase}
-                onChange={(e) => setPassphrase(e.target.value)}
-                placeholder="Enter your passphrase"
-                className="qt-input w-full p-2"
-                disabled={loading || attempts >= 3}
-                onKeyDown={(e) => e.key === 'Enter' && handleUnlock()}
-              />
-            </div>
-            {error && <p className="qt-alert qt-alert-error text-sm">{error}</p>}
-            <button
-              onClick={handleUnlock}
-              disabled={loading || attempts >= 3}
-              className="qt-button qt-button-primary w-full py-2"
-            >
-              {loading ? 'Unlocking...' : 'Unlock'}
             </button>
           </>
         )}

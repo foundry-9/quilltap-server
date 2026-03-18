@@ -55,6 +55,11 @@ export function AutoLockSettingsCard() {
 
   useEffect(() => {
     fetchState()
+
+    // Re-fetch when the passphrase changes (e.g., user sets or removes one)
+    const handlePassphraseChanged = () => fetchState()
+    window.addEventListener('quilltap-passphrase-changed', handlePassphraseChanged)
+    return () => window.removeEventListener('quilltap-passphrase-changed', handlePassphraseChanged)
   }, [fetchState])
 
   const handleSave = async (newConfig: AutoLockConfig) => {

@@ -28,12 +28,13 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const pathname = usePathname()
   const { data: session, status } = useSession()
 
-  // Don't render layout on auth or setup pages
+  // Don't render layout on auth, setup, or unlock pages
   const isAuthPage = pathname?.startsWith('/auth')
   const isSetupPage = pathname?.startsWith('/setup')
+  const isUnlockPage = pathname === '/unlock'
 
-  // Setup page bypasses session check entirely (pepper may not be resolved yet)
-  if (isSetupPage) {
+  // Setup and unlock pages bypass session check entirely (pepper may not be resolved yet)
+  if (isSetupPage || isUnlockPage) {
     return (
       <div className="flex flex-col h-screen bg-background text-foreground">
         <main className="flex-1 min-h-0 overflow-auto">

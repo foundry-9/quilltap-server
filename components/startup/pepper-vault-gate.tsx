@@ -51,14 +51,14 @@ export function PepperVaultGate() {
         // Mark as resolved so we don't re-check
         gateResolved = true;
 
-        if (state === 'needs-setup' || state === 'needs-passphrase') {
-          // If there's an auto-lock return key in sessionStorage, this is a
-          // re-lock from the idle timer — go to /unlock instead of /setup
-          if (state === 'needs-passphrase' && typeof window !== 'undefined' && sessionStorage.getItem('quilltap-autolock-return')) {
-            router.push('/unlock');
-          } else {
-            router.push('/setup');
-          }
+        if (state === 'needs-setup') {
+          router.push('/setup');
+          return;
+        }
+
+        if (state === 'needs-passphrase') {
+          // Always go to /unlock for passphrase entry — whether cold start or auto-lock
+          router.push('/unlock');
           return;
         }
 
