@@ -28,6 +28,12 @@ files:
   - "!__tests__/**/*"
   - "!.githooks/**/*"
 afterSign: electron/notarize.js
+extraResources:
+  # Embedded server: Next.js standalone output + static assets + public files + plugins
+  - from: .electron-server-staging/
+    to: server/
+    filter:
+      - "**/*"
 mac:
   artifactName: "${productName}-${version}-${arch}.${ext}"
   category: public.app-category.productivity

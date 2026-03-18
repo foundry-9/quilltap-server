@@ -25,7 +25,7 @@ const changeDirLink = document.getElementById('changeDirLink');
 // Runtime mode elements
 const runtimeDockerBtn = document.getElementById('runtimeDocker');
 const runtimeVMBtn = document.getElementById('runtimeVM');
-const runtimeNpxBtn = document.getElementById('runtimeNpx');
+const runtimeEmbeddedBtn = document.getElementById('runtimeEmbedded');
 const vmLabelEl = document.getElementById('vmLabel');
 
 // Rename elements
@@ -67,7 +67,7 @@ var phaseMessages = {
   'starting-vm': 'Starting virtual machine...',
   'pulling-image': 'Pulling Docker image...',
   'starting-container': 'Starting Docker container...',
-  'installing-npx': 'Starting Node.js server...',
+  'starting-server': 'Starting server...',
   'waiting-health': 'Waiting for server...',
   'ready': 'Ready!',
   'error': 'Something went wrong',
@@ -128,12 +128,12 @@ function showSection(section) {
 function updateRuntimeButtons() {
   runtimeDockerBtn.classList.remove('selected');
   runtimeVMBtn.classList.remove('selected');
-  runtimeNpxBtn.classList.remove('selected');
+  runtimeEmbeddedBtn.classList.remove('selected');
 
   if (currentRuntimeMode === 'docker') {
     runtimeDockerBtn.classList.add('selected');
-  } else if (currentRuntimeMode === 'npx') {
-    runtimeNpxBtn.classList.add('selected');
+  } else if (currentRuntimeMode === 'embedded') {
+    runtimeEmbeddedBtn.classList.add('selected');
   } else {
     runtimeVMBtn.classList.add('selected');
   }
@@ -282,7 +282,7 @@ window.quilltap.onUpdate(function(data) {
     firstRunNote.classList.add('visible');
   } else if (
     data.phase === 'creating-vm' || data.phase === 'updating-vm' || data.phase === 'starting-vm' ||
-    data.phase === 'pulling-image' || data.phase === 'starting-container' || data.phase === 'installing-npx'
+    data.phase === 'pulling-image' || data.phase === 'starting-container' || data.phase === 'starting-server'
   ) {
     progressContainer.classList.add('visible');
     progressBar.classList.add('indeterminate');
@@ -339,24 +339,14 @@ window.quilltap.onDirectories(function(data) {
     runtimeDockerBtn.disabled = true;
     // Force away from Docker mode if Docker is not available
     if (currentRuntimeMode === 'docker') {
-      currentRuntimeMode = isLinux ? 'npx' : 'vm';
+      currentRuntimeMode = isLinux ? 'embedded' : 'vm';
       updateRuntimeButtons();
       window.quilltap.setRuntimeMode(currentRuntimeMode);
     }
   }
 
-  // Update Node.js button availability
-  if (data.nodeAvailable) {
-    runtimeNpxBtn.disabled = false;
-  } else {
-    runtimeNpxBtn.disabled = true;
-    // Force away from npx mode if Node.js is not available
-    if (currentRuntimeMode === 'npx') {
-      currentRuntimeMode = isLinux ? 'docker' : 'vm';
-      updateRuntimeButtons();
-      window.quilltap.setRuntimeMode(currentRuntimeMode);
-    }
-  }
+  // Embedded mode is always available (uses Electron's own Node.js)
+  runtimeEmbeddedBtn.disabled = false;
 
   // Update VM label
   if (data.vmLabel) {
@@ -367,7 +357,7 @@ window.quilltap.onDirectories(function(data) {
   if (data.platform === 'linux') {
     runtimeVMBtn.style.display = 'none';
     runtimeDockerBtn.style.flex = '1';
-    runtimeNpxBtn.style.flex = '1';
+    runtimeEmbeddedBtn.style.flex = '1';
   }
 });
 
@@ -427,12 +417,12 @@ runtimeVMBtn.addEventListener('click', function() {
   window.quilltap.setRuntimeMode('vm');
 });
 
-/** Runtime mode: Node.js button */
-runtimeNpxBtn.addEventListener('click', function() {
-  if (runtimeNpxBtn.disabled) return;
-  currentRuntimeMode = 'npx';
+/** Runtime mode: Direct (embedded) button */
+runtimeEmbeddedBtn.addEventListener('click', function() {
+  if (runtimeEmbeddedBtn.disabled) return;
+  currentRuntimeMode = 'embedded';
   updateRuntimeButtons();
-  window.quilltap.setRuntimeMode('npx');
+  window.quilltap.setRuntimeMode('embedded');
 });
 
 /** Delete confirmation: config only */

@@ -477,8 +477,8 @@ body {
   background-image: url('runtime-vm.webp');
 }
 
-#runtimeNpx {
-  background-image: url('runtime-npx.webp');
+#runtimeEmbedded {
+  background-image: url('runtime-embedded.webp');
 }
 
 .runtime-btn:hover:not(:disabled) {

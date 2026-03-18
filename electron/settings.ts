@@ -12,7 +12,7 @@ export interface AppSettings {
   knownDataDirs: NamedDataDir[];
   /** Whether to auto-start with lastDataDir (skip chooser) */
   autoStart: boolean;
-  /** Runtime mode: 'docker', 'vm' (Lima/WSL2), or 'npx' (Node.js) */
+  /** Runtime mode: 'docker', 'vm' (Lima/WSL2), or 'embedded' (Electron's Node.js) */
   runtimeMode: RuntimeMode;
 }
 
@@ -65,14 +65,21 @@ export function loadSettings(): AppSettings {
         }
       }
 
+      // Migrate old 'npx' runtime mode to 'embedded'
+      let runtimeMode: RuntimeMode;
+      const savedMode = parsed.runtimeMode;
+      if (process.platform === 'linux') {
+        runtimeMode = (savedMode === 'embedded' || savedMode === 'npx') ? 'embedded' : 'docker';
+      } else {
+        runtimeMode = savedMode === 'docker' ? 'docker'
+          : (savedMode === 'embedded' || savedMode === 'npx') ? 'embedded' : 'vm';
+      }
+
       return {
         lastDataDir: parsed.lastDataDir || defaults.lastDataDir,
         knownDataDirs,
         autoStart: typeof parsed.autoStart === 'boolean' ? parsed.autoStart : defaults.autoStart,
-        runtimeMode: process.platform === 'linux'
-          ? (parsed.runtimeMode === 'npx' ? 'npx' : 'docker')
-          : (parsed.runtimeMode === 'docker' ? 'docker'
-            : parsed.runtimeMode === 'npx' ? 'npx' : 'vm'),
+        runtimeMode,
       };
     }
   } catch (err) {
