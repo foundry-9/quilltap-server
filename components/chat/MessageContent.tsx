@@ -334,9 +334,11 @@ export default function MessageContent({
     [patterns]
   )
 
-  // Pre-process content to escape markdown inside roleplay brackets
+  // Pre-process content: trim leading/trailing whitespace (a leading tab triggers
+  // markdown's indented code block rule, rendering the whole message as preformatted),
+  // then escape markdown inside roleplay brackets
   const processedContent = useMemo(
-    () => escapeMarkdownInBrackets(content, patterns),
+    () => escapeMarkdownInBrackets(content.trim(), patterns),
     [content, patterns]
   )
 

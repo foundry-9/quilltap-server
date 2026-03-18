@@ -308,22 +308,26 @@ export async function renderMarkdownToHtml(
     const patterns = renderingPatterns.length > 0 ? renderingPatterns : DEFAULT_RENDERING_PATTERNS;
     const compiledPatterns = compilePatterns(patterns);
 
-    // Step 2: Escape markdown inside roleplay brackets
-    const escapedContent = escapeMarkdownInBrackets(content, patterns);
+    // Step 2: Trim leading/trailing whitespace — a leading tab triggers markdown's
+    // indented code block rule, rendering the whole message as preformatted text
+    const trimmedContent = content.trim();
 
-    // Step 3: Convert markdown to HTML
+    // Step 3: Escape markdown inside roleplay brackets
+    const escapedContent = escapeMarkdownInBrackets(trimmedContent, patterns);
+
+    // Step 4: Convert markdown to HTML
     const processor = getProcessor();
     const file = await processor.process(escapedContent);
     let html = String(file);
 
-    // Step 4: Apply roleplay patterns
+    // Step 5: Apply roleplay patterns
     html = applyRoleplayPatterns(html, compiledPatterns);
 
-    // Step 5: Apply dialogue detection
+    // Step 6: Apply dialogue detection
     const dialogueConfig = dialogueDetection || DEFAULT_DIALOGUE_DETECTION;
     html = applyDialogueDetection(html, dialogueConfig);
 
-    // Step 6: Wrap in container div with appropriate classes
+    // Step 7: Wrap in container div with appropriate classes
     // Note: We don't add the outer container class here - the client handles that
     return html;
   } catch (error) {
