@@ -81,7 +81,7 @@ import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { isRecoverableRequestError, isToolUnsupportedError } from '@/lib/llm/errors'
 import { countMessagesTokens } from '@/lib/tokens/token-counter'
 import { attemptRequestLimitRecovery } from './recovery.service'
-import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG } from '@/lib/llm/cheap-llm'
+import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { extractMemorySearchKeywords, stripToolArtifacts, extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks'
 import { searchMemoriesSemantic, type SemanticSearchResult } from '@/lib/memory/memory-service'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
@@ -968,6 +968,24 @@ async function processMessage(
       characterId: character.id,
     }))
 
+    // For dangerous chats, use uncensored provider for keyword extraction
+    let recallSelection = cheapLLMSelection
+    if (chat.isDangerousChat) {
+      recallSelection = resolveUncensoredCheapLLMSelection(
+        cheapLLMSelection,
+        true,
+        dangerSettings,
+        allProfiles
+      )
+      if (recallSelection !== cheapLLMSelection) {
+        logger.debug('[ProactiveRecall] Using uncensored provider for memory keyword extraction', {
+          chatId,
+          originalProvider: cheapLLMSelection.provider,
+          uncensoredProvider: recallSelection.provider,
+        })
+      }
+    }
+
     // Extract keywords via cheap LLM, stripping tool artifacts from assistant messages
     const keywordResult = await extractMemorySearchKeywords(
       messagesSinceLastSpoke.reduce<Array<{ role: 'user' | 'assistant' | 'system'; content: string }>>((acc, m) => {
@@ -981,7 +999,7 @@ async function processMessage(
         return acc
       }, []),
       character.name,
-      cheapLLMSelection,
+      recallSelection,
       userId,
       chatId
     )
