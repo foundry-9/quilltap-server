@@ -7,11 +7,12 @@
  */
 
 import { getRepositories } from '@/lib/repositories/factory'
-import { getCheapLLMProvider } from '@/lib/llm/cheap-llm'
+import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { updateContextSummary, summarizeChat, ChatMessage, generateTitleFromSummary, considerTitleUpdate } from '@/lib/memory/cheap-llm-tasks'
 import { countMessagesTokens } from '@/lib/tokens/token-counter'
 import { getModelContextLimit, shouldSummarizeConversation } from '@/lib/llm/model-context-data'
 import { Provider, ConnectionProfile, CheapLLMSettings } from '@/lib/schemas/types'
+import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { logger } from '@/lib/logger'
 import { createContextSummaryEvent, createTitleGenerationEvent } from '@/lib/services/system-events.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
@@ -188,7 +189,7 @@ export async function generateContextSummary(
     }
 
     // Get cheap LLM provider - convert null values to undefined for compatibility
-    const cheapLLM = getCheapLLMProvider(
+    let cheapLLM = getCheapLLMProvider(
       connectionProfile,
       {
         strategy: cheapLLMSettings.strategy,
@@ -201,6 +202,18 @@ export async function generateContextSummary(
 
     if (!cheapLLM) {
       return { success: false, error: 'No cheap LLM provider available', wasGenerated: false }
+    }
+
+    // For dangerous chats, use uncensored provider to avoid content refusals
+    if (chat.isDangerousChat === true) {
+      const chatSettingsForDanger = await repos.chatSettings.findByUserId(userId)
+      const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettingsForDanger)
+      cheapLLM = resolveUncensoredCheapLLMSelection(
+        cheapLLM,
+        true,
+        dangerSettings,
+        availableProfiles
+      )
     }
 
     // Get messages

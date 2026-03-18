@@ -484,7 +484,58 @@ async function processMessage(
   const dangerousContentResolved = resolveDangerousContentSettings(chatSettings)
   const dangerSettings = dangerousContentResolved.settings
 
-  if (dangerSettings.mode !== 'OFF' && dangerSettings.scanTextChat && !isContinueMode && options.content && cheapLLMSelection) {
+  if (chat.isDangerousChat === true && dangerSettings.mode !== 'OFF' && !isContinueMode && options.content) {
+    // Chat is permanently dangerous — skip per-message classification to save tokens
+    logger.debug('[DangerousContent] Skipping per-message classification — chat permanently dangerous', {
+      chatId,
+      dangerCategories: chat.dangerCategories,
+    })
+
+    // Synthesize danger flags from stored chat-level categories
+    const categories = chat.dangerCategories && chat.dangerCategories.length > 0
+      ? chat.dangerCategories
+      : ['unspecified']
+    dangerFlags = categories.map(cat => ({
+      category: cat,
+      score: 1.0,
+      userOverridden: false,
+      wasRerouted: false,
+    }))
+
+    // If AUTO_ROUTE and current profile is NOT uncensored-compatible, reroute
+    if (dangerSettings.mode === 'AUTO_ROUTE' && !effectiveProfile.isDangerousCompatible) {
+      const routeResult = await resolveProviderForDangerousContent(
+        effectiveProfile,
+        effectiveApiKey,
+        dangerSettings,
+        userId
+      )
+
+      if (routeResult.rerouted) {
+        effectiveProfile = routeResult.connectionProfile
+        effectiveApiKey = routeResult.apiKey
+
+        dangerFlags = dangerFlags.map(flag => ({
+          ...flag,
+          wasRerouted: true,
+          reroutedProvider: routeResult.connectionProfile.provider,
+          reroutedModel: routeResult.connectionProfile.modelName,
+        }))
+
+        logger.info('[DangerousContent] Rerouted to uncensored provider (permanently dangerous chat)', {
+          chatId,
+          originalProfile: connectionProfile.name,
+          uncensoredProfile: routeResult.connectionProfile.name,
+        })
+      }
+    } else if (dangerSettings.mode === 'AUTO_ROUTE') {
+      logger.debug('[DangerousContent] Current provider is already uncensored-compatible, skipping reroute', {
+        chatId,
+        provider: effectiveProfile.provider,
+        model: effectiveProfile.modelName,
+      })
+    }
+  } else if (dangerSettings.mode !== 'OFF' && dangerSettings.scanTextChat && !isContinueMode && options.content && cheapLLMSelection) {
     try {
       // Send classification status
       safeEnqueue(controller, encodeStatusEvent(encoder, {
@@ -520,42 +571,50 @@ async function processMessage(
 
         // If AUTO_ROUTE, try to reroute to uncensored provider
         if (dangerSettings.mode === 'AUTO_ROUTE') {
-          safeEnqueue(controller, encodeStatusEvent(encoder, {
-            stage: 'rerouting',
-            message: 'Routing to uncensored provider...',
-            characterName: character.name,
-            characterId: character.id,
-          }))
-
-          const routeResult = await resolveProviderForDangerousContent(
-            effectiveProfile,
-            effectiveApiKey,
-            dangerSettings,
-            userId
-          )
-
-          if (routeResult.rerouted) {
-            effectiveProfile = routeResult.connectionProfile
-            effectiveApiKey = routeResult.apiKey
-
-            // Update danger flags with routing info
-            dangerFlags = dangerFlags.map(flag => ({
-              ...flag,
-              wasRerouted: true,
-              reroutedProvider: routeResult.connectionProfile.provider,
-              reroutedModel: routeResult.connectionProfile.modelName,
+          if (!effectiveProfile.isDangerousCompatible) {
+            safeEnqueue(controller, encodeStatusEvent(encoder, {
+              stage: 'rerouting',
+              message: 'Routing to uncensored provider...',
+              characterName: character.name,
+              characterId: character.id,
             }))
 
-            logger.info('[DangerousContent] Rerouted to uncensored provider', {
-              chatId,
-              originalProfile: connectionProfile.name,
-              uncensoredProfile: routeResult.connectionProfile.name,
-              reason: routeResult.reason,
-            })
+            const routeResult = await resolveProviderForDangerousContent(
+              effectiveProfile,
+              effectiveApiKey,
+              dangerSettings,
+              userId
+            )
+
+            if (routeResult.rerouted) {
+              effectiveProfile = routeResult.connectionProfile
+              effectiveApiKey = routeResult.apiKey
+
+              // Update danger flags with routing info
+              dangerFlags = dangerFlags.map(flag => ({
+                ...flag,
+                wasRerouted: true,
+                reroutedProvider: routeResult.connectionProfile.provider,
+                reroutedModel: routeResult.connectionProfile.modelName,
+              }))
+
+              logger.info('[DangerousContent] Rerouted to uncensored provider', {
+                chatId,
+                originalProfile: connectionProfile.name,
+                uncensoredProfile: routeResult.connectionProfile.name,
+                reason: routeResult.reason,
+              })
+            } else {
+              logger.warn('[DangerousContent] No uncensored provider available, using original', {
+                chatId,
+                reason: routeResult.reason,
+              })
+            }
           } else {
-            logger.warn('[DangerousContent] No uncensored provider available, using original', {
+            logger.debug('[DangerousContent] Current provider is already uncensored-compatible, skipping reroute', {
               chatId,
-              reason: routeResult.reason,
+              provider: effectiveProfile.provider,
+              model: effectiveProfile.modelName,
             })
           }
         }
@@ -1878,7 +1937,6 @@ async function processMessage(
     if (
       fullResponse.trim().length === 0 &&
       dangerSettings.mode === 'AUTO_ROUTE' &&
-      !effectiveProfile.isDangerousCompatible &&
       dangerSettings.uncensoredTextProfileId
     ) {
       uncensoredRetryAttempted = true
@@ -1898,7 +1956,13 @@ async function processMessage(
           userId
         )
 
-        if (routeResult.rerouted) {
+        // Skip if routing resolved to the same profile (pointless retry)
+        if (routeResult.rerouted && routeResult.connectionProfile.id === effectiveProfile.id) {
+          logger.debug('[DangerousContent] Uncensored fallback resolved to same profile, skipping retry', {
+            chatId,
+            profileId: effectiveProfile.id,
+          })
+        } else if (routeResult.rerouted) {
           safeEnqueue(controller, encodeStatusEvent(encoder, {
             stage: 'rerouting',
             message: 'Retrying with uncensored provider...',
@@ -2138,6 +2202,7 @@ async function processMessage(
       const memoryChatSettings: MemoryChatSettings = {
         cheapLLMSettings: chatSettings.cheapLLMSettings,
         dangerSettings,
+        isDangerousChat: chat.isDangerousChat === true,
       }
 
       // Note: personaName is undefined since we only support CHARACTER type participants now

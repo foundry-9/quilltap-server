@@ -13,7 +13,7 @@ import { fileStorageManager } from '@/lib/file-storage/manager';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
 import { craftStoryBackgroundPrompt, deriveSceneContext, extractVisibleConversation, type ChatMessage } from '@/lib/memory/cheap-llm-tasks';
 import { SceneStateSchema } from '@/lib/schemas/chat.types';
-import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig, type CheapLLMSelection } from '@/lib/llm/cheap-llm';
+import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig, type CheapLLMSelection, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/errors';
 import type { StoryBackgroundGenerationPayload } from '../queue-service';
@@ -138,16 +138,25 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     );
   }
 
-  // 7. Fetch recent messages (needed for both scene context and appearance resolution)
-  const chatEvents = await repos.chats.getMessages(payload.chatId);
-  const recentMessages: ChatMessage[] = extractVisibleConversation(chatEvents).slice(-20);
-
-
-  // 7b. Resolve the Concierge settings
+  // Resolve the Concierge settings early (needed for uncensored routing and appearance sanitization)
   const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null);
   const dangerSettings = dangerousContentResolved.settings;
   const isDangerousChat = chat.isDangerousChat === true;
   const hasUncensoredImageProvider = Boolean(dangerSettings.uncensoredImageProfileId);
+
+  // For dangerous chats, use uncensored provider for all cheap LLM tasks
+  if (isDangerousChat) {
+    cheapLLMSelection = resolveUncensoredCheapLLMSelection(
+      cheapLLMSelection!,
+      true,
+      dangerSettings,
+      allProfiles
+    );
+  }
+
+  // 7. Fetch recent messages (needed for both scene context and appearance resolution)
+  const chatEvents = await repos.chats.getMessages(payload.chatId);
+  const recentMessages: ChatMessage[] = extractVisibleConversation(chatEvents).slice(-20);
 
   // 8. Derive scene context AND resolve character appearances in parallel
   let sceneContext = payload.sceneContext || chat.title;

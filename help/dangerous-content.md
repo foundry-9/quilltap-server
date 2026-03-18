@@ -145,6 +145,14 @@ In addition to per-message scanning, Quilltap can classify entire chats as dange
 
 Once a chat is classified as dangerous, it stays marked as dangerous permanently. This prevents the classification from flip-flopping as conversations evolve. Safe chats are re-checked whenever new messages are added (message count changes).
 
+### Optimizations for Permanently Dangerous Chats
+
+When a chat has been permanently classified as dangerous, Quilltap applies several optimizations to save tokens and avoid futile content refusals:
+
+- **Per-message classification is skipped**: Since every message in a permanently dangerous chat will be dangerous, individual message scanning is bypassed entirely. Danger flags are synthesized from the stored chat-level categories instead.
+- **Uncensored providers are not rerouted unnecessarily**: If you have already assigned an uncensored-compatible provider to a character (e.g., DeepSeek), the Concierge will not swap it for the configured uncensored fallback. It only falls back to the configured provider if the current one returns an empty response (suggesting it was caught by censorship anyway).
+- **All background tasks use uncensored providers**: Memory extraction, title generation, context summaries, scene state tracking, story backgrounds, and inter-character memory tasks all automatically use your configured uncensored provider in dangerous chats. This prevents content refusals from censored providers that would otherwise silently fail these background operations.
+
 ### Manual Reclassification
 
 If a chat was incorrectly classified as dangerous, you can reset its classification. This can be done via the API (`POST /api/v1/chats/[id]?action=reclassify-danger`), which clears the classification and re-queues it for evaluation.
@@ -174,7 +182,7 @@ When dangerous content handling is enabled, Quilltap automatically classifies al
 
 - If you have an OpenAI connection profile, classification uses the free moderation endpoint (no token cost)
 - Without an OpenAI profile, classification falls back to your Cheap LLM, adding a small token cost per scanned message
-- Only user messages are scanned per-message, not assistant responses
+- Only user messages are scanned per-message, not assistant responses (and permanently dangerous chats skip per-message scanning entirely)
 - Chat-level classification uses the compressed context summary (covers the whole conversation)
 - The system never blocks messages — if anything fails, your message goes through normally
 - If no uncensored provider is available in Auto-Route mode, the message is sent to your regular provider with a warning

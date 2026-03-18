@@ -78,6 +78,7 @@ export interface CheapLLMTaskResult<T> {
 export interface UncensoredFallbackOptions {
   dangerSettings: DangerousContentSettings
   availableProfiles: ConnectionProfile[]
+  isDangerousChat?: boolean
 }
 
 /**
@@ -261,9 +262,11 @@ function shouldAttemptUncensoredFallback(
   // Need an uncensored text profile configured
   if (!dangerSettings.uncensoredTextProfileId) return null
 
-  // Check if current profile is already dangerous-compatible (no need to fallback)
+  // Check if current profile is already dangerous-compatible
+  // For dangerous chats, allow uncensored→uncensored fallback on empty (the configured
+  // fallback provider may be more reliable than the current one)
   const currentProfile = availableProfiles.find(p => p.id === currentSelection.connectionProfileId)
-  if (currentProfile?.isDangerousCompatible) return null
+  if (currentProfile?.isDangerousCompatible && !uncensoredFallback?.isDangerousChat) return null
 
   // Find the uncensored profile
   const uncensoredProfile = availableProfiles.find(p => p.id === dangerSettings.uncensoredTextProfileId)

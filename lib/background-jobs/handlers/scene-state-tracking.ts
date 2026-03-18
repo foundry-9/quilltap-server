@@ -9,7 +9,7 @@
 import { BackgroundJob, MessageEvent } from '@/lib/schemas/types';
 import { SceneStateSchema } from '@/lib/schemas/chat.types';
 import { getRepositories } from '@/lib/repositories/factory';
-import { getCheapLLMProvider, CheapLLMConfig, type CheapLLMSelection } from '@/lib/llm/cheap-llm';
+import { getCheapLLMProvider, CheapLLMConfig, type CheapLLMSelection, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { updateSceneState, extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks';
 import { createSystemEvent } from '@/lib/services/system-events.service';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
@@ -65,7 +65,18 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
   const isDangerousChat = chat.isDangerousChat === true;
   let cheapLLMSelection = getCheapLLMProvider(connectionProfile, cheapLLMConfig, availableProfiles, false);
 
-  // Build uncensored LLM selection if configured
+  // For dangerous chats, use uncensored provider to avoid content refusals
+  const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings);
+  if (isDangerousChat) {
+    cheapLLMSelection = resolveUncensoredCheapLLMSelection(
+      cheapLLMSelection,
+      true,
+      dangerSettings,
+      availableProfiles
+    );
+  }
+
+  // Build uncensored LLM selection for pre-classification fallback and retries
   let uncensoredLLMSelection: CheapLLMSelection | null = null;
   const uncensoredProfileId = chatSettings?.cheapLLMSettings?.imagePromptProfileId;
   if (uncensoredProfileId) {
@@ -80,14 +91,6 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
         isLocal,
       };
     }
-  }
-
-  // Route to uncensored provider if the chat is already flagged dangerous
-  if (isDangerousChat && uncensoredLLMSelection) {
-    cheapLLMSelection = uncensoredLLMSelection;
-    logger.debug('[SceneStateTracking] Using uncensored provider for dangerous chat', {
-      jobId: job.id, chatId: payload.chatId, provider: uncensoredLLMSelection.provider,
-    });
   }
 
   // 6. Parse previous scene state if it exists
@@ -126,7 +129,6 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
   // 7b. Pre-classify content through the Concierge gatekeeper
   // The danger classification job runs in parallel and may not have completed yet,
   // so we classify the recent messages ourselves to decide provider routing.
-  const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings);
   if (!isDangerousChat && uncensoredLLMSelection && dangerSettings.mode !== 'OFF') {
     try {
       const sampleText = recentMessages.slice(-10)

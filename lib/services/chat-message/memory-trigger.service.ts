@@ -25,6 +25,7 @@ const logger = createServiceLogger('MemoryTriggerService')
 export interface MemoryChatSettings {
   cheapLLMSettings?: CheapLLMSettings
   dangerSettings?: DangerousContentSettings
+  isDangerousChat?: boolean
 }
 
 /**
@@ -76,6 +77,7 @@ export async function triggerMemoryExtraction(
       cheapLLMSettings: options.chatSettings.cheapLLMSettings,
       availableProfiles,
       dangerSettings: options.chatSettings.dangerSettings,
+      isDangerousChat: options.chatSettings.isDangerousChat,
     }, async (result) => {
       // Store memory debug logs in the assistant message if available
       if (result.debugLogs && result.debugLogs.length > 0 && options.sourceMessageId) {
@@ -190,6 +192,7 @@ export async function triggerInterCharacterMemory(
         cheapLLMSettings: options.chatSettings.cheapLLMSettings,
         availableProfiles,
         dangerSettings: options.chatSettings.dangerSettings,
+        isDangerousChat: options.chatSettings.isDangerousChat,
       })
     }
 
@@ -284,6 +287,7 @@ export async function triggerUserControlledCharacterMemory(
       cheapLLMSettings: options.chatSettings.cheapLLMSettings,
       availableProfiles,
       dangerSettings: options.chatSettings.dangerSettings,
+      isDangerousChat: options.chatSettings.isDangerousChat,
     }, async (result) => {
 
     })

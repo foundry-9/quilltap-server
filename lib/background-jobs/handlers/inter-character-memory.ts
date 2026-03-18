@@ -8,8 +8,9 @@
 import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { extractInterCharacterMemoryFromMessage } from '@/lib/memory/cheap-llm-tasks';
-import { getCheapLLMProvider, CheapLLMConfig } from '@/lib/llm/cheap-llm';
+import { getCheapLLMProvider, CheapLLMConfig, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { logger } from '@/lib/logger';
+import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import type { InterCharacterMemoryPayload } from '../queue-service';
 
 /**
@@ -43,11 +44,33 @@ export async function handleInterCharacterMemory(job: BackgroundJob): Promise<vo
   };
 
   // Get cheap LLM selection
-  const cheapLLMSelection = getCheapLLMProvider(
+  let cheapLLMSelection = getCheapLLMProvider(
     connectionProfile,
     cheapLLMConfig,
     availableProfiles
   );
+
+  // Load chat to check danger status
+  const chat = await repos.chats.findById(payload.chatId);
+
+  // For dangerous chats, use uncensored provider to avoid content refusals
+  const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings);
+  if (chat?.isDangerousChat === true) {
+    cheapLLMSelection = resolveUncensoredCheapLLMSelection(
+      cheapLLMSelection,
+      true,
+      dangerSettings,
+      availableProfiles
+    );
+  }
+
+  // Build uncensored fallback options for empty-response retry
+  const uncensoredFallback = dangerSettings.mode !== 'OFF' ? {
+    dangerSettings,
+    availableProfiles,
+    isDangerousChat: chat?.isDangerousChat === true,
+  } : undefined;
+
   // Extract inter-character memory
   const result = await extractInterCharacterMemoryFromMessage(
     payload.observerCharacterName,
@@ -56,7 +79,7 @@ export async function handleInterCharacterMemory(job: BackgroundJob): Promise<vo
     payload.subjectMessage,
     cheapLLMSelection,
     job.userId,
-    undefined,
+    uncensoredFallback,
     payload.chatId
   );
 

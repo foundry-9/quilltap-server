@@ -11,12 +11,14 @@ import {
   isCheapModel,
   estimateModelCost,
   validateCheapLLMConfig,
+  resolveUncensoredCheapLLMSelection,
   DEFAULT_CHEAP_LLM_CONFIG,
   RECOMMENDED_CHEAP_MODELS,
   type CheapLLMConfig,
   type CheapLLMSelection,
 } from '@/lib/llm/cheap-llm'
 import type { ConnectionProfile, Provider } from '@/lib/schemas/types'
+import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
 
 // Helper to create a mock connection profile
 function createMockProfile(
@@ -546,6 +548,145 @@ describe('Cheap LLM Provider Selection', () => {
         expect(RECOMMENDED_CHEAP_MODELS[provider]).toBeDefined()
         expect(RECOMMENDED_CHEAP_MODELS[provider].length).toBeGreaterThan(0)
       }
+    })
+  })
+
+  describe('resolveUncensoredCheapLLMSelection', () => {
+    const standardSelection: CheapLLMSelection = {
+      provider: 'OPENAI',
+      modelName: 'gpt-4o-mini',
+      connectionProfileId: 'standard-profile',
+      isLocal: false,
+    }
+
+    const uncensoredProfile = createMockProfile(
+      'uncensored-profile',
+      'DEEPSEEK',
+      'deepseek-chat'
+    )
+    // Add isDangerousCompatible to the uncensored profile
+    ;(uncensoredProfile as any).isDangerousCompatible = true
+
+    const dangerSettingsAutoRoute: DangerousContentSettings = {
+      mode: 'AUTO_ROUTE',
+      scanTextChat: true,
+      scanImagePrompts: false,
+      scanImageGeneration: false,
+      uncensoredTextProfileId: 'uncensored-profile',
+      uncensoredImageProfileId: null,
+    } as DangerousContentSettings
+
+    const dangerSettingsOff: DangerousContentSettings = {
+      mode: 'OFF',
+      scanTextChat: false,
+      scanImagePrompts: false,
+      scanImageGeneration: false,
+      uncensoredTextProfileId: null,
+      uncensoredImageProfileId: null,
+    } as DangerousContentSettings
+
+    it('should return standard selection when chat is not dangerous', () => {
+      const result = resolveUncensoredCheapLLMSelection(
+        standardSelection,
+        false,
+        dangerSettingsAutoRoute,
+        [uncensoredProfile]
+      )
+      expect(result).toBe(standardSelection)
+    })
+
+    it('should return standard selection when danger settings are undefined', () => {
+      const result = resolveUncensoredCheapLLMSelection(
+        standardSelection,
+        true,
+        undefined,
+        [uncensoredProfile]
+      )
+      expect(result).toBe(standardSelection)
+    })
+
+    it('should return standard selection when mode is OFF', () => {
+      const result = resolveUncensoredCheapLLMSelection(
+        standardSelection,
+        true,
+        dangerSettingsOff,
+        [uncensoredProfile]
+      )
+      expect(result).toBe(standardSelection)
+    })
+
+    it('should return uncensored selection when chat is dangerous and uncensored profile is configured', () => {
+      const result = resolveUncensoredCheapLLMSelection(
+        standardSelection,
+        true,
+        dangerSettingsAutoRoute,
+        [uncensoredProfile]
+      )
+      expect(result.provider).toBe('DEEPSEEK')
+      expect(result.modelName).toBe('deepseek-chat')
+      expect(result.connectionProfileId).toBe('uncensored-profile')
+    })
+
+    it('should find any isDangerousCompatible profile when no uncensored text profile is configured', () => {
+      const settingsWithoutProfile = {
+        ...dangerSettingsAutoRoute,
+        uncensoredTextProfileId: null,
+      } as DangerousContentSettings
+
+      const result = resolveUncensoredCheapLLMSelection(
+        standardSelection,
+        true,
+        settingsWithoutProfile,
+        [uncensoredProfile]
+      )
+      expect(result.provider).toBe('DEEPSEEK')
+      expect(result.connectionProfileId).toBe('uncensored-profile')
+    })
+
+    it('should return standard selection when no uncensored profiles exist (fail-open)', () => {
+      const settingsWithoutProfile = {
+        ...dangerSettingsAutoRoute,
+        uncensoredTextProfileId: null,
+      } as DangerousContentSettings
+
+      const standardProfile = createMockProfile('standard-profile', 'OPENAI', 'gpt-4o-mini')
+
+      const result = resolveUncensoredCheapLLMSelection(
+        standardSelection,
+        true,
+        settingsWithoutProfile,
+        [standardProfile]
+      )
+      expect(result).toBe(standardSelection)
+    })
+
+    it('should return standard selection when configured uncensored profile is not in available profiles', () => {
+      const standardProfile = createMockProfile('standard-profile', 'OPENAI', 'gpt-4o-mini')
+
+      const result = resolveUncensoredCheapLLMSelection(
+        standardSelection,
+        true,
+        dangerSettingsAutoRoute,
+        [standardProfile] // uncensored-profile not in list
+      )
+      // Falls through to isDangerousCompatible scan, but standardProfile doesn't have it
+      expect(result).toBe(standardSelection)
+    })
+
+    it('should work with WARN mode (not just AUTO_ROUTE)', () => {
+      const warnSettings = {
+        ...dangerSettingsAutoRoute,
+        mode: 'WARN' as const,
+      } as DangerousContentSettings
+
+      const result = resolveUncensoredCheapLLMSelection(
+        standardSelection,
+        true,
+        warnSettings,
+        [uncensoredProfile]
+      )
+      // WARN mode is not OFF, so it should still route to uncensored
+      expect(result.provider).toBe('DEEPSEEK')
     })
   })
 })
