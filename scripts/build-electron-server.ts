@@ -38,7 +38,7 @@ function run(cmd: string, description: string, env?: NodeJS.ProcessEnv): void {
 }
 
 function copyDir(src: string, dest: string): void {
-  cpSync(src, dest, { recursive: true });
+  cpSync(src, dest, { recursive: true, dereference: true });
 }
 
 function dirSize(dir: string): string {
