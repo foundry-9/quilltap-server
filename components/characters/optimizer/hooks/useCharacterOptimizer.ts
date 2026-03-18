@@ -195,19 +195,13 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
   }, []);
 
   const goToSuggestion = useCallback((index: number) => {
-    setSuggestions((current) => {
-      if (index >= 0 && index < current.length) {
-        setCurrentIndex(index);
-      }
-      return current;
-    });
+    if (index >= 0 && index < suggestionsRef.current.length) {
+      setCurrentIndex(index);
+    }
   }, []);
 
   const nextSuggestion = useCallback(() => {
-    setSuggestions((current) => {
-      setCurrentIndex((prev) => Math.min(prev + 1, current.length - 1));
-      return current;
-    });
+    setCurrentIndex((prev) => Math.min(prev + 1, suggestionsRef.current.length - 1));
   }, []);
 
   const prevSuggestion = useCallback(() => {
