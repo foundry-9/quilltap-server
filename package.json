@@ -1,6 +1,6 @@
 {
   "name": "@foundry-9/quilltap",
-  "version": "3.3.0-dev.81",
+  "version": "3.3.0-dev.83",
   "private": true,
   "main": "dist-electron/main.js",
   "author": {
@@ -10,7 +10,7 @@
   },
   "description": "Self-hosted AI workspace for writers, worldbuilders, and roleplayers",
   "engines": {
-    "node": ">=24.0.0"
+    "node": ">=22.0.0"
   },
   "license": "MIT",
   "repository": {
@@ -105,7 +105,7 @@
     "@types/adm-zip": "^0.5.7",
     "@types/better-sqlite3": "^7.6.13",
     "@types/jest": "^30.0.0",
-    "@types/node": "^24.10.13",
+    "@types/node": "^22.19.15",
     "@types/react": "^19.2.8",
     "@types/react-dom": "^19.2.3",
     "@types/react-syntax-highlighter": "^15.5.13",

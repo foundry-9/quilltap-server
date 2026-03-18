@@ -96,7 +96,17 @@ const nextConfig = {
   },
 
   // Turbopack configuration (Next.js 16+ uses Turbopack by default)
-  turbopack: {},
+  // Equivalent of webpack resolve.fallback for client-side bundles:
+  // Server-only modules (fs, net, tls, etc.) get stubbed out when imported
+  // from client component trees.
+  turbopack: {
+    resolveAlias: {
+      fs: { browser: './lib/stubs/empty.js' },
+      net: { browser: './lib/stubs/empty.js' },
+      tls: { browser: './lib/stubs/empty.js' },
+      'better-sqlite3': { browser: './lib/stubs/empty.js' },
+    },
+  },
 
   // Webpack optimizations (used when building with --webpack flag)
   webpack: (config, { isServer }) => {

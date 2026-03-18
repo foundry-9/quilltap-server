@@ -1,4 +1,4 @@
-FROM node:24-alpine AS base
+FROM node:22-alpine AS base
 
 # Upgrade npm to latest version (fixes "Invalid Version" bug in npm 10.x)
 RUN npm install -g npm@latest
