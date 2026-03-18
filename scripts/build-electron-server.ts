@@ -14,7 +14,7 @@
  */
 
 import { execSync } from 'child_process';
-import { existsSync, mkdirSync, rmSync, readdirSync, statSync, readFileSync } from 'fs';
+import { cpSync, existsSync, mkdirSync, rmSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 
 const PROJECT_ROOT = join(__dirname, '..');
@@ -23,13 +23,14 @@ const NEXT_STANDALONE = join(PROJECT_ROOT, '.next', 'standalone');
 const NEXT_STATIC = join(PROJECT_ROOT, '.next', 'static');
 const PUBLIC_DIR = join(PROJECT_ROOT, 'public');
 const PLUGINS_DIST = join(PROJECT_ROOT, 'plugins', 'dist');
+const IS_WINDOWS = process.platform === 'win32';
 
 const skipBuild = process.argv.includes('--skip-build');
 
-function run(cmd: string, description: string): void {
+function run(cmd: string, description: string, env?: NodeJS.ProcessEnv): void {
   console.log(`> ${description}`);
   try {
-    execSync(cmd, { stdio: 'inherit', cwd: PROJECT_ROOT });
+    execSync(cmd, { stdio: 'inherit', cwd: PROJECT_ROOT, env: env || process.env });
   } catch {
     console.error(`Failed: ${description}`);
     process.exit(1);
@@ -37,15 +38,52 @@ function run(cmd: string, description: string): void {
 }
 
 function copyDir(src: string, dest: string): void {
-  execSync(`cp -R "${src}" "${dest}"`, { stdio: 'ignore' });
+  cpSync(src, dest, { recursive: true });
 }
 
 function dirSize(dir: string): string {
   try {
+    if (IS_WINDOWS) {
+      // PowerShell: get directory size in human-readable format
+      const bytes = execSync(
+        `powershell -Command "(Get-ChildItem -Recurse '${dir}' | Measure-Object -Property Length -Sum).Sum"`,
+        { encoding: 'utf-8' },
+      ).trim();
+      const mb = Math.round(parseInt(bytes, 10) / 1024 / 1024);
+      return `${mb}M`;
+    }
     return execSync(`du -sh "${dir}" | cut -f1`, { encoding: 'utf-8' }).trim();
   } catch {
     return '?';
   }
+}
+
+/**
+ * Build environment for `next build` on Windows CI.
+ *
+ * On GitHub Actions Windows runners, the user profile at C:\Users\runneradmin\
+ * contains legacy junction points (Application Data, Local Settings, etc.) that
+ * have restricted permissions. Next.js file tracing scans these directories
+ * during standalone builds and fails with EPERM. Redirecting USERPROFILE to a
+ * stub directory within the project prevents the tracer from encountering them.
+ */
+function getNextBuildEnv(): NodeJS.ProcessEnv {
+  if (!IS_WINDOWS || !process.env.CI) {
+    return process.env;
+  }
+
+  const safeHome = join(PROJECT_ROOT, '.next-build-home');
+  mkdirSync(safeHome, { recursive: true });
+
+  console.log(`    [Windows CI] Redirecting USERPROFILE to ${safeHome} for next build`);
+
+  return {
+    ...process.env,
+    USERPROFILE: safeHome,
+    HOME: safeHome,
+    APPDATA: join(safeHome, 'AppData', 'Roaming'),
+    LOCALAPPDATA: join(safeHome, 'AppData', 'Local'),
+  };
 }
 
 // Read root version
@@ -71,7 +109,7 @@ if (!skipBuild) {
 
   // Step 3: Build Next.js standalone
   console.log('==> Step 3/6: Building Next.js (standalone output)');
-  run('npx next build --webpack', 'Building Next.js');
+  run('npx next build --webpack', 'Building Next.js', getNextBuildEnv());
 } else {
   console.log('==> Step 2/6: Skipping plugin build (--skip-build)');
   console.log('==> Step 3/6: Skipping Next.js build (--skip-build)');
@@ -85,25 +123,25 @@ if (!existsSync(NEXT_STANDALONE)) {
 
 // Step 4: Copy standalone output + static assets + public files + plugins
 console.log('==> Step 4/6: Copying standalone output to staging');
-copyDir(`${NEXT_STANDALONE}/.`, STAGING_DIR);
+copyDir(NEXT_STANDALONE, STAGING_DIR);
 
 console.log('    Copying .next/static/');
 const staticDest = join(STAGING_DIR, '.next', 'static');
 mkdirSync(staticDest, { recursive: true });
-copyDir(`${NEXT_STATIC}/.`, staticDest);
+copyDir(NEXT_STATIC, staticDest);
 
 if (existsSync(PUBLIC_DIR)) {
   console.log('    Copying public/');
   const publicDest = join(STAGING_DIR, 'public');
   mkdirSync(publicDest, { recursive: true });
-  copyDir(`${PUBLIC_DIR}/.`, publicDest);
+  copyDir(PUBLIC_DIR, publicDest);
 }
 
 if (existsSync(PLUGINS_DIST)) {
   console.log('    Copying plugins/dist/');
   const pluginsDest = join(STAGING_DIR, 'plugins', 'dist');
   mkdirSync(pluginsDest, { recursive: true });
-  copyDir(`${PLUGINS_DIST}/.`, pluginsDest);
+  copyDir(PLUGINS_DIST, pluginsDest);
 }
 
 // Step 5: Clean unnecessary files (but keep native modules intact)
