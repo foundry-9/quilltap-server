@@ -14,8 +14,8 @@
  */
 
 import { execSync } from 'child_process';
-import { cpSync, existsSync, mkdirSync, rmSync, readdirSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { cpSync, existsSync, lstatSync, mkdirSync, readlinkSync, readdirSync, readFileSync, rmSync, copyFileSync } from 'fs';
+import { join, resolve, dirname } from 'path';
 
 const PROJECT_ROOT = join(__dirname, '..');
 const STAGING_DIR = join(PROJECT_ROOT, '.electron-server-staging');
@@ -96,7 +96,7 @@ console.log(`    Output:  ${STAGING_DIR}`);
 console.log('');
 
 // Step 1: Clean staging directory
-console.log('==> Step 1/6: Cleaning staging directory');
+console.log('==> Step 1/7: Cleaning staging directory');
 if (existsSync(STAGING_DIR)) {
   rmSync(STAGING_DIR, { recursive: true, force: true });
 }
@@ -104,15 +104,15 @@ mkdirSync(STAGING_DIR, { recursive: true });
 
 if (!skipBuild) {
   // Step 2: Build plugins
-  console.log('==> Step 2/6: Building plugins');
+  console.log('==> Step 2/7: Building plugins');
   run('npm run build:plugins', 'Building plugins');
 
   // Step 3: Build Next.js standalone
-  console.log('==> Step 3/6: Building Next.js (standalone output)');
+  console.log('==> Step 3/7: Building Next.js (standalone output)');
   run('npx next build --webpack', 'Building Next.js', getNextBuildEnv());
 } else {
-  console.log('==> Step 2/6: Skipping plugin build (--skip-build)');
-  console.log('==> Step 3/6: Skipping Next.js build (--skip-build)');
+  console.log('==> Step 2/7: Skipping plugin build (--skip-build)');
+  console.log('==> Step 3/7: Skipping Next.js build (--skip-build)');
 }
 
 // Verify standalone output exists
@@ -122,7 +122,7 @@ if (!existsSync(NEXT_STANDALONE)) {
 }
 
 // Step 4: Copy standalone output + static assets + public files + plugins
-console.log('==> Step 4/6: Copying standalone output to staging');
+console.log('==> Step 4/7: Copying standalone output to staging');
 copyDir(NEXT_STANDALONE, STAGING_DIR);
 
 console.log('    Copying .next/static/');
@@ -145,7 +145,7 @@ if (existsSync(PLUGINS_DIST)) {
 }
 
 // Step 5: Clean unnecessary files (but keep native modules intact)
-console.log('==> Step 5/6: Cleaning unnecessary files');
+console.log('==> Step 5/7: Cleaning unnecessary files');
 const standaloneNodeModules = join(STAGING_DIR, 'node_modules');
 if (existsSync(standaloneNodeModules)) {
   const cleanDir = (dir: string): void => {
@@ -171,11 +171,40 @@ if (existsSync(standaloneNodeModules)) {
 }
 
 // Step 6: Rebuild native modules against Electron's Node ABI
-console.log('==> Step 6/6: Rebuilding native modules for Electron');
+console.log('==> Step 6/7: Rebuilding native modules for Electron');
 run(
   `npx electron-rebuild --module-dir "${STAGING_DIR}" --force`,
   'Rebuilding native modules against Electron Node ABI'
 );
+
+// Step 7: Resolve any remaining symlinks (electron-rebuild or npm may create them)
+console.log('==> Step 7/7: Resolving symlinks in staging directory');
+let symlinkCount = 0;
+function resolveSymlinks(dir: string): void {
+  if (!existsSync(dir)) return;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = join(dir, entry.name);
+    if (entry.isSymbolicLink()) {
+      const target = readlinkSync(fullPath);
+      const resolvedTarget = resolve(dirname(fullPath), target);
+      rmSync(fullPath);
+      if (existsSync(resolvedTarget)) {
+        const targetStat = lstatSync(resolvedTarget);
+        if (targetStat.isDirectory()) {
+          cpSync(resolvedTarget, fullPath, { recursive: true, dereference: true });
+        } else {
+          copyFileSync(resolvedTarget, fullPath);
+        }
+        symlinkCount++;
+      }
+      // If target doesn't exist, the symlink was dangling — just remove it
+    } else if (entry.isDirectory()) {
+      resolveSymlinks(fullPath);
+    }
+  }
+}
+resolveSymlinks(STAGING_DIR);
+console.log(`    Resolved ${symlinkCount} symlink(s)`);
 
 // Summary
 const totalSize = dirSize(STAGING_DIR);

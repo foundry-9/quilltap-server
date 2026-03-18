@@ -27,6 +27,10 @@ files:
   - "!packages/**/*"
   - "!__tests__/**/*"
   - "!.githooks/**/*"
+# Native modules are rebuilt in build-electron-server.ts against Electron's Node ABI.
+# Disable electron-builder's own @electron/rebuild to prevent it from scanning the
+# project's node_modules (which contains .bin symlinks that break macOS codesign).
+npmRebuild: false
 afterSign: electron/notarize.js
 extraResources:
   # Embedded server: Next.js standalone output + static assets + public files + plugins
