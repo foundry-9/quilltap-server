@@ -56,31 +56,37 @@ There are several paths to the same destination. Which one you choose depends on
 
 That second question deserves a moment of your attention. As AI models grow more capable — reading files, writing code, using tools — the question of *where* that code executes becomes important. A virtual machine is a genuine locked room: if an AI-generated script misbehaves, it misbehaves inside a contained environment with no access to your host system. Docker provides a similar boundary, though somewhat thinner. Running directly on your machine provides no boundary at all.
 
-| | Desktop App (VM) | Docker | Node.js (`npx`) |
-| --- | --- | --- | --- |
-| **You install** | macOS: Xcode CLI Tools · Windows: WSL2 · Linux: Docker Engine | Docker Desktop or Docker Engine | Node.js 24+ |
-| **First launch** | Slowest — downloads a VM image (~150 MB), boots a Linux guest | Fast — pulls the container image | Fastest — downloads app files, runs directly |
-| **AI sandbox** | ✅ Full VM isolation | ⚠️ Container isolation (good, not airtight) | ❌ No isolation (runs with your permissions) |
-| **Native window** | Yes (Electron) | Yes (Electron) or browser | Yes (Electron) or browser |
-| **Best for** | Most users — best balance of safety and convenience | Server deployments, Docker veterans, Linux users | Quick evaluation, developers, the impatient |
+| | Desktop App (VM) | Desktop App (Direct) | Docker | Node.js (`npx`) |
+| --- | --- | --- | --- | --- |
+| **You install** | macOS: Xcode CLI Tools · Windows: WSL2 · Linux: Docker Engine | Nothing extra — Electron bundles Node.js | Docker Desktop or Docker Engine | Node.js 22+ |
+| **First launch** | Slowest — downloads a VM image (~150 MB), boots a Linux guest | Fastest — uses Electron's embedded Node.js | Fast — pulls the container image | Fast — downloads app files, runs directly |
+| **AI sandbox** | ✅ Full VM isolation | ❌ No isolation (runs with your permissions) | ⚠️ Container isolation (good, not airtight) | ❌ No isolation (runs with your permissions) |
+| **Native window** | Yes (Electron) | Yes (Electron) | Yes (Electron) or browser | Yes (Electron) or browser |
+| **Best for** | Safety-conscious users — best sandbox | Most users — fastest start, zero prerequisites | Server deployments, Docker veterans, Linux users | Quick evaluation, developers, the impatient |
 
-> **Our recommendation:** The desktop application with its VM backend is what we suggest for most people. It is the slowest to start and the most demanding in its prerequisites, but it is the only path that gives you a genuine sandbox around your AI. If you already have Docker, the Electron app lets you switch between VM and Docker runtimes from its splash screen — no commitment required.
+> **Our recommendation:** For most people, the desktop app in **Direct mode** is the fastest and easiest way to get started — no VM, no Docker, no Node.js install, just download and run. If you use AI tools that read and write files on your behalf and want a genuine sandbox around that behavior, switch to **VM mode** from the splash screen. The Electron app lets you toggle between VM, Docker, and Direct runtimes at any time — no commitment required.
 
 ### The Civilized Way: Desktop App (Recommended)
 
 Download the latest release from the [Releases page](https://github.com/foundry-9/quilltap/releases) for your platform:
 
-- **macOS:** `.dmg` installer. Uses [Lima](https://lima-vm.io/) with Apple's Virtualization.framework. Requires Xcode Command Line Tools — the app will offer to install them.
-- **Windows:** `.exe` installer. Uses WSL2, built into Windows 10 and 11. If WSL2 isn't enabled, run `wsl --install` in PowerShell as Administrator and restart.
-- **Linux:** `.AppImage` (make executable and run) or `.deb` package. Requires [Docker Engine](https://docs.docker.com/engine/install/) — Linux uses Docker directly as its runtime backend.
+- **macOS:** `.dmg` installer.
+- **Windows:** `.exe` installer.
+- **Linux:** `.AppImage` (make executable and run) or `.deb` package.
 
-Launch the app. It presents a splash screen where you choose your data directory, downloads a small Linux guest image (~150 MB, cached), boots the backend, and opens your workspace. The setup wizard handles the rest.
+Launch the app. It presents a splash screen where you choose your data directory and runtime mode, then boots the backend and opens your workspace. The setup wizard handles the rest.
 
-The desktop app manages multiple data directories from its splash screen — one for work, one for fiction, one for experiments. Each gets its own VM, so switching is a quick stop-and-start.
+**Runtime modes** (switchable from the splash screen at any time):
+
+- **Direct** — Uses Electron's embedded Node.js. Zero prerequisites, fastest startup. Runs with your user permissions (no sandbox).
+- **VM** — macOS: [Lima](https://lima-vm.io/) with Apple's Virtualization.framework (requires Xcode Command Line Tools — the app will offer to install them). Windows: WSL2 (if not enabled, run `wsl --install` in PowerShell as Administrator and restart). Full sandbox isolation.
+- **Docker** — Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/) or Docker Engine. Linux uses Docker as its default runtime backend.
+
+The desktop app manages multiple data directories from its splash screen — one for work, one for fiction, one for experiments. Each remembers its own runtime mode and window position.
 
 ### The Dockworker's Route: Docker
 
-**With the Electron app:** The desktop app includes a Docker runtime toggle right on the splash screen. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/), launch Quilltap, and switch the runtime from "VM" to "Docker." Same native window, different engine underneath.
+**With the Electron app:** The desktop app includes a runtime switcher on the splash screen. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/), launch Quilltap, and switch the runtime to "Docker." Same native window, different engine underneath.
 
 **Standalone with Docker:** The [foundry9/quilltap](https://hub.docker.com/r/foundry9/quilltap) image is available on Docker Hub. Use the included startup scripts for the smoothest experience:
 
@@ -141,7 +147,7 @@ npm run dev        # Development mode with hot reload
 npm run build && npm run start   # Production build
 ```
 
-Requires **Node.js 24+** and **git**. See the [Development Guide](DEVELOPMENT.md) for building Electron installers, rootfs tarballs, and Docker images from source.
+Requires **Node.js 22+** and **git**. See the [Development Guide](DEVELOPMENT.md) for building Electron installers, rootfs tarballs, and Docker images from source.
 
 ---
 
@@ -264,7 +270,7 @@ Quilltap is a single Next.js 16 application (App Router) that serves both the UI
 
 - **Frontend:** React 19, TypeScript, Tailwind CSS 4 with a semantic `qt-*` class system for full theme overrideability
 - **Backend:** Next.js API routes, SQLite with SQLCipher encryption (better-sqlite3-multiple-ciphers) with WAL mode, Zod schema validation
-- **Desktop:** Electron shell with platform-specific VM backends (Lima/VZ on macOS, WSL2 on Windows, Docker on Linux)
+- **Desktop:** Electron shell with three runtime modes — embedded Node.js (Direct), VM backends (Lima/VZ on macOS, WSL2 on Windows), or Docker
 - **Build:** GitHub Actions CI/CD with automated releases — rootfs tarballs, Electron installers (macOS DMG, Windows NSIS, Linux AppImage/deb), Docker multi-arch images, and npm package all built from a single tag push
 
 The entire provider system is plugin-based — every bundled provider (Anthropic, OpenAI, Google, xAI, Ollama, OpenRouter, OpenAI-Compatible) is a plugin with the same API surface available to third-party authors.
@@ -358,7 +364,7 @@ Quilltap stands on the shoulders of these excellent open source projects, and is
 
 **Desktop & Infrastructure:** Electron, Lima, Docker
 
-**Testing:** Jest, Playwright, Storybook, Testing Library
+**Testing:** Jest, Playwright, Testing Library
 
 **Build & Tooling:** tsx, electron-builder, cross-env
 

@@ -63,9 +63,9 @@ docker run -d \
 
 **CRITICAL SECURITY NOTES:**
 
-1. **Backup `ENCRYPTION_MASTER_PEPPER`** — If lost (and no vault passphrase), all encrypted API keys are unrecoverable. The setup wizard displays it once — save it securely.
-2. **Pepper Vault** — The encryption pepper is auto-generated on first run and stored encrypted in SQLite. You can protect it with a passphrase via the `/setup` page. Use a persistent volume so the vault survives container rebuilds.
-3. **Use strong values** — Generate with `openssl rand -base64 32`
+1. **Backup the `.dbkey` file** — The encryption pepper is auto-generated on first run and stored in `quilltap.dbkey` (and `quilltap-llm-logs.dbkey` for LLM logs) inside your data directory. Without this file, your encrypted databases cannot be decrypted. Use a persistent volume so the key file survives container rebuilds.
+2. **Optional passphrase protection** — You can protect the `.dbkey` file with a passphrase via the setup wizard or settings. If set, the passphrase is required on every startup (or after an auto-lock timeout). If the `.dbkey` file is lost and a passphrase was set, the database is unrecoverable.
+3. **Auto-lock** — Passphrase-protected instances support an idle timer that automatically locks the database after a configurable period of inactivity, requiring the passphrase to resume.
 
 ## Environment Variables
 

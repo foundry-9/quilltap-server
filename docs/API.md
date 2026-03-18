@@ -1881,6 +1881,21 @@ Promote an attachment to general or project files.
 }
 ```
 
+#### `POST /api/v1/files?action=sync`
+
+Trigger filesystem reconciliation — scans the file storage directory and synchronizes the database to match what's on disk.
+
+**Response**:
+
+```json
+{
+  "success": true,
+  "data": {
+    "message": "Filesystem sync completed"
+  }
+}
+```
+
 ---
 
 ### Files & Images (Legacy)

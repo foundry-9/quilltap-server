@@ -41,7 +41,7 @@ quilltap/
 │   ├── vm-manager.ts         # IVMManager interface + createVMManager() factory
 │   ├── lima-manager.ts       # macOS: Lima VM lifecycle (create, start, stop, status)
 │   ├── wsl-manager.ts        # Windows: WSL2 distro lifecycle (import, start, terminate)
-│   ├── npx-manager.ts        # Node.js runtime mode for Electron (Linux, WSL2)
+│   ├── embedded-manager.ts   # Embedded server using Electron's Node.js (ELECTRON_RUN_AS_NODE=1)
 │   ├── docker-manager.ts     # Docker image/container lifecycle management
 │   ├── health-checker.ts     # Polls /api/health until app is ready
 │   ├── download-manager.ts   # Downloads rootfs tarball with progress/retry
@@ -93,6 +93,7 @@ quilltap/
 ├── docker/                   # Docker configuration (entrypoint script)
 ├── scripts/                  # Utility scripts (migrations, cleanup, builds)
 │   ├── build-rootfs.ts       # Build Docker image and export rootfs tarball
+│   ├── build-electron-server.ts # Stage Next.js standalone output for Electron embedding (native module rebuild)
 │   └── stage-lima.ts         # Download and stage Lima binaries into electron/resources/
 ├── public/                   # Static assets (icons, manifest)
 ├── website/                  # Website assets (images, splash graphics)
@@ -113,7 +114,7 @@ quilltap/
 
 ### Prerequisites
 
-- **Node.js 24+**
+- **Node.js 22+**
 - **SQLite with SQLCipher** (automatic with better-sqlite3-multiple-ciphers) — note that the standard `sqlite3` CLI cannot open Quilltap's encrypted database files; use `npx quilltap db` for direct database access
 - **File storage**: Local filesystem (default) or optionally S3-compatible storage
 
@@ -154,21 +155,32 @@ docker logs -f quilltap
 
 ### Running with Electron (Primary Distribution)
 
-Quilltap's primary distribution is an Electron app that runs the backend inside a lightweight Linux VM. The Electron shell manages the VM lifecycle and presents the web UI in a native window.
+Quilltap's primary distribution is an Electron app with three runtime modes for the backend:
 
-**Architecture:**
+**Runtime Modes:**
+
+| Mode | Backend | Platforms | Notes |
+|------|---------|-----------|-------|
+| **VM** | Lima (macOS) or WSL2 (Windows) Alpine Linux guest | macOS, Windows | Primary mode — runs in a lightweight VM |
+| **Docker** | Docker container | All | Optional — uses local Docker daemon |
+| **Embedded** | Electron's bundled Node.js (`ELECTRON_RUN_AS_NODE=1`) | All | Direct mode — no VM or container needed |
 
 ```text
-# macOS
+# VM mode (macOS)
 Electron (host) → Lima VM (Alpine Linux guest) → Node.js + Quilltap (port 3000)
                     ↕ VirtioFS file sharing        ↕ Port forward: 5050 → 3000
 
-# Windows
+# VM mode (Windows)
 Electron (host) → WSL2 distro (Alpine Linux)   → Node.js + Quilltap (port 5050)
                     ↕ Plan 9 / /mnt/c/ auto-mount  ↕ WSL2 localhost forwarding
+
+# Embedded mode (all platforms)
+Electron (host) → process.execPath with ELECTRON_RUN_AS_NODE=1 → server.js (port 5050)
 ```
 
-The VM manager interface (`electron/vm-manager.ts`) abstracts the platform differences. `LimaManager` handles macOS, `WSLManager` handles Windows. The factory function `createVMManager()` selects the right one at runtime.
+The VM manager interface (`electron/vm-manager.ts`) abstracts the platform differences. `LimaManager` handles macOS, `WSLManager` handles Windows. `EmbeddedManager` (`electron/embedded-manager.ts`) spawns the staged Next.js standalone server using Electron's bundled Node.js. The factory function `createVMManager()` selects the right backend at runtime.
+
+**Per-instance window bounds** are persisted — each data directory remembers its own window size, position, and maximized state across restarts.
 
 **Development mode** (skip the VM, connect to your local dev server):
 
