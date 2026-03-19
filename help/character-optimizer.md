@@ -32,15 +32,30 @@ The optimizer reads these heavily-reinforced memories alongside the character's 
 
 Before the analysis begins, you'll see a summary of the character and a dropdown to select which connection profile (and thus which AI model) should perform the analysis. The character's default profile is pre-selected, but you may choose another if you prefer a different analytical temperament.
 
-Click **Refine** when ready.
+Click **Commence Refinement** when ready.
+
+#### Memory Count
+
+A slider allows you to choose how many memories the optimizer should consider — from 5 to 200, in increments of 5. The default is 30. A character with thousands of memories may benefit from a broader analysis, while a focused review might warrant fewer.
+
+#### Filtering Memories
+
+Expand the **Filter Memories** section to narrow which memories are analysed:
+
+- **Search Query** — Enter a word or phrase. With "Use semantic search" enabled (the default), the optimizer will find conceptually related memories using embeddings; with it disabled, it performs a simple text match.
+- **Since / Before** — Date filters that restrict analysis to memories created within a specific window.
+
+Filters are applied before the memory count limit, so if 142 memories match your query but the slider is set to 30, the top 30 by weight will be selected and the remainder noted.
 
 ### Phase 2: Analysis & Progress
 
-The optimizer works through three stages, each reported with a progress indicator:
+The optimizer works through three stages, each reported with an animated progress bar and elapsed timer:
 
-1. **Loading** — Retrieves the character's configuration and their most significant memories (up to 30, filtered to those reinforced at least twice)
+1. **Loading** — Retrieves the character's configuration and their most significant memories (filtered to those reinforced at least twice, limited by your slider setting)
 2. **Analyzing** — The AI reads through the character data and memories, identifying 3–8 behavioral patterns not fully reflected in the current configuration
 3. **Generating** — Based on the analysis, the AI proposes concrete field modifications with significance scores
+
+The progress bar shows three segments — one per stage — that fill as each proceeds. An elapsed timer counts up below. When filters narrow the results, you'll see a message such as "142 memoirs matched; top 30 selected for analysis."
 
 When the analysis completes, you'll see a summary of the behavioral patterns discovered.
 
@@ -87,6 +102,9 @@ The optimizer will **not** touch names, aliases, pronouns, first messages, or ot
 - **Use a capable model.** This is analytical and creative work — a more capable model will produce better insights and more natural-sounding suggestions.
 - **Don't accept everything.** The optimizer's suggestions are just that — suggestions. You know your character best. Accept what rings true and reject what doesn't.
 - **Edit liberally.** The "Edit & Accept" option exists because the AI's proposed text might capture the right idea in slightly the wrong voice.
+- **Use filters for focused refinements.** Search for a specific topic ("betrayal", "relationship with the duke") to get suggestions that lean into that particular aspect of the character's history.
+- **Date ranges help with arcs.** If a character went through a significant shift in recent sessions, narrow the date range to focus on that period.
+- **Increase the memory count for broad analysis.** The default 30 is good for most characters, but long-running characters with hundreds of reinforced memories may benefit from 100 or more.
 - **Run it periodically.** As a character accumulates more memories from new conversations, running the optimizer again may reveal new patterns.
 
 ## In-Chat Navigation

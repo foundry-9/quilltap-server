@@ -14,6 +14,7 @@ import type {
   SuggestionDecision,
   OptimizerAnalysis,
   OptimizerSuggestion,
+  OptimizerFilterOptions,
 } from '../types';
 
 interface UseCharacterOptimizerReturn {
@@ -26,13 +27,15 @@ interface UseCharacterOptimizerReturn {
   editedValues: Map<string, string>;
   error: string | null;
   memoryCount: number;
+  filteredCount: number;
   loading: boolean;
   progressStep: string | null;
   noSuggestionsMessage: string | null;
   applying: boolean;
+  startedAt: number | null;
 
   // Actions
-  startOptimization: (characterId: string, connectionProfileId: string) => Promise<void>;
+  startOptimization: (characterId: string, connectionProfileId: string, filterOptions?: OptimizerFilterOptions) => Promise<void>;
   decideSuggestion: (id: string, decision: SuggestionDecision) => void;
   editSuggestion: (id: string, newValue: string) => void;
   goToSuggestion: (index: number) => void;
@@ -57,11 +60,13 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
   const [progressStep, setProgressStep] = useState<string | null>(null);
   const [noSuggestionsMessage, setNoSuggestionsMessage] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
+  const [filteredCount, setFilteredCount] = useState(0);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
 
   // Ref to track current suggestions count during async streaming
   const suggestionsRef = useRef<OptimizerSuggestion[]>([]);
 
-  const startOptimization = useCallback(async (characterId: string, connectionProfileId: string) => {
+  const startOptimization = useCallback(async (characterId: string, connectionProfileId: string, filterOptions?: OptimizerFilterOptions) => {
     setLoading(true);
     setError(null);
     setAnalysis(null);
@@ -72,13 +77,24 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
     setEditedValues(new Map());
     setProgressStep(null);
     setNoSuggestionsMessage(null);
+    setFilteredCount(0);
+    setStartedAt(Date.now());
     setPhase('progress');
 
     try {
+      const requestBody: Record<string, unknown> = { connectionProfileId };
+      if (filterOptions) {
+        requestBody.maxMemories = filterOptions.maxMemories;
+        requestBody.searchQuery = filterOptions.searchQuery;
+        requestBody.useSemanticSearch = filterOptions.useSemanticSearch;
+        requestBody.sinceDate = filterOptions.sinceDate;
+        requestBody.beforeDate = filterOptions.beforeDate;
+      }
+
       const response = await fetch(`/api/v1/characters/${characterId}?action=optimize-stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ connectionProfileId }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
@@ -116,6 +132,9 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
                 case 'step_complete':
                   if (event.step === 'loading') {
                     setMemoryCount((event.memoryCount as number) ?? 0);
+                    if (event.filteredCount !== undefined) {
+                      setFilteredCount(event.filteredCount as number);
+                    }
                   } else if (event.step === 'analyzing') {
                     setAnalysis(event.analysis as OptimizerAnalysis);
                   } else if (event.step === 'generating') {
@@ -346,6 +365,8 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
     setProgressStep(null);
     setNoSuggestionsMessage(null);
     setApplying(false);
+    setFilteredCount(0);
+    setStartedAt(null);
   }, []);
 
   return {
@@ -357,10 +378,12 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
     editedValues,
     error,
     memoryCount,
+    filteredCount,
     loading,
     progressStep,
     noSuggestionsMessage,
     applying,
+    startedAt,
     startOptimization,
     decideSuggestion,
     editSuggestion,

@@ -87,6 +87,11 @@ const setDefaultPartnerSchema = z.object({
 
 const optimizeStreamSchema = z.object({
   connectionProfileId: z.string().uuid(),
+  maxMemories: z.number().int().min(5).max(200).optional().default(30),
+  searchQuery: z.string().max(500).optional().default(''),
+  useSemanticSearch: z.boolean().optional().default(true),
+  sinceDate: z.string().nullable().optional().default(null),
+  beforeDate: z.string().nullable().optional().default(null),
 });
 
 const CHARACTER_GET_ACTIONS = ['export', 'chats', 'cascade-preview', 'default-partner', 'get-tags'] as const;
@@ -437,15 +442,21 @@ async function handleOptimizeStream(
 
   try {
     const body = await req.json();
-    const { connectionProfileId } = optimizeStreamSchema.parse(body);
+    const { connectionProfileId, maxMemories, searchQuery, useSemanticSearch, sinceDate, beforeDate } = optimizeStreamSchema.parse(body);
 
     logger.info('[Characters v1] Character optimizer starting (streaming)', {
       userId: user.id,
       characterId,
       connectionProfileId,
+      maxMemories,
+      searchQuery: searchQuery || '(none)',
+      useSemanticSearch,
+      sinceDate,
+      beforeDate,
     });
 
     const encoder = new TextEncoder();
+    const optimizerOptions = { maxMemories, searchQuery, useSemanticSearch, sinceDate, beforeDate };
 
     const stream = new ReadableStream({
       async start(controller) {
@@ -457,7 +468,7 @@ async function handleOptimizeStream(
           }
         };
 
-        await runCharacterOptimizer(characterId, connectionProfileId, user.id, repos, enqueue);
+        await runCharacterOptimizer(characterId, connectionProfileId, user.id, repos, enqueue, optimizerOptions);
 
         try {
           controller.close();

@@ -11,11 +11,12 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { CharacterOptimizerModalProps } from './types';
+import type { CharacterOptimizerModalProps, OptimizerFilterOptions } from './types';
 import { useCharacterOptimizer } from './hooks/useCharacterOptimizer';
 import { AnalysisSummary } from './components/AnalysisSummary';
 import { SuggestionCard } from './components/SuggestionCard';
 import { ApplyConfirmation } from './components/ApplyConfirmation';
+import { ProgressBar } from './components/ProgressBar';
 
 function SpinnerIcon({ className }: { className?: string }) {
   return (
@@ -85,6 +86,11 @@ export function CharacterOptimizerModal({
     defaultConnectionProfileId ?? profiles[0]?.id ?? ''
   );
   const [applySuccess, setApplySuccess] = useState(false);
+  const [maxMemories, setMaxMemories] = useState(30);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [useSemanticSearch, setUseSemanticSearch] = useState(true);
+  const [sinceDate, setSinceDate] = useState('');
+  const [beforeDate, setBeforeDate] = useState('');
 
   // Handle escape key
   useEffect(() => {
@@ -105,7 +111,14 @@ export function CharacterOptimizerModal({
 
   const handleStart = async () => {
     if (!selectedProfileId) return;
-    await optimizer.startOptimization(characterId, selectedProfileId);
+    const filterOptions: OptimizerFilterOptions = {
+      maxMemories,
+      searchQuery,
+      useSemanticSearch,
+      sinceDate: sinceDate || null,
+      beforeDate: beforeDate || null,
+    };
+    await optimizer.startOptimization(characterId, selectedProfileId, filterOptions);
   };
 
   const handleApply = async () => {
@@ -128,7 +141,7 @@ export function CharacterOptimizerModal({
   return createPortal(
     <div className="qt-dialog-overlay" onClick={handleClose}>
       <div
-        className="qt-dialog w-full max-w-2xl max-h-[92vh] m-4 flex flex-col"
+        className="qt-dialog w-full max-w-2xl h-[92vh] m-4 flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -212,6 +225,92 @@ export function CharacterOptimizerModal({
                   </p>
                 </div>
               )}
+
+              {/* Memory count slider */}
+              {profiles.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  <label className="qt-label" htmlFor="optimizer-max-memories">
+                    Maximum Memories to Analyse: <span className="text-primary font-semibold">{maxMemories}</span>
+                  </label>
+                  <input
+                    id="optimizer-max-memories"
+                    type="range"
+                    min={5}
+                    max={200}
+                    step={5}
+                    value={maxMemories}
+                    onChange={(e) => setMaxMemories(Number(e.target.value))}
+                    className="qt-range w-full accent-primary"
+                  />
+                  <div className="flex justify-between text-[10px] text-muted-foreground">
+                    <span>5</span>
+                    <span>200</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Filter section */}
+              {profiles.length > 0 && (
+                <details className="qt-card">
+                  <summary className="px-4 py-3 cursor-pointer text-sm font-medium qt-label select-none">
+                    Filter Memories
+                  </summary>
+                  <div className="px-4 pb-4 flex flex-col gap-4 border-t border-border pt-3">
+                    {/* Text / semantic search */}
+                    <div className="flex flex-col gap-2">
+                      <label className="qt-label" htmlFor="optimizer-search-query">
+                        Search Query
+                      </label>
+                      <input
+                        id="optimizer-search-query"
+                        type="text"
+                        className="qt-input"
+                        placeholder="e.g. &ldquo;betrayal&rdquo; or &ldquo;relationship with the duke&rdquo;"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        maxLength={500}
+                      />
+                      <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          className="qt-checkbox"
+                          checked={useSemanticSearch}
+                          onChange={(e) => setUseSemanticSearch(e.target.checked)}
+                        />
+                        Use semantic search (finds conceptually related memories)
+                      </label>
+                    </div>
+
+                    {/* Date filters */}
+                    <div className="flex gap-4">
+                      <div className="flex flex-col gap-1 flex-1">
+                        <label className="qt-label" htmlFor="optimizer-since-date">
+                          Since
+                        </label>
+                        <input
+                          id="optimizer-since-date"
+                          type="date"
+                          className="qt-input"
+                          value={sinceDate}
+                          onChange={(e) => setSinceDate(e.target.value)}
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1 flex-1">
+                        <label className="qt-label" htmlFor="optimizer-before-date">
+                          Before
+                        </label>
+                        <input
+                          id="optimizer-before-date"
+                          type="date"
+                          className="qt-input"
+                          value={beforeDate}
+                          onChange={(e) => setBeforeDate(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </details>
+              )}
             </div>
           )}
 
@@ -224,6 +323,9 @@ export function CharacterOptimizerModal({
                   The automata are at their labours. Please stand by.
                 </p>
               </div>
+
+              {/* Progress bar */}
+              <ProgressBar currentStep={optimizer.progressStep} startedAt={optimizer.startedAt} />
 
               <div className="flex flex-col gap-1 qt-card p-3">
                 {Object.entries(STEP_LABELS).map(([key, label]) => (
@@ -238,7 +340,11 @@ export function CharacterOptimizerModal({
 
               {optimizer.memoryCount > 0 && (
                 <p className="qt-caption text-center">
-                  {optimizer.memoryCount} {optimizer.memoryCount === 1 ? 'memory' : 'memories'} retrieved from the Commonplace Book
+                  {optimizer.filteredCount > optimizer.memoryCount ? (
+                    <>{optimizer.filteredCount} {optimizer.filteredCount === 1 ? 'memoir' : 'memoirs'} matched; top {optimizer.memoryCount} selected for analysis</>
+                  ) : (
+                    <>{optimizer.memoryCount} {optimizer.memoryCount === 1 ? 'memory' : 'memories'} retrieved from the Commonplace Book</>
+                  )}
                 </p>
               )}
 
@@ -271,7 +377,7 @@ export function CharacterOptimizerModal({
 
           {/* ===== REVIEW PHASE ===== */}
           {optimizer.phase === 'review' && optimizer.suggestions.length > 0 && (
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4 flex-1 min-h-0">
               {/* Progress through suggestions */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">

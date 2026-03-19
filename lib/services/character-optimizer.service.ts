@@ -17,6 +17,9 @@ import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { logger } from '@/lib/logger';
 import { rankMemoriesByWeight } from '@/lib/memory/memory-weighting';
 import { parseLLMJson, stripCodeFences } from '@/lib/services/ai-import.service';
+import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service';
+import { getCharacterVectorStore } from '@/lib/embedding/vector-store';
+import { isEmbeddingAvailable } from '@/lib/embedding/embedding-service';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { Character, Memory } from '@/lib/schemas/types';
 
@@ -57,9 +60,18 @@ export interface OptimizerProgressEvent {
   suggestions?: OptimizerSuggestion[];
   error?: string;
   memoryCount?: number;
+  filteredCount?: number;
 }
 
 export type OptimizerProgressCallback = (event: OptimizerProgressEvent) => void;
+
+export interface OptimizerOptions {
+  maxMemories?: number;
+  searchQuery?: string;
+  useSemanticSearch?: boolean;
+  sinceDate?: string | null;
+  beforeDate?: string | null;
+}
 
 // ============================================================================
 // Constants
@@ -265,12 +277,24 @@ export async function runCharacterOptimizer(
   connectionProfileId: string,
   userId: string,
   repos: RepositoryContainer,
-  onProgress: OptimizerProgressCallback
+  onProgress: OptimizerProgressCallback,
+  options?: OptimizerOptions
 ): Promise<void> {
+  const maxMemories = options?.maxMemories ?? MAX_MEMORIES_FOR_ANALYSIS;
+  const searchQuery = options?.searchQuery?.trim() ?? '';
+  const useSemanticSearch = options?.useSemanticSearch ?? true;
+  const sinceDate = options?.sinceDate ?? null;
+  const beforeDate = options?.beforeDate ?? null;
+
   logger.info('[CharacterOptimizer] Starting character optimization', {
     userId,
     characterId,
     connectionProfileId,
+    maxMemories,
+    searchQuery: searchQuery || '(none)',
+    useSemanticSearch,
+    sinceDate,
+    beforeDate,
   });
 
   onProgress({ type: 'start' });
@@ -284,22 +308,99 @@ export async function runCharacterOptimizer(
       throw new Error('Character not found');
     }
 
-    const allMemories = await repos.memories.findByCharacterId(characterId);
-    logger.debug('[CharacterOptimizer] Loaded all memories', {
-      characterId,
-      memoryCount: allMemories.length,
-    });
+    // Memory retrieval pipeline: search → date filter → rank → reinforcement filter → limit
+    let candidateMemories: Memory[] = [];
 
-    // Rank by weight and filter
-    const ranked = rankMemoriesByWeight(allMemories);
-    const qualifyingMemories = ranked
-      .filter(({ memory }) => memory.reinforcementCount >= MIN_REINFORCED_MEMORIES)
-      .slice(0, MAX_MEMORIES_FOR_ANALYSIS);
+    if (searchQuery) {
+      if (useSemanticSearch) {
+        // Try semantic search first, fall back to text search
+        let usedSemantic = false;
+        try {
+          const embeddingAvailable = await isEmbeddingAvailable(userId);
+          if (embeddingAvailable) {
+            const embeddingResult = await generateEmbeddingForUser(searchQuery, userId);
+            const vectorStore = await getCharacterVectorStore(characterId);
+            const results = vectorStore.search(embeddingResult.embedding, 500);
+            const matchedIds = new Set(results.map(r => r.id));
+            const allMemories = await repos.memories.findByCharacterId(characterId);
+            candidateMemories = allMemories.filter(m => matchedIds.has(m.id));
+            usedSemantic = true;
+            logger.debug('[CharacterOptimizer] Semantic search completed', {
+              characterId,
+              query: searchQuery,
+              vectorResults: results.length,
+              matchedMemories: candidateMemories.length,
+            });
+          }
+        } catch (err) {
+          logger.warn('[CharacterOptimizer] Semantic search failed, falling back to text search', {
+            characterId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+        if (!usedSemantic) {
+          candidateMemories = await repos.memories.searchByContent(characterId, searchQuery);
+          logger.debug('[CharacterOptimizer] Text search fallback completed', {
+            characterId,
+            query: searchQuery,
+            results: candidateMemories.length,
+          });
+        }
+      } else {
+        // Text search only
+        candidateMemories = await repos.memories.searchByContent(characterId, searchQuery);
+        logger.debug('[CharacterOptimizer] Text search completed', {
+          characterId,
+          query: searchQuery,
+          results: candidateMemories.length,
+        });
+      }
+    } else {
+      // No search query — load all memories (current behavior)
+      candidateMemories = await repos.memories.findByCharacterId(characterId);
+      logger.debug('[CharacterOptimizer] Loaded all memories', {
+        characterId,
+        memoryCount: candidateMemories.length,
+      });
+    }
+
+    // Apply date filters
+    if (sinceDate) {
+      const sinceTimestamp = new Date(`${sinceDate}T00:00:00.000Z`).getTime();
+      candidateMemories = candidateMemories.filter(m => new Date(m.createdAt).getTime() >= sinceTimestamp);
+      logger.debug('[CharacterOptimizer] Applied sinceDate filter', {
+        sinceDate,
+        remaining: candidateMemories.length,
+      });
+    }
+    if (beforeDate) {
+      const beforeTimestamp = new Date(`${beforeDate}T00:00:00.000Z`).getTime();
+      candidateMemories = candidateMemories.filter(m => new Date(m.createdAt).getTime() < beforeTimestamp);
+      logger.debug('[CharacterOptimizer] Applied beforeDate filter', {
+        beforeDate,
+        remaining: candidateMemories.length,
+      });
+    }
+
+    // Rank by weight and filter by reinforcement
+    const ranked = rankMemoriesByWeight(candidateMemories);
+    const reinforced = ranked.filter(({ memory }) => memory.reinforcementCount >= MIN_REINFORCED_MEMORIES);
+    const filteredCount = reinforced.length;
+    const qualifyingMemories = reinforced.slice(0, maxMemories);
+
+    logger.debug('[CharacterOptimizer] Memory pipeline complete', {
+      characterId,
+      candidateCount: candidateMemories.length,
+      reinforcedCount: filteredCount,
+      selectedCount: qualifyingMemories.length,
+      maxMemories,
+    });
 
     onProgress({
       type: 'step_complete',
       step: 'loading',
       memoryCount: qualifyingMemories.length,
+      filteredCount,
     });
 
     // Check if we have enough memories

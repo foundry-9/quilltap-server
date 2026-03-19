@@ -42,6 +42,14 @@ export interface OptimizerState {
   loading: boolean;
 }
 
+export interface OptimizerFilterOptions {
+  maxMemories: number;
+  searchQuery: string;
+  useSemanticSearch: boolean;
+  sinceDate: string | null;
+  beforeDate: string | null;
+}
+
 export interface CharacterOptimizerModalProps {
   characterId: string;
   characterName: string;
