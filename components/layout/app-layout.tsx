@@ -13,6 +13,8 @@ import { usePathname } from 'next/navigation'
 import { useSession } from '@/components/providers/session-provider'
 import { SidebarProvider } from '@/components/providers/sidebar-provider'
 import { PageToolbarProvider } from '@/components/providers/page-toolbar-provider'
+import { HelpChatProvider } from '@/components/providers/help-chat-provider'
+import { HelpChatDialog } from '@/components/help-chat/HelpChatDialog'
 import { LeftSidebar } from './left-sidebar'
 import { PageToolbar } from './page-toolbar'
 import FooterWrapper from '@/components/footer-wrapper'
@@ -65,18 +67,21 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   }
 
   return (
-    <div className="qt-app-layout">
-      <LeftSidebar />
-      <div className="qt-app-main">
-        <main className="flex flex-col flex-1 min-h-0 overflow-hidden">
-          <PageToolbar />
-          <div className="flex-1 min-h-0 overflow-y-auto">
-            {children}
-          </div>
-        </main>
-        <FooterWrapper />
+    <HelpChatProvider>
+      <div className="qt-app-layout">
+        <LeftSidebar />
+        <div className="qt-app-main">
+          <main className="flex flex-col flex-1 min-h-0 overflow-hidden">
+            <PageToolbar />
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              {children}
+            </div>
+          </main>
+          <FooterWrapper />
+        </div>
       </div>
-    </div>
+      <HelpChatDialog />
+    </HelpChatProvider>
   )
 }
 

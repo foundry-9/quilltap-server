@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
-import { useSidebarDataOptional } from '@/components/providers/sidebar-data-provider'
 import { BaseModal } from '@/components/ui/BaseModal'
 
 interface ChatRenameModalProps {
@@ -22,7 +21,6 @@ export default function ChatRenameModal({
   isManuallyRenamed: initialIsManuallyRenamed,
   onSuccess,
 }: Readonly<ChatRenameModalProps>) {
-  const sidebarData = useSidebarDataOptional()
   const inputRef = useRef<HTMLInputElement>(null)
   const [title, setTitle] = useState(currentTitle)
   const [useAutoRename, setUseAutoRename] = useState(!initialIsManuallyRenamed)
@@ -62,9 +60,6 @@ export default function ChatRenameModal({
         const data = await res.json()
         setTitle(data.title)
         showSuccessToast('Title regenerated')
-
-        // Refresh sidebar to show new title
-        sidebarData?.refreshChats()
 
         // Notify parent of the change
         onSuccess?.(data.title, false)
@@ -118,9 +113,6 @@ export default function ChatRenameModal({
       }
 
       showSuccessToast('Chat renamed')
-
-      // Refresh sidebar to show new title
-      sidebarData?.refreshChats()
 
       onSuccess?.(trimmedTitle, !useAutoRename)
       onClose()

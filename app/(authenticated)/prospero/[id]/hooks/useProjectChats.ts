@@ -10,7 +10,6 @@
 
 import { useCallback, useState, useRef } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
-import { useSidebarData } from '@/components/providers/sidebar-data-provider'
 import type { ProjectChat } from '../types'
 
 interface Pagination {
@@ -42,7 +41,6 @@ export function useProjectChats(projectId: string): UseProjectChatsReturn {
     limit: DEFAULT_LIMIT,
     hasMore: false,
   })
-  const { refreshProjects } = useSidebarData()
   const fetchingRef = useRef(false)
 
   const fetchChats = useCallback(async () => {
@@ -99,13 +97,12 @@ export function useProjectChats(projectId: string): UseProjectChatsReturn {
       setChats(prev => prev.filter(c => c.id !== chatId))
       setPagination(prev => ({ ...prev, total: prev.total - 1 }))
       showSuccessToast('Chat removed from project')
-      refreshProjects()
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to remove chat'
       console.error('useProjectChats: remove error', errorMsg)
       showErrorToast(errorMsg)
     }
-  }, [projectId, refreshProjects])
+  }, [projectId])
 
   return {
     chats,

@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { AIWizardModal, type GeneratedCharacterData, type GeneratedPhysicalDescription } from '@/components/characters/ai-wizard'
-import { useSidebarData } from '@/components/providers/sidebar-data-provider'
 
 interface ConnectionProfile {
   id: string
@@ -14,7 +13,6 @@ interface ConnectionProfile {
 
 export default function NewCharacterPage() {
   const router = useRouter()
-  const { refreshCharacters } = useSidebarData()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [profiles, setProfiles] = useState<ConnectionProfile[]>([])
@@ -122,9 +120,6 @@ export default function NewCharacterPage() {
           showErrorToast('Character created, but physical description failed to save')
         }
       }
-
-      // Refresh sidebar to show new character
-      refreshCharacters()
 
       router.push(`/aurora/${characterId}`)
     } catch (err) {

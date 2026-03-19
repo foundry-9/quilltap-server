@@ -7,7 +7,6 @@ import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
 import { TimestampConfigCard } from '@/components/settings/chat-settings/components/TimestampConfigCard'
-import { useSidebarData } from '@/components/providers/sidebar-data-provider'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
 import type { TimestampConfig } from '@/lib/schemas/types'
 
@@ -70,7 +69,6 @@ export default function NewChatPage() {
   const searchParams = useSearchParams()
   const projectIdParam = searchParams.get('projectId')
   const { style } = useAvatarDisplay()
-  const { refreshChats, refreshProjects } = useSidebarData()
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   const [characters, setCharacters] = useState<Character[]>([])
@@ -338,12 +336,6 @@ export default function NewChatPage() {
 
       const data = await res.json()
       showSuccessToast('Chat created!')
-
-      // Refresh sidebar to show new chat
-      refreshChats()
-      if (project) {
-        refreshProjects()
-      }
 
       router.push('/salon/' + data.chat.id)
     } catch (err) {

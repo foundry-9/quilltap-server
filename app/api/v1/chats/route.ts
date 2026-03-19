@@ -2,6 +2,7 @@
  * Chats API v1 - Collection Endpoint
  *
  * GET /api/v1/chats - List all chats for current user
+ * GET /api/v1/chats?action=has-dangerous - Check if any dangerous chats exist
  * POST /api/v1/chats - Create a new chat
  * POST /api/v1/chats?action=import - Import a SillyTavern chat
  */
@@ -33,6 +34,8 @@ import {
 } from '@/lib/import/sillytavern-import-service';
 
 type Repos = RepositoryContainer;
+const CHAT_GET_ACTIONS = ['has-dangerous'] as const;
+type ChatGetAction = typeof CHAT_GET_ACTIONS[number];
 const CHAT_POST_ACTIONS = ['import'] as const;
 type ChatPostAction = typeof CHAT_POST_ACTIONS[number];
 
@@ -383,6 +386,23 @@ async function handleList(req: NextRequest, context: AuthenticatedContext) {
 }
 
 /**
+ * Check if any dangerous chats exist for the current user
+ */
+async function handleHasDangerous(context: AuthenticatedContext) {
+  const { user, repos } = context;
+
+  try {
+    const allChats = await repos.chats.findByUserId(user.id);
+    const hasDangerous = allChats.some((c: any) => c.isDangerousChat === true);
+    logger.debug('[Chats v1] Checked dangerous chats', { userId: user.id, hasDangerous });
+    return NextResponse.json({ hasDangerous });
+  } catch (error) {
+    logger.error('[Chats v1] Error checking dangerous chats', {}, error instanceof Error ? error : undefined);
+    return serverError('Failed to check dangerous chats');
+  }
+}
+
+/**
  * Create chat
  */
 async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
@@ -584,11 +604,24 @@ async function handleImport(req: NextRequest, context: AuthenticatedContext) {
 // ============================================================================
 
 /**
- * GET /api/v1/chats
- * List all chats for the authenticated user
+ * GET /api/v1/chats - Action dispatch or list
  */
 export const GET = createAuthenticatedHandler(async (req, context) => {
-  return handleList(req, context);
+  const action = getActionParam(req);
+
+  if (!action) {
+    return handleList(req, context);
+  }
+
+  if (!isValidAction(action, CHAT_GET_ACTIONS)) {
+    return badRequest(`Unknown action: ${action}. Available actions: ${CHAT_GET_ACTIONS.join(', ')}`);
+  }
+
+  const actionHandlers: Record<ChatGetAction, () => Promise<NextResponse>> = {
+    'has-dangerous': () => handleHasDangerous(context),
+  };
+
+  return actionHandlers[action]();
 });
 
 /**

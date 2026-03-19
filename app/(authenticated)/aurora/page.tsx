@@ -10,7 +10,6 @@ import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
-import { useSidebarData } from '@/components/providers/sidebar-data-provider'
 import { CharacterDeleteDialog } from '@/components/character-delete-dialog'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
 import { useConnectionProfiles } from '@/hooks/useConnectionProfiles'
@@ -56,7 +55,6 @@ export default function CharactersPage() {
   const { getProfileProvider } = useConnectionProfiles()
   const { style } = useAvatarDisplay()
   const { shouldHideByIds } = useQuickHide()
-  const { refreshSidebar } = useSidebarData()
   const router = useRouter()
 
   const visibleCharacters = useMemo(
@@ -141,8 +139,6 @@ export default function CharactersPage() {
       }
       showSuccessToast(deletedItems.join('. '))
 
-      // Refresh sidebar to reflect deletion (also refreshes chats if cascadeChats was used)
-      refreshSidebar()
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to delete character')
     }
@@ -156,8 +152,6 @@ export default function CharactersPage() {
       const data = await res.json()
       setCharacters(characters.map((c) => (c.id === id ? { ...c, isFavorite: data.character.isFavorite } : c)))
 
-      // Refresh sidebar to reflect favorite change (favorites are shown first)
-      refreshSidebar()
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to toggle favorite')
     }
@@ -220,7 +214,6 @@ export default function CharactersPage() {
 
       await res.json()
       await fetchCharacters()
-      refreshSidebar()
       setResetBuiltinsDialogOpen(false)
       showSuccessToast('Built-in characters reset successfully.')
     } catch (err) {
@@ -495,7 +488,6 @@ export default function CharactersPage() {
               onClose={() => setAIImportDialogOpen(false)}
               onImportSuccess={() => {
                 fetchCharacters()
-                refreshSidebar()
               }}
             />
           </div>

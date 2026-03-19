@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { showAlert } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
-import { useSidebarDataOptional } from '@/components/providers/sidebar-data-provider'
 import {
   Character,
   CharacterFormData,
@@ -32,7 +31,6 @@ const INITIAL_FORM_DATA: CharacterFormData = {
  */
 export function useCharacterEdit(id: string) {
   const router = useRouter()
-  const sidebarData = useSidebarDataOptional()
 
   // State management
   const [state, setState] = useState<CharacterEditState>({
@@ -164,9 +162,6 @@ export function useCharacterEdit(id: string) {
       await fetchCharacter()
       setState((prev) => ({ ...prev, saving: false }))
       showSuccessToast('Character saved successfully!')
-
-      // Refresh sidebar to reflect character changes
-      sidebarData?.refreshCharacters()
 
       router.push(`/aurora/${id}/view`)
       return true

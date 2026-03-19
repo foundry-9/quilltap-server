@@ -31,8 +31,9 @@ export function useHelpChatStreaming({ chatId, onMessageComplete, onNavigate }: 
   })
   const abortRef = useRef<AbortController | null>(null)
 
-  const sendMessage = useCallback(async (content: string, fileIds?: string[]) => {
-    if (!chatId) return
+  const sendMessage = useCallback(async (content: string, fileIds?: string[], overrideChatId?: string) => {
+    const effectiveChatId = overrideChatId || chatId
+    if (!effectiveChatId) return
 
     // Abort any existing stream
     abortRef.current?.abort()
@@ -47,7 +48,7 @@ export function useHelpChatStreaming({ chatId, onMessageComplete, onNavigate }: 
     })
 
     try {
-      const res = await fetch(`/api/v1/help-chats/${chatId}/messages`, {
+      const res = await fetch(`/api/v1/help-chats/${effectiveChatId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content, fileIds }),

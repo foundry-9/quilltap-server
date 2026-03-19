@@ -155,6 +155,8 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
   }, [pathname, isOpen, currentChatId])
 
   const openHelpChat = useCallback(() => {
+    // Always open to the launcher view so past chats are visible
+    setCurrentChatId(null)
     setIsOpen(true)
   }, [])
 

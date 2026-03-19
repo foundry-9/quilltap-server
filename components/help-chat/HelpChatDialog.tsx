@@ -131,12 +131,12 @@ export function HelpChatDialog() {
     }
   }, [])
 
-  // Load past chats when dialog opens
+  // Load past chats when dialog opens or when returning to launcher view
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !currentChatId) {
       fetchPastChats()
     }
-  }, [isOpen, fetchPastChats])
+  }, [isOpen, currentChatId, fetchPastChats])
 
   // Load messages when chat changes
   useEffect(() => {
@@ -185,8 +185,8 @@ export function HelpChatDialog() {
             setParticipantToCharacter(newPtcMap)
           }
 
-          // Send the question
-          sendMessage(question)
+          // Send the question — pass chatId directly to avoid stale closure
+          sendMessage(question, undefined, chatId)
         }
       }
     } catch (error) {
