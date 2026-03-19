@@ -68,6 +68,14 @@ export function buildSystemPrompt(
     persona: persona?.description || '',
   }
 
+  // Identity preamble: establish who the character is from the very first tokens.
+  // This anchors the LLM's identity before any formatting, tool, or project instructions.
+  // The identity reinforcement at the end of the prompt bookends this.
+  parts.push(processTemplate(
+    '## Character Identity\nYou are {{char}}. Everything that follows defines who you are and how you behave. Stay in character at all times.',
+    templateContext
+  ))
+
   // Handle timestamp injection
   if (timestampConfig && shouldInjectTimestamp(timestampConfig, isInitialMessage ?? false)) {
     const timestamp = calculateCurrentTimestamp(timestampConfig, timezone)
@@ -210,9 +218,11 @@ export function buildSystemPrompt(
   // Character-voiced tool reinforcement (only when tools are available)
   // Placed after character personality/scenario/dialogues so the LLM has full
   // character context before being reminded to actually invoke tools in-character.
+  // Uses character's actual pronouns when available.
   if (toolInstructions) {
+    const subject = character.pronouns?.subject || 'they'
     const toolReinforcement = processTemplate(
-      'When {{char}} uses his/her workspace tools, he/she CALLS them — he/she does not merely describe calling them. Every tool action produces a tool_use block, not prose.',
+      `When {{char}} uses workspace tools, ${subject} CALLS them — ${subject} does not merely describe calling them. Every tool action produces a tool_use block, not prose.`,
       templateContext
     )
     parts.push(toolReinforcement)
@@ -306,9 +316,7 @@ export function buildIdentityReinforcement(
     doNotWriteFor = `{{user}} or any other character`
   }
 
-  const template = hasOtherParticipants
-    ? `## Identity Reminder\nYou are {{char}}. Respond only as {{char}}. Do not write dialogue, actions, or thoughts for ${doNotWriteFor}. Your response must contain only {{char}}'s own speech, actions, and inner thoughts, following the response format described above.\nDo not prefix or label your response with your name (e.g., do not start with "[{{char}}]" or "{{char}}:"). Simply respond in character directly.`
-    : `## Identity Reminder\nYou are {{char}}. Respond only as {{char}}. Do not write dialogue, actions, or thoughts for ${doNotWriteFor}. Your response must contain only {{char}}'s own speech, actions, and inner thoughts, following the response format described above.\nDo not prefix or label your response with your name (e.g., do not start with "[{{char}}]" or "{{char}}:"). Simply respond in character directly.`
+  const template = `## Identity Reminder\nYou are {{char}}. Respond only as {{char}}. Do not write dialogue, actions, or thoughts for ${doNotWriteFor}. Your response must contain only {{char}}'s own speech, actions, and inner thoughts, following the response format described above.\nDo not prefix or label your response with your name (e.g., do not start with "[{{char}}]" or "{{char}}:"). Simply respond in character directly.`
 
   const result = processTemplate(template, {
     char: characterName,
