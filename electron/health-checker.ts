@@ -71,10 +71,13 @@ export class HealthChecker {
               dbKeyState: data.status === 'locked' ? data.dbKeyState : undefined,
             });
           } catch {
+            // Include a snippet of the actual response for diagnostics
+            const preview = body.length > 200 ? body.substring(0, 200) + '...' : body;
+            const statusCode = response.statusCode;
             resolve({
               status: 'unhealthy',
               attempts: attempt,
-              error: 'Invalid JSON response from health endpoint',
+              error: `Invalid JSON from health endpoint (HTTP ${statusCode}): ${preview}`,
             });
           }
         });
