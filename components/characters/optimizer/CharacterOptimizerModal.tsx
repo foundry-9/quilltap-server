@@ -175,7 +175,7 @@ export function CharacterOptimizerModal({
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-5">
+        <div className="flex-1 overflow-y-auto px-6 pt-5 pb-8 flex flex-col gap-5">
 
           {/* ===== PREFLIGHT PHASE ===== */}
           {optimizer.phase === 'preflight' && (
@@ -422,47 +422,6 @@ export function CharacterOptimizerModal({
                 />
               )}
 
-              {/* Navigation */}
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={optimizer.prevSuggestion}
-                  disabled={optimizer.currentIndex === 0}
-                  className="qt-button-ghost qt-button-sm disabled:opacity-30"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                  Previous
-                </button>
-
-                <div className="flex-1" />
-
-                {optimizer.currentIndex < optimizer.suggestions.length - 1 ? (
-                  <button
-                    type="button"
-                    onClick={optimizer.nextSuggestion}
-                    className="qt-button-secondary qt-button-sm"
-                  >
-                    Next
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => optimizer.setPhase('apply')}
-                    className="qt-button-primary qt-button-sm"
-                  >
-                    Review Changes
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-
               {/* Skip to apply */}
               {allReviewed && optimizer.currentIndex < optimizer.suggestions.length - 1 && (
                 <div className="text-center">
@@ -540,17 +499,58 @@ export function CharacterOptimizerModal({
         )}
 
         {optimizer.phase === 'review' && (
-          <div className="qt-dialog-footer flex justify-between flex-shrink-0">
-            <span className="qt-caption self-center">
-              {acceptedChanges.length} {acceptedChanges.length === 1 ? 'change' : 'changes'} accepted so far
-            </span>
-            <button
-              type="button"
-              onClick={() => optimizer.setPhase('apply')}
-              className="qt-button-primary"
-            >
-              Review &amp; Apply Changes
-            </button>
+          <div className="qt-dialog-footer flex flex-col gap-2 flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={optimizer.prevSuggestion}
+                disabled={optimizer.currentIndex === 0}
+                className="qt-button-ghost qt-button-sm disabled:opacity-30"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+                Previous
+              </button>
+
+              <div className="flex-1" />
+
+              {optimizer.currentIndex < optimizer.suggestions.length - 1 ? (
+                <button
+                  type="button"
+                  onClick={optimizer.nextSuggestion}
+                  className="qt-button-secondary qt-button-sm"
+                >
+                  Next
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => optimizer.setPhase('apply')}
+                  className="qt-button-primary qt-button-sm"
+                >
+                  Review Changes
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              )}
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="qt-caption">
+                {acceptedChanges.length} {acceptedChanges.length === 1 ? 'change' : 'changes'} accepted so far
+              </span>
+              <button
+                type="button"
+                onClick={() => optimizer.setPhase('apply')}
+                className="qt-button-primary"
+              >
+                Review &amp; Apply Changes
+              </button>
+            </div>
           </div>
         )}
       </div>

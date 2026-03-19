@@ -143,7 +143,7 @@ export function SuggestionCard({
   const isEdited = decision === 'edited';
 
   return (
-    <div className={`qt-card flex flex-col gap-4 flex-1 min-h-0 ${isAccepted || isEdited ? 'border-green-500/40' : isRejected ? 'border-destructive/30 opacity-75' : ''}`}>
+    <div className={`qt-card flex flex-col gap-4 ${isAccepted || isEdited ? 'border-green-500/40' : isRejected ? 'border-destructive/30 opacity-75' : ''}`}>
       {/* Header: field badge + progress */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <span className={`${fieldBadge} text-xs`}>{displayLabel}</span>

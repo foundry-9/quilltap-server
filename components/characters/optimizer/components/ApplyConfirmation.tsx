@@ -43,9 +43,10 @@ const FIELD_BADGE_CLASS: Record<string, string> = {
   title: 'qt-badge-primary',
 };
 
-function truncate(text: string, maxLength: number = 120): string {
-  if (text.length <= maxLength) return text;
-  return text.slice(0, maxLength).trimEnd() + '…';
+function truncate(text: string | unknown, maxLength: number = 120): string {
+  const str = typeof text === 'string' ? text : String(text ?? '');
+  if (str.length <= maxLength) return str;
+  return str.slice(0, maxLength).trimEnd() + '…';
 }
 
 export function ApplyConfirmation({
