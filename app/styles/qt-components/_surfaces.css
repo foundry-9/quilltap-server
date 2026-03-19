@@ -67,6 +67,25 @@
   }
 
   /**
+   * Compact character card for homepage grid
+   * Centered layout with avatar, name, title, provider badge, and action button
+   */
+  .qt-character-card {
+    @apply flex flex-col items-center gap-2 h-full rounded-lg;
+    padding: var(--qt-character-card-padding, 0.75rem);
+    background: var(--qt-card-bg);
+    color: var(--qt-card-fg);
+    border: 1px solid color-mix(in srgb, var(--qt-card-border) calc(var(--qt-card-border-opacity) * 100%), transparent);
+    box-shadow: var(--qt-card-shadow);
+    transition: var(--qt-card-transition);
+  }
+
+  .qt-character-card:hover {
+    border-color: color-mix(in srgb, var(--color-primary) 60%, transparent);
+    box-shadow: var(--qt-card-shadow-hover);
+  }
+
+  /**
    * Entity card actions container
    */
   .qt-entity-card-actions {

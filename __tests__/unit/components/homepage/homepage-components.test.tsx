@@ -932,7 +932,7 @@ describe('CharacterCard', () => {
   it('applies card styling classes', () => {
     const { container } = render(<CharacterCard character={createMockCharacter()} />)
     const card = container.querySelector('div')
-    expect(card).toHaveClass('border', 'bg-card', 'hover:border-primary')
+    expect(card).toHaveClass('qt-character-card')
   })
 
   it('renders chat button with success styling', () => {

@@ -72,6 +72,35 @@ export const Cards: React.FC = () => {
         </div>
       </section>
 
+      {/* Character Cards */}
+      <section style={{ marginBottom: '2rem' }}>
+        <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
+          Character Cards
+        </h3>
+        <p style={{ color: 'var(--color-muted-foreground)', marginBottom: '1rem' }}>
+          Compact cards used on the homepage grid. Centered layout with avatar, name, title, provider badge, and action.
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 140px))', gap: '0.75rem' }}>
+          {[
+            { name: 'Alice', title: 'The Adventurer', provider: 'Claude Sonnet' },
+            { name: 'Bob', title: 'The Keeper of Many Long Titles', provider: 'GPT-4o' },
+            { name: 'Carol', title: 'Scribe', provider: 'Gemini Pro' },
+          ].map((char) => (
+            <div key={char.name} className="qt-character-card">
+              <div className="qt-avatar" style={{ width: '3rem', height: '3rem' }}>
+                <div className="qt-avatar-fallback">{char.name[0]}</div>
+              </div>
+              <div style={{ textAlign: 'center', width: '100%', minWidth: 0 }}>
+                <p className="qt-card-title" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{char.name}</p>
+                <p className="qt-card-subtitle" style={{ fontStyle: 'italic', minHeight: '2.5rem' }}>{char.title}</p>
+                <span style={{ fontSize: '0.75rem', opacity: 0.6 }}>{char.provider}</span>
+              </div>
+              <button className="qt-button-success qt-button-sm" style={{ marginTop: 'auto', width: '100%' }}>Chat</button>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* Card Grid */}
       <section style={{ marginBottom: '2rem' }}>
         <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>

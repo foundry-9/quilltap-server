@@ -628,6 +628,26 @@
   box-shadow: var(--qt-card-shadow-hover);
 }
 
+.qt-character-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  height: 100%;
+  padding: var(--qt-character-card-padding, 0.75rem);
+  border-radius: var(--qt-card-radius);
+  background-color: var(--qt-card-bg);
+  color: var(--qt-card-fg);
+  border: 1px solid color-mix(in srgb, var(--qt-card-border) calc(var(--qt-card-border-opacity, 1) * 100%), transparent);
+  box-shadow: var(--qt-card-shadow);
+  transition: var(--qt-card-transition);
+}
+
+.qt-character-card:hover {
+  border-color: var(--color-primary);
+  box-shadow: var(--qt-card-shadow-hover);
+}
+
 .qt-panel {
   background-color: var(--qt-card-bg);
   border: 1px solid var(--qt-card-border);

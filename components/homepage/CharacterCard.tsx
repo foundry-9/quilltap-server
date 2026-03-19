@@ -26,9 +26,21 @@ export function CharacterCard({ character }: CharacterCardProps) {
     ? getProfileProvider(character.defaultConnectionProfileId)
     : null
 
+  // For compact card display, strip provider prefix (e.g., "GROK/grok-4.20..." → "grok-4.20...")
+  const profileDisplayName = (() => {
+    const name = profileInfo?.name || profileInfo?.modelName || ''
+    if (!name) return ''
+    const provider = profileInfo?.provider || ''
+    const prefixes = [`${provider}/`, `${provider.toLowerCase()}/`]
+    for (const prefix of prefixes) {
+      if (name.startsWith(prefix)) return name.slice(prefix.length)
+    }
+    return name
+  })()
+
   return (
     <>
-      <div className="flex flex-col items-center p-3 h-full rounded-lg border border-border bg-card hover:border-primary hover:qt-shadow-md transition-all">
+      <div className="qt-character-card">
         <Link
           href={`/aurora/${character.id}/view`}
           className="flex flex-col items-center gap-2 flex-grow hover:opacity-80 transition-opacity"
@@ -46,13 +58,19 @@ export function CharacterCard({ character }: CharacterCardProps) {
               {character.title || '\u00A0'}
             </p>
             {profileInfo && (
-              <ProviderModelBadge provider={profileInfo.provider} modelName={profileInfo.modelName} size="sm" />
+              <ProviderModelBadge
+                provider={profileInfo.provider}
+                modelName={profileDisplayName}
+                title={`${profileInfo.name || profileInfo.provider}: ${profileInfo.modelName}`}
+                size="sm"
+                compact
+              />
             )}
           </div>
         </Link>
         <button
           onClick={() => setShowDialog(true)}
-          className="mt-auto pt-2 w-full qt-button-success qt-button-sm"
+          className="mt-auto w-full qt-button-success qt-button-sm"
           title={`Start a chat with ${character.name}`}
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

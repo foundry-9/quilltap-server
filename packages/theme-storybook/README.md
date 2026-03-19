@@ -261,6 +261,7 @@ All Quilltap components use `qt-*` prefixed classes. Your theme CSS can override
 - `.qt-card-title`, `.qt-card-description` - Card text
 - `.qt-card-interactive` - Hoverable card
 - `.qt-entity-card` - Character/entity list card
+- `.qt-character-card` - Compact character card (homepage grid)
 - `.qt-panel` - Panel variant
 
 ### Inputs
