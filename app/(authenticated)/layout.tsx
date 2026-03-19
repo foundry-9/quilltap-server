@@ -1,14 +1,22 @@
 /**
  * Authenticated Layout (Single-User Mode)
  *
- * In single-user mode, simply render children.
- * No authentication check is needed as there is always a single user.
+ * In single-user mode, wraps children with the HelpChatProvider
+ * for help chat state management across authenticated pages.
  */
+
+import { HelpChatProvider } from '@/components/providers/help-chat-provider'
+import { HelpChatDialog } from '@/components/help-chat/HelpChatDialog'
 
 export default function AuthenticatedLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return children;
+  return (
+    <HelpChatProvider>
+      {children}
+      <HelpChatDialog />
+    </HelpChatProvider>
+  );
 }

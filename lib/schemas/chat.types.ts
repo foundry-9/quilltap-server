@@ -62,6 +62,13 @@ export const SceneStateSchema = z.object({
 export type SceneState = z.infer<typeof SceneStateSchema>;
 
 // ============================================================================
+// CHAT TYPE
+// ============================================================================
+
+export const ChatTypeEnum = z.enum(['salon', 'help']);
+export type ChatType = z.infer<typeof ChatTypeEnum>;
+
+// ============================================================================
 // MESSAGE EVENTS
 // ============================================================================
 
@@ -340,6 +347,11 @@ export const ChatMetadataSchema = z.object({
   /** Scene state tracker: structured summary of current scene (location, character actions, appearance, clothing) */
   sceneState: JsonSchema.nullable().optional(),
 
+  /** Chat type discriminator: 'salon' for regular chats, 'help' for help assistant chats */
+  chatType: z.enum(['salon', 'help']).default('salon'),
+  /** For help chats: the current page URL being viewed (for context resolution) */
+  helpPageUrl: z.string().nullable().optional(),
+
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 }).refine(
@@ -442,6 +454,11 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** Scene state tracker: structured summary of current scene (location, character actions, appearance, clothing) */
   sceneState: JsonSchema.nullable().optional(),
+
+  /** Chat type discriminator: 'salon' for regular chats, 'help' for help assistant chats */
+  chatType: z.enum(['salon', 'help']).default('salon'),
+  /** For help chats: the current page URL being viewed (for context resolution) */
+  helpPageUrl: z.string().nullable().optional(),
 
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

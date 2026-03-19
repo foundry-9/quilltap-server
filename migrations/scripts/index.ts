@@ -117,6 +117,8 @@ import { addSceneStateFieldMigration } from './add-scene-state-field';
 import { addHelpToolsFieldMigration } from './add-help-tools-field';
 // Add auto-lock settings field to chat_settings
 import { addAutoLockSettingsFieldMigration } from './add-auto-lock-settings-field';
+// Add chatType field to chats for help chat support
+import { addChatTypeFieldMigration } from './add-chat-type-field';
 
 /**
  * All available migrations.
@@ -229,6 +231,8 @@ export const migrations: Migration[] = [
   addHelpToolsFieldMigration,
   // Add auto-lock settings field to chat_settings
   addAutoLockSettingsFieldMigration,
+  // Add chatType field to chats for help chat support
+  addChatTypeFieldMigration,
 ];
 
 export {
@@ -336,4 +340,6 @@ export {
   addHelpToolsFieldMigration,
   // Add auto-lock settings field to chat_settings
   addAutoLockSettingsFieldMigration,
+  // Add chatType field to chats for help chat support
+  addChatTypeFieldMigration,
 };

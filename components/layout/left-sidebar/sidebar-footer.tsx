@@ -17,6 +17,7 @@ import { useTheme } from '@/components/providers/theme-provider'
 import { ProfileMenu } from './profile-menu'
 import { NavUserMenuThemeContent } from '@/components/dashboard/nav-user-menu-theme'
 import { NavUserMenuQuickHideContent, QuickHideIcon } from '@/components/dashboard/nav-user-menu-quick-hide'
+import { useHelpChatOptional } from '@/components/providers/help-chat-provider'
 
 /**
  * Foundry icon (anvil/wrench)
@@ -60,12 +61,34 @@ function PaletteIcon({ className }: { className?: string }) {
   )
 }
 
+/**
+ * Help icon (question mark in circle)
+ */
+function HelpIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+      <path d="M12 17h.01" />
+    </svg>
+  )
+}
+
 type PopoutMenu = 'themes' | 'quickHide' | null
 
 export function SidebarFooter() {
   const quickHide = useQuickHide()
   const { chats } = useSidebarData()
   const theme = useTheme()
+  const helpChat = useHelpChatOptional()
   const [openPopout, setOpenPopout] = useState<PopoutMenu>(null)
   const themesRef = useRef<HTMLDivElement>(null)
   const quickHideRef = useRef<HTMLDivElement>(null)
@@ -113,6 +136,17 @@ export function SidebarFooter() {
   return (
     <div className="qt-left-sidebar-footer">
       <div className="qt-left-sidebar-footer-actions">
+        {helpChat && (
+          <button
+            type="button"
+            onClick={helpChat.openHelpChat}
+            disabled={!helpChat.isEligible && !helpChat.eligibilityLoading}
+            className={`qt-left-sidebar-item justify-center px-0 ${!helpChat.isEligible && !helpChat.eligibilityLoading ? 'opacity-40 cursor-not-allowed' : ''}`}
+            title={helpChat.isEligible ? 'Help' : 'Help (requires a help-enabled character with a tool-capable connection)'}
+          >
+            <HelpIcon className="qt-left-sidebar-item-icon w-5 h-5" />
+          </button>
+        )}
         <a
           href="/settings"
           className="qt-left-sidebar-item justify-center px-0"

@@ -49,7 +49,8 @@ async function handleCharacters(repos: any, userId: string) {
   characters = characters.filter((c: any) => !c.npc && c.controlledBy !== 'user');
 
   // Get chat counts for each character
-  const chats = await repos.chats.findByUserId(userId);
+  const allUserChats = await repos.chats.findByUserId(userId);
+  const chats = allUserChats.filter((c: any) => !c.chatType || c.chatType === 'salon');
 
   // Count chats per character
   const chatCounts = new Map<string, number>();
@@ -125,8 +126,9 @@ async function handleCharacters(repos: any, userId: string) {
 
 async function handleChats(repos: any, userId: string) {
 
-  // Get all chats
-  const chats = await repos.chats.findByUserId(userId);
+  // Get all salon chats (exclude help chats from sidebar)
+  const allChats = await repos.chats.findByUserId(userId);
+  const chats = allChats.filter((c: any) => !c.chatType || c.chatType === 'salon');
 
   // Sort by updatedAt descending (most recent first)
   chats.sort((a: any, b: any) => {
@@ -259,7 +261,8 @@ async function handleProjects(repos: any, userId: string) {
   const projects = await repos.projects.findByUserId(userId);
 
   // Get counts for each project
-  const allChats = await repos.chats.findByUserId(userId);
+  const allUserChats = await repos.chats.findByUserId(userId);
+  const allChats = allUserChats.filter((c: any) => !c.chatType || c.chatType === 'salon');
   const allFiles = await repos.files.findAll();
   const userFiles = allFiles.filter((f: any) => f.userId === userId);
 

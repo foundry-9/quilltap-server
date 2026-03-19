@@ -269,6 +269,174 @@
   }
 
   /* ==========================================================================
+     FLOATING DIALOG - Movable, resizable floating panel
+     z-[58] places it between panels (z-55) and modals (z-60)
+     ========================================================================== */
+
+  /**
+   * Floating dialog container — portal-rendered, draggable, resizable
+   */
+  .qt-floating-dialog {
+    @apply fixed z-[58];
+    border-radius: var(--qt-dialog-radius);
+    background: var(--qt-dialog-bg);
+    border: 1px solid var(--qt-dialog-border);
+    box-shadow: var(--qt-dialog-shadow);
+    resize: both;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /**
+   * Floating dialog title bar — drag handle
+   */
+  .qt-floating-dialog-header {
+    @apply px-4 py-2 flex items-center justify-between;
+    @apply cursor-grab active:cursor-grabbing select-none;
+    border-bottom: 1px solid var(--qt-dialog-border);
+    background: var(--qt-dialog-bg);
+    flex-shrink: 0;
+  }
+
+  .qt-floating-dialog-title {
+    @apply text-sm font-semibold text-foreground truncate;
+  }
+
+  .qt-floating-dialog-actions {
+    @apply flex items-center gap-1;
+    flex-shrink: 0;
+  }
+
+  .qt-floating-dialog-close {
+    @apply p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors;
+  }
+
+  /**
+   * Floating dialog body — scrollable content area
+   */
+  .qt-floating-dialog-body {
+    @apply flex-1 overflow-y-auto;
+    min-height: 0;
+  }
+
+  /* ==========================================================================
+     HELP CHAT - Message bubbles, composer, and UI elements
+     Used by the contextual help chat system
+     ========================================================================== */
+
+  /**
+   * Help chat message bubble — user messages
+   */
+  .qt-help-msg-user {
+    @apply rounded-lg px-3 py-2 text-sm;
+    max-width: 80%;
+    background: var(--qt-primary);
+    color: var(--qt-primary-foreground, hsl(var(--primary-foreground)));
+  }
+
+  /**
+   * Help chat message bubble — assistant messages
+   */
+  .qt-help-msg-assistant {
+    @apply rounded-lg px-3 py-2 text-sm;
+    max-width: 80%;
+    background: var(--qt-help-assistant-bg, hsl(var(--muted)));
+    color: var(--qt-help-assistant-fg, hsl(var(--foreground)));
+  }
+
+  /**
+   * Help chat message character name label
+   */
+  .qt-help-msg-character-name {
+    @apply text-xs font-medium text-muted-foreground mb-1;
+  }
+
+  /**
+   * Help chat avatar — small circular avatar in message list
+   */
+  .qt-help-avatar {
+    @apply flex-shrink-0 w-7 h-7 rounded-full bg-muted flex items-center justify-center overflow-hidden;
+  }
+
+  /**
+   * Help chat composer — input area at bottom
+   */
+  .qt-help-composer {
+    @apply flex items-end gap-2 p-3;
+    border-top: 1px solid var(--qt-dialog-border);
+    background: var(--qt-dialog-bg);
+  }
+
+  .qt-help-composer-input {
+    @apply flex-1 resize-none rounded-lg px-3 py-2 text-sm;
+    @apply ring-offset-background placeholder:text-muted-foreground;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+    @apply disabled:cursor-not-allowed disabled:opacity-50;
+    border: 1px solid var(--qt-input-border, hsl(var(--input)));
+    background: var(--qt-input-bg, hsl(var(--background)));
+  }
+
+  .qt-help-composer-send {
+    @apply inline-flex items-center justify-center rounded-md px-3 py-2 h-[38px] text-sm font-medium;
+    @apply disabled:opacity-50 disabled:pointer-events-none;
+    background: var(--qt-primary);
+    color: var(--qt-primary-foreground, hsl(var(--primary-foreground)));
+  }
+
+  .qt-help-composer-send:hover:not(:disabled) {
+    opacity: 0.9;
+  }
+
+  /**
+   * Help chat character selection pill
+   */
+  .qt-help-char-pill {
+    @apply flex items-center gap-1.5 px-2 py-1 rounded-full text-xs transition-colors;
+    border: 1px solid var(--qt-dialog-border);
+    color: hsl(var(--muted-foreground));
+  }
+
+  .qt-help-char-pill:hover {
+    border-color: var(--qt-primary);
+    opacity: 0.7;
+  }
+
+  .qt-help-char-pill[data-selected="true"] {
+    border-color: var(--qt-primary);
+    background: color-mix(in srgb, var(--qt-primary) 10%, transparent);
+    color: var(--qt-primary);
+  }
+
+  /**
+   * Help chat past chat list item
+   */
+  .qt-help-past-chat {
+    @apply flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer;
+  }
+
+  .qt-help-past-chat:hover {
+    background: hsl(var(--accent));
+  }
+
+  /**
+   * Help chat section label
+   */
+  .qt-help-section-label {
+    @apply text-xs font-medium text-muted-foreground mb-2;
+  }
+
+  /**
+   * Help chat error banner
+   */
+  .qt-help-error {
+    @apply px-3 py-2 text-xs;
+    background: color-mix(in srgb, hsl(var(--destructive)) 10%, transparent);
+    color: hsl(var(--destructive));
+    border-bottom: 1px solid color-mix(in srgb, hsl(var(--destructive)) 20%, transparent);
+  }
+
+  /* ==========================================================================
      POPOVERS - Shared base styles
      ========================================================================== */
 

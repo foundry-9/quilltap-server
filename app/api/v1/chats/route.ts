@@ -362,7 +362,10 @@ async function handleList(req: NextRequest, context: AuthenticatedContext) {
     const excludeTagIdsParam = searchParams.get('excludeTagIds');
     const limitParam = searchParams.get('limit');
     const excludeTagIds = excludeTagIdsParam ? excludeTagIdsParam.split(',').filter(Boolean) : [];
-    const limit = limitParam ? parseInt(limitParam, 10) : undefined;const chatMetadata = await repos.chats.findByUserId(user.id);
+    const limit = limitParam ? parseInt(limitParam, 10) : undefined;
+    const allChatMetadata = await repos.chats.findByUserId(user.id);
+    // Filter out help chats from salon listing
+    const chatMetadata = allChatMetadata.filter((c: any) => !c.chatType || c.chatType === 'salon');
     const enrichedChats = await enrichChatsForList(chatMetadata, repos);
     let filteredChats = filterChatsByExcludedTags(enrichedChats, excludeTagIds);
 

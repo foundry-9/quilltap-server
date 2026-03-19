@@ -1,6 +1,6 @@
 {
   "name": "@foundry-9/quilltap",
-  "version": "3.3.0-dev.98",
+  "version": "3.3.0-dev.99",
   "private": true,
   "main": "dist-electron/main.js",
   "author": {
