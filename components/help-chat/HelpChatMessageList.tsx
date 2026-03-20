@@ -34,6 +34,7 @@ interface HelpChatMessageListProps {
   streamingContent?: string
   streamingParticipantId?: string | null
   isStreaming?: boolean
+  isExecutingTools?: boolean
   navigationLinks?: NavigationLink[]
   onNavigate?: (url: string) => void
 }
@@ -45,6 +46,7 @@ export function HelpChatMessageList({
   streamingContent,
   streamingParticipantId,
   isStreaming,
+  isExecutingTools,
   navigationLinks,
   onNavigate,
 }: HelpChatMessageListProps) {
@@ -141,14 +143,20 @@ export function HelpChatMessageList({
         </div>
       )}
 
-      {/* Streaming indicator (no content yet) */}
+      {/* Streaming indicator (no content yet, or executing tools) */}
       {isStreaming && !streamingContent && (
         <div className="flex gap-2 flex-row">
           <div className="qt-help-avatar">
-            <span className="text-xs text-muted-foreground">...</span>
+            {(() => {
+              const char = getCharacterForParticipant(streamingParticipantId)
+              if (char?.avatarUrl) {
+                return <img src={char.avatarUrl} alt={char.name} className="w-full h-full object-cover" />
+              }
+              return <span className="text-xs text-muted-foreground">{char?.name?.[0] || '...'}</span>
+            })()}
           </div>
           <div className="qt-help-msg-assistant italic">
-            Thinking...
+            {isExecutingTools ? 'Consulting the archives...' : 'Thinking...'}
           </div>
         </div>
       )}

@@ -119,6 +119,7 @@ export function HelpChatDialog() {
     streamingContent,
     streamingParticipantId,
     streamingNavigationLinks,
+    isExecutingTools,
     error: streamError,
     sendMessage,
   } = useHelpChatStreaming({
@@ -357,6 +358,7 @@ export function HelpChatDialog() {
             streamingContent={streamingContent}
             streamingParticipantId={streamingParticipantId}
             isStreaming={isStreaming}
+            isExecutingTools={isExecutingTools}
             navigationLinks={streamingNavigationLinks}
             onNavigate={handleNavigate}
           />

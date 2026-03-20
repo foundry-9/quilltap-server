@@ -16,6 +16,7 @@ export interface NavigationLink {
 
 interface StreamingState {
   isStreaming: boolean
+  isExecutingTools: boolean
   streamingContent: string
   streamingParticipantId: string | null
   streamingNavigationLinks: NavigationLink[]
@@ -65,6 +66,7 @@ function labelFromUrl(url: string): string {
 export function useHelpChatStreaming({ chatId, onMessageComplete }: UseHelpChatStreamingOptions) {
   const [state, setState] = useState<StreamingState>({
     isStreaming: false,
+    isExecutingTools: false,
     streamingContent: '',
     streamingParticipantId: null,
     streamingNavigationLinks: [],
@@ -88,6 +90,7 @@ export function useHelpChatStreaming({ chatId, onMessageComplete }: UseHelpChatS
 
     setState({
       isStreaming: true,
+      isExecutingTools: false,
       streamingContent: '',
       streamingParticipantId: null,
       streamingNavigationLinks: [],
@@ -136,6 +139,7 @@ export function useHelpChatStreaming({ chatId, onMessageComplete }: UseHelpChatS
               currentContent += event.content
               setState(prev => ({
                 ...prev,
+                isExecutingTools: false,
                 streamingContent: currentContent,
               }))
             }
@@ -187,10 +191,14 @@ export function useHelpChatStreaming({ chatId, onMessageComplete }: UseHelpChatS
               } catch { /* ignore */ }
             }
 
-            // Status events (tool execution)
+            // Status events (tool execution) — clear intermediate content
+            // so the user sees a "working" indicator instead of stale text
             if (event.status) {
+              currentContent = ''
               setState(prev => ({
                 ...prev,
+                isExecutingTools: true,
+                streamingContent: '',
                 streamingParticipantId: event.status.participantId || prev.streamingParticipantId,
               }))
             }

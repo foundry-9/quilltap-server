@@ -28,7 +28,7 @@ export interface ParsedTextTool {
   /** End index in the original text */
   endIndex: number;
   /** Which format was detected */
-  format: 'deepseek' | 'claude' | 'generic' | 'function_call' | 'tool_use';
+  format: 'deepseek' | 'claude' | 'generic' | 'function_call' | 'tool_use' | 'invoke';
 }
 
 /**
@@ -58,6 +58,13 @@ const TOOL_NAME_ALIASES: Record<string, string> = {
   'web_search': 'search_web',
   'websearch': 'search_web',
   'web': 'search_web',
+
+  // Help tool aliases
+  'help_search': 'help_search',
+  'helpsearch': 'help_search',
+  'search_help': 'help_search',
+  'help_navigate': 'help_navigate',
+  'helpnavigate': 'help_navigate',
 };
 
 /**
@@ -99,6 +106,23 @@ export function convertToToolCallRequest(parsed: ParsedTextTool): ToolCallReques
         name: 'search_web',
         arguments: {
           query: parsed.arguments.query || parsed.arguments.search || Object.values(parsed.arguments)[0] || '',
+        },
+      };
+
+    case 'help_search':
+      return {
+        name: 'help_search',
+        arguments: {
+          query: parsed.arguments.query || parsed.arguments.search || Object.values(parsed.arguments)[0] || '',
+          limit: parsed.arguments.limit,
+        },
+      };
+
+    case 'help_navigate':
+      return {
+        name: 'help_navigate',
+        arguments: {
+          url: parsed.arguments.url || parsed.arguments.path || Object.values(parsed.arguments)[0] || '',
         },
       };
 
@@ -366,6 +390,46 @@ export function parseToolUseFormat(response: string): ParsedTextTool[] {
   return results;
 }
 
+/**
+ * Parse bare `<invoke name="...">` format (Kimi K2 and similar models)
+ *
+ * Matches `<invoke>` tags that appear WITHOUT a `<function_calls>` wrapper.
+ * IMPORTANT: In composite parsing, this must run AFTER parseFunctionCallsFormat
+ * so that wrapped invokes are claimed first and deduplicated by startIndex.
+ */
+export function parseInvokeFormat(response: string): ParsedTextTool[] {
+  const results: ParsedTextTool[] = [];
+
+  const invokePattern = /<invoke\s+name=["']([^"']+)["']>([\s\S]*?)<\/invoke>/gi;
+
+  let match;
+  while ((match = invokePattern.exec(response)) !== null) {
+    const toolName = match[1];
+    const paramContent = match[2];
+    const startIndex = match.index;
+
+    const args: Record<string, unknown> = {};
+
+    // Parse <parameter name="...">value</parameter> children
+    const paramPattern = /<parameter\s+name=["']([^"']+)["']>([^<]*)<\/parameter>/gi;
+    let paramMatch;
+    while ((paramMatch = paramPattern.exec(paramContent)) !== null) {
+      args[paramMatch[1]] = paramMatch[2].trim();
+    }
+
+    results.push({
+      toolName: normalizeToolName(toolName),
+      arguments: args,
+      fullMatch: match[0],
+      startIndex,
+      endIndex: startIndex + match[0].length,
+      format: 'invoke',
+    });
+  }
+
+  return results;
+}
+
 // ============================================================================
 // Composite utilities for plugins
 // ============================================================================
@@ -384,6 +448,9 @@ export function parseAllXMLFormats(response: string): ParsedTextTool[] {
   allResults.push(...parseToolCallFormat(response));
   allResults.push(...parseFunctionCallFormat(response));
   allResults.push(...parseToolUseFormat(response));
+  // Bare <invoke> MUST be last — wrapped invokes inside <function_calls> are
+  // already claimed above and will be deduplicated by startIndex.
+  allResults.push(...parseInvokeFormat(response));
 
   // Deduplicate by startIndex
   const seen = new Set<number>();
@@ -416,7 +483,8 @@ export function hasAnyXMLToolMarkers(response: string): boolean {
     /<function_calls>/i.test(response) ||
     /<tool_call>/i.test(response) ||
     /<function_call\s+/i.test(response) ||
-    /<tool_use[\s>]/i.test(response)
+    /<tool_use[\s>]/i.test(response) ||
+    /<invoke\s+name=/i.test(response)
   );
 }
 
@@ -442,6 +510,11 @@ export function hasToolUseMarkers(response: string): boolean {
   return /<tool_use[\s>]/i.test(response);
 }
 
+/** Check for bare `<invoke name="...">` markers (Kimi K2-style) */
+export function hasInvokeMarkers(response: string): boolean {
+  return /<invoke\s+name=/i.test(response);
+}
+
 /**
  * Strip all known XML tool call markers from text.
  * Cleans up whitespace left behind.
@@ -449,10 +522,15 @@ export function hasToolUseMarkers(response: string): boolean {
 export function stripAllXMLToolMarkers(response: string): string {
   let stripped = response;
 
+  // <function_calls> MUST be stripped first — it contains <invoke> tags that
+  // would otherwise be matched by the bare <invoke> stripper below, leaving
+  // empty <function_calls></function_calls> wrappers behind.
   stripped = stripped.replace(/<function_calls>[\s\S]*?<\/function_calls>/gi, '');
   stripped = stripped.replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '');
   stripped = stripped.replace(/<function_call\s+[^>]*>[\s\S]*?<\/function_call>/gi, '');
   stripped = stripped.replace(/<tool_use[\s>][\s\S]*?<\/tool_use>/gi, '');
+  // Bare <invoke> last — only catches unwrapped invoke tags (Kimi K2-style)
+  stripped = stripped.replace(/<invoke\s+name=["'][^"']*["']>[\s\S]*?<\/invoke>/gi, '');
 
   stripped = stripped
     .replace(/\n{3,}/g, '\n\n')
@@ -482,4 +560,9 @@ export function stripFunctionCallMarkers(response: string): string {
 /** Strip `<tool_use>` blocks */
 export function stripToolUseMarkers(response: string): string {
   return response.replace(/<tool_use[\s>][\s\S]*?<\/tool_use>/gi, '');
+}
+
+/** Strip bare `<invoke>` blocks (Kimi K2-style) */
+export function stripInvokeMarkers(response: string): string {
+  return response.replace(/<invoke\s+name=["'][^"']*["']>[\s\S]*?<\/invoke>/gi, '');
 }

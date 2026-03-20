@@ -59,16 +59,19 @@ export {
   parseToolCallFormat,
   parseFunctionCallFormat,
   parseToolUseFormat,
+  parseInvokeFormat,
   // Individual marker checks
   hasFunctionCallsMarkers,
   hasToolCallMarkers,
   hasFunctionCallMarkers,
   hasToolUseMarkers,
+  hasInvokeMarkers,
   // Individual strippers
   stripFunctionCallsMarkers,
   stripToolCallMarkers,
   stripFunctionCallMarkers,
   stripToolUseMarkers,
+  stripInvokeMarkers,
   // Utilities
   normalizeToolName,
   convertToToolCallRequest as convertTextToolToRequest,
