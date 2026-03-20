@@ -1,0 +1,103 @@
+# CI Dockerfile — uses pre-built JS artifacts from the build-app CI job
+#
+# The build context must include a 'prebuild/' directory containing:
+#   prebuild/.next/standalone/    (Next.js standalone server output)
+#   prebuild/.next/static/        (hashed static assets)
+#   prebuild/plugins/dist/        (built plugin bundles)
+#
+# These are produced by the build-app CI job and downloaded as artifacts.
+# This Dockerfile skips the expensive next build / plugin build entirely
+# and only compiles native modules (better-sqlite3, sharp) for Alpine.
+#
+# For local builds, use the standard Dockerfile instead.
+
+# --- Native module compilation (Alpine/musl) ---
+FROM node:22-alpine AS deps-prod
+WORKDIR /app
+
+# Upgrade all Alpine packages to latest security patches
+RUN apk upgrade --no-cache
+
+# Upgrade npm to latest version (fixes "Invalid Version" bug in npm 10.x)
+RUN npm install -g npm@latest
+
+# Install build dependencies for native modules (better-sqlite3)
+RUN apk add --no-cache python3 make g++
+
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev && npm rebuild
+
+# --- Production stage ---
+FROM node:22-alpine AS production
+WORKDIR /app
+
+# Upgrade all Alpine packages to latest security patches
+RUN apk upgrade --no-cache
+
+ENV NODE_ENV=production
+ENV DOCKER_CONTAINER=true
+
+# Create non-root user
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+# Create data directories (data, files, logs, plugins/npm)
+RUN mkdir -p /app/quilltap/data /app/quilltap/files /app/quilltap/logs /app/quilltap/plugins/npm && \
+    chown -R nextjs:nodejs /app/quilltap
+
+# Copy pre-built JS artifacts from CI build-app job
+COPY --chown=nextjs:nodejs prebuild/.next/standalone/ ./
+COPY --chown=nextjs:nodejs prebuild/.next/static/ ./.next/static
+
+# Copy public assets from the repo checkout (not from prebuild)
+COPY public ./public
+
+# Copy plugins from CI build-app job
+COPY --chown=nextjs:nodejs prebuild/plugins/dist/ ./plugins/dist
+
+# Copy package files for native module dependencies
+COPY package.json package-lock.json ./
+
+# Install zip for backup/restore and common tools for LLM shell agent use
+# (busybox provides unzip, avoiding CVE-2008-0888 in alpine/unzip)
+# All packages pulled from the already-upgraded Alpine index (see apk upgrade above)
+RUN apk add --no-cache zip git curl wget jq
+
+# Copy pre-compiled production node_modules from build stage (native modules already built)
+COPY --from=deps-prod /app/node_modules ./node_modules
+
+# Copy entrypoint script
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+USER nextjs
+
+EXPOSE 3000
+
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+ENV NODE_OPTIONS="--max-old-space-size=2048"
+
+ENTRYPOINT ["entrypoint.sh"]
+CMD ["node", "server.js"]
+
+# WSL2 stage — extends production with baked-in provisioning for Windows
+FROM production AS wsl2
+
+USER root
+
+# Bake in the WSL init script
+COPY lima/wsl-init.sh /usr/local/bin/wsl-init.sh
+RUN chmod +x /usr/local/bin/wsl-init.sh
+
+# Pre-install runtime dependencies (Lima YAML does this at provision time)
+# Note: busybox provides unzip; we only need the zip package
+RUN apk add --no-cache libstdc++ libgcc zip
+
+# Set environment defaults
+RUN printf 'export LIMA_CONTAINER=true\nexport NODE_ENV=production\nexport PORT=5050\nexport HOSTNAME=0.0.0.0\nexport NODE_OPTIONS="--max-old-space-size=2048"\n' \
+    > /etc/profile.d/quilltap.sh && chmod 644 /etc/profile.d/quilltap.sh
+
+# Remove Docker entrypoint — WSL2 uses wsl-init.sh directly
+ENTRYPOINT []
+CMD ["/usr/local/bin/wsl-init.sh"]

@@ -11,6 +11,8 @@ features
 *.md
 .env*.local
 
+# prebuild/ is intentionally NOT excluded — Dockerfile.ci uses it for CI builds
+
 # Large directories not needed for Docker build
 out
 coverage
