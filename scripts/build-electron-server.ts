@@ -103,7 +103,7 @@ console.log(`    Output:   ${STAGING_DIR}`);
 console.log('');
 
 // Step 1: Clean staging directory
-console.log('==> Step 1/8: Cleaning staging directory');
+console.log('==> Step 1/9: Cleaning staging directory');
 if (existsSync(STAGING_DIR)) {
   rmSync(STAGING_DIR, { recursive: true, force: true });
 }
@@ -111,15 +111,15 @@ mkdirSync(STAGING_DIR, { recursive: true });
 
 if (!skipBuild) {
   // Step 2: Build plugins
-  console.log('==> Step 2/8: Building plugins');
+  console.log('==> Step 2/9: Building plugins');
   run('npm run build:plugins', 'Building plugins');
 
   // Step 3: Build Next.js standalone
-  console.log('==> Step 3/8: Building Next.js (standalone output)');
+  console.log('==> Step 3/9: Building Next.js (standalone output)');
   run('npx next build --webpack', 'Building Next.js', getNextBuildEnv());
 } else {
-  console.log('==> Step 2/8: Skipping plugin build (--skip-build)');
-  console.log('==> Step 3/8: Skipping Next.js build (--skip-build)');
+  console.log('==> Step 2/9: Skipping plugin build (--skip-build)');
+  console.log('==> Step 3/9: Skipping Next.js build (--skip-build)');
 }
 
 // Verify standalone output exists
@@ -129,7 +129,7 @@ if (!existsSync(NEXT_STANDALONE)) {
 }
 
 // Step 4: Copy standalone output + static assets + public files + plugins
-console.log('==> Step 4/8: Copying standalone output to staging');
+console.log('==> Step 4/9: Copying standalone output to staging');
 copyDir(NEXT_STANDALONE, STAGING_DIR);
 
 console.log('    Copying .next/static/');
@@ -152,7 +152,7 @@ if (existsSync(PLUGINS_DIST)) {
 }
 
 // Step 5: Clean unnecessary files (but keep native modules intact)
-console.log('==> Step 5/8: Cleaning unnecessary files');
+console.log('==> Step 5/9: Cleaning unnecessary files');
 const standaloneNodeModules = join(STAGING_DIR, 'node_modules');
 if (existsSync(standaloneNodeModules)) {
   const cleanDir = (dir: string): void => {
@@ -178,7 +178,7 @@ if (existsSync(standaloneNodeModules)) {
 }
 
 // Step 6: Rebuild native modules against Electron's Node ABI
-console.log('==> Step 6/8: Rebuilding native modules for Electron');
+console.log('==> Step 6/9: Rebuilding native modules for Electron');
 
 // Verify better-sqlite3 exists in staging before rebuild
 const bsqlPath = join(STAGING_DIR, 'node_modules', 'better-sqlite3');
@@ -225,8 +225,83 @@ if (!existsSync(bsqlNodeFile)) {
 }
 console.log('    ✓ better-sqlite3.node rebuilt successfully');
 
-// Step 7: Resolve any remaining symlinks (electron-rebuild or npm may create them)
-console.log('==> Step 7/8: Resolving symlinks in staging directory');
+// Step 7/9: Install correct platform-specific sharp binaries
+// sharp uses pre-built platform binaries distributed as @img/sharp-{platform}-{arch}.
+// When CI builds on Linux and shares artifacts across platforms, only the Linux
+// binaries are included. We need to replace them with the correct ones for the
+// current build platform.
+console.log('==> Step 7/9: Installing platform-specific sharp binaries');
+
+const sharpPlatform = process.platform === 'win32' ? 'win32' : process.platform;
+const sharpArch = targetArch;
+const sharpPkg = JSON.parse(readFileSync(join(PROJECT_ROOT, 'node_modules', 'sharp', 'package.json'), 'utf-8'));
+const sharpVersion: string = sharpPkg.version;
+
+// Determine which @img packages we need for this platform
+const requiredSharpPackages: { name: string; version: string }[] = [];
+const optDeps: Record<string, string> = sharpPkg.optionalDependencies || {};
+for (const [name, ver] of Object.entries(optDeps)) {
+  // Match packages for our platform/arch (e.g., @img/sharp-darwin-arm64, @img/sharp-libvips-darwin-arm64)
+  if (name.includes(`${sharpPlatform}-${sharpArch}`)) {
+    requiredSharpPackages.push({ name, version: ver });
+  }
+}
+
+if (requiredSharpPackages.length === 0) {
+  console.warn(`    WARNING: No sharp platform packages found for ${sharpPlatform}-${sharpArch}`);
+} else {
+  console.log(`    Platform: ${sharpPlatform}-${sharpArch}`);
+  console.log(`    Sharp version: ${sharpVersion}`);
+  console.log(`    Required packages: ${requiredSharpPackages.map(p => p.name).join(', ')}`);
+
+  // Remove any existing @img platform packages from staging (may be for wrong platform)
+  const stagingImgDir = join(STAGING_DIR, 'node_modules', '@img');
+  if (existsSync(stagingImgDir)) {
+    for (const entry of readdirSync(stagingImgDir)) {
+      // Remove platform-specific packages (sharp-linux-x64, sharp-libvips-linux-x64, etc.)
+      // Keep non-platform packages like @img/colour
+      if (entry.startsWith('sharp-') && !entry.includes(`${sharpPlatform}-${sharpArch}`)) {
+        const fullPath = join(stagingImgDir, entry);
+        console.log(`    Removing wrong-platform package: @img/${entry}`);
+        rmSync(fullPath, { recursive: true, force: true });
+      }
+    }
+  }
+
+  // Install the correct platform packages into staging node_modules
+  const installSpecs = requiredSharpPackages.map(p => `${p.name}@${p.version}`).join(' ');
+  run(
+    `npm install --no-save --no-package-lock --prefix "${STAGING_DIR}" ${installSpecs}`,
+    `Installing sharp platform binaries for ${sharpPlatform}-${sharpArch}`,
+  );
+
+  // Verify installation
+  let allFound = true;
+  for (const pkg of requiredSharpPackages) {
+    const pkgDir = join(STAGING_DIR, 'node_modules', ...pkg.name.split('/'));
+    if (!existsSync(pkgDir)) {
+      console.error(`    ERROR: ${pkg.name} not found after install`);
+      allFound = false;
+    }
+  }
+  if (allFound) {
+    console.log('    ✓ Sharp platform binaries installed successfully');
+  } else {
+    console.error('    ERROR: Some sharp platform packages failed to install');
+    process.exit(1);
+  }
+}
+
+// Ensure sharp core JS files are in staging (may be missing if CI built on different platform)
+const stagingSharpDir = join(STAGING_DIR, 'node_modules', 'sharp');
+if (!existsSync(stagingSharpDir)) {
+  console.log('    sharp core not in staging, copying from project node_modules');
+  const srcSharpDir = join(PROJECT_ROOT, 'node_modules', 'sharp');
+  cpSync(srcSharpDir, stagingSharpDir, { recursive: true, dereference: true });
+}
+
+// Step 8/9: Resolve any remaining symlinks (electron-rebuild or npm may create them)
+console.log('==> Step 8/9: Resolving symlinks in staging directory');
 let symlinkCount = 0;
 function resolveSymlinks(dir: string): void {
   if (!existsSync(dir)) return;
@@ -258,7 +333,7 @@ console.log(`    Resolved ${symlinkCount} symlink(s)`);
 // electron-builder has a hardcoded exclusion for "node_modules" in extraResources.
 // Renaming to "_modules" bypasses this filter. The embedded server sets NODE_PATH
 // to point to this directory so require() still resolves modules correctly.
-console.log('==> Step 8/8: Renaming node_modules to _modules (electron-builder workaround)');
+console.log('==> Step 9/9: Renaming node_modules to _modules (electron-builder workaround)');
 const stagingNodeModules = join(STAGING_DIR, 'node_modules');
 const stagingModules = join(STAGING_DIR, '_modules');
 if (existsSync(stagingNodeModules)) {

@@ -16,6 +16,7 @@ const nextConfig = {
     '@openrouter/sdk',  // Used by lib/llm/pricing-fetcher.ts (dynamically imported, optional)
     'zod',              // Used throughout the app
     'better-sqlite3',   // Native module for SQLite database
+    'sharp',            // Native image processing (platform-specific binaries)
   ],
 
   // Include dependencies in standalone output for Docker deployments
@@ -26,6 +27,8 @@ const nextConfig = {
       './node_modules/@openrouter/**/*',
       './node_modules/zod/**/*',
       './node_modules/better-sqlite3/**/*',
+      './node_modules/sharp/**/*',
+      './node_modules/@img/**/*',
       './first-startup/**/*',
       './themes/bundled/**/*',
     ],
