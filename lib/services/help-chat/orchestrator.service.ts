@@ -288,7 +288,7 @@ async function processHelpResponse(
   }
 
   // Build agent mode instructions (always enabled for help chats)
-  const maxAgentTurns = 10
+  const maxAgentTurns = 20
   const agentInstructions = buildAgentModeInstructions(maxAgentTurns)
   toolInstructions = toolInstructions
     ? `${toolInstructions}\n\n${agentInstructions}`
