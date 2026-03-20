@@ -7,17 +7,19 @@
  * No formatting toolbar, no tool palette.
  */
 
-import { useState, useCallback, useRef, type KeyboardEvent } from 'react'
+import { useState, useCallback, useRef, type KeyboardEvent, type RefObject } from 'react'
 
 interface HelpChatComposerProps {
   onSend: (content: string) => void
   disabled?: boolean
   placeholder?: string
+  inputRef?: RefObject<HTMLTextAreaElement | null>
 }
 
-export function HelpChatComposer({ onSend, disabled, placeholder = 'Ask a question...' }: HelpChatComposerProps) {
+export function HelpChatComposer({ onSend, disabled, placeholder = 'Ask a question...', inputRef }: HelpChatComposerProps) {
   const [content, setContent] = useState('')
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const internalRef = useRef<HTMLTextAreaElement>(null)
+  const textareaRef = inputRef || internalRef
 
   const handleSend = useCallback(() => {
     const trimmed = content.trim()
@@ -28,7 +30,7 @@ export function HelpChatComposer({ onSend, disabled, placeholder = 'Ask a questi
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
     }
-  }, [content, disabled, onSend])
+  }, [content, disabled, onSend, textareaRef])
 
   const handleKeyDown = useCallback((e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -42,7 +44,7 @@ export function HelpChatComposer({ onSend, disabled, placeholder = 'Ask a questi
     if (!el) return
     el.style.height = 'auto'
     el.style.height = Math.min(el.scrollHeight, 120) + 'px'
-  }, [])
+  }, [textareaRef])
 
   return (
     <div className="qt-help-composer">

@@ -7,7 +7,7 @@
  * Two states: launcher (character selection + past chats) and active chat.
  */
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { FloatingDialog } from '@/components/ui/FloatingDialog'
 import { useHelpChat } from '@/components/providers/help-chat-provider'
@@ -53,6 +53,7 @@ export function HelpChatDialog() {
   } = useHelpChat()
 
   const router = useRouter()
+  const composerInputRef = useRef<HTMLTextAreaElement>(null)
   const [pastChats, setPastChats] = useState<PastChat[]>([])
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [characterMap, setCharacterMap] = useState<Map<string, CharacterInfo>>(new Map())
@@ -163,6 +164,17 @@ export function HelpChatDialog() {
       setMessages([])
     }
   }, [currentChatId, loadMessages])
+
+  // Auto-focus the composer when streaming completes
+  const wasStreamingRef = useRef(false)
+  useEffect(() => {
+    if (wasStreamingRef.current && !isStreaming) {
+      setTimeout(() => {
+        composerInputRef.current?.focus({ preventScroll: true })
+      }, 100)
+    }
+    wasStreamingRef.current = isStreaming
+  }, [isStreaming])
 
   const handleCreateChat = useCallback(async (question: string) => {
     const eligible = eligibleCharacters.filter(c => c.hasToolCapableProfile)
@@ -388,6 +400,7 @@ export function HelpChatDialog() {
           <HelpChatComposer
             onSend={handleSend}
             disabled={isStreaming || loadingMessages}
+            inputRef={composerInputRef}
           />
         </div>
       )}
