@@ -288,7 +288,7 @@ async function processHelpResponse(
   }
 
   // Build agent mode instructions (always enabled for help chats)
-  const maxAgentTurns = 20
+  const maxAgentTurns = 10
   const agentInstructions = buildAgentModeInstructions(maxAgentTurns)
   toolInstructions = toolInstructions
     ? `${toolInstructions}\n\n${agentInstructions}`
@@ -348,6 +348,8 @@ async function processHelpResponse(
   let fullResponse = ''
   let finalMessageId: string | null = null
   const totalUsage = { promptTokens: 0, completionTokens: 0 }
+  const toolCallHistory: string[] = [] // Track tool call signatures for loop detection
+  const MAX_DUPLICATE_TOOL_CALLS = 2 // Force response after this many identical calls
 
   while (agentTurnCount <= maxAgentTurns) {
     agentTurnCount++
@@ -458,6 +460,35 @@ async function processHelpResponse(
     }
 
     if (hasToolCalls && !isSubmitFinal && toolCallsToProcess && agentTurnCount < maxAgentTurns) {
+      // Detect repeated identical tool calls (stuck agent loop)
+      const callSignature = JSON.stringify(toolCallsToProcess.map(tc => ({ name: tc.name, arguments: tc.arguments })))
+      const duplicateCount = toolCallHistory.filter(sig => sig === callSignature).length
+      toolCallHistory.push(callSignature)
+
+      if (duplicateCount >= MAX_DUPLICATE_TOOL_CALLS) {
+        logger.warn('Agent stuck in tool call loop, forcing final response', {
+          chatId,
+          characterName: character.name,
+          turn: agentTurnCount,
+          duplicateCount: duplicateCount + 1,
+          toolNames: toolCallsToProcess.map(tc => tc.name),
+        })
+
+        // Find the most recent tool result in conversation to echo back to the model
+        const lastToolResult = [...conversationMessages].reverse().find(m => m.role === 'tool')
+        const toolDataReminder = lastToolResult
+          ? `\n\nHere is the data you already received from your previous tool call:\n${lastToolResult.content}`
+          : ''
+
+        // Nudge the model: inject a message telling it to use the data it already has
+        conversationMessages.push({ role: 'assistant', content: currentResponse })
+        conversationMessages.push({
+          role: 'user',
+          content: `You have already called the same tool with the same arguments ${duplicateCount + 1} times and received the same result each time. You already have all the data you need — do NOT call any more tools. Please call the submit_final_response tool NOW with your answer based on the data you already received. Read the tool results carefully and include the actual data in your response.${toolDataReminder}`,
+        })
+        continue
+      }
+
       // Save assistant message with tool calls
       const assistantMessage: MessageEvent = {
         type: 'message',
