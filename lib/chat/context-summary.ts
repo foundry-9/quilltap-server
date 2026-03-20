@@ -537,15 +537,17 @@ async function considerTitleUpdateAsync(
         })
         logger.info(`[Title Update] Updated title for chat ${chatId} to: "${suggestedTitle}"`)
 
-        // Queue story background generation if enabled
-        const chatSettings = await repos.chatSettings.findByUserId(userId)
-        if (chatSettings) {
-          // Re-fetch chat to get updated title
-          const updatedChat = await repos.chats.findById(chatId)
-          if (updatedChat) {
-            queueStoryBackgroundIfEnabled(userId, updatedChat, chatSettings, suggestedTitle).catch(error => {
-              logger.error(`[Title Update] Failed to queue story background for chat ${chatId}:`, {}, error instanceof Error ? error : new Error(String(error)))
-            })
+        // Queue story background generation if enabled (skip for help chats — no Lantern support)
+        if (!isHelpChat) {
+          const chatSettings = await repos.chatSettings.findByUserId(userId)
+          if (chatSettings) {
+            // Re-fetch chat to get updated title
+            const updatedChat = await repos.chats.findById(chatId)
+            if (updatedChat) {
+              queueStoryBackgroundIfEnabled(userId, updatedChat, chatSettings, suggestedTitle).catch(error => {
+                logger.error(`[Title Update] Failed to queue story background for chat ${chatId}:`, {}, error instanceof Error ? error : new Error(String(error)))
+              })
+            }
           }
         }
       } else {
