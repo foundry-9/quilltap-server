@@ -436,6 +436,18 @@
     border-bottom: 1px solid color-mix(in srgb, hsl(var(--destructive)) 20%, transparent);
   }
 
+  .qt-help-nav-button {
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer;
+    background: var(--qt-help-nav-bg, hsl(var(--primary) / 0.1));
+    color: var(--qt-help-nav-fg, hsl(var(--primary)));
+    border: 1px solid var(--qt-help-nav-border, hsl(var(--primary) / 0.2));
+  }
+
+  .qt-help-nav-button:hover {
+    background: var(--qt-help-nav-hover-bg, hsl(var(--primary) / 0.2));
+    border-color: var(--qt-help-nav-hover-border, hsl(var(--primary) / 0.4));
+  }
+
   /* ==========================================================================
      POPOVERS - Shared base styles
      ========================================================================== */

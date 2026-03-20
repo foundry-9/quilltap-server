@@ -7,29 +7,75 @@
  * Simplified from the Salon streaming hooks.
  */
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
+
+export interface NavigationLink {
+  url: string
+  label: string
+}
 
 interface StreamingState {
   isStreaming: boolean
   streamingContent: string
   streamingParticipantId: string | null
+  streamingNavigationLinks: NavigationLink[]
   error: string | null
 }
 
 interface UseHelpChatStreamingOptions {
   chatId: string | null
   onMessageComplete?: (messageId: string) => void
-  onNavigate?: (url: string) => void
 }
 
-export function useHelpChatStreaming({ chatId, onMessageComplete, onNavigate }: UseHelpChatStreamingOptions) {
+/**
+ * Generate a human-readable label from a Quilltap internal URL.
+ * e.g., "/settings?tab=chat&section=dangerous-content" → "Settings → Chat → Dangerous Content"
+ */
+function labelFromUrl(url: string): string {
+  const [path, query] = url.split('?')
+
+  const pathNames: Record<string, string> = {
+    '/settings': 'Settings',
+    '/aurora': 'Characters',
+    '/salon': 'Chats',
+    '/prospero': 'Projects',
+    '/profile': 'Profile',
+    '/files': 'Files',
+    '/setup': 'Setup',
+  }
+
+  const basePath = Object.keys(pathNames).find(p => path.startsWith(p))
+  let label = basePath ? pathNames[basePath] : path
+
+  if (query) {
+    const params = new URLSearchParams(query)
+    const tab = params.get('tab')
+    const section = params.get('section')
+    if (tab) {
+      label += ` → ${tab.charAt(0).toUpperCase() + tab.slice(1).replace(/-/g, ' ')}`
+    }
+    if (section) {
+      label += ` → ${section.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}`
+    }
+  }
+
+  return label
+}
+
+export function useHelpChatStreaming({ chatId, onMessageComplete }: UseHelpChatStreamingOptions) {
   const [state, setState] = useState<StreamingState>({
     isStreaming: false,
     streamingContent: '',
     streamingParticipantId: null,
+    streamingNavigationLinks: [],
     error: null,
   })
   const abortRef = useRef<AbortController | null>(null)
+
+  // Use refs for callbacks so the streaming loop always calls the latest version,
+  // even if the component re-renders with new closures during streaming
+  const onMessageCompleteRef = useRef(onMessageComplete)
+  useEffect(() => { onMessageCompleteRef.current = onMessageComplete }, [onMessageComplete])
 
   const sendMessage = useCallback(async (content: string, fileIds?: string[], overrideChatId?: string) => {
     const effectiveChatId = overrideChatId || chatId
@@ -44,6 +90,7 @@ export function useHelpChatStreaming({ chatId, onMessageComplete, onNavigate }: 
       isStreaming: true,
       streamingContent: '',
       streamingParticipantId: null,
+      streamingNavigationLinks: [],
       error: null,
     })
 
@@ -66,6 +113,7 @@ export function useHelpChatStreaming({ chatId, onMessageComplete, onNavigate }: 
       const decoder = new TextDecoder()
       let buffer = ''
       let currentContent = ''
+      const collectedLinks: NavigationLink[] = []
 
       while (true) {
         const { done, value } = await reader.read()
@@ -111,18 +159,30 @@ export function useHelpChatStreaming({ chatId, onMessageComplete, onNavigate }: 
                 streamingContent: '',
               }))
               if (messageId) {
-                onMessageComplete?.(messageId)
+                onMessageCompleteRef.current?.(messageId)
               }
             }
 
-            // Navigate event (from help_navigate tool)
+            // Navigate event (from help_navigate tool) — collect as a link
             if (event.toolResult && event.toolResult.name === 'help_navigate' && event.toolResult.success) {
               try {
                 const result = typeof event.toolResult.result === 'string'
                   ? JSON.parse(event.toolResult.result)
                   : event.toolResult.result
-                if (result?.url) {
-                  onNavigate?.(result.url)
+                const navUrl = result?.url || result?.navigationUrl
+                if (navUrl) {
+                  const link: NavigationLink = {
+                    url: navUrl,
+                    label: labelFromUrl(navUrl),
+                  }
+                  // Avoid duplicates
+                  if (!collectedLinks.some(l => l.url === link.url)) {
+                    collectedLinks.push(link)
+                    setState(prev => ({
+                      ...prev,
+                      streamingNavigationLinks: [...collectedLinks],
+                    }))
+                  }
                 }
               } catch { /* ignore */ }
             }
@@ -174,7 +234,7 @@ export function useHelpChatStreaming({ chatId, onMessageComplete, onNavigate }: 
         error: error instanceof Error ? error.message : 'Failed to send message',
       }))
     }
-  }, [chatId, onMessageComplete, onNavigate])
+  }, [chatId])
 
   const stopStreaming = useCallback(() => {
     abortRef.current?.abort()

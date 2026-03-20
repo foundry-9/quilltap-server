@@ -9,6 +9,7 @@
 
 import { useEffect, useRef } from 'react'
 import MessageContent from '@/components/chat/MessageContent'
+import type { NavigationLink } from './hooks/useHelpChatStreaming'
 
 interface HelpMessage {
   id: string
@@ -33,6 +34,8 @@ interface HelpChatMessageListProps {
   streamingContent?: string
   streamingParticipantId?: string | null
   isStreaming?: boolean
+  navigationLinks?: NavigationLink[]
+  onNavigate?: (url: string) => void
 }
 
 export function HelpChatMessageList({
@@ -42,13 +45,15 @@ export function HelpChatMessageList({
   streamingContent,
   streamingParticipantId,
   isStreaming,
+  navigationLinks,
+  onNavigate,
 }: HelpChatMessageListProps) {
   const endRef = useRef<HTMLDivElement>(null)
 
   // Auto-scroll to bottom on new messages or streaming
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages.length, streamingContent])
+  }, [messages.length, streamingContent, navigationLinks?.length])
 
   const getCharacterForParticipant = (participantId: string | null | undefined): CharacterInfo | null => {
     if (!participantId) return null
@@ -57,10 +62,19 @@ export function HelpChatMessageList({
     return characterMap.get(charId) || null
   }
 
-  // Filter to visible messages (user + assistant only)
-  const visibleMessages = messages.filter(m =>
-    m.role === 'USER' || m.role === 'ASSISTANT' || m.role === 'user' || m.role === 'assistant'
-  )
+  // Filter to visible messages: user + assistant, excluding intermediate
+  // tool-using turns (empty content from agent mode iterations)
+  const visibleMessages = messages.filter(m => {
+    if (m.role === 'USER' || m.role === 'user') return true
+    if (m.role === 'ASSISTANT' || m.role === 'assistant') {
+      // Hide intermediate agent mode messages with no user-visible content
+      return m.content && m.content.trim().length > 0
+    }
+    return false
+  })
+
+  // Check if navigation links should be shown after the last assistant message
+  const showNavLinks = navigationLinks && navigationLinks.length > 0 && !isStreaming
 
   return (
     <div className="flex flex-col gap-3 p-4 overflow-y-auto flex-1">
@@ -136,6 +150,25 @@ export function HelpChatMessageList({
           <div className="qt-help-msg-assistant italic">
             Thinking...
           </div>
+        </div>
+      )}
+
+      {/* Navigation links from help_navigate tool calls */}
+      {showNavLinks && (
+        <div className="flex flex-wrap gap-2 pl-10">
+          {navigationLinks.map(link => (
+            <button
+              key={link.url}
+              type="button"
+              onClick={() => onNavigate?.(link.url)}
+              className="qt-help-nav-button"
+            >
+              <svg className="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+              </svg>
+              {link.label}
+            </button>
+          ))}
         </div>
       )}
 

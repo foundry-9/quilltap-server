@@ -412,9 +412,9 @@ async function processHelpResponse(
     }
 
     // Check for submit_final_response (agent mode completion)
-    const isSubmitFinal = toolCallsToProcess?.some((tc) =>
+    let isSubmitFinal = toolCallsToProcess?.some((tc) =>
       tc.name === 'submit_final_response'
-    )
+    ) ?? false
 
     if (isSubmitFinal && toolCallsToProcess) {
       // Extract the final response content from the tool call
@@ -430,12 +430,31 @@ async function processHelpResponse(
       fullResponse = currentResponse
       hasToolCalls = false // Don't process submit_final_response as a tool
 
-      logger.debug('Agent submitted final response', {
+      logger.debug('Agent submitted final response via tool call', {
         chatId,
         characterName: character.name,
         turn: agentTurnCount,
         responseLength: fullResponse.length,
       })
+    }
+
+    // Fallback: some models output submit_final_response as JSON text instead
+    // of a proper tool call (e.g., {"response":"actual content here"})
+    if (!isSubmitFinal && !hasToolCalls) {
+      const extracted = extractSubmitFinalResponseFromText(currentResponse)
+      if (extracted !== currentResponse) {
+        isSubmitFinal = true
+        currentResponse = extracted
+        fullResponse = extracted
+        hasToolCalls = false
+
+        logger.debug('Agent submitted final response as JSON text (fallback extraction)', {
+          chatId,
+          characterName: character.name,
+          turn: agentTurnCount,
+          responseLength: fullResponse.length,
+        })
+      }
     }
 
     if (hasToolCalls && !isSubmitFinal && toolCallsToProcess && agentTurnCount < maxAgentTurns) {
@@ -522,6 +541,10 @@ async function processHelpResponse(
   // Clean up response — strip character name prefix if present
   fullResponse = stripCharacterNamePrefix(fullResponse, character.name)
 
+  // Handle models that output submit_final_response as JSON text instead of
+  // a proper tool call (e.g., {"response":"actual content here"})
+  fullResponse = extractSubmitFinalResponseFromText(fullResponse)
+
   // Save final assistant message
   if (fullResponse) {
     const assistantMessage: MessageEvent = {
@@ -580,6 +603,31 @@ async function processHelpResponse(
   }
 
   return finalMessageId
+}
+
+/**
+ * Extract the response text from a submit_final_response JSON that was
+ * output as plain text instead of a proper tool call.
+ * Some models (e.g., ChatGPT-5) sometimes output the tool call arguments
+ * as raw JSON text: {"response":"actual content here"}
+ */
+function extractSubmitFinalResponseFromText(text: string): string {
+  const trimmed = text.trim()
+  if (!trimmed.startsWith('{"response"')) return text
+
+  try {
+    const parsed = JSON.parse(trimmed)
+    if (typeof parsed?.response === 'string' && parsed.response.length > 0) {
+      logger.debug('Extracted submit_final_response from JSON text output', {
+        originalLength: text.length,
+        extractedLength: parsed.response.length,
+      })
+      return parsed.response
+    }
+  } catch {
+    // Not valid JSON, return as-is
+  }
+  return text
 }
 
 /**

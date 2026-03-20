@@ -62,6 +62,26 @@ export function HelpChatDialog() {
     router.push(url)
   }, [router])
 
+  // Build character and participant maps from enriched participant data.
+  // The API returns enriched participants with character info nested under `p.character`,
+  // not directly on the participant object.
+  const buildParticipantMaps = useCallback((participants: any[]) => {
+    const newCharMap = new Map<string, CharacterInfo>()
+    const newPtcMap = new Map<string, string>()
+    for (const p of participants) {
+      // Enriched format: character info is nested under p.character
+      const charId = p.character?.id || p.characterId
+      const charName = p.character?.name || p.name
+      const charAvatar = p.character?.avatarUrl ?? p.avatarUrl ?? null
+      if (charId && charName) {
+        newCharMap.set(charId, { id: charId, name: charName, avatarUrl: charAvatar })
+        newPtcMap.set(p.id, charId)
+      }
+    }
+    setCharacterMap(newCharMap)
+    setParticipantToCharacter(newPtcMap)
+  }, [])
+
   const loadMessages = useCallback(async (chatId: string) => {
     setLoadingMessages(true)
     try {
@@ -76,20 +96,7 @@ export function HelpChatDialog() {
           const chatData = await chatRes.json()
           const chat = chatData.chat
           if (chat?.participants) {
-            const newCharMap = new Map<string, CharacterInfo>()
-            const newPtcMap = new Map<string, string>()
-            for (const p of chat.participants) {
-              if (p.characterId && p.name) {
-                newCharMap.set(p.characterId, {
-                  id: p.characterId,
-                  name: p.name,
-                  avatarUrl: p.avatarUrl || null,
-                })
-                newPtcMap.set(p.id, p.characterId)
-              }
-            }
-            setCharacterMap(newCharMap)
-            setParticipantToCharacter(newPtcMap)
+            buildParticipantMaps(chat.participants)
           }
         }
       }
@@ -98,7 +105,7 @@ export function HelpChatDialog() {
     } finally {
       setLoadingMessages(false)
     }
-  }, [])
+  }, [buildParticipantMaps])
 
   const handleMessageComplete = useCallback(() => {
     // Reload messages to get the saved version
@@ -111,12 +118,12 @@ export function HelpChatDialog() {
     isStreaming,
     streamingContent,
     streamingParticipantId,
+    streamingNavigationLinks,
     error: streamError,
     sendMessage,
   } = useHelpChatStreaming({
     chatId: currentChatId,
     onMessageComplete: handleMessageComplete,
-    onNavigate: handleNavigate,
   })
 
   const fetchPastChats = useCallback(async () => {
@@ -173,16 +180,7 @@ export function HelpChatDialog() {
 
           // Build maps from the newly created chat
           if (data.chat?.participants) {
-            const newCharMap = new Map<string, CharacterInfo>()
-            const newPtcMap = new Map<string, string>()
-            for (const p of data.chat.participants) {
-              if (p.characterId && p.name) {
-                newCharMap.set(p.characterId, { id: p.characterId, name: p.name, avatarUrl: p.avatarUrl || null })
-                newPtcMap.set(p.id, p.characterId)
-              }
-            }
-            setCharacterMap(newCharMap)
-            setParticipantToCharacter(newPtcMap)
+            buildParticipantMaps(data.chat.participants)
           }
 
           // Send the question — pass chatId directly to avoid stale closure
@@ -192,9 +190,18 @@ export function HelpChatDialog() {
     } catch (error) {
       console.error('Failed to create help chat:', error)
     }
-  }, [eligibleCharacters, selectedCharacterIds, currentPageUrl, setCurrentChatId, sendMessage])
+  }, [eligibleCharacters, selectedCharacterIds, currentPageUrl, setCurrentChatId, sendMessage, buildParticipantMaps])
 
   const handleSend = useCallback((content: string) => {
+    // Optimistically add user message to local state so it appears immediately
+    const optimisticMessage: ChatMessage = {
+      id: `optimistic-${Date.now()}`,
+      role: 'USER',
+      content,
+      createdAt: new Date().toISOString(),
+    }
+    setMessages(prev => [...prev, optimisticMessage])
+
     if (!currentChatId) {
       // Create new chat with this question
       handleCreateChat(content)
@@ -350,6 +357,8 @@ export function HelpChatDialog() {
             streamingContent={streamingContent}
             streamingParticipantId={streamingParticipantId}
             isStreaming={isStreaming}
+            navigationLinks={streamingNavigationLinks}
+            onNavigate={handleNavigate}
           />
 
           <HelpChatComposer

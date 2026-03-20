@@ -96,7 +96,13 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false)
   const [currentChatId, setCurrentChatId] = useState<string | null>(() => {
     try {
-      return localStorage.getItem(STORAGE_KEY_LAST_CHAT) || null
+      let val = localStorage.getItem(STORAGE_KEY_LAST_CHAT) || null
+      // Clean up legacy double-quoted values from prior JSON.stringify bug
+      if (val && val.startsWith('"') && val.endsWith('"')) {
+        val = val.slice(1, -1)
+        localStorage.setItem(STORAGE_KEY_LAST_CHAT, val)
+      }
+      return val
     } catch { return null }
   })
   const [eligibleCharacters, setEligibleCharacters] = useState<HelpChatEligibleCharacter[]>([])
@@ -167,7 +173,8 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
   const handleSetCurrentChatId = useCallback((id: string | null) => {
     setCurrentChatId(id)
     if (id) {
-      saveStorageValue(STORAGE_KEY_LAST_CHAT, id)
+      // Store as plain string — not JSON-stringified — since getItem reads it back directly
+      try { localStorage.setItem(STORAGE_KEY_LAST_CHAT, id) } catch { /* ignore */ }
     } else {
       try { localStorage.removeItem(STORAGE_KEY_LAST_CHAT) } catch { /* ignore */ }
     }
