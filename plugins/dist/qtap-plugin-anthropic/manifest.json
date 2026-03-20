@@ -1,9 +1,9 @@
 {
-  "$schema": "../qtap-plugin-template/schemas/plugin-manifest.schema.json",
+  "$schema": "../../../public/schemas/plugin-manifest.schema.json",
   "name": "qtap-plugin-anthropic",
   "title": "Anthropic Provider",
   "description": "Provides Anthropic Claude models for Quilltap",
-  "version": "1.0.17",
+  "version": "1.0.18",
   "author": {
     "name": "Foundry-9 LLC",
     "email": "charles.sebold@foundry-9.com",
@@ -14,7 +14,9 @@
     "quilltapVersion": ">=1.7.0",
     "nodeVersion": ">=18.0.0"
   },
-  "capabilities": ["LLM_PROVIDER"],
+  "capabilities": [
+    "LLM_PROVIDER"
+  ],
   "category": "PROVIDER",
   "main": "index.js",
   "typescript": true,
@@ -22,7 +24,13 @@
   "styling": "TAILWIND",
   "enabledByDefault": true,
   "status": "STABLE",
-  "keywords": ["anthropic", "claude", "llm", "ai", "chat"],
+  "keywords": [
+    "anthropic",
+    "claude",
+    "llm",
+    "ai",
+    "chat"
+  ],
   "providerConfig": {
     "providerName": "ANTHROPIC",
     "displayName": "Anthropic",
@@ -44,12 +52,21 @@
     },
     "attachmentSupport": {
       "supported": true,
-      "mimeTypes": ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf", "text/plain"],
+      "mimeTypes": [
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "application/pdf",
+        "text/plain"
+      ],
       "description": "Images (JPEG, PNG, GIF, WebP), PDFs, and text files"
     }
   },
   "permissions": {
-    "network": ["api.anthropic.com"],
+    "network": [
+      "api.anthropic.com"
+    ],
     "userData": false,
     "database": false
   }

@@ -1,9 +1,9 @@
 {
-  "$schema": "../qtap-plugin-template/schemas/plugin-manifest.schema.json",
+  "$schema": "../../../public/schemas/plugin-manifest.schema.json",
   "name": "qtap-plugin-template-quilltap-rp",
   "title": "Quilltap RP",
   "description": "Custom roleplay formatting with bare dialogue, [actions], {thoughts}, and // OOC",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "author": {
     "name": "Foundry-9 LLC",
     "email": "charles.sebold@foundry-9.com",
@@ -15,28 +15,66 @@
     "quilltapVersion": ">=2.5.0",
     "nodeVersion": ">=18.0.0"
   },
-  "capabilities": ["ROLEPLAY_TEMPLATE"],
+  "capabilities": [
+    "ROLEPLAY_TEMPLATE"
+  ],
   "category": "TEMPLATE",
   "typescript": true,
   "frontend": "NONE",
   "styling": "NONE",
   "enabledByDefault": true,
   "status": "STABLE",
-  "keywords": ["roleplay", "template", "quilltap", "formatting", "rp"],
+  "keywords": [
+    "roleplay",
+    "template",
+    "quilltap",
+    "formatting",
+    "rp"
+  ],
   "roleplayTemplateConfig": {
     "name": "Quilltap RP",
     "description": "Custom formatting protocol with dialogue as bare text, actions in [brackets], thoughts in {braces}, and OOC with // prefix.",
     "systemPrompt": "[SYSTEM INSTRUCTION: INTERACTION FORMATTING PROTOCOL]\nYou must adhere to the following custom syntax for all outputs. Do NOT use standard roleplay formatting.\n\n1. SPOKEN DIALOGUE: Write as bare text. Do NOT use quotation marks.\n   - Example: Put the gun down, John.\n   - Markdown Italics (*text*) denote VOCAL EMPHASIS only, never action.\n\n2. ACTION & NARRATION: Enclose all physical movements, facial expressions, and environmental descriptions in SQUARE BRACKETS [ ].\n   - Example: [I lean back in the chair, crossing my arms.]\n\n3. INTERNAL MONOLOGUE: Enclose private thoughts and feelings in CURLY BRACES { }.\n   - Example: {He's lying to me. I can feel it.}\n\n4. META/OOC: Any Out-of-Character comments or instructions must start with \"// \".\n   - Example: // The user is simulating a high-gravity environment now.\n\n5. STRICT COMPLIANCE: You must mirror this formatting in your responses. Never use asterisks for actions.",
-    "tags": ["quilltap", "custom", "brackets", "braces"],
+    "tags": [
+      "quilltap",
+      "custom",
+      "brackets",
+      "braces"
+    ],
     "annotationButtons": [
-      { "label": "Narration", "abbrev": "Nar", "prefix": "[", "suffix": "]" },
-      { "label": "Internal Monologue", "abbrev": "Int", "prefix": "{", "suffix": "}" },
-      { "label": "Out of Character", "abbrev": "OOC", "prefix": "// ", "suffix": "" }
+      {
+        "label": "Narration",
+        "abbrev": "Nar",
+        "prefix": "[",
+        "suffix": "]"
+      },
+      {
+        "label": "Internal Monologue",
+        "abbrev": "Int",
+        "prefix": "{",
+        "suffix": "}"
+      },
+      {
+        "label": "Out of Character",
+        "abbrev": "OOC",
+        "prefix": "// ",
+        "suffix": ""
+      }
     ],
     "renderingPatterns": [
-      { "pattern": "^// .+$", "className": "qt-chat-ooc", "flags": "m" },
-      { "pattern": "\\[[^\\]]+\\](?!\\()", "className": "qt-chat-narration" },
-      { "pattern": "\\{[^}]+\\}", "className": "qt-chat-inner-monologue" }
+      {
+        "pattern": "^// .+$",
+        "className": "qt-chat-ooc",
+        "flags": "m"
+      },
+      {
+        "pattern": "\\[[^\\]]+\\](?!\\()",
+        "className": "qt-chat-narration"
+      },
+      {
+        "pattern": "\\{[^}]+\\}",
+        "className": "qt-chat-inner-monologue"
+      }
     ]
   },
   "permissions": {

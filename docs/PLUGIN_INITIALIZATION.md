@@ -518,4 +518,4 @@ The initialization system enforces security through:
 - [Plugin Manifest Schema](./PLUGIN_MANIFEST.md)
 - [Plugin Developer Guide](../plugins/README.md)
 - [LLM Provider Guide](../plugins/LLM-PROVIDER-GUIDE.md)
-- [Creating Plugins](../plugins/dist/qtap-plugin-template/)
+- [Plugin Manifest Schema](../public/schemas/plugin-manifest.schema.json)

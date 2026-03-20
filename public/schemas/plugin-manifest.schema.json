@@ -54,9 +54,11 @@
       ]
     },
     "license": {
+      "default": "MIT",
       "type": "string"
     },
     "main": {
+      "default": "index.js",
       "type": "string"
     },
     "homepage": {
@@ -78,6 +80,9 @@
             "url": {
               "type": "string",
               "format": "uri"
+            },
+            "directory": {
+              "type": "string"
             }
           },
           "required": [
@@ -154,6 +159,7 @@
       }
     },
     "capabilities": {
+      "default": [],
       "type": "array",
       "items": {
         "type": "string",
@@ -175,10 +181,11 @@
           "EMBEDDING_PROVIDER",
           "THEME",
           "DATABASE_BACKEND",
-          "FILE_BACKEND",
           "UPGRADE_MIGRATION",
           "ROLEPLAY_TEMPLATE",
-          "TOOL_PROVIDER"
+          "TOOL_PROVIDER",
+          "SEARCH_PROVIDER",
+          "MODERATION_PROVIDER"
         ]
       }
     },
@@ -186,45 +193,58 @@
       "type": "object",
       "properties": {
         "providesChatCommands": {
+          "default": false,
           "type": "boolean"
         },
         "providesMessageProcessors": {
+          "default": false,
           "type": "boolean"
         },
         "providesUIComponents": {
+          "default": false,
           "type": "boolean"
         },
         "providesDataStorage": {
+          "default": false,
           "type": "boolean"
         },
         "providesAPIRoutes": {
+          "default": false,
           "type": "boolean"
         },
         "providesAuthenticationMethods": {
+          "default": false,
           "type": "boolean"
         },
         "providesWebhooks": {
+          "default": false,
           "type": "boolean"
         },
         "providesBackgroundTasks": {
+          "default": false,
           "type": "boolean"
         },
         "providesCustomModels": {
+          "default": false,
           "type": "boolean"
         },
         "providesFileHandlers": {
+          "default": false,
           "type": "boolean"
         },
         "providesNotifications": {
+          "default": false,
           "type": "boolean"
         },
         "providesBackendIntegrations": {
+          "default": false,
           "type": "boolean"
         }
       },
       "additionalProperties": false
     },
     "frontend": {
+      "default": "REACT",
       "type": "string",
       "enum": [
         "REACT",
@@ -235,6 +255,7 @@
       ]
     },
     "styling": {
+      "default": "TAILWIND",
       "type": "string",
       "enum": [
         "TAILWIND",
@@ -246,9 +267,11 @@
       ]
     },
     "typescript": {
+      "default": true,
       "type": "boolean"
     },
     "hooks": {
+      "default": [],
       "type": "array",
       "items": {
         "type": "object",
@@ -262,11 +285,13 @@
             "type": "string"
           },
           "priority": {
+            "default": 50,
             "type": "integer",
             "minimum": 0,
             "maximum": 100
           },
           "enabled": {
+            "default": true,
             "type": "boolean"
           }
         },
@@ -280,6 +305,7 @@
       }
     },
     "apiRoutes": {
+      "default": [],
       "type": "array",
       "items": {
         "type": "object",
@@ -306,6 +332,7 @@
             "type": "string"
           },
           "requiresAuth": {
+            "default": true,
             "type": "boolean"
           },
           "description": {
@@ -322,6 +349,7 @@
       }
     },
     "components": {
+      "default": [],
       "type": "array",
       "items": {
         "type": "object",
@@ -361,6 +389,7 @@
       }
     },
     "models": {
+      "default": [],
       "type": "array",
       "items": {
         "type": "object",
@@ -389,6 +418,7 @@
       }
     },
     "configSchema": {
+      "default": [],
       "type": "array",
       "items": {
         "type": "object",
@@ -417,6 +447,7 @@
           },
           "default": {},
           "required": {
+            "default": false,
             "type": "boolean"
           },
           "description": {
@@ -459,6 +490,7 @@
       }
     },
     "defaultConfig": {
+      "default": {},
       "type": "object",
       "propertyNames": {
         "type": "string"
@@ -512,9 +544,11 @@
           "additionalProperties": false
         },
         "requiresApiKey": {
+          "default": true,
           "type": "boolean"
         },
         "requiresBaseUrl": {
+          "default": false,
           "type": "boolean"
         },
         "apiKeyLabel": {
@@ -535,15 +569,19 @@
           "type": "object",
           "properties": {
             "chat": {
+              "default": true,
               "type": "boolean"
             },
             "imageGeneration": {
+              "default": false,
               "type": "boolean"
             },
             "embeddings": {
+              "default": false,
               "type": "boolean"
             },
             "webSearch": {
+              "default": false,
               "type": "boolean"
             }
           },
@@ -553,9 +591,11 @@
           "type": "object",
           "properties": {
             "supported": {
+              "default": false,
               "type": "boolean"
             },
             "mimeTypes": {
+              "default": [],
               "type": "array",
               "items": {
                 "type": "string"
@@ -629,6 +669,7 @@
       "type": "object",
       "properties": {
         "tokensPath": {
+          "default": "tokens.json",
           "description": "Path to theme tokens JSON file",
           "type": "string"
         },
@@ -637,6 +678,7 @@
           "type": "string"
         },
         "supportsDarkMode": {
+          "default": true,
           "description": "Whether theme provides dark mode colors",
           "type": "boolean"
         },
@@ -657,6 +699,7 @@
         },
         "tags": {
           "description": "Tags for theme discovery",
+          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -664,6 +707,7 @@
         },
         "fonts": {
           "description": "Custom fonts to load",
+          "default": [],
           "type": "array",
           "items": {
             "type": "object",
@@ -679,14 +723,17 @@
                 "description": "Font file path relative to plugin"
               },
               "weight": {
+                "default": "400",
                 "description": "Font weight",
                 "type": "string"
               },
               "style": {
+                "default": "normal",
                 "description": "Font style",
                 "type": "string"
               },
               "display": {
+                "default": "swap",
                 "type": "string",
                 "enum": [
                   "auto",
@@ -709,7 +756,37 @@
         },
         "useModule": {
           "description": "Use module-based self-contained loading",
+          "default": true,
           "type": "boolean"
+        },
+        "subsystems": {
+          "description": "Override Foundry subsystem names, descriptions, and images",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "thumbnail": {
+                "type": "string"
+              },
+              "backgroundImage": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
         }
       },
       "required": [
@@ -739,6 +816,7 @@
         },
         "tags": {
           "description": "Tags for categorization",
+          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -746,6 +824,7 @@
         },
         "annotationButtons": {
           "description": "Formatting toolbar buttons",
+          "default": [],
           "type": "array",
           "items": {
             "type": "object",
@@ -782,6 +861,7 @@
         },
         "renderingPatterns": {
           "description": "Message content rendering patterns",
+          "default": [],
           "type": "array",
           "items": {
             "type": "object",
@@ -876,10 +956,12 @@
           "description": "Description for LLM"
         },
         "requiresConfiguration": {
+          "default": false,
           "description": "Whether user must configure before use",
           "type": "boolean"
         },
         "enabledByDefault": {
+          "default": true,
           "description": "Whether tool is enabled by default",
           "type": "boolean"
         }
@@ -893,119 +975,193 @@
       ],
       "additionalProperties": false
     },
-    "fileBackendConfig": {
+    "searchProviderConfig": {
       "type": "object",
       "properties": {
-        "backendId": {
+        "providerName": {
           "type": "string",
-          "minLength": 1,
-          "maxLength": 50,
-          "description": "Backend identifier"
+          "pattern": "^[A-Z][A-Z0-9_]*$"
         },
         "displayName": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 100,
-          "description": "Display name for UI"
+          "maxLength": 100
         },
-        "configFields": {
-          "description": "Configuration fields",
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "name": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 50,
-                "description": "Field name"
-              },
-              "label": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 100,
-                "description": "Display label"
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "string",
-                  "secret",
-                  "boolean",
-                  "number"
-                ],
-                "description": "Field type"
-              },
-              "required": {
-                "description": "Whether field is required",
-                "type": "boolean"
-              },
-              "defaultValue": {
-                "description": "Default value",
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "boolean"
-                  },
-                  {
-                    "type": "number"
-                  }
-                ]
-              },
-              "description": {
-                "description": "Field description",
-                "type": "string",
-                "maxLength": 500
-              },
-              "placeholder": {
-                "description": "Placeholder text",
-                "type": "string",
-                "maxLength": 200
-              }
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "abbreviation": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 4,
+          "pattern": "^[A-Z0-9]+$"
+        },
+        "colors": {
+          "type": "object",
+          "properties": {
+            "bg": {
+              "type": "string",
+              "minLength": 1
             },
-            "required": [
-              "name",
-              "label",
-              "type"
-            ],
-            "additionalProperties": false
-          }
+            "text": {
+              "type": "string",
+              "minLength": 1
+            },
+            "icon": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "bg",
+            "text",
+            "icon"
+          ],
+          "additionalProperties": false
+        },
+        "requiresApiKey": {
+          "default": true,
+          "type": "boolean"
+        },
+        "apiKeyLabel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "requiresBaseUrl": {
+          "default": false,
+          "type": "boolean"
+        },
+        "baseUrlDefault": {
+          "type": "string",
+          "format": "uri"
         }
       },
       "required": [
-        "backendId",
+        "providerName",
         "displayName",
-        "configFields"
+        "description",
+        "abbreviation",
+        "colors",
+        "requiresApiKey",
+        "requiresBaseUrl"
+      ],
+      "additionalProperties": false
+    },
+    "moderationProviderConfig": {
+      "type": "object",
+      "properties": {
+        "providerName": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]*$"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "abbreviation": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 4,
+          "pattern": "^[A-Z0-9]+$"
+        },
+        "colors": {
+          "type": "object",
+          "properties": {
+            "bg": {
+              "type": "string",
+              "minLength": 1
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1
+            },
+            "icon": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "bg",
+            "text",
+            "icon"
+          ],
+          "additionalProperties": false
+        },
+        "requiresApiKey": {
+          "default": true,
+          "type": "boolean"
+        },
+        "apiKeyLabel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "requiresBaseUrl": {
+          "default": false,
+          "type": "boolean"
+        },
+        "baseUrlDefault": {
+          "type": "string",
+          "format": "uri"
+        }
+      },
+      "required": [
+        "providerName",
+        "displayName",
+        "description",
+        "abbreviation",
+        "colors",
+        "requiresApiKey",
+        "requiresBaseUrl"
       ],
       "additionalProperties": false
     },
     "permissions": {
+      "default": {
+        "fileSystem": [],
+        "network": [],
+        "environment": [],
+        "database": false,
+        "userData": false
+      },
       "type": "object",
       "properties": {
         "fileSystem": {
+          "default": [],
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "network": {
+          "default": [],
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "environment": {
+          "default": [],
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "database": {
+          "default": false,
           "type": "boolean"
         },
         "userData": {
+          "default": false,
           "type": "boolean"
         }
       },
@@ -1019,9 +1175,11 @@
       "additionalProperties": false
     },
     "sandboxed": {
+      "default": true,
       "type": "boolean"
     },
     "keywords": {
+      "default": [],
       "type": "array",
       "items": {
         "type": "string"
@@ -1031,12 +1189,14 @@
       "type": "string"
     },
     "screenshots": {
+      "default": [],
       "type": "array",
       "items": {
         "type": "string"
       }
     },
     "category": {
+      "default": "OTHER",
       "type": "string",
       "enum": [
         "PROVIDER",
@@ -1053,9 +1213,11 @@
       ]
     },
     "enabledByDefault": {
+      "default": false,
       "type": "boolean"
     },
     "status": {
+      "default": "STABLE",
       "type": "string",
       "enum": [
         "STABLE",

@@ -22640,6 +22640,11 @@ function videoFromVertex$1(fromObject) {
   }
   return toObject;
 }
+var Language;
+(function(Language2) {
+  Language2["LANGUAGE_UNSPECIFIED"] = "LANGUAGE_UNSPECIFIED";
+  Language2["PYTHON"] = "PYTHON";
+})(Language || (Language = {}));
 var Outcome;
 (function(Outcome2) {
   Outcome2["OUTCOME_UNSPECIFIED"] = "OUTCOME_UNSPECIFIED";
@@ -22647,11 +22652,6 @@ var Outcome;
   Outcome2["OUTCOME_FAILED"] = "OUTCOME_FAILED";
   Outcome2["OUTCOME_DEADLINE_EXCEEDED"] = "OUTCOME_DEADLINE_EXCEEDED";
 })(Outcome || (Outcome = {}));
-var Language;
-(function(Language2) {
-  Language2["LANGUAGE_UNSPECIFIED"] = "LANGUAGE_UNSPECIFIED";
-  Language2["PYTHON"] = "PYTHON";
-})(Language || (Language = {}));
 var FunctionResponseScheduling;
 (function(FunctionResponseScheduling2) {
   FunctionResponseScheduling2["SCHEDULING_UNSPECIFIED"] = "SCHEDULING_UNSPECIFIED";
@@ -22920,6 +22920,15 @@ var PartMediaResolutionLevel;
   PartMediaResolutionLevel2["MEDIA_RESOLUTION_HIGH"] = "MEDIA_RESOLUTION_HIGH";
   PartMediaResolutionLevel2["MEDIA_RESOLUTION_ULTRA_HIGH"] = "MEDIA_RESOLUTION_ULTRA_HIGH";
 })(PartMediaResolutionLevel || (PartMediaResolutionLevel = {}));
+var ToolType;
+(function(ToolType2) {
+  ToolType2["TOOL_TYPE_UNSPECIFIED"] = "TOOL_TYPE_UNSPECIFIED";
+  ToolType2["GOOGLE_SEARCH_WEB"] = "GOOGLE_SEARCH_WEB";
+  ToolType2["GOOGLE_SEARCH_IMAGE"] = "GOOGLE_SEARCH_IMAGE";
+  ToolType2["URL_CONTEXT"] = "URL_CONTEXT";
+  ToolType2["GOOGLE_MAPS"] = "GOOGLE_MAPS";
+  ToolType2["FILE_SEARCH"] = "FILE_SEARCH";
+})(ToolType || (ToolType = {}));
 var ResourceScope;
 (function(ResourceScope2) {
   ResourceScope2["COLLECTION"] = "COLLECTION";
@@ -25244,6 +25253,14 @@ function partToMldev$4(fromObject) {
   if (fromVideoMetadata != null) {
     setValueByPath(toObject, ["videoMetadata"], fromVideoMetadata);
   }
+  const fromToolCall = getValueByPath(fromObject, ["toolCall"]);
+  if (fromToolCall != null) {
+    setValueByPath(toObject, ["toolCall"], fromToolCall);
+  }
+  const fromToolResponse = getValueByPath(fromObject, ["toolResponse"]);
+  if (fromToolResponse != null) {
+    setValueByPath(toObject, ["toolResponse"], fromToolResponse);
+  }
   return toObject;
 }
 function safetySettingToMldev$1(fromObject) {
@@ -25274,6 +25291,10 @@ function toolConfigToMldev$2(fromObject) {
   ]);
   if (fromFunctionCallingConfig != null) {
     setValueByPath(toObject, ["functionCallingConfig"], functionCallingConfigToMldev$2(fromFunctionCallingConfig));
+  }
+  const fromIncludeServerSideToolInvocations = getValueByPath(fromObject, ["includeServerSideToolInvocations"]);
+  if (fromIncludeServerSideToolInvocations != null) {
+    setValueByPath(toObject, ["includeServerSideToolInvocations"], fromIncludeServerSideToolInvocations);
   }
   return toObject;
 }
@@ -25996,6 +26017,24 @@ function contentToMldev$3(fromObject) {
   }
   return toObject;
 }
+function contentToVertex$2(fromObject) {
+  const toObject = {};
+  const fromParts = getValueByPath(fromObject, ["parts"]);
+  if (fromParts != null) {
+    let transformedList = fromParts;
+    if (Array.isArray(transformedList)) {
+      transformedList = transformedList.map((item) => {
+        return partToVertex$2(item);
+      });
+    }
+    setValueByPath(toObject, ["parts"], transformedList);
+  }
+  const fromRole = getValueByPath(fromObject, ["role"]);
+  if (fromRole != null) {
+    setValueByPath(toObject, ["role"], fromRole);
+  }
+  return toObject;
+}
 function createCachedContentConfigToMldev(fromObject, parentObject) {
   const toObject = {};
   const fromTtl = getValueByPath(fromObject, ["ttl"]);
@@ -26064,7 +26103,7 @@ function createCachedContentConfigToVertex(fromObject, parentObject) {
     let transformedList = tContents(fromContents);
     if (Array.isArray(transformedList)) {
       transformedList = transformedList.map((item) => {
-        return item;
+        return contentToVertex$2(item);
       });
     }
     setValueByPath(parentObject, ["contents"], transformedList);
@@ -26073,7 +26112,7 @@ function createCachedContentConfigToVertex(fromObject, parentObject) {
     "systemInstruction"
   ]);
   if (parentObject !== void 0 && fromSystemInstruction != null) {
-    setValueByPath(parentObject, ["systemInstruction"], tContent(fromSystemInstruction));
+    setValueByPath(parentObject, ["systemInstruction"], contentToVertex$2(tContent(fromSystemInstruction)));
   }
   const fromTools = getValueByPath(fromObject, ["tools"]);
   if (parentObject !== void 0 && fromTools != null) {
@@ -26087,7 +26126,7 @@ function createCachedContentConfigToVertex(fromObject, parentObject) {
   }
   const fromToolConfig = getValueByPath(fromObject, ["toolConfig"]);
   if (parentObject !== void 0 && fromToolConfig != null) {
-    setValueByPath(parentObject, ["toolConfig"], fromToolConfig);
+    setValueByPath(parentObject, ["toolConfig"], toolConfigToVertex$1(fromToolConfig));
   }
   const fromKmsKeyName = getValueByPath(fromObject, ["kmsKeyName"]);
   if (parentObject !== void 0 && fromKmsKeyName != null) {
@@ -26446,6 +26485,80 @@ function partToMldev$3(fromObject) {
   if (fromVideoMetadata != null) {
     setValueByPath(toObject, ["videoMetadata"], fromVideoMetadata);
   }
+  const fromToolCall = getValueByPath(fromObject, ["toolCall"]);
+  if (fromToolCall != null) {
+    setValueByPath(toObject, ["toolCall"], fromToolCall);
+  }
+  const fromToolResponse = getValueByPath(fromObject, ["toolResponse"]);
+  if (fromToolResponse != null) {
+    setValueByPath(toObject, ["toolResponse"], fromToolResponse);
+  }
+  return toObject;
+}
+function partToVertex$2(fromObject) {
+  const toObject = {};
+  const fromMediaResolution = getValueByPath(fromObject, [
+    "mediaResolution"
+  ]);
+  if (fromMediaResolution != null) {
+    setValueByPath(toObject, ["mediaResolution"], fromMediaResolution);
+  }
+  const fromCodeExecutionResult = getValueByPath(fromObject, [
+    "codeExecutionResult"
+  ]);
+  if (fromCodeExecutionResult != null) {
+    setValueByPath(toObject, ["codeExecutionResult"], fromCodeExecutionResult);
+  }
+  const fromExecutableCode = getValueByPath(fromObject, [
+    "executableCode"
+  ]);
+  if (fromExecutableCode != null) {
+    setValueByPath(toObject, ["executableCode"], fromExecutableCode);
+  }
+  const fromFileData = getValueByPath(fromObject, ["fileData"]);
+  if (fromFileData != null) {
+    setValueByPath(toObject, ["fileData"], fromFileData);
+  }
+  const fromFunctionCall = getValueByPath(fromObject, ["functionCall"]);
+  if (fromFunctionCall != null) {
+    setValueByPath(toObject, ["functionCall"], fromFunctionCall);
+  }
+  const fromFunctionResponse = getValueByPath(fromObject, [
+    "functionResponse"
+  ]);
+  if (fromFunctionResponse != null) {
+    setValueByPath(toObject, ["functionResponse"], fromFunctionResponse);
+  }
+  const fromInlineData = getValueByPath(fromObject, ["inlineData"]);
+  if (fromInlineData != null) {
+    setValueByPath(toObject, ["inlineData"], fromInlineData);
+  }
+  const fromText = getValueByPath(fromObject, ["text"]);
+  if (fromText != null) {
+    setValueByPath(toObject, ["text"], fromText);
+  }
+  const fromThought = getValueByPath(fromObject, ["thought"]);
+  if (fromThought != null) {
+    setValueByPath(toObject, ["thought"], fromThought);
+  }
+  const fromThoughtSignature = getValueByPath(fromObject, [
+    "thoughtSignature"
+  ]);
+  if (fromThoughtSignature != null) {
+    setValueByPath(toObject, ["thoughtSignature"], fromThoughtSignature);
+  }
+  const fromVideoMetadata = getValueByPath(fromObject, [
+    "videoMetadata"
+  ]);
+  if (fromVideoMetadata != null) {
+    setValueByPath(toObject, ["videoMetadata"], fromVideoMetadata);
+  }
+  if (getValueByPath(fromObject, ["toolCall"]) !== void 0) {
+    throw new Error("toolCall parameter is not supported in Vertex AI.");
+  }
+  if (getValueByPath(fromObject, ["toolResponse"]) !== void 0) {
+    throw new Error("toolResponse parameter is not supported in Vertex AI.");
+  }
   return toObject;
 }
 function toolConfigToMldev$1(fromObject) {
@@ -26461,6 +26574,29 @@ function toolConfigToMldev$1(fromObject) {
   ]);
   if (fromFunctionCallingConfig != null) {
     setValueByPath(toObject, ["functionCallingConfig"], functionCallingConfigToMldev$1(fromFunctionCallingConfig));
+  }
+  const fromIncludeServerSideToolInvocations = getValueByPath(fromObject, ["includeServerSideToolInvocations"]);
+  if (fromIncludeServerSideToolInvocations != null) {
+    setValueByPath(toObject, ["includeServerSideToolInvocations"], fromIncludeServerSideToolInvocations);
+  }
+  return toObject;
+}
+function toolConfigToVertex$1(fromObject) {
+  const toObject = {};
+  const fromRetrievalConfig = getValueByPath(fromObject, [
+    "retrievalConfig"
+  ]);
+  if (fromRetrievalConfig != null) {
+    setValueByPath(toObject, ["retrievalConfig"], fromRetrievalConfig);
+  }
+  const fromFunctionCallingConfig = getValueByPath(fromObject, [
+    "functionCallingConfig"
+  ]);
+  if (fromFunctionCallingConfig != null) {
+    setValueByPath(toObject, ["functionCallingConfig"], fromFunctionCallingConfig);
+  }
+  if (getValueByPath(fromObject, ["includeServerSideToolInvocations"]) !== void 0) {
+    throw new Error("includeServerSideToolInvocations parameter is not supported in Vertex AI.");
   }
   return toObject;
 }
@@ -27805,6 +27941,24 @@ function contentToMldev$2(fromObject) {
   }
   return toObject;
 }
+function contentToVertex$1(fromObject) {
+  const toObject = {};
+  const fromParts = getValueByPath(fromObject, ["parts"]);
+  if (fromParts != null) {
+    let transformedList = fromParts;
+    if (Array.isArray(transformedList)) {
+      transformedList = transformedList.map((item) => {
+        return partToVertex$1(item);
+      });
+    }
+    setValueByPath(toObject, ["parts"], transformedList);
+  }
+  const fromRole = getValueByPath(fromObject, ["role"]);
+  if (fromRole != null) {
+    setValueByPath(toObject, ["role"], fromRole);
+  }
+  return toObject;
+}
 function fileDataToMldev$2(fromObject) {
   const toObject = {};
   if (getValueByPath(fromObject, ["displayName"]) !== void 0) {
@@ -28211,7 +28365,7 @@ function liveConnectConfigToVertex(fromObject, parentObject) {
     "systemInstruction"
   ]);
   if (parentObject !== void 0 && fromSystemInstruction != null) {
-    setValueByPath(parentObject, ["setup", "systemInstruction"], tContent(fromSystemInstruction));
+    setValueByPath(parentObject, ["setup", "systemInstruction"], contentToVertex$1(tContent(fromSystemInstruction)));
   }
   const fromTools = getValueByPath(fromObject, ["tools"]);
   if (parentObject !== void 0 && fromTools != null) {
@@ -28510,6 +28664,80 @@ function partToMldev$2(fromObject) {
   ]);
   if (fromVideoMetadata != null) {
     setValueByPath(toObject, ["videoMetadata"], fromVideoMetadata);
+  }
+  const fromToolCall = getValueByPath(fromObject, ["toolCall"]);
+  if (fromToolCall != null) {
+    setValueByPath(toObject, ["toolCall"], fromToolCall);
+  }
+  const fromToolResponse = getValueByPath(fromObject, ["toolResponse"]);
+  if (fromToolResponse != null) {
+    setValueByPath(toObject, ["toolResponse"], fromToolResponse);
+  }
+  return toObject;
+}
+function partToVertex$1(fromObject) {
+  const toObject = {};
+  const fromMediaResolution = getValueByPath(fromObject, [
+    "mediaResolution"
+  ]);
+  if (fromMediaResolution != null) {
+    setValueByPath(toObject, ["mediaResolution"], fromMediaResolution);
+  }
+  const fromCodeExecutionResult = getValueByPath(fromObject, [
+    "codeExecutionResult"
+  ]);
+  if (fromCodeExecutionResult != null) {
+    setValueByPath(toObject, ["codeExecutionResult"], fromCodeExecutionResult);
+  }
+  const fromExecutableCode = getValueByPath(fromObject, [
+    "executableCode"
+  ]);
+  if (fromExecutableCode != null) {
+    setValueByPath(toObject, ["executableCode"], fromExecutableCode);
+  }
+  const fromFileData = getValueByPath(fromObject, ["fileData"]);
+  if (fromFileData != null) {
+    setValueByPath(toObject, ["fileData"], fromFileData);
+  }
+  const fromFunctionCall = getValueByPath(fromObject, ["functionCall"]);
+  if (fromFunctionCall != null) {
+    setValueByPath(toObject, ["functionCall"], fromFunctionCall);
+  }
+  const fromFunctionResponse = getValueByPath(fromObject, [
+    "functionResponse"
+  ]);
+  if (fromFunctionResponse != null) {
+    setValueByPath(toObject, ["functionResponse"], fromFunctionResponse);
+  }
+  const fromInlineData = getValueByPath(fromObject, ["inlineData"]);
+  if (fromInlineData != null) {
+    setValueByPath(toObject, ["inlineData"], fromInlineData);
+  }
+  const fromText = getValueByPath(fromObject, ["text"]);
+  if (fromText != null) {
+    setValueByPath(toObject, ["text"], fromText);
+  }
+  const fromThought = getValueByPath(fromObject, ["thought"]);
+  if (fromThought != null) {
+    setValueByPath(toObject, ["thought"], fromThought);
+  }
+  const fromThoughtSignature = getValueByPath(fromObject, [
+    "thoughtSignature"
+  ]);
+  if (fromThoughtSignature != null) {
+    setValueByPath(toObject, ["thoughtSignature"], fromThoughtSignature);
+  }
+  const fromVideoMetadata = getValueByPath(fromObject, [
+    "videoMetadata"
+  ]);
+  if (fromVideoMetadata != null) {
+    setValueByPath(toObject, ["videoMetadata"], fromVideoMetadata);
+  }
+  if (getValueByPath(fromObject, ["toolCall"]) !== void 0) {
+    throw new Error("toolCall parameter is not supported in Vertex AI.");
+  }
+  if (getValueByPath(fromObject, ["toolResponse"]) !== void 0) {
+    throw new Error("toolResponse parameter is not supported in Vertex AI.");
   }
   return toObject;
 }
@@ -28872,7 +29100,7 @@ function citationMetadataFromMldev(fromObject, _rootObject) {
   }
   return toObject;
 }
-function computeTokensParametersToVertex(apiClient, fromObject, _rootObject) {
+function computeTokensParametersToVertex(apiClient, fromObject, rootObject) {
   const toObject = {};
   const fromModel = getValueByPath(fromObject, ["model"]);
   if (fromModel != null) {
@@ -28883,7 +29111,7 @@ function computeTokensParametersToVertex(apiClient, fromObject, _rootObject) {
     let transformedList = tContents(fromContents);
     if (Array.isArray(transformedList)) {
       transformedList = transformedList.map((item) => {
-        return item;
+        return contentToVertex(item);
       });
     }
     setValueByPath(toObject, ["contents"], transformedList);
@@ -28952,6 +29180,24 @@ function contentToMldev$1(fromObject, rootObject) {
   }
   return toObject;
 }
+function contentToVertex(fromObject, rootObject) {
+  const toObject = {};
+  const fromParts = getValueByPath(fromObject, ["parts"]);
+  if (fromParts != null) {
+    let transformedList = fromParts;
+    if (Array.isArray(transformedList)) {
+      transformedList = transformedList.map((item) => {
+        return partToVertex(item);
+      });
+    }
+    setValueByPath(toObject, ["parts"], transformedList);
+  }
+  const fromRole = getValueByPath(fromObject, ["role"]);
+  if (fromRole != null) {
+    setValueByPath(toObject, ["role"], fromRole);
+  }
+  return toObject;
+}
 function controlReferenceConfigToVertex(fromObject, _rootObject) {
   const toObject = {};
   const fromControlType = getValueByPath(fromObject, ["controlType"]);
@@ -28985,7 +29231,7 @@ function countTokensConfigToVertex(fromObject, parentObject, rootObject) {
     "systemInstruction"
   ]);
   if (parentObject !== void 0 && fromSystemInstruction != null) {
-    setValueByPath(parentObject, ["systemInstruction"], tContent(fromSystemInstruction));
+    setValueByPath(parentObject, ["systemInstruction"], contentToVertex(tContent(fromSystemInstruction)));
   }
   const fromTools = getValueByPath(fromObject, ["tools"]);
   if (parentObject !== void 0 && fromTools != null) {
@@ -29038,7 +29284,7 @@ function countTokensParametersToVertex(apiClient, fromObject, rootObject) {
     let transformedList = tContents(fromContents);
     if (Array.isArray(transformedList)) {
       transformedList = transformedList.map((item) => {
-        return item;
+        return contentToVertex(item);
       });
     }
     setValueByPath(toObject, ["contents"], transformedList);
@@ -29438,7 +29684,7 @@ function embedContentParametersPrivateToVertex(apiClient, fromObject, rootObject
   if (discriminatorContent === "EMBED_CONTENT") {
     const fromContent = getValueByPath(fromObject, ["content"]);
     if (fromContent != null) {
-      setValueByPath(toObject, ["content"], tContent(fromContent));
+      setValueByPath(toObject, ["content"], contentToVertex(tContent(fromContent)));
     }
   }
   const fromConfig = getValueByPath(fromObject, ["config"]);
@@ -29786,7 +30032,7 @@ function generateContentConfigToVertex(apiClient, fromObject, parentObject, root
     "systemInstruction"
   ]);
   if (parentObject !== void 0 && fromSystemInstruction != null) {
-    setValueByPath(parentObject, ["systemInstruction"], tContent(fromSystemInstruction));
+    setValueByPath(parentObject, ["systemInstruction"], contentToVertex(tContent(fromSystemInstruction)));
   }
   const fromTemperature = getValueByPath(fromObject, ["temperature"]);
   if (fromTemperature != null) {
@@ -29898,7 +30144,7 @@ function generateContentConfigToVertex(apiClient, fromObject, parentObject, root
   }
   const fromToolConfig = getValueByPath(fromObject, ["toolConfig"]);
   if (parentObject !== void 0 && fromToolConfig != null) {
-    setValueByPath(parentObject, ["toolConfig"], fromToolConfig);
+    setValueByPath(parentObject, ["toolConfig"], toolConfigToVertex(fromToolConfig));
   }
   const fromLabels = getValueByPath(fromObject, ["labels"]);
   if (parentObject !== void 0 && fromLabels != null) {
@@ -29986,7 +30232,7 @@ function generateContentParametersToVertex(apiClient, fromObject, rootObject) {
     let transformedList = tContents(fromContents);
     if (Array.isArray(transformedList)) {
       transformedList = transformedList.map((item) => {
-        return item;
+        return contentToVertex(item);
       });
     }
     setValueByPath(toObject, ["contents"], transformedList);
@@ -31388,6 +31634,80 @@ function partToMldev$1(fromObject, rootObject) {
   if (fromVideoMetadata != null) {
     setValueByPath(toObject, ["videoMetadata"], fromVideoMetadata);
   }
+  const fromToolCall = getValueByPath(fromObject, ["toolCall"]);
+  if (fromToolCall != null) {
+    setValueByPath(toObject, ["toolCall"], fromToolCall);
+  }
+  const fromToolResponse = getValueByPath(fromObject, ["toolResponse"]);
+  if (fromToolResponse != null) {
+    setValueByPath(toObject, ["toolResponse"], fromToolResponse);
+  }
+  return toObject;
+}
+function partToVertex(fromObject, _rootObject) {
+  const toObject = {};
+  const fromMediaResolution = getValueByPath(fromObject, [
+    "mediaResolution"
+  ]);
+  if (fromMediaResolution != null) {
+    setValueByPath(toObject, ["mediaResolution"], fromMediaResolution);
+  }
+  const fromCodeExecutionResult = getValueByPath(fromObject, [
+    "codeExecutionResult"
+  ]);
+  if (fromCodeExecutionResult != null) {
+    setValueByPath(toObject, ["codeExecutionResult"], fromCodeExecutionResult);
+  }
+  const fromExecutableCode = getValueByPath(fromObject, [
+    "executableCode"
+  ]);
+  if (fromExecutableCode != null) {
+    setValueByPath(toObject, ["executableCode"], fromExecutableCode);
+  }
+  const fromFileData = getValueByPath(fromObject, ["fileData"]);
+  if (fromFileData != null) {
+    setValueByPath(toObject, ["fileData"], fromFileData);
+  }
+  const fromFunctionCall = getValueByPath(fromObject, ["functionCall"]);
+  if (fromFunctionCall != null) {
+    setValueByPath(toObject, ["functionCall"], fromFunctionCall);
+  }
+  const fromFunctionResponse = getValueByPath(fromObject, [
+    "functionResponse"
+  ]);
+  if (fromFunctionResponse != null) {
+    setValueByPath(toObject, ["functionResponse"], fromFunctionResponse);
+  }
+  const fromInlineData = getValueByPath(fromObject, ["inlineData"]);
+  if (fromInlineData != null) {
+    setValueByPath(toObject, ["inlineData"], fromInlineData);
+  }
+  const fromText = getValueByPath(fromObject, ["text"]);
+  if (fromText != null) {
+    setValueByPath(toObject, ["text"], fromText);
+  }
+  const fromThought = getValueByPath(fromObject, ["thought"]);
+  if (fromThought != null) {
+    setValueByPath(toObject, ["thought"], fromThought);
+  }
+  const fromThoughtSignature = getValueByPath(fromObject, [
+    "thoughtSignature"
+  ]);
+  if (fromThoughtSignature != null) {
+    setValueByPath(toObject, ["thoughtSignature"], fromThoughtSignature);
+  }
+  const fromVideoMetadata = getValueByPath(fromObject, [
+    "videoMetadata"
+  ]);
+  if (fromVideoMetadata != null) {
+    setValueByPath(toObject, ["videoMetadata"], fromVideoMetadata);
+  }
+  if (getValueByPath(fromObject, ["toolCall"]) !== void 0) {
+    throw new Error("toolCall parameter is not supported in Vertex AI.");
+  }
+  if (getValueByPath(fromObject, ["toolResponse"]) !== void 0) {
+    throw new Error("toolResponse parameter is not supported in Vertex AI.");
+  }
   return toObject;
 }
 function productImageToVertex(fromObject, rootObject) {
@@ -31720,6 +32040,29 @@ function toolConfigToMldev(fromObject, rootObject) {
   ]);
   if (fromFunctionCallingConfig != null) {
     setValueByPath(toObject, ["functionCallingConfig"], functionCallingConfigToMldev(fromFunctionCallingConfig));
+  }
+  const fromIncludeServerSideToolInvocations = getValueByPath(fromObject, ["includeServerSideToolInvocations"]);
+  if (fromIncludeServerSideToolInvocations != null) {
+    setValueByPath(toObject, ["includeServerSideToolInvocations"], fromIncludeServerSideToolInvocations);
+  }
+  return toObject;
+}
+function toolConfigToVertex(fromObject, _rootObject) {
+  const toObject = {};
+  const fromRetrievalConfig = getValueByPath(fromObject, [
+    "retrievalConfig"
+  ]);
+  if (fromRetrievalConfig != null) {
+    setValueByPath(toObject, ["retrievalConfig"], fromRetrievalConfig);
+  }
+  const fromFunctionCallingConfig = getValueByPath(fromObject, [
+    "functionCallingConfig"
+  ]);
+  if (fromFunctionCallingConfig != null) {
+    setValueByPath(toObject, ["functionCallingConfig"], fromFunctionCallingConfig);
+  }
+  if (getValueByPath(fromObject, ["includeServerSideToolInvocations"]) !== void 0) {
+    throw new Error("includeServerSideToolInvocations parameter is not supported in Vertex AI.");
   }
   return toObject;
 }
@@ -32397,7 +32740,7 @@ var CONTENT_TYPE_HEADER = "Content-Type";
 var SERVER_TIMEOUT_HEADER = "X-Server-Timeout";
 var USER_AGENT_HEADER = "User-Agent";
 var GOOGLE_API_CLIENT_HEADER = "x-goog-api-client";
-var SDK_VERSION = "1.45.0";
+var SDK_VERSION = "1.46.0";
 var LIBRARY_LABEL = `google-genai-sdk/${SDK_VERSION}`;
 var VERTEX_AI_API_DEFAULT_VERSION = "v1beta1";
 var GOOGLE_AI_API_DEFAULT_VERSION = "v1beta";
@@ -33521,7 +33864,7 @@ var Session = class {
       }
     }
     const clientMessage = {
-      toolResponse: { functionResponses }
+      toolResponse: { "functionResponses": functionResponses }
     };
     return clientMessage;
   }
@@ -35523,6 +35866,14 @@ function partToMldev(fromObject) {
   ]);
   if (fromVideoMetadata != null) {
     setValueByPath(toObject, ["videoMetadata"], fromVideoMetadata);
+  }
+  const fromToolCall = getValueByPath(fromObject, ["toolCall"]);
+  if (fromToolCall != null) {
+    setValueByPath(toObject, ["toolCall"], fromToolCall);
+  }
+  const fromToolResponse = getValueByPath(fromObject, ["toolResponse"]);
+  if (fromToolResponse != null) {
+    setValueByPath(toObject, ["toolResponse"], fromToolResponse);
   }
   return toObject;
 }
@@ -39008,18 +39359,18 @@ var MAX_RETRY_COUNT = 3;
 var INITIAL_RETRY_DELAY_MS = 1e3;
 var DELAY_MULTIPLIER = 2;
 var X_GOOG_UPLOAD_STATUS_HEADER_FIELD = "x-goog-upload-status";
-async function uploadBlob(file, uploadUrl, apiClient) {
+async function uploadBlob(file, uploadUrl, apiClient, httpOptions) {
   var _a4;
-  const response = await uploadBlobInternal(file, uploadUrl, apiClient);
+  const response = await uploadBlobInternal(file, uploadUrl, apiClient, httpOptions);
   const responseJson = await (response === null || response === void 0 ? void 0 : response.json());
   if (((_a4 = response === null || response === void 0 ? void 0 : response.headers) === null || _a4 === void 0 ? void 0 : _a4[X_GOOG_UPLOAD_STATUS_HEADER_FIELD]) !== "final") {
     throw new Error("Failed to upload file: Upload status is not finalized.");
   }
   return responseJson["file"];
 }
-async function uploadBlobToFileSearchStore(file, uploadUrl, apiClient) {
+async function uploadBlobToFileSearchStore(file, uploadUrl, apiClient, httpOptions) {
   var _a4;
-  const response = await uploadBlobInternal(file, uploadUrl, apiClient);
+  const response = await uploadBlobInternal(file, uploadUrl, apiClient, httpOptions);
   const responseJson = await (response === null || response === void 0 ? void 0 : response.json());
   if (((_a4 = response === null || response === void 0 ? void 0 : response.headers) === null || _a4 === void 0 ? void 0 : _a4[X_GOOG_UPLOAD_STATUS_HEADER_FIELD]) !== "final") {
     throw new Error("Failed to upload file: Upload status is not finalized.");
@@ -39029,8 +39380,18 @@ async function uploadBlobToFileSearchStore(file, uploadUrl, apiClient) {
   Object.assign(typedResp, resp);
   return typedResp;
 }
-async function uploadBlobInternal(file, uploadUrl, apiClient) {
-  var _a4, _b;
+async function uploadBlobInternal(file, uploadUrl, apiClient, httpOptions) {
+  var _a4, _b, _c;
+  let finalUrl = uploadUrl;
+  const effectiveBaseUrl = (httpOptions === null || httpOptions === void 0 ? void 0 : httpOptions.baseUrl) || ((_a4 = apiClient.clientOptions.httpOptions) === null || _a4 === void 0 ? void 0 : _a4.baseUrl);
+  if (effectiveBaseUrl) {
+    const baseUri = new URL(effectiveBaseUrl);
+    const uploadUri = new URL(uploadUrl);
+    uploadUri.protocol = baseUri.protocol;
+    uploadUri.host = baseUri.host;
+    uploadUri.port = baseUri.port;
+    finalUrl = uploadUri.toString();
+  }
   let fileSize = 0;
   let offset = 0;
   let response = new HttpResponse(new Response());
@@ -39045,21 +39406,14 @@ async function uploadBlobInternal(file, uploadUrl, apiClient) {
     let retryCount = 0;
     let currentDelayMs = INITIAL_RETRY_DELAY_MS;
     while (retryCount < MAX_RETRY_COUNT) {
+      const mergedHeaders = Object.assign(Object.assign({}, (httpOptions === null || httpOptions === void 0 ? void 0 : httpOptions.headers) || {}), { "X-Goog-Upload-Command": uploadCommand, "X-Goog-Upload-Offset": String(offset), "Content-Length": String(chunkSize) });
       response = await apiClient.request({
         path: "",
         body: chunk,
         httpMethod: "POST",
-        httpOptions: {
-          apiVersion: "",
-          baseUrl: uploadUrl,
-          headers: {
-            "X-Goog-Upload-Command": uploadCommand,
-            "X-Goog-Upload-Offset": String(offset),
-            "Content-Length": String(chunkSize)
-          }
-        }
+        httpOptions: Object.assign(Object.assign({}, httpOptions), { apiVersion: "", baseUrl: finalUrl, headers: mergedHeaders })
       });
-      if ((_a4 = response === null || response === void 0 ? void 0 : response.headers) === null || _a4 === void 0 ? void 0 : _a4[X_GOOG_UPLOAD_STATUS_HEADER_FIELD]) {
+      if ((_b = response === null || response === void 0 ? void 0 : response.headers) === null || _b === void 0 ? void 0 : _b[X_GOOG_UPLOAD_STATUS_HEADER_FIELD]) {
         break;
       }
       retryCount++;
@@ -39067,7 +39421,7 @@ async function uploadBlobInternal(file, uploadUrl, apiClient) {
       currentDelayMs = currentDelayMs * DELAY_MULTIPLIER;
     }
     offset += chunkSize;
-    if (((_b = response === null || response === void 0 ? void 0 : response.headers) === null || _b === void 0 ? void 0 : _b[X_GOOG_UPLOAD_STATUS_HEADER_FIELD]) !== "active") {
+    if (((_c = response === null || response === void 0 ? void 0 : response.headers) === null || _c === void 0 ? void 0 : _c[X_GOOG_UPLOAD_STATUS_HEADER_FIELD]) !== "active") {
       break;
     }
     if (fileSize <= offset) {
@@ -39095,18 +39449,18 @@ var NodeUploader = class {
       return await getBlobStat(file);
     }
   }
-  async upload(file, uploadUrl, apiClient) {
+  async upload(file, uploadUrl, apiClient, httpOptions) {
     if (typeof file === "string") {
-      return await this.uploadFileFromPath(file, uploadUrl, apiClient);
+      return await this.uploadFileFromPath(file, uploadUrl, apiClient, httpOptions);
     } else {
-      return uploadBlob(file, uploadUrl, apiClient);
+      return uploadBlob(file, uploadUrl, apiClient, httpOptions);
     }
   }
-  async uploadToFileSearchStore(file, uploadUrl, apiClient) {
+  async uploadToFileSearchStore(file, uploadUrl, apiClient, httpOptions) {
     if (typeof file === "string") {
-      return await this.uploadFileToFileSearchStoreFromPath(file, uploadUrl, apiClient);
+      return await this.uploadFileToFileSearchStoreFromPath(file, uploadUrl, apiClient, httpOptions);
     } else {
-      return uploadBlobToFileSearchStore(file, uploadUrl, apiClient);
+      return uploadBlobToFileSearchStore(file, uploadUrl, apiClient, httpOptions);
     }
   }
   /**
@@ -39195,18 +39549,18 @@ var NodeUploader = class {
     const mimeType = mimeTypes[fileExtension.toLowerCase()];
     return mimeType;
   }
-  async uploadFileFromPath(file, uploadUrl, apiClient) {
+  async uploadFileFromPath(file, uploadUrl, apiClient, httpOptions) {
     var _a4;
-    const response = await this.uploadFileFromPathInternal(file, uploadUrl, apiClient);
+    const response = await this.uploadFileFromPathInternal(file, uploadUrl, apiClient, httpOptions);
     const responseJson = await (response === null || response === void 0 ? void 0 : response.json());
     if (((_a4 = response === null || response === void 0 ? void 0 : response.headers) === null || _a4 === void 0 ? void 0 : _a4[X_GOOG_UPLOAD_STATUS_HEADER_FIELD]) !== "final") {
       throw new Error("Failed to upload file: Upload status is not finalized.");
     }
     return responseJson["file"];
   }
-  async uploadFileToFileSearchStoreFromPath(file, uploadUrl, apiClient) {
+  async uploadFileToFileSearchStoreFromPath(file, uploadUrl, apiClient, httpOptions) {
     var _a4;
-    const response = await this.uploadFileFromPathInternal(file, uploadUrl, apiClient);
+    const response = await this.uploadFileFromPathInternal(file, uploadUrl, apiClient, httpOptions);
     const responseJson = await (response === null || response === void 0 ? void 0 : response.json());
     if (((_a4 = response === null || response === void 0 ? void 0 : response.headers) === null || _a4 === void 0 ? void 0 : _a4[X_GOOG_UPLOAD_STATUS_HEADER_FIELD]) !== "final") {
       throw new Error("Failed to upload file: Upload status is not finalized.");
@@ -39216,8 +39570,18 @@ var NodeUploader = class {
     Object.assign(typedResp, resp);
     return typedResp;
   }
-  async uploadFileFromPathInternal(file, uploadUrl, apiClient) {
-    var _a4, _b;
+  async uploadFileFromPathInternal(file, uploadUrl, apiClient, httpOptions) {
+    var _a4, _b, _c;
+    let finalUrl = uploadUrl;
+    const effectiveBaseUrl = (httpOptions === null || httpOptions === void 0 ? void 0 : httpOptions.baseUrl) || ((_a4 = apiClient.clientOptions.httpOptions) === null || _a4 === void 0 ? void 0 : _a4.baseUrl);
+    if (effectiveBaseUrl) {
+      const baseUri = new URL(effectiveBaseUrl);
+      const uploadUri = new URL(uploadUrl);
+      uploadUri.protocol = baseUri.protocol;
+      uploadUri.host = baseUri.host;
+      uploadUri.port = baseUri.port;
+      finalUrl = uploadUri.toString();
+    }
     let fileSize = 0;
     let offset = 0;
     let response = new HttpResponse(new Response());
@@ -39244,22 +39608,14 @@ var NodeUploader = class {
         let retryCount = 0;
         let currentDelayMs = INITIAL_RETRY_DELAY_MS;
         while (retryCount < MAX_RETRY_COUNT) {
+          const mergedHeaders = Object.assign(Object.assign({}, (httpOptions === null || httpOptions === void 0 ? void 0 : httpOptions.headers) || {}), { "X-Goog-Upload-Command": uploadCommand, "X-Goog-Upload-Offset": String(offset), "Content-Length": String(bytesRead), "X-Goog-Upload-File-Name": fileName });
           response = await apiClient.request({
             path: "",
             body: chunk,
             httpMethod: "POST",
-            httpOptions: {
-              apiVersion: "",
-              baseUrl: uploadUrl,
-              headers: {
-                "X-Goog-Upload-Command": uploadCommand,
-                "X-Goog-Upload-Offset": String(offset),
-                "Content-Length": String(bytesRead),
-                "X-Goog-Upload-File-Name": fileName
-              }
-            }
+            httpOptions: Object.assign(Object.assign({}, httpOptions), { apiVersion: "", baseUrl: finalUrl, headers: mergedHeaders })
           });
-          if ((_a4 = response === null || response === void 0 ? void 0 : response.headers) === null || _a4 === void 0 ? void 0 : _a4[X_GOOG_UPLOAD_STATUS_HEADER_FIELD]) {
+          if ((_b = response === null || response === void 0 ? void 0 : response.headers) === null || _b === void 0 ? void 0 : _b[X_GOOG_UPLOAD_STATUS_HEADER_FIELD]) {
             break;
           }
           retryCount++;
@@ -39267,7 +39623,7 @@ var NodeUploader = class {
           currentDelayMs = currentDelayMs * DELAY_MULTIPLIER;
         }
         offset += bytesRead;
-        if (((_b = response === null || response === void 0 ? void 0 : response.headers) === null || _b === void 0 ? void 0 : _b[X_GOOG_UPLOAD_STATUS_HEADER_FIELD]) !== "active") {
+        if (((_c = response === null || response === void 0 ? void 0 : response.headers) === null || _c === void 0 ? void 0 : _c[X_GOOG_UPLOAD_STATUS_HEADER_FIELD]) !== "active") {
           break;
         }
         if (fileSize <= offset) {
@@ -39649,7 +40005,7 @@ var safeJSON2 = (text) => {
 var sleep2 = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ../../../node_modules/openai/version.mjs
-var VERSION2 = "6.31.0";
+var VERSION2 = "6.32.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -47487,7 +47843,13 @@ var TOOL_NAME_ALIASES = {
   "search": "search_web",
   "web_search": "search_web",
   "websearch": "search_web",
-  "web": "search_web"
+  "web": "search_web",
+  // Help tool aliases
+  "help_search": "help_search",
+  "helpsearch": "help_search",
+  "search_help": "help_search",
+  "help_navigate": "help_navigate",
+  "helpnavigate": "help_navigate"
 };
 function normalizeToolName(name) {
   const normalized = name.toLowerCase().trim();
@@ -47515,6 +47877,21 @@ function convertToToolCallRequest(parsed) {
         name: "search_web",
         arguments: {
           query: parsed.arguments.query || parsed.arguments.search || Object.values(parsed.arguments)[0] || ""
+        }
+      };
+    case "help_search":
+      return {
+        name: "help_search",
+        arguments: {
+          query: parsed.arguments.query || parsed.arguments.search || Object.values(parsed.arguments)[0] || "",
+          limit: parsed.arguments.limit
+        }
+      };
+    case "help_navigate":
+      return {
+        name: "help_navigate",
+        arguments: {
+          url: parsed.arguments.url || parsed.arguments.path || Object.values(parsed.arguments)[0] || ""
         }
       };
     default:

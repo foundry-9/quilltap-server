@@ -30,7 +30,8 @@ export function HelpChatComposer({ onSend, disabled, placeholder = 'Ask a questi
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
     }
-  }, [content, disabled, onSend, textareaRef])
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- textareaRef is a stable ref
+  }, [content, disabled, onSend])
 
   const handleKeyDown = useCallback((e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -44,7 +45,8 @@ export function HelpChatComposer({ onSend, disabled, placeholder = 'Ask a questi
     if (!el) return
     el.style.height = 'auto'
     el.style.height = Math.min(el.scrollHeight, 120) + 'px'
-  }, [textareaRef])
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- textareaRef is a stable ref
+  }, [])
 
   return (
     <div className="qt-help-composer">

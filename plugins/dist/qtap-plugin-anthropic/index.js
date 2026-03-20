@@ -5091,7 +5091,7 @@ var safeJSON2 = (text) => {
 var sleep2 = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ../../../node_modules/openai/version.mjs
-var VERSION2 = "6.31.0";
+var VERSION2 = "6.32.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser2 = () => {
@@ -12414,7 +12414,13 @@ var TOOL_NAME_ALIASES = {
   "search": "search_web",
   "web_search": "search_web",
   "websearch": "search_web",
-  "web": "search_web"
+  "web": "search_web",
+  // Help tool aliases
+  "help_search": "help_search",
+  "helpsearch": "help_search",
+  "search_help": "help_search",
+  "help_navigate": "help_navigate",
+  "helpnavigate": "help_navigate"
 };
 function normalizeToolName(name) {
   const normalized = name.toLowerCase().trim();
@@ -12442,6 +12448,21 @@ function convertToToolCallRequest(parsed) {
         name: "search_web",
         arguments: {
           query: parsed.arguments.query || parsed.arguments.search || Object.values(parsed.arguments)[0] || ""
+        }
+      };
+    case "help_search":
+      return {
+        name: "help_search",
+        arguments: {
+          query: parsed.arguments.query || parsed.arguments.search || Object.values(parsed.arguments)[0] || "",
+          limit: parsed.arguments.limit
+        }
+      };
+    case "help_navigate":
+      return {
+        name: "help_navigate",
+        arguments: {
+          url: parsed.arguments.url || parsed.arguments.path || Object.values(parsed.arguments)[0] || ""
         }
       };
     default:
@@ -12637,12 +12658,38 @@ function parseToolUseFormat(response) {
   }
   return results;
 }
+function parseInvokeFormat(response) {
+  const results = [];
+  const invokePattern = /<invoke\s+name=["']([^"']+)["']>([\s\S]*?)<\/invoke>/gi;
+  let match;
+  while ((match = invokePattern.exec(response)) !== null) {
+    const toolName = match[1];
+    const paramContent = match[2];
+    const startIndex = match.index;
+    const args = {};
+    const paramPattern = /<parameter\s+name=["']([^"']+)["']>([^<]*)<\/parameter>/gi;
+    let paramMatch;
+    while ((paramMatch = paramPattern.exec(paramContent)) !== null) {
+      args[paramMatch[1]] = paramMatch[2].trim();
+    }
+    results.push({
+      toolName: normalizeToolName(toolName),
+      arguments: args,
+      fullMatch: match[0],
+      startIndex,
+      endIndex: startIndex + match[0].length,
+      format: "invoke"
+    });
+  }
+  return results;
+}
 function parseAllXMLFormats(response) {
   const allResults = [];
   allResults.push(...parseFunctionCallsFormat(response));
   allResults.push(...parseToolCallFormat(response));
   allResults.push(...parseFunctionCallFormat(response));
   allResults.push(...parseToolUseFormat(response));
+  allResults.push(...parseInvokeFormat(response));
   const seen = /* @__PURE__ */ new Set();
   const deduped = allResults.filter((result) => {
     if (seen.has(result.startIndex)) {
@@ -12658,7 +12705,7 @@ function parseAllXMLAsToolCalls(response) {
   return parseAllXMLFormats(response).map(convertToToolCallRequest);
 }
 function hasAnyXMLToolMarkers(response) {
-  return /<function_calls>/i.test(response) || /<tool_call>/i.test(response) || /<function_call\s+/i.test(response) || /<tool_use[\s>]/i.test(response);
+  return /<function_calls>/i.test(response) || /<tool_call>/i.test(response) || /<function_call\s+/i.test(response) || /<tool_use[\s>]/i.test(response) || /<invoke\s+name=/i.test(response);
 }
 function stripAllXMLToolMarkers(response) {
   let stripped = response;
@@ -12666,6 +12713,7 @@ function stripAllXMLToolMarkers(response) {
   stripped = stripped.replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, "");
   stripped = stripped.replace(/<function_call\s+[^>]*>[\s\S]*?<\/function_call>/gi, "");
   stripped = stripped.replace(/<tool_use[\s>][\s\S]*?<\/tool_use>/gi, "");
+  stripped = stripped.replace(/<invoke\s+name=["'][^"']*["']>[\s\S]*?<\/invoke>/gi, "");
   stripped = stripped.replace(/\n{3,}/g, "\n\n").replace(/  +/g, " ").trim();
   return stripped;
 }

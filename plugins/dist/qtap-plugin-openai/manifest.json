@@ -1,9 +1,9 @@
 {
-  "$schema": "../qtap-plugin-template/schemas/plugin-manifest.schema.json",
+  "$schema": "../../../public/schemas/plugin-manifest.schema.json",
   "name": "qtap-plugin-openai",
   "title": "OpenAI Provider",
   "description": "Provides OpenAI GPT models and DALL-E image generation for Quilltap",
-  "version": "1.0.22",
+  "version": "1.0.23",
   "author": {
     "name": "Foundry-9 LLC",
     "email": "charles.sebold@foundry-9.com",
@@ -14,7 +14,12 @@
     "quilltapVersion": ">=1.7.0",
     "nodeVersion": ">=18.0.0"
   },
-  "capabilities": ["LLM_PROVIDER", "IMAGE_PROVIDER", "EMBEDDING_PROVIDER", "MODERATION_PROVIDER"],
+  "capabilities": [
+    "LLM_PROVIDER",
+    "IMAGE_PROVIDER",
+    "EMBEDDING_PROVIDER",
+    "MODERATION_PROVIDER"
+  ],
   "category": "PROVIDER",
   "main": "index.js",
   "typescript": true,
@@ -22,7 +27,15 @@
   "styling": "TAILWIND",
   "enabledByDefault": true,
   "status": "STABLE",
-  "keywords": ["openai", "gpt", "gpt-4", "dalle", "llm", "ai", "chat"],
+  "keywords": [
+    "openai",
+    "gpt",
+    "gpt-4",
+    "dalle",
+    "llm",
+    "ai",
+    "chat"
+  ],
   "providerConfig": {
     "providerName": "OPENAI",
     "displayName": "OpenAI",
@@ -44,12 +57,19 @@
     },
     "attachmentSupport": {
       "supported": true,
-      "mimeTypes": ["image/jpeg", "image/png", "image/gif", "image/webp"],
+      "mimeTypes": [
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp"
+      ],
       "description": "Images only (JPEG, PNG, GIF, WebP)"
     }
   },
   "permissions": {
-    "network": ["api.openai.com"],
+    "network": [
+      "api.openai.com"
+    ],
     "userData": false,
     "database": false
   }

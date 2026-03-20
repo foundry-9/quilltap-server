@@ -9,7 +9,6 @@ plugins/
 ├── README.md                           # This file
 ├── LLM-PROVIDER-GUIDE.md               # Detailed guide for LLM providers
 ├── dist/                               # Built-in plugins shipped with Quilltap
-│   ├── qtap-plugin-template/           # Example plugin template
 │   ├── qtap-plugin-openai/             # OpenAI provider
 │   ├── qtap-plugin-anthropic/          # Anthropic provider
 │   ├── qtap-plugin-google/             # Google Gemini provider
@@ -57,10 +56,10 @@ Provider plugins add support for new LLM services. Each provider plugin includes
 
 ### Quick Start
 
-1. Copy the template:
+1. Copy an existing plugin as a starting point:
 
 ```bash
-cp -r plugins/dist/qtap-plugin-template plugins/dist/qtap-plugin-myprovider
+cp -r plugins/dist/qtap-plugin-ollama plugins/dist/qtap-plugin-myprovider   # or qtap-plugin-openrouter
 cd plugins/dist/qtap-plugin-myprovider
 ```
 
@@ -68,7 +67,7 @@ cd plugins/dist/qtap-plugin-myprovider
 
 ```json
 {
-  "$schema": "../qtap-plugin-template/schemas/plugin-manifest.schema.json",
+  "$schema": "../../../public/schemas/plugin-manifest.schema.json",
   "name": "qtap-plugin-myprovider",
   "title": "My Provider",
   "description": "Integration with My Provider's API",
@@ -275,4 +274,4 @@ Check the browser console for plugin loading messages:
 ## Support
 
 - [GitHub Issues](https://github.com/foundry-9/quilltap/issues)
-- [Plugin Template](./dist/qtap-plugin-template/)
+- [Plugin Manifest Schema](../public/schemas/plugin-manifest.schema.json)

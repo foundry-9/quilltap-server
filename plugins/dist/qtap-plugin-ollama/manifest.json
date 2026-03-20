@@ -1,9 +1,9 @@
 {
-  "$schema": "../qtap-plugin-template/schemas/plugin-manifest.schema.json",
+  "$schema": "../../../public/schemas/plugin-manifest.schema.json",
   "name": "qtap-plugin-ollama",
   "title": "Ollama Provider",
   "description": "Provides local Ollama LLM models and embeddings for Quilltap - run AI models on your own machine",
-  "version": "1.0.14",
+  "version": "1.0.15",
   "author": {
     "name": "Foundry-9 LLC",
     "email": "charles.sebold@foundry-9.com",
@@ -14,7 +14,10 @@
     "quilltapVersion": ">=1.7.0",
     "nodeVersion": ">=18.0.0"
   },
-  "capabilities": ["LLM_PROVIDER", "EMBEDDING_PROVIDER"],
+  "capabilities": [
+    "LLM_PROVIDER",
+    "EMBEDDING_PROVIDER"
+  ],
   "category": "PROVIDER",
   "main": "index.js",
   "typescript": true,
@@ -22,7 +25,17 @@
   "styling": "TAILWIND",
   "enabledByDefault": true,
   "status": "STABLE",
-  "keywords": ["ollama", "local", "offline", "llm", "llava", "neural-chat", "mistral", "ai", "chat"],
+  "keywords": [
+    "ollama",
+    "local",
+    "offline",
+    "llm",
+    "llava",
+    "neural-chat",
+    "mistral",
+    "ai",
+    "chat"
+  ],
   "providerConfig": {
     "providerName": "OLLAMA",
     "displayName": "Ollama",
@@ -50,7 +63,9 @@
     }
   },
   "permissions": {
-    "network": ["localhost:11434"],
+    "network": [
+      "localhost:11434"
+    ],
     "userData": false,
     "database": false
   }

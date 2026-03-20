@@ -12,7 +12,7 @@ The authoritative schema is defined in TypeScript using Zod at:
 
 - **Schema**: `lib/schemas/plugin-manifest.ts`
 - **Loader**: `lib/plugins/manifest-loader.ts`
-- **JSON Schema**: `plugins/dist/qtap-plugin-template/schemas/plugin-manifest.schema.json`
+- **JSON Schema**: `public/schemas/plugin-manifest.schema.json`
 
 ## Validation
 
@@ -531,7 +531,7 @@ Set this field explicitly to override the inferred value.
 
 ```json
 {
-  "$schema": "../qtap-plugin-template/schemas/plugin-manifest.schema.json",
+  "$schema": "../../../public/schemas/plugin-manifest.schema.json",
   "name": "qtap-plugin-custom-llm",
   "title": "Custom LLM Provider",
   "description": "Integration with CustomAI's API for advanced text generation",
@@ -672,4 +672,4 @@ if (result.success) {
 - [Plugin Developer Guide](../plugins/README.md)
 - [LLM Provider Guide](../plugins/LLM-PROVIDER-GUIDE.md)
 - [Plugin Initialization](./PLUGIN_INITIALIZATION.md)
-- [Plugin Template](../plugins/dist/qtap-plugin-template/)
+- [Plugin Manifest Schema](../public/schemas/plugin-manifest.schema.json)

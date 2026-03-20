@@ -1,6 +1,6 @@
 {
   "name": "create-quilltap-theme",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Scaffold a new Quilltap theme plugin",
   "main": "dist/index.js",
   "bin": {
@@ -36,7 +36,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.19.15",
-    "esbuild": "^0.27.0",
-    "typescript": "^5.0.0"
+    "esbuild": "^0.27.4",
+    "typescript": "^5.9.3"
   }
 }

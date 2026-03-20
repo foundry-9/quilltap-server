@@ -17,10 +17,10 @@ LLM provider plugins enable Quilltap to connect to new AI services. Each provide
 
 ## Quick Start
 
-### 1. Copy the Template
+### 1. Copy an Existing Plugin
 
 ```bash
-cp -r plugins/dist/qtap-plugin-template plugins/dist/qtap-plugin-myprovider
+cp -r plugins/dist/qtap-plugin-ollama plugins/dist/qtap-plugin-myprovider   # or qtap-plugin-openrouter
 cd plugins/dist/qtap-plugin-myprovider
 ```
 
@@ -28,7 +28,7 @@ cd plugins/dist/qtap-plugin-myprovider
 
 ```json
 {
-  "$schema": "../qtap-plugin-template/schemas/plugin-manifest.schema.json",
+  "$schema": "../../../public/schemas/plugin-manifest.schema.json",
   "name": "qtap-plugin-myprovider",
   "title": "My Provider",
   "description": "Integration with MyProvider's API",

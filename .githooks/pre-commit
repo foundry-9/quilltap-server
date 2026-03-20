@@ -173,10 +173,10 @@ if [ -f package-lock.json ]; then
   npm install --package-lock-only
 fi
 
-if [ -f ./plugins/dist/qtap-plugin-template/schemas/plugin-manifest.json ]; then
+if [ -f ./public/schemas/plugin-manifest.schema.json ]; then
   npm run generate:schemas
   npm run build:plugins
-  git add ./plugins/dist/qtap-plugin-template/schemas/plugin-manifest.json
+  git add ./public/schemas/plugin-manifest.schema.json
   git add ./plugins
 fi
 
