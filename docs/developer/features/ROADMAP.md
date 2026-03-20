@@ -25,7 +25,7 @@ This document tracks planned features and improvements for Quilltap.
 - [ ] Better "chat" look-and-feel for help
 - [ ] Unit text coverage
 - [ ] Standard refactor pass
-- [ ] Organize documentation (dev docs, help docs, README)
+- [X] Organize documentation (dev docs, help docs, README)
 
 ## Planned Features
 

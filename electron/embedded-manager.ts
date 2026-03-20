@@ -4,6 +4,42 @@ import * as fs from 'fs';
 import { HOST_PORT } from './constants';
 
 /**
+ * Ensure a `node_modules` symlink exists pointing to `_modules` in the server
+ * directory. The build script renames `node_modules` → `_modules` to bypass
+ * electron-builder's hardcoded `node_modules` exclusion for extraResources.
+ * CommonJS `require()` finds packages via the `NODE_PATH` env var, but ESM
+ * `import()` ignores `NODE_PATH` and only walks `node_modules/` directories.
+ * Creating this symlink at runtime satisfies both resolution algorithms.
+ */
+function ensureNodeModulesSymlink(serverDir: string): void {
+  const modulesDir = path.join(serverDir, '_modules');
+  const nodeModulesDir = path.join(serverDir, 'node_modules');
+
+  if (!fs.existsSync(modulesDir)) {
+    // No _modules directory — nothing to symlink (local dev or node_modules still present)
+    return;
+  }
+
+  if (fs.existsSync(nodeModulesDir)) {
+    // Already exists (either real dir or symlink) — no action needed
+    return;
+  }
+
+  try {
+    if (process.platform === 'win32') {
+      // Windows: use junction (works without admin privileges, requires absolute target)
+      fs.symlinkSync(modulesDir, nodeModulesDir, 'junction');
+    } else {
+      // macOS/Linux: relative symlink
+      fs.symlinkSync('_modules', nodeModulesDir, 'dir');
+    }
+    console.log('[EmbeddedManager] Created node_modules → _modules symlink for ESM resolution');
+  } catch (err) {
+    console.warn('[EmbeddedManager] Failed to create node_modules symlink:', err);
+  }
+}
+
+/**
  * Resolve the path to the Next.js standalone server.js.
  *
  * - **Dev mode** (`ELECTRON_DEV`): not used — dev connects directly to localhost:3000
@@ -97,6 +133,9 @@ export class EmbeddedManager {
 
     console.log(`[EmbeddedManager] Spawning: ${process.execPath} ${serverPath}`);
     console.log(`[EmbeddedManager] Data dir: ${dataDir}`);
+
+    // Ensure ESM module resolution works with the _modules rename workaround
+    ensureNodeModulesSymlink(path.dirname(serverPath));
 
     // Detect the host OS timezone to pass through to the server
     const hostTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
