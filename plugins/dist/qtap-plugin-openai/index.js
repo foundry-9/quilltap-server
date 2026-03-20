@@ -7113,6 +7113,14 @@ function createPluginLogger(pluginName, minLevel = "debug") {
   }
   return createConsoleLoggerWithChild(pluginName, minLevel);
 }
+var GLOBAL_VERSION_KEY = "__quilltap_app_version";
+function getQuilltapVersion() {
+  const version = globalThis[GLOBAL_VERSION_KEY];
+  return typeof version === "string" ? version : "unknown";
+}
+function getQuilltapUserAgent() {
+  return `Quilltap/${getQuilltapVersion()}`;
+}
 var rewriteLogger = createPluginLogger("host-rewrite");
 
 // provider.ts
@@ -7399,7 +7407,8 @@ var OpenAIProvider = class {
   async sendMessage(params, apiKey) {
     const client = new OpenAI({
       apiKey,
-      dangerouslyAllowBrowser: process.env.NODE_ENV === "test"
+      dangerouslyAllowBrowser: process.env.NODE_ENV === "test",
+      defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
     });
     const { input, instructions, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
     logger.debug("Preparing Responses API request", {
@@ -7479,7 +7488,8 @@ var OpenAIProvider = class {
   async *streamMessage(params, apiKey) {
     const client = new OpenAI({
       apiKey,
-      dangerouslyAllowBrowser: process.env.NODE_ENV === "test"
+      dangerouslyAllowBrowser: process.env.NODE_ENV === "test",
+      defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
     });
     const { input, instructions, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
     const baseParams = this.buildBaseRequestParams(params, input, instructions);
@@ -7585,7 +7595,10 @@ var OpenAIProvider = class {
   }
   async validateApiKey(apiKey) {
     try {
-      const client = new OpenAI({ apiKey });
+      const client = new OpenAI({
+        apiKey,
+        defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
+      });
       await client.models.list();
       return true;
     } catch (error) {
@@ -7595,7 +7608,10 @@ var OpenAIProvider = class {
   }
   async getAvailableModels(apiKey) {
     try {
-      const client = new OpenAI({ apiKey });
+      const client = new OpenAI({
+        apiKey,
+        defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
+      });
       const models = await client.models.list();
       const chatModelPrefixes = ["gpt-4", "gpt-5", "o1", "o3", "o4"];
       const chatModels = models.data.filter((m) => chatModelPrefixes.some((prefix) => m.id.startsWith(prefix))).map((m) => m.id).sort();
@@ -7606,7 +7622,10 @@ var OpenAIProvider = class {
     }
   }
   async generateImage(params, apiKey) {
-    const client = new OpenAI({ apiKey });
+    const client = new OpenAI({
+      apiKey,
+      defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
+    });
     const response = await client.images.generate({
       model: params.model ?? "dall-e-3",
       prompt: params.prompt,
@@ -7679,7 +7698,10 @@ var OpenAIImageProvider = class {
     return "1024x1024";
   }
   async generateImage(params, apiKey) {
-    const client = new OpenAI({ apiKey });
+    const client = new OpenAI({
+      apiKey,
+      defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
+    });
     const isGptImage = this.isGptImageModel(params.model ?? "");
     const requestParams = {
       model: params.model,
@@ -7712,7 +7734,10 @@ var OpenAIImageProvider = class {
   }
   async validateApiKey(apiKey) {
     try {
-      const client = new OpenAI({ apiKey });
+      const client = new OpenAI({
+        apiKey,
+        defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
+      });
       await client.models.list();
       return true;
     } catch (error) {
@@ -7799,7 +7824,8 @@ var OpenAIEmbeddingProvider = class {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`
+        Authorization: `Bearer ${apiKey}`,
+        "User-Agent": getQuilltapUserAgent()
       },
       body: JSON.stringify(requestPayload)
     });
@@ -7838,7 +7864,8 @@ var OpenAIEmbeddingProvider = class {
     try {
       const response = await fetch(`${this.baseUrl}/models`, {
         headers: {
-          Authorization: `Bearer ${apiKey}`
+          Authorization: `Bearer ${apiKey}`,
+          "User-Agent": getQuilltapUserAgent()
         }
       });
       if (!response.ok) {
@@ -8222,7 +8249,8 @@ var moderationPlugin = {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`
+        "Authorization": `Bearer ${apiKey}`,
+        "User-Agent": getQuilltapUserAgent()
       },
       body: JSON.stringify({ input: content })
     });
@@ -8261,7 +8289,8 @@ var moderationPlugin = {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`
+          "Authorization": `Bearer ${apiKey}`,
+          "User-Agent": getQuilltapUserAgent()
         },
         body: JSON.stringify({ input: "test" })
       });

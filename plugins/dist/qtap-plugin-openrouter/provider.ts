@@ -17,7 +17,7 @@ import type {
   ImageGenParams,
   ImageGenResponse,
 } from './types';
-import { createPluginLogger } from '@quilltap/plugin-utils';
+import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
 
 const logger = createPluginLogger('qtap-plugin-openrouter');
 
@@ -79,7 +79,7 @@ export class OpenRouterProvider implements LLMProvider {
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || 'http://localhost:3000',
-      xTitle: 'Quilltap',
+      xTitle: getQuilltapUserAgent(),
     });
 
     // Strip attachments from messages and convert to OpenRouter format
@@ -203,7 +203,7 @@ export class OpenRouterProvider implements LLMProvider {
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || 'http://localhost:3000',
-      xTitle: 'Quilltap',
+      xTitle: getQuilltapUserAgent(),
     });
 
     // Convert messages to SDK format
@@ -454,6 +454,7 @@ export class OpenRouterProvider implements LLMProvider {
           'Authorization': `Bearer ${apiKey}`,
           'HTTP-Referer': process.env.BASE_URL || 'http://localhost:3000',
           'X-Title': 'Quilltap',
+          'User-Agent': getQuilltapUserAgent(),
         },
         body: JSON.stringify(body),
       });
@@ -565,7 +566,7 @@ export class OpenRouterProvider implements LLMProvider {
       const client = new OpenRouter({
         apiKey,
         httpReferer: process.env.BASE_URL || 'http://localhost:3000',
-        xTitle: 'Quilltap',
+        xTitle: getQuilltapUserAgent(),
       });
       await client.models.list();
       return true;
@@ -584,7 +585,7 @@ export class OpenRouterProvider implements LLMProvider {
       const client = new OpenRouter({
         apiKey,
         httpReferer: process.env.BASE_URL || 'http://localhost:3000',
-        xTitle: 'Quilltap',
+        xTitle: getQuilltapUserAgent(),
       });
 
       const response = await client.models.list();
@@ -607,7 +608,7 @@ export class OpenRouterProvider implements LLMProvider {
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || 'http://localhost:3000',
-      xTitle: 'Quilltap',
+      xTitle: getQuilltapUserAgent(),
     });
 
     const requestBody: any = {

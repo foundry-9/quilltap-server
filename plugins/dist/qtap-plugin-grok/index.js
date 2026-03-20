@@ -7112,6 +7112,14 @@ function createPluginLogger(pluginName, minLevel = "debug") {
   }
   return createConsoleLoggerWithChild(pluginName, minLevel);
 }
+var GLOBAL_VERSION_KEY = "__quilltap_app_version";
+function getQuilltapVersion() {
+  const version = globalThis[GLOBAL_VERSION_KEY];
+  return typeof version === "string" ? version : "unknown";
+}
+function getQuilltapUserAgent() {
+  return `Quilltap/${getQuilltapVersion()}`;
+}
 var rewriteLogger = createPluginLogger("host-rewrite");
 
 // provider.ts
@@ -7338,7 +7346,8 @@ ${textContent}`
     }
     const client = new OpenAI({
       apiKey,
-      baseURL: this.baseUrl
+      baseURL: this.baseUrl,
+      defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
     });
     const { input, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
     logger.debug("Preparing Responses API request", {
@@ -7416,7 +7425,8 @@ ${textContent}`
     }
     const client = new OpenAI({
       apiKey,
-      baseURL: this.baseUrl
+      baseURL: this.baseUrl,
+      defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
     });
     const { input, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
     logger.debug("Preparing streaming Responses API request", {
@@ -7513,7 +7523,8 @@ ${textContent}`
     try {
       const client = new OpenAI({
         apiKey,
-        baseURL: this.baseUrl
+        baseURL: this.baseUrl,
+        defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
       });
       await client.models.list();
       return true;
@@ -7526,7 +7537,8 @@ ${textContent}`
     try {
       const client = new OpenAI({
         apiKey,
-        baseURL: this.baseUrl
+        baseURL: this.baseUrl,
+        defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
       });
       const models = await client.models.list();
       const grokModels = models.data.map((m) => m.id).sort();
@@ -7542,7 +7554,8 @@ ${textContent}`
     }
     const client = new OpenAI({
       apiKey,
-      baseURL: this.baseUrl
+      baseURL: this.baseUrl,
+      defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
     });
     const response = await client.images.generate({
       model: params.model ?? "grok-2-image",
@@ -7589,7 +7602,8 @@ var GrokImageProvider = class {
     }
     const client = new OpenAI({
       apiKey,
-      baseURL: this.baseUrl
+      baseURL: this.baseUrl,
+      defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
     });
     const model = params.model ?? "grok-imagine-image";
     const requestParams = {
@@ -7628,7 +7642,8 @@ var GrokImageProvider = class {
     try {
       const client = new OpenAI({
         apiKey,
-        baseURL: this.baseUrl
+        baseURL: this.baseUrl,
+        defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
       });
       await client.models.list();
       return true;

@@ -132,6 +132,8 @@ export interface ToolExecutionContext {
   callingParticipantId?: string;
   /** Project ID for project_info tool */
   projectId?: string;
+  /** Browser User-Agent from the originating request (scrubbed of Electron/Quilltap tokens) */
+  browserUserAgent?: string;
 }
 
 /**
@@ -241,6 +243,7 @@ export async function executeToolCallWithContext(
         characterId,
         callingParticipantId: context.callingParticipantId,
         toolConfig,
+        browserUserAgent: context.browserUserAgent,
       };
 
       const result = await toolRegistry.executeTool(

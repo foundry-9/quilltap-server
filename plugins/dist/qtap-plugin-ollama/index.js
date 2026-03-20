@@ -7112,6 +7112,14 @@ function createPluginLogger(pluginName, minLevel = "debug") {
   }
   return createConsoleLoggerWithChild(pluginName, minLevel);
 }
+var GLOBAL_VERSION_KEY = "__quilltap_app_version";
+function getQuilltapVersion() {
+  const version = globalThis[GLOBAL_VERSION_KEY];
+  return typeof version === "string" ? version : "unknown";
+}
+function getQuilltapUserAgent() {
+  return `Quilltap/${getQuilltapVersion()}`;
+}
 var rewriteLogger = createPluginLogger("host-rewrite");
 
 // provider.ts
@@ -7185,7 +7193,10 @@ var OllamaProvider = class {
     try {
       const response = await fetch(`${this.baseUrl}/api/chat`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "User-Agent": getQuilltapUserAgent()
+        },
         body: JSON.stringify(requestBody)
       });
       if (!response.ok) {
@@ -7255,7 +7266,10 @@ var OllamaProvider = class {
     try {
       const response = await fetch(`${this.baseUrl}/api/chat`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "User-Agent": getQuilltapUserAgent()
+        },
         body: JSON.stringify(requestBody)
       });
       if (!response.ok) {
@@ -7359,7 +7373,10 @@ var OllamaProvider = class {
   async validateApiKey(apiKey) {
     try {
       const response = await fetch(`${this.baseUrl}/api/tags`, {
-        method: "GET"
+        method: "GET",
+        headers: {
+          "User-Agent": getQuilltapUserAgent()
+        }
       });
       const isValid = response.ok;
       return isValid;
@@ -7371,7 +7388,10 @@ var OllamaProvider = class {
   async getAvailableModels(apiKey) {
     try {
       const response = await fetch(`${this.baseUrl}/api/tags`, {
-        method: "GET"
+        method: "GET",
+        headers: {
+          "User-Agent": getQuilltapUserAgent()
+        }
       });
       if (!response.ok) {
         logger.error("Failed to fetch Ollama models", { context: "OllamaProvider.getAvailableModels", status: response.status });
@@ -7416,7 +7436,8 @@ var OllamaEmbeddingProvider = class {
     const response = await fetch(`${this.baseUrl}/api/embeddings`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "User-Agent": getQuilltapUserAgent()
       },
       body: JSON.stringify(requestPayload)
     });
@@ -7467,7 +7488,11 @@ var OllamaEmbeddingProvider = class {
    */
   async getAvailableModels(apiKey) {
     try {
-      const response = await fetch(`${this.baseUrl}/api/tags`);
+      const response = await fetch(`${this.baseUrl}/api/tags`, {
+        headers: {
+          "User-Agent": getQuilltapUserAgent()
+        }
+      });
       if (!response.ok) {
         return [];
       }
@@ -7489,7 +7514,11 @@ var OllamaEmbeddingProvider = class {
    */
   async isAvailable() {
     try {
-      const response = await fetch(`${this.baseUrl}/api/tags`);
+      const response = await fetch(`${this.baseUrl}/api/tags`, {
+        headers: {
+          "User-Agent": getQuilltapUserAgent()
+        }
+      });
       return response.ok;
     } catch {
       return false;

@@ -7,7 +7,7 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 import type { LLMProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage, ImageGenParams, ImageGenResponse } from './types'
-import { createPluginLogger } from '@quilltap/plugin-utils'
+import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils'
 
 const logger = createPluginLogger('qtap-plugin-anthropic')
 
@@ -256,7 +256,10 @@ export class AnthropicProvider implements LLMProvider {
 
   async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
 
-    const client = new Anthropic({ apiKey })
+    const client = new Anthropic({
+      apiKey,
+      defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+    })
 
     // Anthropic requires system message separate from messages array
     const systemMessage = params.messages.find(m => m.role === 'system')
@@ -358,7 +361,10 @@ export class AnthropicProvider implements LLMProvider {
 
   async *streamMessage(params: LLMParams, apiKey: string): AsyncGenerator<StreamChunk> {
 
-    const client = new Anthropic({ apiKey })
+    const client = new Anthropic({
+      apiKey,
+      defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+    })
 
     const systemMessage = params.messages.find(m => m.role === 'system')
 
@@ -577,7 +583,10 @@ export class AnthropicProvider implements LLMProvider {
   async validateApiKey(apiKey: string): Promise<boolean> {
     try {
 
-      const client = new Anthropic({ apiKey })
+      const client = new Anthropic({
+        apiKey,
+        defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+      })
       // Anthropic doesn't have a direct validation endpoint, so we make a minimal request
       await client.messages.create({
         model: 'claude-haiku-4-5-20251001',
@@ -595,7 +604,10 @@ export class AnthropicProvider implements LLMProvider {
   async getAvailableModels(apiKey: string): Promise<string[]> {
 
     try {
-      const client = new Anthropic({ apiKey })
+      const client = new Anthropic({
+        apiKey,
+        defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+      })
       const response = await client.models.list()
 
       // Extract model IDs from the response

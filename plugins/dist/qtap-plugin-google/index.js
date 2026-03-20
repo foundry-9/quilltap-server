@@ -46867,6 +46867,14 @@ function createPluginLogger(pluginName, minLevel = "debug") {
   }
   return createConsoleLoggerWithChild(pluginName, minLevel);
 }
+var GLOBAL_VERSION_KEY = "__quilltap_app_version";
+function getQuilltapVersion() {
+  const version = globalThis[GLOBAL_VERSION_KEY];
+  return typeof version === "string" ? version : "unknown";
+}
+function getQuilltapUserAgent() {
+  return `Quilltap/${getQuilltapVersion()}`;
+}
 var rewriteLogger = createPluginLogger("host-rewrite");
 
 // provider.ts
@@ -47226,7 +47234,7 @@ var GoogleProvider = class {
     return { contents, systemInstruction, shouldDisableTools, attachmentResults: { sent, failed } };
   }
   async sendMessage(params, apiKey) {
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey, userAgentExtra: getQuilltapUserAgent() });
     const tools = [];
     if (params.tools && params.tools.length > 0) {
       tools.push({
@@ -47311,7 +47319,7 @@ var GoogleProvider = class {
     }
   }
   async *streamMessage(params, apiKey) {
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey, userAgentExtra: getQuilltapUserAgent() });
     const tools = [];
     if (params.tools && params.tools.length > 0) {
       tools.push({
@@ -47421,7 +47429,7 @@ var GoogleProvider = class {
   }
   async validateApiKey(apiKey) {
     try {
-      const ai = new GoogleGenAI({ apiKey });
+      const ai = new GoogleGenAI({ apiKey, userAgentExtra: getQuilltapUserAgent() });
       await ai.models.generateContent({
         model: "gemini-2.5-flash",
         contents: "test"
@@ -47434,7 +47442,7 @@ var GoogleProvider = class {
   }
   async getAvailableModels(apiKey) {
     try {
-      const ai = new GoogleGenAI({ apiKey });
+      const ai = new GoogleGenAI({ apiKey, userAgentExtra: getQuilltapUserAgent() });
       const modelList = [];
       const pager = await ai.models.list();
       for await (const model of pager) {
@@ -47480,7 +47488,7 @@ var GoogleProvider = class {
     }
   }
   async generateImage(params, apiKey) {
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey, userAgentExtra: getQuilltapUserAgent() });
     const modelName = params.model ?? "gemini-2.5-flash-image";
     const config2 = {
       temperature: 0.7,

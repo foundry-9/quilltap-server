@@ -8,7 +8,7 @@
 
 import { GoogleGenAI } from '@google/genai';
 import type { LLMProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage, ImageGenParams, ImageGenResponse, ModelMetadata } from './types';
-import { createPluginLogger } from '@quilltap/plugin-utils';
+import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
 
 const logger = createPluginLogger('qtap-plugin-google');
 
@@ -466,7 +466,7 @@ export class GoogleProvider implements LLMProvider {
   }
 
   async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey, userAgentExtra: getQuilltapUserAgent() });
 
     // Build tools configuration
     const tools: any[] = [];
@@ -576,7 +576,7 @@ export class GoogleProvider implements LLMProvider {
   }
 
   async *streamMessage(params: LLMParams, apiKey: string): AsyncGenerator<StreamChunk> {
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey, userAgentExtra: getQuilltapUserAgent() });
 
     // Build tools configuration
     const tools: any[] = [];
@@ -716,7 +716,7 @@ export class GoogleProvider implements LLMProvider {
 
   async validateApiKey(apiKey: string): Promise<boolean> {
     try {
-      const ai = new GoogleGenAI({ apiKey });
+      const ai = new GoogleGenAI({ apiKey, userAgentExtra: getQuilltapUserAgent() });
       // Try to generate simple content to validate the API key
       await ai.models.generateContent({
         model: 'gemini-2.5-flash',
@@ -731,7 +731,7 @@ export class GoogleProvider implements LLMProvider {
 
   async getAvailableModels(apiKey: string): Promise<string[]> {
     try {
-      const ai = new GoogleGenAI({ apiKey });
+      const ai = new GoogleGenAI({ apiKey, userAgentExtra: getQuilltapUserAgent() });
 
       // Use the models.list() API to get available models dynamically
       const modelList: string[] = [];
@@ -788,7 +788,7 @@ export class GoogleProvider implements LLMProvider {
   }
 
   async generateImage(params: ImageGenParams, apiKey: string): Promise<ImageGenResponse> {
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey, userAgentExtra: getQuilltapUserAgent() });
 
     // Use the specified model or default to gemini-2.5-flash-image
     const modelName = params.model ?? 'gemini-2.5-flash-image';

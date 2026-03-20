@@ -6,7 +6,7 @@
  */
 
 import type { LLMProvider, LLMParams, LLMResponse, StreamChunk, ImageGenParams, ImageGenResponse } from './types';
-import { createPluginLogger } from '@quilltap/plugin-utils';
+import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
 
 const logger = createPluginLogger('qtap-plugin-ollama');
 
@@ -96,7 +96,10 @@ export class OllamaProvider implements LLMProvider {
     try {
       const response = await fetch(`${this.baseUrl}/api/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': getQuilltapUserAgent(),
+        },
         body: JSON.stringify(requestBody),
       });
 
@@ -181,7 +184,10 @@ export class OllamaProvider implements LLMProvider {
     try {
       const response = await fetch(`${this.baseUrl}/api/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': getQuilltapUserAgent(),
+        },
         body: JSON.stringify(requestBody),
       });
       if (!response.ok) {
@@ -317,6 +323,9 @@ export class OllamaProvider implements LLMProvider {
     try {
       const response = await fetch(`${this.baseUrl}/api/tags`, {
         method: 'GET',
+        headers: {
+          'User-Agent': getQuilltapUserAgent(),
+        },
       });
       const isValid = response.ok;
       return isValid;
@@ -330,6 +339,9 @@ export class OllamaProvider implements LLMProvider {
     try {
       const response = await fetch(`${this.baseUrl}/api/tags`, {
         method: 'GET',
+        headers: {
+          'User-Agent': getQuilltapUserAgent(),
+        },
       });
 
       if (!response.ok) {

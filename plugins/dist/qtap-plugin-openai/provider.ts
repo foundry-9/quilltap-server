@@ -11,7 +11,7 @@
 
 import OpenAI from 'openai';
 import type { LLMProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage, ImageGenParams, ImageGenResponse } from './types';
-import { createPluginLogger } from '@quilltap/plugin-utils';
+import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
 
 const logger = createPluginLogger('qtap-plugin-openai');
 
@@ -370,6 +370,7 @@ export class OpenAIProvider implements LLMProvider {
     const client = new OpenAI({
       apiKey,
       dangerouslyAllowBrowser: process.env.NODE_ENV === 'test',
+      defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
     });
     const { input, instructions, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
 
@@ -468,6 +469,7 @@ export class OpenAIProvider implements LLMProvider {
     const client = new OpenAI({
       apiKey,
       dangerouslyAllowBrowser: process.env.NODE_ENV === 'test',
+      defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
     });
     const { input, instructions, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
     const baseParams = this.buildBaseRequestParams(params, input, instructions);
@@ -589,7 +591,10 @@ export class OpenAIProvider implements LLMProvider {
 
   async validateApiKey(apiKey: string): Promise<boolean> {
     try {
-      const client = new OpenAI({ apiKey });
+      const client = new OpenAI({
+        apiKey,
+        defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+      });
       await client.models.list();
       return true;
     } catch (error) {
@@ -600,7 +605,10 @@ export class OpenAIProvider implements LLMProvider {
 
   async getAvailableModels(apiKey: string): Promise<string[]> {
     try {
-      const client = new OpenAI({ apiKey });
+      const client = new OpenAI({
+        apiKey,
+        defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+      });
       const models = await client.models.list();
       // Filter for Responses API-compatible chat models
       const chatModelPrefixes = ['gpt-4', 'gpt-5', 'o1', 'o3', 'o4'];
@@ -616,7 +624,10 @@ export class OpenAIProvider implements LLMProvider {
   }
 
   async generateImage(params: ImageGenParams, apiKey: string): Promise<ImageGenResponse> {
-    const client = new OpenAI({ apiKey });
+    const client = new OpenAI({
+      apiKey,
+      defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+    });
 
     const response = await client.images.generate({
       model: params.model ?? 'dall-e-3',

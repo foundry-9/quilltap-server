@@ -38,6 +38,7 @@ import type {
   PluginLogger,
 } from '@quilltap/plugin-types';
 import { createPluginLogger } from '../logging';
+import { getQuilltapUserAgent } from '../version';
 
 /**
  * Configuration options for OpenAI-compatible providers.
@@ -180,6 +181,21 @@ export class OpenAICompatibleProvider implements LLMProvider {
   }
 
   /**
+   * Creates an OpenAI client configured with the provider's base URL,
+   * API key, and Quilltap User-Agent header.
+   *
+   * @param apiKey - API key for authentication
+   * @returns Configured OpenAI client instance
+   */
+  protected createClient(apiKey: string): OpenAI {
+    return new OpenAI({
+      apiKey: this.getEffectiveApiKey(apiKey),
+      baseURL: this.baseUrl,
+      defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+    });
+  }
+
+  /**
    * Sends a message and returns the complete response.
    *
    * @param params - LLM parameters including messages, model, and settings
@@ -190,10 +206,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
     this.validateApiKeyRequirement(apiKey);
     const attachmentResults = this.collectAttachmentFailures(params);
 
-    const client = new OpenAI({
-      apiKey: this.getEffectiveApiKey(apiKey),
-      baseURL: this.baseUrl,
-    });
+    const client = this.createClient(apiKey);
 
     // Map messages to OpenAI Chat Completions format, including tool messages
     const messages = params.messages
@@ -273,10 +286,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
     this.validateApiKeyRequirement(apiKey);
     const attachmentResults = this.collectAttachmentFailures(params);
 
-    const client = new OpenAI({
-      apiKey: this.getEffectiveApiKey(apiKey),
-      baseURL: this.baseUrl,
-    });
+    const client = this.createClient(apiKey);
 
     // Map messages to OpenAI Chat Completions format, including tool messages
     const messages = params.messages
@@ -386,10 +396,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
     }
 
     try {
-      const client = new OpenAI({
-        apiKey: this.getEffectiveApiKey(apiKey),
-        baseURL: this.baseUrl,
-      });
+      const client = this.createClient(apiKey);
       await client.models.list();
       return true;
     } catch (error) {
@@ -418,10 +425,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
     }
 
     try {
-      const client = new OpenAI({
-        apiKey: this.getEffectiveApiKey(apiKey),
-        baseURL: this.baseUrl,
-      });
+      const client = this.createClient(apiKey);
       const models = await client.models.list();
       const modelList = models.data.map((m) => m.id).sort();
       return modelList;

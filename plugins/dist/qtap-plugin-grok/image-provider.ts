@@ -8,7 +8,7 @@
 import OpenAI from 'openai';
 import type { Images } from 'openai/resources';
 import type { ImageGenProvider as ImageGenProviderBase, ImageGenParams, ImageGenResponse } from './types';
-import { createPluginLogger } from '@quilltap/plugin-utils';
+import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
 
 const logger = createPluginLogger('qtap-plugin-grok');
 
@@ -33,6 +33,7 @@ export class GrokImageProvider implements ImageGenProviderBase {
     const client = new OpenAI({
       apiKey,
       baseURL: this.baseUrl,
+      defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
     });
 
     const model = params.model ?? 'grok-imagine-image';
@@ -84,6 +85,7 @@ export class GrokImageProvider implements ImageGenProviderBase {
       const client = new OpenAI({
         apiKey,
         baseURL: this.baseUrl,
+        defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
       });
       await client.models.list();
       return true;

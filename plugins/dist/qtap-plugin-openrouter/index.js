@@ -20261,6 +20261,14 @@ function createPluginLogger(pluginName, minLevel = "debug") {
   }
   return createConsoleLoggerWithChild(pluginName, minLevel);
 }
+var GLOBAL_VERSION_KEY = "__quilltap_app_version";
+function getQuilltapVersion() {
+  const version = globalThis[GLOBAL_VERSION_KEY];
+  return typeof version === "string" ? version : "unknown";
+}
+function getQuilltapUserAgent() {
+  return `Quilltap/${getQuilltapVersion()}`;
+}
 var rewriteLogger = createPluginLogger("host-rewrite");
 
 // provider.ts
@@ -20296,7 +20304,7 @@ var OpenRouterProvider = class {
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || "http://localhost:3000",
-      xTitle: "Quilltap"
+      xTitle: getQuilltapUserAgent()
     });
     const messages = params.messages.filter((m) => !(m.role === "tool" && !m.toolCallId)).map((m) => {
       if (m.role === "tool" && m.toolCallId) {
@@ -20391,7 +20399,7 @@ var OpenRouterProvider = class {
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || "http://localhost:3000",
-      xTitle: "Quilltap"
+      xTitle: getQuilltapUserAgent()
     });
     const messages = params.messages.filter((m) => !(m.role === "tool" && !m.toolCallId)).map((m) => {
       if (m.role === "tool" && m.toolCallId) {
@@ -20576,7 +20584,8 @@ var OpenRouterProvider = class {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${apiKey}`,
           "HTTP-Referer": process.env.BASE_URL || "http://localhost:3000",
-          "X-Title": "Quilltap"
+          "X-Title": "Quilltap",
+          "User-Agent": getQuilltapUserAgent()
         },
         body: JSON.stringify(body)
       });
@@ -20670,7 +20679,7 @@ var OpenRouterProvider = class {
       const client = new OpenRouter({
         apiKey,
         httpReferer: process.env.BASE_URL || "http://localhost:3000",
-        xTitle: "Quilltap"
+        xTitle: getQuilltapUserAgent()
       });
       await client.models.list();
       return true;
@@ -20688,7 +20697,7 @@ var OpenRouterProvider = class {
       const client = new OpenRouter({
         apiKey,
         httpReferer: process.env.BASE_URL || "http://localhost:3000",
-        xTitle: "Quilltap"
+        xTitle: getQuilltapUserAgent()
       });
       const response = await client.models.list();
       const models = response.data?.map((m) => m.id) ?? [];
@@ -20706,7 +20715,7 @@ var OpenRouterProvider = class {
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || "http://localhost:3000",
-      xTitle: "Quilltap"
+      xTitle: getQuilltapUserAgent()
     });
     const requestBody = {
       model: params.model ?? "google/gemini-2.5-flash-image-preview",
@@ -20767,7 +20776,7 @@ var OpenRouterEmbeddingProvider = class {
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || "http://localhost:3000",
-      xTitle: "Quilltap"
+      xTitle: getQuilltapUserAgent()
     });
     const response = await client.embeddings.generate({
       requestBody: {
@@ -20816,7 +20825,7 @@ var OpenRouterEmbeddingProvider = class {
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || "http://localhost:3000",
-      xTitle: "Quilltap"
+      xTitle: getQuilltapUserAgent()
     });
     const response = await client.embeddings.generate({
       requestBody: {
@@ -20867,7 +20876,7 @@ var OpenRouterEmbeddingProvider = class {
       const client = new OpenRouter({
         apiKey,
         httpReferer: process.env.BASE_URL || "http://localhost:3000",
-        xTitle: "Quilltap"
+        xTitle: getQuilltapUserAgent()
       });
       const response = await client.embeddings.listModels();
       const models = response.data?.map((m) => m.id) ?? [];

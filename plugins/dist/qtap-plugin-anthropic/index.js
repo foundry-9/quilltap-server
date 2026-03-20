@@ -11952,6 +11952,14 @@ function createPluginLogger(pluginName, minLevel = "debug") {
   }
   return createConsoleLoggerWithChild(pluginName, minLevel);
 }
+var GLOBAL_VERSION_KEY = "__quilltap_app_version";
+function getQuilltapVersion() {
+  const version = globalThis[GLOBAL_VERSION_KEY];
+  return typeof version === "string" ? version : "unknown";
+}
+function getQuilltapUserAgent() {
+  return `Quilltap/${getQuilltapVersion()}`;
+}
 var rewriteLogger = createPluginLogger("host-rewrite");
 
 // provider.ts
@@ -12127,7 +12135,10 @@ var AnthropicProvider = class {
     return { messages: formattedMessages, attachmentResults: { sent, failed } };
   }
   async sendMessage(params, apiKey) {
-    const client = new Anthropic({ apiKey });
+    const client = new Anthropic({
+      apiKey,
+      defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
+    });
     const systemMessage = params.messages.find((m) => m.role === "system");
     const profileParams = params.profileParameters;
     const cachingEnabled = profileParams?.enableCacheBreakpoints ?? false;
@@ -12194,7 +12205,10 @@ var AnthropicProvider = class {
     };
   }
   async *streamMessage(params, apiKey) {
-    const client = new Anthropic({ apiKey });
+    const client = new Anthropic({
+      apiKey,
+      defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
+    });
     const systemMessage = params.messages.find((m) => m.role === "system");
     const profileParams = params.profileParameters;
     const cachingEnabled = profileParams?.enableCacheBreakpoints ?? false;
@@ -12347,7 +12361,10 @@ var AnthropicProvider = class {
   }
   async validateApiKey(apiKey) {
     try {
-      const client = new Anthropic({ apiKey });
+      const client = new Anthropic({
+        apiKey,
+        defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
+      });
       await client.messages.create({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 1,
@@ -12361,7 +12378,10 @@ var AnthropicProvider = class {
   }
   async getAvailableModels(apiKey) {
     try {
-      const client = new Anthropic({ apiKey });
+      const client = new Anthropic({
+        apiKey,
+        defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
+      });
       const response = await client.models.list();
       const models = [];
       for await (const model of response) {

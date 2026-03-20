@@ -86,6 +86,8 @@ export interface SendMessageOptions {
   pendingToolResults?: PendingToolResultInput[]
   /** Target participant IDs for whisper messages (null = visible to all) */
   targetParticipantIds?: string[] | null
+  /** Browser User-Agent string from the originating request (scrubbed of Electron/Quilltap tokens) */
+  browserUserAgent?: string
 }
 
 /**

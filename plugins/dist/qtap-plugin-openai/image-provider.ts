@@ -8,7 +8,7 @@
 
 import OpenAI from 'openai';
 import type { ImageGenProvider as ImageGenProviderBase, ImageGenParams, ImageGenResponse } from './types';
-import { createPluginLogger } from '@quilltap/plugin-utils';
+import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
 
 const logger = createPluginLogger('qtap-plugin-openai');
 
@@ -63,7 +63,10 @@ export class OpenAIImageProvider implements ImageGenProviderBase {
   }
 
   async generateImage(params: ImageGenParams, apiKey: string): Promise<ImageGenResponse> {
-    const client = new OpenAI({ apiKey });
+    const client = new OpenAI({
+      apiKey,
+      defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+    });
 
     // gpt-image models have different parameter support than DALL-E models
     const isGptImage = this.isGptImageModel(params.model ?? '');
@@ -108,7 +111,10 @@ export class OpenAIImageProvider implements ImageGenProviderBase {
 
   async validateApiKey(apiKey: string): Promise<boolean> {
     try {
-      const client = new OpenAI({ apiKey });
+      const client = new OpenAI({
+        apiKey,
+        defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+      });
       await client.models.list();
       return true;
     } catch (error) {

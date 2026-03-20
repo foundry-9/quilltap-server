@@ -1132,7 +1132,8 @@ async function processMessage(
     characterParticipant.id,
     imageProfileId,
     chatSettings?.cheapLLMSettings?.embeddingProfileId ?? undefined,
-    chat.projectId
+    chat.projectId,
+    options.browserUserAgent,
   )
 
   // ============================================================================

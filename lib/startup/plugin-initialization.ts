@@ -21,6 +21,7 @@ import type { SearchProviderPlugin } from '@/lib/plugins/interfaces/search-provi
 import type { ModerationProviderPlugin } from '@/lib/plugins/interfaces/moderation-provider-plugin';
 import type { ThemePlugin } from '@quilltap/plugin-types';
 import { injectPluginLoggerFactory, clearPluginLoggerFactory } from '@/lib/plugins/plugin-logger-bridge';
+import { __injectQuilltapVersion, __clearQuilltapVersion } from '@quilltap/plugin-utils';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import packageJson from '@/package.json';
 import { join } from 'node:path';
@@ -219,6 +220,9 @@ async function performInitialization(): Promise<PluginInitializationResult> {
     // This allows plugins using @quilltap/plugin-utils to have their
     // logs routed through Quilltap's core logging system
     injectPluginLoggerFactory();
+
+    // Inject the app version so plugins can identify themselves in API calls
+    __injectQuilltapVersion(packageJson.version);
 
     // Scan for plugins
     const scanResult = await scanPlugins();
@@ -609,8 +613,9 @@ export function resetPluginSystem(): void {
   toolRegistry.reset();
   // Reset search provider registry
   searchProviderRegistry.reset();
-  // Clear the plugin logger factory
+  // Clear the plugin logger factory and version injection
   clearPluginLoggerFactory();
+  __clearQuilltapVersion();
 }
 
 /**

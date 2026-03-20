@@ -9,7 +9,7 @@
 
 import OpenAI from 'openai';
 import type { LLMProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage, ImageGenParams, ImageGenResponse } from './types';
-import { createPluginLogger } from '@quilltap/plugin-utils';
+import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
 
 const logger = createPluginLogger('qtap-plugin-grok');
 
@@ -285,6 +285,7 @@ export class GrokProvider implements LLMProvider {
     const client = new OpenAI({
       apiKey,
       baseURL: this.baseUrl,
+      defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
     });
     const { input, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
 
@@ -379,6 +380,7 @@ export class GrokProvider implements LLMProvider {
     const client = new OpenAI({
       apiKey,
       baseURL: this.baseUrl,
+      defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
     });
     const { input, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
 
@@ -491,6 +493,7 @@ export class GrokProvider implements LLMProvider {
       const client = new OpenAI({
         apiKey,
         baseURL: this.baseUrl,
+        defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
       });
       await client.models.list();
       return true;
@@ -505,6 +508,7 @@ export class GrokProvider implements LLMProvider {
       const client = new OpenAI({
         apiKey,
         baseURL: this.baseUrl,
+        defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
       });
       const models = await client.models.list();
       const grokModels = models.data
@@ -525,6 +529,7 @@ export class GrokProvider implements LLMProvider {
     const client = new OpenAI({
       apiKey,
       baseURL: this.baseUrl,
+      defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
     });
 
     const response = await client.images.generate({
