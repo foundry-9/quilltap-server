@@ -316,7 +316,7 @@
    * Floating dialog body — scrollable content area
    */
   .qt-floating-dialog-body {
-    @apply flex-1 overflow-y-auto;
+    @apply flex-1 overflow-y-auto relative;
     min-height: 0;
   }
 
@@ -446,6 +446,75 @@
   .qt-help-nav-button:hover {
     background: var(--qt-help-nav-hover-bg, hsl(var(--primary) / 0.2));
     border-color: var(--qt-help-nav-hover-border, hsl(var(--primary) / 0.4));
+  }
+
+  /* Suggested links container — appears below messages with search-derived links */
+  .qt-help-suggested-links {
+    @apply pl-10 pt-1;
+  }
+
+  .qt-help-suggested-links-label {
+    @apply text-[10px] uppercase tracking-wider font-medium mb-1.5;
+    color: var(--qt-help-suggested-label, hsl(var(--muted-foreground)));
+  }
+
+  .qt-help-suggested-link {
+    @apply inline-flex items-center gap-1 px-2 py-1 text-[11px] rounded transition-colors cursor-pointer;
+    background: var(--qt-help-suggested-bg, hsl(var(--muted) / 0.5));
+    color: var(--qt-help-suggested-fg, hsl(var(--muted-foreground)));
+    border: 1px solid var(--qt-help-suggested-border, hsl(var(--border)));
+  }
+
+  .qt-help-suggested-link:hover {
+    background: var(--qt-help-suggested-hover-bg, hsl(var(--primary) / 0.1));
+    color: var(--qt-help-suggested-hover-fg, hsl(var(--primary)));
+    border-color: var(--qt-help-suggested-hover-border, hsl(var(--primary) / 0.3));
+  }
+
+  /* Entity picker — overlay for resolving parameterised help URLs */
+  .qt-help-entity-picker-backdrop {
+    @apply absolute inset-0 z-10 flex items-center justify-center;
+    background: hsl(0 0% 0% / 0.7);
+    backdrop-filter: blur(4px);
+  }
+
+  .qt-help-entity-picker {
+    @apply flex flex-col rounded-lg shadow-lg overflow-hidden;
+    width: min(320px, calc(100% - 2rem));
+    max-height: min(400px, calc(100% - 2rem));
+    background: var(--qt-help-picker-bg, hsl(var(--card)));
+    border: 1px solid var(--qt-help-picker-border, hsl(var(--border)));
+  }
+
+  .qt-help-entity-picker-header {
+    @apply flex items-center justify-between px-3 py-2 text-sm font-medium;
+    border-bottom: 1px solid var(--qt-help-picker-border, hsl(var(--border)));
+  }
+
+  .qt-help-entity-picker-filter {
+    @apply w-full px-2 py-1 text-xs rounded;
+    background: var(--qt-help-picker-filter-bg, hsl(var(--muted)));
+    border: 1px solid var(--qt-help-picker-border, hsl(var(--border)));
+    color: inherit;
+    outline: none;
+  }
+
+  .qt-help-entity-picker-filter:focus {
+    border-color: hsl(var(--primary) / 0.5);
+  }
+
+  .qt-help-entity-picker-list {
+    @apply flex-1 overflow-y-auto py-1;
+  }
+
+  .qt-help-entity-picker-item {
+    @apply w-full text-left px-3 py-1.5 text-sm truncate transition-colors cursor-pointer;
+    color: var(--qt-help-picker-fg, hsl(var(--foreground)));
+  }
+
+  .qt-help-entity-picker-item:hover {
+    background: var(--qt-help-picker-hover-bg, hsl(var(--primary) / 0.1));
+    color: var(--qt-help-picker-hover-fg, hsl(var(--primary)));
   }
 
   /* ==========================================================================

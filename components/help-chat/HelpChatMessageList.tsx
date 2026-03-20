@@ -36,6 +36,8 @@ interface HelpChatMessageListProps {
   isStreaming?: boolean
   isExecutingTools?: boolean
   navigationLinks?: NavigationLink[]
+  /** Links extracted from help_search results — suggested pages based on search relevance */
+  suggestedLinks?: NavigationLink[]
   onNavigate?: (url: string) => void
 }
 
@@ -48,6 +50,7 @@ export function HelpChatMessageList({
   isStreaming,
   isExecutingTools,
   navigationLinks,
+  suggestedLinks,
   onNavigate,
 }: HelpChatMessageListProps) {
   const endRef = useRef<HTMLDivElement>(null)
@@ -55,7 +58,7 @@ export function HelpChatMessageList({
   // Auto-scroll to bottom on new messages or streaming
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages.length, streamingContent, navigationLinks?.length])
+  }, [messages.length, streamingContent, navigationLinks?.length, suggestedLinks?.length])
 
   const getCharacterForParticipant = (participantId: string | null | undefined): CharacterInfo | null => {
     if (!participantId) return null
@@ -77,6 +80,11 @@ export function HelpChatMessageList({
 
   // Check if navigation links should be shown after the last assistant message
   const showNavLinks = navigationLinks && navigationLinks.length > 0 && !isStreaming
+
+  // Suggested links from search results — exclude any that duplicate explicit nav links
+  const navUrls = new Set(navigationLinks?.map(l => l.url) || [])
+  const filteredSuggestions = suggestedLinks?.filter(l => !navUrls.has(l.url)) || []
+  const showSuggestions = filteredSuggestions.length > 0 && !isStreaming
 
   return (
     <div className="flex flex-col gap-3 p-4 overflow-y-auto flex-1">
@@ -177,6 +185,28 @@ export function HelpChatMessageList({
               {link.label}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Suggested links from search results — always shown when search returned relevant pages */}
+      {showSuggestions && (
+        <div className="qt-help-suggested-links">
+          <div className="qt-help-suggested-links-label">Related pages</div>
+          <div className="flex flex-wrap gap-1.5">
+            {filteredSuggestions.map(link => (
+              <button
+                key={link.url}
+                type="button"
+                onClick={() => onNavigate?.(link.url)}
+                className="qt-help-suggested-link"
+              >
+                <svg className="w-3 h-3 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M9 5l7 7-7 7" />
+                </svg>
+                {link.label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

@@ -20,6 +20,8 @@ interface StreamingState {
   streamingContent: string
   streamingParticipantId: string | null
   streamingNavigationLinks: NavigationLink[]
+  /** Links extracted from help_search results — suggested pages based on search relevance */
+  suggestedLinks: NavigationLink[]
   error: string | null
 }
 
@@ -70,6 +72,7 @@ export function useHelpChatStreaming({ chatId, onMessageComplete }: UseHelpChatS
     streamingContent: '',
     streamingParticipantId: null,
     streamingNavigationLinks: [],
+    suggestedLinks: [],
     error: null,
   })
   const abortRef = useRef<AbortController | null>(null)
@@ -94,6 +97,7 @@ export function useHelpChatStreaming({ chatId, onMessageComplete }: UseHelpChatS
       streamingContent: '',
       streamingParticipantId: null,
       streamingNavigationLinks: [],
+      suggestedLinks: [],
       error: null,
     })
 
@@ -117,6 +121,7 @@ export function useHelpChatStreaming({ chatId, onMessageComplete }: UseHelpChatS
       let buffer = ''
       let currentContent = ''
       const collectedLinks: NavigationLink[] = []
+      const collectedSuggestions: NavigationLink[] = []
 
       while (true) {
         const { done, value } = await reader.read()
@@ -185,6 +190,37 @@ export function useHelpChatStreaming({ chatId, onMessageComplete }: UseHelpChatS
                     setState(prev => ({
                       ...prev,
                       streamingNavigationLinks: [...collectedLinks],
+                    }))
+                  }
+                }
+              } catch { /* ignore */ }
+            }
+
+            // Search results (from help_search tool) — extract URLs as suggested links
+            if (event.toolResult && event.toolResult.name === 'help_search' && event.toolResult.success) {
+              try {
+                const result = typeof event.toolResult.result === 'string'
+                  ? JSON.parse(event.toolResult.result)
+                  : event.toolResult.result
+                const results = result?.results || result
+                if (Array.isArray(results)) {
+                  for (const item of results) {
+                    const url = item?.url
+                    if (url && typeof url === 'string' && url.startsWith('/')) {
+                      // Skip if already in nav links or suggestions
+                      if (!collectedLinks.some(l => l.url === url) &&
+                          !collectedSuggestions.some(l => l.url === url)) {
+                        collectedSuggestions.push({
+                          url,
+                          label: item.title || labelFromUrl(url),
+                        })
+                      }
+                    }
+                  }
+                  if (collectedSuggestions.length > 0) {
+                    setState(prev => ({
+                      ...prev,
+                      suggestedLinks: [...collectedSuggestions],
                     }))
                   }
                 }

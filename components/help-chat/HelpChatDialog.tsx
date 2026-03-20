@@ -13,6 +13,7 @@ import { FloatingDialog } from '@/components/ui/FloatingDialog'
 import { useHelpChat } from '@/components/providers/help-chat-provider'
 import { HelpChatComposer } from './HelpChatComposer'
 import { HelpChatMessageList } from './HelpChatMessageList'
+import { HelpEntityPicker, hasParamSegments } from './HelpEntityPicker'
 import { useHelpChatStreaming } from './hooks/useHelpChatStreaming'
 
 interface PastChat {
@@ -57,9 +58,16 @@ export function HelpChatDialog() {
   const [characterMap, setCharacterMap] = useState<Map<string, CharacterInfo>>(new Map())
   const [participantToCharacter, setParticipantToCharacter] = useState<Map<string, string>>(new Map())
   const [loadingMessages, setLoadingMessages] = useState(false)
+  /** URL template pending entity selection, e.g. "/aurora/:id/edit" */
+  const [pendingParamUrl, setPendingParamUrl] = useState<string | null>(null)
 
   const handleNavigate = useCallback((url: string) => {
-    router.push(url)
+    if (hasParamSegments(url)) {
+      // URL has :id params — show picker instead of navigating
+      setPendingParamUrl(url)
+    } else {
+      router.push(url)
+    }
   }, [router])
 
   // Build character and participant maps from enriched participant data.
@@ -119,6 +127,7 @@ export function HelpChatDialog() {
     streamingContent,
     streamingParticipantId,
     streamingNavigationLinks,
+    suggestedLinks,
     isExecutingTools,
     error: streamError,
     sendMessage,
@@ -258,6 +267,18 @@ export function HelpChatDialog() {
         ) : undefined
       }
     >
+      {/* Entity picker overlay for parameterised URLs */}
+      {pendingParamUrl && (
+        <HelpEntityPicker
+          urlTemplate={pendingParamUrl}
+          onSelect={(resolvedUrl) => {
+            setPendingParamUrl(null)
+            router.push(resolvedUrl)
+          }}
+          onCancel={() => setPendingParamUrl(null)}
+        />
+      )}
+
       {!currentChatId ? (
         /* Launcher view */
         <div className="flex flex-col h-full">
@@ -360,6 +381,7 @@ export function HelpChatDialog() {
             isStreaming={isStreaming}
             isExecutingTools={isExecutingTools}
             navigationLinks={streamingNavigationLinks}
+            suggestedLinks={suggestedLinks}
             onNavigate={handleNavigate}
           />
 
