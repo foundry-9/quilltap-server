@@ -857,6 +857,55 @@ export function extractVisibleConversation(
 }
 
 /**
+ * Help chat title prompt template — practical, descriptive titles for support conversations
+ */
+const HELP_CHAT_TITLE_PROMPT = `Generate a short, practical title for this help/support conversation.
+The title should:
+- Be 3-10 words maximum
+- Clearly describe what question was asked or what topic was discussed
+- Be specific enough that someone scanning a list can find it later (e.g., "Setting up Anthropic API connection" not "Getting started")
+- Focus on the user's actual question or problem, not the assistant's personality or style
+- Use plain, descriptive language — no literary flair, no metaphors, no poetic phrasing
+- If technical, mention the specific feature, setting, or area involved
+
+Respond with only the title, no quotes or additional text.`
+
+/**
+ * Help chat title consideration prompt — practical evaluation for help conversations
+ */
+const HELP_CHAT_TITLE_CONSIDERATION_PROMPT = `You are a help chat title evaluator. You will be given:
+1. The current chat title
+2. A previous summary or title (if available)
+3. Recent messages from the chat
+
+Determine if the chat needs a new title. Consider:
+- If the current title is generic (like "Help: [Name]" or "New Chat"), it SHOULD be replaced with a descriptive title about what the user actually asked
+- If the title is already descriptive of the question/topic, only suggest a change if the main topic has shifted significantly
+- A good help chat title clearly describes the question or topic so someone can find it in a list later
+- Titles should be plain and practical — no literary flair, metaphors, or poetic phrasing
+
+Respond with a JSON object:
+{
+  "needsNewTitle": true/false,
+  "reason": "brief explanation",
+  "suggestedTitle": "new title if needsNewTitle is true, otherwise null"
+}
+
+Keep suggested titles 3-10 words, under 60 characters, plain and descriptive.`
+
+/**
+ * Help chat title from summary prompt
+ */
+const HELP_CHAT_TITLE_FROM_SUMMARY_PROMPT = `Generate a short, practical title for this help/support conversation based on the summary provided.
+The title should:
+- Be 3-10 words maximum and under 60 characters
+- Clearly describe what question was asked or what topic was discussed
+- Be specific enough that someone scanning a list can find it later
+- Use plain, descriptive language — no literary flair, no metaphors, no poetic phrasing
+
+Respond with only the title, no quotes or additional text.`
+
+/**
  * Chat title prompt template
  */
 const CHAT_TITLE_PROMPT = `Generate a literary title for this conversation, like titling a short story.
@@ -950,6 +999,152 @@ export async function titleChat(
       return title
     },
     'title-chat',
+    chatId
+  )
+}
+
+/**
+ * Generates a title for a help chat — practical, descriptive, not literary
+ * Should be called after the first Q&A interchange
+ */
+export async function titleHelpChat(
+  messages: ChatMessage[],
+  existingTitle: string | undefined,
+  selection: CheapLLMSelection,
+  userId: string,
+  chatId?: string
+): Promise<CheapLLMTaskResult<string>> {
+  // For help chats, we use fewer messages since titles should fire early
+  const capped = messages.slice(-20)
+  const conversationText = capped
+    .map(m => {
+      const label = m.role.toUpperCase()
+      const text = m.content.length > 500
+        ? m.content.substring(0, 500) + '...'
+        : m.content
+      return `${label}: ${text}`
+    })
+    .join('\n\n')
+
+  let prompt = HELP_CHAT_TITLE_PROMPT
+  if (existingTitle && !existingTitle.startsWith('Help:')) {
+    prompt += `\n\nCurrent title: "${existingTitle}"\nUpdate only if the conversation topic has shifted significantly.`
+  }
+
+  const llmMessages: LLMMessage[] = [
+    { role: 'system', content: prompt },
+    { role: 'user', content: conversationText },
+  ]
+
+  return executeCheapLLMTask(
+    selection,
+    llmMessages,
+    userId,
+    (content: string): string => {
+      let title = content.trim()
+      title = title.replace(/^["']|["']$/g, '')
+      if (title.length > 60) {
+        title = title.substring(0, 57) + '...'
+      }
+      return title
+    },
+    'title-chat',
+    chatId
+  )
+}
+
+/**
+ * Evaluates whether a help chat needs a new title
+ */
+export async function considerHelpChatTitleUpdate(
+  currentTitle: string,
+  recentMessages: ChatMessage[],
+  existingSummaryOrTitle: string | null,
+  selection: CheapLLMSelection,
+  userId: string,
+  chatId?: string
+): Promise<CheapLLMTaskResult<{ needsNewTitle: boolean; reason: string; suggestedTitle: string | null }>> {
+  const conversationText = recentMessages
+    .map(m => `${m.role.toUpperCase()}: ${m.content.substring(0, 500)}`)
+    .join('\n\n')
+
+  const contextInfo = existingSummaryOrTitle
+    ? `Previous context: ${existingSummaryOrTitle}`
+    : 'No previous context'
+
+  const llmMessages: LLMMessage[] = [
+    { role: 'system', content: HELP_CHAT_TITLE_CONSIDERATION_PROMPT },
+    { role: 'user', content: `Current Title: "${currentTitle}"\n\n${contextInfo}\n\nRecent Messages:\n${conversationText}` },
+  ]
+
+  return executeCheapLLMTask(
+    selection,
+    llmMessages,
+    userId,
+    (content: string): { needsNewTitle: boolean; reason: string; suggestedTitle: string | null } => {
+      try {
+        let cleanContent = content.trim()
+        if (cleanContent.startsWith('```json')) {
+          cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
+        } else if (cleanContent.startsWith('```')) {
+          cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
+        }
+
+        const parsed = JSON.parse(cleanContent)
+
+        let suggestedTitle = parsed.suggestedTitle
+        if (suggestedTitle && typeof suggestedTitle === 'string') {
+          suggestedTitle = suggestedTitle.trim().replace(/^["']/, '').replace(/["']$/, '')
+          if (suggestedTitle.length > 60) {
+            suggestedTitle = suggestedTitle.substring(0, 57) + '...'
+          }
+        }
+
+        return {
+          needsNewTitle: parsed.needsNewTitle === true,
+          reason: parsed.reason || 'No reason provided',
+          suggestedTitle: suggestedTitle || null,
+        }
+      } catch {
+        return {
+          needsNewTitle: false,
+          reason: 'Failed to parse response',
+          suggestedTitle: null,
+        }
+      }
+    },
+    'consider-title-update',
+    chatId
+  )
+}
+
+/**
+ * Generates a help chat title from a summary — practical, not literary
+ */
+export async function generateHelpChatTitleFromSummary(
+  summary: string,
+  selection: CheapLLMSelection,
+  userId: string,
+  chatId?: string
+): Promise<CheapLLMTaskResult<string>> {
+  const llmMessages: LLMMessage[] = [
+    { role: 'system', content: HELP_CHAT_TITLE_FROM_SUMMARY_PROMPT },
+    { role: 'user', content: `Summary:\n${summary}` },
+  ]
+
+  return executeCheapLLMTask(
+    selection,
+    llmMessages,
+    userId,
+    (content: string): string => {
+      let title = content.trim()
+      title = title.replace(/^["']|["']$/g, '')
+      if (title.length > 60) {
+        title = title.substring(0, 57) + '...'
+      }
+      return title
+    },
+    'title-from-summary',
     chatId
   )
 }
