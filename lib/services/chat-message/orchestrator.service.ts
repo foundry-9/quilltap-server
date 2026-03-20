@@ -103,6 +103,7 @@ import {
   generateIterationSummary,
   type ResolvedAgentMode,
 } from './agent-mode-resolver.service'
+import { resolveUserIdentity } from './user-identity-resolver.service'
 import {
   shouldChainNext,
   persistTurnParticipantId,
@@ -385,16 +386,23 @@ async function processMessage(
     apiKey = rawApiKey
   }
 
-  // Get persona data (kept for backward compatibility with legacy participant types)
-  let persona: { name: string; description: string } | null = null
-  let personaData: { name: string; description: string } | null = null
+  // Resolve user identity through fallback chain:
+  // 1. User-controlled character in chat → 2. Sole user-controlled character → 3. User profile → 4. "User"
+  const resolvedIdentity = await resolveUserIdentity(repos, userId, chat)
+  const persona: { name: string; description: string } | null = {
+    name: resolvedIdentity.name,
+    description: resolvedIdentity.description,
+  }
 
-  // Get user-controlled character ID (for memory aboutCharacterId)
-  // This is the character that the user is "playing as" in this chat
-  const userControlledParticipant = chat.participants.find(
-    p => p.type === 'CHARACTER' && p.controlledBy === 'user' && p.characterId && p.isActive
-  )
-  const userCharacterId = userControlledParticipant?.characterId || undefined
+  logger.debug('Resolved user identity for chat', {
+    chatId,
+    source: resolvedIdentity.source,
+    name: resolvedIdentity.name,
+    characterId: resolvedIdentity.characterId,
+  })
+
+  // User-controlled character ID for memory aboutCharacterId
+  const userCharacterId = resolvedIdentity.characterId || undefined
 
   // Get chat settings
   const chatSettings = await repos.chatSettings.findByUserId(userId)
@@ -2223,7 +2231,6 @@ async function processMessage(
         isDangerousChat: chat.isDangerousChat === true,
       }
 
-      // Note: personaName is undefined since we only support CHARACTER type participants now
       // Build pronouns map for multi-character chats
       const allCharacterPronouns = isMultiCharacter
         ? Object.fromEntries(Array.from(participantCharacters.values()).map(c => [c.name, c.pronouns ?? null]))
@@ -2233,7 +2240,7 @@ async function processMessage(
         characterId: character.id,
         characterName: character.name,
         characterPronouns: character.pronouns,
-        personaName: undefined,
+        personaName: resolvedIdentity.name !== 'User' ? resolvedIdentity.name : undefined,
         userCharacterId,
         allCharacterNames: isMultiCharacter ? Array.from(participantCharacters.values()).map(c => c.name) : undefined,
         allCharacterPronouns,
