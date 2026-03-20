@@ -60,6 +60,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: app-build
+          include-hidden-files: true
           path: |
             .next/standalone/
             .next/static/
