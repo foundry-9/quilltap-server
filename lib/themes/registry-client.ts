@@ -65,7 +65,7 @@ function getIndexPath(): string {
 // VERSION COMPARISON
 // ============================================================================
 
-function parseVersion(version: string): { major: number; minor: number; patch: number } | null {
+export function parseVersion(version: string): { major: number; minor: number; patch: number } | null {
   const cleaned = version.replace(/^v/, '');
   const match = cleaned.match(/^(\d+)\.(\d+)\.(\d+)/);
   if (!match) return null;
@@ -79,7 +79,7 @@ function parseVersion(version: string): { major: number; minor: number; patch: n
 /**
  * Returns true if versionB is newer than versionA.
  */
-function isNewerVersion(versionA: string, versionB: string): boolean {
+export function isNewerVersion(versionA: string, versionB: string): boolean {
   const a = parseVersion(versionA);
   const b = parseVersion(versionB);
   if (!a || !b) return versionA !== versionB;

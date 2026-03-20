@@ -23,7 +23,7 @@ This document tracks planned features and improvements for Quilltap.
 - [ ] Context help documentation with LLM (lock down theme)
 - [X] Turn off story backgrounds for help chats
 - [X] Better "chat" look-and-feel for help
-- [ ] Unit text coverage
+- [X] Unit test coverage
 - [ ] Standard refactor pass
 - [X] Organize documentation (dev docs, help docs, README)
 

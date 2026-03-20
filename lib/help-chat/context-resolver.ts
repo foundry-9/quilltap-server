@@ -129,7 +129,7 @@ export async function resolveHelpContentForUrl(url: string): Promise<HelpPageCon
 /**
  * Match a URL pattern with :param placeholders against an actual URL path
  */
-function matchUrlPattern(pattern: string, actualPath: string): boolean {
+export function matchUrlPattern(pattern: string, actualPath: string): boolean {
   const patternParts = pattern.split('/')
   const actualParts = actualPath.split('/')
 

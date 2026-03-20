@@ -34,7 +34,7 @@ interface UseHelpChatStreamingOptions {
  * Generate a human-readable label from a Quilltap internal URL.
  * e.g., "/settings?tab=chat&section=dangerous-content" → "Settings → Chat → Dangerous Content"
  */
-function labelFromUrl(url: string): string {
+export function labelFromUrl(url: string): string {
   const [path, query] = url.split('?')
 
   const pathNames: Record<string, string> = {

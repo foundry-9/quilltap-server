@@ -90,7 +90,7 @@ const MIN_SIGNIFICANCE_THRESHOLD = 0.3;
 /**
  * Build character context string from character data
  */
-function buildCharacterContext(character: Character): string {
+export function buildCharacterContext(character: Character): string {
   const parts: string[] = [
     `=== Character: ${character.name} ===`,
     '',
@@ -147,7 +147,7 @@ function buildCharacterContext(character: Character): string {
 /**
  * Build memory context string from ranked memories
  */
-function buildMemoryContext(memories: Array<{ memory: Memory }>): string {
+export function buildMemoryContext(memories: Array<{ memory: Memory }>): string {
   const parts: string[] = [
     `=== Reinforced Memories (top ${memories.length}) ===`,
   ];
@@ -163,7 +163,7 @@ function buildMemoryContext(memories: Array<{ memory: Memory }>): string {
 /**
  * Get analysis prompt
  */
-function getAnalysisPrompt(): string {
+export function getAnalysisPrompt(): string {
   return `Analyze this character's configuration alongside their most-reinforced memories. Identify 3-8 behavioral patterns that are established in the memories but not fully captured in the character's current configuration.
 
 Focus on HOW the character acts, speaks, and relates to others — not just facts about them. Look for:
@@ -189,7 +189,7 @@ Respond with JSON:
 /**
  * Get suggestions prompt
  */
-function getSuggestionsPrompt(analysis: OptimizerAnalysis): string {
+export function getSuggestionsPrompt(analysis: OptimizerAnalysis): string {
   return `Based on the behavioral analysis below and the character's current configuration, propose specific modifications to the character's fields that would better reflect their demonstrated behavior.
 
 === Behavioral Analysis ===
