@@ -179,7 +179,7 @@ Consider adding:
 
 ## Related Documentation
 
-- Main implementation: `features/memory.md`
+- Main implementation: `docs/developer/features/memory.md`
 - Component files:
   - `/components/images/DeletedImagePlaceholder.tsx`
   - `/components/images/image-gallery.tsx`

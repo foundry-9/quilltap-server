@@ -471,7 +471,7 @@ Characters with help tools enabled can navigate directly to this page:
 
 For developers interested in creating plugins:
 
-- See [PLUGIN_DEVELOPMENT.md](../docs/PLUGIN_MANIFEST.md)
-- See [PLUGIN_INITIALIZATION.md](../docs/PLUGIN_INITIALIZATION.md)
+- See [PLUGIN_DEVELOPMENT.md](../docs/developer/PLUGIN_MANIFEST.md)
+- See [PLUGIN_INITIALIZATION.md](../docs/developer/PLUGIN_INITIALIZATION.md)
 - Review existing bundled plugins for examples
 - Join developer community for support

@@ -4,6 +4,7 @@
 
 ### 3.3-dev
 
+- chore: **Documentation reorganization** — consolidate developer documentation under `docs/developer/`; move `DEVELOPMENT.md`, `DEAD-CODE-REPORT.md`, and 15 developer-focused docs (API, database, plugin, prompt architecture, etc.) from `docs/` to `docs/developer/`; move `features/` directory to `docs/developer/features/`; user-facing docs (changelogs, backup/restore, deployment, templates, Windows troubleshooting) remain in `docs/`; update all cross-references in README, CLAUDE.md, help files, plugin docs, package docs, and Claude commands
 - chore: **Dependency updates** — run `npm update -S` across root project, all packages, and all distributed plugins; bump patch versions for all affected packages and plugins
 - chore: **Remove plugin template** — delete `qtap-plugin-template` skeleton plugin and its integration test; relocate generated plugin manifest JSON Schema from `plugins/dist/qtap-plugin-template/schemas/` to `public/schemas/plugin-manifest.schema.json`; update all plugin `manifest.json` `$schema` references, pre-commit hook, schema generation script, and documentation to point to new location; plugin development docs now reference `qtap-plugin-ollama` and `qtap-plugin-openrouter` as example plugins
 - fix: **HelpChatComposer lint error** — remove conditional ref (`textareaRef`) from `useCallback` dependency arrays; refs are stable objects and don't need to be dependencies; fixes React Compiler "memoization could not be preserved" errors

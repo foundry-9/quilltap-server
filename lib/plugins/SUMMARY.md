@@ -30,7 +30,7 @@ This implementation provides a complete, production-ready schema and tooling for
    - Usage examples
    - Development guidelines
 
-5. **`docs/PLUGIN_MANIFEST.md`**
+5. **`docs/developer/PLUGIN_MANIFEST.md`**
    - Complete manifest schema reference
    - Field-by-field documentation
    - Examples and validation info

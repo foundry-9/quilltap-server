@@ -268,8 +268,8 @@ Check the browser console for plugin loading messages:
 ## Documentation
 
 - [LLM Provider Guide](./LLM-PROVIDER-GUIDE.md) - Detailed guide for LLM provider plugins
-- [Plugin Manifest Reference](../docs/PLUGIN_MANIFEST.md) - Complete manifest schema
-- [Plugin Initialization](../docs/PLUGIN_INITIALIZATION.md) - How plugins are loaded
+- [Plugin Manifest Reference](../docs/developer/PLUGIN_MANIFEST.md) - Complete manifest schema
+- [Plugin Initialization](../docs/developer/PLUGIN_INITIALIZATION.md) - How plugins are loaded
 
 ## Support
 

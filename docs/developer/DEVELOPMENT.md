@@ -88,7 +88,7 @@ quilltap/
 ├── __tests__/                # Jest test files (unit and integration)
 ├── __mocks__/                # Test mocks for auth, providers, etc.
 ├── docs/                     # Documentation (API, deployment, backup guides)
-├── features/                 # Feature roadmap and spec documents
+├── docs/developer/features/  # Feature roadmap and spec documents
 │   └── complete/             # Completed feature specifications
 ├── docker/                   # Docker configuration (entrypoint script)
 ├── scripts/                  # Utility scripts (migrations, cleanup, builds)
@@ -407,7 +407,7 @@ npx quilltap themes search "dark"           # Search registries
 
 Bundled themes ship in `themes/bundled/`. User-installed themes go to `<dataDir>/themes/<themeId>/`.
 
-See [docs/THEME_PLUGIN_DEVELOPMENT.md](docs/THEME_PLUGIN_DEVELOPMENT.md) for the legacy plugin format guide.
+See [THEME_PLUGIN_DEVELOPMENT.md](THEME_PLUGIN_DEVELOPMENT.md) for the legacy plugin format guide.
 
 ## Logging
 
@@ -430,7 +430,7 @@ In development, logs are written to `logs/combined.log` and `logs/error.log`. Us
    - KISS
    - YAGNI
 4. Ensure that API endpoints adhere to the `/api/v{version}/{entityname}` standard to try to streamline and minimize API maintenance
-5. Run a test for dead code and refactor that out. Use `npx knip` if it's helpful. We have a [dead code report](DEAD-CODE-REPORT.md) and that should be updated.
+5. Run a test for dead code and refactor that out. Use `npx knip` if it's helpful. We have a [dead code report](DEAD-CODE-REPORT.md) (in the same directory) and that should be updated.
 6. Ensure that the debug logging we always create for new work has been removed unless we still need it.
 7. Verify that new UI components that were created adhere to the standard of using `qt-*` theme utility classes
 8. As much as possible, plugins should be self-contained or use `plugin-types` and `plugin-utils` to access Quilltap internals; even distributed plugins in `plugins/dist/` should use these, since these plugins are models to independent plugin developers
@@ -439,11 +439,11 @@ In development, logs are written to `logs/combined.log` and `logs/error.log`. Us
 11. Make sure that lint/test/build in Github Actions are working
 12. Remove all log.debug calls made during this development cycle (i.e., since the last release)
 13. Check the following Markdown files to be sure they are up-to-date:
-    - [README](README.md)
-    - [Changelog](docs/CHANGELOG.md)
-    - [API Documentation](docs/API.md)
+    - [README](../../README.md)
+    - [Changelog](../CHANGELOG.md)
+    - [API Documentation](API.md)
     - [Developer Documentation](DEVELOPMENT.md)
-    - [Claude instructions](CLAUDE.md)
+    - [Claude instructions](../../CLAUDE.md)
 
 ## Git and Github release instructions
 
@@ -575,10 +575,10 @@ git commit --no-verify -m "bugfix: started $NEWRELEASE bug branch"
 
 ## Additional Documentation
 
-- [API Documentation](docs/API.md) - REST endpoints and authentication
-- [Database Abstraction](docs/DATABASE_ABSTRACTION.md) - SQLite backend and data directory
-- [Deployment Guide](docs/DEPLOYMENT.md) - Production deployment patterns
-- [Backup & Restore Guide](docs/BACKUP-RESTORE.md) - Data backup procedures
-- [Plugin Developer Guide](plugins/README.md) - Creating plugins
-- [Database Encryption](docs/DATABASE_ENCRYPTION.md) - SQLCipher encryption architecture, .dbkey file management, and passphrase handling
+- [API Documentation](API.md) - REST endpoints and authentication
+- [Database Abstraction](DATABASE_ABSTRACTION.md) - SQLite backend and data directory
+- [Deployment Guide](../DEPLOYMENT.md) - Production deployment patterns
+- [Backup & Restore Guide](../BACKUP-RESTORE.md) - Data backup procedures
+- [Plugin Developer Guide](../../plugins/README.md) - Creating plugins
+- [Database Encryption](DATABASE_ENCRYPTION.md) - SQLCipher encryption architecture, .dbkey file management, and passphrase handling
 - [Roadmap](features/ROADMAP.md) - Planned features including Electron/Lima phases

@@ -296,7 +296,7 @@ async function scaffoldPlugin(config: ThemeConfig): Promise<void> {
 
   log('');
   info(`Local documentation: docs/THEME_PLUGIN_DEVELOPMENT.md`);
-  info(`Online documentation: https://github.com/foundry-9/quilltap/blob/main/docs/THEME_PLUGIN_DEVELOPMENT.md`);
+  info(`Online documentation: https://github.com/foundry-9/quilltap/blob/main/docs/developer/THEME_PLUGIN_DEVELOPMENT.md`);
   log('');
 }
 

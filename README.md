@@ -147,7 +147,7 @@ npm run dev        # Development mode with hot reload
 npm run build && npm run start   # Production build
 ```
 
-Requires **Node.js 22+** and **git**. See the [Development Guide](DEVELOPMENT.md) for building Electron installers, rootfs tarballs, and Docker images from source.
+Requires **Node.js 22+** and **git**. See the [Development Guide](docs/developer/DEVELOPMENT.md) for building Electron installers, rootfs tarballs, and Docker images from source.
 
 ---
 
@@ -286,17 +286,17 @@ npm run dev
 
 See the plugin development guides for each extension point:
 
-- [Provider Development](docs/PROVIDER_PLUGIN_DEVELOPMENT.md)
-- [Theme Development](docs/THEME_PLUGIN_DEVELOPMENT.md) (legacy plugin format; new themes use `.qtap-theme` bundles)
-- [Template Development](docs/TEMPLATE_PLUGIN_DEVELOPMENT.md)
-- [Tool Development](docs/TOOL_PLUGIN_DEVELOPMENT.md)
-- [Search Provider Development](docs/SEARCH_PLUGIN_DEVELOPMENT.md)
+- [Provider Development](docs/developer/PROVIDER_PLUGIN_DEVELOPMENT.md)
+- [Theme Development](docs/developer/THEME_PLUGIN_DEVELOPMENT.md) (legacy plugin format; new themes use `.qtap-theme` bundles)
+- [Template Development](docs/developer/TEMPLATE_PLUGIN_DEVELOPMENT.md)
+- [Tool Development](docs/developer/TOOL_PLUGIN_DEVELOPMENT.md)
+- [Search Provider Development](docs/developer/SEARCH_PLUGIN_DEVELOPMENT.md)
 
 ### Contributing
 
 Contributions are welcome. We ask that you open an issue to discuss major changes before submitting a PR — it is far better to align on direction before building the bridge, as anyone who has ever built a bridge in the wrong direction can attest.
 
-See the [Development Guide](DEVELOPMENT.md) for local setup, testing, and build instructions.
+See the [Development Guide](docs/developer/DEVELOPMENT.md) for local setup, testing, and build instructions.
 
 ---
 
@@ -314,16 +314,16 @@ See the [Development Guide](DEVELOPMENT.md) for local setup, testing, and build 
 
 ## Documentation
 
-- [Development Guide](DEVELOPMENT.md) — Contributing, local dev, building from source
+- [Development Guide](docs/developer/DEVELOPMENT.md) — Contributing, local dev, building from source
 - [Deployment Guide](docs/DEPLOYMENT.md) — Production setup with SSL and reverse proxies
-- [API Reference](docs/API.md) — REST endpoints
-- [Image Generation](docs/IMAGE_GENERATION.md) — Provider configuration
-- [File LLM Access](docs/FILE_LLM_ACCESS.md) — How AI reads your files
-- [Database Architecture](docs/DATABASE_ABSTRACTION.md) — SQLite backend and protection
-- [Prompt Architecture](docs/PROMPT_ARCHITECTURE.md) — How system prompts are assembled
+- [API Reference](docs/developer/API.md) — REST endpoints
+- [Image Generation](docs/developer/IMAGE_GENERATION.md) — Provider configuration
+- [File LLM Access](docs/developer/FILE_LLM_ACCESS.md) — How AI reads your files
+- [Database Architecture](docs/developer/DATABASE_ABSTRACTION.md) — SQLite backend and protection
+- [Prompt Architecture](docs/developer/PROMPT_ARCHITECTURE.md) — How system prompts are assembled
 - [Windows Troubleshooting](docs/WINDOWS.md) — WSL2 setup and common issues
 - [Changelog](docs/CHANGELOG.md) — Release history
-- [Roadmap](features/ROADMAP.md) — What's coming
+- [Roadmap](docs/developer/features/ROADMAP.md) — What's coming
 
 ---
 

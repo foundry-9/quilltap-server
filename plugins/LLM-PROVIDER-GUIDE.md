@@ -815,6 +815,6 @@ Before releasing your plugin:
 ## See Also
 
 - [Plugin Developer Guide](./README.md) - General plugin development
-- [Plugin Manifest Reference](../docs/PLUGIN_MANIFEST.md) - Complete manifest schema
-- [Plugin Initialization](../docs/PLUGIN_INITIALIZATION.md) - How plugins are loaded
+- [Plugin Manifest Reference](../docs/developer/PLUGIN_MANIFEST.md) - Complete manifest schema
+- [Plugin Initialization](../docs/developer/PLUGIN_INITIALIZATION.md) - How plugins are loaded
 - [Provider Plugin Interface](../lib/plugins/interfaces/provider-plugin.ts) - TypeScript interface

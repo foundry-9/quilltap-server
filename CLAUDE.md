@@ -68,7 +68,7 @@ Legacy routes outside `/api/v1/` were removed in v2.8. Only `/api/v1/` routes ar
 ## Current State
 
 - **Details for things already implemented** are in [the README](README.md)
-- **Roadmap for future development** is in the files in the `features/` directory, with completed development in `features/complete/`
+- **Roadmap for future development** is in the files in the `docs/developer/features/` directory, with completed development in `docs/developer/features/complete/`
 
 ## Themes
 
