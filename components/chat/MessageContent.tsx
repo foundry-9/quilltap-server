@@ -398,10 +398,10 @@ export default function MessageContent({
     },
     // Lists - inherit font from parent
     ul({ children }) {
-      return <ul className="list-disc list-inside mb-2 ml-4">{children}</ul>
+      return <ul className="list-disc list-outside mb-2 ml-6">{children}</ul>
     },
     ol({ children }) {
-      return <ol className="list-decimal list-inside mb-2 ml-4">{children}</ol>
+      return <ol className="list-decimal list-outside mb-2 ml-6">{children}</ol>
     },
     li({ children }) {
       return <li className="mb-1">{processChildren(children, compiledPatterns)}</li>

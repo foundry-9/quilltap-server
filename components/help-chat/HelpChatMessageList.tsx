@@ -101,7 +101,7 @@ export function HelpChatMessageList({
         return (
           <div
             key={msg.id}
-            className={`flex gap-2 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}
+            className={`flex items-start ${isUser ? 'flex-row-reverse' : 'flex-row'}`}
           >
             {/* Avatar */}
             {!isUser && (
@@ -120,6 +120,15 @@ export function HelpChatMessageList({
               </div>
             )}
 
+            {/* Bubble tail */}
+            <svg className={`qt-help-tail ${isUser ? 'qt-help-tail-user' : 'qt-help-tail-assistant'}`} viewBox="0 0 10 16" fill="currentColor">
+              {isUser ? (
+                <path d="M0 0 L10 8 L0 16 Z" />
+              ) : (
+                <path d="M10 0 L0 8 L10 16 Z" />
+              )}
+            </svg>
+
             {/* Message bubble */}
             <div className={isUser ? 'qt-help-msg-user' : 'qt-help-msg-assistant'}>
               {!isUser && character && visibleMessages.filter(m => m.role !== 'USER' && m.role !== 'user').length > 0 && (
@@ -135,7 +144,7 @@ export function HelpChatMessageList({
 
       {/* Streaming message */}
       {isStreaming && streamingContent && (
-        <div className="flex gap-2 flex-row">
+        <div className="flex items-start flex-row">
           <div className="qt-help-avatar">
             {(() => {
               const char = getCharacterForParticipant(streamingParticipantId)
@@ -145,6 +154,9 @@ export function HelpChatMessageList({
               return <span className="text-xs text-muted-foreground">{char?.name?.[0] || '?'}</span>
             })()}
           </div>
+          <svg className="qt-help-tail qt-help-tail-assistant" viewBox="0 0 10 16" fill="currentColor">
+            <path d="M10 0 L0 8 L10 16 Z" />
+          </svg>
           <div className="qt-help-msg-assistant">
             <MessageContent content={streamingContent} />
           </div>
@@ -153,7 +165,7 @@ export function HelpChatMessageList({
 
       {/* Streaming indicator (no content yet, or executing tools) */}
       {isStreaming && !streamingContent && (
-        <div className="flex gap-2 flex-row">
+        <div className="flex items-start flex-row">
           <div className="qt-help-avatar">
             {(() => {
               const char = getCharacterForParticipant(streamingParticipantId)
@@ -163,6 +175,9 @@ export function HelpChatMessageList({
               return <span className="text-xs text-muted-foreground">{char?.name?.[0] || '...'}</span>
             })()}
           </div>
+          <svg className="qt-help-tail qt-help-tail-assistant" viewBox="0 0 10 16" fill="currentColor">
+            <path d="M10 0 L0 8 L10 16 Z" />
+          </svg>
           <div className="qt-help-msg-assistant italic">
             {isExecutingTools ? 'Consulting the archives...' : 'Thinking...'}
           </div>

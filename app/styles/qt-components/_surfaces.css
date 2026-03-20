@@ -329,20 +329,41 @@
    * Help chat message bubble — user messages
    */
   .qt-help-msg-user {
-    @apply rounded-lg px-3 py-2 text-sm;
+    @apply rounded-2xl px-3 pt-2 pb-1.5 text-sm bg-primary text-primary-foreground;
     max-width: 80%;
-    background: var(--qt-primary);
-    color: var(--qt-primary-foreground, hsl(var(--primary-foreground)));
+  }
+
+  .qt-help-msg-user :last-child,
+  .qt-help-msg-assistant :last-child {
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
   }
 
   /**
    * Help chat message bubble — assistant messages
    */
   .qt-help-msg-assistant {
-    @apply rounded-lg px-3 py-2 text-sm;
+    @apply rounded-2xl px-3 py-2 text-sm bg-muted text-foreground;
     max-width: 80%;
-    background: var(--qt-help-assistant-bg, hsl(var(--muted)));
-    color: var(--qt-help-assistant-fg, hsl(var(--foreground)));
+  }
+
+  /**
+   * Help chat bubble tail — triangular pointer toward sender
+   */
+  .qt-help-tail {
+    flex-shrink: 0;
+    width: 8px;
+    height: 12px;
+    align-self: flex-start;
+    margin-top: 12px;
+  }
+
+  .qt-help-tail-user {
+    color: var(--theme-primary);
+  }
+
+  .qt-help-tail-assistant {
+    color: var(--theme-muted);
   }
 
   /**
@@ -356,7 +377,9 @@
    * Help chat avatar — small circular avatar in message list
    */
   .qt-help-avatar {
-    @apply flex-shrink-0 w-7 h-7 rounded-full bg-muted flex items-center justify-center overflow-hidden;
+    @apply flex-shrink-0 w-8 h-8 rounded-full bg-muted flex items-center justify-center overflow-hidden;
+    margin-top: 2px;
+    margin-right: 4px;
   }
 
   /**
@@ -379,9 +402,7 @@
 
   .qt-help-composer-send {
     @apply inline-flex items-center justify-center rounded-md px-3 py-2 h-[38px] text-sm font-medium;
-    @apply disabled:opacity-50 disabled:pointer-events-none;
-    background: var(--qt-primary);
-    color: var(--qt-primary-foreground, hsl(var(--primary-foreground)));
+    @apply disabled:opacity-50 disabled:pointer-events-none bg-primary text-primary-foreground;
   }
 
   .qt-help-composer-send:hover:not(:disabled) {
@@ -392,20 +413,19 @@
    * Help chat character selection pill
    */
   .qt-help-char-pill {
-    @apply flex items-center gap-1.5 px-2 py-1 rounded-full text-xs transition-colors;
+    @apply flex items-center gap-1.5 px-2 py-1 rounded-full text-xs transition-colors text-muted-foreground;
     border: 1px solid var(--qt-dialog-border);
-    color: hsl(var(--muted-foreground));
   }
 
   .qt-help-char-pill:hover {
-    border-color: var(--qt-primary);
+    border-color: var(--theme-primary);
     opacity: 0.7;
   }
 
   .qt-help-char-pill[data-selected="true"] {
-    border-color: var(--qt-primary);
-    background: color-mix(in srgb, var(--qt-primary) 10%, transparent);
-    color: var(--qt-primary);
+    border-color: var(--theme-primary);
+    background: color-mix(in srgb, var(--theme-primary) 10%, transparent);
+    color: var(--theme-primary);
   }
 
   /**

@@ -177,11 +177,17 @@ export async function getCharacterSummary(
     }
   }
 
+  // Build avatar URL: use explicit avatarUrl if non-empty, else fall back to defaultImage
+  let avatarUrl: string | null = character.avatarUrl || null
+  if (!avatarUrl && defaultImage) {
+    avatarUrl = `/api/v1/files/${defaultImage.id}`
+  }
+
   return {
     id: character.id,
     name: character.name,
     title: character.title ?? null,
-    avatarUrl: character.avatarUrl ?? null,
+    avatarUrl,
     defaultImageId: character.defaultImageId ?? null,
     defaultImage,
     tags: character.tags || [],
@@ -209,11 +215,17 @@ export async function getCharacterDetail(
     }
   }
 
+  // Build avatar URL: use explicit avatarUrl if non-empty, else fall back to defaultImage
+  let avatarUrl: string | null = character.avatarUrl || null
+  if (!avatarUrl && defaultImage) {
+    avatarUrl = `/api/v1/files/${defaultImage.id}`
+  }
+
   return {
     id: character.id,
     name: character.name,
     title: character.title ?? null,
-    avatarUrl: character.avatarUrl ?? null,
+    avatarUrl,
     defaultImageId: character.defaultImageId ?? null,
     defaultImage,
   }

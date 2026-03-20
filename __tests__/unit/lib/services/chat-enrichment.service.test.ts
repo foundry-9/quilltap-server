@@ -103,7 +103,7 @@ describe('chat-enrichment.service', () => {
         id: 'char-1',
         name: 'Alice',
         title: null,
-        avatarUrl: null,
+        avatarUrl: '/api/v1/files/img-1',
         defaultImageId: 'img-1',
         defaultImage: {
           id: 'img-1',

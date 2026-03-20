@@ -21,8 +21,8 @@ This document tracks planned features and improvements for Quilltap.
     - Adaptability (can they be serious? Can they roleplay?)
     - Thinking ability
 - [ ] Context help documentation with LLM (lock down theme)
-- [ ] Turn off story backgrounds for help chats
-- [ ] Better "chat" look-and-feel for help
+- [X] Turn off story backgrounds for help chats
+- [X] Better "chat" look-and-feel for help
 - [ ] Unit text coverage
 - [ ] Standard refactor pass
 - [X] Organize documentation (dev docs, help docs, README)
