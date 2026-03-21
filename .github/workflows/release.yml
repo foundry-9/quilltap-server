@@ -337,9 +337,7 @@ jobs:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_KEY_ISSUER: ${{ secrets.APPLE_API_KEY_ISSUER }}
           DEBUG: electron-notarize*
-        run: |
-          ulimit -n 65536
-          npx electron-builder --mac
+        run: NODE_OPTIONS="-r ./electron/patch-fs.js" npx electron-builder --mac
 
       - name: Clean up keychain and API key
         if: always()

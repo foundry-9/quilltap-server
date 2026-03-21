@@ -6,7 +6,7 @@ This document tracks planned features and improvements for Quilltap.
 
 ### 3.3.0
 
-- [X] Fix direct Node.js/Electron-hosted installation
+- [ ] Fix direct Node.js/Electron-hosted installation
 - [X] ~~Optional (opt-out)~~ reporting to providers about app/version (tell OpenRouter that it's Quilltap/3.3.0 calling)
 - [ ] Start a "recommendation" JSON file on https://quilltap.ai
   - [ ] Parser built-in on website
