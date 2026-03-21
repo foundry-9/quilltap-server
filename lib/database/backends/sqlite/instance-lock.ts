@@ -111,21 +111,55 @@ export function startLockHeartbeat(lockPath: string): void {
     try {
       const content = readLockFile(lockPath);
       if (!content) {
-        moduleLogger.debug('Heartbeat: lock file missing, stopping heartbeat', { lockPath });
+        moduleLogger.error('Instance lock file disappeared — another process may claim the database. Shutting down.', {
+          lockPath,
+        });
         stopLockHeartbeat();
+
+        setTimeout(() => {
+          try {
+            const { closeSQLiteClient } = require('./client');
+            const { closeLLMLogsSQLiteClient } = require('./llm-logs-client');
+            closeLLMLogsSQLiteClient();
+            closeSQLiteClient();
+          } catch (closeErr) {
+            moduleLogger.error('Error closing database during lock-loss shutdown', {
+              error: closeErr instanceof Error ? closeErr.message : String(closeErr),
+            });
+          }
+          process.exit(1);
+        }, 500);
         return;
       }
 
       // Verify the lock is still ours
       if (content.pid !== process.pid || content.hostname !== os.hostname()) {
-        moduleLogger.debug('Heartbeat: lock no longer owned by this process, stopping heartbeat', {
+        moduleLogger.error('Instance lock lost — another process has taken over the database. Shutting down.', {
           lockPath,
           lockPid: content.pid,
           lockHostname: content.hostname,
+          lockEnvironment: content.environment,
           ourPid: process.pid,
           ourHostname: os.hostname(),
         });
         stopLockHeartbeat();
+
+        // Close the database and exit to prevent corruption.
+        // Use a short delay to let the log entry flush.
+        setTimeout(() => {
+          try {
+            // Dynamic require to avoid circular dependency
+            const { closeSQLiteClient } = require('./client');
+            const { closeLLMLogsSQLiteClient } = require('./llm-logs-client');
+            closeLLMLogsSQLiteClient();
+            closeSQLiteClient();
+          } catch (closeErr) {
+            moduleLogger.error('Error closing database during lock-loss shutdown', {
+              error: closeErr instanceof Error ? closeErr.message : String(closeErr),
+            });
+          }
+          process.exit(1);
+        }, 500);
         return;
       }
 
