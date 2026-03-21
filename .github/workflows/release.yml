@@ -338,7 +338,7 @@ jobs:
           APPLE_API_KEY_ISSUER: ${{ secrets.APPLE_API_KEY_ISSUER }}
           DEBUG: electron-notarize*
         run: |
-          ulimit -n 4096
+          ulimit -n 65536
           npx electron-builder --mac
 
       - name: Clean up keychain and API key

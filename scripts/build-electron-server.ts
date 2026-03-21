@@ -151,10 +151,18 @@ if (existsSync(PLUGINS_DIST)) {
   copyDir(PLUGINS_DIST, pluginsDest);
 }
 
-// Step 5: Clean unnecessary files (but keep native modules intact)
-console.log('==> Step 5/9: Cleaning unnecessary files');
-const standaloneNodeModules = join(STAGING_DIR, 'node_modules');
-if (existsSync(standaloneNodeModules)) {
+// Reusable cleanup: removes source maps, type declarations, and other files
+// that aren't needed at runtime but bloat the package and cause EMFILE during
+// macOS codesign. Called after initial copy AND again after npm install steps
+// that can reintroduce these files.
+const BUILD_ONLY_PACKAGES = ['caniuse-lite', 'browserslist'];
+
+function cleanNodeModules(nodeModulesDir: string, label: string): void {
+  if (!existsSync(nodeModulesDir)) return;
+
+  console.log(`    Cleaning ${label}...`);
+  let removedFiles = 0;
+
   const cleanDir = (dir: string): void => {
     if (!existsSync(dir)) return;
     const entries = readdirSync(dir, { withFileTypes: true });
@@ -169,24 +177,30 @@ if (existsSync(standaloneNodeModules)) {
       } else if (entry.isFile()) {
         if (entry.name.endsWith('.map') || entry.name.endsWith('.d.ts') || entry.name.endsWith('.d.mts')) {
           rmSync(fullPath, { force: true });
+          removedFiles++;
         }
       }
     }
   };
 
-  cleanDir(standaloneNodeModules);
+  cleanDir(nodeModulesDir);
 
   // Remove build-time-only packages that Next.js traces but aren't needed at runtime.
-  // caniuse-lite alone has 500+ files and is the primary cause of EMFILE during codesign.
-  const buildOnlyPackages = ['caniuse-lite', 'browserslist'];
-  for (const pkg of buildOnlyPackages) {
-    const pkgPath = join(standaloneNodeModules, pkg);
+  for (const pkg of BUILD_ONLY_PACKAGES) {
+    const pkgPath = join(nodeModulesDir, pkg);
     if (existsSync(pkgPath)) {
       rmSync(pkgPath, { recursive: true, force: true });
       console.log(`    Removed build-only package: ${pkg}`);
     }
   }
+
+  console.log(`    Removed ${removedFiles} unnecessary files`);
 }
+
+// Step 5: Clean unnecessary files (but keep native modules intact)
+console.log('==> Step 5/9: Cleaning unnecessary files');
+const standaloneNodeModules = join(STAGING_DIR, 'node_modules');
+cleanNodeModules(standaloneNodeModules, 'staging node_modules (initial)');
 
 // Step 6: Rebuild native modules against Electron's Node ABI
 console.log('==> Step 6/9: Rebuilding native modules for Electron');
@@ -310,6 +324,10 @@ if (!existsSync(stagingSharpDir)) {
   const srcSharpDir = join(PROJECT_ROOT, 'node_modules', 'sharp');
   cpSync(srcSharpDir, stagingSharpDir, { recursive: true, dereference: true });
 }
+
+// Re-run cleanup: npm install (sharp) and cpSync (sharp core) in steps 6-7 can
+// reintroduce .map/.d.ts/.d.mts files that step 5 already removed.
+cleanNodeModules(join(STAGING_DIR, 'node_modules'), 'staging node_modules (post-install)');
 
 // Step 8/9: Resolve any remaining symlinks (electron-rebuild or npm may create them)
 console.log('==> Step 8/9: Resolving symlinks in staging directory');
