@@ -11,4 +11,5 @@
     - `npm run test:unit`
 
 6. If (and only if) either the Electron source or the Next.js source has changed in any way, run `scripts/update_version.sh` to update the version number of the application.
-7. After this, you can commit.
+7. Please don't credit yourself in the commit message.
+8. After this, you can commit.
