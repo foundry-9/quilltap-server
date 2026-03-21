@@ -39,6 +39,15 @@ export type StartupPhase =
   | 'complete'
   | 'failed';
 
+/** Instance lock conflict details for UI display */
+export interface InstanceLockConflict {
+  pid: number;
+  hostname: string;
+  environment: string;
+  startedAt: string;
+  lockPath: string;
+}
+
 interface StartupStateData {
   phase: StartupPhase;
   migrationsComplete: boolean;
@@ -58,6 +67,8 @@ interface StartupStateData {
   migrationWarnings: string[];
   /** Whether migration warning notifications have been sent to the client */
   migrationWarningsNotified: boolean;
+  /** Instance lock conflict info when another process holds the database */
+  instanceLockConflict: InstanceLockConflict | null;
 }
 
 // Extend globalThis type for our startup state
@@ -90,6 +101,7 @@ function getGlobalState(): StartupStateData {
       isLockedMode: false,
       migrationWarnings: [],
       migrationWarningsNotified: false,
+      instanceLockConflict: null,
     };
   }
 
@@ -334,6 +346,24 @@ export const startupState = {
   },
 
   /**
+   * Set instance lock conflict details.
+   * Called when InstanceLockError is caught during database initialization.
+   */
+  setInstanceLockConflict(conflict: InstanceLockConflict): void {
+    const state = getGlobalState();
+    state.instanceLockConflict = conflict;
+    state.phase = 'failed';
+    state.error = `Database locked by another instance (PID ${conflict.pid}, ${conflict.environment})`;
+  },
+
+  /**
+   * Get instance lock conflict details, if any.
+   */
+  getInstanceLockConflict(): InstanceLockConflict | null {
+    return getGlobalState().instanceLockConflict;
+  },
+
+  /**
    * Wait for the server to be ready
    * Returns immediately if already ready
    * Times out after maxWaitMs (default 30 seconds)
@@ -422,6 +452,7 @@ export const startupState = {
       isLockedMode: false,
       migrationWarnings: [],
       migrationWarningsNotified: false,
+      instanceLockConflict: null,
     };
     global.__quilltapMigrationWarnings = [];
     setReadyPromise(undefined);

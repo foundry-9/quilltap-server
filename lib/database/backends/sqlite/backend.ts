@@ -27,6 +27,8 @@ import { runIntegrityCheck, startPeriodicCheckpoints } from './protection';
 import { createPhysicalBackup, createLLMLogsPhysicalBackup, applyRetentionPolicy } from './physical-backup';
 import { getLLMLogsSQLiteClient, closeLLMLogsSQLiteClient } from './llm-logs-client';
 import { runLLMLogsIntegrityCheck, startLLMLogsPeriodicCheckpoints } from './llm-logs-protection';
+import { acquireInstanceLock, releaseActiveInstanceLock, InstanceLockError } from './instance-lock';
+import { getInstanceLockPath } from '@/lib/paths';
 import { generateDDL, extractSchemaMetadata } from '../../schema-translator';
 import { buildSelectQuery, buildCountQuery, buildUpdateQuery, buildDeleteQuery, translateFilter } from './query-translator';
 import { documentToRow, rowToDocument, toJson, fromJson, fromJsonSafe, blobToEmbedding } from './json-columns';
@@ -495,6 +497,39 @@ export class SQLiteBackend implements DatabaseBackend {
     this._state = 'connecting';
 
     try {
+      // Acquire the instance lock before opening the database.
+      // This prevents two processes from writing to the same SQLCipher
+      // database simultaneously, which causes WAL corruption.
+      try {
+        acquireInstanceLock(getInstanceLockPath());
+      } catch (lockError) {
+        this._state = 'error';
+        if (lockError instanceof InstanceLockError) {
+          logger.error('Cannot open database: another instance holds the lock', {
+            conflictPid: lockError.lockInfo.pid,
+            conflictHostname: lockError.lockInfo.hostname,
+            conflictStartedAt: lockError.lockInfo.startedAt,
+            conflictEnvironment: lockError.lockInfo.environment,
+            lockPath: lockError.lockPath,
+          });
+
+          // Surface the conflict in startup state for the UI
+          try {
+            const { startupState } = require('@/lib/startup/startup-state');
+            startupState.setInstanceLockConflict({
+              pid: lockError.lockInfo.pid,
+              hostname: lockError.lockInfo.hostname,
+              environment: lockError.lockInfo.environment,
+              startedAt: lockError.lockInfo.startedAt,
+              lockPath: lockError.lockPath,
+            });
+          } catch {
+            // Startup state may not be available yet — log only
+          }
+        }
+        throw lockError;
+      }
+
       this.db = getSQLiteClient(this.config);
       this._state = 'connected';
 
@@ -566,6 +601,9 @@ export class SQLiteBackend implements DatabaseBackend {
       closeSQLiteClient();
       this.db = null;
       this._state = 'disconnected';
+
+      // Release the instance lock after closing the database
+      releaseActiveInstanceLock();
 
       logger.info('SQLite backend disconnected');
     } catch (error) {

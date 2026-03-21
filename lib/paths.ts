@@ -325,6 +325,19 @@ export function getBackupsDir(): string {
 }
 
 /**
+ * Get the instance lock file path
+ *
+ * The lock file prevents two Quilltap processes from opening the same
+ * database simultaneously. Contains JSON with PID, hostname, environment,
+ * and a history of state changes for debugging.
+ *
+ * @returns Instance lock file path (<base>/data/quilltap.lock)
+ */
+export function getInstanceLockPath(): string {
+  return path.join(getDataDir(), 'quilltap.lock');
+}
+
+/**
  * Get the themes directory path (for .qtap-theme bundles)
  *
  * @returns Themes directory path (<base>/themes)

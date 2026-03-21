@@ -26,6 +26,8 @@ This document tracks planned features and improvements for Quilltap.
 - [X] Unit test coverage
 - [ ] Standard refactor pass
 - [X] Organize documentation (dev docs, help docs, README)
+- [ ] Database locking
+- [ ] Database version locking
 
 ## Planned Features
 

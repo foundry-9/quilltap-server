@@ -137,6 +137,17 @@ export async function GET() {
       }, { status: 423 });
     }
 
+    // Check for instance lock conflict (database held by another process)
+    const lockConflict = startupState.getInstanceLockConflict();
+    if (lockConflict) {
+      return NextResponse.json({
+        status: 'lock-conflict',
+        lockConflict,
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+      }, { status: 409 });
+    }
+
     // If startup hasn't completed yet (still in pending/migrations phase),
     // return a minimal response so the health checker gets valid JSON
     const phase = startupState.getPhase();
