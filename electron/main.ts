@@ -375,14 +375,14 @@ async function stopCurrentBackend(): Promise<void> {
 async function restartServer(): Promise<void> {
   console.log('[Main] Restarting server...');
 
-  // Close main window
+  // Create splash BEFORE closing main window to avoid triggering window-all-closed quit
+  splashWindow = createSplashWindow();
+
+  // Now safe to close main window
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.close();
     mainWindow = null;
   }
-
-  // Show splash with restart status
-  splashWindow = createSplashWindow();
   splashWindow.webContents.on('did-finish-load', async () => {
     sendSplashUpdate({
       phase: 'initializing',
@@ -401,17 +401,17 @@ async function restartServer(): Promise<void> {
 async function changeSite(): Promise<void> {
   console.log('[Main] Changing site...');
 
-  // Close main window
+  // Set flag so onSplashReady goes to directory chooser instead of auto-start
+  skipAutoStart = true;
+
+  // Create splash BEFORE closing main window to avoid triggering window-all-closed quit
+  splashWindow = createSplashWindow();
+
+  // Now safe to close main window
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.close();
     mainWindow = null;
   }
-
-  // Set flag so onSplashReady goes to directory chooser instead of auto-start
-  skipAutoStart = true;
-
-  // Show splash — onSplashReady will handle showing the directory chooser
-  splashWindow = createSplashWindow();
   splashWindow.webContents.on('did-finish-load', async () => {
     sendSplashUpdate({
       phase: 'initializing',
