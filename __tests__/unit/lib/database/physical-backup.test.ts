@@ -2,7 +2,7 @@
  * Unit tests for SQLite physical backup module
  *
  * Tests cover:
- * - Physical backup creation via db.backup()
+ * - Physical backup creation via VACUUM INTO (SQLCipher-compatible)
  * - 24-hour interval check (skip if recent backup exists)
  * - Partial file cleanup on failure
  * - Retention policy (7-day/weekly/monthly/yearly buckets)
@@ -48,7 +48,7 @@ jest.mock('@/lib/paths', () => ({
 // Create mock database
 function createMockDb() {
   return {
-    backup: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+    exec: jest.fn(),
     pragma: jest.fn(),
   };
 }
@@ -69,15 +69,15 @@ describe('SQLite Physical Backup Module', () => {
   });
 
   describe('createPhysicalBackup', () => {
-    it('should call db.backup() with a path in the backups directory', async () => {
+    it('should call VACUUM INTO with a path in the backups directory', async () => {
       const db = createMockDb();
 
       const result = await physicalBackup.createPhysicalBackup(db as never);
 
       expect(result).not.toBeNull();
       expect(result).toMatch(/^\/mock\/data\/backups\/quilltap-\d{4}-\d{2}-\d{2}T\d{6}\.db$/);
-      expect(db.backup).toHaveBeenCalledTimes(1);
-      expect(db.backup).toHaveBeenCalledWith(result);
+      expect(db.exec).toHaveBeenCalledTimes(1);
+      expect(db.exec).toHaveBeenCalledWith(expect.stringContaining('VACUUM INTO'));
     });
 
     it('should create backups directory if it does not exist', async () => {
@@ -95,7 +95,7 @@ describe('SQLite Physical Backup Module', () => {
 
     it('should return null on backup failure', async () => {
       const db = createMockDb();
-      (db.backup as jest.Mock).mockRejectedValue(new Error('disk full'));
+      (db.exec as jest.Mock).mockImplementation(() => { throw new Error('disk full'); });
       // existsSync for cleanup check
       (mockFs.existsSync as jest.Mock)
         .mockReturnValueOnce(true)   // backups dir exists
@@ -114,7 +114,7 @@ describe('SQLite Physical Backup Module', () => {
       const result = await physicalBackup.createPhysicalBackup(db as never);
 
       expect(result).toBeNull();
-      expect(db.backup).not.toHaveBeenCalled();
+      expect(db.exec).not.toHaveBeenCalled();
     });
 
     it('should create backup if most recent backup is older than 24 hours', async () => {
@@ -125,12 +125,12 @@ describe('SQLite Physical Backup Module', () => {
       const result = await physicalBackup.createPhysicalBackup(db as never);
 
       expect(result).not.toBeNull();
-      expect(db.backup).toHaveBeenCalledTimes(1);
+      expect(db.exec).toHaveBeenCalledTimes(1);
     });
 
     it('should clean up partial file on backup failure', async () => {
       const db = createMockDb();
-      (db.backup as jest.Mock).mockRejectedValue(new Error('disk full'));
+      (db.exec as jest.Mock).mockImplementation(() => { throw new Error('disk full'); });
       (mockFs.existsSync as jest.Mock)
         .mockReturnValueOnce(true)   // backups dir exists
         .mockReturnValueOnce(true);  // partial file exists for cleanup
