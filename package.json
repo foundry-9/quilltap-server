@@ -1,6 +1,6 @@
 {
   "name": "@foundry-9/quilltap",
-  "version": "3.3.0-dev.128",
+  "version": "3.3.0-dev.129",
   "private": true,
   "main": "dist-electron/main.js",
   "author": {
@@ -89,6 +89,7 @@
     "remark-gfm": "^4.0.1",
     "remark-parse": "^11.0.0",
     "remark-rehype": "^11.1.2",
+    "semver": "^7.7.4",
     "sharp": "^0.34.5",
     "unified": "^11.0.5",
     "yauzl": "^3.2.1",
@@ -110,6 +111,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@types/react-syntax-highlighter": "^15.5.13",
+    "@types/semver": "^7.7.1",
     "@vitest/mocker": "^4.1.0",
     "autoprefixer": "^10.4.27",
     "cross-env": "^10.1.0",

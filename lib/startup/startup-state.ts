@@ -39,6 +39,12 @@ export type StartupPhase =
   | 'complete'
   | 'failed';
 
+/** Version guard block details for UI display */
+export interface VersionGuardBlock {
+  currentVersion: string;
+  highestVersion: string;
+}
+
 /** Instance lock conflict details for UI display */
 export interface InstanceLockConflict {
   pid: number;
@@ -69,6 +75,8 @@ interface StartupStateData {
   migrationWarningsNotified: boolean;
   /** Instance lock conflict info when another process holds the database */
   instanceLockConflict: InstanceLockConflict | null;
+  /** Version guard block info when running an older version against a newer database */
+  versionGuardBlock: VersionGuardBlock | null;
 }
 
 // Extend globalThis type for our startup state
@@ -102,6 +110,7 @@ function getGlobalState(): StartupStateData {
       migrationWarnings: [],
       migrationWarningsNotified: false,
       instanceLockConflict: null,
+      versionGuardBlock: null,
     };
   }
 
@@ -346,6 +355,24 @@ export const startupState = {
   },
 
   /**
+   * Set version guard block details.
+   * Called when the running version is older than the database's highest version.
+   */
+  setVersionGuardBlock(block: VersionGuardBlock): void {
+    const state = getGlobalState();
+    state.versionGuardBlock = block;
+    state.phase = 'failed';
+    state.error = `Database was last used by Quilltap v${block.highestVersion}, but this is v${block.currentVersion}`;
+  },
+
+  /**
+   * Get version guard block details, if any.
+   */
+  getVersionGuardBlock(): VersionGuardBlock | null {
+    return getGlobalState().versionGuardBlock;
+  },
+
+  /**
    * Set instance lock conflict details.
    * Called when InstanceLockError is caught during database initialization.
    */
@@ -453,6 +480,7 @@ export const startupState = {
       migrationWarnings: [],
       migrationWarningsNotified: false,
       instanceLockConflict: null,
+      versionGuardBlock: null,
     };
     global.__quilltapMigrationWarnings = [];
     setReadyPromise(undefined);

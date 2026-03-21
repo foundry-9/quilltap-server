@@ -148,6 +148,17 @@ export async function GET() {
       }, { status: 409 });
     }
 
+    // Check for version guard block (running older version against newer database)
+    const versionBlock = startupState.getVersionGuardBlock();
+    if (versionBlock) {
+      return NextResponse.json({
+        status: 'version-blocked',
+        versionBlock,
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+      }, { status: 409 });
+    }
+
     // If startup hasn't completed yet (still in pending/migrations phase),
     // return a minimal response so the health checker gets valid JSON
     const phase = startupState.getPhase();

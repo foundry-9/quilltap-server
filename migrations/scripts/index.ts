@@ -119,6 +119,8 @@ import { addHelpToolsFieldMigration } from './add-help-tools-field';
 import { addAutoLockSettingsFieldMigration } from './add-auto-lock-settings-field';
 // Add chatType field to chats for help chat support
 import { addChatTypeFieldMigration } from './add-chat-type-field';
+// Create instance_settings table for instance-level configuration
+import { createInstanceSettingsTableMigration } from './create-instance-settings-table';
 
 /**
  * All available migrations.
@@ -233,6 +235,8 @@ export const migrations: Migration[] = [
   addAutoLockSettingsFieldMigration,
   // Add chatType field to chats for help chat support
   addChatTypeFieldMigration,
+  // Create instance_settings table for instance-level configuration
+  createInstanceSettingsTableMigration,
 ];
 
 export {
@@ -342,4 +346,6 @@ export {
   addAutoLockSettingsFieldMigration,
   // Add chatType field to chats for help chat support
   addChatTypeFieldMigration,
+  // Create instance_settings table for instance-level configuration
+  createInstanceSettingsTableMigration,
 };
