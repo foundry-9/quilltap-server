@@ -175,6 +175,17 @@ if (existsSync(standaloneNodeModules)) {
   };
 
   cleanDir(standaloneNodeModules);
+
+  // Remove build-time-only packages that Next.js traces but aren't needed at runtime.
+  // caniuse-lite alone has 500+ files and is the primary cause of EMFILE during codesign.
+  const buildOnlyPackages = ['caniuse-lite', 'browserslist'];
+  for (const pkg of buildOnlyPackages) {
+    const pkgPath = join(standaloneNodeModules, pkg);
+    if (existsSync(pkgPath)) {
+      rmSync(pkgPath, { recursive: true, force: true });
+      console.log(`    Removed build-only package: ${pkg}`);
+    }
+  }
 }
 
 // Step 6: Rebuild native modules against Electron's Node ABI
