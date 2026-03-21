@@ -155,7 +155,7 @@ if (existsSync(PLUGINS_DIST)) {
 // that aren't needed at runtime but bloat the package and cause EMFILE during
 // macOS codesign. Called after initial copy AND again after npm install steps
 // that can reintroduce these files.
-const BUILD_ONLY_PACKAGES = ['caniuse-lite', 'browserslist'];
+const BUILD_ONLY_PACKAGES = ['caniuse-lite', 'browserslist', 'electron'];
 
 function cleanNodeModules(nodeModulesDir: string, label: string): void {
   if (!existsSync(nodeModulesDir)) return;
