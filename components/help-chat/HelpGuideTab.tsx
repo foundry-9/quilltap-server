@@ -1,0 +1,189 @@
+'use client'
+
+/**
+ * HelpGuideTab
+ *
+ * Main orchestrator for the browseable Guide tab in the Help dialog.
+ * Three layers: category list, expanded topics, and document reader.
+ */
+
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
+import { useHelpChat } from '@/components/providers/help-chat-provider'
+import { HELP_CATEGORIES, EXCLUDED_DOCUMENTS, getCategoryForUrl } from '@/lib/help-guide/categories'
+import { HelpGuideSearch } from './HelpGuideSearch'
+import { HelpWelcomeCard } from './HelpWelcomeCard'
+import { HelpCategorySection } from './HelpCategorySection'
+import { HelpTopicReader } from './HelpTopicReader'
+
+interface DocumentInfo {
+  id: string
+  title: string
+  url: string
+}
+
+export function HelpGuideTab() {
+  const { currentPageUrl, closeHelpChat } = useHelpChat()
+  const router = useRouter()
+
+  // Document index from API
+  const [documents, setDocuments] = useState<Map<string, DocumentInfo>>(new Map())
+  const [chatCount, setChatCount] = useState<number | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  // Navigation state
+  const [activeDocId, setActiveDocId] = useState<string | null>(null)
+  const [activeCategoryLabel, setActiveCategoryLabel] = useState<string>('')
+  const [searchQuery, setSearchQuery] = useState('')
+
+  // Determine which category to auto-expand
+  const contextCategoryId = useMemo(
+    () => getCategoryForUrl(currentPageUrl),
+    [currentPageUrl]
+  )
+
+  // Fetch document index and chat count on mount
+  useEffect(() => {
+    let cancelled = false
+
+    async function fetchData() {
+      try {
+        const [docsRes, countRes] = await Promise.all([
+          fetch('/api/v1/help-docs'),
+          fetch('/api/v1/help-docs?action=chat-count'),
+        ])
+
+        if (!cancelled) {
+          if (docsRes.ok) {
+            const docsData = await docsRes.json()
+            const docMap = new Map<string, DocumentInfo>()
+            for (const doc of docsData.documents || []) {
+              if (!EXCLUDED_DOCUMENTS.includes(doc.id)) {
+                docMap.set(doc.id, { id: doc.id, title: doc.title, url: doc.url })
+              }
+            }
+            setDocuments(docMap)
+          }
+
+          if (countRes.ok) {
+            const countData = await countRes.json()
+            setChatCount(countData.count ?? null)
+          }
+
+          setLoading(false)
+        }
+      } catch {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    fetchData()
+    return () => { cancelled = true }
+  }, [])
+
+  // Build category data with resolved document info
+  const categories = useMemo(() => {
+    return HELP_CATEGORIES.map((cat) => ({
+      ...cat,
+      resolvedDocs: cat.documents
+        .map((docId) => documents.get(docId))
+        .filter((d): d is DocumentInfo => d !== undefined),
+    }))
+  }, [documents])
+
+  // Filter categories by search query
+  const filteredCategories = useMemo(() => {
+    if (!searchQuery.trim()) return categories
+    const query = searchQuery.toLowerCase()
+    return categories
+      .map((cat) => ({
+        ...cat,
+        resolvedDocs: cat.resolvedDocs.filter((doc) =>
+          doc.title.toLowerCase().includes(query)
+        ),
+      }))
+      .filter((cat) => cat.resolvedDocs.length > 0)
+  }, [categories, searchQuery])
+
+  const handleSelectTopic = useCallback((docId: string, categoryLabel: string) => {
+    setActiveDocId(docId)
+    setActiveCategoryLabel(categoryLabel)
+  }, [])
+
+  const handleBack = useCallback(() => {
+    setActiveDocId(null)
+    setActiveCategoryLabel('')
+  }, [])
+
+  const handleNavigateDoc = useCallback((docId: string) => {
+    // Find which category this doc belongs to
+    const cat = HELP_CATEGORIES.find((c) => c.documents.includes(docId))
+    setActiveDocId(docId)
+    setActiveCategoryLabel(cat?.label || '')
+  }, [])
+
+  const handleNavigatePage = useCallback((url: string) => {
+    closeHelpChat()
+    router.push(url)
+  }, [closeHelpChat, router])
+
+  const handleOpenWelcomeDoc = useCallback((docId: string) => {
+    const cat = HELP_CATEGORIES.find((c) => c.documents.includes(docId))
+    setActiveDocId(docId)
+    setActiveCategoryLabel(cat?.label || '')
+  }, [])
+
+  // Reader view
+  if (activeDocId) {
+    return (
+      <HelpTopicReader
+        documentId={activeDocId}
+        categoryLabel={activeCategoryLabel}
+        onBack={handleBack}
+        onNavigateDoc={handleNavigateDoc}
+        onNavigatePage={handleNavigatePage}
+      />
+    )
+  }
+
+  // Category list view
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex-shrink-0 p-3 pb-0">
+        <HelpGuideSearch value={searchQuery} onChange={setSearchQuery} />
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-3">
+        {loading ? (
+          <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
+            Loading guide...
+          </div>
+        ) : (
+          <>
+            {chatCount !== null && chatCount < 3 && !searchQuery && (
+              <HelpWelcomeCard onOpenDocument={handleOpenWelcomeDoc} />
+            )}
+
+            {filteredCategories.map((cat) => (
+              <HelpCategorySection
+                key={cat.id}
+                label={cat.label}
+                documents={cat.resolvedDocs}
+                currentPageUrl={currentPageUrl}
+                defaultExpanded={cat.id === contextCategoryId && !searchQuery}
+                forceExpanded={!!searchQuery}
+                onSelectTopic={(docId) => handleSelectTopic(docId, cat.label)}
+              />
+            ))}
+
+            {filteredCategories.length === 0 && searchQuery && (
+              <div className="text-center py-6 text-muted-foreground text-sm">
+                No topics match &ldquo;{searchQuery}&rdquo;
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}

@@ -8,7 +8,7 @@ This document tracks planned features and improvements for Quilltap.
 
 - [X] Fix direct Node.js/Electron-hosted installation
 - [X] ~~Optional (opt-out)~~ reporting to providers about app/version (tell OpenRouter that it's Quilltap/3.3.0 calling)
-- [ ] Start a "recommendation" JSON file on https://quilltap.ai
+- [ ] Start a "recommendation" JSON file on [Quilltap website](https://quilltap.ai)
   - [ ] Parser built-in on website
   - [ ] Downloadable information tracking:
     - Available providers
@@ -20,7 +20,8 @@ This document tracks planned features and improvements for Quilltap.
     - Help LLM success
     - Adaptability (can they be serious? Can they roleplay?)
     - Thinking ability
-- [ ] Context help documentation with LLM (lock down theme)
+- [X] Context help documentation with LLM (lock down theme)
+- [X] Browseable Help Guide tab (see `help_guide.md`)
 - [X] Turn off story backgrounds for help chats
 - [X] Better "chat" look-and-feel for help
 - [X] Unit test coverage

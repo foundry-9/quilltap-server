@@ -10,12 +10,27 @@ tags: [help, chat, assistant, navigation, tools]
 
 Picture, if you will, a well-appointed establishment where every guest is attended by a personal concierge of impeccable knowledge and unwavering patience --- one who not only knows every corridor and curiosity of the house, but who can escort you there on a moment's notice. That, dear reader, is your Help Chat: a contextual, LLM-driven assistant that hovers at your elbow on every page of Quilltap, ready to illuminate the obscure, untangle the perplexing, and point you toward whatever you seek.
 
-## Opening the Help Chat
+## Opening Help
 
-At the bottom of the left sidebar, you will find a **question-mark icon** --- the universal signal that enlightenment lies behind a single click. Press it, and a dialog shall appear, offering you two avenues of inquiry:
+At the bottom of the left sidebar, you will find a **question-mark icon** --- the universal signal that enlightenment lies behind a single click. Press it, and a dialog shall appear, offering you two tabs of assistance:
+
+### The Guide Tab
+
+The **Guide** tab presents Quilltap's full documentation library as a browseable index, organised into sensible categories --- Characters, Chats, Projects, Settings, and so forth. No question need be formulated; simply browse, expand a category, and click any topic to read the guide in full, rendered handsomely right inside the dialog.
+
+- **Context-aware** --- The category most relevant to your current page is automatically expanded, so the pertinent topics are already waiting when you arrive
+- **Searchable** --- A search bar at the top filters topics by title, should you know what you are looking for but not where it lives
+- **Welcome card** --- New arrivals (those with fewer than three chats to their name) are greeted with quick-start links to the most essential guides
+- **Navigable** --- "Open this page in Quilltap" buttons within guides take you directly to the relevant page; links to related topics open within the Guide itself
+
+### The Ask Tab
+
+The **Ask** tab provides the conversational help experience:
 
 1. **Start a new help conversation** --- Select one or more help-enabled characters and type your question
 2. **Resume a past help chat** --- Pick up where you left off in a previous conversation
+
+The Guide tab is shown by default when the dialog opens. Your tab selection persists for the session --- if you prefer Ask, it will remain selected until you close your browser.
 
 ## Eligibility Requirements
 
