@@ -356,7 +356,7 @@ Characters with help tools enabled can navigate directly to this page:
 
 ## Related Settings
 
-- **API Keys** — Store credentials for image providers
+- [API Keys](api-keys-settings.md) — Store credentials for image providers
 - **Chat Settings** — Configure image description provider (different from generation)
 - **Connection Profiles** — For LLM that interprets image requests
 - **Chat Memory** — Stores generated images in history

@@ -567,8 +567,8 @@ Characters with help tools enabled can navigate directly to this page:
 
 ## Related Pages
 
-- **Projects** — Manage project-specific files
-- **Characters** — Upload character images and profile files
-- **Chats** — Attach and manage message files
-- **The Forge > File Storage** — Configure where files are stored
-- **Search** — Find files by name or content
+- [Projects](projects.md) — Manage project-specific files
+- [Characters](characters.md) — Upload character images and profile files
+- [Chats](chats.md) — Attach and manage message files
+- [Data Directory](data-directory.md) — Configure where files are stored
+- [Search](search.md) — Find files by name or content

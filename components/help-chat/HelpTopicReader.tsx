@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Components } from 'react-markdown'
@@ -8,6 +8,10 @@ import type { Components } from 'react-markdown'
 interface HelpTopicReaderProps {
   documentId: string
   categoryLabel: string
+  /** Ref attached to the scrollable reader container so the parent can read/write scrollTop */
+  scrollContainerRef?: React.RefObject<HTMLDivElement | null>
+  /** When set, scroll to this position after content loads instead of top */
+  restoreScrollTop?: number
   onBack: () => void
   onNavigateDoc: (docId: string) => void
   onNavigatePage: (url: string) => void
@@ -58,10 +62,14 @@ function processContent(content: string): string {
 export function HelpTopicReader({
   documentId,
   categoryLabel,
+  scrollContainerRef,
+  restoreScrollTop,
   onBack,
   onNavigateDoc,
   onNavigatePage,
 }: HelpTopicReaderProps) {
+  const internalRef = useRef<HTMLDivElement>(null)
+  const readerRef = scrollContainerRef || internalRef
   const [content, setContent] = useState<string | null>(null)
   const [title, setTitle] = useState<string>('')
   const [loading, setLoading] = useState(true)
@@ -97,6 +105,13 @@ export function HelpTopicReader({
     fetchDocument()
     return () => { cancelled = true }
   }, [documentId])
+
+  // Scroll reader to restored position or top when document changes
+  useEffect(() => {
+    if (!loading && content) {
+      readerRef.current?.scrollTo(0, restoreScrollTop ?? 0)
+    }
+  }, [documentId, loading, content, readerRef, restoreScrollTop])
 
   const processedContent = useMemo(() => {
     if (!content) return ''
@@ -218,7 +233,7 @@ export function HelpTopicReader({
         </svg>
         {categoryLabel}
       </button>
-      <div className="qt-help-guide-reader">
+      <div ref={readerRef} className="qt-help-guide-reader">
         <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
           {processedContent}
         </ReactMarkdown>

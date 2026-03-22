@@ -235,7 +235,7 @@ Characters with help tools enabled can navigate directly to this page:
 
 ## Related Settings
 
-- **Connection Profiles** — Use API keys to create LLM connections
-- **Chat Settings** — Configure which connection profile is used by default
+- [Connection Profiles](connection-profiles.md) — Use API keys to create LLM connections
+- [Chat Settings](chat-settings.md) — Configure which connection profile is used by default
 - **Image Profiles** — Some image providers also require API keys
 - **Embedding Profiles** — Cloud-based embeddings need API keys

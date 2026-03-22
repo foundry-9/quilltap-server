@@ -391,10 +391,10 @@ Characters with help tools enabled can navigate directly to this page:
 
 ## Related Settings
 
-- **API Keys** — Store credentials for cloud embedding providers (OpenAI)
-- **Chat Settings** — Memory cascade settings that use embeddings
-- **Connection Profiles** — LLM used in conjunction with embeddings for memory operations
-- **Chat Behavior** — Context management depends on embeddings
+- [API Keys](api-keys-settings.md) — Store credentials for cloud embedding providers (OpenAI)
+- [Chat Settings](chat-settings.md) — Memory cascade settings that use embeddings
+- [Connection Profiles](connection-profiles.md) — LLM used in conjunction with embeddings for memory operations
+- [Chat Settings](chat-settings.md) — Context management depends on embeddings
 
 ## Glossary
 

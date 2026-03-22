@@ -7,7 +7,7 @@
  * Three layers: category list, expanded topics, and document reader.
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useHelpChat } from '@/components/providers/help-chat-provider'
 import { HELP_CATEGORIES, EXCLUDED_DOCUMENTS, getCategoryForUrl } from '@/lib/help-guide/categories'
@@ -22,8 +22,14 @@ interface DocumentInfo {
   url: string
 }
 
+interface NavHistoryEntry {
+  docId: string
+  categoryLabel: string
+  scrollTop: number
+}
+
 export function HelpGuideTab() {
-  const { currentPageUrl, closeHelpChat } = useHelpChat()
+  const { currentPageUrl } = useHelpChat()
   const router = useRouter()
 
   // Document index from API
@@ -35,6 +41,11 @@ export function HelpGuideTab() {
   const [activeDocId, setActiveDocId] = useState<string | null>(null)
   const [activeCategoryLabel, setActiveCategoryLabel] = useState<string>('')
   const [searchQuery, setSearchQuery] = useState('')
+
+  // Navigation history for scroll position restoration
+  const navHistoryRef = useRef<NavHistoryEntry[]>([])
+  const readerScrollRef = useRef<HTMLDivElement>(null)
+  const [restoreScrollTop, setRestoreScrollTop] = useState<number | undefined>(undefined)
 
   // Determine which category to auto-expand
   const contextCategoryId = useMemo(
@@ -106,26 +117,45 @@ export function HelpGuideTab() {
   }, [categories, searchQuery])
 
   const handleSelectTopic = useCallback((docId: string, categoryLabel: string) => {
+    navHistoryRef.current = []
+    setRestoreScrollTop(undefined)
     setActiveDocId(docId)
     setActiveCategoryLabel(categoryLabel)
   }, [])
 
   const handleBack = useCallback(() => {
-    setActiveDocId(null)
-    setActiveCategoryLabel('')
+    const entry = navHistoryRef.current.pop()
+    if (entry) {
+      // Go back to previous document and restore its scroll position
+      setRestoreScrollTop(entry.scrollTop)
+      setActiveDocId(entry.docId)
+      setActiveCategoryLabel(entry.categoryLabel)
+    } else {
+      // No history — go back to category list
+      setRestoreScrollTop(undefined)
+      setActiveDocId(null)
+      setActiveCategoryLabel('')
+    }
   }, [])
 
   const handleNavigateDoc = useCallback((docId: string) => {
-    // Find which category this doc belongs to
+    // Push current document onto history stack before navigating
+    if (activeDocId) {
+      navHistoryRef.current.push({
+        docId: activeDocId,
+        categoryLabel: activeCategoryLabel,
+        scrollTop: readerScrollRef.current?.scrollTop ?? 0,
+      })
+    }
     const cat = HELP_CATEGORIES.find((c) => c.documents.includes(docId))
+    setRestoreScrollTop(undefined)
     setActiveDocId(docId)
     setActiveCategoryLabel(cat?.label || '')
-  }, [])
+  }, [activeDocId, activeCategoryLabel])
 
   const handleNavigatePage = useCallback((url: string) => {
-    closeHelpChat()
     router.push(url)
-  }, [closeHelpChat, router])
+  }, [router])
 
   const handleOpenWelcomeDoc = useCallback((docId: string) => {
     const cat = HELP_CATEGORIES.find((c) => c.documents.includes(docId))
@@ -139,6 +169,8 @@ export function HelpGuideTab() {
       <HelpTopicReader
         documentId={activeDocId}
         categoryLabel={activeCategoryLabel}
+        scrollContainerRef={readerScrollRef}
+        restoreScrollTop={restoreScrollTop}
         onBack={handleBack}
         onNavigateDoc={handleNavigateDoc}
         onNavigatePage={handleNavigatePage}

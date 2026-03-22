@@ -442,11 +442,11 @@ For local development or plugins not on NPM:
 
 ## Related Settings
 
-- **Appearance** — Theme plugins install here
-- **API Keys** — Credentials for plugins that need them
-- **Chat Tools** — Enable/disable tools per chat
-- **Connection Profiles** — If plugin adds new providers
-- **Roleplay Templates** — If plugin adds templates
+- [Appearance Settings](appearance-settings.md) — Theme plugins install here
+- [API Keys](api-keys-settings.md) — Credentials for plugins that need them
+- [Tools Usage](tools-usage.md) — Enable/disable tools per chat
+- [Connection Profiles](connection-profiles.md) — If plugin adds new providers
+- [Roleplay Templates](roleplay-templates.md) — If plugin adds templates
 
 ## In-Chat Settings Access
 

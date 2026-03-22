@@ -405,7 +405,7 @@ Characters with help tools enabled can navigate directly to this page:
 
 ## Related Settings
 
-- **Connection Profiles** — Quality of LLM affects how well prompts are followed
-- **Chat Settings** — Memory and context affect prompt effectiveness
+- [Connection Profiles](connection-profiles.md) — Quality of LLM affects how well prompts are followed
+- [Chat Settings](chat-settings.md) — Memory and context affect prompt effectiveness
 - **Characters** — Where prompts are most commonly used
 - **Chat Tools** — Interact with prompts and instructions

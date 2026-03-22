@@ -425,9 +425,9 @@ Characters with help tools enabled can navigate directly to this page:
 
 ## Related Settings
 
-- **Connection Profiles** — Choose which LLM to use
-- **API Keys** — Store credentials for providers
-- **Image Profiles** — Configure image generation (separate from descriptions)
-- **Embedding Profiles** — Required for memory cascade and semantic search
-- **Appearance Settings** — Control chat UI appearance (separate from behavior)
-- **Story Backgrounds** — AI-generated atmospheric backgrounds for chats
+- [Connection Profiles](connection-profiles.md) — Choose which LLM to use
+- [API Keys](api-keys-settings.md) — Store credentials for providers
+- [Image Generation Profiles](image-generation-profiles.md) — Configure image generation (separate from descriptions)
+- [Embedding Profiles](embedding-profiles.md) — Required for memory cascade and semantic search
+- [Appearance Settings](appearance-settings.md) — Control chat UI appearance (separate from behavior)
+- [Story Backgrounds](story-backgrounds.md) — AI-generated atmospheric backgrounds for chats

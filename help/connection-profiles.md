@@ -355,7 +355,7 @@ Characters with help tools enabled can navigate directly to this page:
 
 ## Related Settings
 
-- **API Keys** — Store credentials for connection profiles
-- **Chat Settings** — Configure which profile is used by default
+- [API Keys](api-keys-settings.md) — Store credentials for connection profiles
+- [Chat Settings](chat-settings.md) — Configure which profile is used by default
 - **Image Profiles** — Separate configuration for image generation
 - **Embedding Profiles** — Separate configuration for semantic search
