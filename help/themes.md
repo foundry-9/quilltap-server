@@ -300,7 +300,7 @@ For the legacy npm plugin format (deprecated), use:
 npx create-quilltap-theme my-theme --plugin
 ```
 
-See the [Theme Plugin Development Guide](docs/developer/THEME_PLUGIN_DEVELOPMENT.md) for details on the plugin format.
+See the **Theme Plugin Development Guide** for details on the plugin format.
 
 ### Managing Themes via CLI
 

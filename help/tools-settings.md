@@ -206,4 +206,4 @@ Characters with help tools enabled can navigate directly to this page:
 
 - [Tools Overview](tools.md) - Understand what tools are and how they work
 - [Using Tools in Chat](tools-usage.md) - Tips for working with AI tools
-- [Chat Settings](settings.md) - Other chat configuration options
+- [Chat Settings](chat-settings.md) - Other chat configuration options

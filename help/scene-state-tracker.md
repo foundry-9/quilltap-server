@@ -49,6 +49,6 @@ Characters with help tools enabled can navigate directly to this page:
 
 ## Related Topics
 
-- [Story Backgrounds](/help/story-backgrounds)
-- [Chat Settings](/help/chat-settings)
-- [Image Generation Profiles](/help/image-generation-profiles)
+- [Story Backgrounds](story-backgrounds.md)
+- [Chat Settings](chat-settings.md)
+- [Image Generation Profiles](image-generation-profiles.md)

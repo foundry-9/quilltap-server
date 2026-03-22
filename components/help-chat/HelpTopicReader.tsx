@@ -178,18 +178,18 @@ export function HelpTopicReader({
         </a>
       )
     },
-    // Code blocks with basic styling (simpler than chat MessageContent)
-    code({ className, children, ...props }) {
-      const match = /language-(\w+)/.exec(className || '')
-      const isInline = !match && !className
-      if (isInline) {
-        return <code className="qt-help-guide-inline-code" {...props}>{children}</code>
-      }
+    // Fenced code blocks get wrapped in <pre> by ReactMarkdown.
+    // We style the <pre> for wrapping.
+    pre({ children, ...props }) {
       return (
-        <pre className="qt-help-guide-code-block">
-          <code className={className} {...props}>{children}</code>
+        <pre className="qt-help-guide-code-block" {...props}>
+          {children}
         </pre>
       )
+    },
+    // Inline code only (single backticks, no block context)
+    code({ className, children, ...props }) {
+      return <code className={className || 'qt-help-guide-inline-code'} {...props}>{children}</code>
     },
   }), [onNavigateDoc, onNavigatePage])
 

@@ -506,7 +506,7 @@ You're ready to chat! Quilltap comes with a starter character, or you can create
 - Try accessing `http://localhost:11434` in your browser
 - Restart Ollama if needed
 
-> **Docker users:** If you're running Quilltap in Docker and Ollama on your host machine, you don't need to change the URL. Add `11434` to the `HOST_REDIRECT_PORTS` environment variable when starting the container, and `http://localhost:11434` works transparently. See the [Deployment Guide](/docs/DEPLOYMENT.md) for details.
+> **Docker users:** If you're running Quilltap in Docker and Ollama on your host machine, you don't need to change the URL. Add `11434` to the `HOST_REDIRECT_PORTS` environment variable when starting the container, and `http://localhost:11434` works transparently. See the **Deployment Guide** for details.
 
 ---
 

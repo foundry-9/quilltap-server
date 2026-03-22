@@ -163,59 +163,58 @@ export function HelpGuideTab() {
     setActiveCategoryLabel(cat?.label || '')
   }, [])
 
-  // Reader view
-  if (activeDocId) {
-    return (
-      <HelpTopicReader
-        documentId={activeDocId}
-        categoryLabel={activeCategoryLabel}
-        scrollContainerRef={readerScrollRef}
-        restoreScrollTop={restoreScrollTop}
-        onBack={handleBack}
-        onNavigateDoc={handleNavigateDoc}
-        onNavigatePage={handleNavigatePage}
-      />
-    )
-  }
-
-  // Category list view
+  // Both views wrapped in Art Deco scoping class
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex-shrink-0 p-3 pb-0">
-        <HelpGuideSearch value={searchQuery} onChange={setSearchQuery} />
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-3">
-        {loading ? (
-          <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
-            Loading guide...
+    <div className="qt-help-guide-deco flex flex-col h-full">
+      {activeDocId ? (
+        <HelpTopicReader
+          documentId={activeDocId}
+          categoryLabel={activeCategoryLabel}
+          scrollContainerRef={readerScrollRef}
+          restoreScrollTop={restoreScrollTop}
+          onBack={handleBack}
+          onNavigateDoc={handleNavigateDoc}
+          onNavigatePage={handleNavigatePage}
+        />
+      ) : (
+        <>
+          <div className="flex-shrink-0 p-3 pb-0">
+            <HelpGuideSearch value={searchQuery} onChange={setSearchQuery} />
           </div>
-        ) : (
-          <>
-            {chatCount !== null && chatCount < 3 && !searchQuery && (
-              <HelpWelcomeCard onOpenDocument={handleOpenWelcomeDoc} />
-            )}
 
-            {filteredCategories.map((cat) => (
-              <HelpCategorySection
-                key={cat.id}
-                label={cat.label}
-                documents={cat.resolvedDocs}
-                currentPageUrl={currentPageUrl}
-                defaultExpanded={cat.id === contextCategoryId && !searchQuery}
-                forceExpanded={!!searchQuery}
-                onSelectTopic={(docId) => handleSelectTopic(docId, cat.label)}
-              />
-            ))}
-
-            {filteredCategories.length === 0 && searchQuery && (
-              <div className="text-center py-6 text-muted-foreground text-sm">
-                No topics match &ldquo;{searchQuery}&rdquo;
+          <div className="flex-1 overflow-y-auto p-3">
+            {loading ? (
+              <div className="flex items-center justify-center py-8" style={{ color: 'var(--deco-fg-muted)' }}>
+                Loading guide...
               </div>
+            ) : (
+              <>
+                {chatCount !== null && chatCount < 3 && !searchQuery && (
+                  <HelpWelcomeCard onOpenDocument={handleOpenWelcomeDoc} />
+                )}
+
+                {filteredCategories.map((cat) => (
+                  <HelpCategorySection
+                    key={cat.id}
+                    label={cat.label}
+                    documents={cat.resolvedDocs}
+                    currentPageUrl={currentPageUrl}
+                    defaultExpanded={cat.id === contextCategoryId && !searchQuery}
+                    forceExpanded={!!searchQuery}
+                    onSelectTopic={(docId) => handleSelectTopic(docId, cat.label)}
+                  />
+                ))}
+
+                {filteredCategories.length === 0 && searchQuery && (
+                  <div className="text-center py-6" style={{ color: 'var(--deco-fg-muted)' }}>
+                    No topics match &ldquo;{searchQuery}&rdquo;
+                  </div>
+                )}
+              </>
             )}
-          </>
-        )}
-      </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

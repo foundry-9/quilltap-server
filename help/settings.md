@@ -94,7 +94,7 @@ The engine room, the filing cabinet, and the emergency exits. Everything that ke
 - **LLM Logs** --- Review detailed records of all AI model interactions
 - **Delete All Data** --- Permanently remove all data (the lever beneath the glass cover; break only in case of genuine emergency)
 
-> See [Plugins](plugins.md), [File Storage Settings](file-storage-settings.md), [Backup & Restore](system-backup-restore.md), [Import & Export Data](system-import-export.md), [Managing Tasks](system-tasks-queue.md), [LLM Logs](system-llm-logs.md), and [Deleting Your Data](system-delete-data.md) for full details
+> See [Plugins](plugins.md), [Data Directory](data-directory.md), [Backup & Restore](system-backup-restore.md), [Import & Export Data](system-import-export.md), [Managing Tasks](system-tasks-queue.md), [LLM Logs](system-llm-logs.md), and [Deleting Your Data](system-delete-data.md) for full details
 
 ## Quick Configuration Workflow
 

@@ -31,7 +31,7 @@ If you don't select a specific profile, the system will use your default image g
 
 ## Requirements
 
-- At least one image generation profile configured (see [Image Generation Profiles](/help/image-generation-profiles))
+- At least one image generation profile configured (see [Image Generation Profiles](image-generation-profiles.md))
 - An active API key for your image provider
 - Characters in your chat with physical descriptions (helps create better scenes)
 
@@ -93,6 +93,6 @@ Characters with help tools enabled can navigate directly to this page:
 
 ## Related Topics
 
-- [Image Generation Profiles](/help/image-generation-profiles)
-- [Chat Settings](/help/chat-settings)
-- [Projects](/help/projects)
+- [Image Generation Profiles](image-generation-profiles.md)
+- [Chat Settings](chat-settings.md)
+- [Projects](projects.md)

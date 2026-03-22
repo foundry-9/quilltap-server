@@ -145,6 +145,6 @@ Characters with help tools enabled can navigate directly to this page:
 
 ## Related Topics
 
-- [Tools](/help/tools) - Learn about the tools available to AI agents
-- [Chat Settings](/help/chat-settings) - Configure global chat behavior
-- [Projects](/help/projects) - Organize work with project-specific settings
+- [Tools](tools.md) - Learn about the tools available to AI agents
+- [Chat Settings](chat-settings.md) - Configure global chat behavior
+- [Projects](projects.md) - Organize work with project-specific settings

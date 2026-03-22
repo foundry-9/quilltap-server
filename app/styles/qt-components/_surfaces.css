@@ -540,7 +540,122 @@
 
   /* ==========================================================================
      HELP GUIDE TAB - Browseable documentation view
+
+     The Guide tab always renders in Art Deco style regardless of the active
+     theme. Variables are hardcoded from the Art Deco token palette so the
+     guide feels like a consistent, branded reading experience.
      ========================================================================== */
+
+  /* --- Art Deco variable scope (light mode) --- */
+  .qt-help-guide-deco {
+    --deco-bg: hsl(45 28% 78%);
+    --deco-fg: hsl(222 40% 12%);
+    --deco-fg-muted: hsl(222 25% 38%);
+    --deco-primary: hsl(222 47% 18%);
+    --deco-primary-fg: hsl(43 85% 55%);
+    --deco-accent: hsl(43 85% 48%);
+    --deco-border: hsl(43 30% 60%);
+    --deco-border-subtle: hsl(43 30% 60% / 0.5);
+    --deco-card: hsl(45 28% 75%);
+    --deco-muted: hsl(222 16% 72%);
+    --deco-input-bg: hsl(45 28% 82%);
+    --deco-code-bg: hsl(45 20% 72%);
+    --deco-gold: hsl(222 47% 18%);
+    --deco-welcome-bg: hsl(222 47% 18% / 0.06);
+    --deco-welcome-border: hsl(43 85% 48% / 0.3);
+    --deco-table-header: hsl(45 25% 72%);
+    --deco-hover-bg: hsl(43 30% 72% / 0.5);
+    --deco-font-serif: "Cormorant Garamond", Georgia, Cambria, "Times New Roman", Times, serif;
+    --deco-font-sans: Raleway, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  /* --- Art Deco variable scope (dark mode) --- */
+  .dark .qt-help-guide-deco,
+  .qt-help-guide-deco.dark {
+    --deco-bg: hsl(222 47% 7%);
+    --deco-fg: hsl(45 15% 90%);
+    --deco-fg-muted: hsl(222 12% 55%);
+    --deco-primary: hsl(43 85% 55%);
+    --deco-primary-fg: hsl(222 47% 7%);
+    --deco-accent: hsl(43 90% 58%);
+    --deco-border: hsl(43 35% 25%);
+    --deco-border-subtle: hsl(43 35% 25% / 0.5);
+    --deco-card: hsl(222 40% 12%);
+    --deco-muted: hsl(222 25% 15%);
+    --deco-input-bg: hsl(222 30% 14%);
+    --deco-code-bg: hsl(222 25% 15%);
+    --deco-gold: hsl(43 90% 58%);
+    --deco-welcome-bg: hsl(43 85% 55% / 0.06);
+    --deco-welcome-border: hsl(43 90% 58% / 0.2);
+    --deco-table-header: hsl(222 30% 16%);
+    --deco-hover-bg: hsl(222 25% 18% / 0.6);
+    --deco-font-serif: "Cormorant Garamond", Georgia, Cambria, "Times New Roman", Times, serif;
+    --deco-font-sans: Raleway, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  /* --- Apply Art Deco palette to all guide components --- */
+  .qt-help-guide-deco {
+    background:
+      linear-gradient(hsl(45 28% 75% / 0.88), hsl(45 28% 75% / 0.88)),
+      url('/api/themes/assets/bundle:art-deco/textures/background-light.webp');
+    background-size: cover;
+    background-position: center center;
+    color: var(--deco-fg);
+    font-family: var(--deco-font-serif);
+
+    --qt-help-guide-search-bg: var(--deco-input-bg);
+    --qt-help-guide-search-border: var(--deco-border);
+    --qt-help-guide-search-fg: var(--deco-fg);
+    --qt-help-guide-search-placeholder: var(--deco-fg-muted);
+    --qt-help-guide-search-icon: var(--deco-fg-muted);
+    --qt-help-guide-border: var(--deco-border-subtle);
+    --qt-help-guide-category-fg: var(--deco-fg);
+    --qt-help-guide-category-hover: var(--deco-gold);
+    --qt-help-guide-badge-fg: var(--deco-fg-muted);
+    --qt-help-guide-topic-fg: var(--deco-fg-muted);
+    --qt-help-guide-topic-hover: var(--deco-fg);
+    --qt-help-guide-topic-hover-bg: var(--deco-hover-bg);
+    --qt-help-guide-topic-active-fg: var(--deco-gold);
+    --qt-help-guide-back-fg: var(--deco-gold);
+    --qt-help-guide-back-hover-bg: var(--deco-hover-bg);
+    --qt-help-guide-reader-fg: var(--deco-fg);
+    --qt-help-guide-heading-fg: var(--deco-fg);
+    --qt-help-guide-code-bg: var(--deco-code-bg);
+    --qt-help-guide-code-fg: var(--deco-fg);
+    --qt-help-guide-link-fg: var(--deco-gold);
+    --qt-help-guide-table-header-bg: var(--deco-table-header);
+    --qt-help-welcome-bg: var(--deco-welcome-bg);
+    --qt-help-welcome-border: var(--deco-welcome-border);
+    --qt-help-welcome-title-fg: var(--deco-fg);
+    --qt-help-welcome-text-fg: var(--deco-fg-muted);
+    --qt-help-welcome-link-fg: var(--deco-gold);
+  }
+
+  .dark .qt-help-guide-deco,
+  .qt-help-guide-deco.dark {
+    background:
+      linear-gradient(hsl(222 40% 12% / 0.88), hsl(222 40% 12% / 0.88)),
+      url('/api/themes/assets/bundle:art-deco/textures/background-dark.webp');
+    background-size: cover;
+    background-position: center center;
+  }
+
+  .qt-help-guide-deco .qt-help-guide-category-label {
+    font-family: var(--deco-font-sans);
+    letter-spacing: 0.025em;
+  }
+
+  .qt-help-guide-deco .qt-help-guide-reader h1,
+  .qt-help-guide-deco .qt-help-guide-reader h2,
+  .qt-help-guide-deco .qt-help-guide-reader h3 {
+    font-family: var(--deco-font-sans);
+    letter-spacing: 0.015em;
+  }
+
+  .qt-help-guide-deco .qt-help-guide-back {
+    font-family: var(--deco-font-sans);
+    letter-spacing: 0.025em;
+  }
 
   .qt-help-guide-search {
     @apply relative flex items-center;
@@ -650,6 +765,8 @@
     font-size: 0.8125rem;
     line-height: 1.625;
     color: var(--qt-help-guide-reader-fg, hsl(var(--foreground)));
+    overflow-x: hidden;
+    min-width: 0;
   }
 
   .qt-help-guide-reader h1 {
@@ -685,6 +802,8 @@
   .qt-help-guide-reader table {
     @apply w-full mb-3 text-xs;
     border-collapse: collapse;
+    table-layout: fixed;
+    word-break: break-word;
   }
 
   .qt-help-guide-reader th,
@@ -710,8 +829,13 @@
   }
 
   .qt-help-guide-code-block {
-    @apply rounded-md p-3 mb-2 overflow-x-auto text-xs;
+    @apply rounded-md p-3 mb-2 text-xs;
     background: var(--qt-help-guide-code-bg, hsl(var(--muted)));
+    white-space: pre-wrap !important;
+    word-break: break-all;
+    overflow-wrap: anywhere;
+    max-width: 100%;
+    overflow: hidden;
     color: var(--qt-help-guide-code-fg, hsl(var(--foreground)));
   }
 

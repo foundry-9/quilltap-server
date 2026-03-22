@@ -264,5 +264,5 @@ Characters with help tools enabled can navigate directly to this page:
 
 - [Tools Overview](tools.md) - What tools are and how they work
 - [Configuring Chat Tools](tools-settings.md) - How to enable/disable tools
-- [Chat Settings](settings.md) - Other chat configuration options
-- [Connection Profiles](settings.md) - Setting up profiles for tools
+- [Chat Settings](chat-settings.md) - Other chat configuration options
+- [Connection Profiles](connection-profiles.md) - Setting up profiles for tools

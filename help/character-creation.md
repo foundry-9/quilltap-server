@@ -538,7 +538,7 @@ Characters with help tools enabled can navigate directly to this page:
 
 - [Characters](characters.md) — Characters overview
 - [Editing Characters](character-editing.md) — Modifying characters
-- [AI Wizard](character-ai-wizard.md) — Using AI to generate content
+- [AI Wizard](ai-character-import.md) — Using AI to generate content
 - [System Prompts](character-system-prompts.md) — Advanced prompt configuration
 - [Character Organization](character-organization.md) — Tags and management
 - [Chats](chats.md) — Starting conversations with characters

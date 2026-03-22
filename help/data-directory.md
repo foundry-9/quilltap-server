@@ -96,4 +96,4 @@ Characters with help tools enabled can navigate directly to this page:
 ## Related Topics
 
 - [Your Profile](profile.md) - Overview of the profile page
-- [Storage Settings](storage-settings.md) - Configure file storage mount points
+- [Settings](settings.md) - Overview of all configuration options

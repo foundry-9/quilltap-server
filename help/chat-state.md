@@ -166,6 +166,6 @@ Characters with help tools enabled can navigate directly to this page:
 
 ## Related Features
 
-- [Tool Palette](/help/tool-palette) - Access the State button and other tools
-- [Projects](/help/projects) - Organize related chats with shared state
-- [LLM Tools](/help/llm-tools) - Other AI capabilities available in chats
+- [Tools](tools.md) - Access the State button and other tools
+- [Projects](projects.md) - Organize related chats with shared state
+- [Tools](tools.md) - Other AI capabilities available in chats

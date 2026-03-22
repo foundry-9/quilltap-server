@@ -150,7 +150,7 @@ When dangerous content handling is enabled (Detect Only or Auto-Route mode), cha
 - Works independently of tag-based hiding
 - Your preference is saved across sessions
 
-See [Dangerous Content Handling](/help/dangerous-content) for more information about how chats are classified.
+See [Dangerous Content Handling](dangerous-content.md) for more information about how chats are classified.
 
 ## Quick-Hide vs. Other Features
 

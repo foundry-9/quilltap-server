@@ -325,5 +325,5 @@ Characters with help tools enabled can navigate directly to this page:
 ## Related Topics
 
 - [System Tools](system-tools.md) - Overview of all system tools
-- [Connection Profiles](settings.md) - Configuring providers
+- [Connection Profiles](connection-profiles.md) - Configuring providers
 - [Plugins](plugins.md) - Installing and managing plugins

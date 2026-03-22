@@ -200,6 +200,6 @@ Characters with help tools enabled can navigate directly to this page:
 
 ## Related Topics
 
-- [Chat Settings](/help/chat-settings) - Configure global chat behavior
-- [Connection Profiles](/help/connection-profiles) - Set up LLM providers
-- [Image Generation Profiles](/help/image-generation-profiles) - Configure image providers
+- [Chat Settings](chat-settings.md) - Configure global chat behavior
+- [Connection Profiles](connection-profiles.md) - Set up LLM providers
+- [Image Generation Profiles](image-generation-profiles.md) - Configure image providers

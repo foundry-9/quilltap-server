@@ -378,5 +378,5 @@ Characters with help tools enabled can navigate directly to this page:
 ## Related Topics
 
 - [System Tools](system-tools.md) - Overview of all system tools
-- [Connection Profiles](settings.md) - Configuring AI providers
-- [Troubleshooting](help.md) - General troubleshooting guide
+- [Connection Profiles](connection-profiles.md) - Configuring AI providers
+- [System Tools](system-tools.md) - Overview of all system tools

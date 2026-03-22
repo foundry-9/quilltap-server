@@ -251,7 +251,7 @@ Configure AI-generated atmospheric background images for your chats.
 - Valid API key for your image provider
 - Characters with physical descriptions produce better results
 
-**Learn more:** See [Story Backgrounds](/help/story-backgrounds) for detailed information.
+**Learn more:** See [Story Backgrounds](story-backgrounds.md) for detailed information.
 
 ### Automation Settings
 

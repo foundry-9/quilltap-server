@@ -510,4 +510,4 @@ Characters with help tools enabled can navigate directly to this page:
 - [Projects](projects.md) — Organize files by project
 - [Characters](characters.md) — Upload character profile pictures
 - [Chats](chats.md) — Attach files to messages
-- [The Forge > File Storage](file-storage-settings.md) — Configure storage location
+- [Data Directory](data-directory.md) — Configure storage location
