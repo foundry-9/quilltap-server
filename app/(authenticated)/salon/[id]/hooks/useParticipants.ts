@@ -179,10 +179,12 @@ export function useParticipants({
       }))
   }, [participantData, impersonatingParticipantIds])
 
-  // Check if this is an all-LLM chat (no user-controlled participants)
+  // Check if this is an all-LLM chat (no user-controlled participants AND no user messages)
+  // A chat with USER messages has a human present even without a controlledBy='user' participant
   const isAllLLM = useMemo(() => {
-    return isAllLLMChat(participantsAsBase)
-  }, [participantsAsBase])
+    if (!isAllLLMChat(participantsAsBase)) return false
+    return !messages.some(m => m.role === 'USER')
+  }, [participantsAsBase, messages])
 
   // Count turns since last user message (for all-LLM pause logic)
   const allLLMTurnCount = useMemo(() => {

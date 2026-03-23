@@ -187,11 +187,17 @@ export async function handleSendMessage(
           const chainStartTime = Date.now()
           let chainDepth = 0
 
+          // If the user just sent a message, ensure the chain loop knows a human is present
+          // even if no participant has controlledBy='user'. The sentinel '__user__' causes
+          // selectNextSpeaker to return user_turn/cycle_complete instead of looping forever.
+          const effectiveUserParticipantId = result.userParticipantId
+            ?? (options.continueMode ? null : '__user__')
+
           while (true) {
             const decision = await shouldChainNext(
               repos,
               chatId,
-              result.userParticipantId,
+              effectiveUserParticipantId,
               chainDepth,
               chainStartTime,
               DEFAULT_CHAIN_CONFIG

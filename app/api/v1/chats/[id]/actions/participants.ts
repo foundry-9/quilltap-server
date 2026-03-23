@@ -216,11 +216,35 @@ export async function handleAddParticipantAction(
 
     // Check if character is already in the chat
     if (validatedData.type === 'CHARACTER' && validatedData.characterId) {
-      const existingParticipant = chat.participants.find(
+      const activeParticipant = chat.participants.find(
         (p) => p.type === 'CHARACTER' && p.characterId === validatedData.characterId && p.isActive
       );
-      if (existingParticipant) {
+      if (activeParticipant) {
         return badRequest('Character is already in this chat');
+      }
+
+      // Check for soft-deleted participant — reactivate instead of creating duplicate
+      const removedParticipant = chat.participants.find(
+        (p) => p.type === 'CHARACTER' && p.characterId === validatedData.characterId && !p.isActive && p.removedAt
+      );
+      if (removedParticipant) {
+        const controlledBy = validatedData.controlledBy || removedParticipant.controlledBy || 'llm';
+        const updatedChat = await repos.chats.updateParticipant(chatId, removedParticipant.id, {
+          isActive: true,
+          removedAt: null,
+          controlledBy,
+          connectionProfileId: validatedData.connectionProfileId || removedParticipant.connectionProfileId,
+          displayOrder: chat.participants.filter(p => p.isActive).length,
+        });
+        if (!updatedChat) {
+          return serverError('Failed to reactivate participant');
+        }
+
+        const reactivatedParticipant = updatedChat.participants.find(p => p.id === removedParticipant.id);
+        const enrichedParticipant = reactivatedParticipant ? await enrichParticipant(reactivatedParticipant, repos) : null;
+
+        logger.info('[Chats v1] Participant reactivated', { chatId, participantId: removedParticipant.id });
+        return NextResponse.json({ participant: enrichedParticipant, chat: updatedChat }, { status: 200 });
       }
     }
 
@@ -316,6 +340,17 @@ export async function handleRemoveParticipantAction(
       if (result.status === 404) return notFound('Resource');
       if (result.status === 400) return badRequest(result.error);
       return serverError(result.error);
+    }
+
+    // Clean up impersonation state for removed participant
+    const currentImpersonating = result.chat.impersonatingParticipantIds || [];
+    if (currentImpersonating.includes(validatedData.participantId)) {
+      const cleanedIds = currentImpersonating.filter((id: string) => id !== validatedData.participantId);
+      const updateData: Record<string, unknown> = { impersonatingParticipantIds: cleanedIds };
+      if (result.chat.activeTypingParticipantId === validatedData.participantId) {
+        updateData.activeTypingParticipantId = cleanedIds[0] || null;
+      }
+      await repos.chats.update(chatId, updateData);
     }
 
     logger.info('[Chats v1] Participant removed', { chatId, participantId: validatedData.participantId });

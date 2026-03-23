@@ -105,7 +105,8 @@ export class ChatParticipantsOps {
   }
 
   /**
-   * Remove a participant from a chat
+   * Remove a participant from a chat (soft-delete: sets isActive=false and removedAt timestamp)
+   * Messages referencing this participant retain their attribution.
    */
   async removeParticipant(chatId: string, participantId: string): Promise<ChatMetadata | null> {
     return safeQuery(async () => {
@@ -114,10 +115,24 @@ export class ChatParticipantsOps {
         return null;
       }
 
-      const participants = chat.participants.filter(p => p.id !== participantId);
+      const participantIndex = chat.participants.findIndex(p => p.id === participantId);
+      if (participantIndex === -1) {
+        logger.warn('Participant not found for removal', { chatId, participantId });
+        return null;
+      }
 
-      // Don't allow removing all participants
-      if (participants.length === 0) {
+      const now = this.ctx.getCurrentTimestamp();
+      const participants = [...chat.participants];
+      participants[participantIndex] = {
+        ...participants[participantIndex],
+        isActive: false,
+        removedAt: now,
+        updatedAt: now,
+      };
+
+      // Don't allow removing the last active participant
+      const activeCount = participants.filter(p => p.isActive).length;
+      if (activeCount === 0) {
         const error = new Error('Cannot remove the last participant from a chat');
         logger.error('Cannot remove last participant', { chatId, participantId });
         throw error;

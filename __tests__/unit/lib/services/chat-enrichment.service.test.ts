@@ -274,6 +274,7 @@ describe('chat-enrichment.service', () => {
         type: 'CHARACTER',
         displayOrder: 0,
         isActive: true,
+        removedAt: null,
         character: expect.objectContaining({
           id: 'char-1',
           name: 'Alice',
@@ -324,6 +325,7 @@ describe('chat-enrichment.service', () => {
         controlledBy: 'llm',
         displayOrder: 0,
         isActive: true,
+        removedAt: null,
         systemPromptOverride: 'Custom prompt',
         character: expect.objectContaining({ id: 'char-1', name: 'Alice' }),
         connectionProfile: expect.objectContaining({ id: 'conn-1' }),

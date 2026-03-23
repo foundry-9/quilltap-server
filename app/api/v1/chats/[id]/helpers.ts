@@ -79,6 +79,7 @@ export async function enrichParticipant(participant: ChatParticipantBase, repos:
     characterId: participant.characterId,
     displayOrder: participant.displayOrder,
     isActive: participant.isActive,
+    removedAt: participant.removedAt ?? null,
     systemPromptOverride: participant.systemPromptOverride,
     hasHistoryAccess: participant.hasHistoryAccess,
     joinScenario: participant.joinScenario,

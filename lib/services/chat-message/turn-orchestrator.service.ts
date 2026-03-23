@@ -79,8 +79,13 @@ export async function shouldChainNext(
   })
 
   // Check all-LLM pause thresholds
+  // A chat is only truly all-LLM if there's no user-controlled participant AND
+  // no USER messages in history (a user typing messages means a human is present)
   const isAllLLM = isAllLLMChat(freshChat.participants)
-  if (isAllLLM) {
+  const hasUserPresence = userParticipantId !== null
+    || messageEvents.some(m => m.role === 'USER')
+  const effectiveAllLLM = isAllLLM && !hasUserPresence
+  if (effectiveAllLLM) {
     // Count assistant messages since last user message
     let turnCount = 0
     for (let i = messageEvents.length - 1; i >= 0; i--) {

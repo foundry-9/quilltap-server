@@ -204,6 +204,7 @@ export const ChatParticipantSchema = z.object({
   // Display and state
   displayOrder: z.number().default(0),   // For ordering in UI
   isActive: z.boolean().default(true),   // Temporarily disable without removing
+  removedAt: TimestampSchema.nullable().optional(),  // Soft-delete timestamp — set when participant is removed from chat
 
   // Multi-character chat fields
   hasHistoryAccess: z.boolean().default(false),  // Whether this participant can see messages from before they joined
@@ -233,6 +234,7 @@ export const ChatParticipantBaseSchema = z.object({
   selectedSystemPromptId: UUIDSchema.nullable().optional(),  // Selected system prompt from character's prompts array
   displayOrder: z.number().default(0),
   isActive: z.boolean().default(true),
+  removedAt: TimestampSchema.nullable().optional(),  // Soft-delete timestamp
   hasHistoryAccess: z.boolean().default(false),
   joinScenario: z.string().nullable().optional(),
   createdAt: TimestampSchema,
