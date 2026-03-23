@@ -149,15 +149,13 @@ export function useTurnManagement(
     const newTurnState = nudgeParticipant(turnState, participantId)
     setTurnState(newTurnState)
 
-    // Persist to backend
-    const response = await callTurnAction(chatId, 'nudge', participantId)
-    if (response) {
-      applyServerResponse(response, setTurnState, setTurnSelectionResult, turnState)
-    }
-
-    // Trigger immediate response generation
+    // Trigger immediate response generation directly — do NOT also add to
+    // the turn queue via callTurnAction('nudge'), because triggerContinueMode
+    // already requests a response for this participant.  Adding them to the
+    // queue as well causes the server-side chain loop to pop the queue entry
+    // and generate a second (duplicate) response.
     triggerContinueMode(participantId)
-  }, [chatId, turnState, participantsAsBase, participantData, ephemeralMessages, setTurnState, setTurnSelectionResult, setEphemeralMessages, triggerContinueMode, isPaused, onUnpause])
+  }, [turnState, participantsAsBase, participantData, ephemeralMessages, setTurnState, setEphemeralMessages, triggerContinueMode, isPaused, onUnpause])
 
   const handleQueue = useCallback(async (participantId: string) => {
     // Optimistic local update for immediate UI feedback

@@ -338,7 +338,7 @@ describe('useTurnManagement', () => {
   })
 
   describe('handleNudge', () => {
-    it('should update turn state with nudged participant and call API', async () => {
+    it('should update turn state with nudged participant and trigger continue mode directly', async () => {
       const { result } = renderHook(() =>
         useTurnManagement(
           TEST_CHAT_ID,
@@ -361,13 +361,10 @@ describe('useTurnManagement', () => {
 
       expect(mockNudgeParticipant).toHaveBeenCalledWith(turnState, 'p1')
       expect(setTurnState).toHaveBeenCalled()
-      expect(mockFetch).toHaveBeenCalledWith(
-        `/api/v1/chats/${TEST_CHAT_ID}?action=turn`,
-        expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({ action: 'nudge', participantId: 'p1' }),
-        })
-      )
+      // Nudge should NOT call the turn action API — triggerContinueMode handles
+      // the immediate response directly.  Adding to the queue AND triggering
+      // continueMode caused duplicate responses from the chain loop.
+      expect(triggerContinueMode).toHaveBeenCalledWith('p1')
     })
 
     it('should create ephemeral message for nudge', async () => {
@@ -395,12 +392,7 @@ describe('useTurnManagement', () => {
       expect(setEphemeralMessages).toHaveBeenCalled()
     })
 
-    it('should update selection result from server response', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => createMockTurnResponse({ nextSpeakerId: 'p1', queue: ['p1'] }),
-      })
-
+    it('should not call turn action API on nudge (avoids duplicate responses)', async () => {
       const { result } = renderHook(() =>
         useTurnManagement(
           TEST_CHAT_ID,
@@ -421,13 +413,17 @@ describe('useTurnManagement', () => {
         await result.current.handleNudge('p1')
       })
 
-      // Should update selection result from API response (second call overwrites optimistic)
-      expect(setTurnSelectionResult).toHaveBeenCalledWith(
+      // The nudge action API should NOT be called — only triggerContinueMode
+      // Adding to the queue AND triggering continueMode caused the chain loop
+      // to pop the queued entry and generate a second duplicate response.
+      expect(mockFetch).not.toHaveBeenCalledWith(
+        `/api/v1/chats/${TEST_CHAT_ID}?action=turn`,
         expect.objectContaining({
-          nextSpeakerId: 'p1',
-          reason: 'weighted_selection',
+          method: 'POST',
+          body: JSON.stringify({ action: 'nudge', participantId: 'p1' }),
         })
       )
+      expect(triggerContinueMode).toHaveBeenCalledWith('p1')
     })
 
     it('should trigger continue mode for the nudged participant', async () => {
@@ -1091,7 +1087,7 @@ describe('useTurnManagement', () => {
   })
 
   describe('Integration scenarios', () => {
-    it('should handle full nudge flow: unpause -> update state -> ephemeral -> API -> continue', async () => {
+    it('should handle full nudge flow: unpause -> update state -> ephemeral -> continue', async () => {
       const { result } = renderHook(() =>
         useTurnManagement(
           TEST_CHAT_ID,
@@ -1114,14 +1110,12 @@ describe('useTurnManagement', () => {
         await result.current.handleNudge('p1')
       })
 
-      // Verify full flow
+      // Verify full flow (no API call — triggerContinueMode handles it directly)
       expect(onUnpause).toHaveBeenCalled()
       expect(mockCreateEphemeralMessage).toHaveBeenCalledWith('nudge', 'p1', 'Alice')
       expect(setEphemeralMessages).toHaveBeenCalled()
       expect(mockNudgeParticipant).toHaveBeenCalledWith(turnState, 'p1')
       expect(setTurnState).toHaveBeenCalled()
-      expect(mockFetch).toHaveBeenCalled()
-      expect(setTurnSelectionResult).toHaveBeenCalled()
       expect(triggerContinueMode).toHaveBeenCalledWith('p1')
     })
 

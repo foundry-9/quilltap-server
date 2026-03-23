@@ -113,13 +113,27 @@ export async function shouldChainNext(
   let selectionReason: string = ''
 
   if (turnQueue.length > 0) {
-    // Pop front of queue
-    nextParticipantId = turnQueue[0]
-    turnQueue = turnQueue.slice(1)
-    // Persist updated queue
+    // Pop from the front of the queue, but skip any entry that matches
+    // the participant who just spoke — otherwise a nudge (which both queues
+    // the participant AND triggers an immediate response) would cause a
+    // duplicate response from the chain loop.
+    while (turnQueue.length > 0) {
+      const candidate = turnQueue[0]
+      turnQueue = turnQueue.slice(1)
+      if (candidate !== turnState.lastSpeakerId) {
+        nextParticipantId = candidate
+        selectionReason = 'queue'
+        break
+      }
+      logger.debug('[TurnOrchestrator] Skipping queued participant who just spoke', {
+        chatId, skippedParticipantId: candidate,
+      })
+    }
+    // Persist updated queue (even if we skipped entries)
     await repos.chats.update(chatId, { turnQueue: JSON.stringify(turnQueue) })
-    selectionReason = 'queue'
-  } else {
+  }
+
+  if (!nextParticipantId && selectionReason !== 'queue') {
     // Use turn selection algorithm
     const activeCharacterParticipants = getActiveCharacterParticipants(freshChat.participants)
     const charactersMap = new Map<string, Character>()
