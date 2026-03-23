@@ -148,6 +148,7 @@ export function createMockChatParticipant(
     displayOrder: 0,
     controlledBy: 'llm',
     isActive: true,
+    status: 'active',
     hasHistoryAccess: false,
     joinScenario: null,
     createdAt: now,

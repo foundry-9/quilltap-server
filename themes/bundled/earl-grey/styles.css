@@ -436,6 +436,12 @@
   --qt-chat-whisper-border: hsl(270 20% 35%);
   --qt-chat-whisper-label-fg: hsl(270 15% 55%);
 
+  /* Chat: Silent messages — classic sage for refined palette */
+  --qt-chat-silent-bg: hsl(158 18% 28%);
+  --qt-chat-silent-fg: hsl(158 12% 80%);
+  --qt-chat-silent-border: hsl(158 20% 40%);
+  --qt-chat-silent-label-fg: hsl(158 15% 55%);
+
   --qt-chat-composer-bg: hsl(var(--bg-300));
   --qt-chat-composer-border: transparent;
   --qt-chat-composer-radius: 26px;
@@ -1037,6 +1043,12 @@
   --qt-chat-whisper-fg: hsl(270 15% 25%);
   --qt-chat-whisper-border: hsl(270 25% 72%);
   --qt-chat-whisper-label-fg: hsl(270 20% 55%);
+
+  /* Silent messages — light sage for light mode */
+  --qt-chat-silent-bg: hsl(158 18% 88%);
+  --qt-chat-silent-fg: hsl(158 15% 22%);
+  --qt-chat-silent-border: hsl(158 20% 70%);
+  --qt-chat-silent-label-fg: hsl(158 18% 50%);
 
   /* Sidebar border - Subtle in light mode */
   --qt-sidebar-border: hsl(var(--border-100));

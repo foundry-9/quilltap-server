@@ -239,55 +239,23 @@ export async function applyContextCompression(
     }, error instanceof Error ? error : undefined)
   }
 
-  let compressedSystemPrompt: string | undefined
-  let systemPromptCompressionResult: CompressionResult | undefined
-
-  // Compress system prompt
-  try {
-    const systemResult = await compressSystemPrompt(
-      systemPrompt,
-      options.systemPromptTargetTokens,
-      options.selection,
-      options.userId,
-      uncensoredFallback,
-      options.chatId
-    )
-
-    if (systemResult.success && systemResult.result) {
-      compressedSystemPrompt = systemResult.result.compressedText
-      systemPromptCompressionResult = systemResult.result
-
-      logger.info('[ContextCompression] System prompt compressed successfully', {
-        context: 'context-compression',
-        originalTokens: systemResult.result.originalTokens,
-        compressedTokens: systemResult.result.compressedTokens,
-        savings: systemResult.result.originalTokens - systemResult.result.compressedTokens,
-      })
-    } else {
-      warnings.push(`Failed to compress system prompt: ${systemResult.error}`)
-      logger.warn('[ContextCompression] Failed to compress system prompt', {
-        context: 'context-compression',
-        error: systemResult.error,
-      })
-    }
-  } catch (error) {
-    warnings.push(`Error during system prompt compression: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    logger.error('[ContextCompression] Error compressing system prompt', {
-      context: 'context-compression',
-    }, error instanceof Error ? error : undefined)
-  }
+  // System prompt compression is disabled — always use fresh per-character prompt
+  // Each character has their own identity and it must not be compressed away
+  const compressedSystemPrompt: string | undefined = undefined
+  const systemPromptCompressionResult: CompressionResult | undefined = undefined
 
   // Calculate compression details
-  const compressionApplied = !!(compressedHistory || compressedSystemPrompt)
+  const compressionApplied = !!compressedHistory
 
   if (compressionApplied) {
     const originalHistoryTokens = historyCompressionResult?.originalTokens ?? 0
     const compressedHistoryTokens = historyCompressionResult?.compressedTokens ?? 0
-    const originalSystemPromptTokens = systemPromptCompressionResult?.originalTokens ?? 0
-    const compressedSystemPromptTokens = systemPromptCompressionResult?.compressedTokens ?? 0
+    // System prompt compression is disabled, so these are always 0
+    const originalSystemPromptTokens = 0
+    const compressedSystemPromptTokens = 0
 
     const historySavings = originalHistoryTokens - compressedHistoryTokens
-    const systemPromptSavings = originalSystemPromptTokens - compressedSystemPromptTokens
+    const systemPromptSavings = 0
     const totalSavings = historySavings + systemPromptSavings
 
     logger.info('[ContextCompression] Compression complete', {
@@ -339,16 +307,13 @@ export function buildCompressedSystemMessage(
   compressedSystemPrompt: string | undefined,
   fullSystemPrompt: string
 ): string {
-  // Use compressed system prompt if available, otherwise use full
-  const systemPromptToUse = compressedSystemPrompt || fullSystemPrompt
-
+  // Always use the full system prompt — system prompt compression is disabled
+  // because each character has their own identity and it must not be compressed away
   if (!compressedHistory) {
-    // No compressed history, just return the system prompt
-    return systemPromptToUse
+    return fullSystemPrompt
   }
 
-  // Combine compressed system prompt with compressed history
-  return `${systemPromptToUse}
+  return `${fullSystemPrompt}
 
 ## Conversation Context (Compressed Summary of Earlier Messages)
 

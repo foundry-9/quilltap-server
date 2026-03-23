@@ -463,6 +463,7 @@ export function encodeDoneEvent(
     emptyResponseReason?: string
     provider?: string
     modelName?: string
+    isSilentMessage?: boolean
   }
 ): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify({ done: true, ...data })}\n\n`)

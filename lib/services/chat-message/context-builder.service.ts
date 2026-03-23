@@ -71,6 +71,8 @@ export interface BuildMessageContextOptions {
   generateMemoryRecap?: boolean
   /** Uncensored fallback options for memory recap in dangerous chats */
   uncensoredFallbackOptions?: UncensoredFallbackOptions
+  /** Status change notifications to include in prompt */
+  statusChangeNotifications?: string[]
 }
 
 /**
@@ -376,6 +378,8 @@ export async function buildMessageContext(
     // Memory recap (chat start or character join)
     generateMemoryRecap: shouldGenerateRecap,
     uncensoredFallbackOptions,
+    // Status change notifications
+    statusChangeNotifications: options.statusChangeNotifications,
   })
 
   // Log context building results for debugging

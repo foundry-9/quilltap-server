@@ -261,6 +261,12 @@
   --qt-chat-whisper-border: hsl(270 45% 55%);
   --qt-chat-whisper-label-fg: hsl(270 40% 48%);
 
+  /* Chat: Silent messages — faded green for retro feel */
+  --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 65%, hsl(120 25% 55%) 35%);
+  --qt-chat-silent-fg: var(--qt-chat-assistant-fg);
+  --qt-chat-silent-border: hsl(120 25% 55%);
+  --qt-chat-silent-label-fg: hsl(120 20% 40%);
+
   --qt-chat-composer-bg: var(--color-background);
   --qt-chat-composer-border: var(--color-border);
   --qt-chat-composer-radius: var(--radius-lg);
@@ -632,6 +638,11 @@
   --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 55%, hsl(270 40% 35%) 45%);
   --qt-chat-whisper-border: hsl(270 40% 45%);
   --qt-chat-whisper-label-fg: hsl(270 50% 72%);
+
+  /* Silent messages — darker faded green for dark mode */
+  --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, hsl(120 30% 30%) 40%);
+  --qt-chat-silent-border: hsl(120 30% 42%);
+  --qt-chat-silent-label-fg: hsl(120 25% 60%);
 
   /* Response status indicator - brighter for dark mode */
   --qt-response-status-bg: color-mix(in srgb, var(--color-muted) 40%, transparent);

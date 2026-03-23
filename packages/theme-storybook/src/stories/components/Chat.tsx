@@ -220,6 +220,34 @@ export const Chat: React.FC = () => {
         </div>
       </section>
 
+      {/* Silent Messages */}
+      <section style={{ marginBottom: '2rem' }}>
+        <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
+          Silent Messages
+        </h3>
+        <p style={{ color: 'var(--color-muted-foreground)', marginBottom: '1rem' }}>
+          Inner thoughts and actions from characters in silent mode. They can think and act physically,
+          but cannot speak aloud. Distinguished from whispers by dotted borders and sage/teal tones.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: '32rem' }}>
+          {/* Silent message — inner thoughts */}
+          <div className="qt-chat-message-row qt-chat-message-row-assistant" style={{ marginBottom: '0.5rem' }}>
+            <div className="qt-chat-message-body qt-chat-message-assistant qt-chat-message-silent">
+              <div className="qt-chat-silent-label">silent &mdash; inner thoughts and actions only</div>
+              <p>*glances at the door, weighing whether to follow or stay behind*</p>
+            </div>
+          </div>
+
+          {/* Silent message — physical action */}
+          <div className="qt-chat-message-row qt-chat-message-row-assistant" style={{ marginBottom: '0.5rem' }}>
+            <div className="qt-chat-message-body qt-chat-message-assistant qt-chat-message-silent">
+              <div className="qt-chat-silent-label">silent &mdash; inner thoughts and actions only</div>
+              <p>*quietly pockets the letter before anyone notices, mind racing with questions about its contents*</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Chat Toolbar */}
       <section style={{ marginBottom: '2rem' }}>
         <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>

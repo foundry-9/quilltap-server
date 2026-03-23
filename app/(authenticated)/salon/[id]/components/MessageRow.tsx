@@ -137,6 +137,11 @@ function MessageRowInner({
 }: MessageRowProps) {
   const isWhisper = !!(message.targetParticipantIds && message.targetParticipantIds.length > 0)
 
+  // Silent message styling is based solely on the persisted flag set when the message
+  // was generated — NOT the participant's current status. Changing a character to silent
+  // should not retroactively restyle their old messages.
+  const isSilentMessage = !!message.isSilentMessage
+
   const messageRowClasses = ['qt-chat-message-row']
   if (message.role === 'USER') {
     messageRowClasses.push('qt-chat-message-row-user')
@@ -178,7 +183,7 @@ function MessageRowInner({
             message.role === 'USER'
               ? 'qt-chat-message-user'
               : 'qt-chat-message-assistant'
-          }${isWhisper ? ' qt-chat-message-whisper' : ''}${isOverheardWhisper ? ' qt-chat-message-whisper-overheard' : ''}`}
+          }${isWhisper ? ' qt-chat-message-whisper' : ''}${isOverheardWhisper ? ' qt-chat-message-whisper-overheard' : ''}${isSilentMessage ? ' qt-chat-message-silent' : ''}`}
         >
           {isEditing ? (
             <div className="space-y-2">
@@ -211,6 +216,12 @@ function MessageRowInner({
                   whispered to {message.targetParticipantIds!.map(
                     id => participantNames?.[id] || 'unknown'
                   ).join(', ')}
+                </div>
+              )}
+              {/* Silent mode label */}
+              {isSilentMessage && !isWhisper && (
+                <div className="qt-chat-silent-label">
+                  silent — inner thoughts and actions only
                 </div>
               )}
               {/* Embedded tool calls - shown at top of message */}

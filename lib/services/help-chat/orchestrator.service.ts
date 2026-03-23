@@ -13,6 +13,7 @@ import { requiresApiKey } from '@/lib/plugins/provider-validation'
 import { stripCharacterNamePrefix } from '@/lib/llm/message-formatter'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { MessageEvent, ChatMetadataBase } from '@/lib/schemas/types'
+import { isParticipantPresent } from '@/lib/schemas/chat.types'
 import type { HelpChatSendOptions } from './types'
 import {
   buildTools,
@@ -98,7 +99,7 @@ export async function handleHelpChatMessage(
 
         // Get active LLM-controlled participants sorted by displayOrder
         const activeParticipants = chat.participants
-          .filter(p => p.isActive && p.controlledBy === 'llm')
+          .filter(p => isParticipantPresent(p.status) && p.controlledBy === 'llm')
           .sort((a, b) => a.displayOrder - b.displayOrder)
 
         if (activeParticipants.length === 0) {

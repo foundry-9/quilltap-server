@@ -308,7 +308,7 @@ export function useChatControls({
   ) => {
     try {
       const res = await fetch(`/api/v1/chats/${chatId}?action=update-participant`, {
-        method: 'PUT',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           updateParticipant: {
@@ -334,11 +334,11 @@ export function useChatControls({
   // Handle participant settings change
   const handleParticipantSettingsChange = useCallback(async (
     participantId: string,
-    updates: { systemPromptOverride?: string | null; isActive?: boolean }
+    updates: { systemPromptOverride?: string | null; isActive?: boolean; status?: 'active' | 'silent' | 'absent' | 'removed' }
   ) => {
     try {
       const res = await fetch(`/api/v1/chats/${chatId}?action=update-participant`, {
-        method: 'PUT',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           updateParticipant: {

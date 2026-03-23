@@ -104,6 +104,7 @@ function createCharacterParticipant(id: string, name: string, displayOrder: numb
     controlledBy: 'llm',
     displayOrder,
     isActive,
+    status: isActive ? 'active' : 'absent',
     character: {
       id: `char-${id}`,
       name,
@@ -119,6 +120,7 @@ function createPersonaParticipant(id: string, name: string, displayOrder: number
     controlledBy: 'user',
     displayOrder,
     isActive,
+    status: isActive ? 'active' : 'absent',
     persona: {
       id: `persona-${id}`,
       name,
@@ -674,9 +676,10 @@ describe('ParticipantSidebar', () => {
 
       const participantElements = container.querySelectorAll('.participant-card-mock')
       expect(participantElements).toHaveLength(3)
-      // Alice (inactive) should be last
+      // Alice (absent/inactive) should be last
       expect(participantElements[2]).toHaveAttribute('data-testid', 'participant-char-1')
-      expect(participantElements[2]).toHaveAttribute('data-turn-status', 'inactive')
+      // status 'absent' maps to 'absent' turn status (non-active participant)
+      expect(participantElements[2]).toHaveAttribute('data-turn-status', 'absent')
     })
   })
 
@@ -1289,7 +1292,7 @@ describe('ParticipantSidebar', () => {
       expect(card2).toHaveAttribute('data-has-stop-streaming', 'false')
     })
 
-    it('assigns inactive status to inactive participants', () => {
+    it('assigns non-active turn status to absent participants', () => {
       const participants = [
         createCharacterParticipant('char-1', 'Alice', 1, true),
         createCharacterParticipant('char-2', 'Bob', 2, false),
@@ -1303,7 +1306,8 @@ describe('ParticipantSidebar', () => {
       )
 
       const card2 = screen.getByTestId('participant-char-2')
-      expect(card2).toHaveAttribute('data-turn-status', 'inactive')
+      // Participants with isActive=false get status='absent', which maps to 'absent' turn status
+      expect(card2).toHaveAttribute('data-turn-status', 'absent')
       expect(card2).toHaveAttribute('data-turn-position', '')
     })
   })

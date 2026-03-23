@@ -168,6 +168,7 @@ const makeHelpChat = (overrides: Record<string, unknown> = {}) => ({
       characterId: 'char-1',
       controlledBy: 'llm',
       isActive: true,
+      status: 'active',
       displayOrder: 0,
       connectionProfileId: 'profile-1',
     },

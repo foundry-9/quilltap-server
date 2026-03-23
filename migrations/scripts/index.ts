@@ -121,6 +121,10 @@ import { addAutoLockSettingsFieldMigration } from './add-auto-lock-settings-fiel
 import { addChatTypeFieldMigration } from './add-chat-type-field';
 // Create instance_settings table for instance-level configuration
 import { createInstanceSettingsTableMigration } from './create-instance-settings-table';
+// Migrate participant isActive boolean to status enum
+import { migrateParticipantStatusFieldMigration } from './migrate-participant-status-field';
+// Add isSilentMessage field to chat_messages
+import { addSilentMessageFieldMigration } from './add-silent-message-field';
 
 /**
  * All available migrations.
@@ -237,6 +241,10 @@ export const migrations: Migration[] = [
   addChatTypeFieldMigration,
   // Create instance_settings table for instance-level configuration
   createInstanceSettingsTableMigration,
+  // Migrate participant isActive boolean to status enum
+  migrateParticipantStatusFieldMigration,
+  // Add isSilentMessage field to chat_messages
+  addSilentMessageFieldMigration,
 ];
 
 export {
@@ -348,4 +356,8 @@ export {
   addChatTypeFieldMigration,
   // Create instance_settings table for instance-level configuration
   createInstanceSettingsTableMigration,
+  // Migrate participant isActive boolean to status enum
+  migrateParticipantStatusFieldMigration,
+  // Add isSilentMessage field to chat_messages
+  addSilentMessageFieldMigration,
 };

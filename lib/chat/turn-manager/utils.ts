@@ -6,6 +6,7 @@
 
 import type { TurnState, TurnSelectionResult } from './types';
 import type { ChatParticipantBase } from '@/lib/schemas/types';
+import { isParticipantPresent } from '@/lib/schemas/types';
 
 /**
  * Gets the queue position for a participant (1-indexed), or 0 if not in queue.
@@ -62,7 +63,7 @@ export function findUserParticipant(
 ): ChatParticipantBase | null {
   // Check for controlledBy='user'
   return participants.find(p =>
-    p.isActive && p.controlledBy === 'user'
+    isParticipantPresent(p.status) && p.controlledBy === 'user'
   ) ?? null;
 }
 
@@ -73,7 +74,7 @@ export function findUserControlledParticipants(
   participants: ChatParticipantBase[]
 ): ChatParticipantBase[] {
   return participants.filter(p =>
-    p.isActive && p.controlledBy === 'user'
+    isParticipantPresent(p.status) && p.controlledBy === 'user'
   );
 }
 
@@ -85,7 +86,7 @@ export function getActiveLLMParticipants(
   participants: ChatParticipantBase[]
 ): ChatParticipantBase[] {
   return participants.filter(p =>
-    p.isActive &&
+    isParticipantPresent(p.status) &&
     p.characterId &&
     p.controlledBy === 'llm'
   );

@@ -19,6 +19,7 @@ import { z } from 'zod'
 
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { MessageEvent, ConnectionProfile, ChatMetadataBase, Character, ChatSettings } from '@/lib/schemas/types'
+import { isParticipantPresent } from '@/lib/schemas/chat.types'
 import type { SendMessageOptions, ToolMessage, GeneratedImage } from './types'
 import type { MemoryChatSettings } from './memory-trigger.service'
 
@@ -292,7 +293,7 @@ export async function handleSendMessage(
               const chatSettings = await repos.chatSettings.findByUserId(userId)
               if (chatSettings?.cheapLLMSettings) {
                 const chainCharacterIds = chainChat.participants
-                  .filter(p => p.isActive && p.characterId)
+                  .filter(p => isParticipantPresent(p.status) && p.characterId)
                   .map(p => p.characterId)
                 const chainConnectionProfile = await repos.connections.findById(
                   chainChat.participants[0]?.connectionProfileId || ''
@@ -921,7 +922,8 @@ async function processMessage(
       // inflates the count and causes the dynamic window to grow excessively.
       const visibleMessages = extractVisibleConversation(existingMessages)
       const actualMessageCount = visibleMessages.length
-      const result = await getCachedCompression(chatId, actualMessageCount)
+      const participantIdForCache = isMultiCharacter ? characterParticipant.id : undefined
+      const result = await getCachedCompression(chatId, actualMessageCount, participantIdForCache)
       if (result) {
         logger.info('Using cached compression from async pre-computation', {
           chatId,
@@ -1121,6 +1123,13 @@ async function processMessage(
       // Memory recap: uncensored fallback for dangerous chats
       uncensoredFallbackOptions: (chat.isDangerousChat && dangerSettings && cheapLLMSelection)
         ? { dangerSettings, availableProfiles: allProfiles, isDangerousChat: true }
+        : undefined,
+      // Extract status change notifications from recent system events
+      statusChangeNotifications: isMultiCharacter
+        ? existingMessages
+            .filter(m => m.type === 'system' && (m as Record<string, unknown>).systemEventType === 'STATUS_CHANGE')
+            .map(m => (m as Record<string, unknown>).description as string)
+            .filter(Boolean)
         : undefined,
     },
     existingMessages,
@@ -2126,6 +2135,7 @@ async function processMessage(
       // Fire and forget - compression runs in background
       triggerAsyncCompression({
         chatId,
+        participantId: isMultiCharacter ? characterParticipant.id : undefined,
         messages: updatedMessages,
         systemPrompt: builtContext.originalSystemPrompt,
         compressionOptions: {
@@ -2232,6 +2242,7 @@ async function processMessage(
       turn: turnInfo,
       provider: effectiveProfile.provider,
       modelName: effectiveProfile.modelName,
+      isSilentMessage: characterParticipant.status === 'silent' || undefined,
     }))
 
     // Trigger memory extraction
@@ -2436,7 +2447,7 @@ async function saveAssistantMessage(
   repos: ReturnType<typeof getRepositories>,
   chatId: string,
   character: { id: string; name: string },
-  characterParticipant: { id: string },
+  characterParticipant: { id: string; status?: string },
   content: string,
   usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null,
   rawResponse: unknown,
@@ -2465,6 +2476,7 @@ async function saveAssistantMessage(
     participantId: characterParticipant.id,
     provider: provider || null,
     modelName: modelName || null,
+    isSilentMessage: characterParticipant.status === 'silent' || null,
   }
 
   await repos.chats.addMessage(chatId, assistantMessage)

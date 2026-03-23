@@ -111,6 +111,8 @@ export const MessageEventSchema = z.object({
   modelName: z.string().nullable().optional(),
   /** Target participant IDs for whisper messages (null = public message, array = private to sender and targets) */
   targetParticipantIds: z.array(UUIDSchema).nullable().optional(),
+  /** Whether this message was generated while the character was in silent mode */
+  isSilentMessage: z.boolean().nullable().optional(),
 });
 
 export type MessageEvent = z.infer<typeof MessageEventSchema>;
@@ -137,6 +139,7 @@ export const SystemEventTypeEnum = z.enum([
   'CONTEXT_COMPRESSION',
   'DANGER_CLASSIFICATION',
   'SCENE_STATE_TRACKING',
+  'STATUS_CHANGE',
 ]);
 
 export type SystemEventType = z.infer<typeof SystemEventTypeEnum>;
@@ -180,6 +183,47 @@ export type ChatEvent = z.infer<typeof ChatEventSchema>;
 export const ParticipantTypeEnum = z.enum(['CHARACTER']);
 export type ParticipantType = z.infer<typeof ParticipantTypeEnum>;
 
+// ============================================================================
+// PARTICIPANT STATUS
+// ============================================================================
+
+/**
+ * Four-state participation model for characters in a chat:
+ * - active: Present and participating normally (speaks and roleplays)
+ * - silent: Gets turns, but must not speak aloud. May have inner thoughts,
+ *           physical reactions, and actions — but no audible dialogue.
+ * - absent: Turn manager skips them. Still "in" the chat but away from the scene.
+ * - removed: No longer part of the chat. Cannot be whispered to, unaware of
+ *            events after leaving.
+ */
+export const ParticipantStatusEnum = z.enum(['active', 'silent', 'absent', 'removed']);
+export type ParticipantStatus = z.infer<typeof ParticipantStatusEnum>;
+
+/**
+ * Check if a participant is present in the scene (active or silent).
+ * Both states participate in turns and can perceive what happens.
+ */
+export function isParticipantPresent(status: ParticipantStatus): boolean {
+  return status === 'active' || status === 'silent';
+}
+
+/**
+ * Check if a participant can receive whispers (must be present).
+ */
+export function canReceiveWhisper(status: ParticipantStatus): boolean {
+  return status === 'active' || status === 'silent';
+}
+
+/**
+ * Convert legacy isActive/removedAt to the new status enum.
+ * Used during migration and for backward compatibility.
+ */
+export function migrateIsActiveToStatus(isActive: boolean, removedAt?: string | null): ParticipantStatus {
+  if (isActive) return 'active';
+  if (removedAt) return 'removed';
+  return 'absent';
+}
+
 export const ChatParticipantSchema = z.object({
   id: UUIDSchema,
 
@@ -203,7 +247,10 @@ export const ChatParticipantSchema = z.object({
 
   // Display and state
   displayOrder: z.number().default(0),   // For ordering in UI
-  isActive: z.boolean().default(true),   // Temporarily disable without removing
+  /** @deprecated Use `status` field instead. Kept as computed compat field (true when status is active or silent). */
+  isActive: z.boolean().default(true),
+  /** Participation status: active, silent, absent, or removed */
+  status: ParticipantStatusEnum.default('active'),
   removedAt: TimestampSchema.nullable().optional(),  // Soft-delete timestamp — set when participant is removed from chat
 
   // Multi-character chat fields
@@ -233,7 +280,10 @@ export const ChatParticipantBaseSchema = z.object({
   systemPromptOverride: z.string().nullable().optional(),
   selectedSystemPromptId: UUIDSchema.nullable().optional(),  // Selected system prompt from character's prompts array
   displayOrder: z.number().default(0),
+  /** @deprecated Use `status` field instead. Kept as computed compat field (true when status is active or silent). */
   isActive: z.boolean().default(true),
+  /** Participation status: active, silent, absent, or removed */
+  status: ParticipantStatusEnum.default('active'),
   removedAt: TimestampSchema.nullable().optional(),  // Soft-delete timestamp
   hasHistoryAccess: z.boolean().default(false),
   joinScenario: z.string().nullable().optional(),

@@ -167,7 +167,9 @@
   .qt-badge-provider-openai,
   .qt-badge-provider-ollama,
   .qt-badge-provider-openrouter,
-  .qt-badge-provider-builtin {
+  .qt-badge-provider-builtin,
+  .qt-badge-silent,
+  .qt-badge-absent {
     @apply inline-flex items-center justify-center flex-shrink-0;
     padding: var(--qt-badge-padding-y) var(--qt-badge-padding-x);
     border-radius: var(--qt-badge-radius);

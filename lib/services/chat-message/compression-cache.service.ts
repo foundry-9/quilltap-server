@@ -22,6 +22,13 @@ import {
 } from '@/lib/chat/context/compression'
 
 /**
+ * Build cache key — per-participant in multi-char chats, per-chat in single-char
+ */
+function cacheKey(chatId: string, participantId?: string): string {
+  return participantId ? `${chatId}:${participantId}` : chatId
+}
+
+/**
  * Persisted cache entry stored in database
  * Excludes promises since they can't be serialized
  */
@@ -57,13 +64,15 @@ interface CompressionCacheEntry {
  */
 export interface AsyncCompressionOptions {
   chatId: string
+  participantId?: string
   messages: CompressibleMessage[]
   systemPrompt: string
   compressionOptions: ContextCompressionOptions
 }
 
 // In-memory cache for compression results (fast path)
-// Key: chatId, Value: CompressionCacheEntry
+// Key: cacheKey(chatId, participantId) = "chatId" for single-char or "chatId:participantId" for multi-char
+// Value: CompressionCacheEntry
 const compressionCache = new Map<string, CompressionCacheEntry>()
 
 /**
@@ -124,18 +133,34 @@ function isCacheValid(
  * Save compression result to database
  * Fire and forget - errors are logged but don't block
  */
-async function persistToDatabase(chatId: string, entry: PersistedCompressionCache): Promise<void> {
+async function persistToDatabase(
+  chatId: string,
+  participantId: string | undefined,
+  entry: PersistedCompressionCache
+): Promise<void> {
   try {
     // Dynamic import to avoid circular dependencies
     const { getRepositories } = await import('@/lib/database/repositories')
     const repos = await getRepositories()
 
-    await repos.chats.update(chatId, {
-      compressionCache: entry as unknown as Record<string, unknown>,
-    })
+    if (participantId) {
+      // Multi-character chat: store as Record<participantId, cache>
+      const chat = await repos.chats.findById(chatId)
+      const existingCache = (chat?.compressionCache || {}) as Record<string, PersistedCompressionCache>
+      existingCache[participantId] = entry
+      await repos.chats.update(chatId, {
+        compressionCache: existingCache as unknown as Record<string, unknown>,
+      })
+    } else {
+      // Single-character chat: store directly (backward compatible)
+      await repos.chats.update(chatId, {
+        compressionCache: entry as unknown as Record<string, unknown>,
+      })
+    }
   } catch (error) {
     logger.error('[CompressionCache] Failed to persist to database', {
       chatId,
+      participantId,
     }, error instanceof Error ? error : undefined)
     // Don't throw - persistence failure shouldn't break the flow
   }
@@ -144,7 +169,7 @@ async function persistToDatabase(chatId: string, entry: PersistedCompressionCach
 /**
  * Load compression result from database
  */
-async function loadFromDatabase(chatId: string): Promise<PersistedCompressionCache | null> {
+async function loadFromDatabase(chatId: string, participantId?: string): Promise<PersistedCompressionCache | null> {
   try {
     // Dynamic import to avoid circular dependencies
     const { getRepositories } = await import('@/lib/database/repositories')
@@ -155,16 +180,34 @@ async function loadFromDatabase(chatId: string): Promise<PersistedCompressionCac
       return null
     }
 
+    let cache: unknown
+    if (participantId) {
+      // Multi-character chat: read from Record<participantId, cache>
+      const record = chat.compressionCache as unknown as Record<string, PersistedCompressionCache>
+      cache = record[participantId]
+      if (!cache) {
+        return null
+      }
+    } else {
+      // Single-character chat: try old format first (direct entry), then new format with '_default' key
+      cache = chat.compressionCache
+      const record = cache as unknown as Record<string, PersistedCompressionCache>
+      if (!('result' in (cache as any)) && record['_default']) {
+        cache = record['_default']
+      }
+    }
+
     // Validate the structure
-    const cache = chat.compressionCache as unknown as PersistedCompressionCache
-    if (!cache.result || typeof cache.messageCount !== 'number' || !cache.systemPromptHash) {
+    const entry = cache as unknown as PersistedCompressionCache
+    if (!entry.result || typeof entry.messageCount !== 'number' || !entry.systemPromptHash) {
       return null
     }
 
-    return cache
+    return entry
   } catch (error) {
     logger.error('[CompressionCache] Failed to load from database', {
       chatId,
+      participantId,
     }, error instanceof Error ? error : undefined)
     return null
   }
@@ -173,18 +216,33 @@ async function loadFromDatabase(chatId: string): Promise<PersistedCompressionCac
 /**
  * Clear compression cache from database
  */
-async function clearFromDatabase(chatId: string): Promise<void> {
+async function clearFromDatabase(chatId: string, participantId?: string): Promise<void> {
   try {
     // Dynamic import to avoid circular dependencies
     const { getRepositories } = await import('@/lib/database/repositories')
     const repos = await getRepositories()
 
-    await repos.chats.update(chatId, {
-      compressionCache: null,
-    })
+    if (participantId) {
+      // Multi-character chat: delete specific participant key from record
+      const chat = await repos.chats.findById(chatId)
+      if (chat?.compressionCache) {
+        const record = (chat.compressionCache as unknown as Record<string, PersistedCompressionCache>)
+        delete record[participantId]
+        const isEmpty = Object.keys(record).length === 0
+        await repos.chats.update(chatId, {
+          compressionCache: isEmpty ? null : (record as unknown as Record<string, unknown>),
+        })
+      }
+    } else {
+      // Single-character chat: clear entire field
+      await repos.chats.update(chatId, {
+        compressionCache: null,
+      })
+    }
   } catch (error) {
     logger.error('[CompressionCache] Failed to clear from database', {
       chatId,
+      participantId,
     }, error instanceof Error ? error : undefined)
   }
 }
@@ -194,7 +252,7 @@ async function clearFromDatabase(chatId: string): Promise<void> {
  * Called after an LLM response is received and saved
  */
 export function triggerAsyncCompression(options: AsyncCompressionOptions): void {
-  const { chatId, messages, systemPrompt, compressionOptions } = options
+  const { chatId, participantId, messages, systemPrompt, compressionOptions } = options
 
   // Don't pre-compress if there aren't enough messages
   if (messages.length <= compressionOptions.windowSize) {
@@ -202,9 +260,10 @@ export function triggerAsyncCompression(options: AsyncCompressionOptions): void 
   }
 
   const systemPromptHash = hashString(systemPrompt)
+  const key = cacheKey(chatId, participantId)
 
   // Check if we already have a valid cache entry
-  const existingEntry = compressionCache.get(chatId)
+  const existingEntry = compressionCache.get(key)
   if (existingEntry && isCacheValid(existingEntry, messages.length, systemPromptHash)) {
     // Even if cache structure is valid, re-compress when enough new messages
     // have accumulated. Without this, the "dynamic window" grows unbounded
@@ -215,6 +274,7 @@ export function triggerAsyncCompression(options: AsyncCompressionOptions): void 
     }
     logger.info('[CompressionCache] Cache valid but stale, re-compressing to incorporate new messages', {
       chatId,
+      participantId,
       cachedMessageCount: existingEntry.messageCount,
       currentMessageCount: messages.length,
       messagesSinceCache,
@@ -224,6 +284,7 @@ export function triggerAsyncCompression(options: AsyncCompressionOptions): void 
 
   logger.info('[CompressionCache] Starting async pre-compression', {
     chatId,
+    participantId,
     messageCount: messages.length,
     windowSize: compressionOptions.windowSize,
   })
@@ -239,7 +300,7 @@ export function triggerAsyncCompression(options: AsyncCompressionOptions): void 
       )
 
       // Update in-memory cache entry with result
-      const entry = compressionCache.get(chatId)
+      const entry = compressionCache.get(key)
       if (entry) {
         entry.result = result
         delete entry.promise
@@ -247,6 +308,7 @@ export function triggerAsyncCompression(options: AsyncCompressionOptions): void 
 
       logger.info('[CompressionCache] Async pre-compression completed', {
         chatId,
+        participantId,
         compressionApplied: result.compressionApplied,
         savings: result.compressionDetails?.totalSavings,
       })
@@ -259,7 +321,7 @@ export function triggerAsyncCompression(options: AsyncCompressionOptions): void 
           createdAt: Date.now(),
           systemPromptHash,
         }
-        persistToDatabase(chatId, persistedEntry).catch(() => {
+        persistToDatabase(chatId, participantId, persistedEntry).catch(() => {
           // Already logged in persistToDatabase
         })
       }
@@ -268,6 +330,7 @@ export function triggerAsyncCompression(options: AsyncCompressionOptions): void 
     } catch (error) {
       logger.error('[CompressionCache] Async pre-compression failed', {
         chatId,
+        participantId,
       }, error instanceof Error ? error : undefined)
 
       // Return a "not applied" result instead of throwing
@@ -278,7 +341,7 @@ export function triggerAsyncCompression(options: AsyncCompressionOptions): void 
       }
 
       // Update cache with failure result instead of deleting
-      const entry = compressionCache.get(chatId)
+      const entry = compressionCache.get(key)
       if (entry) {
         entry.result = failureResult
         delete entry.promise
@@ -291,7 +354,7 @@ export function triggerAsyncCompression(options: AsyncCompressionOptions): void 
   const compressionPromise = runCompression()
 
   // Store the cache entry with the promise
-  compressionCache.set(chatId, {
+  compressionCache.set(key, {
     promise: compressionPromise,
     messageCount: messages.length,
     createdAt: Date.now(),
@@ -325,16 +388,19 @@ export interface CachedCompressionResponse {
  *
  * @param chatId - The chat ID
  * @param currentMessageCount - Current number of messages (excluding new user message)
+ * @param participantId - Participant ID for multi-character chats (optional)
  * @param currentSystemPromptHash - Hash of the current system prompt (optional, for validation)
  * @returns Cached compression response with metadata, or undefined if not available
  */
 export async function getCachedCompression(
   chatId: string,
   currentMessageCount: number,
+  participantId?: string,
   currentSystemPromptHash?: string
 ): Promise<CachedCompressionResponse | undefined> {
   // 1. Check in-memory cache first (fastest path)
-  const memoryEntry = compressionCache.get(chatId)
+  const key = cacheKey(chatId, participantId)
+  const memoryEntry = compressionCache.get(key)
 
   if (memoryEntry) {
     // Validate the in-memory entry using the same logic as isCacheValid
@@ -343,11 +409,11 @@ export async function getCachedCompression(
     const cacheTooStale = messageDiff > 50
 
     if (cacheHasMoreMessages) {
-      compressionCache.delete(chatId)
+      compressionCache.delete(key)
     } else if (cacheTooStale) {
-      compressionCache.delete(chatId)
+      compressionCache.delete(key)
     } else if (currentSystemPromptHash && memoryEntry.systemPromptHash !== currentSystemPromptHash) {
-      compressionCache.delete(chatId)
+      compressionCache.delete(key)
     } else {
       // In-memory entry is valid
       if (memoryEntry.result) {
@@ -375,7 +441,7 @@ export async function getCachedCompression(
   }
 
   // 3. Check database cache (survives restarts, also serves as fallback)
-  const dbEntry = await loadFromDatabase(chatId)
+  const dbEntry = await loadFromDatabase(chatId, participantId)
 
   if (dbEntry) {
     // Validate the database entry
@@ -394,7 +460,7 @@ export async function getCachedCompression(
       // Only populate in-memory cache if there's no in-flight compression
       // (don't overwrite the pending promise entry)
       if (!memoryEntry?.promise) {
-        compressionCache.set(chatId, {
+        compressionCache.set(key, {
           result: dbEntry.result,
           messageCount: dbEntry.messageCount,
           createdAt: dbEntry.createdAt,
@@ -409,7 +475,7 @@ export async function getCachedCompression(
       }
     } else {
       // Clear invalid database cache
-      clearFromDatabase(chatId).catch(() => {
+      clearFromDatabase(chatId, participantId).catch(() => {
         // Already logged
       })
     }
@@ -425,16 +491,44 @@ export async function getCachedCompression(
  * - Full context is requested (bypass compression)
  * - Settings change
  * - Chat is deleted
+ *
+ * @param chatId - The chat ID
+ * @param participantId - Optional participant ID. If provided, only that participant's cache is invalidated.
+ *                        If not provided, all caches for the chat are invalidated.
  */
-export function invalidateCompressionCache(chatId: string): void {
-  if (compressionCache.has(chatId)) {
-    compressionCache.delete(chatId)
+export function invalidateCompressionCache(chatId: string, participantId?: string): void {
+  if (participantId) {
+    // Invalidate specific participant cache
+    const key = cacheKey(chatId, participantId)
+    if (compressionCache.has(key)) {
+      compressionCache.delete(key)
+    }
+    // Clear from database too (fire and forget)
+    clearFromDatabase(chatId, participantId).catch(() => {
+      // Already logged
+    })
+  } else {
+    // Invalidate all participant caches for this chat
+    const key = chatId
+    if (compressionCache.has(key)) {
+      compressionCache.delete(key)
+    }
+    // Delete all per-participant keys for this chat
+    const keysToDelete: string[] = []
+    const allKeys = Array.from(compressionCache.keys())
+    for (const mapKey of allKeys) {
+      if (mapKey.startsWith(`${chatId}:`)) {
+        keysToDelete.push(mapKey)
+      }
+    }
+    for (const key of keysToDelete) {
+      compressionCache.delete(key)
+    }
+    // Clear from database too (fire and forget)
+    clearFromDatabase(chatId).catch(() => {
+      // Already logged
+    })
   }
-
-  // Clear from database too (fire and forget)
-  clearFromDatabase(chatId).catch(() => {
-    // Already logged
-  })
 }
 
 /**
@@ -452,7 +546,7 @@ export function clearCompressionCache(): void {
 export function getCompressionCacheStats(): {
   size: number
   entries: Array<{
-    chatId: string
+    cacheKey: string
     messageCount: number
     hasResult: boolean
     hasPromise: boolean
@@ -460,7 +554,7 @@ export function getCompressionCacheStats(): {
   }>
 } {
   const entries: Array<{
-    chatId: string
+    cacheKey: string
     messageCount: number
     hasResult: boolean
     hasPromise: boolean
@@ -468,9 +562,10 @@ export function getCompressionCacheStats(): {
   }> = []
 
   const now = Date.now()
-  for (const [chatId, entry] of compressionCache.entries()) {
+  const allEntries = Array.from(compressionCache.entries())
+  for (const [cacheKeyValue, entry] of allEntries) {
     entries.push({
-      chatId,
+      cacheKey: cacheKeyValue,
       messageCount: entry.messageCount,
       hasResult: !!entry.result,
       hasPromise: !!entry.promise,

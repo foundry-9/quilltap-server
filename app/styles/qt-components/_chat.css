@@ -19,6 +19,7 @@
   .qt-chat-message-user,
   .qt-chat-message-assistant,
   .qt-chat-message-whisper,
+  .qt-chat-message-silent,
   .qt-chat-message-system {
     @apply relative;
     @apply transition-all duration-200;
@@ -77,6 +78,25 @@
 
   .qt-chat-message-whisper-overheard {
     opacity: 0.6;
+  }
+
+  /**
+   * Silent message - inner thoughts and actions from a character in silent mode.
+   * Distinguished from whispers by a dotted border (vs dashed) and a different
+   * color scheme — muted teal/sage tones to suggest inward contemplation.
+   */
+  .qt-chat-message-silent {
+    background: var(--qt-chat-silent-bg);
+    color: var(--qt-chat-silent-fg);
+    border: 2px dotted var(--qt-chat-silent-border);
+    font-style: italic;
+  }
+
+  .qt-chat-silent-label {
+    font-size: 0.75rem;
+    color: var(--qt-chat-silent-label-fg);
+    font-style: italic;
+    margin-bottom: 0.25rem;
   }
 
   /**
@@ -1388,6 +1408,52 @@
     border: 1px solid var(--qt-participant-card-border);
     opacity: 0.5;
     filter: grayscale(0.3);
+  }
+
+  /**
+   * Silent participant card — subtle teal tint
+   */
+  .qt-participant-card-silent {
+    border-color: var(--qt-chat-silent-border);
+  }
+
+  /**
+   * Status badges for silent/absent participants
+   */
+  .qt-badge-silent {
+    background: var(--qt-chat-silent-bg);
+    color: var(--qt-chat-silent-label-fg);
+    border: 1px solid var(--qt-chat-silent-border);
+    @apply rounded-full px-2 py-0.5 font-medium;
+  }
+
+  .qt-badge-absent {
+    background: color-mix(in srgb, var(--color-muted) 40%, transparent);
+    color: var(--color-muted-foreground);
+    border: 1px solid var(--color-muted);
+    @apply rounded-full px-2 py-0.5 font-medium;
+    opacity: 0.8;
+  }
+
+  /**
+   * Status overlay on participant avatar — small icon badge in the
+   * bottom-right corner, visible even when the sidebar is collapsed
+   * and only the avatar row is showing.
+   */
+  .qt-participant-status-overlay {
+    @apply absolute -bottom-0.5 -right-0.5 w-4.5 h-4.5 rounded-full flex items-center justify-center;
+    border: 1.5px solid var(--color-background);
+    z-index: 2;
+  }
+
+  .qt-participant-status-overlay-silent {
+    background: var(--qt-chat-silent-border);
+    color: white;
+  }
+
+  .qt-participant-status-overlay-absent {
+    background: var(--color-muted);
+    color: var(--color-muted-foreground);
   }
 
   /**

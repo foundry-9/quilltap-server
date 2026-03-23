@@ -79,6 +79,7 @@ export async function enrichParticipant(participant: ChatParticipantBase, repos:
     characterId: participant.characterId,
     displayOrder: participant.displayOrder,
     isActive: participant.isActive,
+    status: participant.status || 'active',
     removedAt: participant.removedAt ?? null,
     systemPromptOverride: participant.systemPromptOverride,
     hasHistoryAccess: participant.hasHistoryAccess,
@@ -152,7 +153,46 @@ export async function handleParticipantUpdate(
     }
   }
 
-  return { chat: result };
+  // If status was explicitly set, sync isActive and record the change event
+  if (participantData.status) {
+    const participant = chat.participants.find(p => p.id === participantId);
+    const oldStatus = participant?.status || (participant?.isActive ? 'active' : (participant?.removedAt ? 'removed' : 'absent'));
+    const newStatus = participantData.status;
+
+    const isActive = newStatus === 'active' || newStatus === 'silent';
+    await repos.chats.updateParticipant(chatId, participantId, {
+      isActive,
+      removedAt: newStatus === 'removed' ? new Date().toISOString() : null,
+    });
+
+    // Record status change event so other characters are notified
+    if (oldStatus !== newStatus && participant?.characterId) {
+      const character = await repos.characters.findById(participant.characterId);
+      if (character) {
+        await recordStatusChangeEvent(chatId, character.name, oldStatus, newStatus, repos);
+      }
+    }
+  }
+  // Backward compat: if isActive was set without status, derive status
+  if (participantData.isActive !== undefined && !participantData.status) {
+    const participant = chat.participants.find(p => p.id === participantId);
+    const oldIsActive = participant?.isActive;
+    const newStatus = participantData.isActive ? 'active' : 'absent';
+    await repos.chats.updateParticipant(chatId, participantId, { status: newStatus });
+
+    // Record status change event
+    if (oldIsActive !== participantData.isActive && participant?.characterId) {
+      const oldStatus = oldIsActive ? 'active' : 'absent';
+      const character = await repos.characters.findById(participant.characterId);
+      if (character) {
+        await recordStatusChangeEvent(chatId, character.name, oldStatus, newStatus, repos);
+      }
+    }
+  }
+
+  // Re-fetch to get the latest state after all updates
+  const finalChat = await repos.chats.findById(chatId);
+  return { chat: finalChat || result };
 }
 
 /**
@@ -197,6 +237,7 @@ export async function handleAddParticipant(
     systemPromptOverride: data.systemPromptOverride || null,
     displayOrder: data.displayOrder ?? currentParticipantCount,
     isActive: true,
+    status: 'active',
     hasHistoryAccess: data.hasHistoryAccess ?? false,
     joinScenario: data.joinScenario || null,
   });
@@ -342,4 +383,40 @@ export async function processChatUpdates(
   }
 
   return { chat: updatedChat };
+}
+
+/**
+ * Record a status change as a system event in the chat's message history.
+ * This allows other characters to be notified in their next prompt.
+ */
+export async function recordStatusChangeEvent(
+  chatId: string,
+  characterName: string,
+  oldStatus: string,
+  newStatus: string,
+  repos: Repos
+): Promise<void> {
+  const statusLabels: Record<string, string> = {
+    active: 'active (speaking normally)',
+    silent: 'silent (observing, not speaking)',
+    absent: 'absent (away from the scene)',
+    removed: 'removed (left the conversation)',
+  };
+
+  const description = `${characterName} changed from ${statusLabels[oldStatus] || oldStatus} to ${statusLabels[newStatus] || newStatus}`;
+
+  const systemEvent = {
+    id: crypto.randomUUID(),
+    type: 'system' as const,
+    systemEventType: 'STATUS_CHANGE' as const,
+    description,
+    createdAt: new Date().toISOString(),
+  };
+
+  try {
+    await repos.chats.addMessage(chatId, systemEvent);
+    logger.debug('[Chats v1] Status change event recorded', { chatId, characterName, oldStatus, newStatus });
+  } catch (error) {
+    logger.error('[Chats v1] Failed to record status change event', { chatId, error: error instanceof Error ? error.message : String(error) });
+  }
 }

@@ -4,12 +4,14 @@
  * v2.7-dev: Sliding Window Context Compression Feature
  */
 
-import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals'
-import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
+import { describe, it, expect, jest, beforeEach } from '@jest/globals'
 
-// Define mock functions at the module level
-const mockCompressConversationHistory = jest.fn()
-const mockCompressSystemPrompt = jest.fn()
+// Define mock functions at the module level with explicit typing to avoid inference issues
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockCompressConversationHistory = jest.fn<(...args: any[]) => any>()
+// Kept for completeness — system prompt compression is disabled but the mock export still exists
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockCompressSystemPrompt = jest.fn<(...args: any[]) => any>()
 
 // Mock the cheap LLM tasks module
 jest.mock('@/lib/memory/cheap-llm-tasks', () => ({
@@ -29,14 +31,22 @@ jest.mock('@/lib/logger', () => ({
 }))
 
 // Import after mocks are set up
-const { 
-  shouldApplyCompression, 
-  splitMessagesForCompression, 
-  applyContextCompression, 
-  buildCompressedSystemMessage 
+const {
+  shouldApplyCompression,
+  splitMessagesForCompression,
+  applyContextCompression,
+  buildCompressedSystemMessage,
 } = require('@/lib/chat/context/compression') as typeof import('@/lib/chat/context/compression')
 
 import type { CompressibleMessage, ContextCompressionOptions } from '@/lib/chat/context/compression'
+
+// Inline the settings type shape to avoid module resolution issues in jest
+interface ContextCompressionSettingsLike {
+  enabled: boolean
+  windowSize: number
+  compressionTargetTokens: number
+  systemPromptTargetTokens: number
+}
 
 // Test fixtures
 const makeMessage = (role: 'user' | 'assistant' | 'system', content: string): CompressibleMessage => ({
@@ -44,7 +54,7 @@ const makeMessage = (role: 'user' | 'assistant' | 'system', content: string): Co
   content,
 })
 
-const makeSettings = (overrides: Partial<ContextCompressionSettings> = {}): ContextCompressionSettings => ({
+const makeSettings = (overrides: Partial<ContextCompressionSettingsLike> = {}): ContextCompressionSettingsLike => ({
   enabled: true,
   windowSize: 5,
   compressionTargetTokens: 2000,
@@ -72,32 +82,32 @@ describe('Context Compression', () => {
   describe('shouldApplyCompression', () => {
     it('returns false when compression is disabled', () => {
       const settings = makeSettings({ enabled: false })
-      expect(shouldApplyCompression(10, settings, false)).toBe(false)
+      expect(shouldApplyCompression(10, settings as Parameters<typeof shouldApplyCompression>[1], false)).toBe(false)
     })
 
     it('returns false when bypass is requested', () => {
       const settings = makeSettings({ enabled: true })
-      expect(shouldApplyCompression(10, settings, true)).toBe(false)
+      expect(shouldApplyCompression(10, settings as Parameters<typeof shouldApplyCompression>[1], true)).toBe(false)
     })
 
     it('returns false when message count is within window size', () => {
       const settings = makeSettings({ enabled: true, windowSize: 5 })
-      expect(shouldApplyCompression(5, settings, false)).toBe(false)
-      expect(shouldApplyCompression(3, settings, false)).toBe(false)
+      expect(shouldApplyCompression(5, settings as Parameters<typeof shouldApplyCompression>[1], false)).toBe(false)
+      expect(shouldApplyCompression(3, settings as Parameters<typeof shouldApplyCompression>[1], false)).toBe(false)
     })
 
     it('returns true when message count exceeds window size', () => {
       const settings = makeSettings({ enabled: true, windowSize: 5 })
-      expect(shouldApplyCompression(6, settings, false)).toBe(true)
-      expect(shouldApplyCompression(10, settings, false)).toBe(true)
+      expect(shouldApplyCompression(6, settings as Parameters<typeof shouldApplyCompression>[1], false)).toBe(true)
+      expect(shouldApplyCompression(10, settings as Parameters<typeof shouldApplyCompression>[1], false)).toBe(true)
     })
 
     it('handles edge case at exact window boundary', () => {
       const settings = makeSettings({ enabled: true, windowSize: 5 })
       // At exactly windowSize, we don't compress (nothing before window)
-      expect(shouldApplyCompression(5, settings, false)).toBe(false)
+      expect(shouldApplyCompression(5, settings as Parameters<typeof shouldApplyCompression>[1], false)).toBe(false)
       // One more than windowSize, we do compress
-      expect(shouldApplyCompression(6, settings, false)).toBe(true)
+      expect(shouldApplyCompression(6, settings as Parameters<typeof shouldApplyCompression>[1], false)).toBe(true)
     })
   })
 
@@ -196,7 +206,7 @@ describe('Context Compression', () => {
       expect(mockCompressSystemPrompt).not.toHaveBeenCalled()
     })
 
-    it('successfully compresses both history and system prompt', async () => {
+    it('successfully compresses history (system prompt compression is disabled)', async () => {
       const options = makeOptions({ windowSize: 2 })
 
       mockCompressConversationHistory.mockResolvedValue({
@@ -208,26 +218,21 @@ describe('Context Compression', () => {
         },
       })
 
-      mockCompressSystemPrompt.mockResolvedValue({
-        success: true,
-        result: {
-          compressedText: 'Luna: friendly assistant.',
-          originalTokens: 100,
-          compressedTokens: 20,
-        },
-      })
-
       const result = await applyContextCompression(messages, systemPrompt, options)
 
       expect(result.compressionApplied).toBe(true)
       expect(result.compressedHistory).toBe('User discussed old topics with assistant.')
-      expect(result.compressedSystemPrompt).toBe('Luna: friendly assistant.')
+      // System prompt compression is disabled — always undefined
+      expect(result.compressedSystemPrompt).toBeUndefined()
       expect(result.compressionDetails).toBeDefined()
       expect(result.compressionDetails?.originalMessageCount).toBe(6)
       expect(result.compressionDetails?.compressedMessageCount).toBe(4)
       expect(result.compressionDetails?.windowMessageCount).toBe(2)
-      expect(result.compressionDetails?.totalSavings).toBe(530) // (500-50) + (100-20)
+      // Savings are from history only (500-50=450); system prompt is never compressed
+      expect(result.compressionDetails?.totalSavings).toBe(450)
       expect(result.warnings).toHaveLength(0)
+      // System prompt compressor is never called
+      expect(mockCompressSystemPrompt).not.toHaveBeenCalled()
     })
 
     it('handles history compression failure gracefully', async () => {
@@ -238,49 +243,17 @@ describe('Context Compression', () => {
         error: 'API rate limited',
       })
 
-      mockCompressSystemPrompt.mockResolvedValue({
-        success: true,
-        result: {
-          compressedText: 'Luna: friendly assistant.',
-          originalTokens: 100,
-          compressedTokens: 20,
-        },
-      })
-
       const result = await applyContextCompression(messages, systemPrompt, options)
 
-      expect(result.compressionApplied).toBe(true)
+      // When only history compression fails and system prompt compression is disabled,
+      // compressionApplied is false (nothing was compressed)
+      expect(result.compressionApplied).toBe(false)
       expect(result.compressedHistory).toBeUndefined()
-      expect(result.compressedSystemPrompt).toBe('Luna: friendly assistant.')
+      expect(result.compressedSystemPrompt).toBeUndefined()
       expect(result.warnings).toContain('Failed to compress conversation history: API rate limited')
     })
 
-    it('handles system prompt compression failure gracefully', async () => {
-      const options = makeOptions({ windowSize: 2 })
-
-      mockCompressConversationHistory.mockResolvedValue({
-        success: true,
-        result: {
-          compressedText: 'User discussed old topics.',
-          originalTokens: 500,
-          compressedTokens: 50,
-        },
-      })
-
-      mockCompressSystemPrompt.mockResolvedValue({
-        success: false,
-        error: 'Timeout',
-      })
-
-      const result = await applyContextCompression(messages, systemPrompt, options)
-
-      expect(result.compressionApplied).toBe(true)
-      expect(result.compressedHistory).toBe('User discussed old topics.')
-      expect(result.compressedSystemPrompt).toBeUndefined()
-      expect(result.warnings).toContain('Failed to compress system prompt: Timeout')
-    })
-
-    it('returns not applied when both compressions fail', async () => {
+    it('returns not applied when history compression fails', async () => {
       const options = makeOptions({ windowSize: 2 })
 
       mockCompressConversationHistory.mockResolvedValue({
@@ -288,28 +261,22 @@ describe('Context Compression', () => {
         error: 'Error 1',
       })
 
-      mockCompressSystemPrompt.mockResolvedValue({
-        success: false,
-        error: 'Error 2',
-      })
-
       const result = await applyContextCompression(messages, systemPrompt, options)
 
       expect(result.compressionApplied).toBe(false)
-      expect(result.warnings).toHaveLength(2)
+      expect(result.warnings).toHaveLength(1)
+      expect(result.warnings[0]).toContain('Error 1')
     })
 
-    it('handles thrown errors during compression', async () => {
+    it('handles thrown errors during history compression', async () => {
       const options = makeOptions({ windowSize: 2 })
 
       mockCompressConversationHistory.mockRejectedValue(new Error('Network error'))
-      mockCompressSystemPrompt.mockRejectedValue(new Error('Server error'))
 
       const result = await applyContextCompression(messages, systemPrompt, options)
 
       expect(result.compressionApplied).toBe(false)
       expect(result.warnings).toContain('Error during conversation compression: Network error')
-      expect(result.warnings).toContain('Error during system prompt compression: Server error')
     })
 
     it('passes correct parameters to compression functions', async () => {
@@ -323,7 +290,6 @@ describe('Context Compression', () => {
       })
 
       mockCompressConversationHistory.mockResolvedValue({ success: false, error: 'test' })
-      mockCompressSystemPrompt.mockResolvedValue({ success: false, error: 'test' })
 
       await applyContextCompression(messages, systemPrompt, options)
 
@@ -340,14 +306,8 @@ describe('Context Compression', () => {
         undefined
       )
 
-      expect(mockCompressSystemPrompt).toHaveBeenCalledWith(
-        systemPrompt,
-        1500,
-        options.selection,
-        'test-user-id',
-        undefined,
-        undefined
-      )
+      // System prompt compression is disabled — should never be called
+      expect(mockCompressSystemPrompt).not.toHaveBeenCalled()
     })
   })
 
@@ -359,10 +319,12 @@ describe('Context Compression', () => {
       expect(result).toBe(fullSystemPrompt)
     })
 
-    it('uses compressed system prompt when available', () => {
+    it('returns full system prompt even when compressed system prompt is provided (system prompt compression disabled)', () => {
+      // System prompt compression is disabled — the compressed system prompt arg is ignored
       const compressedSystem = 'Luna: friendly AI assistant.'
       const result = buildCompressedSystemMessage(undefined, compressedSystem, fullSystemPrompt)
-      expect(result).toBe(compressedSystem)
+      // Always uses the full system prompt now
+      expect(result).toBe(fullSystemPrompt)
     })
 
     it('uses full system prompt with compressed history', () => {
@@ -374,16 +336,19 @@ describe('Context Compression', () => {
       expect(result).toContain(compressedHistory)
     })
 
-    it('combines compressed system prompt and compressed history', () => {
+    it('uses full system prompt when both compressed history and compressed system are provided', () => {
+      // System prompt compression is disabled — always uses fullSystemPrompt, not compressedSystem
       const compressedHistory = 'User asked about weather.'
       const compressedSystem = 'Luna: friendly assistant.'
 
       const result = buildCompressedSystemMessage(compressedHistory, compressedSystem, fullSystemPrompt)
 
-      expect(result).toContain(compressedSystem)
+      // Always uses full system prompt, not the compressed version
+      expect(result).toContain(fullSystemPrompt)
       expect(result).toContain('Conversation Context')
       expect(result).toContain(compressedHistory)
-      expect(result).not.toContain(fullSystemPrompt)
+      // The compressed system prompt is ignored
+      expect(result).not.toContain(compressedSystem)
     })
 
     it('includes proper section headers for compressed history', () => {

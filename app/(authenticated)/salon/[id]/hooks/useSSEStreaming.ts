@@ -76,6 +76,7 @@ interface SSEEvent {
   chainDepth?: number
   nextSpeakerId?: string | null
   reason?: string
+  isSilentMessage?: boolean
 }
 
 /**
@@ -523,6 +524,7 @@ export function useSSEStreaming({
             participantId: resolvedParticipantId,
             provider: data.provider || null,
             modelName: data.modelName || null,
+            isSilentMessage: data.isSilentMessage || undefined,
           }
           setMessages((prev) => [...prev, assistantMessage])
           setStreamingContent('')
@@ -552,6 +554,7 @@ export function useSSEStreaming({
             participantId: resolvedParticipantId,
             provider: data.provider || null,
             modelName: data.modelName || null,
+            isSilentMessage: data.isSilentMessage || undefined,
           }
           setMessages((prev) => [...prev, assistantMessage])
           setStreamingContent('')
@@ -684,6 +687,7 @@ export function useSSEStreaming({
               participantId: resolvedParticipantId,
               provider: data.provider || null,
               modelName: data.modelName || null,
+              isSilentMessage: data.isSilentMessage || undefined,
             }
             setMessages(prev => [...prev, newMessage])
           }

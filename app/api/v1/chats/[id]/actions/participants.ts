@@ -20,6 +20,7 @@ import {
 import { enrichParticipant, handleAddParticipant, handleParticipantUpdate, handleRemoveParticipant } from '../helpers';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 import type { ChatMetadata } from '@/lib/schemas/types';
+import { isParticipantPresent } from '@/lib/schemas/types';
 
 /**
  * Start impersonating a participant
@@ -39,8 +40,8 @@ export async function handleImpersonate(
     if (!participant) {
       return notFound('Participant');
     }
-    if (!participant.isActive) {
-      return badRequest('Participant is not active');
+    if (!isParticipantPresent(participant.status)) {
+      return badRequest('Participant is not active or silent');
     }
 
     const updatedChat = await repos.chats.addImpersonation(chatId, participantId);
@@ -217,7 +218,7 @@ export async function handleAddParticipantAction(
     // Check if character is already in the chat
     if (validatedData.type === 'CHARACTER' && validatedData.characterId) {
       const activeParticipant = chat.participants.find(
-        (p) => p.type === 'CHARACTER' && p.characterId === validatedData.characterId && p.isActive
+        (p) => p.type === 'CHARACTER' && p.characterId === validatedData.characterId && isParticipantPresent(p.status)
       );
       if (activeParticipant) {
         return badRequest('Character is already in this chat');
@@ -225,7 +226,7 @@ export async function handleAddParticipantAction(
 
       // Check for deactivated (silenced) participant — still in chat, just inactive
       const deactivatedParticipant = chat.participants.find(
-        (p) => p.type === 'CHARACTER' && p.characterId === validatedData.characterId && !p.isActive && !p.removedAt
+        (p) => p.type === 'CHARACTER' && p.characterId === validatedData.characterId && p.status === 'absent'
       );
       if (deactivatedParticipant) {
         return badRequest('Character is already in this chat (currently deactivated)');
@@ -233,16 +234,17 @@ export async function handleAddParticipantAction(
 
       // Check for soft-deleted participant — reactivate instead of creating duplicate
       const removedParticipant = chat.participants.find(
-        (p) => p.type === 'CHARACTER' && p.characterId === validatedData.characterId && !p.isActive && p.removedAt
+        (p) => p.type === 'CHARACTER' && p.characterId === validatedData.characterId && p.status === 'removed'
       );
       if (removedParticipant) {
         const controlledBy = validatedData.controlledBy || removedParticipant.controlledBy || 'llm';
         const updatedChat = await repos.chats.updateParticipant(chatId, removedParticipant.id, {
+          status: 'active',
           isActive: true,
           removedAt: null,
           controlledBy,
           connectionProfileId: validatedData.connectionProfileId || removedParticipant.connectionProfileId,
-          displayOrder: chat.participants.filter(p => p.isActive).length,
+          displayOrder: chat.participants.filter(p => isParticipantPresent(p.status)).length,
         });
         if (!updatedChat) {
           return serverError('Failed to reactivate participant');
@@ -337,7 +339,7 @@ export async function handleRemoveParticipantAction(
       return notFound('Participant');
     }
 
-    const activeCharacters = chat.participants.filter((p) => p.type === 'CHARACTER' && p.isActive);
+    const activeCharacters = chat.participants.filter((p) => p.type === 'CHARACTER' && isParticipantPresent(p.status));
     if (activeCharacters.length <= 1 && participantToRemove.type === 'CHARACTER') {
       return badRequest('Cannot remove the last character from the chat');
     }

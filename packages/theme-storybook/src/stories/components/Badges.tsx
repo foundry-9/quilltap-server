@@ -173,6 +173,20 @@ export const Badges: React.FC = () => {
         </div>
       </section>
 
+      {/* Participant Status Badges */}
+      <section style={{ marginBottom: '2rem' }}>
+        <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
+          Participant Status Badges
+        </h3>
+        <p style={{ color: 'var(--color-muted-foreground)', marginBottom: '0.75rem', fontSize: '0.875rem' }}>
+          Status indicators shown on participant cards for silent and absent characters.
+        </p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
+          <span className="qt-badge-silent">Silent</span>
+          <span className="qt-badge-absent">Absent</span>
+        </div>
+      </section>
+
       {/* Badge Usage Examples */}
       <section>
         <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>

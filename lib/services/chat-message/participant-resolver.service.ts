@@ -19,6 +19,7 @@ import type {
   Character,
   ConnectionProfile,
 } from '@/lib/schemas/types'
+import { isParticipantPresent } from '@/lib/schemas/chat.types'
 
 const logger = createServiceLogger('ParticipantResolverService')
 
@@ -73,7 +74,7 @@ export async function resolveRespondingParticipant(
   if (requestedRespondingParticipantId) {
     // Continue mode with specific participant requested - find them
     characterParticipant = chat.participants.find(
-      p => p.id === requestedRespondingParticipantId && p.type === 'CHARACTER' && p.isActive && p.characterId
+      p => p.id === requestedRespondingParticipantId && p.type === 'CHARACTER' && isParticipantPresent(p.status) && p.characterId
     )
     if (!characterParticipant) {
       if (isContinueMode) {
@@ -84,7 +85,7 @@ export async function resolveRespondingParticipant(
           chatId: chat.id,
           requestedParticipantId: requestedRespondingParticipantId,
           activeParticipants: chat.participants
-            .filter(p => p.type === 'CHARACTER' && p.isActive)
+            .filter(p => p.type === 'CHARACTER' && isParticipantPresent(p.status))
             .map(p => ({ id: p.id, characterId: p.characterId })),
         })
         throw new Error(
@@ -98,13 +99,13 @@ export async function resolveRespondingParticipant(
       })
       // Fall back to first active character (only for non-continue mode)
       characterParticipant = chat.participants.find(
-        p => p.type === 'CHARACTER' && p.isActive && p.characterId
+        p => p.type === 'CHARACTER' && isParticipantPresent(p.status) && p.characterId
       )
     }
   } else {
     // Normal mode or continue mode without specific participant - use first active character
     characterParticipant = chat.participants.find(
-      p => p.type === 'CHARACTER' && p.isActive && p.characterId
+      p => p.type === 'CHARACTER' && isParticipantPresent(p.status) && p.characterId
     )
   }
 
@@ -186,7 +187,7 @@ export async function loadAllParticipantData(
 
   // Load all characters
   for (const p of chat.participants) {
-    if (p.type === 'CHARACTER' && p.characterId && p.isActive) {
+    if (p.type === 'CHARACTER' && p.characterId && isParticipantPresent(p.status)) {
       if (p.characterId === primaryCharacter.id) {
         // Reuse already-loaded character
         participantCharacters.set(p.characterId, primaryCharacter)

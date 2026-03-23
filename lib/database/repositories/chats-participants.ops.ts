@@ -10,6 +10,8 @@ import {
   ChatParticipantBase,
   ChatParticipantBaseInput,
   ChatParticipantBaseSchema,
+  ParticipantStatus,
+  isParticipantPresent,
 } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { ChatOpsContext } from './chats-ops-context';
@@ -105,7 +107,7 @@ export class ChatParticipantsOps {
   }
 
   /**
-   * Remove a participant from a chat (soft-delete: sets isActive=false and removedAt timestamp)
+   * Remove a participant from a chat (soft-delete: sets status='removed', isActive=false and removedAt timestamp)
    * Messages referencing this participant retain their attribution.
    */
   async removeParticipant(chatId: string, participantId: string): Promise<ChatMetadata | null> {
@@ -125,13 +127,14 @@ export class ChatParticipantsOps {
       const participants = [...chat.participants];
       participants[participantIndex] = {
         ...participants[participantIndex],
+        status: 'removed',
         isActive: false,
         removedAt: now,
         updatedAt: now,
       };
 
       // Don't allow removing the last active participant
-      const activeCount = participants.filter(p => p.isActive).length;
+      const activeCount = participants.filter(p => isParticipantPresent(p.status)).length;
       if (activeCount === 0) {
         const error = new Error('Cannot remove the last participant from a chat');
         logger.error('Cannot remove last participant', { chatId, participantId });
@@ -140,6 +143,45 @@ export class ChatParticipantsOps {
 
       return await this.ctx.update(chatId, { participants });
     }, 'Failed to remove participant from chat', { chatId, participantId });
+  }
+
+  /**
+   * Change a participant's status and keep isActive in sync.
+   * Records the status change by returning the old status for notification purposes.
+   */
+  async setParticipantStatus(
+    chatId: string,
+    participantId: string,
+    newStatus: ParticipantStatus
+  ): Promise<{ chat: ChatMetadata | null; oldStatus: ParticipantStatus }> {
+    return safeQuery(async () => {
+      const chat = await this.ctx.findById(chatId);
+      if (!chat) {
+        return { chat: null, oldStatus: 'active' };
+      }
+
+      const participantIndex = chat.participants.findIndex(p => p.id === participantId);
+      if (participantIndex === -1) {
+        logger.warn('Participant not found for status update', { chatId, participantId });
+        return { chat: null, oldStatus: 'active' };
+      }
+
+      const now = this.ctx.getCurrentTimestamp();
+      const existingParticipant = chat.participants[participantIndex];
+      const oldStatus = existingParticipant.status || 'active';
+
+      const participants = [...chat.participants];
+      participants[participantIndex] = {
+        ...existingParticipant,
+        status: newStatus,
+        isActive: isParticipantPresent(newStatus),
+        removedAt: newStatus === 'removed' ? now : null,
+        updatedAt: now,
+      };
+
+      const updatedChat = await this.ctx.update(chatId, { participants });
+      return { chat: updatedChat, oldStatus };
+    }, 'Failed to set participant status', { chatId, participantId, newStatus });
   }
 
   /**
@@ -153,7 +195,7 @@ export class ChatParticipantsOps {
    * Get active participants only
    */
   getActiveParticipants(chat: ChatMetadata): ChatParticipantBase[] {
-    return chat.participants.filter(p => p.isActive);
+    return chat.participants.filter(p => isParticipantPresent(p.status));
   }
 
   /**

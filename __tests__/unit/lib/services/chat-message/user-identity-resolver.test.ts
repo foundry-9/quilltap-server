@@ -43,6 +43,7 @@ describe('user-identity-resolver.service', () => {
             controlledBy: 'user',
             type: 'CHARACTER',
             isActive: true,
+            status: 'active',
           },
         ]);
 
@@ -73,6 +74,7 @@ describe('user-identity-resolver.service', () => {
             controlledBy: 'user',
             type: 'CHARACTER',
             isActive: true,
+            status: 'active',
           },
         ]);
 
@@ -98,6 +100,7 @@ describe('user-identity-resolver.service', () => {
             controlledBy: 'user',
             type: 'CHARACTER',
             isActive: true,
+            status: 'active',
           },
         ]);
 
@@ -122,6 +125,7 @@ describe('user-identity-resolver.service', () => {
             controlledBy: 'llm',
             type: 'CHARACTER',
             isActive: true,
+            status: 'active',
           },
           {
             id: 'participant-2',
@@ -129,6 +133,7 @@ describe('user-identity-resolver.service', () => {
             controlledBy: 'user',
             type: 'CHARACTER',
             isActive: true,
+            status: 'active',
           },
         ]);
 
@@ -286,6 +291,7 @@ describe('user-identity-resolver.service', () => {
             controlledBy: 'user',
             type: 'CHARACTER',
             isActive: true,
+            status: 'active',
           },
         ]);
 
@@ -314,6 +320,7 @@ describe('user-identity-resolver.service', () => {
             controlledBy: 'user',
             type: 'CHARACTER',
             isActive: true,
+            status: 'active',
           },
         ]);
 

@@ -214,6 +214,13 @@ export interface BuildContextOptions {
   messagesWithParticipants?: MessageWithParticipant[]
 
   // ============================================================================
+  // Participant Status Notifications
+  // ============================================================================
+
+  /** Status change notifications since the responding character's last turn */
+  statusChangeNotifications?: string[]
+
+  // ============================================================================
   // Tool Instructions (native tool rules or text-block tool instructions)
   // ============================================================================
 
@@ -363,7 +370,9 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     options.timestampConfig,
     options.isInitialMessage,
     projectContext,
-    options.timezone
+    options.timezone,
+    options.statusChangeNotifications,
+    respondingParticipant?.status as 'active' | 'silent' | 'absent' | 'removed' | undefined
   )
   const systemPromptTokens = estimateTokens(systemPrompt, provider)
 
@@ -480,7 +489,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     // Build the compressed system message (includes compressed history)
     effectiveSystemPrompt = buildCompressedSystemMessage(
       compressionResult.compressedHistory,
-      compressionResult.compressedSystemPrompt,
+      undefined,  // System prompt compression disabled — always use fresh per-character prompt
       finalSystemPrompt
     )
 

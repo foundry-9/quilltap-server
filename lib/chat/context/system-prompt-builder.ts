@@ -6,6 +6,7 @@
  */
 
 import type { Character, ChatParticipantBase, TimestampConfig } from '@/lib/schemas/types'
+import { isParticipantPresent, type ParticipantStatus } from '@/lib/schemas/types'
 import { calculateCurrentTimestamp, shouldInjectTimestamp, formatTimestampForSystemPrompt } from '@/lib/chat/timestamp-utils'
 import { buildMultiCharacterContextSection } from '@/lib/llm/message-formatter'
 import { processTemplate, type TemplateContext } from '@/lib/templates/processor'
@@ -19,6 +20,8 @@ export interface OtherParticipantInfo {
   pronouns?: { subject: string; object: string; possessive: string }
   description?: string
   type: 'CHARACTER'
+  /** Current participation status */
+  status?: 'active' | 'silent' | 'absent' | 'removed'
 }
 
 /**
@@ -54,7 +57,11 @@ export function buildSystemPrompt(
   /** Project context to include in system prompt */
   projectContext?: ProjectContext | null,
   /** Resolved IANA timezone name for timestamp formatting */
-  timezone?: string
+  timezone?: string,
+  /** Status change notifications to include (e.g., "Alice is now silent") */
+  statusChangeNotifications?: string[],
+  /** The responding character's own participation status */
+  respondingCharacterStatus?: 'active' | 'silent' | 'absent' | 'removed'
 ): string {
   const parts: string[] = []
 
@@ -245,6 +252,36 @@ export function buildSystemPrompt(
     }
   }
 
+  // Your own status reminder — so the LLM always knows its participation mode
+  if (respondingCharacterStatus && otherParticipants && otherParticipants.length > 0) {
+    parts.push(`## Your Current Status\nYour participation status is: **${respondingCharacterStatus}**.`)
+  }
+
+  // Silent mode instructions for the responding character
+  if (respondingCharacterStatus === 'silent') {
+    parts.push(
+      '## Silent Mode Active\n' +
+      'You are currently in SILENT mode. You are present in the scene but MUST NOT speak out loud — ' +
+      'no dialogue that others can hear. You may:\n' +
+      '- Have inner thoughts and internal monologue (use *italics* or describe as thoughts)\n' +
+      '- Take physical actions (gestures, movements, facial expressions)\n' +
+      '- React emotionally or physically to what others say and do\n\n' +
+      'You MUST NOT:\n' +
+      '- Speak any dialogue out loud\n' +
+      '- Whisper, murmur, or make any vocal sounds others could hear\n' +
+      '- Communicate verbally in any way'
+    )
+  }
+
+  // Status change notifications
+  if (statusChangeNotifications && statusChangeNotifications.length > 0) {
+    parts.push(
+      '## Recent Status Changes\n' +
+      'The following changes have occurred since your last turn:\n' +
+      statusChangeNotifications.map(n => `- ${n}`).join('\n')
+    )
+  }
+
   return parts.join('\n\n').trim()
 }
 
@@ -265,8 +302,8 @@ export function buildOtherParticipantsInfo(
       continue
     }
 
-    // Skip inactive participants
-    if (!participant.isActive) {
+    // Skip removed participants
+    if (participant.status === 'removed') {
       continue
     }
 
@@ -280,6 +317,7 @@ export function buildOtherParticipantsInfo(
           pronouns: character.pronouns || undefined,
           description: character.title || character.description || undefined,
           type: 'CHARACTER',
+          status: participant.status as ParticipantStatus,
         })
       }
     }

@@ -11,6 +11,7 @@
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { ChatMetadataBase } from '@/lib/schemas/types'
+import { isParticipantPresent } from '@/lib/schemas/chat.types'
 
 const logger = createServiceLogger('UserIdentityResolver')
 
@@ -39,7 +40,7 @@ export async function resolveUserIdentity(
 ): Promise<ResolvedUserIdentity> {
   // Step 1: Check if the chat already has a user-controlled character participant
   const userControlledParticipant = chat.participants.find(
-    p => p.type === 'CHARACTER' && p.controlledBy === 'user' && p.characterId && p.isActive
+    p => p.type === 'CHARACTER' && p.controlledBy === 'user' && p.characterId && isParticipantPresent(p.status)
   )
 
   if (userControlledParticipant?.characterId) {

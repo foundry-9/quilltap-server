@@ -55,6 +55,7 @@ jest.mock('@/lib/chat/context/compression', () => ({
 // Define AsyncCompressionOptions type inline
 interface AsyncCompressionOptions {
   chatId: string
+  participantId?: string
   messages: Array<{ role: string; content: string }>
   systemPrompt: string
   compressionOptions: {
@@ -78,13 +79,13 @@ const {
   getCompressionCacheStats,
 } = require('@/lib/services/chat-message/compression-cache.service') as {
   triggerAsyncCompression: (options: AsyncCompressionOptions) => void
-  getCachedCompression: (chatId: string, messageCount: number) => Promise<CachedCompressionResponse | undefined>
-  invalidateCompressionCache: (chatId: string) => void
+  getCachedCompression: (chatId: string, messageCount: number, participantId?: string, currentSystemPromptHash?: string) => Promise<CachedCompressionResponse | undefined>
+  invalidateCompressionCache: (chatId: string, participantId?: string) => void
   clearCompressionCache: () => void
   getCompressionCacheStats: () => {
     size: number
     entries: Array<{
-      chatId: string
+      cacheKey: string
       messageCount: number
       hasResult: boolean
       hasPromise: boolean
@@ -464,7 +465,7 @@ describe('Compression Cache Service', () => {
       invalidateCompressionCache('chat-1')
 
       expect(getCompressionCacheStats().size).toBe(1)
-      expect(getCompressionCacheStats().entries[0].chatId).toBe('chat-2')
+      expect(getCompressionCacheStats().entries[0].cacheKey).toBe('chat-2')
     })
 
     it('does nothing when chat not in cache', () => {
@@ -511,7 +512,7 @@ describe('Compression Cache Service', () => {
 
       const stats = getCompressionCacheStats()
       expect(stats.size).toBe(1)
-      expect(stats.entries[0].chatId).toBe('chat-1')
+      expect(stats.entries[0].cacheKey).toBe('chat-1')
       expect(stats.entries[0].messageCount).toBe(6)
       expect(stats.entries[0].hasResult).toBe(true)
       expect(stats.entries[0].hasPromise).toBe(false)

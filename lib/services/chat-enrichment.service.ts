@@ -86,6 +86,7 @@ export interface EnrichedParticipantSummary {
   type: 'CHARACTER'
   displayOrder: number
   isActive: boolean
+  status: string
   removedAt?: string | null
   character: EnrichedCharacterSummary | null
 }
@@ -99,6 +100,7 @@ export interface EnrichedParticipantDetail {
   controlledBy: 'llm' | 'user'
   displayOrder: number
   isActive: boolean
+  status: string
   removedAt?: string | null
   systemPromptOverride: string | null
   character: EnrichedCharacterDetail | null
@@ -309,6 +311,7 @@ export async function enrichParticipantSummary(
     type: participant.type,
     displayOrder: participant.displayOrder,
     isActive: participant.isActive,
+    status: participant.status || 'active',
     removedAt: participant.removedAt ?? null,
     character,
   }
@@ -339,6 +342,7 @@ export async function enrichParticipantDetail(
     controlledBy: participant.controlledBy || 'llm',
     displayOrder: participant.displayOrder,
     isActive: participant.isActive,
+    status: participant.status || 'active',
     removedAt: participant.removedAt ?? null,
     systemPromptOverride: participant.systemPromptOverride ?? null,
     character,

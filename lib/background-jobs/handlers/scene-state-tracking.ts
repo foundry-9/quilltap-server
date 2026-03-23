@@ -6,7 +6,7 @@
  * Uses the cheap LLM (or uncensored fallback for dangerous chats).
  */
 
-import { BackgroundJob, MessageEvent } from '@/lib/schemas/types';
+import { BackgroundJob, MessageEvent, isParticipantPresent } from '@/lib/schemas/types';
 import { SceneStateSchema } from '@/lib/schemas/chat.types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { getCheapLLMProvider, CheapLLMConfig, type CheapLLMSelection, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
@@ -165,8 +165,14 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
     }
   }
 
-  // 8. Build character baseline data
-  const characterBaselines = validCharacters.map(char => ({
+  // 8. Build character baseline data — only include present (active/silent) participants
+  const presentParticipantCharacterIds = new Set(
+    chat.participants
+      .filter(p => isParticipantPresent(p.status) && p.characterId)
+      .map(p => p.characterId)
+  );
+  const presentCharacters = validCharacters.filter(c => c && presentParticipantCharacterIds.has(c.id));
+  const characterBaselines = presentCharacters.map(char => ({
     characterId: char!.id,
     characterName: char!.name,
     physicalDescription: char!.physicalDescriptions?.[0]?.mediumPrompt || char!.physicalDescriptions?.[0]?.shortPrompt || '',
@@ -176,9 +182,10 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
 
   // 8b. Extract chat scenario from participant system prompts
   // The systemPromptOverride on participants typically sets up the opening scene
+  // Only include present (active/silent) participants
   const chatScenarioParts: string[] = [];
   for (const participant of chat.participants) {
-    if (participant.systemPromptOverride) {
+    if (isParticipantPresent(participant.status) && participant.systemPromptOverride) {
       chatScenarioParts.push(participant.systemPromptOverride);
     }
   }
@@ -286,6 +293,7 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
     chatId: payload.chatId,
     location: (sceneState as any).location,
     characterCount: (sceneState as any).characters?.length ?? 0,
+    presentCharacterCount: presentCharacters.length,
     messageCount: chat.messageCount,
     isDangerousChat,
   });

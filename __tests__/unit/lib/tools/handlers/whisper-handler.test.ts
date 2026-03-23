@@ -143,8 +143,8 @@ describe('executeWhisperTool', () => {
       id: 'chat-1',
       userId: 'user-123',
       participants: [
-        { id: 'caller-p', characterId: 'char-caller', isActive: true, controlledBy: 'llm' },
-        { id: 'target-p', characterId: 'char-target', isActive: true, controlledBy: 'llm' },
+        { id: 'caller-p', characterId: 'char-caller', isActive: true, status: 'active', controlledBy: 'llm' },
+        { id: 'target-p', characterId: 'char-target', isActive: true, status: 'active', controlledBy: 'llm' },
       ],
     }
 
@@ -180,8 +180,8 @@ describe('executeWhisperTool', () => {
       id: 'chat-1',
       userId: 'user-123',
       participants: [
-        { id: 'caller-p', characterId: 'char-caller', isActive: true, controlledBy: 'llm' },
-        { id: 'target-p', characterId: 'char-target', isActive: true, controlledBy: 'llm' },
+        { id: 'caller-p', characterId: 'char-caller', isActive: true, status: 'active', controlledBy: 'llm' },
+        { id: 'target-p', characterId: 'char-target', isActive: true, status: 'active', controlledBy: 'llm' },
       ],
     }
 
@@ -216,8 +216,8 @@ describe('executeWhisperTool', () => {
       id: 'chat-1',
       userId: 'user-123',
       participants: [
-        { id: 'caller-p', characterId: 'char-caller', isActive: true, controlledBy: 'llm' },
-        { id: 'target-p', characterId: 'char-target', isActive: true, controlledBy: 'llm' },
+        { id: 'caller-p', characterId: 'char-caller', isActive: true, status: 'active', controlledBy: 'llm' },
+        { id: 'target-p', characterId: 'char-target', isActive: true, status: 'active', controlledBy: 'llm' },
       ],
     }
 
@@ -251,9 +251,9 @@ describe('executeWhisperTool', () => {
       id: 'chat-1',
       userId: 'user-123',
       participants: [
-        { id: 'caller-p', characterId: 'char-caller', isActive: true, controlledBy: 'llm' },
-        { id: 'target-p1', characterId: 'char-alice1', isActive: true, controlledBy: 'llm' },
-        { id: 'target-p2', characterId: 'char-alice2', isActive: true, controlledBy: 'llm' },
+        { id: 'caller-p', characterId: 'char-caller', isActive: true, status: 'active', controlledBy: 'llm' },
+        { id: 'target-p1', characterId: 'char-alice1', isActive: true, status: 'active', controlledBy: 'llm' },
+        { id: 'target-p2', characterId: 'char-alice2', isActive: true, status: 'active', controlledBy: 'llm' },
       ],
     }
 
@@ -290,8 +290,8 @@ describe('executeWhisperTool', () => {
       id: 'chat-1',
       userId: 'user-123',
       participants: [
-        { id: 'caller-p', characterId: 'char-caller', isActive: true, controlledBy: 'llm' },
-        { id: 'target-p', characterId: 'char-target', isActive: true, controlledBy: 'llm' },
+        { id: 'caller-p', characterId: 'char-caller', isActive: true, status: 'active', controlledBy: 'llm' },
+        { id: 'target-p', characterId: 'char-target', isActive: true, status: 'active', controlledBy: 'llm' },
       ],
     }
 
@@ -325,8 +325,8 @@ describe('executeWhisperTool', () => {
       id: 'chat-1',
       userId: 'user-123',
       participants: [
-        { id: 'caller-p', characterId: 'char-caller', isActive: true, controlledBy: 'llm' },
-        { id: 'target-p', characterId: 'char-target', isActive: true, controlledBy: 'llm' },
+        { id: 'caller-p', characterId: 'char-caller', isActive: true, status: 'active', controlledBy: 'llm' },
+        { id: 'target-p', characterId: 'char-target', isActive: true, status: 'active', controlledBy: 'llm' },
       ],
     }
 
@@ -366,8 +366,8 @@ describe('executeWhisperTool', () => {
       id: 'chat-1',
       userId: 'user-123',
       participants: [
-        { id: 'caller-p', characterId: 'char-caller', isActive: true, controlledBy: 'llm' },
-        { id: 'target-p', characterId: 'char-target', isActive: true, controlledBy: 'llm' },
+        { id: 'caller-p', characterId: 'char-caller', isActive: true, status: 'active', controlledBy: 'llm' },
+        { id: 'target-p', characterId: 'char-target', isActive: true, status: 'active', controlledBy: 'llm' },
       ],
     }
 
@@ -403,8 +403,8 @@ describe('executeWhisperTool', () => {
       id: 'chat-1',
       userId: 'user-123',
       participants: [
-        { id: 'caller-p', characterId: 'char-caller', isActive: true, controlledBy: 'llm' },
-        { id: 'target-p', characterId: 'char-target', isActive: true, controlledBy: 'llm' },
+        { id: 'caller-p', characterId: 'char-caller', isActive: true, status: 'active', controlledBy: 'llm' },
+        { id: 'target-p', characterId: 'char-target', isActive: true, status: 'active', controlledBy: 'llm' },
       ],
     }
 
@@ -461,7 +461,7 @@ describe('executeWhisperTool', () => {
       id: 'chat-1',
       userId: 'different-user',
       participants: [
-        { id: 'caller-p', characterId: 'char-caller', isActive: true, controlledBy: 'llm' },
+        { id: 'caller-p', characterId: 'char-caller', isActive: true, status: 'active', controlledBy: 'llm' },
       ],
     }
 
@@ -488,8 +488,8 @@ describe('executeWhisperTool', () => {
       id: 'chat-1',
       userId: 'user-123',
       participants: [
-        { id: 'caller-p', characterId: 'char-caller', isActive: true, controlledBy: 'llm' },
-        { id: 'target-p', characterId: 'char-target', isActive: true, controlledBy: 'llm' },
+        { id: 'caller-p', characterId: 'char-caller', isActive: true, status: 'active', controlledBy: 'llm' },
+        { id: 'target-p', characterId: 'char-target', isActive: true, status: 'active', controlledBy: 'llm' },
       ],
     }
 
@@ -526,8 +526,8 @@ describe('executeWhisperTool', () => {
       id: 'chat-1',
       userId: 'user-123',
       participants: [
-        { id: 'caller-p', characterId: 'char-caller', isActive: true, controlledBy: 'llm' },
-        { id: 'target-p', characterId: 'char-target', isActive: false, controlledBy: 'llm' },
+        { id: 'caller-p', characterId: 'char-caller', isActive: true, status: 'active', controlledBy: 'llm' },
+        { id: 'target-p', characterId: 'char-target', isActive: false, status: 'absent', controlledBy: 'llm' },
       ],
     }
 
@@ -581,8 +581,8 @@ describe('executeWhisperTool', () => {
       id: 'chat-1',
       userId: 'user-123',
       participants: [
-        { id: 'caller-p', characterId: 'char-caller', isActive: true, controlledBy: 'llm' },
-        { id: 'target-p', characterId: 'char-target', isActive: true, controlledBy: 'llm' },
+        { id: 'caller-p', characterId: 'char-caller', isActive: true, status: 'active', controlledBy: 'llm' },
+        { id: 'target-p', characterId: 'char-target', isActive: true, status: 'active', controlledBy: 'llm' },
       ],
     }
 

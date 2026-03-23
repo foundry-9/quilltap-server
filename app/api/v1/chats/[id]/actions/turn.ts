@@ -22,6 +22,7 @@ import {
 import { turnActionSchema } from '../schemas';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 import type { ChatMetadata, MessageEvent, Character } from '@/lib/schemas/types';
+import { isParticipantPresent } from '@/lib/schemas/chat.types';
 
 /**
  * Process a turn action (nudge, queue, dequeue, or query)
@@ -44,7 +45,7 @@ export async function handleTurnAction(
       if (!participant) {
         return notFound('Participant');
       }
-      if (!participant.isActive) {
+      if (!isParticipantPresent(participant.status)) {
         return badRequest('Participant is not active');
       }
     }

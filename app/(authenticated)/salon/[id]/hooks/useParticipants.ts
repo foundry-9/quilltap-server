@@ -47,6 +47,7 @@ export function useParticipants({
           systemPromptOverride: p.systemPromptOverride ?? null,
           displayOrder: p.displayOrder,
           isActive: p.isActive,
+          status: (p.status as 'active' | 'silent' | 'absent' | 'removed') || (p.isActive ? 'active' : (p.removedAt ? 'removed' : 'absent')),
           hasHistoryAccess: p.hasHistoryAccess ?? false,
           joinScenario: p.joinScenario ?? null,
           createdAt: p.createdAt ?? new Date().toISOString(),
@@ -110,6 +111,7 @@ export function useParticipants({
       controlledBy: p.controlledBy ?? (p.type === 'PERSONA' ? 'user' : 'llm'),
       displayOrder: p.displayOrder,
       isActive: p.isActive,
+      status: (p.status as 'active' | 'silent' | 'absent' | 'removed') || (p.isActive ? 'active' : 'absent'),
       systemPromptOverride: p.systemPromptOverride ?? null,
       character: p.character ? {
         id: p.character.id,

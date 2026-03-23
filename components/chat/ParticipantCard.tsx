@@ -29,6 +29,8 @@ export interface ParticipantData {
   controlledBy?: 'llm' | 'user'
   displayOrder: number
   isActive: boolean
+  /** Four-state participation status: active, silent, absent, removed */
+  status?: 'active' | 'silent' | 'absent' | 'removed'
   systemPromptOverride?: string | null
   character?: {
     id: string
@@ -97,6 +99,7 @@ interface ParticipantCardProps {
   // Inline settings controls
   onSystemPromptOverrideChange?: (participantId: string, override: string | null) => void
   onActiveChange?: (participantId: string, isActive: boolean) => void
+  onStatusChange?: (participantId: string, status: 'active' | 'silent' | 'absent' | 'removed') => void
   // Whisper support
   onWhisper?: (participantId: string) => void
 }
@@ -126,6 +129,7 @@ export function ParticipantCard({
   onConnectionProfileChange,
   onSystemPromptOverrideChange,
   onActiveChange,
+  onStatusChange,
   onWhisper,
 }: ParticipantCardProps) {
   const [localTalkativeness, setLocalTalkativeness] = useState(
@@ -146,7 +150,8 @@ export function ParticipantCard({
 
   const name = entity.name
   const title = entity.title
-  const isInactive = turnStatus === 'inactive'
+  const participantStatus = participant.status || 'active'
+  const isInactive = turnStatus === 'inactive' || turnStatus === 'absent'
 
   // Check if this is a user-controlled character (not LLM-controlled)
   const isUserControlledCharacter = isCharacter && participant.controlledBy === 'user'
@@ -200,9 +205,20 @@ export function ParticipantCard({
     }, 600)
   }
 
-  // Handle active toggle via the eye icon button
+  // Handle active toggle via the eye icon button (legacy compat)
   const handleActiveToggleClick = () => {
     onActiveChange?.(participant.id, !participant.isActive)
+  }
+
+  // Handle status change via dropdown
+  const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newStatus = e.target.value as 'active' | 'silent' | 'absent' | 'removed'
+    if (onStatusChange) {
+      onStatusChange(participant.id, newStatus)
+    } else if (onActiveChange) {
+      // Fallback to legacy toggle
+      onActiveChange(participant.id, newStatus === 'active' || newStatus === 'silent')
+    }
   }
 
   // Determine the current connection profile select value
@@ -240,6 +256,7 @@ export function ParticipantCard({
   // Determine card class based on state
   const getCardClass = (): string => {
     if (isInactive) return 'qt-participant-card-inactive'
+    if (participantStatus === 'silent') return isCurrentTurn ? 'qt-participant-card-active qt-participant-card-silent' : 'qt-participant-card qt-participant-card-silent'
     if (isCurrentTurn) return 'qt-participant-card-active'
     return 'qt-participant-card'
   }
@@ -272,7 +289,7 @@ export function ParticipantCard({
 
       <div className="qt-participant-card-header">
         {/* Avatar */}
-        <div className="flex-shrink-0">
+        <div className="flex-shrink-0 relative">
           <Avatar
             name={name}
             src={entity}
@@ -280,6 +297,21 @@ export function ParticipantCard({
             isActive={isCurrentTurn}
             styleOverride="RECTANGULAR"
           />
+          {/* Status overlay icon — visible even when sidebar is collapsed */}
+          {participantStatus === 'silent' && (
+            <div className="qt-participant-status-overlay qt-participant-status-overlay-silent" title="Silent">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+              </svg>
+            </div>
+          )}
+          {participantStatus === 'absent' && (
+            <div className="qt-participant-status-overlay qt-participant-status-overlay-absent" title="Absent">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+              </svg>
+            </div>
+          )}
         </div>
 
         {/* Info */}
@@ -306,6 +338,13 @@ export function ParticipantCard({
                   size="sm"
                 />
               </>
+            )}
+            {/* Status badge for non-active participants */}
+            {participantStatus === 'silent' && (
+              <span className="qt-badge-silent text-xs">Silent</span>
+            )}
+            {participantStatus === 'absent' && (
+              <span className="qt-badge-absent text-xs">Absent</span>
             )}
           </div>
 
@@ -448,26 +487,19 @@ export function ParticipantCard({
           </button>
         )}
 
-        {/* Active/inactive toggle - visible eye icon */}
-        {onActiveChange && (
-          <button
-            onClick={handleActiveToggleClick}
-            className="qt-button qt-button-sm py-1.5 px-2 qt-participant-active-toggle qt-button-secondary"
-            data-active={participant.isActive ? 'true' : 'false'}
-            title={participant.isActive ? `Deactivate ${name}` : `Activate ${name}`}
-            aria-label={participant.isActive ? `Deactivate ${name}` : `Activate ${name}`}
+        {/* Status selector — four-state dropdown replacing the old eye toggle */}
+        {(onStatusChange || onActiveChange) && (
+          <select
+            value={participantStatus}
+            onChange={handleStatusChange}
+            className="qt-select qt-select-sm qt-participant-status-select py-1 px-1.5 text-xs"
+            title={`Status for ${name}: ${participantStatus}`}
+            aria-label={`Participation status for ${name}`}
           >
-            {participant.isActive ? (
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-            ) : (
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-              </svg>
-            )}
-          </button>
+            <option value="active">Active</option>
+            <option value="silent">Silent</option>
+            <option value="absent">Absent</option>
+          </select>
         )}
 
         {/* Remove button - for characters when canRemove is true

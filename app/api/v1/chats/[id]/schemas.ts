@@ -23,7 +23,8 @@ export const updateParticipantSchema = z.object({
   imageProfileId: z.uuid().nullish(),
   systemPromptOverride: z.string().nullish(),
   displayOrder: z.number().optional(),
-  isActive: z.boolean().optional(),
+  isActive: z.boolean().optional(),  // Keep for backward compat
+  status: z.enum(['active', 'silent', 'absent', 'removed']).optional(),  // New preferred field
   controlledBy: z.enum(['llm', 'user']).optional(),
   hasHistoryAccess: z.boolean().optional(),
   joinScenario: z.string().nullish(),

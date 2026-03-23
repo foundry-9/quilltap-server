@@ -33,6 +33,8 @@ export interface Message {
   modelName?: string | null
   /** Target participant IDs for whisper messages (null = public, array = private) */
   targetParticipantIds?: string[] | null
+  /** Whether this message was generated while the character was in silent mode */
+  isSilentMessage?: boolean
   /** Danger flags from content classification */
   dangerFlags?: Array<{
     category: string
@@ -90,6 +92,8 @@ export interface Participant {
   controlledBy?: 'llm' | 'user'
   displayOrder: number
   isActive: boolean
+  /** Four-state participation status */
+  status?: 'active' | 'silent' | 'absent' | 'removed'
   systemPromptOverride?: string | null
   characterId?: string | null
   personaId?: string | null
@@ -237,6 +241,8 @@ export interface ChatParticipantData {
   controlledBy?: 'llm' | 'user'
   displayOrder: number
   isActive: boolean
+  /** Four-state participation status */
+  status?: 'active' | 'silent' | 'absent' | 'removed'
   character: {
     id: string
     name: string

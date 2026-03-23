@@ -198,7 +198,7 @@ export function formatMessagesForProvider(
  * @returns String to append to system prompt
  */
 export function buildMultiCharacterContextSection(
-  otherParticipants: Array<{ name: string; aliases?: string[]; pronouns?: { subject: string; object: string; possessive: string }; description?: string; type: 'CHARACTER' }>,
+  otherParticipants: Array<{ name: string; aliases?: string[]; pronouns?: { subject: string; object: string; possessive: string }; description?: string; type: 'CHARACTER'; status?: string }>,
   respondingCharacterName: string
 ): string {
   if (otherParticipants.length === 0) {
@@ -211,6 +211,13 @@ export function buildMultiCharacterContextSection(
     '',
   ]
 
+  // Status guide — always present so the LLM understands the participation model
+  lines.push('**Participant Status Guide:**')
+  lines.push('- **active**: Present and participating normally in the conversation')
+  lines.push('- **silent**: Present but observing silently — may think and act physically, but does not speak aloud')
+  lines.push('- **absent**: Away from the scene — cannot perceive what is happening')
+  lines.push('')
+
   for (const participant of otherParticipants) {
     const typeLabel = participant.type === 'CHARACTER' && participant.name.includes('User') ? '(the user)' : ''
     const aliasNote = participant.aliases && participant.aliases.length > 0
@@ -219,8 +226,9 @@ export function buildMultiCharacterContextSection(
     const pronounNote = participant.pronouns
       ? ` (pronouns: ${participant.pronouns.subject}/${participant.pronouns.object}/${participant.pronouns.possessive})`
       : ''
+    const statusNote = ` [${participant.status || 'active'}]`
     const description = participant.description ? ` - ${participant.description}` : ''
-    lines.push(`- **${participant.name}**${aliasNote}${pronounNote} ${typeLabel}${description}`)
+    lines.push(`- **${participant.name}**${aliasNote}${pronounNote}${statusNote} ${typeLabel}${description}`)
   }
 
   lines.push('')

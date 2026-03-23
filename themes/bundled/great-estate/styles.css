@@ -279,6 +279,12 @@
   --qt-chat-whisper-border: hsl(280 30% 42%);
   --qt-chat-whisper-label-fg: hsl(280 25% 50%);
 
+  /* Chat: Silent messages — rich garden green for estate aesthetic */
+  --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 65%, hsl(158 25% 42%) 35%);
+  --qt-chat-silent-fg: var(--qt-chat-assistant-fg);
+  --qt-chat-silent-border: hsl(158 25% 42%);
+  --qt-chat-silent-label-fg: hsl(158 20% 32%);
+
   --qt-chat-composer-bg: var(--color-background);
   --qt-chat-composer-border: var(--color-border);
   --qt-chat-composer-radius: var(--radius-lg);
@@ -682,6 +688,11 @@
   --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 50%, hsl(280 30% 15%) 50%);
   --qt-chat-whisper-border: hsl(280 35% 32%);
   --qt-chat-whisper-label-fg: hsl(280 40% 65%);
+
+  /* Silent messages — darker rich garden green for dark mode */
+  --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, hsl(158 28% 22%) 40%);
+  --qt-chat-silent-border: hsl(158 28% 38%);
+  --qt-chat-silent-label-fg: hsl(158 25% 58%);
 
   /* Links — gold in dark mode */
   --qt-link-color: var(--estate-gold);

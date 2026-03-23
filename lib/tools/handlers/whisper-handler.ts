@@ -13,6 +13,7 @@ import {
 import { stripTextBlockMarkers } from '../text-block-parser';
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
+import { canReceiveWhisper } from '@/lib/schemas/chat.types';
 
 /**
  * Sanitize whisper message content.
@@ -91,7 +92,7 @@ export async function executeWhisperTool(
     }
 
     // Resolve target to participant
-    const activeParticipants = chat.participants.filter(p => p.isActive);
+    const activeParticipants = chat.participants.filter(p => canReceiveWhisper(p.status));
     const targetLower = target.toLowerCase();
 
     // Try matching by character name first, then aliases

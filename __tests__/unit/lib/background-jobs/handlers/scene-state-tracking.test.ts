@@ -40,6 +40,8 @@ jest.mock('@/lib/services/dangerous-content/gatekeeper.service', () => ({
 
 jest.mock('@/lib/schemas/chat.types', () => ({
   SceneStateSchema: { safeParse: jest.fn().mockReturnValue({ success: false }) },
+  isParticipantPresent: (status: string) => status === 'active' || status === 'silent',
+  canReceiveWhisper: (status: string) => status === 'active' || status === 'silent',
 }))
 
 const mockGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>
@@ -87,6 +89,7 @@ const createMockRepos = () => ({
           characterId: 'char-1',
           controlledBy: 'llm',
           isActive: true,
+          status: 'active',
           systemPromptOverride: null,
         },
       ],
@@ -404,7 +407,7 @@ describe('handleSceneStateTracking', () => {
       messageCount: 5,
       sceneState: null,
       isDangerousChat: true,
-      participants: [{ id: 'p1', characterId: 'char-1', controlledBy: 'llm', isActive: true, systemPromptOverride: null }],
+      participants: [{ id: 'p1', characterId: 'char-1', controlledBy: 'llm', isActive: true, status: 'active', systemPromptOverride: null }],
       contextSummary: null,
     })
     // Must return a valid selection so cheapLLMSelection stays non-null after the call
@@ -427,6 +430,19 @@ describe('handleSceneStateTracking', () => {
 
   it('loads all characters listed in characterIds', async () => {
     const job = buildJob({ characterIds: ['char-1', 'char-2'], connectionProfileId: 'profile-1' })
+    // Both characters must have active participants in the chat for them to appear in scene state
+    repos.chats.findById.mockResolvedValue({
+      id: 'chat-1',
+      userId: 'user-1',
+      messageCount: 10,
+      sceneState: null,
+      isDangerousChat: false,
+      participants: [
+        { id: 'p1', characterId: 'char-1', controlledBy: 'llm', isActive: true, status: 'active', systemPromptOverride: null },
+        { id: 'p2', characterId: 'char-2', controlledBy: 'llm', isActive: true, status: 'active', systemPromptOverride: null },
+      ],
+      contextSummary: null,
+    })
     repos.characters.findById
       .mockResolvedValueOnce({ id: 'char-1', name: 'Alice', description: '', scenario: '', physicalDescriptions: [], clothingRecords: [] })
       .mockResolvedValueOnce({ id: 'char-2', name: 'Bob', description: '', scenario: '', physicalDescriptions: [], clothingRecords: [] })
