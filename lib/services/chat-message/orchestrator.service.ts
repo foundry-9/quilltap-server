@@ -1118,6 +1118,10 @@ async function processMessage(
       cachedCompressionMessageCount: cachedCompressionResponse?.cachedMessageCount,
       // Proactive memory recall results
       preSearchedMemories,
+      // Memory recap: uncensored fallback for dangerous chats
+      uncensoredFallbackOptions: (chat.isDangerousChat && dangerSettings && cheapLLMSelection)
+        ? { dangerSettings, availableProfiles: allProfiles, isDangerousChat: true }
+        : undefined,
     },
     existingMessages,
     fileProcessing.attachmentsToSend

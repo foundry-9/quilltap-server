@@ -17,6 +17,8 @@ import { Provider, Character, ChatParticipantBase, ChatMetadataBase, TimestampCo
 import { estimateTokens, countMessagesTokens, truncateToTokenLimit } from '@/lib/tokens/token-counter'
 import { getModelContextLimit, getRecommendedContextAllocation, shouldSummarizeConversation } from '@/lib/llm/model-context-data'
 import { searchMemoriesSemantic, type SemanticSearchResult } from '@/lib/memory/memory-service'
+import { generateMemoryRecap, type MemoryRecapResult } from '@/lib/memory/memory-recap'
+import type { UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
 import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
@@ -263,6 +265,15 @@ export interface BuildContextOptions {
 
   /** Pre-searched memories from proactive recall (skips internal memory search when provided) */
   preSearchedMemories?: SemanticSearchResult[]
+
+  // ============================================================================
+  // Memory Recap (Chat Start / Character Join)
+  // ============================================================================
+
+  /** Whether to generate a memory recap for this character (first message or character join) */
+  generateMemoryRecap?: boolean
+  /** Uncensored fallback options for memory recap in dangerous chats */
+  uncensoredFallbackOptions?: UncensoredFallbackOptions
 }
 
 /**
@@ -530,6 +541,40 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     ? estimateTokens(effectiveSystemPrompt, provider)
     : finalSystemPromptTokens
 
+  // 1b. Generate memory recap on chat start or character join
+  let memoryRecapContent = ''
+  let memoryRecapTokens = 0
+
+  if (options.generateMemoryRecap && character.id && options.cheapLLMSelection) {
+    try {
+      const recapResult = await generateMemoryRecap(
+        character.id,
+        character.name,
+        options.cheapLLMSelection,
+        userId,
+        chat.id,
+        options.uncensoredFallbackOptions
+      )
+
+      if (recapResult.content) {
+        memoryRecapContent = recapResult.content
+        memoryRecapTokens = estimateTokens(memoryRecapContent, provider)
+
+        logger.debug('[ContextManager] Memory recap generated', {
+          characterName: character.name,
+          memoriesUsed: recapResult.memoriesUsed,
+          recapTokens: memoryRecapTokens,
+          usage: recapResult.usage,
+        })
+      }
+    } catch (error) {
+      warnings.push(`Failed to generate memory recap: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      logger.error('[ContextManager] Memory recap generation failed', {
+        characterId: character.id,
+      }, error instanceof Error ? error : undefined)
+    }
+  }
+
   // 2. Retrieve and format relevant memories
   let memoryContent = ''
   let memoryTokens = 0
@@ -657,7 +702,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
 
   // 4. Calculate remaining budget for messages
   // Use effective (possibly compressed) system prompt tokens
-  const usedTokens = effectiveSystemPromptTokens + memoryTokens + interCharacterMemoryTokens + summaryTokens
+  const usedTokens = effectiveSystemPromptTokens + memoryRecapTokens + memoryTokens + interCharacterMemoryTokens + summaryTokens
   const remainingBudget = budget.totalLimit - usedTokens - budget.responseReserve
 
   // 5. Prepare messages based on single vs multi-character mode
@@ -739,6 +784,12 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // Use effective system prompt (possibly compressed)
   let fullSystemContent = effectiveSystemPrompt
 
+  // Memory recap: narrative summary of what the character remembers (chat start only)
+  // Placed after character notes but before per-message memories and identity lockdown
+  if (memoryRecapContent) {
+    fullSystemContent += '\n\n' + memoryRecapContent
+  }
+
   if (memoryContent) {
     fullSystemContent += '\n\n' + memoryContent
   }
@@ -795,7 +846,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
 
   // Calculate final token usage
   // Use effective system prompt tokens (possibly compressed)
-  const totalMemoryTokens = memoryTokens + interCharacterMemoryTokens
+  const totalMemoryTokens = memoryRecapTokens + memoryTokens + interCharacterMemoryTokens
   const totalUsed = effectiveSystemPromptTokens + totalMemoryTokens + summaryTokens + messagesTokens + newUserMessageTokens
   const totalMemoriesIncluded = memoriesIncluded + interCharacterMemoriesIncluded
 

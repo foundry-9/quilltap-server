@@ -9,6 +9,7 @@ import { createServiceLogger } from '@/lib/logging/create-logger'
 import { buildContext, type MessageWithParticipant, type BuiltContext, type ProjectContext, type ContextCompressionResult } from '@/lib/chat/context-manager'
 import type { SemanticSearchResult } from '@/lib/memory/memory-service'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
+import type { UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
 import { loadChatFilesForLLM } from '@/lib/chat-files-v2'
@@ -66,6 +67,10 @@ export interface BuildMessageContextOptions {
   cachedCompressionMessageCount?: number
   /** Pre-searched memories from proactive recall (skips internal memory search when provided) */
   preSearchedMemories?: SemanticSearchResult[]
+  /** Whether to generate a memory recap for this character (chat start or character join) */
+  generateMemoryRecap?: boolean
+  /** Uncensored fallback options for memory recap in dangerous chats */
+  uncensoredFallbackOptions?: UncensoredFallbackOptions
 }
 
 /**
@@ -293,6 +298,8 @@ export async function buildMessageContext(
     cachedCompressionResult,
     cachedCompressionMessageCount,
     preSearchedMemories,
+    generateMemoryRecap: requestMemoryRecap,
+    uncensoredFallbackOptions,
   } = options
 
   // Build conversation messages
@@ -303,6 +310,22 @@ export async function buildMessageContext(
 
   // Determine if this is the first user message (for timestamp START_ONLY mode)
   const isInitialMessage = conversationMessages.filter(m => m.role === 'user' || m.role === 'USER').length === 0
+
+  // Detect if this is the first time this character is responding in this chat
+  // (either it's the very first message, or this character just joined an existing chat)
+  const isCharacterFirstResponse = isInitialMessage || (
+    isMultiCharacter &&
+    characterParticipant &&
+    !characterParticipant.hasHistoryAccess &&
+    messagesWithParticipants !== undefined &&
+    !messagesWithParticipants.some(
+      m => m.participantId === characterParticipant.id &&
+           (m.role === 'assistant' || m.role === 'ASSISTANT')
+    )
+  )
+
+  // Generate memory recap on first message or character join, unless explicitly overridden
+  const shouldGenerateRecap = requestMemoryRecap ?? isCharacterFirstResponse
 
   // Get timestamp config from chat or user defaults
   const timestampConfig = chat.timestampConfig || chatSettings?.defaultTimestampConfig || null
@@ -350,6 +373,9 @@ export async function buildMessageContext(
     cachedCompressionMessageCount,
     // Proactive memory recall
     preSearchedMemories,
+    // Memory recap (chat start or character join)
+    generateMemoryRecap: shouldGenerateRecap,
+    uncensoredFallbackOptions,
   })
 
   // Log context building results for debugging
