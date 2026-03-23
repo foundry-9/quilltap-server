@@ -31,7 +31,7 @@ describe('generateGreetingMessage', () => {
   })
 
   it('requests a greeting from the provider and trims the response', async () => {
-    const content = await generateGreetingMessage({
+    const result = await generateGreetingMessage({
       systemPrompt: 'System instructions',
       characterName: 'Avery',
       provider: 'OPENAI',
@@ -42,7 +42,8 @@ describe('generateGreetingMessage', () => {
       topP: 0.9,
     })
 
-    expect(content).toBe('Hi there!')
+    expect(result.content).toBe('Hi there!')
+    expect(result.contentFilterDetected).toBe(false)
     expect(mockCreateProvider).toHaveBeenCalledWith('OPENAI', undefined)
 
     const call = mockProvider.sendMessage.mock.calls[0] as [any, string]
@@ -73,7 +74,7 @@ describe('generateGreetingMessage', () => {
       raw: {},
     })
 
-    const content = await generateGreetingMessage({
+    const result = await generateGreetingMessage({
       systemPrompt: 'System instructions',
       characterName: 'Rin',
       provider: 'OLLAMA',
@@ -86,6 +87,47 @@ describe('generateGreetingMessage', () => {
 
     expect(payload.maxTokens).toBe(160)
     expect(call[1]).toBe('')
-    expect(content).toBe('Hello there')
+    expect(result.content).toBe('Hello there')
+    expect(result.contentFilterDetected).toBe(false)
+  })
+
+  it('detects content filter when tokens consumed but content is empty', async () => {
+    mockProvider.sendMessage.mockResolvedValueOnce({
+      content: '',
+      finishReason: 'stop',
+      usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+      raw: {},
+    })
+
+    const result = await generateGreetingMessage({
+      systemPrompt: 'System instructions',
+      characterName: 'Friday',
+      provider: 'OPENROUTER',
+      modelName: 'some-model',
+      apiKey: 'key',
+    })
+
+    expect(result.content).toBe('')
+    expect(result.contentFilterDetected).toBe(true)
+  })
+
+  it('does not flag content filter when no tokens consumed', async () => {
+    mockProvider.sendMessage.mockResolvedValueOnce({
+      content: '',
+      finishReason: 'stop',
+      usage: { promptTokens: 100, completionTokens: 0, totalTokens: 100 },
+      raw: {},
+    })
+
+    const result = await generateGreetingMessage({
+      systemPrompt: 'System instructions',
+      characterName: 'Friday',
+      provider: 'OPENROUTER',
+      modelName: 'some-model',
+      apiKey: 'key',
+    })
+
+    expect(result.content).toBe('')
+    expect(result.contentFilterDetected).toBe(false)
   })
 })

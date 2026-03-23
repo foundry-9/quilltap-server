@@ -12,6 +12,8 @@ import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { buildChatContext, type ChatContext } from '@/lib/chat/initialize';
 import { generateGreetingMessage } from '@/lib/chat/initial-greeting';
+import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
+import { resolveProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service';
 import { buildFirstMessageContext } from '@/lib/chat/first-message-context';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/errors';
@@ -300,54 +302,164 @@ async function autoGenerateFirstMessage(
     return undefined;
   };
 
+  const baseParams = {
+    systemPrompt: context.systemPrompt,
+    characterName: context.character.name,
+    provider: connectionProfile.provider,
+    modelName: connectionProfile.modelName,
+    baseUrl: connectionProfile.baseUrl,
+    apiKey,
+    temperature: extractNumber(parameters.temperature),
+    maxTokens: extractNumber(parameters.maxTokens),
+    topP: extractNumber(parameters.topP),
+  };
+
+  // Track whether any attempt hit a content filter so we can try the Concierge fallback
+  let contentFilterHit = false;
+
+  // Attempt 1: Full context (memories + project)
   try {
-    const greeting = await generateGreetingMessage({
-      systemPrompt: context.systemPrompt,
-      characterName: context.character.name,
-      provider: connectionProfile.provider,
-      modelName: connectionProfile.modelName,
-      baseUrl: connectionProfile.baseUrl,
-      apiKey,
-      temperature: extractNumber(parameters.temperature),
-      maxTokens: extractNumber(parameters.maxTokens),
-      topP: extractNumber(parameters.topP),
+    const result = await generateGreetingMessage({
+      ...baseParams,
       participantMemories: participantMemories.length > 0 ? participantMemories : undefined,
       projectContext,
     });
 
-    if (greeting) {
-      return greeting;
+    if (result.content) {
+      return result.content;
     }
+    if (result.contentFilterDetected) {
+      contentFilterHit = true;
+    }
+  } catch (error) {
+    logger.warn('[Chats v1] Greeting generation attempt failed', {
+      characterId: context.character.id,
+      attempt: 'full context',
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 
-    if (participantMemories.length > 0) {
+  // Attempt 2: Strip memories (they may be triggering content filter)
+  if (participantMemories.length > 0) {
+    try {
       logger.info('[Chats v1] Retrying greeting generation without memories', {
         characterId: context.character.id,
         originalMemoryCount: participantMemories.length,
       });
 
-      const retryGreeting = await generateGreetingMessage({
-        systemPrompt: context.systemPrompt,
-        characterName: context.character.name,
-        provider: connectionProfile.provider,
-        modelName: connectionProfile.modelName,
-        baseUrl: connectionProfile.baseUrl,
-        apiKey,
-        temperature: extractNumber(parameters.temperature),
-        maxTokens: extractNumber(parameters.maxTokens),
-        topP: extractNumber(parameters.topP),
+      const result = await generateGreetingMessage({
+        ...baseParams,
         projectContext,
       });
 
-      if (retryGreeting) {
-        return retryGreeting;
+      if (result.content) {
+        logger.info('[Chats v1] Greeting generation succeeded on retry without memories', {
+          characterId: context.character.id,
+        });
+        return result.content;
       }
+      if (result.contentFilterDetected) {
+        contentFilterHit = true;
+      }
+    } catch (error) {
+      logger.warn('[Chats v1] Greeting generation attempt failed', {
+        characterId: context.character.id,
+        attempt: 'without memories',
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
-
-    return '';
-  } catch (error) {
-    logger.error('[Chats v1] Failed to auto-generate greeting', {}, error instanceof Error ? error : undefined);
-    return '';
   }
+
+  // Attempt 3: If content filter was detected, try the Concierge uncensored provider
+  if (contentFilterHit) {
+    try {
+      const chatSettings = await repos.chatSettings.findByUserId(userId);
+      const resolved = resolveDangerousContentSettings(chatSettings);
+
+      if (resolved.settings.mode === 'AUTO_ROUTE') {
+        const routeResult = await resolveProviderForDangerousContent(
+          connectionProfile,
+          apiKey,
+          resolved.settings,
+          userId
+        );
+
+        if (routeResult.rerouted) {
+          logger.info('[Chats v1] Content filter detected on greeting — falling back to Concierge uncensored provider', {
+            characterId: context.character.id,
+            uncensoredProfile: routeResult.connectionProfile.name,
+            uncensoredProvider: routeResult.connectionProfile.provider,
+            uncensoredModel: routeResult.connectionProfile.modelName,
+          });
+
+          const uncensoredParams = routeResult.connectionProfile.parameters as Record<string, unknown> | undefined;
+          const uncensoredParameters = uncensoredParams ?? {};
+
+          const result = await generateGreetingMessage({
+            systemPrompt: context.systemPrompt,
+            characterName: context.character.name,
+            provider: routeResult.connectionProfile.provider,
+            modelName: routeResult.connectionProfile.modelName,
+            baseUrl: routeResult.connectionProfile.baseUrl,
+            apiKey: routeResult.apiKey,
+            temperature: extractNumber(uncensoredParameters.temperature) ?? extractNumber(parameters.temperature),
+            maxTokens: extractNumber(uncensoredParameters.maxTokens) ?? extractNumber(parameters.maxTokens),
+            topP: extractNumber(uncensoredParameters.topP) ?? extractNumber(parameters.topP),
+            participantMemories: participantMemories.length > 0 ? participantMemories : undefined,
+            projectContext,
+          });
+
+          if (result.content) {
+            logger.info('[Chats v1] Greeting generation succeeded via Concierge uncensored provider', {
+              characterId: context.character.id,
+              provider: routeResult.connectionProfile.provider,
+              model: routeResult.connectionProfile.modelName,
+            });
+            return result.content;
+          }
+        } else {
+          logger.debug('[Chats v1] Content filter detected but no uncensored provider available', {
+            characterId: context.character.id,
+            reason: routeResult.reason,
+          });
+        }
+      } else {
+        logger.debug('[Chats v1] Content filter detected but Concierge mode is not AUTO_ROUTE', {
+          characterId: context.character.id,
+          mode: resolved.settings.mode,
+        });
+      }
+    } catch (error) {
+      logger.warn('[Chats v1] Concierge fallback for greeting generation failed', {
+        characterId: context.character.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  // Attempt 4: Final plain retry with delay for transient failures
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const result = await generateGreetingMessage({ ...baseParams });
+
+    if (result.content) {
+      logger.info('[Chats v1] Greeting generation succeeded on final retry', {
+        characterId: context.character.id,
+      });
+      return result.content;
+    }
+  } catch (error) {
+    logger.warn('[Chats v1] Final greeting generation retry failed', {
+      characterId: context.character.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  logger.warn('[Chats v1] All greeting generation attempts exhausted, falling back to static greeting', {
+    characterId: context.character.id,
+    contentFilterHit,
+  });
+  return '';
 }
 
 // ============================================================================
