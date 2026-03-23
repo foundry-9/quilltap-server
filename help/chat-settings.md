@@ -159,6 +159,12 @@ Optimizes how conversation context is managed for efficiency.
   - Prevents token limit overages
   - Helps manage API costs
 
+**How it works:**
+
+Context compression applies only to **conversation history** — the message log that accumulates as you chat. Each character's system prompt (their identity, personality, and instructions) is never compressed, ensuring characters always maintain their distinct voice and personality.
+
+In multi-character chats, each character maintains their own compression cache. This is necessary because different characters may have different views of the conversation — a character who joined late only sees messages after their arrival, whispers are filtered per-recipient, and absent characters don't see messages that occurred while they were away.
+
 **How to configure:**
 
 1. Enable compression if dealing with long conversations

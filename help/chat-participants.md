@@ -47,7 +47,8 @@ When collapsed, the sidebar shows:
 - Stacked vertically on the right edge, sorted by predicted turn order
 - Shows current speaker with glowing border
 - Turn position badges on all active participants (color-coded by status)
-- Inactive participants shown dimmed
+- Status overlay icons on avatars indicate non-active states (silent, absent) so you can see at a glance who's participating even with the sidebar collapsed
+- Absent participants shown dimmed
 
 **Quick Actions:**
 - Pause/Resume button at the top
@@ -119,9 +120,11 @@ This makes switching models the fastest possible action — no need to open a se
 - LLM icon if AI-controlled, with a provider icon badge showing the current LLM service and model
 - "You" indicator if impersonated
 
-**Active/Inactive:**
-- Full color when active
-- Grayed out when inactive
+**Participation Status:**
+- Full color when **active** — speaking and roleplaying normally
+- Muted styling with **Silent** badge when silenced — present but observing
+- Dimmed with **Absent** badge when away — turns are skipped entirely
+- Removed participants no longer appear in the sidebar
 
 **Current Turn:**
 - Glowing border when it's this character's turn
@@ -143,12 +146,13 @@ This makes switching models the fastest possible action — no need to open a se
 - **Dequeue** — Remove from queue (if queued)
 - **Stop** — Interrupt the current generation (shown on the generating character's card)
 
-**Active/Inactive Toggle (Eye Icon):**
-- Visible eye icon button on every participant card
-- Click to toggle the character's active status
-- Active characters have an open eye icon
-- Inactive characters have a crossed-out eye icon and dimmed card appearance
-- Inactive characters appear at the bottom of the sidebar with no position badge
+**Status Dropdown:**
+- A dropdown selector on every participant card lets you set their participation state
+- **Active** — Character speaks and roleplays normally (default)
+- **Silent** — Character receives turns but is instructed to observe silently; they may have inner thoughts, physical reactions, and actions, but must not speak aloud. Messages from silent characters appear with a distinctive dotted border and muted tones, rather like whispered asides at a particularly discreet garden party
+- **Absent** — Character is temporarily away from the scene; the turn manager skips them entirely, and they appear dimmed at the bottom of the sidebar. Other characters are notified of their departure
+- **Removed** — Character has left the chat for good; they cannot be whispered to and have no knowledge of events after their departure. Their past messages remain visible
+- When any character's status changes, all other LLM-controlled characters are informed in their next turn's prompt
 
 **Impersonation Controls:**
 
@@ -168,7 +172,7 @@ Each participant card has a **gear icon** button that expands an inline settings
 - Overrides the character's default system prompt for this chat only
 - Changes auto-save after a short delay
 
-Note: The active/inactive toggle has been moved out of the settings section to a visible eye icon button in the action buttons area for easier access.
+Note: The status dropdown has been moved out of the settings section to the action buttons area for easier access.
 
 ## Header Information
 
@@ -311,7 +315,7 @@ Position badges on each participant show their predicted turn order:
 - **Neutral** — Eligible, sorted by talkativeness
 - **Amber** — Your turn position
 - **Dimmed** — Already spoke this cycle
-- **No badge** — Inactive participant
+- **No badge** — Absent or removed participant
 
 ## Impersonation
 
