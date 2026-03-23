@@ -483,11 +483,16 @@ describe('Instance Lock Manager', () => {
         hostname: 'test-host',
         processArgv0: '/usr/bin/node',
       });
-      (mockFs.readFileSync as jest.Mock).mockReturnValue(JSON.stringify(content));
+      const lockJson = JSON.stringify(content);
+      // Return lock file for lock path, 'node' for /proc/<pid>/cmdline (Linux path)
+      (mockFs.readFileSync as jest.Mock).mockImplementation((...args: unknown[]) => {
+        if (typeof args[0] === 'string' && args[0].startsWith('/proc/')) return 'node\0';
+        return lockJson;
+      });
 
       // PID is alive
       process.kill = jest.fn() as typeof process.kill;
-      // verifyPidMatchesProcess returns true (match)
+      // verifyPidMatchesProcess returns true (match) — used on macOS/win32
       mockExecSync.mockReturnValue('node');
 
       instanceLock.overrideInstanceLock(LOCK_PATH);
@@ -501,11 +506,16 @@ describe('Instance Lock Manager', () => {
         hostname: 'test-host',
         processArgv0: '/usr/bin/node',
       });
-      (mockFs.readFileSync as jest.Mock).mockReturnValue(JSON.stringify(content));
+      const lockJson = JSON.stringify(content);
+      // Return lock file for lock path, 'nginx' for /proc/<pid>/cmdline (Linux path)
+      (mockFs.readFileSync as jest.Mock).mockImplementation((...args: unknown[]) => {
+        if (typeof args[0] === 'string' && args[0].startsWith('/proc/')) return 'nginx\0';
+        return lockJson;
+      });
 
       // PID is alive
       process.kill = jest.fn() as typeof process.kill;
-      // verifyPidMatchesProcess returns false (some unrelated process like 'nginx')
+      // verifyPidMatchesProcess returns false (some unrelated process like 'nginx') — used on macOS/win32
       mockExecSync.mockReturnValue('nginx');
 
       expect(() => instanceLock.overrideInstanceLock(LOCK_PATH)).toThrow(
