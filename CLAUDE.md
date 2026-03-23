@@ -158,6 +158,7 @@ Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/
   - Interactive REPL: `npx quilltap db --repl`
   - Query LLM logs DB: `npx quilltap db --llm-logs --tables`
   - Custom data dir: `npx quilltap db --data-dir /path/to/data --tables`
+  - All information about the databases, including schema and how to query them, can be found in [DDL.md](docs/developer/DDL.md).
 - This is built in Next.js 16+, so don't look in middleware.ts, but consider proxy.ts, for things you would expect there.
 - When creating or modifying API routes, always use the `/api/v1/` structure with action dispatch patterns. Don't create new routes outside `/api/v1/`. Use the middleware from `@/lib/api/middleware` and response helpers from `@/lib/api/responses`.
 - If asked to fix linting errors, do not change out HTML `<img>` tags for Next.js `<Image>` tags; there is a reason that we don't use them sometimes, usually related to their being pulled in via APIs so Next.js can't know what it's going to display.
@@ -165,7 +166,7 @@ Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/
 - Check for Typescript errors by running "npx tsc" rather than "npm run build"
 - **Important:** Before committing, record basic changes in `docs/CHANGELOG.md` in reverse chronological order
 - Keep the documentation listed in [update-documentation](/.claude/commands/update-documentation.md) up to date, and update that file if you add more documentation, in the same format.
-- Any change to data, particularly the schemas used to read or write data either to files or to the database, should be checked to see if they need to be reflected in .qtap or SillyTavern exports, the [qtap schema](./public/schemas/qtap-export.schema.json), backups, and/or the migrations/ directory.
+- Any change to data, particularly the schemas used to read or write data either to files or to the database, should be checked to see if they need to be reflected in .qtap or SillyTavern exports, the [qtap schema](./public/schemas/qtap-export.schema.json), backups, and/or the migrations/ directory. Update [DDL.md](docs/developer/DDL.md) as appropriate; it must be kept up-to-date.
 - Any files that exist in the app source code only because they are necessary for migrations should move to the `migrations/` directory.
 - **IMPORTANT**: If we make changes to anything in the `packages/` directory, we need to make sure we update package.json numbers and pause to allow the developer/human user to `npm publish` to push those packages into npmjs. We do *not* just copy things down into the appropriate directories! We wait to publish the new npm package first. You can stop everything, ask me to publish the new version, then install the new one. If that doesn't work, let's fix the NPM problem we're having, **NOT** work around it.
 - The pre-commit hook in `.githooks/pre-commit` kills the dev server, cleans .next, stops watchman, and stages dependency artifacts. Linting, testing, type-checking, and version updates are handled by the [/commit](/.claude/commands/commit.md) command before the actual commit.
