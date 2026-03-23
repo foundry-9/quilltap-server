@@ -7,10 +7,8 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals'
 
 // Define mock functions at the module level with explicit typing to avoid inference issues
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockCompressConversationHistory = jest.fn<(...args: any[]) => any>()
 // Kept for completeness — system prompt compression is disabled but the mock export still exists
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockCompressSystemPrompt = jest.fn<(...args: any[]) => any>()
 
 // Mock the cheap LLM tasks module
