@@ -102,6 +102,7 @@ export interface Participant {
     provider: string
     modelName: string
   } | null
+  removedAt?: string | null
   // Multi-character chat fields
   hasHistoryAccess?: boolean
   joinScenario?: string | null

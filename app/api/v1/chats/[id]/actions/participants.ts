@@ -223,6 +223,14 @@ export async function handleAddParticipantAction(
         return badRequest('Character is already in this chat');
       }
 
+      // Check for deactivated (silenced) participant — still in chat, just inactive
+      const deactivatedParticipant = chat.participants.find(
+        (p) => p.type === 'CHARACTER' && p.characterId === validatedData.characterId && !p.isActive && !p.removedAt
+      );
+      if (deactivatedParticipant) {
+        return badRequest('Character is already in this chat (currently deactivated)');
+      }
+
       // Check for soft-deleted participant — reactivate instead of creating duplicate
       const removedParticipant = chat.participants.find(
         (p) => p.type === 'CHARACTER' && p.characterId === validatedData.characterId && !p.isActive && p.removedAt
