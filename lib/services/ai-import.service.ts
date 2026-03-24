@@ -250,11 +250,80 @@ export function stripCodeFences(text: string): string {
 }
 
 /**
- * Parse JSON from LLM output, handling code fences and common issues
+ * Attempt to repair truncated JSON from LLM output that was cut off
+ * by maxTokens limits. Closes unclosed strings, arrays, and objects.
+ */
+export function repairTruncatedJson(text: string): string {
+  let repaired = text.trim();
+
+  // If it already parses, return as-is
+  try {
+    JSON.parse(repaired);
+    return repaired;
+  } catch {
+    // Continue with repair
+  }
+
+  // Remove trailing comma (common at truncation point)
+  repaired = repaired.replace(/,\s*$/, '');
+
+  // Track bracket/brace depth to close unclosed structures
+  let inString = false;
+  let escaped = false;
+  const stack: string[] = [];
+
+  for (const ch of repaired) {
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (ch === '\\' && inString) {
+      escaped = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+
+    if (ch === '{') stack.push('}');
+    else if (ch === '[') stack.push(']');
+    else if (ch === '}' || ch === ']') stack.pop();
+  }
+
+  // If we're mid-string, close it
+  if (inString) {
+    repaired += '"';
+  }
+
+  // Remove any trailing key without a value (e.g. `"field":` or `"field": `)
+  repaired = repaired.replace(/,?\s*"[^"]*"\s*:\s*$/, '');
+
+  // Remove trailing comma again after cleanup
+  repaired = repaired.replace(/,\s*$/, '');
+
+  // Close all unclosed brackets/braces
+  while (stack.length > 0) {
+    repaired += stack.pop();
+  }
+
+  return repaired;
+}
+
+/**
+ * Parse JSON from LLM output, handling code fences, truncated output,
+ * and common formatting issues from LLM responses.
  */
 export function parseLLMJson<T>(text: string): T {
   const cleaned = stripCodeFences(text);
-  return JSON.parse(cleaned) as T;
+  try {
+    return JSON.parse(cleaned) as T;
+  } catch {
+    // Attempt to repair truncated JSON (e.g. from maxTokens cutoff)
+    const repaired = repairTruncatedJson(cleaned);
+    return JSON.parse(repaired) as T;
+  }
 }
 
 type LLMProvider = Awaited<ReturnType<typeof createLLMProvider>>;

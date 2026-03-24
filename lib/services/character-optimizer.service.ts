@@ -462,10 +462,21 @@ export async function runCharacterOptimizer(
       characterContext,
       memoryContext,
       getAnalysisPrompt(),
-      { temperature: 0.5, maxTokens: 4000 }
+      { temperature: 0.5, maxTokens: 8000 }
     );
 
-    const analysis = parseLLMJson<OptimizerAnalysis>(analysisRaw);
+    let analysis: OptimizerAnalysis;
+    try {
+      analysis = parseLLMJson<OptimizerAnalysis>(analysisRaw);
+    } catch (parseError) {
+      logger.error('[CharacterOptimizer] Failed to parse analysis JSON', {
+        characterId,
+        rawLength: analysisRaw.length,
+        rawTail: analysisRaw.slice(-200),
+        error: parseError instanceof Error ? parseError.message : String(parseError),
+      });
+      throw parseError;
+    }
     logger.debug('[CharacterOptimizer] Analysis complete', {
       characterId,
       patternCount: analysis.behavioralPatterns.length,
@@ -484,7 +495,7 @@ export async function runCharacterOptimizer(
           { role: 'user', content: `[character context + memory context + analysis instruction]` },
         ],
         temperature: 0.5,
-        maxTokens: 4000,
+        maxTokens: 8000,
       },
       response: {
         content: analysisRaw.substring(0, 500),
@@ -513,10 +524,21 @@ export async function runCharacterOptimizer(
       characterContext,
       memoryContext,
       getSuggestionsPrompt(analysis),
-      { temperature: 0.7, maxTokens: 8000 }
+      { temperature: 0.7, maxTokens: 16000 }
     );
 
-    let suggestions = parseLLMJson<OptimizerSuggestion[]>(suggestionsRaw);
+    let suggestions: OptimizerSuggestion[];
+    try {
+      suggestions = parseLLMJson<OptimizerSuggestion[]>(suggestionsRaw);
+    } catch (parseError) {
+      logger.error('[CharacterOptimizer] Failed to parse suggestions JSON', {
+        characterId,
+        rawLength: suggestionsRaw.length,
+        rawTail: suggestionsRaw.slice(-200),
+        error: parseError instanceof Error ? parseError.message : String(parseError),
+      });
+      throw parseError;
+    }
 
     // Filter by significance threshold and add IDs
     suggestions = suggestions
@@ -544,7 +566,7 @@ export async function runCharacterOptimizer(
           { role: 'user', content: `[character context + memory context + suggestions instruction]` },
         ],
         temperature: 0.7,
-        maxTokens: 8000,
+        maxTokens: 16000,
       },
       response: {
         content: suggestionsRaw.substring(0, 500),
