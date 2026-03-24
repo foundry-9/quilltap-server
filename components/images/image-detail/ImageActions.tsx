@@ -4,6 +4,7 @@
 
 interface ImageActionsProps {
   handleDownload: () => void
+  handleCopyToClipboard: () => void
   onClose: () => void
   onPrev?: () => void
   onNext?: () => void
@@ -11,6 +12,7 @@ interface ImageActionsProps {
 
 export function ImageActions({
   handleDownload,
+  handleCopyToClipboard,
   onClose,
   onPrev,
   onNext,
@@ -24,7 +26,7 @@ export function ImageActions({
             e.stopPropagation()
             onPrev()
           }}
-          className="absolute left-4 top-1/2 -translate-y-1/2 p-3 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full text-foreground transition-colors z-10"
+          className="absolute left-4 top-1/2 -translate-y-1/2 p-3 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full qt-text-overlay transition-colors z-10"
           title="Previous image (Left Arrow)"
         >
           <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -44,7 +46,7 @@ export function ImageActions({
             e.stopPropagation()
             onNext()
           }}
-          className="absolute right-4 top-1/2 -translate-y-1/2 p-3 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full text-foreground transition-colors z-10"
+          className="absolute right-4 top-1/2 -translate-y-1/2 p-3 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full qt-text-overlay transition-colors z-10"
           title="Next image (Right Arrow)"
         >
           <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -66,7 +68,7 @@ export function ImageActions({
             e.stopPropagation()
             handleDownload()
           }}
-          className="p-2 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full text-foreground transition-colors"
+          className="p-2 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full qt-text-overlay transition-colors"
           title="Download"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -78,13 +80,26 @@ export function ImageActions({
             />
           </svg>
         </button>
+        {/* Copy to clipboard button */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            handleCopyToClipboard()
+          }}
+          className="p-2 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full qt-text-overlay transition-colors"
+          title="Copy to clipboard"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+        </button>
         {/* Close button */}
         <button
           onClick={(e) => {
             e.stopPropagation()
             onClose()
           }}
-          className="p-2 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full text-foreground transition-colors"
+          className="p-2 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full qt-text-overlay transition-colors"
           title="Close (Escape)"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

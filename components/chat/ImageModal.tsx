@@ -62,6 +62,18 @@ export default function ImageModal({
     }
   }
 
+  const handleCopyToClipboard = async () => {
+    try {
+      const response = await fetch(src)
+      const blob = await response.blob()
+      await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })])
+      showSuccessToast('Image copied to clipboard')
+    } catch (error) {
+      console.error('Failed to copy image to clipboard:', { error: error instanceof Error ? error.message : String(error) })
+      showErrorToast('Failed to copy image to clipboard')
+    }
+  }
+
   const handleTagCharacter = async () => {
     if (!fileId || !characterId) return
 
@@ -170,7 +182,7 @@ export default function ImageModal({
               handleTagCharacter()
             }}
             disabled={isTagging}
-            className="p-2 bg-primary/10 hover:bg-primary/20 rounded-full text-primary-foreground transition-colors disabled:opacity-50"
+            className="p-2 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full qt-text-overlay transition-colors disabled:opacity-50"
             title={`Add to ${characterName || 'character'}'s gallery`}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -186,7 +198,7 @@ export default function ImageModal({
               handleTagPersona()
             }}
             disabled={isTagging}
-            className="p-2 bg-primary/10 hover:bg-primary/20 rounded-full text-primary-foreground transition-colors disabled:opacity-50"
+            className="p-2 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full qt-text-overlay transition-colors disabled:opacity-50"
             title={`Add to ${personaName || 'persona'}'s gallery`}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -200,11 +212,24 @@ export default function ImageModal({
             e.stopPropagation()
             handleDownload()
           }}
-          className="p-2 bg-primary/10 hover:bg-primary/20 rounded-full text-primary-foreground transition-colors"
+          className="p-2 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full qt-text-overlay transition-colors"
           title="Download"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+        </button>
+        {/* Copy to clipboard button */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            handleCopyToClipboard()
+          }}
+          className="p-2 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full qt-text-overlay transition-colors"
+          title="Copy to clipboard"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
           </svg>
         </button>
         {/* Close button */}
@@ -213,7 +238,7 @@ export default function ImageModal({
             e.stopPropagation()
             onClose()
           }}
-          className="p-2 bg-primary/10 hover:bg-primary/20 rounded-full text-primary-foreground transition-colors"
+          className="p-2 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full qt-text-overlay transition-colors"
           title="Close"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -231,7 +256,7 @@ export default function ImageModal({
               handleDelete()
             }}
             disabled={isDeleting}
-            className="p-2 bg-destructive/80 hover:bg-destructive rounded-full text-primary-foreground transition-colors disabled:opacity-50"
+            className="p-2 bg-destructive/80 hover:bg-destructive rounded-full qt-text-overlay transition-colors disabled:opacity-50"
             title="Delete image"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
