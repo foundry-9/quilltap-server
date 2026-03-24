@@ -16,7 +16,7 @@ interface AnalysisSummaryProps {
 }
 
 function FrequencyBadge({ frequency }: { frequency: string }) {
-  const normalized = frequency.toLowerCase();
+  const normalized = (frequency ?? '').toLowerCase();
   let badgeClass = 'qt-badge-secondary';
 
   if (normalized.includes('often') || normalized.includes('frequent') || normalized.includes('always') || normalized.includes('consistent')) {
