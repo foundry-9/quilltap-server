@@ -47,6 +47,8 @@ This document tracks planned features and improvements for Quilltap.
 
 - [ ] Character checkpointing (backups of a character at a certain point in time)
 - [ ] "Visual Novel" options
+- [X] Four-state character participation system (active/silent/absent/removed) with status change notifications
+- [X] Memory recap at chat start — characters receive first-person narrative summaries from their Commonplace Book when joining a chat
 - [X] Image generation can not only select characters but also different physical descriptions if they have them
 - [X] Almost everything needs a way to handle "dangerous" (largely uncensored) content
   - [X] Gatekeeper needs to determine if content is dangerous
@@ -89,6 +91,8 @@ This document tracks planned features and improvements for Quilltap.
 
 ### Calliope: Themes & UI
 
+- [X] Orphaned file cleanup with de-duplication in file browser (broom icon, relocate/delete modal)
+- [X] Copy-to-clipboard button on full-screen image viewers
 - [X] `.qtap-theme` bundle format for theme distribution (no npm/build tools required)
 - [X] CLI theme management (`quilltap themes list/install/uninstall/validate/export/create`)
 - [X] Theme registry system with Ed25519 signatures and browser UI

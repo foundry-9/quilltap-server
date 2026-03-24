@@ -308,6 +308,10 @@ A whisper is a message visible only to its sender and its intended recipient. Al
 
 The machinery behind the curtain is equally discreet. When assembling context for an AI character's next response, whispers addressed to *other* characters are filtered out entirely—your scheming villain will never accidentally reference a secret plan whispered between two heroes. The Commonplace Book memory system likewise respects whisper privacy, ensuring that memories extracted from whispered messages are attributed only to the participants involved.
 
+### Memory Recap at Chat Start
+
+When a character first speaks in a chat — whether at the very beginning or upon joining an existing conversation — they receive a personalized "What You Remember" narrative summary drawn from their Commonplace Book. This recap is generated automatically by the cheap LLM, weaving together memories of varying importance into a first-person narrative that gives the character a sense of continuity. The recap appears in the character's context after their personality notes, ensuring they arrive to the scene already aware of their history with other participants, much as a well-prepared dinner guest reviews the guest list before entering the room.
+
 ## Best Practices
 
 ### Scene Management

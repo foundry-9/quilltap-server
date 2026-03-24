@@ -155,15 +155,15 @@ Requires **Node.js 22+** and **git**. See the [Development Guide](docs/developer
 
 ### Projects & Files
 
-Organize your work into projects with custom system prompts, file uploads, and folder structures. The AI can list, read, and write your project files with permission. Files are stored on disk using their original filenames — you can browse them directly in your file manager. Semantic search finds things by meaning across your entire project. Built-in Markdown rendering with wikilink support, code highlighting, and PDF preview.
+Organize your work into projects with custom system prompts, file uploads, and folder structures. The AI can list, read, and write your project files with permission. Files are stored on disk using their original filenames — you can browse them directly in your file manager. Semantic search finds things by meaning across your entire project. Built-in Markdown rendering with wikilink support, code highlighting, and PDF preview. Orphaned file cleanup with automatic de-duplication keeps your file storage tidy. Copy images to your clipboard directly from the full-screen viewer.
 
 ### Characters & Roleplay
 
-Create AI characters with personality, backstory, system prompts, pronouns, aliases, and clothing records. Multi-character chats with a turn-order sidebar, identity reinforcement, impersonation, and swipe alternatives. The AI Character Import wizard generates complete characters from source material (wiki pages, documents, freeform text) using focused LLM calls. SillyTavern character and chat import is fully supported.
+Create AI characters with personality, backstory, system prompts, pronouns, aliases, and clothing records. Multi-character chats with a turn-order sidebar, four-state participation (active, silent, absent, removed), identity reinforcement, impersonation, and swipe alternatives. The AI Character Import wizard generates complete characters from source material (wiki pages, documents, freeform text) using focused LLM calls. SillyTavern character and chat import is fully supported.
 
 ### Memory & Context
 
-Long-term semantic memory that persists across conversations. The Memory Gate system reinforces near-duplicates, links related memories, and inserts new ones automatically. Proactive recall lets characters analyze recent conversation for relevant memories. Built-in memory housekeeping for deduplication and cleanup. Context compression handles long conversations, and the AI can request full context reload when needed.
+Long-term semantic memory that persists across conversations. The Memory Gate system reinforces near-duplicates, links related memories, and inserts new ones automatically. Proactive recall lets characters analyze recent conversation for relevant memories. Memory recap at chat start generates a first-person narrative summary from each character's Commonplace Book, giving them continuity across sessions. Built-in memory housekeeping for deduplication and cleanup. Context compression handles long conversations, and the AI can request full context reload when needed.
 
 Quilltap uses a three-model architecture for optimal cost and performance: your best model for chat, a cheap model for background tasks like memory extraction and titling, and an embedding model for semantic search.
 

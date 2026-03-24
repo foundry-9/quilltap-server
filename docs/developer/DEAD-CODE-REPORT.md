@@ -1,8 +1,8 @@
 # Dead Code Analysis Report
 
-**Last Updated**: 2026-03-05
+**Last Updated**: 2026-03-24
 **Tool Used**: knip
-**Codebase**: Quilltap v3.2.0-dev
+**Codebase**: Quilltap v3.3.0-dev
 
 ---
 
@@ -12,10 +12,32 @@ Dead code analysis is performed periodically using knip. A knip configuration fi
 
 | Category | Status |
 |----------|--------|
-| Unused Files | Cleaned up 2026-03-05 |
+| Unused Files | Cleaned up 2026-03-24 |
 | Migration Scripts | Deleted (migrations complete) |
 | Unused Dependencies | @aws-sdk/client-s3, svgo removed 2026-03-05; bcrypt, qrcode, ts-jest removed 2026-01-30 |
 | Unused Exports | Low priority, ~813 remaining (mostly barrel re-exports) |
+
+---
+
+## Cleanup Completed (2026-03-24)
+
+### Files Removed
+
+| File | Reason |
+|------|--------|
+| `docs/developer/example-usage.ts` | Documentation-only file, never imported |
+
+### Duplicates Consolidated
+
+| Functions | Kept In | Removed From |
+|-----------|---------|-------------|
+| `getExtension()` | `lib/images-v2.ts` | `lib/chat-files-v2.ts` (duplicate helper) |
+
+### Stubs Implemented
+
+| Location | Function | Change |
+|----------|----------|--------|
+| `lib/images-v2.ts` | `getImageDimensions()` | Replaced no-op stub with real `sharp`-based implementation; uploaded images now have accurate width/height metadata |
 
 ---
 

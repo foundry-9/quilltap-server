@@ -239,6 +239,10 @@ File operations are exposed through versioned REST API routes:
 - **POST `/api/v1/files/folders`** - Create folder
 - **DELETE `/api/v1/files/folders`** - Delete folder
 
+### Orphaned File Cleanup
+- **POST `/api/v1/files?action=cleanup-orphans`** - Detect and clean up orphaned files (untracked files without database records). Supports dry-run mode (`dryRun: true`) to preview results before acting. Actions: `move` relocates unique orphans to `/orphans/` folder, `delete` removes all orphans permanently. De-duplication via SHA-256 hash automatically removes orphans whose content matches an existing tracked file.
+- **POST `/api/v1/files?action=cleanup-stale`** - Remove stale database entries for files no longer on disk
+
 ### File Permissions
 - **GET `/api/v1/files/write-permissions`** - Check folder write access
 
@@ -375,11 +379,23 @@ Message attachments tracked via:
 - `linkedTo` array with `entityType: 'message'`
 - File deletion cascade options
 
+### Orphaned File Cleanup UI
+
+The file browser includes a user-facing orphaned file cleanup feature:
+
+- **Toolbar button**: A broom icon with an amber count badge appears when untracked files are detected
+- **Cleanup modal**: Presents a dry-run analysis with two options:
+  - **Relocate to /orphans/**: Moves unique orphans to a dedicated folder; duplicates of tracked files are removed
+  - **Delete All**: Permanently removes all untracked files
+- **De-duplication**: Both modes use SHA-256 content hashing to automatically remove orphans that are copies of existing tracked files
+- **Character protection**: The cleanup system excludes character gallery images and avatar files from orphan detection, preventing accidental deletion of character-linked assets
+
+**Implementation**: `app/api/v1/files/actions/cleanup-orphans.ts` handles the API action; the file browser UI at `components/files/` triggers cleanup via the action dispatch pattern.
+
 ## Future Enhancements
 
 The system is designed to support:
 - Image optimization and resizing
-- Automatic cleanup of orphaned files
 - File versioning and snapshots
 - Thumbnail generation
 - Advanced search and filtering
