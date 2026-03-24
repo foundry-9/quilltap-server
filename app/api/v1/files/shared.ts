@@ -13,7 +13,8 @@ export const FILE_POST_ACTIONS = [
   'write',
   'upload',
   'generate-thumbnails',
-  'cleanup-orphaned',
+  'cleanup-stale',
+  'cleanup-orphans',
   'sync',
 ] as const;
 
@@ -35,7 +36,12 @@ export const generateThumbnailsSchema = z.object({
   size: z.number().int().min(1).max(MAX_THUMBNAIL_SIZE).optional(),
 });
 
-export const cleanupOrphanedSchema = z.object({
+export const cleanupStaleSchema = z.object({
+  dryRun: z.boolean().optional().default(true),
+});
+
+export const cleanupOrphansSchema = z.object({
+  mode: z.enum(['move', 'delete']),
   dryRun: z.boolean().optional().default(true),
 });
 

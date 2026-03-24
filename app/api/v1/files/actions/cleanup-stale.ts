@@ -4,9 +4,9 @@ import { logger } from '@/lib/logger';
 import { serverError, successResponse } from '@/lib/api/responses';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { canGenerateThumbnail, cleanupThumbnails } from '@/lib/files/thumbnail-utils';
-import { cleanupOrphanedSchema } from '../shared';
+import { cleanupStaleSchema } from '../shared';
 
-export async function handleCleanupOrphaned(
+export async function handleCleanupStale(
   request: NextRequest,
   ctx: AuthenticatedContext
 ): Promise<NextResponse> {
@@ -15,7 +15,7 @@ export async function handleCleanupOrphaned(
 
     try {
       const body = await request.json();
-      const parsed = cleanupOrphanedSchema.safeParse(body);
+      const parsed = cleanupStaleSchema.safeParse(body);
       if (parsed.success) {
         dryRun = parsed.data.dryRun;
       }
@@ -23,7 +23,7 @@ export async function handleCleanupOrphaned(
       // Empty body or invalid JSON defaults to dryRun.
     }
 
-    logger.info('[Files v1] Cleanup orphaned records requested', {
+    logger.info('[Files v1] Cleanup stale records requested', {
       userId: ctx.user.id,
       dryRun,
     });
@@ -69,7 +69,7 @@ export async function handleCleanupOrphaned(
         }
       }
 
-      logger.info('[Files v1] Cleanup orphaned records complete', {
+      logger.info('[Files v1] Cleanup stale records complete', {
         userId: ctx.user.id,
         total: allFiles.length,
         stale: staleRecords.length,
@@ -90,10 +90,10 @@ export async function handleCleanupOrphaned(
     });
   } catch (error) {
     logger.error(
-      '[Files v1] Error cleaning up orphaned records',
+      '[Files v1] Error cleaning up stale records',
       { userId: ctx.user.id },
       error instanceof Error ? error : undefined
     );
-    return serverError('Failed to cleanup orphaned records');
+    return serverError('Failed to cleanup stale records');
   }
 }

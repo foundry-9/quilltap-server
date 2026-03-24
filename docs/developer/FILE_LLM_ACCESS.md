@@ -215,7 +215,8 @@ The `lib/files/folder-utils.ts` module provides:
 | `/api/v1/files` | POST | `write` | Create new file with permission check |
 | `/api/v1/files` | POST | `upload` | Upload a file (multipart/form-data) |
 | `/api/v1/files` | POST | `generate-thumbnails` | Batch thumbnail generation |
-| `/api/v1/files` | POST | `cleanup-orphaned` | Cleanup orphaned DB records |
+| `/api/v1/files` | POST | `cleanup-stale` | Cleanup stale DB records (files missing from disk) |
+| `/api/v1/files` | POST | `cleanup-orphans` | Cleanup orphaned files (untracked files on disk) |
 | `/api/v1/files` | POST | `sync` | Trigger filesystem reconciliation |
 | `/api/v1/files/[id]` | GET | - | Get file details |
 | `/api/v1/files/[id]` | PUT | - | Update file metadata |

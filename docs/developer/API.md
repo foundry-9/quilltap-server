@@ -1783,7 +1783,7 @@ Batch pre-generate thumbnails for image files. Processes with bounded concurrenc
 }
 ```
 
-#### `POST /api/v1/files?action=cleanup-orphaned`
+#### `POST /api/v1/files?action=cleanup-stale`
 
 Scan for and optionally delete stale file records — database entries whose backing files no longer exist in storage. Defaults to dry-run mode for safety.
 
@@ -1809,6 +1809,51 @@ Scan for and optionally delete stale file records — database entries whose bac
     { "id": "file-uuid-1", "filename": "lost-image.png" },
     { "id": "file-uuid-2", "filename": "missing-doc.pdf" }
   ]
+}
+```
+
+#### `POST /api/v1/files?action=cleanup-orphans`
+
+Analyze and clean up orphaned files — files found on disk with no prior database record (shown as "untracked" in the file browser). Supports two modes: move unique files to an `/orphans/` folder, or delete everything. Duplicate orphans (matching SHA-256 of a tracked file) are always deleted.
+
+**Request Body**:
+
+```json
+{
+  "mode": "move",
+  "dryRun": true
+}
+```
+
+- `mode` - `"move"` (relocate unique orphans to `/orphans/` folder, delete duplicates) or `"delete"` (delete all orphans)
+- `dryRun` (optional) - If `true` (default), only report stats without acting. Set to `false` to execute.
+
+**Response (dry run)**: `200 OK`
+
+```json
+{
+  "orphanedCount": 15,
+  "duplicateCount": 8,
+  "uniqueCount": 7,
+  "totalSize": 45000000,
+  "duplicateSize": 24000000,
+  "uniqueSize": 21000000,
+  "dryRun": true
+}
+```
+
+**Response (execute)**: `200 OK`
+
+```json
+{
+  "orphanedCount": 15,
+  "duplicateCount": 8,
+  "uniqueCount": 7,
+  "totalSize": 45000000,
+  "deleted": 8,
+  "moved": 7,
+  "dryRun": false,
+  "mode": "move"
 }
 ```
 

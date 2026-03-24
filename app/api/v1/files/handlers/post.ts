@@ -3,7 +3,8 @@ import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 import { badRequest } from '@/lib/api/responses';
 import {
-  handleCleanupOrphaned,
+  handleCleanupStale,
+  handleCleanupOrphans,
   handleGenerateThumbnails,
   handleSync,
   handleUploadFile,
@@ -27,7 +28,8 @@ export async function handlePost(
     write: () => handleWriteFile(request, ctx),
     upload: () => handleUploadFile(request, ctx),
     'generate-thumbnails': () => handleGenerateThumbnails(request, ctx),
-    'cleanup-orphaned': () => handleCleanupOrphaned(request, ctx),
+    'cleanup-stale': () => handleCleanupStale(request, ctx),
+    'cleanup-orphans': () => handleCleanupOrphans(request, ctx),
     sync: () => handleSync(),
   };
 

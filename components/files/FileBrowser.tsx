@@ -17,6 +17,7 @@ import { FilePreviewModal } from './FilePreview'
 import { CreateFolderModal } from './FolderManagement'
 import MoveToProjectModal from './MoveToProjectModal'
 import FileDeleteConfirmation from './FileDeleteConfirmation'
+import OrphanCleanupModal from './OrphanCleanupModal'
 import { useProjectFileUpload } from './useProjectFileUpload'
 import { FileInfo, FolderInfo, SortState, sortFiles } from './types'
 
@@ -75,6 +76,15 @@ export default function FileBrowser({
   } | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
+  const [isCleaningUp, setIsCleaningUp] = useState(false)
+  const [showCleanupModal, setShowCleanupModal] = useState(false)
+  const [cleanupStats, setCleanupStats] = useState<{
+    orphanedCount: number
+    duplicateCount: number
+    uniqueCount: number
+    totalSize: number
+    uniqueSize: number
+  } | null>(null)
 
   // Upload functionality (only enabled when showUpload=true and projectId is provided)
   const {
@@ -159,6 +169,12 @@ export default function FileBrowser({
       // Silently ignore — thumbnails will be generated on-demand as fallback
     })
   }, [loading, files])
+
+  // Count orphaned files
+  const orphanedCount = useMemo(() =>
+    files.filter(f => f.fileStatus === 'orphaned').length,
+    [files]
+  )
 
   // Filter files by current folder and sort them
   const filteredFiles = useMemo(() => {
@@ -361,6 +377,76 @@ export default function FileBrowser({
     }
   }, [fetchFiles])
 
+  const handleCleanupClick = useCallback(async () => {
+    setIsCleaningUp(true)
+    try {
+      const res = await fetch('/api/v1/files?action=cleanup-orphans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dryRun: true }),
+      })
+      if (!res.ok) throw new Error('Failed to analyze orphaned files')
+      const data = await res.json()
+      setCleanupStats({
+        orphanedCount: data.orphanedCount,
+        duplicateCount: data.duplicateCount,
+        uniqueCount: data.uniqueCount,
+        totalSize: data.totalSize,
+        uniqueSize: data.uniqueSize,
+      })
+      setShowCleanupModal(true)
+    } catch (error) {
+      showErrorToast('Failed to analyze orphaned files')
+    } finally {
+      setIsCleaningUp(false)
+    }
+  }, [])
+
+  const handleCleanupMove = useCallback(async () => {
+    setIsCleaningUp(true)
+    try {
+      const res = await fetch('/api/v1/files?action=cleanup-orphans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'move', dryRun: false }),
+      })
+      if (!res.ok) throw new Error('Cleanup failed')
+      const data = await res.json()
+      showSuccessToast(
+        `Moved ${data.moved} file${data.moved !== 1 ? 's' : ''} to /orphans/` +
+        (data.deleted > 0 ? `, removed ${data.deleted} duplicate${data.deleted !== 1 ? 's' : ''}` : '')
+      )
+      setShowCleanupModal(false)
+      setCleanupStats(null)
+      fetchFiles()
+    } catch (error) {
+      showErrorToast('Failed to clean up orphaned files')
+    } finally {
+      setIsCleaningUp(false)
+    }
+  }, [fetchFiles])
+
+  const handleCleanupDelete = useCallback(async () => {
+    setIsCleaningUp(true)
+    try {
+      const res = await fetch('/api/v1/files?action=cleanup-orphans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'delete', dryRun: false }),
+      })
+      if (!res.ok) throw new Error('Cleanup failed')
+      const data = await res.json()
+      showSuccessToast(`Removed ${data.deleted} orphaned file${data.deleted !== 1 ? 's' : ''}`)
+      setShowCleanupModal(false)
+      setCleanupStats(null)
+      fetchFiles()
+    } catch (error) {
+      showErrorToast('Failed to delete orphaned files')
+    } finally {
+      setIsCleaningUp(false)
+    }
+  }, [fetchFiles])
+
   const displayTitle = title || (projectId ? 'Project Files' : 'General Files')
 
   return (
@@ -394,6 +480,17 @@ export default function FileBrowser({
           >
             {viewMode === 'list' ? '\u25A6' : '\u2630'}
           </button>
+          {orphanedCount > 0 && (
+            <button
+              onClick={handleCleanupClick}
+              disabled={isCleaningUp || loading}
+              className="qt-button qt-button-secondary p-2 flex items-center gap-1"
+              title={`${orphanedCount} untracked file${orphanedCount !== 1 ? 's' : ''} — click to clean up`}
+            >
+              {isCleaningUp ? '\u23F3' : '\u{1F9F9}'}
+              <span className="text-xs qt-text-warning">{orphanedCount}</span>
+            </button>
+          )}
           <button
             onClick={handleSync}
             disabled={isSyncing || loading}
@@ -549,6 +646,21 @@ export default function FileBrowser({
           onConfirm={handleConfirmDeleteWithDissociation}
           onCancel={() => setDeleteConfirmation(null)}
           isDeleting={isDeleting}
+        />
+      )}
+
+      {/* Orphan Cleanup Modal */}
+      {showCleanupModal && cleanupStats && (
+        <OrphanCleanupModal
+          isOpen={showCleanupModal}
+          stats={cleanupStats}
+          onMove={handleCleanupMove}
+          onDelete={handleCleanupDelete}
+          onCancel={() => {
+            setShowCleanupModal(false)
+            setCleanupStats(null)
+          }}
+          isProcessing={isCleaningUp}
         />
       )}
 

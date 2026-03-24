@@ -56,6 +56,7 @@ This document tracks planned features and improvements for Quilltap.
   - [X] Implies a new quick-hide just for dangerous content
   - [ ] Further: user-determined danger paths (e.g., this talks about politics, I don't want to talk about politics) in addition to the general "most providers won't handle this" rails
   - [X] Testing
+- [ ] Better selectable saved scenarios and prompts per chat
 
 ### LLM Integration (The Foundry)
 
