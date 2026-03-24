@@ -21529,13 +21529,6 @@ var plugin = {
   parseTextToolCalls(text2) {
     try {
       const results = parseAllXMLAsToolCalls(text2);
-      if (results.length > 0) {
-        logger3.debug("Detected spontaneous XML tool calls in OpenRouter response", {
-          context: "openrouter.parseTextToolCalls",
-          count: results.length,
-          tools: results.map((r) => r.name)
-        });
-      }
       return results;
     } catch (error) {
       logger3.error(

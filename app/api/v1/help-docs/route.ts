@@ -25,11 +25,8 @@ async function ensureHelpBundleLoaded(): Promise<void> {
   const helpSearch = getHelpSearch();
 
   if (helpSearch.isLoaded()) {
-    logger.debug('[HelpDocs] Help bundle already loaded');
     return;
   }
-
-  logger.debug('[HelpDocs] Loading help bundle from disk', { bundlePath: HELP_BUNDLE_PATH });
 
   try {
     const buffer = await readFile(HELP_BUNDLE_PATH);
@@ -46,8 +43,6 @@ async function ensureHelpBundleLoaded(): Promise<void> {
  */
 async function handleList(_request: NextRequest, _context: AuthenticatedContext) {
   try {
-    logger.debug('[HelpDocs] Listing all help documents');
-
     await ensureHelpBundleLoaded();
 
     const helpSearch = getHelpSearch();
@@ -69,20 +64,12 @@ async function handleChatCount(_request: NextRequest, context: AuthenticatedCont
   try {
     const { user, repos } = context;
 
-    logger.debug('[HelpDocs] Getting chat count for user', { userId: user.id });
-
     const allChats = await repos.chats.findByUserId(user.id);
 
     // Filter to salon chats (exclude help chats and other types)
     const salonChats = allChats.filter(
       (chat) => !chat.chatType || chat.chatType === 'salon'
     );
-
-    logger.debug('[HelpDocs] Chat count calculated', {
-      userId: user.id,
-      totalChats: allChats.length,
-      salonChats: salonChats.length,
-    });
 
     return successResponse({ count: salonChats.length });
   } catch (error) {
@@ -96,8 +83,6 @@ async function handleChatCount(_request: NextRequest, context: AuthenticatedCont
  */
 export const GET = createAuthenticatedHandler(async (request: NextRequest, context: AuthenticatedContext) => {
   const action = getActionParam(request);
-
-  logger.debug('[HelpDocs] GET request', { action });
 
   if (action === 'chat-count') {
     return handleChatCount(request, context);

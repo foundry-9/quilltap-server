@@ -332,13 +332,6 @@ export const plugin: LLMProviderPlugin = {
   parseTextToolCalls(text: string): ToolCallRequest[] {
     try {
       const results = parseAllXMLAsToolCalls(text);
-      if (results.length > 0) {
-        logger.debug('Detected spontaneous XML tool calls in Grok response', {
-          context: 'grok.parseTextToolCalls',
-          count: results.length,
-          tools: results.map(r => r.name),
-        });
-      }
       return results;
     } catch (error) {
       logger.error(

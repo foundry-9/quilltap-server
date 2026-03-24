@@ -49,11 +49,6 @@ async function getImageDimensions(buffer: Buffer, _mimeType: string): Promise<{ 
   try {
     const sharp = (await import('sharp')).default;
     const metadata = await sharp(buffer).metadata();
-    logger.debug('Extracted image dimensions', {
-      context: 'images-v2.getImageDimensions',
-      width: metadata.width,
-      height: metadata.height,
-    });
     return { width: metadata.width, height: metadata.height };
   } catch (error) {
     logger.debug('Failed to extract image dimensions, returning undefined', {

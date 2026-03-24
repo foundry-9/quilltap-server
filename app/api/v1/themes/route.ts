@@ -106,11 +106,6 @@ async function handleGetThemes() {
 async function handleGetRegistry(request: NextRequest) {
   const query = request.nextUrl.searchParams.get('q') || '';
 
-  logger.debug('Browsing registry themes', {
-    context: 'GET /api/v1/themes?action=registry',
-    query,
-  });
-
   // searchThemes uses cached indexes (with 1-hour TTL), returning all if query is empty
   const themes = await searchThemes(query);
 
@@ -209,12 +204,6 @@ async function handleInstall(request: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     await fs.writeFile(tempFile, Buffer.from(arrayBuffer));
 
-    logger.debug('Theme bundle uploaded', {
-      context: 'POST /api/v1/themes?action=install',
-      fileName: file.name,
-      size: arrayBuffer.byteLength,
-    });
-
     const result = await installThemeBundle(tempFile);
 
     if (!result.success) {
@@ -260,11 +249,6 @@ async function handleInstallFromUrl(request: NextRequest) {
   } catch {
     return badRequest('Invalid URL format');
   }
-
-  logger.debug('Installing theme from URL', {
-    context: 'POST /api/v1/themes?action=install-from-url',
-    url: body.url,
-  });
 
   const result = await installThemeBundleFromUrl(body.url);
 
@@ -312,12 +296,6 @@ async function handleAddSource(request: NextRequest) {
     return badRequest('Invalid URL format');
   }
 
-  logger.debug('Adding registry source', {
-    context: 'POST /api/v1/themes?action=add-source',
-    name: body.name,
-    url: body.url,
-  });
-
   try {
     const source = await addSource({
       name: body.name || new URL(body.url).hostname,
@@ -350,11 +328,6 @@ async function handleRemoveSource(request: NextRequest) {
     return badRequest('Missing or invalid "name" field');
   }
 
-  logger.debug('Removing registry source', {
-    context: 'POST /api/v1/themes?action=remove-source',
-    name: body.name,
-  });
-
   const removed = await removeSource(body.name);
   if (!removed) {
     return badRequest(`Registry source "${body.name}" not found`);
@@ -368,10 +341,6 @@ async function handleRemoveSource(request: NextRequest) {
  * Refresh all registry indexes
  */
 async function handleRefresh() {
-  logger.debug('Refreshing all registry indexes', {
-    context: 'POST /api/v1/themes?action=refresh',
-  });
-
   const themes = await refreshAllRegistries();
   return successResponse({
     message: `Refreshed registries, found ${themes.length} themes`,
@@ -397,12 +366,6 @@ async function handleInstallFromRegistryAction(request: NextRequest) {
   if (!body.registryUrl || typeof body.registryUrl !== 'string') {
     return badRequest('Missing or invalid "registryUrl" field');
   }
-
-  logger.debug('Installing theme from registry', {
-    context: 'POST /api/v1/themes?action=install-registry',
-    themeId: body.themeId,
-    registryUrl: body.registryUrl,
-  });
 
   const result = await installFromRegistry(body.themeId, body.registryUrl);
 

@@ -163,7 +163,6 @@ export async function shouldChainNext(
     const mappedReason = selectionReason === 'cycle_complete' ? 'cycle_complete' as const
       : selectionReason === 'user_turn' ? 'user_turn' as const
       : 'no_next_speaker' as const
-    logger.debug('[TurnOrchestrator] No next speaker', { chatId, chainDepth, reason: mappedReason })
     return { chain: false, reason: mappedReason }
   }
 
@@ -175,7 +174,6 @@ export async function shouldChainNext(
   }
 
   if (nextParticipant.controlledBy === 'user') {
-    logger.debug('[TurnOrchestrator] Next speaker is user-controlled', { chatId, nextParticipantId })
     return { chain: false, reason: 'user_turn' }
   }
 

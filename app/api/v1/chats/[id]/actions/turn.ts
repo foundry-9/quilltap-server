@@ -98,12 +98,6 @@ export async function handleTurnAction(
         turnQueue: JSON.stringify(turnState.queue),
         lastTurnParticipantId: nextSpeakerResult.nextSpeakerId ?? null,
       });
-      logger.debug('[Chats v1] Persisted turn state', {
-        chatId,
-        action: turnAction,
-        queue: turnState.queue,
-        nextSpeakerId: nextSpeakerResult.nextSpeakerId,
-      });
     }
 
     // Determine the next speaker's character info

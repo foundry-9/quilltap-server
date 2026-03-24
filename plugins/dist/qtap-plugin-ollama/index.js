@@ -8105,13 +8105,6 @@ var plugin = {
   parseTextToolCalls(text) {
     try {
       const results = parseAllXMLAsToolCalls(text);
-      if (results.length > 0) {
-        logger3.debug("Detected spontaneous XML tool calls in Ollama response", {
-          context: "ollama.parseTextToolCalls",
-          count: results.length,
-          tools: results.map((r) => r.name)
-        });
-      }
       return results;
     } catch (error) {
       logger3.error(

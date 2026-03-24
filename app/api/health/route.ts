@@ -211,17 +211,6 @@ export async function GET() {
       services,
     };
 
-    const checkDuration = Date.now() - startTime;
-    try {
-      const { logger } = await import('@/lib/logger');
-      logger.child({ module: 'health' }).info('Health check complete', {
-        status: overallStatus,
-        statusCode,
-        durationMs: checkDuration,
-        servicesChecked: Object.keys(services),
-      });
-    } catch { /* logger unavailable */ }
-
     return NextResponse.json(health, { status: statusCode });
   } catch (error) {
     const errorMessage = getErrorMessage(error);

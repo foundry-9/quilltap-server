@@ -374,15 +374,6 @@ export class OpenAIProvider implements LLMProvider {
     });
     const { input, instructions, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
 
-    logger.debug('Preparing Responses API request', {
-      context: 'OpenAIProvider.sendMessage',
-      model: params.model,
-      isReasoning: isReasoningModel(params.model),
-      messageCount: input.length,
-      hasInstructions: !!instructions,
-      hasPreviousResponseId: !!params.previousResponseId,
-    });
-
     const baseParams = this.buildBaseRequestParams(params, input, instructions);
 
     // Try with conversation chaining if we have a previous response ID
@@ -396,27 +387,11 @@ export class OpenAIProvider implements LLMProvider {
           stream: false,
         };
 
-        logger.debug('Attempting conversation chaining', {
-          context: 'OpenAIProvider.sendMessage',
-          previousResponseId: params.previousResponseId,
-          chainedInputCount: chainedInput.length,
-          fullInputCount: input.length,
-        });
-
         const response = await client.responses.create(chainedParams);
 
         if (response.error) {
           throw new Error(`OpenAI API error: ${response.error.message}`);
         }
-
-        logger.debug('Conversation chaining succeeded', {
-          context: 'OpenAIProvider.sendMessage',
-          model: response.model,
-          status: response.status,
-          inputTokens: response.usage?.input_tokens,
-          outputTokens: response.usage?.output_tokens,
-          cachedTokens: response.usage?.input_tokens_details?.cached_tokens,
-        });
 
         return this.buildLLMResponse(response, attachmentResults);
       } catch (error) {
@@ -435,12 +410,6 @@ export class OpenAIProvider implements LLMProvider {
       stream: false,
     };
 
-    logger.debug('Sending Responses API request', {
-      context: 'OpenAIProvider.sendMessage',
-      model: params.model,
-      inputCount: input.length,
-    });
-
     const response = await client.responses.create(requestParams);
 
     if (response.error) {
@@ -451,16 +420,6 @@ export class OpenAIProvider implements LLMProvider {
       });
       throw new Error(`OpenAI API error: ${response.error.message}`);
     }
-
-    logger.debug('Responses API request completed', {
-      context: 'OpenAIProvider.sendMessage',
-      model: response.model,
-      status: response.status,
-      inputTokens: response.usage?.input_tokens,
-      outputTokens: response.usage?.output_tokens,
-      cachedTokens: response.usage?.input_tokens_details?.cached_tokens,
-      reasoningTokens: response.usage?.output_tokens_details?.reasoning_tokens,
-    });
 
     return this.buildLLMResponse(response, attachmentResults);
   }
@@ -473,13 +432,6 @@ export class OpenAIProvider implements LLMProvider {
     });
     const { input, instructions, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
     const baseParams = this.buildBaseRequestParams(params, input, instructions);
-
-    logger.debug('Preparing streaming Responses API request', {
-      context: 'OpenAIProvider.streamMessage',
-      model: params.model,
-      messageCount: input.length,
-      hasPreviousResponseId: !!params.previousResponseId,
-    });
 
     // Determine whether to use conversation chaining
     let useChaining = !!params.previousResponseId;
@@ -494,12 +446,6 @@ export class OpenAIProvider implements LLMProvider {
           previous_response_id: params.previousResponseId,
           stream: true,
         };
-
-        logger.debug('Attempting streaming conversation chaining', {
-          context: 'OpenAIProvider.streamMessage',
-          previousResponseId: params.previousResponseId,
-          chainedInputCount: chainedInput.length,
-        });
 
         stream = await client.responses.create(chainedParams) as AsyncIterable<ResponsesStreamEvent>;
       } catch (error) {
@@ -519,11 +465,6 @@ export class OpenAIProvider implements LLMProvider {
         stream: true,
       };
 
-      logger.debug('Sending streaming Responses API request', {
-        context: 'OpenAIProvider.streamMessage',
-        model: params.model,
-      });
-
       stream = await client.responses.create(requestParams) as AsyncIterable<ResponsesStreamEvent>;
     }
 
@@ -535,25 +476,8 @@ export class OpenAIProvider implements LLMProvider {
           content: event.delta,
           done: false,
         };
-      } else if (event.type === 'response.output_item.added') {
-        if (event.item.type === 'function_call') {
-          logger.debug('Function call started', {
-            context: 'OpenAIProvider.streamMessage',
-            itemId: event.item.id,
-            name: event.item.name,
-          });
-        }
       } else if (event.type === 'response.completed') {
         finalResponse = event.response;
-        logger.debug('Stream completed', {
-          context: 'OpenAIProvider.streamMessage',
-          status: finalResponse.status,
-          usedChaining: useChaining,
-          inputTokens: finalResponse.usage?.input_tokens,
-          outputTokens: finalResponse.usage?.output_tokens,
-          cachedTokens: finalResponse.usage?.input_tokens_details?.cached_tokens,
-          reasoningTokens: finalResponse.usage?.output_tokens_details?.reasoning_tokens,
-        });
       }
     }
 

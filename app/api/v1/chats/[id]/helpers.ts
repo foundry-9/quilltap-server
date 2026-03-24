@@ -415,7 +415,6 @@ export async function recordStatusChangeEvent(
 
   try {
     await repos.chats.addMessage(chatId, systemEvent);
-    logger.debug('[Chats v1] Status change event recorded', { chatId, characterName, oldStatus, newStatus });
   } catch (error) {
     logger.error('[Chats v1] Failed to record status change event', { chatId, error: error instanceof Error ? error.message : String(error) });
   }

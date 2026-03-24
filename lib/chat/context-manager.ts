@@ -568,13 +568,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       if (recapResult.content) {
         memoryRecapContent = recapResult.content
         memoryRecapTokens = estimateTokens(memoryRecapContent, provider)
-
-        logger.debug('[ContextManager] Memory recap generated', {
-          characterName: character.name,
-          memoriesUsed: recapResult.memoriesUsed,
-          recapTokens: memoryRecapTokens,
-          usage: recapResult.usage,
-        })
       }
     } catch (error) {
       warnings.push(`Failed to generate memory recap: ${error instanceof Error ? error.message : 'Unknown error'}`)

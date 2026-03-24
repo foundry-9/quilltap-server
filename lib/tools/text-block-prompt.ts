@@ -171,11 +171,5 @@ ${toolDocs.join('\n')}
 - Do NOT nest tool markers inside each other
 `
 
-  logger.debug('[TextBlockPrompt] Built text-block instructions', {
-    enabledTools: Object.entries(options)
-      .filter(([, v]) => v)
-      .map(([k]) => k),
-  })
-
   return instructions.trim()
 }

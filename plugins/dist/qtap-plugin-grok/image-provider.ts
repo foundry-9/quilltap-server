@@ -57,13 +57,6 @@ export class GrokImageProvider implements ImageGenProviderBase {
       requestParams.resolution = '2k';
     }
 
-    logger.debug('Generating image with Grok', {
-      context: 'GrokImageProvider.generateImage',
-      model,
-      aspectRatio: params.aspectRatio,
-      resolution: requestParams.resolution,
-    });
-
     const response = await client.images.generate(requestParams);
 
     if (!('data' in response) || !response.data || !Array.isArray(response.data)) {

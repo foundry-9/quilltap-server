@@ -224,13 +224,6 @@ var plugin = {
   parseTextToolCalls(text) {
     try {
       const results = (0, import_tools.parseAllXMLAsToolCalls)(text);
-      if (results.length > 0) {
-        logger.debug("Detected spontaneous XML tool calls in OpenAI-compatible response", {
-          context: "openai-compatible.parseTextToolCalls",
-          count: results.length,
-          tools: results.map((r) => r.name)
-        });
-      }
       return results;
     } catch (error) {
       logger.error(

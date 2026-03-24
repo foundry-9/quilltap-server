@@ -48288,13 +48288,6 @@ var plugin = {
   parseTextToolCalls(text) {
     try {
       const parsed = parseToolUseFormat(text);
-      if (parsed.length > 0) {
-        logger3.debug("Detected spontaneous tool_use XML in Gemini response", {
-          context: "google.parseTextToolCalls",
-          count: parsed.length,
-          tools: parsed.map((p) => p.toolName)
-        });
-      }
       return parsed.map(convertToToolCallRequest);
     } catch (error) {
       logger3.error(

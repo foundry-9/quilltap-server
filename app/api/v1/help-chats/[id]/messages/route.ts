@@ -49,7 +49,6 @@ async function verifyHelpChat(
   }
 
   if ((chat as any).chatType !== 'help') {
-    logger.debug('Chat is not a help chat', { chatId: id, chatType: (chat as any).chatType });
     return notFound('Help chat');
   }
 
@@ -76,13 +75,6 @@ async function handleSendMessage(
 
     const body = await req.json();
     const parsed = sendMessageSchema.parse(body);
-
-    logger.debug('Sending help chat message', {
-      chatId: id,
-      userId: user.id,
-      contentLength: parsed.content.length,
-      fileCount: parsed.fileIds?.length || 0,
-    });
 
     const stream = await handleHelpChatMessage(repos, id, user.id, {
       content: parsed.content,
@@ -136,11 +128,7 @@ async function handleGetMessages(
     const result = await verifyHelpChat(id, context);
     if (result instanceof NextResponse) return result;
 
-    logger.debug('Loading help chat messages', { chatId: id });
-
     const messages = await repos.chats.getMessages(id);
-
-    logger.debug('Help chat messages loaded', { chatId: id, messageCount: messages.length });
 
     return successResponse({ messages });
   } catch (error) {

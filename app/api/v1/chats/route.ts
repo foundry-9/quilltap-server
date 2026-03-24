@@ -417,17 +417,7 @@ async function autoGenerateFirstMessage(
             });
             return result.content;
           }
-        } else {
-          logger.debug('[Chats v1] Content filter detected but no uncensored provider available', {
-            characterId: context.character.id,
-            reason: routeResult.reason,
-          });
         }
-      } else {
-        logger.debug('[Chats v1] Content filter detected but Concierge mode is not AUTO_ROUTE', {
-          characterId: context.character.id,
-          mode: resolved.settings.mode,
-        });
       }
     } catch (error) {
       logger.warn('[Chats v1] Concierge fallback for greeting generation failed', {
@@ -506,7 +496,6 @@ async function handleHasDangerous(context: AuthenticatedContext) {
   try {
     const allChats = await repos.chats.findByUserId(user.id);
     const hasDangerous = allChats.some((c: any) => c.isDangerousChat === true);
-    logger.debug('[Chats v1] Checked dangerous chats', { userId: user.id, hasDangerous });
     return NextResponse.json({ hasDangerous });
   } catch (error) {
     logger.error('[Chats v1] Error checking dangerous chats', {}, error instanceof Error ? error : undefined);

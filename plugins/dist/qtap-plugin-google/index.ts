@@ -382,13 +382,6 @@ export const plugin: LLMProviderPlugin = {
   parseTextToolCalls(text: string): ToolCallRequest[] {
     try {
       const parsed = parseToolUseFormat(text);
-      if (parsed.length > 0) {
-        logger.debug('Detected spontaneous tool_use XML in Gemini response', {
-          context: 'google.parseTextToolCalls',
-          count: parsed.length,
-          tools: parsed.map(p => p.toolName),
-        });
-      }
       return parsed.map(convertTextToolToRequest);
     } catch (error) {
       logger.error(

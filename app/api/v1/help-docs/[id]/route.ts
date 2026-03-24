@@ -23,11 +23,8 @@ async function ensureHelpBundleLoaded(): Promise<void> {
   const helpSearch = getHelpSearch();
 
   if (helpSearch.isLoaded()) {
-    logger.debug('[HelpDoc] Help bundle already loaded');
     return;
   }
-
-  logger.debug('[HelpDoc] Loading help bundle from disk', { bundlePath: HELP_BUNDLE_PATH });
 
   try {
     const buffer = await readFile(HELP_BUNDLE_PATH);
@@ -53,8 +50,6 @@ function extractDocumentId(pathname: string): string {
 export const GET = createAuthenticatedHandler(async (request: NextRequest, _context: AuthenticatedContext) => {
   try {
     const docId = extractDocumentId(request.nextUrl.pathname);
-
-    logger.debug('[HelpDoc] Getting document', { documentId: docId });
 
     await ensureHelpBundleLoaded();
 

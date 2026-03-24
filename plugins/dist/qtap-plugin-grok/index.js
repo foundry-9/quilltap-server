@@ -7350,11 +7350,6 @@ ${textContent}`
       defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
     });
     const { input, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
-    logger.debug("Preparing Responses API request", {
-      context: "GrokProvider.sendMessage",
-      model: params.model,
-      messageCount: input.length
-    });
     const requestParams = {
       model: params.model,
       input,
@@ -7381,11 +7376,6 @@ ${textContent}`
     if (tools.length > 0) {
       requestParams.tools = tools;
     }
-    logger.debug("Sending Responses API request", {
-      context: "GrokProvider.sendMessage",
-      model: params.model,
-      toolCount: tools.length
-    });
     const response = await client.responses.create(requestParams);
     if (response.error) {
       logger.error("Responses API returned error", {
@@ -7398,15 +7388,6 @@ ${textContent}`
     const text = this.extractTextFromResponse(response);
     const finishReason = this.getFinishReason(response);
     const raw = this.buildRawResponse(response);
-    logger.debug("Responses API request completed", {
-      context: "GrokProvider.sendMessage",
-      model: response.model,
-      status: response.status,
-      finishReason,
-      inputTokens: response.usage?.input_tokens,
-      outputTokens: response.usage?.output_tokens,
-      cachedTokens: response.usage?.input_tokens_details?.cached_tokens
-    });
     return {
       content: text,
       finishReason,
@@ -7429,11 +7410,6 @@ ${textContent}`
       defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
     });
     const { input, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
-    logger.debug("Preparing streaming Responses API request", {
-      context: "GrokProvider.streamMessage",
-      model: params.model,
-      messageCount: input.length
-    });
     const requestParams = {
       model: params.model,
       input,
@@ -7459,10 +7435,6 @@ ${textContent}`
     if (tools.length > 0) {
       requestParams.tools = tools;
     }
-    logger.debug("Sending streaming Responses API request", {
-      context: "GrokProvider.streamMessage",
-      model: params.model
-    });
     const stream = await client.responses.create(requestParams);
     let finalResponse = null;
     for await (const event of stream) {
@@ -7471,23 +7443,8 @@ ${textContent}`
           content: event.delta,
           done: false
         };
-      } else if (event.type === "response.output_item.added") {
-        if (event.item.type === "function_call") {
-          logger.debug("Function call started", {
-            context: "GrokProvider.streamMessage",
-            itemId: event.item.id,
-            name: event.item.name
-          });
-        }
       } else if (event.type === "response.completed") {
         finalResponse = event.response;
-        logger.debug("Stream completed", {
-          context: "GrokProvider.streamMessage",
-          status: finalResponse.status,
-          inputTokens: finalResponse.usage?.input_tokens,
-          outputTokens: finalResponse.usage?.output_tokens,
-          cachedTokens: finalResponse.usage?.input_tokens_details?.cached_tokens
-        });
       }
     }
     if (finalResponse) {
@@ -7618,12 +7575,6 @@ var GrokImageProvider = class {
     if (this.isImagineModel(model) && model.endsWith("-pro")) {
       requestParams.resolution = "2k";
     }
-    logger2.debug("Generating image with Grok", {
-      context: "GrokImageProvider.generateImage",
-      model,
-      aspectRatio: params.aspectRatio,
-      resolution: requestParams.resolution
-    });
     const response = await client.images.generate(requestParams);
     if (!("data" in response) || !response.data || !Array.isArray(response.data)) {
       logger2.error("Invalid response from Grok Images API", { context: "GrokImageProvider.generateImage" });
@@ -8236,13 +8187,6 @@ var plugin = {
   parseTextToolCalls(text) {
     try {
       const results = parseAllXMLAsToolCalls(text);
-      if (results.length > 0) {
-        logger3.debug("Detected spontaneous XML tool calls in Grok response", {
-          context: "grok.parseTextToolCalls",
-          count: results.length,
-          tools: results.map((r) => r.name)
-        });
-      }
       return results;
     } catch (error) {
       logger3.error(

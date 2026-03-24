@@ -155,13 +155,6 @@ export async function executeWhisperTool(
 
     // Sanitize message content — LLMs sometimes double-encode tool calls
     const cleanMessage = sanitizeWhisperMessage(message);
-    if (cleanMessage !== message) {
-      logger.debug('Sanitized whisper message (stripped markers)', {
-        context: 'whisper-handler',
-        originalLength: message.length,
-        cleanedLength: cleanMessage.length,
-      });
-    }
 
     // Save the whisper as a new ASSISTANT message with targetParticipantIds
     const whisperMessageId = crypto.randomUUID();

@@ -299,10 +299,6 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
     // silently dropped by the UI hierarchy builder)
     const allPlugins = toolRegistry.getAllPlugins();
     const pluginMetadataMap = new Map<string, { displayName?: string; description?: string; category?: string }>();
-    logger.debug('[Tools v1] Iterating plugins for tool definitions', {
-      pluginCount: allPlugins.length,
-      pluginNames: allPlugins.map(p => p.metadata.toolName),
-    });
 
     for (const plugin of allPlugins) {
       const pluginName = plugin.metadata.toolName;

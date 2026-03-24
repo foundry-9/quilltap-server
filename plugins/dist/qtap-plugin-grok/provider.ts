@@ -289,12 +289,6 @@ export class GrokProvider implements LLMProvider {
     });
     const { input, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
 
-    logger.debug('Preparing Responses API request', {
-      context: 'GrokProvider.sendMessage',
-      model: params.model,
-      messageCount: input.length,
-    });
-
     const requestParams: OpenAI.Responses.ResponseCreateParamsNonStreaming = {
       model: params.model,
       input,
@@ -328,12 +322,6 @@ export class GrokProvider implements LLMProvider {
       requestParams.tools = tools;
     }
 
-    logger.debug('Sending Responses API request', {
-      context: 'GrokProvider.sendMessage',
-      model: params.model,
-      toolCount: tools.length,
-    });
-
     const response = await client.responses.create(requestParams);
 
     if (response.error) {
@@ -348,16 +336,6 @@ export class GrokProvider implements LLMProvider {
     const text = this.extractTextFromResponse(response);
     const finishReason = this.getFinishReason(response);
     const raw = this.buildRawResponse(response);
-
-    logger.debug('Responses API request completed', {
-      context: 'GrokProvider.sendMessage',
-      model: response.model,
-      status: response.status,
-      finishReason,
-      inputTokens: response.usage?.input_tokens,
-      outputTokens: response.usage?.output_tokens,
-      cachedTokens: response.usage?.input_tokens_details?.cached_tokens,
-    });
 
     return {
       content: text,
@@ -383,12 +361,6 @@ export class GrokProvider implements LLMProvider {
       defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
     });
     const { input, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
-
-    logger.debug('Preparing streaming Responses API request', {
-      context: 'GrokProvider.streamMessage',
-      model: params.model,
-      messageCount: input.length,
-    });
 
     const requestParams: OpenAI.Responses.ResponseCreateParamsStreaming = {
       model: params.model,
@@ -421,11 +393,6 @@ export class GrokProvider implements LLMProvider {
       requestParams.tools = tools;
     }
 
-    logger.debug('Sending streaming Responses API request', {
-      context: 'GrokProvider.streamMessage',
-      model: params.model,
-    });
-
     const stream = await client.responses.create(requestParams);
 
     let finalResponse: ResponsesResponse | null = null;
@@ -436,23 +403,8 @@ export class GrokProvider implements LLMProvider {
           content: event.delta,
           done: false,
         };
-      } else if (event.type === 'response.output_item.added') {
-        if (event.item.type === 'function_call') {
-          logger.debug('Function call started', {
-            context: 'GrokProvider.streamMessage',
-            itemId: event.item.id,
-            name: event.item.name,
-          });
-        }
       } else if (event.type === 'response.completed') {
         finalResponse = event.response;
-        logger.debug('Stream completed', {
-          context: 'GrokProvider.streamMessage',
-          status: finalResponse.status,
-          inputTokens: finalResponse.usage?.input_tokens,
-          outputTokens: finalResponse.usage?.output_tokens,
-          cachedTokens: finalResponse.usage?.input_tokens_details?.cached_tokens,
-        });
       }
     }
 

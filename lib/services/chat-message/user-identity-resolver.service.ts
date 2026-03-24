@@ -46,11 +46,6 @@ export async function resolveUserIdentity(
   if (userControlledParticipant?.characterId) {
     const character = await repos.characters.findById(userControlledParticipant.characterId)
     if (character) {
-      logger.debug('Resolved user identity from chat participant', {
-        chatId: chat.id,
-        characterId: character.id,
-        name: character.name,
-      })
       return {
         name: character.name,
         description: character.description || '',
@@ -65,11 +60,6 @@ export async function resolveUserIdentity(
 
   if (userControlledCharacters.length === 1) {
     const character = userControlledCharacters[0]
-    logger.debug('Auto-selected sole user-controlled character', {
-      chatId: chat.id,
-      characterId: character.id,
-      name: character.name,
-    })
     return {
       name: character.name,
       description: character.description || '',
@@ -78,20 +68,9 @@ export async function resolveUserIdentity(
     }
   }
 
-  if (userControlledCharacters.length > 1) {
-    logger.debug('Multiple user-controlled characters exist, falling through to profile', {
-      chatId: chat.id,
-      count: userControlledCharacters.length,
-    })
-  }
-
   // Step 3: Fall back to user profile name
   const userProfile = await repos.users.findById(userId)
   if (userProfile?.name) {
-    logger.debug('Resolved user identity from profile', {
-      chatId: chat.id,
-      name: userProfile.name,
-    })
     return {
       name: userProfile.name,
       description: '',
@@ -100,7 +79,6 @@ export async function resolveUserIdentity(
   }
 
   // Step 4: Default fallback
-  logger.debug('Using default user identity', { chatId: chat.id })
   return {
     name: 'User',
     description: '',

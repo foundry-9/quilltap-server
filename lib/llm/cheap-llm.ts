@@ -272,12 +272,6 @@ export function resolveUncensoredCheapLLMSelection(
   if (dangerSettings.uncensoredTextProfileId) {
     const uncensoredProfile = availableProfiles.find(p => p.id === dangerSettings.uncensoredTextProfileId)
     if (uncensoredProfile) {
-      logger.debug('[CheapLLM] Using uncensored provider for dangerous chat', {
-        standardProvider: standardSelection.provider,
-        standardModel: standardSelection.modelName,
-        uncensoredProvider: uncensoredProfile.provider,
-        uncensoredModel: uncensoredProfile.modelName,
-      })
       const isLocal = uncensoredProfile.provider === 'OLLAMA'
       return {
         provider: uncensoredProfile.provider,
@@ -292,12 +286,6 @@ export function resolveUncensoredCheapLLMSelection(
   // Scan for any isDangerousCompatible profile
   const anyUncensored = availableProfiles.find(p => p.isDangerousCompatible === true)
   if (anyUncensored) {
-    logger.debug('[CheapLLM] Using isDangerousCompatible profile for dangerous chat (no configured uncensored text profile)', {
-      standardProvider: standardSelection.provider,
-      standardModel: standardSelection.modelName,
-      uncensoredProvider: anyUncensored.provider,
-      uncensoredModel: anyUncensored.modelName,
-    })
     const isLocal = anyUncensored.provider === 'OLLAMA'
     return {
       provider: anyUncensored.provider,
@@ -309,7 +297,6 @@ export function resolveUncensoredCheapLLMSelection(
   }
 
   // Nothing found — fail open with standard selection
-  logger.debug('[CheapLLM] No uncensored provider available for dangerous chat, using standard selection')
   return standardSelection
 }
 

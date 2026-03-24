@@ -43,8 +43,6 @@ async function handleList(_req: NextRequest, context: AuthenticatedContext) {
   const { user, repos } = context;
 
   try {
-    logger.debug('Listing help chats', { userId: user.id });
-
     const allChats = await repos.chats.findByUserId(user.id);
     const helpChats = allChats
       .filter((c: any) => c.chatType === 'help')
@@ -71,8 +69,6 @@ async function handleList(_req: NextRequest, context: AuthenticatedContext) {
       })
     );
 
-    logger.debug('Help chats listed', { userId: user.id, count: enrichedChats.length });
-
     return successResponse({ chats: enrichedChats });
   } catch (error) {
     logger.error('Error listing help chats', {
@@ -90,8 +86,6 @@ async function handleEligibility(_req: NextRequest, context: AuthenticatedContex
   const { user, repos } = context;
 
   try {
-    logger.debug('Checking help chat eligibility', { userId: user.id });
-
     const characters = await repos.characters.findByUserId(user.id);
     const helpCharacters = characters.filter((c: any) => c.defaultHelpToolsEnabled === true);
 
@@ -131,13 +125,6 @@ async function handleEligibility(_req: NextRequest, context: AuthenticatedContex
     if (helpCharacters.length === 0) reasons.push('No characters have help tools enabled');
     if (!eligible && helpCharacters.length > 0) reasons.push('No tool-capable connection profiles available');
 
-    logger.debug('Eligibility check complete', {
-      userId: user.id,
-      eligible,
-      characterCount: eligibleCharacters.length,
-      reasons,
-    });
-
     return successResponse({ eligible, characters: eligibleCharacters, reasons });
   } catch (error) {
     logger.error('Error checking help chat eligibility', {
@@ -157,12 +144,6 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
   try {
     const body = await req.json();
     const validatedData = createHelpChatSchema.parse(body);
-
-    logger.debug('Creating help chat', {
-      userId: user.id,
-      characterIds: validatedData.characterIds,
-      pageUrl: validatedData.pageUrl,
-    });
 
     // Validate all characters exist and at least one has help tools enabled
     const characters = [];

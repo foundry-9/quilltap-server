@@ -12969,13 +12969,6 @@ var plugin = {
   parseTextToolCalls(text) {
     try {
       const results = parseAllXMLAsToolCalls(text);
-      if (results.length > 0) {
-        logger2.debug("Detected spontaneous XML tool calls in Anthropic response", {
-          context: "anthropic.parseTextToolCalls",
-          count: results.length,
-          tools: results.map((r) => r.name)
-        });
-      }
       return results;
     } catch (error) {
       logger2.error(

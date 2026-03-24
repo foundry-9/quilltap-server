@@ -233,18 +233,7 @@ export async function executeHelpSettingsTool(
 
     const { category } = input
 
-    logger_.debug('Fetching settings for category', {
-      userId: context.userId,
-      category,
-    })
-
     const data = await fetchCategorySettings(category, context.userId)
-
-    logger_.info('Help settings fetch completed', {
-      userId: context.userId,
-      category,
-      dataKeys: Object.keys(data),
-    })
 
     return {
       success: true,

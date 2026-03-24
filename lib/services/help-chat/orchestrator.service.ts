@@ -79,12 +79,6 @@ export async function handleHelpChatMessage(
         if (chat.userId !== userId) throw new Error('Unauthorized')
         if (chat.chatType !== 'help') throw new Error('Not a help chat')
 
-        logger.debug('Processing help chat message', {
-          chatId,
-          userId,
-          contentLength: options.content.length,
-          participantCount: chat.participants.length,
-        })
 
         // Save user message
         const userMessage: MessageEvent = {
@@ -114,12 +108,6 @@ export async function handleHelpChatMessage(
         const primaryContext = allPageContexts[0] || null
         const additionalContexts = allPageContexts.slice(1)
 
-        logger.debug('Resolved help page context', {
-          chatId,
-          pageUrl,
-          primaryTitle: primaryContext?.title,
-          additionalCount: additionalContexts.length,
-        })
 
         // Process each participant sequentially
         for (let i = 0; i < activeParticipants.length; i++) {
@@ -214,12 +202,6 @@ async function processHelpResponse(
   const character = await repos.characters.findById(participant.characterId)
   if (!character) throw new Error('Character not found')
 
-  logger.debug('Processing help response for character', {
-    chatId,
-    characterId: character.id,
-    characterName: character.name,
-    participantId: participant.id,
-  })
 
   // Load connection profile
   if (!participant.connectionProfileId) throw new Error('No connection profile for help character')
@@ -263,12 +245,6 @@ async function processHelpResponse(
     true, // helpToolsEnabled
   )
 
-  logger.debug('Built tools for help chat', {
-    chatId,
-    characterName: character.name,
-    toolCount: tools.length,
-    modelSupportsNativeTools,
-  })
 
   // Determine tool mode (native vs text-block)
   const useTextBlockTools = checkShouldUseTextBlockTools(modelSupportsNativeTools)
@@ -355,12 +331,6 @@ async function processHelpResponse(
   while (agentTurnCount <= maxAgentTurns) {
     agentTurnCount++
 
-    logger.debug('Agent turn', {
-      chatId,
-      characterName: character.name,
-      turn: agentTurnCount,
-      maxTurns: maxAgentTurns,
-    })
 
     // Force final response if at turn limit
     if (agentTurnCount === maxAgentTurns) {
@@ -433,12 +403,6 @@ async function processHelpResponse(
       fullResponse = currentResponse
       hasToolCalls = false // Don't process submit_final_response as a tool
 
-      logger.debug('Agent submitted final response via tool call', {
-        chatId,
-        characterName: character.name,
-        turn: agentTurnCount,
-        responseLength: fullResponse.length,
-      })
     }
 
     // Fallback: some models output submit_final_response as JSON text instead
@@ -554,12 +518,6 @@ async function processHelpResponse(
         }
       }
 
-      logger.debug('Tool execution complete, continuing agent loop', {
-        chatId,
-        characterName: character.name,
-        turn: agentTurnCount,
-        toolCount: toolResult.toolMessages.length,
-      })
 
       // Continue agent loop
       continue
@@ -624,14 +582,6 @@ async function processHelpResponse(
       costResult.source
     )
 
-    logger.debug('Help response complete', {
-      chatId,
-      characterName: character.name,
-      messageId: finalMessageId,
-      agentTurns: agentTurnCount,
-      promptTokens: totalUsage.promptTokens,
-      completionTokens: totalUsage.completionTokens,
-    })
   }
 
   return finalMessageId
@@ -650,10 +600,6 @@ function extractSubmitFinalResponseFromText(text: string): string {
   try {
     const parsed = JSON.parse(trimmed)
     if (typeof parsed?.response === 'string' && parsed.response.length > 0) {
-      logger.debug('Extracted submit_final_response from JSON text output', {
-        originalLength: text.length,
-        extractedLength: parsed.response.length,
-      })
       return parsed.response
     }
   } catch {

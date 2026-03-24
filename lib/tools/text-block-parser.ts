@@ -229,13 +229,6 @@ export function parseTextBlockCalls(response: string): ParsedTextBlock[] {
   // Sort by position
   results.sort((a, b) => a.startIndex - b.startIndex)
 
-  if (results.length > 0) {
-    logger.debug('[TextBlockParser] Parsed text-block calls', {
-      count: results.length,
-      tools: results.map(r => r.toolName),
-    })
-  }
-
   return results
 }
 
@@ -292,12 +285,6 @@ export function convertTextBlockToToolCallRequest(parsed: ParsedTextBlock): Tool
       }
     }
   }
-
-  logger.debug('[TextBlockParser] Converted text-block to tool call request', {
-    originalTool: parsed.toolName,
-    internalTool: internalName,
-    argKeys: Object.keys(args),
-  })
 
   return {
     name: internalName,

@@ -144,14 +144,6 @@ export async function saveFileEntry(options: SaveFileEntryOptions): Promise<{
     filename: sanitizedFilename,
   });
 
-  logger.debug('[Files v1] Persisting file entry', {
-    filename: sanitizedFilename,
-    overwrite: !!overwrite,
-    projectId: options.projectId,
-    folderPath: options.folderPath,
-    userId: options.ctx.user.id,
-  });
-
   const { storageKey } = await fileStorageManager.uploadFile({
     filename: sanitizedFilename,
     content: options.contentBuffer,

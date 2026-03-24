@@ -204,11 +204,6 @@ export async function handleSendMessage(
               DEFAULT_CHAIN_CONFIG
             )
 
-            logger.debug('[TurnOrchestrator] Chain decision', {
-              chatId,
-              chainDepth,
-              decision: { chain: decision.chain, reason: decision.reason, participantId: decision.participantId },
-            })
 
             if (!decision.chain || !decision.participantId) {
               // Persist the final turn state
@@ -401,12 +396,6 @@ async function processMessage(
     description: resolvedIdentity.description,
   }
 
-  logger.debug('Resolved user identity for chat', {
-    chatId,
-    source: resolvedIdentity.source,
-    name: resolvedIdentity.name,
-    characterId: resolvedIdentity.characterId,
-  })
 
   // User-controlled character ID for memory aboutCharacterId
   const userCharacterId = resolvedIdentity.characterId || undefined
@@ -1306,11 +1295,6 @@ async function processMessage(
         const raw = msg.rawResponse as Record<string, unknown>
         if (typeof raw.id === 'string' && raw.id.startsWith('resp_')) {
           previousResponseId = raw.id
-          logger.debug('Found previous response ID for conversation chaining', {
-            chatId,
-            previousResponseId,
-            messageId: msg.id,
-          })
           break
         }
       }

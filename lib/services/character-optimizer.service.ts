@@ -325,12 +325,6 @@ export async function runCharacterOptimizer(
             const allMemories = await repos.memories.findByCharacterId(characterId);
             candidateMemories = allMemories.filter(m => matchedIds.has(m.id));
             usedSemantic = true;
-            logger.debug('[CharacterOptimizer] Semantic search completed', {
-              characterId,
-              query: searchQuery,
-              vectorResults: results.length,
-              matchedMemories: candidateMemories.length,
-            });
           }
         } catch (err) {
           logger.warn('[CharacterOptimizer] Semantic search failed, falling back to text search', {
@@ -340,46 +334,24 @@ export async function runCharacterOptimizer(
         }
         if (!usedSemantic) {
           candidateMemories = await repos.memories.searchByContent(characterId, searchQuery);
-          logger.debug('[CharacterOptimizer] Text search fallback completed', {
-            characterId,
-            query: searchQuery,
-            results: candidateMemories.length,
-          });
         }
       } else {
         // Text search only
         candidateMemories = await repos.memories.searchByContent(characterId, searchQuery);
-        logger.debug('[CharacterOptimizer] Text search completed', {
-          characterId,
-          query: searchQuery,
-          results: candidateMemories.length,
-        });
       }
     } else {
       // No search query — load all memories (current behavior)
       candidateMemories = await repos.memories.findByCharacterId(characterId);
-      logger.debug('[CharacterOptimizer] Loaded all memories', {
-        characterId,
-        memoryCount: candidateMemories.length,
-      });
     }
 
     // Apply date filters
     if (sinceDate) {
       const sinceTimestamp = new Date(`${sinceDate}T00:00:00.000Z`).getTime();
       candidateMemories = candidateMemories.filter(m => new Date(m.createdAt).getTime() >= sinceTimestamp);
-      logger.debug('[CharacterOptimizer] Applied sinceDate filter', {
-        sinceDate,
-        remaining: candidateMemories.length,
-      });
     }
     if (beforeDate) {
       const beforeTimestamp = new Date(`${beforeDate}T00:00:00.000Z`).getTime();
       candidateMemories = candidateMemories.filter(m => new Date(m.createdAt).getTime() < beforeTimestamp);
-      logger.debug('[CharacterOptimizer] Applied beforeDate filter', {
-        beforeDate,
-        remaining: candidateMemories.length,
-      });
     }
 
     // Rank by weight and filter by reinforcement
@@ -388,13 +360,6 @@ export async function runCharacterOptimizer(
     const filteredCount = reinforced.length;
     const qualifyingMemories = reinforced.slice(0, maxMemories);
 
-    logger.debug('[CharacterOptimizer] Memory pipeline complete', {
-      characterId,
-      candidateCount: candidateMemories.length,
-      reinforcedCount: filteredCount,
-      selectedCount: qualifyingMemories.length,
-      maxMemories,
-    });
 
     onProgress({
       type: 'step_complete',
@@ -477,10 +442,6 @@ export async function runCharacterOptimizer(
       });
       throw parseError;
     }
-    logger.debug('[CharacterOptimizer] Analysis complete', {
-      characterId,
-      patternCount: analysis.behavioralPatterns.length,
-    });
 
     // Log the LLM call
     await logLLMCall({
@@ -548,10 +509,6 @@ export async function runCharacterOptimizer(
         id: crypto.randomUUID(),
       }));
 
-    logger.debug('[CharacterOptimizer] Suggestions generated', {
-      characterId,
-      suggestionCount: suggestions.length,
-    });
 
     // Log the LLM call
     await logLLMCall({

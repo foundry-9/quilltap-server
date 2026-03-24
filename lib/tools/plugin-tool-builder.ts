@@ -258,52 +258,42 @@ export async function buildToolsForProvider(
   // Add help search tool if enabled (gated by character help tools setting)
   if (options.helpSearch) {
     universalTools.push(helpSearchToolDefinition as UniversalTool);
-    logger_.debug('Added help search tool to universal tools');
   }
 
   // Add help settings tool if enabled (gated by character help tools setting)
   if (options.helpSettings) {
     universalTools.push(helpSettingsToolDefinition as UniversalTool);
-    logger_.debug('Added help settings tool to universal tools');
   }
 
   // Add help navigate tool if enabled (gated by character help tools setting)
   if (options.helpNavigate) {
     universalTools.push(helpNavigateToolDefinition as UniversalTool);
-    logger_.debug('Added help navigate tool to universal tools');
   }
 
   // Add RNG tool if enabled (defaults to true when not specified)
   if (options.rng !== false) {
     universalTools.push(rngToolDefinition as UniversalTool);
-    logger_.debug('Added RNG tool to universal tools');
   }
 
   // Add state tool if enabled (defaults to true when not specified)
   if (options.state !== false) {
     universalTools.push(stateToolDefinition as UniversalTool);
-    logger_.debug('Added state tool to universal tools');
   }
 
   // Add whisper tool if enabled (multi-character chats only)
   if (options.whisper) {
     universalTools.push(whisperToolDefinition as UniversalTool);
-    logger_.debug('Added whisper tool to universal tools');
   }
 
   // Add submit_final_response tool if agent mode is enabled
   if (options.agentMode) {
     universalTools.push(submitFinalResponseToolDefinition as UniversalTool);
-    logger_.debug('Added submit_final_response tool to universal tools (agent mode)');
   }
 
   // Add shell interactivity tools if enabled (only in VM/Docker environments)
   if (options.shellInteractivity) {
     const shellTools = getAllShellToolDefinitions();
     universalTools.push(...(shellTools as UniversalTool[]));
-    logger_.debug('Added shell interactivity tools to universal tools', {
-      count: shellTools.length,
-    });
   }
 
   // Add plugin tools if enabled (defaults to true when not specified)

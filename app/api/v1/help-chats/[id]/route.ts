@@ -59,7 +59,6 @@ async function verifyHelpChat(
   }
 
   if ((chat as any).chatType !== 'help') {
-    logger.debug('Chat is not a help chat', { chatId: id, chatType: (chat as any).chatType });
     return notFound('Help chat');
   }
 
@@ -84,8 +83,6 @@ async function handleGet(
     const result = await verifyHelpChat(id, context);
     if (result instanceof NextResponse) return result;
     const { chat } = result;
-
-    logger.debug('Getting help chat details', { chatId: id });
 
     const enrichedParticipants = await Promise.all(
       chat.participants.map((p: any) => enrichParticipantSummary(p, repos))
@@ -125,8 +122,6 @@ async function handleRename(
 
     const body = await req.json();
     const validatedData = renameSchema.parse(body);
-
-    logger.debug('Renaming help chat', { chatId: id, newTitle: validatedData.title });
 
     const updated = await repos.chats.update(id, {
       title: validatedData.title,
@@ -169,8 +164,6 @@ async function handleUpdateContext(
 
     const body = await req.json();
     const validatedData = updateContextSchema.parse(body);
-
-    logger.debug('Updating help chat context', { chatId: id, pageUrl: validatedData.pageUrl });
 
     // Update the helpPageUrl on the chat
     const updated = await repos.chats.update(id, {
@@ -221,8 +214,6 @@ async function handleDelete(
   try {
     const result = await verifyHelpChat(id, context);
     if (result instanceof NextResponse) return result;
-
-    logger.debug('Deleting help chat', { chatId: id });
 
     const deleted = await repos.chats.delete(id);
     if (!deleted) {

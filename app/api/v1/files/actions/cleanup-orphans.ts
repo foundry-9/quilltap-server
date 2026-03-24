@@ -167,11 +167,6 @@ export async function handleCleanupOrphans(
       try {
         await ctx.repos.files.update(file.id, { fileStatus: 'ok' });
         rescuedActual += 1;
-        logger.debug('[Files v1] Rescued referenced orphan', {
-          fileId: file.id,
-          filename: file.originalFilename,
-          linkedTo: file.linkedTo,
-        });
       } catch (error) {
         logger.warn('[Files v1] Failed to rescue orphaned file', {
           fileId: file.id,
