@@ -294,7 +294,9 @@ export async function handleUpdateParticipantAction(
 ): Promise<NextResponse> {
   try {
     const body = await req.json();
-    const validatedData = updateParticipantSchema.parse(body);
+    // Support both wrapped ({ updateParticipant: { ... } }) and unwrapped ({ participantId, ... }) formats
+    const rawData = body.updateParticipant ?? body;
+    const validatedData = updateParticipantSchema.parse(rawData);
 
 
     const result = await handleParticipantUpdate(chatId, validatedData, user.id, repos);

@@ -439,9 +439,14 @@ export function isShellEnvironment(): boolean {
  * @returns Host-side data directory path
  */
 export function getHostDataDir(): string {
-  const envOverride = process.env.QUILLTAP_HOST_DATA_DIR;
-  if (envOverride) {
-    return envOverride;
+  // QUILLTAP_HOST_DATA_DIR is only meaningful inside VM/Docker environments
+  // where the internal path differs from the host path. In local environments,
+  // always use getBaseDataDir() to respect QUILLTAP_DATA_DIR overrides.
+  if (isLimaEnvironment() || isDockerEnvironment()) {
+    const envOverride = process.env.QUILLTAP_HOST_DATA_DIR;
+    if (envOverride) {
+      return envOverride;
+    }
   }
   return getBaseDataDir();
 }
