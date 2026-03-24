@@ -22,6 +22,7 @@ import { loadInstalledBundles, loadBundledThemesFromDir } from './bundle-loader'
 import type { LoadedBundleTheme } from './bundle-loader';
 import { getBundledThemesDir } from '@/lib/paths';
 import type { ThemePlugin, EmbeddedFont } from '@quilltap/plugin-types';
+import { AbstractRegistry } from '@/lib/plugins/base-registry';
 
 // ============================================================================
 // TYPES
@@ -150,22 +151,6 @@ declare global {
   var __quilltapThemeRegistryState: ThemeRegistryState | undefined;
 }
 
-/**
- * Get or create the global registry state
- * Using global ensures state persists across Next.js module reloads
- */
-function getGlobalState(): ThemeRegistryState {
-  if (!global.__quilltapThemeRegistryState) {
-    global.__quilltapThemeRegistryState = {
-      initialized: false,
-      themes: new Map(),
-      errors: [],
-      lastInitTime: null,
-    };
-  }
-  return global.__quilltapThemeRegistryState;
-}
-
 // ============================================================================
 // HELPERS
 // ============================================================================
@@ -218,9 +203,17 @@ function resolveSubsystemOverrides(
 // THEME REGISTRY CLASS
 // ============================================================================
 
-class ThemeRegistry {
-  private get state(): ThemeRegistryState {
-    return getGlobalState();
+class ThemeRegistry extends AbstractRegistry<ThemeRegistryState> {
+  protected readonly registryName = 'theme-registry';
+  protected readonly globalStateKey = '__quilltapThemeRegistryState';
+
+  protected createEmptyState(): ThemeRegistryState {
+    return {
+      initialized: false,
+      themes: new Map(),
+      errors: [],
+      lastInitTime: null,
+    };
   }
 
   /**
@@ -852,26 +845,6 @@ class ThemeRegistry {
    */
   getErrors(): ThemeLoadError[] {
     return [...this.state.errors];
-  }
-
-  /**
-   * Check if registry is initialized
-   */
-  isInitialized(): boolean {
-    return this.state.initialized;
-  }
-
-  /**
-   * Reset the registry (for testing)
-   */
-  reset(): void {
-    // Reset the global state entirely
-    global.__quilltapThemeRegistryState = {
-      initialized: false,
-      themes: new Map(),
-      errors: [],
-      lastInitTime: null,
-    };
   }
 
   /**

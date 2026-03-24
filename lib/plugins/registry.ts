@@ -3,10 +3,14 @@
  *
  * Singleton registry for managing loaded plugins.
  * Provides centralized access to plugin information and capabilities.
+ *
+ * Extends AbstractRegistry for HMR-safe global state persistence.
  */
 
 import path from 'path';
 import { logger } from '@/lib/logger';
+import { AbstractRegistry } from './base-registry';
+import type { BaseRegistryState } from './base-registry';
 import type { LoadedPlugin, PluginScanResult } from './manifest-loader';
 import type { PluginCapability } from './index';
 
@@ -14,8 +18,7 @@ import type { PluginCapability } from './index';
 // TYPES
 // ============================================================================
 
-export interface PluginRegistryState {
-  initialized: boolean;
+export interface PluginRegistryState extends BaseRegistryState {
   plugins: Map<string, LoadedPlugin>;
   errors: Map<string, string>;
   capabilities: Map<PluginCapability, string[]>;
@@ -32,30 +35,23 @@ declare global {
   var __quilltapPluginRegistryState: PluginRegistryState | undefined;
 }
 
-/**
- * Get or create the global registry state
- * Using global ensures state persists across Next.js module reloads
- */
-function getGlobalState(): PluginRegistryState {
-  if (!global.__quilltapPluginRegistryState) {
-    global.__quilltapPluginRegistryState = {
+// ============================================================================
+// REGISTRY SINGLETON
+// ============================================================================
+
+class PluginRegistry extends AbstractRegistry<PluginRegistryState> {
+  protected readonly registryName = 'plugin-registry';
+  protected readonly globalStateKey = '__quilltapPluginRegistryState';
+
+  protected createEmptyState(): PluginRegistryState {
+    return {
       initialized: false,
+      lastInitTime: null,
       plugins: new Map(),
       errors: new Map(),
       capabilities: new Map(),
       lastScanTime: null,
     };
-  }
-  return global.__quilltapPluginRegistryState;
-}
-
-// ============================================================================
-// REGISTRY SINGLETON
-// ============================================================================
-
-class PluginRegistry {
-  private get state(): PluginRegistryState {
-    return getGlobalState();
   }
 
   /**
@@ -79,6 +75,7 @@ class PluginRegistry {
 
     this.state.initialized = true;
     this.state.lastScanTime = new Date();
+    this.state.lastInitTime = this.state.lastScanTime;
   }
 
   /**
@@ -207,27 +204,6 @@ class PluginRegistry {
       plugin,
       error,
     }));
-  }
-
-  /**
-   * Check if registry is initialized
-   */
-  isInitialized(): boolean {
-    return this.state.initialized;
-  }
-
-  /**
-   * Reset the registry (for testing)
-   */
-  reset(): void {
-    // Reset the global state entirely
-    global.__quilltapPluginRegistryState = {
-      initialized: false,
-      plugins: new Map(),
-      errors: new Map(),
-      capabilities: new Map(),
-      lastScanTime: null,
-    };
   }
 
   /**

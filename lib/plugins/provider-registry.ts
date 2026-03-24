@@ -8,10 +8,12 @@
  * This registry integrates with the main plugin system, automatically discovering
  * and registering plugins with the LLM_PROVIDER capability.
  *
+ * Extends AbstractProviderRegistry for shared registration, lookup,
+ * initialisation, validation, stats, errors, and state export logic.
+ *
  * @module plugins/provider-registry
  */
 
-import { logger } from '@/lib/logger';
 import type { LLMProviderPlugin, ProviderMetadata, AttachmentSupport, ProviderConfigRequirements, ImageProviderConstraints, MessageFormatSupport, CheapModelConfig, ToolFormatType } from './interfaces/provider-plugin';
 import type { LLMProvider } from '@/lib/llm/base';
 import type { ImageGenProvider } from '@/lib/image-gen/base';
@@ -19,18 +21,14 @@ import type { EmbeddingProvider, LocalEmbeddingProvider } from '@quilltap/plugin
 import { getErrorMessage } from '@/lib/errors';
 import { rewriteLocalhostUrl } from '@/lib/host-rewrite';
 import type { PluginManifest } from '@/lib/schemas/plugin-manifest';
-import { loadPluginModule, extractPluginExport } from './dynamic-loader';
+import { extractPluginExport } from './dynamic-loader';
+import { AbstractProviderRegistry, type ProviderRegistryBaseState } from './abstract-provider-registry';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-export interface ProviderRegistryState {
-  initialized: boolean;
-  providers: Map<string, LLMProviderPlugin>;
-  errors: Map<string, string>;
-  lastInitTime: Date | null;
-}
+export type ProviderRegistryState = ProviderRegistryBaseState<LLMProviderPlugin>;
 
 // ============================================================================
 // GLOBAL STATE PERSISTENCE
@@ -42,58 +40,45 @@ declare global {
   var __quilltapProviderRegistryState: ProviderRegistryState | undefined;
 }
 
-/**
- * Get or create the global registry state
- * Using global ensures state persists across Next.js module reloads
- */
-function getGlobalState(): ProviderRegistryState {
-  if (!global.__quilltapProviderRegistryState) {
-    global.__quilltapProviderRegistryState = {
+// ============================================================================
+// DEFAULT CAPABILITIES
+// ============================================================================
+
+const DEFAULT_CAPABILITIES = {
+  chat: 'chat',
+  imageGeneration: 'imageGeneration',
+  embeddings: 'embeddings',
+  webSearch: 'webSearch',
+  toolUse: 'toolUse',
+} as const;
+
+// ============================================================================
+// REGISTRY SINGLETON
+// ============================================================================
+
+class ProviderRegistry extends AbstractProviderRegistry<LLMProviderPlugin> {
+  protected readonly registryName = 'provider-registry';
+  protected readonly globalStateKey = '__quilltapProviderRegistryState';
+  protected readonly typeName = 'provider';
+
+  protected createEmptyState(): ProviderRegistryState {
+    return {
       initialized: false,
       providers: new Map(),
       errors: new Map(),
       lastInitTime: null,
     };
   }
-  return global.__quilltapProviderRegistryState;
-}
 
-// ============================================================================
-// REGISTRY SINGLETON
-// ============================================================================
-
-class ProviderRegistry {
-  private get state(): ProviderRegistryState {
-    return getGlobalState();
-  }
-
-  private logger = logger.child({
-    module: 'provider-registry',
-  });
-
-  /**
-   * Register a provider plugin
-   *
-   * @param plugin The provider plugin to register
-   * @throws Error if provider with same name is already registered
-   */
-  registerProvider(plugin: LLMProviderPlugin): void {
-    const providerName = plugin.metadata.providerName;
-
-    if (this.state.providers.has(providerName)) {
-      const error = `Provider '${providerName}' is already registered`;
-      this.logger.warn(error);
-      throw new Error(error);
-    }
-
-    this.state.providers.set(providerName, plugin);
-  }
+  // =========================================================================
+  // LLM-SPECIFIC HELPERS
+  // =========================================================================
 
   private requireProvider(name: string): LLMProviderPlugin {
     const plugin = this.getProvider(name);
     if (!plugin) {
       const error = `Provider '${name}' not found in registry`;
-      this.logger.error(error);
+      this.registryLogger.error(error);
       throw new Error(error);
     }
     return plugin;
@@ -103,53 +88,12 @@ class ProviderRegistry {
     return baseUrl ? rewriteLocalhostUrl(baseUrl) : baseUrl;
   }
 
-  /**
-   * Get a specific provider plugin by name
-   *
-   * @param name The provider name (e.g., 'OPENAI')
-   * @returns The provider plugin or null if not found
-   */
-  getProvider(name: string): LLMProviderPlugin | null {
-    return this.state.providers.get(name) ?? null;
-  }
-
-  /**
-   * Get all registered provider plugins
-   *
-   * @returns Array of all registered provider plugins
-   */
-  getAllProviders(): LLMProviderPlugin[] {
-    return Array.from(this.state.providers.values());
-  }
-
-  /**
-   * Check if a provider is registered
-   *
-   * @param name The provider name
-   * @returns true if provider is registered, false otherwise
-   */
-  hasProvider(name: string): boolean {
-    return this.state.providers.has(name);
-  }
-
-  /**
-   * Get list of all registered provider names
-   *
-   * Useful for populating dropdown menus and provider selection UI
-   *
-   * @returns Array of provider names (e.g., ['OPENAI', 'ANTHROPIC', ...])
-   */
-  getProviderNames(): string[] {
-    return Array.from(this.state.providers.keys());
-  }
+  // =========================================================================
+  // FACTORY METHODS (LLM-specific)
+  // =========================================================================
 
   /**
    * Create an LLMProvider instance from a registered plugin
-   *
-   * @param name The provider name
-   * @param baseUrl Optional base URL for providers that support custom endpoints
-   * @returns An instantiated LLMProvider
-   * @throws Error if provider not found or creation fails
    */
   createLLMProvider(name: string, baseUrl?: string): LLMProvider {
     const plugin = this.requireProvider(name);
@@ -158,7 +102,7 @@ class ProviderRegistry {
       const resolvedUrl = this.resolveBaseUrl(baseUrl);
       return plugin.createProvider(resolvedUrl);
     } catch (error) {
-      this.logger.error('Failed to create LLM provider', {
+      this.registryLogger.error('Failed to create LLM provider', {
         provider: name,
         error: getErrorMessage(error),
       });
@@ -168,24 +112,19 @@ class ProviderRegistry {
 
   /**
    * Create an ImageGenProvider instance from a registered plugin
-   *
-   * @param name The provider name
-   * @param baseUrl Optional base URL for providers that support custom endpoints
-   * @returns An instantiated ImageGenProvider
-   * @throws Error if provider not found, doesn't support image generation, or creation fails
    */
   createImageProvider(name: string, baseUrl?: string): ImageGenProvider {
     const plugin = this.requireProvider(name);
 
     if (!plugin.capabilities.imageGeneration) {
       const error = `Provider '${name}' does not support image generation`;
-      this.logger.warn(error);
+      this.registryLogger.warn(error);
       throw new Error(error);
     }
 
     if (!plugin.createImageProvider) {
       const error = `Provider '${name}' does not implement createImageProvider`;
-      this.logger.error(error);
+      this.registryLogger.error(error);
       throw new Error(error);
     }
 
@@ -193,7 +132,7 @@ class ProviderRegistry {
       const resolvedUrl = this.resolveBaseUrl(baseUrl);
       return plugin.createImageProvider(resolvedUrl);
     } catch (error) {
-      this.logger.error('Failed to create image provider', {
+      this.registryLogger.error('Failed to create image provider', {
         provider: name,
         error: getErrorMessage(error),
       });
@@ -203,24 +142,19 @@ class ProviderRegistry {
 
   /**
    * Create an EmbeddingProvider instance from a registered plugin
-   *
-   * @param name The provider name
-   * @param baseUrl Optional base URL for providers that support custom endpoints
-   * @returns An instantiated EmbeddingProvider or LocalEmbeddingProvider
-   * @throws Error if provider not found, doesn't support embeddings, or creation fails
    */
   createEmbeddingProvider(name: string, baseUrl?: string): EmbeddingProvider | LocalEmbeddingProvider {
     const plugin = this.requireProvider(name);
 
     if (!plugin.capabilities.embeddings) {
       const error = `Provider '${name}' does not support embeddings`;
-      this.logger.warn(error);
+      this.registryLogger.warn(error);
       throw new Error(error);
     }
 
     if (!plugin.createEmbeddingProvider) {
       const error = `Provider '${name}' does not implement createEmbeddingProvider`;
-      this.logger.error(error);
+      this.registryLogger.error(error);
       throw new Error(error);
     }
 
@@ -228,7 +162,7 @@ class ProviderRegistry {
       const resolvedUrl = this.resolveBaseUrl(baseUrl);
       return plugin.createEmbeddingProvider(resolvedUrl);
     } catch (error) {
-      this.logger.error('Failed to create embedding provider', {
+      this.registryLogger.error('Failed to create embedding provider', {
         provider: name,
         error: getErrorMessage(error),
       });
@@ -236,34 +170,12 @@ class ProviderRegistry {
     }
   }
 
-  /**
-   * Get metadata for a specific provider
-   *
-   * Metadata includes display name, colors, abbreviation, etc.
-   * Useful for UI rendering and provider identification.
-   *
-   * @param name The provider name
-   * @returns The provider metadata or null if not found
-   */
-  getProviderMetadata(name: string): ProviderMetadata | null {
-    const plugin = this.getProvider(name);
-    return plugin?.metadata || null;
-  }
-
-  /**
-   * Get metadata for all registered providers
-   *
-   * @returns Array of provider metadata objects
-   */
-  getAllProviderMetadata(): ProviderMetadata[] {
-    return this.getAllProviders().map(p => p.metadata);
-  }
+  // =========================================================================
+  // LLM-SPECIFIC QUERY METHODS
+  // =========================================================================
 
   /**
    * Get attachment support information for a provider
-   *
-   * @param name The provider name
-   * @returns Attachment support info or null if not found
    */
   getAttachmentSupport(name: string): AttachmentSupport | null {
     const plugin = this.getProvider(name);
@@ -271,21 +183,7 @@ class ProviderRegistry {
   }
 
   /**
-   * Get configuration requirements for a provider
-   *
-   * @param name The provider name
-   * @returns Configuration requirements or null if not found
-   */
-  getConfigRequirements(name: string): ProviderConfigRequirements | null {
-    const plugin = this.getProvider(name);
-    return plugin?.config || null;
-  }
-
-  /**
    * Get all providers that support a specific capability
-   *
-   * @param capability The capability to check ('chat', 'imageGeneration', 'embeddings', 'webSearch')
-   * @returns Array of provider plugins with the capability
    */
   getProvidersByCapability(capability: keyof typeof DEFAULT_CAPABILITIES): LLMProviderPlugin[] {
     return this.getAllProviders().filter(
@@ -295,10 +193,6 @@ class ProviderRegistry {
 
   /**
    * Check if a provider supports a specific capability
-   *
-   * @param name The provider name
-   * @param capability The capability to check
-   * @returns true if provider supports the capability, false otherwise
    */
   supportsCapability(name: string, capability: keyof typeof DEFAULT_CAPABILITIES): boolean {
     const plugin = this.getProvider(name);
@@ -307,8 +201,6 @@ class ProviderRegistry {
 
   /**
    * Get all providers that support attachments
-   *
-   * @returns Array of provider plugins with attachment support
    */
   getProvidersWithAttachmentSupport(): LLMProviderPlugin[] {
     return this.getAllProviders().filter(
@@ -318,12 +210,6 @@ class ProviderRegistry {
 
   /**
    * Get image provider constraints for a provider
-   *
-   * Returns constraints and limitations for image generation.
-   * Used to apply provider-specific constraints to image generation tools.
-   *
-   * @param name The provider name
-   * @returns Image provider constraints or null if not found/not supported
    */
   getImageProviderConstraints(name: string): ImageProviderConstraints | null {
     const plugin = this.getProvider(name);
@@ -331,12 +217,10 @@ class ProviderRegistry {
       return null;
     }
 
-    // Check if provider supports image generation
     if (!plugin.capabilities.imageGeneration) {
       return null;
     }
 
-    // Call getImageProviderConstraints if it exists
     if (plugin.getImageProviderConstraints && typeof plugin.getImageProviderConstraints === 'function') {
       return plugin.getImageProviderConstraints();
     }
@@ -345,15 +229,9 @@ class ProviderRegistry {
   }
 
   /**
-   * Validate an API key using the provider plugin, with localhost URL rewriting.
-   *
-   * @param name The provider name
-   * @param apiKey The API key to validate
-   * @param baseUrl Optional base URL (will be rewritten if localhost in VM/container)
-   * @returns true if the API key is valid
-   * @throws Error if provider not found
+   * Validate an API key (override — uses requireProvider for strict checking)
    */
-  async validateApiKey(name: string, apiKey: string, baseUrl?: string): Promise<boolean> {
+  override async validateApiKey(name: string, apiKey: string, baseUrl?: string): Promise<boolean> {
     const plugin = this.requireProvider(name);
     const resolvedUrl = this.resolveBaseUrl(baseUrl);
     return plugin.validateApiKey(apiKey, resolvedUrl);
@@ -361,12 +239,6 @@ class ProviderRegistry {
 
   /**
    * Fetch available models from a provider, with localhost URL rewriting.
-   *
-   * @param name The provider name
-   * @param apiKey The API key for authentication
-   * @param baseUrl Optional base URL (will be rewritten if localhost in VM/container)
-   * @returns Array of model IDs, or empty array if not supported
-   * @throws Error if provider not found
    */
   async getAvailableModels(name: string, apiKey: string, baseUrl?: string): Promise<string[]> {
     const plugin = this.requireProvider(name);
@@ -385,12 +257,6 @@ class ProviderRegistry {
 
   /**
    * Get message format support for a provider
-   *
-   * Returns the provider's configuration for handling the 'name' field
-   * in messages (used for multi-character chats).
-   *
-   * @param name The provider name
-   * @returns MessageFormatSupport or default (no name support) if not found
    */
   getMessageFormat(name: string): MessageFormatSupport {
     const plugin = this.getProvider(name);
@@ -399,11 +265,6 @@ class ProviderRegistry {
 
   /**
    * Get token estimation multiplier for a provider
-   *
-   * Returns characters-per-token ratio for estimating token counts.
-   *
-   * @param name The provider name
-   * @returns Characters per token (default: 3.5)
    */
   getCharsPerToken(name: string): number {
     const plugin = this.getProvider(name);
@@ -412,11 +273,6 @@ class ProviderRegistry {
 
   /**
    * Get tool format type for a provider
-   *
-   * Returns the tool format this provider expects.
-   *
-   * @param name The provider name
-   * @returns Tool format type (default: 'openai')
    */
   getToolFormat(name: string): ToolFormatType {
     const plugin = this.getProvider(name);
@@ -425,11 +281,6 @@ class ProviderRegistry {
 
   /**
    * Get cheap model configuration for a provider
-   *
-   * Returns the recommended models for cheap/background tasks.
-   *
-   * @param name The provider name
-   * @returns CheapModelConfig or null if not configured
    */
   getCheapModelConfig(name: string): CheapModelConfig | null {
     const plugin = this.getProvider(name);
@@ -438,11 +289,6 @@ class ProviderRegistry {
 
   /**
    * Get default context window for a provider
-   *
-   * Returns the fallback context window when model is unknown.
-   *
-   * @param name The provider name
-   * @returns Default context window (default: 8192)
    */
   getDefaultContextWindow(name: string): number {
     const plugin = this.getProvider(name);
@@ -451,12 +297,6 @@ class ProviderRegistry {
 
   /**
    * Get model pricing from plugin's getModelInfo()
-   *
-   * Queries the plugin's model info for pricing data.
-   *
-   * @param providerName The provider name
-   * @param modelId The model identifier
-   * @returns Pricing object or null if not found
    */
   getModelPricing(providerName: string, modelId: string): { input: number; output: number } | null {
     const plugin = this.getProvider(providerName);
@@ -465,191 +305,40 @@ class ProviderRegistry {
     return model?.pricing ?? null;
   }
 
-  /**
-   * Initialize the registry (called by the plugin system)
-   *
-   * @param providers Array of provider plugins to register
-   */
-  async initialize(providers: LLMProviderPlugin[]): Promise<void> {
-    // Clear existing state
-    this.state.providers.clear();
-    this.state.errors.clear();
-
-    // Register each provider
-    for (const provider of providers) {
-      try {
-        this.registerProvider(provider);
-      } catch (error) {
-        const providerName = provider.metadata.providerName;
-        const errorMessage = getErrorMessage(error);
-        this.state.errors.set(providerName, errorMessage);
-        this.logger.warn('Failed to register provider', {
-          name: providerName,
-          error: errorMessage,
-        });
-      }
-    }
-
-    this.state.initialized = true;
-    this.state.lastInitTime = new Date();
-  }
-
-  /**
-   * Get registry statistics
-   *
-   * @returns Statistics about registered providers
-   */
-  getStats() {
-    return {
-      total: this.state.providers.size,
-      errors: this.state.errors.size,
-      initialized: this.state.initialized,
-      lastInitTime: this.state.lastInitTime?.toISOString() || null,
-      providers: Array.from(this.state.providers.keys()),
-    };
-  }
-
-  /**
-   * Get all errors from provider registration
-   *
-   * @returns Array of registration errors
-   */
-  getErrors(): Array<{ provider: string; error: string }> {
-    return Array.from(this.state.errors.entries()).map(([provider, error]) => ({
-      provider,
-      error,
-    }));
-  }
-
-  /**
-   * Check if registry is initialized
-   *
-   * @returns true if registry has been initialized
-   */
-  isInitialized(): boolean {
-    return this.state.initialized;
-  }
-
-  /**
-   * Reset the registry (for testing)
-   *
-   * @internal
-   */
-  reset(): void {
-    // Reset the global state entirely
-    global.__quilltapProviderRegistryState = {
-      initialized: false,
-      providers: new Map(),
-      errors: new Map(),
-      lastInitTime: null,
-    };
-  }
+  // =========================================================================
+  // HOT-LOADING (LLM-specific)
+  // =========================================================================
 
   /**
    * Hot-load a provider plugin from disk after installation
-   *
-   * Loads a provider plugin module and registers it with the registry
-   * without requiring a full server restart.
-   *
-   * @param pluginPath Path to the installed plugin directory
-   * @param manifest The validated plugin manifest
-   * @returns true if provider was loaded and registered, false otherwise
    */
   hotLoadProviderPlugin(pluginPath: string, manifest: PluginManifest): boolean {
-    // Handle LLM_PROVIDER or EMBEDDING_PROVIDER plugins
-    const isLLMProvider = manifest.capabilities.includes('LLM_PROVIDER');
-    const isEmbeddingProvider = manifest.capabilities.includes('EMBEDDING_PROVIDER');
-
-    if (!isLLMProvider && !isEmbeddingProvider) {
-      return false;
-    }
-
-    try {
-      const pluginModule = loadPluginModule(pluginPath, manifest);
-      if (!pluginModule) {
-        return false;
-      }
-
-      // Extract the provider plugin object
-      const providerPlugin = extractPluginExport(pluginModule) as LLMProviderPlugin | undefined;
-
-      if (!providerPlugin?.metadata?.providerName) {
-        this.logger.warn('Provider plugin module does not export a valid plugin object', {
-          plugin: manifest.name,
-          exports: Object.keys((pluginModule as Record<string, unknown>) || {}),
-        });
-        return false;
-      }
-
-      // Check if already registered (e.g., from a previous hot-load or startup)
-      if (this.state.providers.has(providerPlugin.metadata.providerName)) {
-        this.logger.info('Provider already registered, skipping', {
-          plugin: manifest.name,
-          provider: providerPlugin.metadata.providerName,
-        });
-        return true; // Already available, consider it success
-      }
-
-      // Register the provider
-      this.registerProvider(providerPlugin);
-      this.logger.info('Provider plugin hot-loaded successfully', {
-        plugin: manifest.name,
-        provider: providerPlugin.metadata.providerName,
-        displayName: providerPlugin.metadata.displayName,
-      });
-
-      return true;
-    } catch (error) {
-      const errorMessage = getErrorMessage(error);
-      this.logger.error('Failed to hot-load provider plugin', {
-        plugin: manifest.name,
-        error: errorMessage,
-      });
-      this.state.errors.set(manifest.name, errorMessage);
-      return false;
-    }
+    return this.hotLoadProviderPluginBase(
+      pluginPath,
+      manifest,
+      ['LLM_PROVIDER', 'EMBEDDING_PROVIDER'],
+      (pluginModule) => extractPluginExport(pluginModule) as LLMProviderPlugin | undefined,
+    );
   }
 
-  /**
-   * Export registry state for debugging/admin UI
-   *
-   * @returns Complete registry state
-   */
-  exportState() {
+  // =========================================================================
+  // EXPORT (override for LLM-specific fields)
+  // =========================================================================
+
+  protected override mapProviderToExportItem(name: string, plugin: LLMProviderPlugin): Record<string, unknown> {
     return {
-      initialized: this.state.initialized,
-      lastInitTime: this.state.lastInitTime?.toISOString() || null,
-      providers: Array.from(this.state.providers.entries()).map(([name, plugin]) => ({
-        name,
-        displayName: plugin.metadata.displayName,
-        description: plugin.metadata.description,
-        capabilities: plugin.capabilities,
-        attachmentSupport: plugin.attachmentSupport,
-        configRequirements: {
-          requiresApiKey: plugin.config.requiresApiKey,
-          requiresBaseUrl: plugin.config.requiresBaseUrl,
-        },
-      })),
-      errors: Array.from(this.state.errors.entries()).map(([provider, error]) => ({
-        provider,
-        error,
-      })),
-      stats: this.getStats(),
+      name,
+      displayName: plugin.metadata.displayName,
+      description: plugin.metadata.description,
+      capabilities: plugin.capabilities,
+      attachmentSupport: plugin.attachmentSupport,
+      configRequirements: {
+        requiresApiKey: plugin.config.requiresApiKey,
+        requiresBaseUrl: plugin.config.requiresBaseUrl,
+      },
     };
   }
 }
-
-// ============================================================================
-// DEFAULT CAPABILITIES
-// ============================================================================
-
-const DEFAULT_CAPABILITIES = {
-  chat: 'chat',
-  imageGeneration: 'imageGeneration',
-  embeddings: 'embeddings',
-  webSearch: 'webSearch',
-  toolUse: 'toolUse',
-} as const;
 
 // ============================================================================
 // SINGLETON INSTANCE
@@ -666,8 +355,6 @@ export const providerRegistry = new ProviderRegistry();
 
 /**
  * Register a provider plugin
- *
- * @param plugin The provider plugin to register
  */
 export function registerProvider(plugin: LLMProviderPlugin): void {
   providerRegistry.registerProvider(plugin);
@@ -675,9 +362,6 @@ export function registerProvider(plugin: LLMProviderPlugin): void {
 
 /**
  * Get a provider plugin by name
- *
- * @param name The provider name
- * @returns The provider plugin or null
  */
 export function getProvider(name: string): LLMProviderPlugin | null {
   return providerRegistry.getProvider(name);
@@ -685,8 +369,6 @@ export function getProvider(name: string): LLMProviderPlugin | null {
 
 /**
  * Get all registered provider plugins
- *
- * @returns Array of all registered providers
  */
 export function getAllProviders(): LLMProviderPlugin[] {
   return providerRegistry.getAllProviders();
@@ -694,9 +376,6 @@ export function getAllProviders(): LLMProviderPlugin[] {
 
 /**
  * Check if a provider is registered
- *
- * @param name The provider name
- * @returns true if provider exists
  */
 export function hasProvider(name: string): boolean {
   return providerRegistry.hasProvider(name);
@@ -704,8 +383,6 @@ export function hasProvider(name: string): boolean {
 
 /**
  * Get list of provider names
- *
- * @returns Array of provider names
  */
 export function getProviderNames(): string[] {
   return providerRegistry.getProviderNames();
@@ -713,10 +390,6 @@ export function getProviderNames(): string[] {
 
 /**
  * Create an LLMProvider instance
- *
- * @param name The provider name
- * @param baseUrl Optional base URL
- * @returns Instantiated LLMProvider
  */
 export function createLLMProvider(name: string, baseUrl?: string): LLMProvider {
   return providerRegistry.createLLMProvider(name, baseUrl);
@@ -724,10 +397,6 @@ export function createLLMProvider(name: string, baseUrl?: string): LLMProvider {
 
 /**
  * Create an ImageGenProvider instance
- *
- * @param name The provider name
- * @param baseUrl Optional base URL
- * @returns Instantiated ImageGenProvider
  */
 export function createImageProvider(name: string, baseUrl?: string): ImageGenProvider {
   return providerRegistry.createImageProvider(name, baseUrl);
@@ -735,10 +404,6 @@ export function createImageProvider(name: string, baseUrl?: string): ImageGenPro
 
 /**
  * Create an EmbeddingProvider instance
- *
- * @param name The provider name
- * @param baseUrl Optional base URL
- * @returns Instantiated EmbeddingProvider or LocalEmbeddingProvider
  */
 export function createEmbeddingProvider(name: string, baseUrl?: string): EmbeddingProvider | LocalEmbeddingProvider {
   return providerRegistry.createEmbeddingProvider(name, baseUrl);
@@ -746,9 +411,6 @@ export function createEmbeddingProvider(name: string, baseUrl?: string): Embeddi
 
 /**
  * Get provider metadata
- *
- * @param name The provider name
- * @returns Provider metadata or null
  */
 export function getProviderMetadata(name: string): ProviderMetadata | null {
   return providerRegistry.getProviderMetadata(name);
@@ -756,8 +418,6 @@ export function getProviderMetadata(name: string): ProviderMetadata | null {
 
 /**
  * Get all provider metadata
- *
- * @returns Array of metadata for all providers
  */
 export function getAllProviderMetadata(): ProviderMetadata[] {
   return providerRegistry.getAllProviderMetadata();
@@ -765,9 +425,6 @@ export function getAllProviderMetadata(): ProviderMetadata[] {
 
 /**
  * Get attachment support for a provider
- *
- * @param name The provider name
- * @returns Attachment support info or null
  */
 export function getAttachmentSupport(name: string): AttachmentSupport | null {
   return providerRegistry.getAttachmentSupport(name);
@@ -775,9 +432,6 @@ export function getAttachmentSupport(name: string): AttachmentSupport | null {
 
 /**
  * Get configuration requirements for a provider
- *
- * @param name The provider name
- * @returns Config requirements or null
  */
 export function getConfigRequirements(name: string): ProviderConfigRequirements | null {
   return providerRegistry.getConfigRequirements(name);
@@ -785,9 +439,6 @@ export function getConfigRequirements(name: string): ProviderConfigRequirements 
 
 /**
  * Get providers with a specific capability
- *
- * @param capability The capability to check
- * @returns Array of providers with the capability
  */
 export function getProvidersByCapability(
   capability: keyof typeof DEFAULT_CAPABILITIES
@@ -797,10 +448,6 @@ export function getProvidersByCapability(
 
 /**
  * Check if provider supports a capability
- *
- * @param name The provider name
- * @param capability The capability to check
- * @returns true if supported
  */
 export function supportsCapability(
   name: string,
@@ -811,8 +458,6 @@ export function supportsCapability(
 
 /**
  * Get providers with attachment support
- *
- * @returns Array of providers supporting attachments
  */
 export function getProvidersWithAttachmentSupport(): LLMProviderPlugin[] {
   return providerRegistry.getProvidersWithAttachmentSupport();
@@ -820,9 +465,6 @@ export function getProvidersWithAttachmentSupport(): LLMProviderPlugin[] {
 
 /**
  * Get image provider constraints for a provider
- *
- * @param name The provider name
- * @returns Image provider constraints or null
  */
 export function getImageProviderConstraints(name: string): ImageProviderConstraints | null {
   return providerRegistry.getImageProviderConstraints(name);
@@ -830,8 +472,6 @@ export function getImageProviderConstraints(name: string): ImageProviderConstrai
 
 /**
  * Initialize the provider registry
- *
- * @param providers Array of provider plugins to register
  */
 export async function initializeProviderRegistry(providers: LLMProviderPlugin[]): Promise<void> {
   return providerRegistry.initialize(providers);
@@ -839,8 +479,6 @@ export async function initializeProviderRegistry(providers: LLMProviderPlugin[])
 
 /**
  * Get registry statistics
- *
- * @returns Statistics about registered providers
  */
 export function getProviderRegistryStats() {
   return providerRegistry.getStats();
@@ -848,8 +486,6 @@ export function getProviderRegistryStats() {
 
 /**
  * Get registry errors
- *
- * @returns Array of registration errors
  */
 export function getProviderRegistryErrors() {
   return providerRegistry.getErrors();
@@ -857,8 +493,6 @@ export function getProviderRegistryErrors() {
 
 /**
  * Check if registry is initialized
- *
- * @returns true if initialized
  */
 export function isProviderRegistryInitialized(): boolean {
   return providerRegistry.isInitialized();
@@ -870,9 +504,6 @@ export function isProviderRegistryInitialized(): boolean {
 
 /**
  * Get message format support for a provider
- *
- * @param name The provider name
- * @returns MessageFormatSupport or default (no name support)
  */
 export function getMessageFormat(name: string): MessageFormatSupport {
   return providerRegistry.getMessageFormat(name);
@@ -880,9 +511,6 @@ export function getMessageFormat(name: string): MessageFormatSupport {
 
 /**
  * Get token estimation multiplier for a provider
- *
- * @param name The provider name
- * @returns Characters per token (default: 3.5)
  */
 export function getCharsPerToken(name: string): number {
   return providerRegistry.getCharsPerToken(name);
@@ -890,9 +518,6 @@ export function getCharsPerToken(name: string): number {
 
 /**
  * Get tool format type for a provider
- *
- * @param name The provider name
- * @returns Tool format type (default: 'openai')
  */
 export function getToolFormat(name: string): ToolFormatType {
   return providerRegistry.getToolFormat(name);
@@ -900,9 +525,6 @@ export function getToolFormat(name: string): ToolFormatType {
 
 /**
  * Get cheap model configuration for a provider
- *
- * @param name The provider name
- * @returns CheapModelConfig or null
  */
 export function getCheapModelConfig(name: string): CheapModelConfig | null {
   return providerRegistry.getCheapModelConfig(name);
@@ -910,9 +532,6 @@ export function getCheapModelConfig(name: string): CheapModelConfig | null {
 
 /**
  * Get default context window for a provider
- *
- * @param name The provider name
- * @returns Default context window (default: 8192)
  */
 export function getDefaultContextWindow(name: string): number {
   return providerRegistry.getDefaultContextWindow(name);
@@ -920,10 +539,6 @@ export function getDefaultContextWindow(name: string): number {
 
 /**
  * Get model pricing from plugin's getModelInfo()
- *
- * @param providerName The provider name
- * @param modelId The model identifier
- * @returns Pricing object or null
  */
 export function getModelPricing(providerName: string, modelId: string): { input: number; output: number } | null {
   return providerRegistry.getModelPricing(providerName, modelId);
@@ -931,10 +546,6 @@ export function getModelPricing(providerName: string, modelId: string): { input:
 
 /**
  * Hot-load a provider plugin from disk after installation
- *
- * @param pluginPath Path to the installed plugin directory
- * @param manifest The validated plugin manifest
- * @returns true if provider was loaded and registered
  */
 export function hotLoadProviderPlugin(pluginPath: string, manifest: PluginManifest): boolean {
   return providerRegistry.hotLoadProviderPlugin(pluginPath, manifest);
