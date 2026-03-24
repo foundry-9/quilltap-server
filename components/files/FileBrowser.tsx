@@ -80,6 +80,7 @@ export default function FileBrowser({
   const [showCleanupModal, setShowCleanupModal] = useState(false)
   const [cleanupStats, setCleanupStats] = useState<{
     orphanedCount: number
+    rescuedCount: number
     duplicateCount: number
     uniqueCount: number
     totalSize: number
@@ -389,6 +390,7 @@ export default function FileBrowser({
       const data = await res.json()
       setCleanupStats({
         orphanedCount: data.orphanedCount,
+        rescuedCount: data.rescuedCount || 0,
         duplicateCount: data.duplicateCount,
         uniqueCount: data.uniqueCount,
         totalSize: data.totalSize,
@@ -412,10 +414,10 @@ export default function FileBrowser({
       })
       if (!res.ok) throw new Error('Cleanup failed')
       const data = await res.json()
-      showSuccessToast(
-        `Moved ${data.moved} file${data.moved !== 1 ? 's' : ''} to /orphans/` +
-        (data.deleted > 0 ? `, removed ${data.deleted} duplicate${data.deleted !== 1 ? 's' : ''}` : '')
-      )
+      const parts = [`Moved ${data.moved} file${data.moved !== 1 ? 's' : ''} to /orphans/`]
+      if (data.deleted > 0) parts.push(`removed ${data.deleted} duplicate${data.deleted !== 1 ? 's' : ''}`)
+      if (data.rescuedCount > 0) parts.push(`rescued ${data.rescuedCount} referenced file${data.rescuedCount !== 1 ? 's' : ''}`)
+      showSuccessToast(parts.join(', '))
       setShowCleanupModal(false)
       setCleanupStats(null)
       fetchFiles()
@@ -436,7 +438,9 @@ export default function FileBrowser({
       })
       if (!res.ok) throw new Error('Cleanup failed')
       const data = await res.json()
-      showSuccessToast(`Removed ${data.deleted} orphaned file${data.deleted !== 1 ? 's' : ''}`)
+      const parts = [`Removed ${data.deleted} orphaned file${data.deleted !== 1 ? 's' : ''}`]
+      if (data.rescuedCount > 0) parts.push(`rescued ${data.rescuedCount} referenced file${data.rescuedCount !== 1 ? 's' : ''}`)
+      showSuccessToast(parts.join(', '))
       setShowCleanupModal(false)
       setCleanupStats(null)
       fetchFiles()

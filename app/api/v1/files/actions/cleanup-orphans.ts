@@ -5,6 +5,73 @@ import { serverError, successResponse } from '@/lib/api/responses';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { canGenerateThumbnail, cleanupThumbnails } from '@/lib/files/thumbnail-utils';
 import { cleanupOrphansSchema } from '../shared';
+import type { FileEntry } from '@/lib/schemas/file.types';
+
+/**
+ * Build a set of file IDs and SHA-256 hashes that are actively referenced by
+ * characters (as default avatars, avatar overrides, or gallery links).
+ * Any orphaned file matching these must be rescued, not deleted.
+ */
+async function buildReferencedFileSets(
+  ctx: AuthenticatedContext,
+  allFiles: FileEntry[]
+): Promise<{ referencedIds: Set<string>; referencedHashes: Set<string> }> {
+  const referencedIds = new Set<string>();
+
+  // Gather all character-referenced file IDs
+  const characters = await ctx.repos.characters.findAll();
+  for (const char of characters) {
+    if (char.defaultImageId) {
+      referencedIds.add(char.defaultImageId);
+    }
+    if (Array.isArray(char.avatarOverrides)) {
+      for (const override of char.avatarOverrides) {
+        if (override.imageId) {
+          referencedIds.add(override.imageId);
+        }
+      }
+    }
+  }
+
+  // Also treat any file with non-empty linkedTo as referenced
+  for (const file of allFiles) {
+    if (file.linkedTo && file.linkedTo.length > 0) {
+      referencedIds.add(file.id);
+    }
+  }
+
+  // Build SHA-256 set from referenced files so we can catch orphaned copies
+  // of files that characters still need (e.g. after reconciliation re-created
+  // the DB record under a new ID)
+  const referencedHashes = new Set<string>();
+  const fileById = new Map(allFiles.map(f => [f.id, f]));
+  for (const id of referencedIds) {
+    const file = fileById.get(id);
+    if (file?.sha256) {
+      referencedHashes.add(file.sha256);
+    }
+  }
+
+  return { referencedIds, referencedHashes };
+}
+
+/**
+ * Check whether an orphaned file is actually still referenced and should be
+ * rescued rather than deleted/moved.
+ */
+function isFileReferenced(
+  file: FileEntry,
+  referencedIds: Set<string>,
+  referencedHashes: Set<string>
+): boolean {
+  // Direct ID reference (character avatar, override, etc.)
+  if (referencedIds.has(file.id)) return true;
+  // Non-empty linkedTo (gallery tag, message attachment link, etc.)
+  if (file.linkedTo && file.linkedTo.length > 0) return true;
+  // SHA-256 matches a referenced file — the physical content is still needed
+  if (file.sha256 && referencedHashes.has(file.sha256)) return true;
+  return false;
+}
 
 export async function handleCleanupOrphans(
   request: NextRequest,
@@ -33,9 +100,31 @@ export async function handleCleanupOrphans(
 
     const allFiles = await ctx.repos.files.findByUserId(ctx.user.id);
 
+    // Build sets of file IDs and hashes that are actively referenced
+    const { referencedIds, referencedHashes } = await buildReferencedFileSets(ctx, allFiles);
+
     // Partition into orphaned and tracked files
-    const orphaned = allFiles.filter(f => f.fileStatus === 'orphaned');
+    const allOrphaned = allFiles.filter(f => f.fileStatus === 'orphaned');
     const tracked = allFiles.filter(f => f.fileStatus !== 'orphaned');
+
+    // Rescue orphaned files that are still referenced by characters or linked entities
+    const rescued: FileEntry[] = [];
+    const orphaned: FileEntry[] = [];
+    for (const file of allOrphaned) {
+      if (isFileReferenced(file, referencedIds, referencedHashes)) {
+        rescued.push(file);
+      } else {
+        orphaned.push(file);
+      }
+    }
+
+    if (rescued.length > 0) {
+      logger.info('[Files v1] Rescued referenced files from orphan cleanup', {
+        userId: ctx.user.id,
+        rescuedCount: rescued.length,
+        rescuedIds: rescued.map(f => f.id),
+      });
+    }
 
     // Build set of tracked SHA-256 hashes
     const trackedHashes = new Set(tracked.map(f => f.sha256));
@@ -52,6 +141,7 @@ export async function handleCleanupOrphans(
     logger.info('[Files v1] Cleanup orphans analysis', {
       userId: ctx.user.id,
       orphanedCount: orphaned.length,
+      rescuedCount: rescued.length,
       duplicateCount: duplicates.length,
       uniqueCount: unique.length,
       totalSize,
@@ -61,6 +151,7 @@ export async function handleCleanupOrphans(
     if (dryRun === true) {
       return successResponse({
         orphanedCount: orphaned.length,
+        rescuedCount: rescued.length,
         duplicateCount: duplicates.length,
         uniqueCount: unique.length,
         totalSize,
@@ -68,6 +159,25 @@ export async function handleCleanupOrphans(
         uniqueSize,
         dryRun: true,
       });
+    }
+
+    // Rescue referenced files: restore their status to 'ok'
+    let rescuedActual = 0;
+    for (const file of rescued) {
+      try {
+        await ctx.repos.files.update(file.id, { fileStatus: 'ok' });
+        rescuedActual += 1;
+        logger.debug('[Files v1] Rescued referenced orphan', {
+          fileId: file.id,
+          filename: file.originalFilename,
+          linkedTo: file.linkedTo,
+        });
+      } catch (error) {
+        logger.warn('[Files v1] Failed to rescue orphaned file', {
+          fileId: file.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
 
     // Actual cleanup
@@ -127,6 +237,7 @@ export async function handleCleanupOrphans(
     logger.info('[Files v1] Cleanup orphans complete', {
       userId: ctx.user.id,
       orphanedCount: orphaned.length,
+      rescuedCount: rescuedActual,
       duplicateCount: duplicates.length,
       uniqueCount: unique.length,
       totalSize,
@@ -137,6 +248,7 @@ export async function handleCleanupOrphans(
 
     return successResponse({
       orphanedCount: orphaned.length,
+      rescuedCount: rescuedActual,
       duplicateCount: duplicates.length,
       uniqueCount: unique.length,
       totalSize,

@@ -21,6 +21,7 @@ interface OrphanCleanupModalProps {
   isOpen: boolean
   stats: {
     orphanedCount: number
+    rescuedCount: number
     duplicateCount: number
     uniqueCount: number
     totalSize: number
@@ -40,7 +41,7 @@ export default function OrphanCleanupModal({
   onCancel,
   isProcessing,
 }: Readonly<OrphanCleanupModalProps>) {
-  const { orphanedCount, duplicateCount, uniqueCount, uniqueSize } = stats
+  const { orphanedCount, rescuedCount, duplicateCount, uniqueCount, uniqueSize } = stats
 
   const footer = (
     <div className="flex justify-end gap-2">
@@ -82,6 +83,15 @@ export default function OrphanCleanupModal({
         <p className="qt-text-base font-semibold">
           We have discovered <strong>{orphanedCount} files</strong> loitering about the premises without proper documentation — rather like uninvited guests at a garden party who nonetheless appear to have brought their own sandwiches.
         </p>
+
+        {/* Rescued files notice */}
+        {rescuedCount > 0 && (
+          <div className="p-3 rounded qt-bg-success/10 qt-border-success/30 border">
+            <p className="qt-text-small">
+              <strong>{rescuedCount}</strong> {rescuedCount === 1 ? 'file has' : 'files have'} been identified as still serving in active duty — attached to character galleries or avatars — and shall be restored to good standing forthwith.
+            </p>
+          </div>
+        )}
 
         {/* Duplicate files explanation */}
         {duplicateCount > 0 && (
