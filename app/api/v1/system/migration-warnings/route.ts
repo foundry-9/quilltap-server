@@ -10,10 +10,9 @@
  * Unauthenticated as it runs during startup before user auth is available.
  */
 
-import { NextResponse } from 'next/server';
 import { startupState } from '@/lib/startup/startup-state';
 import { logger } from '@/lib/logger';
-import { serverError } from '@/lib/api/responses';
+import { successResponse, serverError, messageResponse } from '@/lib/api/responses';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,8 +26,7 @@ export async function GET() {
   try {
     // Check if server is ready
     if (!startupState.isReady()) {
-      return NextResponse.json({
-        success: true,
+      return successResponse({
         ready: false,
         warnings: [],
         message: 'Server startup not complete',
@@ -37,8 +35,7 @@ export async function GET() {
 
     // Check for un-notified warnings
     if (!startupState.hasUnnotifiedMigrationWarnings()) {
-      return NextResponse.json({
-        success: true,
+      return successResponse({
         ready: true,
         warnings: [],
         message: 'No un-notified migration warnings',
@@ -52,8 +49,7 @@ export async function GET() {
       warningCount: warnings.length,
     });
 
-    return NextResponse.json({
-      success: true,
+    return successResponse({
       ready: true,
       warnings,
     });
@@ -81,10 +77,7 @@ export async function POST() {
       context: 'api.v1.system.migration-warnings.POST',
     });
 
-    return NextResponse.json({
-      success: true,
-      message: 'Migration warnings marked as notified',
-    });
+    return messageResponse('Migration warnings marked as notified');
   } catch (error) {
     logger.error(
       'Error marking migration warnings as notified',

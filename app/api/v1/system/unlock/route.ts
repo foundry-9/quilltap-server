@@ -16,7 +16,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
-import { badRequest, serverError, unauthorized } from '@/lib/api/responses';
+import { badRequest, serverError, successResponse, unauthorized } from '@/lib/api/responses';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,7 +58,7 @@ export async function GET() {
       }
     }
 
-    return NextResponse.json({ state, hasUserPassphrase, autoLockMinutes });
+    return successResponse({ state, hasUserPassphrase, autoLockMinutes });
   } catch (error) {
     unlockLogger.error('Error getting database key status', {
       error: error instanceof Error ? error.message : String(error),
@@ -191,8 +191,7 @@ async function handleSetup(passphrase: string): Promise<NextResponse> {
   }
 
   // Return the pepper once for the user to save
-  return NextResponse.json({
-    success: true,
+  return successResponse({
     pepper: result.pepper,
     message: 'Encryption key generated and stored. Save this value — it will not be displayed again.',
   });
@@ -277,7 +276,7 @@ async function handleUnlock(passphrase: string): Promise<NextResponse> {
   }
 
   unlockLogger.info('Database key unlocked successfully');
-  return NextResponse.json({ success: true });
+  return successResponse({});
 }
 
 /**
@@ -293,7 +292,7 @@ async function handleStore(passphrase: string): Promise<NextResponse> {
   startupState.setPepperState('resolved');
 
   unlockLogger.info('Pepper stored in .dbkey file successfully');
-  return NextResponse.json({ success: true });
+  return successResponse({});
 }
 
 /**
@@ -325,7 +324,7 @@ async function handleChangePassphrase(body: Record<string, unknown>): Promise<Ne
   }
 
   unlockLogger.info('Passphrase changed successfully');
-  return NextResponse.json({ success: true });
+  return successResponse({});
 }
 
 /**
@@ -375,5 +374,5 @@ async function handleLock(): Promise<NextResponse> {
   startupState.setPhase('locked');
 
   unlockLogger.info('Application locked successfully via auto-lock');
-  return NextResponse.json({ success: true });
+  return successResponse({});
 }

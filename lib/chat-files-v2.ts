@@ -70,14 +70,6 @@ export interface ChatFileUploadOptions {
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 /**
- * Get the file extension from an original filename
- */
-function getExtension(filename: string): string {
-  const ext = extname(filename);
-  return ext || '.bin';
-}
-
-/**
  * Generate a unique filename by appending (1), (2), etc.
  * @param filename - Original filename
  * @param existingFilenames - Set of filenames that already exist

@@ -25,7 +25,7 @@ This document tracks planned features and improvements for Quilltap.
 - [X] Turn off story backgrounds for help chats
 - [X] Better "chat" look-and-feel for help
 - [X] Unit test coverage
-- [ ] Standard refactor pass
+- [X] Standard refactor pass
 - [X] Organize documentation (dev docs, help docs, README)
 - [X] Database locking
 - [X] Database version locking

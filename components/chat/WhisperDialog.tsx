@@ -87,7 +87,7 @@ export function WhisperDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/50"
+        className="absolute inset-0 qt-bg-overlay-caption"
         onClick={onClose}
       />
       {/* Dialog */}

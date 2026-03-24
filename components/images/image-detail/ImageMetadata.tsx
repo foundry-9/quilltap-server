@@ -45,7 +45,7 @@ export function ImageMetadata({
   }, [characters, taggedCharacterIds])
 
   return (
-    <div className="qt-panel bg-black/70 backdrop-blur-sm w-full max-w-2xl">
+    <div className="qt-panel qt-bg-overlay-medium backdrop-blur-sm w-full max-w-2xl">
       <div className="flex flex-col gap-4">
         {loadingEntities && (
           <p className="text-muted-foreground text-sm">Loading characters...</p>

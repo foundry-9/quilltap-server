@@ -69,7 +69,7 @@ export function InstanceLockGate() {
   const startedAt = new Date(conflict.startedAt).toLocaleString();
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center qt-bg-overlay backdrop-blur-sm">
       <div className="qt-card mx-4 max-w-lg p-8 text-center">
         <div className="text-4xl mb-4" aria-hidden="true">&#x1F512;</div>
         <h1 className="qt-heading-lg mb-2">Database In Use</h1>

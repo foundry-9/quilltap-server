@@ -140,7 +140,7 @@ export function ProgressBar({ currentStep, startedAt }: ProgressBarProps) {
               <span
                 key={seg.key}
                 className={`text-[10px] ${
-                  isActive ? 'text-primary font-medium' : isDone ? 'text-green-600' : 'text-muted-foreground'
+                  isActive ? 'text-primary font-medium' : isDone ? 'qt-text-success' : 'text-muted-foreground'
                 }`}
               >
                 {seg.label}

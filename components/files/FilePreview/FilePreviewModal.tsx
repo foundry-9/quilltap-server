@@ -138,7 +138,7 @@ export default function FilePreviewModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center qt-bg-overlay backdrop-blur-sm"
       onClick={handleBackdropClick}
       onMouseDown={handleMouseDown}
     >

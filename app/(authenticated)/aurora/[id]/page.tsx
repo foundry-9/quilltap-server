@@ -15,7 +15,7 @@ export default function CharacterRedirectPage({ params }: { params: Promise<{ id
 
   return (
     <div className="flex items-center justify-center min-h-screen">
-      <p className="text-lg text-gray-900 dark:text-white">Loading...</p>
+      <p className="text-lg qt-text-primary">Loading...</p>
     </div>
   )
 }

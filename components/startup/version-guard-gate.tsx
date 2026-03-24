@@ -58,7 +58,7 @@ export function VersionGuardGate() {
   if (!versionBlock) return null;
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center qt-bg-overlay backdrop-blur-sm">
       <div className="qt-card mx-4 max-w-lg p-8 text-center">
         <div className="text-4xl mb-4" aria-hidden="true">&#x26A0;&#xFE0F;</div>
         <h1 className="qt-heading-lg mb-2">A Most Regrettable Anachronism</h1>

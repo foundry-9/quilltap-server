@@ -237,7 +237,7 @@ export function SuggestionCard({
             <button
               type="button"
               onClick={onAccept}
-              className="qt-button-ghost qt-button-sm flex-1 min-w-[80px] text-green-600"
+              className="qt-button-ghost qt-button-sm flex-1 min-w-[80px] qt-text-success"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
