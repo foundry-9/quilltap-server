@@ -102,7 +102,6 @@ export interface EnrichedParticipantDetail {
   isActive: boolean
   status: string
   removedAt?: string | null
-  systemPromptOverride: string | null
   character: EnrichedCharacterDetail | null
   connectionProfile: EnrichedConnectionProfile | null
   imageProfile: EnrichedImageProfile | null
@@ -344,7 +343,6 @@ export async function enrichParticipantDetail(
     isActive: participant.isActive,
     status: participant.status || 'active',
     removedAt: participant.removedAt ?? null,
-    systemPromptOverride: participant.systemPromptOverride ?? null,
     character,
     connectionProfile,
     imageProfile,

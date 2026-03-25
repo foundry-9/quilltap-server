@@ -44,7 +44,6 @@ export function useParticipants({
           controlledBy: p.controlledBy ?? 'llm',
           connectionProfileId: p.connectionProfile?.id ?? null,
           imageProfileId: p.imageProfile?.id ?? null,
-          systemPromptOverride: p.systemPromptOverride ?? null,
           displayOrder: p.displayOrder,
           isActive: p.isActive,
           status: (p.status as 'active' | 'silent' | 'absent' | 'removed') || (p.isActive ? 'active' : (p.removedAt ? 'removed' : 'absent')),
@@ -112,7 +111,6 @@ export function useParticipants({
       displayOrder: p.displayOrder,
       isActive: p.isActive,
       status: (p.status as 'active' | 'silent' | 'absent' | 'removed') || (p.isActive ? 'active' : 'absent'),
-      systemPromptOverride: p.systemPromptOverride ?? null,
       character: p.character ? {
         id: p.character.id,
         name: p.character.name,

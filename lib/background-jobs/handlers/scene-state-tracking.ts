@@ -180,16 +180,9 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
     scenario: char!.scenario || undefined,
   }));
 
-  // 8b. Extract chat scenario from participant system prompts
-  // The systemPromptOverride on participants typically sets up the opening scene
-  // Only include present (active/silent) participants
-  const chatScenarioParts: string[] = [];
-  for (const participant of chat.participants) {
-    if (isParticipantPresent(participant.status) && participant.systemPromptOverride) {
-      chatScenarioParts.push(participant.systemPromptOverride);
-    }
-  }
+  // 8b. Extract chat scenario context
   // Also include context summary if available (provides ongoing scene context)
+  const chatScenarioParts: string[] = [];
   if (chat.contextSummary) {
     chatScenarioParts.push(`Story so far: ${chat.contextSummary}`);
   }

@@ -348,7 +348,6 @@ export async function buildMessageContext(
     chat,
     existingMessages: conversationMessages,
     newUserMessage,
-    systemPromptOverride: characterParticipant.systemPromptOverride,
     roleplayTemplate,
     embeddingProfileId: chatSettings?.cheapLLMSettings?.embeddingProfileId || undefined,
     skipMemories: false,

@@ -90,7 +90,7 @@ const createMockRepos = () => ({
           controlledBy: 'llm',
           isActive: true,
           status: 'active',
-          systemPromptOverride: null,
+
         },
       ],
       contextSummary: null,
@@ -407,7 +407,7 @@ describe('handleSceneStateTracking', () => {
       messageCount: 5,
       sceneState: null,
       isDangerousChat: true,
-      participants: [{ id: 'p1', characterId: 'char-1', controlledBy: 'llm', isActive: true, status: 'active', systemPromptOverride: null }],
+      participants: [{ id: 'p1', characterId: 'char-1', controlledBy: 'llm', isActive: true, status: 'active' }],
       contextSummary: null,
     })
     // Must return a valid selection so cheapLLMSelection stays non-null after the call
@@ -438,8 +438,8 @@ describe('handleSceneStateTracking', () => {
       sceneState: null,
       isDangerousChat: false,
       participants: [
-        { id: 'p1', characterId: 'char-1', controlledBy: 'llm', isActive: true, status: 'active', systemPromptOverride: null },
-        { id: 'p2', characterId: 'char-2', controlledBy: 'llm', isActive: true, status: 'active', systemPromptOverride: null },
+        { id: 'p1', characterId: 'char-1', controlledBy: 'llm', isActive: true, status: 'active' },
+        { id: 'p2', characterId: 'char-2', controlledBy: 'llm', isActive: true, status: 'active' },
       ],
       contextSummary: null,
     })

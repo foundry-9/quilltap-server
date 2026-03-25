@@ -163,17 +163,6 @@ This makes switching models the fastest possible action — no need to open a se
 - Remove this character from the chat
 - Only available if more than one character present
 
-### Settings Toggle (Gear Icon)
-
-Each participant card has a **gear icon** button that expands an inline settings section:
-
-**System Prompt Override:**
-- Compact text area for adding custom context or scenario instructions for this participant
-- Overrides the character's default system prompt for this chat only
-- Changes auto-save after a short delay
-
-Note: The status dropdown has been moved out of the settings section to the action buttons area for easier access.
-
 ## Header Information
 
 The sidebar header shows:

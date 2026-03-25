@@ -41,7 +41,6 @@ export interface ProjectContext {
 export function buildSystemPrompt(
   character: Character,
   persona?: { name: string; description: string } | null,
-  systemPromptOverride?: string | null,
   /** For multi-character chats: info about other participants */
   otherParticipants?: OtherParticipantInfo[],
   /** Roleplay template to prepend (formatting instructions) */
@@ -130,41 +129,35 @@ export function buildSystemPrompt(
     parts.push(projectParts.join('\n'))
   }
 
-  // Base system prompt - priority: override > selected prompt > default systemPrompt
-  if (systemPromptOverride) {
-    const processedOverride = processTemplate(systemPromptOverride, templateContext)
+  // Base system prompt - priority: selected prompt > default systemPrompt
+  // Check for selected system prompt from character's prompts array
+  let systemPromptContent: string | null = null
 
-    parts.push(processedOverride)
-  } else {
-    // Check for selected system prompt from character's prompts array
-    let systemPromptContent: string | null = null
+  if (selectedSystemPromptId && character.systemPrompts) {
+    const selectedPrompt = character.systemPrompts.find(p => p.id === selectedSystemPromptId)
+    if (selectedPrompt) {
+      systemPromptContent = selectedPrompt.content
 
-    if (selectedSystemPromptId && character.systemPrompts) {
-      const selectedPrompt = character.systemPrompts.find(p => p.id === selectedSystemPromptId)
-      if (selectedPrompt) {
-        systemPromptContent = selectedPrompt.content
-
-      } else {
-
-      }
-    }
-
-    // Fall back to default prompt in array, then legacy systemPrompt field
-    if (!systemPromptContent && character.systemPrompts) {
-      const defaultPrompt = character.systemPrompts.find(p => p.isDefault)
-      if (defaultPrompt) {
-        systemPromptContent = defaultPrompt.content
-
-      }
-    }
-
-    if (systemPromptContent) {
-      // Process templates in the system prompt content
-      const processedSystemPrompt = processTemplate(systemPromptContent, templateContext)
-      parts.push(processedSystemPrompt)
     } else {
 
     }
+  }
+
+  // Fall back to default prompt in array, then legacy systemPrompt field
+  if (!systemPromptContent && character.systemPrompts) {
+    const defaultPrompt = character.systemPrompts.find(p => p.isDefault)
+    if (defaultPrompt) {
+      systemPromptContent = defaultPrompt.content
+
+    }
+  }
+
+  if (systemPromptContent) {
+    // Process templates in the system prompt content
+    const processedSystemPrompt = processTemplate(systemPromptContent, templateContext)
+    parts.push(processedSystemPrompt)
+  } else {
+
   }
 
   // Character personality - process templates

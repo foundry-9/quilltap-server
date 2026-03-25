@@ -12,7 +12,7 @@ import type { TurnState, TurnSelectionResult } from '@/lib/chat/turn-manager'
 
 // Mock the ParticipantCard component to simplify testing the sidebar
 jest.mock('@/components/chat/ParticipantCard', () => ({
-  ParticipantCard: ({ participant, isCurrentTurn, queuePosition, turnPosition, turnStatus, onNudge, onQueue, onDequeue, onRemove, onStopStreaming, canRemove, connectionProfiles, onConnectionProfileChange, onSystemPromptOverrideChange, onActiveChange }: {
+  ParticipantCard: ({ participant, isCurrentTurn, queuePosition, turnPosition, turnStatus, onNudge, onQueue, onDequeue, onRemove, onStopStreaming, canRemove, connectionProfiles, onConnectionProfileChange, onActiveChange }: {
     participant: ParticipantData
     isCurrentTurn: boolean
     queuePosition: number
@@ -26,7 +26,6 @@ jest.mock('@/components/chat/ParticipantCard', () => ({
     canRemove?: boolean
     connectionProfiles?: Array<{ id: string; name: string }>
     onConnectionProfileChange?: (id: string, profileId: string | null, controlledBy: 'llm' | 'user') => void
-    onSystemPromptOverrideChange?: (id: string, override: string | null) => void
     onActiveChange?: (id: string, isActive: boolean) => void
   }) => (
     <div
@@ -41,7 +40,6 @@ jest.mock('@/components/chat/ParticipantCard', () => ({
       data-is-active={participant.isActive ? 'true' : 'false'}
       data-has-profiles={connectionProfiles ? 'true' : 'false'}
       data-has-profile-change={onConnectionProfileChange ? 'true' : 'false'}
-      data-has-settings-change={onSystemPromptOverrideChange ? 'true' : 'false'}
       data-has-active-change={onActiveChange ? 'true' : 'false'}
       data-has-stop-streaming={onStopStreaming ? 'true' : 'false'}
     >
@@ -1162,7 +1160,7 @@ describe('ParticipantSidebar', () => {
       const card = screen.getByTestId('participant-char-1')
       expect(card).toHaveAttribute('data-has-profiles', 'true')
       expect(card).toHaveAttribute('data-has-profile-change', 'true')
-      expect(card).toHaveAttribute('data-has-settings-change', 'true')
+
       expect(card).toHaveAttribute('data-has-active-change', 'true')
     })
 
@@ -1198,7 +1196,7 @@ describe('ParticipantSidebar', () => {
 
       const card = screen.getByTestId('participant-char-1')
       expect(card).toHaveAttribute('data-has-profiles', 'true')
-      expect(card).toHaveAttribute('data-has-settings-change', 'false')
+
       expect(card).toHaveAttribute('data-has-active-change', 'false')
     })
 
@@ -1227,12 +1225,10 @@ describe('ParticipantSidebar', () => {
 
       expect(card1).toHaveAttribute('data-has-profiles', 'true')
       expect(card1).toHaveAttribute('data-has-profile-change', 'true')
-      expect(card1).toHaveAttribute('data-has-settings-change', 'true')
       expect(card1).toHaveAttribute('data-has-active-change', 'true')
 
       expect(card2).toHaveAttribute('data-has-profiles', 'true')
       expect(card2).toHaveAttribute('data-has-profile-change', 'true')
-      expect(card2).toHaveAttribute('data-has-settings-change', 'true')
       expect(card2).toHaveAttribute('data-has-active-change', 'true')
     })
   })

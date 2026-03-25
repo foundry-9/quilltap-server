@@ -51,7 +51,6 @@ const createParticipantSchema = z.object({
   characterId: z.uuid(),
   connectionProfileId: z.uuid().optional(),
   imageProfileId: z.uuid().optional(), // Legacy: kept for backwards compatibility but ignored
-  systemPromptOverride: z.string().optional(),
   controlledBy: z.enum(['llm', 'user']).optional(),
 });
 
@@ -131,7 +130,6 @@ async function buildCharacterParticipant(
       controlledBy,
       connectionProfileId: isUserControlled ? null : data.connectionProfileId || null,
       imageProfileId: data.imageProfileId || null,
-      systemPromptOverride: data.systemPromptOverride || null,
       displayOrder,
       isActive: true,
     },

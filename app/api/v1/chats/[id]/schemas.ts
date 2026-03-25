@@ -21,7 +21,6 @@ export const updateParticipantSchema = z.object({
   participantId: z.uuid(),
   connectionProfileId: z.uuid().optional(),
   imageProfileId: z.uuid().nullish(),
-  systemPromptOverride: z.string().nullish(),
   displayOrder: z.number().optional(),
   isActive: z.boolean().optional(),  // Keep for backward compat
   status: z.enum(['active', 'silent', 'absent', 'removed']).optional(),  // New preferred field
@@ -35,7 +34,6 @@ export const addParticipantSchema = z.object({
   characterId: z.uuid(),
   connectionProfileId: z.uuid().optional(),
   imageProfileId: z.uuid().nullish(),
-  systemPromptOverride: z.string().nullish(),
   displayOrder: z.number().optional(),
   hasHistoryAccess: z.boolean().optional(),
   joinScenario: z.string().nullish(),

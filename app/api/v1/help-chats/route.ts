@@ -175,7 +175,6 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
         controlledBy: 'llm',
         connectionProfileId: char.defaultConnectionProfileId || null,
         imageProfileId: null,
-        systemPromptOverride: null,
         displayOrder: i,
         isActive: true,
         createdAt: now,

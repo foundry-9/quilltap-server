@@ -60,7 +60,7 @@ interface ParticipantSidebarProps {
   // Connection profile controls (passed to cards)
   connectionProfiles?: ConnectionProfileOption[]
   onConnectionProfileChange?: (participantId: string, profileId: string | null, controlledBy: 'llm' | 'user') => void
-  onParticipantSettingsChange?: (participantId: string, updates: { systemPromptOverride?: string | null; isActive?: boolean; status?: 'active' | 'silent' | 'absent' | 'removed' }) => void
+  onParticipantSettingsChange?: (participantId: string, updates: { isActive?: boolean; status?: 'active' | 'silent' | 'absent' | 'removed' }) => void
   className?: string
 }
 
@@ -426,9 +426,6 @@ export function ParticipantSidebar({
               onStopImpersonate={onStopImpersonate}
               connectionProfiles={connectionProfiles}
               onConnectionProfileChange={onConnectionProfileChange}
-              onSystemPromptOverrideChange={onParticipantSettingsChange
-                ? (pId, override) => onParticipantSettingsChange(pId, { systemPromptOverride: override })
-                : undefined}
               onActiveChange={onParticipantSettingsChange
                 ? (pId, active) => onParticipantSettingsChange(pId, { isActive: active })
                 : undefined}

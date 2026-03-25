@@ -12,10 +12,9 @@
  * - Stop button (when generating)
  * - Active/inactive toggle (visible eye icon)
  * - Nudge/Queue button
- * - Expandable settings section (system prompt override only)
  */
 
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import Avatar from '@/components/ui/Avatar'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
 import type { TurnOrderStatus } from '@/lib/chat/turn-manager'
@@ -31,7 +30,6 @@ export interface ParticipantData {
   isActive: boolean
   /** Four-state participation status: active, silent, absent, removed */
   status?: 'active' | 'silent' | 'absent' | 'removed'
-  systemPromptOverride?: string | null
   character?: {
     id: string
     name: string
@@ -97,7 +95,6 @@ interface ParticipantCardProps {
   connectionProfiles?: ConnectionProfileOption[]
   onConnectionProfileChange?: (participantId: string, profileId: string | null, controlledBy: 'llm' | 'user') => void
   // Inline settings controls
-  onSystemPromptOverrideChange?: (participantId: string, override: string | null) => void
   onActiveChange?: (participantId: string, isActive: boolean) => void
   onStatusChange?: (participantId: string, status: 'active' | 'silent' | 'absent' | 'removed') => void
   // Whisper support
@@ -127,7 +124,6 @@ export function ParticipantCard({
   onStopImpersonate,
   connectionProfiles,
   onConnectionProfileChange,
-  onSystemPromptOverrideChange,
   onActiveChange,
   onStatusChange,
   onWhisper,
@@ -135,12 +131,6 @@ export function ParticipantCard({
   const [localTalkativeness, setLocalTalkativeness] = useState(
     participant.character?.talkativeness ?? 0.5
   )
-  const [settingsExpanded, setSettingsExpanded] = useState(false)
-  const [localSystemPrompt, setLocalSystemPrompt] = useState(
-    participant.systemPromptOverride || ''
-  )
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
   const isCharacter = participant.type === 'CHARACTER'
   const entity = isCharacter ? participant.character : participant.persona
 
@@ -193,16 +183,6 @@ export function ParticipantCard({
     } else {
       onConnectionProfileChange(participant.id, value || null, 'llm')
     }
-  }
-
-  // Handle system prompt override with debounce
-  const handleSystemPromptChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const value = e.target.value
-    setLocalSystemPrompt(value)
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => {
-      onSystemPromptOverrideChange?.(participant.id, value || null)
-    }, 600)
   }
 
   // Handle active toggle via the eye icon button (legacy compat)
@@ -564,37 +544,7 @@ export function ParticipantCard({
           </button>
         )}
 
-        {/* Settings toggle button - now only for system prompt override */}
-        {onSystemPromptOverrideChange && (
-          <button
-            onClick={() => setSettingsExpanded(!settingsExpanded)}
-            className={`qt-button qt-button-sm py-1.5 px-2 ${settingsExpanded ? 'qt-button-primary' : 'qt-button-secondary'}`}
-            title={settingsExpanded ? 'Hide settings' : 'Show settings'}
-            aria-label={settingsExpanded ? 'Hide participant settings' : 'Show participant settings'}
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          </button>
-        )}
       </div>
-
-      {/* Expandable settings section - system prompt override only */}
-      {settingsExpanded && onSystemPromptOverrideChange && (
-        <div className="mt-2 pt-2 border-t border-border space-y-2">
-          <div>
-            <label className="qt-text-xs block mb-1">System Prompt Override</label>
-            <textarea
-              value={localSystemPrompt}
-              onChange={handleSystemPromptChange}
-              placeholder="Custom scenario or context..."
-              rows={2}
-              className="qt-textarea qt-text-xs w-full"
-            />
-          </div>
-        </div>
-      )}
     </div>
   )
 }

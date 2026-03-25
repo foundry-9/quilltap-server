@@ -143,7 +143,7 @@ export function createMockChatParticipant(
     connectionProfileId: type === 'CHARACTER' ? generateId() : null,
     imageProfileId: null,
     roleplayTemplateId: null,
-    systemPromptOverride: null,
+
     selectedSystemPromptId: null,
     displayOrder: 0,
     controlledBy: 'llm',

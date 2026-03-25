@@ -242,7 +242,6 @@ export const ChatParticipantSchema = z.object({
   roleplayTemplateId: z.string().nullable().optional(),   // Roleplay template override - can be UUID or 'plugin:*' format
 
   // Per-chat customization
-  systemPromptOverride: z.string().nullable().optional(),  // Custom scenario/context for this chat
   selectedSystemPromptId: UUIDSchema.nullable().optional(),  // Selected system prompt from character's prompts array
 
   // Display and state
@@ -277,7 +276,6 @@ export const ChatParticipantBaseSchema = z.object({
   connectionProfileId: UUIDSchema.nullable().optional(),
   imageProfileId: UUIDSchema.nullable().optional(),
   roleplayTemplateId: z.string().nullable().optional(),  // Roleplay template override - can be UUID or 'plugin:*' format
-  systemPromptOverride: z.string().nullable().optional(),
   selectedSystemPromptId: UUIDSchema.nullable().optional(),  // Selected system prompt from character's prompts array
   displayOrder: z.number().default(0),
   /** @deprecated Use `status` field instead. Kept as computed compat field (true when status is active or silent). */

@@ -334,7 +334,7 @@ export function useChatControls({
   // Handle participant settings change
   const handleParticipantSettingsChange = useCallback(async (
     participantId: string,
-    updates: { systemPromptOverride?: string | null; isActive?: boolean; status?: 'active' | 'silent' | 'absent' | 'removed' }
+    updates: { isActive?: boolean; status?: 'active' | 'silent' | 'absent' | 'removed' }
   ) => {
     try {
       const res = await fetch(`/api/v1/chats/${chatId}?action=update-participant`, {

@@ -10,7 +10,6 @@
  * - Different states (active, inactive, speaking)
  * - Accessibility attributes
  * - Connection profile dropdown
- * - Expandable settings section
  * - Turn position badge (turnPosition + turnStatus)
  * - Stop button (turnStatus generating + onStopStreaming)
  * - Active toggle button (visible eye icon)
@@ -823,58 +822,6 @@ describe('ParticipantCard', () => {
       // Should show plain text model name, not a select
       expect(screen.getByText('gpt-4-turbo')).toBeInTheDocument()
       expect(screen.queryByLabelText(/connection profile/i)).not.toBeInTheDocument()
-    })
-  })
-
-  describe('Expandable settings section', () => {
-    it('shows settings toggle when onSystemPromptOverrideChange provided', () => {
-      const props = createDefaultProps({
-        onSystemPromptOverrideChange: jest.fn(),
-      })
-      render(<ParticipantCard {...props} />)
-
-      expect(screen.getByLabelText('Show participant settings')).toBeInTheDocument()
-    })
-
-    it('does not show settings toggle when only onActiveChange provided', () => {
-      const props = createDefaultProps({
-        onActiveChange: jest.fn(),
-      })
-      render(<ParticipantCard {...props} />)
-
-      expect(screen.queryByLabelText(/participant settings/i)).not.toBeInTheDocument()
-    })
-
-    it('does not show settings toggle when neither callback provided', () => {
-      const props = createDefaultProps()
-      render(<ParticipantCard {...props} />)
-
-      expect(screen.queryByLabelText(/participant settings/i)).not.toBeInTheDocument()
-    })
-
-    it('expands settings section when toggle clicked', () => {
-      const props = createDefaultProps({
-        onSystemPromptOverrideChange: jest.fn(),
-      })
-      render(<ParticipantCard {...props} />)
-
-      fireEvent.click(screen.getByLabelText('Show participant settings'))
-
-      expect(screen.getByText('System Prompt Override')).toBeInTheDocument()
-      expect(screen.getByLabelText('Hide participant settings')).toBeInTheDocument()
-    })
-
-    it('collapses settings section when toggle clicked again', () => {
-      const props = createDefaultProps({
-        onSystemPromptOverrideChange: jest.fn(),
-      })
-      render(<ParticipantCard {...props} />)
-
-      fireEvent.click(screen.getByLabelText('Show participant settings'))
-      expect(screen.getByText('System Prompt Override')).toBeInTheDocument()
-
-      fireEvent.click(screen.getByLabelText('Hide participant settings'))
-      expect(screen.queryByText('System Prompt Override')).not.toBeInTheDocument()
     })
   })
 

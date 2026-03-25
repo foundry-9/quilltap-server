@@ -94,7 +94,6 @@ export interface Participant {
   isActive: boolean
   /** Four-state participation status */
   status?: 'active' | 'silent' | 'absent' | 'removed'
-  systemPromptOverride?: string | null
   characterId?: string | null
   personaId?: string | null
   character?: CharacterData | null

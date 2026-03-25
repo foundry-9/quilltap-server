@@ -187,8 +187,6 @@ export interface BuildContextOptions {
   existingMessages: Array<{ role: string; content: string; id?: string; thoughtSignature?: string | null }>
   /** New user message being sent (optional for continue mode) */
   newUserMessage?: string
-  /** Custom system prompt override */
-  systemPromptOverride?: string | null
   /** Roleplay template for formatting instructions (prepended to system prompt) */
   roleplayTemplate?: { systemPrompt: string } | null
   /** Embedding profile ID for semantic search */
@@ -317,7 +315,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     chat,
     existingMessages,
     newUserMessage,
-    systemPromptOverride,
     roleplayTemplate,
     embeddingProfileId,
     skipMemories = false,
@@ -362,7 +359,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   const systemPrompt = buildSystemPrompt(
     character,
     persona,
-    systemPromptOverride,
     otherParticipantsInfo,
     roleplayTemplate,
     toolInstructions,

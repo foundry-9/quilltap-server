@@ -52,7 +52,7 @@ const makeCharacterParticipant = (participantId: string, characterId: string, ov
   controlledBy: 'llm',
   connectionProfileId: null,
   imageProfileId: null,
-  systemPromptOverride: null,
+
   displayOrder: 0,
   isActive: true,
   status: 'active',
@@ -70,7 +70,7 @@ const makeUserControlledParticipant = (participantId: string, characterId: strin
   controlledBy: 'user',
   connectionProfileId: null,
   imageProfileId: null,
-  systemPromptOverride: null,
+
   displayOrder: 0,
   isActive: true,
   status: 'active',

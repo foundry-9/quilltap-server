@@ -318,13 +318,7 @@ describe('Context Manager', () => {
       expect(prompt).toContain('curious user')
     })
 
-    it('should use override when provided', () => {
-      const override = 'Custom system prompt override'
-      const prompt = buildSystemPrompt(character as any, null, override)
-      expect(prompt).toContain(override)
-    })
-
-    it('processes template variables across roleplay, override, and persona sections', () => {
+    it('processes template variables across roleplay and persona sections', () => {
       const persona = { name: 'Alex', description: 'A curious tester' }
       const roleplayTemplate = { systemPrompt: 'Stay in {{char}} mindset when talking to {{user}}.' }
       const toolInstructions = 'Tools should mention {{char}} assisting {{user}}.'
@@ -336,14 +330,12 @@ describe('Context Manager', () => {
           exampleDialogues: '{{char}}: Hello {{user}}',
         } as any,
         persona,
-        '{{char}} override for {{user}}',
         undefined,
         roleplayTemplate,
         toolInstructions
       )
 
       expect(prompt).toContain('Stay in Test Character mindset when talking to Alex.')
-      expect(prompt).toContain('Test Character override for Alex')
       expect(prompt).toContain('Test Character is thoughtful')
       expect(prompt).toContain('Test Character meets Alex under the stars')
       expect(prompt).toContain('Tools should mention Test Character assisting Alex.')
@@ -378,7 +370,6 @@ describe('Context Manager', () => {
       const prompt = buildSystemPrompt(
         multiPromptCharacter as any,
         persona,
-        null,
         undefined,
         null,
         undefined,
@@ -547,7 +538,7 @@ describe('Context Manager', () => {
       personaId: null,
       connectionProfileId: null,
       imageProfileId: null,
-      systemPromptOverride: null,
+
       displayOrder: 0,
       isActive: true,
       hasHistoryAccess: false,
@@ -582,7 +573,7 @@ describe('Context Manager', () => {
       controlledBy: 'llm',
       connectionProfileId: null,
       imageProfileId: null,
-      systemPromptOverride: null,
+
       displayOrder: 0,
       isActive: true,
       hasHistoryAccess: true,
@@ -598,7 +589,7 @@ describe('Context Manager', () => {
       controlledBy: 'user',
       connectionProfileId: null,
       imageProfileId: null,
-      systemPromptOverride: null,
+
       displayOrder: 0,
       isActive: true,
       hasHistoryAccess: true,
@@ -755,7 +746,7 @@ describe('Context Manager', () => {
       controlledBy: 'llm',
       connectionProfileId: null,
       imageProfileId: null,
-      systemPromptOverride: null,
+
       displayOrder: 0,
       isActive: true,
       hasHistoryAccess: true,
@@ -771,7 +762,7 @@ describe('Context Manager', () => {
       controlledBy: 'user',
       connectionProfileId: null,
       imageProfileId: null,
-      systemPromptOverride: null,
+
       displayOrder: 0,
       isActive: true,
       hasHistoryAccess: true,
@@ -902,7 +893,7 @@ describe('Context Manager', () => {
           { role: 'ASSISTANT', content: 'Greetings', id: 'm2' },
         ],
         newUserMessage: 'Ready for the next task?',
-        systemPromptOverride: null,
+  
         embeddingProfileId: null,
         skipMemories: false,
         maxMemories: 1,
