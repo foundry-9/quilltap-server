@@ -367,54 +367,49 @@ export default function MessageContent({
         </code>
       )
     },
-    // Paragraph spacing - inherits font from parent, processes roleplay syntax
-    // Also detects dialogue paragraphs (start/end with quotes) for paragraph-level styling
+    // Paragraph - CSS handles spacing; only custom behavior is dialogue detection
+    // and roleplay pattern processing on text nodes.
     p({ children }) {
       const textContent = extractTextContent(children)
       const isDialogue = isDialogueParagraph(textContent, dialogueConfig)
-      // Apply dialogue class at paragraph level when detected
-      // This handles cases where dialogue contains formatting like **bold** that splits the text
-      const dialogueClass = isDialogue ? ` ${dialogueConfig.className}` : ''
-      return <p className={`mb-2 last:mb-0${dialogueClass}`}>{processChildren(children, compiledPatterns)}</p>
+      const dialogueClass = isDialogue ? dialogueConfig.className : undefined
+      return <p className={dialogueClass}>{processChildren(children, compiledPatterns)}</p>
     },
-    // Headings - inherit font from parent
+    // Headings - CSS handles sizing, weight, and spacing; only custom behavior
+    // is roleplay pattern processing on text nodes.
     h1({ children }) {
-      return <h1 className="text-2xl font-bold mb-2 mt-4 first:mt-0">{processChildren(children, compiledPatterns)}</h1>
+      return <h1>{processChildren(children, compiledPatterns)}</h1>
     },
     h2({ children }) {
-      return <h2 className="text-xl font-bold mb-2 mt-3 first:mt-0">{processChildren(children, compiledPatterns)}</h2>
+      return <h2>{processChildren(children, compiledPatterns)}</h2>
     },
     h3({ children }) {
-      return <h3 className="text-lg font-semibold mb-2 mt-3 first:mt-0">{processChildren(children, compiledPatterns)}</h3>
+      return <h3>{processChildren(children, compiledPatterns)}</h3>
     },
     h4({ children }) {
-      return <h4 className="text-base font-semibold mb-1 mt-2 first:mt-0">{processChildren(children, compiledPatterns)}</h4>
+      return <h4>{processChildren(children, compiledPatterns)}</h4>
     },
     h5({ children }) {
-      return <h5 className="text-sm font-semibold mb-1 mt-2 first:mt-0">{processChildren(children, compiledPatterns)}</h5>
+      return <h5>{processChildren(children, compiledPatterns)}</h5>
     },
     h6({ children }) {
-      return <h6 className="text-xs font-semibold mb-1 mt-2 first:mt-0">{processChildren(children, compiledPatterns)}</h6>
+      return <h6>{processChildren(children, compiledPatterns)}</h6>
     },
-    // Lists - inherit font from parent
-    ul({ children }) {
-      return <ul className="list-disc list-outside mb-2 ml-6">{children}</ul>
-    },
-    ol({ children }) {
-      return <ol className="list-decimal list-outside mb-2 ml-6">{children}</ol>
-    },
+    // List items - CSS handles spacing; roleplay patterns processed on text nodes.
+    // ul/ol have no custom behavior, so they are intentionally omitted here —
+    // react-markdown renders plain <ul>/<ol> and CSS handles all styling.
     li({ children }) {
-      return <li className="mb-1">{processChildren(children, compiledPatterns)}</li>
+      return <li>{processChildren(children, compiledPatterns)}</li>
     },
-    // Blockquotes - inherit font from parent
+    // Blockquote - CSS handles styling; roleplay patterns processed on text nodes.
     blockquote({ children }) {
       return (
-        <blockquote className="border-l-4 border-border pl-4 py-1 my-2 italic">
+        <blockquote>
           {processChildren(children, compiledPatterns)}
         </blockquote>
       )
     },
-    // Links
+    // Links - must open in new tab; CSS (qt-link) handles appearance.
     a({ href, children }) {
       return (
         <a
@@ -427,44 +422,16 @@ export default function MessageContent({
         </a>
       )
     },
-    // Tables
+    // Tables - the overflow-x-auto wrapper div is intentionally kept here because
+    // CSS cannot inject a wrapper element, and overflow protection for wide tables
+    // is a layout priority. thead/th/td have no custom behavior so they are omitted
+    // — CSS handles all table cell styling.
     table({ children }) {
       return (
-        <div className="overflow-x-auto my-2">
-          <table className="min-w-full border-collapse border border-border">
-            {children}
-          </table>
+        <div className="overflow-x-auto">
+          <table>{children}</table>
         </div>
       )
-    },
-    thead({ children }) {
-      return <thead className="bg-muted">{children}</thead>
-    },
-    th({ children }) {
-      return (
-        <th className="border border-border px-4 py-2 text-left font-semibold">
-          {children}
-        </th>
-      )
-    },
-    td({ children }) {
-      return (
-        <td className="border border-border px-4 py-2">
-          {children}
-        </td>
-      )
-    },
-    // Horizontal rule
-    hr() {
-      return <hr className="my-4 border-border" />
-    },
-    // Strong/bold
-    strong({ children }) {
-      return <strong className="font-bold">{children}</strong>
-    },
-    // Emphasis/italic
-    em({ children }) {
-      return <em className="italic">{children}</em>
     },
   }), [compiledPatterns, dialogueConfig])
 

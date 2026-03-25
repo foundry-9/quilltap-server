@@ -247,6 +247,23 @@
     @apply border border-border px-4 py-2;
   }
 
+  /* Inline text formatting — allows themes to override via CSS variables rather
+     than needing inline Tailwind classes on every rendered element.
+     Note: The React table component intentionally keeps an overflow-x-auto wrapper
+     <div> around <table> elements — CSS cannot inject a wrapper element, and
+     overflow protection for wide tables is a layout priority. */
+  .qt-chat-message-content strong {
+    @apply font-bold;
+  }
+
+  .qt-chat-message-content em {
+    @apply italic;
+  }
+
+  .qt-chat-message-content del {
+    @apply line-through;
+  }
+
   /**
    * User message content - must use user foreground color, not global foreground
    * This overrides the generic .qt-chat-message-content color to ensure

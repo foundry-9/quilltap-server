@@ -249,38 +249,6 @@ export function applyDialogueDetection(html: string, detection: DialogueDetectio
   });
 }
 
-/**
- * Add formatting classes to inline emphasis tags so server pre-rendered HTML
- * matches client-side MessageContent styling.
- */
-export function applyInlineFormattingClasses(html: string): string {
-  let result = html;
-
-  // Strong/bold
-  result = result.replace(/<strong\b([^>]*)>/g, (match, attrs) => {
-    if (attrs.includes('class="')) {
-      if (/class="[^"]*\bfont-bold\b[^"]*"/.test(attrs)) {
-        return `<strong${attrs}>`;
-      }
-      return `<strong${attrs.replace(/class="([^"]*)"/, 'class="$1 font-bold"')}>`;
-    }
-    return `<strong${attrs} class="font-bold">`;
-  });
-
-  // Emphasis/italic
-  result = result.replace(/<em\b([^>]*)>/g, (match, attrs) => {
-    if (attrs.includes('class="')) {
-      if (/class="[^"]*\bitalic\b[^"]*"/.test(attrs)) {
-        return `<em${attrs}>`;
-      }
-      return `<em${attrs.replace(/class="([^"]*)"/, 'class="$1 italic"')}>`;
-    }
-    return `<em${attrs} class="italic">`;
-  });
-
-  return result;
-}
-
 // ============================================================================
 // MARKDOWN PROCESSOR
 // ============================================================================
@@ -359,10 +327,7 @@ export async function renderMarkdownToHtml(
     const dialogueConfig = dialogueDetection || DEFAULT_DIALOGUE_DETECTION;
     html = applyDialogueDetection(html, dialogueConfig);
 
-    // Step 7: Add inline formatting classes to match client renderer
-    html = applyInlineFormattingClasses(html);
-
-    // Step 8: Wrap in container div with appropriate classes
+    // Step 7: Wrap in container div with appropriate classes
     // Note: We don't add the outer container class here - the client handles that
     return html;
   } catch (error) {
