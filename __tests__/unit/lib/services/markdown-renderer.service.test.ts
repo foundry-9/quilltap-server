@@ -192,6 +192,38 @@ function applyDialogueDetection(html: string, detection: DialogueDetection): str
   });
 }
 
+/**
+ * Reimplementation of applyInlineFormattingClasses for testing
+ * Mirrors the actual implementation in markdown-renderer.service.ts
+ */
+function applyInlineFormattingClasses(html: string): string {
+  let result = html;
+
+  // Strong/bold
+  result = result.replace(/<strong\b([^>]*)>/g, (match, attrs) => {
+    if (attrs.includes('class="')) {
+      if (/class="[^"]*\bfont-bold\b[^"]*"/.test(attrs)) {
+        return `<strong${attrs}>`;
+      }
+      return `<strong${attrs.replace(/class="([^"]*)"/, 'class="$1 font-bold"')}>`;
+    }
+    return `<strong${attrs} class="font-bold">`;
+  });
+
+  // Emphasis/italic
+  result = result.replace(/<em\b([^>]*)>/g, (match, attrs) => {
+    if (attrs.includes('class="')) {
+      if (/class="[^"]*\bitalic\b[^"]*"/.test(attrs)) {
+        return `<em${attrs}>`;
+      }
+      return `<em${attrs.replace(/class="([^"]*)"/, 'class="$1 italic"')}>`;
+    }
+    return `<em${attrs} class="italic">`;
+  });
+
+  return result;
+}
+
 describe('markdown-renderer.service', () => {
   describe('canPreRenderMessage', () => {
     describe('USER role', () => {
@@ -486,6 +518,52 @@ describe('markdown-renderer.service', () => {
       const html2 = '<p>Only end quote"</p>';
       const result2 = applyDialogueDetection(html2, DEFAULT_DETECTION);
       expect(result2).not.toContain('class="qt-chat-dialogue"');
+    });
+  });
+
+  describe('applyInlineFormattingClasses', () => {
+    it('should add font-bold class to strong tags without class', () => {
+      const html = '<p>Hello <strong>world</strong></p>';
+      const result = applyInlineFormattingClasses(html);
+      expect(result).toContain('<strong class="font-bold">world</strong>');
+    });
+
+    it('should add italic class to em tags without class', () => {
+      const html = '<p>Hello <em>world</em></p>';
+      const result = applyInlineFormattingClasses(html);
+      expect(result).toContain('<em class="italic">world</em>');
+    });
+
+    it('should append font-bold to existing strong classes', () => {
+      const html = '<p><strong class="custom">text</strong></p>';
+      const result = applyInlineFormattingClasses(html);
+      expect(result).toContain('<strong class="custom font-bold">text</strong>');
+    });
+
+    it('should append italic to existing em classes', () => {
+      const html = '<p><em class="custom">text</em></p>';
+      const result = applyInlineFormattingClasses(html);
+      expect(result).toContain('<em class="custom italic">text</em>');
+    });
+
+    it('should not duplicate classes when already present', () => {
+      const html = '<p><strong class="font-bold">A</strong> <em class="italic">B</em></p>';
+      const result = applyInlineFormattingClasses(html);
+      expect(result).toBe(html);
+    });
+
+    it('should preserve non-class attributes', () => {
+      const html = '<p><strong data-x="1">A</strong> <em id="e1">B</em></p>';
+      const result = applyInlineFormattingClasses(html);
+      expect(result).toContain('<strong data-x="1" class="font-bold">A</strong>');
+      expect(result).toContain('<em id="e1" class="italic">B</em>');
+    });
+
+    it('should preserve emphasis through final render pipeline ordering', () => {
+      const htmlFromMarkdown = '<p>The <strong>important</strong> <em>detail</em>.</p>';
+      const result = applyInlineFormattingClasses(htmlFromMarkdown);
+      expect(result).toContain('<strong class="font-bold">important</strong>');
+      expect(result).toContain('<em class="italic">detail</em>');
     });
   });
 
