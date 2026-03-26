@@ -20,12 +20,16 @@ interface ProfilesTabProps {
   savingAgentMode?: boolean
   savingHelpTools?: boolean
   savingTimestampConfig?: boolean
+  savingDefaultScenario?: boolean
+  savingDefaultSystemPrompt?: boolean
   onConnectionProfileChange: (profileId: string) => void
   onPartnerChange: (partnerId: string) => void
   onImageProfileChange: (profileId: string | null) => void
   onAgentModeChange: (enabled: boolean | null) => void
   onHelpToolsChange: (enabled: boolean | null) => void
   onTimestampConfigChange: (config: TimestampConfig | null) => void
+  onDefaultScenarioChange: (scenarioId: string | null) => void
+  onDefaultSystemPromptChange: (promptId: string | null) => void
 }
 
 export function ProfilesTab({
@@ -41,12 +45,16 @@ export function ProfilesTab({
   savingAgentMode,
   savingHelpTools,
   savingTimestampConfig,
+  savingDefaultScenario,
+  savingDefaultSystemPrompt,
   onConnectionProfileChange,
   onPartnerChange,
   onImageProfileChange,
   onAgentModeChange,
   onHelpToolsChange,
   onTimestampConfigChange,
+  onDefaultScenarioChange,
+  onDefaultSystemPromptChange,
 }: ProfilesTabProps) {
   // Check if this character is user-controlled (disable partner selection if so)
   const isUserControlled = character?.controlledBy === 'user'
@@ -161,6 +169,72 @@ export function ProfilesTab({
           )}
         </div>
       </div>
+
+      {/* Default System Prompt Section - only show if more than one prompt */}
+      {character.systemPrompts && character.systemPrompts.length > 1 && (
+        <div className="character-section-card rounded-lg border border-border bg-card p-6">
+          <h2 className="text-lg font-semibold text-foreground mb-2">
+            Default System Prompt
+          </h2>
+          <p className="qt-text-small mb-4">
+            The system prompt to use by default when starting new chats with this character. Can be overridden per chat.
+          </p>
+          <div className="flex items-center gap-3">
+            <select
+              value={character.defaultSystemPromptId || ''}
+              onChange={(e) => onDefaultSystemPromptChange(e.target.value || null)}
+              disabled={savingDefaultSystemPrompt}
+              className="flex-1 rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+            >
+              <option value="">Use first prompt marked as default</option>
+              {character.systemPrompts.map((prompt) => (
+                <option key={prompt.id} value={prompt.id}>
+                  {prompt.name}{prompt.isDefault ? ' (current default)' : ''}
+                </option>
+              ))}
+            </select>
+            {savingDefaultSystemPrompt && (
+              <div className="flex items-center gap-2 qt-text-small">
+                <div className="h-4 w-4 animate-spin rounded-full qt-spinner"></div>
+                Saving...
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Default Scenario Section - only show if more than one scenario */}
+      {character.scenarios && character.scenarios.length > 1 && (
+        <div className="character-section-card rounded-lg border border-border bg-card p-6">
+          <h2 className="text-lg font-semibold text-foreground mb-2">
+            Default Scenario
+          </h2>
+          <p className="qt-text-small mb-4">
+            The scenario to pre-select by default when starting new chats with this character. Can be overridden per chat.
+          </p>
+          <div className="flex items-center gap-3">
+            <select
+              value={character.defaultScenarioId || ''}
+              onChange={(e) => onDefaultScenarioChange(e.target.value || null)}
+              disabled={savingDefaultScenario}
+              className="flex-1 rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+            >
+              <option value="">No default scenario</option>
+              {character.scenarios.map((scenario) => (
+                <option key={scenario.id} value={scenario.id}>
+                  {scenario.title}
+                </option>
+              ))}
+            </select>
+            {savingDefaultScenario && (
+              <div className="flex items-center gap-2 qt-text-small">
+                <div className="h-4 w-4 animate-spin rounded-full qt-spinner"></div>
+                Saving...
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Agent Mode Section */}
       <div className="character-section-card rounded-lg border border-border bg-card p-6">

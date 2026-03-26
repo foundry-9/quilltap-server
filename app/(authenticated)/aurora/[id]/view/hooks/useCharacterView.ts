@@ -35,6 +35,8 @@ interface UseCharacterViewReturn {
   savingAgentMode: boolean
   savingHelpTools: boolean
   savingTimestampConfig: boolean
+  savingDefaultScenario: boolean
+  savingDefaultSystemPrompt: boolean
   fetchCharacter: () => Promise<void>
   fetchTags: () => Promise<void>
   fetchProfiles: () => Promise<void>
@@ -52,6 +54,8 @@ interface UseCharacterViewReturn {
   handleSaveAgentMode: (enabled: boolean | null) => Promise<void>
   handleSaveHelpTools: (enabled: boolean | null) => Promise<void>
   handleSaveTimestampConfig: (config: TimestampConfig | null) => Promise<void>
+  handleSaveDefaultScenario: (scenarioId: string | null) => Promise<void>
+  handleSaveDefaultSystemPrompt: (promptId: string | null) => Promise<void>
   handleToggleNpc: () => Promise<void>
   handleToggleFavorite: () => Promise<void>
   handleToggleControlledBy: () => Promise<void>
@@ -78,6 +82,8 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
   const [savingAgentMode, setSavingAgentMode] = useState(false)
   const [savingHelpTools, setSavingHelpTools] = useState(false)
   const [savingTimestampConfig, setSavingTimestampConfig] = useState(false)
+  const [savingDefaultScenario, setSavingDefaultScenario] = useState(false)
+  const [savingDefaultSystemPrompt, setSavingDefaultSystemPrompt] = useState(false)
 
   // Get the default partner for template highlighting ({{user}} replacement)
   // This uses the new default conversation partner system instead of old personas
@@ -424,6 +430,57 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     }
   }
 
+  const handleSaveDefaultScenario = async (scenarioId: string | null) => {
+    setSavingDefaultScenario(true)
+    try {
+      const res = await fetch(`/api/v1/characters/${characterId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ defaultScenarioId: scenarioId }),
+      })
+      if (!res.ok) throw new Error('Failed to update default scenario')
+
+      if (character) {
+        setCharacter({ ...character, defaultScenarioId: scenarioId })
+      }
+      showSuccessToast(scenarioId ? 'Default scenario updated' : 'Default scenario cleared')
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to update default scenario')
+      console.error('Failed to save default scenario', { error: err instanceof Error ? err.message : String(err) })
+      await fetchCharacter()
+    } finally {
+      setSavingDefaultScenario(false)
+    }
+  }
+
+  const handleSaveDefaultSystemPrompt = async (promptId: string | null) => {
+    setSavingDefaultSystemPrompt(true)
+    try {
+      const res = await fetch(`/api/v1/characters/${characterId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ defaultSystemPromptId: promptId }),
+      })
+      if (!res.ok) throw new Error('Failed to update default system prompt')
+
+      if (character) {
+        // Also update the isDefault flags on the prompts array to stay in sync
+        const updatedPrompts = character.systemPrompts?.map(p => ({
+          ...p,
+          isDefault: promptId ? p.id === promptId : p.isDefault,
+        })) || []
+        setCharacter({ ...character, defaultSystemPromptId: promptId, systemPrompts: updatedPrompts })
+      }
+      showSuccessToast(promptId ? 'Default system prompt updated' : 'Default system prompt cleared')
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to update default system prompt')
+      console.error('Failed to save default system prompt', { error: err instanceof Error ? err.message : String(err) })
+      await fetchCharacter()
+    } finally {
+      setSavingDefaultSystemPrompt(false)
+    }
+  }
+
   const handleToggleNpc = async () => {
     if (!character) return
     setTogglingNpc(true)
@@ -507,6 +564,8 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     savingAgentMode,
     savingHelpTools,
     savingTimestampConfig,
+    savingDefaultScenario,
+    savingDefaultSystemPrompt,
     fetchCharacter,
     fetchTags,
     fetchProfiles,
@@ -524,6 +583,8 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     handleSaveAgentMode,
     handleSaveHelpTools,
     handleSaveTimestampConfig,
+    handleSaveDefaultScenario,
+    handleSaveDefaultSystemPrompt,
     handleToggleNpc,
     handleToggleFavorite,
     handleToggleControlledBy,

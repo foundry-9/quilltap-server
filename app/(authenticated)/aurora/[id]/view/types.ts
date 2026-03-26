@@ -62,6 +62,8 @@ export interface Character {
   defaultAgentModeEnabled?: boolean | null
   defaultHelpToolsEnabled?: boolean | null
   defaultTimestampConfig?: TimestampConfig | null
+  defaultScenarioId?: string | null
+  defaultSystemPromptId?: string | null
   aliases?: string[]
   pronouns?: { subject: string; object: string; possessive: string } | null
   defaultImage?: {

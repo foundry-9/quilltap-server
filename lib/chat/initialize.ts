@@ -23,6 +23,7 @@ interface Character {
   exampleDialogues?: string | null
   systemPrompts?: CharacterSystemPrompt[]
   defaultPartnerId?: string | null
+  defaultSystemPromptId?: string | null
 }
 
 /**
@@ -139,6 +140,11 @@ export async function buildChatContext(
 function getDefaultSystemPrompt(character: Character): string {
   if (!character.systemPrompts || character.systemPrompts.length === 0) {
     return ''
+  }
+  // Check defaultSystemPromptId first, then isDefault flag, then first prompt
+  if (character.defaultSystemPromptId) {
+    const byId = character.systemPrompts.find(p => p.id === character.defaultSystemPromptId)
+    if (byId) return byId.content
   }
   const defaultPrompt = character.systemPrompts.find(p => p.isDefault)
   return defaultPrompt?.content || character.systemPrompts[0]?.content || ''

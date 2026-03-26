@@ -522,11 +522,13 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       return badRequest(buildResult.error);
     }
 
-    // Resolve scenario: custom text takes priority, then scenarioId lookup, then nothing
+    // Fetch the primary character for defaults resolution
+    const primaryCharacter = await repos.characters.findById(buildResult.firstCharacter.characterId);
+
+    // Resolve scenario: custom text takes priority, then scenarioId lookup, then character default scenario, then nothing
     let resolvedScenario = validatedData.scenario;
     if (!resolvedScenario && validatedData.scenarioId) {
-      const characterForScenario = await repos.characters.findById(buildResult.firstCharacter.characterId);
-      const matchingScenario = characterForScenario?.scenarios?.find(s => s.id === validatedData.scenarioId);
+      const matchingScenario = primaryCharacter?.scenarios?.find(s => s.id === validatedData.scenarioId);
       if (matchingScenario) {
         resolvedScenario = matchingScenario.content;
         logger.debug('[Chats v1] Resolved scenarioId to scenario content', {
@@ -590,6 +592,17 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       }
     }
 
+    // Resolve timestamp config with fallback chain: request > character default > global default
+    const resolvedTimestampConfig = validatedData.timestampConfig || primaryCharacter?.defaultTimestampConfig || chatSettings?.defaultTimestampConfig || null;
+    if (resolvedTimestampConfig && !validatedData.timestampConfig) {
+      const source = primaryCharacter?.defaultTimestampConfig ? 'character default' : 'global default';
+      logger.debug('[Chats v1] Applied timestamp config from fallback', {
+        characterId: buildResult.firstCharacter.characterId,
+        source,
+        mode: resolvedTimestampConfig.mode,
+      });
+    }
+
     // Use chat-level imageProfileId if provided, otherwise use first from participants (legacy support)
     const chatImageProfileId = validatedData.imageProfileId || buildResult.firstImageProfileId || null;
 
@@ -600,7 +613,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       contextSummary: validatedData.scenario || null,
       tags: Array.from(buildResult.tags),
       roleplayTemplateId: defaultRoleplayTemplateId,
-      timestampConfig: validatedData.timestampConfig || chatSettings?.defaultTimestampConfig || null,
+      timestampConfig: resolvedTimestampConfig,
       messageCount: 0,
       lastMessageAt: null,
       lastRenameCheckInterchange: 0,

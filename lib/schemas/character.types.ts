@@ -134,6 +134,12 @@ export const CharacterSchema = z.object({
   /** Default timestamp configuration for chats with this character (null = use global default / disabled) */
   defaultTimestampConfig: TimestampConfigSchema.nullable().optional(),
 
+  /** Default scenario ID for chats with this character (null = no default scenario) */
+  defaultScenarioId: UUIDSchema.nullable().optional(),
+
+  /** Default system prompt ID for chats with this character (null = use first/isDefault prompt) */
+  defaultSystemPromptId: UUIDSchema.nullable().optional(),
+
   // Relationships
   personaLinks: z.array(z.object({
     personaId: UUIDSchema,

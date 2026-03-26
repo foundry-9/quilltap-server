@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from 'react'
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
 import { TimestampConfigCard } from '@/components/settings/chat-settings/components/TimestampConfigCard'
 import { ConnectionProfile, UserControlledCharacter } from '../types'
@@ -27,6 +26,7 @@ interface ChatCreationDialogProps {
   selectedImageProfileId: string | null
   selectedSystemPromptId: string | null
   scenario: string
+  scenarioId?: string | null
   scenarios?: Array<{ id: string; title: string; content: string }>
   timestampConfig: TimestampConfig | null
   creatingChat: boolean
@@ -53,6 +53,7 @@ export function ChatCreationDialog({
   selectedImageProfileId,
   selectedSystemPromptId,
   scenario,
+  scenarioId: initialScenarioId,
   scenarios,
   timestampConfig,
   creatingChat,
@@ -70,14 +71,13 @@ export function ChatCreationDialog({
   const { formatCharacterName } = useUserCharacterDisplayName()
   const hasScenarios = scenarios && scenarios.length > 0
 
-  const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(null)
+  // Scenario selection is controlled by the parent via initialScenarioId/onScenarioIdChange
+  const selectedScenarioId = initialScenarioId ?? null
 
   const handleScenarioSelectChange = (value: string) => {
     if (value === CUSTOM_SCENARIO_VALUE || value === '') {
-      setSelectedScenarioId(null)
       onScenarioIdChange?.(null)
     } else {
-      setSelectedScenarioId(value)
       onScenarioIdChange?.(value)
       // Clear any custom text when switching to a preset
       onScenarioChange('')

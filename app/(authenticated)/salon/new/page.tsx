@@ -38,6 +38,9 @@ interface Character {
     content: string
   }>
   defaultTimestampConfig?: TimestampConfig | null
+  defaultScenarioId?: string | null
+  defaultSystemPromptId?: string | null
+  defaultImageProfileId?: string | null
 }
 
 interface ConnectionProfile {
@@ -216,13 +219,21 @@ export default function NewChatPage() {
 
   const showCustomTextarea = !singleCharacterScenarios || scenarioId === null
 
-  // When exactly one LLM character is selected, propagate their default timestamp config
+  // When exactly one LLM character is selected, propagate their defaults
   useEffect(() => {
     const llmCharacters = selectedCharacters.filter(sc => sc.controlledBy === 'llm')
     if (llmCharacters.length === 1) {
-      const charTimestampConfig = llmCharacters[0].character.defaultTimestampConfig
-      if (charTimestampConfig) {
-        setTimestampConfig(charTimestampConfig)
+      const char = llmCharacters[0].character
+      if (char.defaultTimestampConfig) {
+        setTimestampConfig(char.defaultTimestampConfig)
+      }
+      // Pre-select default scenario if set
+      if (char.defaultScenarioId) {
+        setScenarioId(char.defaultScenarioId)
+      }
+      // Pre-select default image profile if set
+      if (char.defaultImageProfileId) {
+        setChatImageProfileId(char.defaultImageProfileId)
       }
     }
   }, [selectedCharacters])
@@ -247,8 +258,10 @@ export default function NewChatPage() {
     } else {
       const connectionProfileId =
         character.defaultConnectionProfileId || profiles[0]?.id || ''
-      // Find default or first system prompt
-      const defaultPrompt = character.systemPrompts?.find(p => p.isDefault) || character.systemPrompts?.[0]
+      // Use defaultSystemPromptId if set, otherwise find default or first system prompt
+      const defaultPrompt = character.defaultSystemPromptId
+        ? character.systemPrompts?.find(p => p.id === character.defaultSystemPromptId)
+        : (character.systemPrompts?.find(p => p.isDefault) || character.systemPrompts?.[0])
       const selectedSystemPromptId = defaultPrompt?.id || null
       setSelectedCharacters((prev) => [
         ...prev,

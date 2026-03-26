@@ -80,6 +80,8 @@ const updateCharacterSchema = z.object({
   defaultAgentModeEnabled: z.boolean().nullable().optional(),
   defaultHelpToolsEnabled: z.boolean().nullable().optional(),
   defaultTimestampConfig: TimestampConfigSchema.nullable().optional(),
+  defaultScenarioId: z.uuid().nullable().optional(),
+  defaultSystemPromptId: z.uuid().nullable().optional(),
 });
 
 const avatarSchema = z.object({

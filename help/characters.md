@@ -240,14 +240,18 @@ Manage character organization:
 - Quick-hide settings
 - Filter by tag
 
-### Associated Profiles Tab
+### Default Settings Tab
 
-Configure character partnerships and defaults:
+Configure character partnerships, defaults, and chat behavior:
 
+- Default connection profile (LLM provider)
 - Default conversation partner
-- Connection profile (LLM)
 - Image generation profile
-- Roleplay template
+- Default system prompt (when multiple prompts exist)
+- Default scenario (when multiple scenarios exist)
+- Agent mode default
+- Help tools default
+- Default timestamp injection settings
 
 ### Photo Gallery Tab
 

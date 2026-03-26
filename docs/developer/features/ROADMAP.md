@@ -20,6 +20,7 @@ This document tracks planned features and improvements for Quilltap.
     - Help LLM success
     - Adaptability (can they be serious? Can they roleplay?)
     - Thinking ability
+    - Best settings for purpose (temperature, top_p)
 - [X] Context help documentation with LLM (lock down theme)
 - [X] Browseable Help Guide tab (see `help_guide.md`)
 - [X] Turn off story backgrounds for help chats

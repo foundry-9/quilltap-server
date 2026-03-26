@@ -105,6 +105,11 @@ export function useQuickChat(): UseQuickChatReturn {
         if (character.defaultTimestampConfig) {
           setTimestampConfig(character.defaultTimestampConfig)
         }
+
+        // Initialize image profile from character's default if set
+        if (character.defaultImageProfileId) {
+          setSelectedImageProfileId(character.defaultImageProfileId)
+        }
       }
 
       // Set default partner if available

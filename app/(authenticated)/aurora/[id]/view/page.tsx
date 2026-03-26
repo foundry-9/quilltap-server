@@ -75,6 +75,8 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     handleSaveAgentMode,
     handleSaveHelpTools,
     handleSaveTimestampConfig,
+    handleSaveDefaultScenario,
+    handleSaveDefaultSystemPrompt,
     handleToggleNpc,
     handleToggleFavorite,
     handleToggleControlledBy,
@@ -84,6 +86,8 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     savingAgentMode,
     savingHelpTools,
     savingTimestampConfig,
+    savingDefaultScenario,
+    savingDefaultSystemPrompt,
   } = useCharacterView(id)
 
   const { creatingChat, handleCreateChat } = useChatCreation()
@@ -121,8 +125,23 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
       if (character?.defaultTimestampConfig) {
         setTimestampConfig(character.defaultTimestampConfig)
       }
+
+      // Initialize default image profile if set
+      if (defaultImageProfileId) {
+        setSelectedImageProfileId(defaultImageProfileId)
+      }
+
+      // Initialize default scenario if set
+      if (character?.defaultScenarioId) {
+        setScenarioId(character.defaultScenarioId)
+      }
+
+      // Initialize default system prompt if set
+      if (character?.defaultSystemPromptId) {
+        setSelectedSystemPromptId(character.defaultSystemPromptId)
+      }
     }
-  }, [searchParams, character?.defaultConnectionProfileId, character?.defaultTimestampConfig, profiles, defaultPartnerId])
+  }, [searchParams, character?.defaultConnectionProfileId, character?.defaultTimestampConfig, character?.defaultScenarioId, character?.defaultSystemPromptId, defaultImageProfileId, profiles, defaultPartnerId])
 
   const handleStartChat = () => {
     if (character?.defaultConnectionProfileId) {
@@ -145,6 +164,23 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
       setTimestampConfig(character.defaultTimestampConfig)
     } else {
       setTimestampConfig(null)
+    }
+
+    // Initialize default image profile if set
+    setSelectedImageProfileId(defaultImageProfileId || null)
+
+    // Initialize default scenario if set
+    if (character?.defaultScenarioId) {
+      setScenarioId(character.defaultScenarioId)
+    } else {
+      setScenarioId(null)
+    }
+
+    // Initialize default system prompt if set
+    if (character?.defaultSystemPromptId) {
+      setSelectedSystemPromptId(character.defaultSystemPromptId)
+    } else {
+      setSelectedSystemPromptId(null)
     }
 
     setShowChatDialog(true)
@@ -230,7 +266,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
       case 'tags':
         return <TagsTab characterId={id} />
 
-      case 'profiles':
+      case 'defaults':
         return (
           <ProfilesTab
             characterId={id}
@@ -244,6 +280,8 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
             savingImageProfile={savingImageProfile}
             savingAgentMode={savingAgentMode}
             savingTimestampConfig={savingTimestampConfig}
+            savingDefaultScenario={savingDefaultScenario}
+            savingDefaultSystemPrompt={savingDefaultSystemPrompt}
             onConnectionProfileChange={handleConnectionProfileSave}
             onPartnerChange={handlePartnerSave}
             onImageProfileChange={handleImageProfileSave}
@@ -251,6 +289,8 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
             savingHelpTools={savingHelpTools}
             onHelpToolsChange={handleSaveHelpTools}
             onTimestampConfigChange={handleSaveTimestampConfig}
+            onDefaultScenarioChange={handleSaveDefaultScenario}
+            onDefaultSystemPromptChange={handleSaveDefaultSystemPrompt}
           />
         )
 
@@ -352,6 +392,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           selectedImageProfileId={selectedImageProfileId}
           selectedSystemPromptId={selectedSystemPromptId}
           scenario={scenario}
+          scenarioId={scenarioId}
           scenarios={character?.scenarios}
           timestampConfig={timestampConfig}
           creatingChat={creatingChat}

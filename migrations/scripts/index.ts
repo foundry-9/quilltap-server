@@ -129,6 +129,8 @@ import { addSilentMessageFieldMigration } from './add-silent-message-field';
 import { convertScenarioToScenariosMigration } from './convert-scenario-to-scenarios';
 // Add defaultTimestampConfig field to characters
 import { addCharacterTimestampConfigFieldMigration } from './add-character-timestamp-config-field';
+// Add defaultScenarioId and defaultSystemPromptId fields to characters
+import { addCharacterDefaultIdsFieldsMigration } from './add-character-default-ids-fields';
 
 /**
  * All available migrations.
@@ -253,6 +255,8 @@ export const migrations: Migration[] = [
   convertScenarioToScenariosMigration,
   // Add defaultTimestampConfig field to characters
   addCharacterTimestampConfigFieldMigration,
+  // Add defaultScenarioId and defaultSystemPromptId fields to characters
+  addCharacterDefaultIdsFieldsMigration,
 ];
 
 export {
@@ -372,4 +376,6 @@ export {
   convertScenarioToScenariosMigration,
   // Add defaultTimestampConfig field to characters
   addCharacterTimestampConfigFieldMigration,
+  // Add defaultScenarioId and defaultSystemPromptId fields to characters
+  addCharacterDefaultIdsFieldsMigration,
 };
