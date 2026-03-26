@@ -4,9 +4,6 @@ FROM node:22-alpine AS build-base
 # Upgrade all Alpine packages to latest security patches
 RUN apk upgrade --no-cache
 
-# Upgrade npm to latest version (fixes "Invalid Version" bug in npm 10.x)
-RUN npm install -g npm@latest
-
 # Install build dependencies for native modules (better-sqlite3)
 RUN apk add --no-cache python3 make g++
 
