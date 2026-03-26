@@ -23,30 +23,33 @@ No subscriptions. No data harvested. No forgetting everything between sessions. 
 
 ## What Quilltap Does
 
-Quilltap is three things in one application, and you can use any combination of them.
+Quilltap is three things in one application. Use any combination of them.
 
-**A private AI desktop.** Connect to Claude, GPT, Gemini, Grok, DeepSeek, or local models through Ollama. Your conversations stay on your machine. The AI builds long-term memory across sessions and can search your project files semantically. Agent Mode lets the AI use tools iteratively — web search, image generation, file management, and any MCP server you connect.
+**A private AI desktop.** Connect to Claude, GPT, Gemini, Grok, DeepSeek, or local models through Ollama — all from one interface, with your conversations stored on your machine. The AI builds long-term memory across sessions, searches your files by meaning, and can use tools iteratively: web search, image generation, file management, and any MCP server you connect. Switch providers any time. Keep your data always.
 
-**A writer's workspace.** Organize notes, characters, and lore into projects with folders and files. The AI reads your documents, searches across your worldbuilding by meaning (not just keywords), and maintains context across conversations. Import your SillyTavern characters and chats directly.
+**A writer's workspace.** Organize notes, characters, and worldbuilding into projects with folders, files, and custom instructions. The AI reads your documents, searches across your entire project semantically — not just by keywords — and maintains context across conversations. If you've ever lost a thread because your AI forgot what you told it yesterday, this is the room where that stops happening.
 
-**A character platform.** Create AI characters with detailed personalities, backstories, and voices that stay consistent across sessions. Run multi-character scenes with turn management. Roll dice, flip coins, track inventories and game state — all persistent and all built in.
+**A place for AI relationships.** Create AI characters with genuine personalities, backstories, and voices that persist across sessions. Build a friendship, a companionship, or a partnership on your own terms — with memory that lasts, privacy that's real, and no one looking over your shoulder deciding what's appropriate for you. Your companion remembers your conversations, learns your patterns, and grows with you over time. This is your space. You decide what happens in it.
 
-*"Business in the front, party in the back... literary salon on the veranda."*
+Beyond these three, Quilltap also supports multi-character scenes with turn management, dice rolls and game state tracking, and full roleplay mechanics — but the foundation is simpler than all that: an AI environment that remembers, respects your privacy, and belongs entirely to you.
 
 ---
 
 ## Why Not Just Use Claude or ChatGPT?
 
-A reasonable question. Here is the situation, presented without embellishment — well, with very little embellishment:
+A fair question. Here's the honest answer:
 
 | What you get with hosted AI | What you get with Quilltap |
 | --------------------------- | -------------------------- |
 | Conversations disappear or get compressed | Persistent memory across all your chats |
 | The AI forgets your project between sessions | Projects with files, folders, and custom instructions |
-| One provider, their pricing, their rules | Connect to any provider — or run models locally |
-| Your data on someone else's servers | Everything stays on your infrastructure |
-| Generic assistant personality | Characters with real voices and personalities |
-| No game mechanics or state tracking | Built-in dice rolls, inventories, and persistent game state |
+| One provider, their pricing, their rules | Connect to any provider — or run models locally for free |
+| Your data on someone else's servers | Everything stays on your machine |
+| Generic assistant personality | Characters with real voices and persistent identities |
+| Content policies you didn't choose | You decide what's appropriate in your own space |
+| No relationship continuity | Memory, recall, and genuine emotional persistence |
+
+Quilltap doesn't replace Claude or ChatGPT — it connects to them (and others) while giving you ownership of the conversation. Your data never leaves your infrastructure. Your characters never forget who they are. And nobody gets to revoke your access to a relationship you built.
 
 ---
 
@@ -56,17 +59,17 @@ There are several paths to the same destination. Which one you choose depends on
 
 That second question deserves a moment of your attention. As AI models grow more capable — reading files, writing code, using tools — the question of *where* that code executes becomes important. A virtual machine is a genuine locked room: if an AI-generated script misbehaves, it misbehaves inside a contained environment with no access to your host system. Docker provides a similar boundary, though somewhat thinner. Running directly on your machine provides no boundary at all.
 
-| | Desktop App (VM) | Desktop App (Direct) | Docker | Node.js (`npx`) |
+| | Desktop App (Direct) | Desktop App (VM) | Docker | Node.js (`npx`) |
 | --- | --- | --- | --- | --- |
-| **You install** | macOS: Xcode CLI Tools · Windows: WSL2 · Linux: Docker Engine | Nothing extra — Electron bundles Node.js | Docker Desktop or Docker Engine | Node.js 22+ |
-| **First launch** | Slowest — downloads a VM image (~150 MB), boots a Linux guest | Fastest — uses Electron's embedded Node.js | Fast — pulls the container image | Fast — downloads app files, runs directly |
-| **AI sandbox** | ✅ Full VM isolation | ❌ No isolation (runs with your permissions) | ⚠️ Container isolation (good, not airtight) | ❌ No isolation (runs with your permissions) |
+| **You install** | Nothing extra — Electron bundles Node.js | macOS: Xcode CLI Tools · Windows: WSL2 · Linux: Docker Engine | Docker Desktop or Docker Engine | Node.js 22+ |
+| **First launch** | Fastest — uses Electron's embedded Node.js | Slowest — downloads a VM image (~150 MB), boots a Linux guest | Fast — pulls the container image | Fast — downloads app files, runs directly |
+| **AI sandbox** | ❌ No isolation (runs with your permissions) | ✅ Full VM isolation | ⚠️ Container isolation (good, not airtight) | ❌ No isolation (runs with your permissions) |
 | **Native window** | Yes (Electron) | Yes (Electron) | Yes (Electron) or browser | Yes (Electron) or browser |
-| **Best for** | Safety-conscious users — best sandbox | Most users — fastest start, zero prerequisites | Server deployments, Docker veterans, Linux users | Quick evaluation, developers, the impatient |
+| **Best for** | Most users — fastest start, zero prerequisites | Safety-conscious users — best sandbox | Server deployments, Docker veterans, Linux users | Quick evaluation, developers, the impatient |
 
 > **Our recommendation:** For most people, the desktop app in **Direct mode** is the fastest and easiest way to get started — no VM, no Docker, no Node.js install, just download and run. If you use AI tools that read and write files on your behalf and want a genuine sandbox around that behavior, switch to **VM mode** from the splash screen. The Electron app lets you toggle between VM, Docker, and Direct runtimes at any time — no commitment required.
 
-### The Civilized Way: Desktop App (Recommended)
+### Desktop App (Recommended)
 
 Download the latest release from the [Releases page](https://github.com/foundry-9/quilltap/releases) for your platform:
 
@@ -82,9 +85,9 @@ Launch the app. It presents a splash screen where you choose your data directory
 - **VM** — macOS: [Lima](https://lima-vm.io/) with Apple's Virtualization.framework (requires Xcode Command Line Tools — the app will offer to install them). Windows: WSL2 (if not enabled, run `wsl --install` in PowerShell as Administrator and restart). Full sandbox isolation.
 - **Docker** — Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/) or Docker Engine. Linux uses Docker as its default runtime backend.
 
-The desktop app manages multiple data directories from its splash screen — one for work, one for fiction, one for experiments. Each remembers its own runtime mode and window position.
+The desktop app manages multiple data directories from its splash screen — separate everything by purpose, by project, by world, or however your brain organizes things. Each directory remembers its own runtime mode and window position.
 
-### The Dockworker's Route: Docker
+### Docker
 
 **With the Electron app:** The desktop app includes a runtime switcher on the splash screen. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/), launch Quilltap, and switch the runtime to "Docker." Same native window, different engine underneath.
 
@@ -115,7 +118,7 @@ Open [http://localhost:3000](http://localhost:3000) and the setup wizard will gu
 
 > **Timezone tip:** Set `QUILLTAP_TIMEZONE` to your IANA timezone (e.g., `America/New_York`, `Europe/London`, `Asia/Tokyo`) so timestamps in chats show your local time instead of UTC. The Electron desktop app detects this automatically.
 
-### The Shortcut: npx
+### The Quick Route: npx
 
 If you have Node.js installed and want to skip installers entirely:
 
@@ -132,7 +135,7 @@ npm install -g quilltap
 quilltap
 ```
 
-> **A word of caution:** The npx path runs with your user permissions and provides no sandbox. Excellent for kicking the tires. Less excellent for leaving the AI unsupervised with your filesystem. If you start here and decide to stay, consider graduating to one of the sandboxed options.
+> **A word of caution:** Running Quilltap directly on Node.js — whether via `npx` or a global install — runs with your user permissions and provides no sandbox. Excellent for kicking the tires. Less excellent for leaving the AI unsupervised with your filesystem. If you start here and decide to stay, consider graduating to one of the sandboxed options.
 
 ### From Source
 
@@ -153,41 +156,9 @@ Requires **Node.js 22+** and **git**. See the [Development Guide](docs/developer
 
 ## Core Features
 
-### Projects & Files
+### AI Desktop
 
-Organize your work into projects with custom system prompts, file uploads, and folder structures. The AI can list, read, and write your project files with permission. Files are stored on disk using their original filenames — you can browse them directly in your file manager. Semantic search finds things by meaning across your entire project. Built-in Markdown rendering with wikilink support, code highlighting, and PDF preview. Orphaned file cleanup with automatic de-duplication keeps your file storage tidy. Copy images to your clipboard directly from the full-screen viewer.
-
-### Characters & Roleplay
-
-Create AI characters with personality, backstory, system prompts, pronouns, aliases, and clothing records. Multi-character chats with a turn-order sidebar, four-state participation (active, silent, absent, removed), identity reinforcement, impersonation, and swipe alternatives. The AI Character Import wizard generates complete characters from source material (wiki pages, documents, freeform text) using focused LLM calls. SillyTavern character and chat import is fully supported.
-
-### Memory & Context
-
-Long-term semantic memory that persists across conversations. The Memory Gate system reinforces near-duplicates, links related memories, and inserts new ones automatically. Proactive recall lets characters analyze recent conversation for relevant memories. Memory recap at chat start generates a first-person narrative summary from each character's Commonplace Book, giving them continuity across sessions. Built-in memory housekeeping for deduplication and cleanup. Context compression handles long conversations, and the AI can request full context reload when needed.
-
-Quilltap uses a three-model architecture for optimal cost and performance: your best model for chat, a cheap model for background tasks like memory extraction and titling, and an embedding model for semantic search.
-
-### Agent Mode & Tools
-
-Iterative tool use with self-correction for multi-step tasks. Built-in tools include web search (via Serper API), memory search, image generation, file management, and help search. The Run Tool feature lets you invoke any tool directly from the chat toolbar. Connect external tools through Model Context Protocol (MCP) servers, or write custom tool plugins.
-
-### Alternative Content Provision and Routing — The Concierge
-
-Intelligent content classification and routing with three modes: off, detect-only, or auto-route to uncensored providers. Uses OpenAI's free moderation endpoint when available, falling back to LLM-based classification. Chat-level danger flags with visual indicators and quick-hide integration.
-
-### Gaming & Interactivity — Pascal the Croupier
-
-Persistent chat state (JSON) for inventories, stats, scores, and any structured data. Project-level state shared across chats with per-chat overrides. Protected keys (underscore-prefixed) that the AI can't modify. Cryptographically secure dice rolls (d4 to d1000), coin flips, and random participant selection with auto-detection — "I roll 2d6" actually rolls.
-
-### Story Backgrounds — The Lantern
-
-AI-generated background images for chats based on scene context, with character appearance resolution using clothing and physical descriptions. Project backgrounds and chat card thumbnails. Automatic uncensored fallback routing for chats with flagged content.
-
----
-
-## Supported Providers
-
-Quilltap does not insist you patronize any particular establishment. Model lists are fetched at runtime from each provider's API, so you always see what's currently available.
+Connect to any major AI provider — or several at once. Quilltap uses a three-model architecture for optimal cost and performance: your best model for chat, a lightweight model for background tasks like memory extraction and titling, and an embedding model for semantic search. Model lists are fetched live from each provider, so you always see what's currently available.
 
 | Provider | Notes |
 | -------- | ----- |
@@ -199,29 +170,45 @@ Quilltap does not insist you patronize any particular establishment. Model lists
 | **OpenRouter** | 200+ models through a unified API with automatic pricing. |
 | **OpenAI-Compatible** | LM Studio, vLLM, Together AI, Groq, and any compatible endpoint. |
 
-For best results we recommend Ollama or OpenAI for embedding, a lightweight model for the cheap LLM, and whichever primary model suits your taste and budget. OpenRouter can get you access to many providers through a single API key. Additional providers (such as Gab AI) are available as third-party plugins.
+Agent Mode lets the AI use tools iteratively — web search, image generation, file management, memory search, and any MCP server you connect. The Run Tool feature lets you invoke any tool directly from the chat toolbar. The plugin system means additional providers and tools can be added without waiting for us.
+
+### Writer's Workspace
+
+Organize your work into projects with custom system prompts, file uploads, and folder structures. The AI can list, read, and write your project files with permission. Files are stored on disk using their original filenames — browse them directly in your file manager.
+
+Semantic search finds content by meaning across your entire project: not just the file that mentions "the red door," but the one that describes "a crimson entrance" three chapters ago. Built-in Markdown rendering with wikilink support, code highlighting, and PDF preview. Orphaned file cleanup with automatic de-duplication keeps your storage tidy.
+
+### Characters & Companions
+
+Create AI characters with personality, backstory, system prompts, pronouns, aliases, and physical descriptions. Each character maintains their own long-term memory — they remember your conversations, your preferences, your history together. When you come back after a week away, they know what you talked about last time. In multi-character chats, characters also form memories about each other — learning names, personalities, and shared experiences the way people do.
+
+Characters aren't limited to a single personality template. Each can have multiple named system prompts and scenarios, letting you shift context — the same companion in different settings, or different facets of the same relationship. The AI Character Import wizard can generate a complete character from source material (wiki pages, documents, freeform text).
+
+The Concierge system ensures that your conversations are never arbitrarily refused. Instead of blocking content, it routes intelligently — detecting content type and, when configured, directing requests to providers that can handle them. You set the boundaries. The software respects them.
+
+### Memory & Continuity
+
+Long-term semantic memory persists across conversations — but by design, it's not a transcript. The Memory Gate system distills what characters *learn* from conversations: facts, preferences, relationship dynamics, emotional patterns, and the occasional memorable quote. Characters remember that you hate cilantro and that Tuesday was hard. They don't parrot back what you said word for word. This is deliberate. Human memory works by impression and meaning, not by recording, and character memory is built the same way.
+
+When you *do* need verbatim recall, the search bar at the top of every screen provides it — full-text search across all conversations, memories, and characters. That's your eidetic index. The characters get something more like wisdom.
+
+Proactive recall lets characters analyze recent conversation for relevant memories without being asked. Memory recap at chat start generates a first-person narrative summary from each character's memory, giving them genuine continuity across sessions. Built-in memory housekeeping handles deduplication and cleanup. Context compression manages long conversations, and the AI can request full context reload when needed.
+
+### Multi-Character & Roleplay
+
+Multi-character chats with a turn-order sidebar, four-state participation (active, silent, absent, removed), identity reinforcement, impersonation, and swipe alternatives. Private whisper messages between characters. SillyTavern character and chat import is fully supported.
+
+### Gaming & Interactivity
+
+Persistent chat state for inventories, stats, scores, and any structured data. Project-level state shared across chats with per-chat overrides. Cryptographically secure dice rolls (d4 to d1000), coin flips, and random participant selection with auto-detection — "I roll 2d6" actually rolls.
+
+### Image Generation
+
+AI-generated background images for chats based on scene context, with character appearance resolution using clothing and physical descriptions. The Scene State Tracker automatically maintains a structured summary of the current scene after every turn, so image generation always reflects what's actually happening.
 
 ---
 
-## Themes & Appearance
-
-Switch themes live without reloading — instant redecoration, no painters required. Five bundled themes ship with the application:
-
-| Theme | Style |
-| ----- | ----- |
-| **Old School** | Classic slate-blue palette with professional typography |
-| **Art Deco** | Geometric elegance with navy-and-gold opulence |
-| **The Great Estate** | Warm, manor-inspired design with mahogany and gold |
-| **Earl Grey** | High-contrast dark theme with modern minimal styling |
-| **Rains** | Warm, earthy palette with cozy amber accents |
-
-Themes are distributed as `.qtap-theme` bundles — declarative archives containing JSON design tokens, CSS, fonts, and images. No build tools, no npm packages, no TypeScript — just edit and install. Create your own with `npx create-quilltap-theme my-theme`, manage from the CLI with `npx quilltap themes`, or browse and install from theme registries in Settings with Ed25519 signature verification.
-
-Themes can override subsystem names and images, letting each theme define its own personality for the application.
-
----
-
-## Data & Backup
+## Privacy & Data Ownership
 
 ### Where your data lives
 
@@ -238,15 +225,34 @@ All Quilltap data — database, files, logs — resides in a single directory. T
 
 - **Database:** SQLite encrypted at rest with SQLCipher — every database file is encrypted on disk; integrity checks on startup, periodic WAL checkpoints, physical backups with tiered retention (daily for 7 days, weekly for 4 weeks, monthly for 12 months, yearly forever); standard `sqlite3` CLI cannot open encrypted files, use `npx quilltap db` instead
 - **Files:** Local filesystem using original filenames, organized by project. Real-time filesystem watcher keeps the database in sync.
-- **API keys:** Stored in the encrypted database (whole-database SQLCipher encryption replaces the former field-level AES-256-GCM encryption)
+- **API keys:** Stored in the encrypted database
+
+Your API keys, your conversations, your characters, your memories — all encrypted, all local, all yours. Nothing phones home. Nothing is harvested. Nothing requires an account with us.
 
 ### Backup options
 
+- **Manual copy** — Shut down Quilltap, copy or zip the entire data directory. Everything lives in one place; a filesystem copy is a perfect backup.
 - **Full system backup** — Single ZIP file containing everything: characters, chats, files, memories, settings, and installed plugins
 - **Native export** — Selective `.qtap` format with conflict resolution for sharing specific content
 - **SillyTavern format** — Import/export for compatibility
 
 See [Backup & Restore](docs/BACKUP-RESTORE.md) and [Database Protection](help/database-protection.md) for details.
+
+---
+
+## Themes & Appearance
+
+Switch themes live without reloading. Five bundled themes ship with the application:
+
+| Theme | Style |
+| ----- | ----- |
+| **Old School** | Classic slate-blue palette with professional typography |
+| **Art Deco** | Geometric elegance with navy-and-gold opulence |
+| **The Great Estate** | Warm, manor-inspired design with mahogany and gold |
+| **Earl Grey** | High-contrast dark theme with modern minimal styling |
+| **Rains** | Warm, earthy palette with cozy amber accents |
+
+Themes are distributed as `.qtap-theme` bundles — declarative archives containing JSON design tokens, CSS, fonts, and images. No build tools, no npm packages, no TypeScript — just edit and install. Create your own with `npx create-quilltap-theme my-theme`, manage from the CLI with `npx quilltap themes`, or browse and install from theme registries in Settings with Ed25519 signature verification.
 
 ---
 
@@ -263,6 +269,7 @@ Quilltap was built to be extended. The plugin system supports seven extension po
 | **Template** | Roleplay formatting templates for different prompt styles |
 | **Tool** | Custom LLM capabilities (the AI can use your tool mid-conversation) |
 | **Search Provider** | Alternative web search backends (ships with Serper.dev; swap in your own) |
+| **System Prompt** | Custom system prompt templates for characters |
 
 ### Architecture at a glance
 
