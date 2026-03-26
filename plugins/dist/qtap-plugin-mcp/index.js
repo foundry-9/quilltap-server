@@ -19658,6 +19658,26 @@ var MCPClient = class {
     return mcpResult;
   }
   /**
+   * Reconnect to the MCP server
+   *
+   * Disconnects, reconnects, and rediscovers tools. Used when the server
+   * session has gone stale (e.g., "Server not initialized" error from
+   * Streamable HTTP after server restart or session expiry).
+   */
+  async reconnect() {
+    clientLogger.info("Reconnecting to MCP server", {
+      serverId: this.config.name,
+      previousStatus: this.state.status
+    });
+    await this.disconnect();
+    await this.connect();
+    await this.discoverTools();
+    clientLogger.info("Successfully reconnected to MCP server", {
+      serverId: this.config.name,
+      toolCount: this.state.tools.length
+    });
+  }
+  /**
    * Disconnect from the MCP server
    */
   async disconnect() {
@@ -19935,9 +19955,48 @@ var MCPConnectionManager = class {
         executionTimeMs: Date.now() - startTime
       };
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes("Server not initialized") || errorMessage.includes("server not initialized")) {
+        managerLogger.info("MCP server session stale, attempting reconnect and retry", {
+          serverId,
+          toolName: mcpName,
+          error: errorMessage
+        });
+        try {
+          await client.reconnect();
+          await this.rebuildToolIndex();
+          const retryResult = await client.callTool(mcpName, args);
+          const retryContent = this.formatMCPContent(retryResult);
+          managerLogger.info("Tool call succeeded after reconnect", {
+            serverId,
+            toolName: mcpName
+          });
+          return {
+            success: !retryResult.isError,
+            content: retryContent,
+            error: retryResult.isError ? retryContent : void 0,
+            serverId,
+            originalToolName: mcpName,
+            executionTimeMs: Date.now() - startTime
+          };
+        } catch (reconnectError) {
+          managerLogger.error("Reconnect and retry failed", {
+            serverId,
+            toolName: mcpName,
+            error: reconnectError instanceof Error ? reconnectError.message : String(reconnectError)
+          });
+          return {
+            success: false,
+            error: `Reconnect failed after stale session: ${reconnectError instanceof Error ? reconnectError.message : String(reconnectError)}`,
+            serverId,
+            originalToolName: mcpName,
+            executionTimeMs: Date.now() - startTime
+          };
+        }
+      }
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: errorMessage,
         serverId,
         originalToolName: mcpName,
         executionTimeMs: Date.now() - startTime

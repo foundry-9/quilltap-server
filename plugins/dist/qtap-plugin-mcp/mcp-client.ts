@@ -450,6 +450,29 @@ export class MCPClient {
   }
 
   /**
+   * Reconnect to the MCP server
+   *
+   * Disconnects, reconnects, and rediscovers tools. Used when the server
+   * session has gone stale (e.g., "Server not initialized" error from
+   * Streamable HTTP after server restart or session expiry).
+   */
+  async reconnect(): Promise<void> {
+    clientLogger.info('Reconnecting to MCP server', {
+      serverId: this.config.name,
+      previousStatus: this.state.status,
+    });
+
+    await this.disconnect();
+    await this.connect();
+    await this.discoverTools();
+
+    clientLogger.info('Successfully reconnected to MCP server', {
+      serverId: this.config.name,
+      toolCount: this.state.tools.length,
+    });
+  }
+
+  /**
    * Disconnect from the MCP server
    */
   async disconnect(): Promise<void> {
