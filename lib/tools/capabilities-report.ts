@@ -7,6 +7,7 @@
 
 import crypto from 'crypto';
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { logger } from '@/lib/logger';
 import { getAllPlugins } from '@/lib/plugins/registry';
@@ -19,9 +20,14 @@ import {
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
+import { isDockerEnvironment, isLimaEnvironment, getDataDir, getSQLiteDatabasePath, getLLMLogsDatabasePath, getBackupsDir } from '@/lib/paths';
+import { getHasUserPassphrase } from '@/lib/startup/dbkey';
+import { getAllThemes, getThemeStats } from '@/lib/themes/theme-registry';
+import { parseBackupFilename, parseLLMLogsBackupFilename } from '@/lib/database/backends/sqlite/physical-backup';
 
 import type { LLMProviderPlugin } from '@/lib/plugins/interfaces/provider-plugin';
 import type { LoadedPlugin } from '@/lib/plugins/manifest-loader';
+import type { ChatMetadata } from '@/lib/schemas/chat.types';
 import { getErrorMessage } from '@/lib/errors';
 
 // Read version from package.json
@@ -68,6 +74,21 @@ export interface DatabaseStats {
   tags: number;
 }
 
+export interface EnhancedDatabaseStats {
+  characters: number;
+  favoriteCharacters: number;
+  chats: number;
+  memories: number;
+  tags: number;
+  projects: number;
+  connectionProfiles: { total: number; webSearchEnabled: number; toolUseEnabled: number; dangerousCompatible: number };
+  imageProfiles: number;
+  embeddingProfiles: number;
+  promptTemplates: { total: number; builtIn: number; custom: number };
+  roleplayTemplates: { total: number; builtIn: number; custom: number };
+  filePermissions: number;
+}
+
 export interface FolderStats {
   path: string;
   fileCount: number;
@@ -110,10 +131,96 @@ export interface EmbeddingProviderInfo {
   models: string[];
 }
 
+export interface RuntimeEnvironmentInfo {
+  nodeVersion: string;
+  platform: string;
+  arch: string;
+  osType: string;
+  osRelease: string;
+  totalMemoryBytes: number;
+  freeMemoryBytes: number;
+  runtimeType: 'docker' | 'lima' | 'electron' | 'node';
+  uptimeSeconds: number;
+  dataDirectory: string;
+  timezone: string;
+}
+
+export interface DatabaseSecurityInfo {
+  passphraseProtected: boolean;
+  mainDbSizeBytes: number;
+  llmLogsDbSizeBytes: number;
+  highestAppVersion: string | null;
+}
+
+export interface BackupInfo {
+  count: number;
+  newestDate: string | null;
+  oldestDate: string | null;
+  totalSizeBytes: number;
+}
+
+export interface BackupStatusInfo {
+  mainDb: BackupInfo;
+  llmLogs: BackupInfo;
+}
+
+export interface MCPServersInfo {
+  configured: number;
+  enabled: number;
+  serverNames: string[];
+  autoReconnect: boolean;
+  maxReconnectAttempts: number;
+}
+
+export interface ThemeListItem {
+  name: string;
+  version: string;
+  source: string;
+}
+
+export interface ThemeReportInfo {
+  activeThemeId: string | null;
+  colorMode: string;
+  stats: { total: number; withDarkMode: number; withCssOverrides: number; errors: number };
+  themes: ThemeListItem[];
+}
+
+export interface FeatureConfigInfo {
+  dangerousContent: { mode: string; threshold: number; scanTextChat: boolean; scanImagePrompts: boolean; scanImageGeneration: boolean };
+  contextCompression: { enabled: boolean; windowSize: number; compressionTargetTokens: number };
+  agentMode: { maxTurns: number; defaultEnabled: boolean };
+  storyBackgrounds: { enabled: boolean; hasDefaultImageProfile: boolean };
+  timestamps: { mode: string; format: string };
+  autoLock: { enabled: boolean; idleMinutes: number };
+  memoryCascade: { onMessageDelete: string; onSwipeRegenerate: string };
+  autoDetectRng: boolean;
+  avatarDisplay: { mode: string; style: string };
+}
+
+export interface ChatStatsInfo {
+  totalEstimatedCostUSD: number;
+  totalPromptTokens: number;
+  totalCompletionTokens: number;
+  totalMessages: number;
+  agentModeChats: number;
+  dangerousChats: number;
+}
+
+export interface LLMLogStatsInfo {
+  totalEntries: number;
+  tokenUsage: { promptTokens: number; completionTokens: number; totalTokens: number };
+  loggingEnabled: boolean;
+  verboseMode: boolean;
+  retentionDays: number;
+}
+
 export interface CapabilitiesReportData {
   version: string;
   nodeEnv: string;
   generatedAt: string;
+  runtimeEnvironment: RuntimeEnvironmentInfo;
+  databaseSecurity: DatabaseSecurityInfo;
+  backupStatus: BackupStatusInfo;
   plugins: {
     enabled: PluginInfo[];
     disabled: PluginInfo[];
@@ -126,7 +233,12 @@ export interface CapabilitiesReportData {
   embeddingProvider: EmbeddingInfo;
   imageProviders: ImageProviderInfo[];
   embeddingProviders: EmbeddingProviderInfo[];
-  databaseStats: DatabaseStats;
+  mcpServers: MCPServersInfo;
+  themeInfo: ThemeReportInfo;
+  featureConfig: FeatureConfigInfo;
+  databaseStats: EnhancedDatabaseStats;
+  chatStats: ChatStatsInfo;
+  llmLogStats: LLMLogStatsInfo;
   storageStats: StorageStats;
 }
 
@@ -563,14 +675,404 @@ async function collectEmbeddingProviders(): Promise<EmbeddingProviderInfo[]> {
 }
 
 /**
- * Collect database statistics
+ * Collect runtime environment information
  */
-async function collectDatabaseStats(userId: string): Promise<DatabaseStats> {
-  moduleLogger.info('Collecting database statistics', { userId });
+function collectRuntimeEnvironment(): RuntimeEnvironmentInfo {
+  moduleLogger.info('Collecting runtime environment information');
+
+  let runtimeType: RuntimeEnvironmentInfo['runtimeType'] = 'node';
+  if (isDockerEnvironment()) {
+    runtimeType = 'docker';
+  } else if (isLimaEnvironment()) {
+    runtimeType = 'lima';
+  } else if (process.env.ELECTRON_DEV) {
+    runtimeType = 'electron';
+  }
+
+  const result: RuntimeEnvironmentInfo = {
+    nodeVersion: process.version,
+    platform: process.platform,
+    arch: process.arch,
+    osType: os.type(),
+    osRelease: os.release(),
+    totalMemoryBytes: os.totalmem(),
+    freeMemoryBytes: os.freemem(),
+    runtimeType,
+    uptimeSeconds: process.uptime(),
+    dataDirectory: getDataDir(),
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  };
+
+  moduleLogger.info('Collected runtime environment information', { rawResult: result });
+  return result;
+}
+
+/**
+ * Collect database security information
+ */
+async function collectDatabaseSecurity(): Promise<DatabaseSecurityInfo> {
+  moduleLogger.info('Collecting database security information');
+
+  let passphraseProtected = false;
+  try {
+    passphraseProtected = getHasUserPassphrase();
+  } catch (error) {
+    moduleLogger.debug('Could not check passphrase status', { error: getErrorMessage(error) });
+  }
+
+  let mainDbSizeBytes = 0;
+  try {
+    const mainDbStat = await fs.stat(getSQLiteDatabasePath());
+    mainDbSizeBytes = mainDbStat.size;
+  } catch {
+    // DB file may not exist yet
+  }
+
+  let llmLogsDbSizeBytes = 0;
+  try {
+    const llmLogsStat = await fs.stat(getLLMLogsDatabasePath());
+    llmLogsDbSizeBytes = llmLogsStat.size;
+  } catch {
+    // LLM logs DB may not exist yet
+  }
+
+  const result: DatabaseSecurityInfo = {
+    passphraseProtected,
+    mainDbSizeBytes,
+    llmLogsDbSizeBytes,
+    highestAppVersion: null,
+  };
+
+  moduleLogger.info('Collected database security information', { rawResult: result });
+  return result;
+}
+
+/**
+ * Collect backup status for main DB and LLM logs
+ */
+async function collectBackupStatus(): Promise<BackupStatusInfo> {
+  moduleLogger.info('Collecting backup status');
+
+  const mainDb: BackupInfo = { count: 0, newestDate: null, oldestDate: null, totalSizeBytes: 0 };
+  const llmLogs: BackupInfo = { count: 0, newestDate: null, oldestDate: null, totalSizeBytes: 0 };
+
+  try {
+    const backupsDir = getBackupsDir();
+    let files: string[];
+    try {
+      files = await fs.readdir(backupsDir);
+    } catch {
+      // Backups directory doesn't exist yet
+      const result = { mainDb, llmLogs };
+      moduleLogger.info('Collected backup status (no backups directory)', { rawResult: result });
+      return result;
+    }
+
+    const mainDates: Date[] = [];
+    const llmLogsDates: Date[] = [];
+
+    for (const filename of files) {
+      const llmLogsDate = parseLLMLogsBackupFilename(filename);
+      if (llmLogsDate) {
+        let size = 0;
+        try {
+          const stat = await fs.stat(path.join(backupsDir, filename));
+          size = stat.size;
+        } catch {
+          // Skip files we can't stat
+        }
+        llmLogs.count++;
+        llmLogs.totalSizeBytes += size;
+        llmLogsDates.push(llmLogsDate);
+        continue;
+      }
+
+      const mainDate = parseBackupFilename(filename);
+      if (mainDate) {
+        let size = 0;
+        try {
+          const stat = await fs.stat(path.join(backupsDir, filename));
+          size = stat.size;
+        } catch {
+          // Skip files we can't stat
+        }
+        mainDb.count++;
+        mainDb.totalSizeBytes += size;
+        mainDates.push(mainDate);
+      }
+    }
+
+    if (mainDates.length > 0) {
+      mainDates.sort((a, b) => a.getTime() - b.getTime());
+      mainDb.oldestDate = mainDates[0].toISOString();
+      mainDb.newestDate = mainDates[mainDates.length - 1].toISOString();
+    }
+
+    if (llmLogsDates.length > 0) {
+      llmLogsDates.sort((a, b) => a.getTime() - b.getTime());
+      llmLogs.oldestDate = llmLogsDates[0].toISOString();
+      llmLogs.newestDate = llmLogsDates[llmLogsDates.length - 1].toISOString();
+    }
+  } catch (error) {
+    moduleLogger.warn('Failed to collect backup status', { error: getErrorMessage(error) });
+  }
+
+  const result = { mainDb, llmLogs };
+  moduleLogger.info('Collected backup status', { rawResult: result });
+  return result;
+}
+
+/**
+ * Collect MCP server configuration
+ */
+async function collectMCPServers(userId: string): Promise<MCPServersInfo> {
+  moduleLogger.info('Collecting MCP server configuration', { userId });
+
+  const defaults: MCPServersInfo = {
+    configured: 0,
+    enabled: 0,
+    serverNames: [],
+    autoReconnect: true,
+    maxReconnectAttempts: 5,
+  };
+
+  try {
+    const globalRepos = getRepositories();
+    const mcpConfig = await globalRepos.pluginConfigs.findByUserAndPlugin(userId, 'qtap-plugin-mcp');
+
+    if (!mcpConfig) {
+      moduleLogger.info('Collected MCP server configuration (no config)', { rawResult: defaults });
+      return defaults;
+    }
+
+    const config = mcpConfig.config as Record<string, unknown>;
+    let servers: Array<Record<string, unknown>> = [];
+
+    if (config.servers) {
+      try {
+        servers = typeof config.servers === 'string'
+          ? JSON.parse(config.servers)
+          : Array.isArray(config.servers) ? config.servers : [];
+      } catch {
+        moduleLogger.debug('Failed to parse MCP servers config');
+      }
+    }
+
+    const serverNames: string[] = [];
+    let enabledCount = 0;
+
+    for (const server of servers) {
+      // Extract display name or name — never expose URL or auth fields
+      const name = (server.displayName || server.name || 'Unnamed Server') as string;
+      serverNames.push(name);
+      if (server.enabled === true) {
+        enabledCount++;
+      }
+    }
+
+    const result: MCPServersInfo = {
+      configured: servers.length,
+      enabled: enabledCount,
+      serverNames,
+      autoReconnect: (config.autoReconnect as boolean) ?? true,
+      maxReconnectAttempts: (config.maxReconnectAttempts as number) ?? 5,
+    };
+
+    moduleLogger.info('Collected MCP server configuration', { rawResult: result });
+    return result;
+  } catch (error) {
+    moduleLogger.warn('Failed to collect MCP server configuration', { error: getErrorMessage(error) });
+    return defaults;
+  }
+}
+
+/**
+ * Collect theme information
+ */
+async function collectThemeInfo(userId: string): Promise<ThemeReportInfo> {
+  moduleLogger.info('Collecting theme information', { userId });
+
+  const globalRepos = getRepositories();
+  const chatSettings = await globalRepos.chatSettings.findByUserId(userId);
+
+  const activeThemeId = chatSettings?.themePreference?.activeThemeId ?? null;
+  const colorMode = chatSettings?.themePreference?.colorMode ?? 'system';
+
+  let stats: ThemeReportInfo['stats'] = { total: 0, withDarkMode: 0, withCssOverrides: 0, errors: 0 };
+  try {
+    const rawStats = getThemeStats();
+    stats = {
+      total: rawStats.total,
+      withDarkMode: rawStats.withDarkMode,
+      withCssOverrides: rawStats.withCssOverrides,
+      errors: rawStats.errors,
+    };
+  } catch (error) {
+    moduleLogger.debug('Failed to get theme stats', { error: getErrorMessage(error) });
+  }
+
+  let themes: ThemeListItem[] = [];
+  try {
+    themes = getAllThemes().map(t => ({
+      name: t.name,
+      version: t.version,
+      source: t.source,
+    }));
+  } catch (error) {
+    moduleLogger.debug('Failed to get theme list', { error: getErrorMessage(error) });
+  }
+
+  const result: ThemeReportInfo = { activeThemeId, colorMode, stats, themes };
+  moduleLogger.info('Collected theme information', { rawResult: result });
+  return result;
+}
+
+/**
+ * Collect feature configuration settings
+ */
+async function collectFeatureConfig(userId: string): Promise<FeatureConfigInfo> {
+  moduleLogger.info('Collecting feature configuration', { userId });
+
+  const globalRepos = getRepositories();
+  const chatSettings = await globalRepos.chatSettings.findByUserId(userId);
+
+  const dc = chatSettings?.dangerousContentSettings;
+  const cc = chatSettings?.contextCompressionSettings;
+  const am = chatSettings?.agentModeSettings;
+  const sb = chatSettings?.storyBackgroundsSettings;
+  const ts = chatSettings?.defaultTimestampConfig;
+  const al = chatSettings?.autoLockSettings;
+  const mc = chatSettings?.memoryCascadePreferences;
+
+  const result: FeatureConfigInfo = {
+    dangerousContent: {
+      mode: dc?.mode ?? 'OFF',
+      threshold: dc?.threshold ?? 0.7,
+      scanTextChat: dc?.scanTextChat ?? true,
+      scanImagePrompts: dc?.scanImagePrompts ?? true,
+      scanImageGeneration: dc?.scanImageGeneration ?? false,
+    },
+    contextCompression: {
+      enabled: cc?.enabled ?? true,
+      windowSize: cc?.windowSize ?? 5,
+      compressionTargetTokens: cc?.compressionTargetTokens ?? 800,
+    },
+    agentMode: {
+      maxTurns: am?.maxTurns ?? 10,
+      defaultEnabled: am?.defaultEnabled ?? false,
+    },
+    storyBackgrounds: {
+      enabled: sb?.enabled ?? false,
+      hasDefaultImageProfile: !!(sb?.defaultImageProfileId),
+    },
+    timestamps: {
+      mode: ts?.mode ?? 'NONE',
+      format: ts?.format ?? 'FRIENDLY',
+    },
+    autoLock: {
+      enabled: al?.enabled ?? false,
+      idleMinutes: al?.idleMinutes ?? 15,
+    },
+    memoryCascade: {
+      onMessageDelete: mc?.onMessageDelete ?? 'ASK_EVERY_TIME',
+      onSwipeRegenerate: mc?.onSwipeRegenerate ?? 'DELETE_MEMORIES',
+    },
+    autoDetectRng: chatSettings?.autoDetectRng ?? true,
+    avatarDisplay: {
+      mode: chatSettings?.avatarDisplayMode ?? 'ALWAYS',
+      style: chatSettings?.avatarDisplayStyle ?? 'CIRCULAR',
+    },
+  };
+
+  moduleLogger.info('Collected feature configuration', { rawResult: result });
+  return result;
+}
+
+/**
+ * Collect chat statistics from already-fetched chats
+ */
+function collectChatStats(chats: ChatMetadata[]): ChatStatsInfo {
+  moduleLogger.info('Collecting chat statistics');
+
+  let totalEstimatedCostUSD = 0;
+  let totalPromptTokens = 0;
+  let totalCompletionTokens = 0;
+  let totalMessages = 0;
+  let agentModeChats = 0;
+  let dangerousChats = 0;
+
+  for (const chat of chats) {
+    totalEstimatedCostUSD += chat.estimatedCostUSD ?? 0;
+    totalPromptTokens += chat.totalPromptTokens ?? 0;
+    totalCompletionTokens += chat.totalCompletionTokens ?? 0;
+    totalMessages += chat.messageCount ?? 0;
+    if (chat.agentModeEnabled === true) agentModeChats++;
+    if (chat.isDangerousChat === true) dangerousChats++;
+  }
+
+  const result: ChatStatsInfo = {
+    totalEstimatedCostUSD,
+    totalPromptTokens,
+    totalCompletionTokens,
+    totalMessages,
+    agentModeChats,
+    dangerousChats,
+  };
+
+  moduleLogger.info('Collected chat statistics', { rawResult: result });
+  return result;
+}
+
+/**
+ * Collect LLM log statistics
+ */
+async function collectLLMLogStats(userId: string): Promise<LLMLogStatsInfo> {
+  moduleLogger.info('Collecting LLM log statistics', { userId });
+
+  try {
+    const repos = getUserRepositories(userId);
+    const globalRepos = getRepositories();
+
+    const totalEntries = await repos.llmLogs.countByUserId();
+    const tokenUsage = await repos.llmLogs.getTotalTokenUsage();
+
+    const chatSettings = await globalRepos.chatSettings.findByUserId(userId);
+    const loggingEnabled = chatSettings?.llmLoggingSettings?.enabled ?? true;
+    const verboseMode = chatSettings?.llmLoggingSettings?.verboseMode ?? false;
+    const retentionDays = chatSettings?.llmLoggingSettings?.retentionDays ?? 30;
+
+    const result: LLMLogStatsInfo = {
+      totalEntries,
+      tokenUsage,
+      loggingEnabled,
+      verboseMode,
+      retentionDays,
+    };
+
+    moduleLogger.info('Collected LLM log statistics', { rawResult: result });
+    return result;
+  } catch (error) {
+    moduleLogger.warn('Failed to collect LLM log statistics', { error: getErrorMessage(error) });
+    return {
+      totalEntries: 0,
+      tokenUsage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      loggingEnabled: true,
+      verboseMode: false,
+      retentionDays: 30,
+    };
+  }
+}
+
+/**
+ * Collect enhanced database statistics
+ */
+async function collectEnhancedDatabaseStats(userId: string): Promise<{ stats: EnhancedDatabaseStats; chats: ChatMetadata[] }> {
+  moduleLogger.info('Collecting enhanced database statistics', { userId });
 
   const repos = getUserRepositories(userId);
+  const globalRepos = getRepositories();
 
-  // Count documents in each collection (personas no longer counted - migrated to characters)
+  // Count documents in each collection
   const [characters, chats, tags] = await Promise.all([
     repos.characters.findAll(),
     repos.chats.findAll(),
@@ -584,15 +1086,96 @@ async function collectDatabaseStats(userId: string): Promise<DatabaseStats> {
     memoriesCount += memories.length;
   }
 
-  const stats: DatabaseStats = {
+  // Count favorite characters
+  const favoriteCharacters = characters.filter(c => c.isFavorite).length;
+
+  // Projects
+  let projectCount = 0;
+  try {
+    const projects = await repos.projects.findAll();
+    projectCount = projects.length;
+  } catch (error) {
+    moduleLogger.debug('Failed to count projects', { error: getErrorMessage(error) });
+  }
+
+  // Connection profiles
+  let connectionProfileStats = { total: 0, webSearchEnabled: 0, toolUseEnabled: 0, dangerousCompatible: 0 };
+  try {
+    const profiles = await repos.connections.findAll();
+    connectionProfileStats = {
+      total: profiles.length,
+      webSearchEnabled: profiles.filter(p => p.allowWebSearch).length,
+      toolUseEnabled: profiles.filter(p => p.allowToolUse).length,
+      dangerousCompatible: profiles.filter(p => p.isDangerousCompatible).length,
+    };
+  } catch (error) {
+    moduleLogger.debug('Failed to count connection profiles', { error: getErrorMessage(error) });
+  }
+
+  // Image profiles
+  let imageProfileCount = 0;
+  try {
+    const imgProfiles = await repos.imageProfiles.findAll();
+    imageProfileCount = imgProfiles.length;
+  } catch (error) {
+    moduleLogger.debug('Failed to count image profiles', { error: getErrorMessage(error) });
+  }
+
+  // Embedding profiles
+  let embeddingProfileCount = 0;
+  try {
+    const embProfiles = await repos.embeddingProfiles.findAll();
+    embeddingProfileCount = embProfiles.length;
+  } catch (error) {
+    moduleLogger.debug('Failed to count embedding profiles', { error: getErrorMessage(error) });
+  }
+
+  // Prompt templates
+  let promptTemplateStats = { total: 0, builtIn: 0, custom: 0 };
+  try {
+    const prompts = await globalRepos.promptTemplates.findAllForUser(userId);
+    const builtIn = prompts.filter(p => p.isBuiltIn).length;
+    promptTemplateStats = { total: prompts.length, builtIn, custom: prompts.length - builtIn };
+  } catch (error) {
+    moduleLogger.debug('Failed to count prompt templates', { error: getErrorMessage(error) });
+  }
+
+  // Roleplay templates
+  let roleplayTemplateStats = { total: 0, builtIn: 0, custom: 0 };
+  try {
+    const rts = await globalRepos.roleplayTemplates.findAllForUser(userId);
+    const builtIn = rts.filter(r => r.isBuiltIn).length;
+    roleplayTemplateStats = { total: rts.length, builtIn, custom: rts.length - builtIn };
+  } catch (error) {
+    moduleLogger.debug('Failed to count roleplay templates', { error: getErrorMessage(error) });
+  }
+
+  // File permissions
+  let filePermissionCount = 0;
+  try {
+    const permissions = await globalRepos.filePermissions.findAll();
+    filePermissionCount = permissions.length;
+  } catch (error) {
+    moduleLogger.debug('Failed to count file permissions', { error: getErrorMessage(error) });
+  }
+
+  const stats: EnhancedDatabaseStats = {
     characters: characters.length,
+    favoriteCharacters,
     chats: chats.length,
     memories: memoriesCount,
     tags: tags.length,
+    projects: projectCount,
+    connectionProfiles: connectionProfileStats,
+    imageProfiles: imageProfileCount,
+    embeddingProfiles: embeddingProfileCount,
+    promptTemplates: promptTemplateStats,
+    roleplayTemplates: roleplayTemplateStats,
+    filePermissions: filePermissionCount,
   };
 
-  moduleLogger.info('Collected database statistics', { rawResult: stats });
-  return stats;
+  moduleLogger.info('Collected enhanced database statistics', { rawResult: stats });
+  return { stats, chats };
 }
 
 /**
@@ -658,21 +1241,71 @@ async function collectStorageStats(userId: string): Promise<StorageStats> {
 export async function generateReportData(userId: string): Promise<CapabilitiesReportData> {
   moduleLogger.info('Starting capabilities report generation', { userId });
 
+  // Collect independent data in parallel where possible
+  const [
+    plugins,
+    providers,
+    modelsByProvider,
+    cheapLLM,
+    imagePromptLLM,
+    embeddingProvider,
+    imageProviders,
+    embeddingProviders,
+    runtimeEnvironment,
+    databaseSecurity,
+    backupStatus,
+    mcpServers,
+    themeInfo,
+    featureConfig,
+    dbResult,
+    llmLogStats,
+    storageStats,
+  ] = await Promise.all([
+    collectPluginInfo(),
+    collectProviderInfo(userId),
+    collectModels(userId),
+    collectCheapLLMInfo(userId),
+    collectImagePromptLLMInfo(userId),
+    collectEmbeddingInfo(userId),
+    collectImageProviders(),
+    collectEmbeddingProviders(),
+    Promise.resolve(collectRuntimeEnvironment()),
+    collectDatabaseSecurity(),
+    collectBackupStatus(),
+    collectMCPServers(userId),
+    collectThemeInfo(userId),
+    collectFeatureConfig(userId),
+    collectEnhancedDatabaseStats(userId),
+    collectLLMLogStats(userId),
+    collectStorageStats(userId),
+  ]);
+
+  // Derive chat stats from already-fetched chats
+  const chatStats = collectChatStats(dbResult.chats);
+
   const data: CapabilitiesReportData = {
     version: getVersion(),
     nodeEnv: process.env.NODE_ENV || 'development',
     generatedAt: new Date().toISOString(),
-    plugins: await collectPluginInfo(),
+    runtimeEnvironment,
+    databaseSecurity,
+    backupStatus,
+    plugins,
     apiKeyTypes: collectApiKeyTypes(),
-    providers: await collectProviderInfo(userId),
-    modelsByProvider: await collectModels(userId),
-    cheapLLM: await collectCheapLLMInfo(userId),
-    imagePromptLLM: await collectImagePromptLLMInfo(userId),
-    embeddingProvider: await collectEmbeddingInfo(userId),
-    imageProviders: await collectImageProviders(),
-    embeddingProviders: await collectEmbeddingProviders(),
-    databaseStats: await collectDatabaseStats(userId),
-    storageStats: await collectStorageStats(userId),
+    providers,
+    modelsByProvider,
+    cheapLLM,
+    imagePromptLLM,
+    embeddingProvider,
+    imageProviders,
+    embeddingProviders,
+    mcpServers,
+    themeInfo,
+    featureConfig,
+    databaseStats: dbResult.stats,
+    chatStats,
+    llmLogStats,
+    storageStats,
   };
 
   moduleLogger.info('Capabilities report generation complete', { userId });
@@ -691,6 +1324,13 @@ function formatBytes(bytes: number): string {
 }
 
 /**
+ * Format USD currency
+ */
+function formatUSD(amount: number): string {
+  return `$${amount.toFixed(4)}`;
+}
+
+/**
  * Generate markdown report from data
  */
 export function generateMarkdownReport(data: CapabilitiesReportData): string {
@@ -701,14 +1341,63 @@ export function generateMarkdownReport(data: CapabilitiesReportData): string {
   lines.push(`Generated: ${new Date(data.generatedAt).toLocaleString()}`);
   lines.push('');
 
-  // System Information
+  // ========================================================================
+  // 1. System Information (enhanced)
+  // ========================================================================
   lines.push('## System Information');
   lines.push('');
   lines.push(`- **Version**: ${data.version}`);
   lines.push(`- **Node Environment**: ${data.nodeEnv}`);
+  lines.push(`- **Node Version**: ${data.runtimeEnvironment.nodeVersion}`);
+  lines.push(`- **Platform**: ${data.runtimeEnvironment.platform} (${data.runtimeEnvironment.arch})`);
+  lines.push(`- **OS**: ${data.runtimeEnvironment.osType} ${data.runtimeEnvironment.osRelease}`);
+  lines.push(`- **Runtime Type**: ${data.runtimeEnvironment.runtimeType}`);
+  lines.push(`- **Total Memory**: ${formatBytes(data.runtimeEnvironment.totalMemoryBytes)}`);
+  lines.push(`- **Free Memory**: ${formatBytes(data.runtimeEnvironment.freeMemoryBytes)}`);
+  lines.push(`- **Uptime**: ${Math.floor(data.runtimeEnvironment.uptimeSeconds / 3600)}h ${Math.floor((data.runtimeEnvironment.uptimeSeconds % 3600) / 60)}m`);
+  lines.push(`- **Timezone**: ${data.runtimeEnvironment.timezone}`);
+  lines.push(`- **Data Directory**: ${data.runtimeEnvironment.dataDirectory}`);
   lines.push('');
 
-  // Plugins
+  // ========================================================================
+  // 2. Database & Security
+  // ========================================================================
+  lines.push('## Database & Security');
+  lines.push('');
+  lines.push(`- **Passphrase Protected**: ${data.databaseSecurity.passphraseProtected ? 'Yes' : 'No'}`);
+  lines.push(`- **Main DB Size**: ${formatBytes(data.databaseSecurity.mainDbSizeBytes)}`);
+  lines.push(`- **LLM Logs DB Size**: ${formatBytes(data.databaseSecurity.llmLogsDbSizeBytes)}`);
+  if (data.databaseSecurity.highestAppVersion) {
+    lines.push(`- **Highest App Version**: ${data.databaseSecurity.highestAppVersion}`);
+  }
+  lines.push('');
+
+  // ========================================================================
+  // 3. Backup Status
+  // ========================================================================
+  lines.push('## Backup Status');
+  lines.push('');
+  lines.push('| Database | Backups | Newest | Oldest | Total Size |');
+  lines.push('|----------|---------|--------|--------|------------|');
+  const mainNewest = data.backupStatus.mainDb.newestDate
+    ? new Date(data.backupStatus.mainDb.newestDate).toLocaleDateString()
+    : 'N/A';
+  const mainOldest = data.backupStatus.mainDb.oldestDate
+    ? new Date(data.backupStatus.mainDb.oldestDate).toLocaleDateString()
+    : 'N/A';
+  lines.push(`| Main DB | ${data.backupStatus.mainDb.count} | ${mainNewest} | ${mainOldest} | ${formatBytes(data.backupStatus.mainDb.totalSizeBytes)} |`);
+  const llmNewest = data.backupStatus.llmLogs.newestDate
+    ? new Date(data.backupStatus.llmLogs.newestDate).toLocaleDateString()
+    : 'N/A';
+  const llmOldest = data.backupStatus.llmLogs.oldestDate
+    ? new Date(data.backupStatus.llmLogs.oldestDate).toLocaleDateString()
+    : 'N/A';
+  lines.push(`| LLM Logs | ${data.backupStatus.llmLogs.count} | ${llmNewest} | ${llmOldest} | ${formatBytes(data.backupStatus.llmLogs.totalSizeBytes)} |`);
+  lines.push('');
+
+  // ========================================================================
+  // 4. Plugins (existing)
+  // ========================================================================
   lines.push('## Plugins');
   lines.push('');
 
@@ -738,19 +1427,9 @@ export function generateMarkdownReport(data: CapabilitiesReportData): string {
   }
   lines.push('');
 
-  // API Key Types
-  lines.push('## API Key Types');
-  lines.push('');
-  if (data.apiKeyTypes.length > 0) {
-    for (const keyType of data.apiKeyTypes) {
-      lines.push(`- ${keyType}`);
-    }
-  } else {
-    lines.push('*No API key types available*');
-  }
-  lines.push('');
-
-  // LLM Providers
+  // ========================================================================
+  // 5. LLM Providers (existing — Available Providers table)
+  // ========================================================================
   lines.push('## LLM Providers');
   lines.push('');
   lines.push('### Available Providers');
@@ -768,7 +1447,9 @@ export function generateMarkdownReport(data: CapabilitiesReportData): string {
   }
   lines.push('');
 
-  // Models by Provider
+  // ========================================================================
+  // 6. Models by Provider (existing)
+  // ========================================================================
   lines.push('### Models by Provider');
   lines.push('');
   for (const providerModels of data.modelsByProvider) {
@@ -786,7 +1467,9 @@ export function generateMarkdownReport(data: CapabilitiesReportData): string {
     lines.push('');
   }
 
-  // Cost Configuration
+  // ========================================================================
+  // 7. Cost Configuration (existing)
+  // ========================================================================
   lines.push('## Cost Configuration');
   lines.push('');
   if (data.cheapLLM.provider) {
@@ -804,7 +1487,9 @@ export function generateMarkdownReport(data: CapabilitiesReportData): string {
   }
   lines.push('');
 
-  // Image Providers
+  // ========================================================================
+  // 8. Image Providers (existing)
+  // ========================================================================
   lines.push('## Image Providers');
   lines.push('');
   if (data.imageProviders.length > 0) {
@@ -819,7 +1504,9 @@ export function generateMarkdownReport(data: CapabilitiesReportData): string {
   }
   lines.push('');
 
-  // Embedding Providers
+  // ========================================================================
+  // 9. Embedding Providers (existing)
+  // ========================================================================
   lines.push('## Embedding Providers');
   lines.push('');
   if (data.embeddingProviders.length > 0) {
@@ -834,18 +1521,164 @@ export function generateMarkdownReport(data: CapabilitiesReportData): string {
   }
   lines.push('');
 
-  // Database Statistics
+  // ========================================================================
+  // 10. MCP Servers
+  // ========================================================================
+  lines.push('## MCP Servers');
+  lines.push('');
+  if (data.mcpServers.configured > 0) {
+    lines.push(`- **Configured**: ${data.mcpServers.configured}`);
+    lines.push(`- **Enabled**: ${data.mcpServers.enabled}`);
+    lines.push(`- **Auto-Reconnect**: ${data.mcpServers.autoReconnect ? 'Yes' : 'No'}`);
+    lines.push(`- **Max Reconnect Attempts**: ${data.mcpServers.maxReconnectAttempts}`);
+    lines.push('');
+    lines.push('### Server Names');
+    lines.push('');
+    for (const name of data.mcpServers.serverNames) {
+      lines.push(`- ${name}`);
+    }
+  } else {
+    lines.push('*No MCP servers configured*');
+  }
+  lines.push('');
+
+  // ========================================================================
+  // 11. Theme Information
+  // ========================================================================
+  lines.push('## Theme Information');
+  lines.push('');
+  lines.push(`- **Active Theme**: ${data.themeInfo.activeThemeId ?? 'Default'}`);
+  lines.push(`- **Color Mode**: ${data.themeInfo.colorMode}`);
+  lines.push(`- **Total Themes**: ${data.themeInfo.stats.total}`);
+  lines.push(`- **With Dark Mode**: ${data.themeInfo.stats.withDarkMode}`);
+  lines.push(`- **With CSS Overrides**: ${data.themeInfo.stats.withCssOverrides}`);
+  if (data.themeInfo.stats.errors > 0) {
+    lines.push(`- **Load Errors**: ${data.themeInfo.stats.errors}`);
+  }
+  lines.push('');
+  if (data.themeInfo.themes.length > 0) {
+    lines.push('| Theme | Version | Source |');
+    lines.push('|-------|---------|--------|');
+    for (const theme of data.themeInfo.themes) {
+      lines.push(`| ${theme.name} | ${theme.version} | ${theme.source} |`);
+    }
+  }
+  lines.push('');
+
+  // ========================================================================
+  // 12. Feature Configuration
+  // ========================================================================
+  lines.push('## Feature Configuration');
+  lines.push('');
+
+  lines.push('### The Concierge (Dangerous Content)');
+  lines.push('');
+  lines.push(`- **Mode**: ${data.featureConfig.dangerousContent.mode}`);
+  lines.push(`- **Threshold**: ${data.featureConfig.dangerousContent.threshold}`);
+  lines.push(`- **Scan Text Chat**: ${data.featureConfig.dangerousContent.scanTextChat ? 'Yes' : 'No'}`);
+  lines.push(`- **Scan Image Prompts**: ${data.featureConfig.dangerousContent.scanImagePrompts ? 'Yes' : 'No'}`);
+  lines.push(`- **Scan Image Generation**: ${data.featureConfig.dangerousContent.scanImageGeneration ? 'Yes' : 'No'}`);
+  lines.push('');
+
+  lines.push('### Context Compression');
+  lines.push('');
+  lines.push(`- **Enabled**: ${data.featureConfig.contextCompression.enabled ? 'Yes' : 'No'}`);
+  lines.push(`- **Window Size**: ${data.featureConfig.contextCompression.windowSize}`);
+  lines.push(`- **Compression Target Tokens**: ${data.featureConfig.contextCompression.compressionTargetTokens}`);
+  lines.push('');
+
+  lines.push('### Prospero (Agent Mode)');
+  lines.push('');
+  lines.push(`- **Max Turns**: ${data.featureConfig.agentMode.maxTurns}`);
+  lines.push(`- **Default Enabled**: ${data.featureConfig.agentMode.defaultEnabled ? 'Yes' : 'No'}`);
+  lines.push('');
+
+  lines.push('### The Lantern (Story Backgrounds)');
+  lines.push('');
+  lines.push(`- **Enabled**: ${data.featureConfig.storyBackgrounds.enabled ? 'Yes' : 'No'}`);
+  lines.push(`- **Has Default Image Profile**: ${data.featureConfig.storyBackgrounds.hasDefaultImageProfile ? 'Yes' : 'No'}`);
+  lines.push('');
+
+  lines.push('### Timestamps');
+  lines.push('');
+  lines.push(`- **Mode**: ${data.featureConfig.timestamps.mode}`);
+  lines.push(`- **Format**: ${data.featureConfig.timestamps.format}`);
+  lines.push('');
+
+  lines.push('### Auto-Lock');
+  lines.push('');
+  lines.push(`- **Enabled**: ${data.featureConfig.autoLock.enabled ? 'Yes' : 'No'}`);
+  lines.push(`- **Idle Minutes**: ${data.featureConfig.autoLock.idleMinutes}`);
+  lines.push('');
+
+  lines.push('### Memory Cascade');
+  lines.push('');
+  lines.push(`- **On Message Delete**: ${data.featureConfig.memoryCascade.onMessageDelete}`);
+  lines.push(`- **On Swipe/Regenerate**: ${data.featureConfig.memoryCascade.onSwipeRegenerate}`);
+  lines.push('');
+
+  lines.push('### Pascal the Croupier (RNG)');
+  lines.push('');
+  lines.push(`- **Auto-Detect RNG**: ${data.featureConfig.autoDetectRng ? 'Yes' : 'No'}`);
+  lines.push('');
+
+  lines.push('### Avatar Display');
+  lines.push('');
+  lines.push(`- **Mode**: ${data.featureConfig.avatarDisplay.mode}`);
+  lines.push(`- **Style**: ${data.featureConfig.avatarDisplay.style}`);
+  lines.push('');
+
+  // ========================================================================
+  // 13. Database Statistics (enhanced)
+  // ========================================================================
   lines.push('## Database Statistics');
   lines.push('');
   lines.push('| Collection | Count |');
   lines.push('|------------|-------|');
   lines.push(`| Characters | ${data.databaseStats.characters} |`);
+  lines.push(`| Favorite Characters | ${data.databaseStats.favoriteCharacters} |`);
   lines.push(`| Chats | ${data.databaseStats.chats} |`);
   lines.push(`| Memories | ${data.databaseStats.memories} |`);
   lines.push(`| Tags | ${data.databaseStats.tags} |`);
+  lines.push(`| Projects | ${data.databaseStats.projects} |`);
+  lines.push(`| Connection Profiles | ${data.databaseStats.connectionProfiles.total} (${data.databaseStats.connectionProfiles.webSearchEnabled} web search, ${data.databaseStats.connectionProfiles.toolUseEnabled} tool use, ${data.databaseStats.connectionProfiles.dangerousCompatible} dangerous) |`);
+  lines.push(`| Image Profiles | ${data.databaseStats.imageProfiles} |`);
+  lines.push(`| Embedding Profiles | ${data.databaseStats.embeddingProfiles} |`);
+  lines.push(`| Prompt Templates | ${data.databaseStats.promptTemplates.total} (${data.databaseStats.promptTemplates.builtIn} built-in, ${data.databaseStats.promptTemplates.custom} custom) |`);
+  lines.push(`| Roleplay Templates | ${data.databaseStats.roleplayTemplates.total} (${data.databaseStats.roleplayTemplates.builtIn} built-in, ${data.databaseStats.roleplayTemplates.custom} custom) |`);
+  lines.push(`| File Permissions | ${data.databaseStats.filePermissions} |`);
   lines.push('');
 
-  // Storage Statistics
+  // ========================================================================
+  // 14. Chat Statistics
+  // ========================================================================
+  lines.push('## Chat Statistics');
+  lines.push('');
+  lines.push(`- **Total Messages**: ${data.chatStats.totalMessages.toLocaleString()}`);
+  lines.push(`- **Total Prompt Tokens**: ${data.chatStats.totalPromptTokens.toLocaleString()}`);
+  lines.push(`- **Total Completion Tokens**: ${data.chatStats.totalCompletionTokens.toLocaleString()}`);
+  lines.push(`- **Estimated Total Cost**: ${formatUSD(data.chatStats.totalEstimatedCostUSD)}`);
+  lines.push(`- **Agent Mode Chats**: ${data.chatStats.agentModeChats}`);
+  lines.push(`- **Dangerous Chats**: ${data.chatStats.dangerousChats}`);
+  lines.push('');
+
+  // ========================================================================
+  // 15. LLM Log Statistics
+  // ========================================================================
+  lines.push('## LLM Log Statistics');
+  lines.push('');
+  lines.push(`- **Total Log Entries**: ${data.llmLogStats.totalEntries.toLocaleString()}`);
+  lines.push(`- **Total Prompt Tokens**: ${data.llmLogStats.tokenUsage.promptTokens.toLocaleString()}`);
+  lines.push(`- **Total Completion Tokens**: ${data.llmLogStats.tokenUsage.completionTokens.toLocaleString()}`);
+  lines.push(`- **Total Tokens**: ${data.llmLogStats.tokenUsage.totalTokens.toLocaleString()}`);
+  lines.push(`- **Logging Enabled**: ${data.llmLogStats.loggingEnabled ? 'Yes' : 'No'}`);
+  lines.push(`- **Verbose Mode**: ${data.llmLogStats.verboseMode ? 'Yes' : 'No'}`);
+  lines.push(`- **Retention**: ${data.llmLogStats.retentionDays === 0 ? 'Forever' : `${data.llmLogStats.retentionDays} days`}`);
+  lines.push('');
+
+  // ========================================================================
+  // 16. Storage Statistics (existing)
+  // ========================================================================
   lines.push('## Storage Statistics');
   lines.push('');
   lines.push('### Summary');

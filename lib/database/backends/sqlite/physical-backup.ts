@@ -61,7 +61,7 @@ function generateBackupFilename(): string {
  *
  * @returns Date if filename matches the expected format, null otherwise
  */
-function parseBackupFilename(filename: string): Date | null {
+export function parseBackupFilename(filename: string): Date | null {
   const match = BACKUP_FILENAME_RE.exec(filename);
   if (!match) return null;
 
@@ -102,7 +102,7 @@ function generateLLMLogsBackupFilename(): string {
  *
  * @returns Date if filename matches the expected format, null otherwise
  */
-function parseLLMLogsBackupFilename(filename: string): Date | null {
+export function parseLLMLogsBackupFilename(filename: string): Date | null {
   const match = LLM_LOGS_BACKUP_FILENAME_RE.exec(filename);
   if (!match) return null;
 
