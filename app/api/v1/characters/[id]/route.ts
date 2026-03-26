@@ -30,6 +30,7 @@ import { exportSTCharacter, createSTCharacterPNG } from '@/lib/sillytavern/chara
 import { readImageBuffer } from '@/lib/images-v2';
 import { z } from 'zod';
 import { PronounsSchema } from '@/lib/schemas/character.types';
+import type { Character } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { notFound, forbidden, badRequest, serverError, validationError } from '@/lib/api/responses';
 import { runCharacterOptimizer } from '@/lib/services/character-optimizer.service';
@@ -44,7 +45,17 @@ const updateCharacterSchema = z.object({
   title: z.string().optional(),
   description: z.string().optional(),
   personality: z.string().optional(),
-  scenario: z.string().optional(),
+  scenarios: z
+    .array(
+      z.object({
+        id: z.string().uuid().optional(),
+        title: z.string().min(1).max(200),
+        content: z.string().min(1),
+        createdAt: z.string().optional(),
+        updatedAt: z.string().optional(),
+      })
+    )
+    .optional(),
   firstMessage: z.string().optional(),
   exampleDialogues: z.string().optional(),
   avatarUrl: z.url()
@@ -367,7 +378,21 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
     const body = await req.json();
     const validatedData = updateCharacterSchema.parse(body);
 
-    const character = await repos.characters.update(id, validatedData);
+    // Normalize scenarios: fill in missing id/createdAt/updatedAt
+    const { scenarios: rawScenarios, ...restValidatedData } = validatedData;
+    const updatePayload: Partial<Character> = { ...restValidatedData };
+    if (rawScenarios) {
+      const now = new Date().toISOString();
+      updatePayload.scenarios = rawScenarios.map(s => ({
+        id: s.id ?? crypto.randomUUID(),
+        title: s.title,
+        content: s.content,
+        createdAt: s.createdAt ?? now,
+        updatedAt: s.updatedAt ?? now,
+      }));
+    }
+
+    const character = await repos.characters.update(id, updatePayload);
 
     revalidatePath('/');
 

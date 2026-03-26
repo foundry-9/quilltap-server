@@ -46,7 +46,7 @@ export function buildHelpChatSystemPrompt(options: HelpSystemPromptOptions): str
     user: userName,
     description: character.description || '',
     personality: character.personality || '',
-    scenario: character.scenario || '',
+    scenario: character.scenarios?.[0]?.content || '',
     persona: persona?.description || '',
   }
 

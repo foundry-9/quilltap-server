@@ -39,13 +39,13 @@ describe('buildCharacterContext', () => {
   })
 
   it('includes scenario or (empty)', () => {
-    const characterWithScenario = createMockCharacter({ scenario: 'A tavern in a fantasy world' })
+    const characterWithScenario = createMockCharacter({ scenarios: [{ id: 'test-scenario-id', title: 'Default', content: 'A tavern in a fantasy world', createdAt: '2024-01-01T00:00:00.000Z', updatedAt: '2024-01-01T00:00:00.000Z' }] })
     const resultWith = buildCharacterContext(characterWithScenario)
     expect(resultWith).toContain('A tavern in a fantasy world')
 
-    const characterNoScenario = createMockCharacter({ scenario: null })
+    const characterNoScenario = createMockCharacter({ scenarios: [] })
     const resultWithout = buildCharacterContext(characterNoScenario)
-    expect(resultWithout).toContain('Scenario:')
+    expect(resultWithout).toContain('Scenario')
   })
 
   it('includes talkativeness value', () => {

@@ -18,6 +18,7 @@ import type {
   AIWizardRequest,
   AIWizardResponse,
 } from '../types'
+import { normalizeGeneratedScenarios } from '../types'
 
 interface UseAIWizardProps {
   characterId?: string
@@ -26,7 +27,7 @@ interface UseAIWizardProps {
     title?: string
     description?: string
     personality?: string
-    scenario?: string
+    scenarios?: Array<{ id: string; title: string; content: string }>
     exampleDialogues?: string
     systemPrompt?: string
   }
@@ -130,7 +131,8 @@ export function useAIWizard({
     if (!currentData.title?.trim()) fields.push('title')
     if (!currentData.description?.trim()) fields.push('description')
     if (!currentData.personality?.trim()) fields.push('personality')
-    if (!currentData.scenario?.trim()) fields.push('scenario')
+    // Scenarios are always available — you can always generate more
+    fields.push('scenarios')
     if (!currentData.exampleDialogues?.trim()) fields.push('exampleDialogues')
     if (!currentData.systemPrompt?.trim()) fields.push('systemPrompt')
 
@@ -395,13 +397,26 @@ export function useAIWizard({
     characterId,
   ])
 
-  // Apply generated data
+  // Apply generated data — merge new scenarios with existing ones rather than replacing
   const applyGenerated = useCallback(() => {
     if (generatedData) {
-      onApply(generatedData)
+      let dataToApply = generatedData
+      const newScenarios = normalizeGeneratedScenarios(generatedData.scenarios)
+      if (newScenarios.length > 0) {
+        // Prepend existing scenarios (as title+content) so the caller receives the full merged list
+        const existingAsNew = (currentData.scenarios ?? []).map((s) => ({
+          title: s.title,
+          content: s.content,
+        }))
+        dataToApply = {
+          ...generatedData,
+          scenarios: [...existingAsNew, ...newScenarios],
+        }
+      }
+      onApply(dataToApply)
       onClose()
     }
-  }, [generatedData, onApply, onClose])
+  }, [generatedData, currentData.scenarios, onApply, onClose])
 
   // Reset wizard
   const reset = useCallback(() => {

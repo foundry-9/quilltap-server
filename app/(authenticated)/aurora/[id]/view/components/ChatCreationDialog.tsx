@@ -1,10 +1,13 @@
 'use client'
 
+import { useState } from 'react'
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
 import { TimestampConfigCard } from '@/components/settings/chat-settings/components/TimestampConfigCard'
 import { ConnectionProfile, UserControlledCharacter } from '../types'
 import { useUserCharacterDisplayName } from '@/hooks/usePersonaDisplayName'
 import type { TimestampConfig } from '@/lib/schemas/types'
+
+const CUSTOM_SCENARIO_VALUE = '__custom__'
 
 interface ChatCreationDialogProps {
   characterId: string
@@ -15,6 +18,7 @@ interface ChatCreationDialogProps {
   selectedUserCharacterId: string
   selectedImageProfileId: string | null
   scenario: string
+  scenarios?: Array<{ id: string; title: string; content: string }>
   timestampConfig: TimestampConfig | null
   creatingChat: boolean
   openedFromQuery: boolean
@@ -22,6 +26,7 @@ interface ChatCreationDialogProps {
   onUserCharacterChange: (userCharacterId: string) => void
   onImageProfileChange: (profileId: string | null) => void
   onScenarioChange: (scenario: string) => void
+  onScenarioIdChange?: (scenarioId: string | null) => void
   onTimestampConfigChange: (config: TimestampConfig) => void
   onCancel: () => void
   onCreateChat: () => void
@@ -36,6 +41,7 @@ export function ChatCreationDialog({
   selectedUserCharacterId,
   selectedImageProfileId,
   scenario,
+  scenarios,
   timestampConfig,
   creatingChat,
   openedFromQuery,
@@ -43,11 +49,33 @@ export function ChatCreationDialog({
   onUserCharacterChange,
   onImageProfileChange,
   onScenarioChange,
+  onScenarioIdChange,
   onTimestampConfigChange,
   onCancel,
   onCreateChat,
 }: ChatCreationDialogProps) {
   const { formatCharacterName } = useUserCharacterDisplayName()
+  const hasScenarios = scenarios && scenarios.length > 0
+
+  const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(null)
+
+  const handleScenarioSelectChange = (value: string) => {
+    if (value === CUSTOM_SCENARIO_VALUE || value === '') {
+      setSelectedScenarioId(null)
+      onScenarioIdChange?.(null)
+    } else {
+      setSelectedScenarioId(value)
+      onScenarioIdChange?.(value)
+      // Clear any custom text when switching to a preset
+      onScenarioChange('')
+    }
+  }
+
+  const selectedPreset = selectedScenarioId
+    ? scenarios?.find((s) => s.id === selectedScenarioId)
+    : null
+
+  const showCustomTextarea = !hasScenarios || selectedScenarioId === null
 
   return (
     <div className="character-chat-dialog fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
@@ -120,14 +148,39 @@ export function ChatCreationDialog({
                 <label htmlFor="scenario" className="mb-2 block text-sm qt-text-primary">
                   Starting Scenario (Optional)
                 </label>
-                <textarea
-                  id="scenario"
-                  value={scenario}
-                  onChange={(e) => onScenarioChange(e.target.value)}
-                  placeholder="Describe the starting scenario for this chat..."
-                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                  rows={3}
-                />
+
+                {hasScenarios && (
+                  <select
+                    id="scenarioSelect"
+                    value={selectedScenarioId ?? CUSTOM_SCENARIO_VALUE}
+                    onChange={(e) => handleScenarioSelectChange(e.target.value)}
+                    className="mb-2 w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value={CUSTOM_SCENARIO_VALUE}>Custom...</option>
+                    {scenarios.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.title}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                {selectedPreset && (
+                  <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                    {selectedPreset.content}
+                  </div>
+                )}
+
+                {showCustomTextarea && (
+                  <textarea
+                    id="scenario"
+                    value={scenario}
+                    onChange={(e) => onScenarioChange(e.target.value)}
+                    placeholder="Describe the starting scenario for this chat..."
+                    className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    rows={3}
+                  />
+                )}
               </div>
             </div>
 

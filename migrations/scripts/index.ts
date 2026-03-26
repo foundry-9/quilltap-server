@@ -125,6 +125,8 @@ import { createInstanceSettingsTableMigration } from './create-instance-settings
 import { migrateParticipantStatusFieldMigration } from './migrate-participant-status-field';
 // Add isSilentMessage field to chat_messages
 import { addSilentMessageFieldMigration } from './add-silent-message-field';
+// Convert character scenario string to scenarios array
+import { convertScenarioToScenariosMigration } from './convert-scenario-to-scenarios';
 
 /**
  * All available migrations.
@@ -245,6 +247,8 @@ export const migrations: Migration[] = [
   migrateParticipantStatusFieldMigration,
   // Add isSilentMessage field to chat_messages
   addSilentMessageFieldMigration,
+  // Convert character scenario string to scenarios array
+  convertScenarioToScenariosMigration,
 ];
 
 export {
@@ -360,4 +364,6 @@ export {
   migrateParticipantStatusFieldMigration,
   // Add isSilentMessage field to chat_messages
   addSilentMessageFieldMigration,
+  // Convert character scenario string to scenarios array
+  convertScenarioToScenariosMigration,
 };

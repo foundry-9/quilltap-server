@@ -25,7 +25,7 @@ interface SuggestionCardProps {
 const FIELD_LABELS: Record<string, string> = {
   description: 'Description',
   personality: 'Personality',
-  scenario: 'Scenario',
+  scenarios: 'Scenario',
   exampleDialogues: 'Example Dialogues',
   firstMessage: 'First Message',
   systemPrompt: 'System Prompt',
@@ -38,7 +38,7 @@ const FIELD_LABELS: Record<string, string> = {
 const FIELD_BADGE_CLASS: Record<string, string> = {
   description: 'qt-badge-secondary',
   personality: 'qt-badge-character',
-  scenario: 'qt-badge-project',
+  scenarios: 'qt-badge-project',
   exampleDialogues: 'qt-badge-chat',
   firstMessage: 'qt-badge-message',
   systemPrompt: 'qt-badge-memory',

@@ -177,7 +177,7 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
     characterName: char!.name,
     physicalDescription: char!.physicalDescriptions?.[0]?.mediumPrompt || char!.physicalDescriptions?.[0]?.shortPrompt || '',
     clothingDescription: char!.clothingRecords?.[0]?.description || '',
-    scenario: char!.scenario || undefined,
+    scenario: char!.scenarios?.[0]?.content || undefined,
   }));
 
   // 8b. Extract chat scenario context

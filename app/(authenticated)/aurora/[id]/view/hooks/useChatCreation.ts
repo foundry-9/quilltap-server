@@ -14,6 +14,7 @@ interface UseChatCreationReturn {
     selectedUserCharacterId: string
     selectedImageProfileId: string | null
     scenario: string
+    scenarioId?: string
     timestampConfig?: TimestampConfig | null
   }) => Promise<void>
 }
@@ -29,6 +30,7 @@ export function useChatCreation(): UseChatCreationReturn {
     selectedUserCharacterId: string
     selectedImageProfileId: string | null
     scenario: string
+    scenarioId?: string
     timestampConfig?: TimestampConfig | null
   }) => {
     const {
@@ -38,6 +40,7 @@ export function useChatCreation(): UseChatCreationReturn {
       selectedUserCharacterId,
       selectedImageProfileId,
       scenario,
+      scenarioId,
       timestampConfig,
     } = props
 
@@ -72,7 +75,7 @@ export function useChatCreation(): UseChatCreationReturn {
         body: JSON.stringify({
           participants,
           title: `Chat with ${characterName}`,
-          ...(scenario && { scenario }),
+          ...(scenarioId ? { scenarioId } : scenario ? { scenario } : {}),
           ...(timestampConfig && timestampConfig.mode !== 'NONE' && { timestampConfig }),
         }),
       })

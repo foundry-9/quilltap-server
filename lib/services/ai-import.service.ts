@@ -491,7 +491,13 @@ function assembleQtapExport(
     title: basics.title || null,
     description: basics.description || null,
     personality: basics.personality || null,
-    scenario: basics.scenario || null,
+    scenarios: basics.scenario ? [{
+      id: crypto.randomUUID(),
+      title: 'Default',
+      content: basics.scenario,
+      createdAt: now,
+      updatedAt: now,
+    }] : [],
     firstMessage: stepResults.first_message?.firstMessage || null,
     exampleDialogues: stepResults.first_message?.exampleDialogues || null,
     systemPrompts: (stepResults.system_prompts || []).map((sp) => ({

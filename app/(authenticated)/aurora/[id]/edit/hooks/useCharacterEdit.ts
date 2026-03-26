@@ -8,6 +8,7 @@ import {
   Character,
   CharacterFormData,
   CharacterEditState,
+  CharacterScenario,
 } from '../types'
 
 const INITIAL_FORM_DATA: CharacterFormData = {
@@ -17,7 +18,7 @@ const INITIAL_FORM_DATA: CharacterFormData = {
   title: '',
   description: '',
   personality: '',
-  scenario: '',
+  scenarios: [],
   firstMessage: '',
   exampleDialogues: '',
   systemPrompt: '',
@@ -69,7 +70,7 @@ export function useCharacterEdit(id: string) {
           title: char.title || '',
           description: char.description || '',
           personality: char.personality || '',
-          scenario: char.scenario || '',
+          scenarios: char.scenarios || [],
           firstMessage: char.firstMessage || '',
           exampleDialogues: char.exampleDialogues || '',
           systemPrompt: char.systemPrompt || '',
@@ -136,6 +137,16 @@ export function useCharacterEdit(id: string) {
     setState((prev) => ({
       ...prev,
       formData: { ...prev.formData, pronouns },
+    }))
+  }
+
+  /**
+   * Handle scenarios array changes
+   */
+  const handleScenariosChange = (scenarios: CharacterScenario[]) => {
+    setState((prev) => ({
+      ...prev,
+      formData: { ...prev.formData, scenarios },
     }))
   }
 
@@ -309,6 +320,7 @@ export function useCharacterEdit(id: string) {
     handleChange,
     handleAliasesChange,
     handlePronounsChange,
+    handleScenariosChange,
     handleSubmit,
     handleCancel,
     setCharacterAvatar,

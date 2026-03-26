@@ -146,7 +146,8 @@ CREATE TABLE "characters" (
   "title" TEXT,
   "description" TEXT,
   "personality" TEXT,
-  "scenario" TEXT,
+  "scenario" TEXT,                        -- DEPRECATED: use scenarios instead
+  "scenarios" TEXT DEFAULT '[]',          -- JSON array of { id, title, content, createdAt, updatedAt }
   "firstMessage" TEXT,
   "exampleDialogues" TEXT,
   "systemPrompts" TEXT DEFAULT '[]',

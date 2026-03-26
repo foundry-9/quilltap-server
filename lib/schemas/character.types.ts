@@ -31,6 +31,21 @@ export const CharacterSystemPromptSchema = z.object({
 export type CharacterSystemPrompt = z.infer<typeof CharacterSystemPromptSchema>;
 
 // ============================================================================
+// CHARACTER SCENARIOS
+// ============================================================================
+
+// Character Scenario (embedded in Character) - named scenarios for roleplay context
+export const CharacterScenarioSchema = z.object({
+  id: UUIDSchema,
+  title: z.string().min(1).max(200),
+  content: z.string().min(1),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type CharacterScenario = z.infer<typeof CharacterScenarioSchema>;
+
+// ============================================================================
 // PHYSICAL DESCRIPTIONS
 // ============================================================================
 
@@ -93,7 +108,7 @@ export const CharacterSchema = z.object({
   title: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
   personality: z.string().nullable().optional(),
-  scenario: z.string().nullable().optional(),
+  scenarios: z.array(CharacterScenarioSchema).default([]),  // Named scenarios array
   firstMessage: z.string().nullable().optional(),
   exampleDialogues: z.string().nullable().optional(),
   systemPrompts: z.array(CharacterSystemPromptSchema).default([]),  // Named system prompts array

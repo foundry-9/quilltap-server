@@ -14,6 +14,7 @@ import { fileStorageManager } from '@/lib/file-storage/manager';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { extractFileContent } from '@/lib/services/file-content-extractor';
 import { logger } from '@/lib/logger';
+import { parseLLMJson } from '@/lib/services/ai-import.service';
 import type { ConnectionProfile, FileEntry } from '@/lib/schemas/types';
 import type { FileAttachment } from '@/lib/llm/base';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
@@ -33,7 +34,7 @@ export interface WizardRequest {
     title?: string;
     description?: string;
     personality?: string;
-    scenario?: string;
+    scenarios?: Array<{ id: string; title: string; content: string }>;
     exampleDialogues?: string;
     systemPrompt?: string;
   };
@@ -43,7 +44,7 @@ export interface WizardRequest {
     | 'title'
     | 'description'
     | 'personality'
-    | 'scenario'
+    | 'scenarios'
     | 'exampleDialogues'
     | 'systemPrompt'
     | 'physicalDescription'
@@ -114,13 +115,14 @@ Write in third person, present tense. Be vivid and specific.`,
 
 Write as instructions for how the character behaves, not as a story.`,
 
-  scenario: `Write a default scenario/setting for interactions with this character in 1-2 paragraphs. Include:
-- The typical environment where interactions take place
-- The relationship context (stranger, friend, etc.)
-- Any ongoing situation or circumstances
-- Time period and world details if relevant
+  scenarios: `Generate 2-3 distinct scenarios for interactions with this character. Each scenario should have a short title and detailed content. Return as a JSON array: [{"title": "...", "content": "..."}]
 
-Write in present tense, setting the scene for roleplay.`,
+Each scenario should:
+- Describe a different setting or context for interactions
+- Include the typical environment
+- Include the relationship context
+- Include any ongoing situation or circumstances
+- Be written in present tense, setting the scene for roleplay`,
 
   exampleDialogues: `Write 2-3 example dialogue exchanges that demonstrate this character's voice and personality.
 
@@ -237,7 +239,10 @@ ${documentContent}
     if (existingData.title?.trim()) existingFields.push(`Title: ${existingData.title}`);
     if (existingData.description?.trim()) existingFields.push(`Description: ${existingData.description}`);
     if (existingData.personality?.trim()) existingFields.push(`Personality: ${existingData.personality}`);
-    if (existingData.scenario?.trim()) existingFields.push(`Scenario: ${existingData.scenario}`);
+    if (existingData.scenarios && existingData.scenarios.length > 0) {
+      const scenarioLines = existingData.scenarios.map(s => `  - ${s.title}: ${s.content}`).join('\n');
+      existingFields.push(`Scenarios:\n${scenarioLines}`);
+    }
 
     if (existingFields.length > 0) {
       context += `
@@ -642,8 +647,8 @@ export async function runCharacterWizard(
         );
       } else {
         const fieldPrompt = FIELD_PROMPTS[field];
-        const maxTokens = field === 'exampleDialogues' || field === 'systemPrompt' ? 1000 : 500;
-        generated[field] = await generateField(
+        const maxTokens = field === 'exampleDialogues' || field === 'systemPrompt' ? 1000 : field === 'scenarios' ? 4000 : 500;
+        const rawContent = await generateField(
           primaryProvider,
           primaryApiKey,
           primaryProfile.modelName,
@@ -654,6 +659,16 @@ export async function runCharacterWizard(
           request.characterId,
           primaryProfile.provider
         );
+        if (field === 'scenarios') {
+          try {
+            generated[field] = parseLLMJson<Array<{ title: string; content: string }>>(rawContent);
+          } catch {
+            logger.warn('[CharacterWizard] Failed to parse scenarios JSON, storing as raw string', { rawContent: rawContent.substring(0, 200) });
+            generated[field] = rawContent;
+          }
+        } else {
+          generated[field] = rawContent;
+        }
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Generation failed';
@@ -682,6 +697,12 @@ export async function runCharacterWizard(
 function getSnippet(content: unknown, maxLength: number = 100): string {
   if (typeof content === 'string') {
     return content.length > maxLength ? content.substring(0, maxLength) + '...' : content;
+  }
+  if (Array.isArray(content) && content.length > 0) {
+    // For scenarios array, use the first scenario's title + content
+    const first = content[0] as { title?: string; content?: string };
+    const preview = first.title ? `${first.title}: ${first.content ?? ''}` : (first.content ?? '');
+    return preview.length > maxLength ? preview.substring(0, maxLength) + '...' : preview;
   }
   if (typeof content === 'object' && content !== null) {
     // For physical description, use the short prompt
@@ -869,8 +890,8 @@ export async function runCharacterWizardStreaming(
           onProgress({ type: 'field_complete', field, snippet: getSnippet(physDesc) });
         } else {
           const fieldPrompt = FIELD_PROMPTS[field];
-          const maxTokens = field === 'exampleDialogues' || field === 'systemPrompt' ? 1000 : 500;
-          const content = await generateField(
+          const maxTokens = field === 'exampleDialogues' || field === 'systemPrompt' ? 1000 : field === 'scenarios' ? 4000 : 500;
+          const rawContent = await generateField(
             primaryProvider,
             primaryApiKey,
             primaryProfile.modelName,
@@ -881,8 +902,19 @@ export async function runCharacterWizardStreaming(
             request.characterId,
             primaryProfile.provider
           );
-          generated[field] = content;
-          onProgress({ type: 'field_complete', field, snippet: getSnippet(content) });
+          let fieldValue: unknown;
+          if (field === 'scenarios') {
+            try {
+              fieldValue = parseLLMJson<Array<{ title: string; content: string }>>(rawContent);
+            } catch {
+              logger.warn('[CharacterWizard] Failed to parse scenarios JSON, storing as raw string', { rawContent: rawContent.substring(0, 200) });
+              fieldValue = rawContent;
+            }
+          } else {
+            fieldValue = rawContent;
+          }
+          generated[field] = fieldValue;
+          onProgress({ type: 'field_complete', field, snippet: getSnippet(fieldValue) });
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Generation failed';

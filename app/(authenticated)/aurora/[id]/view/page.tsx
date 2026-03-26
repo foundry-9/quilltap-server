@@ -42,6 +42,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   const [selectedUserCharacterId, setSelectedUserCharacterId] = useState<string>('')
   const [selectedImageProfileId, setSelectedImageProfileId] = useState<string | null>(null)
   const [scenario, setScenario] = useState<string>('')
+  const [scenarioId, setScenarioId] = useState<string | null>(null)
   const [timestampConfig, setTimestampConfig] = useState<TimestampConfig | null>(null)
   const [openedFromQuery, setOpenedFromQuery] = useState(false)
   const [savingConnectionProfile, setSavingConnectionProfile] = useState(false)
@@ -142,6 +143,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
       selectedUserCharacterId,
       selectedImageProfileId,
       scenario,
+      scenarioId: scenarioId ?? undefined,
       timestampConfig,
     })
     setShowChatDialog(false)
@@ -330,6 +332,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           selectedUserCharacterId={selectedUserCharacterId}
           selectedImageProfileId={selectedImageProfileId}
           scenario={scenario}
+          scenarios={character?.scenarios}
           timestampConfig={timestampConfig}
           creatingChat={creatingChat}
           openedFromQuery={openedFromQuery}
@@ -337,6 +340,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           onUserCharacterChange={setSelectedUserCharacterId}
           onImageProfileChange={setSelectedImageProfileId}
           onScenarioChange={setScenario}
+          onScenarioIdChange={setScenarioId}
           onTimestampConfigChange={setTimestampConfig}
           onCancel={() => {
             if (openedFromQuery) {

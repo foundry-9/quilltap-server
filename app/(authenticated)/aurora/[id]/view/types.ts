@@ -33,13 +33,21 @@ export interface CharacterSystemPrompt {
   updatedAt: string
 }
 
+export interface CharacterScenario {
+  id: string
+  title: string
+  content: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface Character {
   id: string
   name: string
   title?: string | null
   description?: string | null
   personality?: string | null
-  scenario?: string | null
+  scenarios?: CharacterScenario[]
   firstMessage?: string | null
   exampleDialogues?: string | null
   systemPrompts?: CharacterSystemPrompt[]
@@ -64,7 +72,6 @@ export interface Character {
 export interface TemplateFields extends Record<string, string | null | undefined> {
   description?: string | null
   personality?: string | null
-  scenario?: string | null
   firstMessage?: string | null
   exampleDialogues?: string | null
   systemPrompt?: string | null

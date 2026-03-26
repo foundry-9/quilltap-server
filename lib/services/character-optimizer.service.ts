@@ -29,9 +29,10 @@ import type { Character, Memory } from '@/lib/schemas/types';
 
 export interface OptimizerSuggestion {
   id: string;
-  field: 'description' | 'personality' | 'scenario' | 'exampleDialogues' | 'systemPrompt' | 'physicalDescription' | 'clothingRecord' | 'talkativeness';
+  field: 'description' | 'personality' | 'scenarios' | 'exampleDialogues' | 'systemPrompt' | 'physicalDescription' | 'clothingRecord' | 'talkativeness';
   subId?: string;
   subName?: string;
+  title?: string;
   currentValue: string;
   proposedValue: string;
   rationale: string;
@@ -100,8 +101,10 @@ export function buildCharacterContext(character: Character): string {
     `Personality:`,
     character.personality || '(empty)',
     '',
-    `Scenario:`,
-    character.scenario || '(empty)',
+    `Scenarios:`,
+    character.scenarios && character.scenarios.length > 0
+      ? character.scenarios.map(s => `  - ${s.title}: ${s.content}`).join('\n')
+      : '(empty)',
     '',
     `Example Dialogues:`,
     character.exampleDialogues || '(empty)',
@@ -199,7 +202,8 @@ For each suggestion, specify exactly which field to modify and provide the compl
 
 Rules:
 - For system prompts, modify existing ones rather than proposing entirely new content
-- For text fields (description, personality, scenario, exampleDialogues), provide the complete new text
+- For text fields (description, personality, exampleDialogues), provide the complete new text
+- For scenarios: if updating an existing scenario, set subId to its ID and provide the updated content; if proposing a new scenario, omit subId and include a "title" field for the new scenario name
 - For talkativeness, provide a number between 0.1 and 1.0
 - Assign a significance score: 0.3+ = noticeable shift, 0.6+ = fundamental behavioral change
 - Include 1-3 memory excerpts that support each suggestion
@@ -208,11 +212,12 @@ Rules:
 Respond with JSON array:
 [
   {
-    "field": "description|personality|scenario|exampleDialogues|systemPrompt|physicalDescription|clothingRecord|talkativeness",
-    "subId": "ID of the specific system prompt/physical description/clothing record (only for those field types)",
-    "subName": "Name of the sub-item (only for those field types)",
-    "currentValue": "The current text of the field",
-    "proposedValue": "The complete new text for the field",
+    "field": "description|personality|scenarios|exampleDialogues|systemPrompt|physicalDescription|clothingRecord|talkativeness",
+    "subId": "ID of the specific scenario/system prompt/physical description/clothing record (only when updating an existing item)",
+    "subName": "Name of the existing sub-item (only when updating an existing item)",
+    "title": "Title for a new scenario (only when field is 'scenarios' and no subId is provided)",
+    "currentValue": "The current text of the field or scenario",
+    "proposedValue": "The complete new text for the field or scenario",
     "rationale": "Why this change is suggested, referencing specific behavioral patterns",
     "significance": 0.5,
     "memoryExcerpts": ["Memory excerpt 1", "Memory excerpt 2"]

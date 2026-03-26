@@ -70,7 +70,7 @@ export function buildSystemPrompt(
     user: persona?.name || 'User',
     description: character.description || '',
     personality: character.personality || '',
-    scenario: character.scenario || '',
+    scenario: character.scenarios?.[0]?.content || '',
     persona: persona?.description || '',
   }
 
@@ -203,9 +203,10 @@ export function buildSystemPrompt(
     parts.push(`\n## Clothing / Outfits\n${clothingLines.join('\n')}`);
   }
 
-  // Scenario/setting - process templates
-  if (character.scenario) {
-    const processedScenario = processTemplate(character.scenario, templateContext)
+  // Scenario/setting - use first scenario in the array, process templates
+  const defaultScenarioContent = character.scenarios?.[0]?.content
+  if (defaultScenarioContent) {
+    const processedScenario = processTemplate(defaultScenarioContent, templateContext)
     parts.push(`\n## Scenario\n${processedScenario}`)
   }
 

@@ -123,6 +123,7 @@ export type {
 // ============================================================================
 export {
   CharacterSystemPromptSchema,
+  CharacterScenarioSchema,
   PhysicalDescriptionSchema,
   ClothingRecordSchema,
   CharacterSchema,
@@ -130,6 +131,7 @@ export {
 
 export type {
   CharacterSystemPrompt,
+  CharacterScenario,
   PhysicalDescription,
   ClothingRecord,
   Character,

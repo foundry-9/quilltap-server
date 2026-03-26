@@ -49,7 +49,7 @@ Watch the AI work through each extraction step:
 | Step | What It Does |
 |------|-------------|
 | Analyzing Source Material | Summarizes large source documents (only for long texts) |
-| Extracting Character Basics | Name, title, description, personality, scenario |
+| Extracting Character Basics | Name, title, description, personality, and an initial scenario (title and content) |
 | Generating Dialogue | First message and example dialogue exchanges |
 | Creating System Prompts | Instructions for AI roleplay behavior |
 | Describing Appearance | Physical descriptions at 5 detail levels for image generation |

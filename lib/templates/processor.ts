@@ -88,7 +88,7 @@ export function buildTemplateContext({
     name: string
     description?: string | null
     personality?: string | null
-    scenario?: string | null
+    scenarios?: Array<{ id: string; title: string; content: string }> | null
     exampleDialogues?: string | null
   }
   persona?: {
@@ -103,7 +103,7 @@ export function buildTemplateContext({
     char: character.name,
     description: character.description || '',
     personality: character.personality || '',
-    scenario: scenario || character.scenario || '',
+    scenario: scenario || character.scenarios?.[0]?.content || '',
 
     // Persona data
     user: persona?.name || 'User',
@@ -145,7 +145,7 @@ export function processCharacterTemplates({
     name: string
     description?: string | null
     personality?: string | null
-    scenario?: string | null
+    scenarios?: Array<{ id: string; title: string; content: string }> | null
     firstMessage?: string | null
     exampleDialogues?: string | null
   }
@@ -168,7 +168,7 @@ export function processCharacterTemplates({
   return {
     description: processTemplate(character.description || '', context),
     personality: processTemplate(character.personality || '', context),
-    scenario: processTemplate(scenario || character.scenario || '', context),
+    scenario: processTemplate(scenario || character.scenarios?.[0]?.content || '', context),
     firstMessage: processTemplate(character.firstMessage || '', context),
     exampleDialogues: processTemplate(character.exampleDialogues || '', context),
     systemPrompt: processTemplate(systemPrompt || '', context),

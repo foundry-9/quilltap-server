@@ -868,6 +868,36 @@ async function importProjects(
   return { imported, skipped };
 }
 
+/**
+ * Convert a legacy character with a `scenario` string field to the new `scenarios` array format.
+ * Used when importing old .qtap files that predate the scenarios schema change.
+ */
+function migrateCharacterScenarios(character: any): any {
+  // If already has scenarios array, nothing to do
+  if (character.scenarios !== undefined) {
+    return character;
+  }
+  // If has old scenario string, convert to scenarios array
+  if (typeof character.scenario === 'string' && character.scenario) {
+    const now = new Date().toISOString();
+    return {
+      ...character,
+      scenarios: [{
+        id: randomUUID(),
+        title: 'Default',
+        content: character.scenario,
+        createdAt: now,
+        updatedAt: now,
+      }],
+    };
+  }
+  // No scenario field at all — return with empty scenarios array
+  return {
+    ...character,
+    scenarios: [],
+  };
+}
+
 async function importCharacters(
   userId: string,
   characters: Character[],
@@ -879,7 +909,8 @@ async function importCharacters(
   let imported = 0;
   let skipped = 0;
 
-  for (const character of characters) {
+  for (const rawCharacter of characters) {
+    const character = migrateCharacterScenarios(rawCharacter);
     try {
       const existing = await repos.characters.findById(character.id);
 

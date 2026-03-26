@@ -57,7 +57,8 @@ const createParticipantSchema = z.object({
 const createChatSchema = z.object({
   participants: z.array(createParticipantSchema).min(1, 'At least one participant is required'),
   title: z.string().optional(),
-  scenario: z.string().optional(),
+  scenario: z.string().optional(), // Custom scenario text override
+  scenarioId: z.string().uuid().optional(), // ID of a named scenario from the character's scenarios array
   timestampConfig: TimestampConfigSchema.optional(),
   projectId: z.uuid().optional(),
   imageProfileId: z.uuid().optional(), // Chat-level image profile (shared by all participants)
@@ -516,10 +517,30 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       return badRequest(buildResult.error);
     }
 
+    // Resolve scenario: custom text takes priority, then scenarioId lookup, then nothing
+    let resolvedScenario = validatedData.scenario;
+    if (!resolvedScenario && validatedData.scenarioId) {
+      const characterForScenario = await repos.characters.findById(buildResult.firstCharacter.characterId);
+      const matchingScenario = characterForScenario?.scenarios?.find(s => s.id === validatedData.scenarioId);
+      if (matchingScenario) {
+        resolvedScenario = matchingScenario.content;
+        logger.debug('[Chats v1] Resolved scenarioId to scenario content', {
+          characterId: buildResult.firstCharacter.characterId,
+          scenarioId: validatedData.scenarioId,
+          scenarioTitle: matchingScenario.title,
+        });
+      } else {
+        logger.warn('[Chats v1] scenarioId not found on character', {
+          characterId: buildResult.firstCharacter.characterId,
+          scenarioId: validatedData.scenarioId,
+        });
+      }
+    }
+
     const chatContext = await buildChatContext(
       buildResult.firstCharacter.characterId,
       buildResult.firstCharacter.userCharacterId,
-      validatedData.scenario
+      resolvedScenario
     );
 
     const chatSettings = await repos.chatSettings.findByUserId(user.id);

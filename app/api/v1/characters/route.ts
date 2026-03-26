@@ -34,7 +34,15 @@ const createCharacterSchema = z.object({
   title: z.string().optional(),
   description: z.string().optional(),
   personality: z.string().optional(),
-  scenario: z.string().optional(),
+  scenarios: z
+    .array(
+      z.object({
+        id: z.string().uuid().optional(),
+        title: z.string().min(1).max(200),
+        content: z.string().min(1),
+      })
+    )
+    .optional(),
   firstMessage: z.string().optional(),
   exampleDialogues: z.string().optional(),
   avatarUrl: z.url().optional().or(z.literal('')),
@@ -100,7 +108,7 @@ const wizardRequestSchema = z.object({
       title: z.string().optional(),
       description: z.string().optional(),
       personality: z.string().optional(),
-      scenario: z.string().optional(),
+      scenarios: z.array(z.object({ id: z.string(), title: z.string(), content: z.string() })).optional(),
       exampleDialogues: z.string().optional(),
       systemPrompt: z.string().optional(),
     })
@@ -112,7 +120,7 @@ const wizardRequestSchema = z.object({
       'title',
       'description',
       'personality',
-      'scenario',
+      'scenarios',
       'exampleDialogues',
       'systemPrompt',
       'physicalDescription',
@@ -373,13 +381,23 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     const body = await req.json();
     const validatedData = createCharacterSchema.parse(body);
 
+    // Normalize scenarios: fill in missing id/createdAt/updatedAt
+    const now = new Date().toISOString();
+    const normalizedScenarios = (validatedData.scenarios || []).map(s => ({
+      id: s.id ?? crypto.randomUUID(),
+      title: s.title,
+      content: s.content,
+      createdAt: now,
+      updatedAt: now,
+    }));
+
     const character = await repos.characters.create({
       userId: user.id,
       name: validatedData.name,
       title: validatedData.title || null,
       description: validatedData.description || null,
       personality: validatedData.personality || null,
-      scenario: validatedData.scenario || null,
+      scenarios: normalizedScenarios,
       firstMessage: validatedData.firstMessage || null,
       exampleDialogues: validatedData.exampleDialogues || null,
       avatarUrl: validatedData.avatarUrl || null,
@@ -432,7 +450,7 @@ async function handleQuickCreate(req: NextRequest, context: AuthenticatedContext
       title: null,
       description: 'Character created during chat import',
       personality: null,
-      scenario: null,
+      scenarios: [],
       firstMessage: null,
       exampleDialogues: null,
       avatarUrl: null,

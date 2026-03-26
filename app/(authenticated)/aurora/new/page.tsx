@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
-import { AIWizardModal, type GeneratedCharacterData, type GeneratedPhysicalDescription } from '@/components/characters/ai-wizard'
+import { AIWizardModal, type GeneratedCharacterData, type GeneratedPhysicalDescription, normalizeGeneratedScenarios } from '@/components/characters/ai-wizard'
 
 interface ConnectionProfile {
   id: string
@@ -19,6 +19,8 @@ export default function NewCharacterPage() {
   const [showWizard, setShowWizard] = useState(false)
   // Store pending physical description from wizard to save after character creation
   const pendingPhysicalDescription = useRef<GeneratedPhysicalDescription | null>(null)
+  // Store pending scenarios from wizard to save after character creation
+  const pendingScenarios = useRef<Array<{ title: string; content: string }> | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     title: '',
@@ -40,13 +42,17 @@ export default function NewCharacterPage() {
       ...(data.title && { title: data.title }),
       ...(data.description && { description: data.description }),
       ...(data.personality && { personality: data.personality }),
-      ...(data.scenario && { scenario: data.scenario }),
       ...(data.exampleDialogues && { exampleDialogues: data.exampleDialogues }),
       ...(data.systemPrompt && { systemPrompt: data.systemPrompt }),
     }))
     // Store physical description to save after character creation
     if (data.physicalDescription) {
       pendingPhysicalDescription.current = data.physicalDescription
+    }
+    // Store scenarios to save after character creation
+    const normalizedScenarios = normalizeGeneratedScenarios(data.scenarios)
+    if (normalizedScenarios.length > 0) {
+      pendingScenarios.current = normalizedScenarios
     }
   }
 
@@ -91,6 +97,22 @@ export default function NewCharacterPage() {
 
       const data = await res.json()
       const characterId = data.character.id
+
+      // Save pending scenarios if any (from wizard)
+      if (pendingScenarios.current && pendingScenarios.current.length > 0) {
+        for (const scenario of pendingScenarios.current) {
+          try {
+            await fetch(`/api/v1/characters/${characterId}/scenarios`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ title: scenario.title, content: scenario.content }),
+            })
+          } catch (scenErr) {
+            console.error('Error saving scenario', scenErr instanceof Error ? scenErr.message : String(scenErr))
+          }
+        }
+        pendingScenarios.current = null
+      }
 
       // Save pending physical description if any
       if (pendingPhysicalDescription.current) {
@@ -351,7 +373,6 @@ export default function NewCharacterPage() {
           title: formData.title,
           description: formData.description,
           personality: formData.personality,
-          scenario: formData.scenario,
           exampleDialogues: formData.exampleDialogues,
           systemPrompt: formData.systemPrompt,
         }}

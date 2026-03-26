@@ -87,7 +87,7 @@ The optimizer may propose changes to:
 
 - **Description** — The character's general description
 - **Personality** — Behavioral traits and interaction style
-- **Scenario** — The default interaction context
+- **Scenarios** — The optimizer may suggest updates to the content of existing named scenarios where the established description no longer reflects how the character actually behaves in that context, or propose an entirely new scenario with a title and content if the memories reveal a recurring setting not yet catalogued
 - **Example Dialogues** — Sample conversations demonstrating voice
 - **System Prompts** — Individual named system prompts (modified, not created)
 - **Physical Descriptions** — Appearance descriptions at various detail levels

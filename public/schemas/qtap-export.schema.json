@@ -252,6 +252,20 @@
         "description": { "type": "string" },
         "personality": { "type": "string" },
         "scenario": { "type": "string" },
+        "scenarios": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "title": { "type": "string" },
+              "content": { "type": "string" },
+              "createdAt": { "type": "string" },
+              "updatedAt": { "type": "string" }
+            },
+            "required": ["id", "title", "content"]
+          }
+        },
         "firstMessage": { "type": "string" },
         "exampleDialogues": { "type": "string" },
         "avatarUrl": { "type": ["string", "null"] },

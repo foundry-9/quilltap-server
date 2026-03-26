@@ -105,7 +105,10 @@ When you export, the file contains:
   "title": "The Wanderer",
   "description": "...",
   "personality": "...",
-  "scenario": "...",
+  "scenarios": [
+    { "title": "The Brass Lantern Tavern", "content": "..." },
+    { "title": "The Road to Vienna", "content": "..." }
+  ],
   "firstMessage": "...",
   "exampleDialogues": "...",
   "systemPrompt": "...",
@@ -266,7 +269,7 @@ If importing from SillyTavern:
 - Character name ✓
 - Description ✓
 - Personality ✓
-- Scenario ✓
+- Scenario ✓ (imported as a single scenario in the scenarios list)
 - First message ✓
 - Example dialogues ✓
 - Avatar image ✓
@@ -370,7 +373,9 @@ If you know JSON structure:
   "title": "Character Title",
   "description": "Full description text",
   "personality": "Personality traits",
-  "scenario": "Setting/scenario",
+  "scenarios": [
+    { "title": "Scenario Title", "content": "Setting/scenario description" }
+  ],
   "firstMessage": "Opening message",
   "exampleDialogues": "Example conversations",
   "systemPrompt": "AI instructions",
@@ -380,6 +385,8 @@ If you know JSON structure:
   "imageProfile": null
 }
 ```
+
+Note that `scenarios` is an array of objects with `title` and `content` fields. A character may have zero, one, or many scenarios. The SillyTavern format uses a single `"scenario"` string field, which Quilltap imports as a single entry in the scenarios list.
 
 ### Batch Import/Export with Scripts
 

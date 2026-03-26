@@ -78,7 +78,7 @@ export function createMockCharacter(overrides: Partial<Character> = {}): Charact
     title: null,
     description: 'A test character for unit tests',
     personality: 'Friendly and helpful',
-    scenario: null,
+    scenarios: [],
     firstMessage: 'Hello! How can I help you today?',
     exampleDialogues: null,
     systemPrompts: [],

@@ -115,7 +115,7 @@ Characters are sorted by:
 - **Title** — Optional subtitle or role (e.g., "Bounty Hunter")
 - **Description** — Long-form narrative about character
 - **Personality** — Key traits and characteristics
-- **Scenario** — The setting or situation character exists in
+- **Scenarios** — A collection of named scenes, each with a title and content, describing the settings or situations the character may find themselves in. A character may have any number of scenarios, or none at all.
 
 ### Conversation Starter
 
@@ -165,7 +165,7 @@ For more control:
 2. Fill all available fields:
    - Name, title, description
    - Personality traits
-   - Background/scenario
+   - Background and scenarios (one or more named scenes)
    - First message
    - Example dialogues
    - System prompt
@@ -278,7 +278,7 @@ View detailed appearance and outfits:
 Editable fields:
 
 - Name, aliases, pronouns, title, description
-- Personality and scenario
+- Personality and scenarios
 - First message and examples
 - Avatar and images
 - Tags

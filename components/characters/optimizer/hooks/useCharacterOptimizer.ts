@@ -9,6 +9,7 @@
  */
 
 import { useState, useCallback, useRef } from 'react';
+import { randomUUID } from 'crypto';
 import type {
   OptimizerPhase,
   SuggestionDecision,
@@ -273,18 +274,26 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
         const simpleFields = [
           'description',
           'personality',
-          'scenario',
           'exampleDialogues',
           'talkativeness',
         ];
         const arrayFieldUpdates: Record<
           string,
-          Array<{ subId: string; finalValue: string }>
+          Array<{ subId: string | undefined; finalValue: string; title?: string }>
         > = {};
 
         for (const { suggestion, finalValue } of accepted) {
           if (simpleFields.includes(suggestion.field)) {
             updatePayload[suggestion.field] = finalValue;
+          } else if (suggestion.field === 'scenarios') {
+            if (!arrayFieldUpdates['scenarios']) {
+              arrayFieldUpdates['scenarios'] = [];
+            }
+            arrayFieldUpdates['scenarios'].push({
+              subId: suggestion.subId,
+              finalValue,
+              title: suggestion.title,
+            });
           } else if (suggestion.subId) {
             if (!arrayFieldUpdates[suggestion.field]) {
               arrayFieldUpdates[suggestion.field] = [];
@@ -294,6 +303,36 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
               finalValue,
             });
           }
+        }
+
+        // Handle scenarios array: update existing or add new
+        if (arrayFieldUpdates['scenarios'] && arrayFieldUpdates['scenarios'].length > 0) {
+          const existingScenarios =
+            (character['scenarios'] as Array<Record<string, unknown>> | undefined) ?? [];
+          const now = new Date().toISOString();
+          let updatedScenarios = [...existingScenarios];
+
+          for (const { subId, finalValue, title } of arrayFieldUpdates['scenarios']) {
+            if (subId) {
+              // Update existing scenario
+              updatedScenarios = updatedScenarios.map((s) => {
+                if (s.id === subId) {
+                  return { ...s, content: finalValue, updatedAt: now };
+                }
+                return s;
+              });
+            } else {
+              // Add new scenario
+              updatedScenarios.push({
+                id: randomUUID(),
+                title: title ?? 'New Scenario',
+                content: finalValue,
+                createdAt: now,
+                updatedAt: now,
+              });
+            }
+          }
+          updatePayload['scenarios'] = updatedScenarios;
         }
 
         // Handle array field updates by merging with existing character data

@@ -18,7 +18,7 @@ interface Character {
   name: string
   description?: string | null
   personality?: string | null
-  scenario?: string | null
+  scenarios?: Array<{ id: string; title: string; content: string }>
   firstMessage?: string | null
   exampleDialogues?: string | null
   systemPrompts?: CharacterSystemPrompt[]
@@ -98,11 +98,14 @@ export async function buildChatContext(
     }
   }
 
+  // Resolve scenario content: custom text overrides first scenario in array
+  const resolvedScenario = customScenario || character.scenarios?.[0]?.content || undefined
+
   // Build system prompt (pass userCharacter as 'persona' for template compatibility)
   const systemPrompt = buildSystemPrompt({
     character,
     userCharacter: userCharacter || undefined,
-    scenario: customScenario || character.scenario || undefined,
+    scenario: resolvedScenario,
   })
 
   // Get the default system prompt content for template processing
@@ -113,7 +116,7 @@ export async function buildChatContext(
   const processedCharacter = processCharacterTemplates({
     character,
     persona: userCharacter ? { name: userCharacter.name, description: userCharacter.description } : undefined,
-    scenario: customScenario || character.scenario || undefined,
+    scenario: resolvedScenario,
     systemPrompt: defaultSystemPrompt,
   })
   const firstMessage = processedCharacter.firstMessage

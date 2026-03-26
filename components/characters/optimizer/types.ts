@@ -19,6 +19,7 @@ export interface OptimizerSuggestion {
   field: string;
   subId?: string;
   subName?: string;
+  title?: string;
   currentValue: string;
   proposedValue: string;
   rationale: string;

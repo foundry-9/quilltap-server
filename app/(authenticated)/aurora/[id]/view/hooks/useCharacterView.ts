@@ -88,7 +88,6 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
   const templateFields: TemplateFields = {
     description: character?.description,
     personality: character?.personality,
-    scenario: character?.scenario,
     firstMessage: character?.firstMessage,
     exampleDialogues: character?.exampleDialogues,
     systemPrompt: defaultSystemPromptContent,
@@ -217,9 +216,16 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
         const replaced = replaceWithTemplate(character.personality, nameToReplace, template)
         if (replaced !== character.personality) updates.personality = replaced
       }
-      if (character.scenario) {
-        const replaced = replaceWithTemplate(character.scenario, nameToReplace, template)
-        if (replaced !== character.scenario) updates.scenario = replaced
+      // Apply template replacement to all scenarios
+      if (character.scenarios && character.scenarios.length > 0) {
+        const updatedScenarios = character.scenarios.map(s => {
+          const replaced = replaceWithTemplate(s.content, nameToReplace, template)
+          return replaced !== s.content ? { ...s, content: replaced } : s
+        })
+        const hasChanges = updatedScenarios.some((s, i) => s !== character.scenarios![i])
+        if (hasChanges) {
+          (updates as Record<string, unknown>).scenarios = updatedScenarios
+        }
       }
       if (character.firstMessage) {
         const replaced = replaceWithTemplate(character.firstMessage, nameToReplace, template)
