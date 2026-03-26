@@ -2109,10 +2109,6 @@ User-created system prompt templates.
 - `PUT /api/v1/prompt-templates/[id]` - Update template
 - `DELETE /api/v1/prompt-templates/[id]` - Delete template
 
-#### `GET /api/v1/sample-prompts`
-
-Get built-in sample prompts (read-only, can be imported).
-
 #### Roleplay Templates
 
 Per-chat roleplay formatting templates.

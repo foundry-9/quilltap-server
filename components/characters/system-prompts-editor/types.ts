@@ -21,14 +21,6 @@ export interface PromptTemplate {
   modelHint: string | null
 }
 
-export interface SamplePrompt {
-  name: string
-  content: string
-  modelHint: string
-  category: string
-  filename: string
-}
-
 export interface SystemPromptsEditorProps {
   characterId: string
   characterName: string

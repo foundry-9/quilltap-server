@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { AIWizardModal, type GeneratedCharacterData, type GeneratedPhysicalDescription, normalizeGeneratedScenarios } from '@/components/characters/ai-wizard'
+import { ImportModal } from '@/components/characters/system-prompts-editor/ImportModal'
+import type { PromptTemplate } from '@/components/characters/system-prompts-editor/types'
 
 interface ConnectionProfile {
   id: string
@@ -17,6 +19,9 @@ export default function NewCharacterPage() {
   const [error, setError] = useState<string | null>(null)
   const [profiles, setProfiles] = useState<ConnectionProfile[]>([])
   const [showWizard, setShowWizard] = useState(false)
+  const [showTemplateImport, setShowTemplateImport] = useState(false)
+  const [templates, setTemplates] = useState<PromptTemplate[]>([])
+  const [loadingTemplates, setLoadingTemplates] = useState(false)
   // Store pending physical description from wizard to save after character creation
   const pendingPhysicalDescription = useRef<GeneratedPhysicalDescription | null>(null)
   // Store pending scenarios from wizard to save after character creation
@@ -54,6 +59,29 @@ export default function NewCharacterPage() {
     if (normalizedScenarios.length > 0) {
       pendingScenarios.current = normalizedScenarios
     }
+  }
+
+  const openTemplateImport = async () => {
+    setShowTemplateImport(true)
+    if (templates.length === 0) {
+      try {
+        setLoadingTemplates(true)
+        const res = await fetch('/api/v1/prompt-templates')
+        if (res.ok) {
+          const data = await res.json()
+          setTemplates(data.templates || [])
+        }
+      } catch (err) {
+        console.error('Error fetching templates', err instanceof Error ? err.message : String(err))
+      } finally {
+        setLoadingTemplates(false)
+      }
+    }
+  }
+
+  const handleTemplateImport = (content: string, _suggestedName: string) => {
+    setFormData(prev => ({ ...prev, systemPrompt: content }))
+    setShowTemplateImport(false)
   }
 
   useEffect(() => {
@@ -295,9 +323,18 @@ export default function NewCharacterPage() {
         </div>
 
         <div>
-          <label htmlFor="systemPrompt" className="block text-sm font-medium mb-2 text-foreground">
-            System Prompt (Optional)
-          </label>
+          <div className="flex items-center justify-between mb-2">
+            <label htmlFor="systemPrompt" className="block text-sm font-medium text-foreground">
+              System Prompt (Optional)
+            </label>
+            <button
+              type="button"
+              onClick={openTemplateImport}
+              className="qt-button-secondary text-xs px-2 py-1"
+            >
+              Import Template
+            </button>
+          </div>
           <textarea
             id="systemPrompt"
             name="systemPrompt"
@@ -363,6 +400,15 @@ export default function NewCharacterPage() {
           </Link>
         </div>
       </form>
+
+      {/* Import Template Modal */}
+      <ImportModal
+        isOpen={showTemplateImport}
+        loading={loadingTemplates}
+        templates={templates}
+        onClose={() => setShowTemplateImport(false)}
+        onImport={handleTemplateImport}
+      />
 
       {/* AI Wizard Modal */}
       <AIWizardModal
