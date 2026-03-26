@@ -246,7 +246,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
           const characterParticipant = chat.participants.find(
             p => p.type === 'CHARACTER' && p.isActive
           );
-          const hasImageProfile = !!characterParticipant?.imageProfileId;
+          const hasImageProfile = !!chat.imageProfileId || !!characterParticipant?.imageProfileId;
 
           // Check if chat is in a project
           const hasProject = !!chat.projectId;
