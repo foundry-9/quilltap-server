@@ -15,17 +15,17 @@ These are **system prompts** (sent in the `system` role) unless otherwise noted.
 
 ## Provider matrix
 
-| Provider | Companion | Romantic | Notes |
-|---|---|---|---|
-| **Anthropic (Claude)** | `CLAUDE_COMPANION.md` | `CLAUDE_ROMANTIC.md` | Uses XML tags for structure (Claude's fine-tuned strength). Romantic capped at sensual/emotional — explicit content blocked by policy. Prefilling deprecated in 4.5+; use system prompts only. Best prose quality of any provider. |
-| **OpenAI (GPT-4o)** | `GPT4O_COMPANION.md` | `GPT4O_ROMANTIC.md` | Community gold standard for roleplay — proactive co-creator that introduces plot twists and emotional nuance. Retired from ChatGPT Feb 2026 but still available via API snapshots. Prompts emphasize initiative and scene-driving. Best OpenAI option for creative depth. |
-| **OpenAI (GPT-5/5.1)** | `GPT5_COMPANION.md` | `GPT5_ROMANTIC.md` | Framed as "collaborative fiction" to reduce refusals. Adult mode still delayed as of March 2026. GPT-5 is passive — prompts emphasize proactive co-creation. Works for GPT-4.1 too, though 4.1's strength is context length (1M tokens), not creative depth. |
-| **Google Gemini** | `GEMINI_COMPANION.md` | `GEMINI_ROMANTIC.md` | Uses XML-style tags. Set all safety categories to `BLOCK_NONE` in API config. Prone to false-positive filtering mid-response — narrative framing (subtext over explicit description) helps. Free tier + 1M context = best budget option. |
-| **Grok / xAI** | `GROK_COMPANION.md` | `GROK_ROMANTIC.md` | #1 on EQ-Bench3 for emotional intelligence. Most permissive mainstream provider for intimate content. Moderation is inconsistent — same prompt may work or fail across attempts. Use non-thinking mode (`grok-4.1`) for roleplay. |
-| **DeepSeek** | `DEEPSEEK_COMPANION.md` | `DEEPSEEK_ROMANTIC.md` | Uses `### SECTION ###` delimiters (DeepSeek's preferred format). V3 uses system prompts; **R1 ignores system prompts** — place everything in user message. R1 temperature 0.5–0.7 to prevent loops. Cheapest mainstream option. Explicit boundaries on autonomy to prevent character hijacking. |
-| **Mistral** | `MISTRAL_COMPANION.md` | `MISTRAL_ROMANTIC.md` | No explicit prohibition on consensual adult content in usage policy. Supports prefix feature for locking character voice. Mistral Small Creative (retiring April 2026) is purpose-built for RP. For local: Dolphin 3.0 R1 Mistral 24B recommended. |
-| **Ollama (Local)** | `OLLAMA_COMPANION.md` | `OLLAMA_ROMANTIC.md` | Designed for local Llama/Mistral fine-tunes. Includes anti-slop rules and recommended sampler settings. No content restrictions — behavior depends entirely on model choice. Top picks: Euryale v2.3 (70B), Stheno v3.4 (8B), Nous Hermes 3 (8B). |
-| **Generic (OpenRouter / OpenAI-Compatible)** | `GENERIC_COMPANION.md` | `GENERIC_ROMANTIC.md` | Fallback for any provider without a dedicated prompt. Works with Gab AI, Together AI, Groq, Fireworks, LM Studio, vLLM, and any OpenAI-format endpoint. Balances between provider-specific optimizations. |
+| Provider                                     | Companion               | Romantic               | Notes                                                                                                                                                                                                                                                                                           |
+| -------------------------------------------- | ----------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Anthropic (Claude)**                       | `CLAUDE_COMPANION.md`   | `CLAUDE_ROMANTIC.md`   | Uses XML tags for structure (Claude's fine-tuned strength). Romantic capped at sensual/emotional — explicit content blocked by policy. Prefilling deprecated in 4.5+; use system prompts only. Best prose quality of any provider.                                                              |
+| **OpenAI (GPT-4o)**                          | `GPT4O_COMPANION.md`    | `GPT4O_ROMANTIC.md`    | Community gold standard for roleplay — proactive co-creator that introduces plot twists and emotional nuance. Retired from ChatGPT Feb 2026 but still available via API snapshots. Prompts emphasize initiative and scene-driving. Best OpenAI option for creative depth.                       |
+| **OpenAI (GPT-5/5.1)**                       | `GPT5_COMPANION.md`     | `GPT5_ROMANTIC.md`     | Framed as "collaborative fiction" to reduce refusals. Adult mode still delayed as of March 2026. GPT-5 is passive — prompts emphasize proactive co-creation. Works for GPT-4.1 too, though 4.1's strength is context length (1M tokens), not creative depth.                                    |
+| **Google Gemini**                            | `GEMINI_COMPANION.md`   | `GEMINI_ROMANTIC.md`   | Uses XML-style tags. Set all safety categories to `BLOCK_NONE` in API config. Prone to false-positive filtering mid-response — narrative framing (subtext over explicit description) helps. Free tier + 1M context = best budget option.                                                        |
+| **Grok / xAI**                               | `GROK_COMPANION.md`     | `GROK_ROMANTIC.md`     | #1 on EQ-Bench3 for emotional intelligence. Most permissive mainstream provider for intimate content. Moderation is inconsistent — same prompt may work or fail across attempts. Use non-thinking mode (`grok-4.1`) for roleplay.                                                               |
+| **DeepSeek**                                 | `DEEPSEEK_COMPANION.md` | `DEEPSEEK_ROMANTIC.md` | Uses `### SECTION ###` delimiters (DeepSeek's preferred format). V3 uses system prompts; **R1 ignores system prompts** — place everything in user message. R1 temperature 0.5–0.7 to prevent loops. Cheapest mainstream option. Explicit boundaries on autonomy to prevent character hijacking. |
+| **Mistral**                                  | `MISTRAL_COMPANION.md`  | `MISTRAL_ROMANTIC.md`  | No explicit prohibition on consensual adult content in usage policy. Supports prefix feature for locking character voice. Mistral Small Creative (retiring April 2026) is purpose-built for RP. For local: Dolphin 3.0 R1 Mistral 24B recommended.                                              |
+| **Ollama (Local)**                           | `OLLAMA_COMPANION.md`   | `OLLAMA_ROMANTIC.md`   | Designed for local Llama/Mistral fine-tunes. Includes anti-slop rules and recommended sampler settings. No content restrictions — behavior depends entirely on model choice. Top picks: Euryale v2.3 (70B), Stheno v3.4 (8B), Nous Hermes 3 (8B).                                               |
+| **Generic (OpenRouter / OpenAI-Compatible)** | `GENERIC_COMPANION.md`  | `GENERIC_ROMANTIC.md`  | Fallback for any provider without a dedicated prompt. Works with Gab AI, Together AI, Groq, Fireworks, LM Studio, vLLM, and any OpenAI-format endpoint. Balances between provider-specific optimizations.                                                                                       |
 
 ---
 
@@ -57,14 +57,14 @@ These are listed in the Ollama prompts' rules section but can be appended to any
 
 ## Sampler settings quick reference
 
-| Provider | Temperature | Top P | Min P | Rep Penalty | Notes |
-|---|---|---|---|---|---|
-| Claude | 0.7–1.0 | 0.95 | — | — | Claude handles its own sampling well |
-| GPT-4o | 0.7–1.0 | 0.95 | — | — | Community favorite: `chatgpt-4o-latest` snapshot |
-| GPT-5 | 0.7–1.0 | 0.95 | — | — | Disable reasoning mode |
-| Gemini | 0.8–1.0 | 0.95 | — | — | Higher temp can trigger safety filters |
-| Grok | 0.8–1.0 | 0.95 | — | — | Use non-thinking mode for RP |
-| DeepSeek V3 | 0.7–1.0 | 0.95 | — | — | Standard chat completion |
-| DeepSeek R1 | 0.5–0.7 | 0.95 | — | — | Higher temp causes repetition loops |
-| Mistral | 0.7–1.0 | 0.95 | — | — | Use prefix feature when available |
-| Ollama (local) | 1.0–1.4 | — | 0.1–0.2 | 1.05–1.1 | Min P preferred over Top P for local |
+| Provider       | Temperature | Top P | Min P   | Rep Penalty | Notes                                            |
+| -------------- | ----------- | ----- | ------- | ----------- | ------------------------------------------------ |
+| Claude         | 0.7–1.0     | 0.95  | —       | —           | Claude handles its own sampling well             |
+| GPT-4o         | 0.7–1.0     | 0.95  | —       | —           | Community favorite: `chatgpt-4o-latest` snapshot |
+| GPT-5          | 0.7–1.0     | 0.95  | —       | —           | Disable reasoning mode                           |
+| Gemini         | 0.8–1.0     | 0.95  | —       | —           | Higher temp can trigger safety filters           |
+| Grok           | 0.8–1.0     | 0.95  | —       | —           | Use non-thinking mode for RP                     |
+| DeepSeek V3    | 0.7–1.0     | 0.95  | —       | —           | Standard chat completion                         |
+| DeepSeek R1    | 0.5–0.7     | 0.95  | —       | —           | Higher temp causes repetition loops              |
+| Mistral        | 0.7–1.0     | 0.95  | —       | —           | Use prefix feature when available                |
+| Ollama (local) | 1.0–1.4     | —     | 0.1–0.2 | 1.05–1.1    | Min P preferred over Top P for local             |
