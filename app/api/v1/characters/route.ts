@@ -353,6 +353,16 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
           createdAt: character.createdAt,
           tags: character.tags || [],
           updatedAt: character.updatedAt,
+          systemPrompts: (character.systemPrompts || []).map(p => ({
+            id: p.id,
+            name: p.name,
+            isDefault: p.isDefault,
+          })),
+          scenarios: (character.scenarios || []).map(s => ({
+            id: s.id,
+            title: s.title,
+            content: s.content,
+          })),
           _count: {
             chats: chats.length,
           },

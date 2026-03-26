@@ -32,6 +32,11 @@ interface Character {
     name: string
     isDefault: boolean
   }>
+  scenarios?: Array<{
+    id: string
+    title: string
+    content: string
+  }>
 }
 
 interface ConnectionProfile {
@@ -57,6 +62,8 @@ interface SelectedCharacter {
 
 // Special value for "Play As (User)" option in connection profile dropdown
 const USER_CONTROLLED_PROFILE = '__USER_CONTROLLED__'
+// Special value for custom scenario text in the scenario dropdown
+const CUSTOM_SCENARIO_VALUE = '__custom__'
 
 interface Project {
   id: string
@@ -79,6 +86,7 @@ export default function NewChatPage() {
   const [selectedUserCharacterId, setSelectedUserCharacterId] = useState<string>('')
   const [chatImageProfileId, setChatImageProfileId] = useState<string>('')
   const [scenario, setScenario] = useState('')
+  const [scenarioId, setScenarioId] = useState<string | null>(null)
   const [timestampConfig, setTimestampConfig] = useState<TimestampConfig | null>(null)
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
@@ -194,7 +202,32 @@ export default function NewChatPage() {
     [selectedCharacters]
   )
 
+  // Scenario selection for single-character mode
+  const singleCharacterScenarios = useMemo(() => {
+    if (selectedCharacters.length !== 1) return null
+    const scenarios = selectedCharacters[0].character.scenarios
+    return scenarios && scenarios.length > 0 ? scenarios : null
+  }, [selectedCharacters])
+
+  const selectedPreset = scenarioId
+    ? singleCharacterScenarios?.find((s) => s.id === scenarioId)
+    : null
+
+  const showCustomTextarea = !singleCharacterScenarios || scenarioId === null
+
+  const handleScenarioSelectChange = (value: string) => {
+    if (value === CUSTOM_SCENARIO_VALUE || value === '') {
+      setScenarioId(null)
+    } else {
+      setScenarioId(value)
+      // Clear custom text when switching to a preset
+      setScenario('')
+    }
+  }
+
   const handleSelectCharacter = (character: Character) => {
+    // Reset scenario selection when characters change
+    setScenarioId(null)
     if (selectedCharacterIds.has(character.id)) {
       setSelectedCharacters((prev) =>
         prev.filter((sc) => sc.character.id !== character.id)
@@ -236,6 +269,7 @@ export default function NewChatPage() {
   }
 
   const handleRemoveCharacter = (characterId: string) => {
+    setScenarioId(null)
     setSelectedCharacters((prev) =>
       prev.filter((sc) => sc.character.id !== characterId)
     )
@@ -313,6 +347,8 @@ export default function NewChatPage() {
 
       if (scenario) {
         requestBody.scenario = scenario
+      } else if (scenarioId) {
+        requestBody.scenarioId = scenarioId
       }
 
       if (timestampConfig) {
@@ -559,13 +595,37 @@ export default function NewChatPage() {
             <div className="rounded-xl border border-border bg-card p-6">
               <h2 className="mb-4 text-lg font-semibold">Scenario (Optional)</h2>
               <p className="mb-3 qt-text-small">Describe the starting scenario for this chat.</p>
-              <textarea
-                value={scenario}
-                onChange={(e) => setScenario(e.target.value)}
-                placeholder="e.g., You are in a cozy coffee shop on a rainy afternoon..."
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                rows={4}
-              />
+
+              {singleCharacterScenarios && (
+                <select
+                  value={scenarioId ?? CUSTOM_SCENARIO_VALUE}
+                  onChange={(e) => handleScenarioSelectChange(e.target.value)}
+                  className="mb-3 w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value={CUSTOM_SCENARIO_VALUE}>Custom...</option>
+                  {singleCharacterScenarios.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.title}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              {selectedPreset && (
+                <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                  {selectedPreset.content}
+                </div>
+              )}
+
+              {showCustomTextarea && (
+                <textarea
+                  value={scenario}
+                  onChange={(e) => setScenario(e.target.value)}
+                  placeholder="e.g., You are in a cozy coffee shop on a rainy afternoon..."
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  rows={4}
+                />
+              )}
             </div>
 
             {imageProfiles.length > 0 && (
