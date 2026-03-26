@@ -21,6 +21,8 @@ import {
   MemoriesTab,
   DescriptionsTab,
   ChatCreationDialog,
+  ExternalPromptDialog,
+  ExternalPromptResultDialog,
 } from './components'
 import { CHARACTER_TABS } from './constants'
 import { SearchReplaceModal } from '@/components/tools/search-replace'
@@ -37,6 +39,8 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   const [showChatDialog, setShowChatDialog] = useState(false)
   const [showSearchReplaceModal, setShowSearchReplaceModal] = useState(false)
   const [showOptimizerModal, setShowOptimizerModal] = useState(false)
+  const [showExternalPromptDialog, setShowExternalPromptDialog] = useState(false)
+  const [externalPromptResult, setExternalPromptResult] = useState<string | null>(null)
   const [dataRefreshKey, setDataRefreshKey] = useState(0)
   const [selectedProfileId, setSelectedProfileId] = useState<string>('')
   const [selectedUserCharacterId, setSelectedUserCharacterId] = useState<string>('')
@@ -368,6 +372,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           onToggleControlledBy={handleToggleControlledBy}
           onOptimize={() => setShowOptimizerModal(true)}
           onSearchReplace={() => setShowSearchReplaceModal(true)}
+          onGenerateExternalPrompt={() => setShowExternalPromptDialog(true)}
           togglingNpc={togglingNpc}
           togglingFavorite={togglingFavorite}
           togglingControlledBy={togglingControlledBy}
@@ -443,6 +448,29 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           }
         }}
       />
+
+      {/* External Prompt Generator */}
+      {showExternalPromptDialog && (
+        <ExternalPromptDialog
+          characterId={id}
+          characterName={character?.name}
+          systemPrompts={character?.systemPrompts}
+          scenarios={character?.scenarios}
+          onCancel={() => setShowExternalPromptDialog(false)}
+          onGenerated={(prompt) => {
+            setShowExternalPromptDialog(false)
+            setExternalPromptResult(prompt)
+          }}
+        />
+      )}
+
+      {externalPromptResult && (
+        <ExternalPromptResultDialog
+          characterName={character?.name}
+          prompt={externalPromptResult}
+          onClose={() => setExternalPromptResult(null)}
+        />
+      )}
     </div>
   )
 }

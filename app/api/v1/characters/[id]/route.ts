@@ -19,6 +19,7 @@
  * - remove-tag - Remove tag
  * - toggle-controlled-by - Toggle user/LLM control
  * - set-default-partner - Set default partner
+ * - generate-external-prompt - Generate standalone system prompt for external tools
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -36,6 +37,7 @@ import { logger } from '@/lib/logger';
 import { notFound, forbidden, badRequest, serverError, validationError } from '@/lib/api/responses';
 import { runCharacterOptimizer } from '@/lib/services/character-optimizer.service';
 import type { OptimizerProgressEvent } from '@/lib/services/character-optimizer.service';
+import { generateExternalPrompt } from '@/lib/services/external-prompt-generator.service';
 
 // ============================================================================
 // Schemas
@@ -112,7 +114,16 @@ const optimizeStreamSchema = z.object({
 const CHARACTER_GET_ACTIONS = ['export', 'chats', 'cascade-preview', 'default-partner', 'get-tags'] as const;
 type CharacterGetAction = typeof CHARACTER_GET_ACTIONS[number];
 
-const CHARACTER_POST_ACTIONS = ['favorite', 'avatar', 'add-tag', 'remove-tag', 'toggle-controlled-by', 'set-default-partner', 'optimize-stream'] as const;
+const generateExternalPromptSchema = z.object({
+  connectionProfileId: z.string().uuid(),
+  systemPromptId: z.string().uuid(),
+  scenarioId: z.string().uuid().optional(),
+  descriptionId: z.string().uuid().optional(),
+  clothingRecordId: z.string().uuid().optional(),
+  maxTokens: z.number().int().min(1000).max(20000),
+});
+
+const CHARACTER_POST_ACTIONS = ['favorite', 'avatar', 'add-tag', 'remove-tag', 'toggle-controlled-by', 'set-default-partner', 'optimize-stream', 'generate-external-prompt'] as const;
 type CharacterPostAction = typeof CHARACTER_POST_ACTIONS[number];
 
 // ============================================================================
@@ -718,6 +729,35 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
     },
 
     'optimize-stream': () => handleOptimizeStream(req, user, repos, id),
+
+    'generate-external-prompt': async () => {
+      try {
+        const body = await req.json();
+        const validated = generateExternalPromptSchema.parse(body);
+
+        logger.info('[Characters v1] External prompt generation starting', {
+          userId: user.id,
+          characterId: id,
+          connectionProfileId: validated.connectionProfileId,
+          maxTokens: validated.maxTokens,
+        });
+
+        const result = await generateExternalPrompt(id, validated, user.id, repos);
+
+        if (!result.success) {
+          return serverError(result.error || 'Generation failed');
+        }
+
+        return NextResponse.json({ prompt: result.prompt, tokensUsed: result.tokensUsed });
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return validationError(error);
+        }
+        const errorMessage = error instanceof Error ? error.message : 'External prompt generation failed';
+        logger.error('[Characters v1] External prompt generation failed', { characterId: id, error: errorMessage });
+        return serverError(errorMessage);
+      }
+    },
   };
 
   return actionHandlers[action]();
