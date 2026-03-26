@@ -140,6 +140,11 @@ logger.error('Failed to connect', { endpoint: 'api.example.com' }, error);
 | `ProviderCapabilities` | Capability flags |
 | `AttachmentSupport` | File attachment config |
 | `PluginManifest` | Plugin manifest schema |
+| `SystemPromptPlugin` | System prompt plugin interface |
+| `SystemPromptData` | Individual prompt entry |
+| `SystemPromptMetadata` | System prompt plugin metadata |
+| `RoleplayTemplatePlugin` | Roleplay template plugin interface |
+| `RoleplayTemplateConfig` | Roleplay template configuration |
 
 ### Common Types
 

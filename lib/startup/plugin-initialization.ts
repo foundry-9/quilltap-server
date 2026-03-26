@@ -16,6 +16,7 @@ import { initializeRoleplayTemplateRegistry, roleplayTemplateRegistry } from '@/
 import { initializeToolRegistry, toolRegistry } from '@/lib/plugins/tool-registry';
 import { initializeSearchProviderRegistry, searchProviderRegistry } from '@/lib/plugins/search-provider-registry';
 import { initializeModerationProviderRegistry, moderationProviderRegistry } from '@/lib/plugins/moderation-provider-registry';
+import { initializeSystemPromptRegistry, systemPromptRegistry } from '@/lib/plugins/system-prompt-registry';
 import type { ToolPlugin } from '@/lib/plugins/interfaces/tool-plugin';
 import type { SearchProviderPlugin } from '@/lib/plugins/interfaces/search-provider-plugin';
 import type { ModerationProviderPlugin } from '@/lib/plugins/interfaces/moderation-provider-plugin';
@@ -547,6 +548,47 @@ async function performInitialization(): Promise<PluginInitializationResult> {
       }
     }
 
+    // Initialize system prompt registry from enabled plugins with SYSTEM_PROMPT capability
+    const systemPromptPlugins = pluginRegistry.getEnabledByCapability('SYSTEM_PROMPT');
+    if (systemPromptPlugins.length > 0) {
+      const systemPrompts: Array<{ metadata: { pluginId: string; displayName: string; description?: string; version?: string }; prompts: Array<{ name: string; content: string; modelHint: string; category: string }>; initialize?: () => void | Promise<void> }> = [];
+      for (const loadedPlugin of systemPromptPlugins) {
+        try {
+          const mainFile = loadedPlugin.manifest.main || 'index.js';
+          const modulePath = _resolve(process.cwd(), loadedPlugin.pluginPath, mainFile);
+
+          // Use external loader for npm-installed plugins to resolve peer dependencies
+          const isExternalPlugin = loadedPlugin.source === 'npm';
+          const pluginModule = isExternalPlugin
+            ? loadExternalPluginModule(modulePath)
+            : dynamicRequire(modulePath);
+
+          if ((pluginModule as { plugin?: unknown })?.plugin) {
+            systemPrompts.push((pluginModule as { plugin: typeof systemPrompts[number] }).plugin);
+          } else if ((pluginModule as { default?: { plugin?: unknown } })?.default?.plugin) {
+            systemPrompts.push((pluginModule as { default: { plugin: typeof systemPrompts[number] } }).default.plugin);
+          } else {
+            logger.warn('System prompt plugin module does not export a plugin object', {
+              plugin: loadedPlugin.manifest.name,
+              exports: Object.keys(pluginModule as object),
+            });
+          }
+        } catch (error) {
+          logger.error('Failed to load system prompt plugin module', {
+            plugin: loadedPlugin.manifest.name,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      if (systemPrompts.length > 0) {
+        await initializeSystemPromptRegistry(systemPrompts);
+        logger.info('System prompt registry initialized', {
+          systemPromptPlugins: systemPrompts.length,
+        });
+      }
+    }
+
     // Initialize the file storage manager
     try {
       await fileStorageManager.initialize();
@@ -613,6 +655,8 @@ export function resetPluginSystem(): void {
   toolRegistry.reset();
   // Reset search provider registry
   searchProviderRegistry.reset();
+  // Reset system prompt registry
+  systemPromptRegistry.reset();
   // Clear the plugin logger factory and version injection
   clearPluginLoggerFactory();
   __clearQuilltapVersion();

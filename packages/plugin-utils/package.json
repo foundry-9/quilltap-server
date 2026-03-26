@@ -1,6 +1,6 @@
 {
   "name": "@quilltap/plugin-utils",
-  "version": "1.6.2",
+  "version": "1.7.0",
   "description": "Utility functions for Quilltap plugin development",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -31,6 +31,11 @@
       "import": "./dist/roleplay-templates/index.mjs",
       "require": "./dist/roleplay-templates/index.js"
     },
+    "./system-prompts": {
+      "types": "./dist/system-prompts/index.d.ts",
+      "import": "./dist/system-prompts/index.mjs",
+      "require": "./dist/system-prompts/index.js"
+    },
     "./host-rewrite": {
       "types": "./dist/host-rewrite.d.ts",
       "import": "./dist/host-rewrite.mjs",
@@ -49,7 +54,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@quilltap/plugin-types": "^1.17.3"
+    "@quilltap/plugin-types": "^1.18.0"
   },
   "peerDependencies": {
     "openai": "^4.0.0 || ^5.0.0 || ^6.0.0"

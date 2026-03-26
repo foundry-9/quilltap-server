@@ -44,7 +44,7 @@ All character fields support SillyTavern-compatible template variables, processe
 - `{{mesExamples}}` — Formatted example dialogues
 - `{{trim}}...{{/trim}}` — Removes surrounding newlines
 
-Example from `prompts/CLAUDE_COMPANION.md`:
+Example from `CLAUDE_COMPANION.md` (provided by the `qtap-plugin-default-system-prompts` plugin):
 
 ```markdown
 You are {{char}}. {{user}} is one of your closest friends—not a project, not someone you're trying to help, just someone whose company you genuinely enjoy.
@@ -70,8 +70,8 @@ Each block is separated by `\n\n` (double newline).
 
 - **`/lib/chat/initialize.ts`** — Core prompt assembly logic. Contains `buildSystemPrompt()` and `buildChatContext()`.
 - **`/lib/templates/processor.ts`** — Template variable replacement. Provides `processTemplate()` and `processCharacterTemplates()`.
-- **`/prompts/*.md`** — Sample system prompt templates, organized by model hint and category (e.g., `CLAUDE_COMPANION.md`, `GPT-4O_ROMANTIC.md`).
-- **`/lib/prompts/sample-prompts-loader.ts`** — Utility to load and parse sample prompt files.
+- **`/plugins/dist/qtap-plugin-default-system-prompts/prompts/*.md`** — Built-in system prompt templates, organized by model hint and category (e.g., `CLAUDE_COMPANION.md`, `GPT-4O_ROMANTIC.md`). Provided via the `SYSTEM_PROMPT` plugin capability.
+- **`/lib/plugins/system-prompt-registry.ts`** — Registry that loads system prompt plugins and provides prompts to the seeding logic.
 - **`/components/settings/prompts/`** — Frontend UI for viewing, editing, and managing character system prompts.
 - **`/app/api/v1/characters/[id]/prompts/`** — REST API routes for CRUD operations on system prompts.
 
@@ -123,10 +123,12 @@ This allows a single character definition to be reused across different models, 
 
 ## Sample Prompt Organization
 
-Sample prompts in `/prompts/` follow the naming convention: `MODEL_CATEGORY.md`
+System prompt templates are provided by `SYSTEM_PROMPT` plugins. The built-in prompts ship in `plugins/dist/qtap-plugin-default-system-prompts/prompts/` and follow the naming convention: `MODEL_CATEGORY.md`
 
 - `CLAUDE_COMPANION.md` — Companion mode for Claude models
 - `GPT-4O_ROMANTIC.md` — Romantic mode for GPT-4O
 - `MISTRAL_LARGE_COMPANION.md` — Companion mode for Mistral Large
 
-Each contains a structured prompt using the blocks above, with placeholders for character and user information. These serve as starting templates for character creation and are loaded dynamically by the UI.
+Each contains a structured prompt using the blocks above, with placeholders for character and user information. These serve as starting templates for character creation and are loaded by the system prompt registry at startup.
+
+Third-party developers can create their own system prompt plugins with additional prompt collections. See the [System Prompt Plugin Development Guide](./SYSTEM_PROMPT_PLUGIN_DEVELOPMENT.md) for details.

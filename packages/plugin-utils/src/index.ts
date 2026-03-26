@@ -116,6 +116,23 @@ export type {
 } from './roleplay-templates';
 
 // ============================================================================
+// System Prompt Utilities
+// ============================================================================
+
+export {
+  // Builder functions
+  createSystemPromptPlugin,
+
+  // Validation utilities
+  validateSystemPromptPlugin,
+} from './system-prompts';
+
+export type {
+  // Builder option types
+  CreateSystemPromptPluginOptions,
+} from './system-prompts';
+
+// ============================================================================
 // Built-in Tool Names
 // ============================================================================
 
@@ -156,4 +173,4 @@ export {
  * Version of the plugin-utils package.
  * Can be used at runtime to check compatibility.
  */
-export const PLUGIN_UTILS_VERSION = '1.6.1';
+export const PLUGIN_UTILS_VERSION = '1.7.0';

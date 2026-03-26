@@ -185,7 +185,8 @@
           "ROLEPLAY_TEMPLATE",
           "TOOL_PROVIDER",
           "SEARCH_PROVIDER",
-          "MODERATION_PROVIDER"
+          "MODERATION_PROVIDER",
+          "SYSTEM_PROMPT"
         ]
       }
     },
@@ -1122,6 +1123,34 @@
         "colors",
         "requiresApiKey",
         "requiresBaseUrl"
+      ],
+      "additionalProperties": false
+    },
+    "systemPromptConfig": {
+      "type": "object",
+      "properties": {
+        "promptCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "Number of system prompts provided"
+        },
+        "description": {
+          "description": "Description of the prompt collection",
+          "type": "string",
+          "maxLength": 500
+        },
+        "tags": {
+          "description": "Tags for categorization",
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "promptCount"
       ],
       "additionalProperties": false
     },

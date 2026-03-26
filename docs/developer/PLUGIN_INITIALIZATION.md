@@ -169,7 +169,14 @@ Core initialization logic that runs on the server.
    - Manifest schema validity
    - Version compatibility
    - Security permissions
-5. **Register** - Register provider plugins with provider registry
+5. **Register** - Register plugins with capability-specific registries:
+   - `LLM_PROVIDER` / `EMBEDDING_PROVIDER` → Provider Registry
+   - `THEME` → Theme Registry
+   - `ROLEPLAY_TEMPLATE` → Roleplay Template Registry
+   - `TOOL_PROVIDER` → Tool Registry
+   - `SEARCH_PROVIDER` → Search Provider Registry
+   - `MODERATION_PROVIDER` → Moderation Provider Registry
+   - `SYSTEM_PROMPT` → System Prompt Registry
 6. **Finalize** - Store validated plugins in registry
 
 **Note:** Data migrations run BEFORE this function is called, in `instrumentation.ts`. By the time plugin initialization runs, all data is guaranteed to be in the correct format.

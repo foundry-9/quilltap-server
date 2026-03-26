@@ -152,6 +152,7 @@ The manifest is validated at runtime using Zod schemas. Invalid manifests will p
   - `TOOL_PROVIDER` - LLM tools (e.g., curl, calculators)
   - `SEARCH_PROVIDER` - Web search backend (e.g., Serper, Bing, DuckDuckGo)
   - `MODERATION_PROVIDER` - Content moderation (e.g., OpenAI moderation endpoint)
+  - `SYSTEM_PROMPT` - System prompt templates for characters
 
 **Example**:
 
@@ -265,6 +266,38 @@ Roleplay templates provide formatting instructions that are prepended to charact
 - Plugin-provided templates are treated as built-in (read-only) by users
 - Template IDs are derived from the plugin name: `qtap-plugin-template-xyz` → `plugin:xyz`
 - Multiple plugins can provide templates; they all appear in the template selection UI
+
+### `systemPromptConfig` (object, optional)
+
+For plugins with `SYSTEM_PROMPT` capability, this section provides metadata about the prompt collection. The actual prompt content is loaded from `.md` files in the plugin's `prompts/` directory at runtime.
+
+**Schema**:
+
+```json
+{
+  "systemPromptConfig": {
+    "promptCount": 10,
+    "description": "System prompts for Claude, GPT-4o, and other models",
+    "tags": ["companion", "romantic", "claude", "gpt"]
+  }
+}
+```
+
+**Fields**:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `promptCount` | number | Yes | Number of system prompts provided (min: 1) |
+| `description` | string | No | Short description of the collection (max 500 characters) |
+| `tags` | string[] | No | Optional categorization tags |
+
+**Notes**:
+- Prompt content lives in `.md` files, not in the manifest
+- Filenames are prompt names (e.g., `CLAUDE_COMPANION.md` → prompt name `CLAUDE_COMPANION`)
+- Prompts are identified as `pluginShortName/promptName` (e.g., `default-system-prompts/CLAUDE_COMPANION`)
+- See [System Prompt Plugin Development Guide](./SYSTEM_PROMPT_PLUGIN_DEVELOPMENT.md) for full details
+
+---
 
 ## Technical Details
 
@@ -648,6 +681,38 @@ Set this field explicitly to override the inferred value.
 }
 ```
 
+## Complete Example: System Prompt Plugin
+
+```json
+{
+  "name": "qtap-plugin-default-system-prompts",
+  "title": "Default System Prompts",
+  "description": "Built-in system prompt templates for various LLM models and use cases",
+  "version": "1.0.0",
+  "author": {
+    "name": "Foundry-9 LLC",
+    "email": "charles.sebold@foundry-9.com"
+  },
+  "license": "MIT",
+  "main": "index.js",
+  "compatibility": {
+    "quilltapVersion": ">=2.5.0"
+  },
+  "capabilities": ["SYSTEM_PROMPT"],
+  "category": "TEMPLATE",
+  "enabledByDefault": true,
+  "status": "STABLE",
+  "keywords": ["system-prompt", "prompt", "template", "companion", "romantic"],
+  "systemPromptConfig": {
+    "promptCount": 10,
+    "description": "System prompts for Claude, GPT-4o, GPT-5, DeepSeek, and Mistral Large",
+    "tags": ["companion", "romantic", "claude", "gpt", "deepseek", "mistral"]
+  }
+}
+```
+
+---
+
 ## Validation
 
 Use the provided utilities to validate manifests:
@@ -673,3 +738,5 @@ if (result.success) {
 - [LLM Provider Guide](../plugins/LLM-PROVIDER-GUIDE.md)
 - [Plugin Initialization](./PLUGIN_INITIALIZATION.md)
 - [Plugin Manifest Schema](../public/schemas/plugin-manifest.schema.json)
+- [System Prompt Plugin Development](./SYSTEM_PROMPT_PLUGIN_DEVELOPMENT.md)
+- [Roleplay Template Plugin Development](./TEMPLATE_PLUGIN_DEVELOPMENT.md)
