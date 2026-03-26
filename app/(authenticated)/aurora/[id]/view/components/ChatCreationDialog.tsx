@@ -9,14 +9,23 @@ import type { TimestampConfig } from '@/lib/schemas/types'
 
 const CUSTOM_SCENARIO_VALUE = '__custom__'
 
+interface SystemPrompt {
+  id: string
+  name: string
+  content: string
+  isDefault: boolean
+}
+
 interface ChatCreationDialogProps {
   characterId: string
   characterName: string | undefined
   profiles: ConnectionProfile[]
   userControlledCharacters: UserControlledCharacter[]
+  systemPrompts?: SystemPrompt[]
   selectedProfileId: string
   selectedUserCharacterId: string
   selectedImageProfileId: string | null
+  selectedSystemPromptId: string | null
   scenario: string
   scenarios?: Array<{ id: string; title: string; content: string }>
   timestampConfig: TimestampConfig | null
@@ -25,6 +34,7 @@ interface ChatCreationDialogProps {
   onProfileChange: (profileId: string) => void
   onUserCharacterChange: (userCharacterId: string) => void
   onImageProfileChange: (profileId: string | null) => void
+  onSystemPromptChange: (promptId: string | null) => void
   onScenarioChange: (scenario: string) => void
   onScenarioIdChange?: (scenarioId: string | null) => void
   onTimestampConfigChange: (config: TimestampConfig) => void
@@ -37,9 +47,11 @@ export function ChatCreationDialog({
   characterName,
   profiles,
   userControlledCharacters,
+  systemPrompts,
   selectedProfileId,
   selectedUserCharacterId,
   selectedImageProfileId,
+  selectedSystemPromptId,
   scenario,
   scenarios,
   timestampConfig,
@@ -48,6 +60,7 @@ export function ChatCreationDialog({
   onProfileChange,
   onUserCharacterChange,
   onImageProfileChange,
+  onSystemPromptChange,
   onScenarioChange,
   onScenarioIdChange,
   onTimestampConfigChange,
@@ -107,6 +120,28 @@ export function ChatCreationDialog({
                   ))}
                 </select>
               </div>
+
+              {/* System Prompt Selection */}
+              {systemPrompts && systemPrompts.length > 1 && (
+                <div>
+                  <label htmlFor="systemPrompt" className="mb-2 block text-sm qt-text-primary">
+                    System Prompt
+                  </label>
+                  <select
+                    id="systemPrompt"
+                    value={selectedSystemPromptId || ''}
+                    onChange={(e) => onSystemPromptChange(e.target.value || null)}
+                    className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">Use Default</option>
+                    {systemPrompts.map((prompt) => (
+                      <option key={prompt.id} value={prompt.id}>
+                        {prompt.name}{prompt.isDefault ? ' (Default)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* User Character Selection */}
               {userControlledCharacters.length > 0 && (

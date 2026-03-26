@@ -43,6 +43,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   const [selectedImageProfileId, setSelectedImageProfileId] = useState<string | null>(null)
   const [scenario, setScenario] = useState<string>('')
   const [scenarioId, setScenarioId] = useState<string | null>(null)
+  const [selectedSystemPromptId, setSelectedSystemPromptId] = useState<string | null>(null)
   const [timestampConfig, setTimestampConfig] = useState<TimestampConfig | null>(null)
   const [openedFromQuery, setOpenedFromQuery] = useState(false)
   const [savingConnectionProfile, setSavingConnectionProfile] = useState(false)
@@ -142,6 +143,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
       selectedProfileId,
       selectedUserCharacterId,
       selectedImageProfileId,
+      selectedSystemPromptId: selectedSystemPromptId ?? undefined,
       scenario,
       scenarioId: scenarioId ?? undefined,
       timestampConfig,
@@ -328,9 +330,11 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           characterName={character?.name}
           profiles={profiles}
           userControlledCharacters={userControlledCharacters}
+          systemPrompts={character?.systemPrompts}
           selectedProfileId={selectedProfileId}
           selectedUserCharacterId={selectedUserCharacterId}
           selectedImageProfileId={selectedImageProfileId}
+          selectedSystemPromptId={selectedSystemPromptId}
           scenario={scenario}
           scenarios={character?.scenarios}
           timestampConfig={timestampConfig}
@@ -339,6 +343,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           onProfileChange={setSelectedProfileId}
           onUserCharacterChange={setSelectedUserCharacterId}
           onImageProfileChange={setSelectedImageProfileId}
+          onSystemPromptChange={setSelectedSystemPromptId}
           onScenarioChange={setScenario}
           onScenarioIdChange={setScenarioId}
           onTimestampConfigChange={setTimestampConfig}

@@ -13,6 +13,7 @@ interface UseChatCreationReturn {
     selectedProfileId: string
     selectedUserCharacterId: string
     selectedImageProfileId: string | null
+    selectedSystemPromptId?: string
     scenario: string
     scenarioId?: string
     timestampConfig?: TimestampConfig | null
@@ -29,6 +30,7 @@ export function useChatCreation(): UseChatCreationReturn {
     selectedProfileId: string
     selectedUserCharacterId: string
     selectedImageProfileId: string | null
+    selectedSystemPromptId?: string
     scenario: string
     scenarioId?: string
     timestampConfig?: TimestampConfig | null
@@ -39,6 +41,7 @@ export function useChatCreation(): UseChatCreationReturn {
       selectedProfileId,
       selectedUserCharacterId,
       selectedImageProfileId,
+      selectedSystemPromptId,
       scenario,
       scenarioId,
       timestampConfig,
@@ -58,6 +61,7 @@ export function useChatCreation(): UseChatCreationReturn {
           characterId,
           connectionProfileId: selectedProfileId,
           imageProfileId: selectedImageProfileId || undefined,
+          selectedSystemPromptId: selectedSystemPromptId || undefined,
         },
       ]
 

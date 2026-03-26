@@ -53,11 +53,13 @@ export interface ChatContext {
  * @param characterId - The AI-controlled character ID
  * @param userCharacterId - Optional user-controlled character ID (replaces personaId)
  * @param customScenario - Optional custom scenario override
+ * @param selectedSystemPromptId - Optional specific system prompt ID from the character's prompts array
  */
 export async function buildChatContext(
   characterId: string,
   userCharacterId?: string,
-  customScenario?: string
+  customScenario?: string,
+  selectedSystemPromptId?: string
 ): Promise<ChatContext> {
   const repos = getRepositories()
 
@@ -106,10 +108,11 @@ export async function buildChatContext(
     character,
     userCharacter: userCharacter || undefined,
     scenario: resolvedScenario,
+    selectedSystemPromptId,
   })
 
-  // Get the default system prompt content for template processing
-  const defaultSystemPrompt = getDefaultSystemPrompt(character)
+  // Get the system prompt content for template processing (selected or default)
+  const defaultSystemPrompt = getSelectedOrDefaultSystemPrompt(character, selectedSystemPromptId)
 
   // Process first message with templates
   // Note: processCharacterTemplates expects 'persona' shape for {{user}} template variable
@@ -141,17 +144,36 @@ function getDefaultSystemPrompt(character: Character): string {
   return defaultPrompt?.content || character.systemPrompts[0]?.content || ''
 }
 
+/**
+ * Get the selected system prompt content, falling back to the default
+ */
+function getSelectedOrDefaultSystemPrompt(character: Character, selectedSystemPromptId?: string): string {
+  if (selectedSystemPromptId && character.systemPrompts) {
+    const selected = character.systemPrompts.find(p => p.id === selectedSystemPromptId)
+    if (selected) {
+      return selected.content
+    }
+    logger.warn('[Chat Initialize] selectedSystemPromptId not found on character, falling back to default', {
+      characterId: character.id,
+      selectedSystemPromptId,
+    })
+  }
+  return getDefaultSystemPrompt(character)
+}
+
 function buildSystemPrompt({
   character,
   userCharacter,
   scenario,
+  selectedSystemPromptId,
 }: {
   character: Character
   userCharacter?: UserCharacter
   scenario?: string | null
+  selectedSystemPromptId?: string
 }): string {
-  // Get the default system prompt content
-  const systemPromptContent = getDefaultSystemPrompt(character)
+  // Get the selected or default system prompt content
+  const systemPromptContent = getSelectedOrDefaultSystemPrompt(character, selectedSystemPromptId)
 
   // Process all character templates with the current context
   // Note: processCharacterTemplates expects 'persona' shape for {{user}} template variable

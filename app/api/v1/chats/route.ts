@@ -52,6 +52,7 @@ const createParticipantSchema = z.object({
   connectionProfileId: z.uuid().optional(),
   imageProfileId: z.uuid().optional(), // Legacy: kept for backwards compatibility but ignored
   controlledBy: z.enum(['llm', 'user']).optional(),
+  selectedSystemPromptId: z.uuid().optional(),
 });
 
 const createChatSchema = z.object({
@@ -79,7 +80,7 @@ type BuildParticipantsResult =
   | {
       participants: Omit<ChatParticipantBaseInput, 'id' | 'createdAt' | 'updatedAt'>[];
       tags: Set<string>;
-      firstCharacter: { characterId: string; userCharacterId?: string };
+      firstCharacter: { characterId: string; userCharacterId?: string; selectedSystemPromptId?: string };
       firstImageProfileId: string | null;
     }
   | { error: string };
@@ -131,6 +132,7 @@ async function buildCharacterParticipant(
       controlledBy,
       connectionProfileId: isUserControlled ? null : data.connectionProfileId || null,
       imageProfileId: data.imageProfileId || null,
+      selectedSystemPromptId: data.selectedSystemPromptId || null,
       displayOrder,
       isActive: true,
     },
@@ -146,7 +148,7 @@ async function buildAllParticipants(
 ): Promise<BuildParticipantsResult> {
   const builtParticipants: Omit<ChatParticipantBaseInput, 'id' | 'createdAt' | 'updatedAt'>[] = [];
   const allTagIds = new Set<string>();
-  let firstLLMCharacter: { characterId: string; userCharacterId?: string } | null = null;
+  let firstLLMCharacter: { characterId: string; userCharacterId?: string; selectedSystemPromptId?: string } | null = null;
   let firstUserCharacterId: string | null = null;
   let firstImageProfileId: string | null = null;
 
@@ -170,7 +172,10 @@ async function buildAllParticipants(
 
     const isUserControlled = result.participant.controlledBy === 'user';
     if (!isUserControlled && !firstLLMCharacter && participantData.characterId) {
-      firstLLMCharacter = { characterId: participantData.characterId };
+      firstLLMCharacter = {
+        characterId: participantData.characterId,
+        selectedSystemPromptId: participantData.selectedSystemPromptId || undefined,
+      };
     }
 
     if (isUserControlled && !firstUserCharacterId && participantData.characterId) {
@@ -540,7 +545,8 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     const chatContext = await buildChatContext(
       buildResult.firstCharacter.characterId,
       buildResult.firstCharacter.userCharacterId,
-      resolvedScenario
+      resolvedScenario,
+      buildResult.firstCharacter.selectedSystemPromptId
     );
 
     const chatSettings = await repos.chatSettings.findByUserId(user.id);
