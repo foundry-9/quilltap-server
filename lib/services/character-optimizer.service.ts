@@ -78,7 +78,13 @@ export interface OptimizerOptions {
 // Constants
 // ============================================================================
 
-const SYSTEM_MESSAGE = `You are a character analysis assistant for Quilltap, a creative writing and roleplay platform. Your job is to analyze a character's accumulated memories and identify behavioral patterns that should be reflected in their configuration. Always respond with ONLY valid JSON — no markdown code fences, no explanations, no extra text.`;
+const SYSTEM_MESSAGE = `You are a character analysis assistant for Quilltap, a creative writing and roleplay platform. Your job is to analyze a character's accumulated memories and identify behavioral patterns that should be reflected in their configuration.
+
+Key concepts:
+- Characters can have MULTIPLE named scenarios. A scenario is a setting for a chat — it describes the environment, circumstances, and context in which an interaction takes place. Scenarios set the stage but do not fundamentally change the character's personality, voice, or behavior. Think of them as different locations or situations where the character might be encountered.
+- Characters can have MULTIPLE named system prompts. Each system prompt provides different instructions for how the AI should roleplay the character, potentially for different contexts or styles of interaction.
+
+Always respond with ONLY valid JSON — no markdown code fences, no explanations, no extra text.`;
 
 const MIN_REINFORCED_MEMORIES = 2;
 const MAX_MEMORIES_FOR_ANALYSIS = 30;
@@ -175,6 +181,7 @@ Focus on HOW the character acts, speaks, and relates to others — not just fact
 - Relationship dynamics
 - Behavioral quirks or consistent actions
 - Attitudes and worldview that emerge through interactions
+- Recurring settings or environments that might warrant new or updated scenarios (remember: a scenario describes the setting/environment of a chat, not a change in the character's personality)
 
 Respond with JSON:
 {
@@ -200,10 +207,13 @@ ${JSON.stringify(analysis, null, 2)}
 
 For each suggestion, specify exactly which field to modify and provide the complete new value for that field. Preserve the character's existing voice and style while incorporating the behavioral patterns.
 
+Important: A scenario is a setting for a chat — it describes the environment, location, circumstances, and context where an interaction takes place. Scenarios set the stage but should NOT fundamentally change the character's personality, voice, or core behavior. Think of a scenario as "where and when" rather than "who and how." Unless there is a specific reason tied to the environment (e.g., a character acts differently at work vs. at home), a scenario should not alter how the character speaks, thinks, or relates to others.
+
 Rules:
-- For system prompts, modify existing ones rather than proposing entirely new content
+- The character has MULTIPLE named scenarios (each with an ID and title) and MULTIPLE named system prompts (each with an ID and name). Review all of them in the character context before suggesting changes.
+- For scenarios: if updating an existing scenario, set subId to its ID and provide the updated content; if proposing a new scenario, omit subId and include a "title" field for the new scenario name. New scenarios should describe distinct settings or environments, not personality variations.
+- For system prompts: if updating an existing one, set subId to its ID; if proposing a new system prompt for a different interaction style or context, omit subId and include a "name" field for the new prompt name.
 - For text fields (description, personality, exampleDialogues), provide the complete new text
-- For scenarios: if updating an existing scenario, set subId to its ID and provide the updated content; if proposing a new scenario, omit subId and include a "title" field for the new scenario name
 - For talkativeness, provide a number between 0.1 and 1.0
 - Assign a significance score: 0.3+ = noticeable shift, 0.6+ = fundamental behavioral change
 - Include 1-3 memory excerpts that support each suggestion
@@ -216,6 +226,7 @@ Respond with JSON array:
     "subId": "ID of the specific scenario/system prompt/physical description/clothing record (only when updating an existing item)",
     "subName": "Name of the existing sub-item (only when updating an existing item)",
     "title": "Title for a new scenario (only when field is 'scenarios' and no subId is provided)",
+    "name": "Name for a new system prompt (only when field is 'systemPrompt' and no subId is provided)",
     "currentValue": "The current text of the field or scenario",
     "proposedValue": "The complete new text for the field or scenario",
     "rationale": "Why this change is suggested, referencing specific behavioral patterns",

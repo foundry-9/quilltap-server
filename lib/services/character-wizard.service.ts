@@ -117,12 +117,15 @@ Write as instructions for how the character behaves, not as a story.`,
 
   scenarios: `Generate 2-3 distinct scenarios for interactions with this character. Each scenario should have a short title and detailed content. Return as a JSON array: [{"title": "...", "content": "..."}]
 
+A scenario is a setting for a chat — it describes the environment, location, circumstances, and context in which an interaction with this character takes place. Scenarios set the stage but should NOT fundamentally change the character's personality, voice, or core behavior. Think of each scenario as a different "where and when" for encountering the character, not a different version of who they are.
+
 Each scenario should:
-- Describe a different setting or context for interactions
-- Include the typical environment
-- Include the relationship context
-- Include any ongoing situation or circumstances
-- Be written in present tense, setting the scene for roleplay`,
+- Describe a distinct setting, location, or situation where the character might be encountered
+- Include details about the physical environment and atmosphere
+- Include the relationship context between the character and the person they're interacting with
+- Include any ongoing circumstances or events relevant to that setting
+- Be written in present tense, setting the scene for roleplay
+- Focus on the environment and situation, not on changing how the character behaves (the character's personality remains consistent across scenarios unless the environment naturally warrants different behavior)`,
 
   exampleDialogues: `Write 2-3 example dialogue exchanges that demonstrate this character's voice and personality.
 
@@ -133,7 +136,9 @@ Format each exchange as:
 
 Show variety in the character's emotional range and speech patterns. Include *actions* and *expressions* in asterisks.`,
 
-  systemPrompt: `Write a system prompt that instructs an AI how to roleplay as this character. Include:
+  systemPrompt: `Write a system prompt that instructs an AI how to roleplay as this character. This will serve as the default system prompt (characters can have multiple named system prompts for different interaction styles, but this one should be a comprehensive general-purpose default).
+
+Include:
 - Core identity and self-perception
 - Speech patterns and vocabulary
 - Key behaviors and reactions
