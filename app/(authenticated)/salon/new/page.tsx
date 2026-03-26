@@ -37,6 +37,7 @@ interface Character {
     title: string
     content: string
   }>
+  defaultTimestampConfig?: TimestampConfig | null
 }
 
 interface ConnectionProfile {
@@ -214,6 +215,17 @@ export default function NewChatPage() {
     : null
 
   const showCustomTextarea = !singleCharacterScenarios || scenarioId === null
+
+  // When exactly one LLM character is selected, propagate their default timestamp config
+  useEffect(() => {
+    const llmCharacters = selectedCharacters.filter(sc => sc.controlledBy === 'llm')
+    if (llmCharacters.length === 1) {
+      const charTimestampConfig = llmCharacters[0].character.defaultTimestampConfig
+      if (charTimestampConfig) {
+        setTimestampConfig(charTimestampConfig)
+      }
+    }
+  }, [selectedCharacters])
 
   const handleScenarioSelectChange = (value: string) => {
     if (value === CUSTOM_SCENARIO_VALUE || value === '') {

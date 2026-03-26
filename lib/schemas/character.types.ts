@@ -13,6 +13,7 @@ import {
   TimestampSchema,
   JsonSchema,
 } from './common.types';
+import { TimestampConfigSchema } from './settings.types';
 
 // ============================================================================
 // CHARACTER SYSTEM PROMPTS
@@ -129,6 +130,9 @@ export const CharacterSchema = z.object({
 
   /** Default help tools enabled state for chats with this character (null = inherit from global, default disabled) */
   defaultHelpToolsEnabled: z.boolean().nullable().optional(),
+
+  /** Default timestamp configuration for chats with this character (null = use global default / disabled) */
+  defaultTimestampConfig: TimestampConfigSchema.nullable().optional(),
 
   // Relationships
   personaLinks: z.array(z.object({

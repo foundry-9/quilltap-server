@@ -1,5 +1,7 @@
 // TypeScript interfaces and types for character view page
 
+import type { TimestampConfig } from '@/lib/schemas/types'
+
 export interface Tag {
   id: string
   name: string
@@ -59,6 +61,7 @@ export interface Character {
   npc?: boolean
   defaultAgentModeEnabled?: boolean | null
   defaultHelpToolsEnabled?: boolean | null
+  defaultTimestampConfig?: TimestampConfig | null
   aliases?: string[]
   pronouns?: { subject: string; object: string; possessive: string } | null
   defaultImage?: {

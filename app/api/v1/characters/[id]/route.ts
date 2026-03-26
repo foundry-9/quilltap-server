@@ -30,6 +30,7 @@ import { exportSTCharacter, createSTCharacterPNG } from '@/lib/sillytavern/chara
 import { readImageBuffer } from '@/lib/images-v2';
 import { z } from 'zod';
 import { PronounsSchema } from '@/lib/schemas/character.types';
+import { TimestampConfigSchema } from '@/lib/schemas/settings.types';
 import type { Character } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { notFound, forbidden, badRequest, serverError, validationError } from '@/lib/api/responses';
@@ -78,6 +79,7 @@ const updateCharacterSchema = z.object({
   npc: z.boolean().optional(),
   defaultAgentModeEnabled: z.boolean().nullable().optional(),
   defaultHelpToolsEnabled: z.boolean().nullable().optional(),
+  defaultTimestampConfig: TimestampConfigSchema.nullable().optional(),
 });
 
 const avatarSchema = z.object({

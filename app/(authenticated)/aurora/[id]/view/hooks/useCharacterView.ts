@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { countTemplateReplacements, replaceWithTemplate } from '@/components/characters/TemplateHighlighter'
 import { USER_CONTROLLED_PROFILE_ID } from '@/lib/constants/character'
+import type { TimestampConfig } from '@/lib/schemas/types'
 import {
   Character,
   Tag,
@@ -33,6 +34,7 @@ interface UseCharacterViewReturn {
   togglingControlledBy: boolean
   savingAgentMode: boolean
   savingHelpTools: boolean
+  savingTimestampConfig: boolean
   fetchCharacter: () => Promise<void>
   fetchTags: () => Promise<void>
   fetchProfiles: () => Promise<void>
@@ -49,6 +51,7 @@ interface UseCharacterViewReturn {
   handleSaveImageProfile: (profileId: string | null) => Promise<void>
   handleSaveAgentMode: (enabled: boolean | null) => Promise<void>
   handleSaveHelpTools: (enabled: boolean | null) => Promise<void>
+  handleSaveTimestampConfig: (config: TimestampConfig | null) => Promise<void>
   handleToggleNpc: () => Promise<void>
   handleToggleFavorite: () => Promise<void>
   handleToggleControlledBy: () => Promise<void>
@@ -74,6 +77,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
   const [togglingControlledBy, setTogglingControlledBy] = useState(false)
   const [savingAgentMode, setSavingAgentMode] = useState(false)
   const [savingHelpTools, setSavingHelpTools] = useState(false)
+  const [savingTimestampConfig, setSavingTimestampConfig] = useState(false)
 
   // Get the default partner for template highlighting ({{user}} replacement)
   // This uses the new default conversation partner system instead of old personas
@@ -393,6 +397,33 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     }
   }
 
+  const handleSaveTimestampConfig = async (config: TimestampConfig | null) => {
+    setSavingTimestampConfig(true)
+    try {
+      const res = await fetch(`/api/v1/characters/${characterId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ defaultTimestampConfig: config }),
+      })
+      if (!res.ok) throw new Error('Failed to update timestamp config')
+
+      // Update local state
+      if (character) {
+        setCharacter({ ...character, defaultTimestampConfig: config })
+      }
+      const message = config && config.mode !== 'NONE'
+        ? 'Default timestamp settings updated'
+        : 'Default timestamp settings cleared'
+      showSuccessToast(message)
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to update timestamp config')
+      console.error('Failed to save timestamp config', { error: err instanceof Error ? err.message : String(err) })
+      await fetchCharacter() // Revert to server state
+    } finally {
+      setSavingTimestampConfig(false)
+    }
+  }
+
   const handleToggleNpc = async () => {
     if (!character) return
     setTogglingNpc(true)
@@ -475,6 +506,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     togglingControlledBy,
     savingAgentMode,
     savingHelpTools,
+    savingTimestampConfig,
     fetchCharacter,
     fetchTags,
     fetchProfiles,
@@ -491,6 +523,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     handleSaveImageProfile,
     handleSaveAgentMode,
     handleSaveHelpTools,
+    handleSaveTimestampConfig,
     handleToggleNpc,
     handleToggleFavorite,
     handleToggleControlledBy,

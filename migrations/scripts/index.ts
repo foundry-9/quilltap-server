@@ -127,6 +127,8 @@ import { migrateParticipantStatusFieldMigration } from './migrate-participant-st
 import { addSilentMessageFieldMigration } from './add-silent-message-field';
 // Convert character scenario string to scenarios array
 import { convertScenarioToScenariosMigration } from './convert-scenario-to-scenarios';
+// Add defaultTimestampConfig field to characters
+import { addCharacterTimestampConfigFieldMigration } from './add-character-timestamp-config-field';
 
 /**
  * All available migrations.
@@ -249,6 +251,8 @@ export const migrations: Migration[] = [
   addSilentMessageFieldMigration,
   // Convert character scenario string to scenarios array
   convertScenarioToScenariosMigration,
+  // Add defaultTimestampConfig field to characters
+  addCharacterTimestampConfigFieldMigration,
 ];
 
 export {
@@ -366,4 +370,6 @@ export {
   addSilentMessageFieldMigration,
   // Convert character scenario string to scenarios array
   convertScenarioToScenariosMigration,
+  // Add defaultTimestampConfig field to characters
+  addCharacterTimestampConfigFieldMigration,
 };

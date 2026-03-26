@@ -172,7 +172,8 @@ CREATE TABLE "characters" (
   "aliases" TEXT DEFAULT '[]',
   "pronouns" TEXT DEFAULT NULL,
   "clothingRecords" TEXT DEFAULT '[]',
-  "defaultHelpToolsEnabled" INTEGER DEFAULT NULL
+  "defaultHelpToolsEnabled" INTEGER DEFAULT NULL,
+  "defaultTimestampConfig" TEXT DEFAULT NULL
 );
 
 CREATE INDEX "idx_characters_createdAt" ON "characters" ("createdAt" DESC);

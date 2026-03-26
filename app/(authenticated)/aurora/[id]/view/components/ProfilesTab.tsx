@@ -2,8 +2,10 @@
 
 import Link from 'next/link'
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
+import { TimestampConfigCard } from '@/components/settings/chat-settings/components/TimestampConfigCard'
 import { Character, ConnectionProfile, UserControlledCharacter } from '../types'
 import { USER_CONTROLLED_PROFILE_ID } from '@/lib/constants/character'
+import type { TimestampConfig } from '@/lib/schemas/types'
 
 interface ProfilesTabProps {
   characterId: string
@@ -17,11 +19,13 @@ interface ProfilesTabProps {
   savingImageProfile?: boolean
   savingAgentMode?: boolean
   savingHelpTools?: boolean
+  savingTimestampConfig?: boolean
   onConnectionProfileChange: (profileId: string) => void
   onPartnerChange: (partnerId: string) => void
   onImageProfileChange: (profileId: string | null) => void
   onAgentModeChange: (enabled: boolean | null) => void
   onHelpToolsChange: (enabled: boolean | null) => void
+  onTimestampConfigChange: (config: TimestampConfig | null) => void
 }
 
 export function ProfilesTab({
@@ -36,11 +40,13 @@ export function ProfilesTab({
   savingImageProfile,
   savingAgentMode,
   savingHelpTools,
+  savingTimestampConfig,
   onConnectionProfileChange,
   onPartnerChange,
   onImageProfileChange,
   onAgentModeChange,
   onHelpToolsChange,
+  onTimestampConfigChange,
 }: ProfilesTabProps) {
   // Check if this character is user-controlled (disable partner selection if so)
   const isUserControlled = character?.controlledBy === 'user'
@@ -218,6 +224,32 @@ export function ProfilesTab({
             </div>
           )}
         </div>
+      </div>
+
+      {/* Default Timestamp Settings Section */}
+      <div className="character-section-card rounded-lg border border-border bg-card p-6">
+        <h2 className="text-lg font-semibold text-foreground mb-2">
+          Default Timestamp Settings
+        </h2>
+        <p className="qt-text-small mb-4">
+          Default timestamp injection settings for new chats with this character.
+          When this character is the only participant in a new chat, these settings will be pre-filled in the chat creation dialog.
+        </p>
+        <TimestampConfigCard
+          config={character?.defaultTimestampConfig}
+          onChange={(config) => {
+            // If mode is NONE, save as null to indicate "use global default"
+            onTimestampConfigChange(config.mode === 'NONE' ? null : config)
+          }}
+          compact={true}
+          disabled={savingTimestampConfig}
+        />
+        {savingTimestampConfig && (
+          <div className="mt-2 flex items-center gap-2 qt-text-small">
+            <div className="h-4 w-4 animate-spin rounded-full qt-spinner"></div>
+            Saving...
+          </div>
+        )}
       </div>
     </div>
   )

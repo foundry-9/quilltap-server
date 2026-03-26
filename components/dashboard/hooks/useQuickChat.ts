@@ -92,13 +92,18 @@ export function useQuickChat(): UseQuickChatReturn {
         })
       }
 
-      // Set default profile from character or first available
+      // Set default profile and timestamp config from character or first available
       if (characterRes.ok) {
         const { character } = await characterRes.json()
         if (character.defaultConnectionProfileId) {
           setSelectedProfileId(character.defaultConnectionProfileId)
         } else if (fetchedProfiles.length > 0) {
           setSelectedProfileId(fetchedProfiles[0].id)
+        }
+
+        // Initialize timestamp config from character's default if set
+        if (character.defaultTimestampConfig) {
+          setTimestampConfig(character.defaultTimestampConfig)
         }
       }
 

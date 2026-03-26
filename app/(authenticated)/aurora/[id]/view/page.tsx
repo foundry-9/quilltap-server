@@ -74,6 +74,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     handleSaveImageProfile,
     handleSaveAgentMode,
     handleSaveHelpTools,
+    handleSaveTimestampConfig,
     handleToggleNpc,
     handleToggleFavorite,
     handleToggleControlledBy,
@@ -82,6 +83,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     togglingControlledBy,
     savingAgentMode,
     savingHelpTools,
+    savingTimestampConfig,
   } = useCharacterView(id)
 
   const { creatingChat, handleCreateChat } = useChatCreation()
@@ -114,8 +116,13 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
       if (defaultPartnerId) {
         setSelectedUserCharacterId(defaultPartnerId)
       }
+
+      // Initialize timestamp config from character's default
+      if (character?.defaultTimestampConfig) {
+        setTimestampConfig(character.defaultTimestampConfig)
+      }
     }
-  }, [searchParams, character?.defaultConnectionProfileId, profiles, defaultPartnerId])
+  }, [searchParams, character?.defaultConnectionProfileId, character?.defaultTimestampConfig, profiles, defaultPartnerId])
 
   const handleStartChat = () => {
     if (character?.defaultConnectionProfileId) {
@@ -131,6 +138,13 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
       setSelectedUserCharacterId(defaultPartnerId)
     } else {
       setSelectedUserCharacterId('')
+    }
+
+    // Initialize timestamp config from character's default if set
+    if (character?.defaultTimestampConfig) {
+      setTimestampConfig(character.defaultTimestampConfig)
+    } else {
+      setTimestampConfig(null)
     }
 
     setShowChatDialog(true)
@@ -229,12 +243,14 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
             savingPartner={savingPartner}
             savingImageProfile={savingImageProfile}
             savingAgentMode={savingAgentMode}
+            savingTimestampConfig={savingTimestampConfig}
             onConnectionProfileChange={handleConnectionProfileSave}
             onPartnerChange={handlePartnerSave}
             onImageProfileChange={handleImageProfileSave}
             onAgentModeChange={handleSaveAgentMode}
             savingHelpTools={savingHelpTools}
             onHelpToolsChange={handleSaveHelpTools}
+            onTimestampConfigChange={handleSaveTimestampConfig}
           />
         )
 
