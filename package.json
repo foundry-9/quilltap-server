@@ -1,6 +1,6 @@
 {
   "name": "@foundry-9/quilltap",
-  "version": "3.3.0-dev.180",
+  "version": "3.3.0-dev.181",
   "private": true,
   "main": "dist-electron/main.js",
   "author": {
@@ -58,7 +58,8 @@
     "test:integration": "cross-env LOG_LEVEL=error jest --config jest.integration.config.ts",
     "test:unit": "cross-env LOG_LEVEL=error jest",
     "test:watch": "jest --watch",
-    "update:npm": "./scripts/upgrade-dependencies.sh"
+    "update:npm": "./scripts/upgrade-dependencies.sh",
+    "update:version": "./scripts/update-version.sh"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

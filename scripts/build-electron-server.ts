@@ -185,6 +185,48 @@ function cleanNodeModules(nodeModulesDir: string, label: string): void {
 
   cleanDir(nodeModulesDir);
 
+  // Strip files from bundled npm that cause macOS codesign failures:
+  // shell scripts, Python files, Windows-only files, and .bin directories
+  const npmDir = join(nodeModulesDir, 'npm');
+  if (existsSync(npmDir)) {
+    // Remove .bin directories (symlinks to executables that confuse codesign)
+    const npmBinDirs = [
+      join(npmDir, 'node_modules', '.bin'),
+    ];
+    for (const binDir of npmBinDirs) {
+      if (existsSync(binDir)) {
+        rmSync(binDir, { recursive: true, force: true });
+        console.log(`    Removed npm .bin directory: ${binDir}`);
+      }
+    }
+
+    // Remove node-gyp (large, contains Python/shell scripts, not needed for npm install of pure JS plugins)
+    const nodeGypDir = join(npmDir, 'node_modules', 'node-gyp');
+    if (existsSync(nodeGypDir)) {
+      rmSync(nodeGypDir, { recursive: true, force: true });
+      console.log(`    Removed node-gyp from bundled npm (not needed for plugin installation)`);
+    }
+
+    // Remove shell scripts, Python files, and Windows batch files from npm tree
+    const cleanNpmDir = (dir: string): void => {
+      if (!existsSync(dir)) return;
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const fullPath = join(dir, entry.name);
+        if (entry.isDirectory()) {
+          cleanNpmDir(fullPath);
+        } else if (entry.isFile()) {
+          const name = entry.name;
+          if (name.endsWith('.sh') || name.endsWith('.bat') || name.endsWith('.cmd') ||
+              name.endsWith('.ps1') || name.endsWith('.py') || name.endsWith('.exe')) {
+            rmSync(fullPath, { force: true });
+            removedFiles++;
+          }
+        }
+      }
+    };
+    cleanNpmDir(npmDir);
+  }
+
   // Remove build-time-only packages that Next.js traces but aren't needed at runtime.
   for (const pkg of BUILD_ONLY_PACKAGES) {
     const pkgPath = join(nodeModulesDir, pkg);
