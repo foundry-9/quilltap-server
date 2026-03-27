@@ -17,7 +17,6 @@ const nextConfig = {
     'zod',              // Used throughout the app
     'better-sqlite3',   // Native module for SQLite database
     'sharp',            // Native image processing (platform-specific binaries)
-    'npm',              // Bundled npm for plugin installation (devDep to avoid electron-builder conflicts)
   ],
 
   // Include dependencies in standalone output for Docker deployments
@@ -30,7 +29,6 @@ const nextConfig = {
       './node_modules/better-sqlite3/**/*',
       './node_modules/sharp/**/*',
       './node_modules/@img/**/*',
-      './node_modules/npm/**/*',   // devDep — must be explicitly traced for standalone/Electron
       './first-startup/**/*',
       './themes/bundled/**/*',
     ],

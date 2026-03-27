@@ -55,9 +55,6 @@ mac:
   icon: electron/resources/icon.icns
   signIgnore:
     - "lima/share/lima/lima-guestagent"
-    # npm and its dependencies contain shell scripts, Python files, and .cmd/.bat
-    # files that are not Mach-O binaries and cannot be code-signed
-    - "server/_modules/npm"
   extraResources:
     - from: lima/quilltap.yaml
       to: lima/quilltap.yaml

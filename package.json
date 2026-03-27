@@ -1,6 +1,6 @@
 {
   "name": "@foundry-9/quilltap",
-  "version": "3.3.0-dev.182",
+  "version": "3.3.0-dev.183",
   "private": true,
   "main": "dist-electron/main.js",
   "author": {
@@ -110,7 +110,6 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.19.15",
-    "npm": "^11.12.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@types/react-syntax-highlighter": "^15.5.13",
