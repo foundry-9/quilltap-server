@@ -1489,6 +1489,30 @@ ipcMain.handle('splash:delete-directory', async (_event, dirPath: string, action
   }
 });
 
+/** Erase the VM for a directory (stop + delete VM only, preserve config and data) */
+ipcMain.handle('splash:delete-vm', async (_event, dirPath: string): Promise<boolean> => {
+  console.log('[Main] Erase VM for directory:', dirPath);
+  try {
+    const tempVMManager = createVMManager();
+    tempVMManager.setDataDir(dirPath);
+    const vmStatus = await tempVMManager.checkStatus();
+    if (vmStatus.running) {
+      console.log('[Main] Stopping VM for directory:', dirPath);
+      await tempVMManager.stopVM();
+    }
+    if (vmStatus.exists) {
+      console.log('[Main] Deleting VM for directory:', dirPath);
+      await tempVMManager.deleteVM();
+    }
+    // Refresh sizes so the UI shows "No VM" for this directory
+    sendDirectoryInfo();
+    return true;
+  } catch (err) {
+    console.error('[Main] Error erasing VM:', err);
+    return false;
+  }
+});
+
 /** User chose a directory and clicked Start */
 ipcMain.on('splash:start', (_event, dirPath: string) => {
   console.log('[Main] Starting with directory:', dirPath);

@@ -42,6 +42,12 @@ const deleteConfigOnlyBtn = document.getElementById('deleteConfigOnlyBtn');
 const deleteConfigAndDataBtn = document.getElementById('deleteConfigAndDataBtn');
 const deleteCancelBtn = document.getElementById('deleteCancelBtn');
 
+// VM erase confirmation elements
+const vmEraseOverlay = document.getElementById('vmEraseOverlay');
+const vmEraseDialogPath = document.getElementById('vmEraseDialogPath');
+const vmEraseConfirmBtn = document.getElementById('vmEraseConfirmBtn');
+const vmEraseCancelBtn = document.getElementById('vmEraseCancelBtn');
+
 /** Currently selected directory in the chooser */
 var selectedDir = '';
 
@@ -56,6 +62,9 @@ var pendingDeleteDir = '';
 
 /** Directory pending rename (path of the directory being renamed) */
 var pendingRenameDir = '';
+
+/** Directory pending VM erase */
+var pendingVMEraseDir = '';
 
 /** Phase descriptions shown to the user */
 var phaseMessages = {
@@ -152,6 +161,19 @@ function hideDeleteConfirmation() {
   deleteOverlay.classList.remove('visible');
 }
 
+/** Show the VM erase confirmation dialog */
+function showVMEraseConfirmation(dir) {
+  pendingVMEraseDir = dir;
+  vmEraseDialogPath.textContent = dir;
+  vmEraseOverlay.classList.add('visible');
+}
+
+/** Hide the VM erase confirmation dialog */
+function hideVMEraseConfirmation() {
+  pendingVMEraseDir = '';
+  vmEraseOverlay.classList.remove('visible');
+}
+
 /** Show the rename dialog for a directory */
 function showRenameDialog(dir) {
   pendingRenameDir = dir.path;
@@ -222,6 +244,20 @@ function renderDirectoryList(dirs, lastUsed, sizes) {
       showRenameDialog(dir);
     });
     item.appendChild(editBtn);
+
+    // VM erase button (only when VM mode is active and a VM exists)
+    var sizeInfo = sizes && sizes[dirPath];
+    if (currentRuntimeMode === 'vm' && sizeInfo && sizeInfo.vmSize >= 0) {
+      var vmEraseBtn = document.createElement('button');
+      vmEraseBtn.className = 'directory-item-vm-erase';
+      vmEraseBtn.textContent = '\u21BB'; // clockwise open circle arrow (reset)
+      vmEraseBtn.title = 'Erase VM...';
+      vmEraseBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        showVMEraseConfirmation(dirPath);
+      });
+      item.appendChild(vmEraseBtn);
+    }
 
     // Delete button
     var removeBtn = document.createElement('button');
@@ -444,6 +480,19 @@ deleteConfigAndDataBtn.addEventListener('click', async function() {
 /** Delete confirmation: cancel */
 deleteCancelBtn.addEventListener('click', function() {
   hideDeleteConfirmation();
+});
+
+/** VM erase confirmation: confirm */
+vmEraseConfirmBtn.addEventListener('click', async function() {
+  if (pendingVMEraseDir) {
+    await window.quilltap.deleteVM(pendingVMEraseDir);
+    hideVMEraseConfirmation();
+  }
+});
+
+/** VM erase confirmation: cancel */
+vmEraseCancelBtn.addEventListener('click', function() {
+  hideVMEraseConfirmation();
 });
 
 /** Rename: save */

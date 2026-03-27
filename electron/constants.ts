@@ -119,7 +119,7 @@ export const VM_STOP_TIMEOUT_S = 60;
 
 /** Splash window dimensions */
 export const SPLASH_WIDTH = 580;
-export const SPLASH_HEIGHT = 680;
+export const SPLASH_HEIGHT = 720;
 
 /** Main window dimensions */
 export const MAIN_WIDTH = 1200;

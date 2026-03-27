@@ -22,6 +22,9 @@ contextBridge.exposeInMainWorld('quilltap', {
   /** Delete a directory with confirmation action ('config-only' or 'config-and-data') */
   deleteDirectory: (dirPath: string, action: string): Promise<boolean> =>
     ipcRenderer.invoke('splash:delete-directory', dirPath, action),
+  /** Erase the VM for a directory (stops and deletes VM only, preserves config and data) */
+  deleteVM: (dirPath: string): Promise<boolean> =>
+    ipcRenderer.invoke('splash:delete-vm', dirPath),
   /** Rename a directory's display name */
   renameDirectory: (dirPath: string, newName: string): Promise<boolean> =>
     ipcRenderer.invoke('splash:rename-directory', dirPath, newName),

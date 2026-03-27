@@ -98,6 +98,21 @@
     </div>
   </div>
 
+  <!-- VM erase confirmation overlay -->
+  <div class="delete-overlay" id="vmEraseOverlay">
+    <div class="delete-dialog">
+      <div class="delete-dialog-title">Erase Virtual Machine</div>
+      <div class="delete-dialog-path" id="vmEraseDialogPath"></div>
+      <div class="delete-dialog-warning" style="color: #bbbbbb; margin-bottom: 12px;">
+        This will stop and delete the VM for this instance. Your data and configuration will be preserved. The VM will be recreated automatically on next launch.
+      </div>
+      <div class="delete-dialog-buttons">
+        <button class="btn btn-warning btn-sm" id="vmEraseConfirmBtn">Erase VM</button>
+        <button class="btn btn-secondary btn-sm" id="vmEraseCancelBtn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <script src="splash.js"></script>
 </body>
 </html>
