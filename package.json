@@ -1,6 +1,6 @@
 {
   "name": "@foundry-9/quilltap",
-  "version": "3.3.0-dev.178",
+  "version": "3.3.0-dev.180",
   "private": true,
   "main": "dist-electron/main.js",
   "author": {
@@ -78,6 +78,7 @@
     "jest-fetch-mock": "^3.0.3",
     "next": "^16.2.1",
     "node-fetch": "^3.3.2",
+    "npm": "^11.12.1",
     "openai": "^6.32.0",
     "pdf-parse": "^2.4.5",
     "pdfjs-dist": "^5.5.207",

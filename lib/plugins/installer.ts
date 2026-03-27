@@ -5,8 +5,6 @@
  * All plugins are installed site-wide.
  */
 
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs/promises';
 import { logger } from '@/lib/logger';
@@ -16,8 +14,7 @@ import { hotLoadProviderPlugin } from './provider-registry';
 import { hotLoadSearchProviderPlugin } from './search-provider-registry';
 import { hotLoadModerationProviderPlugin } from './moderation-provider-registry';
 import { getNpmPluginsDir } from '@/lib/paths';
-
-const execAsync = promisify(exec);
+import { runNpm } from './npm-runner';
 
 // ============================================================================
 // TYPES
@@ -169,13 +166,13 @@ export async function installPluginFromNpm(
       path.join(pluginDir, 'package.json'),
       JSON.stringify(wrapperPkg, null, 2)
     );
-    // Install the plugin from npm
-    const { stdout, stderr } = await execAsync(
-      `npm install ${packageName} --save --legacy-peer-deps`,
+    // Install the plugin using the locally-bundled npm
+    const { stdout, stderr } = await runNpm(
+      ['install', packageName, '--save', '--legacy-peer-deps'],
       {
         cwd: pluginDir,
         timeout: NPM_INSTALL_TIMEOUT,
-        env: { ...process.env, NODE_ENV: 'production' },
+        env: { NODE_ENV: 'production' },
       }
     );
     // Check for npm errors (warnings are ok)

@@ -5,12 +5,9 @@
  * Uses semver to determine if updates are breaking (major) or non-breaking (minor/patch).
  */
 
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import { logger } from '@/lib/logger';
 import { getInstalledPlugins, type InstalledPluginInfo } from './installer';
-
-const execAsync = promisify(exec);
+import { runNpm } from './npm-runner';
 
 // ============================================================================
 // TYPES
@@ -140,11 +137,11 @@ const NPM_TIMEOUT = 30000; // 30 seconds for npm queries
  */
 export async function getLatestVersion(packageName: string): Promise<string | null> {
   try {
-    const { stdout, stderr } = await execAsync(
-      `npm view ${packageName} version --json`,
+    const { stdout, stderr } = await runNpm(
+      ['view', packageName, 'version', '--json'],
       {
         timeout: NPM_TIMEOUT,
-        env: { ...process.env, NODE_ENV: 'production' },
+        env: { NODE_ENV: 'production' },
       }
     );
 
