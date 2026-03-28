@@ -7024,7 +7024,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ../../../node_modules/openai/version.mjs
-var VERSION = "6.32.0";
+var VERSION = "6.33.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -15821,6 +15821,10 @@ var Protocol = class {
     this._progressHandlers.clear();
     this._taskProgressTokens.clear();
     this._pendingDebouncedNotifications.clear();
+    for (const info of this._timeoutInfo.values()) {
+      clearTimeout(info.timeoutId);
+    }
+    this._timeoutInfo.clear();
     for (const controller of this._requestHandlerAbortControllers.values()) {
       controller.abort();
     }
@@ -15951,7 +15955,9 @@ var Protocol = class {
         await capturedTransport?.send(errorResponse);
       }
     }).catch((error) => this._onerror(new Error(`Failed to send response: ${error}`))).finally(() => {
-      this._requestHandlerAbortControllers.delete(request.id);
+      if (this._requestHandlerAbortControllers.get(request.id) === abortController) {
+        this._requestHandlerAbortControllers.delete(request.id);
+      }
     });
   }
   _onprogress(notification) {
@@ -17677,11 +17683,11 @@ var AUTHORIZATION_CODE_RESPONSE_TYPE = "code";
 var AUTHORIZATION_CODE_CHALLENGE_METHOD = "S256";
 function selectClientAuthMethod(clientInformation, supportedMethods) {
   const hasClientSecret = clientInformation.client_secret !== void 0;
-  if (supportedMethods.length === 0) {
-    return hasClientSecret ? "client_secret_post" : "none";
-  }
-  if ("token_endpoint_auth_method" in clientInformation && clientInformation.token_endpoint_auth_method && isClientAuthMethod(clientInformation.token_endpoint_auth_method) && supportedMethods.includes(clientInformation.token_endpoint_auth_method)) {
+  if ("token_endpoint_auth_method" in clientInformation && clientInformation.token_endpoint_auth_method && isClientAuthMethod(clientInformation.token_endpoint_auth_method) && (supportedMethods.length === 0 || supportedMethods.includes(clientInformation.token_endpoint_auth_method))) {
     return clientInformation.token_endpoint_auth_method;
+  }
+  if (supportedMethods.length === 0) {
+    return hasClientSecret ? "client_secret_basic" : "none";
   }
   if (hasClientSecret && supportedMethods.includes("client_secret_basic")) {
     return "client_secret_basic";
@@ -17793,6 +17799,7 @@ async function authInternal(provider, { serverUrl, authorizationCode, scope, res
     });
   }
   const resource = await selectResourceURL(serverUrl, provider, resourceMetadata);
+  const resolvedScope = scope || resourceMetadata?.scopes_supported?.join(" ") || provider.clientMetadata.scope;
   let clientInformation = await Promise.resolve(provider.clientInformation());
   if (!clientInformation) {
     if (authorizationCode !== void 0) {
@@ -17816,6 +17823,7 @@ async function authInternal(provider, { serverUrl, authorizationCode, scope, res
       const fullInformation = await registerClient(authorizationServerUrl, {
         metadata: metadata2,
         clientMetadata: provider.clientMetadata,
+        scope: resolvedScope,
         fetchFn
       });
       await provider.saveClientInformation(fullInformation);
@@ -17859,7 +17867,7 @@ async function authInternal(provider, { serverUrl, authorizationCode, scope, res
     clientInformation,
     state,
     redirectUrl: provider.redirectUrl,
-    scope: scope || resourceMetadata?.scopes_supported?.join(" ") || provider.clientMetadata.scope,
+    scope: resolvedScope,
     resource
   });
   await provider.saveCodeVerifier(codeVerifier);
@@ -18177,7 +18185,7 @@ async function fetchToken(provider, authorizationServerUrl, { metadata: metadata
     fetchFn
   });
 }
-async function registerClient(authorizationServerUrl, { metadata: metadata2, clientMetadata, fetchFn }) {
+async function registerClient(authorizationServerUrl, { metadata: metadata2, clientMetadata, scope, fetchFn }) {
   let registrationUrl;
   if (metadata2) {
     if (!metadata2.registration_endpoint) {
@@ -18192,7 +18200,10 @@ async function registerClient(authorizationServerUrl, { metadata: metadata2, cli
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify(clientMetadata)
+    body: JSON.stringify({
+      ...clientMetadata,
+      ...scope !== void 0 ? { scope } : {}
+    })
   });
   if (!response.ok) {
     throw await parseErrorResponse(response);

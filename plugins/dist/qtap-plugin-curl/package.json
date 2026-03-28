@@ -1,14 +1,14 @@
 {
   "name": "qtap-plugin-curl",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "HTTP request tool for LLMs",
   "main": "index.js",
   "scripts": {
     "build": "node esbuild.config.mjs"
   },
   "dependencies": {
-    "@quilltap/plugin-types": "^1.17.3",
-    "@quilltap/plugin-utils": "^1.6.1",
+    "@quilltap/plugin-types": "^1.18.0",
+    "@quilltap/plugin-utils": "^1.7.0",
     "html-to-text": "^9.0.5"
   },
   "devDependencies": {
