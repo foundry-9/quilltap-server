@@ -498,10 +498,16 @@ If accessing Quilltap on mobile:
 - Verify file integrity if downloading
 - Keep backups of critical files
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/files")`
+
 ## Related Topics
 
 - [File Management](files.md) — Browse and manage uploaded files
 - [Projects](projects.md) — Organize files by project
 - [Characters](characters.md) — Upload character profile pictures
 - [Chats](chats.md) — Attach files to messages
-- [The Forge > File Storage](file-storage-settings.md) — Configure storage location
+- [Data Directory](data-directory.md) — Configure storage location

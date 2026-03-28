@@ -198,7 +198,7 @@ export function formatMessagesForProvider(
  * @returns String to append to system prompt
  */
 export function buildMultiCharacterContextSection(
-  otherParticipants: Array<{ name: string; aliases?: string[]; pronouns?: { subject: string; object: string; possessive: string }; description?: string; type: 'CHARACTER' }>,
+  otherParticipants: Array<{ name: string; aliases?: string[]; pronouns?: { subject: string; object: string; possessive: string }; description?: string; type: 'CHARACTER'; status?: string }>,
   respondingCharacterName: string
 ): string {
   if (otherParticipants.length === 0) {
@@ -211,6 +211,13 @@ export function buildMultiCharacterContextSection(
     '',
   ]
 
+  // Status guide — always present so the LLM understands the participation model
+  lines.push('**Participant Status Guide:**')
+  lines.push('- **active**: Present and participating normally in the conversation')
+  lines.push('- **silent**: Present but observing silently — may think and act physically, but does not speak aloud')
+  lines.push('- **absent**: Away from the scene — cannot perceive what is happening')
+  lines.push('')
+
   for (const participant of otherParticipants) {
     const typeLabel = participant.type === 'CHARACTER' && participant.name.includes('User') ? '(the user)' : ''
     const aliasNote = participant.aliases && participant.aliases.length > 0
@@ -219,8 +226,9 @@ export function buildMultiCharacterContextSection(
     const pronounNote = participant.pronouns
       ? ` (pronouns: ${participant.pronouns.subject}/${participant.pronouns.object}/${participant.pronouns.possessive})`
       : ''
+    const statusNote = ` [${participant.status || 'active'}]`
     const description = participant.description ? ` - ${participant.description}` : ''
-    lines.push(`- **${participant.name}**${aliasNote}${pronounNote} ${typeLabel}${description}`)
+    lines.push(`- **${participant.name}**${aliasNote}${pronounNote}${statusNote} ${typeLabel}${description}`)
   }
 
   lines.push('')
@@ -298,59 +306,56 @@ export function normalizeContentBlockFormat(content: string): string {
 export function stripCharacterNamePrefix(content: string, characterName?: string, aliases?: string[]): string {
   if (!content) return content
 
-  // If we know the specific character name, build a specific pattern
-  // Otherwise, use a general pattern to match any [Name] prefix
   let result = content
 
-  // Pattern to match [Name] at the start, possibly across multiple lines
-  // Matches: [Name], [Name]\n, [Name] \n, [Name]\n\n, etc.
-  // The name can contain letters, numbers, spaces, and common punctuation
-  const generalPrefixPattern = /^\s*\[[^\]]+\]\s*/
+  // Build targeted patterns from the known character name and aliases.
+  // We ONLY strip brackets that contain the actual character name or alias,
+  // not arbitrary bracketed content — that would eat roleplay action tags
+  // like [*sighs*], status messages like [Whisper sent.], etc.
+  const namePatterns: RegExp[] = []
 
-  // If we have a specific character name, also build a specific pattern
-  // that's more targeted (case-insensitive)
-  let specificPattern: RegExp | null = null
   if (characterName) {
     const escapedName = characterName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    specificPattern = new RegExp(`^\\s*\\[${escapedName}\\]\\s*`, 'i')
+    namePatterns.push(new RegExp(`^\\s*\\[${escapedName}\\]\\s*`, 'i'))
+    // Also match "Name:" without brackets
+    namePatterns.push(new RegExp(`^\\s*${escapedName}\\s*:\\s*`, 'i'))
   }
 
-  // Keep stripping prefixes until we don't find any more
+  if (aliases && aliases.length > 0) {
+    for (const alias of aliases) {
+      const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      namePatterns.push(new RegExp(`^\\s*\\[${escapedAlias}\\]\\s*`, 'i'))
+      namePatterns.push(new RegExp(`^\\s*${escapedAlias}\\s*:\\s*`, 'i'))
+    }
+  }
+
+  // If we have no character name at all, fall back to a conservative general
+  // pattern that only matches short name-like content in brackets (1-3 words,
+  // letters/spaces/hyphens/apostrophes only — no punctuation or sentences)
+  if (namePatterns.length === 0) {
+    namePatterns.push(/^\s*\[[\p{L}\p{M}'\- ]{1,40}\]\s*/u)
+  }
+
+  // Keep stripping prefixes until we don't find any more.
   // This handles cases like "[Name]\n[Name]\n[Name]\n*content*"
   let previousLength = -1
   let iterations = 0
-  const MAX_ITERATIONS = 10 // Safety limit
+  const MAX_ITERATIONS = 10
 
   while (result.length !== previousLength && iterations < MAX_ITERATIONS) {
     previousLength = result.length
     iterations++
 
-    // Try specific pattern first (if available)
-    if (specificPattern && specificPattern.test(result)) {
-      result = result.replace(specificPattern, '')
-      continue
-    }
-
-    // Then try general pattern
-    if (generalPrefixPattern.test(result)) {
-      result = result.replace(generalPrefixPattern, '')
-      continue
-    }
-
-    // No more prefixes found
-    break
-  }
-
-  // Also strip alias-based prefixes
-  if (aliases && aliases.length > 0) {
-    for (const alias of aliases) {
-      const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      const aliasPattern = new RegExp(`^\\s*\\[${escapedAlias}\\]\\s*`, 'i')
-      while (aliasPattern.test(result) && iterations < MAX_ITERATIONS) {
-        result = result.replace(aliasPattern, '')
-        iterations++
+    let matched = false
+    for (const pattern of namePatterns) {
+      if (pattern.test(result)) {
+        result = result.replace(pattern, '')
+        matched = true
+        break
       }
     }
+
+    if (!matched) break
   }
 
   if (iterations > 1) {

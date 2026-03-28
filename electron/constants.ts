@@ -119,14 +119,14 @@ export const VM_STOP_TIMEOUT_S = 60;
 
 /** Splash window dimensions */
 export const SPLASH_WIDTH = 580;
-export const SPLASH_HEIGHT = 680;
+export const SPLASH_HEIGHT = 720;
 
 /** Main window dimensions */
 export const MAIN_WIDTH = 1200;
 export const MAIN_HEIGHT = 800;
 
 /** Docker image name on Docker Hub */
-export const DOCKER_IMAGE = 'csebold/quilltap';
+export const DOCKER_IMAGE = 'foundry9/quilltap';
 
 /** Port the Quilltap container listens on internally */
 export const DOCKER_CONTAINER_PORT = 3000;

@@ -6,7 +6,7 @@
  * Handles CRUD operations and advanced queries for Character entities.
  */
 
-import { Character, CharacterInput, CharacterSchema, PhysicalDescription, ClothingRecord, CharacterSystemPrompt } from '@/lib/schemas/types';
+import { Character, CharacterInput, CharacterSchema, PhysicalDescription, ClothingRecord, CharacterSystemPrompt, CharacterScenario } from '@/lib/schemas/types';
 import { TaggableBaseRepository, CreateOptions } from './base.repository';
 import { logger } from '@/lib/logger';
 import { TypedQueryFilter } from '../interfaces';
@@ -169,6 +169,7 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
           avatarOverrides: data.avatarOverrides ?? [],
           physicalDescriptions: data.physicalDescriptions ?? [],
           systemPrompts: data.systemPrompts ?? [],
+          scenarios: data.scenarios ?? [],
         } as Omit<Character, 'id' | 'createdAt' | 'updatedAt'>;
 
         const character = await this._create(characterData, options);
@@ -873,6 +874,152 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
         return character.systemPrompts || [];
       },
       'Error getting system prompts',
+      { characterId },
+      []
+    );
+  }
+
+  // ============================================================================
+  // SCENARIO OPERATIONS
+  // ============================================================================
+
+  /**
+   * Add a scenario to a character
+   * @param characterId The character ID
+   * @param data The scenario data (title and content)
+   * @returns Promise<CharacterScenario | null> The added scenario if successful, null if character not found
+   */
+  async addScenario(
+    characterId: string,
+    data: { title: string; content: string }
+  ): Promise<CharacterScenario | null> {
+    return this.safeQuery(
+      async () => {
+        const character = await this.findById(characterId);
+        if (!character) {
+          logger.warn('Character not found for scenario addition', { characterId });
+          return null;
+        }
+
+        const now = this.getCurrentTimestamp();
+        const scenario: CharacterScenario = {
+          id: this.generateId(),
+          title: data.title,
+          content: data.content,
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        const scenarios = character.scenarios || [];
+        scenarios.push(scenario);
+
+        await this.update(characterId, { scenarios });
+
+        logger.debug('Scenario added to character', { characterId, scenarioId: scenario.id, title: data.title });
+        return scenario;
+      },
+      'Error adding scenario',
+      { characterId, title: data.title }
+    );
+  }
+
+  /**
+   * Update a scenario on a character
+   * @param characterId The character ID
+   * @param scenarioId The scenario ID
+   * @param data Partial scenario data to update (title and/or content)
+   * @returns Promise<CharacterScenario | null> The updated scenario if found, null otherwise
+   */
+  async updateScenario(
+    characterId: string,
+    scenarioId: string,
+    data: { title?: string; content?: string }
+  ): Promise<CharacterScenario | null> {
+    return this.safeQuery(
+      async () => {
+        const character = await this.findById(characterId);
+        if (!character) {
+          logger.warn('Character not found for scenario update', { characterId });
+          return null;
+        }
+
+        const scenarios = character.scenarios || [];
+        const index = scenarios.findIndex(s => s.id === scenarioId);
+        if (index === -1) {
+          logger.warn('Scenario not found for update', { characterId, scenarioId });
+          return null;
+        }
+
+        const now = this.getCurrentTimestamp();
+        const updated: CharacterScenario = {
+          ...scenarios[index],
+          ...data,
+          id: scenarios[index].id,
+          createdAt: scenarios[index].createdAt,
+          updatedAt: now,
+        };
+
+        scenarios[index] = updated;
+        await this.update(characterId, { scenarios });
+
+        logger.debug('Scenario updated on character', { characterId, scenarioId });
+        return updated;
+      },
+      'Error updating scenario',
+      { characterId, scenarioId }
+    );
+  }
+
+  /**
+   * Remove a scenario from a character
+   * @param characterId The character ID
+   * @param scenarioId The scenario ID
+   * @returns Promise<boolean> True if scenario was removed, false if not found
+   */
+  async removeScenario(characterId: string, scenarioId: string): Promise<boolean> {
+    return this.safeQuery(
+      async () => {
+        const character = await this.findById(characterId);
+        if (!character) {
+          logger.warn('Character not found for scenario removal', { characterId });
+          return false;
+        }
+
+        const scenarios = character.scenarios || [];
+        const filtered = scenarios.filter(s => s.id !== scenarioId);
+
+        if (filtered.length === scenarios.length) {
+          logger.warn('Scenario not found for removal', { characterId, scenarioId });
+          return false;
+        }
+
+        await this.update(characterId, { scenarios: filtered });
+
+        logger.debug('Scenario removed from character', { characterId, scenarioId });
+        return true;
+      },
+      'Error removing scenario',
+      { characterId, scenarioId }
+    );
+  }
+
+  /**
+   * Get all scenarios for a character
+   * @param characterId The character ID
+   * @returns Promise<CharacterScenario[]> Array of all scenarios for the character
+   */
+  async getScenarios(characterId: string): Promise<CharacterScenario[]> {
+    return this.safeQuery(
+      async () => {
+        const character = await this.findById(characterId);
+        if (!character) {
+          logger.warn('Character not found for scenarios retrieval', { characterId });
+          return [];
+        }
+
+        return character.scenarios || [];
+      },
+      'Error getting scenarios',
       { characterId },
       []
     );

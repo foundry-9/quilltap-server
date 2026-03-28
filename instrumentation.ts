@@ -300,6 +300,31 @@ export async function register() {
       }
 
       // ================================================================
+      // PHASE 0.5: Version Guard (before migrations)
+      // ================================================================
+      // Prevents an older app version from running against a database
+      // that was touched by a newer version (which could have run
+      // schema-altering migrations).
+      {
+        const { checkVersionGuard } = await import('./lib/startup/version-guard');
+        const versionGuardResult = checkVersionGuard();
+
+        if (versionGuardResult.blocked) {
+          logger.error('Version guard: database was modified by a newer Quilltap version', {
+            context: 'instrumentation.register',
+            currentVersion: versionGuardResult.currentVersion,
+            highestVersion: versionGuardResult.highestVersion,
+          });
+          startupState.setVersionGuardBlock({
+            currentVersion: versionGuardResult.currentVersion,
+            highestVersion: versionGuardResult.highestVersion,
+          });
+          // Keep server alive for Electron UI but block all data access
+          return;
+        }
+      }
+
+      // ================================================================
       // PHASE 1: Run Migrations FIRST - before anything else
       // ================================================================
       // This ensures data compatibility before any API requests
@@ -335,6 +360,13 @@ export async function register() {
 
       // Mark migrations as complete
       startupState.markMigrationsComplete();
+
+      // Store current version in instance_settings so future older versions
+      // know not to touch this database
+      {
+        const { storeCurrentVersion } = await import('./lib/startup/version-guard');
+        storeCurrentVersion();
+      }
 
       // Clean up migration runner's database connection
       await migrationRunner.cleanup();

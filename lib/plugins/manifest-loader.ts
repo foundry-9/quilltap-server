@@ -11,7 +11,6 @@ import {
   PluginManifest,
   validatePluginManifest,
   safeValidatePluginManifest,
-  functionalityToCapabilities,
   type PluginCapability,
 } from '@/lib/schemas/plugin-manifest';
 import { isSitePluginEnabled } from './site-plugins';
@@ -55,6 +54,15 @@ export interface PluginScanResult {
 const PLUGINS_DIR = path.join(process.cwd(), 'plugins');
 const PLUGINS_DIST_DIR = path.join(process.cwd(), 'plugins', 'dist');
 const MANIFEST_FILENAME = 'manifest.json';
+
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Get the npm plugins directory path
@@ -107,13 +115,8 @@ function dirToPackageName(dirName: string): string {
  * @returns Version string or undefined if not found
  */
 async function getPackageVersion(pluginPath: string): Promise<string | undefined> {
-  try {
-    const packageJsonPath = path.join(pluginPath, 'package.json');
-    const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf-8'));
-    return packageJson.version;
-  } catch {
-    return undefined;
-  }
+  const packageJson = await readPackageJson(pluginPath);
+  return typeof packageJson?.version === 'string' ? packageJson.version : undefined;
 }
 
 /**
@@ -122,12 +125,23 @@ async function getPackageVersion(pluginPath: string): Promise<string | undefined
  * @returns Package name (may be scoped like @org/name) or undefined
  */
 async function getPackageName(pluginPath: string): Promise<string | undefined> {
+  const packageJson = await readPackageJson(pluginPath);
+  return typeof packageJson?.name === 'string' ? packageJson.name : undefined;
+}
+
+type PackageJsonShape = {
+  name?: string;
+  version?: string;
+  repository?: string | { url?: string };
+};
+
+async function readPackageJson(pluginPath: string): Promise<PackageJsonShape | null> {
   try {
     const packageJsonPath = path.join(pluginPath, 'package.json');
-    const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf-8'));
-    return packageJson.name;
+    const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf-8')) as PackageJsonShape;
+    return packageJson;
   } catch {
-    return undefined;
+    return null;
   }
 }
 
@@ -155,7 +169,10 @@ async function determinePluginSource(pluginPath: string): Promise<PluginSource> 
     await fs.access(packageJsonPath);
 
     // Read package.json to check for repository info
-    const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf-8'));
+    const packageJson = await readPackageJson(pluginPath);
+    if (!packageJson) {
+      return 'manual';
+    }
 
     // If it has a valid plugin name and version, likely from npm
     if (packageJson.name && isQuilltapPlugin(packageJson.name) && packageJson.version) {
@@ -281,7 +298,7 @@ export async function scanPlugins(
   const scanDirectory = async (dirPath: string, isNpmInstalled: boolean = false) => {
     try {
       // Check if directory exists, create only for standard directories
-      const dirExists = await fs.access(dirPath).then(() => true).catch(() => false);
+      const dirExists = await pathExists(dirPath);
       if (!dirExists) {
         // Only create site directory automatically
         if (dirPath === getPluginsNpmDir()) {
@@ -313,7 +330,7 @@ export async function scanPlugins(
         if (isNpmInstalled) {
           const npmPluginPath = path.join(pluginPath, 'node_modules', packageName);
           const npmManifestPath = path.join(npmPluginPath, MANIFEST_FILENAME);
-          const npmExists = await fs.access(npmManifestPath).then(() => true).catch(() => false);
+          const npmExists = await pathExists(npmManifestPath);
           if (npmExists) {
             pluginPath = npmPluginPath;
             manifestPath = npmManifestPath;
@@ -351,8 +368,10 @@ export async function scanPlugins(
 
         // Determine plugin source and get package info
         const source = await determinePluginSource(pluginPath);
-        const packageVersion = await getPackageVersion(pluginPath);
-        const npmPackageName = await getPackageName(pluginPath);
+        const [packageVersion, npmPackageName] = await Promise.all([
+          getPackageVersion(pluginPath),
+          getPackageName(pluginPath),
+        ]);
 
         result.plugins.push({
           manifest,
@@ -366,6 +385,11 @@ export async function scanPlugins(
         });
       }
     } catch (error) {
+      logger.warn('Failed to scan plugin directory', {
+        dirPath,
+        isNpmInstalled,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   };
 
@@ -411,7 +435,7 @@ export async function loadPlugin(
     if (isNpmInstalled) {
       const npmPluginPath = path.join(pluginPath, 'node_modules', pluginName);
       const npmManifestPath = path.join(npmPluginPath, MANIFEST_FILENAME);
-      const npmExists = await fs.access(npmManifestPath).then(() => true).catch(() => false);
+      const npmExists = await pathExists(npmManifestPath);
       if (npmExists) {
         pluginPath = npmPluginPath;
         manifestPath = npmManifestPath;

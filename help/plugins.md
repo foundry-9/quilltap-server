@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=system
+url: /settings?tab=system&section=plugins
 ---
 
 # Plugins
 
-> **[Open this page in Quilltap](/settings?tab=providers)**
+> **[Open this page in Quilltap](/settings?tab=system&section=plugins)**
 
 Plugins extend Quilltap's functionality by adding new features, themes, and capabilities. The Plugins tab is where you manage installed plugins, install new ones, and check for updates.
 
@@ -442,11 +442,21 @@ For local development or plugins not on NPM:
 
 ## Related Settings
 
-- **Appearance** — Theme plugins install here
-- **API Keys** — Credentials for plugins that need them
-- **Chat Tools** — Enable/disable tools per chat
-- **Connection Profiles** — If plugin adds new providers
-- **Roleplay Templates** — If plugin adds templates
+- [Appearance Settings](appearance-settings.md) — Theme plugins install here
+- [API Keys](api-keys-settings.md) — Credentials for plugins that need them
+- [Tools Usage](tools-usage.md) — Enable/disable tools per chat
+- [Connection Profiles](connection-profiles.md) — If plugin adds new providers
+- [Roleplay Templates](roleplay-templates.md) — If plugin adds templates
+
+## In-Chat Settings Access
+
+Characters with help tools enabled can read your system-level settings during a conversation using the `help_settings` tool with `category: "system"`. This returns your LLM logging configuration and timezone settings. For a broader picture of what is configured across all categories, the `help_settings` tool with `category: "overview"` provides a high-level summary. Ask a help-tools-enabled character something like "What are my system settings?" and it will have a look.
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=system&section=plugins")`
 
 ## Plugin Resources
 
@@ -461,7 +471,7 @@ For local development or plugins not on NPM:
 
 For developers interested in creating plugins:
 
-- See [PLUGIN_DEVELOPMENT.md](../docs/PLUGIN_MANIFEST.md)
-- See [PLUGIN_INITIALIZATION.md](../docs/PLUGIN_INITIALIZATION.md)
+- **Plugin Manifest Documentation**
+- **Plugin Initialization Documentation**
 - Review existing bundled plugins for examples
 - Join developer community for support

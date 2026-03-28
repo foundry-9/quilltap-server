@@ -202,7 +202,7 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
                       value={imageUrl}
                       onChange={(e) => setImageUrl(e.target.value)}
                       placeholder="https://example.com/image.jpg"
-                      className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                      className="qt-input"
                     />
                   </div>
                 )}

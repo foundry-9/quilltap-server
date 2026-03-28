@@ -89,6 +89,23 @@ Quilltap stores its database, files, and logs in a platform-specific directory:
 
 Override with `--data-dir` or the `QUILLTAP_DATA_DIR` environment variable.
 
+## Theme Management
+
+The CLI includes theme management commands:
+
+```bash
+quilltap themes list                    # List all installed themes
+quilltap themes install my.qtap-theme   # Install a .qtap-theme bundle
+quilltap themes validate my.qtap-theme  # Validate a bundle
+quilltap themes uninstall my-theme      # Uninstall a bundle theme
+quilltap themes export earl-grey        # Export any theme as a bundle
+quilltap themes create sunset           # Scaffold a new theme
+quilltap themes search "dark"           # Search registries
+quilltap themes update                  # Check for theme updates
+quilltap themes registry list           # List configured registries
+quilltap themes registry add <url>      # Add a registry source
+```
+
 ## Requirements
 
 - Node.js 18 or later
@@ -96,7 +113,7 @@ Override with `--data-dir` or the `QUILLTAP_DATA_DIR` environment variable.
 ## Other Ways to Run Quilltap
 
 - **Electron desktop app** (macOS, Windows) - [Download](https://github.com/foundry-9/quilltap/releases)
-- **Docker** - `docker run -d -p 3000:3000 -v /path/to/data:/app/quilltap csebold/quilltap`
+- **Docker** - `docker run -d -p 3000:3000 -v /path/to/data:/app/quilltap foundry9/quilltap`
 
 ## Links
 

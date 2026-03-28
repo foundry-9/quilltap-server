@@ -11,7 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
-import { withCollectionActionDispatch, getActionParam } from '@/lib/api/middleware/actions';
+import { withCollectionActionDispatch, getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { getUserRepositories } from '@/lib/repositories/factory';
 import { maskApiKey, encryptWithPassphrase, decryptWithPassphrase, signWithPassphrase, verifyWithPassphrase } from '@/lib/encryption';
 import { Provider } from '@/lib/schemas/types';
@@ -55,6 +55,9 @@ interface ImportFile {
 }
 
 type DuplicateHandling = 'skip' | 'replace' | 'rename';
+
+const API_KEYS_POST_ACTIONS = ['auto-associate', 'export', 'import', 'import-preview'] as const;
+type ApiKeysPostAction = typeof API_KEYS_POST_ACTIONS[number];
 
 /**
  * GET /api/v1/api-keys
@@ -556,17 +559,17 @@ async function handleImportPreview(req: NextRequest, user: { id: string }) {
 export const POST = createAuthenticatedHandler(async (req, { user }) => {
   const action = getActionParam(req);
 
-  switch (action) {
-    case 'auto-associate':
-      return handleAutoAssociate(req, user);
-    case 'export':
-      return handleExport(req, user);
-    case 'import':
-      return handleImport(req, user);
-    case 'import-preview':
-      return handleImportPreview(req, user);
-    default:
-      // No action = create new key
-      return handleCreate(req, user);
+  // No action or unknown action = create new key (existing behavior)
+  if (!action || !isValidAction(action, API_KEYS_POST_ACTIONS)) {
+    return handleCreate(req, user);
   }
+
+  const actionHandlers: Record<ApiKeysPostAction, () => Promise<NextResponse>> = {
+    'auto-associate': () => handleAutoAssociate(req, user),
+    export: () => handleExport(req, user),
+    import: () => handleImport(req, user),
+    'import-preview': () => handleImportPreview(req, user),
+  };
+
+  return actionHandlers[action]();
 });

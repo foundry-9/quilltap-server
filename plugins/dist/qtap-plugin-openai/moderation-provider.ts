@@ -11,6 +11,7 @@
 
 import {
   createPluginLogger,
+  getQuilltapUserAgent,
 } from '@quilltap/plugin-utils';
 
 import type {
@@ -73,6 +74,7 @@ export const moderationPlugin: ModerationProviderPlugin = {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
+        'User-Agent': getQuilltapUserAgent(),
       },
       body: JSON.stringify({ input: content }),
     });
@@ -123,6 +125,7 @@ export const moderationPlugin: ModerationProviderPlugin = {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': getQuilltapUserAgent(),
         },
         body: JSON.stringify({ input: 'test' }),
       });

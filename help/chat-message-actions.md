@@ -440,6 +440,12 @@ Check Settings for your configured shortcuts.
 - Try simpler edit
 - Refresh and try again
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/salon/:id")`
+
 ## Related Pages
 
 - [Chats Overview](chats.md) — Basic chat functionality

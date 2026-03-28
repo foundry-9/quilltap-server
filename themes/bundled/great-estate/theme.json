@@ -1,0 +1,65 @@
+{
+  "format": "qtap-theme",
+  "formatVersion": 1,
+  "id": "great-estate",
+  "name": "The Great Estate",
+  "description": "Warm gold and mahogany, like a manor house library at golden hour. Playfair Display serif headings with Inter sans-serif body text, carbon-fibre texture overlay, and a palette that whispers old money. Light mode is cream and vellum; dark mode is deep walnut and burnished gold.",
+  "version": "1.0.2",
+  "author": "Foundry-9 LLC",
+  "license": "MIT",
+  "supportsDarkMode": true,
+  "tags": [
+    "great-estate",
+    "gold",
+    "mahogany",
+    "warm",
+    "elegant",
+    "manor"
+  ],
+  "tokensPath": "tokens.json",
+  "stylesPath": "styles.css",
+  "fonts": [
+    {
+      "family": "Playfair Display",
+      "src": "fonts/PlayfairDisplay-Regular.woff2",
+      "weight": "400",
+      "style": "normal",
+      "display": "swap"
+    },
+    {
+      "family": "Playfair Display",
+      "src": "fonts/PlayfairDisplay-SemiBold.woff2",
+      "weight": "600",
+      "style": "normal",
+      "display": "swap"
+    },
+    {
+      "family": "Playfair Display",
+      "src": "fonts/PlayfairDisplay-Bold.woff2",
+      "weight": "700",
+      "style": "normal",
+      "display": "swap"
+    },
+    {
+      "family": "Inter",
+      "src": "fonts/Inter-Regular.woff2",
+      "weight": "400",
+      "style": "normal",
+      "display": "swap"
+    },
+    {
+      "family": "Inter",
+      "src": "fonts/Inter-SemiBold.woff2",
+      "weight": "600",
+      "style": "normal",
+      "display": "swap"
+    },
+    {
+      "family": "Inter",
+      "src": "fonts/Inter-Bold.woff2",
+      "weight": "700",
+      "style": "normal",
+      "display": "swap"
+    }
+  ]
+}

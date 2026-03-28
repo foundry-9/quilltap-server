@@ -55,11 +55,14 @@ This guide walks you through creating new characters in Quilltap, from simple ch
 - Their temperament and attitude
 - Examples: "Sarcastic but kind", "Serious and professional", "Playful and mischievous"
 
-**Scenario**
+**Scenarios**
 
-- The setting or situation where character exists
-- Context for conversations
-- Examples: "Tavern bartender in a fantasy world", "Office coworker in modern day", "Shipwreck survivor on desert island"
+- A collection of named scenes, each with a title and descriptive content
+- Each scenario sets the stage for a particular conversation context or campaign
+- A character may have any number of scenarios — or none at all, if they prefer to remain contextually mysterious
+- The active scenario provides context to the AI during conversation
+- Examples of scenario titles: "The Brass Lantern Tavern", "Aboard the *Perseverance*", "The Detective's Office, 1923"
+- When starting a new chat, you may select which scenario applies — or leave all scenarios to their own devices and let the character roam free of fixed context
 
 **First Message**
 
@@ -139,7 +142,7 @@ For a well-developed character:
    - Description: "Veteran space pirate with a hidden heart of gold..."
 3. **Fill personality details:**
    - Personality: "Bold, cunning, secretly honorable"
-   - Scenario: "Commanding a small crew on a merchant ship"
+   - Scenarios: Add one titled "Commanding the *Rattlesnake*" — "Aboard a fast merchant vessel with a crew of six and secrets in the hold"
 4. **Add conversation starters:**
    - First Message: "Well, what brings you aboard me ship?"
    - Example Dialogues:
@@ -181,7 +184,7 @@ If you want AI to generate content:
      - ☐ Name (if not provided)
      - ☐ Title
      - ☐ Personality
-     - ☐ Scenario
+     - ☐ Scenarios
      - ☐ First Message
      - ☐ Example Dialogues
      - ☐ System Prompt
@@ -351,11 +354,13 @@ Use these as starting points for common character types:
 ```
 Name: [Detective Name]
 Title: Detective / Private Investigator
-Description: Seasoned detective with [X years] experience. 
+Description: Seasoned detective with [X years] experience.
 Personality traits include [traits]. Driven by [motivation].
 Personality: [Specific traits - suspicious, analytical, intuitive, etc.]
-Scenario: Working cases in [City/Setting]
-First Message: "Another case lands on my desk. You look like 
+Scenarios:
+  - "[City/Setting], [Year]": Working cases in the city, office hours
+  - "The Crime Scene": Called to an active investigation
+First Message: "Another case lands on my desk. You look like
 you've got something to tell me..."
 ```
 
@@ -366,7 +371,9 @@ Name: [Character Name]
 Title: [Race/Class, e.g., "Elf Ranger"]
 Description: [Character backstory in fantasy world]
 Personality: [Personality in context of fantasy setting]
-Scenario: [Quest/situation they're in]
+Scenarios:
+  - "[Location of Current Quest]": [Quest/situation they're in]
+  - "[Home Village or Base Camp]": At rest, between adventures
 First Message: "[Greeting in character, hinting at current situation]"
 Tags: Fantasy, [Faction/Group], [Role]
 ```
@@ -378,7 +385,9 @@ Name: [Character Name]
 Title: [Job/Role, e.g., "Coffee Shop Owner"]
 Description: [Who they are in modern setting]
 Personality: [Contemporary personality traits]
-Scenario: [Current life situation/setting]
+Scenarios:
+  - "[Workplace Name]": At work during regular hours
+  - "After Hours": [Current life situation outside of work]
 First Message: "[Natural modern greeting with personality]"
 Tags: Modern, [Workplace/Circle], [Type]
 ```
@@ -390,7 +399,9 @@ Name: [Character Name]
 Title: [Sci-Fi Role, e.g., "AI Assistant"]
 Description: [Sci-Fi background and context]
 Personality: [How they interact, AI quirks, etc.]
-Scenario: [Sci-Fi setting/situation]
+Scenarios:
+  - "Aboard the [Ship/Station Name]": [Default shipboard situation]
+  - "[Planet or Location]": [Planetside or mission scenario]
 First Message: "[Sci-Fi greeting showing character]"
 Tags: SciFi, [Setting/Faction], [Role]
 ```
@@ -446,9 +457,9 @@ tragedy that took her family. Seeks redemption through protecting others.
 
 ### Mistake 2: Conflicting Personality
 
-**Problem:** First message says character is shy, but personality is outgoing, scenario is bold pirate.
+**Problem:** First message says character is shy, but personality is outgoing, and their scenario casts them as a bold pirate.
 
-**Solution:** Ensure description, personality, scenario, and first message all align with consistent character.
+**Solution:** Ensure description, personality, scenarios, and first message all align with a consistent character.
 
 ### Mistake 3: System Prompt Too Long
 
@@ -528,11 +539,17 @@ Clothing records describe what your character wears in different situations. The
 
 Clothing records appear in the system prompt as a `## Clothing / Outfits` section and are included in image generation context.
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/aurora/new")`
+
 ## Related Topics
 
 - [Characters](characters.md) — Characters overview
 - [Editing Characters](character-editing.md) — Modifying characters
-- [AI Wizard](character-ai-wizard.md) — Using AI to generate content
+- [AI Wizard](ai-character-import.md) — Using AI to generate content
 - [System Prompts](character-system-prompts.md) — Advanced prompt configuration
 - [Character Organization](character-organization.md) — Tags and management
 - [Chats](chats.md) — Starting conversations with characters

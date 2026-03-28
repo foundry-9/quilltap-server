@@ -1,9 +1,9 @@
 {
-  "$schema": "../qtap-plugin-template/schemas/plugin-manifest.schema.json",
+  "$schema": "../../../public/schemas/plugin-manifest.schema.json",
   "name": "qtap-plugin-builtin-embeddings",
   "title": "Built-in Embeddings",
   "description": "Zero-dependency, offline TF-IDF embeddings with BM25 enhancement and Porter stemming - no API keys required",
-  "version": "1.0.2",
+  "version": "1.0.5",
   "author": {
     "name": "Foundry-9 LLC",
     "email": "charles.sebold@foundry-9.com",
@@ -14,7 +14,9 @@
     "quilltapVersion": ">=2.8.0",
     "nodeVersion": ">=18.0.0"
   },
-  "capabilities": ["EMBEDDING_PROVIDER"],
+  "capabilities": [
+    "EMBEDDING_PROVIDER"
+  ],
   "category": "PROVIDER",
   "main": "index.js",
   "typescript": true,
@@ -22,7 +24,15 @@
   "styling": "TAILWIND",
   "enabledByDefault": true,
   "status": "STABLE",
-  "keywords": ["embeddings", "tfidf", "bm25", "offline", "builtin", "local", "semantic-search"],
+  "keywords": [
+    "embeddings",
+    "tfidf",
+    "bm25",
+    "offline",
+    "builtin",
+    "local",
+    "semantic-search"
+  ],
   "providerConfig": {
     "providerName": "BUILTIN",
     "displayName": "Built-in (TF-IDF)",

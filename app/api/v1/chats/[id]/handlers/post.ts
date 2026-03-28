@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getActionParam } from '@/lib/api/middleware/actions';
+import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { notFound, badRequest } from '@/lib/api/responses';
 import {
   handleAddTag,
@@ -32,6 +32,32 @@ import {
 } from '../actions';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 
+const CHAT_POST_ACTIONS = [
+  'regenerate-title',
+  'add-tag',
+  'remove-tag',
+  'impersonate',
+  'stop-impersonate',
+  'set-active-speaker',
+  'turn',
+  'add-participant',
+  'update-participant',
+  'remove-participant',
+  'bulk-reattribute',
+  'set-avatar',
+  'remove-avatar',
+  'add-tool-result',
+  'queue-memories',
+  'update-tool-settings',
+  'rng',
+  'run-tool',
+  'toggle-agent-mode',
+  'regenerate-background',
+  'reclassify-danger',
+] as const;
+
+type ChatPostAction = typeof CHAT_POST_ACTIONS[number];
+
 /**
  * POST handler with action dispatch
  */
@@ -49,73 +75,33 @@ export async function handlePost(
     return notFound('Chat');
   }
 
-  switch (action) {
-    case 'regenerate-title':
-      return handleRegenerateTitle(chatId, chat, ctx);
-
-    case 'add-tag':
-      return handleAddTag(req, chatId, ctx);
-
-    case 'remove-tag':
-      return handleRemoveTag(req, chatId, ctx);
-
-    case 'impersonate':
-      return handleImpersonate(req, chatId, chat, ctx);
-
-    case 'stop-impersonate':
-      return handleStopImpersonate(req, chatId, chat, ctx);
-
-    case 'set-active-speaker':
-      return handleSetActiveSpeaker(req, chatId, chat, ctx);
-
-    case 'turn':
-      return handleTurnAction(req, chatId, chat, ctx);
-
-    case 'add-participant':
-      return handleAddParticipantAction(req, chatId, chat, ctx);
-
-    case 'update-participant':
-      return handleUpdateParticipantAction(req, chatId, ctx);
-
-    case 'remove-participant':
-      return handleRemoveParticipantAction(req, chatId, chat, ctx);
-
-    case 'bulk-reattribute':
-      return handleBulkReattribute(req, chatId, chat, ctx);
-
-    case 'set-avatar':
-      return handleSetAvatar(req, chatId, ctx);
-
-    case 'remove-avatar':
-      return handleRemoveAvatar(req, chatId, ctx);
-
-    case 'add-tool-result':
-      return handleAddToolResult(req, chatId, ctx);
-
-    case 'queue-memories':
-      return handleQueueMemories(req, chatId, chat, ctx);
-
-    case 'update-tool-settings':
-      return handleUpdateToolSettings(req, chatId, ctx);
-
-    case 'rng':
-      return handleRng(req, chatId, ctx);
-
-    case 'run-tool':
-      return handleRunTool(req, chatId, ctx);
-
-    case 'toggle-agent-mode':
-      return handleToggleAgentMode(req, chatId, ctx);
-
-    case 'regenerate-background':
-      return handleRegenerateBackground(chatId, chat, ctx);
-
-    case 'reclassify-danger':
-      return handleReclassifyDanger(chatId, chat, ctx);
-
-    default:
-      return badRequest(
-        `Unknown action: ${action}. Available actions: regenerate-title, add-tag, remove-tag, impersonate, stop-impersonate, set-active-speaker, turn, add-participant, update-participant, remove-participant, bulk-reattribute, get-avatars, set-avatar, remove-avatar, add-tool-result, queue-memories, update-tool-settings, rng, run-tool, toggle-agent-mode, regenerate-background, reclassify-danger`
-      );
+  if (!isValidAction(action, CHAT_POST_ACTIONS)) {
+    return badRequest(`Unknown action: ${action}. Available actions: ${CHAT_POST_ACTIONS.join(', ')}`);
   }
+
+  const actionHandlers: Record<ChatPostAction, () => Promise<NextResponse>> = {
+    'regenerate-title': () => handleRegenerateTitle(chatId, chat, ctx),
+    'add-tag': () => handleAddTag(req, chatId, ctx),
+    'remove-tag': () => handleRemoveTag(req, chatId, ctx),
+    impersonate: () => handleImpersonate(req, chatId, chat, ctx),
+    'stop-impersonate': () => handleStopImpersonate(req, chatId, chat, ctx),
+    'set-active-speaker': () => handleSetActiveSpeaker(req, chatId, chat, ctx),
+    turn: () => handleTurnAction(req, chatId, chat, ctx),
+    'add-participant': () => handleAddParticipantAction(req, chatId, chat, ctx),
+    'update-participant': () => handleUpdateParticipantAction(req, chatId, ctx),
+    'remove-participant': () => handleRemoveParticipantAction(req, chatId, chat, ctx),
+    'bulk-reattribute': () => handleBulkReattribute(req, chatId, chat, ctx),
+    'set-avatar': () => handleSetAvatar(req, chatId, ctx),
+    'remove-avatar': () => handleRemoveAvatar(req, chatId, ctx),
+    'add-tool-result': () => handleAddToolResult(req, chatId, ctx),
+    'queue-memories': () => handleQueueMemories(req, chatId, chat, ctx),
+    'update-tool-settings': () => handleUpdateToolSettings(req, chatId, ctx),
+    rng: () => handleRng(req, chatId, ctx),
+    'run-tool': () => handleRunTool(req, chatId, ctx),
+    'toggle-agent-mode': () => handleToggleAgentMode(req, chatId, ctx),
+    'regenerate-background': () => handleRegenerateBackground(chatId, chat, ctx),
+    'reclassify-danger': () => handleReclassifyDanger(chatId, chat, ctx),
+  };
+
+  return actionHandlers[action]();
 }

@@ -19,7 +19,7 @@ export type GeneratableField =
   | 'title'
   | 'description'
   | 'personality'
-  | 'scenario'
+  | 'scenarios'
   | 'exampleDialogues'
   | 'systemPrompt'
   | 'physicalDescription'
@@ -45,10 +45,31 @@ export interface GeneratedCharacterData {
   title?: string
   description?: string
   personality?: string
-  scenario?: string
+  scenarios?: Array<{ title: string; content: string }> | string  // string when LLM returns unparseable JSON
   exampleDialogues?: string
   systemPrompt?: string
   physicalDescription?: GeneratedPhysicalDescription
+}
+
+/**
+ * Normalize scenarios from GeneratedCharacterData — handles both parsed arrays
+ * and raw strings (returned when LLM JSON parsing fails in the wizard service).
+ */
+export function normalizeGeneratedScenarios(
+  scenarios: GeneratedCharacterData['scenarios']
+): Array<{ title: string; content: string }> {
+  if (!scenarios) return []
+  if (Array.isArray(scenarios)) return scenarios
+  // Try to parse raw string
+  try {
+    const stripped = scenarios.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+    const parsed = JSON.parse(stripped)
+    if (Array.isArray(parsed)) return parsed
+  } catch {
+    // Return as a single "Generated" scenario with the raw text as content
+    return [{ title: 'Generated', content: scenarios }]
+  }
+  return []
 }
 
 export interface AIWizardState {
@@ -102,7 +123,7 @@ export interface AIWizardRequest {
     title?: string
     description?: string
     personality?: string
-    scenario?: string
+    scenarios?: Array<{ id: string; title: string; content: string }>
     exampleDialogues?: string
     systemPrompt?: string
   }
@@ -133,7 +154,7 @@ export interface AIWizardModalProps {
     title?: string
     description?: string
     personality?: string
-    scenario?: string
+    scenarios?: Array<{ id: string; title: string; content: string }>
     exampleDialogues?: string
     systemPrompt?: string
   }
@@ -173,7 +194,7 @@ export interface FieldSelectionStepProps {
   availableFields: GeneratableField[]
   selectedFields: Set<GeneratableField>
   onFieldToggle: (field: GeneratableField) => void
-  currentData: Record<string, string | undefined>
+  currentData: Record<string, string | Array<unknown> | undefined>
   canGeneratePhysicalDescription: boolean
 }
 
@@ -195,7 +216,7 @@ export const FIELD_LABELS: Record<GeneratableField, string> = {
   title: 'Title',
   description: 'Description',
   personality: 'Personality',
-  scenario: 'Scenario',
+  scenarios: 'Scenarios',
   exampleDialogues: 'Example Dialogues',
   systemPrompt: 'System Prompt',
   physicalDescription: 'Physical Description',
@@ -206,7 +227,7 @@ export const FIELD_DESCRIPTIONS: Record<GeneratableField, string> = {
   title: 'A short epithet or title (e.g., "The Wanderer")',
   description: 'Character appearance, background, and key traits',
   personality: 'Personality traits and behavioral patterns',
-  scenario: 'Setting and context for conversations',
+  scenarios: 'Generate 2-3 named scenarios with distinct settings and contexts for interactions',
   exampleDialogues: 'Example conversations to guide AI responses',
   systemPrompt: 'Custom system instructions for AI roleplay',
   physicalDescription: 'Detailed physical description for image generation',

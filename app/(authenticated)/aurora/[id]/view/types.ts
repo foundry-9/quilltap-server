@@ -1,5 +1,7 @@
 // TypeScript interfaces and types for character view page
 
+import type { TimestampConfig } from '@/lib/schemas/types'
+
 export interface Tag {
   id: string
   name: string
@@ -33,13 +35,21 @@ export interface CharacterSystemPrompt {
   updatedAt: string
 }
 
+export interface CharacterScenario {
+  id: string
+  title: string
+  content: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface Character {
   id: string
   name: string
   title?: string | null
   description?: string | null
   personality?: string | null
-  scenario?: string | null
+  scenarios?: CharacterScenario[]
   firstMessage?: string | null
   exampleDialogues?: string | null
   systemPrompts?: CharacterSystemPrompt[]
@@ -50,6 +60,10 @@ export interface Character {
   isFavorite?: boolean
   npc?: boolean
   defaultAgentModeEnabled?: boolean | null
+  defaultHelpToolsEnabled?: boolean | null
+  defaultTimestampConfig?: TimestampConfig | null
+  defaultScenarioId?: string | null
+  defaultSystemPromptId?: string | null
   aliases?: string[]
   pronouns?: { subject: string; object: string; possessive: string } | null
   defaultImage?: {
@@ -63,7 +77,6 @@ export interface Character {
 export interface TemplateFields extends Record<string, string | null | undefined> {
   description?: string | null
   personality?: string | null
-  scenario?: string | null
   firstMessage?: string | null
   exampleDialogues?: string | null
   systemPrompt?: string | null

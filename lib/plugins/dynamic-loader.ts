@@ -55,6 +55,19 @@ const PEER_DEPENDENCIES = new Set([
   'react-dom',
 ]);
 
+function clearRequireCache(modulePath: string): void {
+  try {
+    const resolvedPath = dynamicRequire.resolve(modulePath);
+    delete dynamicRequire.cache[resolvedPath];
+  } catch {
+    // Module may not be in cache yet
+  }
+}
+
+function isExternalPluginPath(pluginPath: string): boolean {
+  return pluginPath.includes('node_modules') && !pluginPath.includes(join('plugins', 'dist'));
+}
+
 // ============================================================================
 // EXTERNAL MODULE LOADING
 // ============================================================================
@@ -97,11 +110,7 @@ export function loadExternalPluginModule(modulePath: string): unknown {
     }
   };
 
-  try {
-    delete dynamicRequire.cache[dynamicRequire.resolve(modulePath)];
-  } catch {
-    // Not in cache
-  }
+  clearRequireCache(modulePath);
 
   try {
     return dynamicRequire(modulePath);
@@ -139,19 +148,14 @@ export function loadPluginModule(pluginPath: string, manifest: PluginManifest): 
   }
 
   // External plugins have paths containing node_modules but not in plugins/dist
-  const isExternalPlugin = pluginPath.includes('node_modules') && !pluginPath.includes(join('plugins', 'dist'));
+  const isExternalPlugin = isExternalPluginPath(pluginPath);
 
   if (isExternalPlugin) {
     return loadExternalPluginModule(modulePath);
   }
 
   // Bundled plugin: clear require cache and load directly
-  try {
-    const resolvedPath = dynamicRequire.resolve(modulePath);
-    delete dynamicRequire.cache[resolvedPath];
-  } catch {
-    // Module may not be in cache yet, that's fine
-  }
+  clearRequireCache(modulePath);
   return dynamicRequire(modulePath);
 }
 

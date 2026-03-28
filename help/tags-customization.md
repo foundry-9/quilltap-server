@@ -4,7 +4,7 @@ url: /aurora
 
 # Tag Customization
 
-> **[Open this page in Quilltap](/settings?tab=appearance)**
+> **[Open this page in Quilltap](/settings?tab=appearance&section=tags)**
 
 The Tags customization tab in your Settings is where you control how tags look and function throughout Quilltap. Here you can customize every aspect of your tags' appearance and set up which tags are available for quick-hide.
 
@@ -279,3 +279,9 @@ For precise control:
 - Test on the devices you use most
 
 The Tags customization system is flexible—experiment to find a setup that works perfectly for your workflow!
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/aurora")`

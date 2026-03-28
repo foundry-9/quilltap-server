@@ -77,6 +77,12 @@ function buildContextSection(
   return sections.join('\n\n')
 }
 
+export interface GreetingResult {
+  content: string
+  /** True when the LLM consumed tokens but returned empty content — likely a content filter */
+  contentFilterDetected: boolean
+}
+
 /**
  * Ask the configured LLM to produce a short greeting that fits the character.
  */
@@ -92,7 +98,7 @@ export async function generateGreetingMessage({
   topP,
   participantMemories,
   projectContext,
-}: GreetingRequest): Promise<string> {
+}: GreetingRequest): Promise<GreetingResult> {
   const providerClient = await createLLMProvider(provider, baseUrl || undefined)
 
   // Build enhanced system prompt with context sections
@@ -122,19 +128,17 @@ export async function generateGreetingMessage({
     apiKey ?? ''
   )
 
-  // Debug log: LLM response
-
   const trimmedContent = (response.content || '').trim()
+  const contentFilterDetected = !trimmedContent && !!response.usage && response.usage.completionTokens > 0
 
-  // Warn if we got an empty response - likely content filtering
-  if (!trimmedContent && response.usage && response.usage.completionTokens > 0) {
+  if (contentFilterDetected) {
     logger.warn('[Greeting Generation] LLM returned empty content despite consuming tokens - likely content filter hit', {
       context: 'initial-greeting',
       provider,
       model: modelName,
       characterName,
-      promptTokens: response.usage.promptTokens,
-      completionTokens: response.usage.completionTokens,
+      promptTokens: response.usage!.promptTokens,
+      completionTokens: response.usage!.completionTokens,
       hadProjectContext: !!projectContext,
       memoryCount: participantMemories?.length || 0,
     })
@@ -149,5 +153,5 @@ export async function generateGreetingMessage({
     })
   }
 
-  return trimmedContent
+  return { content: trimmedContent, contentFilterDetected }
 }

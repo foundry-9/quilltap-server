@@ -23,6 +23,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createHash } from 'crypto';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { logger } from '@/lib/logger';
 import { badRequest, notFound, serverError } from '@/lib/api/responses';
 import { deleteAllUserData, previewDeleteAllUserData } from '@/lib/backup/restore-service';
@@ -37,6 +38,31 @@ import type { AIImportRequest, AIImportProgressEvent } from '@/lib/services/ai-i
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { getUserRepositories, getRepositories } from '@/lib/repositories/factory';
 import type { ExportEntityType } from '@/lib/export/types';
+
+const TOOLS_GET_ACTIONS = [
+  'tasks-queue',
+  'delete-data-preview',
+  'export-entities',
+  'export-preview',
+  'capabilities-report',
+  'capabilities-report-list',
+  'capabilities-report-get',
+  'memory-dedup-preview',
+] as const;
+type ToolsGetAction = typeof TOOLS_GET_ACTIONS[number];
+
+const TOOLS_POST_ACTIONS = [
+  'delete-data',
+  'tasks-queue',
+  'export',
+  'import-preview',
+  'import-execute',
+  'capabilities-report-generate',
+  'capabilities-report-delete',
+  'memory-dedup',
+  'ai-import-stream',
+] as const;
+type ToolsPostAction = typeof TOOLS_POST_ACTIONS[number];
 
 // ============================================================================
 // Helper Functions
@@ -334,7 +360,7 @@ async function handleExportEntities(req: NextRequest, context: any) {
   const { user } = context;
 
   try {
-    const { searchParams } = new URL(req.url);
+    const { searchParams } = req.nextUrl;
     const type = searchParams.get('type') as ExportEntityType | null;
 
     if (!type) {
@@ -453,7 +479,7 @@ async function handleExportPreview(req: NextRequest, context: any) {
   const { user } = context;
 
   try {
-    const { searchParams } = new URL(req.url);
+    const { searchParams } = req.nextUrl;
     const type = searchParams.get('type');
     const scope = searchParams.get('scope') || 'all';
     const selectedIdsParam = searchParams.get('selectedIds');
@@ -643,17 +669,17 @@ async function handleImportExecute(req: NextRequest, context: any) {
 
     const { conflictStrategy, importMemories, selectedIds } = options;
 
-    if (!conflictStrategy || !['skip', 'replace', 'duplicate'].includes(conflictStrategy)) {
+    if (!conflictStrategy || !['skip', 'replace', 'overwrite', 'duplicate'].includes(conflictStrategy)) {
       logger.warn('[System Tools v1] Import execute invalid conflict strategy', {
         userId: user.id,
         conflictStrategy,
       });
-      return badRequest('Invalid conflictStrategy. Must be one of: skip, replace, duplicate');
+      return badRequest('Invalid conflictStrategy. Must be one of: skip, replace, overwrite, duplicate');
     }
 
     const manifest = (exportData as Record<string, unknown>).manifest as Record<string, unknown>;
 
-    // Map 'replace' to 'overwrite' for the import service
+    // Map 'replace' to 'overwrite' for the import service (legacy compat)
     const mappedConflictStrategy: ConflictStrategy =
       conflictStrategy === 'replace' ? 'overwrite' : conflictStrategy as ConflictStrategy;
 
@@ -825,7 +851,7 @@ async function handleCapabilitiesReportGet(req: NextRequest, context: any) {
   const { user, repos } = context;
 
   try {
-    const { searchParams } = new URL(req.url);
+    const { searchParams } = req.nextUrl;
     const reportId = searchParams.get('reportId');
     const download = searchParams.get('download') === 'true';
 
@@ -924,7 +950,7 @@ async function handleMemoryDedupPreview(req: NextRequest, context: any) {
   const { user } = context;
 
   try {
-    const { searchParams } = new URL(req.url);
+    const { searchParams } = req.nextUrl;
     const thresholdParam = searchParams.get('threshold');
     const threshold = thresholdParam ? parseFloat(thresholdParam) : 0.80;
 
@@ -1066,61 +1092,48 @@ async function handleAIImportStream(req: NextRequest, context: any) {
 // ============================================================================
 
 export const GET = createAuthenticatedHandler(async (req: NextRequest, context) => {
-  const { searchParams } = new URL(req.url);
-  const action = searchParams.get('action');
+  const action = getActionParam(req);
 
-
-  switch (action) {
-    case 'tasks-queue':
-      return handleTasksQueue(req, context);
-    case 'delete-data-preview':
-      return handleDeleteDataPreview(req, context);
-    case 'export-entities':
-      return handleExportEntities(req, context);
-    case 'export-preview':
-      return handleExportPreview(req, context);
-    case 'capabilities-report':
-      return handleCapabilitiesReport(req, context);
-    case 'capabilities-report-list':
-      return handleCapabilitiesReportList(req, context);
-    case 'capabilities-report-get':
-      return handleCapabilitiesReportGet(req, context);
-    case 'memory-dedup-preview':
-      return handleMemoryDedupPreview(req, context);
-    default:
-      return badRequest(
-        `Unknown action: ${action}. Available GET actions: tasks-queue, delete-data-preview, export-entities, export-preview, capabilities-report, capabilities-report-list, capabilities-report-get, memory-dedup-preview`
-      );
+  if (!isValidAction(action, TOOLS_GET_ACTIONS)) {
+    return badRequest(
+      `Unknown action: ${action}. Available GET actions: ${TOOLS_GET_ACTIONS.join(', ')}`
+    );
   }
+
+  const actionHandlers: Record<ToolsGetAction, () => Promise<NextResponse>> = {
+    'tasks-queue': () => handleTasksQueue(req, context),
+    'delete-data-preview': () => handleDeleteDataPreview(req, context),
+    'export-entities': () => handleExportEntities(req, context),
+    'export-preview': () => handleExportPreview(req, context),
+    'capabilities-report': () => handleCapabilitiesReport(req, context),
+    'capabilities-report-list': () => handleCapabilitiesReportList(req, context),
+    'capabilities-report-get': () => handleCapabilitiesReportGet(req, context),
+    'memory-dedup-preview': () => handleMemoryDedupPreview(req, context),
+  };
+
+  return actionHandlers[action]();
 });
 
 export const POST = createAuthenticatedHandler(async (req: NextRequest, context) => {
-  const { searchParams } = new URL(req.url);
-  const action = searchParams.get('action');
+  const action = getActionParam(req);
 
-
-  switch (action) {
-    case 'delete-data':
-      return handleDeleteData(req, context);
-    case 'tasks-queue':
-      return handleTasksQueueControl(req, context);
-    case 'export':
-      return handleExport(req, context);
-    case 'import-preview':
-      return handleImportPreview(req, context);
-    case 'import-execute':
-      return handleImportExecute(req, context);
-    case 'capabilities-report-generate':
-      return handleCapabilitiesReportGenerate(req, context);
-    case 'capabilities-report-delete':
-      return handleCapabilitiesReportDelete(req, context);
-    case 'memory-dedup':
-      return handleMemoryDedup(req, context);
-    case 'ai-import-stream':
-      return handleAIImportStream(req, context);
-    default:
-      return badRequest(
-        `Unknown action: ${action}. Available POST actions: delete-data, tasks-queue, export, import-preview, import-execute, capabilities-report-generate, capabilities-report-delete, memory-dedup, ai-import-stream`
-      );
+  if (!isValidAction(action, TOOLS_POST_ACTIONS)) {
+    return badRequest(
+      `Unknown action: ${action}. Available POST actions: ${TOOLS_POST_ACTIONS.join(', ')}`
+    );
   }
+
+  const actionHandlers: Record<ToolsPostAction, () => Promise<NextResponse>> = {
+    'delete-data': () => handleDeleteData(req, context),
+    'tasks-queue': () => handleTasksQueueControl(req, context),
+    'export': () => handleExport(req, context),
+    'import-preview': () => handleImportPreview(req, context),
+    'import-execute': () => handleImportExecute(req, context),
+    'capabilities-report-generate': () => handleCapabilitiesReportGenerate(req, context),
+    'capabilities-report-delete': () => handleCapabilitiesReportDelete(req, context),
+    'memory-dedup': () => handleMemoryDedup(req, context),
+    'ai-import-stream': () => handleAIImportStream(req, context),
+  };
+
+  return actionHandlers[action]();
 });

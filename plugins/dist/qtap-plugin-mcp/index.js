@@ -7024,7 +7024,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ../../../node_modules/openai/version.mjs
-var VERSION = "6.26.0";
+var VERSION = "6.33.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -10002,7 +10002,7 @@ var Speech = class extends APIResource {
    * const speech = await client.audio.speech.create({
    *   input: 'input',
    *   model: 'string',
-   *   voice: 'ash',
+   *   voice: 'string',
    * });
    *
    * const content = await speech.blob();
@@ -13167,7 +13167,7 @@ var Videos = class extends APIResource {
    * Create a new video generation job from a prompt and optional reference assets.
    */
   create(body, options) {
-    return this._client.post("/videos", maybeMultipartFormRequestOptions({ body, ...options }, this._client));
+    return this._client.post("/videos", multipartFormRequestOptions({ body, ...options }, this._client));
   }
   /**
    * Fetch the latest metadata for a generated video.
@@ -13188,6 +13188,12 @@ var Videos = class extends APIResource {
     return this._client.delete(path`/videos/${videoID}`, options);
   }
   /**
+   * Create a character from an uploaded video.
+   */
+  createCharacter(body, options) {
+    return this._client.post("/videos/characters", multipartFormRequestOptions({ body, ...options }, this._client));
+  }
+  /**
    * Download the generated video bytes or a derived preview asset.
    *
    * Streams the rendered video content for the specified video job.
@@ -13199,6 +13205,25 @@ var Videos = class extends APIResource {
       headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
       __binaryResponse: true
     });
+  }
+  /**
+   * Create a new video generation job by editing a source video or existing
+   * generated video.
+   */
+  edit(body, options) {
+    return this._client.post("/videos/edits", multipartFormRequestOptions({ body, ...options }, this._client));
+  }
+  /**
+   * Create an extension of a completed video.
+   */
+  extend(body, options) {
+    return this._client.post("/videos/extensions", multipartFormRequestOptions({ body, ...options }, this._client));
+  }
+  /**
+   * Fetch a character.
+   */
+  getCharacter(characterID, options) {
+    return this._client.get(path`/videos/characters/${characterID}`, options);
   }
   /**
    * Create a remix of a completed video using a refreshed prompt.
@@ -13432,8 +13457,9 @@ var OpenAI = class {
     const baseURL = !__classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_baseURLOverridden).call(this) && defaultBaseURL || this.baseURL;
     const url2 = isAbsoluteURL(path2) ? new URL(path2) : new URL(baseURL + (baseURL.endsWith("/") && path2.startsWith("/") ? path2.slice(1) : path2));
     const defaultQuery = this.defaultQuery();
-    if (!isEmptyObj(defaultQuery)) {
-      query = { ...defaultQuery, ...query };
+    const pathQuery = Object.fromEntries(url2.searchParams);
+    if (!isEmptyObj(defaultQuery) || !isEmptyObj(pathQuery)) {
+      query = { ...pathQuery, ...defaultQuery, ...query };
     }
     if (typeof query === "object" && query && !Array.isArray(query)) {
       url2.search = this.stringifyQuery(query);
@@ -13833,7 +13859,8 @@ var BUILTIN_TOOL_NAMES = /* @__PURE__ */ new Set([
   "project_info",
   "file_management",
   "request_full_context",
-  "search_help"
+  "help_search",
+  "help_settings"
 ]);
 function getBuiltinToolNames() {
   return new Set(BUILTIN_TOOL_NAMES);
@@ -15794,6 +15821,10 @@ var Protocol = class {
     this._progressHandlers.clear();
     this._taskProgressTokens.clear();
     this._pendingDebouncedNotifications.clear();
+    for (const info of this._timeoutInfo.values()) {
+      clearTimeout(info.timeoutId);
+    }
+    this._timeoutInfo.clear();
     for (const controller of this._requestHandlerAbortControllers.values()) {
       controller.abort();
     }
@@ -15924,7 +15955,9 @@ var Protocol = class {
         await capturedTransport?.send(errorResponse);
       }
     }).catch((error) => this._onerror(new Error(`Failed to send response: ${error}`))).finally(() => {
-      this._requestHandlerAbortControllers.delete(request.id);
+      if (this._requestHandlerAbortControllers.get(request.id) === abortController) {
+        this._requestHandlerAbortControllers.delete(request.id);
+      }
     });
   }
   _onprogress(notification) {
@@ -17650,11 +17683,11 @@ var AUTHORIZATION_CODE_RESPONSE_TYPE = "code";
 var AUTHORIZATION_CODE_CHALLENGE_METHOD = "S256";
 function selectClientAuthMethod(clientInformation, supportedMethods) {
   const hasClientSecret = clientInformation.client_secret !== void 0;
-  if (supportedMethods.length === 0) {
-    return hasClientSecret ? "client_secret_post" : "none";
-  }
-  if ("token_endpoint_auth_method" in clientInformation && clientInformation.token_endpoint_auth_method && isClientAuthMethod(clientInformation.token_endpoint_auth_method) && supportedMethods.includes(clientInformation.token_endpoint_auth_method)) {
+  if ("token_endpoint_auth_method" in clientInformation && clientInformation.token_endpoint_auth_method && isClientAuthMethod(clientInformation.token_endpoint_auth_method) && (supportedMethods.length === 0 || supportedMethods.includes(clientInformation.token_endpoint_auth_method))) {
     return clientInformation.token_endpoint_auth_method;
+  }
+  if (supportedMethods.length === 0) {
+    return hasClientSecret ? "client_secret_basic" : "none";
   }
   if (hasClientSecret && supportedMethods.includes("client_secret_basic")) {
     return "client_secret_basic";
@@ -17766,6 +17799,7 @@ async function authInternal(provider, { serverUrl, authorizationCode, scope, res
     });
   }
   const resource = await selectResourceURL(serverUrl, provider, resourceMetadata);
+  const resolvedScope = scope || resourceMetadata?.scopes_supported?.join(" ") || provider.clientMetadata.scope;
   let clientInformation = await Promise.resolve(provider.clientInformation());
   if (!clientInformation) {
     if (authorizationCode !== void 0) {
@@ -17789,6 +17823,7 @@ async function authInternal(provider, { serverUrl, authorizationCode, scope, res
       const fullInformation = await registerClient(authorizationServerUrl, {
         metadata: metadata2,
         clientMetadata: provider.clientMetadata,
+        scope: resolvedScope,
         fetchFn
       });
       await provider.saveClientInformation(fullInformation);
@@ -17832,7 +17867,7 @@ async function authInternal(provider, { serverUrl, authorizationCode, scope, res
     clientInformation,
     state,
     redirectUrl: provider.redirectUrl,
-    scope: scope || resourceMetadata?.scopes_supported?.join(" ") || provider.clientMetadata.scope,
+    scope: resolvedScope,
     resource
   });
   await provider.saveCodeVerifier(codeVerifier);
@@ -18150,7 +18185,7 @@ async function fetchToken(provider, authorizationServerUrl, { metadata: metadata
     fetchFn
   });
 }
-async function registerClient(authorizationServerUrl, { metadata: metadata2, clientMetadata, fetchFn }) {
+async function registerClient(authorizationServerUrl, { metadata: metadata2, clientMetadata, scope, fetchFn }) {
   let registrationUrl;
   if (metadata2) {
     if (!metadata2.registration_endpoint) {
@@ -18165,7 +18200,10 @@ async function registerClient(authorizationServerUrl, { metadata: metadata2, cli
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify(clientMetadata)
+    body: JSON.stringify({
+      ...clientMetadata,
+      ...scope !== void 0 ? { scope } : {}
+    })
   });
   if (!response.ok) {
     throw await parseErrorResponse(response);
@@ -19631,6 +19669,26 @@ var MCPClient = class {
     return mcpResult;
   }
   /**
+   * Reconnect to the MCP server
+   *
+   * Disconnects, reconnects, and rediscovers tools. Used when the server
+   * session has gone stale (e.g., "Server not initialized" error from
+   * Streamable HTTP after server restart or session expiry).
+   */
+  async reconnect() {
+    clientLogger.info("Reconnecting to MCP server", {
+      serverId: this.config.name,
+      previousStatus: this.state.status
+    });
+    await this.disconnect();
+    await this.connect();
+    await this.discoverTools();
+    clientLogger.info("Successfully reconnected to MCP server", {
+      serverId: this.config.name,
+      toolCount: this.state.tools.length
+    });
+  }
+  /**
    * Disconnect from the MCP server
    */
   async disconnect() {
@@ -19908,9 +19966,48 @@ var MCPConnectionManager = class {
         executionTimeMs: Date.now() - startTime
       };
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes("Server not initialized") || errorMessage.includes("server not initialized")) {
+        managerLogger.info("MCP server session stale, attempting reconnect and retry", {
+          serverId,
+          toolName: mcpName,
+          error: errorMessage
+        });
+        try {
+          await client.reconnect();
+          await this.rebuildToolIndex();
+          const retryResult = await client.callTool(mcpName, args);
+          const retryContent = this.formatMCPContent(retryResult);
+          managerLogger.info("Tool call succeeded after reconnect", {
+            serverId,
+            toolName: mcpName
+          });
+          return {
+            success: !retryResult.isError,
+            content: retryContent,
+            error: retryResult.isError ? retryContent : void 0,
+            serverId,
+            originalToolName: mcpName,
+            executionTimeMs: Date.now() - startTime
+          };
+        } catch (reconnectError) {
+          managerLogger.error("Reconnect and retry failed", {
+            serverId,
+            toolName: mcpName,
+            error: reconnectError instanceof Error ? reconnectError.message : String(reconnectError)
+          });
+          return {
+            success: false,
+            error: `Reconnect failed after stale session: ${reconnectError instanceof Error ? reconnectError.message : String(reconnectError)}`,
+            serverId,
+            originalToolName: mcpName,
+            executionTimeMs: Date.now() - startTime
+          };
+        }
+      }
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: errorMessage,
         serverId,
         originalToolName: mcpName,
         executionTimeMs: Date.now() - startTime

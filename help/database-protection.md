@@ -36,6 +36,24 @@ You may also *remove* a passphrase entirely, should you decide that the convenie
 
 After changing your passphrase, the new passphrase will be required the next time Quilltap starts.
 
+### Auto-Lock (Idle Timer)
+
+For those who prefer their security to be proactive rather than merely passive — the sort of arrangement whereby the valet not only guards the strongbox but also locks it again should the master wander off for a cup of tea — Quilltap offers an **auto-lock** feature.
+
+When enabled, Quilltap monitors your activity (or, more precisely, the absence thereof). After a configurable number of minutes of idleness, it quietly closes the database connections, clears the encryption key from memory, and redirects you to a locked screen. One simply re-enters the passphrase, and the application resumes precisely where it left off, as though the interruption had never occurred.
+
+**To configure auto-lock:**
+
+1. Navigate to **Settings > Data & System > Auto-Lock** (or use the navigation tool below)
+2. Enable the "Automatically lock after idle period" toggle
+3. Set the desired number of minutes (default: 15, minimum: 1)
+
+**Important notes:**
+- Auto-lock requires a passphrase to be set — without one, there is nothing to lock behind
+- A warning notification appears approximately one minute before locking
+- Upon re-entering your passphrase, you are returned to the exact page you were on
+- If you are in the middle of an LLM conversation, the active stream will be interrupted — security, regrettably, does not wait for the end of a sentence
+
 ### Accessing the Database Directly
 
 Since the standard `sqlite3` CLI cannot open encrypted databases, Quilltap provides its own subcommand for direct database queries — useful for troubleshooting, migrations, and the occasional moment of diagnostic curiosity:
@@ -144,3 +162,9 @@ Quilltap has two independent backup systems:
 | **Location** | `data/backups/` | Downloaded to your computer |
 
 For the most complete protection, use both: let physical backups run automatically, and periodically create a manual backup via Backup & Restore.
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=system")`

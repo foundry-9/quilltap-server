@@ -5,8 +5,6 @@
  * All plugins are installed site-wide.
  */
 
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs/promises';
 import { logger } from '@/lib/logger';
@@ -16,8 +14,7 @@ import { hotLoadProviderPlugin } from './provider-registry';
 import { hotLoadSearchProviderPlugin } from './search-provider-registry';
 import { hotLoadModerationProviderPlugin } from './moderation-provider-registry';
 import { getNpmPluginsDir } from '@/lib/paths';
-
-const execAsync = promisify(exec);
+import { installPackageFromRegistry } from './registry-client';
 
 // ============================================================================
 // TYPES
@@ -75,7 +72,6 @@ function getPluginsNpmDir(): string {
 const UNSCOPED_PLUGIN_REGEX = /^qtap-plugin-[a-z0-9-]+$/;
 // Regex for scoped plugins: @org/qtap-plugin-*
 const SCOPED_PLUGIN_REGEX = /^@[a-z0-9-]+\/qtap-plugin-[a-z0-9-]+$/;
-const NPM_INSTALL_TIMEOUT = 120000; // 2 minutes
 
 /**
  * Check if a package name is a valid Quilltap plugin
@@ -158,34 +154,15 @@ export async function installPluginFromNpm(
     // Create directory structure
     await fs.mkdir(pluginDir, { recursive: true });
 
-    // Initialize wrapper package.json for npm install
-    const wrapperPkg = {
-      name: `${safeDirName}-wrapper`,
-      version: '1.0.0',
-      private: true,
-      dependencies: {},
-    };
-    await fs.writeFile(
-      path.join(pluginDir, 'package.json'),
-      JSON.stringify(wrapperPkg, null, 2)
-    );
-    // Install the plugin from npm
-    const { stdout, stderr } = await execAsync(
-      `npm install ${packageName} --save --legacy-peer-deps`,
-      {
-        cwd: pluginDir,
-        timeout: NPM_INSTALL_TIMEOUT,
-        env: { ...process.env, NODE_ENV: 'production' },
-      }
-    );
-    // Check for npm errors (warnings are ok)
-    if (stderr && stderr.includes('ERR!')) {
-      logger.error('npm install failed with error', {
+    // Install the plugin directly from the npm registry
+    const installResult = await installPackageFromRegistry(packageName, pluginDir);
+    if (!installResult.success) {
+      logger.error('Registry install failed', {
         context: 'PluginInstaller.installPluginFromNpm',
-        stderr,
+        error: installResult.error,
       });
       await fs.rm(pluginDir, { recursive: true, force: true });
-      return { success: false, error: `npm install failed: ${stderr.split('\n').find(l => l.includes('ERR!')) || stderr}` };
+      return { success: false, error: installResult.error || 'Installation from registry failed' };
     }
 
     // Locate the installed package

@@ -406,7 +406,7 @@ describe('First Message Context Builder', () => {
           personaId: null,
           connectionProfileId: null,
           imageProfileId: null,
-          systemPromptOverride: null,
+
           displayOrder: 0,
           isActive: true,
           hasHistoryAccess: true,
@@ -442,7 +442,7 @@ describe('First Message Context Builder', () => {
           personaId: null,
           connectionProfileId: null,
           imageProfileId: null,
-          systemPromptOverride: null,
+
           displayOrder: 0,
           isActive: true,
           hasHistoryAccess: true,
@@ -456,7 +456,7 @@ describe('First Message Context Builder', () => {
           personaId: null,
           connectionProfileId: null,
           imageProfileId: null,
-          systemPromptOverride: null,
+
           displayOrder: 1,
           isActive: true,
           hasHistoryAccess: true,
@@ -504,7 +504,7 @@ describe('First Message Context Builder', () => {
           personaId: 'persona-123',
           connectionProfileId: null,
           imageProfileId: null,
-          systemPromptOverride: null,
+
           displayOrder: 0,
           isActive: true,
           hasHistoryAccess: true,
@@ -530,7 +530,7 @@ describe('First Message Context Builder', () => {
           personaId: null,
           connectionProfileId: null,
           imageProfileId: null,
-          systemPromptOverride: null,
+
           displayOrder: 0,
           isActive: true,
           hasHistoryAccess: true,

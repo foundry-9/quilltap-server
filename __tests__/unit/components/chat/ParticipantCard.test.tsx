@@ -10,7 +10,6 @@
  * - Different states (active, inactive, speaking)
  * - Accessibility attributes
  * - Connection profile dropdown
- * - Expandable settings section
  * - Turn position badge (turnPosition + turnStatus)
  * - Stop button (turnStatus generating + onStopStreaming)
  * - Active toggle button (visible eye icon)
@@ -826,58 +825,6 @@ describe('ParticipantCard', () => {
     })
   })
 
-  describe('Expandable settings section', () => {
-    it('shows settings toggle when onSystemPromptOverrideChange provided', () => {
-      const props = createDefaultProps({
-        onSystemPromptOverrideChange: jest.fn(),
-      })
-      render(<ParticipantCard {...props} />)
-
-      expect(screen.getByLabelText('Show participant settings')).toBeInTheDocument()
-    })
-
-    it('does not show settings toggle when only onActiveChange provided', () => {
-      const props = createDefaultProps({
-        onActiveChange: jest.fn(),
-      })
-      render(<ParticipantCard {...props} />)
-
-      expect(screen.queryByLabelText(/participant settings/i)).not.toBeInTheDocument()
-    })
-
-    it('does not show settings toggle when neither callback provided', () => {
-      const props = createDefaultProps()
-      render(<ParticipantCard {...props} />)
-
-      expect(screen.queryByLabelText(/participant settings/i)).not.toBeInTheDocument()
-    })
-
-    it('expands settings section when toggle clicked', () => {
-      const props = createDefaultProps({
-        onSystemPromptOverrideChange: jest.fn(),
-      })
-      render(<ParticipantCard {...props} />)
-
-      fireEvent.click(screen.getByLabelText('Show participant settings'))
-
-      expect(screen.getByText('System Prompt Override')).toBeInTheDocument()
-      expect(screen.getByLabelText('Hide participant settings')).toBeInTheDocument()
-    })
-
-    it('collapses settings section when toggle clicked again', () => {
-      const props = createDefaultProps({
-        onSystemPromptOverrideChange: jest.fn(),
-      })
-      render(<ParticipantCard {...props} />)
-
-      fireEvent.click(screen.getByLabelText('Show participant settings'))
-      expect(screen.getByText('System Prompt Override')).toBeInTheDocument()
-
-      fireEvent.click(screen.getByLabelText('Hide participant settings'))
-      expect(screen.queryByText('System Prompt Override')).not.toBeInTheDocument()
-    })
-  })
-
   describe('Turn position badge', () => {
     it('shows position badge when turnPosition is provided', () => {
       const props = createDefaultProps({
@@ -1026,69 +973,83 @@ describe('ParticipantCard', () => {
     })
   })
 
-  describe('Active toggle button', () => {
-    it('shows eye icon button when onActiveChange provided', () => {
+  describe('Status dropdown', () => {
+    it('shows status dropdown when onStatusChange provided', () => {
+      const props = createDefaultProps({
+        onStatusChange: jest.fn(),
+      })
+      render(<ParticipantCard {...props} />)
+
+      const select = screen.getByLabelText('Participation status for Echo')
+      expect(select).toBeInTheDocument()
+      expect(select.tagName).toBe('SELECT')
+    })
+
+    it('shows status dropdown when only onActiveChange provided (legacy fallback)', () => {
       const props = createDefaultProps({
         onActiveChange: jest.fn(),
       })
       render(<ParticipantCard {...props} />)
 
-      const button = screen.getByTitle('Deactivate Echo')
-      expect(button).toBeInTheDocument()
-      expect(button).toHaveAttribute('data-active', 'true')
+      const select = screen.getByLabelText('Participation status for Echo')
+      expect(select).toBeInTheDocument()
     })
 
-    it('shows deactivate title when participant is active', () => {
+    it('shows active status when participant status is active', () => {
       const props = createDefaultProps({
-        onActiveChange: jest.fn(),
-        participant: createCharacterParticipant({ isActive: true }),
+        onStatusChange: jest.fn(),
+        participant: createCharacterParticipant({ status: 'active' }),
+      })
+      render(<ParticipantCard {...props} />) as HTMLSelectElement
+
+      const select = screen.getByLabelText('Participation status for Echo') as HTMLSelectElement
+      expect(select.value).toBe('active')
+    })
+
+    it('shows silent status when participant status is silent', () => {
+      const props = createDefaultProps({
+        onStatusChange: jest.fn(),
+        participant: createCharacterParticipant({ status: 'silent', isActive: true }),
       })
       render(<ParticipantCard {...props} />)
 
-      expect(screen.getByTitle('Deactivate Echo')).toBeInTheDocument()
+      const select = screen.getByLabelText('Participation status for Echo') as HTMLSelectElement
+      expect(select.value).toBe('silent')
     })
 
-    it('shows activate title when participant is inactive', () => {
+    it('calls onStatusChange when dropdown value changes', () => {
+      const onStatusChange = jest.fn()
       const props = createDefaultProps({
-        onActiveChange: jest.fn(),
-        participant: createCharacterParticipant({ isActive: false }),
+        onStatusChange,
+        participant: createCharacterParticipant({ status: 'active' }),
       })
       render(<ParticipantCard {...props} />)
 
-      expect(screen.getByTitle('Activate Echo')).toBeInTheDocument()
-      expect(screen.getByTitle('Activate Echo')).toHaveAttribute('data-active', 'false')
+      const select = screen.getByLabelText('Participation status for Echo')
+      fireEvent.change(select, { target: { value: 'silent' } })
+
+      expect(onStatusChange).toHaveBeenCalledWith('participant-char-1', 'silent')
     })
 
-    it('calls onActiveChange when clicked to deactivate', () => {
-      const onActiveChange = jest.fn()
+    it('calls onStatusChange with absent when selecting absent', () => {
+      const onStatusChange = jest.fn()
       const props = createDefaultProps({
-        onActiveChange,
-        participant: createCharacterParticipant({ isActive: true }),
+        onStatusChange,
+        participant: createCharacterParticipant({ status: 'active' }),
       })
       render(<ParticipantCard {...props} />)
 
-      fireEvent.click(screen.getByTitle('Deactivate Echo'))
-      expect(onActiveChange).toHaveBeenCalledWith('participant-char-1', false)
+      const select = screen.getByLabelText('Participation status for Echo')
+      fireEvent.change(select, { target: { value: 'absent' } })
+
+      expect(onStatusChange).toHaveBeenCalledWith('participant-char-1', 'absent')
     })
 
-    it('calls onActiveChange when clicked to activate', () => {
-      const onActiveChange = jest.fn()
-      const props = createDefaultProps({
-        onActiveChange,
-        participant: createCharacterParticipant({ isActive: false }),
-      })
-      render(<ParticipantCard {...props} />)
-
-      fireEvent.click(screen.getByTitle('Activate Echo'))
-      expect(onActiveChange).toHaveBeenCalledWith('participant-char-1', true)
-    })
-
-    it('does not show active toggle when onActiveChange not provided', () => {
+    it('does not show status dropdown when neither onStatusChange nor onActiveChange provided', () => {
       const props = createDefaultProps()
       render(<ParticipantCard {...props} />)
 
-      expect(screen.queryByTitle(/activate echo/i)).not.toBeInTheDocument()
-      expect(screen.queryByTitle(/deactivate echo/i)).not.toBeInTheDocument()
+      expect(screen.queryByLabelText(/participation status/i)).not.toBeInTheDocument()
     })
   })
 

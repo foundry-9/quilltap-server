@@ -340,3 +340,9 @@ Some templates include:
 8. **Keep learning** — Read template documentation to use them better
 
 The template system gives you fine-grained control over how your chats look and feel—use it to create the perfect environment for your creative work!
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/salon/:id")`

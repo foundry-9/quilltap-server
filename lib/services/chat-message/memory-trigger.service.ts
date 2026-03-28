@@ -11,7 +11,7 @@ import { checkAndGenerateSummaryIfNeeded } from '@/lib/chat/context-summary'
 import { createMemoryExtractionEvent } from '@/lib/services/system-events.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
-import { enqueueChatDangerClassification } from '@/lib/background-jobs/queue-service'
+import { enqueueChatDangerClassification, enqueueSceneStateTracking } from '@/lib/background-jobs/queue-service'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { Character, ConnectionProfile, ChatParticipantBase, MessageEvent, CheapLLMSettings } from '@/lib/schemas/types'
 import type { Pronouns } from '@/lib/schemas/character.types'
@@ -25,6 +25,7 @@ const logger = createServiceLogger('MemoryTriggerService')
 export interface MemoryChatSettings {
   cheapLLMSettings?: CheapLLMSettings
   dangerSettings?: DangerousContentSettings
+  isDangerousChat?: boolean
 }
 
 /**
@@ -76,6 +77,7 @@ export async function triggerMemoryExtraction(
       cheapLLMSettings: options.chatSettings.cheapLLMSettings,
       availableProfiles,
       dangerSettings: options.chatSettings.dangerSettings,
+      isDangerousChat: options.chatSettings.isDangerousChat,
     }, async (result) => {
       // Store memory debug logs in the assistant message if available
       if (result.debugLogs && result.debugLogs.length > 0 && options.sourceMessageId) {
@@ -151,6 +153,15 @@ export async function triggerInterCharacterMemory(
       .filter(msg => {
         return msg.role === 'ASSISTANT' && msg.participantId && msg.participantId !== options.characterParticipantId
       })
+      .filter(msg => {
+        // Skip whisper messages not involving this character
+        const targetIds = (msg as any).targetParticipantIds
+        if (targetIds && Array.isArray(targetIds) && targetIds.length > 0) {
+          // Only include if this character is the sender or target
+          return msg.participantId === options.characterParticipantId || targetIds.includes(options.characterParticipantId)
+        }
+        return true // Public message
+      })
       .slice(-5) // Look at last 5 assistant messages from others
 
     for (const otherMsg of otherCharacterMessages) {
@@ -181,6 +192,7 @@ export async function triggerInterCharacterMemory(
         cheapLLMSettings: options.chatSettings.cheapLLMSettings,
         availableProfiles,
         dangerSettings: options.chatSettings.dangerSettings,
+        isDangerousChat: options.chatSettings.isDangerousChat,
       })
     }
 
@@ -275,6 +287,7 @@ export async function triggerUserControlledCharacterMemory(
       cheapLLMSettings: options.chatSettings.cheapLLMSettings,
       availableProfiles,
       dangerSettings: options.chatSettings.dangerSettings,
+      isDangerousChat: options.chatSettings.isDangerousChat,
     }, async (result) => {
 
     })
@@ -378,5 +391,36 @@ export async function triggerChatDangerClassification(
 
   } catch (error) {
     logger.error('Failed to trigger chat danger classification', {}, error as Error)
+  }
+}
+
+/**
+ * Trigger scene state tracking after a chat turn
+ *
+ * Enqueues a background job to derive the current scene state
+ * (location, character actions, appearance, clothing) using the cheap LLM.
+ */
+export async function triggerSceneStateTracking(
+  repos: ReturnType<typeof getRepositories>,
+  options: {
+    chatId: string
+    userId: string
+    connectionProfile: ConnectionProfile
+    chatSettings: MemoryChatSettings
+    characterIds: string[]
+  }
+): Promise<void> {
+  try {
+    if (!options.chatSettings.cheapLLMSettings) {
+      return
+    }
+
+    await enqueueSceneStateTracking(options.userId, {
+      chatId: options.chatId,
+      characterIds: options.characterIds,
+      connectionProfileId: options.connectionProfile.id,
+    })
+  } catch (error) {
+    logger.error('Failed to trigger scene state tracking', {}, error as Error)
   }
 }

@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { showConfirmation } from '@/lib/alert'
 import { showErrorToast } from '@/lib/toast'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
-import { useSidebarData } from '@/components/providers/sidebar-data-provider'
 import { ImportWizard } from '@/components/import/import-wizard'
 import { ChatCard, type ChatCardData } from '@/components/chat/ChatCard'
 
@@ -112,7 +111,6 @@ export default function ChatsPage() {
   const [highlightedChatId, setHighlightedChatId] = useState<string | null>(null)
   const importedChatRef = useRef<HTMLDivElement>(null)
   const { shouldHideByIds, hideDangerousChats } = useQuickHide()
-  const { refreshSidebar } = useSidebarData()
 
   const visibleChats = useMemo(
     () => chats.filter(chat => {
@@ -208,8 +206,6 @@ export default function ChatsPage() {
       if (!res.ok) throw new Error('Failed to delete chat')
       setChats(chats.filter((c) => c.id !== id))
 
-      // Refresh sidebar to reflect deletion
-      refreshSidebar()
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to delete chat')
     }
@@ -223,12 +219,10 @@ export default function ChatsPage() {
     await fetchChats()
     // Also refetch characters in case new ones were created
     await fetchCharacters()
-    // Refresh sidebar to show new chat and any new characters
-    refreshSidebar()
     // Highlight the imported chat
     setHighlightedChatId(chatId)
     setImportDialogOpen(false)
-  }, [refreshSidebar])
+  }, [])
 
   if (loading) {
     return (

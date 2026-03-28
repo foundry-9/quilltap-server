@@ -9,7 +9,7 @@
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import type { GeneratableField, GenerationProgress, GeneratedCharacterData } from '../types'
-import { FIELD_LABELS } from '../types'
+import { FIELD_LABELS, normalizeGeneratedScenarios } from '../types'
 
 interface GenerationStepProps {
   generating: boolean
@@ -35,7 +35,7 @@ export function GenerationStep({
   // Check if generation is complete
   const isComplete = generatedData !== null && !generating
 
-  // Get content for a field
+  // Get content for a field (returns string for simple fields, null if empty)
   const getFieldContent = (field: GeneratableField): string | null => {
     if (!generatedData) return null
 
@@ -46,7 +46,16 @@ export function GenerationStep({
       return null
     }
 
-    return generatedData[field] || null
+    if (field === 'scenarios') {
+      const scenarios = normalizeGeneratedScenarios(generatedData.scenarios)
+      if (scenarios.length > 0) {
+        return scenarios.map((s) => `**${s.title}**\n${s.content}`).join('\n\n')
+      }
+      return null
+    }
+
+    const value = generatedData[field as keyof Omit<GeneratedCharacterData, 'scenarios' | 'physicalDescription'>]
+    return typeof value === 'string' ? value || null : null
   }
 
   // Render field preview
@@ -90,6 +99,20 @@ export function GenerationStep({
               </div>
             </div>
           )}
+        </div>
+      )
+    }
+
+    if (field === 'scenarios' && generatedData?.scenarios) {
+      const scenarios = normalizeGeneratedScenarios(generatedData.scenarios)
+      return (
+        <div className="mt-2 space-y-2">
+          {scenarios.map((s, idx) => (
+            <div key={idx} className="text-sm">
+              <strong className="text-foreground">{s.title}</strong>
+              <p className="text-muted-foreground mt-0.5 whitespace-pre-wrap">{s.content}</p>
+            </div>
+          ))}
         </div>
       )
     }

@@ -577,6 +577,12 @@ If you used the AI Wizard to generate system prompt:
 - Refine based on actual character behavior
 - Save refined version for future use
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/aurora/:id/edit")`
+
 ## Related Topics
 
 - [Character Creation](character-creation.md) — Creating characters with prompts

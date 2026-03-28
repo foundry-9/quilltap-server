@@ -70,7 +70,7 @@ function createSnippet(content: string, query: string, maxLength = 100): string 
 
 export const GET = createAuthenticatedHandler(async (req, context) => {
   try {
-    const { searchParams } = new URL(req.url);
+    const { searchParams } = req.nextUrl;
     const query = searchParams.get('q')?.trim();
     const typesParam = searchParams.get('types');
     const limitParam = searchParams.get('limit');

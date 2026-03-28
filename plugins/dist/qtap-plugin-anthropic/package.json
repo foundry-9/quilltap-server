@@ -1,6 +1,6 @@
 {
   "name": "qtap-plugin-anthropic",
-  "version": "1.0.16",
+  "version": "1.0.22",
   "description": "Anthropic provider plugin for Quilltap",
   "main": "index.js",
   "types": "index.d.ts",
@@ -11,10 +11,10 @@
     "clean": "rm -f index.js"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.78.0",
-    "@quilltap/plugin-utils": "^1.2.2"
+    "@anthropic-ai/sdk": "^0.79.0",
+    "@quilltap/plugin-utils": "^1.7.0"
   },
   "devDependencies": {
-    "esbuild": "^0.27.0"
+    "esbuild": "^0.27.4"
   }
 }

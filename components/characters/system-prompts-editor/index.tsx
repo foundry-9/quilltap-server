@@ -100,7 +100,6 @@ export function SystemPromptsEditor({
         isOpen={editor.showImportModal}
         loading={editor.loadingTemplates}
         templates={editor.templates}
-        samplePrompts={editor.samplePrompts}
         onClose={() => editor.setShowImportModal(false)}
         onImport={editor.handleImport}
       />

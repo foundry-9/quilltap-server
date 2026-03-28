@@ -150,7 +150,7 @@ When dangerous content handling is enabled (Detect Only or Auto-Route mode), cha
 - Works independently of tag-based hiding
 - Your preference is saved across sessions
 
-See [Dangerous Content Handling](/help/dangerous-content) for more information about how chats are classified.
+See [Dangerous Content Handling](dangerous-content.md) for more information about how chats are classified.
 
 ## Quick-Hide vs. Other Features
 
@@ -224,3 +224,9 @@ Your quick-hide settings are automatically saved:
 - Share your workspace with others without affecting their quick-hide preferences
 
 The quick-hide feature is essential for managing large character rosters and complex projects. Use it to keep your workspace organized and focused!
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/salon/:id")`

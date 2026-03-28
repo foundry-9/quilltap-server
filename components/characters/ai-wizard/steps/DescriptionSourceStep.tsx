@@ -311,7 +311,7 @@ export function DescriptionSourceStep({
 
           {/* Gallery Modal */}
           {showGallery && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="fixed inset-0 z-50 flex items-center justify-center qt-bg-overlay-caption">
               <div className="qt-dialog w-full max-w-4xl max-h-[80vh] m-4 flex flex-col">
                 <div className="qt-dialog-header flex justify-between items-center">
                   <h3 className="text-lg font-semibold">Select Image</h3>

@@ -1,11 +1,11 @@
 'use client'
 
-import { use, useEffect, useState, useRef, useCallback } from 'react'
+import { use, useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import ParticipantSidebar from '@/components/chat/ParticipantSidebar'
 import SpeakerSelector from '@/components/chat/SpeakerSelector'
 import type { EphemeralMessageData } from '@/components/chat/EphemeralMessage'
-import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toast'
 import { ChatCostSummary } from '@/components/chat/ChatCostSummary'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
@@ -49,6 +49,7 @@ import {
   ChatModals,
 } from './components'
 import LLMInspectorPanel from '@/components/chat/LLMInspectorPanel'
+import { WhisperDialog } from '@/components/chat/WhisperDialog'
 
 export default function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -58,7 +59,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const chatDataHook = useChatData(id)
   const { chat, messages, loading, error, chatSettings, swipeStates, chatPhotoCount, chatMemoryCount } = chatDataHook
   const { setChat, setMessages, setSwipeStates } = chatDataHook
-  const { fetchChat, fetchChatSettings, fetchChatPhotoCount, fetchChatMemoryCount, persistTurnState } = chatDataHook
+  const { fetchChat, fetchChatSettings, fetchChatPhotoCount, fetchChatMemoryCount } = chatDataHook
 
   // --- Story background ---
   const {
@@ -86,6 +87,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [respondingParticipantId, setRespondingParticipantId] = useState<string | null>(null)
   const [isPaused, setIsPaused] = useState(false)
   const [pendingToolResults, setPendingToolResults] = useState<PendingToolResult[]>([])
+  const [showAllWhispers, setShowAllWhispers] = useState(false)
+  const [whisperTarget, setWhisperTarget] = useState<{ participantId: string; name: string } | null>(null)
 
   // --- Refs ---
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -94,6 +97,48 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const hasRestoredTurnStateRef = useRef<boolean>(false)
   const triggerContinueModeRef = useRef<(participantId: string) => Promise<void>>(async () => {})
   const wasGeneratingRef = useRef(false)
+  const streamingRef = useRef(false)
+
+  // --- Whisper support ---
+  const participantNames = useMemo(() => {
+    const names: Record<string, string> = {}
+    if (chat?.participants) {
+      for (const p of chat.participants) {
+        if (p.character?.name) {
+          names[p.id] = p.character.name
+        } else if (p.persona?.name) {
+          names[p.id] = p.persona.name
+        }
+      }
+    }
+    return names
+  }, [chat?.participants])
+
+  const handleWhisper = useCallback((participantId: string) => {
+    const participant = chat?.participants.find(p => p.id === participantId)
+    const name = participant?.character?.name || participant?.persona?.name || 'Unknown'
+    setWhisperTarget({ participantId, name })
+  }, [chat?.participants])
+
+  const userParticipantIdSet = useMemo(() => {
+    if (!chat?.participants) return new Set<string>()
+    return new Set(
+      chat.participants
+        .filter(p => p.controlledBy === 'user')
+        .map(p => p.id)
+    )
+  }, [chat?.participants])
+
+  const visibleMessages = useMemo(() => {
+    return messages.filter(msg => {
+      if (!msg.targetParticipantIds || msg.targetParticipantIds.length === 0) return true
+      if (showAllWhispers) return true
+      // Show if user is sender or target
+      if (msg.participantId && userParticipantIdSet.has(msg.participantId)) return true
+      if (msg.targetParticipantIds.some(id => userParticipantIdSet.has(id))) return true
+      return false
+    })
+  }, [messages, showAllWhispers, userParticipantIdSet])
 
   // --- Modal state hook ---
   const modals = useModalState()
@@ -169,8 +214,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     effectiveNextSpeakerId: participantsWithImpersonation.effectiveNextSpeakerId,
     userParticipantId: participantsWithImpersonation.userParticipantId,
     turnState,
-    streaming: false, // Will be set correctly after SSE hook
-    waitingForResponse: false,
+    streamingRef,
     isPaused,
     setIsPaused,
     fetchChat,
@@ -206,16 +250,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     setPauseState: chatControls.setPauseState,
   })
 
-  // Keep triggerContinueModeRef in sync
+  // Keep refs in sync with SSE streaming state
   triggerContinueModeRef.current = sseStreaming.triggerContinueMode
+  streamingRef.current = sseStreaming.streaming || sseStreaming.waitingForResponse
 
   // --- Virtualizer ---
   const getItemKey = useCallback((index: number) => {
-    return messages[index]?.id ?? index
-  }, [messages])
+    return visibleMessages[index]?.id ?? index
+  }, [visibleMessages])
 
   const virtualizer = useVirtualizer({
-    count: messages.length,
+    count: visibleMessages.length,
     getScrollElement: () => messagesContainerRef.current,
     estimateSize: () => 150,
     overscan: 5,
@@ -232,7 +277,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     containerRef: messagesContainerRef,
     endRef: messagesEndRef,
     virtualizer,
-    messageCount: messages.length,
+    messageCount: visibleMessages.length,
     isStreaming: sseStreaming.streaming,
     isWaitingForResponse: sseStreaming.waitingForResponse,
     streamingContent: sseStreaming.streamingContent,
@@ -284,6 +329,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   // --- Turn management hook ---
   const turnManagement = useTurnManagement(
+    id,
     participantsWithImpersonation.participantsAsBase,
     participantsWithImpersonation.charactersMap,
     turnState,
@@ -335,6 +381,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       participantId: m.participantId,
       createdAt: m.createdAt,
       attachments: m.attachments?.map(a => a.id) ?? [],
+      targetParticipantIds: m.targetParticipantIds ?? null,
     }))
 
     const newTurnState = calculateTurnStateFromHistory({
@@ -373,15 +420,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
     setTurnSelectionResult(result)
   }, [messages, participantsWithImpersonation.participantsAsBase, participantsWithImpersonation.userParticipantId, participantsWithImpersonation.charactersMap, chat?.lastTurnParticipantId])
-
-  // --- Persist turn state ---
-  useEffect(() => {
-    if (!participantsWithImpersonation.isMultiChar) return
-    if (sseStreaming.streaming || sseStreaming.waitingForResponse) return
-    if (turnSelectionResult === null) return
-
-    persistTurnState(turnSelectionResult.nextSpeakerId)
-  }, [participantsWithImpersonation.isMultiChar, sseStreaming.streaming, sseStreaming.waitingForResponse, turnSelectionResult, persistTurnState])
 
   // --- Handle scroll-to-message from memory provenance navigation ---
   useEffect(() => {
@@ -767,8 +805,30 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       style={storyBackgroundUrl ? { '--story-background-url': `url('${storyBackgroundUrl}')` } as React.CSSProperties : undefined}
     >
       <div className="qt-chat-main">
+        {/* Whisper toggle - shown in multi-character chats */}
+        {participantsWithImpersonation.isMultiChar && (
+          <div className="flex items-center justify-end gap-2 px-4 py-1">
+            <span className="qt-text-secondary text-xs">All Whispers</span>
+            <button
+              onClick={() => setShowAllWhispers(!showAllWhispers)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                showAllWhispers ? 'bg-primary' : 'qt-bg-muted'
+              }`}
+              role="switch"
+              aria-checked={showAllWhispers}
+              title={showAllWhispers ? 'Hide private whispers' : 'Show all whispers'}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full qt-bg-toggle-knob transition-transform ${
+                  showAllWhispers ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+        )}
+
         <VirtualizedMessageList
-          messages={messages}
+          messages={visibleMessages}
           virtualizer={virtualizer}
           messagesContainerRef={messagesContainerRef}
           messagesEndRef={messagesEndRef}
@@ -812,6 +872,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           shouldShowAvatars={shouldShowAvatars}
           getFirstCharacter={participantsWithImpersonation.getFirstCharacter}
           getMessageAvatar={getMessageAvatar}
+          participantNames={participantNames}
+          userParticipantIdSet={userParticipantIdSet}
         />
 
         {/* Speaker Selector - shown when controlling multiple characters */}
@@ -869,7 +931,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             pendingToolResults,
             setPendingToolResults,
             clearDraft,
-            chatControls.lastAutoTriggeredRef,
             chatControls.userStoppedStreamRef,
           )}
           onFileSelect={handleFileSelect}
@@ -1008,6 +1069,21 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           connectionProfiles={chatControls.connectionProfiles}
           onConnectionProfileChange={chatControls.handleConnectionProfileChange}
           onParticipantSettingsChange={chatControls.handleParticipantSettingsChange}
+          onWhisper={handleWhisper}
+        />
+      )}
+
+      {whisperTarget && (
+        <WhisperDialog
+          isOpen={!!whisperTarget}
+          targetName={whisperTarget.name}
+          targetParticipantId={whisperTarget.participantId}
+          chatId={id}
+          onClose={() => setWhisperTarget(null)}
+          onSent={async () => {
+            setWhisperTarget(null)
+            await fetchChat()
+          }}
         />
       )}
     </div>

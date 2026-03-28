@@ -104,4 +104,28 @@ describe('shouldCheckTitleAtInterchange', () => {
     expect(shouldCheckTitleAtInterchange(2, 3)).toBe(false)
     expect(shouldCheckTitleAtInterchange(5, 7)).toBe(false)
   })
+
+  describe('help chats', () => {
+    it('should check at interchange 1 for help chats', () => {
+      expect(shouldCheckTitleAtInterchange(1, 0, 'help')).toBe(true)
+    })
+
+    it('should still not check at interchange 0 for help chats', () => {
+      expect(shouldCheckTitleAtInterchange(0, 0, 'help')).toBe(false)
+    })
+
+    it('should check at all early checkpoints for help chats: 1, 2, 3, 5, 7, 10', () => {
+      expect(shouldCheckTitleAtInterchange(1, 0, 'help')).toBe(true)
+      expect(shouldCheckTitleAtInterchange(2, 1, 'help')).toBe(true)
+      expect(shouldCheckTitleAtInterchange(3, 2, 'help')).toBe(true)
+      expect(shouldCheckTitleAtInterchange(5, 3, 'help')).toBe(true)
+      expect(shouldCheckTitleAtInterchange(7, 5, 'help')).toBe(true)
+      expect(shouldCheckTitleAtInterchange(10, 7, 'help')).toBe(true)
+    })
+
+    it('should not check at interchange 1 for regular (salon) chats', () => {
+      expect(shouldCheckTitleAtInterchange(1, 0, 'salon')).toBe(false)
+      expect(shouldCheckTitleAtInterchange(1, 0)).toBe(false)
+    })
+  })
 })

@@ -1,9 +1,9 @@
 {
-  "$schema": "../qtap-plugin-template/schemas/plugin-manifest.schema.json",
+  "$schema": "../../../public/schemas/plugin-manifest.schema.json",
   "name": "qtap-plugin-openrouter",
   "title": "OpenRouter Provider",
   "description": "Provides access to 100+ models including GPT-4, Claude, Gemini, Llama and more via OpenRouter API",
-  "version": "1.0.18",
+  "version": "1.0.23",
   "author": {
     "name": "Foundry-9 LLC",
     "email": "charles.sebold@foundry-9.com",
@@ -14,7 +14,10 @@
     "quilltapVersion": ">=1.7.0",
     "nodeVersion": ">=18.0.0"
   },
-  "capabilities": ["LLM_PROVIDER", "IMAGE_PROVIDER"],
+  "capabilities": [
+    "LLM_PROVIDER",
+    "IMAGE_PROVIDER"
+  ],
   "category": "PROVIDER",
   "main": "index.js",
   "typescript": true,
@@ -22,7 +25,17 @@
   "styling": "TAILWIND",
   "enabledByDefault": true,
   "status": "STABLE",
-  "keywords": ["openrouter", "gpt-4", "claude", "gemini", "llama", "llm", "ai", "chat", "models"],
+  "keywords": [
+    "openrouter",
+    "gpt-4",
+    "claude",
+    "gemini",
+    "llama",
+    "llm",
+    "ai",
+    "chat",
+    "models"
+  ],
   "providerConfig": {
     "providerName": "OPENROUTER",
     "displayName": "OpenRouter",
@@ -49,7 +62,9 @@
     }
   },
   "permissions": {
-    "network": ["openrouter.ai"],
+    "network": [
+      "openrouter.ai"
+    ],
     "userData": false,
     "database": false
   }

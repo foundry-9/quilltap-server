@@ -14,7 +14,6 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
-import { useSidebarDataOptional } from '@/components/providers/sidebar-data-provider'
 import Avatar from '@/components/ui/Avatar'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
 import { useClickOutside } from '@/hooks/useClickOutside'
@@ -59,7 +58,6 @@ export default function AddCharacterDialog({
   existingCharacterIds,
   onCharacterAdded,
 }: AddCharacterDialogProps) {
-  const sidebarData = useSidebarDataOptional()
   const [characters, setCharacters] = useState<CharacterOption[]>([])
   const [connectionProfiles, setConnectionProfiles] = useState<ConnectionProfile[]>([])
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null)
@@ -221,9 +219,6 @@ export default function AddCharacterDialog({
       }
 
       showSuccessToast(`${selectedCharacter?.name || 'Character'} has joined the chat`)
-
-      // Refresh sidebar to reflect updated participants
-      sidebarData?.refreshChats()
 
       onCharacterAdded()
       onClose()

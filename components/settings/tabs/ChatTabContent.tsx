@@ -10,9 +10,11 @@ import { ImageDescriptionSettings } from '@/components/settings/chat-settings/Im
 import { AutomationSettings } from '@/components/settings/chat-settings/AutomationSettings'
 import { AgentModeSettings } from '@/components/settings/chat-settings/AgentModeSettings'
 import { DangerousContentSettings } from '@/components/settings/chat-settings/DangerousContentSettings'
+import { useSettingsSection } from './useSettingsSection'
 
 export function ChatTabContent() {
   const info = useSubsystemInfo('salon')
+  const activeSection = useSettingsSection()
   const {
     settings,
     loading,
@@ -48,7 +50,7 @@ export function ChatTabContent() {
       <p className="qt-text-small qt-text-muted italic mb-6">{info.description}</p>
 
       <div className="space-y-4">
-        <CollapsibleCard title="Token Display" description="Configure token count and cost display">
+        <CollapsibleCard title="Token Display" description="Configure token count and cost display" sectionId="token-display" forceOpen={activeSection === 'token-display'}>
           <TokenDisplaySettingsComponent
             settings={settings}
             saving={saving}
@@ -56,7 +58,7 @@ export function ChatTabContent() {
           />
         </CollapsibleCard>
 
-        <CollapsibleCard title="Context Compression" description="Configure how older messages are compressed">
+        <CollapsibleCard title="Context Compression" description="Configure how older messages are compressed" sectionId="context-compression" forceOpen={activeSection === 'context-compression'}>
           <ContextCompressionSettingsComponent
             settings={settings}
             saving={saving}
@@ -64,7 +66,7 @@ export function ChatTabContent() {
           />
         </CollapsibleCard>
 
-        <CollapsibleCard title="Memory Cascade" description="Control how memories behave when messages change">
+        <CollapsibleCard title="Memory Cascade" description="Control how memories behave when messages change" sectionId="memory-cascade" forceOpen={activeSection === 'memory-cascade'}>
           <MemoryCascadeSettings
             settings={settings}
             saving={saving}
@@ -72,7 +74,7 @@ export function ChatTabContent() {
           />
         </CollapsibleCard>
 
-        <CollapsibleCard title="Image Description" description="Configure image description generation">
+        <CollapsibleCard title="Image Description" description="Configure image description generation" sectionId="image-description" forceOpen={activeSection === 'image-description'}>
           <ImageDescriptionSettings
             settings={settings}
             saving={saving}
@@ -82,7 +84,7 @@ export function ChatTabContent() {
           />
         </CollapsibleCard>
 
-        <CollapsibleCard title="Automation" description="Configure automatic detection features">
+        <CollapsibleCard title="Automation" description="Configure automatic detection features" sectionId="automation" forceOpen={activeSection === 'automation'}>
           <AutomationSettings
             settings={settings}
             saving={saving}
@@ -90,7 +92,7 @@ export function ChatTabContent() {
           />
         </CollapsibleCard>
 
-        <CollapsibleCard title="Agent Mode" description="Configure iterative tool use with self-correction">
+        <CollapsibleCard title="Agent Mode" description="Configure iterative tool use with self-correction" sectionId="agent-mode" forceOpen={activeSection === 'agent-mode'}>
           <AgentModeSettings
             settings={settings}
             saving={saving}
@@ -99,7 +101,7 @@ export function ChatTabContent() {
           />
         </CollapsibleCard>
 
-        <CollapsibleCard title="Dangerous Content" description="Configure content detection, routing, and display behavior">
+        <CollapsibleCard title="Dangerous Content" description="Configure content detection, routing, and display behavior" sectionId="dangerous-content" forceOpen={activeSection === 'dangerous-content'}>
           <DangerousContentSettings
             settings={settings}
             saving={saving}

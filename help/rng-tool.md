@@ -30,7 +30,7 @@ By default, Quilltap automatically detects RNG patterns in both your messages an
 
 For your messages, results appear as tool messages before your message. For character responses, results appear as tool messages after the response. Either way, everyone in the chat sees the outcome.
 
-**Note:** This feature can be disabled in [Chat Settings](/settings?tab=chat) under "Automation" if you prefer to use the manual tool palette or want to discuss dice without executing rolls.
+**Note:** This feature can be disabled in [Chat Settings](/settings?tab=chat&section=automation) under "Automation" if you prefer to use the manual tool palette or want to discuss dice without executing rolls.
 
 ### From the Tool Palette
 
@@ -132,6 +132,12 @@ RNG results are saved as tool messages in the chat history. They:
 - Flip coins for yes/no decisions
 - Play simple games with characters
 - Add randomness to story elements
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/salon/:id")`
 
 ## Related Topics
 

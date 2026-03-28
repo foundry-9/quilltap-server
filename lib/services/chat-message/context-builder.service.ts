@@ -9,6 +9,7 @@ import { createServiceLogger } from '@/lib/logging/create-logger'
 import { buildContext, type MessageWithParticipant, type BuiltContext, type ProjectContext, type ContextCompressionResult } from '@/lib/chat/context-manager'
 import type { SemanticSearchResult } from '@/lib/memory/memory-service'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
+import type { UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
 import { loadChatFilesForLLM } from '@/lib/chat-files-v2'
@@ -66,6 +67,12 @@ export interface BuildMessageContextOptions {
   cachedCompressionMessageCount?: number
   /** Pre-searched memories from proactive recall (skips internal memory search when provided) */
   preSearchedMemories?: SemanticSearchResult[]
+  /** Whether to generate a memory recap for this character (chat start or character join) */
+  generateMemoryRecap?: boolean
+  /** Uncensored fallback options for memory recap in dangerous chats */
+  uncensoredFallbackOptions?: UncensoredFallbackOptions
+  /** Status change notifications to include in prompt */
+  statusChangeNotifications?: string[]
 }
 
 /**
@@ -79,6 +86,8 @@ export interface MessageContextResult {
     attachments?: unknown[]
     name?: string
     thoughtSignature?: string
+    toolCallId?: string
+    toolCalls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>
   }>
   isInitialMessage: boolean
 }
@@ -176,7 +185,7 @@ export async function loadAndProcessFiles(
  * Build conversation messages for context
  */
 export function buildConversationMessages(
-  existingMessages: Array<{ type: string; role?: string; content?: string; id?: string; thoughtSignature?: string | null; participantId?: string | null; createdAt?: string }>,
+  existingMessages: Array<{ type: string; role?: string; content?: string; id?: string; thoughtSignature?: string | null; participantId?: string | null; targetParticipantIds?: string[] | null; createdAt?: string }>,
   isMultiCharacter: boolean
 ): {
   conversationMessages: Array<{ role: string; content: string; id?: string; thoughtSignature?: string | null }>
@@ -253,6 +262,7 @@ export function buildConversationMessages(
           id: msg.id,
           thoughtSignature: msg.role === 'ASSISTANT' ? msg.thoughtSignature : undefined,
           participantId: msg.participantId,
+          targetParticipantIds: (msg as any).targetParticipantIds || null,
           createdAt: msg.createdAt,
         }
       })
@@ -267,7 +277,7 @@ export function buildConversationMessages(
  */
 export async function buildMessageContext(
   options: BuildMessageContextOptions,
-  existingMessages: Array<{ type: string; role?: string; content?: string; id?: string; thoughtSignature?: string | null; participantId?: string | null; createdAt?: string }>,
+  existingMessages: Array<{ type: string; role?: string; content?: string; id?: string; thoughtSignature?: string | null; participantId?: string | null; targetParticipantIds?: string[] | null; createdAt?: string }>,
   attachmentsToSend: unknown[]
 ): Promise<MessageContextResult> {
   const {
@@ -290,6 +300,8 @@ export async function buildMessageContext(
     cachedCompressionResult,
     cachedCompressionMessageCount,
     preSearchedMemories,
+    generateMemoryRecap: requestMemoryRecap,
+    uncensoredFallbackOptions,
   } = options
 
   // Build conversation messages
@@ -300,6 +312,22 @@ export async function buildMessageContext(
 
   // Determine if this is the first user message (for timestamp START_ONLY mode)
   const isInitialMessage = conversationMessages.filter(m => m.role === 'user' || m.role === 'USER').length === 0
+
+  // Detect if this is the first time this character is responding in this chat
+  // (either it's the very first message, or this character just joined an existing chat)
+  const isCharacterFirstResponse = isInitialMessage || (
+    isMultiCharacter &&
+    characterParticipant &&
+    !characterParticipant.hasHistoryAccess &&
+    messagesWithParticipants !== undefined &&
+    !messagesWithParticipants.some(
+      m => m.participantId === characterParticipant.id &&
+           (m.role === 'assistant' || m.role === 'ASSISTANT')
+    )
+  )
+
+  // Generate memory recap on first message or character join, unless explicitly overridden
+  const shouldGenerateRecap = requestMemoryRecap ?? isCharacterFirstResponse
 
   // Get timestamp config from chat or user defaults
   const timestampConfig = chat.timestampConfig || chatSettings?.defaultTimestampConfig || null
@@ -320,7 +348,6 @@ export async function buildMessageContext(
     chat,
     existingMessages: conversationMessages,
     newUserMessage,
-    systemPromptOverride: characterParticipant.systemPromptOverride,
     roleplayTemplate,
     embeddingProfileId: chatSettings?.cheapLLMSettings?.embeddingProfileId || undefined,
     skipMemories: false,
@@ -331,7 +358,7 @@ export async function buildMessageContext(
     allParticipants: isMultiCharacter ? chat.participants : undefined,
     participantCharacters: isMultiCharacter ? participantCharacters : undefined,
     messagesWithParticipants: isMultiCharacter ? messagesWithParticipants : undefined,
-    // Tool instructions (native tool rules or pseudo-tool instructions)
+    // Tool instructions (native tool rules or text-block tool instructions)
     toolInstructions,
     // Timestamp injection
     timestampConfig,
@@ -347,6 +374,11 @@ export async function buildMessageContext(
     cachedCompressionMessageCount,
     // Proactive memory recall
     preSearchedMemories,
+    // Memory recap (chat start or character join)
+    generateMemoryRecap: shouldGenerateRecap,
+    uncensoredFallbackOptions,
+    // Status change notifications
+    statusChangeNotifications: options.statusChangeNotifications,
   })
 
   // Log context building results for debugging

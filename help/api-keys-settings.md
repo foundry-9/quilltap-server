@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=providers
+url: /settings?tab=providers&section=api-keys
 ---
 
 # API Keys Settings
 
-> **[Open this page in Quilltap](/settings?tab=providers)**
+> **[Open this page in Quilltap](/settings?tab=providers&section=api-keys)**
 
 The API Keys tab is where you securely store and manage authentication credentials for AI services. API keys are required to use most LLM providers and other services in Quilltap.
 
@@ -223,9 +223,19 @@ You can store multiple keys from the same provider. This is useful for:
 - You can have different profiles use different keys
 - No key is selected by default — you choose per profile
 
+## In-Chat Settings Access
+
+Characters with help tools enabled can read your configured connection, embedding, and image profiles during a conversation using the `help_settings` tool (with categories `"connections"`, `"embeddings"`, or `"images"` respectively). These reports show which profiles exist and which providers and models they use --- but API keys and credentials are never disclosed, not even partially. Ask a help-tools-enabled character something like "What providers do I have set up?" and it will produce a summary.
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=providers&section=api-keys")`
+
 ## Related Settings
 
-- **Connection Profiles** — Use API keys to create LLM connections
-- **Chat Settings** — Configure which connection profile is used by default
+- [Connection Profiles](connection-profiles.md) — Use API keys to create LLM connections
+- [Chat Settings](chat-settings.md) — Configure which connection profile is used by default
 - **Image Profiles** — Some image providers also require API keys
 - **Embedding Profiles** — Cloud-based embeddings need API keys

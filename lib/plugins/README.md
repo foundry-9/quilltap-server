@@ -216,9 +216,9 @@ When developing plugins:
 5. Document your plugin thoroughly
 6. Test against the manifest schema before publishing
 
-## Template Plugin
+## Example Plugin
 
-See `plugins/qtap-plugin-template/` for a complete example of a properly structured plugin.
+See `plugins/dist/qtap-plugin-ollama/` and `plugins/dist/qtap-plugin-openrouter/` for examples of properly structured LLM provider plugins.
 
 ## API Documentation
 

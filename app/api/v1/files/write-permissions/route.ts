@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
-import { getActionParam } from '@/lib/api/middleware/actions';
+import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
 import { successResponse, badRequest, notFound, forbidden, serverError, validationError } from '@/lib/api/responses';
@@ -43,6 +43,9 @@ const completeWriteSchema = z.object({
     projectId: z.uuid().nullable(),
   }),
 });
+
+const WRITE_PERMISSIONS_POST_ACTIONS = ['revoke', 'complete'] as const;
+type WritePermissionsPostAction = typeof WRITE_PERMISSIONS_POST_ACTIONS[number];
 
 // ============================================================================
 // GET Handler - List permissions
@@ -95,15 +98,16 @@ export const GET = createAuthenticatedHandler(async (_request, { user, repos }) 
 export const POST = createAuthenticatedHandler(async (request, { user, repos }) => {
   const action = getActionParam(request);
 
-  switch (action) {
-    case 'revoke':
-      return handleRevokePermission(request, user, repos);
-    case 'complete':
-      return handleCompleteWrite(request, user, repos);
-    default:
-      // No action = grant permission (default POST behavior)
-      return handleGrantPermission(request, user, repos);
+  if (!action || !isValidAction(action, WRITE_PERMISSIONS_POST_ACTIONS)) {
+    return handleGrantPermission(request, user, repos);
   }
+
+  const actionHandlers: Record<WritePermissionsPostAction, () => Promise<NextResponse>> = {
+    revoke: () => handleRevokePermission(request, user, repos),
+    complete: () => handleCompleteWrite(request, user, repos),
+  };
+
+  return actionHandlers[action]();
 });
 
 // ============================================================================

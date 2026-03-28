@@ -122,7 +122,7 @@ function handleListProviders() {
  */
 async function handleListModels(req: NextRequest, context: AuthenticatedContext) {
   try {
-    const { searchParams } = new URL(req.url);
+    const { searchParams } = req.nextUrl;
     const provider = searchParams.get('provider')?.toUpperCase();
 
     if (provider) {

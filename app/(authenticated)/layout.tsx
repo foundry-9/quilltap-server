@@ -1,8 +1,8 @@
 /**
  * Authenticated Layout (Single-User Mode)
  *
- * In single-user mode, simply render children.
- * No authentication check is needed as there is always a single user.
+ * Passthrough layout for authenticated pages.
+ * HelpChatProvider is mounted in AppLayout so the sidebar can access it.
  */
 
 export default function AuthenticatedLayout({
@@ -10,5 +10,5 @@ export default function AuthenticatedLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return children;
+  return <>{children}</>;
 }

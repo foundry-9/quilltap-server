@@ -1,0 +1,270 @@
+# File Management LLM Tool
+
+This document describes the file management system that allows LLMs to interact with user files during conversations.
+
+## Overview
+
+The file management tool (`file_management`) enables LLMs to:
+- List files in projects or general storage
+- Read file contents
+- Write new files (with user permission)
+- Create folders
+- Promote message attachments to persistent storage
+
+## Tool Actions
+
+### list_files
+
+List files by scope with optional folder filtering.
+
+**Parameters:**
+- `scope` (required): `'project'` | `'general'` | `'character'`
+  - `project`: Files in the current chat's project
+  - `general`: Files not in any project
+  - `character`: Images associated with a specific character
+- `folderPath` (optional): Filter to specific folder (e.g., `'/documents/'`)
+- `recursive` (optional): Include subfolders (default: `true`)
+- `characterId` (required for `scope='character'`): Character ID
+- `limit` (optional): Max results (default: 20, max: 100)
+
+**Example:**
+```json
+{
+  "action": "list_files",
+  "scope": "project",
+  "folderPath": "/documents/",
+  "recursive": true,
+  "limit": 50
+}
+```
+
+### list_folders
+
+List folder structure within project or general files.
+
+**Parameters:**
+- `scope` (optional): `'project'` | `'general'` (default: `'project'`)
+
+**Example:**
+```json
+{
+  "action": "list_folders",
+  "scope": "project"
+}
+```
+
+### read_file
+
+Read the contents of a specific file.
+
+**Parameters:**
+- `fileId` (required): The file ID to read
+
+**Access Rules:**
+- File must belong to the user
+- For project files: must match the current chat's project
+- General files (no project) are always accessible
+
+**Example:**
+```json
+{
+  "action": "read_file",
+  "fileId": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+### write_file
+
+Create or update a file. **Requires user permission.**
+
+**Parameters:**
+- `filename` (required): Name for the new file
+- `content` (required): File content (max 1MB)
+- `mimeType` (optional): MIME type (default: `'text/plain'`)
+- `targetFolderPath` (optional): Destination folder (default: `'/'`)
+
+**Permission Flow:**
+1. LLM requests write
+2. If no permission exists, returns `requiresPermission: true`
+3. User sees approval modal with options:
+   - Approve this write only
+   - Approve all writes to this project
+   - Approve all general file writes
+   - Deny
+4. After approval, permission is stored and write proceeds
+
+**Overwrite Behavior:**
+
+When writing a file with the same name as an existing file in the same scope (same user, project, and folder), the existing file is **overwritten** rather than creating a duplicate. The original file ID is preserved so any existing references (links, embeddings, etc.) remain valid. The old physical file and thumbnails are cleaned up before the new content is stored.
+
+This applies to all file creation paths:
+- LLM `write_file` tool calls
+- API `POST /api/v1/files?action=write`
+- API `POST /api/v1/files?action=upload`
+- `promote_attachment` (if a file with the same name exists at the destination)
+
+**Example:**
+```json
+{
+  "action": "write_file",
+  "filename": "notes.txt",
+  "content": "Meeting notes from today...",
+  "mimeType": "text/plain",
+  "targetFolderPath": "/documents/"
+}
+```
+
+### create_folder
+
+Create (validate) a new folder path.
+
+**Parameters:**
+- `newFolderPath` (required): Full folder path (e.g., `'/documents/reports/'`)
+
+**Note:** Folders are implicit - they exist when files are written to them. This action validates the path and confirms it's ready for use.
+
+**Example:**
+```json
+{
+  "action": "create_folder",
+  "newFolderPath": "/documents/reports/"
+}
+```
+
+### promote_attachment
+
+Move a message attachment to project or general files.
+
+**Parameters:**
+- `attachmentId` (required): The attachment file ID
+- `targetProjectId` (optional): Project ID to move to (null for general files)
+- `targetFolderPath` (optional): Destination folder (default: `'/'`)
+
+**Example:**
+```json
+{
+  "action": "promote_attachment",
+  "attachmentId": "550e8400-e29b-41d4-a716-446655440000",
+  "targetProjectId": null,
+  "targetFolderPath": "/saved-attachments/"
+}
+```
+
+## File Write Permissions
+
+Permissions are stored in the `file_permissions` SQLite table and control when the LLM can write without asking.
+
+### Permission Scopes
+
+| Scope | Description |
+|-------|-------------|
+| `SINGLE_FILE` | Permission for one specific file (for overwrites) |
+| `PROJECT` | Permission for any file in a specific project |
+| `GENERAL` | Permission for any file not in a project |
+
+### Permission Schema
+
+```typescript
+interface FileWritePermission {
+  id: string;
+  userId: string;
+  scope: 'SINGLE_FILE' | 'PROJECT' | 'GENERAL';
+  fileId?: string;      // For SINGLE_FILE scope
+  projectId?: string;   // For PROJECT scope
+  grantedAt: string;
+  grantedInChatId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+### Managing Permissions
+
+Users can view and revoke permissions through:
+- Settings > File Permissions tab
+- API: `GET /api/v1/files/write-permissions` (list permissions)
+- API: `POST /api/v1/files/write-permissions` (grant permission)
+- API: `POST /api/v1/files/write-permissions?action=revoke` (revoke permission)
+
+## Folder Organization
+
+Files are organized using a path-based folder system.
+
+### Path Conventions
+
+- Root level: `"/"`
+- Subfolders: `"/documents/"`, `"/documents/reports/"`
+- Always starts and ends with `/`
+- Case-sensitive
+- No `..` or path traversal allowed
+
+### Folder Utilities
+
+The `lib/files/folder-utils.ts` module provides:
+- `normalizeFolderPath(path)`: Ensure proper format
+- `validateFolderPath(path)`: Check for valid path
+- `getParentPath(path)`: Get parent folder
+- `buildFolderTree(paths)`: Build tree structure
+- `isInFolder(filePath, folderPath)`: Check containment
+
+## API Routes
+
+| Route | Methods | Action | Description |
+|-------|---------|--------|-------------|
+| `/api/v1/files` | GET | - | List files (filter by projectId, folderPath, or filter=general) |
+| `/api/v1/files` | POST | `write` | Create new file with permission check |
+| `/api/v1/files` | POST | `upload` | Upload a file (multipart/form-data) |
+| `/api/v1/files` | POST | `generate-thumbnails` | Batch thumbnail generation |
+| `/api/v1/files` | POST | `cleanup-stale` | Cleanup stale DB records (files missing from disk) |
+| `/api/v1/files` | POST | `cleanup-orphans` | Cleanup orphaned files (untracked files on disk) |
+| `/api/v1/files` | POST | `sync` | Trigger filesystem reconciliation |
+| `/api/v1/files/[id]` | GET | - | Get file details |
+| `/api/v1/files/[id]` | PUT | - | Update file metadata |
+| `/api/v1/files/[id]` | DELETE | - | Delete a file |
+| `/api/v1/files/folders` | GET | - | List folder structure |
+| `/api/v1/files/write-permissions` | GET | - | List user's file write permissions |
+| `/api/v1/files/write-permissions` | POST | - | Grant a new file write permission |
+| `/api/v1/files/write-permissions` | POST | `revoke` | Revoke a permission |
+| `/api/v1/files/write-permissions` | POST | `complete` | Complete a pending file write (approve/deny) |
+| `/api/v1/files/proxy/[...key]` | GET | - | Proxy file access |
+
+## Security Considerations
+
+1. **Project Isolation**: LLM can only access files in the current project or general files
+2. **Permission Required**: No writes without explicit user approval
+3. **Server Validation**: All permissions checked server-side
+4. **Content Limits**: Max 1MB for LLM-written files
+5. **Filename Sanitization**: Path traversal characters stripped
+6. **User Control**: Permissions can be revoked at any time
+
+## UI Components
+
+| Component | Path | Purpose |
+|-----------|------|---------|
+| `FileWriteApprovalModal` | `components/chat/FileWriteApprovalModal.tsx` | Approval dialog for LLM write requests |
+| `FileWritePermissionPrompt` | `components/chat/FileWritePermissionPrompt.tsx` | UI prompt for requesting file write permissions |
+| `FolderPicker` | `components/files/FolderPicker.tsx` | Select/create folders |
+| `FileBrowser` | `components/files/FileBrowser.tsx` | Browse project/general files |
+| `FileBrowserGrid` | `components/files/FileBrowserGrid.tsx` | Grid view for file browsing |
+| `FileBrowserList` | `components/files/FileBrowserList.tsx` | List view for file browsing |
+
+## Integration Points
+
+### Tool Builder
+The file management tool is enabled by default in `lib/tools/plugin-tool-builder.ts`. Set `fileManagement: false` in options to disable.
+
+### Tool Executor
+Handled in `lib/chat/tool-executor.ts` as the `file_management` case.
+
+### Tool Display
+The `ToolMessage.tsx` component displays file management results with the 📁 icon.
+
+## Future Enhancements
+
+Potential improvements for future versions:
+- File browser UI on project pages
+- Drag-and-drop file organization
+- File search across projects
+- File sharing between projects
+- Version history for LLM-written files
+- Bulk operations (move, delete multiple files)

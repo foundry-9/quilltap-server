@@ -133,6 +133,14 @@ export type {
 } from './plugins/roleplay-template';
 
 export type {
+  // System prompt plugin types
+  SystemPromptData,
+  SystemPromptMetadata,
+  SystemPromptPlugin,
+  SystemPromptPluginExport,
+} from './plugins/system-prompt';
+
+export type {
   // Tool plugin types
   ToolMetadata,
   ToolHierarchyInfo,
@@ -191,4 +199,4 @@ export { createConsoleLogger, createNoopLogger } from './common/logger';
  * Version of the plugin-types package.
  * Can be used at runtime to check compatibility.
  */
-export const PLUGIN_TYPES_VERSION = '1.16.0';
+export const PLUGIN_TYPES_VERSION = '1.18.0';

@@ -24,6 +24,7 @@ import {
   type OpenAIToolDefinition,
   type ToolCallRequest,
 } from '@quilltap/plugin-utils';
+import { hasAnyXMLToolMarkers, parseAllXMLAsToolCalls, stripAllXMLToolMarkers } from '@quilltap/plugin-utils/tools';
 
 const logger = createPluginLogger('qtap-plugin-openrouter');
 
@@ -381,6 +382,38 @@ export const plugin: LLMProviderPlugin = {
       );
       return [];
     }
+  },
+
+  /**
+   * Detect spontaneous XML tool call markers in OpenRouter text responses
+   * Checks all XML formats since OpenRouter routes to any model
+   */
+  hasTextToolMarkers(text: string): boolean {
+    return hasAnyXMLToolMarkers(text);
+  },
+
+  /**
+   * Parse spontaneous XML tool calls from OpenRouter text responses
+   */
+  parseTextToolCalls(text: string): ToolCallRequest[] {
+    try {
+      const results = parseAllXMLAsToolCalls(text);
+      return results;
+    } catch (error) {
+      logger.error(
+        'Error parsing text tool calls',
+        { context: 'openrouter.parseTextToolCalls' },
+        error instanceof Error ? error : undefined
+      );
+      return [];
+    }
+  },
+
+  /**
+   * Strip spontaneous XML tool call markers from OpenRouter text responses
+   */
+  stripTextToolMarkers(text: string): string {
+    return stripAllXMLToolMarkers(text);
   },
 };
 

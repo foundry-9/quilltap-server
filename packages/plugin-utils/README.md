@@ -205,6 +205,49 @@ export const plugin = createRoleplayTemplatePlugin({
 | `validateTemplateConfig(template)` | Validate an individual template configuration |
 | `validateRoleplayTemplatePlugin(plugin)` | Validate a complete roleplay template plugin |
 
+### System Prompt Plugin Utilities
+
+Create system prompt plugins that provide character prompt templates from `.md` files:
+
+```typescript
+import { createSystemPromptPlugin } from '@quilltap/plugin-utils';
+import type { SystemPromptData } from '@quilltap/plugin-types';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+
+function loadPrompts(): SystemPromptData[] {
+  const promptsDir = join(dirname(__filename), 'prompts');
+  return readdirSync(promptsDir)
+    .filter(f => f.endsWith('.md'))
+    .map(file => {
+      const name = file.replace(/\.md$/i, '');
+      const parts = name.split('_');
+      const category = parts.pop()!;
+      const modelHint = parts.join('_');
+      return {
+        name,
+        content: readFileSync(join(promptsDir, file), 'utf-8'),
+        modelHint,
+        category,
+      };
+    });
+}
+
+export const plugin = createSystemPromptPlugin({
+  metadata: {
+    pluginId: 'my-prompts',
+    displayName: 'My System Prompts',
+    version: '1.0.0',
+  },
+  prompts: loadPrompts(),
+});
+```
+
+| Function | Description |
+|----------|-------------|
+| `createSystemPromptPlugin(options)` | Create a system prompt plugin with validation |
+| `validateSystemPromptPlugin(plugin)` | Validate a complete system prompt plugin |
+
 ## Example: Complete Plugin Provider
 
 ```typescript

@@ -35,7 +35,7 @@ The edit interface has multiple tabs for different aspects of character:
 
 | Tab | Purpose | When to Use |
 |-----|---------|-----------|
-| **Details** | Name, description, personality, scenario, first message | Modify core character info |
+| **Details** | Name, description, personality, scenarios, first message | Modify core character info |
 | **System Prompts** | AI instructions and behaviors | Fine-tune how character acts |
 | **Appearance** | Physical descriptions and clothing records | Add visual and outfit information |
 | **Rename/Replace** | Bulk rename or replace content | Reorganize or rebrand character |
@@ -72,11 +72,13 @@ The Details tab contains all basic character information.
 - Edit to refine how they're perceived
 - Example: Add "Recently developed anxiety" to existing description
 
-**Scenario**
+**Scenarios**
 
-- Current situation or setting
-- Update when context changes
-- Example: "Changed from tavern owner to traveling merchant"
+- A collection of named scenes, each with a title and descriptive content
+- A character may accumulate any number of scenarios as their story progresses — one for the tavern, one for the road, one for that regrettable business in Marseille
+- Add a new scenario when you begin a fresh campaign or a character finds themselves in significantly altered circumstances
+- Edit existing scenarios to adjust their descriptive content; rename them as the situation demands
+- Example additions: "The Road to Venice, 1924" when transitioning a tavern owner into a traveling merchant
 
 **First Message**
 
@@ -401,13 +403,15 @@ Always use Preview before Replace All:
 **Solution:**
 
 1. Edit **Details** tab:
-   - Update Scenario field
-   - Update Description if time has passed
+   - Add a new scenario with a title reflecting the new setting — rather than erasing the old one, let the character carry their history with them
+   - Update Description if time has passed or circumstances have changed substantially
 2. Edit **System Prompts** tab:
    - Add context about new time period
    - Update relevant personality notes
 3. Optional: Update Physical Description if appearance changed
 4. Save and test
+
+**Note:** The character's previous scenarios remain intact, available for flashbacks, parallel campaigns, or the sort of elaborate timeline shenanigans that make worldbuilders so very pleased with themselves.
 
 ### Scenario 3: Adding Relationship Information
 
@@ -557,6 +561,12 @@ If character has different modes:
 - Add notes about when to use each
 - Test each variant thoroughly
 - Keep consistent core personality
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/aurora/:id/edit")`
 
 ## Related Topics
 

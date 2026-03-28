@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=memory
+url: /settings?tab=memory&section=embedding-profiles
 ---
 
 # Embedding Provider Profiles
 
-> **[Open this page in Quilltap](/settings?tab=memory)**
+> **[Open this page in Quilltap](/settings?tab=memory&section=embedding-profiles)**
 
 Embedding Provider Profiles configure services that transform text into numerical representations (embeddings) for semantic search. Embeddings enable Quilltap to intelligently search through memories and find relevant context based on meaning, not just keywords.
 
@@ -84,7 +84,7 @@ The profiles list shows:
 
 For cloud providers only:
 
-1. Go to the **AI Providers** tab in Settings (`/settings?tab=providers`) and expand **API Keys**
+1. Go to the **AI Providers** tab in Settings (`/settings?tab=providers&section=api-keys`) and expand **API Keys**
 2. Click **Add API Key**
 3. Select "OpenAI" (or relevant provider)
 4. Enter your API key
@@ -379,12 +379,22 @@ Some installations support additional providers:
 - Check Ollama is running (if using local)
 - Restart chat and try again
 
+## In-Chat Settings Access
+
+Characters with help tools enabled can read your configured embedding profiles during a conversation using the `help_settings` tool with `category: "embeddings"`. This returns each profile's name, provider, model, and dimensions --- but never your API keys. Ask a help-tools-enabled character something like "What embedding profiles do I have set up?" and it will consult the records.
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=memory&section=embedding-profiles")`
+
 ## Related Settings
 
-- **API Keys** — Store credentials for cloud embedding providers (OpenAI)
-- **Chat Settings** — Memory cascade settings that use embeddings
-- **Connection Profiles** — LLM used in conjunction with embeddings for memory operations
-- **Chat Behavior** — Context management depends on embeddings
+- [API Keys](api-keys-settings.md) — Store credentials for cloud embedding providers (OpenAI)
+- [Chat Settings](chat-settings.md) — Memory cascade settings that use embeddings
+- [Connection Profiles](connection-profiles.md) — LLM used in conjunction with embeddings for memory operations
+- [Chat Settings](chat-settings.md) — Context management depends on embeddings
 
 ## Glossary
 

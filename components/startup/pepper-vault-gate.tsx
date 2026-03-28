@@ -22,8 +22,8 @@ export function PepperVaultGate() {
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    // Don't check if we're already on a setup page
-    if (pathname === '/setup' || pathname?.startsWith('/setup/')) {
+    // Don't check if we're already on a setup page or unlock page
+    if (pathname === '/setup' || pathname?.startsWith('/setup/') || pathname === '/unlock') {
       // Reset the flag so we re-check when navigating away from setup
       gateResolved = false;
       return;
@@ -51,8 +51,14 @@ export function PepperVaultGate() {
         // Mark as resolved so we don't re-check
         gateResolved = true;
 
-        if (state === 'needs-setup' || state === 'needs-passphrase') {
+        if (state === 'needs-setup') {
           router.push('/setup');
+          return;
+        }
+
+        if (state === 'needs-passphrase') {
+          // Always go to /unlock for passphrase entry — whether cold start or auto-lock
+          router.push('/unlock');
           return;
         }
 
@@ -116,7 +122,7 @@ export function PepperVaultGate() {
       </span>
       <button
         onClick={() => setShowBanner(false)}
-        className="qt-btn text-xs px-2 py-1 ml-4"
+        className="qt-button qt-button-ghost text-xs px-2 py-1 ml-4"
         aria-label="Dismiss"
       >
         Dismiss

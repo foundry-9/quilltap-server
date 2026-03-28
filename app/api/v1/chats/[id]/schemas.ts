@@ -21,9 +21,9 @@ export const updateParticipantSchema = z.object({
   participantId: z.uuid(),
   connectionProfileId: z.uuid().optional(),
   imageProfileId: z.uuid().nullish(),
-  systemPromptOverride: z.string().nullish(),
   displayOrder: z.number().optional(),
-  isActive: z.boolean().optional(),
+  isActive: z.boolean().optional(),  // Keep for backward compat
+  status: z.enum(['active', 'silent', 'absent', 'removed']).optional(),  // New preferred field
   controlledBy: z.enum(['llm', 'user']).optional(),
   hasHistoryAccess: z.boolean().optional(),
   joinScenario: z.string().nullish(),
@@ -34,7 +34,6 @@ export const addParticipantSchema = z.object({
   characterId: z.uuid(),
   connectionProfileId: z.uuid().optional(),
   imageProfileId: z.uuid().nullish(),
-  systemPromptOverride: z.string().nullish(),
   displayOrder: z.number().optional(),
   hasHistoryAccess: z.boolean().optional(),
   joinScenario: z.string().nullish(),
@@ -75,10 +74,12 @@ export const setActiveSpeakerSchema = z.object({
   participantId: z.uuid(),
 });
 
-export const turnActionSchema = z.object({
-  action: z.enum(['nudge', 'queue', 'dequeue']),
-  participantId: z.uuid(),
-});
+export const turnActionSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('nudge'), participantId: z.uuid() }),
+  z.object({ action: z.literal('queue'), participantId: z.uuid() }),
+  z.object({ action: z.literal('dequeue'), participantId: z.uuid() }),
+  z.object({ action: z.literal('query') }),
+]);
 
 export const persistTurnSchema = z.object({
   lastTurnParticipantId: z.uuid().nullable(),

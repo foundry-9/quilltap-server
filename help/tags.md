@@ -163,7 +163,7 @@ In the Tags customization tab, you'll see:
 
 ### Deleting Tags
 
-The **Tag Management** section at the bottom of the Tags tab lets you delete any tag. Each tag shows its usage count across all entity types. When deleted, the tag is automatically removed from all characters, chats, profiles, and files that use it. See the [Tag Customization](/help/tags-customization) page for full details.
+The **Tag Management** section at the bottom of the Tags tab lets you delete any tag. Each tag shows its usage count across all entity types. When deleted, the tag is automatically removed from all characters, chats, profiles, and files that use it. See the [Tag Customization](tags-customization.md) page for full details.
 
 ### Organizing Your Tags
 
@@ -217,3 +217,9 @@ Use tags as search filters to find content faster:
 5. **Combine with visual styles** — Use distinctive colors and emojis for quick visual identification
 
 Tags are flexible and personal—develop a tagging system that works for your creative workflow!
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/aurora")`

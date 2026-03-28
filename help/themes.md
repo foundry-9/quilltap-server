@@ -1,12 +1,12 @@
 ---
-url: /settings?tab=appearance
+url: /settings?tab=appearance&section=appearance
 ---
 
 # Themes
 
-> **[Open this page in Quilltap](/settings?tab=appearance)**
+> **[Open this page in Quilltap](/settings?tab=appearance&section=appearance)**
 
-Themes control the overall look and feel of Quilltap, including colors, fonts, and visual styling. You can switch between the built-in default theme and custom themes installed as plugins, and customize your preferred color mode (light, dark, or system).
+Themes control the overall look and feel of Quilltap, including colors, fonts, and visual styling. You can switch between the built-in default theme and custom themes installed as plugins or `.qtap-theme` bundles, and customize your preferred color mode (light, dark, or system).
 
 ## What Are Themes?
 
@@ -17,7 +17,7 @@ A theme is a complete visual design for Quilltap that includes:
 - **Component styles** — Visual appearance of buttons, cards, inputs, and other UI elements
 - **Dark mode support** — Some themes provide separate styling for light and dark modes
 
-Quilltap comes with a built-in default theme and can be extended with custom themes installed as plugins.
+Quilltap comes with a built-in default theme and can be extended with custom themes installed as plugins or uploaded as `.qtap-theme` bundles.
 
 ## Available Themes
 
@@ -42,6 +42,46 @@ Additional themes can be installed as plugins to provide alternative visual styl
 - Additional customization options
 
 Check your installed plugins to see available themes.
+
+### Theme Bundles (.qtap-theme)
+
+Theme bundles are a simpler way to distribute and install themes. A `.qtap-theme` file is a zip archive containing:
+
+- **theme.json** — Theme manifest with metadata and design tokens
+- **CSS files** — Optional style overrides
+- **Font files** — Custom fonts (.woff2, .ttf, etc.)
+- **Image assets** — Preview images and other assets
+
+Theme bundles require no build tools, npm packages, or JavaScript code -- they are purely declarative, containing only static assets and configuration.
+
+#### Installing a Theme Bundle
+
+1. Open **Settings** from the sidebar
+2. Go to the **Appearance** tab
+3. Click the **Install Theme** button
+4. Select a `.qtap-theme` file from your computer
+5. The theme appears in your theme list immediately
+
+#### Uninstalling a Theme Bundle
+
+Bundle themes can be uninstalled from the Appearance settings:
+
+1. Find the bundle theme in your theme list (marked with a "Bundle" badge)
+2. Expand its preview
+3. Click the trash icon to uninstall
+4. The theme is removed from your system
+
+Note: Plugin themes and the built-in default theme cannot be uninstalled from this interface.
+
+#### Exporting a Theme
+
+Any installed theme (including plugin themes and the default) can be exported as a `.qtap-theme` bundle:
+
+1. Find the theme in your theme list
+2. Expand its preview
+3. Click the download/export icon
+4. Save the `.qtap-theme` file to your computer
+5. Share it with others or use it as a starting point for a new theme
 
 ## Color Modes
 
@@ -229,25 +269,121 @@ When viewing theme options:
 
 ## Custom Themes
 
-### Installing Theme Plugins
+### Installing Theme Plugins (Deprecated)
 
-Custom themes are distributed as npm packages:
+> **Note:** npm-based theme plugins are deprecated. We recommend using `.qtap-theme` bundles instead — they require no build tools or npm packages.
 
-1. Follow your plugin manager's instructions
-2. Install the theme plugin
-3. Restart Quilltap (if required)
-4. The new theme appears in your theme list
+Custom themes were historically distributed as npm packages. Existing plugin themes still work, but new themes should use the bundle format. Plugin themes are marked with a "(deprecated)" badge in the theme selector.
+
+### Installing Theme Bundles
+
+The simplest way to install a custom theme:
+
+1. Obtain a `.qtap-theme` file
+2. Open **Settings** > **Appearance**
+3. Click **Install Theme** and select the file
+4. The theme is instantly available
 
 ### Creating Your Own Theme
 
-If you're a developer, you can create custom themes:
+The recommended way to create a theme is the `.qtap-theme` bundle format:
 
-- Use the theme development guide (see documentation)
-- Define custom colors, fonts, and component styles
-- Publish as an npm package for distribution
-- Share with the community
+```bash
+npx create-quilltap-theme my-theme
+```
 
-See the [Theme Plugin Development Guide](docs/THEME_PLUGIN_DEVELOPMENT.md) for details.
+This scaffolds a directory with `theme.json`, `tokens.json`, `styles.css`, and a `fonts/` folder — no build tools, no npm packages, no TypeScript. Just edit JSON and CSS, then zip and install.
+
+For the legacy npm plugin format (deprecated), use:
+
+```bash
+npx create-quilltap-theme my-theme --plugin
+```
+
+See the **Theme Plugin Development Guide** for details on the plugin format.
+
+### Managing Themes via CLI
+
+The `quilltap themes` CLI provides commands for managing theme bundles from the terminal:
+
+```bash
+# List all installed themes (default, plugins, bundles)
+npx quilltap themes list
+
+# Validate a .qtap-theme file before installing
+npx quilltap themes validate my-theme.qtap-theme
+
+# Install a .qtap-theme bundle
+npx quilltap themes install my-theme.qtap-theme
+
+# Install from a URL
+npx quilltap themes install https://example.com/my-theme.qtap-theme
+
+# Uninstall a bundle theme
+npx quilltap themes uninstall my-theme
+
+# Export any theme as a .qtap-theme file
+npx quilltap themes export earl-grey --output ./my-export.qtap-theme
+
+# Scaffold a new theme (delegates to create-quilltap-theme)
+npx quilltap themes create sunset
+```
+
+The `validate` command checks bundle structure, file types, size limits, and manifest schema without installing. Use it to verify your bundle before distributing it.
+
+### Theme Registries
+
+Theme registries are remote indexes of themes that you can browse, search, and install from. Think of them as curated theme catalogs.
+
+#### Browsing Themes in the UI
+
+1. Open **Settings** > **Appearance**
+2. Scroll down to the **Browse Themes** section
+3. Search for themes by name, tag, or description
+4. Click **Install** on any theme to download and install it
+5. Verified themes show a checkmark badge (signature verified against the registry's public key)
+
+#### Managing Registries via CLI
+
+```bash
+# List configured registries
+npx quilltap themes registry list
+
+# Add a registry source
+npx quilltap themes registry add https://example.com/registry.json --name "My Registry"
+
+# Add a registry with signature verification
+npx quilltap themes registry add https://example.com/registry.json --key ed25519:BASE64KEY
+
+# Remove a registry
+npx quilltap themes registry remove "My Registry"
+
+# Refresh all registry indexes
+npx quilltap themes registry refresh
+
+# Search for themes across registries
+npx quilltap themes search "dark modern"
+
+# Check for theme updates
+npx quilltap themes update
+
+# Update a specific theme
+npx quilltap themes update my-theme
+```
+
+#### For Registry Operators
+
+If you host your own theme registry, the CLI provides tools for signing:
+
+```bash
+# Generate an Ed25519 keypair
+npx quilltap themes registry keygen --output ./keys
+
+# Sign a registry directory
+npx quilltap themes registry sign ./my-registry --key ed25519:PRIVATE_KEY
+```
+
+Registry indexes are JSON files listing available themes with download URLs, SHA-256 hashes, and optional Ed25519 signatures for integrity verification.
 
 ## Tips for Theme Selection
 
@@ -298,5 +434,11 @@ Every time you log in, Quilltap remembers your theme selections.
 - Verify you're logged in
 - Try switching themes again
 - Check the browser console for errors
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=appearance&section=appearance")`
 
 Themes are a powerful way to personalize Quilltap and make it work for your creative style and environment!

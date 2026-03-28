@@ -29,6 +29,8 @@ export interface StreamOptions {
     attachments?: unknown[]
     name?: string
     thoughtSignature?: string
+    toolCallId?: string
+    toolCalls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>
   }>
   connectionProfile: ConnectionProfile
   apiKey: string
@@ -39,6 +41,8 @@ export interface StreamOptions {
   messageId?: string
   chatId?: string
   characterId?: string
+  /** Previous response ID for conversation chaining (OpenAI Responses API) */
+  previousResponseId?: string
 }
 
 /**
@@ -50,7 +54,6 @@ export interface StreamDebugInfo {
   modelParams: Record<string, unknown>
   messages: Array<{ role: string; contentLength: number; hasAttachments: boolean }>
   tools: unknown[]
-  usePseudoTools: boolean
   enabledToolOptions?: Record<string, boolean>
   fallbackResults?: FallbackResult[]
 }
@@ -122,7 +125,6 @@ export async function buildTools(
   imageProfileId: string | null,
   imageProfile: ImageProfile | null,
   userId: string,
-  usePseudoTools: boolean,
   /** Project ID if chat is associated with a project (enables project_info tool) */
   projectId?: string | null,
   /** Whether context compression is enabled (enables request_full_context tool) */
@@ -132,7 +134,11 @@ export async function buildTools(
   /** List of disabled group patterns (e.g., "plugin:mcp", "plugin:mcp:subgroup:filesystem") */
   disabledToolGroups?: string[],
   /** Whether agent mode is enabled (enables submit_final_response tool) */
-  agentModeEnabled?: boolean
+  agentModeEnabled?: boolean,
+  /** Whether this is a multi-character chat (enables whisper tool) */
+  isMultiCharacter?: boolean,
+  /** Whether help tools are enabled for this character (enables help_search and help_settings) */
+  helpToolsEnabled?: boolean
 ): Promise<{
   tools: unknown[]
   modelSupportsNativeTools: boolean
@@ -151,11 +157,6 @@ export async function buildTools(
 
   // Native web search requires both the profile setting AND provider support
   const useNativeWebSearch = connectionProfile.useNativeWebSearch && provider.supportsWebSearch
-
-  if (usePseudoTools) {
-
-    return { tools: [], modelSupportsNativeTools, useNativeWebSearch }
-  }
 
   // Profile-level tool override - if allowToolUse is explicitly false, skip all tools
   if (connectionProfile.allowToolUse === false) {
@@ -200,6 +201,10 @@ export async function buildTools(
     projectInfo: !!projectId,
     requestFullContext: !!requestFullContext,
     agentMode: !!agentModeEnabled,
+    helpSearch: !!helpToolsEnabled,
+    helpSettings: !!helpToolsEnabled,
+    helpNavigate: !!helpToolsEnabled,
+    whisper: !!isMultiCharacter,
     shellInteractivity: isShellEnvironment(),
     toolConfigs,
   })
@@ -275,7 +280,7 @@ export async function* streamMessage(
   rawResponse?: unknown
   thoughtSignature?: string
 }> {
-  const { messages, connectionProfile, apiKey, modelParams, tools, useNativeWebSearch, userId, messageId, chatId, characterId } = options
+  const { messages, connectionProfile, apiKey, modelParams, tools, useNativeWebSearch, userId, messageId, chatId, characterId, previousResponseId } = options
 
   const provider = await createLLMProvider(
     connectionProfile.provider,
@@ -284,11 +289,13 @@ export async function* streamMessage(
 
   // Cast messages to LLMMessage[] - the role type is constrained to valid values
   const llmMessages = messages.map(m => ({
-    role: m.role as 'system' | 'user' | 'assistant',
+    role: m.role as 'system' | 'user' | 'assistant' | 'tool',
     content: m.content,
     attachments: m.attachments,
     name: m.name,
     thoughtSignature: m.thoughtSignature,
+    toolCallId: m.toolCallId,
+    toolCalls: m.toolCalls,
   })) as LLMMessage[]
 
   // Track timing and accumulated content
@@ -309,6 +316,7 @@ export async function* streamMessage(
       tools: tools.length > 0 ? tools : undefined,
       webSearchEnabled: useNativeWebSearch,
       profileParameters: modelParams,
+      previousResponseId,
     },
     apiKey
   )) {
@@ -378,7 +386,7 @@ export function encodeDebugInfo(
   encoder: TextEncoder,
   debugInfo: StreamDebugInfo
 ): Uint8Array {
-  const { builtContext, connectionProfile, modelParams, messages, tools, usePseudoTools, enabledToolOptions } = debugInfo
+  const { builtContext, connectionProfile, modelParams, messages, tools } = debugInfo
 
   const llmRequestDetails = {
     provider: connectionProfile.provider,
@@ -389,12 +397,6 @@ export function encodeDebugInfo(
     messageCount: messages.length,
     hasTools: tools.length > 0,
     tools: tools.length > 0 ? tools : undefined,
-    usePseudoTools,
-    pseudoToolsEnabled: usePseudoTools && enabledToolOptions
-      ? Object.entries(enabledToolOptions)
-          .filter(([, enabled]) => enabled)
-          .map(([name]) => name)
-      : undefined,
     messages: messages,
     contextManagement: {
       tokenUsage: builtContext.tokenUsage,
@@ -446,6 +448,7 @@ export function encodeDoneEvent(
   encoder: TextEncoder,
   data: {
     messageId: string | null
+    participantId?: string | null
     usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null
     cacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | null
     attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null
@@ -460,6 +463,7 @@ export function encodeDoneEvent(
     emptyResponseReason?: string
     provider?: string
     modelName?: string
+    isSilentMessage?: boolean
   }
 ): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify({ done: true, ...data })}\n\n`)
@@ -499,6 +503,40 @@ export function encodeStatusEvent(
   }
 ): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify({ status })}\n\n`)
+}
+
+/**
+ * Encode a turn start event (chained character about to respond)
+ */
+export function encodeTurnStartEvent(
+  encoder: TextEncoder,
+  data: { participantId: string; characterName: string; chainDepth: number }
+): Uint8Array {
+  return encoder.encode(`data: ${JSON.stringify({ turnStart: true, ...data })}\n\n`)
+}
+
+/**
+ * Encode a turn complete event (chained character finished responding)
+ */
+export function encodeTurnCompleteEvent(
+  encoder: TextEncoder,
+  data: { participantId: string; messageId: string; chainDepth: number }
+): Uint8Array {
+  return encoder.encode(`data: ${JSON.stringify({ turnComplete: true, ...data })}\n\n`)
+}
+
+/**
+ * Encode a chain complete event (all chained turns done)
+ */
+export function encodeChainCompleteEvent(
+  encoder: TextEncoder,
+  data: {
+    reason: 'user_turn' | 'paused' | 'max_depth' | 'max_time' | 'error' | 'no_next_speaker' | 'cycle_complete'
+    nextSpeakerId: string | null
+    chainDepth: number
+  }
+): Uint8Array {
+  return encoder.encode(`data: ${JSON.stringify({ chainComplete: true, ...data })}\n\n`)
 }
 
 /**

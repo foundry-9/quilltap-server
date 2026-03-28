@@ -1,14 +1,17 @@
 /**
  * OpenAI Provider Implementation for Quilltap Plugin
  *
- * Provides chat completion functionality using OpenAI's API
+ * Provides chat completion functionality using OpenAI's Responses API
  * Supports GPT models with multimodal capabilities (text + images)
+ * Uses server-side tools for web search (web_search_preview)
+ * Supports conversation chaining via previous_response_id for cache optimization
+ * Migrated from Chat Completions API to Responses API for better
+ * cache utilization, reasoning model support, and future-proofing.
  */
 
 import OpenAI from 'openai';
-import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import type { LLMProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage, ImageGenParams, ImageGenResponse } from './types';
-import { createPluginLogger } from '@quilltap/plugin-utils';
+import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
 
 const logger = createPluginLogger('qtap-plugin-openai');
 
@@ -29,12 +32,11 @@ function isReasoningModel(model: string): boolean {
   return REASONING_MODEL_PREFIXES.some(prefix => modelLower.startsWith(prefix));
 }
 
-type OpenAIMessageContent = string | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string; detail?: 'auto' | 'low' | 'high' } }>;
-
-interface OpenAIMessage {
-  role: 'system' | 'user' | 'assistant';
-  content: OpenAIMessageContent;
-}
+// SDK types for the Responses API
+type ResponsesInputItem = OpenAI.Responses.ResponseInputItem;
+type ResponsesTool = OpenAI.Responses.Tool;
+type ResponsesResponse = OpenAI.Responses.Response;
+type ResponsesStreamEvent = OpenAI.Responses.ResponseStreamEvent;
 
 export class OpenAIProvider implements LLMProvider {
   readonly supportsFileAttachments = true;
@@ -42,290 +44,481 @@ export class OpenAIProvider implements LLMProvider {
   readonly supportsImageGeneration = true;
   readonly supportsWebSearch = true;
 
-  private formatMessagesWithAttachments(
+  /**
+   * Format messages from LLMMessage format to Responses API input format.
+   * The first system message is extracted as top-level instructions.
+   * Additional system messages become 'developer' role messages.
+   */
+  private formatMessagesForResponsesAPI(
     messages: LLMMessage[]
-  ): { messages: OpenAIMessage[]; attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } } {
+  ): { input: ResponsesInputItem[]; instructions: string | undefined; attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } } {
     const sent: string[] = [];
     const failed: { id: string; error: string }[] = [];
 
-    // Filter out 'tool' role messages as they require special handling
-    const filteredMessages = messages.filter(m => m.role !== 'tool');
+    // Extract the first system message as top-level instructions
+    let instructions: string | undefined;
+    const inputMessages: LLMMessage[] = [];
 
-    const formattedMessages: OpenAIMessage[] = filteredMessages.map((msg) => {
-      // If no attachments, return simple string content
-      if (!msg.attachments || msg.attachments.length === 0) {
-        return {
-          role: msg.role as 'system' | 'user' | 'assistant',
+    for (const msg of messages) {
+      if (msg.role === 'system' && instructions === undefined) {
+        instructions = msg.content;
+      } else {
+        inputMessages.push(msg);
+      }
+    }
+
+    const input: ResponsesInputItem[] = [];
+
+    for (const msg of inputMessages) {
+      // Additional system messages become 'developer' role in Responses API
+      if (msg.role === 'system') {
+        input.push({
+          type: 'message' as const,
+          role: 'developer' as const,
           content: msg.content,
-        };
-      }
-
-      // Build multimodal content array
-      const content: Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string; detail?: 'auto' | 'low' | 'high' } }> = [];
-
-      // Add text content first
-      if (msg.content) {
-        content.push({ type: 'text', text: msg.content });
-      }
-
-      // Add image attachments
-      for (const attachment of msg.attachments) {
-        if (!this.supportedMimeTypes.includes(attachment.mimeType)) {
-          failed.push({
-            id: attachment.id,
-            error: `Unsupported file type: ${attachment.mimeType}. OpenAI supports: ${this.supportedMimeTypes.join(', ')}`,
-          });
-          continue;
-        }
-
-        if (!attachment.data) {
-          failed.push({
-            id: attachment.id,
-            error: 'File data not loaded',
-          });
-          continue;
-        }
-
-        content.push({
-          type: 'image_url',
-          image_url: {
-            url: `data:${attachment.mimeType};base64,${attachment.data}`,
-            detail: 'auto',
-          },
         });
-        sent.push(attachment.id);
+        continue;
       }
 
-      return {
-        role: msg.role as 'system' | 'user' | 'assistant',
-        content: content.length > 0 ? content : msg.content,
-      };
-    });
+      // Tool result messages become function_call_output items
+      if (msg.role === 'tool') {
+        if (msg.toolCallId) {
+          input.push({
+            type: 'function_call_output' as const,
+            call_id: msg.toolCallId,
+            output: msg.content,
+          });
+        } else {
+          logger.debug('Skipping tool message without toolCallId', {
+            context: 'OpenAIProvider.formatMessagesForResponsesAPI',
+          });
+        }
+        continue;
+      }
 
-    return { messages: formattedMessages, attachmentResults: { sent, failed } };
+      // Assistant messages: emit text content + any tool calls as separate items
+      if (msg.role === 'assistant') {
+        input.push({
+          type: 'message' as const,
+          role: 'assistant' as const,
+          content: msg.content,
+        });
+
+        // Emit function_call items for each tool call
+        if (msg.toolCalls && msg.toolCalls.length > 0) {
+          for (const tc of msg.toolCalls) {
+            input.push({
+              type: 'function_call' as const,
+              call_id: tc.id,
+              name: tc.function.name,
+              arguments: tc.function.arguments,
+            } as ResponsesInputItem);
+          }
+        }
+        continue;
+      }
+
+      // User messages need content array format for image support
+      const content: Array<OpenAI.Responses.ResponseInputText | OpenAI.Responses.ResponseInputImage> = [];
+
+      if (msg.content) {
+        content.push({ type: 'input_text', text: msg.content });
+      }
+
+      // Add file attachments
+      if (msg.attachments && msg.attachments.length > 0) {
+        for (const attachment of msg.attachments) {
+          if (!this.supportedMimeTypes.includes(attachment.mimeType)) {
+            failed.push({
+              id: attachment.id,
+              error: `Unsupported file type: ${attachment.mimeType}. OpenAI supports: ${this.supportedMimeTypes.join(', ')}`,
+            });
+            continue;
+          }
+
+          if (!attachment.data) {
+            failed.push({
+              id: attachment.id,
+              error: 'File data not loaded',
+            });
+            continue;
+          }
+
+          content.push({
+            type: 'input_image',
+            image_url: `data:${attachment.mimeType};base64,${attachment.data}`,
+            detail: 'auto',
+          });
+          sent.push(attachment.id);
+        }
+      }
+
+      // If no content was added, add empty text to avoid empty content array
+      if (content.length === 0) {
+        content.push({ type: 'input_text', text: '' });
+      }
+
+      input.push({
+        type: 'message' as const,
+        role: 'user' as const,
+        content,
+      });
+    }
+
+    return { input, instructions, attachmentResults: { sent, failed } };
   }
 
-  async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
-    const isReasoning = isReasoningModel(params.model);
-    const client = new OpenAI({
-      apiKey,
-      dangerouslyAllowBrowser: process.env.NODE_ENV === 'test',
+  /**
+   * Extract only the last user message from the input for use with previous_response_id.
+   * When chaining, OpenAI reconstructs the conversation from the previous response,
+   * so we only need to send the new user message.
+   */
+  private extractLastUserMessage(input: ResponsesInputItem[]): ResponsesInputItem[] {
+    for (let i = input.length - 1; i >= 0; i--) {
+      const item = input[i];
+      if ('role' in item && item.role === 'user') {
+        return [item];
+      }
+    }
+    // Fallback: return the last item regardless of type
+    return input.length > 0 ? [input[input.length - 1]] : [];
+  }
+
+  /**
+   * Convert Chat Completions-format tools to Responses API function tools
+   */
+  private formatToolsForResponsesAPI(
+    tools: LLMParams['tools']
+  ): OpenAI.Responses.FunctionTool[] {
+    if (!tools || tools.length === 0) return [];
+
+    return tools.map((tool) => {
+      const chatTool = tool as { type: string; function: { name: string; description?: string; parameters: Record<string, unknown> } };
+      const fn = chatTool.function;
+      return {
+        type: 'function' as const,
+        name: fn.name,
+        description: fn.description ?? undefined,
+        parameters: fn.parameters,
+        strict: false,
+      };
     });
+  }
 
-    const { messages, attachmentResults } = this.formatMessagesWithAttachments(params.messages);
+  /**
+   * Build raw response object compatible with Chat Completions format.
+   * This ensures the streaming service, tool call parser, Inspector,
+   * and chat log storage all continue to work without changes.
+   */
+  private buildRawResponse(response: ResponsesResponse): Record<string, unknown> {
+    const toolCalls: Array<{
+      id: string;
+      type: string;
+      function: { name: string; arguments: string };
+    }> = [];
 
-    const requestParams: any = {
+    for (const item of response.output) {
+      if (item.type === 'function_call') {
+        toolCalls.push({
+          id: item.call_id,
+          type: 'function',
+          function: {
+            name: item.name,
+            arguments: item.arguments,
+          },
+        });
+      }
+    }
+
+    return {
+      id: response.id,
+      object: 'chat.completion',
+      created: response.created_at,
+      model: response.model,
+      choices: [{
+        index: 0,
+        message: {
+          role: 'assistant',
+          content: response.output_text,
+          tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
+        },
+        finish_reason: toolCalls.length > 0 ? 'tool_calls' : 'stop',
+      }],
+      usage: {
+        prompt_tokens: response.usage?.input_tokens ?? 0,
+        completion_tokens: response.usage?.output_tokens ?? 0,
+        total_tokens: response.usage?.total_tokens ?? 0,
+      },
+    };
+  }
+
+  /**
+   * Determine finish reason from response
+   */
+  private getFinishReason(response: ResponsesResponse): string {
+    for (const item of response.output) {
+      if (item.type === 'function_call') {
+        return 'tool_calls';
+      }
+    }
+
+    if (response.status === 'completed') return 'stop';
+    if (response.status === 'incomplete') return response.incomplete_details?.reason || 'length';
+    if (response.status === 'failed') return 'error';
+
+    return 'stop';
+  }
+
+  /**
+   * Build the text format configuration for structured output
+   */
+  private buildTextConfig(responseFormat?: LLMParams['responseFormat']): OpenAI.Responses.ResponseTextConfig | undefined {
+    if (!responseFormat) return undefined;
+
+    if (responseFormat.type === 'json_object') {
+      return { format: { type: 'json_object' } };
+    }
+
+    if (responseFormat.type === 'json_schema' && responseFormat.jsonSchema) {
+      return {
+        format: {
+          type: 'json_schema',
+          name: responseFormat.jsonSchema.name || 'response',
+          schema: responseFormat.jsonSchema.schema as Record<string, unknown>,
+          strict: responseFormat.jsonSchema.strict ?? true,
+        },
+      };
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Build the common request parameters shared between sendMessage and streamMessage
+   */
+  private buildBaseRequestParams(
+    params: LLMParams,
+    input: ResponsesInputItem[],
+    instructions: string | undefined,
+  ): Omit<OpenAI.Responses.ResponseCreateParamsNonStreaming, 'stream'> {
+    const isReasoning = isReasoningModel(params.model);
+
+    const requestParams: Record<string, unknown> = {
       model: params.model,
-      messages: messages as ChatCompletionMessageParam[],
-      max_completion_tokens: params.maxTokens ?? 4096,
+      input,
+      store: false,
+      max_output_tokens: params.maxTokens ?? 4096,
     };
 
-    // Reasoning models (o1, o3, o4, gpt-5) don't support temperature, top_p, or other sampling parameters
-    // See: https://platform.openai.com/docs/guides/reasoning
+    if (instructions) {
+      requestParams.instructions = instructions;
+    }
+
     if (!isReasoning) {
       requestParams.top_p = params.topP ?? 1;
-      requestParams.stop = params.stop;
-
-      // Only include temperature if explicitly provided - some models don't support custom values
       if (params.temperature !== undefined) {
         requestParams.temperature = params.temperature;
       }
     } else {
-      // Reasoning models use internal reasoning tokens before generating output.
-      // To ensure sufficient tokens for actual output, we increase the limit.
-      // GPT-5 nano/mini need extra tokens because they default to medium reasoning effort.
-      // See: https://platform.openai.com/docs/guides/reasoning
       const minTokensForReasoning = 4096;
       if ((params.maxTokens ?? 0) < minTokensForReasoning) {
-        requestParams.max_completion_tokens = minTokensForReasoning;
+        requestParams.max_output_tokens = minTokensForReasoning;
       }
     }
 
-    // Add tools if provided
-    if (params.tools && params.tools.length > 0) {
-      requestParams.tools = params.tools;
-      // Explicitly enable tool use with "auto" - let the model decide when to use tools
-      requestParams.tool_choice = 'auto';
-    }
-
-    // Add native web search if enabled
-    // Requires gpt-4o-search-preview or gpt-4o-mini-search-preview models
+    const tools: ResponsesTool[] = [];
     if (params.webSearchEnabled) {
-      requestParams.web_search_options = {};
+      tools.push({ type: 'web_search_preview' });
+      requestParams.include = ['web_search_call.action.sources'];
+    }
+    if (params.tools && params.tools.length > 0) {
+      tools.push(...this.formatToolsForResponsesAPI(params.tools));
+    }
+    if (tools.length > 0) {
+      requestParams.tools = tools;
     }
 
-    const response = await client.chat.completions.create(requestParams);
+    const textConfig = this.buildTextConfig(params.responseFormat);
+    if (textConfig) {
+      requestParams.text = textConfig;
+    }
 
-    const choice = response.choices[0];
+    return requestParams as Omit<OpenAI.Responses.ResponseCreateParamsNonStreaming, 'stream'>;
+  }
+
+  /**
+   * Build LLMResponse from a Responses API response
+   */
+  private buildLLMResponse(
+    response: ResponsesResponse,
+    attachmentResults: { sent: string[]; failed: { id: string; error: string }[] },
+  ): LLMResponse {
     return {
-      content: choice.message.content ?? '',
-      finishReason: choice.finish_reason,
+      content: response.output_text,
+      finishReason: this.getFinishReason(response),
       usage: {
-        promptTokens: response.usage?.prompt_tokens ?? 0,
-        completionTokens: response.usage?.completion_tokens ?? 0,
+        promptTokens: response.usage?.input_tokens ?? 0,
+        completionTokens: response.usage?.output_tokens ?? 0,
         totalTokens: response.usage?.total_tokens ?? 0,
       },
-      raw: response,
+      raw: this.buildRawResponse(response),
       attachmentResults,
     };
   }
 
-  async *streamMessage(params: LLMParams, apiKey: string): AsyncGenerator<StreamChunk> {
-    const isReasoning = isReasoningModel(params.model);
+  async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
     const client = new OpenAI({
       apiKey,
       dangerouslyAllowBrowser: process.env.NODE_ENV === 'test',
+      defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
     });
+    const { input, instructions, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
 
-    const { messages, attachmentResults } = this.formatMessagesWithAttachments(params.messages);
+    const baseParams = this.buildBaseRequestParams(params, input, instructions);
 
-    const requestParams: any = {
-      model: params.model,
-      messages: messages as ChatCompletionMessageParam[],
-      max_completion_tokens: params.maxTokens ?? 4096,
-      stream: true,
-      stream_options: { include_usage: true },
-    };
+    // Try with conversation chaining if we have a previous response ID
+    if (params.previousResponseId) {
+      try {
+        const chainedInput = this.extractLastUserMessage(input);
+        const chainedParams: OpenAI.Responses.ResponseCreateParamsNonStreaming = {
+          ...baseParams,
+          input: chainedInput,
+          previous_response_id: params.previousResponseId,
+          stream: false,
+        };
 
-    // Reasoning models (o1, o3, o4, gpt-5) don't support temperature, top_p, or other sampling parameters
-    // See: https://platform.openai.com/docs/guides/reasoning
-    if (!isReasoning) {
-      requestParams.top_p = params.topP ?? 1;
+        const response = await client.responses.create(chainedParams);
 
-      // Only include temperature if explicitly provided - some models don't support custom values
-      if (params.temperature !== undefined) {
-        requestParams.temperature = params.temperature;
-      }
-    } else {
-      // Reasoning models use internal reasoning tokens before generating output.
-      // To ensure sufficient tokens for actual output, we increase the limit.
-      const minTokensForReasoning = 4096;
-      if ((params.maxTokens ?? 0) < minTokensForReasoning) {
-        requestParams.max_completion_tokens = minTokensForReasoning;
-      }
-    }
-
-    // Add tools if provided
-    if (params.tools && params.tools.length > 0) {
-      requestParams.tools = params.tools;
-      // Explicitly enable tool use with "auto" - let the model decide when to use tools
-      requestParams.tool_choice = 'auto';
-    }
-
-    // Add native web search if enabled
-    if (params.webSearchEnabled) {
-      requestParams.web_search_options = {};
-    }
-
-    const stream = (await client.chat.completions.create(requestParams)) as unknown as AsyncIterable<any>;
-
-    let fullMessage: any = {
-      choices: [
-        {
-          message: {
-            role: 'assistant',
-            content: '',
-            tool_calls: [],
-          },
-          finish_reason: null,
-        },
-      ],
-      usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
-    };
-    let chunkCount = 0;
-    let finishReasonSeen = false;
-    let usageSeen = false;
-
-    for await (const chunk of stream) {
-      chunkCount++;
-      const delta = chunk.choices?.[0]?.delta;
-      const content = delta?.content;
-      const finishReason = chunk.choices[0]?.finish_reason;
-      const hasUsage = chunk.usage;
-
-      // Merge delta content
-      if (content) {
-        fullMessage.choices[0].message.content += content;
-      }
-
-      // Merge delta tool calls
-      if (delta?.tool_calls) {
-        for (const toolCall of delta.tool_calls) {
-          // Tool calls have an index property that tells us which one to update
-          const index = toolCall.index ?? 0;
-          if (!fullMessage.choices[0].message.tool_calls[index]) {
-            fullMessage.choices[0].message.tool_calls[index] = {
-              id: '',
-              type: 'function',
-              function: { name: '', arguments: '' },
-            };
-          }
-          // Merge the delta into the existing tool call
-          if (toolCall.id) fullMessage.choices[0].message.tool_calls[index].id = toolCall.id;
-          if (toolCall.function?.name) fullMessage.choices[0].message.tool_calls[index].function.name = toolCall.function.name;
-          if (toolCall.function?.arguments) fullMessage.choices[0].message.tool_calls[index].function.arguments += toolCall.function.arguments;
+        if (response.error) {
+          throw new Error(`OpenAI API error: ${response.error.message}`);
         }
+
+        return this.buildLLMResponse(response, attachmentResults);
+      } catch (error) {
+        logger.warn('Conversation chaining failed, falling back to full input', {
+          context: 'OpenAIProvider.sendMessage',
+          previousResponseId: params.previousResponseId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        // Fall through to full input request below
       }
+    }
 
-      // Update finish reason
-      if (finishReason) {
-        fullMessage.choices[0].finish_reason = finishReason;
-        finishReasonSeen = true;
+    // Standard request with full input (no chaining or chaining fallback)
+    const requestParams: OpenAI.Responses.ResponseCreateParamsNonStreaming = {
+      ...baseParams,
+      stream: false,
+    };
+
+    const response = await client.responses.create(requestParams);
+
+    if (response.error) {
+      logger.error('Responses API returned error', {
+        context: 'OpenAIProvider.sendMessage',
+        code: response.error.code,
+        message: response.error.message,
+      });
+      throw new Error(`OpenAI API error: ${response.error.message}`);
+    }
+
+    return this.buildLLMResponse(response, attachmentResults);
+  }
+
+  async *streamMessage(params: LLMParams, apiKey: string): AsyncGenerator<StreamChunk> {
+    const client = new OpenAI({
+      apiKey,
+      dangerouslyAllowBrowser: process.env.NODE_ENV === 'test',
+      defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+    });
+    const { input, instructions, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
+    const baseParams = this.buildBaseRequestParams(params, input, instructions);
+
+    // Determine whether to use conversation chaining
+    let useChaining = !!params.previousResponseId;
+    let stream: AsyncIterable<ResponsesStreamEvent> | null = null;
+
+    if (useChaining) {
+      try {
+        const chainedInput = this.extractLastUserMessage(input);
+        const chainedParams: OpenAI.Responses.ResponseCreateParamsStreaming = {
+          ...baseParams,
+          input: chainedInput,
+          previous_response_id: params.previousResponseId,
+          stream: true,
+        };
+
+        stream = await client.responses.create(chainedParams) as AsyncIterable<ResponsesStreamEvent>;
+      } catch (error) {
+        logger.warn('Streaming conversation chaining failed, falling back to full input', {
+          context: 'OpenAIProvider.streamMessage',
+          previousResponseId: params.previousResponseId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        useChaining = false;
       }
+    }
 
-      // Update usage
-      if (hasUsage) {
-        fullMessage.usage = chunk.usage;
-        usageSeen = true;
-      }
+    // Fall back to standard request if chaining wasn't used or failed
+    if (!stream) {
+      const requestParams: OpenAI.Responses.ResponseCreateParamsStreaming = {
+        ...baseParams,
+        stream: true,
+      };
 
-      // Yield content chunks unless this is the final chunk (finish_reason + usage together)
-      // Exception: for tool_calls, we yield even with finish_reason (no usage comes with tool_calls)
-      const isFinalChunk = finishReasonSeen && usageSeen;
-      const isToolCallsChunk = finishReasonSeen && finishReason === 'tool_calls';
+      stream = await client.responses.create(requestParams) as AsyncIterable<ResponsesStreamEvent>;
+    }
 
-      if (content && !isFinalChunk && !isToolCallsChunk) {
+    let finalResponse: ResponsesResponse | null = null;
+
+    for await (const event of stream) {
+      if (event.type === 'response.output_text.delta') {
         yield {
-          content,
+          content: event.delta,
           done: false,
         };
+      } else if (event.type === 'response.completed') {
+        finalResponse = event.response;
       }
+    }
 
-      // For tool calls: OpenAI sends finish_reason='tool_calls' in one chunk, usage in the next
-      // We yield immediately when we see tool_calls finish reason
-      if (finishReasonSeen && finishReason === 'tool_calls' && !usageSeen) {
-        yield {
-          content: '',
-          done: true,
-          usage: {
-            promptTokens: fullMessage.usage?.prompt_tokens ?? 0,
-            completionTokens: fullMessage.usage?.completion_tokens ?? 0,
-            totalTokens: fullMessage.usage?.total_tokens ?? 0,
-          },
-          attachmentResults,
-          rawResponse: fullMessage,
-        };
-        // Continue reading to drain the stream
-      } else if (finishReasonSeen && usageSeen) {
-        // For regular text responses, we get both finish_reason and usage
-        yield {
-          content: '',
-          done: true,
-          usage: {
-            promptTokens: fullMessage.usage?.prompt_tokens ?? 0,
-            completionTokens: fullMessage.usage?.completion_tokens ?? 0,
-            totalTokens: fullMessage.usage?.total_tokens ?? 0,
-          },
-          attachmentResults,
-          rawResponse: fullMessage,
-        };
-      }
+    // Build final response
+    if (finalResponse) {
+      const raw = this.buildRawResponse(finalResponse);
+
+      yield {
+        content: '',
+        done: true,
+        usage: {
+          promptTokens: finalResponse.usage?.input_tokens ?? 0,
+          completionTokens: finalResponse.usage?.output_tokens ?? 0,
+          totalTokens: finalResponse.usage?.total_tokens ?? 0,
+        },
+        attachmentResults,
+        rawResponse: raw,
+      };
+    } else {
+      logger.warn('Stream ended without response.completed event', {
+        context: 'OpenAIProvider.streamMessage',
+      });
+      yield {
+        content: '',
+        done: true,
+        usage: {
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0,
+        },
+        attachmentResults,
+      };
     }
   }
 
   async validateApiKey(apiKey: string): Promise<boolean> {
     try {
-      const client = new OpenAI({ apiKey });
+      const client = new OpenAI({
+        apiKey,
+        defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+      });
       await client.models.list();
       return true;
     } catch (error) {
@@ -336,13 +529,18 @@ export class OpenAIProvider implements LLMProvider {
 
   async getAvailableModels(apiKey: string): Promise<string[]> {
     try {
-      const client = new OpenAI({ apiKey });
+      const client = new OpenAI({
+        apiKey,
+        defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+      });
       const models = await client.models.list();
-      const gptModels = models.data
-        .filter((m) => m.id.includes('gpt'))
+      // Filter for Responses API-compatible chat models
+      const chatModelPrefixes = ['gpt-4', 'gpt-5', 'o1', 'o3', 'o4'];
+      const chatModels = models.data
+        .filter((m) => chatModelPrefixes.some(prefix => m.id.startsWith(prefix)))
         .map((m) => m.id)
         .sort();
-      return gptModels;
+      return chatModels;
     } catch (error) {
       logger.error('Failed to fetch OpenAI models', { context: 'OpenAIProvider.getAvailableModels' }, error instanceof Error ? error : undefined);
       return [];
@@ -350,7 +548,10 @@ export class OpenAIProvider implements LLMProvider {
   }
 
   async generateImage(params: ImageGenParams, apiKey: string): Promise<ImageGenResponse> {
-    const client = new OpenAI({ apiKey });
+    const client = new OpenAI({
+      apiKey,
+      defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+    });
 
     const response = await client.images.generate({
       model: params.model ?? 'dall-e-3',

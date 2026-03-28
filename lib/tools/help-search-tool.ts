@@ -43,7 +43,7 @@ export interface HelpSearchToolOutput {
 export const helpSearchToolDefinition = {
   type: 'function',
   function: {
-    name: 'search_help',
+    name: 'help_search',
     description:
       'Search Quilltap help documentation for features, settings, configuration, or usage guidance. Use this when the user asks about how to use Quilltap, configure settings, troubleshoot issues, or understand features. This helps you provide accurate documentation-based answers.',
     parameters: {
@@ -67,60 +67,6 @@ export const helpSearchToolDefinition = {
       required: ['query'],
     },
   },
-}
-
-/**
- * Tool definition compatible with Anthropic's tool_use format
- */
-export const anthropicHelpSearchToolDefinition = {
-  name: 'search_help',
-  description:
-    'Search Quilltap help documentation for features, settings, configuration, or usage guidance. Use this when the user asks about how to use Quilltap, configure settings, troubleshoot issues, or understand features. This helps you provide accurate documentation-based answers.',
-  input_schema: {
-    type: 'object' as const,
-    properties: {
-      query: {
-        type: 'string',
-        description:
-          'What to search for in the help documentation. Be specific about the feature, setting, or topic. Examples: "how to configure embedding profiles", "image generation settings", "memory search", "project files"',
-        minLength: 1,
-        maxLength: 500,
-      },
-      limit: {
-        type: 'integer',
-        minimum: 1,
-        maximum: 10,
-        description: 'Maximum number of help documents to retrieve. Default is 3.',
-        default: 3,
-      },
-    },
-    required: ['query'],
-  },
-}
-
-/**
- * Helper to get tool definition in OpenAI format
- */
-export function getOpenAIHelpSearchTool() {
-  return helpSearchToolDefinition
-}
-
-/**
- * Helper to get tool definition in Anthropic format
- */
-export function getAnthropicHelpSearchTool() {
-  return anthropicHelpSearchToolDefinition
-}
-
-/**
- * Helper to get Google/Gemini format tool definition
- */
-export function getGoogleHelpSearchTool() {
-  return {
-    name: anthropicHelpSearchToolDefinition.name,
-    description: anthropicHelpSearchToolDefinition.description,
-    parameters: anthropicHelpSearchToolDefinition.input_schema,
-  }
 }
 
 /**

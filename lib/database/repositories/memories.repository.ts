@@ -252,6 +252,70 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   }
 
   /**
+   * Find recent memories for a character across importance tiers.
+   * Returns three arrays: high (≥0.7), medium (0.3–0.7), low (<0.3),
+   * each sorted by createdAt descending (newest first).
+   * Uses reinforcedImportance when available, otherwise importance.
+   *
+   * @param characterId The character ID
+   * @param limits Optional per-tier limits (defaults: high=50, medium=20, low=10)
+   * @returns Promise with high, medium, and low importance memory arrays
+   */
+  async findRecentByImportanceTier(
+    characterId: string,
+    limits: { high?: number; medium?: number; low?: number } = {}
+  ): Promise<{ high: Memory[]; medium: Memory[]; low: Memory[] }> {
+    const highLimit = limits.high ?? 50;
+    const mediumLimit = limits.medium ?? 20;
+    const lowLimit = limits.low ?? 10;
+
+    const [high, medium, low] = await Promise.all([
+      this.safeQuery(
+        async () => {
+          const memories = await this.findByFilter(
+            { characterId, importance: { $gte: 0.7 } },
+            { sort: { createdAt: -1 }, limit: highLimit }
+          );
+          return memories;
+        },
+        'Error finding high-importance memories',
+        { characterId, limit: highLimit },
+        []
+      ),
+      this.safeQuery(
+        async () => {
+          // Medium tier: importance >= 0.3 AND < 0.7
+          const allAboveLow = await this.findByFilter(
+            { characterId, importance: { $gte: 0.3 } },
+            { sort: { createdAt: -1 } }
+          );
+          // Filter out high-importance memories and apply limit
+          return allAboveLow
+            .filter(m => (m.reinforcedImportance ?? m.importance) < 0.7)
+            .slice(0, mediumLimit);
+        },
+        'Error finding medium-importance memories',
+        { characterId, limit: mediumLimit },
+        []
+      ),
+      this.safeQuery(
+        async () => {
+          const memories = await this.findByFilter(
+            { characterId, importance: { $lt: 0.3 } },
+            { sort: { createdAt: -1 }, limit: lowLimit }
+          );
+          return memories;
+        },
+        'Error finding low-importance memories',
+        { characterId, limit: lowLimit },
+        []
+      ),
+    ]);
+
+    return { high, medium, low };
+  }
+
+  /**
    * Create a new memory
    * @param data The memory data (without id, createdAt, updatedAt)
    * @param options Optional CreateOptions to specify ID and createdAt (for sync)

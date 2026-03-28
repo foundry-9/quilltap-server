@@ -18,6 +18,7 @@ const mockGetRepositoriesSafe = jest.mocked(getRepositoriesSafe)
 function createMockRequest(url: string) {
   return {
     url,
+    nextUrl: new URL(url),
     method: 'GET',
     headers: new Headers(),
   } as any

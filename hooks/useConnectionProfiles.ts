@@ -69,10 +69,10 @@ export function useConnectionProfiles() {
   return {
     profiles,
     loading,
-    getProfileProvider(id: string): { provider: string; modelName: string } | null {
+    getProfileProvider(id: string): { provider: string; modelName: string; name: string } | null {
       const profile = profiles.find(p => p.id === id)
       if (!profile) return null
-      return { provider: profile.provider, modelName: profile.modelName }
+      return { provider: profile.provider, modelName: profile.modelName, name: profile.name }
     },
   }
 }

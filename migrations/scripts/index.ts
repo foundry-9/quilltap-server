@@ -107,6 +107,30 @@ import { dropApiKeyEncryptionColumnsMigration } from './drop-api-key-encryption-
 import { decryptApiKeyValuesMigration } from './decrypt-api-key-values';
 // Drop pepper_vault table (encryption simplified)
 import { dropPepperVaultMigration } from './drop-pepper-vault';
+// Add whisper target field to chat_messages
+import { addWhisperTargetFieldMigration } from './add-whisper-target-field';
+// Add turn queue field to chats for server-side turn management
+import { addTurnQueueFieldMigration } from './add-turn-queue-field';
+// Add scene state tracking field to chats
+import { addSceneStateFieldMigration } from './add-scene-state-field';
+// Add help tools field to characters
+import { addHelpToolsFieldMigration } from './add-help-tools-field';
+// Add auto-lock settings field to chat_settings
+import { addAutoLockSettingsFieldMigration } from './add-auto-lock-settings-field';
+// Add chatType field to chats for help chat support
+import { addChatTypeFieldMigration } from './add-chat-type-field';
+// Create instance_settings table for instance-level configuration
+import { createInstanceSettingsTableMigration } from './create-instance-settings-table';
+// Migrate participant isActive boolean to status enum
+import { migrateParticipantStatusFieldMigration } from './migrate-participant-status-field';
+// Add isSilentMessage field to chat_messages
+import { addSilentMessageFieldMigration } from './add-silent-message-field';
+// Convert character scenario string to scenarios array
+import { convertScenarioToScenariosMigration } from './convert-scenario-to-scenarios';
+// Add defaultTimestampConfig field to characters
+import { addCharacterTimestampConfigFieldMigration } from './add-character-timestamp-config-field';
+// Add defaultScenarioId and defaultSystemPromptId fields to characters
+import { addCharacterDefaultIdsFieldsMigration } from './add-character-default-ids-fields';
 
 /**
  * All available migrations.
@@ -209,6 +233,30 @@ export const migrations: Migration[] = [
   decryptApiKeyValuesMigration,
   // Drop pepper_vault table (encryption simplified)
   dropPepperVaultMigration,
+  // Add whisper target field to chat_messages
+  addWhisperTargetFieldMigration,
+  // Add turn queue field to chats for server-side turn management
+  addTurnQueueFieldMigration,
+  // Add scene state tracking field to chats
+  addSceneStateFieldMigration,
+  // Add help tools field to characters
+  addHelpToolsFieldMigration,
+  // Add auto-lock settings field to chat_settings
+  addAutoLockSettingsFieldMigration,
+  // Add chatType field to chats for help chat support
+  addChatTypeFieldMigration,
+  // Create instance_settings table for instance-level configuration
+  createInstanceSettingsTableMigration,
+  // Migrate participant isActive boolean to status enum
+  migrateParticipantStatusFieldMigration,
+  // Add isSilentMessage field to chat_messages
+  addSilentMessageFieldMigration,
+  // Convert character scenario string to scenarios array
+  convertScenarioToScenariosMigration,
+  // Add defaultTimestampConfig field to characters
+  addCharacterTimestampConfigFieldMigration,
+  // Add defaultScenarioId and defaultSystemPromptId fields to characters
+  addCharacterDefaultIdsFieldsMigration,
 ];
 
 export {
@@ -306,4 +354,28 @@ export {
   decryptApiKeyValuesMigration,
   // Drop pepper_vault table (encryption simplified)
   dropPepperVaultMigration,
+  // Add whisper target field to chat_messages
+  addWhisperTargetFieldMigration,
+  // Add turn queue field to chats for server-side turn management
+  addTurnQueueFieldMigration,
+  // Add scene state tracking field to chats
+  addSceneStateFieldMigration,
+  // Add help tools field to characters
+  addHelpToolsFieldMigration,
+  // Add auto-lock settings field to chat_settings
+  addAutoLockSettingsFieldMigration,
+  // Add chatType field to chats for help chat support
+  addChatTypeFieldMigration,
+  // Create instance_settings table for instance-level configuration
+  createInstanceSettingsTableMigration,
+  // Migrate participant isActive boolean to status enum
+  migrateParticipantStatusFieldMigration,
+  // Add isSilentMessage field to chat_messages
+  addSilentMessageFieldMigration,
+  // Convert character scenario string to scenarios array
+  convertScenarioToScenariosMigration,
+  // Add defaultTimestampConfig field to characters
+  addCharacterTimestampConfigFieldMigration,
+  // Add defaultScenarioId and defaultSystemPromptId fields to characters
+  addCharacterDefaultIdsFieldsMigration,
 };

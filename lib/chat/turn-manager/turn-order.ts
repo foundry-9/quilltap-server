@@ -11,6 +11,7 @@
 
 import type { TurnState, TurnSelectionResult } from './types';
 import type { ParticipantData } from '@/components/chat/ParticipantCard';
+import { isParticipantPresent } from '@/lib/schemas/types';
 
 /**
  * Status values for turn order entries.
@@ -22,6 +23,8 @@ export type TurnOrderStatus =
   | 'eligible'     // Eligible to speak (hasn't spoken this cycle, not last speaker)
   | 'user-turn'    // User's slot in the cycle
   | 'spoken'       // Already spoke this cycle
+  | 'silent'       // Participant is silent (present but not speaking)
+  | 'absent'       // Participant is absent
   | 'inactive';    // Participant is inactive
 
 /**
@@ -111,8 +114,8 @@ export function computePredictedTurnOrder(options: ComputeTurnOrderOptions): Tur
   }
 
   // Separate active vs inactive participants
-  const activeParticipants = participants.filter(p => p.isActive);
-  const inactiveParticipants = participants.filter(p => !p.isActive);
+  const activeParticipants = participants.filter(p => isParticipantPresent(p.status || 'active'));
+  const inactiveParticipants = participants.filter(p => !isParticipantPresent(p.status || 'active'));
 
   // 4. Eligible participants (active, not spoken this cycle, not last speaker, not user)
   // Sort by talkativeness descending
@@ -139,7 +142,7 @@ export function computePredictedTurnOrder(options: ComputeTurnOrderOptions): Tur
   // 5. User persona at their cycle position
   if (userParticipantId && !placed.has(userParticipantId)) {
     const userP = participants.find(p => p.id === userParticipantId);
-    if (userP?.isActive) {
+    if (userP && isParticipantPresent(userP.status || 'active')) {
       // If it's the user's turn (nextSpeakerId is null and not generating), place as user-turn
       const isUserTurn = turnSelectionResult?.nextSpeakerId === null && !isGenerating;
       addEntry(userParticipantId, isUserTurn ? 'user-turn' : 'user-turn');
@@ -166,10 +169,18 @@ export function computePredictedTurnOrder(options: ComputeTurnOrderOptions): Tur
   for (const p of inactiveParticipants) {
     if (!placed.has(p.id)) {
       placed.add(p.id);
+      // Check if participant has 'absent' or 'removed' status
+      const pStatus = (p as any).status;
+      let turnOrderStatus: TurnOrderStatus = 'inactive';
+      if (pStatus === 'absent') {
+        turnOrderStatus = 'absent';
+      } else if (pStatus === 'silent') {
+        turnOrderStatus = 'silent';
+      }
       entries.push({
         participantId: p.id,
         position: null,
-        status: 'inactive',
+        status: turnOrderStatus,
       });
     }
   }

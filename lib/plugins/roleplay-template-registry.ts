@@ -13,6 +13,7 @@ import { getEnabledPluginsByCapability } from '@/lib/plugins';
 import type { LoadedPlugin } from '@/lib/plugins/manifest-loader';
 import { getErrorMessage } from '@/lib/errors';
 import type { AnnotationButton, RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types';
+import { AbstractRegistry } from '@/lib/plugins/base-registry';
 
 // ============================================================================
 // TYPES
@@ -86,34 +87,22 @@ declare global {
   var __quilltapRoleplayTemplateRegistryState: TemplateRegistryState | undefined;
 }
 
-/**
- * Get or create the global registry state
- * Using global ensures state persists across Next.js module reloads
- */
-function getGlobalState(): TemplateRegistryState {
-  if (!global.__quilltapRoleplayTemplateRegistryState) {
-    global.__quilltapRoleplayTemplateRegistryState = {
+// ============================================================================
+// ROLEPLAY TEMPLATE REGISTRY CLASS
+// ============================================================================
+
+class RoleplayTemplateRegistry extends AbstractRegistry<TemplateRegistryState> {
+  protected readonly registryName = 'roleplay-template-registry';
+  protected readonly globalStateKey = '__quilltapRoleplayTemplateRegistryState';
+
+  protected createEmptyState(): TemplateRegistryState {
+    return {
       initialized: false,
       templates: new Map(),
       errors: [],
       lastInitTime: null,
     };
   }
-  return global.__quilltapRoleplayTemplateRegistryState;
-}
-
-// ============================================================================
-// ROLEPLAY TEMPLATE REGISTRY CLASS
-// ============================================================================
-
-class RoleplayTemplateRegistry {
-  private get state(): TemplateRegistryState {
-    return getGlobalState();
-  }
-
-  private logger = logger.child({
-    module: 'roleplay-template-registry',
-  });
 
   /**
    * Initialize the template registry by loading templates from enabled ROLEPLAY_TEMPLATE plugins
@@ -132,7 +121,7 @@ class RoleplayTemplateRegistry {
         this.loadTemplateFromPlugin(plugin);
       } catch (error) {
         const errorMessage = getErrorMessage(error);
-        this.logger.error('Failed to load roleplay template from plugin', {
+        this.registryLogger.error('Failed to load roleplay template from plugin', {
           plugin: plugin.manifest.name,
           error: errorMessage,
         });
@@ -268,26 +257,6 @@ class RoleplayTemplateRegistry {
    */
   getErrors(): TemplateLoadError[] {
     return [...this.state.errors];
-  }
-
-  /**
-   * Check if registry is initialized
-   */
-  isInitialized(): boolean {
-    return this.state.initialized;
-  }
-
-  /**
-   * Reset the registry (for testing)
-   */
-  reset(): void {
-    // Reset the global state entirely
-    global.__quilltapRoleplayTemplateRegistryState = {
-      initialized: false,
-      templates: new Map(),
-      errors: [],
-      lastInitTime: null,
-    };
   }
 
   /**

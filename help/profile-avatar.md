@@ -120,6 +120,12 @@ If you don't see any images in the avatar selector, you'll need to upload some f
 - Try refreshing the page
 - Check that you have permission to upload and select images
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/profile")`
+
 ## Related Topics
 
 - [Profile Settings](profile-settings.md) - Edit your Display Name and Email

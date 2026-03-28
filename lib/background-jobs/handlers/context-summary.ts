@@ -8,7 +8,7 @@
 import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { updateContextSummary, extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks';
-import { getCheapLLMProvider, CheapLLMConfig } from '@/lib/llm/cheap-llm';
+import { getCheapLLMProvider, CheapLLMConfig, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { logger } from '@/lib/logger';
 import { createContextSummaryEvent } from '@/lib/services/system-events.service';
 import { enqueueChatDangerClassification } from '../queue-service';
@@ -52,11 +52,23 @@ export async function handleContextSummary(job: BackgroundJob): Promise<void> {
   };
 
   // Get cheap LLM selection
-  const cheapLLMSelection = getCheapLLMProvider(
+  let cheapLLMSelection = getCheapLLMProvider(
     connectionProfile,
     cheapLLMConfig,
     availableProfiles
   );
+
+  // For dangerous chats, use uncensored provider to avoid content refusals
+  const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings);
+  if (chat.isDangerousChat === true) {
+    cheapLLMSelection = resolveUncensoredCheapLLMSelection(
+      cheapLLMSelection,
+      true,
+      dangerSettings,
+      availableProfiles
+    );
+  }
+
   // Get all chat messages and extract only visible conversation (USER/ASSISTANT, tool artifacts stripped)
   const allMessages = await repos.chats.getMessages(payload.chatId);
   const chatMessages = extractVisibleConversation(allMessages);
@@ -113,7 +125,6 @@ export async function handleContextSummary(job: BackgroundJob): Promise<void> {
 
   // Chain: enqueue danger classification after successful summary update
   try {
-    const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings);
     if (dangerSettings.mode !== 'OFF') {
       const chainResult = await enqueueChatDangerClassification(
         job.userId,

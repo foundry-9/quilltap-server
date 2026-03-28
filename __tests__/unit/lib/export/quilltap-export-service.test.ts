@@ -242,7 +242,7 @@ describe('quilltap-export-service', () => {
             connectionProfileId: generateId(),
             imageProfileId: null,
             roleplayTemplateId: null,
-            systemPromptOverride: null,
+
             selectedSystemPromptId: null,
             displayOrder: 0,
             isActive: true,

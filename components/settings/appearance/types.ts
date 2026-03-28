@@ -49,6 +49,10 @@ export interface ThemeCardProps {
   isExpanded?: boolean
   /** Callback to toggle preview expansion */
   onToggleExpand?: () => void
+  /** Callback to uninstall (only for bundle themes) */
+  onUninstall?: () => void
+  /** Callback to export theme as .qtap-theme */
+  onExport?: () => void
 }
 
 /**

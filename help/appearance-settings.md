@@ -331,6 +331,16 @@ For example:
 5. **Adjust sidebar width to your needs** — Find what's comfortable for you
 6. **Use both Settings and quick-switcher** — Each has advantages
 
+## In-Chat Settings Access
+
+Characters with help tools enabled can read your current appearance settings during a conversation using the `help_settings` tool with `category: "appearance"`. This returns your theme preference, avatar display mode and style, tag styles, and sidebar width. Ask a help-tools-enabled character something like "What are my appearance settings?" and it will report back.
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=appearance")`
+
 ## Related Help
 
 For more information, see:

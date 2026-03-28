@@ -159,6 +159,12 @@ Optimizes how conversation context is managed for efficiency.
   - Prevents token limit overages
   - Helps manage API costs
 
+**How it works:**
+
+Context compression applies only to **conversation history** — the message log that accumulates as you chat. Each character's system prompt (their identity, personality, and instructions) is never compressed, ensuring characters always maintain their distinct voice and personality.
+
+In multi-character chats, each character maintains their own compression cache. This is necessary because different characters may have different views of the conversation — a character who joined late only sees messages after their arrival, whispers are filtered per-recipient, and absent characters don't see messages that occurred while they were away.
+
 **How to configure:**
 
 1. Enable compression if dealing with long conversations
@@ -251,7 +257,7 @@ Configure AI-generated atmospheric background images for your chats.
 - Valid API key for your image provider
 - Characters with physical descriptions produce better results
 
-**Learn more:** See [Story Backgrounds](/help/story-backgrounds) for detailed information.
+**Learn more:** See [Story Backgrounds](story-backgrounds.md) for detailed information.
 
 ### Automation Settings
 
@@ -413,11 +419,21 @@ Most settings save automatically as you make changes. You'll see:
 - Some providers don't support vision
 - Try updating to a newer model that supports vision
 
+## In-Chat Settings Access
+
+Characters with help tools enabled can read your current chat settings during a conversation using the `help_settings` tool with `category: "chat"`. This returns your token display, context compression, memory cascade, timestamp, agent mode, dangerous content, automation, and LLM logging settings. Simply ask a help-tools-enabled character something like "What are my chat settings?" and it will look them up for you.
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=chat")`
+
 ## Related Settings
 
-- **Connection Profiles** — Choose which LLM to use
-- **API Keys** — Store credentials for providers
-- **Image Profiles** — Configure image generation (separate from descriptions)
-- **Embedding Profiles** — Required for memory cascade and semantic search
-- **Appearance Settings** — Control chat UI appearance (separate from behavior)
-- **Story Backgrounds** — AI-generated atmospheric backgrounds for chats
+- [Connection Profiles](connection-profiles.md) — Choose which LLM to use
+- [API Keys](api-keys-settings.md) — Store credentials for providers
+- [Image Generation Profiles](image-generation-profiles.md) — Configure image generation (separate from descriptions)
+- [Embedding Profiles](embedding-profiles.md) — Required for memory cascade and semantic search
+- [Appearance Settings](appearance-settings.md) — Control chat UI appearance (separate from behavior)
+- [Story Backgrounds](story-backgrounds.md) — AI-generated atmospheric backgrounds for chats

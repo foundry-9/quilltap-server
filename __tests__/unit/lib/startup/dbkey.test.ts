@@ -67,6 +67,9 @@ describe('Database Key Manager (dbkey)', () => {
     if ('__quilltapDbKeyState' in global) {
       delete (global as Record<string, unknown>).__quilltapDbKeyState;
     }
+    if ('__quilltapHasUserPassphrase' in global) {
+      delete (global as Record<string, unknown>).__quilltapHasUserPassphrase;
+    }
 
     mockExit = jest.spyOn(process, 'exit').mockImplementation((_code?: string | number | null) => {
       throw new Error(`process.exit called with code ${_code}`);
@@ -217,6 +220,79 @@ describe('Database Key Manager (dbkey)', () => {
       const state = await dbkey2.provisionDbKey();
       expect(state).toBe('resolved');
       expect(process.env.ENCRYPTION_MASTER_PEPPER).toBe(result.pepper);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // getHasUserPassphrase()
+  // ---------------------------------------------------------------------------
+
+  describe('getHasUserPassphrase()', () => {
+    it('returns true after unlocking with a user passphrase', async () => {
+      const passphrase = 'test-passphrase';
+      const dbkey = await importDbKey();
+      await dbkey.provisionDbKey();
+      dbkey.setupDbKey(passphrase);
+
+      // Simulate restart
+      delete process.env.ENCRYPTION_MASTER_PEPPER;
+      delete (global as Record<string, unknown>).__quilttapDbKeyState;
+      delete (global as Record<string, unknown>).__quilltapHasUserPassphrase;
+
+      const dbkey2 = await importDbKey();
+      await dbkey2.provisionDbKey();
+      expect(dbkey2.getHasUserPassphrase()).toBe(true);
+    });
+
+    it('returns false when no passphrase was set', async () => {
+      const dbkey = await importDbKey();
+      await dbkey.provisionDbKey();
+      dbkey.setupDbKey('');
+
+      // Simulate restart
+      delete process.env.ENCRYPTION_MASTER_PEPPER;
+      delete (global as Record<string, unknown>).__quilttapDbKeyState;
+      delete (global as Record<string, unknown>).__quilltapHasUserPassphrase;
+
+      const dbkey2 = await importDbKey();
+      await dbkey2.provisionDbKey();
+      expect(dbkey2.getHasUserPassphrase()).toBe(false);
+    });
+
+    it('preserves hasUserPassphrase=true when provisionDbKey re-runs after unlock', async () => {
+      // This tests the bug fix: after unlockDbKey() sets hasUserPassphrase=true,
+      // a subsequent provisionDbKey() (triggered by register() re-init) must not
+      // overwrite it to false when it sees the env pepper matching the .dbkey hash.
+      const passphrase = 'my-secret';
+      const dbkey = await importDbKey();
+      await dbkey.provisionDbKey();
+      dbkey.setupDbKey(passphrase);
+
+      // Simulate restart without env var (passphrase required)
+      delete process.env.ENCRYPTION_MASTER_PEPPER;
+      delete (global as Record<string, unknown>).__quilltapDbKeyState;
+      delete (global as Record<string, unknown>).__quilltapHasUserPassphrase;
+
+      const dbkey2 = await importDbKey();
+      await dbkey2.provisionDbKey();
+      expect(dbkey2.getDbKeyState()).toBe('needs-passphrase');
+
+      // Unlock sets pepper in env and hasUserPassphrase=true
+      const success = dbkey2.unlockDbKey(passphrase);
+      expect(success).toBe(true);
+      expect(dbkey2.getHasUserPassphrase()).toBe(true);
+
+      // Simulate register() re-running provisionDbKey after unlock
+      // (pepper is now in process.env, .dbkey file exists)
+      delete (global as Record<string, unknown>).__quilltapDbKeyState;
+      // Note: do NOT clear __quilltapHasUserPassphrase — that's the point of the test
+
+      const dbkey3 = await importDbKey();
+      const state = await dbkey3.provisionDbKey();
+      expect(state).toBe('resolved');
+
+      // The critical assertion: hasUserPassphrase must still be true
+      expect(dbkey3.getHasUserPassphrase()).toBe(true);
     });
   });
 

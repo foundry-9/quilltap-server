@@ -52,9 +52,10 @@ const makeCharacterParticipant = (participantId: string, characterId: string, ov
   controlledBy: 'llm',
   connectionProfileId: null,
   imageProfileId: null,
-  systemPromptOverride: null,
+
   displayOrder: 0,
   isActive: true,
+  status: 'active',
   hasHistoryAccess: true,
   joinScenario: null,
   createdAt: now,
@@ -69,9 +70,10 @@ const makeUserControlledParticipant = (participantId: string, characterId: strin
   controlledBy: 'user',
   connectionProfileId: null,
   imageProfileId: null,
-  systemPromptOverride: null,
+
   displayOrder: 0,
   isActive: true,
+  status: 'active',
   hasHistoryAccess: true,
   joinScenario: null,
   createdAt: now,
@@ -247,7 +249,7 @@ describe('turn manager state', () => {
   it('finds user participant and active characters', () => {
     const userChar = makeUserControlledParticipant('u1', 'char-user')
     const char1 = makeCharacterParticipant('p1', 'char-1')
-    const char2 = makeCharacterParticipant('p2', 'char-2', { isActive: false })
+    const char2 = makeCharacterParticipant('p2', 'char-2', { isActive: false, status: 'absent' })
 
     expect(findUserParticipant([char1, userChar])).toBe(userChar)
     expect(getActiveCharacterParticipants([char1, char2])).toEqual([char1])
@@ -385,7 +387,7 @@ describe('turn manager participant removal during turn', () => {
     const participants = [
       makeCharacterParticipant('p1', 'char-1'),
       makeCharacterParticipant('p2', 'char-2'),
-      makeCharacterParticipant('p3', 'char-3', { isActive: false }), // Simulating removal by setting inactive
+      makeCharacterParticipant('p3', 'char-3', { isActive: false, status: 'absent' }), // Simulating removal by setting inactive
     ]
     const characters = new Map<string, Character>([
       ['char-1', makeCharacter('char-1')],
@@ -405,8 +407,8 @@ describe('turn manager participant removal during turn', () => {
 
   it('returns user turn when all remaining participants become inactive', () => {
     const participants = [
-      makeCharacterParticipant('p1', 'char-1', { isActive: false }),
-      makeCharacterParticipant('p2', 'char-2', { isActive: false }),
+      makeCharacterParticipant('p1', 'char-1', { isActive: false, status: 'absent' }),
+      makeCharacterParticipant('p2', 'char-2', { isActive: false, status: 'absent' }),
     ]
     const characters = new Map<string, Character>([
       ['char-1', makeCharacter('char-1')],
@@ -551,7 +553,7 @@ describe('turn manager edge cases', () => {
     })
 
     it('single inactive character results in user turn', () => {
-      const participant = makeCharacterParticipant('p1', 'char-1', { isActive: false })
+      const participant = makeCharacterParticipant('p1', 'char-1', { isActive: false, status: 'absent' })
       const characters = new Map<string, Character>([['char-1', makeCharacter('char-1')]])
       const state = createInitialTurnState()
 
@@ -565,9 +567,9 @@ describe('turn manager edge cases', () => {
   describe('all participants inactive', () => {
     it('returns user turn when all character participants are inactive', () => {
       const participants = [
-        makeCharacterParticipant('p1', 'char-1', { isActive: false }),
-        makeCharacterParticipant('p2', 'char-2', { isActive: false }),
-        makeCharacterParticipant('p3', 'char-3', { isActive: false }),
+        makeCharacterParticipant('p1', 'char-1', { isActive: false, status: 'absent' }),
+        makeCharacterParticipant('p2', 'char-2', { isActive: false, status: 'absent' }),
+        makeCharacterParticipant('p3', 'char-3', { isActive: false, status: 'absent' }),
       ]
       const characters = new Map<string, Character>([
         ['char-1', makeCharacter('char-1')],
@@ -585,7 +587,7 @@ describe('turn manager edge cases', () => {
 
     it('handles mixed active/inactive with only user-controlled active', () => {
       const participants = [
-        makeCharacterParticipant('p1', 'char-1', { isActive: false }),
+        makeCharacterParticipant('p1', 'char-1', { isActive: false, status: 'absent' }),
         makeUserControlledParticipant('u1', 'char-user'), // User-controlled character is active
       ]
       const characters = new Map<string, Character>([['char-1', makeCharacter('char-1')]])

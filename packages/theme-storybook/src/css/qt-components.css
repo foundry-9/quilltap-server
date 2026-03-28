@@ -304,6 +304,12 @@
   --qt-chat-assistant-font: var(--font-sans);
   --qt-chat-assistant-font-weight: inherit;
 
+  /* Chat: Silent messages — inner thoughts/actions from characters in silent mode */
+  --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 65%, #7a9e8e 35%);
+  --qt-chat-silent-fg: var(--qt-chat-assistant-fg);
+  --qt-chat-silent-border: #7a9e8e;
+  --qt-chat-silent-label-fg: #5d7e6e;
+
   /* Chat composer variables */
   --qt-chat-composer-bg: var(--color-background);
   --qt-chat-composer-border: var(--color-border);
@@ -624,6 +630,26 @@
 }
 
 .qt-entity-card:hover {
+  border-color: var(--color-primary);
+  box-shadow: var(--qt-card-shadow-hover);
+}
+
+.qt-character-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  height: 100%;
+  padding: var(--qt-character-card-padding, 0.75rem);
+  border-radius: var(--qt-card-radius);
+  background-color: var(--qt-card-bg);
+  color: var(--qt-card-fg);
+  border: 1px solid color-mix(in srgb, var(--qt-card-border) calc(var(--qt-card-border-opacity, 1) * 100%), transparent);
+  box-shadow: var(--qt-card-shadow);
+  transition: var(--qt-card-transition);
+}
+
+.qt-character-card:hover {
   border-color: var(--color-primary);
   box-shadow: var(--qt-card-shadow-hover);
 }
@@ -997,6 +1023,80 @@
   background-color: var(--qt-chat-assistant-bg);
   color: var(--qt-chat-assistant-fg);
   border: 1px solid var(--color-border);
+}
+
+/**
+ * Silent message — inner thoughts and actions from character in silent mode.
+ * Distinguished from whispers by a dotted border (vs dashed) and sage/teal tones.
+ */
+.qt-chat-message-silent {
+  background: var(--qt-chat-silent-bg);
+  color: var(--qt-chat-silent-fg);
+  border: 2px dotted var(--qt-chat-silent-border);
+  font-style: italic;
+}
+
+.qt-chat-silent-label {
+  font-size: 0.75rem;
+  color: var(--qt-chat-silent-label-fg);
+  font-style: italic;
+  margin-bottom: 0.25rem;
+}
+
+/**
+ * Status badges for silent/absent participants
+ */
+.qt-badge-silent {
+  background: var(--qt-chat-silent-bg);
+  color: var(--qt-chat-silent-label-fg);
+  border: 1px solid var(--qt-chat-silent-border);
+  border-radius: 9999px;
+  padding: 0.125rem 0.5rem;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+.qt-badge-absent {
+  background: color-mix(in srgb, var(--color-muted) 40%, transparent);
+  color: var(--color-muted-foreground);
+  border: 1px solid var(--color-muted);
+  border-radius: 9999px;
+  padding: 0.125rem 0.5rem;
+  font-weight: 600;
+  font-size: 0.75rem;
+  opacity: 0.8;
+}
+
+/**
+ * Status overlay on participant avatar — small icon badge in the
+ * bottom-right corner, visible when sidebar is collapsed.
+ */
+.qt-participant-status-overlay {
+  position: absolute;
+  bottom: -0.125rem;
+  right: -0.125rem;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--color-background);
+  z-index: 2;
+}
+
+.qt-participant-status-overlay-silent {
+  background: var(--qt-chat-silent-border);
+  color: white;
+}
+
+.qt-participant-status-overlay-absent {
+  background: var(--color-muted);
+  color: var(--color-muted-foreground);
+}
+
+.qt-participant-card-silent {
+  border-color: var(--qt-chat-silent-border);
 }
 
 .qt-chat-composer {
@@ -1757,6 +1857,11 @@
    Adjusted colors for dark backgrounds with better contrast
    ========================================================================== */
 .dark {
+  /* Chat: Silent messages — darker mode variants */
+  --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 65%, #4a7a6a 35%);
+  --qt-chat-silent-border: #4a7a6a;
+  --qt-chat-silent-label-fg: #8ab8a4;
+
   /* Alert tokens - brighter, more saturated for dark backgrounds */
   --qt-alert-success-bg: hsl(142 76% 36% / 0.2);
   --qt-alert-success-fg: hsl(142 76% 65%);

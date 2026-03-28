@@ -16,6 +16,7 @@ const nextConfig = {
     '@openrouter/sdk',  // Used by lib/llm/pricing-fetcher.ts (dynamically imported, optional)
     'zod',              // Used throughout the app
     'better-sqlite3',   // Native module for SQLite database
+    'sharp',            // Native image processing (platform-specific binaries)
   ],
 
   // Include dependencies in standalone output for Docker deployments
@@ -26,7 +27,10 @@ const nextConfig = {
       './node_modules/@openrouter/**/*',
       './node_modules/zod/**/*',
       './node_modules/better-sqlite3/**/*',
+      './node_modules/sharp/**/*',
+      './node_modules/@img/**/*',
       './first-startup/**/*',
+      './themes/bundled/**/*',
     ],
   },
 
@@ -95,7 +99,17 @@ const nextConfig = {
   },
 
   // Turbopack configuration (Next.js 16+ uses Turbopack by default)
-  turbopack: {},
+  // Equivalent of webpack resolve.fallback for client-side bundles:
+  // Server-only modules (fs, net, tls, etc.) get stubbed out when imported
+  // from client component trees.
+  turbopack: {
+    resolveAlias: {
+      fs: { browser: './lib/stubs/empty.js' },
+      net: { browser: './lib/stubs/empty.js' },
+      tls: { browser: './lib/stubs/empty.js' },
+      'better-sqlite3': { browser: './lib/stubs/empty.js' },
+    },
+  },
 
   // Webpack optimizations (used when building with --webpack flag)
   webpack: (config, { isServer }) => {

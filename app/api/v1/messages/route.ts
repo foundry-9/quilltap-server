@@ -27,8 +27,8 @@ const continueMessageWithChatIdSchema = continueMessageSchema.extend({
  * GET /api/v1/messages?chatId= - List messages for a chat
  */
 export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
-  const url = new URL(req.url);
-  const chatId = url.searchParams.get('chatId');
+  const { searchParams } = req.nextUrl;
+  const chatId = searchParams.get('chatId');
 
   if (!chatId) {
     return badRequest('Query parameter required: chatId');
@@ -64,8 +64,8 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
 export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
   try {
     // Get chatId from query string
-    const url = new URL(req.url);
-    const chatId = url.searchParams.get('chatId');
+    const { searchParams } = req.nextUrl;
+    const chatId = searchParams.get('chatId');
 
     if (!chatId) {
       return badRequest('Query parameter required: chatId');

@@ -12,7 +12,7 @@ const jsonSchema = toJSONSchema(PluginManifestSchema, {
   reused: 'inline', // Equivalent to $refStrategy: 'none' - inline all schemas instead of using $ref
 });
 
-const outputPath = join(__dirname, '../plugins/dist/qtap-plugin-template/schemas/plugin-manifest.schema.json');
+const outputPath = join(__dirname, '../public/schemas/plugin-manifest.schema.json');
 
 writeFileSync(outputPath, JSON.stringify(jsonSchema, null, 2), 'utf-8');
 

@@ -5,12 +5,9 @@
  * Uses semver to determine if updates are breaking (major) or non-breaking (minor/patch).
  */
 
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import { logger } from '@/lib/logger';
-import { getInstalledPlugins, type InstalledPluginInfo } from './installer';
-
-const execAsync = promisify(exec);
+import { getInstalledPlugins } from './installer';
+import { getLatestVersion as getLatestVersionFromRegistry } from './registry-client';
 
 // ============================================================================
 // TYPES
@@ -130,66 +127,9 @@ export function isNonBreakingUpdate(currentVersion: string, latestVersion: strin
 // NPM REGISTRY QUERIES
 // ============================================================================
 
-const NPM_TIMEOUT = 30000; // 30 seconds for npm queries
-
-/**
- * Get the latest version of a package from npm registry
- *
- * @param packageName - npm package name
- * @returns Latest version string, or null if unable to fetch
- */
-export async function getLatestVersion(packageName: string): Promise<string | null> {
-  try {
-    const { stdout, stderr } = await execAsync(
-      `npm view ${packageName} version --json`,
-      {
-        timeout: NPM_TIMEOUT,
-        env: { ...process.env, NODE_ENV: 'production' },
-      }
-    );
-
-    if (stderr && stderr.includes('ERR!')) {
-      logger.warn('npm view command failed', {
-        context: 'VersionChecker.getLatestVersion',
-        packageName,
-        stderr,
-      });
-      return null;
-    }
-
-    // npm view returns the version as a JSON string (e.g., "1.2.3")
-    const version = JSON.parse(stdout.trim());
-
-    return version;
-  } catch (error) {
-    // Handle common errors gracefully
-    if (error instanceof Error) {
-      if (error.message.includes('ETIMEDOUT') || error.message.includes('timeout')) {
-        logger.warn('Timeout checking npm for package version', {
-          context: 'VersionChecker.getLatestVersion',
-          packageName,
-        });
-      } else if (error.message.includes('ENOTFOUND')) {
-        logger.warn('Cannot reach npm registry', {
-          context: 'VersionChecker.getLatestVersion',
-          packageName,
-        });
-      } else if (error.message.includes('404') || error.message.includes('Not Found')) {
-        logger.warn('Package not found on npm', {
-          context: 'VersionChecker.getLatestVersion',
-          packageName,
-        });
-      } else {
-        logger.warn('Error checking npm for package version', {
-          context: 'VersionChecker.getLatestVersion',
-          packageName,
-          error: error.message,
-        });
-      }
-    }
-    return null;
-  }
-}
+// Re-export getLatestVersion from the registry client so existing consumers
+// that import it from this module continue to work.
+export { getLatestVersion } from './registry-client';
 
 // ============================================================================
 // UPDATE CHECKING
@@ -221,7 +161,7 @@ export async function checkForUpdates(): Promise<PluginUpdateInfo[]> {
       try {
         const packageName = plugin.manifest.name;
         const currentVersion = plugin.version;
-        const latestVersion = await getLatestVersion(packageName);
+        const latestVersion = await getLatestVersionFromRegistry(packageName);
 
         if (!latestVersion) {
           continue;

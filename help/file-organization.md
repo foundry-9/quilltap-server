@@ -536,10 +536,16 @@ Gets confusing and hard to navigate
 - Split very large folders into subfolders
 - Use search/filter instead of browsing huge folders
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/files")`
+
 ## Related Topics
 
 - [File Management](files.md) — Browse and manage files
 - [Uploading Files](file-uploads.md) — Add files to folders
 - [File Search](search.md) — Find files by name or content
 - [Projects](projects.md) — Organize files by project
-- [The Forge > File Storage](file-storage-settings.md) — Configure storage location
+- [Data Directory](data-directory.md) — Configure storage location

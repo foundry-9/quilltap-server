@@ -120,7 +120,7 @@ Each participant card shows:
 - **Avatar and Name** — Character identity
 - **Type Badge** — "Character" or "Persona"
 - **Connection Profile** — Which LLM they use
-- **Active/Inactive Status** — Whether they're participating
+- **Participation Status** — Active, Silent, Absent, or Removed
 - **Turn Indicator** — Glowing when it's their turn
 
 ### Adjusting Talkativeness
@@ -178,15 +178,19 @@ Control how often each character speaks:
 
 **Note:** You cannot remove the last character — every chat needs at least one participant.
 
-### Temporarily Disabling Characters
+### Character Participation States
 
-To pause a character without removing them:
+Each character in a multi-character chat can be set to one of four states via the **Status** dropdown on their participant card:
 
-1. Find their card in the sidebar
-2. Toggle their **Active** status off
-3. They won't speak until reactivated
-4. Their messages are still visible
-5. Toggle Active back on when ready
+**Active** (default) — The character speaks and roleplays normally, taking turns as determined by the turn manager.
+
+**Silent** — The character still receives turns, but their prompt instructs them to observe without speaking aloud. They may have interior thoughts, physical reactions, and subtle actions — but no audible dialogue. Messages from silent characters appear with a distinctive dotted border and muted tones, rather like watching someone's inner monologue unfold at a particularly charged dinner party.
+
+**Absent** — The character is temporarily away from the scene. The turn manager skips them entirely. They appear dimmed at the bottom of the sidebar with no turn position badge. Set a character to Absent when they've stepped away from the scene but may return later.
+
+**Removed** — The character has left the chat permanently. They cannot be whispered to and have no knowledge of events after their departure. Their past messages remain visible. Removed characters can be re-added later via the Add Character button, but they arrive as a fresh participant.
+
+**Status Change Notifications:** When any character's status changes, all other LLM-controlled characters are notified in their next turn's prompt — so if someone goes silent or steps out, the remaining characters can react naturally.
 
 ## Impersonation
 
@@ -282,6 +286,32 @@ Set which image service to use when this character generates images:
 1. Configure in character settings within the chat
 2. Each character can use different image services
 
+## Whispers
+
+In the bustling parlour of a multi-character chat—where three or more distinguished personalities hold court—one occasionally finds oneself in need of a *private word*. This is where whispers come in, much like those delicious asides one overhears (or, more properly, does *not* overhear) at a particularly eventful garden party.
+
+### How Whispers Work
+
+A whisper is a message visible only to its sender and its intended recipient. All other characters in the chat remain blissfully unaware of its contents, rather like a note passed under the table at a dinner party hosted by someone with excellent taste and questionable associates.
+
+**For AI Characters:** Characters with native tool-calling abilities will discover the `whisper` tool at their disposal. They may use it to send private asides, secret warnings, or clandestine plans to a specific character by name or alias.
+
+**For You, the Distinguished Reader:** When participating in a chat with three or more characters, you will find a small speech-bubble icon beside each character in the participant sidebar. Clicking it opens a whisper dialog—a discreet little window where you may compose your private communique.
+
+### Visibility
+
+- **Default:** Whispers between AI characters are hidden from the chat display, preserving the illusion that some things are, in fact, private.
+- **Show All Whispers:** A toggle in the chat header lets you peek behind the curtain and see all whispers, including those between characters. These "overheard" whispers appear with a distinctive faded style, as if glimpsed through a frosted window.
+- **Your Whispers:** Whispers you send, or whispers addressed to characters you control, are always visible to you.
+
+### Context and Memory
+
+The machinery behind the curtain is equally discreet. When assembling context for an AI character's next response, whispers addressed to *other* characters are filtered out entirely—your scheming villain will never accidentally reference a secret plan whispered between two heroes. The Commonplace Book memory system likewise respects whisper privacy, ensuring that memories extracted from whispered messages are attributed only to the participants involved.
+
+### Memory Recap at Chat Start
+
+When a character first speaks in a chat — whether at the very beginning or upon joining an existing conversation — they receive a personalized "What You Remember" narrative summary drawn from their Commonplace Book. This recap is generated automatically by the cheap LLM, weaving together memories of varying importance into a first-person narrative that gives the character a sense of continuity. The recap appears in the character's context after their personality notes, ensuring they arrive to the scene already aware of their history with other participants, much as a well-prepared dinner guest reviews the guest list before entering the room.
+
 ## Best Practices
 
 ### Scene Management
@@ -308,7 +338,7 @@ Set which image service to use when this character generates images:
 ### Performance
 
 - **Fewer Characters** — More participants = more API calls = higher cost
-- **Disable Inactive Characters** — Rather than keeping everyone active
+- **Set Absent for Off-Scene Characters** — Rather than keeping everyone active
 - **Use Cheaper Models** — For less important characters
 - **Monitor Tokens** — Large casts use more context
 
@@ -386,6 +416,12 @@ Set which image service to use when this character generates images:
 - Click Pause button in sidebar
 - Refresh the page if needed
 - Wait for current response to complete
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/salon/:id")`
 
 ## Related Pages
 

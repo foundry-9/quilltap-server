@@ -280,7 +280,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="fixed inset-0 z-50 flex items-center justify-center qt-bg-overlay backdrop-blur-sm p-4" onClick={onClose}>
         <div
           className="qt-dialog flex flex-col max-h-[90vh] max-w-[90vw]"
           style={{ minWidth: '300px' }}

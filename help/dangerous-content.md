@@ -1,5 +1,5 @@
 ---
-url: /settings?tab=chat
+url: /settings?tab=chat&section=dangerous-content
 ---
 
 # Dangerous Content Handling
@@ -41,7 +41,7 @@ Messages are scanned, and flagged content is automatically rerouted to an uncens
 
 ## Configuration
 
-Navigate to the **Chat** tab in Settings (`/settings?tab=chat`) and expand **Dangerous Content Handling** to configure:
+Navigate to the **Chat** tab in Settings (`/settings?tab=chat&section=dangerous-content`) and expand **Dangerous Content Handling** to configure:
 
 ### Detection Threshold
 
@@ -78,7 +78,7 @@ Additional instructions appended to the content classifier's system prompt. Use 
 
 To use Auto-Route mode, you need at least one connection profile marked as uncensored-compatible:
 
-1. Go to the **AI Providers** tab in Settings (`/settings?tab=providers`) and expand **Connection Profiles**
+1. Go to the **AI Providers** tab in Settings (`/settings?tab=providers&section=connection-profiles`) and expand **Connection Profiles**
 2. Edit or create a profile that connects to an uncensored-compatible model
 3. Check the **"Uncensored-compatible"** checkbox
 4. Save the profile
@@ -129,7 +129,7 @@ Overriding a message's danger flags marks all flags as user-overridden and remov
 
 ## Image Prompt Expansion
 
-When an image prompt is flagged as dangerous, the system can use a separate uncensored LLM for prompt expansion (the step where character placeholders are resolved into visual descriptions). Configure this in the **Chat** tab in Settings (`/settings?tab=chat`) under **Cheap LLM Settings** > "Image Prompt Expansion LLM (Uncensored - Optional)." If not set, the standard cheap LLM is always used for prompt expansion.
+When an image prompt is flagged as dangerous, the system can use a separate uncensored LLM for prompt expansion (the step where character placeholders are resolved into visual descriptions). Configure this in the **Chat** tab in Settings (`/settings?tab=chat&section=dangerous-content`) under **Cheap LLM Settings** > "Image Prompt Expansion LLM (Uncensored - Optional)." If not set, the standard cheap LLM is always used for prompt expansion.
 
 ## Chat-Level Classification
 
@@ -144,6 +144,14 @@ In addition to per-message scanning, Quilltap can classify entire chats as dange
 ### Sticky Classification
 
 Once a chat is classified as dangerous, it stays marked as dangerous permanently. This prevents the classification from flip-flopping as conversations evolve. Safe chats are re-checked whenever new messages are added (message count changes).
+
+### Optimizations for Permanently Dangerous Chats
+
+When a chat has been permanently classified as dangerous, Quilltap applies several optimizations to save tokens and avoid futile content refusals:
+
+- **Per-message classification is skipped**: Since every message in a permanently dangerous chat will be dangerous, individual message scanning is bypassed entirely. Danger flags are synthesized from the stored chat-level categories instead.
+- **Uncensored providers are not rerouted unnecessarily**: If you have already assigned an uncensored-compatible provider to a character (e.g., DeepSeek), the Concierge will not swap it for the configured uncensored fallback. It only falls back to the configured provider if the current one returns an empty response (suggesting it was caught by censorship anyway).
+- **All background tasks use uncensored providers**: Memory extraction, title generation, context summaries, scene state tracking, story backgrounds, and inter-character memory tasks all automatically use your configured uncensored provider in dangerous chats. This prevents content refusals from censored providers that would otherwise silently fail these background operations.
 
 ### Manual Reclassification
 
@@ -174,14 +182,24 @@ When dangerous content handling is enabled, Quilltap automatically classifies al
 
 - If you have an OpenAI connection profile, classification uses the free moderation endpoint (no token cost)
 - Without an OpenAI profile, classification falls back to your Cheap LLM, adding a small token cost per scanned message
-- Only user messages are scanned per-message, not assistant responses
+- Only user messages are scanned per-message, not assistant responses (and permanently dangerous chats skip per-message scanning entirely)
 - Chat-level classification uses the compressed context summary (covers the whole conversation)
 - The system never blocks messages — if anything fails, your message goes through normally
 - If no uncensored provider is available in Auto-Route mode, the message is sent to your regular provider with a warning
 - Classification accuracy depends on the method used: the OpenAI moderation endpoint is purpose-built and highly accurate; the Cheap LLM fallback depends on the model's capabilities
 
+## In-Chat Settings Access
+
+Characters with help tools enabled can read your current dangerous content configuration during a conversation using the `help_settings` tool with `category: "chat"`. The chat category includes your dangerous content handling settings alongside other chat preferences. Ask a help-tools-enabled character something like "What are my dangerous content settings?" and it will look them up.
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=chat&section=dangerous-content")`
+
 ## Related Topics
 
-- [Chat Settings](/help/chat-settings) - Configure global chat behavior
-- [Connection Profiles](/help/connection-profiles) - Set up LLM providers
-- [Image Generation Profiles](/help/image-generation-profiles) - Configure image providers
+- [Chat Settings](chat-settings.md) - Configure global chat behavior
+- [Connection Profiles](connection-profiles.md) - Set up LLM providers
+- [Image Generation Profiles](image-generation-profiles.md) - Configure image providers

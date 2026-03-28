@@ -241,7 +241,7 @@ export function ApiKeyEntryStep({ state, dispatch }: ApiKeyEntryStepProps) {
                   type="button"
                   onClick={() => handleValidate(provider)}
                   disabled={form.validating || (requiresKey && !form.key.trim())}
-                  className="qt-btn qt-button-primary"
+                  className="qt-button qt-button-primary"
                 >
                   {form.validating ? (
                     <span className="flex items-center gap-2">

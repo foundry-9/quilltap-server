@@ -7,6 +7,7 @@ export default defineConfig({
     'logging/index': 'src/logging/index.ts',
     'providers/index': 'src/providers/index.ts',
     'roleplay-templates/index': 'src/roleplay-templates/index.ts',
+    'system-prompts/index': 'src/system-prompts/index.ts',
     'host-rewrite': 'src/host-rewrite.ts',
   },
   format: ['cjs', 'esm'],

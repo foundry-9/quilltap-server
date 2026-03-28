@@ -261,7 +261,7 @@ export function ChatModals({
         onClose={closeAddCharacter}
         chatId={chatId}
         existingCharacterIds={chat?.participants
-          .filter(p => p.type === 'CHARACTER' && p.isActive)
+          .filter(p => p.type === 'CHARACTER' && !p.removedAt)
           .map(p => p.character?.id)
           .filter((id): id is string => id !== null && id !== undefined) || []}
         onCharacterAdded={onCharacterAdded}

@@ -142,7 +142,7 @@ describe('Template Processing', () => {
         name: 'Alice',
         description: 'A brave warrior',
         personality: 'Courageous and kind',
-        scenario: 'In a medieval castle',
+        scenarios: [{ id: 'test-scenario-id', title: 'Default', content: 'In a medieval castle', createdAt: '2024-01-01T00:00:00.000Z', updatedAt: '2024-01-01T00:00:00.000Z' }],
         exampleDialogues: 'Example dialogue',
       }
 
@@ -172,7 +172,7 @@ describe('Template Processing', () => {
         name: 'Alice',
         description: 'A brave warrior',
         personality: 'Courageous and kind',
-        scenario: 'In a medieval castle',
+        scenarios: [{ id: 'test-scenario-id', title: 'Default', content: 'In a medieval castle', createdAt: '2024-01-01T00:00:00.000Z', updatedAt: '2024-01-01T00:00:00.000Z' }],
         exampleDialogues: null,
       }
 
@@ -192,7 +192,7 @@ describe('Template Processing', () => {
         name: 'Alice',
         description: 'A brave warrior',
         personality: 'Courageous and kind',
-        scenario: 'In a medieval castle',
+        scenarios: [{ id: 'test-scenario-id', title: 'Default', content: 'In a medieval castle', createdAt: '2024-01-01T00:00:00.000Z', updatedAt: '2024-01-01T00:00:00.000Z' }],
         exampleDialogues: null,
       }
 
@@ -212,7 +212,7 @@ describe('Template Processing', () => {
         name: 'Alice',
         description: 'I am {{char}}, a brave warrior.',
         personality: '{{char}} is courageous and kind.',
-        scenario: '{{char}} meets {{user}} in a medieval castle.',
+        scenarios: [{ id: 'test-scenario-id', title: 'Default', content: '{{char}} meets {{user}} in a medieval castle.', createdAt: '2024-01-01T00:00:00.000Z', updatedAt: '2024-01-01T00:00:00.000Z' }],
         firstMessage: 'Hello {{user}}, I am {{char}}!',
         exampleDialogues: '<START>\n{{char}}: Example dialogue\n{{user}}: Example response',
       }
@@ -241,7 +241,7 @@ describe('Template Processing', () => {
         name: 'Alice',
         description: null,
         personality: null,
-        scenario: null,
+        scenarios: [],
         firstMessage: null,
         exampleDialogues: null,
       }
@@ -265,7 +265,7 @@ describe('Template Processing', () => {
         name: 'Alice',
         description: '{{char}} is a {{personality}}',
         personality: 'brave warrior',
-        scenario: '{{char}} meets {{user}} who is {{persona}}',
+        scenarios: [{ id: 'test-scenario-id', title: 'Default', content: '{{char}} meets {{user}} who is {{persona}}', createdAt: '2024-01-01T00:00:00.000Z', updatedAt: '2024-01-01T00:00:00.000Z' }],
         firstMessage: null,
         exampleDialogues: null,
       }

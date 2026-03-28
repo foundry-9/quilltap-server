@@ -74,10 +74,12 @@ The Turn Manager selects the next speaker in this order:
 
 A character is eligible to speak if:
 
-- They are **active** (not disabled)
+- They are **active** or **silent** (not absent or removed)
 - They are **LLM-controlled** (not impersonated, unless queued)
 - They have **not spoken** since your last message
 - They are **not the previous speaker** (except in single-character situations)
+
+**Note:** Silent characters are still selected for turns — the difference is that their prompt instructs them to observe without speaking aloud. They may describe inner thoughts and physical reactions but not audible dialogue.
 
 ### Talkativeness Weights
 
@@ -164,7 +166,8 @@ The participant sidebar shows a **predicted turn order** for all participants. E
 4. **Eligible (neutral)** — Available to speak this cycle, sorted by talkativeness
 5. **Your Turn (amber)** — Indicates the user's position in the cycle
 6. **Spoken (dimmed)** — Already spoke this cycle
-7. **Inactive (no badge)** — Not participating, shown at the bottom of the list
+7. **Silent (no badge, muted)** — Present but observing silently, still receives turns
+8. **Absent (no badge, dimmed)** — Away from the scene, turns skipped entirely
 
 Participants are automatically sorted in the sidebar by their predicted turn position, so you can see at a glance who's speaking, who's next, and who has already spoken.
 
@@ -195,7 +198,12 @@ The UI shows turn status in several ways:
 - Neutral position badge with predicted position
 - Sorted by talkativeness (higher talkativeness = earlier position)
 
-**Inactive Characters:**
+**Silent Characters:**
+- Muted appearance with "Silent" badge
+- Still receive turns (shown in turn order)
+- Messages styled with dotted borders and muted tones
+
+**Absent Characters:**
 - Dimmed/greyed appearance
 - No position badge
 - Shown at the bottom of the participant list
@@ -404,7 +412,8 @@ Access these in Chat Settings if available.
 
 - **Balance talkativeness** — For equal ensemble participation
 - **Vary by scene** — Adjust who's prominent based on scene focus
-- **Mute temporarily** — Set to inactive for characters not in scene
+- **Mark absent** — Set characters not in the scene to Absent
+- **Silence observers** — Use Silent for characters who should watch but not speak
 
 ### For Pacing
 
@@ -417,6 +426,12 @@ Access these in Chat Settings if available.
 - **Fewer active characters** — Less API calls per cycle
 - **Lower talkativeness** — Some characters speak less often
 - **Pause between cycles** — Read before continuing
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/salon/:id")`
 
 ## Related Pages
 

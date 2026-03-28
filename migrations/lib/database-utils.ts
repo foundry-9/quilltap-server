@@ -1,14 +1,7 @@
 /**
  * Database Utilities for Migrations
  *
- * Backend-agnostic database utilities for running migrations.
- *
- * This module supports both MongoDB and SQLite. MongoDB is maintained for backward
- * compatibility with existing deployments using the standalone migration tool
- * (scripts/mongo-to-sqlite-cli.js), but new installations default to SQLite.
- *
- * MongoDB functionality is only loaded when explicitly enabled via DATABASE_BACKEND
- * environment variable or when the migration tool explicitly requires it.
+ * SQLite database utilities for running migrations.
  */
 
 import { logger } from './logger';
@@ -20,16 +13,8 @@ import { logger } from './logger';
 /**
  * Detect the current database backend from environment
  */
-export function detectDatabaseBackend(): 'mongodb' | 'sqlite' {
-  // MongoDB support has been removed; force SQLite backend
+export function detectDatabaseBackend(): 'sqlite' {
   return 'sqlite';
-}
-
-/**
- * Check if the current backend is MongoDB
- */
-export function isMongoDBBackend(): boolean {
-  return false;
 }
 
 /**
@@ -40,34 +25,12 @@ export function isSQLiteBackend(): boolean {
 }
 
 // ============================================================================
-// MongoDB Access (for existing migrations)
-// ============================================================================
-
-// Backwards-compatibility stubs (MongoDB removed)
-export function getMongoDatabase(): any {
-  throw new Error('MongoDB backend has been removed from migrations.');
-}
-
-export function closeMongoDB(): void {
-  // no-op
-}
-
-export function testMongoDBConnection(): { success: boolean; message: string } {
-  return { success: true, message: 'MongoDB backend removed; using SQLite.' };
-}
-
-export function validateMongoDBConfig(): { isConfigured: boolean; errors: string[] } {
-  return { isConfigured: false, errors: ['MongoDB backend removed'] };
-}
-
-// ============================================================================
 // SQLite Access (for migrations)
 // ============================================================================
 
 import Database, { Database as DatabaseType } from 'better-sqlite3';
-import path from 'path';
 import fs from 'fs';
-import { getSQLiteDatabasePath, getDataDir, ensureDataDirectoriesExist } from '../../lib/paths';
+import { getSQLiteDatabasePath, getDataDir } from '../../lib/paths';
 
 let sqliteDb: DatabaseType | null = null;
 
@@ -236,9 +199,7 @@ export async function waitForDatabaseReady(
  * Check if a table exists in SQLite
  */
 export function sqliteTableExists(tableName: string): boolean {
-  if (!isSQLiteBackend()) {
-    throw new Error('sqliteTableExists can only be called with SQLite backend');
-  }
+  assertSQLiteBackend('sqliteTableExists');
 
   const db = getSQLiteDatabase();
   const result = db.prepare(`
@@ -259,9 +220,7 @@ export function getSQLiteTableColumns(tableName: string): Array<{
   dflt_value: unknown;
   pk: boolean;
 }> {
-  if (!isSQLiteBackend()) {
-    throw new Error('getSQLiteTableColumns can only be called with SQLite backend');
-  }
+  assertSQLiteBackend('getSQLiteTableColumns');
 
   const db = getSQLiteDatabase();
   return db.prepare(`PRAGMA table_info("${tableName}")`).all() as Array<{
@@ -277,9 +236,7 @@ export function getSQLiteTableColumns(tableName: string): Array<{
  * Execute a SQL statement on SQLite
  */
 export function executeSQLite(sql: string, params: unknown[] = []): void {
-  if (!isSQLiteBackend()) {
-    throw new Error('executeSQLite can only be called with SQLite backend');
-  }
+  assertSQLiteBackend('executeSQLite');
 
   const db = getSQLiteDatabase();
   db.prepare(sql).run(...params);
@@ -289,10 +246,14 @@ export function executeSQLite(sql: string, params: unknown[] = []): void {
  * Query SQLite and return results
  */
 export function querySQLite<T = unknown>(sql: string, params: unknown[] = []): T[] {
-  if (!isSQLiteBackend()) {
-    throw new Error('querySQLite can only be called with SQLite backend');
-  }
+  assertSQLiteBackend('querySQLite');
 
   const db = getSQLiteDatabase();
   return db.prepare(sql).all(...params) as T[];
+}
+
+function assertSQLiteBackend(caller: string): void {
+  if (!isSQLiteBackend()) {
+    throw new Error(`${caller} can only be called with SQLite backend`);
+  }
 }

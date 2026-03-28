@@ -45,6 +45,8 @@ export const ChatMessageRowSchema = z.object({
   renderedHtml: z.string().nullable().optional(),
   // Danger content flags from gatekeeper classification
   dangerFlags: z.array(DangerFlagSchema).nullable().optional(),  // JSON array
+  targetParticipantIds: z.array(UUIDSchema).nullable().optional(),  // JSON array — whisper targets
+  isSilentMessage: z.union([z.boolean(), z.number().transform(v => v === 1)]).nullable().optional(),  // Whether message was generated while character was in silent mode (SQLite stores as 0/1)
   // For type='context-summary'
   context: z.string().nullable().optional(),
   // For type='system'

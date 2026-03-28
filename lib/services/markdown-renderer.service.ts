@@ -33,8 +33,8 @@ export interface MarkdownRenderOptions {
   dialogueDetection?: DialogueDetection | null;
 }
 
-// Internal compiled pattern type
-interface CompiledPattern {
+// Internal compiled pattern type (exported for testing)
+export interface CompiledPattern {
   regex: RegExp;
   className: string;
 }
@@ -94,7 +94,7 @@ function compilePatterns(patterns: RenderingPattern[]): CompiledPattern[] {
  * IMPORTANT: This function preserves fenced code blocks (``` ... ```) unchanged
  * to prevent corrupting code content with escape sequences.
  */
-function escapeMarkdownInBrackets(content: string, patterns: RenderingPattern[]): string {
+export function escapeMarkdownInBrackets(content: string, patterns: RenderingPattern[]): string {
   // Characters that trigger markdown parsing
   const markdownChars = /([*_~`])/g;
 
@@ -169,7 +169,7 @@ function escapeMarkdownInBrackets(content: string, patterns: RenderingPattern[])
  * text content, avoiding corruption of HTML attributes that contain quotes.
  * It also skips content inside <code> and <pre> blocks to preserve code formatting.
  */
-function applyRoleplayPatterns(html: string, compiledPatterns: CompiledPattern[]): string {
+export function applyRoleplayPatterns(html: string, compiledPatterns: CompiledPattern[]): string {
   // Split by HTML tags to avoid matching inside them
   // This regex captures HTML tags as separate array elements
   const tagRegex = /(<[^>]*>)/g;
@@ -229,7 +229,7 @@ function isDialogueParagraph(text: string, detection: DialogueDetection): boolea
  * Apply dialogue detection to paragraphs in HTML.
  * Adds dialogue class to <p> tags whose content starts and ends with quotes.
  */
-function applyDialogueDetection(html: string, detection: DialogueDetection): string {
+export function applyDialogueDetection(html: string, detection: DialogueDetection): string {
   // Match paragraph tags and their content
   return html.replace(/<p([^>]*)>([\s\S]*?)<\/p>/g, (match, attrs, content) => {
     // Strip HTML tags to get plain text for detection
@@ -308,22 +308,26 @@ export async function renderMarkdownToHtml(
     const patterns = renderingPatterns.length > 0 ? renderingPatterns : DEFAULT_RENDERING_PATTERNS;
     const compiledPatterns = compilePatterns(patterns);
 
-    // Step 2: Escape markdown inside roleplay brackets
-    const escapedContent = escapeMarkdownInBrackets(content, patterns);
+    // Step 2: Trim leading/trailing whitespace — a leading tab triggers markdown's
+    // indented code block rule, rendering the whole message as preformatted text
+    const trimmedContent = content.trim();
 
-    // Step 3: Convert markdown to HTML
+    // Step 3: Escape markdown inside roleplay brackets
+    const escapedContent = escapeMarkdownInBrackets(trimmedContent, patterns);
+
+    // Step 4: Convert markdown to HTML
     const processor = getProcessor();
     const file = await processor.process(escapedContent);
     let html = String(file);
 
-    // Step 4: Apply roleplay patterns
+    // Step 5: Apply roleplay patterns
     html = applyRoleplayPatterns(html, compiledPatterns);
 
-    // Step 5: Apply dialogue detection
+    // Step 6: Apply dialogue detection
     const dialogueConfig = dialogueDetection || DEFAULT_DIALOGUE_DETECTION;
     html = applyDialogueDetection(html, dialogueConfig);
 
-    // Step 6: Wrap in container div with appropriate classes
+    // Step 7: Wrap in container div with appropriate classes
     // Note: We don't add the outer container class here - the client handles that
     return html;
   } catch (error) {

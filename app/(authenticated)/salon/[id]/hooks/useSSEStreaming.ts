@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback } from 'react'
-import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toast'
+import { showSuccessToast, showErrorToast, showWarningToast, showInfoToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import type { ChatParticipantBase } from '@/lib/schemas/types'
@@ -66,6 +66,17 @@ interface SSEEvent {
   }
   provider?: string
   modelName?: string
+  // Turn/chain events are sent as flat JSON with boolean flags
+  // e.g. { turnStart: true, participantId: "...", characterName: "...", chainDepth: 1 }
+  turnStart?: boolean
+  turnComplete?: boolean
+  chainComplete?: boolean
+  participantId?: string
+  characterName?: string
+  chainDepth?: number
+  nextSpeakerId?: string | null
+  reason?: string
+  isSilentMessage?: boolean
 }
 
 /**
@@ -161,10 +172,16 @@ export function useSSEStreaming({
       onToolsDetected?: (data: SSEEvent) => void
       onToolResult?: (data: SSEEvent) => void
       onDone: (fullContent: string, data: SSEEvent) => void | Promise<void>
+      /** Called for intermediate done events during a chain (not the final one) */
+      onIntermediateDone?: (fullContent: string, data: SSEEvent) => void | Promise<void>
+      onTurnStart?: (event: { participantId: string; characterName: string; chainDepth: number }) => void
+      onTurnComplete?: (event: { participantId: string; messageId: string; chainDepth: number }) => void | Promise<void>
+      onChainComplete?: (event: { reason: string; nextSpeakerId: string | null; chainDepth: number }) => void | Promise<void>
     }
   ): Promise<string> => {
     const decoder = new TextDecoder()
     let fullContent = ''
+    let inChain = false
 
     while (true) {
       const { done, value } = await reader.read()
@@ -182,6 +199,10 @@ export function useSSEStreaming({
         // Handle status updates
         if (data.status) {
           setResponseStatus(data.status)
+          // Show warning toast when retrying due to empty response
+          if (data.status.stage === 'retrying') {
+            showWarningToast(data.status.message)
+          }
         }
 
         // Handle content chunks
@@ -214,7 +235,50 @@ export function useSSEStreaming({
         // Handle completion
         if (data.done) {
           setResponseStatus(null)
-          await opts.onDone(fullContent, data)
+          if (inChain && opts.onIntermediateDone) {
+            // Intermediate done during a chain — lighter cleanup, no state reset
+            await opts.onIntermediateDone(fullContent, data)
+          } else {
+            await opts.onDone(fullContent, data)
+          }
+        }
+
+        // Handle turn start (chained character about to respond)
+        // Server sends flat: { turnStart: true, participantId, characterName, chainDepth }
+        if (data.turnStart) {
+          inChain = true
+          fullContent = ''
+          setStreamingContent('')
+          setStreaming(false)
+          setWaitingForResponse(true)
+          if (data.participantId) {
+            opts.onTurnStart?.({
+              participantId: data.participantId,
+              characterName: data.characterName || 'Unknown',
+              chainDepth: data.chainDepth || 0,
+            })
+          }
+        }
+
+        // Handle turn complete (chained character finished)
+        // Server sends flat: { turnComplete: true, participantId, messageId, chainDepth }
+        if (data.turnComplete) {
+          await opts.onTurnComplete?.({
+            participantId: data.participantId!,
+            messageId: data.messageId || '',
+            chainDepth: data.chainDepth || 0,
+          })
+        }
+
+        // Handle chain complete (all chained turns done)
+        // Server sends flat: { chainComplete: true, reason, nextSpeakerId, chainDepth }
+        if (data.chainComplete) {
+          inChain = false
+          await opts.onChainComplete?.({
+            reason: data.reason || 'no_next_speaker',
+            nextSpeakerId: data.nextSpeakerId ?? null,
+            chainDepth: data.chainDepth || 0,
+          })
         }
       }
     }
@@ -247,14 +311,12 @@ export function useSSEStreaming({
     pendingToolResults: PendingToolResult[],
     setPendingToolResults: (results: PendingToolResult[]) => void,
     clearDraft: () => void,
-    lastAutoTriggeredRef: React.MutableRefObject<string | null>,
     userStoppedStreamRef: React.MutableRefObject<boolean>,
   ) => {
     e.preventDefault()
     if ((!input.trim() && attachedFiles.length === 0 && pendingToolResults.length === 0) || sending) return
 
-    // Reset auto-trigger ref when user sends a message
-    lastAutoTriggeredRef.current = null
+    // Reset user-stopped flag when user sends a message
     if (!isPaused) {
       userStoppedStreamRef.current = false
     }
@@ -277,7 +339,9 @@ export function useSSEStreaming({
     setStreaming(false)
     setStreamingContent('')
     const firstCharParticipant = getFirstCharacterParticipant()
-    setRespondingParticipantId(firstCharParticipant?.id || null)
+    // Track the current responding participant across chained turns (mutable for closures)
+    let currentParticipantId = firstCharParticipant?.id || null
+    setRespondingParticipantId(currentParticipantId)
     if (inputRef.current) {
       inputRef.current.style.height = 'auto'
     }
@@ -414,6 +478,11 @@ export function useSSEStreaming({
             })
           }
 
+          // Handle help_navigate: navigate the current window to the target URL
+          if (name === 'help_navigate' && success && result?.navigationUrl) {
+            window.location.href = result.navigationUrl
+          }
+
           if (name === 'generate_image') {
             if (success) {
               const imageCount = result?.images?.length || 1
@@ -444,18 +513,23 @@ export function useSSEStreaming({
             return
           }
 
+          // Use server-provided participantId if available (authoritative)
+          const resolvedParticipantId = data.participantId || currentParticipantId
+
           const assistantMessage: Message = {
             id: data.messageId!,
             role: 'ASSISTANT',
             content: fullContent,
             createdAt: new Date().toISOString(),
-            participantId: firstCharParticipant?.id,
+            participantId: resolvedParticipantId,
             provider: data.provider || null,
             modelName: data.modelName || null,
+            isSilentMessage: data.isSilentMessage || undefined,
           }
           setMessages((prev) => [...prev, assistantMessage])
           setStreamingContent('')
           setStreaming(false)
+          setWaitingForResponse(false)
           setRespondingParticipantId(null)
           scrollOnStreamComplete()
           await fetchChat()
@@ -464,6 +538,50 @@ export function useSSEStreaming({
             setToolExecutionStatus(null)
             setPendingToolCalls([])
           }, 3000)
+        },
+        onIntermediateDone: async (fullContent, data) => {
+          // Intermediate done during a chain — add temp message but don't reset state
+          if (data.emptyResponse || !fullContent) return
+
+          // Use server-provided participantId if available (authoritative)
+          const resolvedParticipantId = data.participantId || currentParticipantId
+
+          const assistantMessage: Message = {
+            id: data.messageId!,
+            role: 'ASSISTANT',
+            content: fullContent,
+            createdAt: new Date().toISOString(),
+            participantId: resolvedParticipantId,
+            provider: data.provider || null,
+            modelName: data.modelName || null,
+            isSilentMessage: data.isSilentMessage || undefined,
+          }
+          setMessages((prev) => [...prev, assistantMessage])
+          setStreamingContent('')
+          setStreaming(false)
+        },
+        onTurnStart: (event) => {
+          currentParticipantId = event.participantId
+          setRespondingParticipantId(event.participantId)
+          setStreamingContent('')
+          setWaitingForResponse(true)
+          setStreaming(false)
+        },
+        onTurnComplete: async (event) => {
+          setStreamingContent('')
+          setStreaming(false)
+          setWaitingForResponse(false)
+          await fetchChat()
+        },
+        onChainComplete: async (event) => {
+          setStreamingContent('')
+          setStreaming(false)
+          setWaitingForResponse(false)
+          setRespondingParticipantId(null)
+          scrollOnStreamComplete()
+          await fetchChat()
+          notifyQueueChange()
+          focusInput()
         },
       })
     } catch (err) {
@@ -493,6 +611,7 @@ export function useSSEStreaming({
       }
     } finally {
       setSending(false)
+      setWaitingForResponse(false)
       abortControllerRef.current = null
       setResponseStatus(null)
       focusInput()
@@ -525,6 +644,8 @@ export function useSSEStreaming({
     setWaitingForResponse(true)
     setStreaming(false)
     setStreamingContent('')
+    // Track the current responding participant across chained turns (mutable for closures)
+    let currentParticipantId = participantId
     setRespondingParticipantId(participantId)
 
     try {
@@ -555,14 +676,18 @@ export function useSSEStreaming({
           setResponseStatus(null)
 
           if (fullContent.trim()) {
+            // Use server-provided participantId if available (authoritative)
+            const resolvedParticipantId = data.participantId || currentParticipantId
+
             const newMessage: Message = {
               id: data.messageId || `continue-${Date.now()}`,
               role: 'ASSISTANT',
               content: fullContent,
               createdAt: new Date().toISOString(),
-              participantId,
+              participantId: resolvedParticipantId,
               provider: data.provider || null,
               modelName: data.modelName || null,
+              isSilentMessage: data.isSilentMessage || undefined,
             }
             setMessages(prev => [...prev, newMessage])
           }
@@ -570,6 +695,47 @@ export function useSSEStreaming({
           setEphemeralMessages(prev =>
             prev.filter(em => em.participantId !== participantId)
           )
+        },
+        onIntermediateDone: async (fullContent, data) => {
+          // Intermediate done during a chain — add temp message but don't reset state
+          if (!fullContent.trim()) return
+
+          // Use server-provided participantId if available (authoritative)
+          const resolvedParticipantId = data.participantId || currentParticipantId
+
+          const newMessage: Message = {
+            id: data.messageId || `continue-chain-${Date.now()}`,
+            role: 'ASSISTANT',
+            content: fullContent,
+            createdAt: new Date().toISOString(),
+            participantId: resolvedParticipantId,
+            provider: data.provider || null,
+            modelName: data.modelName || null,
+          }
+          setMessages(prev => [...prev, newMessage])
+        },
+        onTurnStart: (event) => {
+          currentParticipantId = event.participantId
+          setRespondingParticipantId(event.participantId)
+          setStreamingContent('')
+          setWaitingForResponse(true)
+          setStreaming(false)
+        },
+        onTurnComplete: async (event) => {
+          setStreamingContent('')
+          setStreaming(false)
+          setWaitingForResponse(false)
+          await fetchChat()
+        },
+        onChainComplete: async (event) => {
+          setStreamingContent('')
+          setStreaming(false)
+          setWaitingForResponse(false)
+          setRespondingParticipantId(null)
+          scrollOnStreamComplete()
+          await fetchChat()
+          notifyQueueChange()
+          focusInput()
         },
       })
     } catch (err) {
@@ -586,9 +752,12 @@ export function useSSEStreaming({
       setResponseStatus(null)
       abortControllerRef.current = null
       scrollOnStreamComplete()
+      // Re-fetch chat to pick up side-channel messages (e.g. whisper tool writes)
+      await fetchChat()
+      notifyQueueChange()
       focusInput()
     }
-  }, [chatId, streaming, waitingForResponse, isPaused, participantsAsBase, hasActiveCharacters, setMessages, setEphemeralMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput])
+  }, [chatId, streaming, waitingForResponse, isPaused, participantsAsBase, hasActiveCharacters, setMessages, setEphemeralMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat])
 
   const stopStreaming = useCallback(() => {
     if (abortControllerRef.current) {

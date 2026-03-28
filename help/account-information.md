@@ -140,6 +140,12 @@ No, the "Account Created" date is automatically set when your account is first c
 **Is my User ID secret?**
 Your User ID is not sensitive information like a password. It's typically safe to share with support, but you don't need to provide it to other users unless they specifically ask for it.
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/profile")`
+
 ## Related Topics
 
 - [Profile Settings](profile-settings.md) - Edit your Display Name, Email, and Avatar

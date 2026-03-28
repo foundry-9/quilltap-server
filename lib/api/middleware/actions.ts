@@ -57,8 +57,7 @@ export type ActionHandlerMap<P extends Record<string, string> = Record<string, s
  * @returns The action parameter value or null if not present
  */
 export function getActionParam(request: NextRequest): string | null {
-  const url = new URL(request.url);
-  return url.searchParams.get('action');
+  return request.nextUrl.searchParams.get('action');
 }
 
 /**
@@ -181,10 +180,9 @@ export function isValidAction<T extends string>(
 export function getQueryParamsWithoutAction(
   request: NextRequest
 ): Record<string, string> {
-  const url = new URL(request.url);
   const params: Record<string, string> = {};
 
-  url.searchParams.forEach((value, key) => {
+  request.nextUrl.searchParams.forEach((value, key) => {
     if (key !== 'action') {
       params[key] = value;
     }

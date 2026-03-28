@@ -347,6 +347,12 @@ When chatting in a project, the AI can:
 - Expand the Projects section in sidebar
 - Refresh the page
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/prospero")`
+
 ## Related Pages
 
 - [Project Chats](project-chats.md) — Managing conversations within projects

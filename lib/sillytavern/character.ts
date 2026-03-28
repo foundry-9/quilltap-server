@@ -61,12 +61,21 @@ export function importSTCharacter(stData: STCharacterV2 | STCharacterCard) {
       }]
     : []
 
+  // Build scenarios array from ST scenario string if present
+  const scenarios = data.scenario ? [{
+    id: crypto.randomUUID(),
+    title: 'Default',
+    content: data.scenario,
+    createdAt: now,
+    updatedAt: now,
+  }] : []
+
   return {
     name: data.name,
     title: data.title || null,
     description: data.description,
     personality: data.personality,
-    scenario: data.scenario,
+    scenarios,
     firstMessage: data.first_mes,
     exampleDialogues,
     systemPrompts,
@@ -85,12 +94,19 @@ export function exportSTCharacter(character: any): STCharacterCard {
     systemPromptContent = defaultPrompt?.content || character.systemPrompts[0]?.content || ''
   }
 
+  // Concatenate all scenarios into a single string for ST format
+  const scenarioContent = character.scenarios?.length
+    ? character.scenarios.length === 1
+      ? character.scenarios[0].content
+      : character.scenarios.map((s: { title: string; content: string }) => `## ${s.title}\n${s.content}`).join('\n\n')
+    : ''
+
   // If we have original ST data, use it as base to preserve all fields
   const baseData: STCharacterV2 = character.sillyTavernData || {
     name: character.name,
     description: character.description,
     personality: character.personality,
-    scenario: character.scenario,
+    scenario: scenarioContent,
     first_mes: character.firstMessage,
     mes_example: character.exampleDialogues || '',
     creator_notes: '',
@@ -106,7 +122,7 @@ export function exportSTCharacter(character: any): STCharacterCard {
     name: character.name,
     description: character.description,
     personality: character.personality,
-    scenario: character.scenario,
+    scenario: scenarioContent,
     first_mes: character.firstMessage,
     mes_example: character.exampleDialogues || '',
     system_prompt: systemPromptContent,

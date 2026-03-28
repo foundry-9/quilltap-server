@@ -204,6 +204,12 @@ For detailed instructions, see [Deleting Your Data](system-delete-data.md).
 - Review LLM Logs if experiencing issues
 - Generate Capabilities Reports periodically to document your setup
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=system")`
+
 ## Related Topics
 
 - [Backup & Restore](system-backup-restore.md) - Detailed backup and restore guide

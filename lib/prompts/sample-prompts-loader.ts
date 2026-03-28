@@ -1,6 +1,11 @@
 /**
  * Sample Prompts Loader
  *
+ * @deprecated System prompts are now provided by SYSTEM_PROMPT plugins
+ * (e.g., qtap-plugin-default-system-prompts). This loader is kept as a
+ * fallback for backward compatibility but will be removed in a future version.
+ * See lib/plugins/system-prompt-registry.ts for the new approach.
+ *
  * Utility for loading sample prompt files from the prompts/ directory.
  * Parses filenames in MODEL_CATEGORY.md format (e.g., CLAUDE_ROMANTIC.md).
  */

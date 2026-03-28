@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=templates
+url: /settings?tab=templates&section=prompts
 ---
 
 # Prompts
 
-> **[Open this page in Quilltap](/settings?tab=templates)**
+> **[Open this page in Quilltap](/settings?tab=templates&section=prompts)**
 
 The Prompts tab lets you create and manage reusable prompt templates. These templates can be used with characters and in chats to provide consistent instructions to the AI.
 
@@ -397,9 +397,15 @@ Writing Aids:
 - Clear chat history
 - Try different connection profile
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=templates&section=prompts")`
+
 ## Related Settings
 
-- **Connection Profiles** — Quality of LLM affects how well prompts are followed
-- **Chat Settings** — Memory and context affect prompt effectiveness
+- [Connection Profiles](connection-profiles.md) — Quality of LLM affects how well prompts are followed
+- [Chat Settings](chat-settings.md) — Memory and context affect prompt effectiveness
 - **Characters** — Where prompts are most commonly used
 - **Chat Tools** — Interact with prompts and instructions

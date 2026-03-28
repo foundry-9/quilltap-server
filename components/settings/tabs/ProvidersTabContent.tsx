@@ -8,9 +8,11 @@ import ApiKeysTab from '@/components/settings/api-keys-tab'
 import ConnectionProfilesTab from '@/components/settings/connection-profiles-tab'
 import { CheapLLMSettings } from '@/components/settings/chat-settings/CheapLLMSettings'
 import { CapabilitiesReportCard } from '@/components/tools/capabilities-report-card'
+import { useSettingsSection } from './useSettingsSection'
 
 export function ProvidersTabContent() {
   const info = useSubsystemInfo('forge')
+  const activeSection = useSettingsSection()
   const {
     settings,
     loading,
@@ -43,15 +45,15 @@ export function ProvidersTabContent() {
           </div>
         </Link>
 
-        <CollapsibleCard title="API Keys" description="Manage API keys for LLM providers">
+        <CollapsibleCard title="API Keys" description="Manage API keys for LLM providers" sectionId="api-keys" forceOpen={activeSection === 'api-keys'}>
           <ApiKeysTab />
         </CollapsibleCard>
 
-        <CollapsibleCard title="Connection Profiles" description="Configure LLM connection profiles">
+        <CollapsibleCard title="Connection Profiles" description="Configure LLM connection profiles" sectionId="connection-profiles" forceOpen={activeSection === 'connection-profiles'}>
           <ConnectionProfilesTab />
         </CollapsibleCard>
 
-        <CollapsibleCard title="Cheap LLM Settings" description="Configure the lightweight LLM used for background tasks">
+        <CollapsibleCard title="Cheap LLM Settings" description="Configure the lightweight LLM used for background tasks" sectionId="cheap-llm" forceOpen={activeSection === 'cheap-llm'}>
           {loading ? (
             <div className="flex items-center justify-center py-8">
               <div className="text-muted-foreground">Loading settings...</div>
@@ -70,7 +72,7 @@ export function ProvidersTabContent() {
           )}
         </CollapsibleCard>
 
-        <CollapsibleCard title="Capabilities Report" description="View LLM provider capabilities and feature support">
+        <CollapsibleCard title="Capabilities Report" description="View LLM provider capabilities and feature support" sectionId="capabilities-report" forceOpen={activeSection === 'capabilities-report'}>
           <CapabilitiesReportCard />
         </CollapsibleCard>
       </div>

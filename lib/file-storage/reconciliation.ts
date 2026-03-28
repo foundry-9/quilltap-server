@@ -10,6 +10,7 @@
  * 3. For each file on disk: match to DB by storageKey, collect unmatched
  * 3.5. SHA-256 cross-match unmatched disk files with unmatched DB records to detect moves
  * 4. For each DB record not on disk and not matched by cross-matching: delete
+ *    (unless referenced by characters or has linkedTo — those are preserved)
  * 5. Log summary
  *
  * @module file-storage/reconciliation
@@ -203,8 +204,48 @@ export async function reconcileFilesystem(): Promise<void> {
     }
 
     // Step 4: Delete DB records not on disk and not matched by cross-matching
+    // First, build a set of file IDs referenced by characters so we don't
+    // delete records that are still actively used as avatars/gallery images.
+    const referencedFileIds = new Set<string>();
+    let recordsPreserved = 0;
+    try {
+      const allCharacters = await repos.characters.findByUserId(userId);
+      for (const char of allCharacters) {
+        if (char.defaultImageId) {
+          referencedFileIds.add(char.defaultImageId);
+        }
+        if (Array.isArray(char.avatarOverrides)) {
+          for (const override of char.avatarOverrides) {
+            if (override.imageId) {
+              referencedFileIds.add(override.imageId);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      logger.warn('Failed to load character references during reconciliation; proceeding cautiously', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
     for (const dbRecord of unmatchedDbRecords) {
       if (matchedDbIds.has(dbRecord.id)) continue;
+
+      // Preserve records that are still referenced by characters or have linkedTo
+      const isReferenced = referencedFileIds.has(dbRecord.id) ||
+        (dbRecord.linkedTo && dbRecord.linkedTo.length > 0);
+
+      if (isReferenced) {
+        recordsPreserved++;
+        logger.info('Preserving referenced DB record despite missing file on disk', {
+          fileId: dbRecord.id,
+          storageKey: dbRecord.storageKey,
+          filename: dbRecord.originalFilename,
+          linkedTo: dbRecord.linkedTo,
+          referencedByCharacter: referencedFileIds.has(dbRecord.id),
+        });
+        continue;
+      }
 
       try {
         await repos.files.delete(dbRecord.id);
@@ -231,6 +272,7 @@ export async function reconcileFilesystem(): Promise<void> {
       recordsCreated,
       recordsDeleted,
       recordsUpdated,
+      recordsPreserved,
       errors,
       durationMs,
     });

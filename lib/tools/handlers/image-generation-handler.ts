@@ -18,7 +18,7 @@ import {
 } from '@/lib/tools/image-generation-tool';
 import { preparePromptExpansion, buildExpansionContext, parsePlaceholders, resolvePlaceholders } from '@/lib/image-gen/prompt-expansion';
 import { craftImagePrompt, type ChatMessage } from '@/lib/memory/cheap-llm-tasks';
-import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig, type CheapLLMSelection } from '@/lib/llm/cheap-llm';
+import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig, type CheapLLMSelection } from '@/lib/llm/cheap-llm';
 import type { CheapLLMSettings } from '@/lib/schemas/settings.types';
 import {
   resolveCharacterAppearances,
@@ -678,6 +678,17 @@ export async function executeImageGenerationTool(
               false
             );
           }
+        }
+
+        // For dangerous chats, use uncensored provider for appearance resolution
+        if (isDangerousChat && appearanceLLMSelection) {
+          const profilesForUncensored = await repos.connections.findByUserId(context.userId);
+          appearanceLLMSelection = resolveUncensoredCheapLLMSelection(
+            appearanceLLMSelection,
+            true,
+            dangerSettings,
+            profilesForUncensored
+          );
         }
 
         if (appearanceLLMSelection) {

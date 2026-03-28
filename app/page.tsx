@@ -16,7 +16,8 @@ import type {
   HomepageCharacter,
 } from "@/components/homepage";
 
-// Revalidate on every request
+// Never pre-render during build - requires database access
+export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function Home() {
@@ -51,8 +52,11 @@ export default async function Home() {
       : [],
   ]);
 
+  // Filter out help chats — only show salon (regular) chats on the homepage
+  const salonChats = allChatsRaw.filter((c: any) => !c.chatType || c.chatType === 'salon');
+
   // Enrich chats with participant data using the enrichment service
-  const enrichedChats = await enrichChatsForList(allChatsRaw, repos);
+  const enrichedChats = await enrichChatsForList(salonChats, repos);
   const cleanedChats = cleanEnrichedChats(enrichedChats);
 
   // Get more chats than we'll display to account for quick-hide filtering

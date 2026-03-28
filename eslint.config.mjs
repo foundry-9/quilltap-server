@@ -9,6 +9,7 @@ const eslintConfig = defineConfig([
       '.next/**',
       'out/**',
       'build/**',
+      '.electron-server-staging/**',
       'next-env.d.ts',
       'node_modules/**',
       'dist/**',

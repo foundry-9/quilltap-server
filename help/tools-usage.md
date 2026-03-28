@@ -209,6 +209,25 @@ Some responses involve a sequence of tool calls:
 - Over time, it uses tools more intelligently
 - Let it experiment with different tool combinations
 
+### For Settings Help
+
+**Enable these first:**
+
+- Help tools must be enabled on the character (in the character's Profiles tab)
+
+**Best practices:**
+
+- Ask about specific setting categories for focused results
+- The tool accepts categories: overview, chat, connections, embeddings, images, appearance, templates, system
+- API keys and credentials are never disclosed
+
+**Example requests:**
+
+- "What connection profiles do I have configured?"
+- "Show me my chat settings"
+- "What are my current appearance settings?"
+- "Give me an overview of my settings"
+
 ## Pro Tips
 
 **For Research Tasks:**
@@ -235,9 +254,15 @@ Some responses involve a sequence of tool calls:
 - Enable Project Info to learn from your project context
 - Keep Search Memories on to reference past learnings
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/salon/:id")`
+
 ## Related Topics
 
 - [Tools Overview](tools.md) - What tools are and how they work
 - [Configuring Chat Tools](tools-settings.md) - How to enable/disable tools
-- [Chat Settings](settings.md) - Other chat configuration options
-- [Connection Profiles](settings.md) - Setting up profiles for tools
+- [Chat Settings](chat-settings.md) - Other chat configuration options
+- [Connection Profiles](connection-profiles.md) - Setting up profiles for tools

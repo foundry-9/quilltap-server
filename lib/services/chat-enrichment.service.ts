@@ -86,6 +86,8 @@ export interface EnrichedParticipantSummary {
   type: 'CHARACTER'
   displayOrder: number
   isActive: boolean
+  status: string
+  removedAt?: string | null
   character: EnrichedCharacterSummary | null
 }
 
@@ -98,7 +100,8 @@ export interface EnrichedParticipantDetail {
   controlledBy: 'llm' | 'user'
   displayOrder: number
   isActive: boolean
-  systemPromptOverride: string | null
+  status: string
+  removedAt?: string | null
   character: EnrichedCharacterDetail | null
   connectionProfile: EnrichedConnectionProfile | null
   imageProfile: EnrichedImageProfile | null
@@ -177,11 +180,17 @@ export async function getCharacterSummary(
     }
   }
 
+  // Build avatar URL: use explicit avatarUrl if non-empty, else fall back to defaultImage
+  let avatarUrl: string | null = character.avatarUrl || null
+  if (!avatarUrl && defaultImage) {
+    avatarUrl = `/api/v1/files/${defaultImage.id}`
+  }
+
   return {
     id: character.id,
     name: character.name,
     title: character.title ?? null,
-    avatarUrl: character.avatarUrl ?? null,
+    avatarUrl,
     defaultImageId: character.defaultImageId ?? null,
     defaultImage,
     tags: character.tags || [],
@@ -209,11 +218,17 @@ export async function getCharacterDetail(
     }
   }
 
+  // Build avatar URL: use explicit avatarUrl if non-empty, else fall back to defaultImage
+  let avatarUrl: string | null = character.avatarUrl || null
+  if (!avatarUrl && defaultImage) {
+    avatarUrl = `/api/v1/files/${defaultImage.id}`
+  }
+
   return {
     id: character.id,
     name: character.name,
     title: character.title ?? null,
-    avatarUrl: character.avatarUrl ?? null,
+    avatarUrl,
     defaultImageId: character.defaultImageId ?? null,
     defaultImage,
   }
@@ -295,6 +310,8 @@ export async function enrichParticipantSummary(
     type: participant.type,
     displayOrder: participant.displayOrder,
     isActive: participant.isActive,
+    status: participant.status || 'active',
+    removedAt: participant.removedAt ?? null,
     character,
   }
 }
@@ -324,7 +341,8 @@ export async function enrichParticipantDetail(
     controlledBy: participant.controlledBy || 'llm',
     displayOrder: participant.displayOrder,
     isActive: participant.isActive,
-    systemPromptOverride: participant.systemPromptOverride ?? null,
+    status: participant.status || 'active',
+    removedAt: participant.removedAt ?? null,
     character,
     connectionProfile,
     imageProfile,

@@ -2,13 +2,21 @@
  * TypeScript interfaces and types for character editing functionality
  */
 
+export interface CharacterScenario {
+  id: string
+  title: string
+  content: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface Character {
   id: string
   name: string
   title?: string | null
   description?: string | null
   personality?: string | null
-  scenario?: string | null
+  scenarios?: CharacterScenario[]
   firstMessage?: string | null
   exampleDialogues?: string | null
   systemPrompt?: string
@@ -32,7 +40,7 @@ export interface CharacterFormData {
   title: string
   description: string
   personality: string
-  scenario: string
+  scenarios: CharacterScenario[]
   firstMessage: string
   exampleDialogues: string
   systemPrompt: string

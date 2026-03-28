@@ -139,7 +139,7 @@
      ========================================================================== */
   --qt-input-radius: var(--radius-md);
   --qt-input-padding-x: 0.75rem;
-  --qt-input-padding-y: 0.4375rem;
+  --qt-input-padding-y: 0.5rem;
   --qt-input-bg: var(--color-background);
   --qt-input-fg: var(--color-foreground);
   --qt-input-border: var(--color-input);
@@ -265,6 +265,18 @@
   --qt-chat-assistant-border: var(--color-border);
   --qt-chat-assistant-font: var(--font-sans);
   --qt-chat-assistant-font-weight: inherit;
+
+  /* Chat: Whisper messages */
+  --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #9b8ec4 40%);
+  --qt-chat-whisper-fg: var(--qt-chat-assistant-fg);
+  --qt-chat-whisper-border: #9b8ec4;
+  --qt-chat-whisper-label-fg: #7c6fa0;
+
+  /* Chat: Silent messages — inner thoughts/actions from characters in silent mode */
+  --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 65%, #7a9e8e 35%);
+  --qt-chat-silent-fg: var(--qt-chat-assistant-fg);
+  --qt-chat-silent-border: #7a9e8e;
+  --qt-chat-silent-label-fg: #5d7e6e;
 
   --qt-chat-composer-bg: var(--color-background);
   --qt-chat-composer-border: var(--color-border);
@@ -635,6 +647,16 @@
   --qt-queue-badge-summary-bg: hsl(152 50% 42%);
   --qt-queue-badge-danger-bg: hsl(0 60% 52%);
   --qt-queue-badge-story-bg: hsl(225 12% 44%);
+
+  /* Chat: Whisper messages — dark mode */
+  --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #6b5b95 40%);
+  --qt-chat-whisper-border: #6b5b95;
+  --qt-chat-whisper-label-fg: #a89cc8;
+
+  /* Chat: Silent messages — dark mode */
+  --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 65%, #4a7a6a 35%);
+  --qt-chat-silent-border: #4a7a6a;
+  --qt-chat-silent-label-fg: #8ab8a4;
 
   /* Response status — brighter indicators */
   --qt-response-status-bg: color-mix(in srgb, var(--color-muted) 40%, transparent);

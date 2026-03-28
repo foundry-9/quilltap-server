@@ -179,7 +179,7 @@ export function ModelSelector({
           onChange={e => onChange(e.target.value)}
           disabled={disabled}
           required={required}
-          className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+          className="qt-select"
         >
           <option value="">{placeholder}</option>
           {sortedModels.map(model => {
@@ -211,7 +211,7 @@ export function ModelSelector({
           placeholder={placeholder}
           disabled={disabled}
           required={required && !value}
-          className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring pr-8"
+          className="qt-input pr-8"
         />
         <button
           type="button"

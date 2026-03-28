@@ -97,3 +97,9 @@ The command will **not execute** until you click Approve. If you click Deny, the
 ## Workspace Acknowledgement
 
 The first time shell tools are used in a chat, you'll see a workspace acknowledgement dialog. This is a one-time notice ensuring you understand the nature of the shared workspace. Once acknowledged, it won't appear again for that chat.
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/salon/:id")`

@@ -10,8 +10,6 @@
 
 import { logger } from './lib/logger';
 import {
-  isMongoDBBackend,
-  isSQLiteBackend,
   closeDatabase,
   waitForDatabaseReady,
   detectDatabaseBackend,

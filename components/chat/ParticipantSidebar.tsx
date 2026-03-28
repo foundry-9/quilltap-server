@@ -50,6 +50,8 @@ interface ParticipantSidebarProps {
   onAddCharacter?: () => void
   onRemoveCharacter?: (participantId: string) => void // Phase 6: Remove character from chat
   onStopStreaming?: () => void // Stop/interrupt current generation
+  /** Callback when user wants to whisper to a participant */
+  onWhisper?: (participantId: string) => void
   // Impersonation support (Characters Not Personas)
   impersonatingParticipantIds?: string[] // Participant IDs the user is impersonating
   activeTypingParticipantId?: string | null // Which impersonated character is currently "active" for typing
@@ -58,7 +60,7 @@ interface ParticipantSidebarProps {
   // Connection profile controls (passed to cards)
   connectionProfiles?: ConnectionProfileOption[]
   onConnectionProfileChange?: (participantId: string, profileId: string | null, controlledBy: 'llm' | 'user') => void
-  onParticipantSettingsChange?: (participantId: string, updates: { systemPromptOverride?: string | null; isActive?: boolean }) => void
+  onParticipantSettingsChange?: (participantId: string, updates: { isActive?: boolean; status?: 'active' | 'silent' | 'absent' | 'removed' }) => void
   className?: string
 }
 
@@ -80,6 +82,7 @@ export function ParticipantSidebar({
   onAddCharacter,
   onRemoveCharacter,
   onStopStreaming,
+  onWhisper,
   impersonatingParticipantIds = [],
   activeTypingParticipantId,
   onImpersonate,
@@ -161,6 +164,11 @@ export function ParticipantSidebar({
     return participants.filter(p => p.type === 'CHARACTER' && p.isActive).length
   }, [participants])
 
+  // Count all active participants (characters + personas) for whisper eligibility
+  const activeParticipantCount = useMemo(() => {
+    return participants.filter(p => p.isActive).length
+  }, [participants])
+
 
   // Build class list based on collapsed state
   const baseClasses: string[] = []
@@ -225,6 +233,8 @@ export function ParticipantSidebar({
             // Get position badge class for collapsed view
             const positionBadgeClass = turnEntry ? getCollapsedPositionBadgeClass(turnEntry.status) : ''
 
+            const participantStatus = (participant as ParticipantData & { status?: string }).status || 'active'
+
             // Build avatar wrapper classes
             const avatarClasses = ['qt-chat-sidebar-collapsed-avatar']
             if (isInactive) {
@@ -236,19 +246,38 @@ export function ParticipantSidebar({
               avatarClasses.push('qt-chat-sidebar-collapsed-avatar-streaming')
             }
 
+            const statusLabel = participantStatus !== 'active' ? ` [${participantStatus}]` : ''
+
             return (
               <button
                 key={participant.id}
                 onClick={expandSidebar}
                 className={avatarClasses.join(' ')}
-                title={`${name}${isCurrentTurn ? ' (current turn)' : ''}${turnEntry?.position ? ` (#${turnEntry.position})` : ''}`}
-                aria-label={`${name} - click to expand sidebar`}
+                title={`${name}${statusLabel}${isCurrentTurn ? ' (current turn)' : ''}${turnEntry?.position ? ` (#${turnEntry.position})` : ''}`}
+                aria-label={`${name}${statusLabel} - click to expand sidebar`}
               >
-                <Avatar
-                  name={name}
-                  src={avatarUrl ? { avatarUrl } : defaultImage ? { defaultImage } : undefined}
-                  size="sm"
-                />
+                <div className="relative">
+                  <Avatar
+                    name={name}
+                    src={avatarUrl ? { avatarUrl } : defaultImage ? { defaultImage } : undefined}
+                    size="sm"
+                  />
+                  {/* Status overlay on collapsed avatar */}
+                  {participantStatus === 'silent' && (
+                    <div className="qt-participant-status-overlay qt-participant-status-overlay-silent">
+                      <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                      </svg>
+                    </div>
+                  )}
+                  {participantStatus === 'absent' && (
+                    <div className="qt-participant-status-overlay qt-participant-status-overlay-absent">
+                      <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+                      </svg>
+                    </div>
+                  )}
+                </div>
                 {/* Position badge - shows turn order position instead of just queue */}
                 {turnEntry && turnEntry.position != null && turnEntry.position > 0 && (
                   <span className={`qt-chat-sidebar-collapsed-position-badge ${positionBadgeClass}`}>
@@ -397,12 +426,13 @@ export function ParticipantSidebar({
               onStopImpersonate={onStopImpersonate}
               connectionProfiles={connectionProfiles}
               onConnectionProfileChange={onConnectionProfileChange}
-              onSystemPromptOverrideChange={onParticipantSettingsChange
-                ? (pId, override) => onParticipantSettingsChange(pId, { systemPromptOverride: override })
-                : undefined}
               onActiveChange={onParticipantSettingsChange
                 ? (pId, active) => onParticipantSettingsChange(pId, { isActive: active })
                 : undefined}
+              onStatusChange={onParticipantSettingsChange
+                ? (pId, status) => onParticipantSettingsChange(pId, { status, isActive: status === 'active' || status === 'silent' })
+                : undefined}
+              onWhisper={activeParticipantCount >= 3 ? onWhisper : undefined}
             />
           )
         })}

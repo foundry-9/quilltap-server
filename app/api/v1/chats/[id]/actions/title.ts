@@ -8,7 +8,7 @@ import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { badRequest, serverError } from '@/lib/api/responses';
 import { getCheapLLMProvider } from '@/lib/llm/cheap-llm';
-import { titleChat, extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks';
+import { titleChat, titleHelpChat, extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 import type { ChatMetadata } from '@/lib/schemas/types';
 
@@ -64,7 +64,9 @@ export async function handleRegenerateTitle(
       return badRequest('No messages in chat to generate title from');
     }
 
-    const result = await titleChat(conversationMessages, undefined, cheapLLM, user.id, chatId);
+    const result = chat.chatType === 'help'
+      ? await titleHelpChat(conversationMessages, undefined, cheapLLM, user.id, chatId)
+      : await titleChat(conversationMessages, undefined, cheapLLM, user.id, chatId);
 
     if (!result.success || !result.result) {
       logger.error('[Chats v1] Title generation failed', { chatId, error: result.error });

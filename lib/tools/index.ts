@@ -13,9 +13,6 @@ export {
 
 export {
   imageGenerationToolDefinition,
-  anthropicImageGenerationToolDefinition,
-  getOpenAIImageGenerationTool,
-  getAnthropicImageGenerationTool,
   validateImageGenerationInput,
   getProviderConstraints,
   type ImageGenerationToolConfig,
@@ -35,10 +32,6 @@ export {
 // Memory Search Tool (Sprint 6)
 export {
   memorySearchToolDefinition,
-  anthropicMemorySearchToolDefinition,
-  getOpenAIMemorySearchTool,
-  getAnthropicMemorySearchTool,
-  getGoogleMemorySearchTool,
   validateMemorySearchInput,
   type MemorySearchToolInput,
   type MemorySearchToolOutput,
@@ -55,10 +48,6 @@ export {
 // Web Search Tool
 export {
   webSearchToolDefinition,
-  anthropicWebSearchToolDefinition,
-  getOpenAIWebSearchTool,
-  getAnthropicWebSearchTool,
-  getGoogleWebSearchTool,
   validateWebSearchInput,
   type WebSearchToolInput,
   type WebSearchToolOutput,
@@ -75,10 +64,6 @@ export {
 // Project Info Tool
 export {
   projectInfoToolDefinition,
-  anthropicProjectInfoToolDefinition,
-  getOpenAIProjectInfoTool,
-  getAnthropicProjectInfoTool,
-  getGoogleProjectInfoTool,
   validateProjectInfoInput,
   type ProjectInfoAction,
   type ProjectInfoToolInput,
@@ -100,10 +85,6 @@ export {
 // File Management Tool
 export {
   fileManagementToolDefinition,
-  anthropicFileManagementToolDefinition,
-  getOpenAIFileManagementTool,
-  getAnthropicFileManagementTool,
-  getGoogleFileManagementTool,
   validateFileManagementInput,
   type FileManagementAction,
   type FileScope,
@@ -129,10 +110,6 @@ export {
 // Request Full Context Tool (Context Compression Feature)
 export {
   requestFullContextToolDefinition,
-  anthropicRequestFullContextToolDefinition,
-  getOpenAIRequestFullContextTool,
-  getAnthropicRequestFullContextTool,
-  getGoogleRequestFullContextTool,
   validateRequestFullContextInput,
   type RequestFullContextToolInput,
   type RequestFullContextToolOutput,
@@ -147,10 +124,6 @@ export {
 // Submit Final Response Tool (Agent Mode Feature)
 export {
   submitFinalResponseToolDefinition,
-  anthropicSubmitFinalResponseToolDefinition,
-  getOpenAISubmitFinalResponseTool,
-  getAnthropicSubmitFinalResponseTool,
-  getGoogleSubmitFinalResponseTool,
   validateSubmitFinalResponseInput,
   type SubmitFinalResponseToolInput,
   type SubmitFinalResponseToolOutput,
@@ -165,10 +138,6 @@ export {
 // Help Search Tool
 export {
   helpSearchToolDefinition,
-  anthropicHelpSearchToolDefinition,
-  getOpenAIHelpSearchTool,
-  getAnthropicHelpSearchTool,
-  getGoogleHelpSearchTool,
   validateHelpSearchInput,
   type HelpSearchToolInput,
   type HelpSearchToolOutput,
@@ -182,13 +151,39 @@ export {
   type HelpSearchToolContext,
 } from './handlers/help-search-handler';
 
+// Help Settings Tool
+export {
+  helpSettingsToolDefinition,
+  validateHelpSettingsInput,
+  type HelpSettingsCategory,
+  type HelpSettingsToolInput,
+  type HelpSettingsToolOutput,
+} from './help-settings-tool';
+
+export {
+  executeHelpSettingsTool,
+  formatHelpSettingsResults,
+  HelpSettingsError,
+  type HelpSettingsToolContext,
+} from './handlers/help-settings-handler';
+
+// Help Navigate Tool
+export {
+  helpNavigateToolDefinition,
+  validateHelpNavigateInput,
+  type HelpNavigateToolInput,
+  type HelpNavigateToolOutput,
+} from './help-navigate-tool';
+
+export {
+  executeHelpNavigateTool,
+  formatHelpNavigateResults,
+  type HelpNavigateToolContext,
+} from './handlers/help-navigate-handler';
+
 // RNG (Random Number Generator) Tool
 export {
   rngToolDefinition,
-  anthropicRngToolDefinition,
-  getOpenAIRngTool,
-  getAnthropicRngTool,
-  getGoogleRngTool,
   validateRngInput,
   type RngType,
   type RngToolInput,
@@ -203,13 +198,24 @@ export {
   type RngToolContext,
 } from './handlers/rng-handler';
 
+// Whisper Tool (Private Messages in Multi-Character Chats)
+export {
+  whisperToolDefinition,
+  validateWhisperInput,
+  type WhisperToolInput,
+  type WhisperToolOutput,
+} from './whisper-tool';
+
+export {
+  executeWhisperTool,
+  formatWhisperResults,
+  WhisperError,
+  type WhisperToolContext,
+} from './handlers/whisper-handler';
+
 // State (Persistent State Management) Tool
 export {
   stateToolDefinition,
-  anthropicStateToolDefinition,
-  getOpenAIStateTool,
-  getAnthropicStateTool,
-  getGoogleStateTool,
   validateStateInput,
   type StateOperation,
   type StateContext,
@@ -256,39 +262,28 @@ export {
   type BuildToolsOptions,
 } from './plugin-tool-builder';
 
-// Pseudo-Tool Support (for models without native function calling)
+// Tool Support (for checking model capabilities and tool mode)
 export {
   checkModelSupportsTools,
-  shouldUsePseudoTools,
-  buildPseudoToolConfig,
-  type PseudoToolConfig,
+  shouldUseTextBlockTools,
   type ToolMode,
 } from './pseudo-tool-support';
-
-export {
-  buildPseudoToolInstructions,
-  type PseudoToolOptions,
-} from './pseudo-tool-prompt'
 
 export {
   buildNativeToolInstructions,
 } from './native-tool-prompt';
 
+// Text-Block Tool Call Parser (rich text-based tool invocation for all tools)
 export {
-  parsePseudoToolCalls,
-  convertToToolCallRequest,
-  stripPseudoToolMarkers,
-  hasPseudoToolMarkers,
-  type ParsedPseudoTool,
-  type ToolCallRequest,
-} from './pseudo-tool-parser';
+  parseTextBlockCalls,
+  convertTextBlockToToolCallRequest,
+  stripTextBlockMarkers,
+  hasTextBlockMarkers,
+  mapTextBlockToolName,
+  type ParsedTextBlock,
+} from './text-block-parser';
 
-// XML Tool Call Parser (for LLMs that emit XML-style tool calls)
 export {
-  parseXMLToolCalls,
-  convertXMLToToolCallRequest,
-  stripXMLToolMarkers,
-  hasXMLToolMarkers,
-  mapXMLToolName,
-  type ParsedXMLTool,
-} from './xml-tool-parser';
+  buildTextBlockInstructions,
+  type TextBlockPromptOptions,
+} from './text-block-prompt';

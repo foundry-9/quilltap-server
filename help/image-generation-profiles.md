@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=images
+url: /settings?tab=images&section=image-profiles
 ---
 
 # Image Generation Profiles
 
-> **[Open this page in Quilltap](/settings?tab=images)**
+> **[Open this page in Quilltap](/settings?tab=images&section=image-profiles)**
 
 Image Generation Profiles configure services that can create images during chats. With an image generation profile set up, you can ask an AI to generate images as part of your conversations.
 
@@ -66,7 +66,7 @@ First, obtain an API key from an image generation provider:
 
 ### Step 2: Add the Key to Quilltap
 
-1. Go to the **AI Providers** tab in Settings (`/settings?tab=providers`) and expand **API Keys**
+1. Go to the **AI Providers** tab in Settings (`/settings?tab=providers&section=api-keys`) and expand **API Keys**
 2. Click **Add API Key**
 3. Select the image provider from the dropdown
 4. Enter your API key
@@ -344,9 +344,19 @@ The quality of generated images depends on:
 
 **Solutions:** Check error message and troubleshoot accordingly
 
+## In-Chat Settings Access
+
+Characters with help tools enabled can read your configured image profiles and story background settings during a conversation using the `help_settings` tool with `category: "images"`. This returns each profile's name, provider, model, and default status, plus your story backgrounds configuration --- but never your API keys. Ask a help-tools-enabled character something like "What image profiles do I have?" and it will oblige.
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=images&section=image-profiles")`
+
 ## Related Settings
 
-- **API Keys** — Store credentials for image providers
+- [API Keys](api-keys-settings.md) — Store credentials for image providers
 - **Chat Settings** — Configure image description provider (different from generation)
 - **Connection Profiles** — For LLM that interprets image requests
 - **Chat Memory** — Stores generated images in history

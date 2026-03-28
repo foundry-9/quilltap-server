@@ -13,6 +13,7 @@ import {
   TimestampSchema,
   JsonSchema,
 } from './common.types';
+import { TimestampConfigSchema } from './settings.types';
 
 // ============================================================================
 // CHARACTER SYSTEM PROMPTS
@@ -29,6 +30,21 @@ export const CharacterSystemPromptSchema = z.object({
 });
 
 export type CharacterSystemPrompt = z.infer<typeof CharacterSystemPromptSchema>;
+
+// ============================================================================
+// CHARACTER SCENARIOS
+// ============================================================================
+
+// Character Scenario (embedded in Character) - named scenarios for roleplay context
+export const CharacterScenarioSchema = z.object({
+  id: UUIDSchema,
+  title: z.string().min(1).max(200),
+  content: z.string().min(1),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type CharacterScenario = z.infer<typeof CharacterScenarioSchema>;
 
 // ============================================================================
 // PHYSICAL DESCRIPTIONS
@@ -93,7 +109,7 @@ export const CharacterSchema = z.object({
   title: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
   personality: z.string().nullable().optional(),
-  scenario: z.string().nullable().optional(),
+  scenarios: z.array(CharacterScenarioSchema).default([]),  // Named scenarios array
   firstMessage: z.string().nullable().optional(),
   exampleDialogues: z.string().nullable().optional(),
   systemPrompts: z.array(CharacterSystemPromptSchema).default([]),  // Named system prompts array
@@ -111,6 +127,18 @@ export const CharacterSchema = z.object({
 
   /** Default agent mode enabled state for chats with this character (null = inherit from global) */
   defaultAgentModeEnabled: z.boolean().nullable().optional(),
+
+  /** Default help tools enabled state for chats with this character (null = inherit from global, default disabled) */
+  defaultHelpToolsEnabled: z.boolean().nullable().optional(),
+
+  /** Default timestamp configuration for chats with this character (null = use global default / disabled) */
+  defaultTimestampConfig: TimestampConfigSchema.nullable().optional(),
+
+  /** Default scenario ID for chats with this character (null = no default scenario) */
+  defaultScenarioId: UUIDSchema.nullable().optional(),
+
+  /** Default system prompt ID for chats with this character (null = use first/isDefault prompt) */
+  defaultSystemPromptId: UUIDSchema.nullable().optional(),
 
   // Relationships
   personaLinks: z.array(z.object({

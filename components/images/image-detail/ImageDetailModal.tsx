@@ -27,6 +27,7 @@ export default function ImageDetailModal({
     toggleCharacterTag,
     setAsAvatar,
     handleDownload,
+    handleCopyToClipboard,
     updateTaggedCharacters,
   } = useImageActions(image, characters, onAvatarSet)
 
@@ -92,11 +93,12 @@ export default function ImageDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-[60] flex items-center justify-center qt-bg-overlay backdrop-blur-sm p-4"
       onClick={onClose}
     >
       <ImageActions
         handleDownload={handleDownload}
+        handleCopyToClipboard={handleCopyToClipboard}
         onClose={onClose}
         onPrev={onPrev}
         onNext={onNext}
@@ -141,7 +143,7 @@ export default function ImageDetailModal({
       </div>
 
       {/* Filename at bottom */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/70 text-sm bg-black/50 px-3 py-1 rounded">
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 qt-text-overlay-muted text-sm qt-bg-overlay-caption px-3 py-1 rounded">
         {image.filename}
       </div>
     </div>

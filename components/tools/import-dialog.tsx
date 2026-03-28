@@ -78,8 +78,9 @@ export function ImportDialog({
 
   // Check if preview has memories
   const hasMemories = Boolean(
-    (state.preview?.entities?.memories as any)?.length > 0 ||
-    (state.preview?.entities?.memories as any)?.[0]?.id
+    state.preview?.entities?.memories &&
+    (state.preview.entities.memories as { count?: number }).count &&
+    (state.preview.entities.memories as { count?: number }).count! > 0
   )
 
   return (

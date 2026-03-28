@@ -170,6 +170,7 @@ function mapResolutionResults(
  * @param cheapLLMSelection - The cheap LLM provider to use
  * @param userId - Current user ID
  * @param chatId - Optional chat ID for logging
+ * @param sceneState - Optional scene state with appearance data (avoids redundant LLM call)
  * @returns Resolution result with appearances and whether the LLM succeeded
  */
 export async function resolveCharacterAppearances(
@@ -178,10 +179,46 @@ export async function resolveCharacterAppearances(
   imagePrompt: string,
   cheapLLMSelection: CheapLLMSelection,
   userId: string,
-  chatId?: string
+  chatId?: string,
+  sceneState?: { characters: Array<{ characterId: string; characterName: string; appearance: string | null; clothing: string | null }> } | null
 ): Promise<AppearanceResolutionResult> {
   if (characters.length === 0) {
     return { appearances: [], llmResolved: true }
+  }
+
+  // Shortcut: use scene state appearances if provided (avoids redundant LLM call)
+  if (sceneState?.characters && sceneState.characters.length > 0) {
+    const sceneAppearances: ResolvedCharacterAppearance[] = characters.map(char => {
+      const sceneChar = sceneState.characters.find(sc => sc.characterId === char.characterId)
+      const primary = char.physicalDescriptions[0]
+      const physDesc = sceneChar?.appearance
+        || primary?.completePrompt || primary?.longPrompt || primary?.mediumPrompt || primary?.shortPrompt
+        || char.characterName
+
+      return {
+        characterId: char.characterId,
+        characterName: char.characterName,
+        physicalDescription: physDesc,
+        physicalDescriptionName: primary?.name || 'scene-state',
+        // If scene state has clothing info, use it. If clothing is explicitly null/empty
+        // (e.g. character undressed), do NOT fall back to stored clothing records —
+        // that would incorrectly redress the character in their default outfit.
+        // Only fall back to stored records if the character wasn't found in scene state at all.
+        clothingDescription: sceneChar
+          ? (sceneChar.clothing || '')
+          : (char.clothingRecords[0]?.description || ''),
+        clothingSource: sceneChar ? 'narrative' as const : 'default' as const,
+        wasSanitized: false,
+      }
+    })
+
+    logger.info('[AppearanceResolution] Using scene state for character appearances', {
+      context: 'image-gen.appearance-resolution',
+      chatId,
+      characterCount: sceneAppearances.length,
+    })
+
+    return { appearances: sceneAppearances, llmResolved: true }
   }
 
   // Skip optimization: no LLM call needed when context is trivial

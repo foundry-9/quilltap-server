@@ -195,21 +195,6 @@ export function useChatData(chatId: string) {
     }
   }, [chatId])
 
-  const persistTurnState = useCallback(async (lastTurnParticipantId: string | null) => {
-    try {
-      const res = await fetch(`/api/v1/chats/${chatId}?action=turn`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lastTurnParticipantId }),
-      })
-      if (!res.ok) {
-        console.warn('[Chat] Failed to persist turn state', { status: res.status })
-      }
-    } catch (err) {
-      console.error('[Chat] Error persisting turn state', { error: err instanceof Error ? err.message : String(err) })
-    }
-  }, [chatId])
-
   return {
     chat,
     setChat,
@@ -229,6 +214,5 @@ export function useChatData(chatId: string) {
     fetchChatSettings,
     fetchChatPhotoCount,
     fetchChatMemoryCount,
-    persistTurnState,
   }
 }

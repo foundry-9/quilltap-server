@@ -48,6 +48,9 @@ export function ChangePassphraseCard() {
 
       setStatus('success')
       resetForm()
+
+      // Notify other components (e.g., AutoLockSettingsCard) that passphrase state changed
+      window.dispatchEvent(new CustomEvent('quilltap-passphrase-changed'))
     } catch (err) {
       setStatus('error')
       setErrorMessage(err instanceof Error ? err.message : 'An unexpected error occurred')

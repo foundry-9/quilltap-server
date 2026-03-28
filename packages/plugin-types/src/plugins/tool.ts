@@ -71,6 +71,9 @@ export interface ToolExecutionContext {
 
   /** User-configured settings for this tool */
   toolConfig: Record<string, unknown>;
+
+  /** Browser User-Agent from the originating request (for tools that make HTTP requests) */
+  browserUserAgent?: string;
 }
 
 /**

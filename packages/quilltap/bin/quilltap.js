@@ -57,6 +57,7 @@ function parseArgs(argv) {
         opts.help = true;
         break;
       default:
+        // Allow subcommands to pass through (they're handled before parseArgs)
         console.error(`Unknown argument: ${args[i]}`);
         console.error('Run "quilltap --help" for usage information.');
         process.exit(1);
@@ -72,6 +73,10 @@ function printHelp() {
 Quilltap - Self-hosted AI workspace
 
 Usage: quilltap [options]
+
+Subcommands:
+  db                            Query encrypted databases
+  themes                        Manage theme bundles
 
 Options:
   -p, --port <number>     Port to listen on (default: 3000)
@@ -387,9 +392,58 @@ function resolveDataDir(overrideDir) {
 }
 
 /**
- * Read and decrypt the .dbkey file to get the SQLCipher key.
+ * Prompt for a passphrase interactively with hidden input.
+ * Returns a promise that resolves to the entered passphrase.
  */
-function loadDbKey(dataDir, passphrase) {
+function promptPassphrase(prompt) {
+  return new Promise((resolve, reject) => {
+    const readline = require('readline');
+    if (!process.stdin.isTTY) {
+      reject(new Error('This database requires a passphrase. Use --passphrase <pass> or set QUILLTAP_DB_PASSPHRASE'));
+      return;
+    }
+    process.stdout.write(prompt || 'Passphrase: ');
+    const rl = readline.createInterface({ input: process.stdin, terminal: false });
+    // Disable echo by switching stdin to raw mode
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    let passphrase = '';
+    const onData = (ch) => {
+      const c = ch.toString();
+      if (c === '\n' || c === '\r' || c === '\u0004') {
+        // Enter or Ctrl+D — done
+        process.stdin.setRawMode(false);
+        process.stdin.removeListener('data', onData);
+        process.stdin.pause();
+        rl.close();
+        process.stdout.write('\n');
+        resolve(passphrase);
+      } else if (c === '\u0003') {
+        // Ctrl+C — abort
+        process.stdin.setRawMode(false);
+        process.stdin.removeListener('data', onData);
+        process.stdin.pause();
+        rl.close();
+        process.stdout.write('\n');
+        process.exit(130);
+      } else if (c === '\u007F' || c === '\b') {
+        // Backspace
+        if (passphrase.length > 0) {
+          passphrase = passphrase.slice(0, -1);
+        }
+      } else {
+        passphrase += c;
+      }
+    };
+    process.stdin.on('data', onData);
+  });
+}
+
+/**
+ * Read and decrypt the .dbkey file to get the SQLCipher key.
+ * If passphrase is needed and not provided, prompts interactively.
+ */
+async function loadDbKey(dataDir, passphrase) {
   const crypto = require('crypto');
   const dbkeyPath = path.join(dataDir, 'quilltap.dbkey');
   if (!fs.existsSync(dbkeyPath)) {
@@ -429,12 +483,295 @@ function loadDbKey(dataDir, passphrase) {
     // Internal passphrase failed — need user passphrase
   }
 
-  // User passphrase required
+  // Check environment variable if no CLI passphrase provided
+  if (!passphrase && process.env.QUILLTAP_DB_PASSPHRASE) {
+    passphrase = process.env.QUILLTAP_DB_PASSPHRASE;
+  }
+
+  // Prompt interactively if still no passphrase
   if (!passphrase) {
-    throw new Error('This database requires a passphrase. Use --passphrase <pass>');
+    passphrase = await promptPassphrase('Database passphrase: ');
+    if (!passphrase) {
+      throw new Error('No passphrase provided');
+    }
   }
 
   return tryDecrypt(passphrase);
+}
+
+// ============================================================================
+// Instance Lock CLI Commands
+// ============================================================================
+
+/**
+ * Check whether a PID is alive using signal 0.
+ */
+function isPidAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return err.code === 'EPERM'; // EPERM = exists but no permission
+  }
+}
+
+/**
+ * Verify a PID looks like a Node/Quilltap process (best-effort).
+ */
+function verifyPidIsNode(pid, expectedArgv0) {
+  try {
+    if (process.platform === 'linux') {
+      try {
+        const cmdline = fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8');
+        const cmd = cmdline.split('\0')[0] || '';
+        return /node|electron|quilltap|next-server/i.test(cmd);
+      } catch {
+        return true; // Can't read — assume match
+      }
+    }
+    if (process.platform === 'darwin') {
+      const { execSync } = require('child_process');
+      const output = execSync(`ps -p ${pid} -o comm=`, {
+        encoding: 'utf8', timeout: 2000, stdio: ['pipe', 'pipe', 'pipe'],
+      }).trim();
+      return /node|electron|quilltap|next-server/i.test(output);
+    }
+    if (process.platform === 'win32') {
+      const { execSync } = require('child_process');
+      const output = execSync(`tasklist /FI "PID eq ${pid}" /NH`, {
+        encoding: 'utf8', timeout: 2000, stdio: ['pipe', 'pipe', 'pipe'],
+      }).trim();
+      return /node|electron|quilltap|next-server/i.test(output);
+    }
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Handle --lock-status, --lock-clean, --lock-override commands.
+ */
+function handleLockCommand(dataDir, opts) {
+  const lockPath = path.join(dataDir, 'quilltap.lock');
+  const hostname = require('os').hostname();
+
+  // Read lock file
+  let lock = null;
+  try {
+    if (fs.existsSync(lockPath)) {
+      const raw = fs.readFileSync(lockPath, 'utf8');
+      lock = JSON.parse(raw);
+    }
+  } catch (err) {
+    if (opts.lockStatus) {
+      console.log('Lock file exists but is corrupt or unreadable.');
+      console.log(`  Path: ${lockPath}`);
+      if (opts.lockClean) {
+        fs.unlinkSync(lockPath);
+        console.log('  Removed corrupt lock file.');
+      }
+    }
+    return;
+  }
+
+  // --lock-status: display current lock state
+  if (opts.lockStatus) {
+    if (!lock) {
+      console.log('No instance lock found. Database is not currently claimed.');
+      console.log(`  Lock path: ${lockPath}`);
+      return;
+    }
+
+    const sameHost = lock.hostname === hostname;
+    const alive = sameHost && isPidAlive(lock.pid);
+    const isNode = alive ? verifyPidIsNode(lock.pid, lock.processArgv0 || '') : false;
+
+    // Status line
+    let status;
+    if (alive && isNode) {
+      status = '\x1b[32mACTIVE\x1b[0m (process confirmed running)';
+    } else if (alive && !isNode) {
+      status = '\x1b[33mSUSPECT\x1b[0m (PID alive but does not look like Quilltap — possible PID reuse)';
+    } else if (!sameHost) {
+      // Different hostname — could be a VM/container on this machine
+      const isVMOrContainer = ['docker', 'lima', 'wsl2'].includes(lock.environment);
+      const heartbeatAgeMs = lock.lastHeartbeat
+        ? Date.now() - new Date(lock.lastHeartbeat).getTime()
+        : Infinity;
+      const heartbeatFreshMs = 5 * 60 * 1000;
+
+      if (isVMOrContainer && heartbeatAgeMs < heartbeatFreshMs) {
+        const ageStr = Math.round(heartbeatAgeMs / 1000) + 's';
+        status = `\x1b[32mACTIVE (${lock.environment}, heartbeat ${ageStr} ago)\x1b[0m`;
+      } else if (isVMOrContainer) {
+        status = `\x1b[33mSTALE (${lock.environment}, no recent heartbeat)\x1b[0m — will be auto-claimed on next startup`;
+      } else {
+        status = '\x1b[33mSTALE (different host)\x1b[0m — will be auto-claimed on next startup';
+      }
+    } else {
+      status = '\x1b[31mSTALE (process dead)\x1b[0m — will be auto-claimed on next startup';
+    }
+
+    console.log(`Instance Lock Status: ${status}`);
+    console.log();
+    console.log(`  PID:          ${lock.pid}`);
+    console.log(`  Hostname:     ${lock.hostname}${sameHost ? ' (this host)' : ' (different host)'}`);
+    console.log(`  Environment:  ${lock.environment || 'unknown'}`);
+    console.log(`  Process:      ${lock.processTitle || 'unknown'}`);
+    console.log(`  Started:      ${lock.startedAt || 'unknown'}`);
+
+    // Show heartbeat age if available
+    if (lock.lastHeartbeat) {
+      const heartbeatAge = Math.round((Date.now() - new Date(lock.lastHeartbeat).getTime()) / 1000);
+      let heartbeatDisplay;
+      if (heartbeatAge < 120) {
+        heartbeatDisplay = `${heartbeatAge}s ago`;
+      } else if (heartbeatAge < 7200) {
+        heartbeatDisplay = `${Math.round(heartbeatAge / 60)}m ago`;
+      } else {
+        heartbeatDisplay = `${Math.round(heartbeatAge / 3600)}h ago`;
+      }
+      // Warn if heartbeat is older than 5 minutes (process may be hung)
+      if (alive && heartbeatAge > 300) {
+        heartbeatDisplay = `\x1b[33m${heartbeatDisplay} (stale — process may be hung)\x1b[0m`;
+      }
+      console.log(`  Heartbeat:    ${heartbeatDisplay}`);
+    }
+
+    console.log(`  Lock file:    ${lockPath}`);
+
+    if (lock.history && lock.history.length > 0) {
+      console.log();
+      console.log(`  Recent history (${lock.history.length} entries):`);
+      const recent = lock.history.slice(-10);
+      for (const entry of recent) {
+        const ts = entry.timestamp ? entry.timestamp.replace('T', ' ').replace(/\.\d+Z$/, 'Z') : '?';
+        const detail = entry.detail ? ` — ${entry.detail}` : '';
+        console.log(`    [${ts}] ${entry.event} (PID ${entry.pid})${detail}`);
+      }
+      if (lock.history.length > 10) {
+        console.log(`    ... and ${lock.history.length - 10} earlier entries`);
+      }
+    }
+    return;
+  }
+
+  // --lock-clean: remove stale locks only
+  if (opts.lockClean) {
+    if (!lock) {
+      console.log('No lock file found. Nothing to clean.');
+      return;
+    }
+
+    const sameHost = lock.hostname === hostname;
+    const alive = sameHost && isPidAlive(lock.pid);
+
+    if (alive) {
+      const isNode = verifyPidIsNode(lock.pid, lock.processArgv0 || '');
+      if (isNode) {
+        console.log(`Lock is held by a live Quilltap process (PID ${lock.pid}). Cannot clean.`);
+        console.log('Stop the running instance first, or use --lock-override to force.');
+        process.exit(1);
+      } else {
+        console.log(`Lock references PID ${lock.pid} which is alive but does NOT look like a Quilltap process.`);
+        console.log('This is likely a stale lock with a reused PID. Removing.');
+      }
+    } else if (!sameHost) {
+      // Different hostname — check if it's a VM/container with a recent heartbeat
+      const isVMOrContainer = ['docker', 'lima', 'wsl2'].includes(lock.environment);
+      const heartbeatAgeMs = lock.lastHeartbeat
+        ? Date.now() - new Date(lock.lastHeartbeat).getTime()
+        : Infinity;
+      const heartbeatFreshMs = 5 * 60 * 1000;
+
+      if (isVMOrContainer && heartbeatAgeMs < heartbeatFreshMs) {
+        const ageStr = Math.round(heartbeatAgeMs / 1000) + 's';
+        console.log(`Lock is held by a live ${lock.environment} instance (heartbeat ${ageStr} ago). Cannot clean.`);
+        console.log('Stop the other instance first, or use --lock-override to force.');
+        process.exit(1);
+      } else if (isVMOrContainer) {
+        console.log(`Lock was held by ${lock.environment} (${lock.hostname}) with no recent heartbeat. Removing stale lock.`);
+      } else {
+        console.log(`Lock was held by a different host (${lock.hostname}). Removing stale lock.`);
+      }
+    } else {
+      console.log(`Lock was held by PID ${lock.pid} which is no longer running. Removing stale lock.`);
+    }
+
+    // Write a final history entry before deleting
+    if (!lock.history) lock.history = [];
+    lock.history.push({
+      event: 'stale-claimed',
+      pid: process.pid,
+      hostname: hostname,
+      timestamp: new Date().toISOString(),
+      detail: `Cleaned via CLI (quilltap db --lock-clean)`,
+    });
+
+    // Write final state then remove
+    try {
+      fs.writeFileSync(lockPath, JSON.stringify(lock, null, 2) + '\n', 'utf8');
+    } catch { /* best effort */ }
+
+    try {
+      fs.unlinkSync(lockPath);
+      console.log('Lock file removed.');
+    } catch (err) {
+      console.error(`Failed to remove lock file: ${err.message}`);
+      process.exit(1);
+    }
+    return;
+  }
+
+  // --lock-override: forcibly claim the lock
+  if (opts.lockOverride) {
+    if (!lock) {
+      console.log('No lock file found. Nothing to override.');
+      return;
+    }
+
+    const sameHost = lock.hostname === hostname;
+    const alive = sameHost && isPidAlive(lock.pid);
+
+    if (alive) {
+      const isNode = verifyPidIsNode(lock.pid, lock.processArgv0 || '');
+      if (!isNode) {
+        console.error(`Lock override rejected: PID ${lock.pid} is alive but does not appear to be`);
+        console.error('a Quilltap/Node process. The PID may have been reused. Verify manually.');
+        process.exit(1);
+      }
+      console.log(`WARNING: Overriding lock held by live process (PID ${lock.pid}, ${lock.environment || 'unknown'}).`);
+      console.log('The other instance may corrupt the database if it is still writing.');
+    } else {
+      console.log(`Overriding stale lock (PID ${lock.pid} is no longer running).`);
+    }
+
+    // Record override in history
+    if (!lock.history) lock.history = [];
+    lock.history.push({
+      event: 'override',
+      pid: process.pid,
+      hostname: hostname,
+      timestamp: new Date().toISOString(),
+      detail: `Manual override via CLI (quilltap db --lock-override)` +
+              (alive ? ` — overriding live PID ${lock.pid}` : ` — PID ${lock.pid} was dead`),
+    });
+
+    // Write final state then remove so next startup gets a clean acquire
+    try {
+      fs.writeFileSync(lockPath, JSON.stringify(lock, null, 2) + '\n', 'utf8');
+    } catch { /* best effort */ }
+
+    try {
+      fs.unlinkSync(lockPath);
+      console.log('Lock file removed. Next Quilltap startup will acquire a fresh lock.');
+    } catch (err) {
+      console.error(`Failed to remove lock file: ${err.message}`);
+      process.exit(1);
+    }
+    return;
+  }
 }
 
 function printDbHelp() {
@@ -454,12 +791,24 @@ Options:
   --passphrase <pass>   Provide passphrase for encrypted .dbkey
   -h, --help            Show this help
 
+Instance Lock Commands:
+  --lock-status         Show the current instance lock state
+  --lock-clean          Remove stale locks (dead processes only)
+  --lock-override       Forcibly claim the lock for this process
+
+If a passphrase is required and not provided via --passphrase, the tool
+will check the QUILLTAP_DB_PASSPHRASE environment variable, then prompt
+interactively (with hidden input) if a TTY is available.
+
 Examples:
   quilltap db --tables
   quilltap db "SELECT count(*) FROM characters"
   quilltap db --count messages
   quilltap db --repl
   quilltap db --llm-logs --tables
+  quilltap db --lock-status
+  quilltap db --lock-clean
+  QUILLTAP_DB_PASSPHRASE=secret quilltap db --tables
 `);
 }
 
@@ -472,6 +821,9 @@ async function dbCommand(args) {
   let repl = false;
   let sql = '';
   let showHelp = false;
+  let lockStatus = false;
+  let lockClean = false;
+  let lockOverride = false;
 
   let i = 0;
   while (i < args.length) {
@@ -483,6 +835,9 @@ async function dbCommand(args) {
       case '--count': countTable = args[++i]; break;
       case '--repl': repl = true; break;
       case '--help': case '-h': showHelp = true; break;
+      case '--lock-status': lockStatus = true; break;
+      case '--lock-clean': lockClean = true; break;
+      case '--lock-override': lockOverride = true; break;
       default:
         if (args[i].startsWith('-')) {
           console.error(`Unknown option: ${args[i]}`);
@@ -500,6 +855,13 @@ async function dbCommand(args) {
   }
 
   const dataDir = resolveDataDir(dataDirOverride);
+
+  // ---- Instance lock commands (no database open required) ----
+  if (lockStatus || lockClean || lockOverride) {
+    handleLockCommand(dataDir, { lockStatus, lockClean, lockOverride });
+    return;
+  }
+
   const dbFilename = useLlmLogs ? 'quilltap-llm-logs.db' : 'quilltap.db';
   const dbPath = path.join(dataDir, dbFilename);
 
@@ -511,7 +873,7 @@ async function dbCommand(args) {
   // Load encryption key
   let pepper;
   try {
-    pepper = loadDbKey(dataDir, passphrase);
+    pepper = await loadDbKey(dataDir, passphrase);
   } catch (err) {
     console.error(`Error: ${err.message}`);
     process.exit(1);
@@ -613,6 +975,9 @@ async function dbCommand(args) {
 // Route to subcommand or main
 if (process.argv[2] === 'db') {
   dbCommand(process.argv.slice(3));
+} else if (process.argv[2] === 'themes') {
+  const { themesCommand } = require('../lib/theme-commands');
+  themesCommand(process.argv.slice(3));
 } else {
   main();
 }

@@ -36,11 +36,6 @@ jest.mock('@/lib/chat/turn-manager', () => ({
     ...state,
     queue: state.queue.filter((id: string) => id !== participantId),
   })),
-  selectNextSpeaker: jest.fn(() => ({
-    nextSpeakerId: 'p1',
-    reason: 'weighted_selection',
-    cycleComplete: false,
-  })),
 }))
 
 // Mock EphemeralMessage module
@@ -63,7 +58,6 @@ import {
   nudgeParticipant,
   addToQueue,
   removeFromQueue,
-  selectNextSpeaker,
 } from '@/lib/chat/turn-manager'
 import { createEphemeralMessage } from '@/components/chat/EphemeralMessage'
 
@@ -73,10 +67,46 @@ const mockShowInfoToast = showInfoToast as jest.MockedFunction<typeof showInfoTo
 const mockNudgeParticipant = nudgeParticipant as jest.MockedFunction<typeof nudgeParticipant>
 const mockAddToQueue = addToQueue as jest.MockedFunction<typeof addToQueue>
 const mockRemoveFromQueue = removeFromQueue as jest.MockedFunction<typeof removeFromQueue>
-const mockSelectNextSpeaker = selectNextSpeaker as jest.MockedFunction<typeof selectNextSpeaker>
 const mockCreateEphemeralMessage = createEphemeralMessage as jest.MockedFunction<
   typeof createEphemeralMessage
 >
+
+// Mock fetch for API calls
+const mockFetch = jest.fn()
+global.fetch = mockFetch
+
+const TEST_CHAT_ID = 'test-chat-id'
+
+/**
+ * Create a mock API response for the turn action endpoint
+ */
+function createMockTurnResponse(overrides: Partial<{
+  nextSpeakerId: string | null
+  nextSpeakerControlledBy: string | null
+  reason: string
+  cycleComplete: boolean
+  queue: string[]
+}> = {}) {
+  const nextSpeakerId = 'nextSpeakerId' in overrides ? overrides.nextSpeakerId! : 'p1'
+  return {
+    success: true,
+    action: 'query',
+    turn: {
+      nextSpeakerId,
+      nextSpeakerName: nextSpeakerId ? 'Alice' : null,
+      nextSpeakerControlledBy: 'nextSpeakerControlledBy' in overrides
+        ? overrides.nextSpeakerControlledBy!
+        : 'llm',
+      reason: overrides.reason ?? 'weighted_selection',
+      explanation: 'Selected by weighted random',
+      cycleComplete: overrides.cycleComplete ?? false,
+      isUsersTurn: nextSpeakerId === null,
+    },
+    state: {
+      queue: overrides.queue ?? [],
+    },
+  }
+}
 
 // Test data factories
 function createMockParticipant(
@@ -181,6 +211,12 @@ describe('useTurnManagement', () => {
   beforeEach(() => {
     jest.clearAllMocks()
 
+    // Default fetch mock: return successful response
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => createMockTurnResponse(),
+    })
+
     // Initialize mock functions
     setTurnState = jest.fn()
     setTurnSelectionResult = jest.fn()
@@ -209,19 +245,13 @@ describe('useTurnManagement', () => {
     ]
 
     ephemeralMessages = []
-
-    // Reset mock implementations for selectNextSpeaker (the default one)
-    mockSelectNextSpeaker.mockReturnValue({
-      nextSpeakerId: 'p1',
-      reason: 'weighted_selection',
-      cycleComplete: false,
-    })
   })
 
   describe('Initial state', () => {
     it('should return all action handlers', () => {
       const { result } = renderHook(() =>
         useTurnManagement(
+          TEST_CHAT_ID,
           participantsAsBase,
           charactersMap,
           turnState,
@@ -245,6 +275,7 @@ describe('useTurnManagement', () => {
     it('should calculate hasActiveCharacters correctly with active characters', () => {
       const { result } = renderHook(() =>
         useTurnManagement(
+          TEST_CHAT_ID,
           participantsAsBase,
           charactersMap,
           turnState,
@@ -266,6 +297,7 @@ describe('useTurnManagement', () => {
 
       const { result } = renderHook(() =>
         useTurnManagement(
+          TEST_CHAT_ID,
           noActiveChars,
           charactersMap,
           turnState,
@@ -287,6 +319,7 @@ describe('useTurnManagement', () => {
 
       const { result } = renderHook(() =>
         useTurnManagement(
+          TEST_CHAT_ID,
           onlyPersona,
           charactersMap,
           turnState,
@@ -305,9 +338,10 @@ describe('useTurnManagement', () => {
   })
 
   describe('handleNudge', () => {
-    it('should update turn state with nudged participant', async () => {
+    it('should update turn state with nudged participant and trigger continue mode directly', async () => {
       const { result } = renderHook(() =>
         useTurnManagement(
+          TEST_CHAT_ID,
           participantsAsBase,
           charactersMap,
           turnState,
@@ -327,11 +361,16 @@ describe('useTurnManagement', () => {
 
       expect(mockNudgeParticipant).toHaveBeenCalledWith(turnState, 'p1')
       expect(setTurnState).toHaveBeenCalled()
+      // Nudge should NOT call the turn action API — triggerContinueMode handles
+      // the immediate response directly.  Adding to the queue AND triggering
+      // continueMode caused duplicate responses from the chain loop.
+      expect(triggerContinueMode).toHaveBeenCalledWith('p1')
     })
 
     it('should create ephemeral message for nudge', async () => {
       const { result } = renderHook(() =>
         useTurnManagement(
+          TEST_CHAT_ID,
           participantsAsBase,
           charactersMap,
           turnState,
@@ -353,9 +392,10 @@ describe('useTurnManagement', () => {
       expect(setEphemeralMessages).toHaveBeenCalled()
     })
 
-    it('should recalculate next speaker after nudge', async () => {
+    it('should not call turn action API on nudge (avoids duplicate responses)', async () => {
       const { result } = renderHook(() =>
         useTurnManagement(
+          TEST_CHAT_ID,
           participantsAsBase,
           charactersMap,
           turnState,
@@ -373,13 +413,23 @@ describe('useTurnManagement', () => {
         await result.current.handleNudge('p1')
       })
 
-      expect(mockSelectNextSpeaker).toHaveBeenCalled()
-      expect(setTurnSelectionResult).toHaveBeenCalled()
+      // The nudge action API should NOT be called — only triggerContinueMode
+      // Adding to the queue AND triggering continueMode caused the chain loop
+      // to pop the queued entry and generate a second duplicate response.
+      expect(mockFetch).not.toHaveBeenCalledWith(
+        `/api/v1/chats/${TEST_CHAT_ID}?action=turn`,
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ action: 'nudge', participantId: 'p1' }),
+        })
+      )
+      expect(triggerContinueMode).toHaveBeenCalledWith('p1')
     })
 
     it('should trigger continue mode for the nudged participant', async () => {
       const { result } = renderHook(() =>
         useTurnManagement(
+          TEST_CHAT_ID,
           participantsAsBase,
           charactersMap,
           turnState,
@@ -403,6 +453,7 @@ describe('useTurnManagement', () => {
     it('should unpause chat before nudge if paused', async () => {
       const { result } = renderHook(() =>
         useTurnManagement(
+          TEST_CHAT_ID,
           participantsAsBase,
           charactersMap,
           turnState,
@@ -428,6 +479,7 @@ describe('useTurnManagement', () => {
     it('should not call onUnpause when chat is not paused', async () => {
       const { result } = renderHook(() =>
         useTurnManagement(
+          TEST_CHAT_ID,
           participantsAsBase,
           charactersMap,
           turnState,
@@ -455,6 +507,7 @@ describe('useTurnManagement', () => {
 
       const { result } = renderHook(() =>
         useTurnManagement(
+          TEST_CHAT_ID,
           participantsAsBase,
           charactersMap,
           turnState,
@@ -480,6 +533,7 @@ describe('useTurnManagement', () => {
 
       const { result } = renderHook(() =>
         useTurnManagement(
+          TEST_CHAT_ID,
           participantsAsBase,
           charactersMap,
           turnState,
@@ -506,9 +560,10 @@ describe('useTurnManagement', () => {
   })
 
   describe('handleQueue', () => {
-    it('should add participant to queue', () => {
+    it('should add participant to queue and call API', async () => {
       const { result } = renderHook(() =>
         useTurnManagement(
+          TEST_CHAT_ID,
           participantsAsBase,
           charactersMap,
           turnState,
@@ -522,17 +577,30 @@ describe('useTurnManagement', () => {
         )
       )
 
-      act(() => {
-        result.current.handleQueue('p1')
+      await act(async () => {
+        await result.current.handleQueue('p1')
       })
 
       expect(mockAddToQueue).toHaveBeenCalledWith(turnState, 'p1')
       expect(setTurnState).toHaveBeenCalled()
+      expect(mockFetch).toHaveBeenCalledWith(
+        `/api/v1/chats/${TEST_CHAT_ID}?action=turn`,
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ action: 'queue', participantId: 'p1' }),
+        })
+      )
     })
 
-    it('should recalculate next speaker after queue update', () => {
+    it('should update turn state from server response', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => createMockTurnResponse({ queue: ['p1'] }),
+      })
+
       const { result } = renderHook(() =>
         useTurnManagement(
+          TEST_CHAT_ID,
           participantsAsBase,
           charactersMap,
           turnState,
@@ -546,46 +614,24 @@ describe('useTurnManagement', () => {
         )
       )
 
-      act(() => {
-        result.current.handleQueue('p1')
+      await act(async () => {
+        await result.current.handleQueue('p1')
       })
 
-      expect(mockSelectNextSpeaker).toHaveBeenCalled()
-      expect(setTurnSelectionResult).toHaveBeenCalled()
-    })
-
-    it('should not recalculate if no participants', () => {
-      const { result } = renderHook(() =>
-        useTurnManagement(
-          [], // empty participants
-          charactersMap,
-          turnState,
-          'p3',
-          participantData,
-          ephemeralMessages,
-          setTurnState,
-          setTurnSelectionResult,
-          setEphemeralMessages,
-          triggerContinueMode
-        )
+      // Should update turn state with server's authoritative queue
+      expect(setTurnState).toHaveBeenCalledWith(
+        expect.objectContaining({ queue: ['p1'] })
       )
-
-      mockSelectNextSpeaker.mockClear()
-
-      act(() => {
-        result.current.handleQueue('p1')
-      })
-
-      expect(mockSelectNextSpeaker).not.toHaveBeenCalled()
     })
   })
 
   describe('handleDequeue', () => {
-    it('should remove participant from queue', () => {
+    it('should remove participant from queue and call API', async () => {
       const stateWithQueue = createMockTurnState({ queue: ['p1', 'p2'] })
 
       const { result } = renderHook(() =>
         useTurnManagement(
+          TEST_CHAT_ID,
           participantsAsBase,
           charactersMap,
           stateWithQueue,
@@ -599,76 +645,32 @@ describe('useTurnManagement', () => {
         )
       )
 
-      act(() => {
-        result.current.handleDequeue('p1')
+      await act(async () => {
+        await result.current.handleDequeue('p1')
       })
 
       expect(mockRemoveFromQueue).toHaveBeenCalledWith(stateWithQueue, 'p1')
       expect(setTurnState).toHaveBeenCalled()
-    })
-
-    it('should recalculate next speaker after dequeue', () => {
-      const stateWithQueue = createMockTurnState({ queue: ['p1'] })
-
-      const { result } = renderHook(() =>
-        useTurnManagement(
-          participantsAsBase,
-          charactersMap,
-          stateWithQueue,
-          'p3',
-          participantData,
-          ephemeralMessages,
-          setTurnState,
-          setTurnSelectionResult,
-          setEphemeralMessages,
-          triggerContinueMode
-        )
+      expect(mockFetch).toHaveBeenCalledWith(
+        `/api/v1/chats/${TEST_CHAT_ID}?action=turn`,
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ action: 'dequeue', participantId: 'p1' }),
+        })
       )
-
-      act(() => {
-        result.current.handleDequeue('p1')
-      })
-
-      expect(mockSelectNextSpeaker).toHaveBeenCalled()
-      expect(setTurnSelectionResult).toHaveBeenCalled()
-    })
-
-    it('should not recalculate if no participants', () => {
-      const { result } = renderHook(() =>
-        useTurnManagement(
-          [], // empty participants
-          charactersMap,
-          turnState,
-          'p3',
-          participantData,
-          ephemeralMessages,
-          setTurnState,
-          setTurnSelectionResult,
-          setEphemeralMessages,
-          triggerContinueMode
-        )
-      )
-
-      mockSelectNextSpeaker.mockClear()
-
-      act(() => {
-        result.current.handleDequeue('p1')
-      })
-
-      expect(mockSelectNextSpeaker).not.toHaveBeenCalled()
     })
   })
 
   describe('handleContinue', () => {
-    it('should select next speaker and trigger continue mode', () => {
-      mockSelectNextSpeaker.mockReturnValue({
-        nextSpeakerId: 'p1',
-        reason: 'weighted_selection',
-        cycleComplete: false,
+    it('should query server for next speaker and trigger continue mode', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => createMockTurnResponse({ nextSpeakerId: 'p1' }),
       })
 
       const { result } = renderHook(() =>
         useTurnManagement(
+          TEST_CHAT_ID,
           participantsAsBase,
           charactersMap,
           turnState,
@@ -682,20 +684,21 @@ describe('useTurnManagement', () => {
         )
       )
 
-      act(() => {
-        result.current.handleContinue()
+      await act(async () => {
+        await result.current.handleContinue()
       })
 
-      expect(mockSelectNextSpeaker).toHaveBeenCalledWith(
-        participantsAsBase,
-        charactersMap,
-        turnState,
-        'p3'
+      expect(mockFetch).toHaveBeenCalledWith(
+        `/api/v1/chats/${TEST_CHAT_ID}?action=turn`,
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ action: 'query' }),
+        })
       )
       expect(triggerContinueMode).toHaveBeenCalledWith('p1')
     })
 
-    it('should show error toast when no active characters', () => {
+    it('should show error toast when no active characters', async () => {
       // All inactive characters
       const noActiveChars = participantsAsBase.map((p) => ({
         ...p,
@@ -704,6 +707,7 @@ describe('useTurnManagement', () => {
 
       const { result } = renderHook(() =>
         useTurnManagement(
+          TEST_CHAT_ID,
           noActiveChars,
           charactersMap,
           turnState,
@@ -717,25 +721,26 @@ describe('useTurnManagement', () => {
         )
       )
 
-      act(() => {
-        result.current.handleContinue()
+      await act(async () => {
+        await result.current.handleContinue()
       })
 
       expect(mockShowErrorToast).toHaveBeenCalledWith(
         'No characters available. Add a character to continue.'
       )
       expect(triggerContinueMode).not.toHaveBeenCalled()
+      expect(mockFetch).not.toHaveBeenCalled()
     })
 
-    it('should show info toast when next speaker is the user', () => {
-      mockSelectNextSpeaker.mockReturnValue({
-        nextSpeakerId: null, // User's turn
-        reason: 'cycle_complete',
-        cycleComplete: true,
+    it('should show info toast when next speaker is the user', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => createMockTurnResponse({ nextSpeakerId: null }),
       })
 
       const { result } = renderHook(() =>
         useTurnManagement(
+          TEST_CHAT_ID,
           participantsAsBase,
           charactersMap,
           turnState,
@@ -749,8 +754,8 @@ describe('useTurnManagement', () => {
         )
       )
 
-      act(() => {
-        result.current.handleContinue()
+      await act(async () => {
+        await result.current.handleContinue()
       })
 
       expect(mockShowInfoToast).toHaveBeenCalledWith(
@@ -759,15 +764,18 @@ describe('useTurnManagement', () => {
       expect(triggerContinueMode).not.toHaveBeenCalled()
     })
 
-    it('should show info toast when next speaker matches user participant id', () => {
-      mockSelectNextSpeaker.mockReturnValue({
-        nextSpeakerId: 'p3', // Same as user participant ID
-        reason: 'user_turn',
-        cycleComplete: false,
+    it('should show info toast when next speaker is user-controlled', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => createMockTurnResponse({
+          nextSpeakerId: 'p2',
+          nextSpeakerControlledBy: 'user',
+        }),
       })
 
       const { result } = renderHook(() =>
         useTurnManagement(
+          TEST_CHAT_ID,
           participantsAsBase,
           charactersMap,
           turnState,
@@ -781,8 +789,72 @@ describe('useTurnManagement', () => {
         )
       )
 
-      act(() => {
-        result.current.handleContinue()
+      await act(async () => {
+        await result.current.handleContinue()
+      })
+
+      expect(mockShowInfoToast).toHaveBeenCalledWith(
+        "It's a user-controlled character's turn. Type a message as them."
+      )
+      expect(triggerContinueMode).not.toHaveBeenCalled()
+    })
+
+    it('should show error toast when API call fails', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        json: async () => ({ error: 'Server error' }),
+      })
+
+      const { result } = renderHook(() =>
+        useTurnManagement(
+          TEST_CHAT_ID,
+          participantsAsBase,
+          charactersMap,
+          turnState,
+          'p3',
+          participantData,
+          ephemeralMessages,
+          setTurnState,
+          setTurnSelectionResult,
+          setEphemeralMessages,
+          triggerContinueMode
+        )
+      )
+
+      await act(async () => {
+        await result.current.handleContinue()
+      })
+
+      expect(mockShowErrorToast).toHaveBeenCalledWith(
+        'Failed to determine next speaker. Please try again.'
+      )
+      expect(triggerContinueMode).not.toHaveBeenCalled()
+    })
+
+    it('should show info toast when next speaker matches user participant id', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => createMockTurnResponse({ nextSpeakerId: 'p3' }),
+      })
+
+      const { result } = renderHook(() =>
+        useTurnManagement(
+          TEST_CHAT_ID,
+          participantsAsBase,
+          charactersMap,
+          turnState,
+          'p3',
+          participantData,
+          ephemeralMessages,
+          setTurnState,
+          setTurnSelectionResult,
+          setEphemeralMessages,
+          triggerContinueMode
+        )
+      )
+
+      await act(async () => {
+        await result.current.handleContinue()
       })
 
       expect(mockShowInfoToast).toHaveBeenCalledWith(
@@ -801,6 +873,7 @@ describe('useTurnManagement', () => {
 
       const { result } = renderHook(() =>
         useTurnManagement(
+          TEST_CHAT_ID,
           participantsAsBase,
           charactersMap,
           turnState,
@@ -829,6 +902,7 @@ describe('useTurnManagement', () => {
 
       const { result } = renderHook(() =>
         useTurnManagement(
+          TEST_CHAT_ID,
           participantsAsBase,
           charactersMap,
           turnState,
@@ -854,6 +928,7 @@ describe('useTurnManagement', () => {
     it('should handle empty ephemeral messages array', () => {
       const { result } = renderHook(() =>
         useTurnManagement(
+          TEST_CHAT_ID,
           participantsAsBase,
           charactersMap,
           turnState,
@@ -879,6 +954,7 @@ describe('useTurnManagement', () => {
     it('should memoize handleQueue callback when dependencies unchanged', () => {
       const { result, rerender } = renderHook(() =>
         useTurnManagement(
+          TEST_CHAT_ID,
           participantsAsBase,
           charactersMap,
           turnState,
@@ -904,6 +980,7 @@ describe('useTurnManagement', () => {
 
       const { result, rerender } = renderHook(() =>
         useTurnManagement(
+          TEST_CHAT_ID,
           participantsAsBase,
           charactersMap,
           currentTurnState,
@@ -929,9 +1006,10 @@ describe('useTurnManagement', () => {
   })
 
   describe('Edge cases', () => {
-    it('should handle null userParticipantId', () => {
+    it('should handle null userParticipantId', async () => {
       const { result } = renderHook(() =>
         useTurnManagement(
+          TEST_CHAT_ID,
           participantsAsBase,
           charactersMap,
           turnState,
@@ -945,21 +1023,24 @@ describe('useTurnManagement', () => {
         )
       )
 
-      act(() => {
-        result.current.handleContinue()
+      await act(async () => {
+        await result.current.handleContinue()
       })
 
-      expect(mockSelectNextSpeaker).toHaveBeenCalledWith(
-        participantsAsBase,
-        charactersMap,
-        turnState,
-        null
+      // Should call the API with query action
+      expect(mockFetch).toHaveBeenCalledWith(
+        `/api/v1/chats/${TEST_CHAT_ID}?action=turn`,
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ action: 'query' }),
+        })
       )
     })
 
     it('should handle empty participants array', () => {
       const { result } = renderHook(() =>
         useTurnManagement(
+          TEST_CHAT_ID,
           [],
           charactersMap,
           turnState,
@@ -976,36 +1057,14 @@ describe('useTurnManagement', () => {
       expect(result.current.hasActiveCharacters).toBe(false)
     })
 
-    it('should handle empty characters map', () => {
-      const { result } = renderHook(() =>
-        useTurnManagement(
-          participantsAsBase,
-          new Map(),
-          turnState,
-          'p3',
-          participantData,
-          ephemeralMessages,
-          setTurnState,
-          setTurnSelectionResult,
-          setEphemeralMessages,
-          triggerContinueMode
-        )
-      )
-
-      act(() => {
-        result.current.handleContinue()
-      })
-
-      expect(mockSelectNextSpeaker).toHaveBeenCalled()
-    })
-
-    it('should handle queue with same participant multiple times', () => {
+    it('should handle queue with same participant multiple times', async () => {
       const stateWithDuplicates = createMockTurnState({
         queue: ['p1', 'p1'], // shouldn't happen but test defensively
       })
 
       const { result } = renderHook(() =>
         useTurnManagement(
+          TEST_CHAT_ID,
           participantsAsBase,
           charactersMap,
           stateWithDuplicates,
@@ -1019,8 +1078,8 @@ describe('useTurnManagement', () => {
         )
       )
 
-      act(() => {
-        result.current.handleDequeue('p1')
+      await act(async () => {
+        await result.current.handleDequeue('p1')
       })
 
       expect(mockRemoveFromQueue).toHaveBeenCalledWith(stateWithDuplicates, 'p1')
@@ -1031,6 +1090,7 @@ describe('useTurnManagement', () => {
     it('should handle full nudge flow: unpause -> update state -> ephemeral -> continue', async () => {
       const { result } = renderHook(() =>
         useTurnManagement(
+          TEST_CHAT_ID,
           participantsAsBase,
           charactersMap,
           turnState,
@@ -1050,18 +1110,16 @@ describe('useTurnManagement', () => {
         await result.current.handleNudge('p1')
       })
 
-      // Verify full flow
+      // Verify full flow (no API call — triggerContinueMode handles it directly)
       expect(onUnpause).toHaveBeenCalled()
       expect(mockCreateEphemeralMessage).toHaveBeenCalledWith('nudge', 'p1', 'Alice')
       expect(setEphemeralMessages).toHaveBeenCalled()
       expect(mockNudgeParticipant).toHaveBeenCalledWith(turnState, 'p1')
       expect(setTurnState).toHaveBeenCalled()
-      expect(mockSelectNextSpeaker).toHaveBeenCalled()
-      expect(setTurnSelectionResult).toHaveBeenCalled()
       expect(triggerContinueMode).toHaveBeenCalledWith('p1')
     })
 
-    it('should handle queue then dequeue sequence', () => {
+    it('should handle queue then dequeue sequence', async () => {
       let currentState = turnState
       setTurnState.mockImplementation((newState: TurnState) => {
         currentState = newState
@@ -1075,6 +1133,7 @@ describe('useTurnManagement', () => {
       const { result, rerender } = renderHook(
         ({ state }) =>
           useTurnManagement(
+            TEST_CHAT_ID,
             participantsAsBase,
             charactersMap,
             state,
@@ -1090,8 +1149,8 @@ describe('useTurnManagement', () => {
       )
 
       // Queue participant
-      act(() => {
-        result.current.handleQueue('p1')
+      await act(async () => {
+        await result.current.handleQueue('p1')
       })
 
       expect(mockAddToQueue).toHaveBeenCalledWith(turnState, 'p1')
@@ -1100,11 +1159,42 @@ describe('useTurnManagement', () => {
       rerender({ state: currentState })
 
       // Dequeue participant
-      act(() => {
-        result.current.handleDequeue('p1')
+      await act(async () => {
+        await result.current.handleDequeue('p1')
       })
 
       expect(mockRemoveFromQueue).toHaveBeenCalled()
+    })
+
+    it('should gracefully handle API failure for queue without breaking UI', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        json: async () => ({ error: 'Server error' }),
+      })
+
+      const { result } = renderHook(() =>
+        useTurnManagement(
+          TEST_CHAT_ID,
+          participantsAsBase,
+          charactersMap,
+          turnState,
+          'p3',
+          participantData,
+          ephemeralMessages,
+          setTurnState,
+          setTurnSelectionResult,
+          setEphemeralMessages,
+          triggerContinueMode
+        )
+      )
+
+      await act(async () => {
+        await result.current.handleQueue('p1')
+      })
+
+      // Optimistic update should still have happened
+      expect(mockAddToQueue).toHaveBeenCalledWith(turnState, 'p1')
+      expect(setTurnState).toHaveBeenCalled()
     })
   })
 })

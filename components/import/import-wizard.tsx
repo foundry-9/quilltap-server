@@ -1,17 +1,20 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
 import { SpeakerMapper } from './speaker-mapper'
 import { MemoryCreationDialog } from './memory-creation-dialog'
 import {
+  WizardLoadingStep,
+  WizardCompleteStep,
+} from '@/components/tools/import-export/components'
+import {
   parseSTFile,
   createDefaultMappings,
   validateMappings,
   type ParseResult,
-  type ParsedSpeaker,
   type SpeakerMapping,
 } from '@/lib/sillytavern/multi-char-parser'
 
@@ -44,6 +47,24 @@ interface ImportWizardProps {
   onImportComplete: (chatId: string) => void
 }
 
+const STEPS = [
+  { key: 'file-select', label: 'Select File' },
+  { key: 'mapping', label: 'Map Speakers' },
+  { key: 'complete', label: 'Complete' },
+] as const
+
+function getStepIndex(step: WizardStep): number {
+  if (step === 'file-select' || step === 'analyzing') return 0
+  if (step === 'mapping' || step === 'importing') return 1
+  return 2
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
 /**
  * Multi-step import wizard for SillyTavern chats
  */
@@ -62,6 +83,10 @@ export function ImportWizard({
   const [showMemoryDialog, setShowMemoryDialog] = useState(false)
   const [createMemories, setCreateMemories] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [dragActive, setDragActive] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const isProcessing = step === 'analyzing' || step === 'importing'
 
   /**
    * Handle file selection
@@ -71,6 +96,23 @@ export function ImportWizard({
     if (file) {
       setSelectedFile(file)
       setError(null)
+    }
+  }, [])
+
+  /**
+   * Handle file drop
+   */
+  const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragActive(false)
+
+    const file = e.dataTransfer.files?.[0]
+    if (file && (file.name.endsWith('.json') || file.name.endsWith('.jsonl'))) {
+      setSelectedFile(file)
+      setError(null)
+    } else if (file) {
+      setError('Please select a JSON or JSONL file')
     }
   }, [])
 
@@ -184,6 +226,30 @@ export function ImportWizard({
     onClose()
   }, [importedChat, onImportComplete, onClose])
 
+  const handleClose = () => {
+    if (!isProcessing) {
+      onClose()
+    }
+  }
+
+  /**
+   * Build the completion description
+   */
+  const getCompletionDescription = (): string => {
+    const parts: string[] = []
+    parts.push(`Imported ${importedChat?._count?.messages || 0} messages`)
+    if (importedChat?.createdEntities?.characters?.length > 0) {
+      parts.push(`created ${importedChat.createdEntities.characters.length} new character(s)`)
+    }
+    if (importedChat?.createdEntities?.personas?.length > 0) {
+      parts.push(`created ${importedChat.createdEntities.personas.length} new persona(s)`)
+    }
+    if (importedChat?.memoryJobCount > 0) {
+      parts.push(`queued ${importedChat.memoryJobCount} messages for memory analysis`)
+    }
+    return parts.join(', ')
+  }
+
   /**
    * Render step content
    */
@@ -192,63 +258,70 @@ export function ImportWizard({
       case 'file-select':
         return (
           <div className="space-y-4">
-            <div>
-              <label className="block qt-text-label mb-2">
-                Select SillyTavern chat file (JSON or JSONL)
-              </label>
+            <p className="qt-text-small text-muted-foreground">
+              Select a SillyTavern chat file (.json or .jsonl) to import.
+            </p>
+
+            <div
+              className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+                dragActive
+                  ? 'border-primary bg-primary/10'
+                  : selectedFile
+                    ? 'border-primary/50 bg-primary/5'
+                    : 'border-border hover:border-primary/50'
+              }`}
+              onClick={() => fileInputRef.current?.click()}
+              onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setDragActive(true) }}
+              onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setDragActive(false) }}
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation() }}
+              onDrop={handleDrop}
+            >
               <input
+                ref={fileInputRef}
                 type="file"
                 accept=".json,.jsonl"
                 onChange={handleFileSelect}
-                className="block w-full qt-text-small file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-accent file:text-primary hover:file:bg-accent/80"
+                className="hidden"
               />
+              <svg
+                className="w-12 h-12 mx-auto mb-3 text-muted-foreground"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.5}
+                  d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                />
+              </svg>
+              <p className="text-foreground font-medium">
+                {selectedFile ? selectedFile.name : 'Drag and drop a chat file here'}
+              </p>
+              <p className="text-muted-foreground text-sm mt-1">
+                {selectedFile
+                  ? formatFileSize(selectedFile.size)
+                  : 'or click to browse'}
+              </p>
             </div>
-
-            {selectedFile && (
-              <div className="qt-text-small">
-                Selected: {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
-              </div>
-            )}
 
             {error && (
               <div className="text-sm text-destructive whitespace-pre-wrap">
                 {error}
               </div>
             )}
-
-            <div className="flex gap-2 justify-end">
-              <button
-                type="button"
-                onClick={onClose}
-                className="qt-button qt-button-secondary"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleAnalyze}
-                disabled={!selectedFile}
-                className="qt-button qt-button-primary"
-              >
-                Analyze File
-              </button>
-            </div>
           </div>
         )
 
       case 'analyzing':
-        return (
-          <div className="flex flex-col items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
-            <p className="mt-4 text-muted-foreground">Analyzing file...</p>
-          </div>
-        )
+        return <WizardLoadingStep message="Analyzing file..." />
 
       case 'mapping':
         return (
           <div className="space-y-4">
             {parseResult && (
-              <div className="qt-text-small mb-4">
+              <div className="qt-text-small text-muted-foreground">
                 Found {parseResult.messages.length} messages from {parseResult.speakers.length} speaker(s)
                 {parseResult.isGroupChat && ' (Group Chat)'}
               </div>
@@ -274,8 +347,8 @@ export function ImportWizard({
                   className="mt-1"
                 />
                 <div>
-                  <div className="qt-text-primary">Analyze messages for memories</div>
-                  <div className="qt-text-small">
+                  <div className="text-foreground font-medium">Analyze messages for memories</div>
+                  <div className="qt-text-small text-muted-foreground">
                     Queue each message for AI analysis to extract meaningful memories in the background
                   </div>
                 </div>
@@ -287,117 +360,193 @@ export function ImportWizard({
                 {error}
               </div>
             )}
-
-            <div className="flex gap-2 justify-end">
-              <button
-                type="button"
-                onClick={() => {
-                  setStep('file-select')
-                  setParseResult(null)
-                  setMappings([])
-                }}
-                className="qt-button qt-button-secondary"
-              >
-                Back
-              </button>
-              <button
-                type="button"
-                onClick={handleImport}
-                disabled={!defaultProfileId || mappings.length === 0}
-                className="qt-button qt-button-primary"
-              >
-                Import Chat
-              </button>
-            </div>
           </div>
         )
 
       case 'importing':
+        return <WizardLoadingStep message="Importing chat..." />
+
+      case 'complete':
         return (
-          <div className="flex flex-col items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
-            <p className="mt-4 text-muted-foreground">Importing chat...</p>
-          </div>
+          <WizardCompleteStep
+            title="Import Complete!"
+            description={getCompletionDescription()}
+          />
+        )
+    }
+  }
+
+  /**
+   * Render footer buttons based on step
+   */
+  const renderFooter = () => {
+    switch (step) {
+      case 'file-select':
+        return (
+          <>
+            <button
+              type="button"
+              onClick={handleClose}
+              className="qt-button qt-button-secondary"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleAnalyze}
+              disabled={!selectedFile}
+              className="qt-button qt-button-primary"
+            >
+              Analyze File
+            </button>
+          </>
+        )
+
+      case 'mapping':
+        return (
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                setStep('file-select')
+                setParseResult(null)
+                setMappings([])
+              }}
+              className="qt-button qt-button-secondary"
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              onClick={handleImport}
+              disabled={!defaultProfileId || mappings.length === 0}
+              className="qt-button qt-button-primary"
+            >
+              Import Chat
+            </button>
+          </>
         )
 
       case 'complete':
         return (
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 text-success">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              <span className="text-lg font-medium">Import Complete!</span>
-            </div>
-
-            <div className="qt-text-small">
-              Imported {importedChat?._count?.messages || 0} messages
-              {importedChat?.createdEntities?.characters?.length > 0 && (
-                <>, created {importedChat.createdEntities.characters.length} new character(s)</>
-              )}
-              {importedChat?.createdEntities?.personas?.length > 0 && (
-                <>, created {importedChat.createdEntities.personas.length} new persona(s)</>
-              )}
-              {importedChat?.memoryJobCount > 0 && (
-                <>, queued {importedChat.memoryJobCount} messages for memory analysis</>
-              )}
-            </div>
-
-            <div className="flex gap-2 justify-end">
-              {/* Only show memory dialog button if memories weren't already queued */}
-              {!importedChat?.memoryJobCount && (
-                <button
-                  type="button"
-                  onClick={() => setShowMemoryDialog(true)}
-                  className="qt-button qt-button-secondary"
-                >
-                  Analyze for Memories...
-                </button>
-              )}
+          <>
+            {!importedChat?.memoryJobCount && (
               <button
                 type="button"
-                onClick={() => {
-                  if (importedChat?.id) {
-                    onImportComplete(importedChat.id)
-                  }
-                  onClose()
-                }}
-                className="qt-button qt-button-primary"
+                onClick={() => setShowMemoryDialog(true)}
+                className="qt-button qt-button-secondary"
               >
-                Done
+                Analyze for Memories...
               </button>
-            </div>
-          </div>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                if (importedChat?.id) {
+                  onImportComplete(importedChat.id)
+                }
+                onClose()
+              }}
+              className="qt-button qt-button-primary"
+            >
+              Done
+            </button>
+          </>
         )
+
+      default:
+        return null
     }
   }
 
   if (typeof document === 'undefined') return null
 
+  const currentStepIndex = getStepIndex(step)
+
   return createPortal(
     <>
-      <div className="qt-dialog-overlay p-4">
-        <div className="qt-dialog max-w-2xl max-h-[90vh] overflow-y-auto">
-          <h3 className="qt-dialog-title mb-4">
-            Import SillyTavern Chat
-          </h3>
+      {/* Overlay */}
+      <button
+        className="qt-dialog-overlay !p-0 cursor-default border-none"
+        onClick={handleClose}
+        disabled={isProcessing}
+        aria-label="Close dialog"
+        type="button"
+      />
 
-          {/* Step indicator */}
-          <div className="flex items-center gap-2 mb-6 qt-text-small">
-            <span className={step === 'file-select' ? 'text-primary font-medium' : ''}>
-              1. Select File
-            </span>
-            <span>→</span>
-            <span className={step === 'mapping' ? 'text-primary font-medium' : ''}>
-              2. Map Speakers
-            </span>
-            <span>→</span>
-            <span className={step === 'complete' ? 'text-primary font-medium' : ''}>
-              3. Complete
-            </span>
+      {/* Dialog */}
+      <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[61] pointer-events-auto w-[90vw] max-w-2xl">
+        <div className="qt-dialog w-full max-h-[90vh] flex flex-col">
+          {/* Header */}
+          <div className="qt-dialog-header flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="qt-dialog-title">Import SillyTavern Chat</h2>
+                <p className="qt-dialog-description mt-0.5">
+                  Step {currentStepIndex + 1} of {STEPS.length}
+                </p>
+              </div>
+              <button
+                onClick={handleClose}
+                disabled={isProcessing}
+                className="text-muted-foreground hover:text-foreground disabled:opacity-50"
+                aria-label="Close dialog"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Step indicator */}
+            <div className="flex items-center gap-1 mt-4">
+              {STEPS.map((s, i) => (
+                <div key={s.key} className="flex items-center gap-1 flex-1">
+                  <div className="flex items-center gap-2 flex-1">
+                    <div
+                      className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0 transition-colors ${
+                        i < currentStepIndex
+                          ? 'bg-primary text-primary-foreground'
+                          : i === currentStepIndex
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted text-muted-foreground'
+                      }`}
+                    >
+                      {i < currentStepIndex ? (
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : (
+                        i + 1
+                      )}
+                    </div>
+                    <span className={`text-xs hidden sm:inline ${
+                      i === currentStepIndex ? 'text-foreground font-medium' : 'text-muted-foreground'
+                    }`}>
+                      {s.label}
+                    </span>
+                  </div>
+                  {i < STEPS.length - 1 && (
+                    <div className={`h-px flex-1 min-w-4 ${
+                      i < currentStepIndex ? 'bg-primary' : 'bg-border'
+                    }`} />
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
 
-          {renderStepContent()}
+          {/* Body */}
+          <div className="qt-dialog-body overflow-y-auto flex-1">
+            {renderStepContent()}
+          </div>
+
+          {/* Footer */}
+          {renderFooter() && (
+            <div className="qt-dialog-footer flex-shrink-0">
+              {renderFooter()}
+            </div>
+          )}
         </div>
       </div>
 

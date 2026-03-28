@@ -10,7 +10,6 @@
 
 import { useCallback, useState } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
-import { useSidebarData } from '@/components/providers/sidebar-data-provider'
 import type { Project, EditForm, BackgroundDisplayMode } from '../types'
 
 interface UseProjectDetailReturn {
@@ -35,7 +34,6 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
   const [error, setError] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [editForm, setEditForm] = useState<EditForm>({ name: '', description: '', instructions: '' })
-  const { refreshProjects } = useSidebarData()
 
   const fetchProject = useCallback(async () => {
     try {
@@ -74,13 +72,12 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
       setProject(data.project)
       setIsEditing(false)
       showSuccessToast('Project updated!')
-      refreshProjects()
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to update project'
       console.error('useProjectDetail: save error', errorMsg)
       showErrorToast(errorMsg)
     }
-  }, [projectId, editForm, refreshProjects])
+  }, [projectId, editForm])
 
   const handleToggleAllowAnyCharacter = useCallback(async () => {
     if (!project) return

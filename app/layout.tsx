@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "@/components/providers/session-provider";
+import { AutoLockProvider } from "@/components/providers/auto-lock-provider";
 import { PluginInitializer, PluginUpgradeNotifier, MigrationWarningNotifier } from "@/components/startup";
 import { PepperVaultGate } from "@/components/startup/pepper-vault-gate";
+import { InstanceLockGate } from "@/components/startup/instance-lock-gate";
+import { VersionGuardGate } from "@/components/startup/version-guard-gate";
 import { AppLayout } from "@/components/layout/app-layout";
 
 export const metadata: Metadata = {
@@ -19,7 +22,10 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning data-scroll-behavior="smooth">
       <body className="font-sans" suppressHydrationWarning>
         <PepperVaultGate />
+        <InstanceLockGate />
+        <VersionGuardGate />
         <Providers>
+          <AutoLockProvider />
           <PluginInitializer />
           <PluginUpgradeNotifier />
           <MigrationWarningNotifier />

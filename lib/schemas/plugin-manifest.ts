@@ -37,6 +37,7 @@ export const PluginCapabilityEnum = z.enum([
   'TOOL_PROVIDER',         // Provides LLM tools (e.g., curl, calculators, etc.)
   'SEARCH_PROVIDER',       // Provides web search backend (e.g., Serper, Bing, DuckDuckGo)
   'MODERATION_PROVIDER',   // Provides content moderation (e.g., OpenAI moderation endpoint)
+  'SYSTEM_PROMPT',         // Provides system prompt templates for characters
 ]);
 
 export type PluginCapability = z.infer<typeof PluginCapabilityEnum>;
@@ -620,6 +621,26 @@ export const ModerationProviderConfigSchema = z.object({
 
 export type ModerationProviderConfig = z.infer<typeof ModerationProviderConfigSchema>;
 
+/**
+ * System prompt plugin configuration schema
+ *
+ * Defines the manifest-level metadata for system prompt plugins.
+ * The actual prompt content is provided by the plugin module export,
+ * not the manifest (since prompts contain long-form markdown content).
+ */
+export const SystemPromptConfigSchema = z.object({
+  /** How many system prompts this plugin provides */
+  promptCount: z.number().int().min(1).describe('Number of system prompts provided'),
+
+  /** Short description of the prompt collection */
+  description: z.string().max(500).optional().describe('Description of the prompt collection'),
+
+  /** Tags for categorization */
+  tags: z.array(z.string()).default([]).optional().describe('Tags for categorization'),
+});
+
+export type SystemPromptConfig = z.infer<typeof SystemPromptConfigSchema>;
+
 // ============================================================================
 // MAIN MANIFEST SCHEMA
 // ============================================================================
@@ -743,6 +764,9 @@ export const PluginManifestSchema = z.strictObject({
 
   /** Moderation provider configuration (for MODERATION_PROVIDER capability plugins) */
   moderationProviderConfig: ModerationProviderConfigSchema.optional(),
+
+  /** System prompt configuration (for SYSTEM_PROMPT capability plugins) */
+  systemPromptConfig: SystemPromptConfigSchema.optional(),
 
   // ===== SECURITY & PERMISSIONS =====
   /** Permissions required by the plugin */

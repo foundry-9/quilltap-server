@@ -67,6 +67,25 @@
   }
 
   /**
+   * Compact character card for homepage grid
+   * Centered layout with avatar, name, title, provider badge, and action button
+   */
+  .qt-character-card {
+    @apply flex flex-col items-center gap-2 h-full rounded-lg;
+    padding: var(--qt-character-card-padding, 0.75rem);
+    background: var(--qt-card-bg);
+    color: var(--qt-card-fg);
+    border: 1px solid color-mix(in srgb, var(--qt-card-border) calc(var(--qt-card-border-opacity) * 100%), transparent);
+    box-shadow: var(--qt-card-shadow);
+    transition: var(--qt-card-transition);
+  }
+
+  .qt-character-card:hover {
+    border-color: color-mix(in srgb, var(--color-primary) 60%, transparent);
+    box-shadow: var(--qt-card-shadow-hover);
+  }
+
+  /**
    * Entity card actions container
    */
   .qt-entity-card-actions {
@@ -247,6 +266,639 @@
    */
   .qt-dialog-wide {
     max-width: min(var(--qt-page-max-width), calc(100vw - 2rem));
+  }
+
+  /* ==========================================================================
+     FLOATING DIALOG - Movable, resizable floating panel
+     z-[58] places it between panels (z-55) and modals (z-60)
+     ========================================================================== */
+
+  /**
+   * Floating dialog container — portal-rendered, draggable, resizable
+   */
+  .qt-floating-dialog {
+    @apply fixed z-[58];
+    border-radius: var(--qt-dialog-radius);
+    background: var(--qt-dialog-bg);
+    border: 1px solid var(--qt-dialog-border);
+    box-shadow: var(--qt-dialog-shadow);
+    resize: both;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /**
+   * Floating dialog title bar — drag handle
+   */
+  .qt-floating-dialog-header {
+    @apply px-4 py-2 flex items-center justify-between;
+    @apply cursor-grab active:cursor-grabbing select-none;
+    border-bottom: 1px solid var(--qt-dialog-border);
+    background: var(--qt-dialog-bg);
+    flex-shrink: 0;
+  }
+
+  .qt-floating-dialog-title {
+    @apply text-sm font-semibold text-foreground truncate;
+  }
+
+  .qt-floating-dialog-actions {
+    @apply flex items-center gap-1;
+    flex-shrink: 0;
+  }
+
+  .qt-floating-dialog-close {
+    @apply p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors;
+  }
+
+  /**
+   * Floating dialog body — scrollable content area
+   */
+  .qt-floating-dialog-body {
+    @apply flex-1 flex flex-col relative;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* ==========================================================================
+     HELP CHAT - Message bubbles, composer, and UI elements
+     Used by the contextual help chat system
+     ========================================================================== */
+
+  /**
+   * Help chat message bubble — user messages
+   */
+  .qt-help-msg-user {
+    @apply rounded-2xl px-3 pt-2 pb-1.5 text-sm bg-primary text-primary-foreground;
+    max-width: 80%;
+  }
+
+  .qt-help-msg-user :last-child,
+  .qt-help-msg-assistant :last-child {
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  /**
+   * Help chat message bubble — assistant messages
+   */
+  .qt-help-msg-assistant {
+    @apply rounded-2xl px-3 py-2 text-sm bg-muted text-foreground;
+    max-width: 80%;
+  }
+
+  /**
+   * Help chat bubble tail — triangular pointer toward sender
+   */
+  .qt-help-tail {
+    flex-shrink: 0;
+    width: 8px;
+    height: 12px;
+    align-self: flex-start;
+    margin-top: 12px;
+  }
+
+  .qt-help-tail-user {
+    color: var(--theme-primary);
+  }
+
+  .qt-help-tail-assistant {
+    color: var(--theme-muted);
+  }
+
+  /**
+   * Help chat message character name label
+   */
+  .qt-help-msg-character-name {
+    @apply text-xs font-medium text-muted-foreground mb-1;
+  }
+
+  /**
+   * Help chat avatar — small circular avatar in message list
+   */
+  .qt-help-avatar {
+    @apply flex-shrink-0 w-8 h-8 rounded-full bg-muted flex items-center justify-center overflow-hidden;
+    margin-top: 2px;
+    margin-right: 4px;
+  }
+
+  /**
+   * Help chat composer — input area at bottom
+   */
+  .qt-help-composer {
+    @apply flex items-end gap-2 p-3;
+    border-top: 1px solid var(--qt-dialog-border);
+    background: var(--qt-dialog-bg);
+  }
+
+  .qt-help-composer-input {
+    @apply flex-1 resize-none rounded-lg px-3 py-2 text-sm;
+    @apply ring-offset-background placeholder:text-muted-foreground;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+    @apply disabled:cursor-not-allowed disabled:opacity-50;
+    border: 1px solid var(--qt-input-border, hsl(var(--input)));
+    background: var(--qt-input-bg, hsl(var(--background)));
+  }
+
+  .qt-help-composer-send {
+    @apply inline-flex items-center justify-center rounded-md px-3 py-2 h-[38px] text-sm font-medium;
+    @apply disabled:opacity-50 disabled:pointer-events-none bg-primary text-primary-foreground;
+  }
+
+  .qt-help-composer-send:hover:not(:disabled) {
+    opacity: 0.9;
+  }
+
+  /**
+   * Help chat character selection pill
+   */
+  .qt-help-char-pill {
+    @apply flex items-center gap-1.5 px-2 py-1 rounded-full text-xs transition-colors text-muted-foreground;
+    border: 1px solid var(--qt-dialog-border);
+  }
+
+  .qt-help-char-pill:hover {
+    border-color: var(--theme-primary);
+    opacity: 0.7;
+  }
+
+  .qt-help-char-pill[data-selected="true"] {
+    border-color: var(--theme-primary);
+    background: color-mix(in srgb, var(--theme-primary) 10%, transparent);
+    color: var(--theme-primary);
+  }
+
+  /**
+   * Help chat past chat list item
+   */
+  .qt-help-past-chat {
+    @apply flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer;
+  }
+
+  .qt-help-past-chat:hover {
+    background: hsl(var(--accent));
+  }
+
+  /**
+   * Help chat section label
+   */
+  .qt-help-section-label {
+    @apply text-xs font-medium text-muted-foreground mb-2;
+  }
+
+  /**
+   * Help chat error banner
+   */
+  .qt-help-error {
+    @apply px-3 py-2 text-xs;
+    background: color-mix(in srgb, hsl(var(--destructive)) 10%, transparent);
+    color: hsl(var(--destructive));
+    border-bottom: 1px solid color-mix(in srgb, hsl(var(--destructive)) 20%, transparent);
+  }
+
+  .qt-help-nav-button {
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer;
+    background: var(--qt-help-nav-bg, hsl(var(--primary) / 0.1));
+    color: var(--qt-help-nav-fg, hsl(var(--primary)));
+    border: 1px solid var(--qt-help-nav-border, hsl(var(--primary) / 0.2));
+  }
+
+  .qt-help-nav-button:hover {
+    background: var(--qt-help-nav-hover-bg, hsl(var(--primary) / 0.2));
+    border-color: var(--qt-help-nav-hover-border, hsl(var(--primary) / 0.4));
+  }
+
+  /* Suggested links container — appears below messages with search-derived links */
+  .qt-help-suggested-links {
+    @apply pl-10 pt-1;
+  }
+
+  .qt-help-suggested-links-label {
+    @apply text-[10px] uppercase tracking-wider font-medium mb-1.5;
+    color: var(--qt-help-suggested-label, hsl(var(--muted-foreground)));
+  }
+
+  .qt-help-suggested-link {
+    @apply inline-flex items-center gap-1 px-2 py-1 text-[11px] rounded transition-colors cursor-pointer;
+    background: var(--qt-help-suggested-bg, hsl(var(--muted) / 0.5));
+    color: var(--qt-help-suggested-fg, hsl(var(--muted-foreground)));
+    border: 1px solid var(--qt-help-suggested-border, hsl(var(--border)));
+  }
+
+  .qt-help-suggested-link:hover {
+    background: var(--qt-help-suggested-hover-bg, hsl(var(--primary) / 0.1));
+    color: var(--qt-help-suggested-hover-fg, hsl(var(--primary)));
+    border-color: var(--qt-help-suggested-hover-border, hsl(var(--primary) / 0.3));
+  }
+
+  /* Entity picker — overlay for resolving parameterised help URLs */
+  .qt-help-entity-picker-backdrop {
+    @apply absolute inset-0 z-10 flex items-center justify-center;
+    background: hsl(0 0% 0% / 0.7);
+    backdrop-filter: blur(4px);
+  }
+
+  .qt-help-entity-picker {
+    @apply flex flex-col rounded-lg shadow-lg overflow-hidden;
+    width: min(320px, calc(100% - 2rem));
+    max-height: min(400px, calc(100% - 2rem));
+    background: var(--qt-help-picker-bg, hsl(var(--card)));
+    border: 1px solid var(--qt-help-picker-border, hsl(var(--border)));
+  }
+
+  .qt-help-entity-picker-header {
+    @apply flex items-center justify-between px-3 py-2 text-sm font-medium;
+    border-bottom: 1px solid var(--qt-help-picker-border, hsl(var(--border)));
+  }
+
+  .qt-help-entity-picker-filter {
+    @apply w-full px-2 py-1 text-xs rounded;
+    background: var(--qt-help-picker-filter-bg, hsl(var(--muted)));
+    border: 1px solid var(--qt-help-picker-border, hsl(var(--border)));
+    color: inherit;
+    outline: none;
+  }
+
+  .qt-help-entity-picker-filter:focus {
+    border-color: hsl(var(--primary) / 0.5);
+  }
+
+  .qt-help-entity-picker-list {
+    @apply flex-1 overflow-y-auto py-1;
+  }
+
+  .qt-help-entity-picker-item {
+    @apply w-full text-left px-3 py-1.5 text-sm truncate transition-colors cursor-pointer;
+    color: var(--qt-help-picker-fg, hsl(var(--foreground)));
+  }
+
+  .qt-help-entity-picker-item:hover {
+    background: var(--qt-help-picker-hover-bg, hsl(var(--primary) / 0.1));
+    color: var(--qt-help-picker-hover-fg, hsl(var(--primary)));
+  }
+
+  /* ==========================================================================
+     HELP GUIDE TAB - Browseable documentation view
+
+     The Guide tab always renders in Art Deco style regardless of the active
+     theme. Variables are hardcoded from the Art Deco token palette so the
+     guide feels like a consistent, branded reading experience.
+     ========================================================================== */
+
+  /* --- Art Deco variable scope (light mode) --- */
+  .qt-help-guide-deco {
+    --deco-bg: hsl(45 28% 78%);
+    --deco-fg: hsl(222 40% 12%);
+    --deco-fg-muted: hsl(222 25% 38%);
+    --deco-primary: hsl(222 47% 18%);
+    --deco-primary-fg: hsl(43 85% 55%);
+    --deco-accent: hsl(43 85% 48%);
+    --deco-border: hsl(43 30% 60%);
+    --deco-border-subtle: hsl(43 30% 60% / 0.5);
+    --deco-card: hsl(45 28% 75%);
+    --deco-muted: hsl(222 16% 72%);
+    --deco-input-bg: hsl(45 28% 82%);
+    --deco-code-bg: hsl(45 20% 72%);
+    --deco-gold: hsl(222 47% 18%);
+    --deco-welcome-bg: hsl(222 47% 18% / 0.06);
+    --deco-welcome-border: hsl(43 85% 48% / 0.3);
+    --deco-table-header: hsl(45 25% 72%);
+    --deco-hover-bg: hsl(43 30% 72% / 0.5);
+    --deco-font-serif: "Cormorant Garamond", Georgia, Cambria, "Times New Roman", Times, serif;
+    --deco-font-sans: Raleway, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  /* --- Art Deco variable scope (dark mode) --- */
+  .dark .qt-help-guide-deco,
+  .qt-help-guide-deco.dark {
+    --deco-bg: hsl(222 47% 7%);
+    --deco-fg: hsl(45 15% 90%);
+    --deco-fg-muted: hsl(222 12% 55%);
+    --deco-primary: hsl(43 85% 55%);
+    --deco-primary-fg: hsl(222 47% 7%);
+    --deco-accent: hsl(43 90% 58%);
+    --deco-border: hsl(43 35% 25%);
+    --deco-border-subtle: hsl(43 35% 25% / 0.5);
+    --deco-card: hsl(222 40% 12%);
+    --deco-muted: hsl(222 25% 15%);
+    --deco-input-bg: hsl(222 30% 14%);
+    --deco-code-bg: hsl(222 25% 15%);
+    --deco-gold: hsl(43 90% 58%);
+    --deco-welcome-bg: hsl(43 85% 55% / 0.06);
+    --deco-welcome-border: hsl(43 90% 58% / 0.2);
+    --deco-table-header: hsl(222 30% 16%);
+    --deco-hover-bg: hsl(222 25% 18% / 0.6);
+    --deco-font-serif: "Cormorant Garamond", Georgia, Cambria, "Times New Roman", Times, serif;
+    --deco-font-sans: Raleway, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  /* --- Apply Art Deco palette to all guide components --- */
+  .qt-help-guide-deco {
+    background:
+      linear-gradient(hsl(45 28% 75% / 0.88), hsl(45 28% 75% / 0.88)),
+      url('/api/themes/assets/bundle:art-deco/textures/background-light.webp');
+    background-size: cover;
+    background-position: center center;
+    color: var(--deco-fg);
+    font-family: var(--deco-font-serif);
+
+    --qt-help-guide-search-bg: var(--deco-input-bg);
+    --qt-help-guide-search-border: var(--deco-border);
+    --qt-help-guide-search-fg: var(--deco-fg);
+    --qt-help-guide-search-placeholder: var(--deco-fg-muted);
+    --qt-help-guide-search-icon: var(--deco-fg-muted);
+    --qt-help-guide-border: var(--deco-border-subtle);
+    --qt-help-guide-category-fg: var(--deco-fg);
+    --qt-help-guide-category-hover: var(--deco-gold);
+    --qt-help-guide-badge-fg: var(--deco-fg-muted);
+    --qt-help-guide-topic-fg: var(--deco-fg-muted);
+    --qt-help-guide-topic-hover: var(--deco-fg);
+    --qt-help-guide-topic-hover-bg: var(--deco-hover-bg);
+    --qt-help-guide-topic-active-fg: var(--deco-gold);
+    --qt-help-guide-back-fg: var(--deco-gold);
+    --qt-help-guide-back-hover-bg: var(--deco-hover-bg);
+    --qt-help-guide-reader-fg: var(--deco-fg);
+    --qt-help-guide-heading-fg: var(--deco-fg);
+    --qt-help-guide-code-bg: var(--deco-code-bg);
+    --qt-help-guide-code-fg: var(--deco-fg);
+    --qt-help-guide-link-fg: var(--deco-gold);
+    --qt-help-guide-table-header-bg: var(--deco-table-header);
+    --qt-help-welcome-bg: var(--deco-welcome-bg);
+    --qt-help-welcome-border: var(--deco-welcome-border);
+    --qt-help-welcome-title-fg: var(--deco-fg);
+    --qt-help-welcome-text-fg: var(--deco-fg-muted);
+    --qt-help-welcome-link-fg: var(--deco-gold);
+  }
+
+  .dark .qt-help-guide-deco,
+  .qt-help-guide-deco.dark {
+    background:
+      linear-gradient(hsl(222 40% 12% / 0.88), hsl(222 40% 12% / 0.88)),
+      url('/api/themes/assets/bundle:art-deco/textures/background-dark.webp');
+    background-size: cover;
+    background-position: center center;
+  }
+
+  .qt-help-guide-deco .qt-help-guide-category-label {
+    font-family: var(--deco-font-sans);
+    letter-spacing: 0.025em;
+  }
+
+  .qt-help-guide-deco .qt-help-guide-reader h1,
+  .qt-help-guide-deco .qt-help-guide-reader h2,
+  .qt-help-guide-deco .qt-help-guide-reader h3 {
+    font-family: var(--deco-font-sans);
+    letter-spacing: 0.015em;
+  }
+
+  .qt-help-guide-deco .qt-help-guide-back {
+    font-family: var(--deco-font-sans);
+    letter-spacing: 0.025em;
+  }
+
+  .qt-help-guide-search {
+    @apply relative flex items-center;
+  }
+
+  .qt-help-guide-search-icon {
+    @apply absolute left-2.5 w-4 h-4 pointer-events-none;
+    color: var(--qt-help-guide-search-icon, hsl(var(--muted-foreground)));
+  }
+
+  .qt-help-guide-search-input {
+    @apply w-full pl-9 pr-8 py-1.5 text-sm rounded-md border;
+    background: var(--qt-help-guide-search-bg, hsl(var(--background)));
+    border-color: var(--qt-help-guide-search-border, hsl(var(--border)));
+    color: var(--qt-help-guide-search-fg, hsl(var(--foreground)));
+  }
+
+  .qt-help-guide-search-input::placeholder {
+    color: var(--qt-help-guide-search-placeholder, hsl(var(--muted-foreground)));
+  }
+
+  .qt-help-guide-search-input:focus {
+    @apply outline-none ring-2 ring-ring ring-offset-1;
+  }
+
+  .qt-help-guide-search-clear {
+    @apply absolute right-2 p-0.5 rounded-sm transition-colors;
+    color: var(--qt-help-guide-search-icon, hsl(var(--muted-foreground)));
+  }
+
+  .qt-help-guide-search-clear:hover {
+    color: var(--qt-help-guide-search-fg, hsl(var(--foreground)));
+  }
+
+  /* Category accordion */
+
+  .qt-help-guide-category {
+    @apply border-b;
+    border-color: var(--qt-help-guide-border, hsl(var(--border) / 0.5));
+  }
+
+  .qt-help-guide-category:last-child {
+    @apply border-b-0;
+  }
+
+  .qt-help-guide-category-header {
+    @apply w-full flex items-center gap-2 py-2 px-1 text-left text-sm transition-colors cursor-pointer;
+    color: var(--qt-help-guide-category-fg, hsl(var(--foreground)));
+  }
+
+  .qt-help-guide-category-header:hover {
+    color: var(--qt-help-guide-category-hover, hsl(var(--primary)));
+  }
+
+  .qt-help-guide-category-chevron {
+    @apply w-4 h-4 flex-shrink-0 transition-transform duration-150;
+  }
+
+  .qt-help-guide-category-chevron-open {
+    transform: rotate(90deg);
+  }
+
+  .qt-help-guide-category-label {
+    @apply flex-1 font-medium;
+  }
+
+  .qt-help-guide-category-badge {
+    @apply text-xs flex-shrink-0;
+    color: var(--qt-help-guide-badge-fg, hsl(var(--muted-foreground)));
+  }
+
+  .qt-help-guide-category-topics {
+    @apply flex flex-col pb-1;
+  }
+
+  /* Topic rows */
+
+  .qt-help-guide-topic {
+    @apply w-full text-left py-1 pl-7 pr-2 text-sm truncate transition-colors cursor-pointer rounded-sm;
+    color: var(--qt-help-guide-topic-fg, hsl(var(--muted-foreground)));
+  }
+
+  .qt-help-guide-topic:hover {
+    color: var(--qt-help-guide-topic-hover, hsl(var(--foreground)));
+    background: var(--qt-help-guide-topic-hover-bg, hsl(var(--accent) / 0.5));
+  }
+
+  .qt-help-guide-topic-active {
+    color: var(--qt-help-guide-topic-active-fg, hsl(var(--primary)));
+    font-weight: 500;
+  }
+
+  /* Reader view */
+
+  .qt-help-guide-back {
+    @apply flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b flex-shrink-0 transition-colors cursor-pointer;
+    color: var(--qt-help-guide-back-fg, hsl(var(--primary)));
+    border-color: var(--qt-help-guide-border, hsl(var(--border) / 0.5));
+  }
+
+  .qt-help-guide-back:hover {
+    background: var(--qt-help-guide-back-hover-bg, hsl(var(--accent) / 0.3));
+  }
+
+  .qt-help-guide-reader {
+    @apply flex-1 overflow-y-auto px-4 py-3;
+    font-size: 0.8125rem;
+    line-height: 1.625;
+    color: var(--qt-help-guide-reader-fg, hsl(var(--foreground)));
+    overflow-x: hidden;
+    min-width: 0;
+  }
+
+  .qt-help-guide-reader h1 {
+    @apply text-lg font-bold mt-0 mb-3;
+  }
+
+  .qt-help-guide-reader h2 {
+    @apply text-base font-semibold mt-5 mb-2;
+    color: var(--qt-help-guide-heading-fg, hsl(var(--foreground)));
+  }
+
+  .qt-help-guide-reader h3 {
+    @apply text-sm font-semibold mt-4 mb-1.5;
+  }
+
+  .qt-help-guide-reader p {
+    @apply mb-2;
+  }
+
+  .qt-help-guide-reader ul,
+  .qt-help-guide-reader ol {
+    @apply mb-2 pl-5;
+  }
+
+  .qt-help-guide-reader li {
+    @apply mb-0.5;
+  }
+
+  .qt-help-guide-reader strong {
+    @apply font-semibold;
+  }
+
+  .qt-help-guide-reader table {
+    @apply w-full mb-3 text-xs;
+    border-collapse: collapse;
+    table-layout: fixed;
+    word-break: break-word;
+  }
+
+  .qt-help-guide-reader th,
+  .qt-help-guide-reader td {
+    @apply px-2 py-1 border text-left;
+    border-color: var(--qt-help-guide-border, hsl(var(--border) / 0.5));
+  }
+
+  .qt-help-guide-reader th {
+    @apply font-semibold;
+    background: var(--qt-help-guide-table-header-bg, hsl(var(--muted) / 0.5));
+  }
+
+  .qt-help-guide-reader hr {
+    @apply my-4;
+    border-color: var(--qt-help-guide-border, hsl(var(--border) / 0.5));
+  }
+
+  .qt-help-guide-inline-code {
+    @apply px-1 py-0.5 rounded text-xs;
+    background: var(--qt-help-guide-code-bg, hsl(var(--muted)));
+    color: var(--qt-help-guide-code-fg, hsl(var(--foreground)));
+  }
+
+  .qt-help-guide-code-block {
+    @apply rounded-md p-3 mb-2 text-xs;
+    background: var(--qt-help-guide-code-bg, hsl(var(--muted)));
+    white-space: pre-wrap !important;
+    word-break: break-all;
+    overflow-wrap: anywhere;
+    max-width: 100%;
+    overflow: hidden;
+    color: var(--qt-help-guide-code-fg, hsl(var(--foreground)));
+  }
+
+  /* Navigation callout button (replaces "Open this page in Quilltap" blockquote) */
+
+  .qt-help-guide-nav-callout {
+    @apply my-3;
+  }
+
+  /* Doc links and page links within reader */
+
+  .qt-help-guide-doc-link {
+    @apply cursor-pointer underline;
+    color: var(--qt-help-guide-link-fg, hsl(var(--primary)));
+  }
+
+  .qt-help-guide-doc-link:hover {
+    opacity: 0.8;
+  }
+
+  .qt-help-guide-page-link {
+    @apply cursor-pointer underline;
+    color: var(--qt-help-guide-link-fg, hsl(var(--primary)));
+  }
+
+  .qt-help-guide-page-link:hover {
+    opacity: 0.8;
+  }
+
+  /* Welcome card */
+
+  .qt-help-welcome-card {
+    @apply rounded-lg border p-3 mb-3;
+    background: var(--qt-help-welcome-bg, hsl(var(--primary) / 0.05));
+    border-color: var(--qt-help-welcome-border, hsl(var(--primary) / 0.2));
+  }
+
+  .qt-help-welcome-title {
+    @apply text-sm font-semibold mb-1;
+    color: var(--qt-help-welcome-title-fg, hsl(var(--foreground)));
+  }
+
+  .qt-help-welcome-text {
+    @apply text-xs mb-2;
+    color: var(--qt-help-welcome-text-fg, hsl(var(--muted-foreground)));
+  }
+
+  .qt-help-welcome-links {
+    @apply flex flex-col gap-0.5 mb-2;
+  }
+
+  .qt-help-welcome-link {
+    @apply flex items-center gap-1.5 text-xs py-0.5 transition-colors cursor-pointer text-left;
+    color: var(--qt-help-welcome-link-fg, hsl(var(--primary)));
+  }
+
+  .qt-help-welcome-link:hover {
+    opacity: 0.8;
+  }
+
+  .qt-help-welcome-footer {
+    @apply text-xs;
+    color: var(--qt-help-welcome-text-fg, hsl(var(--muted-foreground)));
   }
 
   /* ==========================================================================

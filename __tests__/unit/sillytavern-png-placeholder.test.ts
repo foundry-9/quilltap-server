@@ -11,7 +11,7 @@ describe('SillyTavern PNG Placeholder Generation', () => {
     name: 'Alice',
     description: 'A test character',
     personality: 'Friendly',
-    scenario: 'Test scenario',
+    scenarios: [{ id: 'test-scenario-id', title: 'Default', content: 'Test scenario', createdAt: '2024-01-01T00:00:00.000Z', updatedAt: '2024-01-01T00:00:00.000Z' }],
     firstMessage: 'Hello!',
     exampleDialogues: '',
     systemPrompts: [{
@@ -270,7 +270,7 @@ describe('SillyTavern PNG Placeholder Generation', () => {
         name: 'TestChar',
         description: 'Test description',
         personality: 'Test personality',
-        scenario: 'Test scenario',
+        scenarios: [{ id: 'test-scenario-id', title: 'Default', content: 'Test scenario', createdAt: '2024-01-01T00:00:00.000Z', updatedAt: '2024-01-01T00:00:00.000Z' }],
         firstMessage: 'Test first message',
         exampleDialogues: 'Test examples',
       };
@@ -284,7 +284,8 @@ describe('SillyTavern PNG Placeholder Generation', () => {
       expect(parsed?.name).toBe(originalChar.name);
       expect(parsed?.description).toBe(originalChar.description);
       expect(parsed?.personality).toBe(originalChar.personality);
-      expect(parsed?.scenario).toBe(originalChar.scenario);
+      // The PNG stores ST format where scenarios are concatenated into a single scenario string
+      expect(parsed?.scenario).toBe(originalChar.scenarios[0].content);
       expect(parsed?.first_mes).toBe(originalChar.firstMessage);
       expect(parsed?.mes_example).toBe(originalChar.exampleDialogues);
     });
