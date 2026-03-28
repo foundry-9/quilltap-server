@@ -188,10 +188,14 @@ export function useImportData({
 
         const preview = await response.json()
 
+        // Auto-enable memory import when the export contains memories
+        const hasMemories = preview?.entities?.memories?.count > 0
+
         setState((prev) => ({
           ...prev,
           preview,
           loadingPreview: false,
+          ...(hasMemories && { importMemories: true }),
         }))
       } catch (error) {
         const message = getErrorMessage(error)

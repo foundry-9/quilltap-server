@@ -74,6 +74,8 @@ export interface ImportPreviewEntity {
   id: string;
   name: string;
   exists: boolean;
+  /** When a cross-instance name match is found, this holds the existing entity's ID */
+  matchedExistingId?: string;
 }
 
 export interface ImportPreview {
@@ -222,14 +224,58 @@ export async function previewImport(
 
   const data = getExportData(exportData);
 
+  // Check characters with name-based fallback for cross-instance imports
+  const checkCharacterExists = async (
+    items: ExportedCharacter[] | undefined
+  ): Promise<ImportPreviewEntity[]> => {
+    if (!items) return [];
+
+    const results: ImportPreviewEntity[] = [];
+    let conflicts = 0;
+
+    // Pre-fetch all existing characters for name matching
+    const existingCharacters = await repos.characters.findAll();
+    const existingByName = new Map<string, Character>();
+    for (const char of existingCharacters) {
+      existingByName.set(char.name.toLowerCase(), char);
+    }
+
+    for (const item of items) {
+      // First check by ID (same instance re-import)
+      const existingById = await repos.characters.findById(item.id);
+      if (existingById) {
+        conflicts++;
+        results.push({ id: item.id, name: item.name, exists: true });
+        continue;
+      }
+
+      // Fallback: check by name (cross-instance import)
+      const existingByNameMatch = existingByName.get(item.name.toLowerCase());
+      if (existingByNameMatch) {
+        conflicts++;
+        results.push({
+          id: item.id,
+          name: item.name,
+          exists: true,
+          matchedExistingId: existingByNameMatch.id,
+        });
+        continue;
+      }
+
+      results.push({ id: item.id, name: item.name, exists: false });
+    }
+
+    if (conflicts > 0) {
+      conflictCounts.characters = conflicts;
+    }
+
+    return results;
+  };
+
   // Preview all entity types
   const [characters, chats, tags, connectionProfiles, imageProfiles, embeddingProfiles, roleplayTemplates, projects] =
     await Promise.all([
-      checkExists(
-        data.characters,
-        (id) => repos.characters.findById(id),
-        'characters'
-      ),
+      checkCharacterExists(data.characters),
       checkExists(
         data.chats,
         (id) => repos.chats.findById(id),
@@ -909,30 +955,56 @@ async function importCharacters(
   let imported = 0;
   let skipped = 0;
 
+  // Pre-fetch existing characters for name-based matching (cross-instance imports)
+  const existingCharacters = await repos.characters.findAll();
+  const existingByName = new Map<string, Character>();
+  for (const char of existingCharacters) {
+    existingByName.set(char.name.toLowerCase(), char);
+  }
+
   for (const rawCharacter of characters) {
     const character = migrateCharacterScenarios(rawCharacter);
     try {
-      const existing = await repos.characters.findById(character.id);
+      // Check by ID first (same-instance re-import), then by name (cross-instance)
+      let existing = await repos.characters.findById(character.id);
+      let nameMatched = false;
+
+      if (!existing) {
+        const nameMatch = existingByName.get(character.name.toLowerCase());
+        if (nameMatch) {
+          existing = nameMatch;
+          nameMatched = true;
+          moduleLogger.debug('Character matched by name for cross-instance import', {
+            importedId: character.id,
+            existingId: nameMatch.id,
+            name: character.name,
+          });
+        }
+      }
 
       if (existing) {
         if (options.conflictStrategy === 'skip') {
           skipped++;
-          idMaps.characters.set(character.id, character.id);
+          idMaps.characters.set(character.id, existing.id);
           continue;
         }
 
         if (options.conflictStrategy === 'overwrite') {
-          await repos.characters.delete(character.id);
+          // Map old import ID to the existing ID before deleting, so related
+          // entities (chats, memories) get re-linked to the replacement
+          idMaps.characters.set(character.id, existing.id);
+          await repos.characters.delete(existing.id);
+          // Remove from name map so we don't re-match
+          existingByName.delete(character.name.toLowerCase());
         }
 
         if (options.conflictStrategy === 'duplicate') {
-          const newId = randomUUID();
-          idMaps.characters.set(character.id, newId);
           const { id: _, userId: __, createdAt, updatedAt, ...charData } = character;
           const newCharacter = await repos.characters.create({
             ...charData,
             name: `${charData.name} (imported)`,
           });
+          idMaps.characters.set(character.id, newCharacter.id);
           imported++;
           continue;
         }

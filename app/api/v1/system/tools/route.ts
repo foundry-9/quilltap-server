@@ -669,17 +669,17 @@ async function handleImportExecute(req: NextRequest, context: any) {
 
     const { conflictStrategy, importMemories, selectedIds } = options;
 
-    if (!conflictStrategy || !['skip', 'replace', 'duplicate'].includes(conflictStrategy)) {
+    if (!conflictStrategy || !['skip', 'replace', 'overwrite', 'duplicate'].includes(conflictStrategy)) {
       logger.warn('[System Tools v1] Import execute invalid conflict strategy', {
         userId: user.id,
         conflictStrategy,
       });
-      return badRequest('Invalid conflictStrategy. Must be one of: skip, replace, duplicate');
+      return badRequest('Invalid conflictStrategy. Must be one of: skip, replace, overwrite, duplicate');
     }
 
     const manifest = (exportData as Record<string, unknown>).manifest as Record<string, unknown>;
 
-    // Map 'replace' to 'overwrite' for the import service
+    // Map 'replace' to 'overwrite' for the import service (legacy compat)
     const mappedConflictStrategy: ConflictStrategy =
       conflictStrategy === 'replace' ? 'overwrite' : conflictStrategy as ConflictStrategy;
 
