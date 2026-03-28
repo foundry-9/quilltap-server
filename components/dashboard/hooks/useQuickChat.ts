@@ -16,6 +16,12 @@ interface UserControlledCharacter {
   title: string | null
 }
 
+interface CharacterScenario {
+  id: string
+  title: string
+  content: string
+}
+
 interface UseQuickChatReturn {
   loading: boolean
   profiles: ConnectionProfile[]
@@ -24,12 +30,15 @@ interface UseQuickChatReturn {
   selectedPartnerId: string
   selectedImageProfileId: string | null
   scenario: string
+  scenarioId: string | null
+  scenarios: CharacterScenario[]
   timestampConfig: TimestampConfig | null
   creatingChat: boolean
   setSelectedProfileId: (id: string) => void
   setSelectedPartnerId: (id: string) => void
   setSelectedImageProfileId: (id: string | null) => void
   setScenario: (scenario: string) => void
+  setScenarioId: (id: string | null) => void
   setTimestampConfig: (config: TimestampConfig) => void
   fetchData: (characterId: string) => Promise<void>
   handleCreateChat: (characterId: string, characterName: string) => Promise<void>
@@ -45,6 +54,8 @@ export function useQuickChat(): UseQuickChatReturn {
   const [selectedPartnerId, setSelectedPartnerId] = useState('')
   const [selectedImageProfileId, setSelectedImageProfileId] = useState<string | null>(null)
   const [scenario, setScenario] = useState('')
+  const [scenarioId, setScenarioId] = useState<string | null>(null)
+  const [scenarios, setScenarios] = useState<CharacterScenario[]>([])
   const [timestampConfig, setTimestampConfig] = useState<TimestampConfig | null>(null)
   const [creatingChat, setCreatingChat] = useState(false)
 
@@ -53,6 +64,8 @@ export function useQuickChat(): UseQuickChatReturn {
     setSelectedPartnerId('')
     setSelectedImageProfileId(null)
     setScenario('')
+    setScenarioId(null)
+    setScenarios([])
     setTimestampConfig(null)
   }, [])
 
@@ -110,6 +123,18 @@ export function useQuickChat(): UseQuickChatReturn {
         if (character.defaultImageProfileId) {
           setSelectedImageProfileId(character.defaultImageProfileId)
         }
+
+        // Extract scenarios and set default
+        if (character.scenarios && character.scenarios.length > 0) {
+          setScenarios(character.scenarios.map((s: any) => ({
+            id: s.id,
+            title: s.title,
+            content: s.content,
+          })))
+          if (character.defaultScenarioId) {
+            setScenarioId(character.defaultScenarioId)
+          }
+        }
       }
 
       // Set default partner if available
@@ -164,6 +189,7 @@ export function useQuickChat(): UseQuickChatReturn {
           participants,
           title: `Chat with ${characterName}`,
           ...(scenario && { scenario }),
+          ...(scenarioId && { scenarioId }),
           ...(timestampConfig && timestampConfig.mode !== 'NONE' && { timestampConfig }),
         }),
       })
@@ -186,7 +212,7 @@ export function useQuickChat(): UseQuickChatReturn {
     } finally {
       setCreatingChat(false)
     }
-  }, [router, selectedProfileId, selectedPartnerId, selectedImageProfileId, scenario, timestampConfig])
+  }, [router, selectedProfileId, selectedPartnerId, selectedImageProfileId, scenario, scenarioId, timestampConfig])
 
   return {
     loading,
@@ -196,12 +222,15 @@ export function useQuickChat(): UseQuickChatReturn {
     selectedPartnerId,
     selectedImageProfileId,
     scenario,
+    scenarioId,
+    scenarios,
     timestampConfig,
     creatingChat,
     setSelectedProfileId,
     setSelectedPartnerId,
     setSelectedImageProfileId,
     setScenario,
+    setScenarioId,
     setTimestampConfig,
     fetchData,
     handleCreateChat,
