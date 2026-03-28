@@ -2,7 +2,7 @@
 
 ## Recent Changes
 
-### 3.3-dev
+### 3.3.0
 
 - chore: **Dependency updates** — update npm dependencies across root project, packages, and plugins; notable updates include openai 6.32→6.33, electron 40.8.3→40.8.5, @vitest/mocker 4.1.1→4.1.2, @google/genai 1.46→1.47, @modelcontextprotocol/sdk 1.27→1.28; bump @quilltap/plugin-utils to 1.7.1 and all 12 affected plugin versions
 - fix: **Cross-instance import creates duplicates instead of overwriting** — the import conflict resolution was purely ID-based, so importing a character from a different instance (where UUIDs differ) would always create a duplicate regardless of the conflict strategy selected; add name-based fallback matching for characters so that importing "Friday" into an instance that already has "Friday" correctly detects the conflict and applies skip/overwrite/duplicate as chosen; also fix the API validation rejecting the `'overwrite'` conflict strategy value that the frontend actually sends (API only accepted `'replace'`), fix the "Import associated memories" checkbox never appearing because the preview returns `{ count: N }` but the UI checked for array `.length`, and auto-enable memory import when the export contains memories
