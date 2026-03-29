@@ -3,7 +3,7 @@
   "name": "qtap-plugin-template-quilltap-rp",
   "title": "Quilltap RP",
   "description": "Custom roleplay formatting with bare dialogue, [actions], {thoughts}, and // OOC",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "author": {
     "name": "Foundry-9 LLC",
     "email": "charles.sebold@foundry-9.com",

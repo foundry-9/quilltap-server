@@ -1,6 +1,6 @@
 {
   "name": "qtap-plugin-template-quilltap-rp",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "Quilltap RP template plugin - Custom roleplay formatting with bare dialogue, [actions], {thoughts}, and // OOC",
   "main": "index.js",
   "types": "index.d.ts",
@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@quilltap/plugin-types": "^1.18.0",
-    "@quilltap/plugin-utils": "^1.7.0"
+    "@quilltap/plugin-utils": "^1.7.1"
   },
   "devDependencies": {
     "esbuild": "^0.27.4",
