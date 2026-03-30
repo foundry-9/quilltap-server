@@ -1,5 +1,10 @@
 # Windows Troubleshooting Guide
 
+> **Note:** As of v4.0, the Electron desktop app lives in a separate repository
+> ([quilltap-shell](https://github.com/foundry-9/quilltap-shell)). This
+> troubleshooting guide is preserved here for reference but applies to the
+> Electron shell, not the server component.
+
 This document covers common issues when running Quilltap on Windows via the Electron desktop app.
 
 ## Architecture

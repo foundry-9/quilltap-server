@@ -1,8 +1,9 @@
 /**
- * Type declarations for the Quilltap Electron preload bridge.
+ * Type declarations for the Quilltap desktop bridge.
  *
- * When running inside Electron, `window.quilltap` is exposed via contextBridge
- * in electron/preload.ts. In a regular browser this object does not exist.
+ * When running inside the Quilltap Electron shell (separate repository),
+ * `window.quilltap` is exposed via contextBridge. In a regular browser
+ * this object does not exist — all consumers use optional chaining.
  */
 
 interface QuilltapElectronBridge {

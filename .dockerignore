@@ -16,8 +16,6 @@ features
 # Large directories not needed for Docker build
 out
 coverage
-electron
-dist-electron
 temp
 packages
 playwright-report
@@ -26,7 +24,5 @@ storybook-static
 __tests__
 stories
 website
-lima/quilltap.yaml
-lima/*.md
 .githooks
 .claude

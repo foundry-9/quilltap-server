@@ -19,9 +19,8 @@ Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, 
 - **Design Documentation**: Storybook
 - **API Structure**: Versioned REST API under `/api/v1/` with action dispatch pattern
 - **User Documentation**: Found in `/help/` and maintained and searchable using MessagePack
-- **Electron**: Electron front-end to Lima/WSL2 backend is primary way to use app
-- **Virtualization**: Lima + VZ (macOS) / WSL2 (Windows) for self-contained app distribution
-- **Native Modules**: `better-sqlite3` (compiled via node-gyp) and `sharp` (pre-built platform binaries via `@img/sharp-{platform}-{arch}`). Both require special handling in `scripts/build-electron-server.ts` — better-sqlite3 is rebuilt against Electron's Node ABI, and sharp's platform-specific binaries must be installed for the target platform. When adding new native modules, update both `next.config.js` (`serverExternalPackages` + `outputFileTracingIncludes`) and the Electron build script.
+- **Electron**: Desktop shell lives in a separate repository ([quilltap-shell](https://github.com/foundry-9/quilltap-shell)); this repo produces the standalone tarball it consumes
+- **Native Modules**: `better-sqlite3` (compiled via node-gyp) and `sharp` (pre-built platform binaries via `@img/sharp-{platform}-{arch}`). Both require special handling in standalone and Docker builds — sharp's platform-specific binaries must be installed for the target platform. When adding new native modules, update `next.config.js` (`serverExternalPackages` + `outputFileTracingIncludes`).
 
 ## API Architecture
 
