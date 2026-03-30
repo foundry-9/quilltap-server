@@ -28,6 +28,12 @@
  * - QUILLTAP_HOST_DATA_DIR: The host-side data directory path. In VM/Docker
  *   environments, this preserves the original host path for display purposes.
  *   Falls back to getBaseDataDir() when not set.
+ * - QUILLTAP_SHELL: Set by the quilltap-shell Electron app to its own version
+ *   string (e.g., "1.2.0"). Presence indicates the server was spawned by the
+ *   Electron desktop shell.
+ * - QUILLTAP_SHELL_CAPABILITIES: Comma-delimited string of capability flags
+ *   advertised by the shell (e.g., "OPENS_FS_PATH,DOWNLOADS_FILE"). When not
+ *   set, no shell capabilities are assumed.
  *
  * @module lib/paths
  */
@@ -106,6 +112,56 @@ export function isDockerEnvironment(): boolean {
   }
 
   return false;
+}
+
+/**
+ * Check if the server was spawned by the Quilltap Electron shell
+ *
+ * The quilltap-shell app sets QUILLTAP_SHELL to its own version string
+ * (e.g., "1.2.0") when it launches the Next.js server. This is true
+ * regardless of whether Electron runs the server directly, via Docker,
+ * or via a Lima/WSL2 VM.
+ */
+export function isElectronShell(): boolean {
+  return !!process.env.QUILLTAP_SHELL;
+}
+
+/**
+ * Get the quilltap-shell version, if running under Electron
+ *
+ * @returns The shell version string, or null if not running under Electron
+ */
+export function getElectronShellVersion(): string | null {
+  return process.env.QUILLTAP_SHELL || null;
+}
+
+/**
+ * Get the set of capability flags advertised by the Electron shell
+ *
+ * QUILLTAP_SHELL_CAPABILITIES is a comma-delimited string of uppercase flags
+ * (e.g., "OPENS_FS_PATH,DOWNLOADS_FILE"). Returns an empty set when the
+ * variable is unset or empty.
+ *
+ * @returns Set of capability flag strings
+ */
+export function getShellCapabilities(): Set<string> {
+  const raw = process.env.QUILLTAP_SHELL_CAPABILITIES;
+  if (!raw) {
+    return new Set();
+  }
+  return new Set(
+    raw.split(',').map((s) => s.trim()).filter(Boolean)
+  );
+}
+
+/**
+ * Check whether the Electron shell advertises a specific capability
+ *
+ * @param capability - The capability flag to check (e.g., "OPENS_FS_PATH")
+ * @returns true if the shell has this capability
+ */
+export function hasShellCapability(capability: string): boolean {
+  return getShellCapabilities().has(capability);
 }
 
 /**
