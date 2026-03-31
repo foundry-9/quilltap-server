@@ -7,6 +7,7 @@ import { BaseModal } from '@/components/ui/BaseModal'
 import { ModelSelector, type ModelInfo } from '../model-selector'
 import { getAttachmentSupportDescription } from '@/lib/llm/attachment-support'
 import { FormActions } from '@/components/ui/FormActions'
+import { MODEL_CLASSES, getModelClass } from '@/lib/llm/model-classes'
 import type { ApiKey, ProviderConfig, ProfileFormData, ConnectionProfile } from './types'
 
 interface ProfileModalProps {
@@ -571,6 +572,56 @@ export function ProfileModal({
                   </label>
                 </div>
               )}
+            </div>
+
+            {/* Model Class and Max Context */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="modelClass" className="block qt-text-label mb-2">
+                  Model Class
+                </label>
+                <select
+                  id="modelClass"
+                  name="modelClass"
+                  value={form.formData.modelClass}
+                  onChange={(e) => form.setField('modelClass', e.target.value)}
+                  className="qt-select"
+                >
+                  <option value="">(None)</option>
+                  {MODEL_CLASSES.map((mc) => (
+                    <option key={mc.name} value={mc.name}>
+                      {mc.name} (Tier {mc.tier})
+                    </option>
+                  ))}
+                </select>
+                {form.formData.modelClass && (() => {
+                  const mc = getModelClass(form.formData.modelClass)
+                  if (!mc) return null
+                  return (
+                    <p className="qt-text-xs mt-1">
+                      Context: {mc.maxContext.toLocaleString()} | Output: {mc.maxOutput.toLocaleString()} | Quality: {mc.quality} | Tags: {mc.tags.join(', ')}
+                    </p>
+                  )
+                })()}
+              </div>
+              <div>
+                <label htmlFor="maxContext" className="block qt-text-label mb-2">
+                  Max Context (tokens)
+                </label>
+                <input
+                  type="number"
+                  id="maxContext"
+                  name="maxContext"
+                  value={form.formData.maxContext}
+                  onChange={(e) => form.setField('maxContext', e.target.value)}
+                  placeholder="e.g., 128000"
+                  min="1"
+                  className="qt-input"
+                />
+                <p className="qt-text-xs mt-1">
+                  Override context window size. Leave blank to use provider default.
+                </p>
+              </div>
             </div>
 
             {/* OpenRouter-specific options */}

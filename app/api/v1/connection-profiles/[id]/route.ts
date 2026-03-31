@@ -14,6 +14,7 @@ import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, forbidden, badRequest, serverError, validationError } from '@/lib/api/responses';
+import { isValidModelClassName } from '@/lib/llm/model-classes';
 
 // Disable caching
 export const dynamic = 'force-dynamic';
@@ -111,6 +112,8 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
         allowWebSearch,
         useNativeWebSearch,
         allowToolUse,
+        modelClass,
+        maxContext,
         sortIndex,
       } = body;
 
@@ -219,6 +222,29 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
           return badRequest('allowToolUse must be a boolean');
         }
         updateData.allowToolUse = allowToolUse;
+      }
+
+      if (modelClass !== undefined) {
+        if (modelClass === null || modelClass === '') {
+          updateData.modelClass = null;
+        } else {
+          if (!isValidModelClassName(modelClass)) {
+            return badRequest(`Invalid model class: ${modelClass}`);
+          }
+          updateData.modelClass = modelClass;
+        }
+      }
+
+      if (maxContext !== undefined) {
+        if (maxContext === null || maxContext === '' || maxContext === 0) {
+          updateData.maxContext = null;
+        } else {
+          const parsed = typeof maxContext === 'string' ? parseInt(maxContext, 10) : maxContext;
+          if (!Number.isInteger(parsed) || parsed <= 0) {
+            return badRequest('maxContext must be a positive integer');
+          }
+          updateData.maxContext = parsed;
+        }
       }
 
       if (sortIndex !== undefined) {

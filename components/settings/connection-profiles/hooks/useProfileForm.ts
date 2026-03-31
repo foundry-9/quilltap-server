@@ -54,6 +54,8 @@ export function useProfileForm(providers: ProviderConfig[]) {
         allowToolUse: profile.allowToolUse ?? true,
         allowWebSearch: profile.allowWebSearch ?? false,
         useNativeWebSearch: profile.useNativeWebSearch ?? false,
+        modelClass: profile.modelClass ?? '',
+        maxContext: profile.maxContext ? String(profile.maxContext) : '',
         // OpenRouter-specific fields
         fallbackModels: profile.parameters?.fallbackModels ?? [],
         enableZDR: profile.parameters?.providerPreferences?.dataCollection === 'deny',
@@ -115,6 +117,8 @@ export function useProfileForm(providers: ProviderConfig[]) {
       allowToolUse: form.formData.allowToolUse,
       allowWebSearch: form.formData.allowWebSearch,
       useNativeWebSearch: form.formData.useNativeWebSearch,
+      modelClass: form.formData.modelClass || null,
+      maxContext: form.formData.maxContext ? parseInt(form.formData.maxContext, 10) : null,
       parameters,
     }
 

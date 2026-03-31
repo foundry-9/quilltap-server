@@ -5,6 +5,7 @@ import { ProfileCard as BaseProfileCard, ProfileCardBadge } from '@/components/u
 import { TagBadge } from '@/components/tags/tag-badge'
 import { MissingApiKeyBadge } from '@/components/ui/MissingApiKeyBadge'
 import { getAttachmentSupportDescription } from '@/lib/llm/attachment-support'
+import { getModelClass } from '@/lib/llm/model-classes'
 import { formatTokenCount } from '@/lib/utils/format-tokens'
 import type { ConnectionProfile } from './types'
 
@@ -76,6 +77,12 @@ function ProfileCardContent({
   }
   if (profile.allowToolUse === false) {
     badges.push({ text: 'No Tools', variant: 'destructive' })
+  }
+  if (profile.modelClass) {
+    const mc = getModelClass(profile.modelClass)
+    if (mc) {
+      badges.push({ text: `${mc.name} (Tier ${mc.tier})`, variant: 'default' })
+    }
   }
 
   return (

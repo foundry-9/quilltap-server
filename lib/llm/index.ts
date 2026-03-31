@@ -56,6 +56,15 @@ export {
   getImageCapableProviders,
 } from './image-capable'
 
+// Model classes
+export type { ModelClass } from './model-classes'
+export {
+  MODEL_CLASSES,
+  MODEL_CLASS_NAMES,
+  getModelClass,
+  isValidModelClassName,
+} from './model-classes'
+
 // Context and pricing utilities
 export {
   getModelContextLimit,

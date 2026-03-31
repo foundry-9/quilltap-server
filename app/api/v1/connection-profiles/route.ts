@@ -19,6 +19,7 @@ import { ProviderEnum } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
 import { badRequest, serverError, notFound, validationError } from '@/lib/api/responses';
+import { isValidModelClassName } from '@/lib/llm/model-classes';
 
 // Disable caching
 export const dynamic = 'force-dynamic';
@@ -154,6 +155,8 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       allowWebSearch = false,
       useNativeWebSearch = false,
       allowToolUse = true,
+      modelClass = null,
+      maxContext = null,
     } = body;
 
     // Validation
@@ -179,6 +182,21 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
 
       if (apiKey.provider !== provider) {
         return badRequest('API key provider does not match profile provider');
+      }
+    }
+
+    // Validate modelClass if provided
+    if (modelClass !== null && modelClass !== undefined && modelClass !== '') {
+      if (!isValidModelClassName(modelClass)) {
+        return badRequest(`Invalid model class: ${modelClass}`);
+      }
+    }
+
+    // Validate maxContext if provided
+    if (maxContext !== null && maxContext !== undefined) {
+      const parsed = typeof maxContext === 'string' ? parseInt(maxContext, 10) : maxContext;
+      if (!Number.isInteger(parsed) || parsed <= 0) {
+        return badRequest('maxContext must be a positive integer');
       }
     }
 
@@ -218,6 +236,8 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       allowWebSearch,
       useNativeWebSearch,
       allowToolUse,
+      modelClass: modelClass || null,
+      maxContext: maxContext ? (typeof maxContext === 'string' ? parseInt(maxContext, 10) : maxContext) : null,
       tags: [],
       sortIndex: maxSortIndex + 1,
       totalTokens: 0,

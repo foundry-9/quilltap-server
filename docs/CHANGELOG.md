@@ -4,6 +4,7 @@
 
 ### 4.0-dev
 
+- feat: add model classes (Compact/Standard/Extended/Deep) as capability tier definitions for connection profiles, with optional `maxContext` override for context window size; new `GET /api/v1/model-classes` endpoint, migration adds `modelClass` and `maxContext` columns
 - chore: update remove-old-dev-tags command to also delete GitHub releases before tags, filter release list to prereleases/drafts only, and remove csebold/quilltap Docker registry references
 - fix: image "copy to clipboard" button in Electron now works via IPC bridge instead of unsupported `navigator.clipboard.write()` API; browser fallback unchanged
 - fix: scenario selection ignored when starting chats — selected scenario was not persisted on the chat, so the runtime system prompt builder always used the first scenario in the array; now stores resolved scenario text (`scenarioText`) on the chat at creation and uses it for all subsequent messages; also fixes UI useEffect that reset scenario selection when changing connection profiles or system prompts

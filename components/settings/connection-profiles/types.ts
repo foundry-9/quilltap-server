@@ -47,6 +47,8 @@ export interface ConnectionProfile {
   allowWebSearch?: boolean
   useNativeWebSearch?: boolean
   allowToolUse?: boolean
+  modelClass?: string | null
+  maxContext?: number | null
   sortIndex?: number
   apiKey?: ApiKey | null
   tags?: Tag[]
@@ -71,6 +73,8 @@ export interface ProfileFormData {
   allowToolUse: boolean
   allowWebSearch: boolean
   useNativeWebSearch: boolean
+  modelClass: string
+  maxContext: string
   // OpenRouter-specific fields
   fallbackModels: string[]
   enableZDR: boolean
@@ -97,6 +101,8 @@ export const initialFormState: ProfileFormData = {
   allowToolUse: true,
   allowWebSearch: false,
   useNativeWebSearch: false,
+  modelClass: '',
+  maxContext: '',
   // OpenRouter-specific fields
   fallbackModels: [],
   enableZDR: false,

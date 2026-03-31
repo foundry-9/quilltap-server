@@ -133,6 +133,8 @@ import { addCharacterTimestampConfigFieldMigration } from './add-character-times
 import { addCharacterDefaultIdsFieldsMigration } from './add-character-default-ids-fields';
 // Add scenarioText field to chats for persisting selected scenario content
 import { addChatScenarioTextFieldMigration } from './add-chat-scenario-text-field';
+// Add modelClass field to connection profiles for capability tier classification
+import { addConnectionProfileModelClassFieldMigration } from './add-connection-profile-model-class-field';
 
 /**
  * All available migrations.
@@ -261,6 +263,8 @@ export const migrations: Migration[] = [
   addCharacterDefaultIdsFieldsMigration,
   // Add scenarioText field to chats for persisting selected scenario content
   addChatScenarioTextFieldMigration,
+  // Add modelClass field to connection profiles for capability tier classification
+  addConnectionProfileModelClassFieldMigration,
 ];
 
 export {
@@ -384,4 +388,6 @@ export {
   addCharacterDefaultIdsFieldsMigration,
   // Add scenarioText field to chats for persisting selected scenario content
   addChatScenarioTextFieldMigration,
+  // Add modelClass field to connection profiles for capability tier classification
+  addConnectionProfileModelClassFieldMigration,
 };
