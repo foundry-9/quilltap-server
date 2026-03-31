@@ -81,6 +81,7 @@ export default function NewChatPage() {
   const projectIdParam = searchParams.get('projectId')
   const { style } = useAvatarDisplay()
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const prevCharacterIdsRef = useRef<string>('')
 
   const [characters, setCharacters] = useState<Character[]>([])
   const [profiles, setProfiles] = useState<ConnectionProfile[]>([])
@@ -220,8 +221,13 @@ export default function NewChatPage() {
   const showCustomTextarea = !singleCharacterScenarios || scenarioId === null
 
   // When exactly one LLM character is selected, propagate their defaults
+  // Only run when the actual character IDs change, not on profile/prompt changes
   useEffect(() => {
     const llmCharacters = selectedCharacters.filter(sc => sc.controlledBy === 'llm')
+    const currentIds = llmCharacters.map(sc => sc.character.id).sort().join(',')
+    if (currentIds === prevCharacterIdsRef.current) return
+    prevCharacterIdsRef.current = currentIds
+
     if (llmCharacters.length === 1) {
       const char = llmCharacters[0].character
       if (char.defaultTimestampConfig) {

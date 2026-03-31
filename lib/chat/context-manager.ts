@@ -368,7 +368,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     projectContext,
     options.timezone,
     options.statusChangeNotifications,
-    respondingParticipant?.status as 'active' | 'silent' | 'absent' | 'removed' | undefined
+    respondingParticipant?.status as 'active' | 'silent' | 'absent' | 'removed' | undefined,
+    options.chat.scenarioText ?? undefined
   )
   const systemPromptTokens = estimateTokens(systemPrompt, provider)
 

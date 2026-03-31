@@ -232,7 +232,8 @@ CREATE TABLE "chats" (
   "turnQueue" TEXT DEFAULT '[]',
   "sceneState" TEXT DEFAULT NULL,
   "chatType" TEXT DEFAULT 'salon',
-  "helpPageUrl" TEXT DEFAULT NULL
+  "helpPageUrl" TEXT DEFAULT NULL,
+  "scenarioText" TEXT DEFAULT NULL
 );
 
 CREATE INDEX "idx_chats_chatType" ON "chats"("chatType");

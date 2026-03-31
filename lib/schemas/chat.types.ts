@@ -339,6 +339,9 @@ export const ChatMetadataSchema = z.object({
   /** Project this chat belongs to (optional) */
   projectId: UUIDSchema.nullable().optional(),
 
+  /** Resolved scenario text selected at chat creation (preset or custom) */
+  scenarioText: z.string().nullable().optional(),
+
   // Token usage tracking (aggregate totals for this chat)
   /** Total prompt/input tokens used in this chat */
   totalPromptTokens: z.number().default(0),
@@ -446,6 +449,9 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** Project this chat belongs to (optional) */
   projectId: UUIDSchema.nullable().optional(),
+
+  /** Resolved scenario text selected at chat creation (preset or custom) */
+  scenarioText: z.string().nullable().optional(),
 
   // Token usage tracking (aggregate totals for this chat)
   /** Total prompt/input tokens used in this chat */

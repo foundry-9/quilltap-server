@@ -1,6 +1,6 @@
 'use client'
 
-import { use, useEffect, useState } from 'react'
+import { use, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { showErrorToast } from '@/lib/toast'
@@ -50,6 +50,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   const [selectedSystemPromptId, setSelectedSystemPromptId] = useState<string | null>(null)
   const [timestampConfig, setTimestampConfig] = useState<TimestampConfig | null>(null)
   const [openedFromQuery, setOpenedFromQuery] = useState(false)
+  const chatDialogInitializedRef = useRef(false)
   const [savingConnectionProfile, setSavingConnectionProfile] = useState(false)
   const [savingPartner, setSavingPartner] = useState(false)
   const [savingImageProfile, setSavingImageProfile] = useState(false)
@@ -107,14 +108,15 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     fetchImageProfiles()
   }, [fetchCharacter, fetchProfiles, fetchUserControlledCharacters, fetchDefaultPartner, fetchImageProfiles, id])
 
-  // Handle chat dialog opening from query params
+  // Handle chat dialog opening from query params (only initialize once)
   useEffect(() => {
-    if (searchParams.get('action') === 'chat') {
+    if (searchParams.get('action') === 'chat' && !chatDialogInitializedRef.current && character) {
+      chatDialogInitializedRef.current = true
       setShowChatDialog(true)
       setOpenedFromQuery(true)
 
       // Set default profile when opening from query
-      if (character?.defaultConnectionProfileId) {
+      if (character.defaultConnectionProfileId) {
         setSelectedProfileId(character.defaultConnectionProfileId)
       } else if (profiles.length > 0) {
         setSelectedProfileId(profiles[0].id)
@@ -126,7 +128,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
       }
 
       // Initialize timestamp config from character's default
-      if (character?.defaultTimestampConfig) {
+      if (character.defaultTimestampConfig) {
         setTimestampConfig(character.defaultTimestampConfig)
       }
 
@@ -136,16 +138,16 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
       }
 
       // Initialize default scenario if set
-      if (character?.defaultScenarioId) {
+      if (character.defaultScenarioId) {
         setScenarioId(character.defaultScenarioId)
       }
 
       // Initialize default system prompt if set
-      if (character?.defaultSystemPromptId) {
+      if (character.defaultSystemPromptId) {
         setSelectedSystemPromptId(character.defaultSystemPromptId)
       }
     }
-  }, [searchParams, character?.defaultConnectionProfileId, character?.defaultTimestampConfig, character?.defaultScenarioId, character?.defaultSystemPromptId, defaultImageProfileId, profiles, defaultPartnerId])
+  }, [searchParams, character, defaultImageProfileId, profiles, defaultPartnerId])
 
   const handleStartChat = () => {
     if (character?.defaultConnectionProfileId) {

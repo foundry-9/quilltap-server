@@ -525,7 +525,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     // Fetch the primary character for defaults resolution
     const primaryCharacter = await repos.characters.findById(buildResult.firstCharacter.characterId);
 
-    // Resolve scenario: custom text takes priority, then scenarioId lookup, then character default scenario, then nothing
+    // Resolve scenario: custom text takes priority, then scenarioId lookup, then nothing
     let resolvedScenario = validatedData.scenario;
     if (!resolvedScenario && validatedData.scenarioId) {
       const matchingScenario = primaryCharacter?.scenarios?.find(s => s.id === validatedData.scenarioId);
@@ -618,6 +618,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       lastMessageAt: null,
       lastRenameCheckInterchange: 0,
       projectId: validatedData.projectId || null,
+      scenarioText: resolvedScenario || null,
       disabledTools: projectToolDefaults.disabledTools,
       disabledToolGroups: projectToolDefaults.disabledToolGroups,
       imageProfileId: chatImageProfileId,

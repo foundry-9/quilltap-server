@@ -131,6 +131,8 @@ import { convertScenarioToScenariosMigration } from './convert-scenario-to-scena
 import { addCharacterTimestampConfigFieldMigration } from './add-character-timestamp-config-field';
 // Add defaultScenarioId and defaultSystemPromptId fields to characters
 import { addCharacterDefaultIdsFieldsMigration } from './add-character-default-ids-fields';
+// Add scenarioText field to chats for persisting selected scenario content
+import { addChatScenarioTextFieldMigration } from './add-chat-scenario-text-field';
 
 /**
  * All available migrations.
@@ -257,6 +259,8 @@ export const migrations: Migration[] = [
   addCharacterTimestampConfigFieldMigration,
   // Add defaultScenarioId and defaultSystemPromptId fields to characters
   addCharacterDefaultIdsFieldsMigration,
+  // Add scenarioText field to chats for persisting selected scenario content
+  addChatScenarioTextFieldMigration,
 ];
 
 export {
@@ -378,4 +382,6 @@ export {
   addCharacterTimestampConfigFieldMigration,
   // Add defaultScenarioId and defaultSystemPromptId fields to characters
   addCharacterDefaultIdsFieldsMigration,
+  // Add scenarioText field to chats for persisting selected scenario content
+  addChatScenarioTextFieldMigration,
 };
