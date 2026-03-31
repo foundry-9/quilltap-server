@@ -341,7 +341,8 @@ CREATE TABLE "connection_profiles" (
   "allowToolUse" INTEGER DEFAULT 1,
   "sortIndex" INTEGER DEFAULT 0,
   "modelClass" TEXT DEFAULT NULL,
-  "maxContext" INTEGER DEFAULT NULL
+  "maxContext" INTEGER DEFAULT NULL,
+  "maxTokens" INTEGER DEFAULT NULL
 );
 
 CREATE INDEX "idx_connection_profiles_createdAt" ON "connection_profiles" ("createdAt" DESC);

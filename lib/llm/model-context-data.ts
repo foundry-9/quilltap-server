@@ -14,6 +14,7 @@
 import { Provider } from '@/lib/schemas/types'
 import { FALLBACK_PRICING, ModelPricing } from './pricing'
 import { getDefaultContextWindow, getProvider } from '@/lib/plugins/provider-registry'
+import { getModelClass } from './model-classes'
 
 /**
  * Default context window sizes by provider when model is unknown
@@ -268,4 +269,98 @@ export function calculateRecentMessageCount(
   const count = Math.floor(availableTokens / averageMessageTokens)
   // Keep at least 4 messages (2 exchanges) and cap at 100
   return Math.max(4, Math.min(100, count))
+}
+
+// ============================================================================
+// BUDGET-DRIVEN CONTEXT COMPRESSION
+// ============================================================================
+
+/** Budget ratio: conversation history should not exceed 50% of max_available */
+export const CONTEXT_HISTORY_BUDGET_RATIO = 0.50
+
+/** Budget ratio: recalled memories should not exceed 20% of max_available */
+export const MEMORY_BUDGET_RATIO = 0.20
+
+/** Default max context window when no profile/model info is available */
+export const DEFAULT_MAX_CONTEXT = 128000
+
+/** Default max output tokens when no profile/model info is available */
+export const DEFAULT_MAX_TOKENS = 8000
+
+/** Minimum floor for max_available to prevent degenerate cases */
+const MIN_MAX_AVAILABLE = 4096
+
+/**
+ * Resolve the effective maxTokens (max output) for a connection profile.
+ *
+ * Resolution order:
+ * 1. Profile's top-level maxTokens field (explicit user override for budget calculation)
+ * 2. Model class maxOutput (from profile's modelClass tier)
+ * 3. Default: 8000
+ *
+ * NOTE: We intentionally do NOT read from parameters.max_tokens / parameters.maxTokens.
+ * That value is the per-request generation cap (often set to the model's maximum, e.g. 128K),
+ * not a realistic output expectation. Using it would produce nonsensical budgets
+ * (e.g., 200K context - 2*128K = negative).
+ */
+export function resolveMaxTokens(profile: {
+  maxTokens?: number | null
+  modelClass?: string | null
+  parameters?: Record<string, unknown>
+}): number {
+  // 1. Explicit profile override (top-level field set specifically for budget calculation)
+  if (profile.maxTokens != null && profile.maxTokens > 0) {
+    return profile.maxTokens
+  }
+
+  // 2. Model class
+  if (profile.modelClass) {
+    const mc = getModelClass(profile.modelClass)
+    if (mc) {
+      return mc.maxOutput
+    }
+  }
+
+  // 4. Default
+  return DEFAULT_MAX_TOKENS
+}
+
+/**
+ * Calculate the maximum available tokens for a prompt (max_available).
+ *
+ * Formula: max_available = maxContext - (2 * maxTokens)
+ *
+ * The 2x multiplier reserves space for both the response and a safety buffer
+ * (e.g., extended thinking, tool call overhead).
+ *
+ * @returns maxAvailable (floored at MIN_MAX_AVAILABLE), plus the resolved maxContext and maxTokens
+ */
+export function calculateMaxAvailable(
+  provider: Provider,
+  modelName: string,
+  profile: {
+    maxContext?: number | null
+    maxTokens?: number | null
+    modelClass?: string | null
+    parameters?: Record<string, unknown>
+  }
+): { maxAvailable: number; maxContext: number; maxTokens: number } {
+  // Resolve maxContext: profile override -> model lookup -> default
+  const maxContext = (profile.maxContext != null && profile.maxContext > 0)
+    ? profile.maxContext
+    : getModelContextLimit(provider, modelName) || DEFAULT_MAX_CONTEXT
+
+  // Resolve maxTokens
+  const maxTokens = resolveMaxTokens(profile)
+
+  // Cap maxTokens so it never consumes more than 20% of maxContext
+  // Model classes and parameters often set maxOutput to the model's absolute ceiling
+  // (e.g., 128K on a 200K model), which would make maxAvailable negative.
+  // The 2x multiplier already provides generous headroom for response + overhead.
+  const cappedMaxTokens = Math.min(maxTokens, Math.floor(maxContext * 0.20))
+
+  // Calculate available budget
+  const maxAvailable = Math.max(maxContext - (2 * cappedMaxTokens), MIN_MAX_AVAILABLE)
+
+  return { maxAvailable, maxContext, maxTokens: cappedMaxTokens }
 }

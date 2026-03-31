@@ -15,10 +15,12 @@
 
 import { Provider, Character, ChatParticipantBase, ChatMetadataBase, TimestampConfig } from '@/lib/schemas/types'
 import { estimateTokens, countMessagesTokens, truncateToTokenLimit } from '@/lib/tokens/token-counter'
-import { getModelContextLimit, getRecommendedContextAllocation, shouldSummarizeConversation } from '@/lib/llm/model-context-data'
+import { getModelContextLimit, getRecommendedContextAllocation, shouldSummarizeConversation, calculateMaxAvailable, CONTEXT_HISTORY_BUDGET_RATIO, MEMORY_BUDGET_RATIO } from '@/lib/llm/model-context-data'
 import { searchMemoriesSemantic, type SemanticSearchResult } from '@/lib/memory/memory-service'
 import { generateMemoryRecap, type MemoryRecapResult } from '@/lib/memory/memory-recap'
 import type { UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
+import { compressMemories } from '@/lib/memory/cheap-llm-tasks'
+import type { ConnectionProfile } from '@/lib/schemas/types'
 import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
@@ -52,6 +54,7 @@ import {
 } from './context/message-selector'
 import {
   shouldApplyCompression,
+  shouldApplyBudgetCompression,
   splitMessagesForCompression,
   applyContextCompression,
   buildCompressedSystemMessage,
@@ -244,6 +247,13 @@ export interface BuildContextOptions {
   projectContext?: ProjectContext | null
 
   // ============================================================================
+  // Connection Profile (for budget-driven compression)
+  // ============================================================================
+
+  /** The connection profile being used (provides maxContext/maxTokens for budget calculation) */
+  connectionProfile?: ConnectionProfile
+
+  // ============================================================================
   // Context Compression
   // ============================================================================
 
@@ -279,6 +289,13 @@ export interface BuildContextOptions {
   generateMemoryRecap?: boolean
   /** Uncensored fallback options for memory recap in dangerous chats */
   uncensoredFallbackOptions?: UncensoredFallbackOptions
+
+  // ============================================================================
+  // Status Callback (for streaming status events to client)
+  // ============================================================================
+
+  /** Optional callback to emit status events during context building phases */
+  onStatusChange?: (stage: string, message: string) => void
 }
 
 /**
@@ -392,89 +409,157 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   const finalSystemPromptTokens = estimateTokens(finalSystemPrompt, provider)
 
   // ============================================================================
-  // Context Compression (Sliding Window)
+  // Context Compression (Budget-Driven)
   // ============================================================================
 
   // Extract compression options
-  const { contextCompressionSettings, cheapLLMSelection, bypassCompression = false } = options
+  const { contextCompressionSettings, cheapLLMSelection, bypassCompression = false, connectionProfile } = options
 
-  // Determine if compression should be applied
+  // Calculate budget-driven max_available
+  const budgetInfo = connectionProfile
+    ? calculateMaxAvailable(provider, modelName, connectionProfile)
+    : null
+
+  // Estimate total conversation tokens for budget check
+  const visibleConversation = extractVisibleConversation(existingMessages)
+  const conversationTokens = countMessagesTokens(
+    visibleConversation.map(m => ({ role: m.role, content: m.content })),
+    provider
+  )
+
+  // Total estimated prompt = system prompt + conversation + a rough memory estimate
+  // (Memories haven't been retrieved yet, but we use the budget allocation as an estimate)
+  const totalEstimatedTokens = finalSystemPromptTokens + conversationTokens + budget.memoryBudget
+
+  // Determine if budget-driven compression should be applied
   const compressionEnabled = !!(
     contextCompressionSettings &&
     cheapLLMSelection &&
-    shouldApplyCompression(
-      existingMessages.length,
+    budgetInfo &&
+    shouldApplyBudgetCompression(
+      totalEstimatedTokens,
+      budgetInfo.maxAvailable,
       contextCompressionSettings,
       bypassCompression
     )
   )
 
+  // Emit status: budget check
+  if (budgetInfo && options.onStatusChange) {
+    options.onStatusChange('budget_check', 'Calculating context budget...')
+  }
+
+  // Log budget analysis
+  if (budgetInfo) {
+    logger.info('[ContextManager] Budget analysis', {
+      maxContext: budgetInfo.maxContext,
+      maxTokens: budgetInfo.maxTokens,
+      maxAvailable: budgetInfo.maxAvailable,
+      totalEstimatedTokens,
+      compressionNeeded: compressionEnabled,
+      systemPromptTokens: finalSystemPromptTokens,
+      conversationTokens,
+    })
+  }
+
   // Initialize compression result
   let compressionResult: ContextCompressionResult | undefined
   let useCompressedContext = false
 
-  if (compressionEnabled && contextCompressionSettings && cheapLLMSelection) {
-    logger.info('[ContextManager] Context compression enabled', {
+  if (compressionEnabled && contextCompressionSettings && cheapLLMSelection && budgetInfo) {
+    const maxAvailable = budgetInfo.maxAvailable
+    const contextHistoryBudget = Math.floor(maxAvailable * CONTEXT_HISTORY_BUDGET_RATIO)
+
+    logger.info('[ContextManager] Budget-driven compression enabled', {
       messageCount: existingMessages.length,
       windowSize: contextCompressionSettings.windowSize,
-      bypassCompression,
+      maxAvailable,
+      contextHistoryBudget,
+      conversationTokens,
     })
 
-    // Check for cached compression result first (async pre-compression)
-    const { cachedCompressionResult } = options
-    if (cachedCompressionResult && cachedCompressionResult.compressionApplied) {
-      logger.info('[ContextManager] Using cached compression result (async pre-compression)', {
-        messageCount: existingMessages.length,
-        cachedSavings: cachedCompressionResult.compressionDetails?.totalSavings,
-      })
-      compressionResult = cachedCompressionResult
-      useCompressedContext = true
+    // Phase 1: Compress conversation history if it exceeds 50% of max_available
+    // (minus the last windowSize messages which are kept verbatim)
+    const { messagesToCompress } = splitMessagesForCompression(
+      visibleConversation,
+      contextCompressionSettings.windowSize
+    )
+    const compressibleTokens = countMessagesTokens(
+      messagesToCompress.map(m => ({ role: m.role, content: m.content })),
+      provider
+    )
 
-      if (compressionResult.warnings.length > 0) {
-        warnings.push(...compressionResult.warnings.map(w => `[Compression] ${w}`))
+    if (compressibleTokens > contextHistoryBudget) {
+      // Emit status: Phase 1 compression
+      if (options.onStatusChange) {
+        options.onStatusChange('compressing_context', 'Compressing conversation history...')
       }
-    } else {
-      // No cached result - perform synchronous compression
-      logger.info('[ContextManager] No cached compression, performing sync compression', {
-        messageCount: existingMessages.length,
-        hasCachedResult: !!cachedCompressionResult,
+
+      logger.info('[ContextManager] Phase 1: Compressing conversation history', {
+        compressibleTokens,
+        contextHistoryBudget,
+        compressibleMessageCount: messagesToCompress.length,
       })
 
-      // Get user/persona name for compression prompt
-      const userName = persona?.name || 'User'
-
-      // Apply compression
-      try {
-        compressionResult = await applyContextCompression(
-          extractVisibleConversation(existingMessages),
-          finalSystemPrompt,
-          {
-            enabled: contextCompressionSettings.enabled,
-            windowSize: contextCompressionSettings.windowSize,
-            compressionTargetTokens: contextCompressionSettings.compressionTargetTokens,
-            systemPromptTargetTokens: contextCompressionSettings.systemPromptTargetTokens,
-            selection: cheapLLMSelection,
-            userId,
-            chatId: chat.id,
-            characterName: character.name,
-            userName,
-          }
-        )
-
-        useCompressedContext = compressionResult.compressionApplied
+      // Check for cached compression result first (async pre-compression)
+      const { cachedCompressionResult } = options
+      if (cachedCompressionResult && cachedCompressionResult.compressionApplied) {
+        logger.info('[ContextManager] Using cached compression result (async pre-compression)', {
+          messageCount: existingMessages.length,
+          cachedSavings: cachedCompressionResult.compressionDetails?.totalSavings,
+        })
+        compressionResult = cachedCompressionResult
+        useCompressedContext = true
 
         if (compressionResult.warnings.length > 0) {
           warnings.push(...compressionResult.warnings.map(w => `[Compression] ${w}`))
         }
-
-        logger.info('[ContextManager] Compression result', {
-          compressionApplied: compressionResult.compressionApplied,
-          compressionDetails: compressionResult.compressionDetails,
+      } else {
+        // No cached result - perform synchronous compression
+        logger.info('[ContextManager] No cached compression, performing sync compression', {
+          messageCount: existingMessages.length,
+          hasCachedResult: !!cachedCompressionResult,
         })
-      } catch (error) {
-        warnings.push(`Failed to apply context compression: ${error instanceof Error ? error.message : 'Unknown error'}`)
-        logger.error('[ContextManager] Context compression error', {}, error instanceof Error ? error : undefined)
+
+        const userName = persona?.name || 'User'
+
+        try {
+          compressionResult = await applyContextCompression(
+            visibleConversation,
+            finalSystemPrompt,
+            {
+              enabled: contextCompressionSettings.enabled,
+              windowSize: contextCompressionSettings.windowSize,
+              compressionTargetTokens: contextHistoryBudget,
+              systemPromptTargetTokens: contextCompressionSettings.systemPromptTargetTokens,
+              selection: cheapLLMSelection,
+              userId,
+              chatId: chat.id,
+              characterName: character.name,
+              userName,
+            }
+          )
+
+          useCompressedContext = compressionResult.compressionApplied
+
+          if (compressionResult.warnings.length > 0) {
+            warnings.push(...compressionResult.warnings.map(w => `[Compression] ${w}`))
+          }
+
+          logger.info('[ContextManager] Phase 1 compression result', {
+            compressionApplied: compressionResult.compressionApplied,
+            compressionDetails: compressionResult.compressionDetails,
+          })
+        } catch (error) {
+          warnings.push(`Failed to apply context compression: ${error instanceof Error ? error.message : 'Unknown error'}`)
+          logger.error('[ContextManager] Context compression error', {}, error instanceof Error ? error : undefined)
+        }
       }
+    } else {
+      logger.info('[ContextManager] Phase 1 skipped: conversation history within budget', {
+        compressibleTokens,
+        contextHistoryBudget,
+      })
     }
   }
 
@@ -682,6 +767,107 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       }
     } catch (error) {
       warnings.push(`Failed to retrieve inter-character memories: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+
+  // ============================================================================
+  // Phase 2: Memory Compression (Budget-Driven)
+  // ============================================================================
+
+  // If budget-driven compression is active and memories exceed 20% of max_available, compress them
+  const totalMemoryTokensBeforeCompression = memoryTokens + interCharacterMemoryTokens
+  if (
+    compressionEnabled &&
+    budgetInfo &&
+    cheapLLMSelection &&
+    totalMemoryTokensBeforeCompression > 0
+  ) {
+    const memoryBudget = Math.floor(budgetInfo.maxAvailable * MEMORY_BUDGET_RATIO)
+
+    if (totalMemoryTokensBeforeCompression > memoryBudget) {
+      // Emit status: Phase 2 memory compression
+      if (options.onStatusChange) {
+        options.onStatusChange('compressing_memories', 'Compressing memories...')
+      }
+
+      logger.info('[ContextManager] Phase 2: Compressing memories', {
+        totalMemoryTokens: totalMemoryTokensBeforeCompression,
+        memoryBudget,
+        semanticMemoryTokens: memoryTokens,
+        interCharacterMemoryTokens,
+      })
+
+      // Build uncensored fallback options
+      const uncensoredFallback: UncensoredFallbackOptions | undefined =
+        options.uncensoredFallbackOptions
+
+      // Compress semantic memories if they exceed their share of the budget
+      const semanticMemoryBudget = interCharacterMemoryTokens > 0
+        ? Math.floor(memoryBudget * 0.7) // 70% for semantic, 30% for inter-character
+        : memoryBudget
+
+      if (memoryContent && memoryTokens > semanticMemoryBudget) {
+        try {
+          const memCompResult = await compressMemories(
+            memoryContent,
+            character.name,
+            semanticMemoryBudget,
+            cheapLLMSelection,
+            userId,
+            uncensoredFallback,
+            chat.id
+          )
+
+          if (memCompResult.success && memCompResult.result) {
+            logger.info('[ContextManager] Semantic memories compressed', {
+              originalTokens: memCompResult.result.originalTokens,
+              compressedTokens: memCompResult.result.compressedTokens,
+            })
+            memoryContent = memCompResult.result.compressedText
+            memoryTokens = estimateTokens(memoryContent, provider)
+          } else {
+            warnings.push(`Failed to compress memories: ${memCompResult.error}`)
+          }
+        } catch (error) {
+          warnings.push(`Error during memory compression: ${error instanceof Error ? error.message : 'Unknown error'}`)
+          logger.error('[ContextManager] Memory compression error', {}, error instanceof Error ? error : undefined)
+        }
+      }
+
+      // Compress inter-character memories if they exceed their share
+      const interCharBudget = memoryBudget - Math.min(memoryTokens, semanticMemoryBudget)
+      if (interCharacterMemoryContent && interCharacterMemoryTokens > interCharBudget && interCharBudget > 0) {
+        try {
+          const interCompResult = await compressMemories(
+            interCharacterMemoryContent,
+            character.name,
+            interCharBudget,
+            cheapLLMSelection,
+            userId,
+            uncensoredFallback,
+            chat.id
+          )
+
+          if (interCompResult.success && interCompResult.result) {
+            logger.info('[ContextManager] Inter-character memories compressed', {
+              originalTokens: interCompResult.result.originalTokens,
+              compressedTokens: interCompResult.result.compressedTokens,
+            })
+            interCharacterMemoryContent = interCompResult.result.compressedText
+            interCharacterMemoryTokens = estimateTokens(interCharacterMemoryContent, provider)
+          } else {
+            warnings.push(`Failed to compress inter-character memories: ${interCompResult.error}`)
+          }
+        } catch (error) {
+          warnings.push(`Error during inter-character memory compression: ${error instanceof Error ? error.message : 'Unknown error'}`)
+          logger.error('[ContextManager] Inter-character memory compression error', {}, error instanceof Error ? error : undefined)
+        }
+      }
+    } else {
+      logger.info('[ContextManager] Phase 2 skipped: memories within budget', {
+        totalMemoryTokens: totalMemoryTokensBeforeCompression,
+        memoryBudget,
+      })
     }
   }
 

@@ -2480,6 +2480,96 @@ export async function compressSystemPrompt(
 }
 
 // ============================================================================
+// MEMORY COMPRESSION
+// ============================================================================
+
+/**
+ * Memory compression prompt template
+ * Uses dynamic {{characterName}} and {{targetTokens}} placeholders
+ */
+const MEMORY_COMPRESSION_PROMPT = `You are a memory compression assistant. You are given a set of recalled memories belonging to {{characterName}}. Your job is to compress them into a shorter form that preserves the most important information while fitting within a token budget.
+
+**What to PRESERVE (in priority order):**
+- Key relationships and who people are to {{characterName}}
+- Emotional bonds, promises, and trust dynamics
+- Unresolved situations or ongoing commitments
+- Important facts about the world, setting, and locations
+- Preferences, habits, and personality-defining moments
+- Decisions {{characterName}} made and why
+
+**What to DROP:**
+- Redundant entries that say the same thing in different words
+- Minor details that don't affect future interactions
+- Exact dates/times when relative timing is sufficient
+- Details about concluded events with no ongoing impact
+
+**Output Format:**
+Produce a single block of condensed memory notes as a bulleted list. Each bullet should be one key fact or relationship. Do not add commentary or headers.
+
+**Target length:** {{targetTokens}} tokens.`
+
+/**
+ * Compresses recalled memories into a shorter form to fit within budget
+ *
+ * @param formattedMemoryText - The already-formatted memory text to compress
+ * @param characterName - The character whose memories these are
+ * @param targetTokens - Target token count for the compressed output
+ * @param selection - The cheap LLM provider selection
+ * @param userId - The user ID for API key retrieval
+ * @param uncensoredFallback - Optional uncensored fallback for dangerous chats
+ * @param chatId - Optional chat ID for LLM call logging
+ * @returns The compressed memories
+ */
+export async function compressMemories(
+  formattedMemoryText: string,
+  characterName: string,
+  targetTokens: number,
+  selection: CheapLLMSelection,
+  userId: string,
+  uncensoredFallback?: UncensoredFallbackOptions,
+  chatId?: string
+): Promise<CheapLLMTaskResult<CompressionResult>> {
+  // Estimate original token count
+  const originalTokens = Math.ceil(formattedMemoryText.length / 4)
+
+  // Build the prompt with dynamic values
+  const systemPrompt = MEMORY_COMPRESSION_PROMPT
+    .replace(/\{\{characterName\}\}/g, characterName)
+    .replace(/\{\{targetTokens\}\}/g, String(targetTokens))
+
+  const llmMessages: LLMMessage[] = [
+    {
+      role: 'system',
+      content: systemPrompt,
+    },
+    {
+      role: 'user',
+      content: `Compress the following recalled memories:\n\n${formattedMemoryText}`,
+    },
+  ]
+
+  return executeCheapLLMTask(
+    selection,
+    llmMessages,
+    userId,
+    (content: string): CompressionResult => {
+      const compressedText = content.trim()
+      const compressedTokens = Math.ceil(compressedText.length / 4)
+
+      return {
+        compressedText,
+        originalTokens,
+        compressedTokens,
+      }
+    },
+    'compress-memories',
+    chatId,
+    undefined,
+    uncensoredFallback
+  )
+}
+
+// ============================================================================
 // CHARACTER APPEARANCE RESOLUTION
 // ============================================================================
 

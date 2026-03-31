@@ -177,7 +177,7 @@ describe('ConnectionProfilesTab max tokens limit', () => {
 
       // Verify the model limit text is displayed with correct formatting
       const modelLimitElements = screen.queryAllByText((content, element) => {
-        return element?.textContent?.includes('Model limit') && element?.textContent?.includes('8,192')
+        return element?.textContent?.includes('Reported model limit') && element?.textContent?.includes('8,192')
       })
       expect(modelLimitElements.length).toBeGreaterThan(0)
     } else {
@@ -190,7 +190,7 @@ describe('ConnectionProfilesTab max tokens limit', () => {
 
       // Verify the model limit text is displayed
       const modelLimitElements = screen.queryAllByText((content, element) => {
-        return element?.textContent?.includes('Model limit') && element?.textContent?.includes('8,192')
+        return element?.textContent?.includes('Reported model limit') && element?.textContent?.includes('8,192')
       })
       expect(modelLimitElements.length).toBeGreaterThan(0)
     }

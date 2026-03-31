@@ -367,7 +367,7 @@ export function ProfileForm({
               />
               <p className="qt-text-xs mt-1">
                 {getSelectedModelInfo()?.maxOutputTokens
-                  ? `Model limit: ${getSelectedModelInfo()?.maxOutputTokens?.toLocaleString()} tokens`
+                  ? `Reported model limit: ${getSelectedModelInfo()?.maxOutputTokens?.toLocaleString()} tokens`
                   : 'Max output tokens for responses'}
               </p>
             </div>

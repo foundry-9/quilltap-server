@@ -61,6 +61,8 @@ export const ConnectionProfileSchema = z.object({
   modelClass: z.string().nullable().optional(),
   /** Optional override for the context window size in tokens (caps how much input the model accepts) */
   maxContext: z.number().int().positive().nullable().optional(),
+  /** Optional override for the maximum output/completion tokens the model can generate */
+  maxTokens: z.number().int().positive().nullable().optional(),
   /** Whether this profile is suitable for uncensored/dangerous content (user must explicitly opt in) */
   isDangerousCompatible: z.boolean().default(false),
   tags: z.array(UUIDSchema).default([]),

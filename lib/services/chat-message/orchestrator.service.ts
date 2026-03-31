@@ -81,6 +81,7 @@ import { trackMessageTokenUsage } from '@/lib/services/token-tracking.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { isRecoverableRequestError, isToolUnsupportedError } from '@/lib/llm/errors'
 import { countMessagesTokens } from '@/lib/tokens/token-counter'
+import { calculateMaxAvailable, CONTEXT_HISTORY_BUDGET_RATIO } from '@/lib/llm/model-context-data'
 import { attemptRequestLimitRecovery } from './recovery.service'
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { extractMemorySearchKeywords, stripToolArtifacts, extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks'
@@ -1120,6 +1121,15 @@ async function processMessage(
             .map(m => (m as Record<string, unknown>).description as string)
             .filter(Boolean)
         : undefined,
+      // Status callback for budget-driven compression phases
+      onStatusChange: (stage: string, message: string) => {
+        safeEnqueue(controller, encodeStatusEvent(encoder, {
+          stage,
+          message,
+          characterName: character.name,
+          characterId: character.id,
+        }))
+      },
     },
     existingMessages,
     fileProcessing.attachmentsToSend
@@ -2116,6 +2126,10 @@ async function processMessage(
         },
       ]
 
+      // Calculate budget-driven compression target for async pre-compression
+      const asyncBudgetInfo = calculateMaxAvailable(effectiveProfile.provider, effectiveProfile.modelName, effectiveProfile)
+      const asyncCompressionTarget = Math.floor(asyncBudgetInfo.maxAvailable * CONTEXT_HISTORY_BUDGET_RATIO)
+
       // Fire and forget - compression runs in background
       triggerAsyncCompression({
         chatId,
@@ -2125,7 +2139,7 @@ async function processMessage(
         compressionOptions: {
           enabled: contextCompressionSettings.enabled,
           windowSize: contextCompressionSettings.windowSize,
-          compressionTargetTokens: contextCompressionSettings.compressionTargetTokens,
+          compressionTargetTokens: asyncCompressionTarget,
           systemPromptTargetTokens: contextCompressionSettings.systemPromptTargetTokens,
           selection: cheapLLMSelection,
           userId,

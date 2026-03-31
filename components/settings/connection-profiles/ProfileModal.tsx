@@ -472,7 +472,7 @@ export function ProfileModal({
                   />
                   <p className="qt-text-xs mt-1">
                     {getSelectedModelInfo()?.maxOutputTokens
-                      ? `Model limit: ${getSelectedModelInfo()?.maxOutputTokens?.toLocaleString()}`
+                      ? `Reported model limit: ${getSelectedModelInfo()?.maxOutputTokens?.toLocaleString()}`
                       : 'Max output tokens'}
                   </p>
                 </div>
