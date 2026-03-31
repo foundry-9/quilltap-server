@@ -26,6 +26,9 @@ interface QuilltapElectronBridge {
   saveFile: (data: ArrayBuffer, filename: string) => Promise<boolean>;
   downloadUrl: (url: string) => Promise<void>;
 
+  // --- Clipboard ---
+  copyImageToClipboard: (dataUrl: string) => Promise<boolean>;
+
   // --- File system ---
   openPath: (dirPath: string) => Promise<void>;
 }

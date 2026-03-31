@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
 import { triggerDownload } from '@/lib/download-utils'
+import { copyImageToClipboard } from '@/lib/clipboard-utils'
 
 interface ImageModalProps {
   isOpen: boolean
@@ -64,9 +65,7 @@ export default function ImageModal({
 
   const handleCopyToClipboard = async () => {
     try {
-      const response = await fetch(src)
-      const blob = await response.blob()
-      await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })])
+      await copyImageToClipboard(src)
       showSuccessToast('Image copied to clipboard')
     } catch (error) {
       console.error('Failed to copy image to clipboard:', { error: error instanceof Error ? error.message : String(error) })

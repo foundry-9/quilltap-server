@@ -4,6 +4,7 @@ import { useState, useCallback, useMemo } from 'react'
 import { formatMessageTime } from '@/lib/format-time'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import DeletedImagePlaceholder from '@/components/images/DeletedImagePlaceholder'
+import { copyImageToClipboard } from '@/lib/clipboard-utils'
 
 interface ToolMessageProps {
   readonly message: {
@@ -62,17 +63,11 @@ async function copyToClipboard(text: string): Promise<boolean> {
 }
 
 /**
- * Copy image to clipboard from URL
+ * Copy image to clipboard from URL (wrapper for local use with boolean return)
  */
-async function copyImageToClipboard(imageUrl: string): Promise<boolean> {
+async function copyImageToClipboardLocal(imageUrl: string): Promise<boolean> {
   try {
-    const response = await fetch(imageUrl)
-    const blob = await response.blob()
-    await navigator.clipboard.write([
-      new ClipboardItem({
-        [blob.type]: blob,
-      }),
-    ])
+    await copyImageToClipboardLocal(imageUrl)
     return true
   } catch {
     return false
@@ -263,7 +258,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
 
   const handleCopyImage = useCallback(async (filepath: string) => {
     const imageUrl = filepath.startsWith('/') ? filepath : `/${filepath}`
-    const success = await copyImageToClipboard(imageUrl)
+    const success = await copyImageToClipboardLocal(imageUrl)
     if (success) {
       showSuccessToast('Image copied to clipboard')
     } else {

@@ -7,6 +7,7 @@ import { safeJsonParse } from '@/lib/fetch-helpers'
 import { useImageNavigation } from '@/hooks/useImageNavigation'
 import DeletedImagePlaceholder from '@/components/images/DeletedImagePlaceholder'
 import { triggerDownload } from '@/lib/download-utils'
+import { copyImageToClipboard } from '@/lib/clipboard-utils'
 
 interface ChatFile {
   id: string
@@ -93,9 +94,7 @@ export default function ChatGalleryImageViewModal({
 
   const handleCopyToClipboard = async () => {
     try {
-      const response = await fetch(file.url)
-      const blob = await response.blob()
-      await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })])
+      await copyImageToClipboard(file.url)
       showSuccessToast('Image copied to clipboard')
     } catch (error) {
       console.error('Failed to copy image to clipboard:', { error: error instanceof Error ? error.message : String(error) })

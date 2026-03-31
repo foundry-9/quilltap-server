@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { triggerDownload } from '@/lib/download-utils'
+import { copyImageToClipboard } from '@/lib/clipboard-utils'
 import type { ImageData, Character, EntityType } from '../types'
 
 interface UseImageActionsReturn {
@@ -156,9 +157,7 @@ export function useImageActions(
     try {
       const filepath = image.url || image.filepath
       const src = filepath.startsWith('/') ? filepath : `/${filepath}`
-      const response = await fetch(src)
-      const blob = await response.blob()
-      await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })])
+      await copyImageToClipboard(src)
       showSuccessToast('Image copied to clipboard')
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
