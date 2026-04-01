@@ -948,11 +948,11 @@ var parseLogLevel = (maybeLevel, sourceName, client) => {
 };
 function noop() {
 }
-function makeLogFn(fnLevel, logger3, logLevel) {
-  if (!logger3 || levelNumbers[fnLevel] > levelNumbers[logLevel]) {
+function makeLogFn(fnLevel, logger4, logLevel) {
+  if (!logger4 || levelNumbers[fnLevel] > levelNumbers[logLevel]) {
     return noop;
   } else {
-    return logger3[fnLevel].bind(logger3);
+    return logger4[fnLevel].bind(logger4);
   }
 }
 var noopLogger = {
@@ -963,22 +963,22 @@ var noopLogger = {
 };
 var cachedLoggers = /* @__PURE__ */ new WeakMap();
 function loggerFor(client) {
-  const logger3 = client.logger;
+  const logger4 = client.logger;
   const logLevel = client.logLevel ?? "off";
-  if (!logger3) {
+  if (!logger4) {
     return noopLogger;
   }
-  const cachedLogger = cachedLoggers.get(logger3);
+  const cachedLogger = cachedLoggers.get(logger4);
   if (cachedLogger && cachedLogger[0] === logLevel) {
     return cachedLogger[1];
   }
   const levelLogger = {
-    error: makeLogFn("error", logger3, logLevel),
-    warn: makeLogFn("warn", logger3, logLevel),
-    info: makeLogFn("info", logger3, logLevel),
-    debug: makeLogFn("debug", logger3, logLevel)
+    error: makeLogFn("error", logger4, logLevel),
+    warn: makeLogFn("warn", logger4, logLevel),
+    info: makeLogFn("info", logger4, logLevel),
+    debug: makeLogFn("debug", logger4, logLevel)
   };
-  cachedLoggers.set(logger3, [logLevel, levelLogger]);
+  cachedLoggers.set(logger4, [logLevel, levelLogger]);
   return levelLogger;
 }
 var formatRequestDetails = (details) => {
@@ -1012,7 +1012,7 @@ var Stream = class _Stream {
   }
   static fromSSEResponse(response, controller, client) {
     let consumed = false;
-    const logger3 = client ? loggerFor(client) : console;
+    const logger4 = client ? loggerFor(client) : console;
     async function* iterator() {
       if (consumed) {
         throw new OpenAIError("Cannot iterate over a consumed stream, use `.tee()` to split the stream.");
@@ -1032,8 +1032,8 @@ var Stream = class _Stream {
             try {
               data = JSON.parse(sse.data);
             } catch (e) {
-              logger3.error(`Could not parse message into JSON:`, sse.data);
-              logger3.error(`From chunk:`, sse.raw);
+              logger4.error(`Could not parse message into JSON:`, sse.data);
+              logger4.error(`From chunk:`, sse.raw);
               throw e;
             }
             if (data && data.error) {
@@ -6865,7 +6865,7 @@ function createConsoleLoggerWithChild(prefix, minLevel = "debug", baseContext = 
     const entries = Object.entries(merged).filter(([key]) => key !== "context").map(([key, value]) => `${key}=${JSON.stringify(value)}`).join(" ");
     return entries ? ` ${entries}` : "";
   };
-  const logger3 = {
+  const logger4 = {
     debug: (message, context) => {
       if (shouldLog("debug")) {
         console.debug(`[${prefix}] ${message}${formatContext(context)}`);
@@ -6897,7 +6897,7 @@ ${error.stack || error.message}` : ""
       });
     }
   };
-  return logger3;
+  return logger4;
 }
 function createPluginLogger(pluginName, minLevel = "debug") {
   const coreFactory = getCoreLoggerFactory();
@@ -7138,48 +7138,135 @@ var OllamaProvider = class {
   }
 };
 
-// icon.tsx
-var import_jsx_runtime = require("react/jsx-runtime");
-function OllamaIcon({ className = "h-5 w-5" }) {
-  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
-    "svg",
-    {
-      className: `text-gray-600 ${className}`,
-      fill: "currentColor",
-      viewBox: "0 0 24 24",
-      xmlns: "http://www.w3.org/2000/svg",
-      "data-testid": "ollama-icon",
-      children: [
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { cx: "12", cy: "12", r: "11", fill: "none", stroke: "currentColor", strokeWidth: "2" }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-          "path",
-          {
-            d: "M12 2A10 10 0 1 1 2 12A10 10 0 0 1 12 2Z",
-            fill: "currentColor",
-            opacity: "0.1"
-          }
-        ),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-          "text",
-          {
-            x: "50%",
-            y: "50%",
-            textAnchor: "middle",
-            dominantBaseline: "middle",
-            fill: "currentColor",
-            fontSize: "9",
-            fontWeight: "bold",
-            fontFamily: "system-ui, -apple-system, sans-serif",
-            children: "OLL"
-          }
-        )
-      ]
+// embedding-provider.ts
+var logger2 = createPluginLogger("qtap-plugin-ollama");
+var OllamaEmbeddingProvider = class {
+  constructor(baseUrl) {
+    this.baseUrl = baseUrl || "http://localhost:11434";
+  }
+  /**
+   * Generate an embedding for the given text
+   *
+   * Note: Ollama doesn't require an API key, but the interface requires it.
+   * The apiKey parameter is ignored for Ollama.
+   *
+   * @param text The text to embed
+   * @param model The model to use (e.g., 'nomic-embed-text')
+   * @param apiKey Ignored for Ollama (no API key required)
+   * @returns The embedding result
+   */
+  async generateEmbedding(text, model, apiKey) {
+    logger2.debug("Generating Ollama embedding", {
+      context: "OllamaEmbeddingProvider.generateEmbedding",
+      model,
+      textLength: text.length,
+      baseUrl: this.baseUrl
+    });
+    const requestPayload = {
+      model,
+      prompt: text
+    };
+    const response = await fetch(`${this.baseUrl}/api/embeddings`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(requestPayload)
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      const errorMessage = error.error || response.statusText;
+      logger2.error("Ollama embedding failed", {
+        context: "OllamaEmbeddingProvider.generateEmbedding",
+        status: response.status,
+        error: errorMessage
+      });
+      throw new Error(`Ollama embedding failed: ${errorMessage}`);
     }
-  );
-}
+    const data = await response.json();
+    const embedding = data.embedding;
+    if (!embedding) {
+      throw new Error("No embedding returned from Ollama");
+    }
+    logger2.debug("Ollama embedding generated successfully", {
+      context: "OllamaEmbeddingProvider.generateEmbedding",
+      model,
+      dimensions: embedding.length
+    });
+    return {
+      embedding,
+      model,
+      dimensions: embedding.length
+    };
+  }
+  /**
+   * Generate embeddings for multiple texts in a batch
+   *
+   * Note: Ollama doesn't have a native batch API, so this processes texts sequentially.
+   *
+   * @param texts Array of texts to embed
+   * @param model The model to use
+   * @param apiKey Ignored for Ollama
+   * @returns Array of embedding results
+   */
+  async generateBatchEmbeddings(texts, model, apiKey) {
+    logger2.debug("Generating batch Ollama embeddings", {
+      context: "OllamaEmbeddingProvider.generateBatchEmbeddings",
+      model,
+      count: texts.length
+    });
+    const results = [];
+    for (const text of texts) {
+      const result = await this.generateEmbedding(text, model, apiKey);
+      results.push(result);
+    }
+    logger2.debug("Ollama batch embeddings generated successfully", {
+      context: "OllamaEmbeddingProvider.generateBatchEmbeddings",
+      model,
+      count: results.length
+    });
+    return results;
+  }
+  /**
+   * Get available embedding models from Ollama
+   *
+   * @param apiKey Ignored for Ollama
+   * @returns Array of model names that support embeddings
+   */
+  async getAvailableModels(apiKey) {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/tags`);
+      if (!response.ok) {
+        return [];
+      }
+      const data = await response.json();
+      const models = data.models?.map((m) => m.name) || [];
+      return models;
+    } catch (error) {
+      logger2.error("Failed to fetch Ollama models", {
+        context: "OllamaEmbeddingProvider.getAvailableModels",
+        baseUrl: this.baseUrl
+      }, error instanceof Error ? error : void 0);
+      return [];
+    }
+  }
+  /**
+   * Check if the Ollama server is available
+   *
+   * @returns True if the Ollama server is reachable
+   */
+  async isAvailable() {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/tags`);
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
+};
 
 // index.ts
-var logger2 = createPluginLogger("qtap-plugin-ollama");
+var logger3 = createPluginLogger("qtap-plugin-ollama");
 var metadata = {
   providerName: "OLLAMA",
   displayName: "Ollama",
@@ -7245,6 +7332,13 @@ var plugin = {
     throw new Error("Ollama does not support image generation");
   },
   /**
+   * Factory method to create an Ollama embedding provider instance
+   */
+  createEmbeddingProvider: (baseUrl) => {
+    const url = baseUrl || config.baseUrlDefault;
+    return new OllamaEmbeddingProvider(url);
+  },
+  /**
    * Get list of available models from Ollama server
    * No API key required, uses baseUrl to connect to local/remote Ollama instance
    */
@@ -7255,7 +7349,7 @@ var plugin = {
       const models = await provider.getAvailableModels(apiKey);
       return models;
     } catch (error) {
-      logger2.error("Failed to fetch Ollama models", { context: "plugin.getAvailableModels", baseUrl: url }, error instanceof Error ? error : void 0);
+      logger3.error("Failed to fetch Ollama models", { context: "plugin.getAvailableModels", baseUrl: url }, error instanceof Error ? error : void 0);
       return [];
     }
   },
@@ -7270,7 +7364,7 @@ var plugin = {
       const isValid = await provider.validateApiKey(apiKey);
       return isValid;
     } catch (error) {
-      logger2.error("Error validating Ollama server", { context: "plugin.validateApiKey", baseUrl: url }, error instanceof Error ? error : void 0);
+      logger3.error("Error validating Ollama server", { context: "plugin.validateApiKey", baseUrl: url }, error instanceof Error ? error : void 0);
       return false;
     }
   },
@@ -7357,9 +7451,6 @@ var plugin = {
   /**
    * Render the Ollama icon
    */
-  renderIcon: (props) => {
-    return OllamaIcon(props);
-  },
   /**
    * Format tools from OpenAI format to OpenAI format
    * Ollama uses OpenAI format, with Grok constraints applied if needed
@@ -7372,7 +7463,7 @@ var plugin = {
       const formattedTools = [];
       for (const tool of tools) {
         if (!("function" in tool)) {
-          logger2.warn("Skipping tool with invalid format", {
+          logger3.warn("Skipping tool with invalid format", {
             context: "plugin.formatTools"
           });
           continue;
@@ -7381,7 +7472,7 @@ var plugin = {
       }
       return formattedTools;
     } catch (error) {
-      logger2.error(
+      logger3.error(
         "Error formatting tools for Ollama",
         { context: "plugin.formatTools" },
         error instanceof Error ? error : void 0
@@ -7401,7 +7492,7 @@ var plugin = {
       const toolCalls = parseOpenAIToolCalls(response);
       return toolCalls;
     } catch (error) {
-      logger2.error(
+      logger3.error(
         "Error parsing tool calls from Ollama response",
         { context: "plugin.parseToolCalls" },
         error instanceof Error ? error : void 0

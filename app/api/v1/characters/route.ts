@@ -13,7 +13,7 @@ import { createAuthenticatedHandler, AuthenticatedContext } from '@/lib/api/midd
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { getFilePath } from '@/lib/api/middleware/file-path';
 import { importSTCharacter, parseSTCharacterPNG } from '@/lib/sillytavern/character';
-import { runCharacterWizard, type WizardRequest } from '@/lib/services/character-wizard.service';
+import { runCharacterWizard, runCharacterWizardStreaming, type WizardRequest, type WizardProgressEvent } from '@/lib/services/character-wizard.service';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { badRequest, serverError, notFound, validationError } from '@/lib/api/responses';
@@ -70,9 +70,10 @@ const quickCreateSchema = z.object({
 const wizardRequestSchema = z.object({
   primaryProfileId: z.uuid(),
   visionProfileId: z.uuid().optional(),
-  sourceType: z.enum(['existing', 'upload', 'gallery', 'skip']),
+  sourceType: z.enum(['existing', 'upload', 'gallery', 'document', 'skip']),
   imageId: z.uuid().optional(),
-  characterName: z.string().min(1),
+  documentId: z.uuid().optional(),
+  characterName: z.string(),
   existingData: z
     .object({
       title: z.string().optional(),
@@ -86,6 +87,7 @@ const wizardRequestSchema = z.object({
   background: z.string(),
   fieldsToGenerate: z.array(
     z.enum([
+      'name',
       'title',
       'description',
       'personality',
@@ -405,12 +407,68 @@ async function handleAiWizard(req: NextRequest, context: AuthenticatedContext) {
   }
 }
 
+async function handleAiWizardStream(req: NextRequest, context: AuthenticatedContext) {
+  const { user, repos } = context;
+
+  try {
+    const body = await req.json();
+    const request = wizardRequestSchema.parse(body) as WizardRequest;
+
+    logger.info('[Characters v1] AI Wizard starting (streaming)', {
+      userId: user.id,
+      characterName: request.characterName,
+      fieldsToGenerate: request.fieldsToGenerate,
+      sourceType: request.sourceType,
+    });
+
+    const encoder = new TextEncoder();
+
+    const stream = new ReadableStream({
+      async start(controller) {
+        const enqueue = (event: WizardProgressEvent) => {
+          try {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+          } catch {
+            // Stream may be closed
+          }
+        };
+
+        await runCharacterWizardStreaming(request, user.id, repos, enqueue);
+
+        try {
+          controller.close();
+        } catch {
+          // Stream may already be closed
+        }
+      },
+    });
+
+    return new NextResponse(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return validationError(error);
+    }
+
+    const errorMessage = error instanceof Error ? error.message : 'Generation failed';
+    logger.error('[Characters v1] AI Wizard stream failed', { error: errorMessage });
+    return serverError(errorMessage);
+  }
+}
+
 export const POST = createAuthenticatedHandler(async (req, context) => {
   const action = getActionParam(req);
 
   switch (action) {
     case 'ai-wizard':
       return handleAiWizard(req, context);
+    case 'ai-wizard-stream':
+      return handleAiWizardStream(req, context);
     case 'import':
       return handleImport(req, context);
     case 'quick-create':

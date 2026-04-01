@@ -4,16 +4,16 @@ This plugin provides integration with xAI's Grok API, enabling Quilltap to use G
 
 ## Features
 
-- **Chat Completions**: Access to Grok-2 and other Grok models
-- **Vision Capabilities**: Analyze images with vision-enabled models (Grok-2 Vision)
+- **Chat Completions**: Access to Grok 4, Grok 3, and other Grok models via the Responses API
+- **Vision Capabilities**: Analyze images with vision-enabled models
 - **Image Generation**: Create images using grok-2-image
 - **Function Calling**: Use tools and function calling for structured outputs
-- **Web Search**: Native live search integration (searches web, X/Twitter, news)
+- **Web Search**: Server-side web search with `web_search` and `x_search` tools
 - **Streaming**: Support for streaming responses for real-time chat
 
 ## Installation
 
-The plugin is included with Quilltap. To ensure you have the latest version of the OpenAI SDK (Grok uses OpenAI-compatible API):
+The plugin is included with Quilltap. To ensure you have the latest version of the OpenAI SDK (used for image generation and model listing):
 
 ```bash
 npm install openai@latest
@@ -38,13 +38,25 @@ This plugin requires the following:
 ### Chat Completion Models
 
 | Model | Context Window | Supports Vision | Supports Tools |
-|-------|---|---|---|
-| grok-2 | 128K | Yes | Yes |
-| grok-2-vision-1212 | 128K | Yes | Yes |
+|-------|----------------|-----------------|----------------|
+| grok-4 | 128K | Yes | Yes |
+| grok-4-1-fast | 2M | Yes | Yes |
+| grok-3 | 128K | Yes | Yes |
+| grok-3-mini | 128K | Yes | Yes |
+| grok-2-1212 | 128K | Yes | Yes |
+| grok-code-fast-1 | 256K | No | Yes |
 
 ### Image Generation Models
 
 - **grok-2-image**: Image generation model
+
+### Recommended Models by Use Case
+
+- **General chat**: grok-3 or grok-4
+- **Background tasks**: grok-3-mini (default cheap model)
+- **Fast responses**: grok-4-1-fast
+- **Code tasks**: grok-code-fast-1
+- **Long context**: grok-4-1-fast (2M context window)
 
 ## File Attachment Support
 
@@ -56,37 +68,53 @@ The plugin supports image attachments for vision-capable models:
 - image/gif
 - image/webp
 
-### Supported Models
-- Grok-2
-- Grok-2 Vision
-
-Images are automatically encoded to base64 and sent with your message for analysis.
+Images are automatically encoded to base64 and sent with your message for analysis using the Responses API `input_image` format.
 
 ## Parameters
 
 ### Chat Completion Parameters
 
-- **model**: The model to use (e.g., 'grok-2', 'grok-2-vision-1212')
+- **model**: The model to use (e.g., 'grok-4', 'grok-3-mini')
 - **temperature**: Randomness of responses (0-2, default: 0.7)
-- **maxTokens**: Maximum response length (default: 1000)
+- **maxTokens**: Maximum response length (default: 4096)
 - **topP**: Diversity parameter (0-1, default: 1)
 - **tools**: Function definitions for tool use
-- **webSearchEnabled**: Enable web search (searches web, X/Twitter, news)
+- **webSearchEnabled**: Enable server-side web search
 
 ### Image Generation Parameters
 
 - **model**: Image model ('grok-2-image')
 - **prompt**: Text description of the image
 - **n**: Number of images to generate (1-10)
+- **aspectRatio**: Aspect ratio for generated images ('1:1', '4:3', '3:4', '16:9', '9:16')
 
 ## Web Search
 
-The plugin supports native web search with Grok models:
+The plugin supports server-side web search using xAI's Responses API tools:
 
-When `webSearchEnabled` is true, Grok's Live Search API will:
-- Search the web, X/Twitter, and news sources
-- Return citations for search results
-- Automatically decide when to search based on the query
+### Server-Side Tools
+
+When `webSearchEnabled` is true, the plugin adds two server-side tools:
+- **web_search**: Searches the general web
+- **x_search**: Searches X/Twitter
+
+The model decides when to use these tools based on the query. Results include inline citations when available.
+
+### Important Notes
+
+- Server-side web search tools work alongside client-side function calling
+- Citations are automatically included in responses when web search is used
+- The `store: false` parameter ensures Quilltap manages conversation history locally
+
+## API Details
+
+This plugin uses xAI's **Responses API** (`/v1/responses`) for chat completions, which is the recommended API for new development. The Chat Completions API is deprecated.
+
+Key differences from Chat Completions:
+- Uses `input` array instead of `messages`
+- Image format is `input_image` instead of `image_url`
+- Web search uses server-side tools instead of `search_parameters`
+- Response format uses `output` array with structured items
 
 ## Logging
 
@@ -128,7 +156,7 @@ const response = await provider.sendMessage({
   messages: [
     { role: 'user', content: 'Hello, how are you?' }
   ],
-  model: 'grok-2',
+  model: 'grok-3',
 }, apiKey);
 ```
 
@@ -152,7 +180,7 @@ const response = await provider.sendMessage({
       ]
     }
   ],
-  model: 'grok-2',
+  model: 'grok-4',
 }, apiKey);
 ```
 
@@ -162,6 +190,7 @@ const response = await provider.sendMessage({
 const result = await provider.generateImage({
   prompt: 'A futuristic city at night',
   model: 'grok-2-image',
+  aspectRatio: '16:9',
 }, apiKey);
 ```
 
@@ -170,7 +199,7 @@ const result = await provider.generateImage({
 ```typescript
 const response = await provider.sendMessage({
   messages: [{ role: 'user', content: 'What are the latest AI developments?' }],
-  model: 'grok-2',
+  model: 'grok-3',
   webSearchEnabled: true,
 }, apiKey);
 ```
@@ -180,7 +209,7 @@ const response = await provider.sendMessage({
 ```typescript
 for await (const chunk of provider.streamMessage({
   messages: [{ role: 'user', content: 'Tell me a story' }],
-  model: 'grok-2',
+  model: 'grok-4',
 }, apiKey)) {
   console.log(chunk.content);
 }
@@ -200,13 +229,18 @@ for await (const chunk of provider.streamMessage({
 
 ### Image Generation Fails
 - Verify the model is 'grok-2-image'
-- Ensure the prompt is not too long or violates content policy
+- Ensure the prompt is not too long (max 1024 bytes) or violates content policy
 - Check that your account has image generation enabled
 
 ### Slow Responses
 - Check Grok status page: https://console.x.ai/status
 - Verify network connection
 - Check rate limiting (429 errors)
+
+### Web Search Not Working
+- Ensure `webSearchEnabled: true` is set
+- Server-side tools require supported models (grok-3, grok-4)
+- Check that the query is appropriate for web search
 
 ## Support
 

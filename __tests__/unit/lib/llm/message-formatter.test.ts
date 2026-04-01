@@ -4,6 +4,7 @@ import {
   formatParticipantName,
   formatMessagesForProvider,
   buildMultiCharacterContextSection,
+  normalizeContentBlockFormat,
 } from '@/lib/llm/message-formatter'
 
 jest.mock('@/lib/logger', () => ({
@@ -89,6 +90,57 @@ describe('message formatter utilities', () => {
       expect(section).toContain('User')
       expect(section).toContain('(the user)')
       expect(section).toContain('You are Lyra')
+    })
+  })
+
+  describe('normalizeContentBlockFormat', () => {
+    it('returns normal text content unchanged', () => {
+      const content = 'This is a normal response from an LLM.'
+      expect(normalizeContentBlockFormat(content)).toBe(content)
+    })
+
+    it('returns empty string for empty input', () => {
+      expect(normalizeContentBlockFormat('')).toBe('')
+    })
+
+    it('returns null/undefined unchanged', () => {
+      expect(normalizeContentBlockFormat(null as unknown as string)).toBe(null)
+      expect(normalizeContentBlockFormat(undefined as unknown as string)).toBe(undefined)
+    })
+
+    it('extracts text from Python-style content block format', () => {
+      const wrapped = `[{'type': 'text', 'text': "This is the actual response content."}]`
+      expect(normalizeContentBlockFormat(wrapped)).toBe('This is the actual response content.')
+    })
+
+    it('extracts text from JSON-style content block format', () => {
+      const wrapped = `[{"type": "text", "text": "This is the actual response content."}]`
+      expect(normalizeContentBlockFormat(wrapped)).toBe('This is the actual response content.')
+    })
+
+    it('handles multiline content in Python-style format', () => {
+      const multiline = `[{'type': 'text', 'text': "First line.\\n\\nSecond line with [brackets].\\n\\nThird line."}]`
+      expect(normalizeContentBlockFormat(multiline)).toBe('First line.\\n\\nSecond line with [brackets].\\n\\nThird line.')
+    })
+
+    it('handles content with special characters and formatting', () => {
+      const wrapped = `[{'type': 'text', 'text': "[Tina] *She smiles.* \\"Hello!\\""}]`
+      expect(normalizeContentBlockFormat(wrapped)).toBe('[Tina] *She smiles.* \\"Hello!\\"')
+    })
+
+    it('does not modify content that starts with [ but is not content block format', () => {
+      const content = '[Character Name] This is roleplay content with a name prefix.'
+      expect(normalizeContentBlockFormat(content)).toBe(content)
+    })
+
+    it('does not modify array-like content that is not content block format', () => {
+      const content = '[item1, item2, item3]'
+      expect(normalizeContentBlockFormat(content)).toBe(content)
+    })
+
+    it('handles whitespace around the content block', () => {
+      const wrapped = `  [{'type': 'text', 'text': "Extracted content"}]  `
+      expect(normalizeContentBlockFormat(wrapped)).toBe('Extracted content')
     })
   })
 })

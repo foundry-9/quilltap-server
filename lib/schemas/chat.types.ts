@@ -244,8 +244,14 @@ export const ChatMetadataSchema = z.object({
   /** Groups of tools that are disabled (e.g., "plugin:mcp", "plugin:mcp:subgroup:filesystem") */
   disabledToolGroups: z.array(z.string()).default([]),
 
-  /** Force tools to be sent with next message (set when tool settings change) */
+  /** Flag to trigger tool change notification on next message (set when tool settings change) */
   forceToolsOnNextMessage: z.boolean().default(false),
+
+  /** Persistent JSON state for games, inventory, session data, etc. */
+  state: JsonSchema.default({}),
+
+  /** Cached compression result for context compression (persisted across restarts) */
+  compressionCache: JsonSchema.nullable().optional(),
 
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
@@ -311,8 +317,14 @@ export const ChatMetadataBaseSchema = z.object({
   /** Groups of tools that are disabled (e.g., "plugin:mcp", "plugin:mcp:subgroup:filesystem") */
   disabledToolGroups: z.array(z.string()).default([]),
 
-  /** Force tools to be sent with next message (set when tool settings change) */
+  /** Flag to trigger tool change notification on next message (set when tool settings change) */
   forceToolsOnNextMessage: z.boolean().default(false),
+
+  /** Persistent JSON state for games, inventory, session data, etc. */
+  state: JsonSchema.default({}),
+
+  /** Cached compression result for context compression (persisted across restarts) */
+  compressionCache: JsonSchema.nullable().optional(),
 
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

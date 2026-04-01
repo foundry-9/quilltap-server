@@ -203,30 +203,30 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
               <p className="qt-text-small">Loading preview...</p>
             </div>
           ) : error ? (
-            <div className="bg-destructive/10 border border-destructive/30 text-destructive px-4 py-3 rounded">
+            <div className="qt-bg-destructive/10 border qt-border-destructive/30 qt-text-destructive px-4 py-3 rounded">
               {error}
             </div>
           ) : preview ? (
             <div className="space-y-4">
               {/* Summary Stats */}
               <div className="grid grid-cols-3 gap-4">
-                <div className="bg-green-500/10 border border-green-600/30 rounded-lg p-4 text-center">
-                  <p className="text-2xl font-bold text-green-600">
+                <div className="qt-bg-success/10 border qt-border-success/30 rounded-lg p-4 text-center">
+                  <p className="text-2xl font-bold qt-text-success">
                     {preview.wouldKeep}
                   </p>
-                  <p className="text-sm text-green-600">Keep</p>
+                  <p className="text-sm qt-text-success">Keep</p>
                 </div>
-                <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4 text-center">
-                  <p className="text-2xl font-bold text-destructive">
+                <div className="qt-bg-destructive/10 border qt-border-destructive/30 rounded-lg p-4 text-center">
+                  <p className="text-2xl font-bold qt-text-destructive">
                     {preview.wouldDelete}
                   </p>
-                  <p className="text-sm text-destructive">Delete</p>
+                  <p className="text-sm qt-text-destructive">Delete</p>
                 </div>
-                <div className="bg-yellow-500/10 border border-yellow-600/30 rounded-lg p-4 text-center">
-                  <p className="text-2xl font-bold text-yellow-600">
+                <div className="qt-bg-warning/10 border qt-border-warning/30 rounded-lg p-4 text-center">
+                  <p className="text-2xl font-bold qt-text-warning">
                     {preview.wouldMerge}
                   </p>
-                  <p className="text-sm text-yellow-600">Merge</p>
+                  <p className="text-sm qt-text-warning">Merge</p>
                 </div>
               </div>
 
@@ -244,8 +244,8 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
                           key={detail.memoryId}
                           className={`p-3 rounded-lg qt-text-small ${
                             detail.action === 'deleted'
-                              ? 'bg-destructive/10 border border-destructive/30'
-                              : 'bg-yellow-500/10 border border-yellow-600/30'
+                              ? 'qt-bg-destructive/10 border qt-border-destructive/30'
+                              : 'qt-bg-warning/10 border qt-border-warning/30'
                           }`}
                         >
                           <p className="qt-text-primary line-clamp-1">

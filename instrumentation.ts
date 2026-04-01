@@ -43,7 +43,7 @@ export async function register() {
       const {
         ensureDataDirectoriesExist,
         getPlatform,
-        getBaseDataDir,
+        getBaseDataDirWithSource,
         getDataDir,
         getFilesDir,
         getLegacyPaths,
@@ -54,7 +54,16 @@ export async function register() {
       const path = await import('path');
 
       const platform = getPlatform();
-      const baseDir = getBaseDataDir();
+      const baseDirInfo = getBaseDataDirWithSource();
+      const baseDir = baseDirInfo.path;
+
+      logger.info('Quilltap data directory configuration', {
+        context: 'instrumentation.register',
+        baseDir,
+        source: baseDirInfo.source,
+        sourceDescription: baseDirInfo.sourceDescription,
+        platform,
+      });
 
       logger.info('Phase 0: Ensuring data directories exist', {
         context: 'instrumentation.register',

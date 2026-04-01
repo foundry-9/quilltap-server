@@ -1,20 +1,15 @@
 /**
  * Unit tests for BackupRestoreCard component
+ *
+ * Tests the simplified backup/restore UI that supports:
+ * - Creating backups (download to local)
+ * - Opening the restore dialog for file uploads
  */
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals'
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import React from 'react'
 import BackupRestoreCard from '@/components/tools/backup-restore-card'
-
-const backups = [
-  {
-    key: 'backup-1',
-    filename: 'chat-2024-01-01.quilltap',
-    createdAt: '2024-01-01T12:00:00.000Z',
-    size: 2048,
-  },
-]
 
 function jsonResponse(data: any, ok = true) {
   return Promise.resolve({
@@ -33,40 +28,41 @@ describe('BackupRestoreCard', () => {
     jest.restoreAllMocks()
   })
 
-  it('lists cloud backups returned by the API', async () => {
-    const fetchMock = jest.spyOn(global as any, 'fetch').mockImplementation((input: RequestInfo, init?: RequestInit) => {
-      const url = typeof input === 'string' ? input : input.url
-      if (url === '/api/v1/system/backup') {
-        return jsonResponse({ backups, count: backups.length })
-      }
-      if (url.startsWith('/api/v1/system/backup/') && init?.method === 'DELETE') {
-        return jsonResponse({ success: true })
-      }
-      return jsonResponse({})
-    })
-
+  it('renders backup and restore buttons', async () => {
     await act(async () => {
       render(<BackupRestoreCard />)
     })
 
-    await waitFor(() => {
-      expect(screen.getByText(backups[0].filename)).toBeInTheDocument()
-      expect(screen.getByText(/Cloud Backups/)).toBeInTheDocument()
-    })
-
-    expect(fetchMock).toHaveBeenCalledWith('/api/v1/system/backup', expect.any(Object))
+    expect(screen.getByRole('button', { name: /create backup/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /restore from backup/i })).toBeInTheDocument()
   })
 
-  it('sends delete request after confirmation and refreshes list', async () => {
-    let listCall = 0
-    const fetchMock = jest.spyOn(global as any, 'fetch').mockImplementation((input: RequestInfo, init?: RequestInit) => {
+  it('shows info text about backups', async () => {
+    await act(async () => {
+      render(<BackupRestoreCard />)
+    })
+
+    expect(screen.getByText(/backups include all your characters/i)).toBeInTheDocument()
+  })
+
+  it('opens backup dialog and triggers download on confirm', async () => {
+    const mockBackupId = 'test-backup-id'
+    const mockManifest = {
+      version: '1.0',
+      createdAt: new Date().toISOString(),
+      counts: { characters: 5, chats: 10 }
+    }
+
+    const fetchMock = jest.spyOn(global as any, 'fetch').mockImplementation((input: RequestInfo) => {
       const url = typeof input === 'string' ? input : input.url
-      if (url === '/api/v1/system/backup' && (!init?.method || init.method === 'GET')) {
-        listCall += 1
-        return jsonResponse({ backups: listCall === 1 ? backups : [], count: listCall === 1 ? backups.length : 0 })
+      if (url === '/api/v1/system/backup') {
+        return jsonResponse({ success: true, backupId: mockBackupId, manifest: mockManifest }, true)
       }
-      if (url.startsWith('/api/v1/system/backup/') && init?.method === 'DELETE') {
-        return jsonResponse({ success: true })
+      if (url === `/api/v1/system/backup/${mockBackupId}`) {
+        return Promise.resolve({
+          ok: true,
+          blob: async () => new Blob(['test data'], { type: 'application/zip' })
+        } as Response)
       }
       return jsonResponse({})
     })
@@ -75,30 +71,44 @@ describe('BackupRestoreCard', () => {
       render(<BackupRestoreCard />)
     })
 
-    const deleteButton = await screen.findByRole('button', { name: /delete/i })
+    // Click Create Backup to open the dialog
+    const createButton = screen.getByRole('button', { name: /create backup/i })
     await act(async () => {
-      fireEvent.click(deleteButton)
+      fireEvent.click(createButton)
     })
-    expect(screen.getByText('Delete?')).toBeInTheDocument()
 
-    const confirmButton = screen.getByRole('button', { name: 'Yes' })
+    // Dialog should be open - find the Download Backup button in the dialog
+    await waitFor(() => {
+      expect(screen.getByText(/your backup will include/i)).toBeInTheDocument()
+    })
+
+    // Click the Download Backup button in the dialog
+    const downloadButton = screen.getByRole('button', { name: /download backup/i })
     await act(async () => {
-      fireEvent.click(confirmButton)
+      fireEvent.click(downloadButton)
     })
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        `/api/v1/system/backup/${backups[0].key}`,
-        expect.objectContaining({
-          method: 'DELETE',
-          body: JSON.stringify({ s3Key: backups[0].key }),
-        })
-      )
+      // Verify backup creation API was called
+      expect(fetchMock).toHaveBeenCalledWith('/api/v1/system/backup', expect.objectContaining({
+        method: 'POST'
+      }))
+    })
+  })
+
+  it('opens restore dialog when restore button is clicked', async () => {
+    await act(async () => {
+      render(<BackupRestoreCard />)
     })
 
+    const restoreButton = screen.getByRole('button', { name: /restore from backup/i })
+    await act(async () => {
+      fireEvent.click(restoreButton)
+    })
+
+    // The restore dialog should now be visible
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith('/api/v1/system/backup', expect.any(Object))
-      expect(listCall).toBeGreaterThanOrEqual(2)
+      expect(screen.getByText(/restore backup/i)).toBeInTheDocument()
     })
   })
 })

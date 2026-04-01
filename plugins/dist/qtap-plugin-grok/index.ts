@@ -4,7 +4,7 @@
  *
  * This plugin provides:
  * - Chat completion using Grok-2 and other Grok models
- * - Image generation using grok-2-image
+ * - Image generation using grok-imagine-image
  * - Vision capabilities (image analysis)
  * - Function calling / tool use
  * - Web search integration (Live Search API)
@@ -13,7 +13,6 @@
 import type { LLMProviderPlugin, ImageProviderConstraints } from './types';
 import { GrokProvider } from './provider';
 import { GrokImageProvider } from './image-provider';
-import { GrokIcon } from './icon';
 import {
   createPluginLogger,
   parseOpenAIToolCalls,
@@ -26,11 +25,12 @@ const logger = createPluginLogger('qtap-plugin-grok');
 /**
  * Grok image generation constraints
  * Grok has a strict 1024-byte limit for image generation prompts
+ * Grok uses aspect ratios instead of fixed sizes
  */
 const GROK_IMAGE_CONSTRAINTS: ImageProviderConstraints = {
   maxPromptBytes: 1024,
   promptConstraintWarning: 'IMPORTANT: Grok has a strict limit of 1024 bytes for image generation prompts. Keep your prompt concise and under this limit.',
-  supportedSizes: ['1024x1024'],
+  supportedAspectRatios: ['1:1', '4:3', '3:4', '16:9', '9:16'],
 };
 
 /**
@@ -92,8 +92,8 @@ const messageFormat = {
  * Cheap model configuration for background tasks
  */
 const cheapModels = {
-  defaultModel: 'grok-2-mini',
-  recommendedModels: ['grok-2-mini'],
+  defaultModel: 'grok-3-mini',
+  recommendedModels: ['grok-3-mini', 'grok-4-1-fast'],
 };
 
 /**
@@ -166,24 +166,56 @@ export const plugin: LLMProviderPlugin = {
   getModelInfo: () => {
     return [
       {
-        id: 'grok-2',
-        name: 'Grok-2',
-        contextWindow: 128000,
+        id: 'grok-4',
+        name: 'Grok 4',
+        contextWindow: 131072,
+        maxOutputTokens: 16384,
+        supportsImages: true,
+        supportsTools: true,
+      },
+      {
+        id: 'grok-4-1-fast',
+        name: 'Grok 4.1 Fast',
+        contextWindow: 2097152,
+        maxOutputTokens: 16384,
+        supportsImages: true,
+        supportsTools: true,
+      },
+      {
+        id: 'grok-3',
+        name: 'Grok 3',
+        contextWindow: 131072,
+        maxOutputTokens: 16384,
+        supportsImages: true,
+        supportsTools: true,
+      },
+      {
+        id: 'grok-3-mini',
+        name: 'Grok 3 Mini',
+        contextWindow: 131072,
+        maxOutputTokens: 16384,
+        supportsImages: true,
+        supportsTools: true,
+      },
+      {
+        id: 'grok-2-1212',
+        name: 'Grok 2 (1212)',
+        contextWindow: 131072,
         maxOutputTokens: 4096,
         supportsImages: true,
         supportsTools: true,
       },
       {
-        id: 'grok-2-vision-1212',
-        name: 'Grok-2 Vision',
-        contextWindow: 128000,
-        maxOutputTokens: 4096,
-        supportsImages: true,
+        id: 'grok-code-fast-1',
+        name: 'Grok Code Fast',
+        contextWindow: 262144,
+        maxOutputTokens: 16384,
+        supportsImages: false,
         supportsTools: true,
       },
       {
         id: 'grok-2-image',
-        name: 'Grok-2 Image',
+        name: 'Grok 2 Image',
         contextWindow: 2048,
         maxOutputTokens: 1024,
         supportsImages: false,
@@ -195,9 +227,6 @@ export const plugin: LLMProviderPlugin = {
   /**
    * Render the Grok icon
    */
-  renderIcon: (props) => {
-    return GrokIcon(props);
-  },
 
   /**
    * Format tools from OpenAI format to OpenAI format

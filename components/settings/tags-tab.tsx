@@ -243,7 +243,7 @@ export default function TagsTab() {
                 value={selectedTagId}
                 onChange={(e) => setSelectedTagId(e.target.value)}
                 disabled={tagSaving !== null || availableForStyling.length === 0}
-                className="w-full rounded-md border border-input bg-background text-foreground px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                className="qt-select w-full"
               >
                 <option value="">Select a tag</option>
                 {availableForStyling.map((tag) => (
@@ -291,7 +291,7 @@ export default function TagsTab() {
                           onChange={(e) => handleTagStyleFieldChange(tag.id, { emoji: e.target.value.trim() || null })}
                           disabled={isSaving}
                           placeholder="😀"
-                          className="mt-1 block w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+                          className="qt-input mt-1 block w-full text-sm"
                         />
                       </label>
 
@@ -364,7 +364,7 @@ export default function TagsTab() {
                           value={mergedStyle.foregroundColor}
                           onChange={(e) => handleColorChange(tag.id, { foregroundColor: e.target.value })}
                           disabled={isSaving}
-                          className="mt-1 block h-10 w-full rounded-md border border-input bg-background"
+                          className="qt-input mt-1 block h-10 w-full"
                         />
                       </label>
 
@@ -375,7 +375,7 @@ export default function TagsTab() {
                           value={mergedStyle.backgroundColor}
                           onChange={(e) => handleColorChange(tag.id, { backgroundColor: e.target.value })}
                           disabled={isSaving}
-                          className="mt-1 block h-10 w-full rounded-md border border-input bg-background"
+                          className="qt-input mt-1 block h-10 w-full"
                         />
                       </label>
 
@@ -383,7 +383,7 @@ export default function TagsTab() {
                         type="button"
                         onClick={() => handleRemoveTagStyle(tag.id)}
                         disabled={isSaving}
-                        className="w-full px-3 py-1.5 text-sm rounded-md text-destructive border border-destructive/30 hover:bg-destructive/10 disabled:opacity-50"
+                        className="w-full px-3 py-1.5 text-sm rounded-md qt-text-destructive border qt-border-destructive/30 hover:qt-bg-destructive/10 disabled:opacity-50"
                       >
                         Remove Style
                       </button>

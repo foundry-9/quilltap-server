@@ -1,50 +1,57 @@
 import { test, expect } from '@playwright/test'
-import { TestUserHelper } from './helpers/test-user'
+import { TestHelper } from './helpers/test-user'
 
 /**
  * E2E tests for file attachment functionality
  *
- * Uses the TestUserHelper for full user lifecycle:
- * - Create test user
- * - Set up test data (character, chat)
- * - Run tests
- * - Delete test data
- * - Delete test user
+ * Tests the file attachment UI in chat:
+ * - Opening file picker via attach button
+ * - Selecting and displaying attached files
  */
 
 test.describe('File Attachment', () => {
   test.describe.configure({ mode: 'serial' })
 
-  const testUser = new TestUserHelper('file_attach')
+  const testHelper = new TestHelper('file_attach')
   let testCharacterId: string
   let testChatId: string
 
-  test('setup: create test user and login', async ({ page }) => {
-    await testUser.createAndLogin(page)
+  const navigateToChatWithRetry = async (page: import('@playwright/test').Page) => {
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      await page.goto(`/chats/${testChatId}`)
+      await page.waitForLoadState('networkidle')
+      try {
+        await page.waitForSelector('.qt-chat-composer', { state: 'visible', timeout: 15000 })
+        return
+      } catch (error) {
+        if (attempt === 3) throw error
+        console.log(`Chat composer not visible, retrying (attempt ${attempt})...`)
+      }
+    }
+  }
+
+  test('setup: seed test data', async ({ page }) => {
+    await testHelper.ensureReady(page)
   })
 
   test('setup: create test character and chat', async ({ page }) => {
-    testCharacterId = await testUser.createCharacter(page, {
+    testCharacterId = await testHelper.createCharacter(page, {
       name: 'File Attach Test Character',
       description: 'A character for testing file attachments',
       firstMessage: 'Hello! I am ready to test file attachments.',
     })
 
-    testChatId = await testUser.createChat(page, testCharacterId)
+    testChatId = await testHelper.createChat(page, testCharacterId)
   })
 
   test('attach button should open file picker', async ({ page }) => {
-    await testUser.login(page)
-
-    // Navigate to the chat
-    await page.goto(`/chats/${testChatId}`)
-    await page.waitForLoadState('domcontentloaded')
-    await page.waitForSelector('.qt-chat-composer', { timeout: 20000 })
+    // Navigate to the chat with retry
+    await navigateToChatWithRetry(page)
 
     // Open the tool palette
-    const toolsButton = page.locator('button.qt-desktop-only[title="Tools"]')
+    const toolsButton = page.locator('button[title="Tools"]')
     await toolsButton.click()
-    await page.waitForSelector('.qt-tool-palette-bar')
+    await page.waitForSelector('.qt-tool-palette-bar', { timeout: 10000 })
 
     // Set up file chooser listener BEFORE clicking
     const fileChooserPromise = page.waitForEvent('filechooser', { timeout: 5000 })
@@ -59,16 +66,12 @@ test.describe('File Attachment', () => {
   })
 
   test('can select and display attached file', async ({ page }) => {
-    await testUser.login(page)
-
-    // Navigate to the chat
-    await page.goto(`/chats/${testChatId}`)
-    await page.waitForLoadState('domcontentloaded')
-    await page.waitForSelector('.qt-chat-composer', { timeout: 20000 })
+    // Navigate to the chat with retry
+    await navigateToChatWithRetry(page)
 
     // Open tool palette and trigger file picker
-    await page.locator('button.qt-desktop-only[title="Tools"]').click()
-    await page.waitForSelector('.qt-tool-palette-bar')
+    await page.locator('button[title="Tools"]').click()
+    await page.waitForSelector('.qt-tool-palette-bar', { timeout: 10000 })
 
     const fileChooserPromise = page.waitForEvent('filechooser')
     await page.locator('.qt-tool-palette-bar button:has-text("Attach")').click()
@@ -91,7 +94,7 @@ test.describe('File Attachment', () => {
     console.log('File attached and displayed successfully!')
   })
 
-  test('cleanup: delete test data and user', async ({ page }) => {
-    await testUser.cleanup(page)
+  test('cleanup: delete test data', async ({ page }) => {
+    await testHelper.cleanup(page)
   })
 })

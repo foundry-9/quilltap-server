@@ -5,6 +5,7 @@ import Link from 'next/link'
 import {
   ProfileInfoSection,
   ProfileEditSection,
+  DataDirectorySection,
   UserProfile,
 } from '@/components/profile'
 
@@ -93,6 +94,9 @@ export default function ProfilePage() {
 
         {/* Account Information (read-only) */}
         <ProfileInfoSection profile={profile} />
+
+        {/* Data Directory Information */}
+        <DataDirectorySection />
       </div>
     </div>
   )

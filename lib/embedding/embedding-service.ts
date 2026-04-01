@@ -2,13 +2,16 @@
  * Embedding Service
  *
  * Provides text embedding functionality using configured embedding profiles.
- * Supports OpenAI, Ollama, and OpenRouter providers with fallback to text search
- * heuristics when embedding is not available.
+ * Delegates to provider plugins for actual embedding generation.
+ * Supports OpenAI, Ollama, OpenRouter, and built-in TF-IDF providers with
+ * fallback to text search heuristics when embedding is not available.
  */
 
 import { logger } from '@/lib/logger'
 import { getRepositories } from '@/lib/repositories/factory'
-import { EmbeddingProfile, EmbeddingProfileProvider } from '@/lib/schemas/types'
+import { providerRegistry } from '@/lib/plugins/provider-registry'
+import { isLocalEmbeddingProvider } from '@quilltap/plugin-types'
+import type { EmbeddingProfile, EmbeddingProfileProvider } from '@/lib/schemas/types'
 
 /**
  * Result of an embedding operation
@@ -74,203 +77,6 @@ export async function getEmbeddingProfile(profileId: string): Promise<EmbeddingP
 }
 
 /**
- * Generate an embedding for text using OpenAI
- */
-async function generateOpenAIEmbedding(
-  text: string,
-  profile: EmbeddingProfile,
-  apiKey: string
-): Promise<EmbeddingResult> {
-  const baseUrl = profile.baseUrl || 'https://api.openai.com/v1'
-
-  const requestPayload = {
-    model: profile.modelName,
-    input: text,
-    dimensions: profile.dimensions || undefined,
-  }
-
-  const response = await fetch(`${baseUrl}/embeddings`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(requestPayload),
-  })
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}))
-
-    throw new EmbeddingError(
-      `OpenAI embedding failed: ${error.error?.message || response.statusText}`,
-      'OPENAI'
-    )
-  }
-
-  const data = await response.json()
-  const embedding = data.data[0].embedding
-
-  return {
-    embedding,
-    model: profile.modelName,
-    dimensions: embedding.length,
-    provider: 'OPENAI',
-  }
-}
-
-/**
- * Generate an embedding for text using Ollama
- */
-async function generateOllamaEmbedding(
-  text: string,
-  profile: EmbeddingProfile
-): Promise<EmbeddingResult> {
-  const baseUrl = profile.baseUrl || 'http://localhost:11434'
-
-  const requestPayload = {
-    model: profile.modelName,
-    prompt: text,
-  }
-
-  const response = await fetch(`${baseUrl}/api/embeddings`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(requestPayload),
-  })
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}))
-
-    throw new EmbeddingError(
-      `Ollama embedding failed: ${error.error || response.statusText}`,
-      'OLLAMA'
-    )
-  }
-
-  const data = await response.json()
-  const embedding = data.embedding
-
-  return {
-    embedding,
-    model: profile.modelName,
-    dimensions: embedding.length,
-    provider: 'OLLAMA',
-  }
-}
-
-/**
- * Generate an embedding for text using OpenRouter
- * Uses the OpenRouter SDK for embeddings API access
- */
-async function generateOpenRouterEmbedding(
-  text: string,
-  profile: EmbeddingProfile,
-  apiKey: string
-): Promise<EmbeddingResult> {
-  // Dynamic import to avoid loading SDK unless needed
-  const { OpenRouter } = await import('@openrouter/sdk')
-
-  const client = new OpenRouter({
-    apiKey,
-    httpReferer: process.env.BASE_URL || 'http://localhost:3000',
-    xTitle: 'Quilltap',
-  })
-
-  const response = await client.embeddings.generate({
-    input: text,
-    model: profile.modelName,
-    dimensions: profile.dimensions || undefined,
-  })
-
-  // Handle case where response is a string (error case)
-  if (typeof response === 'string') {
-    throw new EmbeddingError(`OpenRouter returned an error: ${response}`, 'OPENROUTER')
-  }
-
-  // Handle both float array and base64 encoded responses
-  const embeddingData = response.data[0]?.embedding
-  if (!embeddingData) {
-    throw new EmbeddingError('No embedding returned from OpenRouter', 'OPENROUTER')
-  }
-
-  // If embedding is base64 encoded string, decode it
-  let embedding: number[]
-  if (typeof embeddingData === 'string') {
-    // Base64 encoded float array - decode it
-    const buffer = Buffer.from(embeddingData, 'base64')
-    embedding = Array.from(new Float32Array(buffer.buffer, buffer.byteOffset, buffer.length / 4))
-  } else {
-    embedding = embeddingData
-  }
-
-  return {
-    embedding,
-    model: response.model,
-    dimensions: embedding.length,
-    provider: 'OPENROUTER',
-  }
-}
-
-/**
- * Generate an embedding for text using the built-in TF-IDF provider
- */
-async function generateBuiltinEmbedding(
-  text: string,
-  profile: EmbeddingProfile,
-  userId: string
-): Promise<EmbeddingResult> {
-  const repos = getRepositories()
-
-  // Get the stored vocabulary for this profile
-  const vocabulary = await repos.tfidfVocabularies.findByProfileId(profile.id)
-
-  if (!vocabulary) {
-    throw new EmbeddingError(
-      'Built-in embedding profile not yet fitted. ' +
-      'Please wait for the vocabulary to be built from your memories.',
-      'BUILTIN'
-    )
-  }
-
-  try {
-    // Import the TF-IDF vectorizer from the plugin
-    const plugin = await import('@/plugins/dist/qtap-plugin-builtin-embeddings')
-    const vectorizer = new plugin.TfIdfVectorizer(vocabulary.includeBigrams)
-
-    // Load the saved state
-    vectorizer.loadState({
-      vocabulary: JSON.parse(vocabulary.vocabulary),
-      idf: JSON.parse(vocabulary.idf),
-      avgDocLength: vocabulary.avgDocLength,
-      vocabularySize: vocabulary.vocabularySize,
-      includeBigrams: vocabulary.includeBigrams,
-      fittedAt: vocabulary.fittedAt,
-    })
-
-    // Generate the embedding
-    const embedding = vectorizer.transform(text)
-
-    return {
-      embedding,
-      model: 'tfidf-bm25-v1',
-      dimensions: embedding.length,
-      provider: 'BUILTIN',
-    }
-  } catch (error) {
-    if (error instanceof EmbeddingError) {
-      throw error
-    }
-    throw new EmbeddingError(
-      `Built-in embedding failed: ${error instanceof Error ? error.message : String(error)}`,
-      'BUILTIN',
-      error instanceof Error ? error : undefined
-    )
-  }
-}
-
-/**
  * Get the decrypted API key for an embedding profile
  */
 async function getApiKeyForProfile(
@@ -290,6 +96,142 @@ async function getApiKeyForProfile(
 }
 
 /**
+ * Generate an embedding using an API-based provider (OpenAI, Ollama, OpenRouter)
+ */
+async function generateApiEmbedding(
+  text: string,
+  profile: EmbeddingProfile,
+  userId: string
+): Promise<EmbeddingResult> {
+  const providerName = profile.provider
+
+  logger.debug('Generating embedding via plugin provider', {
+    context: 'embedding-service.generateApiEmbedding',
+    provider: providerName,
+    model: profile.modelName,
+    textLength: text.length,
+  })
+
+  // Get the embedding provider from the registry
+  const embeddingProvider = providerRegistry.createEmbeddingProvider(providerName, profile.baseUrl || undefined)
+
+  // For API providers, we need an API key (except Ollama which doesn't require one)
+  let apiKey = ''
+  const plugin = providerRegistry.getProvider(providerName)
+
+  if (plugin?.config.requiresApiKey) {
+    const key = await getApiKeyForProfile(profile, userId)
+    if (!key) {
+      throw new EmbeddingError(`No API key found for ${providerName} embedding profile`, providerName)
+    }
+    apiKey = key
+  }
+
+  // This is an API-based provider
+  if (isLocalEmbeddingProvider(embeddingProvider)) {
+    throw new EmbeddingError(
+      `Provider ${providerName} returned a local embedding provider but API provider was expected`,
+      providerName
+    )
+  }
+
+  const result = await embeddingProvider.generateEmbedding(
+    text,
+    profile.modelName,
+    apiKey,
+    { dimensions: profile.dimensions || undefined }
+  )
+
+  logger.debug('Embedding generated successfully via plugin', {
+    context: 'embedding-service.generateApiEmbedding',
+    provider: providerName,
+    model: result.model,
+    dimensions: result.dimensions,
+  })
+
+  return {
+    embedding: result.embedding,
+    model: result.model,
+    dimensions: result.dimensions,
+    provider: providerName,
+  }
+}
+
+/**
+ * Generate an embedding for text using the built-in TF-IDF provider
+ */
+async function generateBuiltinEmbedding(
+  text: string,
+  profile: EmbeddingProfile
+): Promise<EmbeddingResult> {
+  const repos = getRepositories()
+
+  logger.debug('Generating built-in TF-IDF embedding', {
+    context: 'embedding-service.generateBuiltinEmbedding',
+    profileId: profile.id,
+    textLength: text.length,
+  })
+
+  // Get the stored vocabulary for this profile
+  const vocabulary = await repos.tfidfVocabularies.findByProfileId(profile.id)
+
+  if (!vocabulary) {
+    throw new EmbeddingError(
+      'Built-in embedding profile not yet fitted. ' +
+      'Please wait for the vocabulary to be built from your memories.',
+      'BUILTIN'
+    )
+  }
+
+  try {
+    // Get the local embedding provider from the registry
+    const embeddingProvider = providerRegistry.createEmbeddingProvider('BUILTIN')
+
+    if (!isLocalEmbeddingProvider(embeddingProvider)) {
+      throw new EmbeddingError(
+        'BUILTIN provider did not return a local embedding provider',
+        'BUILTIN'
+      )
+    }
+
+    // Load the saved state
+    embeddingProvider.loadState({
+      vocabulary: JSON.parse(vocabulary.vocabulary),
+      idf: JSON.parse(vocabulary.idf),
+      avgDocLength: vocabulary.avgDocLength,
+      vocabularySize: vocabulary.vocabularySize,
+      includeBigrams: vocabulary.includeBigrams,
+      fittedAt: vocabulary.fittedAt,
+    })
+
+    // Generate the embedding
+    const result = embeddingProvider.generateEmbedding(text)
+
+    logger.debug('Built-in embedding generated successfully', {
+      context: 'embedding-service.generateBuiltinEmbedding',
+      model: result.model,
+      dimensions: result.dimensions,
+    })
+
+    return {
+      embedding: result.embedding,
+      model: result.model,
+      dimensions: result.dimensions,
+      provider: 'BUILTIN',
+    }
+  } catch (error) {
+    if (error instanceof EmbeddingError) {
+      throw error
+    }
+    throw new EmbeddingError(
+      `Built-in embedding failed: ${error instanceof Error ? error.message : String(error)}`,
+      'BUILTIN',
+      error instanceof Error ? error : undefined
+    )
+  }
+}
+
+/**
  * Generate an embedding for text using the specified profile
  */
 export async function generateEmbedding(
@@ -297,31 +239,31 @@ export async function generateEmbedding(
   profile: EmbeddingProfile,
   userId: string
 ): Promise<EmbeddingResult> {
-  if (profile.provider === 'OPENAI') {
-    const apiKey = await getApiKeyForProfile(profile, userId)
-    if (!apiKey) {
-      throw new EmbeddingError('No API key found for OpenAI embedding profile', 'OPENAI')
+  logger.debug('Generating embedding', {
+    context: 'embedding-service.generateEmbedding',
+    provider: profile.provider,
+    model: profile.modelName,
+    profileId: profile.id,
+  })
+
+  try {
+    // Built-in provider has special handling for vocabulary state
+    if (profile.provider === 'BUILTIN') {
+      return generateBuiltinEmbedding(text, profile)
     }
-    return generateOpenAIEmbedding(text, profile, apiKey)
-  }
 
-  if (profile.provider === 'OLLAMA') {
-    return generateOllamaEmbedding(text, profile)
-  }
-
-  if (profile.provider === 'OPENROUTER') {
-    const apiKey = await getApiKeyForProfile(profile, userId)
-    if (!apiKey) {
-      throw new EmbeddingError('No API key found for OpenRouter embedding profile', 'OPENROUTER')
+    // All other providers use the API-based flow
+    return generateApiEmbedding(text, profile, userId)
+  } catch (error) {
+    if (error instanceof EmbeddingError) {
+      throw error
     }
-    return generateOpenRouterEmbedding(text, profile, apiKey)
+    throw new EmbeddingError(
+      `Embedding failed for provider ${profile.provider}: ${error instanceof Error ? error.message : String(error)}`,
+      profile.provider,
+      error instanceof Error ? error : undefined
+    )
   }
-
-  if (profile.provider === 'BUILTIN') {
-    return generateBuiltinEmbedding(text, profile, userId)
-  }
-
-  throw new EmbeddingError(`Unsupported embedding provider: ${profile.provider}`)
 }
 
 /**

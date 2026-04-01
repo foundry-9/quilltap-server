@@ -1,8 +1,8 @@
 # Dead Code Analysis Report
 
-**Last Updated**: 2026-01-30
+**Last Updated**: 2026-02-02
 **Tool Used**: knip
-**Codebase**: Quilltap v2.8.0-dev
+**Codebase**: Quilltap v2.9.0-dev
 
 ---
 
@@ -15,7 +15,30 @@ Dead code analysis is performed periodically using knip. A knip configuration fi
 | Unused Files | Cleaned up 2026-01-30 |
 | Migration Scripts | Deleted (migrations complete) |
 | Unused Dependencies | bcrypt, qrcode, ts-jest removed 2026-01-30 |
-| Unused Exports | Low priority, ~628 remaining (mostly barrel re-exports) |
+| Unused Exports | Low priority, ~620 remaining (mostly barrel re-exports) |
+
+---
+
+## Cleanup Completed (2026-02-02)
+
+### Functions Removed
+
+| Location | Function | Reason |
+|----------|----------|--------|
+| `lib/avatar-styles.ts` | `getAvatarAspectRatioStyle()` | Never imported anywhere |
+| `lib/avatar-styles.ts` | `getAvatarMarginClass()` | Never imported anywhere |
+| `lib/chat/connection-resolver.ts` | `hasResolvableConnectionProfile()` | Never imported anywhere |
+| `lib/chat-files-v2.ts` | `deleteChatFileById()` | Never imported anywhere |
+| `lib/chat-files-v2.ts` | `getChatFileById()` | Never imported anywhere |
+| `lib/chat-files-v2.ts` | `readChatFileBuffer()` | Never imported anywhere |
+| `lib/chat-files-v2.ts` | `getSupportedMimeTypes()` | Deprecated, never imported |
+
+### Documented as Unused (Preserved)
+
+| Location | Item | Reason for Preservation |
+|----------|------|-------------------------|
+| `lib/chat/tool-executor.ts` | `formatToolResult()` | Has tests; may be useful for native tool result format implementation. Documented that actual formatting is in `context-builder.service.ts`. |
+| `lib/chat/tool-executor.ts` | `FormattedToolResult` | Associated interface for `formatToolResult()` |
 
 ---
 

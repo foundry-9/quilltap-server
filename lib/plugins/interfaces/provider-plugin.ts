@@ -11,6 +11,7 @@
 import { logger } from '@/lib/logger';
 import type { LLMProvider } from '@/lib/llm/base';
 import type { ImageGenProvider } from '@/lib/image-gen/base';
+import type { EmbeddingProvider, LocalEmbeddingProvider } from '@quilltap/plugin-types';
 
 /**
  * Provider metadata for UI display and identification
@@ -207,6 +208,29 @@ export interface ProviderCapabilities {
 }
 
 /**
+ * Information about a style or LoRA available for an image provider
+ *
+ * @interface ImageStyleInfo
+ */
+export interface ImageStyleInfo {
+  /** Human-readable name for the style */
+  name: string;
+
+  /** Internal LoRA/style identifier used in API calls */
+  loraId: string;
+
+  /** Description for UI display and LLM context */
+  description: string;
+
+  /**
+   * Trigger phrase to include in prompt when this style is active.
+   * The LLM should incorporate this phrase into the image prompt
+   * for optimal results with this style.
+   */
+  triggerPhrase?: string | null;
+}
+
+/**
  * Constraints for image generation providers
  *
  * Describes limitations and requirements for image generation,
@@ -230,6 +254,23 @@ export interface ImageProviderConstraints {
 
   /** Supported image sizes (e.g., ['1024x1024', '512x512']) */
   supportedSizes?: string[];
+
+  /**
+   * Prompting guidance text that should be provided to the chat LLM
+   * when it's generating image prompts for this provider.
+   * This can include structure recommendations, best practices,
+   * and provider-specific tips for writing effective prompts.
+   */
+  promptingGuidance?: string;
+
+  /**
+   * Detailed information about available styles/LoRAs.
+   * Keys are the style identifiers (matching supportedStyles if defined).
+   * When a style is selected, the LLM can use the styleInfo to understand
+   * how to craft prompts that work well with that style, including
+   * incorporating any required trigger phrases.
+   */
+  styleInfo?: Record<string, ImageStyleInfo>;
 }
 
 /**
@@ -411,9 +452,9 @@ export interface LLMProviderPlugin {
    * Only required if `capabilities.embeddings` is true.
    *
    * @param baseUrl Optional base URL for the provider
-   * @returns An instantiated embedding provider
+   * @returns An instantiated embedding provider (EmbeddingProvider for API-based, LocalEmbeddingProvider for offline)
    */
-  createEmbeddingProvider?: (baseUrl?: string) => unknown;
+  createEmbeddingProvider?: (baseUrl?: string) => EmbeddingProvider | LocalEmbeddingProvider;
 
   /**
    * Get list of available models for this provider
@@ -511,7 +552,75 @@ export interface LLMProviderPlugin {
   validateApiKey: (apiKey: string, baseUrl?: string) => Promise<boolean>;
 
   /**
-   * Render the provider icon as a React component
+   * Provider icon as SVG data (RECOMMENDED)
+   *
+   * Provides the icon as raw SVG data that Quilltap will render.
+   * This is the preferred approach as it doesn't require React in the plugin.
+   *
+   * Can be either:
+   * - A raw SVG string: `<svg viewBox="0 0 24 24">...</svg>`
+   * - Structured data with viewBox and path elements
+   *
+   * If not provided, falls back to `renderIcon` (deprecated) or generates
+   * a default icon from the provider's abbreviation.
+   *
+   * @example
+   * ```typescript
+   * // Option 1: Raw SVG string
+   * icon: {
+   *   svg: '<svg viewBox="0 0 24 24"><path d="M12 2..." fill="currentColor"/></svg>'
+   * }
+   *
+   * // Option 2: Structured data (useful for simple icons)
+   * icon: {
+   *   viewBox: '0 0 24 24',
+   *   paths: [
+   *     { d: 'M12 2L2 7l10 5 10-5-10-5z', fill: 'currentColor' },
+   *     { d: 'M2 17l10 5 10-5', fill: 'currentColor', opacity: '0.5' }
+   *   ]
+   * }
+   * ```
+   */
+  icon?: {
+    /** Raw SVG string (complete <svg> element) */
+    svg?: string;
+    /** SVG viewBox attribute (e.g., '0 0 24 24') - used with paths */
+    viewBox?: string;
+    /** SVG path elements - used with viewBox */
+    paths?: Array<{
+      d: string;
+      fill?: string;
+      stroke?: string;
+      strokeWidth?: string;
+      opacity?: string;
+      fillRule?: 'nonzero' | 'evenodd';
+    }>;
+    /** SVG circle elements - used with viewBox */
+    circles?: Array<{
+      cx: string | number;
+      cy: string | number;
+      r: string | number;
+      fill?: string;
+      stroke?: string;
+      strokeWidth?: string;
+      opacity?: string;
+    }>;
+    /** SVG text element for abbreviation - used with viewBox */
+    text?: {
+      content: string;
+      x?: string;
+      y?: string;
+      fontSize?: string;
+      fontWeight?: string;
+      fill?: string;
+    };
+  };
+
+  /**
+   * Render the provider icon as a React component (DEPRECATED)
+   *
+   * @deprecated Use the `icon` property instead, which doesn't require React.
+   * This method is kept for backwards compatibility with existing external plugins.
    *
    * Returns a function that renders the provider's icon.
    * Called by the UI to display provider icons in various places.
@@ -524,7 +633,7 @@ export interface LLMProviderPlugin {
    * const Icon = plugin.renderIcon({ className: 'w-6 h-6' });
    * ```
    */
-  renderIcon: (props: { className?: string }) => React.ReactNode;
+  renderIcon?: (props: { className?: string }) => React.ReactNode;
 
   /**
    * Convert universal tool format to provider-specific format (OPTIONAL)

@@ -13,7 +13,6 @@
  */
 
 import { Provider } from '@/lib/schemas/types'
-import { logger } from '@/lib/logger'
 import { getMessageFormat } from '@/lib/plugins/provider-registry'
 import {
   LEGACY_PROVIDER_NAME_SUPPORT,
@@ -226,6 +225,57 @@ export function buildMultiCharacterContextSection(
   )
 
   return lines.join('\n')
+}
+
+/**
+ * Normalize LLM response content that may be wrapped in content block format
+ *
+ * Some providers return content in Anthropic's content block array format:
+ * [{'type': 'text', 'text': "actual content"}]
+ *
+ * This function extracts the text if it detects this format.
+ *
+ * @param content The raw content from the LLM
+ * @returns The normalized text content
+ */
+export function normalizeContentBlockFormat(content: string): string {
+  if (!content) return content
+
+  // Check for patterns that look like content block arrays
+  // Handles both single quotes (Python repr) and double quotes (JSON)
+  // Pattern: [{'type': 'text', 'text': "..."} or [{"type": "text", "text": "..."}
+
+  const trimmed = content.trim()
+
+  // Quick checks to avoid expensive regex on normal content
+  if (!trimmed.startsWith('[')) return content
+  if (!trimmed.includes("'type'") && !trimmed.includes('"type"')) return content
+
+  // Pattern for Python-style single quotes: [{'type': 'text', 'text': "..."}]
+  // The inner text value can use double quotes
+  const pythonPattern = /^\[\s*\{\s*'type'\s*:\s*'text'\s*,\s*'text'\s*:\s*"([\s\S]*)"\s*\}\s*\]$/
+  const pythonMatch = trimmed.match(pythonPattern)
+  if (pythonMatch) {
+    return pythonMatch[1]
+  }
+
+  // Try parsing as JSON (handles double-quoted format)
+  // Pattern: [{"type": "text", "text": "..."}]
+  try {
+    const parsed = JSON.parse(trimmed)
+    if (
+      Array.isArray(parsed) &&
+      parsed.length > 0 &&
+      parsed[0]?.type === 'text' &&
+      typeof parsed[0]?.text === 'string'
+    ) {
+      return parsed[0].text
+    }
+  } catch {
+    // Not valid JSON, that's fine - return original content
+  }
+
+  return content
 }
 
 /**

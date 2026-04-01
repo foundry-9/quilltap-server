@@ -8,6 +8,7 @@ import { MemoryCascadeSettings } from './MemoryCascadeSettings'
 import { TokenDisplaySettingsComponent } from './TokenDisplaySettings'
 import { ContextCompressionSettingsComponent } from './ContextCompressionSettings'
 import { LLMLoggingSettingsComponent } from './LLMLoggingSettings'
+import { AutomationSettings } from './AutomationSettings'
 
 /**
  * ChatSettingsTab Component
@@ -38,6 +39,7 @@ export default function ChatSettingsTab() {
     handleTokenDisplayChange,
     handleContextCompressionUpdate,
     handleLLMLoggingChange,
+    handleAutoDetectRngChange,
   } = useChatSettings()
 
   if (loading) {
@@ -117,6 +119,12 @@ export default function ChatSettingsTab() {
           settings={settings}
           saving={saving}
           onTokenDisplayChange={handleTokenDisplayChange}
+        />
+
+        <AutomationSettings
+          settings={settings}
+          saving={saving}
+          onAutoDetectRngChange={handleAutoDetectRngChange}
         />
       </div>
     </div>

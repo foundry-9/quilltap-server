@@ -22868,6 +22868,7 @@ var TuningMethod;
 (function(TuningMethod2) {
   TuningMethod2["SUPERVISED_FINE_TUNING"] = "SUPERVISED_FINE_TUNING";
   TuningMethod2["PREFERENCE_TUNING"] = "PREFERENCE_TUNING";
+  TuningMethod2["DISTILLATION"] = "DISTILLATION";
 })(TuningMethod || (TuningMethod = {}));
 var DocumentState;
 (function(DocumentState2) {
@@ -23277,6 +23278,8 @@ var ListFilesResponse = class {
 var CreateFileResponse = class {
 };
 var DeleteFileResponse = class {
+};
+var RegisterFilesResponse = class {
 };
 var ListBatchJobsResponse = class {
 };
@@ -24872,6 +24875,10 @@ function inlinedResponseFromMldev(fromObject) {
   const fromResponse = getValueByPath(fromObject, ["response"]);
   if (fromResponse != null) {
     setValueByPath(toObject, ["response"], generateContentResponseFromMldev$1(fromResponse));
+  }
+  const fromMetadata = getValueByPath(fromObject, ["metadata"]);
+  if (fromMetadata != null) {
+    setValueByPath(toObject, ["metadata"], fromMetadata);
   }
   const fromError = getValueByPath(fromObject, ["error"]);
   if (fromError != null) {
@@ -27112,6 +27119,14 @@ function getFileParametersToMldev(fromObject) {
   }
   return toObject;
 }
+function internalRegisterFilesParametersToMldev(fromObject) {
+  const toObject = {};
+  const fromUris = getValueByPath(fromObject, ["uris"]);
+  if (fromUris != null) {
+    setValueByPath(toObject, ["uris"], fromUris);
+  }
+  return toObject;
+}
 function listFilesConfigToMldev(fromObject, parentObject) {
   const toObject = {};
   const fromPageSize = getValueByPath(fromObject, ["pageSize"]);
@@ -27145,6 +27160,26 @@ function listFilesResponseFromMldev(fromObject) {
   ]);
   if (fromNextPageToken != null) {
     setValueByPath(toObject, ["nextPageToken"], fromNextPageToken);
+  }
+  const fromFiles = getValueByPath(fromObject, ["files"]);
+  if (fromFiles != null) {
+    let transformedList = fromFiles;
+    if (Array.isArray(transformedList)) {
+      transformedList = transformedList.map((item) => {
+        return item;
+      });
+    }
+    setValueByPath(toObject, ["files"], transformedList);
+  }
+  return toObject;
+}
+function registerFilesResponseFromMldev(fromObject) {
+  const toObject = {};
+  const fromSdkHttpResponse = getValueByPath(fromObject, [
+    "sdkHttpResponse"
+  ]);
+  if (fromSdkHttpResponse != null) {
+    setValueByPath(toObject, ["sdkHttpResponse"], fromSdkHttpResponse);
   }
   const fromFiles = getValueByPath(fromObject, ["files"]);
   if (fromFiles != null) {
@@ -27235,6 +27270,16 @@ var Files = class extends BaseModule {
    */
   async download(params) {
     await this.apiClient.downloadFile(params);
+  }
+  /**
+   * Registers Google Cloud Storage files for use with the API.
+   * This method is only available in Node.js environments.
+   */
+  async registerFiles(params) {
+    throw new Error("registerFiles is only supported in Node.js environments.");
+  }
+  async _registerFiles(params) {
+    return this.registerFilesInternal(params);
   }
   async listInternal(params) {
     var _a4, _b;
@@ -27392,6 +27437,37 @@ var Files = class extends BaseModule {
       return response.then((apiResponse) => {
         const resp = deleteFileResponseFromMldev(apiResponse);
         const typedResp = new DeleteFileResponse();
+        Object.assign(typedResp, resp);
+        return typedResp;
+      });
+    }
+  }
+  async registerFilesInternal(params) {
+    var _a4, _b;
+    let response;
+    let path3 = "";
+    let queryParams = {};
+    if (this.apiClient.isVertexAI()) {
+      throw new Error("This method is only supported by the Gemini Developer API.");
+    } else {
+      const body = internalRegisterFilesParametersToMldev(params);
+      path3 = formatMap("files:register", body["_url"]);
+      queryParams = body["_query"];
+      delete body["_url"];
+      delete body["_query"];
+      response = this.apiClient.request({
+        path: path3,
+        queryParams,
+        body: JSON.stringify(body),
+        httpMethod: "POST",
+        httpOptions: (_a4 = params.config) === null || _a4 === void 0 ? void 0 : _a4.httpOptions,
+        abortSignal: (_b = params.config) === null || _b === void 0 ? void 0 : _b.abortSignal
+      }).then((httpResponse) => {
+        return httpResponse.json();
+      });
+      return response.then((apiResponse) => {
+        const resp = registerFilesResponseFromMldev(apiResponse);
+        const typedResp = new RegisterFilesResponse();
         Object.assign(typedResp, resp);
         return typedResp;
       });
@@ -28356,7 +28432,7 @@ function voiceActivityFromVertex(fromObject) {
   }
   return toObject;
 }
-function blobToMldev$1(fromObject) {
+function blobToMldev$1(fromObject, _rootObject) {
   const toObject = {};
   const fromData = getValueByPath(fromObject, ["data"]);
   if (fromData != null) {
@@ -28371,7 +28447,7 @@ function blobToMldev$1(fromObject) {
   }
   return toObject;
 }
-function candidateFromMldev(fromObject) {
+function candidateFromMldev(fromObject, rootObject) {
   const toObject = {};
   const fromContent = getValueByPath(fromObject, ["content"]);
   if (fromContent != null) {
@@ -28431,7 +28507,7 @@ function candidateFromMldev(fromObject) {
   }
   return toObject;
 }
-function citationMetadataFromMldev(fromObject) {
+function citationMetadataFromMldev(fromObject, _rootObject) {
   const toObject = {};
   const fromCitations = getValueByPath(fromObject, ["citationSources"]);
   if (fromCitations != null) {
@@ -28445,7 +28521,7 @@ function citationMetadataFromMldev(fromObject) {
   }
   return toObject;
 }
-function computeTokensParametersToVertex(apiClient, fromObject) {
+function computeTokensParametersToVertex(apiClient, fromObject, _rootObject) {
   const toObject = {};
   const fromModel = getValueByPath(fromObject, ["model"]);
   if (fromModel != null) {
@@ -28463,7 +28539,7 @@ function computeTokensParametersToVertex(apiClient, fromObject) {
   }
   return toObject;
 }
-function computeTokensResponseFromVertex(fromObject) {
+function computeTokensResponseFromVertex(fromObject, _rootObject) {
   const toObject = {};
   const fromSdkHttpResponse = getValueByPath(fromObject, [
     "sdkHttpResponse"
@@ -28483,7 +28559,7 @@ function computeTokensResponseFromVertex(fromObject) {
   }
   return toObject;
 }
-function contentEmbeddingFromVertex(fromObject) {
+function contentEmbeddingFromVertex(fromObject, rootObject) {
   const toObject = {};
   const fromValues = getValueByPath(fromObject, ["values"]);
   if (fromValues != null) {
@@ -28495,7 +28571,7 @@ function contentEmbeddingFromVertex(fromObject) {
   }
   return toObject;
 }
-function contentEmbeddingStatisticsFromVertex(fromObject) {
+function contentEmbeddingStatisticsFromVertex(fromObject, _rootObject) {
   const toObject = {};
   const fromTruncated = getValueByPath(fromObject, ["truncated"]);
   if (fromTruncated != null) {
@@ -28507,7 +28583,7 @@ function contentEmbeddingStatisticsFromVertex(fromObject) {
   }
   return toObject;
 }
-function contentToMldev$1(fromObject) {
+function contentToMldev$1(fromObject, rootObject) {
   const toObject = {};
   const fromParts = getValueByPath(fromObject, ["parts"]);
   if (fromParts != null) {
@@ -28525,7 +28601,7 @@ function contentToMldev$1(fromObject) {
   }
   return toObject;
 }
-function controlReferenceConfigToVertex(fromObject) {
+function controlReferenceConfigToVertex(fromObject, _rootObject) {
   const toObject = {};
   const fromControlType = getValueByPath(fromObject, ["controlType"]);
   if (fromControlType != null) {
@@ -28539,7 +28615,7 @@ function controlReferenceConfigToVertex(fromObject) {
   }
   return toObject;
 }
-function countTokensConfigToMldev(fromObject) {
+function countTokensConfigToMldev(fromObject, _rootObject) {
   const toObject = {};
   if (getValueByPath(fromObject, ["systemInstruction"]) !== void 0) {
     throw new Error("systemInstruction parameter is not supported in Gemini API.");
@@ -28552,7 +28628,7 @@ function countTokensConfigToMldev(fromObject) {
   }
   return toObject;
 }
-function countTokensConfigToVertex(fromObject, parentObject) {
+function countTokensConfigToVertex(fromObject, parentObject, rootObject) {
   const toObject = {};
   const fromSystemInstruction = getValueByPath(fromObject, [
     "systemInstruction"
@@ -28578,7 +28654,7 @@ function countTokensConfigToVertex(fromObject, parentObject) {
   }
   return toObject;
 }
-function countTokensParametersToMldev(apiClient, fromObject) {
+function countTokensParametersToMldev(apiClient, fromObject, rootObject) {
   const toObject = {};
   const fromModel = getValueByPath(fromObject, ["model"]);
   if (fromModel != null) {
@@ -28600,7 +28676,7 @@ function countTokensParametersToMldev(apiClient, fromObject) {
   }
   return toObject;
 }
-function countTokensParametersToVertex(apiClient, fromObject) {
+function countTokensParametersToVertex(apiClient, fromObject, rootObject) {
   const toObject = {};
   const fromModel = getValueByPath(fromObject, ["model"]);
   if (fromModel != null) {
@@ -28622,7 +28698,7 @@ function countTokensParametersToVertex(apiClient, fromObject) {
   }
   return toObject;
 }
-function countTokensResponseFromMldev(fromObject) {
+function countTokensResponseFromMldev(fromObject, _rootObject) {
   const toObject = {};
   const fromSdkHttpResponse = getValueByPath(fromObject, [
     "sdkHttpResponse"
@@ -28642,7 +28718,7 @@ function countTokensResponseFromMldev(fromObject) {
   }
   return toObject;
 }
-function countTokensResponseFromVertex(fromObject) {
+function countTokensResponseFromVertex(fromObject, _rootObject) {
   const toObject = {};
   const fromSdkHttpResponse = getValueByPath(fromObject, [
     "sdkHttpResponse"
@@ -28656,7 +28732,7 @@ function countTokensResponseFromVertex(fromObject) {
   }
   return toObject;
 }
-function deleteModelParametersToMldev(apiClient, fromObject) {
+function deleteModelParametersToMldev(apiClient, fromObject, _rootObject) {
   const toObject = {};
   const fromModel = getValueByPath(fromObject, ["model"]);
   if (fromModel != null) {
@@ -28664,7 +28740,7 @@ function deleteModelParametersToMldev(apiClient, fromObject) {
   }
   return toObject;
 }
-function deleteModelParametersToVertex(apiClient, fromObject) {
+function deleteModelParametersToVertex(apiClient, fromObject, _rootObject) {
   const toObject = {};
   const fromModel = getValueByPath(fromObject, ["model"]);
   if (fromModel != null) {
@@ -28672,7 +28748,7 @@ function deleteModelParametersToVertex(apiClient, fromObject) {
   }
   return toObject;
 }
-function deleteModelResponseFromMldev(fromObject) {
+function deleteModelResponseFromMldev(fromObject, _rootObject) {
   const toObject = {};
   const fromSdkHttpResponse = getValueByPath(fromObject, [
     "sdkHttpResponse"
@@ -28682,7 +28758,7 @@ function deleteModelResponseFromMldev(fromObject) {
   }
   return toObject;
 }
-function deleteModelResponseFromVertex(fromObject) {
+function deleteModelResponseFromVertex(fromObject, _rootObject) {
   const toObject = {};
   const fromSdkHttpResponse = getValueByPath(fromObject, [
     "sdkHttpResponse"
@@ -28692,7 +28768,7 @@ function deleteModelResponseFromVertex(fromObject) {
   }
   return toObject;
 }
-function editImageConfigToVertex(fromObject, parentObject) {
+function editImageConfigToVertex(fromObject, parentObject, _rootObject) {
   const toObject = {};
   const fromOutputGcsUri = getValueByPath(fromObject, ["outputGcsUri"]);
   if (parentObject !== void 0 && fromOutputGcsUri != null) {
@@ -28782,7 +28858,7 @@ function editImageConfigToVertex(fromObject, parentObject) {
   }
   return toObject;
 }
-function editImageParametersInternalToVertex(apiClient, fromObject) {
+function editImageParametersInternalToVertex(apiClient, fromObject, rootObject) {
   const toObject = {};
   const fromModel = getValueByPath(fromObject, ["model"]);
   if (fromModel != null) {
@@ -28810,7 +28886,7 @@ function editImageParametersInternalToVertex(apiClient, fromObject) {
   }
   return toObject;
 }
-function editImageResponseFromVertex(fromObject) {
+function editImageResponseFromVertex(fromObject, rootObject) {
   const toObject = {};
   const fromSdkHttpResponse = getValueByPath(fromObject, [
     "sdkHttpResponse"
@@ -28832,7 +28908,7 @@ function editImageResponseFromVertex(fromObject) {
   }
   return toObject;
 }
-function embedContentConfigToMldev(fromObject, parentObject) {
+function embedContentConfigToMldev(fromObject, parentObject, _rootObject) {
   const toObject = {};
   const fromTaskType = getValueByPath(fromObject, ["taskType"]);
   if (parentObject !== void 0 && fromTaskType != null) {
@@ -28856,7 +28932,7 @@ function embedContentConfigToMldev(fromObject, parentObject) {
   }
   return toObject;
 }
-function embedContentConfigToVertex(fromObject, parentObject) {
+function embedContentConfigToVertex(fromObject, parentObject, _rootObject) {
   const toObject = {};
   const fromTaskType = getValueByPath(fromObject, ["taskType"]);
   if (parentObject !== void 0 && fromTaskType != null) {
@@ -28882,7 +28958,7 @@ function embedContentConfigToVertex(fromObject, parentObject) {
   }
   return toObject;
 }
-function embedContentParametersToMldev(apiClient, fromObject) {
+function embedContentParametersToMldev(apiClient, fromObject, rootObject) {
   const toObject = {};
   const fromModel = getValueByPath(fromObject, ["model"]);
   if (fromModel != null) {
@@ -28908,7 +28984,7 @@ function embedContentParametersToMldev(apiClient, fromObject) {
   }
   return toObject;
 }
-function embedContentParametersToVertex(apiClient, fromObject) {
+function embedContentParametersToVertex(apiClient, fromObject, rootObject) {
   const toObject = {};
   const fromModel = getValueByPath(fromObject, ["model"]);
   if (fromModel != null) {
@@ -28930,7 +29006,7 @@ function embedContentParametersToVertex(apiClient, fromObject) {
   }
   return toObject;
 }
-function embedContentResponseFromMldev(fromObject) {
+function embedContentResponseFromMldev(fromObject, _rootObject) {
   const toObject = {};
   const fromSdkHttpResponse = getValueByPath(fromObject, [
     "sdkHttpResponse"
@@ -28954,7 +29030,7 @@ function embedContentResponseFromMldev(fromObject) {
   }
   return toObject;
 }
-function embedContentResponseFromVertex(fromObject) {
+function embedContentResponseFromVertex(fromObject, rootObject) {
   const toObject = {};
   const fromSdkHttpResponse = getValueByPath(fromObject, [
     "sdkHttpResponse"
@@ -28981,7 +29057,7 @@ function embedContentResponseFromVertex(fromObject) {
   }
   return toObject;
 }
-function endpointFromVertex(fromObject) {
+function endpointFromVertex(fromObject, _rootObject) {
   const toObject = {};
   const fromName = getValueByPath(fromObject, ["endpoint"]);
   if (fromName != null) {
@@ -28995,7 +29071,7 @@ function endpointFromVertex(fromObject) {
   }
   return toObject;
 }
-function fileDataToMldev$1(fromObject) {
+function fileDataToMldev$1(fromObject, _rootObject) {
   const toObject = {};
   if (getValueByPath(fromObject, ["displayName"]) !== void 0) {
     throw new Error("displayName parameter is not supported in Gemini API.");
@@ -29010,7 +29086,7 @@ function fileDataToMldev$1(fromObject) {
   }
   return toObject;
 }
-function functionCallToMldev$1(fromObject) {
+function functionCallToMldev$1(fromObject, _rootObject) {
   const toObject = {};
   const fromId = getValueByPath(fromObject, ["id"]);
   if (fromId != null) {
@@ -29032,7 +29108,7 @@ function functionCallToMldev$1(fromObject) {
   }
   return toObject;
 }
-function functionCallingConfigToMldev(fromObject) {
+function functionCallingConfigToMldev(fromObject, _rootObject) {
   const toObject = {};
   const fromAllowedFunctionNames = getValueByPath(fromObject, [
     "allowedFunctionNames"
@@ -29049,7 +29125,7 @@ function functionCallingConfigToMldev(fromObject) {
   }
   return toObject;
 }
-function functionDeclarationToVertex(fromObject) {
+function functionDeclarationToVertex(fromObject, _rootObject) {
   const toObject = {};
   const fromDescription = getValueByPath(fromObject, ["description"]);
   if (fromDescription != null) {
@@ -29084,7 +29160,7 @@ function functionDeclarationToVertex(fromObject) {
   }
   return toObject;
 }
-function generateContentConfigToMldev(apiClient, fromObject, parentObject) {
+function generateContentConfigToMldev(apiClient, fromObject, parentObject, rootObject) {
   const toObject = {};
   const fromSystemInstruction = getValueByPath(fromObject, [
     "systemInstruction"
@@ -29247,7 +29323,7 @@ function generateContentConfigToMldev(apiClient, fromObject, parentObject) {
   }
   return toObject;
 }
-function generateContentConfigToVertex(apiClient, fromObject, parentObject) {
+function generateContentConfigToVertex(apiClient, fromObject, parentObject, rootObject) {
   const toObject = {};
   const fromSystemInstruction = getValueByPath(fromObject, [
     "systemInstruction"
@@ -29420,7 +29496,7 @@ function generateContentConfigToVertex(apiClient, fromObject, parentObject) {
   }
   return toObject;
 }
-function generateContentParametersToMldev(apiClient, fromObject) {
+function generateContentParametersToMldev(apiClient, fromObject, rootObject) {
   const toObject = {};
   const fromModel = getValueByPath(fromObject, ["model"]);
   if (fromModel != null) {
@@ -29442,7 +29518,7 @@ function generateContentParametersToMldev(apiClient, fromObject) {
   }
   return toObject;
 }
-function generateContentParametersToVertex(apiClient, fromObject) {
+function generateContentParametersToVertex(apiClient, fromObject, rootObject) {
   const toObject = {};
   const fromModel = getValueByPath(fromObject, ["model"]);
   if (fromModel != null) {
@@ -29464,7 +29540,7 @@ function generateContentParametersToVertex(apiClient, fromObject) {
   }
   return toObject;
 }
-function generateContentResponseFromMldev(fromObject) {
+function generateContentResponseFromMldev(fromObject, rootObject) {
   const toObject = {};
   const fromSdkHttpResponse = getValueByPath(fromObject, [
     "sdkHttpResponse"
@@ -29504,7 +29580,7 @@ function generateContentResponseFromMldev(fromObject) {
   }
   return toObject;
 }
-function generateContentResponseFromVertex(fromObject) {
+function generateContentResponseFromVertex(fromObject, _rootObject) {
   const toObject = {};
   const fromSdkHttpResponse = getValueByPath(fromObject, [
     "sdkHttpResponse"
@@ -29548,7 +29624,7 @@ function generateContentResponseFromVertex(fromObject) {
   }
   return toObject;
 }
-function generateImagesConfigToMldev(fromObject, parentObject) {
+function generateImagesConfigToMldev(fromObject, parentObject, _rootObject) {
   const toObject = {};
   if (getValueByPath(fromObject, ["outputGcsUri"]) !== void 0) {
     throw new Error("outputGcsUri parameter is not supported in Gemini API.");
@@ -29630,7 +29706,7 @@ function generateImagesConfigToMldev(fromObject, parentObject) {
   }
   return toObject;
 }
-function generateImagesConfigToVertex(fromObject, parentObject) {
+function generateImagesConfigToVertex(fromObject, parentObject, _rootObject) {
   const toObject = {};
   const fromOutputGcsUri = getValueByPath(fromObject, ["outputGcsUri"]);
   if (parentObject !== void 0 && fromOutputGcsUri != null) {
@@ -29722,7 +29798,7 @@ function generateImagesConfigToVertex(fromObject, parentObject) {
   }
   return toObject;
 }
-function generateImagesParametersToMldev(apiClient, fromObject) {
+function generateImagesParametersToMldev(apiClient, fromObject, rootObject) {
   const toObject = {};
   const fromModel = getValueByPath(fromObject, ["model"]);
   if (fromModel != null) {
@@ -29738,7 +29814,7 @@ function generateImagesParametersToMldev(apiClient, fromObject) {
   }
   return toObject;
 }
-function generateImagesParametersToVertex(apiClient, fromObject) {
+function generateImagesParametersToVertex(apiClient, fromObject, rootObject) {
   const toObject = {};
   const fromModel = getValueByPath(fromObject, ["model"]);
   if (fromModel != null) {
@@ -29754,7 +29830,7 @@ function generateImagesParametersToVertex(apiClient, fromObject) {
   }
   return toObject;
 }
-function generateImagesResponseFromMldev(fromObject) {
+function generateImagesResponseFromMldev(fromObject, rootObject) {
   const toObject = {};
   const fromSdkHttpResponse = getValueByPath(fromObject, [
     "sdkHttpResponse"
@@ -29782,7 +29858,7 @@ function generateImagesResponseFromMldev(fromObject) {
   }
   return toObject;
 }
-function generateImagesResponseFromVertex(fromObject) {
+function generateImagesResponseFromVertex(fromObject, rootObject) {
   const toObject = {};
   const fromSdkHttpResponse = getValueByPath(fromObject, [
     "sdkHttpResponse"
@@ -29810,7 +29886,7 @@ function generateImagesResponseFromVertex(fromObject) {
   }
   return toObject;
 }
-function generateVideosConfigToMldev(fromObject, parentObject) {
+function generateVideosConfigToMldev(fromObject, parentObject, rootObject) {
   const toObject = {};
   const fromNumberOfVideos = getValueByPath(fromObject, [
     "numberOfVideos"
@@ -29889,7 +29965,7 @@ function generateVideosConfigToMldev(fromObject, parentObject) {
   }
   return toObject;
 }
-function generateVideosConfigToVertex(fromObject, parentObject) {
+function generateVideosConfigToVertex(fromObject, parentObject, rootObject) {
   const toObject = {};
   const fromNumberOfVideos = getValueByPath(fromObject, [
     "numberOfVideos"
@@ -29979,7 +30055,7 @@ function generateVideosConfigToVertex(fromObject, parentObject) {
   }
   return toObject;
 }
-function generateVideosOperationFromMldev(fromObject) {
+function generateVideosOperationFromMldev(fromObject, rootObject) {
   const toObject = {};
   const fromName = getValueByPath(fromObject, ["name"]);
   if (fromName != null) {
@@ -30006,7 +30082,7 @@ function generateVideosOperationFromMldev(fromObject) {
   }
   return toObject;
 }
-function generateVideosOperationFromVertex(fromObject) {
+function generateVideosOperationFromVertex(fromObject, rootObject) {
   const toObject = {};
   const fromName = getValueByPath(fromObject, ["name"]);
   if (fromName != null) {
@@ -30030,7 +30106,7 @@ function generateVideosOperationFromVertex(fromObject) {
   }
   return toObject;
 }
-function generateVideosParametersToMldev(apiClient, fromObject) {
+function generateVideosParametersToMldev(apiClient, fromObject, rootObject) {
   const toObject = {};
   const fromModel = getValueByPath(fromObject, ["model"]);
   if (fromModel != null) {
@@ -30058,7 +30134,7 @@ function generateVideosParametersToMldev(apiClient, fromObject) {
   }
   return toObject;
 }
-function generateVideosParametersToVertex(apiClient, fromObject) {
+function generateVideosParametersToVertex(apiClient, fromObject, rootObject) {
   const toObject = {};
   const fromModel = getValueByPath(fromObject, ["model"]);
   if (fromModel != null) {
@@ -30086,7 +30162,7 @@ function generateVideosParametersToVertex(apiClient, fromObject) {
   }
   return toObject;
 }
-function generateVideosResponseFromMldev(fromObject) {
+function generateVideosResponseFromMldev(fromObject, rootObject) {
   const toObject = {};
   const fromGeneratedVideos = getValueByPath(fromObject, [
     "generatedSamples"
@@ -30114,7 +30190,7 @@ function generateVideosResponseFromMldev(fromObject) {
   }
   return toObject;
 }
-function generateVideosResponseFromVertex(fromObject) {
+function generateVideosResponseFromVertex(fromObject, rootObject) {
   const toObject = {};
   const fromGeneratedVideos = getValueByPath(fromObject, ["videos"]);
   if (fromGeneratedVideos != null) {
@@ -30140,7 +30216,7 @@ function generateVideosResponseFromVertex(fromObject) {
   }
   return toObject;
 }
-function generateVideosSourceToMldev(fromObject, parentObject) {
+function generateVideosSourceToMldev(fromObject, parentObject, rootObject) {
   const toObject = {};
   const fromPrompt = getValueByPath(fromObject, ["prompt"]);
   if (parentObject !== void 0 && fromPrompt != null) {
@@ -30156,7 +30232,7 @@ function generateVideosSourceToMldev(fromObject, parentObject) {
   }
   return toObject;
 }
-function generateVideosSourceToVertex(fromObject, parentObject) {
+function generateVideosSourceToVertex(fromObject, parentObject, rootObject) {
   const toObject = {};
   const fromPrompt = getValueByPath(fromObject, ["prompt"]);
   if (parentObject !== void 0 && fromPrompt != null) {
@@ -30172,7 +30248,7 @@ function generateVideosSourceToVertex(fromObject, parentObject) {
   }
   return toObject;
 }
-function generatedImageFromMldev(fromObject) {
+function generatedImageFromMldev(fromObject, rootObject) {
   const toObject = {};
   const fromImage = getValueByPath(fromObject, ["_self"]);
   if (fromImage != null) {
@@ -30190,7 +30266,7 @@ function generatedImageFromMldev(fromObject) {
   }
   return toObject;
 }
-function generatedImageFromVertex(fromObject) {
+function generatedImageFromVertex(fromObject, rootObject) {
   const toObject = {};
   const fromImage = getValueByPath(fromObject, ["_self"]);
   if (fromImage != null) {
@@ -30212,7 +30288,7 @@ function generatedImageFromVertex(fromObject) {
   }
   return toObject;
 }
-function generatedImageMaskFromVertex(fromObject) {
+function generatedImageMaskFromVertex(fromObject, rootObject) {
   const toObject = {};
   const fromMask = getValueByPath(fromObject, ["_self"]);
   if (fromMask != null) {
@@ -30230,7 +30306,7 @@ function generatedImageMaskFromVertex(fromObject) {
   }
   return toObject;
 }
-function generatedVideoFromMldev(fromObject) {
+function generatedVideoFromMldev(fromObject, rootObject) {
   const toObject = {};
   const fromVideo = getValueByPath(fromObject, ["video"]);
   if (fromVideo != null) {
@@ -30238,7 +30314,7 @@ function generatedVideoFromMldev(fromObject) {
   }
   return toObject;
 }
-function generatedVideoFromVertex(fromObject) {
+function generatedVideoFromVertex(fromObject, rootObject) {
   const toObject = {};
   const fromVideo = getValueByPath(fromObject, ["_self"]);
   if (fromVideo != null) {
@@ -30246,7 +30322,7 @@ function generatedVideoFromVertex(fromObject) {
   }
   return toObject;
 }
-function generationConfigToVertex(fromObject) {
+function generationConfigToVertex(fromObject, _rootObject) {
   const toObject = {};
   const fromModelSelectionConfig = getValueByPath(fromObject, [
     "modelSelectionConfig"
@@ -30373,7 +30449,7 @@ function generationConfigToVertex(fromObject) {
   }
   return toObject;
 }
-function getModelParametersToMldev(apiClient, fromObject) {
+function getModelParametersToMldev(apiClient, fromObject, _rootObject) {
   const toObject = {};
   const fromModel = getValueByPath(fromObject, ["model"]);
   if (fromModel != null) {
@@ -30381,7 +30457,7 @@ function getModelParametersToMldev(apiClient, fromObject) {
   }
   return toObject;
 }
-function getModelParametersToVertex(apiClient, fromObject) {
+function getModelParametersToVertex(apiClient, fromObject, _rootObject) {
   const toObject = {};
   const fromModel = getValueByPath(fromObject, ["model"]);
   if (fromModel != null) {
@@ -30389,7 +30465,7 @@ function getModelParametersToVertex(apiClient, fromObject) {
   }
   return toObject;
 }
-function googleMapsToMldev$1(fromObject) {
+function googleMapsToMldev$1(fromObject, _rootObject) {
   const toObject = {};
   if (getValueByPath(fromObject, ["authConfig"]) !== void 0) {
     throw new Error("authConfig parameter is not supported in Gemini API.");
@@ -30400,7 +30476,7 @@ function googleMapsToMldev$1(fromObject) {
   }
   return toObject;
 }
-function googleSearchToMldev$1(fromObject) {
+function googleSearchToMldev$1(fromObject, _rootObject) {
   const toObject = {};
   if (getValueByPath(fromObject, ["excludeDomains"]) !== void 0) {
     throw new Error("excludeDomains parameter is not supported in Gemini API.");
@@ -30416,7 +30492,7 @@ function googleSearchToMldev$1(fromObject) {
   }
   return toObject;
 }
-function imageConfigToMldev(fromObject) {
+function imageConfigToMldev(fromObject, _rootObject) {
   const toObject = {};
   const fromAspectRatio = getValueByPath(fromObject, ["aspectRatio"]);
   if (fromAspectRatio != null) {
@@ -30437,7 +30513,7 @@ function imageConfigToMldev(fromObject) {
   }
   return toObject;
 }
-function imageConfigToVertex(fromObject) {
+function imageConfigToVertex(fromObject, _rootObject) {
   const toObject = {};
   const fromAspectRatio = getValueByPath(fromObject, ["aspectRatio"]);
   if (fromAspectRatio != null) {
@@ -30467,7 +30543,7 @@ function imageConfigToVertex(fromObject) {
   }
   return toObject;
 }
-function imageFromMldev(fromObject) {
+function imageFromMldev(fromObject, _rootObject) {
   const toObject = {};
   const fromImageBytes = getValueByPath(fromObject, [
     "bytesBase64Encoded"
@@ -30481,7 +30557,7 @@ function imageFromMldev(fromObject) {
   }
   return toObject;
 }
-function imageFromVertex(fromObject) {
+function imageFromVertex(fromObject, _rootObject) {
   const toObject = {};
   const fromGcsUri = getValueByPath(fromObject, ["gcsUri"]);
   if (fromGcsUri != null) {
@@ -30499,7 +30575,7 @@ function imageFromVertex(fromObject) {
   }
   return toObject;
 }
-function imageToMldev(fromObject) {
+function imageToMldev(fromObject, _rootObject) {
   const toObject = {};
   if (getValueByPath(fromObject, ["gcsUri"]) !== void 0) {
     throw new Error("gcsUri parameter is not supported in Gemini API.");
@@ -30514,7 +30590,7 @@ function imageToMldev(fromObject) {
   }
   return toObject;
 }
-function imageToVertex(fromObject) {
+function imageToVertex(fromObject, _rootObject) {
   const toObject = {};
   const fromGcsUri = getValueByPath(fromObject, ["gcsUri"]);
   if (fromGcsUri != null) {
@@ -30530,7 +30606,7 @@ function imageToVertex(fromObject) {
   }
   return toObject;
 }
-function listModelsConfigToMldev(apiClient, fromObject, parentObject) {
+function listModelsConfigToMldev(apiClient, fromObject, parentObject, _rootObject) {
   const toObject = {};
   const fromPageSize = getValueByPath(fromObject, ["pageSize"]);
   if (parentObject !== void 0 && fromPageSize != null) {
@@ -30550,7 +30626,7 @@ function listModelsConfigToMldev(apiClient, fromObject, parentObject) {
   }
   return toObject;
 }
-function listModelsConfigToVertex(apiClient, fromObject, parentObject) {
+function listModelsConfigToVertex(apiClient, fromObject, parentObject, _rootObject) {
   const toObject = {};
   const fromPageSize = getValueByPath(fromObject, ["pageSize"]);
   if (parentObject !== void 0 && fromPageSize != null) {
@@ -30570,7 +30646,7 @@ function listModelsConfigToVertex(apiClient, fromObject, parentObject) {
   }
   return toObject;
 }
-function listModelsParametersToMldev(apiClient, fromObject) {
+function listModelsParametersToMldev(apiClient, fromObject, rootObject) {
   const toObject = {};
   const fromConfig = getValueByPath(fromObject, ["config"]);
   if (fromConfig != null) {
@@ -30578,7 +30654,7 @@ function listModelsParametersToMldev(apiClient, fromObject) {
   }
   return toObject;
 }
-function listModelsParametersToVertex(apiClient, fromObject) {
+function listModelsParametersToVertex(apiClient, fromObject, rootObject) {
   const toObject = {};
   const fromConfig = getValueByPath(fromObject, ["config"]);
   if (fromConfig != null) {
@@ -30586,7 +30662,7 @@ function listModelsParametersToVertex(apiClient, fromObject) {
   }
   return toObject;
 }
-function listModelsResponseFromMldev(fromObject) {
+function listModelsResponseFromMldev(fromObject, rootObject) {
   const toObject = {};
   const fromSdkHttpResponse = getValueByPath(fromObject, [
     "sdkHttpResponse"
@@ -30612,7 +30688,7 @@ function listModelsResponseFromMldev(fromObject) {
   }
   return toObject;
 }
-function listModelsResponseFromVertex(fromObject) {
+function listModelsResponseFromVertex(fromObject, rootObject) {
   const toObject = {};
   const fromSdkHttpResponse = getValueByPath(fromObject, [
     "sdkHttpResponse"
@@ -30638,7 +30714,7 @@ function listModelsResponseFromVertex(fromObject) {
   }
   return toObject;
 }
-function maskReferenceConfigToVertex(fromObject) {
+function maskReferenceConfigToVertex(fromObject, _rootObject) {
   const toObject = {};
   const fromMaskMode = getValueByPath(fromObject, ["maskMode"]);
   if (fromMaskMode != null) {
@@ -30656,7 +30732,7 @@ function maskReferenceConfigToVertex(fromObject) {
   }
   return toObject;
 }
-function modelFromMldev(fromObject) {
+function modelFromMldev(fromObject, rootObject) {
   const toObject = {};
   const fromName = getValueByPath(fromObject, ["name"]);
   if (fromName != null) {
@@ -30720,7 +30796,7 @@ function modelFromMldev(fromObject) {
   }
   return toObject;
 }
-function modelFromVertex(fromObject) {
+function modelFromVertex(fromObject, rootObject) {
   const toObject = {};
   const fromName = getValueByPath(fromObject, ["name"]);
   if (fromName != null) {
@@ -30774,7 +30850,7 @@ function modelFromVertex(fromObject) {
   }
   return toObject;
 }
-function partToMldev$1(fromObject) {
+function partToMldev$1(fromObject, rootObject) {
   const toObject = {};
   const fromMediaResolution = getValueByPath(fromObject, [
     "mediaResolution"
@@ -30834,7 +30910,7 @@ function partToMldev$1(fromObject) {
   }
   return toObject;
 }
-function productImageToVertex(fromObject) {
+function productImageToVertex(fromObject, rootObject) {
   const toObject = {};
   const fromProductImage = getValueByPath(fromObject, ["productImage"]);
   if (fromProductImage != null) {
@@ -30842,7 +30918,7 @@ function productImageToVertex(fromObject) {
   }
   return toObject;
 }
-function recontextImageConfigToVertex(fromObject, parentObject) {
+function recontextImageConfigToVertex(fromObject, parentObject, _rootObject) {
   const toObject = {};
   const fromNumberOfImages = getValueByPath(fromObject, [
     "numberOfImages"
@@ -30902,7 +30978,7 @@ function recontextImageConfigToVertex(fromObject, parentObject) {
   }
   return toObject;
 }
-function recontextImageParametersToVertex(apiClient, fromObject) {
+function recontextImageParametersToVertex(apiClient, fromObject, rootObject) {
   const toObject = {};
   const fromModel = getValueByPath(fromObject, ["model"]);
   if (fromModel != null) {
@@ -30918,7 +30994,7 @@ function recontextImageParametersToVertex(apiClient, fromObject) {
   }
   return toObject;
 }
-function recontextImageResponseFromVertex(fromObject) {
+function recontextImageResponseFromVertex(fromObject, rootObject) {
   const toObject = {};
   const fromGeneratedImages = getValueByPath(fromObject, [
     "predictions"
@@ -30934,7 +31010,7 @@ function recontextImageResponseFromVertex(fromObject) {
   }
   return toObject;
 }
-function recontextImageSourceToVertex(fromObject, parentObject) {
+function recontextImageSourceToVertex(fromObject, parentObject, rootObject) {
   const toObject = {};
   const fromPrompt = getValueByPath(fromObject, ["prompt"]);
   if (parentObject !== void 0 && fromPrompt != null) {
@@ -30958,7 +31034,7 @@ function recontextImageSourceToVertex(fromObject, parentObject) {
   }
   return toObject;
 }
-function referenceImageAPIInternalToVertex(fromObject) {
+function referenceImageAPIInternalToVertex(fromObject, rootObject) {
   const toObject = {};
   const fromReferenceImage = getValueByPath(fromObject, [
     "referenceImage"
@@ -31002,7 +31078,7 @@ function referenceImageAPIInternalToVertex(fromObject) {
   }
   return toObject;
 }
-function safetyAttributesFromMldev(fromObject) {
+function safetyAttributesFromMldev(fromObject, _rootObject) {
   const toObject = {};
   const fromCategories = getValueByPath(fromObject, [
     "safetyAttributes",
@@ -31024,7 +31100,7 @@ function safetyAttributesFromMldev(fromObject) {
   }
   return toObject;
 }
-function safetyAttributesFromVertex(fromObject) {
+function safetyAttributesFromVertex(fromObject, _rootObject) {
   const toObject = {};
   const fromCategories = getValueByPath(fromObject, [
     "safetyAttributes",
@@ -31046,7 +31122,7 @@ function safetyAttributesFromVertex(fromObject) {
   }
   return toObject;
 }
-function safetySettingToMldev(fromObject) {
+function safetySettingToMldev(fromObject, _rootObject) {
   const toObject = {};
   const fromCategory = getValueByPath(fromObject, ["category"]);
   if (fromCategory != null) {
@@ -31061,7 +31137,7 @@ function safetySettingToMldev(fromObject) {
   }
   return toObject;
 }
-function scribbleImageToVertex(fromObject) {
+function scribbleImageToVertex(fromObject, rootObject) {
   const toObject = {};
   const fromImage = getValueByPath(fromObject, ["image"]);
   if (fromImage != null) {
@@ -31069,7 +31145,7 @@ function scribbleImageToVertex(fromObject) {
   }
   return toObject;
 }
-function segmentImageConfigToVertex(fromObject, parentObject) {
+function segmentImageConfigToVertex(fromObject, parentObject, _rootObject) {
   const toObject = {};
   const fromMode = getValueByPath(fromObject, ["mode"]);
   if (parentObject !== void 0 && fromMode != null) {
@@ -31103,7 +31179,7 @@ function segmentImageConfigToVertex(fromObject, parentObject) {
   }
   return toObject;
 }
-function segmentImageParametersToVertex(apiClient, fromObject) {
+function segmentImageParametersToVertex(apiClient, fromObject, rootObject) {
   const toObject = {};
   const fromModel = getValueByPath(fromObject, ["model"]);
   if (fromModel != null) {
@@ -31119,7 +31195,7 @@ function segmentImageParametersToVertex(apiClient, fromObject) {
   }
   return toObject;
 }
-function segmentImageResponseFromVertex(fromObject) {
+function segmentImageResponseFromVertex(fromObject, rootObject) {
   const toObject = {};
   const fromGeneratedMasks = getValueByPath(fromObject, ["predictions"]);
   if (fromGeneratedMasks != null) {
@@ -31133,7 +31209,7 @@ function segmentImageResponseFromVertex(fromObject) {
   }
   return toObject;
 }
-function segmentImageSourceToVertex(fromObject, parentObject) {
+function segmentImageSourceToVertex(fromObject, parentObject, rootObject) {
   const toObject = {};
   const fromPrompt = getValueByPath(fromObject, ["prompt"]);
   if (parentObject !== void 0 && fromPrompt != null) {
@@ -31151,7 +31227,7 @@ function segmentImageSourceToVertex(fromObject, parentObject) {
   }
   return toObject;
 }
-function toolConfigToMldev(fromObject) {
+function toolConfigToMldev(fromObject, rootObject) {
   const toObject = {};
   const fromRetrievalConfig = getValueByPath(fromObject, [
     "retrievalConfig"
@@ -31167,7 +31243,7 @@ function toolConfigToMldev(fromObject) {
   }
   return toObject;
 }
-function toolToMldev$1(fromObject) {
+function toolToMldev$1(fromObject, rootObject) {
   const toObject = {};
   if (getValueByPath(fromObject, ["retrieval"]) !== void 0) {
     throw new Error("retrieval parameter is not supported in Gemini API.");
@@ -31221,7 +31297,7 @@ function toolToMldev$1(fromObject) {
   }
   return toObject;
 }
-function toolToVertex(fromObject) {
+function toolToVertex(fromObject, rootObject) {
   const toObject = {};
   const fromRetrieval = getValueByPath(fromObject, ["retrieval"]);
   if (fromRetrieval != null) {
@@ -31278,7 +31354,7 @@ function toolToVertex(fromObject) {
   }
   return toObject;
 }
-function tunedModelInfoFromMldev(fromObject) {
+function tunedModelInfoFromMldev(fromObject, _rootObject) {
   const toObject = {};
   const fromBaseModel = getValueByPath(fromObject, ["baseModel"]);
   if (fromBaseModel != null) {
@@ -31294,7 +31370,7 @@ function tunedModelInfoFromMldev(fromObject) {
   }
   return toObject;
 }
-function tunedModelInfoFromVertex(fromObject) {
+function tunedModelInfoFromVertex(fromObject, _rootObject) {
   const toObject = {};
   const fromBaseModel = getValueByPath(fromObject, [
     "labels",
@@ -31313,7 +31389,7 @@ function tunedModelInfoFromVertex(fromObject) {
   }
   return toObject;
 }
-function updateModelConfigToMldev(fromObject, parentObject) {
+function updateModelConfigToMldev(fromObject, parentObject, _rootObject) {
   const toObject = {};
   const fromDisplayName = getValueByPath(fromObject, ["displayName"]);
   if (parentObject !== void 0 && fromDisplayName != null) {
@@ -31331,7 +31407,7 @@ function updateModelConfigToMldev(fromObject, parentObject) {
   }
   return toObject;
 }
-function updateModelConfigToVertex(fromObject, parentObject) {
+function updateModelConfigToVertex(fromObject, parentObject, _rootObject) {
   const toObject = {};
   const fromDisplayName = getValueByPath(fromObject, ["displayName"]);
   if (parentObject !== void 0 && fromDisplayName != null) {
@@ -31349,7 +31425,7 @@ function updateModelConfigToVertex(fromObject, parentObject) {
   }
   return toObject;
 }
-function updateModelParametersToMldev(apiClient, fromObject) {
+function updateModelParametersToMldev(apiClient, fromObject, rootObject) {
   const toObject = {};
   const fromModel = getValueByPath(fromObject, ["model"]);
   if (fromModel != null) {
@@ -31361,7 +31437,7 @@ function updateModelParametersToMldev(apiClient, fromObject) {
   }
   return toObject;
 }
-function updateModelParametersToVertex(apiClient, fromObject) {
+function updateModelParametersToVertex(apiClient, fromObject, rootObject) {
   const toObject = {};
   const fromModel = getValueByPath(fromObject, ["model"]);
   if (fromModel != null) {
@@ -31373,7 +31449,7 @@ function updateModelParametersToVertex(apiClient, fromObject) {
   }
   return toObject;
 }
-function upscaleImageAPIConfigInternalToVertex(fromObject, parentObject) {
+function upscaleImageAPIConfigInternalToVertex(fromObject, parentObject, _rootObject) {
   const toObject = {};
   const fromOutputGcsUri = getValueByPath(fromObject, ["outputGcsUri"]);
   if (parentObject !== void 0 && fromOutputGcsUri != null) {
@@ -31437,7 +31513,7 @@ function upscaleImageAPIConfigInternalToVertex(fromObject, parentObject) {
   }
   return toObject;
 }
-function upscaleImageAPIParametersInternalToVertex(apiClient, fromObject) {
+function upscaleImageAPIParametersInternalToVertex(apiClient, fromObject, rootObject) {
   const toObject = {};
   const fromModel = getValueByPath(fromObject, ["model"]);
   if (fromModel != null) {
@@ -31459,7 +31535,7 @@ function upscaleImageAPIParametersInternalToVertex(apiClient, fromObject) {
   }
   return toObject;
 }
-function upscaleImageResponseFromVertex(fromObject) {
+function upscaleImageResponseFromVertex(fromObject, rootObject) {
   const toObject = {};
   const fromSdkHttpResponse = getValueByPath(fromObject, [
     "sdkHttpResponse"
@@ -31481,7 +31557,7 @@ function upscaleImageResponseFromVertex(fromObject) {
   }
   return toObject;
 }
-function videoFromMldev(fromObject) {
+function videoFromMldev(fromObject, _rootObject) {
   const toObject = {};
   const fromUri = getValueByPath(fromObject, ["uri"]);
   if (fromUri != null) {
@@ -31497,7 +31573,7 @@ function videoFromMldev(fromObject) {
   }
   return toObject;
 }
-function videoFromVertex(fromObject) {
+function videoFromVertex(fromObject, _rootObject) {
   const toObject = {};
   const fromUri = getValueByPath(fromObject, ["gcsUri"]);
   if (fromUri != null) {
@@ -31515,7 +31591,7 @@ function videoFromVertex(fromObject) {
   }
   return toObject;
 }
-function videoGenerationMaskToVertex(fromObject) {
+function videoGenerationMaskToVertex(fromObject, rootObject) {
   const toObject = {};
   const fromImage = getValueByPath(fromObject, ["image"]);
   if (fromImage != null) {
@@ -31527,7 +31603,7 @@ function videoGenerationMaskToVertex(fromObject) {
   }
   return toObject;
 }
-function videoGenerationReferenceImageToMldev(fromObject) {
+function videoGenerationReferenceImageToMldev(fromObject, rootObject) {
   const toObject = {};
   const fromImage = getValueByPath(fromObject, ["image"]);
   if (fromImage != null) {
@@ -31541,7 +31617,7 @@ function videoGenerationReferenceImageToMldev(fromObject) {
   }
   return toObject;
 }
-function videoGenerationReferenceImageToVertex(fromObject) {
+function videoGenerationReferenceImageToVertex(fromObject, rootObject) {
   const toObject = {};
   const fromImage = getValueByPath(fromObject, ["image"]);
   if (fromImage != null) {
@@ -31555,7 +31631,7 @@ function videoGenerationReferenceImageToVertex(fromObject) {
   }
   return toObject;
 }
-function videoToMldev(fromObject) {
+function videoToMldev(fromObject, _rootObject) {
   const toObject = {};
   const fromUri = getValueByPath(fromObject, ["uri"]);
   if (fromUri != null) {
@@ -31571,7 +31647,7 @@ function videoToMldev(fromObject) {
   }
   return toObject;
 }
-function videoToVertex(fromObject) {
+function videoToVertex(fromObject, _rootObject) {
   const toObject = {};
   const fromUri = getValueByPath(fromObject, ["uri"]);
   if (fromUri != null) {
@@ -31819,7 +31895,7 @@ var CONTENT_TYPE_HEADER = "Content-Type";
 var SERVER_TIMEOUT_HEADER = "X-Server-Timeout";
 var USER_AGENT_HEADER = "User-Agent";
 var GOOGLE_API_CLIENT_HEADER = "x-goog-api-client";
-var SDK_VERSION = "1.38.0";
+var SDK_VERSION = "1.39.0";
 var LIBRARY_LABEL = `google-genai-sdk/${SDK_VERSION}`;
 var VERTEX_AI_API_DEFAULT_VERSION = "v1beta1";
 var GOOGLE_AI_API_DEFAULT_VERSION = "v1beta";
@@ -33537,7 +33613,7 @@ var Models = class extends BaseModule {
               _c2 = apiResponse_1_1.value;
               _d2 = false;
               const chunk = _c2;
-              const resp = generateContentResponseFromVertex(yield __await(chunk.json()));
+              const resp = generateContentResponseFromVertex(yield __await(chunk.json()), params);
               resp["sdkHttpResponse"] = {
                 headers: chunk.headers
               };
@@ -33579,7 +33655,7 @@ var Models = class extends BaseModule {
               _c2 = apiResponse_2_1.value;
               _d2 = false;
               const chunk = _c2;
-              const resp = generateContentResponseFromMldev(yield __await(chunk.json()));
+              const resp = generateContentResponseFromMldev(yield __await(chunk.json()), params);
               resp["sdkHttpResponse"] = {
                 headers: chunk.headers
               };
@@ -36082,7 +36158,9 @@ var BaseInteractions = class extends APIResource {
    *
    * @example
    * ```ts
-   * const interaction = await client.interactions.delete('id');
+   * const interaction = await client.interactions.delete('id', {
+   *   api_version: 'api_version',
+   * });
    * ```
    */
   delete(id, params = {}, options) {
@@ -36094,7 +36172,9 @@ var BaseInteractions = class extends APIResource {
    *
    * @example
    * ```ts
-   * const interaction = await client.interactions.cancel('id');
+   * const interaction = await client.interactions.cancel('id', {
+   *   api_version: 'api_version',
+   * });
    * ```
    */
   cancel(id, params = {}, options) {
@@ -37363,6 +37443,12 @@ function createTuningJobConfigToMldev(fromObject, parentObject, _rootObject) {
   if (getValueByPath(fromObject, ["adapterSize"]) !== void 0) {
     throw new Error("adapterSize parameter is not supported in Gemini API.");
   }
+  if (getValueByPath(fromObject, ["tuningMode"]) !== void 0) {
+    throw new Error("tuningMode parameter is not supported in Gemini API.");
+  }
+  if (getValueByPath(fromObject, ["customBaseModel"]) !== void 0) {
+    throw new Error("customBaseModel parameter is not supported in Gemini API.");
+  }
   const fromBatchSize = getValueByPath(fromObject, ["batchSize"]);
   if (parentObject !== void 0 && fromBatchSize != null) {
     setValueByPath(parentObject, ["tuningTask", "hyperparameters", "batchSize"], fromBatchSize);
@@ -37376,6 +37462,18 @@ function createTuningJobConfigToMldev(fromObject, parentObject, _rootObject) {
   }
   if (getValueByPath(fromObject, ["beta"]) !== void 0) {
     throw new Error("beta parameter is not supported in Gemini API.");
+  }
+  if (getValueByPath(fromObject, ["baseTeacherModel"]) !== void 0) {
+    throw new Error("baseTeacherModel parameter is not supported in Gemini API.");
+  }
+  if (getValueByPath(fromObject, ["tunedTeacherModelSource"]) !== void 0) {
+    throw new Error("tunedTeacherModelSource parameter is not supported in Gemini API.");
+  }
+  if (getValueByPath(fromObject, ["sftLossWeightMultiplier"]) !== void 0) {
+    throw new Error("sftLossWeightMultiplier parameter is not supported in Gemini API.");
+  }
+  if (getValueByPath(fromObject, ["outputUri"]) !== void 0) {
+    throw new Error("outputUri parameter is not supported in Gemini API.");
   }
   return toObject;
 }
@@ -37401,6 +37499,13 @@ function createTuningJobConfigToVertex(fromObject, parentObject, rootObject) {
     ]);
     if (parentObject !== void 0 && fromValidationDataset != null) {
       setValueByPath(parentObject, ["preferenceOptimizationSpec"], tuningValidationDatasetToVertex(fromValidationDataset));
+    }
+  } else if (discriminatorValidationDataset === "DISTILLATION") {
+    const fromValidationDataset = getValueByPath(fromObject, [
+      "validationDataset"
+    ]);
+    if (parentObject !== void 0 && fromValidationDataset != null) {
+      setValueByPath(parentObject, ["distillationSpec"], tuningValidationDatasetToVertex(fromValidationDataset));
     }
   }
   const fromTunedModelDisplayName = getValueByPath(fromObject, [
@@ -37430,6 +37535,11 @@ function createTuningJobConfigToVertex(fromObject, parentObject, rootObject) {
     if (parentObject !== void 0 && fromEpochCount != null) {
       setValueByPath(parentObject, ["preferenceOptimizationSpec", "hyperParameters", "epochCount"], fromEpochCount);
     }
+  } else if (discriminatorEpochCount === "DISTILLATION") {
+    const fromEpochCount = getValueByPath(fromObject, ["epochCount"]);
+    if (parentObject !== void 0 && fromEpochCount != null) {
+      setValueByPath(parentObject, ["distillationSpec", "hyperParameters", "epochCount"], fromEpochCount);
+    }
   }
   let discriminatorLearningRateMultiplier = getValueByPath(rootObject, [
     "config",
@@ -37456,6 +37566,13 @@ function createTuningJobConfigToVertex(fromObject, parentObject, rootObject) {
         "learningRateMultiplier"
       ], fromLearningRateMultiplier);
     }
+  } else if (discriminatorLearningRateMultiplier === "DISTILLATION") {
+    const fromLearningRateMultiplier = getValueByPath(fromObject, [
+      "learningRateMultiplier"
+    ]);
+    if (parentObject !== void 0 && fromLearningRateMultiplier != null) {
+      setValueByPath(parentObject, ["distillationSpec", "hyperParameters", "learningRateMultiplier"], fromLearningRateMultiplier);
+    }
   }
   let discriminatorExportLastCheckpointOnly = getValueByPath(rootObject, ["config", "method"]);
   if (discriminatorExportLastCheckpointOnly === void 0) {
@@ -37475,6 +37592,13 @@ function createTuningJobConfigToVertex(fromObject, parentObject, rootObject) {
     if (parentObject !== void 0 && fromExportLastCheckpointOnly != null) {
       setValueByPath(parentObject, ["preferenceOptimizationSpec", "exportLastCheckpointOnly"], fromExportLastCheckpointOnly);
     }
+  } else if (discriminatorExportLastCheckpointOnly === "DISTILLATION") {
+    const fromExportLastCheckpointOnly = getValueByPath(fromObject, [
+      "exportLastCheckpointOnly"
+    ]);
+    if (parentObject !== void 0 && fromExportLastCheckpointOnly != null) {
+      setValueByPath(parentObject, ["distillationSpec", "exportLastCheckpointOnly"], fromExportLastCheckpointOnly);
+    }
   }
   let discriminatorAdapterSize = getValueByPath(rootObject, [
     "config",
@@ -37493,12 +37617,58 @@ function createTuningJobConfigToVertex(fromObject, parentObject, rootObject) {
     if (parentObject !== void 0 && fromAdapterSize != null) {
       setValueByPath(parentObject, ["preferenceOptimizationSpec", "hyperParameters", "adapterSize"], fromAdapterSize);
     }
+  } else if (discriminatorAdapterSize === "DISTILLATION") {
+    const fromAdapterSize = getValueByPath(fromObject, ["adapterSize"]);
+    if (parentObject !== void 0 && fromAdapterSize != null) {
+      setValueByPath(parentObject, ["distillationSpec", "hyperParameters", "adapterSize"], fromAdapterSize);
+    }
   }
-  if (getValueByPath(fromObject, ["batchSize"]) !== void 0) {
-    throw new Error("batchSize parameter is not supported in Vertex AI.");
+  let discriminatorTuningMode = getValueByPath(rootObject, [
+    "config",
+    "method"
+  ]);
+  if (discriminatorTuningMode === void 0) {
+    discriminatorTuningMode = "SUPERVISED_FINE_TUNING";
   }
-  if (getValueByPath(fromObject, ["learningRate"]) !== void 0) {
-    throw new Error("learningRate parameter is not supported in Vertex AI.");
+  if (discriminatorTuningMode === "SUPERVISED_FINE_TUNING") {
+    const fromTuningMode = getValueByPath(fromObject, ["tuningMode"]);
+    if (parentObject !== void 0 && fromTuningMode != null) {
+      setValueByPath(parentObject, ["supervisedTuningSpec", "tuningMode"], fromTuningMode);
+    }
+  }
+  const fromCustomBaseModel = getValueByPath(fromObject, [
+    "customBaseModel"
+  ]);
+  if (parentObject !== void 0 && fromCustomBaseModel != null) {
+    setValueByPath(parentObject, ["customBaseModel"], fromCustomBaseModel);
+  }
+  let discriminatorBatchSize = getValueByPath(rootObject, [
+    "config",
+    "method"
+  ]);
+  if (discriminatorBatchSize === void 0) {
+    discriminatorBatchSize = "SUPERVISED_FINE_TUNING";
+  }
+  if (discriminatorBatchSize === "SUPERVISED_FINE_TUNING") {
+    const fromBatchSize = getValueByPath(fromObject, ["batchSize"]);
+    if (parentObject !== void 0 && fromBatchSize != null) {
+      setValueByPath(parentObject, ["supervisedTuningSpec", "hyperParameters", "batchSize"], fromBatchSize);
+    }
+  }
+  let discriminatorLearningRate = getValueByPath(rootObject, [
+    "config",
+    "method"
+  ]);
+  if (discriminatorLearningRate === void 0) {
+    discriminatorLearningRate = "SUPERVISED_FINE_TUNING";
+  }
+  if (discriminatorLearningRate === "SUPERVISED_FINE_TUNING") {
+    const fromLearningRate = getValueByPath(fromObject, [
+      "learningRate"
+    ]);
+    if (parentObject !== void 0 && fromLearningRate != null) {
+      setValueByPath(parentObject, ["supervisedTuningSpec", "hyperParameters", "learningRate"], fromLearningRate);
+    }
   }
   const fromLabels = getValueByPath(fromObject, ["labels"]);
   if (parentObject !== void 0 && fromLabels != null) {
@@ -37507,6 +37677,28 @@ function createTuningJobConfigToVertex(fromObject, parentObject, rootObject) {
   const fromBeta = getValueByPath(fromObject, ["beta"]);
   if (parentObject !== void 0 && fromBeta != null) {
     setValueByPath(parentObject, ["preferenceOptimizationSpec", "hyperParameters", "beta"], fromBeta);
+  }
+  const fromBaseTeacherModel = getValueByPath(fromObject, [
+    "baseTeacherModel"
+  ]);
+  if (parentObject !== void 0 && fromBaseTeacherModel != null) {
+    setValueByPath(parentObject, ["distillationSpec", "baseTeacherModel"], fromBaseTeacherModel);
+  }
+  const fromTunedTeacherModelSource = getValueByPath(fromObject, [
+    "tunedTeacherModelSource"
+  ]);
+  if (parentObject !== void 0 && fromTunedTeacherModelSource != null) {
+    setValueByPath(parentObject, ["distillationSpec", "tunedTeacherModelSource"], fromTunedTeacherModelSource);
+  }
+  const fromSftLossWeightMultiplier = getValueByPath(fromObject, [
+    "sftLossWeightMultiplier"
+  ]);
+  if (parentObject !== void 0 && fromSftLossWeightMultiplier != null) {
+    setValueByPath(parentObject, ["distillationSpec", "hyperParameters", "sftLossWeightMultiplier"], fromSftLossWeightMultiplier);
+  }
+  const fromOutputUri = getValueByPath(fromObject, ["outputUri"]);
+  if (parentObject !== void 0 && fromOutputUri != null) {
+    setValueByPath(parentObject, ["outputUri"], fromOutputUri);
   }
   return toObject;
 }
@@ -37725,6 +37917,11 @@ function tuningDatasetToVertex(fromObject, parentObject, rootObject) {
     if (parentObject !== void 0 && fromGcsUri != null) {
       setValueByPath(parentObject, ["preferenceOptimizationSpec", "trainingDatasetUri"], fromGcsUri);
     }
+  } else if (discriminatorGcsUri === "DISTILLATION") {
+    const fromGcsUri = getValueByPath(fromObject, ["gcsUri"]);
+    if (parentObject !== void 0 && fromGcsUri != null) {
+      setValueByPath(parentObject, ["distillationSpec", "promptDatasetUri"], fromGcsUri);
+    }
   }
   let discriminatorVertexDatasetResource = getValueByPath(rootObject, [
     "config",
@@ -37746,6 +37943,13 @@ function tuningDatasetToVertex(fromObject, parentObject, rootObject) {
     ]);
     if (parentObject !== void 0 && fromVertexDatasetResource != null) {
       setValueByPath(parentObject, ["preferenceOptimizationSpec", "trainingDatasetUri"], fromVertexDatasetResource);
+    }
+  } else if (discriminatorVertexDatasetResource === "DISTILLATION") {
+    const fromVertexDatasetResource = getValueByPath(fromObject, [
+      "vertexDatasetResource"
+    ]);
+    if (parentObject !== void 0 && fromVertexDatasetResource != null) {
+      setValueByPath(parentObject, ["distillationSpec", "promptDatasetUri"], fromVertexDatasetResource);
     }
   }
   if (getValueByPath(fromObject, ["examples"]) !== void 0) {
@@ -37870,6 +38074,12 @@ function tuningJobFromVertex(fromObject, _rootObject) {
   ]);
   if (fromPreferenceOptimizationSpec != null) {
     setValueByPath(toObject, ["preferenceOptimizationSpec"], fromPreferenceOptimizationSpec);
+  }
+  const fromDistillationSpec = getValueByPath(fromObject, [
+    "distillationSpec"
+  ]);
+  if (fromDistillationSpec != null) {
+    setValueByPath(toObject, ["distillationSpec"], fromDistillationSpec);
   }
   const fromTuningDataStats = getValueByPath(fromObject, [
     "tuningDataStats"
@@ -38561,6 +38771,37 @@ var NodeUploader = class {
     }
   }
 };
+var NodeFiles = class extends Files {
+  /**
+   * Registers Google Cloud Storage files for use with the API.
+   * This method is only available in Node.js environments.
+   */
+  async registerFiles(params) {
+    if (typeof process === "undefined" || !process.versions || !process.versions.node) {
+      throw new Error("registerFiles is only supported in Node.js environments.");
+    }
+    const googleAuth = params.auth;
+    const authHeaders = await googleAuth.getRequestHeaders();
+    const config2 = params.config || {};
+    const httpOptions = config2.httpOptions || {};
+    const headers = Object.assign({}, httpOptions.headers || {});
+    if (authHeaders) {
+      if (typeof authHeaders[Symbol.iterator] === "function") {
+        for (const [key, value] of authHeaders) {
+          headers[key] = value;
+        }
+      } else {
+        for (const [key, value] of Object.entries(authHeaders)) {
+          headers[key] = value;
+        }
+      }
+    }
+    return this._registerFiles({
+      uris: params.uris,
+      config: Object.assign(Object.assign({}, config2), { httpOptions: Object.assign(Object.assign({}, httpOptions), { headers }) })
+    });
+  }
+};
 var LANGUAGE_LABEL_PREFIX = "gl-node/";
 var GoogleGenAI = class {
   get interactions() {
@@ -38649,7 +38890,7 @@ var GoogleGenAI = class {
     this.batches = new Batches(this.apiClient);
     this.chats = new Chats(this.models, this.apiClient);
     this.caches = new Caches(this.apiClient);
-    this.files = new Files(this.apiClient);
+    this.files = new NodeFiles(this.apiClient);
     this.operations = new Operations(this.apiClient);
     this.authTokens = new Tokens(this.apiClient);
     this.tunings = new Tunings(this.apiClient);
@@ -46503,46 +46744,6 @@ var GoogleImagenProvider = class {
   }
 };
 
-// icon.tsx
-var import_jsx_runtime = require("react/jsx-runtime");
-function GoogleIcon({ className = "h-5 w-5" }) {
-  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
-    "svg",
-    {
-      className: `text-blue-600 ${className}`,
-      fill: "currentColor",
-      viewBox: "0 0 24 24",
-      xmlns: "http://www.w3.org/2000/svg",
-      "data-testid": "google-icon",
-      children: [
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { cx: "12", cy: "12", r: "11", fill: "none", stroke: "currentColor", strokeWidth: "2" }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-          "path",
-          {
-            d: "M12 2A10 10 0 1 1 2 12A10 10 0 0 1 12 2Z",
-            fill: "currentColor",
-            opacity: "0.1"
-          }
-        ),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-          "text",
-          {
-            x: "50%",
-            y: "50%",
-            textAnchor: "middle",
-            dominantBaseline: "middle",
-            fill: "currentColor",
-            fontSize: "10",
-            fontWeight: "bold",
-            fontFamily: "system-ui, -apple-system, sans-serif",
-            children: "GGL"
-          }
-        )
-      ]
-    }
-  );
-}
-
 // index.ts
 var logger3 = createPluginLogger("qtap-plugin-google");
 var metadata = {
@@ -46780,9 +46981,6 @@ var plugin = {
   /**
    * Render the Google icon
    */
-  renderIcon: (props) => {
-    return GoogleIcon(props);
-  },
   /**
    * Format tools from OpenAI format to Google format
    * Converts tool definitions to Google's function calling format

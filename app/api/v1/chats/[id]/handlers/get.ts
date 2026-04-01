@@ -15,7 +15,7 @@ import { getChatCostBreakdown, getDetailedChatCostBreakdown } from '@/lib/servic
 import { enrichParticipantDetail } from '@/lib/services/chat-enrichment.service';
 import { logger } from '@/lib/logger';
 import { notFound, forbidden, serverError } from '@/lib/api/responses';
-import { handleGetAvatars } from '../actions';
+import { handleGetAvatars, handleGetState } from '../actions';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 
 /**
@@ -90,6 +90,11 @@ export async function handleGet(
   // Handle get-avatars action
   if (action === 'get-avatars') {
     return handleGetAvatars(chatId, ctx);
+  }
+
+  // Handle get-state action
+  if (action === 'get-state') {
+    return handleGetState(chatId, ctx);
   }
 
   // Handle cost action

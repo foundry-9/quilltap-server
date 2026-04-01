@@ -174,6 +174,9 @@ export function AIWizardModal({
               selectedGalleryImageId={wizard.selectedGalleryImageId}
               selectedGalleryImageUrl={wizard.selectedGalleryImageUrl}
               onGallerySelect={wizard.handleGallerySelect}
+              uploadedDocumentId={wizard.uploadedDocumentId}
+              uploadedDocumentName={wizard.uploadedDocumentName}
+              onDocumentUpload={wizard.handleDocumentUpload}
               needsVisionProfile={wizard.needsVisionProfile}
               visionProfileId={wizard.visionProfileId}
               visionProfiles={wizard.visionProfiles}

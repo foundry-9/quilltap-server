@@ -2,6 +2,17 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.17] - 2026-02-02
+
+### Added
+- Status color utility classes with opacity variants:
+  - Background: `qt-bg-success/10`, `qt-bg-warning/10`, `qt-bg-info/10`, `qt-bg-destructive/10` (also /5 and /20)
+  - Text: `qt-text-success`, `qt-text-warning`, `qt-text-info`, `qt-text-destructive`
+  - Border: `qt-border-success`, `qt-border-warning`, `qt-border-info`, `qt-border-destructive`
+  - Border with opacity: `qt-border-success/30`, `qt-border-warning/30`, `qt-border-info/30`, `qt-border-destructive/30`
+  - Hover backgrounds: `hover:qt-bg-success/10`, `hover:qt-bg-warning/10`, `hover:qt-bg-info/10`, `hover:qt-bg-destructive/10`
+- `qt-bg-muted` utility class
+
 ## [1.0.16] - 2026-01-30
 
 ### Added

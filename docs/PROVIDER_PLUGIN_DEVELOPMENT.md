@@ -374,8 +374,11 @@ export const plugin: LLMProviderPlugin = {
     },
   ],
 
-  // Provider icon (React component)
-  renderIcon: (props) => <MyAIIcon {...props} />,
+  // Provider icon (SVG data - no React required)
+  icon: {
+    viewBox: '0 0 24 24',
+    paths: [{ d: 'M12 2L2 7l10 5 10-5-10-5z', fill: 'currentColor' }],
+  },
 
   // Optional: Tool format (default is 'openai')
   toolFormat: 'openai',
@@ -586,11 +589,38 @@ createImageProvider: (baseUrl?: string) => {
 },
 
 getImageProviderConstraints: () => ({
+  // Basic constraints
   maxPromptBytes: 4000,
   promptConstraintWarning: 'Prompts limited to 4000 bytes',
   maxImagesPerRequest: 4,
   supportedSizes: ['1024x1024', '512x512', '256x256'],
   supportedStyles: ['vivid', 'natural'],
+
+  // Optional: Prompting guidance for the chat LLM
+  // This text is included in the image generation tool description
+  // to help the LLM write better prompts for your provider
+  promptingGuidance: `For best results with MyAI:
+- Start with the subject, then describe style and mood
+- Include lighting and color palette details
+- Avoid negative phrasing; use positive descriptions instead`,
+
+  // Optional: Style/LoRA information with trigger phrases
+  // When a style is selected, the trigger phrase is automatically
+  // incorporated into the final image prompt
+  styleInfo: {
+    'vivid': {
+      name: 'Vivid',
+      loraId: 'vivid-v1',
+      description: 'Dramatic, hyper-real images with vibrant colors',
+      triggerPhrase: null, // No trigger phrase needed
+    },
+    'anime': {
+      name: 'Anime Style',
+      loraId: 'anime-lora-v2',
+      description: 'Japanese anime-inspired artwork',
+      triggerPhrase: 'anime style illustration of', // Required for this style
+    },
+  },
 }),
 ```
 
@@ -643,6 +673,257 @@ export class MyAIImageProvider implements ImageGenProvider {
   async getAvailableModels(apiKey: string): Promise<string[]> {
     return this.supportedModels;
   }
+}
+```
+
+---
+
+## Embedding Provider (Optional)
+
+If your provider supports text embeddings, add `EMBEDDING_PROVIDER` to capabilities and implement an embedding provider.
+
+### Embedding Provider Interface
+
+There are two types of embedding providers:
+
+1. **API-based providers** (EmbeddingProvider): OpenAI, OpenRouter, Ollama - require API calls
+2. **Local providers** (LocalEmbeddingProvider): Built-in TF-IDF - work entirely offline
+
+Most providers will implement `EmbeddingProvider`:
+
+```typescript
+// In manifest.json, add to capabilities:
+"capabilities": ["LLM_PROVIDER", "EMBEDDING_PROVIDER"],
+
+// And in providerConfig.capabilities:
+"capabilities": {
+  "chat": true,
+  "imageGeneration": false,
+  "embeddings": true,
+  "webSearch": false
+}
+```
+
+### Implementation
+
+```typescript
+// src/embedding-provider.ts
+import type { EmbeddingProvider, EmbeddingResult, EmbeddingOptions } from '@quilltap/plugin-types';
+import { createPluginLogger } from '@quilltap/plugin-utils';
+
+const logger = createPluginLogger('qtap-plugin-myai');
+
+export class MyAIEmbeddingProvider implements EmbeddingProvider {
+  private baseUrl: string;
+
+  constructor(baseUrl?: string) {
+    this.baseUrl = baseUrl || 'https://api.myai.com';
+  }
+
+  /**
+   * Generate an embedding for the given text
+   *
+   * @param text The text to embed
+   * @param model The model to use (e.g., 'text-embedding-3-small')
+   * @param apiKey The API key for authentication
+   * @param options Optional configuration (dimensions)
+   * @returns The embedding result
+   */
+  async generateEmbedding(
+    text: string,
+    model: string,
+    apiKey: string,
+    options?: EmbeddingOptions
+  ): Promise<EmbeddingResult> {
+    logger.debug('Generating embedding', { model, textLength: text.length });
+
+    const response = await fetch(`${this.baseUrl}/v1/embeddings`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        input: text,
+        dimensions: options?.dimensions,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(`Embedding failed: ${error.error?.message || response.statusText}`);
+    }
+
+    const data = await response.json();
+    const embedding = data.data[0].embedding;
+
+    return {
+      embedding,
+      model,
+      dimensions: embedding.length,
+      usage: data.usage ? {
+        promptTokens: data.usage.prompt_tokens,
+        totalTokens: data.usage.total_tokens,
+      } : undefined,
+    };
+  }
+
+  /**
+   * Generate embeddings for multiple texts in a batch (optional)
+   */
+  async generateBatchEmbeddings(
+    texts: string[],
+    model: string,
+    apiKey: string,
+    options?: EmbeddingOptions
+  ): Promise<EmbeddingResult[]> {
+    // Can batch in single request if provider supports it
+    const response = await fetch(`${this.baseUrl}/v1/embeddings`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        input: texts,
+        dimensions: options?.dimensions,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Batch embedding failed: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.data.map((item: any) => ({
+      embedding: item.embedding,
+      model,
+      dimensions: item.embedding.length,
+    }));
+  }
+
+  /**
+   * Get available embedding models (optional)
+   */
+  async getAvailableModels(apiKey: string): Promise<string[]> {
+    // Return list of embedding models
+    return ['myai-embed-small', 'myai-embed-large'];
+  }
+}
+```
+
+### Adding to Plugin Entry Point
+
+```typescript
+// In src/index.ts, add to plugin object:
+import { MyAIEmbeddingProvider } from './embedding-provider';
+
+export const plugin: LLMProviderPlugin = {
+  // ... other fields ...
+
+  // Factory method for embedding provider
+  createEmbeddingProvider: (baseUrl?: string) => {
+    return new MyAIEmbeddingProvider(baseUrl);
+  },
+
+  // Static embedding model info (optional)
+  getEmbeddingModels: () => [
+    {
+      id: 'myai-embed-small',
+      name: 'MyAI Embed Small',
+      dimensions: 768,
+      description: 'Fast embedding model for general use',
+    },
+    {
+      id: 'myai-embed-large',
+      name: 'MyAI Embed Large',
+      dimensions: 1536,
+      description: 'High-quality embedding model for demanding applications',
+    },
+  ],
+};
+```
+
+### Local Embedding Providers
+
+For offline/local embedding providers (like TF-IDF), implement `LocalEmbeddingProvider`:
+
+```typescript
+import type { LocalEmbeddingProvider, EmbeddingResult, LocalEmbeddingProviderState } from '@quilltap/plugin-types';
+
+export class MyLocalEmbeddingProvider implements LocalEmbeddingProvider {
+  private vocabulary: Map<string, number> = new Map();
+  private idf: number[] = [];
+
+  // No API key required for local providers
+  generateEmbedding(text: string): EmbeddingResult {
+    if (!this.isFitted()) {
+      throw new Error('Provider must be fitted before generating embeddings');
+    }
+    // Generate embedding using local algorithm
+    const embedding = this.vectorize(text);
+    return { embedding, model: 'local-embed', dimensions: embedding.length };
+  }
+
+  generateBatchEmbeddings(texts: string[]): EmbeddingResult[] {
+    return texts.map(text => this.generateEmbedding(text));
+  }
+
+  // Fit on corpus of documents
+  fitCorpus(documents: string[]): void {
+    // Build vocabulary, compute IDF weights, etc.
+  }
+
+  isFitted(): boolean {
+    return this.vocabulary.size > 0;
+  }
+
+  // For persistence
+  loadState(state: LocalEmbeddingProviderState): void {
+    this.vocabulary = new Map(state.vocabulary);
+    this.idf = state.idf;
+  }
+
+  getState(): LocalEmbeddingProviderState | null {
+    if (!this.isFitted()) return null;
+    return {
+      vocabulary: Array.from(this.vocabulary.entries()),
+      idf: this.idf,
+      avgDocLength: 0,
+      vocabularySize: this.vocabulary.size,
+      includeBigrams: false,
+      fittedAt: new Date().toISOString(),
+    };
+  }
+
+  getVocabularySize(): number {
+    return this.vocabulary.size;
+  }
+
+  getDimensions(): number {
+    return this.vocabulary.size;
+  }
+}
+```
+
+### Using Type Guards
+
+Quilltap provides a type guard to distinguish between API and local providers:
+
+```typescript
+import { isLocalEmbeddingProvider } from '@quilltap/plugin-types';
+
+const provider = createEmbeddingProvider('MYAI');
+
+if (isLocalEmbeddingProvider(provider)) {
+  // Local provider - load state from database, then generate
+  provider.loadState(savedState);
+  const result = provider.generateEmbedding(text);
+} else {
+  // API provider - needs apiKey parameter
+  const result = await provider.generateEmbedding(text, model, apiKey, options);
 }
 ```
 
@@ -841,11 +1122,15 @@ interface LLMProviderPlugin {
   createProvider(baseUrl?: string): LLMProvider;
   getAvailableModels(apiKey: string, baseUrl?: string): Promise<string[]>;
   validateApiKey(apiKey: string, baseUrl?: string): Promise<boolean>;
-  renderIcon(props: { className?: string }): React.ReactNode;
+
+  // Icon (recommended - no React required)
+  icon?: PluginIconData;
+  // Deprecated: use icon instead
+  renderIcon?(props: { className?: string }): React.ReactNode;
 
   // Optional factories
   createImageProvider?(baseUrl?: string): ImageGenProvider;
-  createEmbeddingProvider?(baseUrl?: string): unknown;
+  createEmbeddingProvider?(baseUrl?: string): EmbeddingProvider | LocalEmbeddingProvider;
 
   // Optional info methods
   getModelInfo?(): ModelInfo[];

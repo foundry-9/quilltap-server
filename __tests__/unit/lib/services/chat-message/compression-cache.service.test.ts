@@ -24,6 +24,13 @@ interface ContextCompressionResult {
   warnings: string[]
 }
 
+// Define the cached compression response type
+interface CachedCompressionResponse {
+  result: ContextCompressionResult
+  cachedMessageCount: number
+  isFallback: boolean
+}
+
 // Define mock at module level with explicit typing
 const mockApplyContextCompression = jest.fn<
   (messages: unknown[], systemPrompt: string, options: unknown) => Promise<ContextCompressionResult>
@@ -71,7 +78,7 @@ const {
   getCompressionCacheStats,
 } = require('@/lib/services/chat-message/compression-cache.service') as {
   triggerAsyncCompression: (options: AsyncCompressionOptions) => void
-  getCachedCompression: (chatId: string, messageCount: number) => Promise<ContextCompressionResult | undefined>
+  getCachedCompression: (chatId: string, messageCount: number) => Promise<CachedCompressionResponse | undefined>
   invalidateCompressionCache: (chatId: string) => void
   clearCompressionCache: () => void
   getCompressionCacheStats: () => {
@@ -244,12 +251,12 @@ describe('Compression Cache Service', () => {
       const stats = getCompressionCacheStats()
       expect(stats.size).toBe(1)
       expect(stats.entries[0].hasResult).toBe(true)
-      
+
       // Verify the result indicates failure
-      const result = await getCachedCompression('chat-123', 6)
-      expect(result).toBeDefined()
-      expect(result?.compressionApplied).toBe(false)
-      expect(result?.warnings?.[0]).toContain('Compression failed')
+      const response = await getCachedCompression('chat-123', 6)
+      expect(response).toBeDefined()
+      expect(response?.result.compressionApplied).toBe(false)
+      expect(response?.result.warnings?.[0]).toContain('Compression failed')
     })
   })
 
@@ -269,13 +276,17 @@ describe('Compression Cache Service', () => {
       // Wait for completion
       await new Promise(resolve => setTimeout(resolve, 10))
 
-      const result = await getCachedCompression('chat-123', 6)
-      expect(result).toBeDefined()
-      expect(result?.compressionApplied).toBe(true)
-      expect(result?.compressedHistory).toBe('Compressed history content.')
+      const response = await getCachedCompression('chat-123', 6)
+      expect(response).toBeDefined()
+      expect(response?.result.compressionApplied).toBe(true)
+      expect(response?.result.compressedHistory).toBe('Compressed history content.')
+      expect(response?.cachedMessageCount).toBe(6)
+      expect(response?.isFallback).toBe(false)
     })
 
-    it('waits for in-flight compression and returns result', async () => {
+    it('returns undefined when compression is in-flight (does not wait)', async () => {
+      // This test verifies the new behavior: we DON'T wait for in-flight compression
+      // Instead, we return undefined immediately (or fallback to database cache)
       let resolveCompression: (result: ContextCompressionResult) => void
       const compressionPromise = new Promise<ContextCompressionResult>(resolve => {
         resolveCompression = resolve
@@ -285,19 +296,16 @@ describe('Compression Cache Service', () => {
       const options = makeAsyncOptions()
       triggerAsyncCompression(options)
 
-      // Start getting cached result (should wait)
-      const getPromise = getCachedCompression('chat-123', 6)
+      // Getting cached result should return undefined immediately (no waiting)
+      // since compression is still in-flight and there's no database fallback
+      const response = await getCachedCompression('chat-123', 6)
+      expect(response).toBeUndefined()
 
-      // Resolve the compression
-      const compressionResult = makeCompressionResult()
-      resolveCompression!(compressionResult)
-
-      const result = await getPromise
-      expect(result).toBeDefined()
-      expect(result?.compressionApplied).toBe(true)
+      // Clean up: resolve the compression so it doesn't hang
+      resolveCompression!(makeCompressionResult())
     })
 
-    it('returns undefined when cache is stale (message count mismatch)', async () => {
+    it('returns undefined when cache is too stale (>50 messages behind)', async () => {
       const compressionResult = makeCompressionResult()
       mockApplyContextCompression.mockResolvedValue(compressionResult)
 
@@ -307,12 +315,12 @@ describe('Compression Cache Service', () => {
       // Wait for completion
       await new Promise(resolve => setTimeout(resolve, 10))
 
-      // Request with different message count (too different from cached)
-      const result = await getCachedCompression('chat-123', 20)
+      // Request with message count more than 50 ahead of cached (6 + 51 = 57)
+      const result = await getCachedCompression('chat-123', 57)
       expect(result).toBeUndefined()
     })
 
-    it('accepts cache for current message count or count - 1', async () => {
+    it('accepts cache when message count is up to 50 messages ahead', async () => {
       const compressionResult = makeCompressionResult()
       mockApplyContextCompression.mockResolvedValue(compressionResult)
 
@@ -324,25 +332,47 @@ describe('Compression Cache Service', () => {
       await new Promise(resolve => setTimeout(resolve, 10))
 
       // Should be valid for count 6 (exact match)
-      const result1 = await getCachedCompression('chat-123', 6)
-      expect(result1).toBeDefined()
+      const response1 = await getCachedCompression('chat-123', 6)
+      expect(response1).toBeDefined()
+      expect(response1?.cachedMessageCount).toBe(6)
 
-      // Should also be valid for count 7 (cached is count - 1)
-      const result2 = await getCachedCompression('chat-123', 7)
-      expect(result2).toBeDefined()
+      // Should be valid for count 56 (50 messages ahead, at the limit)
+      const response2 = await getCachedCompression('chat-123', 56)
+      expect(response2).toBeDefined()
+      expect(response2?.cachedMessageCount).toBe(6)
+
+      // Should be valid for count 20 (14 messages ahead, well within tolerance)
+      const response3 = await getCachedCompression('chat-123', 20)
+      expect(response3).toBeDefined()
+      expect(response3?.cachedMessageCount).toBe(6)
     })
 
-    it('returns failure result when in-flight compression fails', async () => {
-      mockApplyContextCompression.mockRejectedValue(new Error('API Error'))
+    it('returns undefined when compression is in-flight and failing (does not wait for failure)', async () => {
+      // Create a slow-failing promise to ensure we're testing in-flight behavior
+      let rejectCompression: (error: Error) => void
+      const compressionPromise = new Promise<ContextCompressionResult>((_, reject) => {
+        rejectCompression = reject
+      })
+      mockApplyContextCompression.mockReturnValue(compressionPromise)
 
       const options = makeAsyncOptions()
       triggerAsyncCompression(options)
 
-      // Get should wait and then return the failure result
-      const result = await getCachedCompression('chat-123', 6)
-      expect(result).toBeDefined()
-      expect(result?.compressionApplied).toBe(false)
-      expect(result?.warnings?.[0]).toContain('API Error')
+      // Getting cached result while in-flight should return undefined (no waiting)
+      const response = await getCachedCompression('chat-123', 6)
+      expect(response).toBeUndefined()
+
+      // Clean up: reject the compression
+      rejectCompression!(new Error('API Error'))
+
+      // Wait for the error to be handled
+      await new Promise(resolve => setTimeout(resolve, 10))
+
+      // Now after the failure is recorded, we should get the failure result
+      const responseAfterFailure = await getCachedCompression('chat-123', 6)
+      expect(responseAfterFailure).toBeDefined()
+      expect(responseAfterFailure?.result.compressionApplied).toBe(false)
+      expect(responseAfterFailure?.result.warnings?.[0]).toContain('API Error')
     })
   })
 

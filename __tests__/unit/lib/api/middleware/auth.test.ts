@@ -1,7 +1,6 @@
 /**
- * Unit Tests for API Auth Middleware (Single-User Mode)
+ * Unit Tests for API Context Middleware
  * Tests lib/api/middleware/auth.ts
- * v2.8-dev: Single-user mode - always authenticated
  */
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
@@ -19,11 +18,11 @@ jest.mock('@/lib/startup/startup-state', () => ({
 }));
 
 const {
-  withAuth,
-  withAuthParams,
-  createAuthenticatedHandler,
-  createAuthenticatedParamsHandler,
-  checkOwnership,
+  withContext,
+  withContextParams,
+  createContextHandler,
+  createContextParamsHandler,
+  exists,
 } = require('@/lib/api/middleware/auth');
 
 const { getServerSession } = require('@/lib/auth/session');
@@ -32,7 +31,7 @@ const { getRepositoriesSafe } = require('@/lib/repositories/factory');
 const mockGetServerSession = jest.mocked(getServerSession);
 const mockGetRepositoriesSafe = jest.mocked(getRepositoriesSafe);
 
-describe('API Auth Middleware (Single-User Mode)', () => {
+describe('API Context Middleware', () => {
   let mockRepos: any;
   let mockUser: any;
   let mockSession: any;
@@ -66,10 +65,10 @@ describe('API Auth Middleware (Single-User Mode)', () => {
     mockGetRepositoriesSafe.mockResolvedValue(mockRepos);
   });
 
-  describe('withAuth', () => {
-    it('should call handler with authenticated context', async () => {
+  describe('withContext', () => {
+    it('should call handler with request context', async () => {
       const handler = jest.fn().mockResolvedValue(NextResponse.json({ success: true }));
-      const response = await withAuth(handler);
+      const response = await withContext(handler);
 
       expect(mockGetServerSession).toHaveBeenCalled();
       expect(mockGetRepositoriesSafe).toHaveBeenCalled();
@@ -87,11 +86,11 @@ describe('API Auth Middleware (Single-User Mode)', () => {
       expect(body).toEqual({ success: true });
     });
 
-    it('should return 500 when session fails (should not happen in single-user mode)', async () => {
+    it('should return 500 when session fails', async () => {
       mockGetServerSession.mockResolvedValue(null);
       const handler = jest.fn();
 
-      const response = await withAuth(handler);
+      const response = await withContext(handler);
 
       expect(response.status).toBe(500);
       const body = await response.json();
@@ -99,11 +98,11 @@ describe('API Auth Middleware (Single-User Mode)', () => {
       expect(handler).not.toHaveBeenCalled();
     });
 
-    it('should return 500 when session missing user ID (should not happen in single-user mode)', async () => {
+    it('should return 500 when session missing user ID', async () => {
       mockGetServerSession.mockResolvedValue({ user: {} });
       const handler = jest.fn();
 
-      const response = await withAuth(handler);
+      const response = await withContext(handler);
 
       expect(response.status).toBe(500);
       const body = await response.json();
@@ -111,11 +110,11 @@ describe('API Auth Middleware (Single-User Mode)', () => {
       expect(handler).not.toHaveBeenCalled();
     });
 
-    it('should return 500 when user not found in database (should not happen in single-user mode)', async () => {
+    it('should return 500 when user not found in database', async () => {
       mockRepos.users.findById.mockResolvedValue(null);
       const handler = jest.fn();
 
-      const response = await withAuth(handler);
+      const response = await withContext(handler);
 
       expect(response.status).toBe(500);
       const body = await response.json();
@@ -126,17 +125,17 @@ describe('API Auth Middleware (Single-User Mode)', () => {
     it('should propagate handler errors', async () => {
       const handler = jest.fn().mockRejectedValue(new Error('Handler error'));
 
-      await expect(withAuth(handler)).rejects.toThrow('Handler error');
+      await expect(withContext(handler)).rejects.toThrow('Handler error');
     });
   });
 
-  describe('withAuthParams', () => {
-    it('should call handler with params and authenticated context', async () => {
+  describe('withContextParams', () => {
+    it('should call handler with params and request context', async () => {
       const request = new NextRequest('https://example.com/api/characters/char-1');
       const params = { id: 'char-1' };
       const handler = jest.fn().mockResolvedValue(NextResponse.json({ id: 'char-1' }));
 
-      const response = await withAuthParams(request, params, handler);
+      const response = await withContextParams(request, params, handler);
 
       expect(handler).toHaveBeenCalledWith(
         request,
@@ -158,7 +157,7 @@ describe('API Auth Middleware (Single-User Mode)', () => {
       const params = { id: 'test-1' };
       const handler = jest.fn();
 
-      const response = await withAuthParams(request, params, handler);
+      const response = await withContextParams(request, params, handler);
 
       expect(response.status).toBe(500);
       expect(handler).not.toHaveBeenCalled();
@@ -170,7 +169,7 @@ describe('API Auth Middleware (Single-User Mode)', () => {
       const params = { id: 'test-1' };
       const handler = jest.fn();
 
-      const response = await withAuthParams(request, params, handler);
+      const response = await withContextParams(request, params, handler);
 
       expect(response.status).toBe(500);
       expect(handler).not.toHaveBeenCalled();
@@ -181,7 +180,7 @@ describe('API Auth Middleware (Single-User Mode)', () => {
       const params = { id: 'char-1', action: 'favorite' };
       const handler = jest.fn().mockResolvedValue(NextResponse.json({ ok: true }));
 
-      await withAuthParams(request, params, handler);
+      await withContextParams(request, params, handler);
 
       expect(handler).toHaveBeenCalledWith(
         request,
@@ -191,12 +190,12 @@ describe('API Auth Middleware (Single-User Mode)', () => {
     });
   });
 
-  describe('createAuthenticatedHandler', () => {
-    it('should create handler that authenticates and calls inner handler', async () => {
+  describe('createContextHandler', () => {
+    it('should create handler that provides context and calls inner handler', async () => {
       const innerHandler = jest.fn().mockResolvedValue(
         NextResponse.json({ data: 'test' })
       );
-      const handler = createAuthenticatedHandler(innerHandler);
+      const handler = createContextHandler(innerHandler);
       const request = new NextRequest('https://example.com/api/test');
 
       const response = await handler(request);
@@ -216,10 +215,10 @@ describe('API Auth Middleware (Single-User Mode)', () => {
       expect(body).toEqual({ data: 'test' });
     });
 
-    it('should return 500 when session fails (should not happen in single-user mode)', async () => {
+    it('should return 500 when session fails', async () => {
       mockGetServerSession.mockResolvedValue(null);
       const innerHandler = jest.fn();
-      const handler = createAuthenticatedHandler(innerHandler);
+      const handler = createContextHandler(innerHandler);
       const request = new NextRequest('https://example.com/api/test');
 
       const response = await handler(request);
@@ -229,9 +228,8 @@ describe('API Auth Middleware (Single-User Mode)', () => {
     });
 
     it('should be usable as Next.js route handler', async () => {
-      // This is the pattern used in actual routes:
-      // export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {...})
-      const handler = createAuthenticatedHandler(async (req, { user, repos }) => {
+      // Pattern: export const GET = createContextHandler(async (req, { user, repos }) => {...})
+      const handler = createContextHandler(async (req, { user, repos }) => {
         return NextResponse.json({ userId: user.id });
       });
 
@@ -243,12 +241,12 @@ describe('API Auth Middleware (Single-User Mode)', () => {
     });
   });
 
-  describe('createAuthenticatedParamsHandler', () => {
-    it('should create handler that authenticates with params', async () => {
+  describe('createContextParamsHandler', () => {
+    it('should create handler that provides context with params', async () => {
       const innerHandler = jest.fn().mockResolvedValue(
         NextResponse.json({ id: 'char-1' })
       );
-      const handler = createAuthenticatedParamsHandler<{ id: string }>(innerHandler);
+      const handler = createContextParamsHandler<{ id: string }>(innerHandler);
       const request = new NextRequest('https://example.com/api/characters/char-1');
       const context = { params: Promise.resolve({ id: 'char-1' }) };
 
@@ -274,7 +272,7 @@ describe('API Auth Middleware (Single-User Mode)', () => {
       });
 
       const innerHandler = jest.fn().mockResolvedValue(NextResponse.json({ ok: true }));
-      const handler = createAuthenticatedParamsHandler(innerHandler);
+      const handler = createContextParamsHandler(innerHandler);
       const request = new NextRequest('https://example.com/api/test');
       const context = { params: paramsPromise };
 
@@ -295,11 +293,11 @@ describe('API Auth Middleware (Single-User Mode)', () => {
       );
     });
 
-    it('should return 500 when session fails (should not happen in single-user mode)', async () => {
+    it('should return 500 when session fails', async () => {
       mockGetServerSession.mockResolvedValue(null);
 
       const innerHandler = jest.fn();
-      const handler = createAuthenticatedParamsHandler(innerHandler);
+      const handler = createContextParamsHandler(innerHandler);
       const request = new NextRequest('https://example.com/api/test');
       const context = { params: Promise.resolve({ id: 'test-1' }) };
 
@@ -310,8 +308,8 @@ describe('API Auth Middleware (Single-User Mode)', () => {
     });
 
     it('should be usable as Next.js route handler with params', async () => {
-      // Pattern: export const GET = createAuthenticatedParamsHandler<{ id: string }>(...)
-      const handler = createAuthenticatedParamsHandler<{ id: string }>(
+      // Pattern: export const GET = createContextParamsHandler<{ id: string }>(...)
+      const handler = createContextParamsHandler<{ id: string }>(
         async (req, { user }, { id }) => {
           return NextResponse.json({ userId: user.id, characterId: id });
         }
@@ -326,41 +324,29 @@ describe('API Auth Middleware (Single-User Mode)', () => {
     });
   });
 
-  describe('checkOwnership', () => {
-    const userId = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
-
-    it('should return true for resource owned by user', () => {
-      const resource = { id: 'res-1', userId: 'ffffffff-ffff-ffff-ffff-ffffffffffff', name: 'Test' };
-      expect(checkOwnership(resource, userId)).toBe(true);
+  describe('exists', () => {
+    it('should return true for defined values', () => {
+      expect(exists({ id: 'test' })).toBe(true);
+      expect(exists('string')).toBe(true);
+      expect(exists(0)).toBe(true);
+      expect(exists(false)).toBe(true);
+      expect(exists([])).toBe(true);
     });
 
-    it('should return false for resource owned by different user', () => {
-      const resource = { id: 'res-1', userId: 'user-456', name: 'Test' };
-      expect(checkOwnership(resource, userId)).toBe(false);
+    it('should return false for null', () => {
+      expect(exists(null)).toBe(false);
     });
 
-    it('should return false for null resource', () => {
-      expect(checkOwnership(null, userId)).toBe(false);
-    });
-
-    it('should return false for undefined resource', () => {
-      expect(checkOwnership(undefined, userId)).toBe(false);
-    });
-
-    it('should return false for resource without userId', () => {
-      const resource = { id: 'res-1', name: 'Test' };
-      expect(checkOwnership(resource, userId)).toBe(false);
+    it('should return false for undefined', () => {
+      expect(exists(undefined)).toBe(false);
     });
 
     it('should work as type guard', () => {
-      const resource: { id: string; userId?: string } | null = {
-        id: 'res-1',
-        userId: 'ffffffff-ffff-ffff-ffff-ffffffffffff',
-      };
+      const resource: { id: string } | null = { id: 'test' };
 
-      if (checkOwnership(resource, userId)) {
-        // TypeScript should know resource is not null and has userId
-        expect(resource.userId).toBe('ffffffff-ffff-ffff-ffff-ffffffffffff');
+      if (exists(resource)) {
+        // TypeScript should know resource is not null
+        expect(resource.id).toBe('test');
       }
     });
   });

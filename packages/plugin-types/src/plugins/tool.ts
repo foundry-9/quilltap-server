@@ -224,15 +224,13 @@ export interface ToolPlugin {
   getDefaultConfig?: () => Record<string, unknown>;
 
   /**
-   * Render the tool icon as a React component (optional)
+   * Render the tool icon (optional, deprecated)
    *
-   * Returns a function that renders the tool's icon.
-   * Called by the UI to display tool icons in various places.
-   *
+   * @deprecated Use the `icon` property with PluginIconData instead
    * @param props Component props including optional className for styling
-   * @returns JSX Element representing the tool icon
+   * @returns Icon element
    */
-  renderIcon?: (props: { className?: string }) => React.ReactNode;
+  renderIcon?: (props: { className?: string }) => unknown;
 
   /**
    * Called when configuration changes (optional)

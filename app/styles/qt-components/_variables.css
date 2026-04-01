@@ -270,6 +270,19 @@
   --qt-chat-sidebar-muted: var(--color-muted-foreground);
   --qt-chat-sidebar-heading: var(--color-foreground);
 
+  /* Response status indicator */
+  --qt-response-status-bg: color-mix(in srgb, var(--color-muted) 60%, transparent);
+  --qt-response-status-fg: var(--color-muted-foreground);
+  --qt-response-status-border: var(--color-border);
+
+  /* Stage-specific colors */
+  --qt-response-status-compressing-fg: var(--qt-status-info-fg);
+  --qt-response-status-gathering-fg: hsl(270 70% 60%);
+  --qt-response-status-building-fg: hsl(38 92% 50%);
+  --qt-response-status-sending-fg: var(--qt-status-info-fg);
+  --qt-response-status-streaming-fg: hsl(142 76% 36%);
+  --qt-response-status-tool-fg: hsl(270 70% 60%);
+
   --qt-participant-card-radius: var(--radius-lg);
   --qt-participant-card-bg: var(--color-card);
   --qt-participant-card-border: var(--color-border);
@@ -545,4 +558,14 @@
   /* Capability badge tokens */
   --qt-badge-capability-bg: hsl(217 91% 60% / 0.2);
   --qt-badge-capability-fg: hsl(217 91% 70%);
+
+  /* Response status indicator - brighter for dark mode */
+  --qt-response-status-bg: color-mix(in srgb, var(--color-muted) 40%, transparent);
+  --qt-response-status-fg: var(--color-muted-foreground);
+  --qt-response-status-compressing-fg: hsl(199 89% 70%);
+  --qt-response-status-gathering-fg: hsl(270 70% 70%);
+  --qt-response-status-building-fg: hsl(38 92% 65%);
+  --qt-response-status-sending-fg: hsl(199 89% 70%);
+  --qt-response-status-streaming-fg: hsl(142 76% 65%);
+  --qt-response-status-tool-fg: hsl(270 70% 70%);
 }

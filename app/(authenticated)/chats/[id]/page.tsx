@@ -14,6 +14,7 @@ import AddCharacterDialog from '@/components/chat/AddCharacterDialog'
 import ReattributeMessageDialog from '@/components/chat/ReattributeMessageDialog'
 import BulkCharacterReplaceModal from '@/components/chat/BulkCharacterReplaceModal'
 import ChatToolSettingsModal from '@/components/chat/ChatToolSettingsModal'
+import StateEditorModal from '@/components/state/StateEditorModal'
 import { SearchReplaceModal } from '@/components/tools/search-replace'
 import AllLLMPauseModal from '@/components/chat/AllLLMPauseModal'
 import LLMLogViewerModal from '@/components/chat/LLMLogViewerModal'
@@ -74,7 +75,7 @@ import {
   useAutoScroll,
   type SwipeState,
 } from './hooks'
-import type { Chat, ChatSettings, Message, MessageAttachment, Participant, CharacterData } from './types'
+import type { Chat, ChatSettings, Message, MessageAttachment, Participant, CharacterData, PendingToolResult } from './types'
 import {
   StreamingMessage,
   MessageRow,
@@ -125,6 +126,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [searchReplaceModalOpen, setSearchReplaceModalOpen] = useState(false)
   const [bulkReplaceModalOpen, setBulkReplaceModalOpen] = useState(false)
   const [toolSettingsModalOpen, setToolSettingsModalOpen] = useState(false)
+  const [stateEditorModalOpen, setStateEditorModalOpen] = useState(false)
   const [toolExecutionStatus, setToolExecutionStatus] = useState<{ tool: string; status: 'pending' | 'success' | 'error'; message: string } | null>(null)
   const [pendingToolCalls, setPendingToolCalls] = useState<Array<{ id: string; name: string; status: 'pending' | 'success' | 'error'; result?: unknown; arguments?: Record<string, unknown> }>>([])
   const [showPreview, setShowPreview] = useState(false)
@@ -134,6 +136,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [ephemeralMessages, setEphemeralMessages] = useState<EphemeralMessageData[]>([])
   const [respondingParticipantId, setRespondingParticipantId] = useState<string | null>(null)
   const [isPaused, setIsPaused] = useState(false)
+  const [responseStatus, setResponseStatus] = useState<{
+    stage: string
+    message: string
+    toolName?: string
+    characterName?: string
+    characterId?: string
+  } | null>(null)
 
   // Impersonation state (Characters Not Personas)
   const [impersonatingParticipantIds, setImpersonatingParticipantIds] = useState<string[]>([])
@@ -178,6 +187,28 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const { handleFileSelect, removeAttachedFile, uploadFile } = fileHook
   const { conflictInfo, isConflictDialogOpen, resolvingConflict, handleConflictResolution, cancelConflict } = fileHook
 
+  // Pending tool results (shown in composer before sending)
+  const [pendingToolResults, setPendingToolResults] = useState<PendingToolResult[]>([])
+
+  // Add a pending tool result (from RNG or other tools)
+  const handleAddPendingToolResult = useCallback((result: Omit<PendingToolResult, 'id' | 'createdAt'>) => {
+    const newResult: PendingToolResult = {
+      ...result,
+      id: crypto.randomUUID(),
+      createdAt: new Date().toISOString(),
+    }
+    console.debug('[Chat] Adding pending tool result:', { tool: result.tool, id: newResult.id })
+    setPendingToolResults(prev => {
+      console.debug('[Chat] Pending tool results updated:', { previousCount: prev.length, newCount: prev.length + 1 })
+      return [...prev, newResult]
+    })
+  }, [])
+
+  // Remove a pending tool result
+  const handleRemovePendingToolResult = useCallback((resultId: string) => {
+    setPendingToolResults(prev => prev.filter(r => r.id !== resultId))
+  }, [])
+
   // Refs
   const lastAutoTriggeredRef = useRef<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -194,12 +225,21 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   // Ref for triggerContinueMode to break dependency cycle in auto-trigger useEffect
   const triggerContinueModeRef = useRef<(participantId: string) => Promise<void>>(async () => {})
 
+  // Use message IDs as keys for the virtualizer to prevent stale measurement cache
+  // When messages are replaced (e.g., temp ID -> server ID), the virtualizer needs to
+  // know they're different items to re-measure them. Without this, it uses indices
+  // and can position items at wrong locations when the array is replaced.
+  const getItemKey = useCallback((index: number) => {
+    return messages[index]?.id ?? index
+  }, [messages])
+
   // Virtualizer for efficient message list rendering - must be defined before auto-scroll hook
   const virtualizer = useVirtualizer({
     count: messages.length,
     getScrollElement: () => messagesContainerRef.current,
     estimateSize: () => 150, // Estimated row height in pixels
     overscan: 5, // Render 5 extra items above/below viewport for smooth scrolling
+    getItemKey, // Use message IDs to properly track items across array replacements
   })
 
   // Intelligent auto-scroll hook - handles settling, streaming, and user scroll intent
@@ -878,6 +918,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             try {
               const data = JSON.parse(rawData)
 
+              // Handle status updates
+              if (data.status) {
+                setResponseStatus(data.status)
+              }
+
               if (data.content) {
                 fullContent += data.content
                 setWaitingForResponse(false)
@@ -886,6 +931,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               }
 
               if (data.error) {
+                // Clear response status
+                setResponseStatus(null)
                 // Include details in error message if available
                 const errorMsg = data.details
                   ? `${data.error}: ${data.details}`
@@ -894,6 +941,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               }
 
               if (data.done) {
+                // Clear response status
+                setResponseStatus(null)
+
                 if (fullContent.trim()) {
                   const newMessage: Message = {
                     id: data.messageId || `continue-${Date.now()}`,
@@ -948,6 +998,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       setWaitingForResponse(false)
       setStreamingContent('')
       setRespondingParticipantId(null)
+      setResponseStatus(null)
       abortControllerRef.current = null
       scrollOnStreamComplete()
       // Return focus to input after AI response completes
@@ -1525,7 +1576,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   // Main sendMessage function
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
-    if ((!input.trim() && attachedFiles.length === 0) || sending) return
+    if ((!input.trim() && attachedFiles.length === 0 && pendingToolResults.length === 0) || sending) return
 
     // Reset auto-trigger ref when user sends a message (new turn cycle starts)
     lastAutoTriggeredRef.current = null
@@ -1543,9 +1594,16 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       filepath: f.filepath,
       mimeType: f.mimeType,
     }))
+    // Capture pending tool results before clearing
+    const toolResultsToSend = [...pendingToolResults]
+    console.debug('[Chat] Sending message with tool results:', {
+      toolResultCount: toolResultsToSend.length,
+      tools: toolResultsToSend.map(r => ({ tool: r.tool, id: r.id })),
+    })
     setInput('')
     clearDraft()
     setAttachedFiles([])
+    setPendingToolResults([])
     setSending(true)
     setWaitingForResponse(true)
     setStreaming(false)
@@ -1564,6 +1622,21 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       ? `${userMessage}${userMessage ? '\n' : ''}[Attached: ${messageAttachments.map(f => f.filename).join(', ')}]`
       : userMessage
 
+    // Add pending tool result messages to UI (before user message)
+    const toolMessages: Message[] = toolResultsToSend.map((result, index) => ({
+      id: `temp-tool-${Date.now()}-${index}`,
+      role: 'TOOL',
+      content: JSON.stringify({
+        tool: result.tool,
+        initiatedBy: 'user',
+        success: result.success,
+        result: result.formattedResult,
+        prompt: result.requestPrompt,
+        arguments: result.arguments,
+      }),
+      createdAt: result.createdAt,
+    }))
+
     // Add user message to UI
     const tempUserMessageId = `temp-user-${Date.now()}`
     const tempUserMessage: Message = {
@@ -1573,13 +1646,25 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       createdAt: new Date().toISOString(),
       attachments: messageAttachments.length > 0 ? messageAttachments : undefined,
     }
-    setMessages((prev) => [...prev, tempUserMessage])
+    setMessages((prev) => [...prev, ...toolMessages, tempUserMessage])
 
     // Scroll to show user message - this also re-enables auto-scroll
     scrollOnUserMessage()
 
-    // Debug: Log outgoing request
-    const requestPayload = { content: userMessage || 'Please look at the attached file(s).', fileIds }
+    // Build request payload with pending tool results
+    const requestPayload = {
+      content: userMessage || (attachedFiles.length > 0 ? 'Please look at the attached file(s).' : ''),
+      fileIds,
+      // Include pending tool results to be persisted as TOOL messages
+      pendingToolResults: toolResultsToSend.length > 0 ? toolResultsToSend.map(r => ({
+        tool: r.tool,
+        success: r.success,
+        result: r.formattedResult,
+        prompt: r.requestPrompt,
+        arguments: r.arguments,
+        createdAt: r.createdAt,
+      })) : undefined,
+    }
 
     try {
       // Create AbortController for this request
@@ -1630,6 +1715,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             }
             try {
               const data = JSON.parse(rawData)
+
+              // Handle status updates
+              if (data.status) {
+                setResponseStatus(data.status)
+              }
 
               if (data.content) {
                 fullContent += data.content
@@ -1709,6 +1799,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               }
 
               if (data.done) {
+                // Clear response status
+                setResponseStatus(null)
+
                 // Check for empty response (known Gemini API issue)
                 if (data.emptyResponse) {
                   showErrorToast(data.emptyResponseReason || 'The AI returned an empty response. Use the Resend button to try again.')
@@ -1743,6 +1836,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               }
 
               if (data.error) {
+                // Clear response status
+                setResponseStatus(null)
                 // Include details in error message if available
                 const errorMsg = data.details
                   ? `${data.error}: ${data.details}`
@@ -1785,6 +1880,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         setStreaming(false)
         setWaitingForResponse(false)
         setRespondingParticipantId(null)
+        setResponseStatus(null)
       } else {
         // Extract error message, handling cases where message may be undefined
         // Network errors (connection dropped, timeout) may have empty messages
@@ -1805,10 +1901,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         setStreaming(false)
         setWaitingForResponse(false)
         setRespondingParticipantId(null)
+        setResponseStatus(null)
       }
     } finally {
       setSending(false)
       abortControllerRef.current = null
+      setResponseStatus(null)
       // Return focus to input after send completes
       // Use longer timeout to let smooth scroll settle, and preventScroll to avoid conflicts
       setTimeout(() => {
@@ -2117,11 +2215,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           setInput={setInput}
           attachedFiles={attachedFiles}
           onRemoveAttachedFile={removeAttachedFile}
+          pendingToolResults={pendingToolResults}
+          onRemovePendingToolResult={handleRemovePendingToolResult}
           disabled={sending}
           sending={sending}
           hasActiveCharacters={hasActiveCharacters}
           streaming={streaming}
           waitingForResponse={waitingForResponse}
+          responseStatus={responseStatus}
           toolPaletteOpen={toolPaletteOpen}
           setToolPaletteOpen={setToolPaletteOpen}
           showPreview={showPreview}
@@ -2165,7 +2266,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onSearchReplaceClick={() => setSearchReplaceModalOpen(true)}
           onBulkCharacterReplaceClick={() => setBulkReplaceModalOpen(true)}
           onToolSettingsClick={() => setToolSettingsModalOpen(true)}
+          onStateClick={() => setStateEditorModalOpen(true)}
           onStopStreaming={stopStreaming}
+          onPendingToolResult={handleAddPendingToolResult}
         />
 
         {/* Modals */}
@@ -2337,6 +2440,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 disabledToolGroups: newDisabledToolGroups,
               } : prev)
             }}
+          />
+        )}
+
+        {/* State Editor Modal */}
+        {chat && (
+          <StateEditorModal
+            isOpen={stateEditorModalOpen}
+            onClose={() => setStateEditorModalOpen(false)}
+            entityType="chat"
+            entityId={id}
+            entityName={chat.title}
           />
         )}
 

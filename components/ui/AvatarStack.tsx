@@ -89,14 +89,14 @@ export function AvatarStack({
 
     return (
       <div
-        className={`bg-gray-300 dark:bg-slate-700 flex items-center justify-center flex-shrink-0 ${style === 'CIRCULAR' ? 'rounded-full' : ''} ${className}`}
+        className={`qt-bg-muted flex items-center justify-center flex-shrink-0 ${style === 'CIRCULAR' ? 'rounded-full' : ''} ${className}`}
         style={{
           width: `${width}px`,
           height: `${height}px`,
           aspectRatio: style === 'RECTANGULAR' ? '4/5' : undefined,
         }}
       >
-        <span className={`font-bold text-gray-600 dark:text-gray-300 ${config.textSize}`}>?</span>
+        <span className={`font-bold qt-text-secondary ${config.textSize}`}>?</span>
       </div>
     )
   }

@@ -2,21 +2,31 @@
  * Chats API v1 - DELETE Handler
  *
  * DELETE /api/v1/chats/[id] - Delete a chat
+ * DELETE /api/v1/chats/[id]?action=reset-state - Reset chat state to empty
  */
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { getActionParam } from '@/lib/api/middleware/actions';
 import { logger } from '@/lib/logger';
 import { notFound, serverError } from '@/lib/api/responses';
+import { handleResetState } from '../actions';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 
 /**
  * DELETE handler for removing a chat
  */
 export async function handleDelete(
+  req: NextRequest,
   ctx: AuthenticatedContext,
   chatId: string
 ): Promise<NextResponse> {
   const { user, repos } = ctx;
+  const action = getActionParam(req);
+
+  // Handle reset-state action
+  if (action === 'reset-state') {
+    return handleResetState(chatId, ctx);
+  }
 
   try {
 

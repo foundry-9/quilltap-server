@@ -7,6 +7,9 @@
  * GET /api/v1/chats/[id]?action=export - Export chat (SillyTavern JSONL)
  * GET /api/v1/chats/[id]?action=cost - Get cost breakdown
  * GET /api/v1/chats/[id]?action=get-avatars - Get avatar overrides for chat
+ * GET /api/v1/chats/[id]?action=get-state - Get chat state (merged with project)
+ * PUT /api/v1/chats/[id]?action=set-state - Set chat state
+ * DELETE /api/v1/chats/[id]?action=reset-state - Reset chat state to empty
  * POST /api/v1/chats/[id]?action=regenerate-title - Regenerate chat title
  * POST /api/v1/chats/[id]?action=add-tag - Add tag
  * POST /api/v1/chats/[id]?action=remove-tag - Remove tag
@@ -22,6 +25,7 @@
  * POST /api/v1/chats/[id]?action=remove-avatar - Remove avatar override
  * POST /api/v1/chats/[id]?action=add-tool-result - Add tool result message
  * POST /api/v1/chats/[id]?action=queue-memories - Queue memory extraction jobs
+ * POST /api/v1/chats/[id]?action=rng - Execute random number generator (dice, coin, bottle)
  * PATCH /api/v1/chats/[id]?action=turn - Persist turn state (lastTurnParticipantId)
  */
 
@@ -37,7 +41,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
 );
 
 export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
-  (_, ctx, { id }) => handleDelete(ctx, id)
+  (req, ctx, { id }) => handleDelete(req, ctx, id)
 );
 
 export const POST = createAuthenticatedParamsHandler<{ id: string }>(

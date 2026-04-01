@@ -43,13 +43,13 @@ export default function RoleplayTemplatesTab() {
   return (
     <div className="space-y-6">
       {error && (
-        <div className="bg-destructive/10 border border-destructive/30 rounded p-4 text-destructive">
+        <div className="qt-bg-destructive/10 border qt-border-destructive rounded p-4 qt-text-destructive">
           {error}
         </div>
       )}
 
       {success && (
-        <div className="bg-green-50 border border-green-200 rounded p-4 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-200">
+        <div className="qt-bg-success/10 border qt-border-success rounded p-4 qt-text-success">
           {success}
         </div>
       )}
@@ -69,7 +69,7 @@ export default function RoleplayTemplatesTab() {
               value={defaultTemplateId || ''}
               onChange={(e) => handleDefaultTemplateChange(e.target.value || null)}
               disabled={defaultSaving || loading}
-              className="w-full rounded-md border border-input bg-background text-foreground px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+              className="qt-select"
             >
               <option value="">None (no formatting template)</option>
               {templates.map((template) => (
@@ -173,7 +173,7 @@ export default function RoleplayTemplatesTab() {
                     onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                     maxLength={100}
                     placeholder="My Custom RP Style"
-                    className="w-full rounded-md border border-input bg-background text-foreground px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="qt-input w-full"
                   />
                   <p className="qt-text-xs mt-1">
                     {formData.name.length}/100 characters
@@ -190,7 +190,7 @@ export default function RoleplayTemplatesTab() {
                     onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                     maxLength={500}
                     placeholder="A brief description of what this template does"
-                    className="w-full rounded-md border border-input bg-background text-foreground px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="qt-input w-full"
                   />
                   <p className="qt-text-xs mt-1">
                     {formData.description.length}/500 characters
@@ -206,7 +206,7 @@ export default function RoleplayTemplatesTab() {
                     onChange={(e) => setFormData(prev => ({ ...prev, systemPrompt: e.target.value }))}
                     rows={12}
                     placeholder="Enter the formatting instructions that will be prepended to character system prompts..."
-                    className="w-full rounded-md border border-input bg-background text-foreground px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-ring font-mono text-sm"
+                    className="qt-textarea w-full font-mono text-sm"
                   />
                   <p className="qt-text-xs mt-1">
                     This will be prepended to the character&apos;s system prompt when this template is selected.

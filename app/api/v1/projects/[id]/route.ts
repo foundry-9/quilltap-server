@@ -21,6 +21,10 @@
  * GET /api/v1/projects/[id]?action=get-mount-point - Get project mount point config
  * PUT /api/v1/projects/[id]?action=set-mount-point - Set project mount point
  * DELETE /api/v1/projects/[id]?action=clear-mount-point - Clear project mount point (use system default)
+ *
+ * GET /api/v1/projects/[id]?action=get-state - Get project state
+ * PUT /api/v1/projects/[id]?action=set-state - Set project state
+ * DELETE /api/v1/projects/[id]?action=reset-state - Reset project state to empty
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -79,6 +83,10 @@ const setMountPointSchema = z.object({
 const updateToolSettingsSchema = z.object({
   defaultDisabledTools: z.array(z.string()),
   defaultDisabledToolGroups: z.array(z.string()),
+});
+
+const setStateSchema = z.object({
+  state: z.record(z.string(), z.unknown()),
 });
 
 // ============================================================================
@@ -321,6 +329,27 @@ async function handleListFiles(req: NextRequest, context: AuthenticatedContext, 
   }
 }
 
+async function handleGetState(req: NextRequest, context: AuthenticatedContext, { id }: { id: string }) {
+  const { user, repos } = context;
+
+  try {
+    const project = await repos.projects.findById(id);
+    if (!checkOwnership(project, user.id)) {
+      return notFound('Project');
+    }
+
+    const projectState = (project.state || {}) as Record<string, unknown>;
+
+    return successResponse({
+      success: true,
+      state: projectState,
+    });
+  } catch (error) {
+    logger.error('[Projects v1] Error getting state', { projectId: id }, error instanceof Error ? error : undefined);
+    return serverError('Failed to get state');
+  }
+}
+
 async function handleGetMountPoint(req: NextRequest, context: AuthenticatedContext, { id }: { id: string }) {
   const { user, repos } = context;
 
@@ -390,6 +419,8 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
       return handleListFiles(req, context, { id });
     case 'get-mount-point':
       return handleGetMountPoint(req, context, { id });
+    case 'get-state':
+      return handleGetState(req, context, { id });
     default:
       return handleGetDefault(req, context, { id });
   }
@@ -425,6 +456,42 @@ async function handlePutDefault(req: NextRequest, context: AuthenticatedContext,
 
     logger.error('[Projects v1] Error updating project', { projectId: id }, error instanceof Error ? error : undefined);
     return serverError('Failed to update project');
+  }
+}
+
+async function handleSetState(req: NextRequest, context: AuthenticatedContext, { id }: { id: string }) {
+  const { user, repos } = context;
+
+  try {
+    const project = await repos.projects.findById(id);
+    if (!checkOwnership(project, user.id)) {
+      return notFound('Project');
+    }
+
+    const body = await req.json();
+    const validated = setStateSchema.parse(body);
+
+    // Update state
+    const updatedProject = await repos.projects.update(id, {
+      state: validated.state,
+    });
+
+    logger.info('[Projects v1] State updated', {
+      projectId: id,
+      userId: user.id,
+      stateKeys: Object.keys(validated.state),
+    });
+
+    return successResponse({
+      success: true,
+      state: updatedProject?.state || validated.state,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return validationError(error);
+    }
+    logger.error('[Projects v1] Error setting state', { projectId: id }, error instanceof Error ? error : undefined);
+    return serverError('Failed to set state');
   }
 }
 
@@ -533,6 +600,8 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
   switch (action) {
     case 'set-mount-point':
       return handleSetMountPoint(req, context, { id });
+    case 'set-state':
+      return handleSetState(req, context, { id });
     default:
       return handlePutDefault(req, context, { id });
   }
@@ -689,6 +758,37 @@ async function handleClearMountPoint(req: NextRequest, context: AuthenticatedCon
   }
 }
 
+async function handleResetState(req: NextRequest, context: AuthenticatedContext, { id }: { id: string }) {
+  const { user, repos } = context;
+
+  try {
+    const project = await repos.projects.findById(id);
+    if (!checkOwnership(project, user.id)) {
+      return notFound('Project');
+    }
+
+    const previousState = (project.state || {}) as Record<string, unknown>;
+
+    // Reset to empty object
+    await repos.projects.update(id, {
+      state: {},
+    });
+
+    logger.info('[Projects v1] State reset', {
+      projectId: id,
+      userId: user.id,
+    });
+
+    return successResponse({
+      success: true,
+      previousState,
+    });
+  } catch (error) {
+    logger.error('[Projects v1] Error resetting state', { projectId: id }, error instanceof Error ? error : undefined);
+    return serverError('Failed to reset state');
+  }
+}
+
 export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (req, context, { id }) => {
   const action = getActionParam(req);
 
@@ -701,6 +801,8 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
       return handleRemoveFile(req, context, { id });
     case 'clear-mount-point':
       return handleClearMountPoint(req, context, { id });
+    case 'reset-state':
+      return handleResetState(req, context, { id });
     default:
       return handleDeleteProject(req, context, { id });
   }

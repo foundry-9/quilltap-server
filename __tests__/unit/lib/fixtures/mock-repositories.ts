@@ -21,6 +21,7 @@ import type {
   MessageEvent,
   ChatEvent,
   ApiKey,
+  Project,
 } from '@/lib/schemas/types';
 
 // ============================================================================
@@ -123,6 +124,14 @@ export interface MockFilesRepository {
   delete: jest.Mock<(id: string) => Promise<boolean>>;
 }
 
+export interface MockProjectsRepository {
+  findById: jest.Mock<(id: string) => Promise<Project | null>>;
+  findAll: jest.Mock<() => Promise<Project[]>>;
+  create: jest.Mock<(data: Partial<Project>) => Promise<Project>>;
+  update: jest.Mock<(id: string, data: Partial<Project>) => Promise<Project | null>>;
+  delete: jest.Mock<(id: string) => Promise<boolean>>;
+}
+
 export interface MockLLMLogsRepository {
   create: jest.Mock;
   findById: jest.Mock;
@@ -158,6 +167,8 @@ export interface MockUserRepositories {
   connections: MockConnectionsRepository;
   imageProfiles: MockImageProfilesRepository;
   embeddingProfiles: MockEmbeddingProfilesRepository;
+  projects: MockProjectsRepository;
+  files: MockFilesRepository;
 }
 
 export interface MockGlobalRepositories {
@@ -322,6 +333,19 @@ export function createMockFilesRepository(): MockFilesRepository {
 }
 
 /**
+ * Create a mock projects repository
+ */
+export function createMockProjectsRepository(): MockProjectsRepository {
+  return {
+    findById: jest.fn<(id: string) => Promise<Project | null>>().mockResolvedValue(null),
+    findAll: jest.fn<() => Promise<Project[]>>().mockResolvedValue([]),
+    create: jest.fn<(data: Partial<Project>) => Promise<Project>>(),
+    update: jest.fn<(id: string, data: Partial<Project>) => Promise<Project | null>>().mockResolvedValue(null),
+    delete: jest.fn<(id: string) => Promise<boolean>>().mockResolvedValue(true),
+  };
+}
+
+/**
  * Create a mock LLM logs repository
  */
 export function createMockLLMLogsRepository(): MockLLMLogsRepository {
@@ -374,6 +398,8 @@ export function createMockUserRepositories(): MockUserRepositories {
     connections: createMockConnectionsRepository(),
     imageProfiles: createMockImageProfilesRepository(),
     embeddingProfiles: createMockEmbeddingProfilesRepository(),
+    projects: createMockProjectsRepository(),
+    files: createMockFilesRepository(),
   };
 }
 

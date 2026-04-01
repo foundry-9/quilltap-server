@@ -217,6 +217,7 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
             verboseMode: false,
             retentionDays: 30,
           },
+          autoDetectRng: true,
           defaultRoleplayTemplateId,
           ...data,
         };

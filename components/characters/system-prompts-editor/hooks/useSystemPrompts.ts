@@ -103,17 +103,19 @@ export function useSystemPrompts(
       setLoadingTemplates(true)
       const [templatesRes, samplesRes] = await Promise.all([
         fetch('/api/v1/prompt-templates'),
-        fetch('/api/v1/sample-prompts'),
+        fetch('/api/v1/sample-prompts?all=true'),
       ])
 
       if (templatesRes.ok) {
         const data = await templatesRes.json()
-        setTemplates(data)
+        // Extract templates array from response wrapper
+        setTemplates(data.templates || [])
       }
 
       if (samplesRes.ok) {
         const data = await samplesRes.json()
-        setSamplePrompts(data)
+        // Extract prompts array from response wrapper
+        setSamplePrompts(data.prompts || [])
       }
     } catch (err) {
       console.error('Error fetching templates', {

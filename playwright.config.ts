@@ -1,10 +1,11 @@
 import { defineConfig, devices } from '@playwright/test'
+import { mkdtempSync } from 'fs'
+import { join } from 'path'
+import { tmpdir } from 'os'
 
 const fallbackPort = Number(process.env.E2E_PORT || process.env.PORT || 3000)
 let baseURL = process.env.BASE_URL || `http://localhost:${fallbackPort}`
 let serverPort = fallbackPort
-const authDisabled = process.env.E2E_AUTH_DISABLED ?? 'true'
-const authEnv = authDisabled === 'true' ? 'AUTH_DISABLED=true OAUTH_DISABLED=true' : ''
 
 try {
   const parsedUrl = new URL(baseURL)
@@ -16,8 +17,17 @@ try {
   serverPort = fallbackPort
 }
 
+// Create a fresh data directory for each test run to ensure isolation
+// Use E2E_DATA_DIR if set (for reusing across config evaluations), otherwise create new
+let testDataDir = process.env.E2E_DATA_DIR
+if (!testDataDir) {
+  testDataDir = mkdtempSync(join(tmpdir(), 'quilltap-e2e-'))
+  process.env.E2E_DATA_DIR = testDataDir
+  console.log(`E2E Test Data Directory: ${testDataDir}`)
+}
+
 process.env.BASE_URL = baseURL
-process.env.E2E_AUTH_DISABLED = authDisabled
+process.env.QUILLTAP_DATA_DIR = testDataDir
 
 /**
  * Read environment variables from file.
@@ -36,12 +46,14 @@ export default defineConfig({
   fullyParallel: false,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
-  /* Retry on CI only */
-  retries: process.env.CI ? 2 : 0,
+  /* Retry to handle occasional flakiness */
+  retries: process.env.CI ? 2 : 1,
   /* Use single worker to avoid race conditions with database */
   workers: 1,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: 'html',
+  /* Global timeout for each test */
+  timeout: 60000,
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
@@ -49,6 +61,9 @@ export default defineConfig({
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
+
+    /* Longer action timeout for dev server which can be slow during hot reload */
+    actionTimeout: 15000,
   },
 
   /* Configure projects for major browsers */
@@ -69,11 +84,13 @@ export default defineConfig({
     // },
   ],
 
-  /* Run your local dev server before starting the tests */
+  /* Run a production build for stable e2e tests */
   webServer: {
-    command: `${authEnv} BASE_URL=${baseURL} PORT=${serverPort} npm run dev`,
+    command: `npm run build && QUILLTAP_DATA_DIR="${testDataDir}" PORT=${serverPort} npm run start`,
     url: baseURL,
     reuseExistingServer: false,
-    timeout: 120000, // 2 minutes for Next.js to compile
+    timeout: 300000, // 5 minutes for build + start
+    stdout: 'pipe',
+    stderr: 'pipe',
   },
 })

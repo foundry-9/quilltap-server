@@ -7,7 +7,7 @@ Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, 
 No subscriptions. No data harvested. No forgetting everything between sessions.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.8.1-green.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.9.0-green.svg)](package.json)
 
 <p align="center">
   <img src="./website/images/welcome-to-quilltap-2-8.png" alt="Welcome to Quilltap" />
@@ -19,7 +19,7 @@ No subscriptions. No data harvested. No forgetting everything between sessions.
 
 **For fiction writers and worldbuilders:** Organize your notes, characters, and lore into projects. The AI can read your files, search semantically across your worldbuilding, and actually understand the context of what you're creating—not just the last few messages.
 
-**For roleplayers:** Create detailed AI characters with personalities, backstories, and voices. Run multi-character scenes. Import your SillyTavern characters and chats. Have conversations that feel like collaboration, not customer service.
+**For roleplayers and gamers:** Create detailed AI characters with personalities, backstories, and voices. Run multi-character scenes. Roll dice and flip coins with built-in RNG. Track inventories, stats, and game state that persists across sessions. Import your SillyTavern characters and chats.
 
 **For everyone else:** Use it as a private AI desktop. Connect to Claude, GPT, Gemini, Grok, or local models through Ollama. Your conversations stay on your machine. The AI builds long-term memory across sessions. You control everything.
 
@@ -34,6 +34,7 @@ No subscriptions. No data harvested. No forgetting everything between sessions.
 | One provider, their pricing, their rules | Connect to any provider—or run models locally |
 | Your data on someone else's servers | Everything stays on your infrastructure |
 | Generic assistant personality | Characters with real voices and personalities |
+| No game mechanics or state tracking | Built-in dice rolls, inventories, and persistent game state |
 
 ---
 
@@ -44,8 +45,9 @@ SillyTavern is excellent for maximally customized character chat. Quilltap start
 - **Project-based organization** — files, folders, semantic search, not just chat logs
 - **LLM file access** — the AI can read and write your project files with permission
 - **Long-term memory** — semantic recall across conversations, not just within them
-- **Structured workflows** — for people who are *making* something, not just chatting
-- **Easier configuration** - more safeguards in place to try to keep things working
+- **Game mechanics** — persistent state for inventories, stats, and game tracking
+- **Built-in RNG** — dice rolls and coin flips that execute automatically when mentioned
+- **Easier configuration** — more safeguards to keep things working
 
 If you're coming from SillyTavern, Quilltap imports your characters and chats directly.
 
@@ -122,6 +124,7 @@ Create AI personalities that feel like collaborators:
 - **Multi-character chats** — Multiple AI characters in one conversation with turn management
 - **Impersonation** — Take control of any character mid-scene
 - **Swipes** — Generate alternative responses when one doesn't land
+- **AI Wizard** — Generate character details automatically, with streaming progress and document upload support
 - **SillyTavern import** — Bring your existing characters and chats
 
 ### Memory & Context
@@ -133,22 +136,32 @@ An AI that actually remembers:
 - **Context compression** — Automatic summarization for long conversations
 - **Full context reload** — AI can request complete context when needed
 
-The key difference here is this: we recommend that you set up at least two AI LLM models and one "embedding" model:
+Quilltap uses a three-model architecture for optimal cost and performance:
 
-1. **The usual chat model** - this is the one that "thinks," that is what you remember as being that special something that makes this AI connect with you
-2. **The cheap model** - this does the housework, what your brain does when you're asleep or thinking about something else. It makes memories, it titles conversations, it explains what's in an image you attached. The cheap LLM is the special sauce that explains why, when you talk to ChatGPT or Claude or whatever, it asks how that meeting went, or whether your lunch was good
-3. **The embedding model** - this is what your AI uses to search for relevant memories
+1. **Chat model** — Your primary AI for conversations (Claude, GPT-4, Gemini, etc.)
+2. **Cheap model** — Handles background tasks like memory extraction, titling, and image descriptions
+3. **Embedding model** — Powers semantic search for memories and files
 
-Memories are stored in the database and keyed to that "character" and their interaction with you. They can search their memories. The searches are semantically linked, so they are more likely to remember relevant things that irrelevant ones.
+### Gaming & Interactivity
+
+Built-in mechanics for tabletop gaming, RPGs, and interactive fiction:
+
+- **Chat State** — Persistent JSON storage for inventories, stats, scores, and any structured data
+- **State inheritance** — Project-level state shared across chats, with per-chat overrides
+- **Protected keys** — Underscore-prefixed keys (`_notes`) can't be modified by AI
+- **Random Number Generator** — Dice rolls (d4 to d1000), coin flips, and random participant selection
+- **Auto-detection** — Dice notation in messages executes automatically ("I roll 2d6" actually rolls)
+- **Cryptographically secure** — Fair, unpredictable random results
 
 ### LLM Tools
 
 Your AI can do more than talk:
 
 - **Web search** — Current information via Serper API
-- **Memory search** — Query past conversations, it naturally remembers things
+- **Memory search** — Query past conversations
 - **Image generation** — Create images mid-conversation (OpenAI, Google Imagen, Grok)
 - **File management** — Read/write project files
+- **Help search** — AI can search Quilltap's documentation to help you use features
 - **MCP connector** — Connect to Model Context Protocol servers
 - **Custom tools** — Extend with plugins
 
@@ -168,7 +181,7 @@ Connect to the AI services you prefer:
 | **OpenRouter** | 200+ models | Unified API, automatic pricing |
 | **OpenAI-Compatible** | LM Studio, vLLM, etc. | Any compatible endpoint |
 
-For best results we recommend Ollama or OpenAI for embedding, a "nano" or "lite" model for the cheap LLM, and Claude, ChatGPT, Gemini, GLM, or DeepSeek for the primary model. OpenRouter can get you access to all of these for pretty good rates - pay one provider and get a lot - but you will probably want to use Ollama as a local embedder if you do that.
+For best results we recommend Ollama or OpenAI for embedding, a "nano" or "lite" model for the cheap LLM, and Claude, ChatGPT, Gemini, GLM, or DeepSeek for the primary model. OpenRouter can get you access to all of these for good rates—pay one provider and get a lot—but you'll probably want to use Ollama as a local embedder if you do that.
 
 ---
 
@@ -203,7 +216,7 @@ See the plugin development guides:
 
 All Quilltap data (database, files, logs) is stored in a single directory:
 
-| Environment | Default Location | Override Variable |
+| Environment | Default Location                                   | Override Variable         |
 | ----------- | -------------------------------------------------- | ------------------------- |
 | **Linux**   | `~/.quilltap`                                      | `QUILLTAP_DATA_DIR`       |
 | **macOS**   | `~/Library/Application Support/Quilltap`           | `QUILLTAP_DATA_DIR`       |
@@ -216,7 +229,7 @@ All Quilltap data (database, files, logs) is stored in a single directory:
 QUILLTAP_HOST_DATA_DIR=/mnt/data/quilltap docker-compose up
 ```
 
-**Non-Docker users:** Set `QUILLTAP_DATA_DIR` to override the default:
+**Non-Docker users:** Set `QUILTTAP_DATA_DIR` to override the default:
 
 ```bash
 QUILLTAP_DATA_DIR=/custom/path npm run dev
@@ -232,9 +245,8 @@ At startup, Quilltap logs which directory it's using and where that configuratio
 
 ### Backup options
 
-- **Native export** — Selective .qtap format with conflict resolution
-- **Cloud backup** — S3-compatible storage (AWS, MinIO, Cloudflare R2)
-- **Multi-instance sync** — Bidirectional sync between Quilltap installations
+- **Full system backup** — Single ZIP file containing everything: characters, chats, files, memories, profiles, plugin configs, and installed npm plugins
+- **Native export** — Selective .qtap format with conflict resolution for sharing specific content
 - **SillyTavern format** — Import/export for compatibility
 
 See [Backup & Restore](docs/BACKUP-RESTORE.md) for details.

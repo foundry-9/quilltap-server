@@ -18,8 +18,10 @@
  * └── plugins/
  *     └── npm/     - npm-installed plugins
  *
- * Environment variable QUILLTAP_DATA_DIR overrides the base directory.
- * For Docker, set QUILLTAP_HOST_DATA_DIR to change the host mount location.
+ * Environment variables:
+ * - QUILLTAP_DATA_DIR: Overrides the base directory (non-Docker only)
+ * - QUILLTAP_HOST_DATA_DIR: Used by docker-compose.yml to set the host-side volume mount path
+ *   (not read by the application; defaults to ~/.quilltap in docker-compose.yml)
  *
  * @module lib/paths
  */
@@ -140,26 +142,79 @@ export function getPlatformDefaultBaseDir(): string {
   }
 }
 
+export type BaseDataDirSource = 'environment' | 'platform-default';
+
+export interface BaseDataDirInfo {
+  /** The resolved base data directory path */
+  path: string;
+  /** Where the path came from */
+  source: BaseDataDirSource;
+  /** Human-readable description of the source */
+  sourceDescription: string;
+}
+
+/**
+ * Get the base data directory with source information
+ *
+ * Respects QUILLTAP_DATA_DIR environment variable if set (non-Docker only),
+ * otherwise returns platform-specific default.
+ *
+ * In Docker, QUILLTAP_DATA_DIR is ignored because the container must use
+ * /app/quilltap to match the volume mount configured in docker-compose.yml.
+ *
+ * @returns Object containing the path and its source
+ */
+export function getBaseDataDirWithSource(): BaseDataDirInfo {
+  const platform = getPlatform();
+
+  const platformDescriptions: Record<Platform, string> = {
+    docker: 'Docker container default (/app/quilltap)',
+    darwin: 'macOS default (~/Library/Application Support/Quilltap)',
+    win32: 'Windows default (%APPDATA%\\Quilltap)',
+    linux: 'Linux default (~/.quilltap)',
+  };
+
+  // In Docker, always use the default path to match volume mounts
+  if (platform === 'docker') {
+    return {
+      path: getPlatformDefaultBaseDir(),
+      source: 'platform-default',
+      sourceDescription: platformDescriptions[platform],
+    };
+  }
+
+  const envOverride = process.env.QUILLTAP_DATA_DIR;
+
+  if (envOverride) {
+    // Expand ~ to home directory
+    const resolvedPath = envOverride.startsWith('~')
+      ? path.join(os.homedir(), envOverride.slice(1))
+      : envOverride;
+
+    return {
+      path: resolvedPath,
+      source: 'environment',
+      sourceDescription: `QUILLTAP_DATA_DIR environment variable (${envOverride})`,
+    };
+  }
+
+  return {
+    path: getPlatformDefaultBaseDir(),
+    source: 'platform-default',
+    sourceDescription: platformDescriptions[platform],
+  };
+}
+
 /**
  * Get the base data directory
  *
- * Respects QUILLTAP_DATA_DIR environment variable if set,
+ * Respects QUILLTAP_DATA_DIR environment variable if set (non-Docker only),
  * otherwise returns platform-specific default.
  *
  * @returns Base data directory path
  */
 export function getBaseDataDir(): string {
-  const envOverride = process.env.QUILLTAP_DATA_DIR;
-
-  if (envOverride) {
-    // Expand ~ to home directory
-    if (envOverride.startsWith('~')) {
-      return path.join(os.homedir(), envOverride.slice(1));
-    }
-    return envOverride;
-  }
-
-  return getPlatformDefaultBaseDir();
+  return getBaseDataDirWithSource().path;
 }
 
 /**

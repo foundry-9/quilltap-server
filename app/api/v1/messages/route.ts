@@ -113,6 +113,7 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
       const stream = await handleSendMessage(repos, chatId, user.id, {
         content: parsed.content,
         fileIds: parsed.fileIds,
+        pendingToolResults: parsed.pendingToolResults,
         continueMode: false,
       });
 

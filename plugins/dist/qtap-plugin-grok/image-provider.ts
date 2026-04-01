@@ -6,6 +6,7 @@
  */
 
 import OpenAI from 'openai';
+import type { Images } from 'openai/resources';
 import type { ImageGenProvider as ImageGenProviderBase, ImageGenParams, ImageGenResponse } from './types';
 import { createPluginLogger } from '@quilltap/plugin-utils';
 
@@ -27,19 +28,27 @@ export class GrokImageProvider implements ImageGenProviderBase {
       baseURL: this.baseUrl,
     });
 
-    const response = await client.images.generate({
+    // Build request params - Grok uses aspect_ratio instead of size
+    const requestParams: Images.ImageGenerateParams & { aspect_ratio?: string } = {
       model: params.model ?? 'grok-2-image',
       prompt: params.prompt,
       n: params.n ?? 1,
       response_format: 'b64_json',
-    });
+    };
 
-    if (!response.data || !Array.isArray(response.data)) {
+    // Add aspect_ratio if provided (Grok-specific parameter)
+    if (params.aspectRatio) {
+      requestParams.aspect_ratio = params.aspectRatio;
+    }
+
+    const response = await client.images.generate(requestParams);
+
+    if (!('data' in response) || !response.data || !Array.isArray(response.data)) {
       logger.error('Invalid response from Grok Images API', { context: 'GrokImageProvider.generateImage' });
       throw new Error('Invalid response from Grok Images API');
     }
     return {
-      images: response.data.map((img) => ({
+      images: response.data.map((img: { b64_json?: string; url?: string; revised_prompt?: string }) => ({
         data: img.b64_json || img.url || '',
         mimeType: 'image/jpeg',
         revisedPrompt: img.revised_prompt,

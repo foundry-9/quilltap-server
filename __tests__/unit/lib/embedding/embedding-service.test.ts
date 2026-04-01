@@ -9,10 +9,21 @@ jest.mock('@/lib/repositories/factory', () => ({
 jest.mock('@/lib/encryption', () => ({
   decryptApiKey: jest.fn(),
 }))
+jest.mock('@/lib/plugins/provider-registry', () => ({
+  providerRegistry: {
+    createEmbeddingProvider: jest.fn(),
+    getProvider: jest.fn(),
+  },
+}))
+jest.mock('@quilltap/plugin-types', () => ({
+  isLocalEmbeddingProvider: jest.fn(),
+}))
 
 import * as embeddingService from '@/lib/embedding/embedding-service'
 import { getRepositories } from '@/lib/repositories/factory'
 import { decryptApiKey } from '@/lib/encryption'
+import { providerRegistry } from '@/lib/plugins/provider-registry'
+import { isLocalEmbeddingProvider } from '@quilltap/plugin-types'
 import type { EmbeddingProfile } from '@/lib/schemas/types'
 
 const {
@@ -30,9 +41,9 @@ const {
 
 const mockGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>
 const mockDecryptApiKey = decryptApiKey as jest.MockedFunction<typeof decryptApiKey>
-
-const globalAny = global as typeof globalThis & { fetch: jest.MockedFunction<typeof fetch> }
-globalAny.fetch = jest.fn()
+const mockIsLocalEmbeddingProvider = isLocalEmbeddingProvider as jest.MockedFunction<typeof isLocalEmbeddingProvider>
+const mockCreateEmbeddingProvider = providerRegistry.createEmbeddingProvider as jest.MockedFunction<typeof providerRegistry.createEmbeddingProvider>
+const mockGetProvider = providerRegistry.getProvider as jest.MockedFunction<typeof providerRegistry.getProvider>
 
 const now = new Date().toISOString()
 const userId = '11111111-1111-1111-1111-111111111111'
@@ -67,6 +78,16 @@ function makeProfile(overrides: Partial<EmbeddingProfile> = {}): EmbeddingProfil
   }
 }
 
+function createMockEmbeddingProvider(embedding: number[]) {
+  return {
+    generateEmbedding: jest.fn().mockResolvedValue({
+      embedding,
+      model: 'test-model',
+      dimensions: embedding.length,
+    }),
+  }
+}
+
 describe('embedding service', () => {
   beforeEach(() => {
     jest.clearAllMocks()
@@ -76,6 +97,7 @@ describe('embedding service', () => {
     mockRepos.embeddingProfiles.findByUserId.mockResolvedValue([])
     mockRepos.connections.findApiKeyById.mockResolvedValue(null)
     mockRepos.connections.findApiKeyByIdAndUserId.mockResolvedValue(null)
+    mockIsLocalEmbeddingProvider.mockReturnValue(false)
   })
 
   it('calls OpenAI embeddings API when provider is OPENAI', async () => {
@@ -87,20 +109,18 @@ describe('embedding service', () => {
     })
     mockDecryptApiKey.mockReturnValue('sk-test')
 
-    globalAny.fetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        data: [{ embedding: [0.1, 0.2, 0.3] }],
-      }),
-    } as any)
+    const mockProvider = createMockEmbeddingProvider([0.1, 0.2, 0.3])
+    mockCreateEmbeddingProvider.mockReturnValue(mockProvider as any)
+    mockGetProvider.mockReturnValue({ config: { requiresApiKey: true } } as any)
 
     const embedding = await generateEmbedding('hello world', profile, userId)
 
-    expect(globalAny.fetch).toHaveBeenCalledWith(
-      `${profile.baseUrl}/embeddings`,
-      expect.objectContaining({
-        method: 'POST',
-      })
+    expect(mockCreateEmbeddingProvider).toHaveBeenCalledWith('OPENAI', profile.baseUrl)
+    expect(mockProvider.generateEmbedding).toHaveBeenCalledWith(
+      'hello world',
+      profile.modelName,
+      'sk-test',
+      { dimensions: profile.dimensions }
     )
     expect(embedding.embedding).toEqual([0.1, 0.2, 0.3])
     expect(embedding.provider).toBe('OPENAI')
@@ -113,27 +133,24 @@ describe('embedding service', () => {
       apiKeyId: null,
     })
 
-    globalAny.fetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        embedding: [0.5, 0.4, 0.3],
-      }),
-    } as any)
+    const mockProvider = createMockEmbeddingProvider([0.5, 0.4, 0.3])
+    mockCreateEmbeddingProvider.mockReturnValue(mockProvider as any)
+    mockGetProvider.mockReturnValue({ config: { requiresApiKey: false } } as any)
 
     const embedding = await generateEmbedding('text to embed', profile, userId)
 
-    expect(globalAny.fetch).toHaveBeenCalledWith(
-      `${profile.baseUrl}/api/embeddings`,
-      expect.objectContaining({
-        method: 'POST',
-      })
-    )
+    expect(mockCreateEmbeddingProvider).toHaveBeenCalledWith('OLLAMA', profile.baseUrl)
     expect(embedding.provider).toBe('OLLAMA')
     expect(embedding.embedding.length).toBe(3)
   })
 
   it('throws when OpenAI profile lacks an API key', async () => {
     const profile = makeProfile({ apiKeyId: null })
+    mockGetProvider.mockReturnValue({ config: { requiresApiKey: true } } as any)
+    mockCreateEmbeddingProvider.mockReturnValue({
+      generateEmbedding: jest.fn(),
+    } as any)
+
     await expect(generateEmbedding('missing key', profile, userId)).rejects.toThrow('No API key found')
   })
 
@@ -141,12 +158,9 @@ describe('embedding service', () => {
     const profile = makeProfile({ id: 'profile-abc', provider: 'OLLAMA', baseUrl: 'http://localhost:11434', apiKeyId: null })
     mockRepos.embeddingProfiles.findById.mockResolvedValue(profile)
 
-    globalAny.fetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        embedding: [0.3, 0.4],
-      }),
-    } as any)
+    const mockProvider = createMockEmbeddingProvider([0.3, 0.4])
+    mockCreateEmbeddingProvider.mockReturnValue(mockProvider as any)
+    mockGetProvider.mockReturnValue({ config: { requiresApiKey: false } } as any)
 
     const result = await generateEmbeddingForUser('text', userId, profile.id)
     expect(result.embedding).toEqual([0.3, 0.4])
@@ -163,18 +177,13 @@ describe('embedding service', () => {
       authTag: 'tag',
     })
     mockDecryptApiKey.mockReturnValue('sk-test')
-    globalAny.fetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        data: [{ embedding: [0.2, 0.1] }],
-      }),
-    } as any)
+
+    const mockProvider = createMockEmbeddingProvider([0.2, 0.1])
+    mockCreateEmbeddingProvider.mockReturnValue(mockProvider as any)
+    mockGetProvider.mockReturnValue({ config: { requiresApiKey: true } } as any)
 
     const result = await generateEmbeddingForUser('fallback text', userId)
-    expect(globalAny.fetch).toHaveBeenCalledWith(
-      `${profile.baseUrl}/embeddings`,
-      expect.anything()
-    )
+    expect(mockCreateEmbeddingProvider).toHaveBeenCalledWith('OPENAI', profile.baseUrl)
     expect(result.embedding).toEqual([0.2, 0.1])
   })
 
@@ -188,12 +197,10 @@ describe('embedding service', () => {
   it('prepares embeddings for search when generation succeeds', async () => {
     const profile = makeProfile({ provider: 'OLLAMA', baseUrl: 'http://localhost:11434', apiKeyId: null })
     mockRepos.embeddingProfiles.findDefault.mockResolvedValue(profile)
-    globalAny.fetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        embedding: [0.1, 0.2],
-      }),
-    } as any)
+
+    const mockProvider = createMockEmbeddingProvider([0.1, 0.2])
+    mockCreateEmbeddingProvider.mockReturnValue(mockProvider as any)
+    mockGetProvider.mockReturnValue({ config: { requiresApiKey: false } } as any)
 
     const result = await prepareForSearch('embed me', userId)
     expect(result.usedEmbedding).toBe(true)

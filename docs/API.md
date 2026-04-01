@@ -1,6 +1,6 @@
 # Quilltap API Documentation
 
-Complete API reference for Quilltap v2.8.
+Complete API reference for Quilltap v2.9.
 
 ## Table of Contents
 
@@ -12,23 +12,30 @@ Complete API reference for Quilltap v2.8.
 - [Endpoints](#endpoints)
   - [Health](#health)
   - [User Profile](#user-profile)
+  - [Chat Settings](#chat-settings)
   - [API Keys](#api-keys)
   - [Connection Profiles](#connection-profiles)
   - [Embedding Profiles](#embedding-profiles)
   - [Image Profiles](#image-profiles)
+  - [Models](#models)
   - [Characters](#characters)
   - [NPCs](#npcs)
   - [Chats](#chats)
   - [Messages](#messages)
   - [Memories](#memories)
   - [Tags](#tags)
-  - [Files & Images](#files--images)
+  - [Files](#files)
+  - [Files & Images (Legacy)](#files--images)
   - [Folders](#folders)
   - [Templates](#templates)
-  - [System & Backup](#system--backup)
+  - [System Backup & Restore](#system-backup--restore)
+  - [System Data Directory](#system-data-directory)
+  - [System Mount Points](#system-mount-points)
+  - [Tools & Backup (Legacy)](#tools--backup)
   - [LLM Logs](#llm-logs)
   - [Themes](#themes)
   - [Search](#search)
+  - [LLM Tools](#llm-tools)
   - [Plugins](#plugins)
   - [Projects](#projects)
 
@@ -243,6 +250,75 @@ To clear avatar, set `imageId` to `null`.
 **Response**: `200 OK`
 
 Returns updated profile with avatar URL.
+
+---
+
+### Chat Settings
+
+User-specific chat and UI settings.
+
+#### `GET /api/v1/settings/chat`
+
+Get chat settings for the current user.
+
+**Response**: `200 OK`
+
+```json
+{
+  "avatarDisplayMode": "ALWAYS",
+  "avatarDisplayStyle": "CIRCULAR",
+  "tagStyles": {},
+  "cheapLLMSettings": {
+    "strategy": "PROVIDER_CHEAPEST",
+    "fallbackToLocal": true,
+    "embeddingProvider": "OPENAI"
+  },
+  "imageDescriptionProfileId": null,
+  "themePreference": {
+    "activeThemeId": null,
+    "colorMode": "system",
+    "showNavThemeSelector": false
+  },
+  "defaultRoleplayTemplateId": null,
+  "sidebarWidth": 320,
+  "tokenDisplaySettings": {},
+  "memoryCascadePreferences": {},
+  "llmLoggingSettings": {},
+  "autoDetectRng": true
+}
+```
+
+#### `PUT /api/v1/settings/chat`
+
+Update chat settings.
+
+**Request Body** (all fields optional):
+
+```json
+{
+  "avatarDisplayMode": "ALWAYS" | "GROUP_ONLY" | "NEVER",
+  "avatarDisplayStyle": "CIRCULAR" | "RECTANGULAR",
+  "tagStyles": {},
+  "cheapLLMSettings": {
+    "strategy": "USER_DEFINED" | "PROVIDER_CHEAPEST" | "LOCAL_FIRST",
+    "fallbackToLocal": true,
+    "embeddingProvider": "SAME_PROVIDER" | "OPENAI" | "LOCAL"
+  },
+  "imageDescriptionProfileId": "profile-uuid" | null,
+  "themePreference": {
+    "activeThemeId": "theme-id" | null,
+    "colorMode": "light" | "dark" | "system"
+  },
+  "defaultRoleplayTemplateId": "template-uuid" | null,
+  "sidebarWidth": 320,
+  "memoryCascadePreferences": {
+    "onMessageDelete": "DELETE_MEMORIES" | "KEEP_MEMORIES" | "ASK_EVERY_TIME",
+    "onSwipeRegenerate": "DELETE_MEMORIES" | "KEEP_MEMORIES" | "REGENERATE_MEMORIES"
+  },
+  "llmLoggingSettings": {},
+  "autoDetectRng": true
+}
+```
 
 ---
 
@@ -573,6 +649,81 @@ Update an image profile.
 #### `DELETE /api/v1/image-profiles/[id]`
 
 Delete an image profile.
+
+---
+
+### Models
+
+Retrieve available LLM models from providers.
+
+#### `GET /api/v1/models`
+
+List cached models from the database.
+
+**Query Parameters**:
+- `provider` - Filter by provider (e.g., `openai`, `anthropic`)
+- `hasVision` - Filter to vision-capable models (`true`)
+- `hasStreaming` - Filter to streaming-capable models (`true`)
+
+**Response**: `200 OK`
+
+```json
+{
+  "models": [
+    {
+      "id": "model-uuid",
+      "provider": "OPENAI",
+      "modelId": "gpt-4o",
+      "displayName": "GPT-4o",
+      "contextWindow": 128000,
+      "maxOutputTokens": 4096,
+      "deprecated": false,
+      "experimental": false
+    }
+  ],
+  "count": 25,
+  "filters": {
+    "provider": "openai",
+    "hasVision": false,
+    "hasStreaming": false
+  },
+  "cached": true
+}
+```
+
+#### `POST /api/v1/models`
+
+Fetch models directly from a provider (live query, not cached).
+
+**Request Body**:
+
+```json
+{
+  "provider": "OPENAI",
+  "apiKeyId": "key-uuid",
+  "baseUrl": "https://api.openai.com/v1"
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "provider": "OPENAI",
+  "models": ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"],
+  "modelsWithInfo": [
+    {
+      "id": "gpt-4o",
+      "displayName": "GPT-4o",
+      "deprecated": false,
+      "experimental": false,
+      "maxOutputTokens": 4096,
+      "contextWindow": 128000
+    }
+  ],
+  "count": 3
+}
+```
 
 ---
 
@@ -1322,7 +1473,147 @@ Delete a tag.
 
 ---
 
-### Files & Images
+### Files
+
+Modern file management API (v1).
+
+#### `GET /api/v1/files`
+
+List files for the authenticated user.
+
+**Query Parameters**:
+- `projectId` - Filter by project ID
+- `folderPath` - Filter by folder path
+- `filter=general` - Return only files without a project
+
+**Response**: `200 OK`
+
+```json
+{
+  "files": [
+    {
+      "id": "file-uuid",
+      "userId": "user-uuid",
+      "originalFilename": "document.pdf",
+      "filename": "document.pdf",
+      "filepath": "/api/v1/files/file-uuid",
+      "mimeType": "application/pdf",
+      "size": 12345,
+      "category": "DOCUMENT",
+      "description": null,
+      "projectId": "project-uuid",
+      "folderPath": "/documents/",
+      "width": null,
+      "height": null,
+      "createdAt": "2026-01-15T12:00:00.000Z",
+      "updatedAt": "2026-01-15T12:00:00.000Z"
+    }
+  ]
+}
+```
+
+#### `POST /api/v1/files?action=write`
+
+Create a file from text content. Requires file write permission.
+
+**Request Body**:
+
+```json
+{
+  "filename": "notes.txt",
+  "content": "File content here",
+  "mimeType": "text/plain",
+  "projectId": "project-uuid",
+  "folderPath": "/documents/"
+}
+```
+
+**Response**: `201 Created`
+
+#### `POST /api/v1/files?action=upload`
+
+Upload a file via multipart/form-data.
+
+**Request**: `multipart/form-data`
+- `file` (required) - The file to upload
+- `projectId` (optional) - Project to associate with
+- `folderPath` (optional) - Folder path within project
+- `tags` (optional) - JSON array of tag associations
+
+**Response**: `201 Created`
+
+#### `GET /api/v1/files/[id]`
+
+Download a file by ID. Returns the file content with appropriate headers.
+
+**Query Parameters**:
+- `action=thumbnail` - Get thumbnail for images
+- `size` - Thumbnail size (default 150, max 300)
+
+**Response**: File binary with `Content-Type` and `Content-Disposition` headers.
+
+#### `DELETE /api/v1/files/[id]`
+
+Delete a file.
+
+**Query Parameters**:
+- `force=true` - Delete even if file is linked to other entities
+- `dissociate=true` - Remove all associations before deleting
+
+**Response**: `200 OK`
+
+```json
+{
+  "success": true
+}
+```
+
+**Error Response** (if file has associations):
+
+```json
+{
+  "error": "Bad Request",
+  "message": "File is linked to other items",
+  "details": {
+    "code": "FILE_HAS_ASSOCIATIONS",
+    "associations": {
+      "characters": [...],
+      "messages": [...]
+    }
+  }
+}
+```
+
+#### `POST /api/v1/files/[id]?action=move`
+
+Move or rename a file.
+
+**Request Body**:
+
+```json
+{
+  "folderPath": "/new-folder/",
+  "filename": "new-name.txt",
+  "projectId": "project-uuid"
+}
+```
+
+#### `POST /api/v1/files/[id]?action=promote`
+
+Promote an attachment to general or project files.
+
+**Request Body**:
+
+```json
+{
+  "targetProjectId": "project-uuid",
+  "folderPath": "/documents/"
+}
+```
+
+---
+
+### Files & Images (Legacy)
 
 #### `GET /api/files/[id]`
 
@@ -1504,7 +1795,318 @@ Per-chat roleplay formatting templates.
 
 ---
 
-### Tools & Backup
+### System Backup & Restore
+
+Modern backup and restore API (v1).
+
+#### `POST /api/v1/system/backup`
+
+Create a new backup for download. Returns a temporary backup ID.
+
+**Response**: `201 Created`
+
+```json
+{
+  "success": true,
+  "backupId": "uuid",
+  "manifest": {
+    "version": "2.9.0",
+    "createdAt": "2026-01-15T12:00:00.000Z",
+    "counts": {
+      "characters": 10,
+      "chats": 25,
+      "messages": 500,
+      "memories": 100,
+      "files": 50
+    }
+  }
+}
+```
+
+#### `GET /api/v1/system/backup/[id]`
+
+Download a temporary backup by ID. The backup is a ZIP file containing all user data.
+
+**Response**: `200 OK` (application/zip)
+
+Returns the backup ZIP file for download. Backup expires after 30 minutes.
+
+#### `POST /api/v1/system/restore`
+
+Restore data from a backup file.
+
+**Request**: `multipart/form-data`
+- `file` (required) - The backup ZIP file
+- `mode` (required) - `"replace"` (overwrite existing data) or `"new-account"` (import as new)
+- `preview` (optional) - Set to `"true"` for preview mode
+
+**Response**: `200 OK`
+
+```json
+{
+  "success": true,
+  "summary": {
+    "characters": 10,
+    "chats": 25,
+    "messages": 500,
+    "memories": 100,
+    "files": 50,
+    "tags": 5,
+    "warnings": []
+  }
+}
+```
+
+#### `POST /api/v1/system/restore?action=preview`
+
+Preview backup contents without restoring.
+
+**Request**: `multipart/form-data`
+- `file` (required) - The backup ZIP file
+
+**Response**: `200 OK`
+
+```json
+{
+  "success": true,
+  "preview": {
+    "version": "2.9.0",
+    "counts": {
+      "characters": 10,
+      "chats": 25,
+      "files": 50
+    }
+  }
+}
+```
+
+---
+
+### System Data Directory
+
+Information about the Quilltap data directory location.
+
+#### `GET /api/v1/system/data-dir`
+
+Get data directory information.
+
+**Response**: `200 OK`
+
+```json
+{
+  "path": "/Users/user/Library/Application Support/Quilltap",
+  "source": "platform-default",
+  "sourceDescription": "Using macOS default location",
+  "platform": "darwin",
+  "isDocker": false,
+  "canOpen": true
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `path` | Absolute path to the data directory |
+| `source` | `"environment"` (from env var) or `"platform-default"` |
+| `platform` | `"darwin"`, `"linux"`, `"win32"` |
+| `isDocker` | Whether running in Docker container |
+| `canOpen` | Whether "open" action is supported |
+
+#### `POST /api/v1/system/data-dir?action=open`
+
+Open the data directory in the system file browser (not available in Docker).
+
+**Response**: `200 OK`
+
+```json
+{
+  "message": "Data directory opened in file browser",
+  "path": "/Users/user/Library/Application Support/Quilltap"
+}
+```
+
+---
+
+### System Mount Points
+
+Manage storage mount points for file backends.
+
+#### `GET /api/v1/system/mount-points`
+
+List all mount points.
+
+**Response**: `200 OK`
+
+```json
+{
+  "mountPoints": [
+    {
+      "id": "mount-uuid",
+      "name": "Local Storage",
+      "backendType": "local",
+      "backendConfig": {
+        "basePath": "/Users/user/.quilltap/files"
+      },
+      "scope": "user",
+      "userId": "user-uuid",
+      "isDefault": true,
+      "enabled": true,
+      "healthStatus": "healthy",
+      "createdAt": "2026-01-15T12:00:00.000Z"
+    }
+  ],
+  "count": 1
+}
+```
+
+#### `GET /api/v1/system/mount-points?action=list-backends`
+
+List available storage backend types.
+
+**Response**: `200 OK`
+
+```json
+{
+  "backends": [
+    {
+      "type": "local",
+      "name": "Local Filesystem",
+      "description": "Store files on local filesystem",
+      "requiresConfig": ["basePath"]
+    },
+    {
+      "type": "s3",
+      "name": "S3 Compatible",
+      "description": "AWS S3 or S3-compatible storage (MinIO, etc.)",
+      "requiresConfig": ["endpoint", "accessKey", "secretKey", "bucket"]
+    }
+  ]
+}
+```
+
+#### `POST /api/v1/system/mount-points`
+
+Create a new mount point.
+
+**Request Body**:
+
+```json
+{
+  "name": "My S3 Storage",
+  "backendType": "s3",
+  "path": "/",
+  "isDefault": false,
+  "config": {
+    "endpoint": "https://s3.amazonaws.com",
+    "bucket": "my-bucket",
+    "region": "us-east-1"
+  }
+}
+```
+
+**Response**: `201 Created`
+
+#### `GET /api/v1/system/mount-points/[id]`
+
+Get a specific mount point.
+
+#### `PUT /api/v1/system/mount-points/[id]`
+
+Update a mount point.
+
+**Request Body**:
+
+```json
+{
+  "name": "Updated Name",
+  "path": "/new-path",
+  "config": {}
+}
+```
+
+#### `DELETE /api/v1/system/mount-points/[id]`
+
+Delete a mount point.
+
+#### `POST /api/v1/system/mount-points/[id]?action=test`
+
+Test mount point connection.
+
+**Response**: `200 OK`
+
+```json
+{
+  "mountPointId": "mount-uuid",
+  "healthy": true,
+  "status": "healthy",
+  "message": "Mount point connection successful",
+  "testedAt": "2026-01-15T12:00:00.000Z",
+  "backendType": "local"
+}
+```
+
+#### `POST /api/v1/system/mount-points/[id]?action=set-default`
+
+Set as the default mount point.
+
+**Response**: `200 OK`
+
+```json
+{
+  "success": true,
+  "mountPointId": "mount-uuid",
+  "message": "Mount point set as default"
+}
+```
+
+#### `POST /api/v1/system/mount-points/[id]?action=scan-orphans`
+
+Scan for orphaned files (files in storage without database records).
+
+**Response**: `200 OK`
+
+```json
+{
+  "totalFilesInStorage": 100,
+  "totalFilesInDatabase": 95,
+  "orphans": [
+    {
+      "storageKey": "users/uuid/files/orphan.txt",
+      "size": 1234,
+      "lastModified": "2026-01-15T12:00:00.000Z"
+    }
+  ],
+  "errors": [],
+  "scannedAt": "2026-01-15T12:00:00.000Z"
+}
+```
+
+#### `POST /api/v1/system/mount-points/[id]?action=adopt-orphans`
+
+Adopt orphaned files into the database.
+
+**Request Body**:
+
+```json
+{
+  "storageKeys": ["users/uuid/files/orphan.txt"],
+  "defaultProjectId": "project-uuid",
+  "source": "IMPORTED",
+  "computeHashes": false
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "adopted": 5,
+  "failed": []
+}
+```
+
+---
+
+### Tools & Backup (Legacy)
 
 #### `POST /api/tools/backup/create`
 
@@ -1746,6 +2348,94 @@ Resume a paused job.
 #### `GET /api/tools/tasks-queue`
 
 Get tasks queue status (UI endpoint).
+
+---
+
+### LLM Tools
+
+Endpoints for managing LLM tools available during chat conversations.
+
+#### `GET /api/v1/tools`
+
+List all available LLM tools that can be enabled/disabled per chat.
+
+**Query Parameters:**
+- `chatId` (optional) - Chat ID to check tool availability in context
+
+**Response:**
+```json
+{
+  "tools": [
+    {
+      "id": "generate_image",
+      "name": "Generate Image",
+      "description": "Generate images using AI image generation providers",
+      "source": "built-in",
+      "category": "media",
+      "available": true
+    },
+    {
+      "id": "search_memories",
+      "name": "Search Memories",
+      "description": "Search through character memories and past conversations",
+      "source": "built-in",
+      "category": "memory",
+      "available": true
+    },
+    {
+      "id": "search_web",
+      "name": "Search Web",
+      "description": "Search the web for current information",
+      "source": "built-in",
+      "category": "search",
+      "available": false,
+      "unavailableReason": "Web search must be enabled in the connection profile"
+    },
+    {
+      "id": "project_info",
+      "name": "Project Info",
+      "description": "Access project information and files",
+      "source": "built-in",
+      "category": "project",
+      "available": false,
+      "unavailableReason": "Chat must be associated with a project"
+    },
+    {
+      "id": "manage_files",
+      "name": "Manage Files",
+      "description": "Read, write, and manage files in the file system",
+      "source": "built-in",
+      "category": "files",
+      "available": true
+    },
+    {
+      "id": "search_help",
+      "name": "Search Help",
+      "description": "Search Quilltap help documentation for features, settings, and usage guidance",
+      "source": "built-in",
+      "category": "help",
+      "available": true
+    }
+  ],
+  "count": 6
+}
+```
+
+**Built-in Tools:**
+
+| Tool ID | Name | Description | Context Requirements |
+|---------|------|-------------|---------------------|
+| `generate_image` | Generate Image | AI image generation | Requires image profile on character |
+| `search_memories` | Search Memories | Search character memories | Always available |
+| `search_web` | Search Web | Web search for current info | Requires web search enabled in connection profile |
+| `project_info` | Project Info | Access project files | Chat must be in a project |
+| `manage_files` | Manage Files | File system operations | Always available |
+| `search_help` | Search Help | Search Quilltap documentation | Always available |
+
+**Notes:**
+- When `chatId` is provided, the response includes `available` and `unavailableReason` fields
+- Plugin-provided tools are also included with `source: "plugin"`
+- The `request_full_context` tool is intentionally excluded (always available when context compression is enabled)
 
 ---
 
@@ -2121,7 +2811,7 @@ characters = data['characters']
 
 ## Versioning
 
-Current API version: **v2.8**
+Current API version: **v2.9**
 
 All core endpoints use the `/api/v1/` prefix. Legacy routes (without prefix) were removed in v2.8.
 

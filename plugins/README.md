@@ -129,7 +129,6 @@ cd plugins/dist/qtap-plugin-myprovider
 | `index.ts` | Main entry point exporting the plugin |
 | `provider.ts` | LLM provider implementation |
 | `types.ts` | Type re-exports from core |
-| `icon.tsx` | React icon component |
 
 ### Optional Files
 
@@ -155,7 +154,10 @@ interface LLMProviderPlugin {
   createProvider(baseUrl?: string): LLMProvider;
   getAvailableModels(apiKey: string, baseUrl?: string): Promise<string[]>;
   validateApiKey(apiKey: string, baseUrl?: string): Promise<boolean>;
-  renderIcon(props: { className?: string }): React.ReactNode;
+
+  // Icon (optional - if not provided, uses abbreviation)
+  icon?: PluginIconData;  // Recommended: SVG data, no React needed
+  renderIcon?(props: { className?: string }): React.ReactNode;  // Deprecated
 
   // Optional methods
   createImageProvider?(baseUrl?: string): ImageGenProvider;

@@ -4,8 +4,18 @@
  * Central export point for all API middleware utilities.
  */
 
-// Authentication middleware
+// Request context middleware
 export {
+  // Primary exports
+  withContext,
+  withContextParams,
+  createContextHandler,
+  createContextParamsHandler,
+  exists,
+  type RequestContext,
+  type ContextHandler,
+  type ContextParamsHandler,
+  // Legacy aliases (deprecated)
   withAuth,
   withAuthParams,
   createAuthenticatedHandler,

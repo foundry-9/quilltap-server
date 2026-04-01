@@ -1,13 +1,11 @@
 'use client'
 
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
-import type { BackupInfo } from '@/lib/backup/types'
 import type {
   RestoreStep,
   RestoreMode,
-  RestorePreview,
   RestoreState,
 } from '../types'
 
@@ -16,10 +14,6 @@ export function useRestoreData(isOpen: boolean) {
   const [state, setState] = useState<RestoreState>({
     step: 'source',
     selectedFile: null,
-    s3Backups: [],
-    selectedS3Key: null,
-    loadingBackups: false,
-    backupsLoaded: false,
     preview: null,
     loadingPreview: false,
     restoreMode: 'import',
@@ -29,69 +23,22 @@ export function useRestoreData(isOpen: boolean) {
     error: null,
   })
 
-  const loadS3Backups = useCallback(async () => {
-    setState((prev) => ({ ...prev, loadingBackups: true }))
-    try {
-      const response = await fetch('/api/v1/system/backup')
-      if (!response.ok) throw new Error('Failed to load backups')
-      const data = await response.json()
-      setState((prev) => ({
-        ...prev,
-        s3Backups: data.backups || data || [],
-        backupsLoaded: true,
-      }))
-    } catch (err) {
-      const errorMessage = getErrorMessage(err, 'Failed to load backups')
-      console.error('Failed to load S3 backups', { error: errorMessage })
-      setState((prev) => ({ ...prev, backupsLoaded: true }))
-    } finally {
-      setState((prev) => ({ ...prev, loadingBackups: false }))
-    }
-  }, [])
-
-  // Load S3 backups when dialog opens
-  useEffect(() => {
-    if (isOpen && state.step === 'source' && !state.backupsLoaded && !state.loadingBackups) {
-      loadS3Backups()
-    }
-  }, [isOpen, state.step, state.backupsLoaded, state.loadingBackups, loadS3Backups])
-
-  // Reset state when dialog closes
-  useEffect(() => {
-    if (!isOpen) {
-      setState((prev) => ({ ...prev, backupsLoaded: false }))
-    }
-  }, [isOpen])
-
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setState((prev) => ({
       ...prev,
       selectedFile: e.target.files?.[0] || null,
-      selectedS3Key: null,
-      error: null,
-    }))
-  }, [])
-
-  const handleS3Select = useCallback((key: string) => {
-    setState((prev) => ({
-      ...prev,
-      selectedS3Key: key,
-      selectedFile: null,
       error: null,
     }))
   }, [])
 
   const fetchPreview = useCallback(async () => {
+    if (!state.selectedFile) return
+
     setState((prev) => ({ ...prev, loadingPreview: true, error: null }))
 
     try {
-
       const formData = new FormData()
-      if (state.selectedFile) {
-        formData.append('file', state.selectedFile)
-      } else if (state.selectedS3Key) {
-        formData.append('s3Key', state.selectedS3Key)
-      }
+      formData.append('file', state.selectedFile)
 
       const previewResponse = await fetch('/api/v1/system/restore?action=preview', {
         method: 'POST',
@@ -117,14 +64,14 @@ export function useRestoreData(isOpen: boolean) {
     } finally {
       setState((prev) => ({ ...prev, loadingPreview: false }))
     }
-  }, [state.selectedFile, state.selectedS3Key])
+  }, [state.selectedFile])
 
   const handleNext = useCallback(async () => {
     if (state.step === 'source') {
-      if (!state.selectedFile && !state.selectedS3Key) {
+      if (!state.selectedFile) {
         setState((prev) => ({
           ...prev,
-          error: 'Please select a backup source',
+          error: 'Please select a backup file',
         }))
         return
       }
@@ -132,7 +79,7 @@ export function useRestoreData(isOpen: boolean) {
     } else if (state.step === 'preview') {
       setState((prev) => ({ ...prev, step: 'mode' }))
     }
-  }, [state.step, state.selectedFile, state.selectedS3Key, fetchPreview])
+  }, [state.step, state.selectedFile, fetchPreview])
 
   const handleBack = useCallback(() => {
     if (state.step === 'preview') {
@@ -154,6 +101,8 @@ export function useRestoreData(isOpen: boolean) {
 
   const handleStartRestore = useCallback(
     async () => {
+      if (!state.selectedFile) return
+
       if (state.restoreMode === 'replace' && !state.confirmReplace) {
         setState((prev) => ({
           ...prev,
@@ -171,11 +120,7 @@ export function useRestoreData(isOpen: boolean) {
 
       try {
         const formData = new FormData()
-        if (state.selectedFile) {
-          formData.append('file', state.selectedFile)
-        } else if (state.selectedS3Key) {
-          formData.append('s3Key', state.selectedS3Key)
-        }
+        formData.append('file', state.selectedFile)
         formData.append('mode', state.restoreMode === 'replace' ? 'replace' : 'new-account')
 
         const response = await fetch('/api/v1/system/restore', {
@@ -208,17 +153,13 @@ export function useRestoreData(isOpen: boolean) {
         setState((prev) => ({ ...prev, restoring: false }))
       }
     },
-    [state.restoreMode, state.confirmReplace, state.selectedFile, state.selectedS3Key]
+    [state.restoreMode, state.confirmReplace, state.selectedFile]
   )
 
   const resetDialog = useCallback(() => {
     setState({
       step: 'source',
       selectedFile: null,
-      s3Backups: state.s3Backups,
-      selectedS3Key: null,
-      loadingBackups: false,
-      backupsLoaded: state.backupsLoaded,
       preview: null,
       loadingPreview: false,
       restoreMode: 'import',
@@ -227,15 +168,13 @@ export function useRestoreData(isOpen: boolean) {
       restoreSummary: null,
       error: null,
     })
-  }, [state.s3Backups, state.backupsLoaded])
+  }, [])
 
   return {
     state,
     fileInputRef,
     actions: {
-      loadS3Backups,
       handleFileSelect,
-      handleS3Select,
       handleNext,
       handleBack,
       fetchPreview,

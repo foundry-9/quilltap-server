@@ -14,7 +14,7 @@ import {
   getActiveCharacterParticipants,
   isMultiCharacterChat,
 } from '@/lib/chat/turn-manager'
-import { stripCharacterNamePrefix } from '@/lib/llm/message-formatter'
+import { stripCharacterNamePrefix, normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
 import { z } from 'zod'
 
 import type { getRepositories } from '@/lib/repositories/factory'
@@ -47,6 +47,7 @@ import {
   encodeDoneEvent,
   encodeErrorEvent,
   encodeKeepAlive,
+  encodeStatusEvent,
   safeEnqueue,
   safeClose,
 } from './streaming.service'
@@ -80,16 +81,46 @@ import {
   getCachedCompression,
   triggerAsyncCompression,
   invalidateCompressionCache,
+  type CachedCompressionResponse,
 } from './compression-cache.service'
+import {
+  detectAndConvertRngPatterns,
+  type RngToolCall,
+} from './rng-pattern-detector.service'
+import { executeRngTool, formatRngResults } from '@/lib/tools/handlers/rng-handler'
 
 const logger = createServiceLogger('ChatMessageOrchestrator')
 
 /**
+ * Schema for pending tool results (user-initiated tool calls shown in composer)
+ */
+const pendingToolResultSchema = z.object({
+  tool: z.string(),
+  success: z.boolean(),
+  result: z.string(),
+  prompt: z.string(),
+  arguments: z.record(z.string(), z.unknown()),
+  createdAt: z.string(),
+})
+
+/**
  * Validation schema for send message
+ * Content can be empty if there are pending tool results or file attachments
  */
 export const sendMessageSchema = z.object({
-  content: z.string().min(1, 'Message content is required'),
+  content: z.string().default(''),
   fileIds: z.array(z.string()).optional(),
+  /** Pending tool results to be saved as TOOL messages before the user message */
+  pendingToolResults: z.array(pendingToolResultSchema).optional(),
+}).superRefine((data, ctx) => {
+  if (data.content.trim().length === 0 &&
+      (!data.fileIds || data.fileIds.length === 0) &&
+      (!data.pendingToolResults || data.pendingToolResults.length === 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Message must have content, attached files, or tool results',
+    })
+  }
 })
 
 /**
@@ -299,6 +330,78 @@ async function processMessage(
     options.fileIds
   )
 
+  // Save pending tool results as TOOL messages (before user message)
+  // Also add them to existingMessages so they're included in context building
+  if (!isContinueMode && options.pendingToolResults && options.pendingToolResults.length > 0) {
+    for (const toolResult of options.pendingToolResults) {
+      const toolMessageId = crypto.randomUUID()
+      const toolMessage = {
+        id: toolMessageId,
+        type: 'message' as const,
+        role: 'TOOL' as const,
+        content: JSON.stringify({
+          tool: toolResult.tool,
+          initiatedBy: 'user',
+          success: toolResult.success,
+          result: toolResult.result,
+          prompt: toolResult.prompt,
+          arguments: toolResult.arguments,
+        }),
+        createdAt: toolResult.createdAt,
+        attachments: [],
+      }
+      await repos.chats.addMessage(chatId, toolMessage)
+      // Add to existingMessages so it's included in context building
+      // (existingMessages was loaded before this save operation)
+      existingMessages.push(toolMessage)
+    }
+  }
+
+  // ============================================================================
+  // Auto-Detect RNG Patterns
+  // ============================================================================
+  // When enabled, detect dice rolls, coin flips, and spin-the-bottle patterns
+  // in user messages and automatically execute them as RNG tool calls
+  const autoDetectRng = chatSettings?.autoDetectRng ?? true
+  if (autoDetectRng && !isContinueMode && options.content) {
+    const rngPatterns = detectAndConvertRngPatterns(options.content)
+    if (rngPatterns.length > 0) {
+      logger.info('Auto-detected RNG patterns in user message', {
+        chatId,
+        userId,
+        patternCount: rngPatterns.length,
+        patterns: rngPatterns.map(p => ({ type: p.type, rolls: p.rolls, matchText: p.matchText })),
+      })
+
+      // Execute each detected pattern and save as TOOL messages
+      for (const pattern of rngPatterns) {
+        const rngContext = { userId, chatId }
+        const result = await executeRngTool({ type: pattern.type, rolls: pattern.rolls }, rngContext)
+        const formattedResult = formatRngResults(result)
+
+        const toolMessageId = crypto.randomUUID()
+        const toolMessage = {
+          id: toolMessageId,
+          type: 'message' as const,
+          role: 'TOOL' as const,
+          content: JSON.stringify({
+            tool: 'rng',
+            initiatedBy: 'auto-detect',
+            success: result.success,
+            result: formattedResult,
+            prompt: pattern.matchText,
+            arguments: { type: pattern.type, rolls: pattern.rolls },
+          }),
+          createdAt: new Date().toISOString(),
+          attachments: [],
+        }
+
+        await repos.chats.addMessage(chatId, toolMessage)
+        existingMessages.push(toolMessage)
+      }
+    }
+  }
+
   // Save user message (not in continue mode)
   let userMessageId: string | null = null
   let content = ''
@@ -332,17 +435,12 @@ async function processMessage(
     : (fileProcessing.messageContentPrefix ? fileProcessing.messageContentPrefix + content : content)
 
   // ============================================================================
-  // Tool Re-injection Logic
+  // Tool Injection
   // ============================================================================
-  // Determine if tools should be sent this message (similar to project context re-injection)
-  // Tools are sent: on first message, when forced (settings changed), or at window interval
-  const toolReinjectInterval = contextCompressionSettings.windowSize // Reuse compression window size
-  const toolMessageCount = existingMessages.filter(m => m.type === 'message').length
+  // Tools are always sent with every LLM prompt to ensure consistent availability
+
+  // Check if tool settings were just changed (for notification message)
   const toolSettingsChanged = chat.forceToolsOnNextMessage === true
-  const shouldSendTools =
-    toolSettingsChanged ||                     // Tool settings changed
-    toolMessageCount === 0 ||                  // First message
-    toolMessageCount % toolReinjectInterval === 0  // At interval
 
   // Clear forceToolsOnNextMessage flag if it was set
   if (toolSettingsChanged) {
@@ -356,7 +454,7 @@ async function processMessage(
   )
 
   // Build tools (include request_full_context when compression is enabled)
-  // Pass disabledTools and disabledToolGroups for filtering (shouldSendTools controls tool injection)
+  // Always pass disabledTools and disabledToolGroups for filtering
   const { tools, modelSupportsNativeTools, useNativeWebSearch } = await buildTools(
     connectionProfile,
     imageProfileId,
@@ -365,8 +463,8 @@ async function processMessage(
     false, // Will check pseudo-tools after
     undefined, // projectId (will be set if needed)
     compressionEnabled, // requestFullContext - enable the tool when compression is active
-    shouldSendTools ? (chat.disabledTools ?? []) : undefined, // Pass disabledTools only when sending tools
-    shouldSendTools ? (chat.disabledToolGroups ?? []) : undefined // Pass disabledToolGroups only when sending tools
+    chat.disabledTools ?? [],
+    chat.disabledToolGroups ?? []
   )
 
   const usePseudoTools = checkShouldUsePseudoTools(modelSupportsNativeTools)
@@ -391,15 +489,30 @@ async function processMessage(
   // ============================================================================
   // Async Pre-Compression: Get cached compression result if available
   // ============================================================================
-  let cachedCompressionResult = null
+  let cachedCompressionResponse: CachedCompressionResponse | undefined = undefined
   if (compressionEnabled && !bypassCompression) {
+    // Send status update for compression check
+    safeEnqueue(controller, encodeStatusEvent(encoder, {
+      stage: 'compressing',
+      message: 'Checking context cache...',
+      characterName: character.name,
+      characterId: character.id,
+    }))
+
     // Try to get cached compression from previous async pre-computation
-    cachedCompressionResult = await getCachedCompression(chatId, existingMessages.length)
-    if (cachedCompressionResult) {
+    // This returns immediately without waiting for in-flight compression,
+    // falling back to previous cache if async isn't ready yet
+    // IMPORTANT: Use filtered message count (only type === 'message') to match
+    // how messages are counted when persisting the cache
+    const actualMessageCount = existingMessages.filter(m => m.type === 'message').length
+    cachedCompressionResponse = await getCachedCompression(chatId, actualMessageCount)
+    if (cachedCompressionResponse) {
       logger.info('Using cached compression from async pre-computation', {
         chatId,
-        messageCount: existingMessages.length,
-        savings: cachedCompressionResult.compressionDetails?.totalSavings,
+        messageCount: actualMessageCount,
+        cachedMessageCount: cachedCompressionResponse.cachedMessageCount,
+        isFallback: cachedCompressionResponse.isFallback,
+        savings: cachedCompressionResponse.result.compressionDetails?.totalSavings,
       })
     }
   } else if (bypassCompression) {
@@ -410,7 +523,7 @@ async function processMessage(
   // Start keep-alive pings during context building (especially important during compression)
   // This prevents proxy/load balancer timeouts during long compression operations
   let keepAliveInterval: ReturnType<typeof setInterval> | null = null
-  if (compressionEnabled && !cachedCompressionResult) {
+  if (compressionEnabled && !cachedCompressionResponse) {
 
     keepAliveInterval = setInterval(() => {
       if (!safeEnqueue(controller, encodeKeepAlive(encoder))) {
@@ -422,6 +535,14 @@ async function processMessage(
       }
     }, 15000) // Send ping every 15 seconds
   }
+
+  // Send status update for context gathering
+  safeEnqueue(controller, encodeStatusEvent(encoder, {
+    stage: 'gathering',
+    message: 'Gathering memories and context...',
+    characterName: character.name,
+    characterId: character.id,
+  }))
 
   const { builtContext, formattedMessages, isInitialMessage } = await buildMessageContext(
     {
@@ -445,7 +566,9 @@ async function processMessage(
       contextCompressionSettings: compressionEnabled ? contextCompressionSettings : null,
       cheapLLMSelection,
       bypassCompression,
-      cachedCompressionResult,
+      // Pass cached compression result and message count for dynamic window calculation
+      cachedCompressionResult: cachedCompressionResponse?.result,
+      cachedCompressionMessageCount: cachedCompressionResponse?.cachedMessageCount,
     },
     existingMessages,
     fileProcessing.attachmentsToSend
@@ -543,6 +666,17 @@ async function processMessage(
   // Pre-generate assistant message ID so logs can reference it
   const preGeneratedAssistantMessageId = crypto.randomUUID()
 
+  // Send status update for sending to LLM
+  safeEnqueue(controller, encodeStatusEvent(encoder, {
+    stage: 'sending',
+    message: `Sending to ${character.name}...`,
+    characterName: character.name,
+    characterId: character.id,
+  }))
+
+  // Track if streaming has started for status update
+  let hasStartedStreaming = false
+
   try {
     for await (const chunk of streamMessage({
       messages: formattedMessages,
@@ -556,6 +690,16 @@ async function processMessage(
       chatId,
     })) {
       if (chunk.content) {
+        // Send streaming status on first content
+        if (!hasStartedStreaming) {
+          safeEnqueue(controller, encodeStatusEvent(encoder, {
+            stage: 'streaming',
+            message: `${character.name} is responding...`,
+            characterName: character.name,
+            characterId: character.id,
+          }))
+          hasStartedStreaming = true
+        }
         fullResponse += chunk.content
         controller.enqueue(encodeContentChunk(encoder, chunk.content))
       }
@@ -632,6 +776,17 @@ async function processMessage(
     if (toolCalls.length === 0) break
 
     toolIterations++
+
+    // Send tool executing status for each detected tool
+    for (const toolCall of toolCalls) {
+      safeEnqueue(controller, encodeStatusEvent(encoder, {
+        stage: 'tool_executing',
+        message: `Running ${toolCall.name}...`,
+        toolName: toolCall.name,
+        characterName: character.name,
+        characterId: character.id,
+      }))
+    }
 
     const results = await processToolCalls(toolCalls, toolContext, controller, encoder)
     toolMessages = [...toolMessages, ...results.toolMessages]
@@ -710,6 +865,17 @@ async function processMessage(
         formats: xmlToolCalls.map(tc => tc.format),
       })
 
+      // Send tool executing status for each detected tool
+      for (const toolCall of xmlToolCallRequests) {
+        safeEnqueue(controller, encodeStatusEvent(encoder, {
+          stage: 'tool_executing',
+          message: `Running ${toolCall.name}...`,
+          toolName: toolCall.name,
+          characterName: character.name,
+          characterId: character.id,
+        }))
+      }
+
       const results = await processToolCalls(xmlToolCallRequests, toolContext, controller, encoder)
       toolMessages = [...toolMessages, ...results.toolMessages]
       generatedImagePaths = [...generatedImagePaths, ...results.generatedImagePaths]
@@ -775,6 +941,17 @@ async function processMessage(
     const pseudoToolCalls = parsePseudoToolsFromResponse(fullResponse)
 
     if (pseudoToolCalls.length > 0) {
+      // Send tool executing status for each detected tool
+      for (const toolCall of pseudoToolCalls) {
+        safeEnqueue(controller, encodeStatusEvent(encoder, {
+          stage: 'tool_executing',
+          message: `Running ${toolCall.name}...`,
+          toolName: toolCall.name,
+          characterName: character.name,
+          characterId: character.id,
+        }))
+      }
+
       const results = await processToolCalls(pseudoToolCalls, toolContext, controller, encoder)
       toolMessages = [...toolMessages, ...results.toolMessages]
       generatedImagePaths = [...generatedImagePaths, ...results.generatedImagePaths]
@@ -838,9 +1015,13 @@ async function processMessage(
   let assistantMessageId: string | null = null
 
   if (fullResponse && fullResponse.trim().length > 0) {
+    // Normalize content that may be wrapped in content block format
+    // e.g., [{'type': 'text', 'text': "actual content"}]
+    const normalizedResponse = normalizeContentBlockFormat(fullResponse)
+
     // Strip any character name prefixes that the LLM might have echoed back
     // This handles cases where LLMs mimic the [Name] prefix format from the input
-    const cleanedResponse = stripCharacterNamePrefix(fullResponse, character.name)
+    const cleanedResponse = stripCharacterNamePrefix(normalizedResponse, character.name)
 
     assistantMessageId = await saveAssistantMessage(
       repos,
@@ -856,6 +1037,50 @@ async function processMessage(
       preGeneratedAssistantMessageId
     )
 
+    // ============================================================================
+    // Async Pre-Compression: Start EARLY for next message
+    // ============================================================================
+    // Trigger compression as soon as we have the response, BEFORE memory extraction
+    // and other async work. This gives maximum time for compression to complete
+    // before the user sends their next message.
+    if (compressionEnabled && cheapLLMSelection && builtContext.originalSystemPrompt) {
+      const updatedMessages = [
+        ...existingMessages
+          .filter((m): m is MessageEvent => m.type === 'message' && 'role' in m && 'content' in m)
+          .map(m => ({
+            role: m.role.toLowerCase() as 'user' | 'assistant' | 'system',
+            content: m.content || '',
+          })),
+        // Add the user message we just sent (if not continue mode)
+        ...(content && !isContinueMode ? [{
+          role: 'user' as const,
+          content,
+        }] : []),
+        // Add the assistant response we just received
+        {
+          role: 'assistant' as const,
+          content: cleanedResponse,
+        },
+      ]
+
+      // Fire and forget - compression runs in background
+      triggerAsyncCompression({
+        chatId,
+        messages: updatedMessages,
+        systemPrompt: builtContext.originalSystemPrompt,
+        compressionOptions: {
+          enabled: contextCompressionSettings.enabled,
+          windowSize: contextCompressionSettings.windowSize,
+          compressionTargetTokens: contextCompressionSettings.compressionTargetTokens,
+          systemPromptTargetTokens: contextCompressionSettings.systemPromptTargetTokens,
+          selection: cheapLLMSelection,
+          userId,
+          characterName: character.name,
+          userName: 'User',
+        },
+      })
+    }
+
     // Track token usage for profile and chat aggregates
     if (usage && (usage.promptTokens || usage.completionTokens)) {
       // Estimate cost using available pricing data
@@ -867,6 +1092,58 @@ async function processMessage(
         userId
       )
       await trackMessageTokenUsage(chatId, connectionProfile.id, usage, costResult.cost, costResult.source)
+    }
+
+    // ============================================================================
+    // Auto-Detect RNG Patterns in Assistant Response
+    // ============================================================================
+    // When enabled, detect dice rolls, coin flips, and spin-the-bottle patterns
+    // in assistant messages and automatically execute them as RNG tool calls
+    const autoDetectRngInResponse = chatSettings?.autoDetectRng ?? true
+    if (autoDetectRngInResponse && cleanedResponse) {
+      const rngPatternsInResponse = detectAndConvertRngPatterns(cleanedResponse)
+      if (rngPatternsInResponse.length > 0) {
+        logger.info('Auto-detected RNG patterns in assistant response', {
+          chatId,
+          userId,
+          patternCount: rngPatternsInResponse.length,
+          patterns: rngPatternsInResponse.map(p => ({ type: p.type, rolls: p.rolls, matchText: p.matchText })),
+        })
+
+        // Execute each detected pattern and save as TOOL messages after the assistant message
+        for (const pattern of rngPatternsInResponse) {
+          const rngContext = { userId, chatId }
+          const result = await executeRngTool({ type: pattern.type, rolls: pattern.rolls }, rngContext)
+          const formattedResult = formatRngResults(result)
+
+          const toolMessageId = crypto.randomUUID()
+          const toolMessage = {
+            id: toolMessageId,
+            type: 'message' as const,
+            role: 'TOOL' as const,
+            content: JSON.stringify({
+              tool: 'rng',
+              initiatedBy: 'auto-detect-response',
+              success: result.success,
+              result: formattedResult,
+              prompt: pattern.matchText,
+              arguments: { type: pattern.type, rolls: pattern.rolls },
+            }),
+            createdAt: new Date().toISOString(),
+            attachments: [],
+          }
+
+          await repos.chats.addMessage(chatId, toolMessage)
+
+          // Add to toolMessages array so done event reflects the execution
+          toolMessages.push({
+            toolName: 'rng',
+            content: formattedResult,
+            success: result.success,
+            arguments: { type: pattern.type, rolls: pattern.rolls },
+          })
+        }
+      }
     }
 
     // Update chat timestamp
@@ -977,49 +1254,6 @@ async function processMessage(
         userId,
         connectionProfile,
         chatSettings: memoryChatSettings,
-      })
-    }
-
-    // ============================================================================
-    // Async Pre-Compression: Trigger compression for next message
-    // ============================================================================
-    // Start compression asynchronously so it's ready for the next message
-    if (compressionEnabled && cheapLLMSelection && builtContext.originalSystemPrompt) {
-      // Build updated messages list (including this response)
-      const updatedMessages = [
-        ...existingMessages
-          .filter((m): m is MessageEvent => m.type === 'message' && 'role' in m && 'content' in m)
-          .map(m => ({
-            role: m.role.toLowerCase() as 'user' | 'assistant' | 'system',
-            content: m.content || '',
-          })),
-        // Add the user message we just sent (if not continue mode)
-        ...(content && !isContinueMode ? [{
-          role: 'user' as const,
-          content,
-        }] : []),
-        // Add the assistant response we just received
-        {
-          role: 'assistant' as const,
-          content: cleanedResponse,
-        },
-      ]
-
-      // Trigger async compression (fire and forget)
-      triggerAsyncCompression({
-        chatId,
-        messages: updatedMessages,
-        systemPrompt: builtContext.originalSystemPrompt,
-        compressionOptions: {
-          enabled: contextCompressionSettings.enabled,
-          windowSize: contextCompressionSettings.windowSize,
-          compressionTargetTokens: contextCompressionSettings.compressionTargetTokens,
-          systemPromptTargetTokens: contextCompressionSettings.systemPromptTargetTokens,
-          selection: cheapLLMSelection,
-          userId,
-          characterName: character.name,
-          userName: 'User',
-        },
       })
     }
   } else if (toolMessages.length > 0) {

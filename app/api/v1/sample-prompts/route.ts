@@ -1,7 +1,8 @@
 /**
  * Sample Prompts API v1
  *
- * GET /api/v1/sample-prompts - Get sample prompts for character creation
+ * GET /api/v1/sample-prompts - Get sample prompt categories
+ * GET /api/v1/sample-prompts?all=true - Get all sample prompts flattened
  * GET /api/v1/sample-prompts?category=category - Filter by category
  */
 
@@ -131,7 +132,32 @@ const SAMPLE_PROMPTS = {
 export const GET = createAuthenticatedHandler(async (req, context) => {
   try {
     const { searchParams } = new URL(req.url);
-    const category = searchParams.get('category');if (category) {
+    const category = searchParams.get('category');
+    const all = searchParams.get('all');
+
+    // Return all prompts flattened (for import modal)
+    if (all === 'true') {
+      const allPrompts = Object.entries(SAMPLE_PROMPTS).flatMap(([categoryKey, data]) =>
+        data.items.map((item) => ({
+          name: item.name,
+          content: item.systemPrompt,
+          modelHint: categoryKey.charAt(0).toUpperCase() + categoryKey.slice(1),
+          category: categoryKey,
+          filename: `${categoryKey}-${item.id}`,
+        }))
+      );
+
+      logger.info('[Sample Prompts v1] Listed all prompts', {
+        count: allPrompts.length,
+      });
+
+      return successResponse({
+        prompts: allPrompts,
+        count: allPrompts.length,
+      });
+    }
+
+    if (category) {
       const categoryData = SAMPLE_PROMPTS[category as keyof typeof SAMPLE_PROMPTS];
 
       if (!categoryData) {

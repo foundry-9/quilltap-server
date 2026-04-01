@@ -4,16 +4,13 @@
  * POST /api/v1/system/restore - Restore data from a backup
  * POST /api/v1/system/restore?action=preview - Preview backup contents
  *
- * Supports two modes:
- * 1. Upload mode: multipart/form-data with file and mode
- * 2. S3 mode: JSON body with s3Key and mode
+ * Accepts multipart/form-data with file and mode
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { restore, previewRestore } from '@/lib/backup/restore-service';
-import { downloadBackupFromS3 } from '@/lib/backup/backup-service';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
 import { badRequest, serverError, validationError } from '@/lib/api/responses';
@@ -22,56 +19,35 @@ import { badRequest, serverError, validationError } from '@/lib/api/responses';
 export const maxDuration = 300; // 5 minutes
 export const dynamic = 'force-dynamic';
 
-const RestoreRequestSchema = z.object({
-  s3Key: z.string().optional(),
-  mode: z.enum(['replace', 'new-account']),
-});
-
 /**
- * Parse request and get the ZIP buffer
+ * Parse request and get the ZIP buffer from file upload
  */
 async function getBackupBuffer(
-  req: NextRequest,
-  userId: string
+  req: NextRequest
 ): Promise<{ buffer: Buffer; mode: 'replace' | 'new-account'; isPreview?: boolean } | NextResponse> {
   const contentType = req.headers.get('content-type');
-  let zipBuffer: Buffer | null = null;
-  let mode: 'replace' | 'new-account' = 'replace';
-  let isPreview = false;
 
-  if (contentType?.includes('multipart/form-data')) {
-    // Handle file upload
-    const formData = await req.formData();
-    const file = formData.get('file') as File;
-    const modeParam = formData.get('mode') as string;
-    const previewParam = formData.get('preview') as string;
-
-    if (!file) {
-      return badRequest('No file provided');
-    }
-
-    if (!modeParam || !['replace', 'new-account'].includes(modeParam)) {
-      return badRequest('mode must be "replace" or "new-account"');
-    }
-
-    mode = modeParam as 'replace' | 'new-account';
-    isPreview = previewParam === 'true';
-    zipBuffer = Buffer.from(await file.arrayBuffer());} else if (contentType?.includes('application/json')) {
-    // Handle S3 download
-    const body = await req.json();
-    const { s3Key, mode: bodyMode } = RestoreRequestSchema.parse(body);
-
-    if (!s3Key) {
-      return badRequest('s3Key is required for S3 restore');
-    }
-
-    mode = bodyMode;zipBuffer = await downloadBackupFromS3(userId, s3Key);} else {
-    return badRequest('Unsupported content type. Use multipart/form-data or application/json');
+  if (!contentType?.includes('multipart/form-data')) {
+    return badRequest('Content-Type must be multipart/form-data');
   }
 
-  if (!zipBuffer) {
-    return badRequest('Failed to load backup data');
+  // Handle file upload
+  const formData = await req.formData();
+  const file = formData.get('file') as File;
+  const modeParam = formData.get('mode') as string;
+  const previewParam = formData.get('preview') as string;
+
+  if (!file) {
+    return badRequest('No file provided');
   }
+
+  if (!modeParam || !['replace', 'new-account'].includes(modeParam)) {
+    return badRequest('mode must be "replace" or "new-account"');
+  }
+
+  const mode = modeParam as 'replace' | 'new-account';
+  const isPreview = previewParam === 'true';
+  const zipBuffer = Buffer.from(await file.arrayBuffer());
 
   return { buffer: zipBuffer, mode, isPreview };
 }
@@ -85,21 +61,14 @@ export const POST = createAuthenticatedHandler(async (req, { user }) => {
   // Handle preview action
   if (action === 'preview') {
     try {
-
       const formData = await req.formData();
       const file = formData.get('file') as File | null;
-      const s3Key = formData.get('s3Key') as string | null;
 
-      let zipBuffer: Buffer | null = null;
-
-      if (file) {zipBuffer = Buffer.from(await file.arrayBuffer());
-      } else if (s3Key) {zipBuffer = await downloadBackupFromS3(user.id, s3Key);
+      if (!file) {
+        return badRequest('No file provided');
       }
 
-      if (!zipBuffer) {
-        return badRequest('No file or s3Key provided');
-      }
-
+      const zipBuffer = Buffer.from(await file.arrayBuffer());
       const preview = previewRestore(zipBuffer);
 
       logger.info('[System Restore v1] Preview generated', {
@@ -119,8 +88,7 @@ export const POST = createAuthenticatedHandler(async (req, { user }) => {
 
   // Handle restore
   try {
-
-    const result = await getBackupBuffer(req, user.id);
+    const result = await getBackupBuffer(req);
 
     // If it's a NextResponse (error), return it
     if (result instanceof NextResponse) {

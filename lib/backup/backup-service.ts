@@ -6,13 +6,15 @@
  */
 
 import archiver from 'archiver';
-import { createHash, randomUUID } from 'crypto';
+import fs from 'fs';
+import path from 'path';
 import { logger } from '@/lib/logger';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
-import type { BackupManifest, BackupData, BackupInfo, ChatWithMessages } from './types';
-import type { ChatEvent, ProviderModel } from '@/lib/schemas/types';
+import { getNpmPluginsDir } from '@/lib/paths';
+import type { BackupManifest, BackupData, ChatWithMessages } from './types';
+import type { ChatEvent } from '@/lib/schemas/types';
 
 // Get app version from package.json
 const APP_VERSION = process.env.npm_package_version || '2.0.0';
@@ -40,6 +42,7 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     providerModels,
     projects,
     llmLogs,
+    pluginConfigs,
   ] = await Promise.all([
     repos.characters.findAll(),
     repos.chats.findAll(),
@@ -57,6 +60,8 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     repos.projects.findAll(),
     // Get LLM logs
     repos.llmLogs.findAll(10000), // High limit to get all user logs
+    // Get plugin configurations
+    globalRepos.pluginConfigs.findByUserId(userId),
   ]);
 
   // Exclude backup files from the file list - we don't want to back up old backups
@@ -104,7 +109,28 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     providerModels,
     projects,
     llmLogs,
+    pluginConfigs,
   };
+}
+
+/**
+ * Counts npm-installed plugins in the plugins/npm directory
+ */
+function countNpmPlugins(): number {
+  try {
+    const npmPluginsDir = getNpmPluginsDir();
+    if (!fs.existsSync(npmPluginsDir)) {
+      return 0;
+    }
+    // Count directories in plugins/npm (each directory is a plugin)
+    const entries = fs.readdirSync(npmPluginsDir, { withFileTypes: true });
+    return entries.filter(entry => entry.isDirectory()).length;
+  } catch (error) {
+    moduleLogger.warn('Failed to count npm plugins', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return 0;
+  }
 }
 
 /**
@@ -133,6 +159,8 @@ function createManifest(userId: string, data: Omit<BackupData, 'manifest'>): Bac
       providerModels: data.providerModels.length,
       projects: data.projects.length,
       llmLogs: data.llmLogs.length,
+      pluginConfigs: data.pluginConfigs?.length || 0,
+      npmPlugins: countNpmPlugins(),
     },
   };
 }
@@ -225,6 +253,9 @@ export async function createBackup(userId: string): Promise<{
   archive.append(JSON.stringify(data.llmLogs, null, 2), {
     name: `${folderName}/data/llm-logs.json`,
   });
+  archive.append(JSON.stringify(data.pluginConfigs || [], null, 2), {
+    name: `${folderName}/data/plugin-configs.json`,
+  });
 
   // Add actual files from storage
 
@@ -246,6 +277,26 @@ export async function createBackup(userId: string): Promise<{
     }
   }
 
+  // Add npm-installed plugins directory
+  const npmPluginsDir = getNpmPluginsDir();
+  if (fs.existsSync(npmPluginsDir)) {
+    try {
+      const pluginDirs = fs.readdirSync(npmPluginsDir, { withFileTypes: true });
+      for (const entry of pluginDirs) {
+        if (entry.isDirectory()) {
+          const pluginPath = path.join(npmPluginsDir, entry.name);
+          archive.directory(pluginPath, `${folderName}/plugins/npm/${entry.name}`);
+          moduleLogger.debug('Added npm plugin to backup', { pluginName: entry.name });
+        }
+      }
+    } catch (error) {
+      moduleLogger.warn('Failed to add npm plugins to backup', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Continue with backup even if npm plugins fail
+    }
+  }
+
   // Finalize and wait for the archive to complete
   await new Promise<void>((resolve, reject) => {
     archive.on('end', () => {
@@ -264,162 +315,4 @@ export async function createBackup(userId: string): Promise<{
   });
 
   return { zipBuffer, manifest };
-}
-
-/**
- * Saves a backup ZIP to storage
- */
-export async function saveBackupToS3(
-  userId: string,
-  zipBuffer: Buffer,
-  customFilename?: string
-): Promise<string> {
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const fileId = randomUUID();
-  const filename = customFilename || `backup-${timestamp}.zip`;
-  // Upload to S3 storage
-  const result = await fileStorageManager.uploadFile({
-    userId,
-    fileId,
-    filename,
-    content: zipBuffer,
-    contentType: 'application/zip',
-    folderPath: '/backups',
-  });
-
-  // Calculate SHA256 hash
-  const sha256 = createHash('sha256').update(new Uint8Array(zipBuffer)).digest('hex');
-
-  // Create file metadata entry in the database so backups appear in listings
-  // Note: userId is automatically added by the user-scoped repository
-  const repos = getUserRepositories(userId);
-  await repos.files.create(
-    {
-      originalFilename: filename,
-      mimeType: 'application/zip',
-      size: zipBuffer.length,
-      sha256,
-      source: 'GENERATED',
-      category: 'BACKUP',
-      storageKey: result.storageKey,
-      mountPointId: result.mountPointId,
-      folderPath: '/backups',
-      linkedTo: [],
-      tags: [],
-    },
-    { id: fileId }
-  );
-
-  moduleLogger.info('Backup saved to storage', {
-    userId,
-    fileId,
-    storageKey: result.storageKey,
-    mountPointId: result.mountPointId,
-  });
-
-  return result.storageKey;
-}
-
-/**
- * Lists all backups stored in storage for a user
- */
-export async function listS3Backups(userId: string): Promise<BackupInfo[]> {
-  const repos = getUserRepositories(userId);
-
-  try {
-    // Get all user files and filter for backups by category or folder path
-    const allFiles = await repos.files.findAll();
-    const backupFiles = allFiles.filter(
-      (file) =>
-        file.storageKey &&
-        (file.category === 'BACKUP' ||
-        file.folderPath === '/backups' ||
-        file.originalFilename?.endsWith('.zip'))
-    );
-
-    const backups: BackupInfo[] = backupFiles
-      .filter((file) => file.storageKey) // Ensure storageKey exists
-      .map((file) => ({
-        key: file.storageKey as string,
-        filename: file.originalFilename,
-        createdAt: new Date(file.createdAt),
-        size: file.size || 0,
-      }));
-
-    // Sort by creation date, newest first
-    backups.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-    return backups;
-  } catch (error) {
-    moduleLogger.warn('Failed to list backups', {
-      userId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return [];
-  }
-}
-
-/**
- * Downloads a backup from storage
- *
- * @param userId - User ID to scope the backup lookup
- * @param storageKey - Storage key of the backup file
- */
-export async function downloadBackupFromS3(userId: string, storageKey: string): Promise<Buffer> {
-  const repos = getUserRepositories(userId);
-
-  try {
-    // Find the backup file by storage key
-    const allFiles = await repos.files.findAll();
-    const backupFile = allFiles.find((f) => f.storageKey === storageKey);
-
-    if (!backupFile) {
-      throw new Error(`Backup file not found: ${storageKey}`);
-    }
-
-    const buffer = await fileStorageManager.downloadFile(backupFile);
-    return buffer;
-  } catch (error) {
-    moduleLogger.error('Failed to download backup', {
-      userId,
-      storageKey,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
-  }
-}
-
-/**
- * Deletes a backup from storage
- *
- * @param userId - User ID to scope the backup lookup
- * @param storageKey - Storage key of the backup file
- */
-export async function deleteBackupFromS3(userId: string, storageKey: string): Promise<void> {
-  const repos = getUserRepositories(userId);
-
-  try {
-    // Find the backup file by storage key
-    const allFiles = await repos.files.findAll();
-    const backupFile = allFiles.find((f) => f.storageKey === storageKey);
-
-    if (!backupFile) {
-      moduleLogger.warn('Backup file not found for deletion', { userId, storageKey });
-      return;
-    }
-
-    // Delete from storage
-    await fileStorageManager.deleteFile(backupFile);
-
-    // Delete metadata from database
-    await repos.files.delete(backupFile.id);
-
-    moduleLogger.info('Deleted backup from storage', { userId, fileId: backupFile.id, storageKey });
-  } catch (error) {
-    moduleLogger.error('Failed to delete backup', {
-      userId,
-      storageKey,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
-  }
 }
