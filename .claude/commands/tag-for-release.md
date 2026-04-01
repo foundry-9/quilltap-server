@@ -1,11 +1,6 @@
 # Tag for Production Release
 
-## Strategy Selection
-
-This command supports two git strategies, selected by argument:
-
-- **Default (no argument, or `--merge-back`)**: The original workflow. After creating the release commit on `release`, merges release back into `main` (and bugfix). This keeps merge-base awareness but creates parallel rails in the git graph.
-- **`--linear`**: The linear workflow. After creating the release commit on `release`, does NOT merge release back into `main`. Main stays perfectly linear. Use `git log <tag>..main` to see commits since a release. The squash onto release uses a tree-copy approach immune to stale merge bases.
+This command uses a linear git strategy. After creating the release commit on `release`, main stays perfectly linear (no merge-back). Use `git log <tag>..main` to see commits since a release. The squash onto release uses a tree-copy approach immune to stale merge bases.
 
 ## If current branch is `main`
 
@@ -17,8 +12,6 @@ The following commands need to be run, one at a time. Modify as needed to deal w
 
 #### Commands run to set up the release branch
 
-If using `--linear` strategy:
-
 ```bash
 # Don't just run this script; run the commands one at a time.
 git checkout release
@@ -26,24 +19,6 @@ git checkout release
 git rm -rf .
 git checkout main -- .
 git add -A
-# Remove the detritus after the release
-sed -i '' -E 's/("version": "[^"]*)-[^"]*"/\1"/' package.json
-# Update package-lock.json to be up-to-date
-npm install
-# Get new release version for tags
-NEWRELEASE=$(sed -n -E 's/.*"version": "([^"]*)".*/\1/p' package.json)
-echo "New release is $NEWRELEASE"
-# Change the badge to release version standards
-sed -i '' -E 's/(badge\/version-)[^)]+\.svg/\1'"$NEWRELEASE"'-green.svg/' README.md
-```
-
-If using default (`--merge-back`) strategy:
-
-```bash
-# Don't just run this script; run the commands one at a time.
-git checkout release
-# This brings in all the changes without the history
-git merge --squash --strategy-option=theirs main
 # Remove the detritus after the release
 sed -i '' -E 's/("version": "[^"]*)-[^"]*"/\1"/' package.json
 # Update package-lock.json to be up-to-date
@@ -90,24 +65,6 @@ From the commands above you will know what the new release is called (the semver
 Next we need to start the new dev line in branch `main`.
 
 ### Now we'll start the new dev branch
-
-If using default (`--merge-back`) strategy:
-
-```bash
-NEWDEVVERSION=$(echo "$NEWRELEASE" | awk -F. '{print $1"."$2+1".0"}')
-echo "New dev release is $NEWDEVVERSION"
-git checkout main
-# Should just bring over the one updated commit for the release itself
-git merge --strategy-option=theirs release
-# Make this the new first dev version
-sed -i '' -E 's/("version": ")[^"]*"/\1'"$NEWDEVVERSION"'-dev.0"/' package.json
-# Update package-lock.json again
-npm install
-# Let's fix that badge in the README file too
-sed -i '' -E 's/(badge\/version-)[^-]*-[a-z]+/\1'"$NEWDEVVERSION"'--dev.0-yellow/' README.md
-```
-
-If using `--linear` strategy:
 
 ```bash
 NEWDEVVERSION=$(echo "$NEWRELEASE" | awk -F. '{print $1"."$2+1".0"}')
@@ -156,27 +113,6 @@ git tag -s -m "$NEWDEVVERSION-dev" $NEWDEVVERSION-dev
 
 ### Now we set up the new bugfix history
 
-If using default (`--merge-back`) strategy:
-
-```bash
-# Let's set up the bugfix version too
-git checkout bugfix
-echo "New bugfix release is $NEWRELEASE-bugfix.0"
-# Merge everything that release has
-git merge --strategy-option=theirs release
-# make this the new first bugfix version
-sed -i '' -E 's/("version": ")[^"]*"/\1'"$NEWRELEASE"'-bugfix.0"/' package.json
-# Update package-lock.json again
-npm install
-# Let's fix that badge in the README file too
-sed -i '' -E 's/(badge\/version-)[^-]*-[a-z]+/\1'"$NEWRELEASE"'--bugfix.0-yellow/' README.md
-# Again, we haven't changed anything substantial, so no pre-commits
-git add package.json package-lock.json README.md
-git commit --no-verify -m "bugfix: started $NEWRELEASE bug branch"
-```
-
-If using `--linear` strategy:
-
 ```bash
 # Let's set up the bugfix version too
 git checkout bugfix
@@ -212,8 +148,6 @@ git push --tags
 
 ### Merge bugfix changes into release
 
-If using `--linear` strategy:
-
 ```bash
 # Don't just run this script; run the commands one at a time.
 git checkout release
@@ -237,32 +171,7 @@ git commit --no-verify -m "release: $NEWRELEASE"
 git tag -s -m "$NEWRELEASE" $NEWRELEASE
 ```
 
-If using default (`--merge-back`) strategy:
-
-```bash
-# Don't just run this script; run the commands one at a time.
-git checkout release
-# This brings in all the changes without the history
-git merge --squash --strategy-option=theirs bugfix
-# Remove the detritus after the release
-node -e "const p=require('./package.json');const v=p.version.split('-')[0].split('.');v[2]++;p.version=v.join('.');require('fs').writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
-# Update package-lock.json to be up-to-date
-npm install
-# Get new release version for tags
-NEWRELEASE=$(sed -n -E 's/.*"version": "([^"]*)".*/\1/p' package.json)
-echo "New release is $NEWRELEASE"
-# Change the badge to release version standards
-sed -i '' -E 's/(badge\/version-)[^)]+\.svg/\1'"$NEWRELEASE"'-green.svg/' README.md
-# Presumably we ran tests and bumped prerelease versions when we committed last time
-git add package.json package-lock.json README.md
-git commit --no-verify -m "release: $NEWRELEASE"
-# We'll tag it so we can handle the release
-git tag -s -m "$NEWRELEASE" $NEWRELEASE
-```
-
 ### Now we restart bugfix from the new release
-
-If using `--linear` strategy:
 
 ```bash
 # Let's set up the bugfix version again
@@ -283,36 +192,6 @@ git add package.json package-lock.json README.md
 git commit --no-verify -m "bugfix: started $NEWRELEASE bug branch"
 ```
 
-If using default (`--merge-back`) strategy:
-
-```bash
-# Let's set up the bugfix version again
-git checkout bugfix
-# Merge everything that release has
-git merge --strategy-option=theirs release
-# make this the new first bugfix version
-sed -i '' -E 's/("version": ")[^"]*"/\1'"$NEWRELEASE"'-bugfix.0"/' package.json
-echo "New bugfix release is $NEWRELEASE-bugfix.0"
-# Update package-lock.json again
-npm install
-# Let's fix that badge in the README file too
-sed -i '' -E 's/(badge\/version-)[^-]*-[a-z]+/\1'"$NEWRELEASE"'--bugfix.0-yellow/' README.md
-# Again, we haven't changed anything substantial, so no pre-commits
-git add package.json package-lock.json README.md
-git commit --no-verify -m "bugfix: started $NEWRELEASE bug branch"
-```
-
 ### Now we need to pull the changes from release into dev
-
-If using default (`--merge-back`) strategy:
-
-```bash
-git checkout main
-git merge release
-```
-
-If there are conflicts, resolve them preserving the `main` branch's dev versioning (package.json, README badge) while accepting the bugfix code changes.
-
-If using `--linear` strategy:
 
 No merge needed — main stays linear. The bugfix code is already on `release` and will be picked up in the next main-to-release squash. If the bugfix is urgent and needed on `main` immediately, cherry-pick the specific commits from `bugfix` onto `main`.

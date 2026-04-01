@@ -4,6 +4,7 @@
 
 ### 4.0-dev
 
+- chore: tag-for-release command now uses linear strategy exclusively — removed merge-back strategy and all strategy selection logic
 - chore: add `--linear` strategy option to tag-for-release command — tree-copy approach that keeps main linear by skipping merge-back from release; default behavior unchanged
 - fix: character optimizer "Refine from Memories" UI — frequency badges in behavioral tendencies now wrap instead of overflowing the dialog; textarea in edit mode is taller and resizable, filling available space
 - feat: budget-driven context compression — replace count-based compression trigger with token-budget-aware system; compute `max_available = maxContext - 2 * maxTokens` from connection profile, compress conversation history (Phase 1) when it exceeds 50% of budget and recalled memories (Phase 2) when they exceed 20%; add `maxTokens` field to connection profiles with migration; new `compressMemories()` cheap LLM task; status events for each compression phase shown above ChatComposer
