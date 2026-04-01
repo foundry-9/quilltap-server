@@ -4,23 +4,65 @@
  */
 
 import { NextResponse } from 'next/server';
-import { getAllFiles, getFileStats } from '@/lib/file-manager';
+import { getServerSession } from '@/lib/auth/session';
+import { getRepositories } from '@/lib/repositories/factory';
+import type { FileCategory, FileSource } from '@/lib/schemas/types';
 
 export async function GET() {
   try {
-    const files = await getAllFiles();
-    const stats = await getFileStats();
+    // Security: require authentication
+    const session = await getServerSession();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const repos = getRepositories();
+    // Security: only show user's own files
+    const files = await repos.files.findByUserId(session.user.id);
+
+    // Calculate stats
+    const stats = {
+      totalFiles: files.length,
+      totalSize: files.reduce((sum, f) => sum + f.size, 0),
+      byCategory: {} as Record<FileCategory, number>,
+      bySource: {} as Record<FileSource, number>,
+      withS3Key: files.filter(f => f.s3Key).length,
+      withoutS3Key: files.filter(f => !f.s3Key).length,
+    };
+
+    // Initialize category counts
+    const categories: FileCategory[] = ['IMAGE', 'DOCUMENT', 'AVATAR', 'ATTACHMENT', 'EXPORT'];
+    for (const cat of categories) {
+      stats.byCategory[cat] = 0;
+    }
+
+    // Initialize source counts
+    const sources: FileSource[] = ['UPLOADED', 'GENERATED', 'IMPORTED', 'SYSTEM'];
+    for (const src of sources) {
+      stats.bySource[src] = 0;
+    }
+
+    // Count files
+    for (const f of files) {
+      if (f.category in stats.byCategory) {
+        stats.byCategory[f.category]++;
+      }
+      if (f.source in stats.bySource) {
+        stats.bySource[f.source]++;
+      }
+    }
 
     return NextResponse.json({
       status: 'OK',
-      message: 'New file system is working',
+      message: 'File system is working (repository pattern, S3 storage)',
       stats,
       sampleFiles: files.slice(0, 5).map(f => ({
         id: f.id,
         filename: f.originalFilename,
-        url: `/data/files/storage/${f.id}.${f.originalFilename.split('.').pop()}`,
+        url: `/api/files/${f.id}`,
         category: f.category,
         source: f.source,
+        hasS3Key: !!f.s3Key,
       })),
     });
   } catch (error) {

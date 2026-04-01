@@ -1,7 +1,6 @@
 'use client'
 
 import { use, useEffect, useState, useRef, useCallback } from 'react'
-import Image from 'next/image'
 import ImageModal from '@/components/chat/ImageModal'
 import PhotoGalleryModal from '@/components/images/PhotoGalleryModal'
 import ToolPalette from '@/components/chat/ToolPalette'
@@ -18,7 +17,7 @@ import { formatMessageTime } from '@/lib/format-time'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { useDebugOptional } from '@/components/providers/debug-provider'
 import DebugPanel from '@/components/debug/DebugPanel'
-import type { TagVisualStyle } from '@/lib/json-store/schemas/types'
+import type { TagVisualStyle } from '@/lib/schemas/types'
 import { useChatContext } from '@/components/providers/chat-context'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
@@ -145,6 +144,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [chatSettingsModalOpen, setChatSettingsModalOpen] = useState(false)
   const [generateImageDialogOpen, setGenerateImageDialogOpen] = useState(false)
   const [toolExecutionStatus, setToolExecutionStatus] = useState<{ tool: string; status: 'pending' | 'success' | 'error'; message: string } | null>(null)
+  const [pendingToolCalls, setPendingToolCalls] = useState<Array<{ name: string; status: 'pending' | 'success' | 'error'; result?: unknown; arguments?: Record<string, unknown> }>>([])
   const [showPreview, setShowPreview] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -473,33 +473,50 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 setStreamingContent(fullContent)
               }
 
-              // Handle tool detection
-              if (data.toolsDetected) {
-                setToolExecutionStatus({
-                  tool: 'generate_image',
-                  status: 'pending',
-                  message: `Generating ${data.toolsDetected} image${data.toolsDetected > 1 ? 's' : ''}...`,
-                })
+              // Handle tool detection - create pending entries for each tool
+              if (data.toolsDetected && data.toolNames) {
+                const toolNames = data.toolNames as string[]
+                const toolArgs = (data.toolArguments || []) as Record<string, unknown>[]
+                setPendingToolCalls(toolNames.map((name, idx) => ({
+                  name,
+                  status: 'pending' as const,
+                  arguments: toolArgs[idx],
+                })))
+                // Only show image generation status for generate_image tool
+                if (toolNames.includes('generate_image')) {
+                  setToolExecutionStatus({
+                    tool: 'generate_image',
+                    status: 'pending',
+                    message: `Generating image...`,
+                  })
+                }
               }
 
               // Handle tool results
               if (data.toolResult) {
                 const { name, success, result } = data.toolResult
-                if (success) {
-                  const imageCount = result?.images?.length || 1
-                  setToolExecutionStatus({
-                    tool: name,
-                    status: 'success',
-                    message: `Successfully generated ${imageCount} image${imageCount > 1 ? 's' : ''}!`,
-                  })
-                  showSuccessToast(`Image generation complete! ${imageCount} image${imageCount > 1 ? 's' : ''} generated.`)
-                } else {
-                  setToolExecutionStatus({
-                    tool: name,
-                    status: 'error',
-                    message: result?.error || 'Failed to generate image',
-                  })
-                  showErrorToast(`Image generation failed: ${result?.error || 'Unknown error'}`)
+                // Update pending tool call status
+                setPendingToolCalls(prev => prev.map(tc =>
+                  tc.name === name ? { ...tc, status: success ? 'success' : 'error', result } : tc
+                ))
+                // Only show toast/status for image generation
+                if (name === 'generate_image') {
+                  if (success) {
+                    const imageCount = result?.images?.length || 1
+                    setToolExecutionStatus({
+                      tool: name,
+                      status: 'success',
+                      message: `Successfully generated ${imageCount} image${imageCount > 1 ? 's' : ''}!`,
+                    })
+                    showSuccessToast(`Image generation complete! ${imageCount} image${imageCount > 1 ? 's' : ''} generated.`)
+                  } else {
+                    setToolExecutionStatus({
+                      tool: name,
+                      status: 'error',
+                      message: result?.error || 'Failed to generate image',
+                    })
+                    showErrorToast(`Image generation failed: ${result?.error || 'Unknown error'}`)
+                  }
                 }
               }
 
@@ -512,6 +529,16 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 // Debug: Finalize streaming entry with stitched content
                 if (debug?.isDebugMode && responseEntryId) {
                   debug.finalizeStreamingEntry(responseEntryId)
+                }
+
+                // Check for empty response (known Gemini API issue)
+                if (data.emptyResponse) {
+                  showErrorToast(data.emptyResponseReason || 'The AI returned an empty response. Use the Resend button to try again.')
+                  setStreamingContent('')
+                  setStreaming(false)
+                  setWaitingForResponse(false)
+                  setSending(false)
+                  return
                 }
 
                 // Add assistant message to messages list
@@ -552,7 +579,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   }, 1000)
                 }
                 // Clear tool status after a short delay
-                setTimeout(() => setToolExecutionStatus(null), 3000)
+                setTimeout(() => {
+                  setToolExecutionStatus(null)
+                  setPendingToolCalls([])
+                }, 3000)
               }
 
               if (data.error) {
@@ -635,6 +665,109 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to delete message')
     }
+  }
+
+  // Check if a user message can be resent
+  // Returns true if: it's the last user message AND there are either no messages after it,
+  // or only blank/empty assistant messages after it
+  const canResendMessage = (messageId: string, messageIndex: number): boolean => {
+    const message = messages[messageIndex]
+    if (!message || message.role !== 'USER') return false
+
+    // Check all messages after this one
+    const messagesAfter = messages.slice(messageIndex + 1)
+
+    // If no messages after, can resend
+    if (messagesAfter.length === 0) return true
+
+    // Check if all messages after are blank assistant messages
+    // A message is considered "blank" if it has no content or only whitespace
+    for (const msg of messagesAfter) {
+      // Skip TOOL messages - they don't count as meaningful responses
+      if (msg.role === 'TOOL') continue
+
+      // If there's a non-blank assistant message, can't resend
+      if (msg.role === 'ASSISTANT' && msg.content && msg.content.trim().length > 0) {
+        return false
+      }
+
+      // If there's another user message after this, can't resend
+      if (msg.role === 'USER') {
+        return false
+      }
+    }
+
+    return true
+  }
+
+  // Resend a user message: delete blank responses after it, delete the message, then resend
+  const resendMessage = async (message: Message) => {
+    if (sending) return
+
+    // Extract the original content (strip [Attached: ...] suffix)
+    const originalContent = getDisplayContent(message.content)
+
+    // Get attachments from the original message
+    const originalAttachments = message.attachments || []
+
+    // Find the index of this message
+    const messageIndex = messages.findIndex(m => m.id === message.id)
+    if (messageIndex === -1) return
+
+    // Delete blank assistant messages after this one (from the server)
+    const messagesAfter = messages.slice(messageIndex + 1)
+    for (const msg of messagesAfter) {
+      if (msg.role === 'ASSISTANT' && (!msg.content || msg.content.trim().length === 0)) {
+        try {
+          await fetch(`/api/messages/${msg.id}`, { method: 'DELETE' })
+        } catch {
+          // Ignore errors deleting blank messages
+        }
+      }
+    }
+
+    // Delete the original user message from server
+    try {
+      const deleteRes = await fetch(`/api/messages/${message.id}`, { method: 'DELETE' })
+      if (!deleteRes.ok) {
+        throw new Error('Failed to delete original message')
+      }
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to resend message')
+      return
+    }
+
+    // Remove the message and any blank messages after it from the UI
+    setMessages(prev => {
+      const idx = prev.findIndex(m => m.id === message.id)
+      if (idx === -1) return prev
+      // Keep messages before this one
+      return prev.slice(0, idx)
+    })
+
+    // Set up the input and attachments for resending
+    setInput(originalContent)
+
+    // If there were attachments, we need to re-attach them
+    if (originalAttachments.length > 0) {
+      setAttachedFiles(originalAttachments.map(a => ({
+        id: a.id,
+        filename: a.filename,
+        filepath: a.filepath,
+        mimeType: a.mimeType,
+        size: 0, // Size not stored in message attachments
+        url: a.filepath.startsWith('/') ? a.filepath : `/${a.filepath}`,
+      })))
+    }
+
+    // Focus the input so user can see the restored message
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus()
+      }
+    }, 100)
+
+    showSuccessToast('Message restored to input. Press Enter to resend.')
   }
 
   const generateSwipe = async (messageId: string) => {
@@ -767,7 +900,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           }}
         >
           {avatarSrc ? (
-            <Image
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
               src={avatarSrc}
               alt={avatar.name}
               width={avatarWidth}
@@ -836,10 +970,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       {/* Messages */}
       <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-slate-900 min-h-0">
         <div className={`${isDebugMode ? '' : 'mx-auto max-w-[800px]'} p-4 space-y-4`}>
-        {messages.map((message) => {
+        {messages.map((message, messageIndex) => {
           const isEditing = editingMessageId === message.id
           const swipeState = message.swipeGroupId ? swipeStates[message.swipeGroupId] : null
-
+          const showResendButton = canResendMessage(message.id, messageIndex)
 
           // Render TOOL messages differently
           if (message.role === 'TOOL') {
@@ -922,7 +1056,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                               })}
                               className="relative group/thumb overflow-hidden rounded border border-gray-300 dark:border-slate-600 hover:border-blue-500 dark:hover:border-blue-400 transition-colors"
                             >
-                              <Image
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
                                 src={`/${attachment.filepath.startsWith('/') ? attachment.filepath.slice(1) : attachment.filepath}`}
                                 alt={attachment.filename}
                                 width={80}
@@ -982,6 +1117,15 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                         >
                           Delete
                         </button>
+                        {showResendButton && (
+                          <button
+                            onClick={() => resendMessage(message)}
+                            className="text-orange-600 dark:text-orange-400 hover:text-orange-900 dark:hover:text-orange-300"
+                            title="Resend this message (deletes blank responses and restores to input)"
+                          >
+                            ↻ Resend
+                          </button>
+                        )}
                       </>
                     )}
 
@@ -1051,6 +1195,66 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             )}
             <div className="text-gray-500 dark:text-gray-400">
               <QuillAnimation size="lg" />
+            </div>
+          </div>
+        )}
+
+        {/* Pending tool calls - shown collapsed before streaming response */}
+        {pendingToolCalls.length > 0 && (
+          <div className="flex gap-4 w-[90%] justify-start">
+            <div className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 text-lg">
+              {(() => {
+                if (pendingToolCalls.some(tc => tc.name === 'generate_image')) return '🎨'
+                if (pendingToolCalls.some(tc => tc.name === 'search_memories')) return '🧠'
+                if (pendingToolCalls.some(tc => tc.name === 'search_web')) return '🔍'
+                return '⚙️'
+              })()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <details className="group" open={pendingToolCalls.some(tc => tc.status === 'pending')}>
+                <summary className="px-4 py-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 cursor-pointer list-none flex items-center gap-2">
+                  <svg className="w-4 h-4 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {pendingToolCalls.map(tc => {
+                      const displayNames: Record<string, string> = {
+                        'generate_image': 'Image Generation',
+                        'search_memories': 'Memory Search',
+                        'search_web': 'Web Search',
+                      }
+                      return displayNames[tc.name] || tc.name
+                    }).join(', ')}
+                  </span>
+                  {pendingToolCalls.some(tc => tc.status === 'pending') && (
+                    <QuillAnimation size="sm" className="ml-auto text-gray-400" />
+                  )}
+                  {pendingToolCalls.every(tc => tc.status === 'success') && (
+                    <span className="ml-auto text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded">
+                      Complete
+                    </span>
+                  )}
+                  {pendingToolCalls.some(tc => tc.status === 'error') && (
+                    <span className="ml-auto text-xs px-2 py-0.5 bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 rounded">
+                      Error
+                    </span>
+                  )}
+                </summary>
+                <div className="mt-2 px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                  {pendingToolCalls.map((tc) => (
+                    <div key={tc.name} className="text-xs text-gray-600 dark:text-gray-400">
+                      <span className="font-medium">{tc.name}</span>
+                      {tc.arguments && Object.keys(tc.arguments).length > 0 && (
+                        <span className="ml-2 text-gray-500">
+                          ({Object.entries(tc.arguments).map(([k, v]) => `${k}: ${typeof v === 'string' ? v.slice(0, 50) : JSON.stringify(v)}`).join(', ')})
+                        </span>
+                      )}
+                      {tc.status === 'success' && <span className="ml-2 text-green-600 dark:text-green-400">✓</span>}
+                      {tc.status === 'error' && <span className="ml-2 text-red-600 dark:text-red-400">✗</span>}
+                    </div>
+                  ))}
+                </div>
+              </details>
             </div>
           </div>
         )}

@@ -9,8 +9,8 @@
  * - Memory count limits per character
  */
 
-import { getRepositories } from '@/lib/json-store/repositories'
-import { Memory } from '@/lib/json-store/schemas/types'
+import { getRepositories } from '@/lib/repositories/factory'
+import { Memory } from '@/lib/schemas/types'
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
 import { findSimilarMemories } from './memory-service'
 import { logger } from '@/lib/logger'

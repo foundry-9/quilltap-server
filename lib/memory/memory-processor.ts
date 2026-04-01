@@ -6,10 +6,10 @@
  * It runs as a background task to avoid blocking chat responses.
  */
 
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getRepositories } from '@/lib/repositories/factory'
 import { extractMemoryFromMessage, extractCharacterMemoryFromMessage, MemoryCandidate } from './cheap-llm-tasks'
 import { getCheapLLMProvider, CheapLLMConfig, CheapLLMSelection } from '@/lib/llm/cheap-llm'
-import { ConnectionProfile, CheapLLMSettings, Memory } from '@/lib/json-store/schemas/types'
+import { ConnectionProfile, CheapLLMSettings, Memory } from '@/lib/schemas/types'
 import { createMemoryWithEmbedding, findSimilarMemories } from './memory-service'
 import { logger } from '@/lib/logger'
 

@@ -3,15 +3,22 @@
  * GET /api/images/:id - Get single image
  * DELETE /api/images/:id - Delete image
  *
- * Uses only the file-manager system.
+ * Uses the repository pattern for metadata and S3 for file storage.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { getRepositories } from '@/lib/json-store/repositories';
-import { findFileById, deleteFile, getFileUrl } from '@/lib/file-manager';
+import { getServerSession } from '@/lib/auth/session';
+import { getRepositories } from '@/lib/repositories/factory';
+import { deleteFile as deleteS3File, downloadFile as downloadS3File } from '@/lib/s3/operations';
 import { logger } from '@/lib/logger';
+import type { FileEntry } from '@/lib/schemas/types';
+
+/**
+ * Get the filepath for an image - always returns API path for S3-backed files
+ */
+function getFilePath(image: FileEntry): string {
+  return `/api/files/${image.id}`;
+}
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -23,7 +30,7 @@ interface RouteContext {
  */
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession();
     if (!session?.user?.id) {
       logger.debug('GET /api/images/[id] - Unauthorized: no session');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -34,7 +41,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
     logger.debug('GET /api/images/[id] - Fetching image', { imageId: id, userId: session.user.id });
 
-    const image = await findFileById(id);
+    const image = await repos.files.findById(id);
 
     if (!image) {
       logger.debug('GET /api/images/[id] - Image not found', { imageId: id });
@@ -85,7 +92,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
         id: image.id,
         userId: session.user.id,
         filename: image.originalFilename,
-        filepath: getFileUrl(image.id, image.originalFilename),
+        filepath: getFilePath(image),
         mimeType: image.mimeType,
         size: image.size,
         width: image.width,
@@ -118,7 +125,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
  */
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession();
     if (!session?.user?.id) {
       logger.debug('DELETE /api/images/[id] - Unauthorized: no session');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -130,7 +137,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     logger.debug('DELETE /api/images/[id] - Deleting image', { imageId: id, userId: session.user.id });
 
     // Check if image exists
-    const image = await findFileById(id);
+    const image = await repos.files.findById(id);
 
     if (!image) {
       logger.debug('DELETE /api/images/[id] - Image not found', { imageId: id });
@@ -153,30 +160,73 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Image not found' }, { status: 404 });
     }
 
+    // Check if the underlying file actually exists in S3 (to detect orphaned metadata)
+    let fileExists = false;
+    if (image.s3Key) {
+      try {
+        await downloadS3File(image.s3Key);
+        fileExists = true;
+      } catch {
+        logger.debug('DELETE /api/images/[id] - S3 file does not exist (orphaned)', { imageId: id, s3Key: image.s3Key });
+      }
+    }
+
     // Count usages by checking related entities
     const [allCharacters, allPersonas] = await Promise.all([
       repos.characters.findByUserId(session.user.id),
       repos.personas.findByUserId(session.user.id),
     ]);
 
-    const charactersUsingAsDefault = allCharacters.filter(c => c.defaultImageId === id).length;
-    const personasUsingAsDefault = allPersonas.filter(p => p.defaultImageId === id).length;
-    const chatAvatarOverrides = allCharacters.reduce((count, c) => {
-      return count + c.avatarOverrides.filter(o => o.imageId === id).length;
-    }, 0);
+    const charactersUsingAsDefault = allCharacters.filter(c => c.defaultImageId === id);
+    const personasUsingAsDefault = allPersonas.filter(p => p.defaultImageId === id);
+    const chatAvatarOverrides = allCharacters.reduce((acc, c) => {
+      const overrides = c.avatarOverrides.filter(o => o.imageId === id);
+      return overrides.length > 0 ? [...acc, { characterId: c.id, overrides }] : acc;
+    }, [] as Array<{ characterId: string; overrides: Array<{ chatId: string; imageId: string }> }>);
 
     // Check if image is being used
     const isInUse =
-      charactersUsingAsDefault > 0 ||
-      personasUsingAsDefault > 0 ||
-      chatAvatarOverrides > 0;
+      charactersUsingAsDefault.length > 0 ||
+      personasUsingAsDefault.length > 0 ||
+      chatAvatarOverrides.length > 0;
 
-    if (isInUse) {
+    // If the file is orphaned (doesn't exist), clean up references and allow deletion
+    if (!fileExists && isInUse) {
+      logger.info('DELETE /api/images/[id] - Cleaning up references to orphaned image', {
+        imageId: id,
+        charactersUsingAsDefault: charactersUsingAsDefault.length,
+        personasUsingAsDefault: personasUsingAsDefault.length,
+        chatAvatarOverrides: chatAvatarOverrides.length,
+      });
+
+      // Clear defaultImageId on characters
+      for (const character of charactersUsingAsDefault) {
+        await repos.characters.update(character.id, { defaultImageId: null });
+        logger.debug('DELETE /api/images/[id] - Cleared defaultImageId on character', { characterId: character.id });
+      }
+
+      // Clear defaultImageId on personas
+      for (const persona of personasUsingAsDefault) {
+        await repos.personas.update(persona.id, { defaultImageId: null });
+        logger.debug('DELETE /api/images/[id] - Cleared defaultImageId on persona', { personaId: persona.id });
+      }
+
+      // Clear avatar overrides
+      for (const { characterId, overrides } of chatAvatarOverrides) {
+        const character = allCharacters.find(c => c.id === characterId);
+        if (character) {
+          const updatedOverrides = character.avatarOverrides.filter(o => o.imageId !== id);
+          await repos.characters.update(characterId, { avatarOverrides: updatedOverrides });
+          logger.debug('DELETE /api/images/[id] - Cleared avatar overrides on character', { characterId, removedCount: overrides.length });
+        }
+      }
+    } else if (isInUse) {
+      // File exists and is in use - don't allow deletion
       logger.debug('DELETE /api/images/[id] - Image is in use, cannot delete', {
         imageId: id,
-        charactersUsingAsDefault,
-        personasUsingAsDefault,
-        chatAvatarOverrides,
+        charactersUsingAsDefault: charactersUsingAsDefault.length,
+        personasUsingAsDefault: personasUsingAsDefault.length,
+        chatAvatarOverrides: chatAvatarOverrides.length,
       });
       return NextResponse.json(
         {
@@ -188,11 +238,26 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       );
     }
 
-    // Delete file and metadata
-    const deleted = await deleteFile(id);
+    // Delete from S3 if file has s3Key
+    if (image.s3Key) {
+      try {
+        await deleteS3File(image.s3Key);
+        logger.debug('DELETE /api/images/[id] - Deleted from S3', { imageId: id, s3Key: image.s3Key });
+      } catch (s3Error) {
+        logger.warn('DELETE /api/images/[id] - Failed to delete from S3', {
+          imageId: id,
+          s3Key: image.s3Key,
+          error: s3Error instanceof Error ? s3Error.message : 'Unknown error',
+        });
+        // Continue with metadata deletion even if S3 deletion fails
+      }
+    }
+
+    // Delete file metadata from repository
+    const deleted = await repos.files.delete(id);
 
     if (!deleted) {
-      logger.warn('DELETE /api/images/[id] - Failed to delete file', { imageId: id });
+      logger.warn('DELETE /api/images/[id] - Failed to delete file metadata', { imageId: id });
       return NextResponse.json({ error: 'Failed to delete image' }, { status: 500 });
     }
 

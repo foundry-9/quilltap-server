@@ -190,7 +190,7 @@ export default function PluginsTab() {
         </div>
       ) : (
         <div className="space-y-3">
-          {plugins.map((plugin) => {
+          {plugins.toSorted((a, b) => a.title.localeCompare(b.title)).map((plugin) => {
             const isToggling = toggling.has(plugin.name)
             return (
               <div

@@ -9,7 +9,7 @@
 import { profileSupportsMimeType } from '@/lib/llm/connection-profile-utils'
 import { createLLMProvider } from '@/lib/llm'
 import { decryptApiKey } from '@/lib/encryption'
-import type { ConnectionProfile } from '@/lib/json-store/schemas/types'
+import type { ConnectionProfile } from '@/lib/schemas/types'
 import type { FileAttachment } from '@/lib/llm/base'
 import { join } from 'path'
 import { readFile } from 'fs/promises'
@@ -186,10 +186,10 @@ export async function generateImageDescription(
       }
     }
 
-    // Get API key for image description profile
+    // Get API key for image description profile (verify ownership)
     let apiKeyValue: string | null = null
     if (imageDescProfile.apiKeyId) {
-      const apiKey = await repos.connections.findApiKeyById(imageDescProfile.apiKeyId)
+      const apiKey = await repos.connections.findApiKeyByIdAndUserId(imageDescProfile.apiKeyId, userId)
       if (apiKey) {
         apiKeyValue = decryptApiKey(
           apiKey.ciphertext,

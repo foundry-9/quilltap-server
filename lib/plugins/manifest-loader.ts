@@ -13,7 +13,8 @@ import {
   safeValidatePluginManifest,
   functionalityToCapabilities,
   type PluginCapability,
-} from '@/lib/json-store/schemas/plugin-manifest';
+} from '@/lib/schemas/plugin-manifest';
+import { isSitePluginEnabled } from './site-plugins';
 
 // ============================================================================
 // TYPES
@@ -227,6 +228,16 @@ export async function scanPlugins(
         }
 
         const manifest = loadResult.manifest;
+
+        // Check if plugin is enabled by site configuration
+        const siteEnabled = isSitePluginEnabled(manifest.name);
+        if (!siteEnabled) {
+          logger.debug('Plugin disabled by site configuration', {
+            context: 'scanPlugins',
+            pluginName: manifest.name,
+          });
+          continue;
+        }
 
         // Get capabilities from manifest
         const capabilities = [...manifest.capabilities];

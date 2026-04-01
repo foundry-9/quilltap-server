@@ -3,9 +3,12 @@
  * Handles execution of image generation tool calls from LLMs
  */
 
-import { createFile, getFileUrl } from '@/lib/file-manager';
-import { getRepositories } from '@/lib/json-store/repositories';
+import { createHash } from 'node:crypto';
+import { getRepositories } from '@/lib/repositories/factory';
+import { uploadFile as uploadS3File } from '@/lib/s3/operations';
+import { buildS3Key } from '@/lib/s3/client';
 import { decryptApiKey } from '@/lib/encryption';
+import type { FileCategory, FileSource } from '@/lib/schemas/types';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
 import {
   ImageGenerationToolInput,
@@ -61,6 +64,7 @@ async function saveGeneratedImage(
   try {
     // Decode base64 to buffer
     const buffer = Buffer.from(imageData, 'base64');
+    const sha256 = createHash('sha256').update(buffer).digest('hex');
 
     // Generate original filename
     const ext = mimeType.split('/')[1] || 'png';
@@ -69,22 +73,45 @@ async function saveGeneratedImage(
     // Build linkedTo array
     const linkedTo = chatId ? [chatId] : [];
 
-    // Create file entry using file manager
-    const fileEntry = await createFile({
-      buffer,
+    const repos = getRepositories();
+    const category: FileCategory = 'IMAGE';
+
+    // Generate a new file ID
+    const fileId = crypto.randomUUID();
+
+    // Upload to S3
+    const s3Key = buildS3Key(userId, fileId, originalFilename, category);
+    await uploadS3File(s3Key, buffer, mimeType, {
+      userId,
+      fileId,
+      category,
+      filename: originalFilename,
+      sha256,
+    });
+    logger.debug('Uploaded generated image to S3', { fileId, s3Key, size: buffer.length });
+
+    // Create metadata in repository
+    const fileEntry = await repos.files.create({
+      userId,
+      sha256,
       originalFilename,
       mimeType,
-      source: 'GENERATED',
-      category: 'IMAGE',
-      userId,
+      size: buffer.length,
+      width: null,
+      height: null,
       linkedTo,
-      tags: chatId ? [chatId] : [],
+      source: 'GENERATED' as FileSource,
+      category,
       generationPrompt: metadata.prompt,
       generationModel: metadata.model,
-      generationRevisedPrompt: metadata.revisedPrompt,
+      generationRevisedPrompt: metadata.revisedPrompt || null,
+      description: null,
+      tags: chatId ? [chatId] : [],
+      s3Key,
     });
 
-    const filepath = getFileUrl(fileEntry.id, fileEntry.originalFilename);
+    // Always use API route for S3-backed files
+    const filepath = `/api/files/${fileEntry.id}`;
 
     return {
       id: fileEntry.id,
@@ -166,10 +193,10 @@ async function loadAndValidateProfile(
       };
     }
 
-    // Get the API key if profile has one
+    // Get the API key if profile has one (verify ownership)
     let apiKey = null;
     if (imageProfile.apiKeyId) {
-      apiKey = await repos.connections.findApiKeyById(imageProfile.apiKeyId);
+      apiKey = await repos.connections.findApiKeyByIdAndUserId(imageProfile.apiKeyId, userId);
     }
 
     if (!apiKey?.ciphertext) {
@@ -526,10 +553,10 @@ export async function validateImageProfile(
       };
     }
 
-    // Get the API key if profile has one
+    // Get the API key if profile has one (verify ownership)
     let apiKey = null;
     if (profile.apiKeyId) {
-      apiKey = await repos.connections.findApiKeyById(profile.apiKeyId);
+      apiKey = await repos.connections.findApiKeyByIdAndUserId(profile.apiKeyId, userId);
     }
 
     if (!apiKey?.ciphertext) {
@@ -570,10 +597,10 @@ export async function getDefaultImageProfile(userId: string) {
       return null;
     }
 
-    // Enrich with API key info
+    // Enrich with API key info (verify ownership)
     let apiKey = null;
     if (profile.apiKeyId) {
-      const key = await repos.connections.findApiKeyById(profile.apiKeyId);
+      const key = await repos.connections.findApiKeyByIdAndUserId(profile.apiKeyId, userId);
       if (key) {
         apiKey = {
           id: key.id,

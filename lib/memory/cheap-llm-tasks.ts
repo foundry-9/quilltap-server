@@ -10,7 +10,7 @@
 import { createLLMProvider } from '@/lib/llm'
 import { LLMMessage, LLMResponse } from '@/lib/llm/base'
 import { CheapLLMSelection } from '@/lib/llm/cheap-llm'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getRepositories } from '@/lib/repositories/factory'
 import { decryptApiKey } from '@/lib/encryption'
 
 /**
@@ -90,7 +90,7 @@ async function getApiKeyForSelection(
     return null
   }
 
-  const apiKey = await repos.connections.findApiKeyById(profile.apiKeyId)
+  const apiKey = await repos.connections.findApiKeyByIdAndUserId(profile.apiKeyId, userId)
   if (!apiKey) {
     return null
   }

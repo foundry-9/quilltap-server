@@ -3,9 +3,8 @@
 // POST /api/tags - Create a new tag
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getServerSession } from '@/lib/auth/session'
+import { getUserRepositories, getRepositories } from '@/lib/repositories/factory'
 import { z } from 'zod'
 import { logger } from '@/lib/logger'
 
@@ -17,22 +16,25 @@ const createTagSchema = z.object({
 // GET /api/tags - List or search tags
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.email) {
+    const session = await getServerSession()
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const repos = getRepositories()
-    const user = await repos.users.findByEmail(session.user.email)
+    const baseRepos = getRepositories()
+    const user = await baseRepos.users.findById(session.user.id)
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
+    // Use user-scoped repositories for automatic filtering
+    const repos = getUserRepositories(session.user.id)
+
     const searchParams = req.nextUrl.searchParams
     const search = searchParams.get('search')
 
-    // Get all tags
+    // Get all tags for the user (automatically scoped)
     let tags = await repos.tags.findAll()
 
     // Filter by search if provided
@@ -44,7 +46,7 @@ export async function GET(req: NextRequest) {
     // Sort by name
     tags.sort((a, b) => a.name.localeCompare(b.name))
 
-    // Get usage counts for each tag
+    // Get usage counts for each tag (automatically scoped to user)
     const allCharacters = await repos.characters.findAll()
     const allPersonas = await repos.personas.findAll()
     const allChats = await repos.chats.findAll()
@@ -84,33 +86,36 @@ export async function GET(req: NextRequest) {
 // POST /api/tags - Create a new tag
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.email) {
+    const session = await getServerSession()
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const repos = getRepositories()
-    const user = await repos.users.findByEmail(session.user.email)
+    const baseRepos = getRepositories()
+    const user = await baseRepos.users.findById(session.user.id)
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
+
+    // Use user-scoped repositories
+    const repos = getUserRepositories(session.user.id)
 
     const body = await req.json()
     const validatedData = createTagSchema.parse(body)
 
     const nameLower = validatedData.name.toLowerCase()
 
-    // Check if tag already exists (case-insensitive)
-    const existingTag = await repos.tags.findByName(user.id, validatedData.name)
+    // Check if tag already exists (case-insensitive) - user-scoped
+    const existingTag = await repos.tags.findByName(validatedData.name)
 
     if (existingTag) {
       // Return existing tag instead of error
       return NextResponse.json({ tag: existingTag })
     }
 
+    // Create tag - userId is automatically set by user-scoped repo
     const tag = await repos.tags.create({
-      userId: user.id,
       name: validatedData.name,
       nameLower,
       quickHide: false,

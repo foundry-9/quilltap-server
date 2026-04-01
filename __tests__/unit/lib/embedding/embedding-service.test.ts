@@ -3,7 +3,7 @@
  * Validates provider-specific calls, fallbacks, and similarity helpers.
  */
 
-jest.mock('@/lib/json-store/repositories', () => ({
+jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
 }))
 jest.mock('@/lib/encryption', () => ({
@@ -11,9 +11,9 @@ jest.mock('@/lib/encryption', () => ({
 }))
 
 import * as embeddingService from '@/lib/embedding/embedding-service'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getRepositories } from '@/lib/repositories/factory'
 import { decryptApiKey } from '@/lib/encryption'
-import type { EmbeddingProfile } from '@/lib/json-store/schemas/types'
+import type { EmbeddingProfile } from '@/lib/schemas/types'
 
 const {
   getDefaultEmbeddingProfile,
@@ -45,6 +45,7 @@ const mockRepos = {
   },
   connections: {
     findApiKeyById: jest.fn(),
+    findApiKeyByIdAndUserId: jest.fn(),
   },
 }
 
@@ -74,11 +75,12 @@ describe('embedding service', () => {
     mockRepos.embeddingProfiles.findById.mockResolvedValue(null)
     mockRepos.embeddingProfiles.findByUserId.mockResolvedValue([])
     mockRepos.connections.findApiKeyById.mockResolvedValue(null)
+    mockRepos.connections.findApiKeyByIdAndUserId.mockResolvedValue(null)
   })
 
   it('calls OpenAI embeddings API when provider is OPENAI', async () => {
     const profile = makeProfile()
-    mockRepos.connections.findApiKeyById.mockResolvedValue({
+    mockRepos.connections.findApiKeyByIdAndUserId.mockResolvedValue({
       ciphertext: 'cipher',
       iv: 'iv',
       authTag: 'tag',
@@ -155,7 +157,7 @@ describe('embedding service', () => {
     const profile = makeProfile()
     mockRepos.embeddingProfiles.findDefault.mockResolvedValue(profile)
 
-    mockRepos.connections.findApiKeyById.mockResolvedValue({
+    mockRepos.connections.findApiKeyByIdAndUserId.mockResolvedValue({
       ciphertext: 'cipher',
       iv: 'iv',
       authTag: 'tag',

@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { showConfirmation } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { clientLogger } from '@/lib/client-logger'
@@ -112,7 +111,9 @@ export default function ChatsPage() {
     const character = getFirstCharacter(chat)
     if (!character) return null
     if (character.defaultImage) {
-      return character.defaultImage.url || `/${character.defaultImage.filepath}`
+      // Handle filepath - check if it already has a leading slash (e.g., S3 files use /api/files/...)
+      const filepath = character.defaultImage.filepath
+      return character.defaultImage.url || (filepath.startsWith('/') ? filepath : `/${filepath}`)
     }
     return character.avatarUrl || null
   }
@@ -380,7 +381,8 @@ export default function ChatsPage() {
                     return (
                       <>
                         {avatarSrc ? (
-                          <Image
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
                             src={avatarSrc}
                             alt={characterName}
                             width={64}

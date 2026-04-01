@@ -2,17 +2,23 @@
  * Persona Avatar API Routes
  * PATCH /api/personas/:id/avatar - Set default avatar for persona
  *
- * Simplified to use only file-manager system for avatar management.
+ * Uses the repository pattern for file metadata management.
  * All avatars are stored as FileEntry objects with category 'AVATAR' or 'IMAGE'.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { getRepositories } from '@/lib/json-store/repositories';
+import { getServerSession } from '@/lib/auth/session';
+import { getRepositories } from '@/lib/repositories/factory';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { findFileById, getFileUrl } from '@/lib/file-manager';
+import type { FileEntry } from '@/lib/schemas/types';
+
+/**
+ * Get the filepath for a file - always returns API path for S3-backed files
+ */
+function getFilePath(file: FileEntry): string {
+  return `/api/files/${file.id}`;
+}
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -33,7 +39,7 @@ const avatarSchema = z.object({
  */
 export async function PATCH(request: NextRequest, context: RouteContext) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession();
     if (!session?.user?.id) {
       logger.debug('Unauthorized persona avatar update - no session', { context: 'personas-avatar-PATCH' });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -56,11 +62,11 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Persona not found' }, { status: 404 });
     }
 
-    // If imageId is provided, verify it from file-manager
+    // If imageId is provided, verify it from repository
     if (imageId) {
       logger.debug('Validating file for persona avatar', { fileId: imageId, personaId: id });
 
-      const fileEntry = await findFileById(imageId);
+      const fileEntry = await repos.files.findById(imageId);
 
       // Verify file exists
       if (!fileEntry) {
@@ -111,11 +117,11 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     // Build response with file info if image is set
     let defaultImage = null;
     if (updatedPersona?.defaultImageId) {
-      const fileEntry = await findFileById(updatedPersona.defaultImageId);
+      const fileEntry = await repos.files.findById(updatedPersona.defaultImageId);
       if (fileEntry) {
         defaultImage = {
           id: fileEntry.id,
-          filepath: getFileUrl(fileEntry.id, fileEntry.originalFilename),
+          filepath: getFilePath(fileEntry),
           url: null,
         };
         logger.debug('Built response with default image', {

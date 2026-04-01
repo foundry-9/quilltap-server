@@ -1,51 +1,67 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { getRepositories } from "@/lib/json-store/repositories";
-import { findFileById, getFileUrl } from "@/lib/file-manager";
+import { getServerSession } from "@/lib/auth/session";
+import { getUserRepositories, getRepositories } from "@/lib/repositories/factory";
 import Link from "next/link";
 import { RecentChatsSection } from "@/components/dashboard/recent-chats";
 import { FavoriteCharactersSection } from "@/components/dashboard/favorite-characters";
+import type { FileEntry } from "@/lib/schemas/types";
+
+/**
+ * Get the filepath for a file based on storage type
+ */
+function getFilePath(file: FileEntry): string {
+  if (file.s3Key) {
+    return `/api/files/${file.id}`;
+  }
+  const ext = file.originalFilename.includes('.')
+    ? file.originalFilename.substring(file.originalFilename.lastIndexOf('.'))
+    : '';
+  return `data/files/storage/${file.id}${ext}`;
+}
 
 // Revalidate dashboard on every request to show latest character data
 export const revalidate = 0;
 
 export default async function Dashboard() {
-  const session = await getServerSession(authOptions);
-  const repos = getRepositories();
+  const session = await getServerSession();
+  const userId = session?.user?.id;
+
+  // Use user-scoped repositories for automatic userId filtering
+  const repos = userId ? getUserRepositories(userId) : null;
+  // Keep base repos for user lookup (users aren't scoped)
+  const baseRepos = getRepositories();
 
   // Get the user from the repository
-  const user = session?.user?.email
-    ? await repos.users.findByEmail(session.user.email)
+  const user = userId
+    ? await baseRepos.users.findById(userId)
     : null;
-  const userId = user?.id;
 
-  // Get all characters, chats, and personas for counts
+  // Get all characters, chats, and personas for counts (automatically scoped to user)
   const [allCharacters, allChats, allPersonas] = await Promise.all([
-    userId ? repos.characters.findAll() : Promise.resolve([]),
-    userId ? repos.chats.findAll() : Promise.resolve([]),
-    userId ? repos.personas.findAll() : Promise.resolve([]),
+    repos ? repos.characters.findAll() : Promise.resolve([]),
+    repos ? repos.chats.findAll() : Promise.resolve([]),
+    repos ? repos.personas.findAll() : Promise.resolve([]),
   ]);
 
-  // Count items (single-user system, but filter by userId for consistency)
+  // Count items (now properly filtered by user)
   const charactersCount = allCharacters.length;
   const chatsCount = allChats.length;
   const personasCount = allPersonas.length;
 
   // Get favorite characters
-  const favoriteCharacters = userId
+  const favoriteCharacters = repos
     ? await Promise.all(
         allCharacters
           .filter((c) => c.isFavorite)
           .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
           .map(async (character) => {
-            // Get default image from file-manager if exists
+            // Get default image from repository if exists
             let defaultImage = null;
             if (character.defaultImageId) {
-              const fileEntry = await findFileById(character.defaultImageId);
+              const fileEntry = await repos.files.findById(character.defaultImageId);
               if (fileEntry) {
                 defaultImage = {
                   id: fileEntry.id,
-                  filepath: getFileUrl(fileEntry.id, fileEntry.originalFilename),
+                  filepath: getFilePath(fileEntry),
                   url: null,
                 };
               }
@@ -77,7 +93,7 @@ export default async function Dashboard() {
     }
     persona: { id: string; name: string } | null
     tags: Array<{ tag: { id: string; name: string } }>
-  } | null> = userId
+  } | null> = repos
     ? await Promise.all(
         [...allChats]
           .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
@@ -95,11 +111,11 @@ export default async function Dashboard() {
 
             let characterDefaultImage = null;
             if (character.defaultImageId) {
-              const fileEntry = await findFileById(character.defaultImageId);
+              const fileEntry = await repos.files.findById(character.defaultImageId);
               if (fileEntry) {
                 characterDefaultImage = {
                   id: fileEntry.id,
-                  filepath: getFileUrl(fileEntry.id, fileEntry.originalFilename),
+                  filepath: getFilePath(fileEntry),
                   url: null,
                 };
               }

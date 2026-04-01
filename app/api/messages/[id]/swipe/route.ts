@@ -5,20 +5,19 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getServerSession } from '@/lib/auth/session'
+import { getRepositories } from '@/lib/repositories/factory'
 import { createLLMProvider } from '@/lib/llm'
 import { decryptApiKey } from '@/lib/encryption'
 import { logger } from '@/lib/logger'
-import type { ChatEvent, MessageEvent } from '@/lib/json-store/schemas/types'
+import type { ChatEvent, MessageEvent } from '@/lib/schemas/types'
 
 export async function POST(
   req: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession()
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -27,13 +26,13 @@ export async function POST(
     const { id } = await context.params
     const repos = getRepositories()
 
-    // Get all chats to find which chat contains this message
-    const allChats = await repos.chats.findAll()
+    // Get user's chats to find which chat contains this message (security: filter by userId)
+    const userChats = await repos.chats.findByUserId(session.user.id)
     let foundChat = null
     let foundMessage: MessageEvent | null = null
     let allMessages: ChatEvent[] = []
 
-    for (const chat of allChats) {
+    for (const chat of userChats) {
       const messages = await repos.chats.getMessages(chat.id)
       const message = messages.find(
         (m): m is MessageEvent => m.type === 'message' && m.id === id
@@ -116,7 +115,8 @@ export async function POST(
 
     let apiKey = ''
     if (profile.apiKeyId) {
-      const apiKeyRecord = await repos.connections.findApiKeyById(profile.apiKeyId)
+      // Security: verify API key belongs to user
+      const apiKeyRecord = await repos.connections.findApiKeyByIdAndUserId(profile.apiKeyId, session.user.id)
       if (apiKeyRecord) {
         apiKey = decryptApiKey(
           apiKeyRecord.ciphertext,
@@ -175,7 +175,7 @@ export async function PUT(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession()
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -194,12 +194,12 @@ export async function PUT(
       )
     }
 
-    // Find the message across all chats
-    const allChats = await repos.chats.findAll()
+    // Find the message across user's chats only (security: filter by userId)
+    const userChats = await repos.chats.findByUserId(session.user.id)
     let foundMessage: MessageEvent | null = null
     let allMessages: ChatEvent[] = []
 
-    for (const chat of allChats) {
+    for (const chat of userChats) {
       const messages = await repos.chats.getMessages(chat.id)
       const message = messages.find(
         (m): m is MessageEvent => m.type === 'message' && m.id === id

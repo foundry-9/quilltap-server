@@ -5,18 +5,23 @@
 
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals'
 import { getServerSession } from 'next-auth'
-import { GET as getKeys, POST as createKey } from '@/app/api/keys/route'
 import { encryptApiKey, maskApiKey } from '@/lib/encryption'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getUserRepositories } from '@/lib/repositories/factory'
 
 // Mock dependencies
 jest.mock('next-auth')
+// Note: @/lib/repositories/factory is mocked globally in jest.setup.ts
+
+// Import after mock setup
+import { GET as getKeys, POST as createKey } from '@/app/api/keys/route'
+
+// Get the mocked getUserRepositories from the global mock
+const mockGetUserRepositories = jest.mocked(getUserRepositories)
 
 // Encryption is mocked globally in jest.setup.ts
 // Get the mocked versions for use in tests
 const mockEncryptApiKey = jest.mocked(encryptApiKey)
 const mockMaskApiKey = jest.mocked(maskApiKey)
-const mockGetRepositories = jest.mocked(getRepositories)
 
 // Helper to create a mock NextRequest
 function createMockRequest(url: string, options?: { method?: string; body?: string }) {
@@ -60,16 +65,17 @@ describe('API Keys Routes', () => {
       delete: jest.fn(),
     }
 
-    mockGetRepositories.mockReturnValue({
+    mockGetUserRepositories.mockReturnValue({
       connections: mockConnectionsRepo,
-      characters: {},
-      personas: {},
-      chats: {},
-      tags: {},
-      users: {},
-      images: {},
-      imageProfiles: {},
-    })
+      characters: {} as any,
+      personas: {} as any,
+      chats: {} as any,
+      tags: {} as any,
+      files: {} as any,
+      imageProfiles: {} as any,
+      embeddingProfiles: {} as any,
+      memories: {} as any,
+    } as any)
 
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
   })

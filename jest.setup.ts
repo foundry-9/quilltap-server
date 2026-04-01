@@ -21,6 +21,7 @@ process.env.NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET || 'test-secret-for-un
 process.env.GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'test-google-client-id'
 process.env.GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || 'test-google-client-secret'
 process.env.ENCRYPTION_MASTER_PEPPER = process.env.ENCRYPTION_MASTER_PEPPER || 'test-pepper-for-unit-tests-32-chars-long!'
+process.env.MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/quilltap-test'
 
 // Set up globals required for Next.js
 // Note: We check if they're undefined to avoid conflicts with jsdom's implementation
@@ -148,10 +149,44 @@ jest.mock('@/lib/llm/plugin-factory', () => ({
   isProviderFromPlugin: jest.fn(() => true),
 }))
 
-// Mock JSON Store Repositories
-jest.mock('@/lib/json-store/repositories', () => ({
+// Mock Repositories
+jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
+  getUserRepositories: jest.fn(),
   resetRepositories: jest.fn(),
+  clearUserRepositoryCache: jest.fn(),
+}))
+
+// Mock S3 operations - used by cascade-delete and other modules
+jest.mock('@/lib/s3/operations', () => ({
+  uploadFile: jest.fn().mockResolvedValue(undefined),
+  downloadFile: jest.fn().mockResolvedValue(Buffer.from('mock file content')),
+  deleteFile: jest.fn().mockResolvedValue(undefined),
+  fileExists: jest.fn().mockResolvedValue(true),
+  getPresignedUrl: jest.fn().mockResolvedValue('https://mock-s3.com/presigned-url'),
+  getPresignedUploadUrl: jest.fn().mockResolvedValue('https://mock-s3.com/presigned-upload-url'),
+  getPublicUrl: jest.fn().mockResolvedValue('https://mock-s3.com/public-url'),
+  getFileMetadata: jest.fn().mockResolvedValue({ size: 1024, contentType: 'image/jpeg', lastModified: new Date() }),
+  listFiles: jest.fn().mockResolvedValue([]),
+}))
+
+// Mock S3 client module
+jest.mock('@/lib/s3/client', () => ({
+  getS3Client: jest.fn().mockReturnValue({}),
+  getS3Bucket: jest.fn().mockReturnValue('mock-bucket'),
+}))
+
+// Mock vector store for embedding operations
+jest.mock('@/lib/embedding/vector-store', () => ({
+  getVectorStoreManager: jest.fn().mockReturnValue({
+    deleteStore: jest.fn().mockResolvedValue(undefined),
+    getStore: jest.fn().mockResolvedValue(null),
+  }),
+  CharacterVectorStore: jest.fn().mockImplementation(() => ({
+    addMemory: jest.fn().mockResolvedValue(undefined),
+    searchSimilar: jest.fn().mockResolvedValue([]),
+    deleteMemory: jest.fn().mockResolvedValue(undefined),
+  })),
 }))
 
 global.fetch = jest.fn(() =>

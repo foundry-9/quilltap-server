@@ -9,12 +9,18 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { getRepositories } from '@/lib/json-store/repositories';
-import { findFileById, getFileUrl } from '@/lib/file-manager';
+import { getServerSession } from '@/lib/auth/session';
+import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
+import type { FileEntry } from '@/lib/schemas/types';
+
+/**
+ * Get the filepath for a file - always returns API path for S3-backed files
+ */
+function getFilePath(file: FileEntry): string {
+  return `/api/files/${file.id}`;
+}
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -31,7 +37,7 @@ const avatarOverrideSchema = z.object({
  */
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession();
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -55,7 +61,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
         (character.avatarOverrides || [])
           .filter(override => override.chatId === id)
           .map(async (override) => {
-            const fileEntry = await findFileById(override.imageId);
+            const fileEntry = await repos.files.findById(override.imageId);
             return {
               chatId: id,
               characterId: character.id,
@@ -63,7 +69,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
               character: { id: character.id, name: character.name },
               image: fileEntry ? {
                 id: fileEntry.id,
-                filepath: getFileUrl(fileEntry.id, fileEntry.originalFilename),
+                filepath: getFilePath(fileEntry),
                 url: null,
               } : null,
             };
@@ -87,7 +93,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
  */
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession();
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -112,8 +118,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 });
     }
 
-    // Verify image exists in file-manager and belongs to user
-    const fileEntry = await findFileById(imageId);
+    // Verify image exists in repository and belongs to user
+    const fileEntry = await repos.files.findById(imageId);
 
     if (!fileEntry || fileEntry.userId !== session.user.id) {
       return NextResponse.json({ error: 'Image not found' }, { status: 404 });
@@ -142,7 +148,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       character: { id: character.id, name: character.name },
       image: {
         id: fileEntry.id,
-        filepath: getFileUrl(fileEntry.id, fileEntry.originalFilename),
+        filepath: getFilePath(fileEntry),
         url: null,
       },
     };
@@ -168,7 +174,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
  */
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession();
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

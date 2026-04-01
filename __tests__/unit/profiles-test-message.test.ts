@@ -1,13 +1,6 @@
 /**
  * Unit Tests for Connection Profile Test Message Endpoint
  * Tests app/api/profiles/test-message/route.ts
- *
- * NOTE: Some tests are temporarily skipped due to Jest mock configuration
- * issues with the @/lib/plugins/provider-validation module. The implementation
- * is working correctly (verified via build and integration tests).
- *
- * TODO: Fix Jest mock hoisting issues with provider-validation module
- * See: https://jestjs.io/docs/manual-mocks for guidance
  */
 
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals'
@@ -19,7 +12,7 @@ const mockValidateProviderConfig = jest.fn()
 jest.mock('next-auth')
 jest.mock('@/lib/encryption')
 jest.mock('@/lib/llm/plugin-factory')
-jest.mock('@/lib/json-store/repositories')
+jest.mock('@/lib/repositories/factory')
 jest.mock('@/lib/plugins/provider-validation', () => ({
   validateProviderConfig: mockValidateProviderConfig,
 }))
@@ -39,7 +32,7 @@ import { POST as testMessage } from '@/app/api/profiles/test-message/route'
 import { getServerSession } from 'next-auth'
 import { decryptApiKey } from '@/lib/encryption'
 import { createLLMProvider } from '@/lib/llm'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getRepositories } from '@/lib/repositories/factory'
 
 // Get mocked functions
 const mockGetServerSession = jest.mocked(getServerSession)

@@ -8,14 +8,14 @@ import { getServerSession } from 'next-auth'
 import { decryptApiKey } from '@/lib/encryption'
 import { createLLMProvider } from '@/lib/llm'
 import { writeFile, mkdir } from 'node:fs/promises'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getRepositories } from '@/lib/repositories/factory'
 
 // Mock dependencies
 jest.mock('next-auth')
 jest.mock('@/lib/encryption')
 jest.mock('@/lib/llm/plugin-factory')
 jest.mock('fs/promises')
-jest.mock('@/lib/json-store/repositories')
+jest.mock('@/lib/repositories/factory')
 
 const mockGetServerSession = jest.mocked(getServerSession)
 const mockDecryptApiKey = jest.mocked(decryptApiKey)
@@ -68,13 +68,14 @@ describe('POST /api/images/generate', () => {
     mockGetRepositories.mockReturnValue({
       connections: mockConnectionsRepo,
       images: mockImagesRepo,
+      files: mockImagesRepo, // files repo is used for file storage operations
       characters: {},
       personas: {},
       chats: {},
       tags: {},
       users: {},
       imageProfiles: {},
-    })
+    } as any)
   })
 
   afterEach(() => {
@@ -247,7 +248,7 @@ describe('POST /api/images/generate', () => {
     // Verify new Phase 4 fields are set correctly
     expect(mockImagesRepo.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        source: 'generated',
+        source: 'GENERATED',
         generationPrompt: 'a beautiful landscape',
         generationModel: 'dall-e-3',
       })

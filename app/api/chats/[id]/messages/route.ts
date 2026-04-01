@@ -2,9 +2,8 @@
 // POST /api/chats/:id/messages - Send a message and get streaming response
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getServerSession } from '@/lib/auth/session'
+import { getRepositories } from '@/lib/repositories/factory'
 import { createLLMProvider } from '@/lib/llm'
 import { decryptApiKey } from '@/lib/encryption'
 import { loadChatFilesForLLM } from '@/lib/chat-files-v2'
@@ -19,6 +18,7 @@ import {
   type FallbackResult,
 } from '@/lib/chat/file-attachment-fallback'
 import { logger } from '@/lib/logger'
+import { requiresApiKey } from '@/lib/plugins/provider-validation'
 import { z } from 'zod'
 
 // Validation schema
@@ -34,15 +34,14 @@ async function loadAttachedFiles(repos: ReturnType<typeof getRepositories>, chat
     return []
   }
 
-  // Use the new file manager system instead of repos.images
-  const { findFilesLinkedTo, getFileUrl } = await import('@/lib/file-manager')
-  const chatFiles = await findFilesLinkedTo(chatId)
+  // Use the repository to find files linked to the chat
+  const chatFiles = await repos.files.findByLinkedTo(chatId)
 
   const matched = chatFiles.filter(file => fileIds.includes(file.id))
 
   return matched.map(file => ({
     id: file.id,
-    filepath: getFileUrl(file.id, file.originalFilename).slice(1), // Remove leading slash for consistency
+    filepath: `api/files/${file.id}`, // Always use API route for S3-backed files
     filename: file.originalFilename,
     mimeType: file.mimeType,
     size: file.size,
@@ -57,10 +56,15 @@ async function processToolResults(
   encoder: TextEncoder
 ) {
   const toolMessages: Array<{ toolName: string; success: boolean; content: string; arguments?: Record<string, unknown>; metadata?: { provider?: string; model?: string } }> = []
-  const generatedImagePaths: Array<{ filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number; sha256?: string }> = []
+  const generatedImagePaths: Array<{ id: string; filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number; sha256?: string }> = []
 
+  // Send tool detection info with tool names for proper UI handling
   controller.enqueue(
-    encoder.encode(`data: ${JSON.stringify({ toolsDetected: toolCalls.length })}\n\n`)
+    encoder.encode(`data: ${JSON.stringify({
+      toolsDetected: toolCalls.length,
+      toolNames: toolCalls.map(tc => tc.name),
+      toolArguments: toolCalls.map(tc => tc.arguments),
+    })}\n\n`)
   )
 
   for (const toolCall of toolCalls) {
@@ -68,8 +72,9 @@ async function processToolResults(
 
     if (toolResult.success && Array.isArray(toolResult.result)) {
       for (const img of toolResult.result) {
-        if (img.filepath) {
+        if (img.filepath && img.id) {
           generatedImagePaths.push({
+            id: img.id,
             filename: img.filename,
             filepath: img.filepath,
             mimeType: img.mimeType || 'image/png',
@@ -115,18 +120,25 @@ async function processToolResults(
   return { toolMessages, generatedImagePaths }
 }
 
-// Helper function to save tool messages and generated images
+// Helper function to save tool messages and link generated images
 async function saveToolMessages(
   repos: ReturnType<typeof getRepositories>,
   chatId: string,
-  userId: string,
+  _userId: string,
   toolMessages: Array<{ toolName: string; success: boolean; content: string; arguments?: Record<string, unknown>; metadata?: { provider?: string; model?: string } }>,
-  generatedImagePaths: Array<{ filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number; sha256?: string }>
+  generatedImagePaths: Array<{ id: string; filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number; sha256?: string }>,
+  characterId?: string
 ) {
   let firstToolMessageId: string | null = null
+  const generatedImageIds: string[] = generatedImagePaths.map(img => img.id)
 
   for (const toolMsg of toolMessages) {
     const toolMessageId = crypto.randomUUID()
+    // Include image IDs as attachments on the tool message
+    const toolAttachments = toolMsg.toolName === 'generate_image'
+      ? generatedImageIds
+      : []
+
     const toolMessage = {
       id: toolMessageId,
       type: 'message' as const,
@@ -140,38 +152,32 @@ async function saveToolMessages(
         model: toolMsg.metadata?.model,
       }),
       createdAt: new Date().toISOString(),
-      attachments: [] as string[],
+      attachments: toolAttachments,
     }
     await repos.chats.addMessage(chatId, toolMessage)
 
     if (!firstToolMessageId) {
       firstToolMessageId = toolMessageId
     }
+  }
 
-    for (const imagePath of generatedImagePaths) {
-      if (imagePath.sha256) {
-        await repos.images.create({
-          userId,
-          type: 'chat_file',
-          chatId,
-          messageId: toolMessageId,
-          filename: imagePath.filename,
-          relativePath: imagePath.filepath,
-          mimeType: imagePath.mimeType,
-          size: imagePath.size,
-          source: 'generated',
-          sha256: imagePath.sha256,
-          width: imagePath.width,
-          height: imagePath.height,
-          tags: [],
-        })
-      } else {
-        logger.warn('Skipping chat_file creation for generated image due to missing SHA256:', { filename: imagePath.filename })
+  // Link generated images to the tool message and add character tag
+  for (const imageId of generatedImageIds) {
+    try {
+      // Link to the tool message
+      if (firstToolMessageId) {
+        await repos.files.addLink(imageId, firstToolMessageId)
       }
+      // Add character tag so it shows up in character's gallery
+      if (characterId) {
+        await repos.files.addTag(imageId, characterId)
+      }
+    } catch (error) {
+      logger.warn('Failed to link/tag generated image:', { imageId, error: error instanceof Error ? error.message : String(error) })
     }
   }
 
-  return firstToolMessageId
+  return { firstToolMessageId, generatedImageIds }
 }
 
 export async function POST(
@@ -180,13 +186,13 @@ export async function POST(
 ) {
   try {
     const { id } = await params
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.email) {
+    const session = await getServerSession()
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const repos = getRepositories()
-    const user = await repos.users.findByEmail(session.user.email)
+    const user = await repos.users.findById(session.user.id)
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -261,12 +267,11 @@ export async function POST(
     // Add user message to chat
     await repos.chats.addMessage(id, userMessage)
 
-    // Update file attachments with message ID using file manager
+    // Update file attachments with message ID using repository
     if (attachedFiles.length > 0) {
-      const { addFileLink } = await import('@/lib/file-manager')
       for (const file of attachedFiles) {
         // Link the file to the message ID
-        await addFileLink(file.id, userMessageId)
+        await repos.files.addLink(file.id, userMessageId)
       }
     }
 
@@ -328,7 +333,7 @@ export async function POST(
         return role === 'USER' || role === 'ASSISTANT' || role === 'TOOL'
       })
       .map(msg => {
-        const messageEvent = msg as { role: string; content: string; id?: string }
+        const messageEvent = msg as { role: string; content: string; id?: string; thoughtSignature?: string | null }
 
         // For TOOL messages, parse the content and format as a user message
         // indicating the tool result (LLMs expect tool results as user messages)
@@ -349,10 +354,12 @@ export async function POST(
           }
         }
 
+        // Include thought signature for ASSISTANT messages (required for Gemini 3 thinking models)
         return {
           role: messageEvent.role,
           content: messageEvent.content,
           id: messageEvent.id,
+          thoughtSignature: messageEvent.role === 'ASSISTANT' ? messageEvent.thoughtSignature : undefined,
         }
       })
       .filter((msg): msg is NonNullable<typeof msg> => msg !== null)
@@ -394,26 +401,32 @@ export async function POST(
           attachments: attachmentsToSend,
         }
       }
+      // Preserve thoughtSignature for Gemini 3 thinking models (required for multi-turn function calling)
+      // Convert null to undefined for LLMMessage compatibility
       return {
         role: msg.role,
         content: msg.content,
+        thoughtSignature: msg.thoughtSignature ?? undefined,
       }
     })
 
-    // Get API key
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: 'No API key configured for this connection profile' },
-        { status: 400 }
+    // Get API key (only required for providers that need it)
+    let decryptedKey = ''
+    if (requiresApiKey(connectionProfile.provider)) {
+      if (!apiKey) {
+        return NextResponse.json(
+          { error: 'No API key configured for this connection profile' },
+          { status: 400 }
+        )
+      }
+      decryptedKey = decryptApiKey(
+        apiKey.ciphertext,
+        apiKey.iv,
+        apiKey.authTag,
+        user.id
       )
     }
-
-    const decryptedKey = decryptApiKey(
-      apiKey.ciphertext,
-      apiKey.iv,
-      apiKey.authTag,
-      user.id
-    )
+    // For providers that don't require API keys (like Ollama), pass empty string
 
     // Get LLM provider
     const provider = await createLLMProvider(
@@ -430,14 +443,18 @@ export async function POST(
     let usage: { totalTokens?: number } | null = null
     let attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null = null
     let rawResponse: unknown = null
+    // Track thought signature from Gemini 3 thinking models (required for multi-turn function calling)
+    let thoughtSignature: string | undefined = undefined
 
     // Prepare tool execution context
+    // Pass the character's participant ID so {{me}} in image prompts resolves to the character
     const toolContext: ToolExecutionContext = {
       chatId: id,
       userId: user.id,
       imageProfileId: imageProfileId || undefined,
       characterId: character.id,
       embeddingProfileId: chatSettings?.cheapLLMSettings?.embeddingProfileId || undefined,
+      callingParticipantId: characterParticipant.id,
     }
 
     const stream = new ReadableStream({
@@ -545,26 +562,135 @@ export async function POST(
               if (chunk.rawResponse) {
                 rawResponse = chunk.rawResponse
               }
+              // Capture thought signature from Gemini 3 thinking models
+              if (chunk.thoughtSignature) {
+                thoughtSignature = chunk.thoughtSignature
+                logger.debug('[Chat Messages] Captured thought signature from response', {
+                  signatureLength: thoughtSignature.length,
+                })
+              }
             }
           }
 
-          // Detect and execute tool calls
+          // Detect and execute tool calls, then continue conversation if needed
           let toolMessages: Array<{ toolName: string; success: boolean; content: string; arguments?: Record<string, unknown>; metadata?: { provider?: string; model?: string } }> = []
-          let generatedImagePaths: Array<{ filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number; sha256?: string }> = []
+          let generatedImagePaths: Array<{ id: string; filename: string; filepath: string; mimeType: string; size: number; width?: number; height?: number; sha256?: string }> = []
 
-          if (rawResponse) {
-            const toolCalls = detectToolCalls(rawResponse, connectionProfile.provider)
-            if (toolCalls.length > 0) {
-              const results = await processToolResults(toolCalls, toolContext, controller, encoder)
-              toolMessages = results.toolMessages
-              generatedImagePaths = results.generatedImagePaths
+          // Track conversation messages for tool call continuation
+          let currentMessages = [...messages]
+          let currentResponse = fullResponse
+          let currentRawResponse = rawResponse
+          const MAX_TOOL_ITERATIONS = 5 // Prevent infinite loops
+          let toolIterations = 0
+
+          // Tool call loop - continue until LLM gives a text response or max iterations
+          while (currentRawResponse && toolIterations < MAX_TOOL_ITERATIONS) {
+            const toolCalls = detectToolCalls(currentRawResponse, connectionProfile.provider)
+
+            if (toolCalls.length === 0) {
+              // No tool calls, we're done
+              break
             }
+
+            toolIterations++
+            logger.debug('[Chat Messages] Processing tool calls, iteration', {
+              iteration: toolIterations,
+              toolCallCount: toolCalls.length,
+              tools: toolCalls.map(tc => tc.name),
+            })
+
+            const results = await processToolResults(toolCalls, toolContext, controller, encoder)
+            toolMessages = [...toolMessages, ...results.toolMessages]
+            generatedImagePaths = [...generatedImagePaths, ...results.generatedImagePaths]
+
+            // Add assistant message with tool call to conversation (if there was any content)
+            // Include thought signature for Gemini 3 thinking models
+            if (currentResponse && currentResponse.trim().length > 0) {
+              currentMessages = [
+                ...currentMessages,
+                { role: 'assistant' as const, content: currentResponse, thoughtSignature }
+              ]
+            } else {
+              // Even without content, add a placeholder to maintain conversation flow
+              currentMessages = [
+                ...currentMessages,
+                { role: 'assistant' as const, content: '[Tool call made]', thoughtSignature }
+              ]
+            }
+
+            // Add tool results as user messages (how LLMs expect to receive tool results)
+            for (const toolMsg of results.toolMessages) {
+              currentMessages = [
+                ...currentMessages,
+                { role: 'user' as const, content: `[Tool Result: ${toolMsg.toolName}]\n${toolMsg.content}`, thoughtSignature: undefined }
+              ]
+            }
+
+            // Continue the conversation with the tool results
+            logger.debug('[Chat Messages] Continuing conversation after tool execution', {
+              messageCount: currentMessages.length,
+              iteration: toolIterations,
+            })
+
+            // Reset for next iteration
+            currentResponse = ''
+            currentRawResponse = null
+
+            // Stream the continuation from the LLM
+            for await (const chunk of provider.streamMessage(
+              {
+                messages: currentMessages,
+                model: connectionProfile.modelName,
+                temperature: modelParams.temperature as number | undefined,
+                maxTokens: modelParams.maxTokens as number | undefined,
+                topP: modelParams.topP as number | undefined,
+                tools: tools.length > 0 ? tools : undefined,
+                webSearchEnabled: useNativeWebSearch,
+              },
+              decryptedKey
+            )) {
+              if (chunk.content) {
+                currentResponse += chunk.content
+                fullResponse += chunk.content
+                controller.enqueue(
+                  encoder.encode(`data: ${JSON.stringify({ content: chunk.content })}\n\n`)
+                )
+              }
+
+              if (chunk.done) {
+                if (chunk.usage) {
+                  usage = chunk.usage
+                }
+                if (chunk.attachmentResults) {
+                  attachmentResults = chunk.attachmentResults
+                }
+                if (chunk.rawResponse) {
+                  currentRawResponse = chunk.rawResponse
+                  rawResponse = chunk.rawResponse
+                }
+                // Capture thought signature from continuation response
+                if (chunk.thoughtSignature) {
+                  thoughtSignature = chunk.thoughtSignature
+                }
+              }
+            }
+          }
+
+          if (toolIterations >= MAX_TOOL_ITERATIONS) {
+            logger.warn('[Chat Messages] Max tool iterations reached', {
+              iterations: toolIterations,
+              chatId: id,
+            })
           }
 
           // Save assistant message only if there's actual content (not just a tool call)
           let assistantMessageId: string | null = null
           if (fullResponse && fullResponse.trim().length > 0) {
             assistantMessageId = crypto.randomUUID()
+
+            // Get image IDs from generated images to attach to assistant message
+            const assistantAttachments = generatedImagePaths.map(img => img.id)
+
             const assistantMessage = {
               id: assistantMessageId,
               type: 'message' as const,
@@ -573,14 +699,28 @@ export async function POST(
               createdAt: new Date().toISOString(),
               tokenCount: usage?.totalTokens || null,
               rawResponse: (rawResponse as Record<string, unknown>) || null,
-              attachments: [] as string[],
+              attachments: assistantAttachments,
+              // Store thought signature for Gemini 3 thinking models (required for multi-turn function calling)
+              thoughtSignature: thoughtSignature || null,
             }
             await repos.chats.addMessage(id, assistantMessage)
 
-            // Save tool messages if tools were executed
-            const firstToolMessageId = toolMessages.length > 0
-              ? await saveToolMessages(repos, id, user.id, toolMessages, generatedImagePaths)
+            // Save tool messages if tools were executed (this also links images to character)
+            const toolSaveResult = toolMessages.length > 0
+              ? await saveToolMessages(repos, id, user.id, toolMessages, generatedImagePaths, character.id)
               : null
+            const firstToolMessageId = toolSaveResult?.firstToolMessageId ?? null
+
+            // Link images to assistant message as well
+            if (assistantAttachments.length > 0) {
+              for (const imageId of assistantAttachments) {
+                try {
+                  await repos.files.addLink(imageId, assistantMessageId)
+                } catch (error) {
+                  logger.warn('Failed to link image to assistant message:', { imageId, error: error instanceof Error ? error.message : String(error) })
+                }
+              }
+            }
 
             // Update chat timestamp
             await repos.chats.update(id, { updatedAt: new Date().toISOString() })
@@ -642,7 +782,8 @@ export async function POST(
             }
           } else if (toolMessages.length > 0) {
             // Even if there's no text response, send done event if tools were executed
-            const firstToolMessageId = await saveToolMessages(repos, id, user.id, toolMessages, generatedImagePaths)
+            const toolSaveResult = await saveToolMessages(repos, id, user.id, toolMessages, generatedImagePaths, character.id)
+            const firstToolMessageId = toolSaveResult.firstToolMessageId
             await repos.chats.update(id, { updatedAt: new Date().toISOString() })
 
             controller.enqueue(
@@ -657,8 +798,9 @@ export async function POST(
               )
             )
           } else {
-            // No response content and no tool execution - still need to send done to close the stream
-            logger.warn(`[Chat Messages] Empty response for chat ${id}`)
+            // No response content and no tool execution - this is a known Gemini API issue
+            // where the model returns finishReason: STOP but no content
+            logger.warn(`[Chat Messages] Empty response for chat ${id} - this is a known Gemini API issue`)
             controller.enqueue(
               encoder.encode(
                 `data: ${JSON.stringify({
@@ -667,6 +809,8 @@ export async function POST(
                   usage,
                   attachmentResults,
                   toolsExecuted: false,
+                  emptyResponse: true,
+                  emptyResponseReason: 'The AI model returned an empty response. This is a known issue with some Gemini models. Please try resending your message.',
                 })}\n\n`
               )
             )

@@ -19,6 +19,7 @@ describe('Environment Validation', () => {
     process.env.GOOGLE_CLIENT_ID = 'test-client-id';
     process.env.GOOGLE_CLIENT_SECRET = 'test-client-secret';
     process.env.ENCRYPTION_MASTER_PEPPER = 'test-pepper-key-minimum-32-characters';
+    process.env.MONGODB_URI = 'mongodb://localhost:27017/quilltap-test';
   });
 
   afterEach(() => {
@@ -39,6 +40,16 @@ describe('Environment Validation', () => {
     delete process.env.DATABASE_URL;
 
     // We need to re-import after changing env
+    jest.resetModules();
+
+    const { validateEnv } = await import('@/lib/env');
+    expect(() => validateEnv()).not.toThrow();
+  });
+
+  it('should succeed without Google OAuth credentials (plugin-based auth)', async () => {
+    delete process.env.GOOGLE_CLIENT_ID;
+    delete process.env.GOOGLE_CLIENT_SECRET;
+
     jest.resetModules();
 
     const { validateEnv } = await import('@/lib/env');

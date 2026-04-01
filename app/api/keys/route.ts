@@ -7,11 +7,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getServerSession } from '@/lib/auth/session'
+import { getUserRepositories } from '@/lib/repositories/factory'
 import { encryptApiKey, maskApiKey } from '@/lib/encryption'
-import { Provider } from '@/lib/json-store/schemas/types'
+import { Provider } from '@/lib/schemas/types'
 import { getAllAvailableProviders } from '@/lib/llm'
 import { logger } from '@/lib/logger'
 
@@ -22,7 +21,7 @@ import { logger } from '@/lib/logger'
  */
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession()
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -30,7 +29,7 @@ export async function GET(req: NextRequest) {
       )
     }
 
-    const repos = getRepositories()
+    const repos = getUserRepositories(session.user.id)
     const apiKeys = await repos.connections.getAllApiKeys()
 
     // Sort by creation date
@@ -75,7 +74,7 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession()
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -118,9 +117,9 @@ export async function POST(req: NextRequest) {
     // Encrypt the API key
     const encrypted = encryptApiKey(apiKey, session.user.id)
 
-    const repos = getRepositories()
+    const repos = getUserRepositories(session.user.id)
 
-    // Store in database
+    // Store in database - userId is automatically set by user-scoped repository
     const newKey = await repos.connections.createApiKey({
       provider: provider as Provider,
       label: label.trim(),

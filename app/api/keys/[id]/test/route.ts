@@ -6,12 +6,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getServerSession } from '@/lib/auth/session'
+import { getRepositories } from '@/lib/repositories/factory'
 import { decryptApiKey } from '@/lib/encryption'
 import { logger } from '@/lib/logger'
-import { Provider } from '@/lib/json-store/schemas/types'
+import { Provider } from '@/lib/schemas/types'
 import { providerRegistry } from '@/lib/plugins/provider-registry'
 
 /**
@@ -60,7 +59,7 @@ export async function POST(
 ) {
   try {
     const { id } = await params
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession()
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -70,8 +69,8 @@ export async function POST(
 
     const repos = getRepositories()
 
-    // Get the API key
-    const apiKey = await repos.connections.findApiKeyById(id)
+    // Get the API key (verify ownership)
+    const apiKey = await repos.connections.findApiKeyByIdAndUserId(id, session.user.id)
 
     if (!apiKey) {
       return NextResponse.json(

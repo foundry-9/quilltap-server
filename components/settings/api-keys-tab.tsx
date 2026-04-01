@@ -43,6 +43,7 @@ export default function ApiKeysTab() {
       if (!res.ok) throw new Error('Failed to fetch API keys')
       const data = await res.json()
       setApiKeys(data)
+      setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
@@ -148,7 +149,7 @@ export default function ApiKeysTab() {
           </div>
         ) : (
           <div className="space-y-3">
-            {apiKeys.map(key => (
+            {apiKeys.toSorted((a, b) => a.label.localeCompare(b.label)).map(key => (
               <div
                 key={key.id}
                 className="border border-gray-200 dark:border-slate-700 rounded-lg p-4 flex items-center justify-between bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700"

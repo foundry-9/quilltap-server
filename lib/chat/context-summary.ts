@@ -6,12 +6,12 @@
  * Uses the cheap LLM system for efficient summarization.
  */
 
-import { getRepositories } from '@/lib/json-store/repositories'
+import { getRepositories } from '@/lib/repositories/factory'
 import { getCheapLLMProvider } from '@/lib/llm/cheap-llm'
 import { updateContextSummary, summarizeChat, ChatMessage, generateTitleFromSummary, considerTitleUpdate } from '@/lib/memory/cheap-llm-tasks'
 import { countMessagesTokens } from '@/lib/tokens/token-counter'
 import { getModelContextLimit, shouldSummarizeConversation } from '@/lib/llm/model-context-data'
-import { Provider, ConnectionProfile, CheapLLMSettings } from '@/lib/json-store/schemas/types'
+import { Provider, ConnectionProfile, CheapLLMSettings } from '@/lib/schemas/types'
 import { logger } from '@/lib/logger'
 
 /**
