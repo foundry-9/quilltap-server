@@ -58,6 +58,10 @@ function estimateTokensForJob(job: BackgroundJob): number {
     case 'TITLE_UPDATE': {
       return baseTokens + 300;
     }
+    case 'LLM_LOG_CLEANUP': {
+      // No LLM tokens needed for cleanup
+      return 0;
+    }
     default:
       return baseTokens;
   }
@@ -69,6 +73,7 @@ function getJobTypeName(type: string): string {
     INTER_CHARACTER_MEMORY: 'Character Memory',
     CONTEXT_SUMMARY: 'Context Summary',
     TITLE_UPDATE: 'Title Update',
+    LLM_LOG_CLEANUP: 'LLM Log Cleanup',
   };
   return typeNames[type] || type;
 }
@@ -114,7 +119,6 @@ async function handleDeleteDataPreview(req: NextRequest, context: any) {
   const { user } = context;
 
   try {
-    logger.debug('[System Tools v1] Preview delete request received', { userId: user.id });
 
     const summary = await previewDeleteAllUserData(user.id);
 
@@ -138,7 +142,6 @@ async function handleTasksQueue(req: NextRequest, context: any) {
   const { user, repos } = context;
 
   try {
-    logger.debug('[System Tools v1] GET tasks queue status', { userId: user.id });
 
     const repo = repos.backgroundJobs;
     const stats = await repo.getStats(user.id);
@@ -190,15 +193,7 @@ async function handleTasksQueue(req: NextRequest, context: any) {
       };
     });
 
-    const processorStatus = getProcessorStatus();
-
-    logger.debug('[System Tools v1] Tasks queue status retrieved', {
-      userId: user.id,
-      activeJobCount: activeJobs.length,
-      totalEstimatedTokens,
-    });
-
-    return NextResponse.json({
+    const processorStatus = getProcessorStatus();return NextResponse.json({
       stats: {
         pending: stats.pending,
         processing: stats.processing,
@@ -243,15 +238,7 @@ async function handleTasksQueueControl(req: NextRequest, context: any) {
       stopProcessor();
     }
 
-    const processorStatus = getProcessorStatus();
-
-    logger.debug('[System Tools v1] Tasks queue processor status updated', {
-      userId: user.id,
-      action,
-      running: processorStatus.running,
-    });
-
-    return NextResponse.json({
+    const processorStatus = getProcessorStatus();return NextResponse.json({
       success: true,
       action,
       processorStatus,
@@ -287,15 +274,7 @@ async function handleExport(req: NextRequest, context: any) {
       scope: scope || 'all',
       selectedIds,
       includeMemories: includeMemories || false,
-    });
-
-    logger.debug('[System Tools v1] Export created', {
-      userId: user.id,
-      type,
-      exportDataSize: JSON.stringify(exportData).length,
-    });
-
-    const timestamp = new Date().toISOString().split('T')[0];
+    });const timestamp = new Date().toISOString().split('T')[0];
     const sanitizedType = (type || 'data').replace(/_/g, '-');
     const filename = `quilltap-${sanitizedType}-${timestamp}.qtap`;
 
@@ -327,7 +306,6 @@ async function handleExportEntities(req: NextRequest, context: any) {
       return badRequest('Missing type parameter');
     }
 
-    logger.debug('[System Tools v1] Fetching entities for export', { userId: user.id, type });
 
     const repos = getUserRepositories(user.id);
     const globalRepos = getRepositories();
@@ -466,15 +444,7 @@ async function handleExportPreview(req: NextRequest, context: any) {
       scope: scope as 'all' | 'selected',
       selectedIds,
       includeMemories,
-    });
-
-    logger.debug('[System Tools v1] Export preview generated', {
-      userId: user.id,
-      type,
-      entityCount: preview.entities.length,
-    });
-
-    return NextResponse.json(preview);
+    });return NextResponse.json(preview);
   } catch (error) {
     logger.error(
       '[System Tools v1] Export preview failed',
@@ -535,15 +505,7 @@ async function handleImportPreview(req: NextRequest, context: any) {
           maxSize: MAX_IMPORT_FILE_SIZE,
         });
         return badRequest(`File too large (max ${Math.round(MAX_IMPORT_FILE_SIZE / 1024 / 1024)}MB)`);
-      }
-
-      logger.debug('[System Tools v1] Reading uploaded export file', {
-        userId: user.id,
-        fileName: file.name,
-        fileSize: file.size,
-      });
-
-      const text = await file.text();
+      }const text = await file.text();
       try {
         exportData = JSON.parse(text);
       } catch {
@@ -574,15 +536,7 @@ async function handleImportPreview(req: NextRequest, context: any) {
       exportType: exported.manifest.exportType,
     });
 
-    const preview = await previewImport(user.id, exported);
-
-    logger.debug('[System Tools v1] Import preview generated', {
-      userId: user.id,
-      entityTypes: Object.keys(preview.entities),
-      conflictCounts: preview.conflictCounts,
-    });
-
-    return NextResponse.json(preview);
+    const preview = await previewImport(user.id, exported);return NextResponse.json(preview);
   } catch (error) {
     logger.error(
       '[System Tools v1] Import preview failed',
@@ -661,7 +615,6 @@ async function handleImportExecute(req: NextRequest, context: any) {
 
 async function handleCapabilitiesReport(req: NextRequest, context: any) {
   try {
-    logger.debug('[System Tools v1] GET capabilities report');
 
     const report = {
       version: '1.0',
@@ -685,7 +638,6 @@ async function handleCapabilitiesReport(req: NextRequest, context: any) {
       },
     };
 
-    logger.debug('[System Tools v1] Capabilities report generated');
 
     return NextResponse.json(report);
   } catch (error) {
@@ -899,7 +851,6 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, context) 
   const { searchParams } = new URL(req.url);
   const action = searchParams.get('action');
 
-  logger.debug('[System Tools v1] GET request', { action, userId: context.user.id });
 
   switch (action) {
     case 'tasks-queue':
@@ -927,7 +878,6 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, context)
   const { searchParams } = new URL(req.url);
   const action = searchParams.get('action');
 
-  logger.debug('[System Tools v1] POST request', { action, userId: context.user.id });
 
   switch (action) {
     case 'delete-data':

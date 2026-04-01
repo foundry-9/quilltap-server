@@ -4,46 +4,40 @@ This document tracks planned features and improvements for Quilltap.
 
 ## In Progress
 
-### Authentication Enhancements
-
-- [ ] Retain site-installed plugins in `plugins/`, controlled by environment variables
-- [ ] Move user-installed plugins to `plugins/users/[login-uuid]/`
-- [ ] Add Apple, GitHub OAuth plugins
-- [X] Make the signout actually completely wipe the session data from the browser and take you back to the beginning page
-
-### Mobile Responsive
-
-- [ ] Fully mobile-capable media breakpoints
-  - [ ] Home
-  - [ ] Chat (partially done in v2.4)
-  - [ ] Characters
-  - [ ] Settings
-  - [ ] Tools
-  - [ ] About
-
 ## Planned Features
+
+### Plugin architecture
+
+- [ ] Ability to have simplified architecture for:
+  - [ ] connection profiles/images/embedding
+  - [ ] themes
+  - [ ] API
 
 ### Chat & Conversation
 
 - [ ] Server-side Markdown render of historical chat messages to speed up delivery
 - [ ] Character checkpointing (backups of a character at a certain point in time)
 - [ ] "Visual Novel" options
+- [ ] Image generation can not only select characters but also different physical descriptions if they have them
 
 ### LLM Integration
 
-- [ ] Tool management UI - Settings interface to enable/disable individual tools per profile
+- [ ] Tool management UI - Settings interface to enable/disable individual tools per connection profile, project, chat
 - [ ] Finish file read/write tool calling support with permissions
+- [ ] Option for built-in TF-IDF embedding if you don't need full semantic support
+- [ ] More intelligent handling of empty messages from the LLM (usually some kind of error, but a plain blank often means you crossed a provider line - NSFW, content filtering)
+- [ ] Fully agentic capabilities (limits on how many turns it takes, trading information back and forth, etc.)
 
 ### Content & Worldbuilding
 
 - [ ] Worldbook/Lore system
+- [ ] Complete AI wizard for characters or NPCs
 
 ### External Integrations
 
 - [ ] General SSE-based MCP support improvements
 - [ ] Python script support
 - [ ] ComfyUI + LORA support for local installations (see [feature request](./comfy_ui_local_image.md))
-- [ ] Ability to auto-upgrade plugins
 
 ### Themes & UI
 
@@ -57,10 +51,17 @@ This document tracks planned features and improvements for Quilltap.
   - [ ] Can be restored quickly to basics
   - [ ] Has intimate knowledge of this application
   - [ ] Works well enough with simple, low-cost or local LLMs (e.g., Mistral or Qwen)
+- [ ] Application web page and useful help and videos hosted there
 
-### Platform Expansion
+## Completed in v2.8
 
-- [ ] Create web-only version that uses IndexedDB for everything
+- [X] Pull NPC tab out of settings and just list them among the characters
+- [X] Ability to auto-upgrade plugins
+- [X] Removal of sync functionality
+- [X] Have the previews of themes actually match the themes
+- [X] Make all plugins either dist or site-wide
+- [X] Make the signout actually completely wipe the session data from the browser and take you back to the beginning page
+- [X] Remove authentication (this will be a local-only website)
 
 ## Completed in v2.7
 

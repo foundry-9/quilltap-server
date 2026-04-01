@@ -34,23 +34,12 @@ export class UuidRemapper {
   remap(oldUuid: string): string {
     // Check if we already have a mapping for this UUID
     if (this.mapping.has(oldUuid)) {
-      const newUuid = this.mapping.get(oldUuid)!;
-      this.moduleLogger.debug('Retrieved existing UUID mapping', {
-        oldUuid,
-        newUuid,
-      });
-      return newUuid;
+      return this.mapping.get(oldUuid)!;
     }
 
     // Generate a new UUID for this old UUID
     const newUuid = randomUUID();
     this.mapping.set(oldUuid, newUuid);
-
-    this.moduleLogger.debug('Created new UUID mapping', {
-      oldUuid,
-      newUuid,
-      mappingSize: this.mapping.size,
-    });
 
     return newUuid;
   }
@@ -71,14 +60,7 @@ export class UuidRemapper {
       return [];
     }
 
-    const remappedUuids = uuids.map((uuid) => this.remap(uuid));
-
-    this.moduleLogger.debug('Remapped UUID array', {
-      inputCount: uuids.length,
-      outputCount: remappedUuids.length,
-    });
-
-    return remappedUuids;
+    return uuids.map((uuid) => this.remap(uuid));
   }
 
   /**
@@ -107,26 +89,12 @@ export class UuidRemapper {
     }
 
     const remappedObject: Record<string, any> = { ...obj };
-    const remappedFieldsCount: Record<string, boolean> = {};
 
     for (const field of fields) {
       if (field in remappedObject && typeof remappedObject[field] === 'string') {
-        const oldValue = remappedObject[field];
-        remappedObject[field] = this.remap(oldValue);
-        remappedFieldsCount[field] = true;
-
-        this.moduleLogger.debug('Remapped field UUID', {
-          field,
-          oldValue,
-          newValue: remappedObject[field],
-        });
+        remappedObject[field] = this.remap(remappedObject[field]);
       }
     }
-
-    this.moduleLogger.debug('Remapped object fields', {
-      fieldsRequested: fields.length,
-      fieldsRemapped: Object.keys(remappedFieldsCount).length,
-    });
 
     return remappedObject as T;
   }
@@ -157,27 +125,12 @@ export class UuidRemapper {
     }
 
     const remappedObject: Record<string, any> = { ...obj };
-    const remappedFieldsCount: Record<string, boolean> = {};
 
     for (const field of fields) {
       if (field in remappedObject && Array.isArray(remappedObject[field])) {
-        const oldArray = remappedObject[field];
-        const newArray = this.remapArray(oldArray);
-        remappedObject[field] = newArray;
-        remappedFieldsCount[field] = true;
-
-        this.moduleLogger.debug('Remapped array field', {
-          field,
-          oldCount: oldArray.length,
-          newCount: newArray.length,
-        });
+        remappedObject[field] = this.remapArray(remappedObject[field]);
       }
     }
-
-    this.moduleLogger.debug('Remapped object array fields', {
-      fieldsRequested: fields.length,
-      fieldsRemapped: Object.keys(remappedFieldsCount).length,
-    });
 
     return remappedObject as T;
   }
@@ -195,10 +148,6 @@ export class UuidRemapper {
       mappingObject[oldUuid] = newUuid;
     }
 
-    this.moduleLogger.debug('Retrieved full UUID mapping', {
-      totalMappings: this.mapping.size,
-    });
-
     return mappingObject;
   }
 
@@ -207,13 +156,10 @@ export class UuidRemapper {
    * This should be called before starting a new restore operation if the same instance is reused.
    */
   clear(): void {
-    const previousSize = this.mapping.size;
-    this.mapping.clear();
-
-    this.moduleLogger.info('Cleared UUID mapping', {
-      previousSize,
-      currentSize: this.mapping.size,
+    this.moduleLogger.info('Clearing UUID mapping', {
+      size: this.mapping.size,
     });
+    this.mapping.clear();
   }
 
   /**

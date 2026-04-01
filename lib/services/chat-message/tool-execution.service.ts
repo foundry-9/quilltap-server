@@ -45,14 +45,6 @@ export async function processToolCalls(
     const toolResult = await executeToolCallWithContext(toolCall, toolContext)
 
     // Debug: Log what we received from executeToolCallWithContext
-    logger.debug('Tool execution result received', {
-      toolName: toolResult.toolName,
-      success: toolResult.success,
-      requiresPermission: toolResult.requiresPermission,
-      hasPendingWrite: !!toolResult.pendingWrite,
-      error: toolResult.error,
-      resultKeys: toolResult.result ? Object.keys(toolResult.result as object) : [],
-    })
 
     if (toolResult.success && Array.isArray(toolResult.result)) {
       for (const img of toolResult.result) {

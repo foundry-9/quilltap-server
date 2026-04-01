@@ -49,14 +49,6 @@ export async function createSystemEvent(
 
     // Add system event to chat messages
     await repos.chats.addMessage(chatId, systemEvent);
-
-    logger.debug('Created system event', {
-      chatId,
-      eventId: systemEvent.id,
-      type: event.systemEventType,
-      tokens: event.totalTokens,
-    });
-
     // Also update chat token aggregates for this operation
     if (event.promptTokens || event.completionTokens) {
       const { updateChatTokenAggregates } = await import('./token-tracking.service');

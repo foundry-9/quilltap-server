@@ -34,9 +34,7 @@ export function filterMessagesByHistoryAccess(
 ): MessageWithParticipant[] {
   // If participant has full history access, return all messages
   if (participant.hasHistoryAccess) {
-    logger.debug('[MessageAttribution] Participant has full history access', {
-      participantId: participant.id,
-    })
+
     return messages
   }
 
@@ -50,13 +48,6 @@ export function filterMessagesByHistoryAccess(
     }
     const msgTime = new Date(msg.createdAt).getTime()
     return msgTime >= participantJoinTime
-  })
-
-  logger.debug('[MessageAttribution] Filtered messages by history access', {
-    participantId: participant.id,
-    joinTime: participant.createdAt,
-    originalCount: messages.length,
-    filteredCount: filteredMessages.length,
   })
 
   return filteredMessages
@@ -103,10 +94,6 @@ export function attributeMessagesForCharacter(
   participantCharacters: Map<string, Character>,
   allParticipants: ChatParticipantBase[]
 ): MultiCharacterMessage[] {
-  logger.debug('[MessageAttribution] Attributing messages for character', {
-    respondingParticipantId,
-    messageCount: messages.length,
-  })
 
   return messages.map(msg => {
     const participantName = getParticipantName(

@@ -134,6 +134,7 @@ export interface EnrichedChatSummary {
   contextSummary: string | null
   createdAt: string
   updatedAt: string
+  lastMessageAt: string | null
   participants: EnrichedParticipantSummary[]
   tags: EnrichedTag[]
   project: EnrichedProject | null
@@ -154,7 +155,7 @@ export async function getCharacterSummary(
 ): Promise<EnrichedCharacterSummary | null> {
   const character = await repos.characters.findById(characterId)
   if (!character) {
-    logger.debug('Character not found for enrichment', { characterId })
+
     return null
   }
 
@@ -186,7 +187,7 @@ export async function getCharacterDetail(
 ): Promise<EnrichedCharacterDetail | null> {
   const character = await repos.characters.findById(characterId)
   if (!character) {
-    logger.debug('Character not found for enrichment', { characterId })
+
     return null
   }
 
@@ -222,7 +223,7 @@ export async function getConnectionProfile(
 ): Promise<EnrichedConnectionProfile | null> {
   const profile = await repos.connections.findById(profileId)
   if (!profile) {
-    logger.debug('Connection profile not found for enrichment', { profileId })
+
     return null
   }
 
@@ -252,7 +253,7 @@ export async function getImageProfile(
 ): Promise<EnrichedImageProfile | null> {
   const imgProfile = await repos.imageProfiles.findById(profileId)
   if (!imgProfile) {
-    logger.debug('Image profile not found for enrichment', { profileId })
+
     return null
   }
 
@@ -404,6 +405,7 @@ export async function enrichChatForList(
     contextSummary: chat.contextSummary ?? null,
     createdAt: chat.createdAt,
     updatedAt: chat.updatedAt,
+    lastMessageAt: chat.lastMessageAt ?? null,
     participants,
     tags,
     project,
@@ -419,10 +421,12 @@ export async function enrichChatsForList(
   chats: ChatMetadata[],
   repos: Repos
 ): Promise<EnrichedChatSummary[]> {
-  // Sort by updatedAt descending
-  const sortedChats = [...chats].sort((a, b) =>
-    new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-  )
+  // Sort by lastMessageAt descending, falling back to updatedAt for chats without messages
+  const sortedChats = [...chats].sort((a, b) => {
+    const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : new Date(a.updatedAt).getTime()
+    const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : new Date(b.updatedAt).getTime()
+    return bTime - aTime
+  })
 
   return Promise.all(sortedChats.map(chat => enrichChatForList(chat, repos)))
 }

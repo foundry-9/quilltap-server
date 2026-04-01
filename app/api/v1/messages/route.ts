@@ -16,11 +16,11 @@ import { notFound, badRequest, serverError, validationError } from '@/lib/api/re
 
 // Extended schema that includes chatId
 const sendMessageWithChatIdSchema = sendMessageSchema.extend({
-  chatId: z.string().uuid('Chat ID is required'),
+  chatId: z.uuid('Chat ID is required'),
 });
 
 const continueMessageWithChatIdSchema = continueMessageSchema.extend({
-  chatId: z.string().uuid('Chat ID is required'),
+  chatId: z.uuid('Chat ID is required'),
 });
 
 /**
@@ -34,13 +34,7 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
     return badRequest('Query parameter required: chatId');
   }
 
-  try {
-    logger.debug('[Messages API v1] GET messages', {
-      chatId,
-      userId: user.id,
-    });
-
-    // Verify chat ownership
+  try {// Verify chat ownership
     const chat = await repos.chats.findById(chatId);
     if (!chat || chat.userId !== user.id) {
       return notFound('Chat');
@@ -89,14 +83,7 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
 
     // Validate request based on mode
     if (isContinueMode) {
-      const parsed = continueMessageSchema.parse(body);
-
-      logger.debug('[Messages API v1] Continue mode request', {
-        chatId,
-        respondingParticipantId: parsed.respondingParticipantId,
-      });
-
-      // Verify chat ownership
+      const parsed = continueMessageSchema.parse(body);// Verify chat ownership
       const chat = await repos.chats.findById(chatId);
       if (!chat || chat.userId !== user.id) {
         return notFound('Chat');
@@ -116,15 +103,7 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
         },
       });
     } else {
-      const parsed = sendMessageSchema.parse(body);
-
-      logger.debug('[Messages API v1] Send message request', {
-        chatId,
-        contentLength: parsed.content.length,
-        fileCount: parsed.fileIds?.length || 0,
-      });
-
-      // Verify chat ownership
+      const parsed = sendMessageSchema.parse(body);// Verify chat ownership
       const chat = await repos.chats.findById(chatId);
       if (!chat || chat.userId !== user.id) {
         return notFound('Chat');

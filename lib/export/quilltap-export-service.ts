@@ -80,7 +80,6 @@ async function resolveTagNames(
     }
     return tagNames;
   } catch (error) {
-    logger.debug('Error resolving tag names', { tagIds, error: error instanceof Error ? error.message : String(error) });
     return [];
   }
 }
@@ -98,7 +97,6 @@ async function resolveApiKeyLabel(
     const apiKey = await repos.connections.findApiKeyById(apiKeyId);
     return apiKey?.label;
   } catch (error) {
-    logger.debug('Error resolving API key label', { apiKeyId, error: error instanceof Error ? error.message : String(error) });
     return undefined;
   }
 }
@@ -113,7 +111,6 @@ async function collectCharacterMemories(
   try {
     return await repos.memories.findByCharacterId(characterId);
   } catch (error) {
-    logger.debug('Error collecting character memories', { characterId, error: error instanceof Error ? error.message : String(error) });
     return [];
   }
 }
@@ -134,7 +131,6 @@ async function collectChatMemories(
     const allMemories = memoriesArrays.flat();
     return allMemories.filter(m => m.chatId === chatId);
   } catch (error) {
-    logger.debug('Error collecting chat memories', { chatId, error: error instanceof Error ? error.message : String(error) });
     return [];
   }
 }
@@ -152,7 +148,6 @@ async function getChatMessages(
       (event): event is MessageEvent => event.type === 'message'
     );
   } catch (error) {
-    logger.debug('Error getting chat messages', { chatId, error: error instanceof Error ? error.message : String(error) });
     return [];
   }
 }
@@ -200,8 +195,6 @@ export async function exportCharacters(
   characterIds: string[],
   includeMemories: boolean
 ): Promise<CharactersExportData> {
-  logger.debug('Exporting characters', { userId, characterCount: characterIds.length, includeMemories });
-
   const repos = getUserRepositories(userId);
   const globalRepos = getRepositories();
 
@@ -218,9 +211,6 @@ export async function exportCharacters(
       });
     }
   }
-
-  logger.debug('Exported characters', { count: characters.length });
-
   // Collect memories if requested
   let memories: Memory[] | undefined;
   if (includeMemories) {
@@ -228,7 +218,6 @@ export async function exportCharacters(
       characterIds.map(id => collectCharacterMemories(repos, id))
     );
     memories = memoriesArrays.flat();
-    logger.debug('Collected character memories', { count: memories.length });
   }
 
   return {
@@ -245,8 +234,6 @@ export async function exportChats(
   chatIds: string[],
   includeMemories: boolean
 ): Promise<ChatsExportData> {
-  logger.debug('Exporting chats', { userId, chatCount: chatIds.length, includeMemories });
-
   const repos = getUserRepositories(userId);
 
   // Fetch chats with messages
@@ -287,9 +274,6 @@ export async function exportChats(
       });
     }
   }
-
-  logger.debug('Exported chats', { count: chats.length, messages: totalMessages });
-
   // Collect memories if requested
   let memories: Memory[] | undefined;
   if (includeMemories) {
@@ -297,7 +281,6 @@ export async function exportChats(
       chatIds.map(id => collectChatMemories(repos, id))
     );
     memories = memoriesArrays.flat();
-    logger.debug('Collected chat memories', { count: memories.length });
   }
 
   return {
@@ -313,8 +296,6 @@ export async function exportRoleplayTemplates(
   userId: string,
   templateIds: string[]
 ): Promise<RoleplayTemplatesExportData> {
-  logger.debug('Exporting roleplay templates', { userId, templateCount: templateIds.length });
-
   const repos = getUserRepositories(userId);
   const globalRepos = getRepositories();
 
@@ -331,9 +312,6 @@ export async function exportRoleplayTemplates(
       });
     }
   }
-
-  logger.debug('Exported roleplay templates', { count: templates.length });
-
   return {
     roleplayTemplates: templates,
   };
@@ -346,8 +324,6 @@ export async function exportConnectionProfiles(
   userId: string,
   profileIds: string[]
 ): Promise<ConnectionProfilesExportData> {
-  logger.debug('Exporting connection profiles', { userId, profileCount: profileIds.length });
-
   const repos = getUserRepositories(userId);
 
   // Fetch profiles and sanitize
@@ -364,9 +340,6 @@ export async function exportConnectionProfiles(
       );
     }
   }
-
-  logger.debug('Exported connection profiles', { count: profiles.length });
-
   return {
     connectionProfiles: profiles,
   };
@@ -379,8 +352,6 @@ export async function exportImageProfiles(
   userId: string,
   profileIds: string[]
 ): Promise<ImageProfilesExportData> {
-  logger.debug('Exporting image profiles', { userId, profileCount: profileIds.length });
-
   const repos = getUserRepositories(userId);
 
   // Fetch profiles and sanitize
@@ -397,9 +368,6 @@ export async function exportImageProfiles(
       );
     }
   }
-
-  logger.debug('Exported image profiles', { count: profiles.length });
-
   return {
     imageProfiles: profiles,
   };
@@ -412,8 +380,6 @@ export async function exportEmbeddingProfiles(
   userId: string,
   profileIds: string[]
 ): Promise<EmbeddingProfilesExportData> {
-  logger.debug('Exporting embedding profiles', { userId, profileCount: profileIds.length });
-
   const repos = getUserRepositories(userId);
 
   // Fetch profiles and sanitize
@@ -430,9 +396,6 @@ export async function exportEmbeddingProfiles(
       );
     }
   }
-
-  logger.debug('Exported embedding profiles', { count: profiles.length });
-
   return {
     embeddingProfiles: profiles,
   };
@@ -445,8 +408,6 @@ export async function exportTags(
   userId: string,
   tagIds: string[]
 ): Promise<TagsExportData> {
-  logger.debug('Exporting tags', { userId, tagCount: tagIds.length });
-
   const repos = getUserRepositories(userId);
 
   // Fetch tags
@@ -457,9 +418,6 @@ export async function exportTags(
       tags.push(tag);
     }
   }
-
-  logger.debug('Exported tags', { count: tags.length });
-
   return {
     tags,
   };
@@ -472,8 +430,6 @@ export async function exportProjects(
   userId: string,
   projectIds: string[]
 ): Promise<ProjectsExportData> {
-  logger.debug('Exporting projects', { userId, projectCount: projectIds.length });
-
   const repos = getUserRepositories(userId);
 
   // Fetch projects
@@ -505,9 +461,6 @@ export async function exportProjects(
       });
     }
   }
-
-  logger.debug('Exported projects', { count: projects.length });
-
   return {
     projects,
   };
@@ -686,8 +639,6 @@ export async function previewExport(
   userId: string,
   options: ExportOptions
 ): Promise<ExportPreview> {
-  logger.debug('Previewing export', { userId, type: options.type, scope: options.scope });
-
   try {
     const repos = getUserRepositories(userId);
     const entities: Array<{ id: string; name: string }> = [];
@@ -846,14 +797,6 @@ export async function previewExport(
       default:
         throw new Error(`Unknown export type: ${options.type}`);
     }
-
-    logger.debug('Export preview generated', {
-      userId,
-      type: options.type,
-      entityCount: entities.length,
-      memoryCount,
-    });
-
     return {
       type: options.type,
       entities,

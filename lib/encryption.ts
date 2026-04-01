@@ -250,12 +250,6 @@ export function encryptWithPassphrase(data: unknown, passphrase: string): {
 
   const authTag = cipher.getAuthTag()
 
-  logger.debug('Encrypted data with passphrase', {
-    context: 'encryption.encryptWithPassphrase',
-    dataLength: jsonData.length,
-    ciphertextLength: encrypted.length,
-  })
-
   return {
     salt: salt.toString('hex'),
     iv: iv.toString('hex'),
@@ -297,17 +291,9 @@ export function decryptWithPassphrase<T>(
     let decrypted = decipher.update(encrypted.ciphertext, 'hex', 'utf8')
     decrypted += decipher.final('utf8')
 
-    logger.debug('Decrypted data with passphrase', {
-      context: 'encryption.decryptWithPassphrase',
-      decryptedLength: decrypted.length,
-    })
-
     return JSON.parse(decrypted) as T
   } catch (error) {
-    logger.debug('Failed to decrypt with passphrase', {
-      context: 'encryption.decryptWithPassphrase',
-      error: error instanceof Error ? error.message : 'Unknown error',
-    })
+
     throw new Error('Failed to decrypt. Invalid passphrase or corrupted data.')
   }
 }
@@ -331,12 +317,6 @@ export function signData(data: string, userId: string): string {
 
   const signature = hmac.digest('hex')
 
-  logger.debug('Signed data', {
-    context: 'encryption.signData',
-    dataLength: data.length,
-    signatureLength: signature.length,
-  })
-
   return signature
 }
 
@@ -351,12 +331,7 @@ export function signData(data: string, userId: string): string {
  */
 export function verifySignature(data: string, signature: string, userId: string): boolean {
   if (!data || !signature || !userId) {
-    logger.debug('Missing parameters for signature verification', {
-      context: 'encryption.verifySignature',
-      hasData: !!data,
-      hasSignature: !!signature,
-      hasUserId: !!userId,
-    })
+
     return false
   }
 
@@ -367,17 +342,9 @@ export function verifySignature(data: string, signature: string, userId: string)
       new Uint8Array(Buffer.from(expectedSignature, 'hex'))
     )
 
-    logger.debug('Verified signature', {
-      context: 'encryption.verifySignature',
-      isValid,
-    })
-
     return isValid
   } catch (error) {
-    logger.debug('Signature verification error', {
-      context: 'encryption.verifySignature',
-      error: error instanceof Error ? error.message : 'Unknown error',
-    })
+
     return false
   }
 }

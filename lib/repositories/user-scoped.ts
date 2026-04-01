@@ -14,16 +14,17 @@ import { logger } from '@/lib/logger';
 import {
   RepositoryContainer,
   CharactersRepository,
-  MongoChatsRepository,
-  MongoTagsRepository,
+  ChatsRepository,
+  TagsRepository,
   ConnectionProfilesRepository,
-  MongoImageProfilesRepository,
+  ImageProfilesRepository,
   EmbeddingProfilesRepository,
   MemoriesRepository,
   FilesRepository,
   ProjectsRepository,
+  LLMLogsRepository,
   type CreateOptions,
-} from '@/lib/mongodb/repositories';
+} from '@/lib/database/repositories';
 import { getRepositories, getRepositoriesSafe } from './factory';
 import type {
   Character,
@@ -37,6 +38,7 @@ import type {
   ApiKey,
   ChatEvent,
   Project,
+  LLMLog,
 } from '@/lib/schemas/types';
 
 // ============================================================================
@@ -191,7 +193,7 @@ class UserScopedCharactersRepository extends UserScopedTaggableRepository<Charac
 /**
  * User-scoped Chats Repository
  */
-class UserScopedChatsRepository extends UserScopedTaggableRepository<ChatMetadata, MongoChatsRepository> {
+class UserScopedChatsRepository extends UserScopedTaggableRepository<ChatMetadata, ChatsRepository> {
   async findByCharacterId(characterId: string): Promise<ChatMetadata[]> {
     const chats = await this.baseRepo.findByCharacterId(characterId);
     return this.filterByUser(chats);
@@ -219,7 +221,7 @@ class UserScopedChatsRepository extends UserScopedTaggableRepository<ChatMetadat
 /**
  * User-scoped Tags Repository
  */
-class UserScopedTagsRepository extends UserScopedRepository<Tag, MongoTagsRepository> {
+class UserScopedTagsRepository extends UserScopedRepository<Tag, TagsRepository> {
   async findByName(name: string): Promise<Tag | null> {
     return this.baseRepo.findByName(this.userId, name);
   }
@@ -269,7 +271,7 @@ class UserScopedConnectionsRepository extends UserScopedTaggableRepository<Conne
 /**
  * User-scoped Image Profiles Repository
  */
-class UserScopedImageProfilesRepository extends UserScopedRepository<ImageProfile, MongoImageProfilesRepository> {
+class UserScopedImageProfilesRepository extends UserScopedRepository<ImageProfile, ImageProfilesRepository> {
   async findDefault(): Promise<ImageProfile | null> {
     return this.baseRepo.findDefault(this.userId);
   }
@@ -418,6 +420,70 @@ class UserScopedFilesRepository extends UserScopedTaggableRepository<FileEntry, 
   }
 }
 
+/**
+ * User-scoped LLM Logs Repository
+ * Note: LLM logs are user-scoped only (no tagging or special features)
+ */
+class UserScopedLLMLogsRepository extends UserScopedRepository<LLMLog, LLMLogsRepository> {
+  async findAll(limit?: number, offset?: number): Promise<LLMLog[]> {
+    return this.baseRepo.findByUserId(this.userId, limit ?? 50, offset ?? 0);
+  }
+
+  async findByMessageId(messageId: string): Promise<LLMLog[]> {
+    const logs = await this.baseRepo.findByMessageId(messageId);
+    return this.filterByUser(logs);
+  }
+
+  async findByChatId(chatId: string): Promise<LLMLog[]> {
+    const logs = await this.baseRepo.findByChatId(chatId);
+    return this.filterByUser(logs);
+  }
+
+  async findByCharacterId(characterId: string): Promise<LLMLog[]> {
+    const logs = await this.baseRepo.findByCharacterId(characterId);
+    return this.filterByUser(logs);
+  }
+
+  async findStandalone(limit?: number): Promise<LLMLog[]> {
+    const logs = await this.baseRepo.findStandalone(this.userId, limit);
+    return logs;
+  }
+
+  async findByType(type: any, limit?: number): Promise<LLMLog[]> {
+    const logs = await this.baseRepo.findByType(this.userId, type, limit);
+    return logs;
+  }
+
+  async findRecent(limit?: number): Promise<LLMLog[]> {
+    const logs = await this.baseRepo.findRecent(this.userId, limit);
+    return logs;
+  }
+
+  async countByUserId(): Promise<number> {
+    return this.baseRepo.countByUserId(this.userId);
+  }
+
+  async countByType(type: any): Promise<number> {
+    return this.baseRepo.countByType(this.userId, type);
+  }
+
+  async getTotalTokenUsage(): Promise<{ promptTokens: number; completionTokens: number; totalTokens: number }> {
+    return this.baseRepo.getTotalTokenUsage(this.userId);
+  }
+
+  async deleteByMessageId(messageId: string): Promise<number> {
+    return this.baseRepo.deleteByMessageId(messageId);
+  }
+
+  async deleteByChatId(chatId: string): Promise<number> {
+    return this.baseRepo.deleteByChatId(chatId);
+  }
+
+  async deleteByCharacterId(characterId: string): Promise<number> {
+    return this.baseRepo.deleteByCharacterId(characterId);
+  }
+}
+
 // ============================================================================
 // Container and Factory
 // ============================================================================
@@ -448,6 +514,8 @@ export interface UserScopedRepositoryContainer {
   images: UserScopedFilesRepository;
   /** Projects repository - only returns user's projects */
   projects: UserScopedProjectsRepository;
+  /** LLM logs repository - only returns user's LLM logs */
+  llmLogs: UserScopedLLMLogsRepository;
 }
 
 /**
@@ -480,12 +548,8 @@ export function getUserRepositories(userId: string): UserScopedRepositoryContain
   // Check cache first
   const cached = userRepoCache.get(userId);
   if (cached) {
-    logger.debug('Returning cached user-scoped repositories', { userId });
     return cached;
   }
-
-  logger.debug('Creating new user-scoped repository container', { userId });
-
   // Get the base repositories
   const baseRepos = getRepositories();
 
@@ -499,6 +563,7 @@ export function getUserRepositories(userId: string): UserScopedRepositoryContain
   const files = new UserScopedFilesRepository(userId, baseRepos.files);
   const memories = new UserScopedMemoriesRepository(userId, baseRepos.memories, characters);
   const projects = new UserScopedProjectsRepository(userId, baseRepos.projects);
+  const llmLogs = new UserScopedLLMLogsRepository(userId, baseRepos.llmLogs);
 
   const container: UserScopedRepositoryContainer = {
     userId,
@@ -512,12 +577,11 @@ export function getUserRepositories(userId: string): UserScopedRepositoryContain
     files,
     images: files, // Alias for backwards compatibility
     projects,
+    llmLogs,
   };
 
   // Cache the container
   userRepoCache.set(userId, container);
-
-  logger.debug('User-scoped repository container created', { userId });
   return container;
 }
 
@@ -528,10 +592,8 @@ export function getUserRepositories(userId: string): UserScopedRepositoryContain
 export function clearUserRepositoryCache(userId?: string): void {
   if (userId) {
     userRepoCache.delete(userId);
-    logger.debug('Cleared user repository cache for user', { userId });
   } else {
     userRepoCache.clear();
-    logger.debug('Cleared all user repository caches');
   }
 }
 

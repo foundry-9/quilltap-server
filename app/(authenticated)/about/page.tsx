@@ -12,8 +12,8 @@ export default function AboutPage() {
     <div className="qt-page-container">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold">About <BrandName /></h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-2">
+        <h1 className="qt-heading-1">About <BrandName /></h1>
+        <p className="qt-text-muted mt-2">
           AI-powered roleplay chat platform with a pluggable provider system
         </p>
       </div>
@@ -38,12 +38,12 @@ export default function AboutPage() {
       {/* About Section */}
       <div className="qt-card p-6 mb-6">
         <h2 className="text-xl font-semibold mb-4">What is <BrandName />?</h2>
-        <p className="text-gray-700 dark:text-gray-300 mb-4">
+        <p className="qt-text-primary mb-4">
           <BrandName /> is a modern, self-hosted chat platform for AI-powered roleplay. It combines a Next.js application
           with a plugin architecture so you can mix-and-match LLM providers, theme packs, and authentication methods
           while keeping your data under your control.
         </p>
-        <p className="text-gray-700 dark:text-gray-300">
+        <p className="qt-text-primary">
           The platform ships with a multi-character chat system, a Tools workspace for backups and restores,
           and a ThemeProvider runtime that lets you swap entire visual palettes at runtime.
         </p>
@@ -52,7 +52,7 @@ export default function AboutPage() {
       {/* Key Features */}
       <div className="qt-card p-6 mb-6">
         <h2 className="text-xl font-semibold mb-4">Key Features</h2>
-        <ul className="space-y-2 text-gray-700 dark:text-gray-300">
+        <ul className="space-y-2 qt-text-primary">
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
             <span><strong>Multi-provider plugins</strong> &ndash; OpenAI, Anthropic, Google Gemini, Grok, Ollama, OpenRouter, and OpenAI-compatible APIs</span>
@@ -91,7 +91,7 @@ export default function AboutPage() {
       {/* Tech Stack */}
       <div className="qt-card p-6 mb-6">
         <h2 className="text-xl font-semibold mb-4">Tech Stack</h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-gray-700 dark:text-gray-300">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 qt-text-primary">
           <div>
             <span className="font-medium">Runtime:</span> Node.js 22+
           </div>
@@ -102,7 +102,7 @@ export default function AboutPage() {
             <span className="font-medium">Language:</span> TypeScript 5.6+
           </div>
           <div>
-            <span className="font-medium">Database:</span> MongoDB 7+
+            <span className="font-medium">Database:</span> SQLite
           </div>
           <div>
             <span className="font-medium">File Storage:</span> S3-compatible
@@ -168,17 +168,17 @@ export default function AboutPage() {
       {/* Author & Support */}
       <div className="qt-card p-6 mb-6">
         <h2 className="text-xl font-semibold mb-4">Author & Support</h2>
-        <div className="text-gray-700 dark:text-gray-300 space-y-2">
+        <div className="qt-text-primary space-y-2">
           <p><span className="font-medium">Author:</span> Charles Sebold</p>
           <p>
             <span className="font-medium">Email:</span>{' '}
-            <a href="mailto:charles.sebold@foundry-9.com" className="text-blue-600 dark:text-blue-400 hover:underline">
+            <a href="mailto:charles.sebold@foundry-9.com" className="qt-link">
               charles.sebold@foundry-9.com
             </a>
           </p>
           <p>
             <span className="font-medium">Website:</span>{' '}
-            <a href="https://foundry-9.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">
+            <a href="https://foundry-9.com" target="_blank" rel="noopener noreferrer" className="qt-link">
               foundry-9.com
             </a>
           </p>
@@ -187,20 +187,17 @@ export default function AboutPage() {
 
       {/* Copyright */}
       <div className="qt-card p-6 mb-6">
-        <p className="text-gray-700 dark:text-gray-300 text-center">
+        <p className="qt-text-primary text-center">
           &copy; {copyrightYears} Foundry-9 LLC. All rights reserved.
         </p>
-        <p className="text-gray-500 dark:text-gray-400 text-center text-sm mt-2">
+        <p className="qt-text-muted text-center text-sm mt-2">
           Released under the MIT License. Free software for personal and commercial use.
         </p>
       </div>
 
       {/* Back Link */}
       <div className="mt-8">
-        <Link
-          href="/"
-          className="text-blue-600 dark:text-blue-400 hover:underline"
-        >
+        <Link href="/" className="qt-link">
           &larr; Back to Home
         </Link>
       </div>

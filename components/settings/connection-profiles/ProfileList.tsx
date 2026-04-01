@@ -62,7 +62,7 @@ export function ProfileList({
           }}
         />
       ) : (
-        <div className="space-y-3">
+        <div className="qt-card-grid-auto">
           {profiles
             .toSorted((a, b) => a.name.localeCompare(b.name))
             .map((profile) => (

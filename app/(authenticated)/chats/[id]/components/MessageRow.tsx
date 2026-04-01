@@ -4,11 +4,9 @@ import { memo } from 'react'
 import Avatar, { getAvatarSrc } from '@/components/ui/Avatar'
 import LazyMessageContent from '@/components/chat/LazyMessageContent'
 import { formatMessageTime } from '@/lib/format-time'
-import MobileParticipantDropdown from '@/components/chat/MobileParticipantDropdown'
 import { TokenBadge } from '@/components/chat/TokenBadge'
-import type { Message, Participant, TokenDisplaySettings } from '../types'
-import type { TurnState, TurnSelectionResult } from '@/lib/chat/turn-manager'
-import { getQueuePosition } from '@/lib/chat/turn-manager'
+import type { Message, TokenDisplaySettings } from '../types'
+import type { TurnState } from '@/lib/chat/turn-manager'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
 
@@ -40,13 +38,15 @@ interface MessageRowProps {
   turnState: TurnState
   streaming: boolean
   waitingForResponse: boolean
-  mobileParticipantDropdownId: string | null
-  mobileParticipantRefs: React.MutableRefObject<Map<string, HTMLButtonElement | null>>
   userParticipantId: string | null
   isPaused?: boolean
   onTogglePause?: () => void
   /** Token display settings */
   tokenDisplaySettings?: TokenDisplaySettings
+  /** Whether this message has LLM logs available */
+  hasLLMLogs?: boolean
+  /** Callback to view LLM logs */
+  onViewLLMLogs?: (messageId: string) => void
 
   // Callbacks
   onEditStart: (message: Message) => void
@@ -60,7 +60,6 @@ interface MessageRowProps {
   onCopyContent: (content: string) => void
   onResend: (message: Message) => void
   onImageClick: (filepath: string, filename: string, fileId?: string) => void
-  onMobileParticipantDropdownChange: (participantId: string | null) => void
   onHandleNudge: (participantId: string) => void
   onHandleQueue: (participantId: string) => void
   onHandleDequeue: (participantId: string) => void
@@ -92,12 +91,12 @@ function MessageRowInner({
   turnState,
   streaming,
   waitingForResponse,
-  mobileParticipantDropdownId,
-  mobileParticipantRefs,
   userParticipantId,
   isPaused = false,
   onTogglePause,
   tokenDisplaySettings,
+  hasLLMLogs,
+  onViewLLMLogs,
   onEditStart,
   onEditSave,
   onEditCancel,
@@ -109,7 +108,6 @@ function MessageRowInner({
   onCopyContent,
   onResend,
   onImageClick,
-  onMobileParticipantDropdownChange,
   onHandleNudge,
   onHandleQueue,
   onHandleDequeue,
@@ -147,165 +145,6 @@ function MessageRowInner({
         </div>
       )}
       <div className="qt-chat-message-body group">
-        {/* Mobile header - speaker avatar/name on left, participant controls on right */}
-        {shouldShowAvatars && messageAvatar && (
-          <div className="qt-chat-message-mobile-header">
-            {/* Left side: current message speaker */}
-            <div className="qt-chat-message-mobile-speaker">
-              <div className="qt-chat-message-mobile-avatar">
-                {getAvatarSrc(messageAvatar) ? (
-                   
-                  <img
-                    src={getAvatarSrc(messageAvatar)!}
-                    alt={messageAvatar.name}
-                  />
-                ) : (
-                  <div className="qt-chat-message-mobile-avatar-initial">
-                    {messageAvatar.name.charAt(0).toUpperCase()}
-                  </div>
-                )}
-              </div>
-              <span className="qt-chat-message-mobile-name">{messageAvatar.name}</span>
-            </div>
-
-            {/* Right side: participant controls for multi-char chats */}
-            {isMultiChar && (
-              <div className="qt-mobile-participant-controls">
-                {/* Pause/Resume button for mobile */}
-                {onTogglePause && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onTogglePause()
-                    }}
-                    className={`qt-mobile-pause-button ${isPaused ? 'qt-mobile-pause-button-paused' : ''}`}
-                    title={isPaused ? 'Resume auto-responses' : 'Pause auto-responses'}
-                  >
-                    {isPaused ? (
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M8 5v14l11-7z" />
-                      </svg>
-                    ) : (
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
-                      </svg>
-                    )}
-                  </button>
-                )}
-
-                {(() => {
-                  // Sort participants: user on right, characters on left
-                  const activeParticipants = participantData
-                    .filter(p => p.isActive)
-                    .sort((a, b) => {
-                      if (a.type === 'PERSONA' && b.type !== 'PERSONA') return 1
-                      if (b.type === 'PERSONA' && a.type !== 'PERSONA') return -1
-                      return b.displayOrder - a.displayOrder
-                    })
-                  const activeCharCount = activeParticipants.filter(p => p.type === 'CHARACTER').length
-
-                  return activeParticipants.map((participant) => {
-                    const entity = participant.type === 'CHARACTER' ? participant.character : participant.persona
-                    if (!entity) return null
-
-                    const isCurrentTurn = turnState.currentTurnParticipantId === participant.id
-                    const queuePos = getQueuePosition(turnState, participant.id)
-                    const isSelected = mobileParticipantDropdownId === participant.id
-
-                    // Get avatar source
-                    const pAvatarSrc = entity.defaultImage
-                      ? (entity.defaultImage.url || entity.defaultImage.filepath).replace(/^(?!\/)/, '/')
-                      : entity.avatarUrl || null
-
-                    const avatarClasses = [
-                      'qt-mobile-participant-avatar',
-                      isCurrentTurn ? 'qt-mobile-participant-avatar-active' : '',
-                      isSelected ? 'qt-mobile-participant-avatar-selected' : '',
-                    ].filter(Boolean).join(' ')
-
-                    return (
-                      <button
-                        key={participant.id}
-                        ref={(el) => { mobileParticipantRefs.current.set(participant.id, el) }}
-                        className={avatarClasses}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          onMobileParticipantDropdownChange(
-                            mobileParticipantDropdownId === participant.id ? null : participant.id
-                          )
-                        }}
-                        title={entity.name}
-                      >
-                        {pAvatarSrc ? (
-                           
-                          <img src={pAvatarSrc} alt={entity.name} />
-                        ) : (
-                          <span className="qt-mobile-participant-avatar-initial">
-                            {entity.name.charAt(0).toUpperCase()}
-                          </span>
-                        )}
-                        {queuePos > 0 && (
-                          <span className="qt-mobile-participant-queue-badge">{queuePos}</span>
-                        )}
-                        {isCurrentTurn && <span className="qt-mobile-participant-turn-dot" />}
-                      </button>
-                    )
-                  })
-                })()}
-
-                {/* Dropdown for selected participant */}
-                {mobileParticipantDropdownId && (() => {
-                  const selectedParticipant = participantData.find(p => p.id === mobileParticipantDropdownId)
-                  if (!selectedParticipant) return null
-                  const activeCharCount = participantData.filter(p => p.type === 'CHARACTER' && p.isActive).length
-
-                  return (
-                    <MobileParticipantDropdown
-                      participant={selectedParticipant}
-                      isOpen={true}
-                      anchorRef={{ current: mobileParticipantRefs.current.get(mobileParticipantDropdownId) ?? null }}
-                      isCurrentTurn={turnState.currentTurnParticipantId === mobileParticipantDropdownId}
-                      queuePosition={getQueuePosition(turnState, mobileParticipantDropdownId)}
-                      isGenerating={streaming || waitingForResponse}
-                      isUserParticipant={mobileParticipantDropdownId === userParticipantId}
-                      canRemove={activeCharCount > 1}
-                      onClose={() => onMobileParticipantDropdownChange(null)}
-                      onNudge={onHandleNudge}
-                      onQueue={onHandleQueue}
-                      onDequeue={onHandleDequeue}
-                      onTalkativenessChange={onHandleTalkativenessChange}
-                      onRemove={onHandleRemoveCharacter}
-                    />
-                  )
-                })()}
-              </div>
-            )}
-
-            {/* Mobile continue button - to the right of participant avatars */}
-            {isMultiChar && (
-              <button
-                type="button"
-                onClick={onHandleContinue}
-                disabled={
-                  streaming ||
-                  waitingForResponse ||
-                  turnState.currentTurnParticipantId !== null
-                }
-                className="qt-mobile-continue-button"
-                title={
-                  turnState.currentTurnParticipantId !== null
-                    ? "It's not your turn"
-                    : "Pass turn to next character"
-                }
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </button>
-            )}
-          </div>
-        )}
-
         <div
           className={`chat-message ${
             message.role === 'USER'
@@ -377,7 +216,7 @@ function MessageRowInner({
                 </div>
               )}
 
-              {/* Mobile/responsive action bar - shown on mobile, hidden on desktop */}
+              {/* Action bar - shows action icons at bottom of message */}
               <div className="qt-chat-message-action-bar">
                 <div className="qt-chat-message-action-bar-icons">
                   {/* Copy */}
@@ -453,6 +292,18 @@ function MessageRowInner({
                       </svg>
                     </button>
                   )}
+                  {/* View LLM Logs (assistant messages with logs) */}
+                  {hasLLMLogs && message.role === 'ASSISTANT' && onViewLLMLogs && (
+                    <button
+                      onClick={() => onViewLLMLogs(message.id)}
+                      className="qt-chat-message-action-icon"
+                      title="View LLM request/response logs"
+                    >
+                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                      </svg>
+                    </button>
+                  )}
                   {/* Resend (user messages only) */}
                   {message.role === 'USER' && showResendButton && (
                     <button
@@ -507,25 +358,11 @@ function MessageRowInner({
                   )}
                 </div>
               </div>
-
-              {/* Desktop timestamp and token info - hidden on mobile */}
-              <div className="qt-text-xs mt-2 qt-chat-desktop-timestamp flex items-center gap-2">
-                <span>{formatMessageTime(message.createdAt)}</span>
-                {tokenDisplaySettings?.showPerMessageTokens && (message.promptTokens || message.completionTokens) && (
-                  <TokenBadge
-                    promptTokens={message.promptTokens}
-                    completionTokens={message.completionTokens}
-                    totalTokens={message.tokenCount}
-                    showTokens={tokenDisplaySettings.showPerMessageTokens}
-                    showCost={tokenDisplaySettings.showPerMessageCost}
-                  />
-                )}
-              </div>
             </>
           )}
         </div>
 
-        {/* Desktop hover action buttons - hidden on mobile */}
+        {/* Desktop hover action buttons */}
         {!isEditing && (
           <div className="absolute -top-8 right-0 flex gap-1 bg-muted rounded px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity qt-chat-desktop-hover-actions">
             <button
@@ -553,10 +390,21 @@ function MessageRowInner({
                 </svg>
               )}
             </button>
+            {hasLLMLogs && message.role === 'ASSISTANT' && onViewLLMLogs && (
+              <button
+                onClick={() => onViewLLMLogs(message.id)}
+                className="p-1 text-muted-foreground hover:text-foreground"
+                title="View LLM logs"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                </svg>
+              </button>
+            )}
           </div>
         )}
 
-        {/* Desktop message actions - hidden on mobile */}
+        {/* Desktop message actions */}
         {!isEditing && (
           <div className="flex gap-2 mt-1 text-sm qt-chat-message-desktop-actions">
             {message.role === 'USER' && (
@@ -579,7 +427,7 @@ function MessageRowInner({
                     className="text-warning hover:text-warning/80"
                     title="Resend this message (deletes blank responses and restores to input)"
                   >
-                    ↻ Resend
+                    Resend
                   </button>
                 )}
                 {onReattribute && participantData.filter(p => p.id !== message.participantId).length > 0 && (
@@ -624,7 +472,7 @@ function MessageRowInner({
                       disabled={swipeState.current === 0}
                       className="text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
                     >
-                      ←
+
                     </button>
                     <span className="qt-text-xs">
                       {swipeState.current + 1} / {swipeState.total}
@@ -634,7 +482,7 @@ function MessageRowInner({
                       disabled={swipeState.current === swipeState.total - 1}
                       className="text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
                     >
-                      →
+
                     </button>
                   </div>
                 )}
@@ -696,7 +544,6 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
 
   // Multi-char specific state
   if (prev.isMultiChar !== next.isMultiChar) return false
-  if (prev.mobileParticipantDropdownId !== next.mobileParticipantDropdownId) return false
   if (prev.turnState.currentTurnParticipantId !== next.turnState.currentTurnParticipantId) return false
 
   // Avatar info (compare by value since it's an object)
@@ -724,6 +571,9 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
     if (prev.message.promptTokens !== next.message.promptTokens) return false
     if (prev.message.completionTokens !== next.message.completionTokens) return false
   }
+
+  // LLM logs availability
+  if (prev.hasLLMLogs !== next.hasLLMLogs) return false
 
   // Props are equal, skip re-render
   return true

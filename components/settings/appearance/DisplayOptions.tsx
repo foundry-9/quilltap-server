@@ -11,7 +11,7 @@
  */
 
 import type { ColorMode } from '@/lib/themes/types'
-import { BrandName } from '@/components/ui/brand-name'
+import { SettingsCard } from '@/components/ui/SettingsCard'
 import { ColorModeSelector } from './components/ColorModeSelector'
 
 interface DisplayOptionsProps {
@@ -37,7 +37,7 @@ export function DisplayOptions({
   onNavThemeSelectorChange,
 }: DisplayOptionsProps) {
   return (
-    <div className="space-y-8">
+    <>
       {/* Error Display */}
       {error && (
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 text-red-800 dark:text-red-200">
@@ -61,12 +61,10 @@ export function DisplayOptions({
       )}
 
       {/* Nav Theme Selector Toggle */}
-      <section>
-        <h2 className="text-xl font-semibold mb-2 text-foreground">Quick Theme Access</h2>
-        <p className="text-muted-foreground mb-4">
-          Show a theme selector dropdown in the navigation bar for quick theme switching.
-        </p>
-
+      <SettingsCard
+        title="Quick Theme Access"
+        subtitle="Show a theme selector dropdown in the navigation bar for quick theme switching."
+      >
         <label
           className={`
           flex items-center justify-between gap-4 p-4 border rounded-lg transition-colors cursor-pointer
@@ -119,23 +117,20 @@ export function DisplayOptions({
             />
           </button>
         </label>
-      </section>
+      </SettingsCard>
 
       {/* Color Mode Section */}
-      <section>
-        <h2 className="text-xl font-semibold mb-2 text-foreground">Color Mode</h2>
-        <p className="text-muted-foreground mb-4">
-          Choose how <BrandName /> should appear. You can select light mode, dark mode, or follow
-          your system settings.
-        </p>
-
+      <SettingsCard
+        title="Color Mode"
+        subtitle="Choose how Quilltap should appear. You can select light mode, dark mode, or follow your system settings."
+      >
         <ColorModeSelector
           value={colorMode}
           resolvedMode={resolvedColorMode}
           onChange={onColorModeChange}
           disabled={isLoading}
         />
-      </section>
-    </div>
+      </SettingsCard>
+    </>
   )
 }

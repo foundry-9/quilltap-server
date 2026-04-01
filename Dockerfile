@@ -1,5 +1,8 @@
 FROM node:22-alpine AS base
 
+# Install build dependencies for native modules (better-sqlite3)
+RUN apk add --no-cache python3 make g++
+
 # Install dependencies only when needed
 FROM base AS deps
 WORKDIR /app
@@ -11,8 +14,17 @@ RUN npm ci
 FROM base AS development
 WORKDIR /app
 
-COPY --from=deps /app/node_modules ./node_modules
+# Copy package files
+COPY package.json package-lock.json ./
+
+# Install all dependencies (including dev dependencies for development)
+RUN npm ci
+
+# Copy source code
 COPY . .
+
+# Rebuild native modules for the current Alpine Linux platform
+RUN npm rebuild
 
 # Generate self-signed localhost certificate for dev SSL usage
 RUN apk add --no-cache openssl && \
@@ -47,10 +59,15 @@ FROM base AS production
 WORKDIR /app
 
 ENV NODE_ENV=production
+ENV DOCKER_CONTAINER=true
 
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
+
+# Create data directories (data, files, logs) and plugin site directory
+RUN mkdir -p /app/quilltap/data /app/quilltap/files /app/quilltap/logs /app/plugins/site && \
+    chown -R nextjs:nodejs /app/quilltap /app/plugins/site
 
 # Copy built assets
 COPY --from=builder /app/public ./public
@@ -59,6 +76,15 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 # Copy plugins (required for LLM providers, auth, themes, etc.)
 COPY --from=builder --chown=nextjs:nodejs /app/plugins/dist ./plugins/dist
+
+# Copy package files for native module dependencies
+COPY package.json package-lock.json ./
+
+# Install only production dependencies (including better-sqlite3)
+RUN npm ci --only=production
+
+# Rebuild native modules for the current Alpine Linux platform
+RUN npm rebuild
 
 USER nextjs
 

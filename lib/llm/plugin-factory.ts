@@ -51,11 +51,6 @@ export async function createLLMProvider(
   baseUrl?: string
 ): Promise<LLMProvider> {
   try {
-    pluginLogger.debug('Creating LLM provider from plugin registry', {
-      provider,
-      hasBaseUrl: !!baseUrl,
-    });
-
     // Check if registry is initialized, if not, initialize it
     if (!providerRegistry.isInitialized()) {
       pluginLogger.warn('Provider registry not initialized, initializing now', {
@@ -89,11 +84,6 @@ export function createImageProvider(
   provider: string,
   baseUrl?: string
 ): ImageGenProvider {
-  pluginLogger.debug('Creating image provider from plugin registry', {
-    provider,
-    hasBaseUrl: !!baseUrl,
-  });
-
   // Map legacy provider names if needed
   const providerName = provider.toUpperCase() === 'GOOGLE_IMAGEN' ? 'GOOGLE' : provider;
 
@@ -119,11 +109,6 @@ export function createImageProvider(
  */
 export function getAllAvailableProviders(): string[] {
   const pluginProviders = providerRegistry.getProviderNames();
-
-  pluginLogger.debug('Retrieved all available providers', {
-    pluginCount: pluginProviders.length,
-  });
-
   return pluginProviders;
 }
 
@@ -136,11 +121,5 @@ export function getAllAvailableImageProviders(): string[] {
   const providers = providerRegistry
     .getProvidersByCapability('imageGeneration')
     .map(plugin => plugin.metadata.providerName);
-
-  pluginLogger.debug('Retrieved all available image providers', {
-    count: providers.length,
-    providers,
-  });
-
   return providers;
 }

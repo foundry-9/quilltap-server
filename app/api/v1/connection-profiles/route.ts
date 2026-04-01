@@ -52,15 +52,7 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
   try {
     const { searchParams } = new URL(req.url);
     const sortByCharacter = searchParams.get('sortByCharacter');
-    const imageCapable = searchParams.get('imageCapable') === 'true';
-
-    logger.debug('[Connection Profiles v1] GET list', {
-      userId: user.id,
-      sortByCharacter,
-      imageCapable,
-    });
-
-    // Get all connection profiles for user
+    const imageCapable = searchParams.get('imageCapable') === 'true';// Get all connection profiles for user
     let profiles = await repos.connections.findByUserId(user.id);
 
     // Enrich with API key info and tags
@@ -269,15 +261,7 @@ async function handleTestConnection(req: NextRequest, context: AuthenticatedCont
 
   try {
     const body = await req.json();
-    const { provider, apiKeyId, baseUrl } = testConnectionSchema.parse(body);
-
-    logger.debug('[Connection Profiles v1] Testing connection', {
-      provider,
-      hasApiKeyId: !!apiKeyId,
-      hasBaseUrl: !!baseUrl,
-    });
-
-    // Get API key if provided
+    const { provider, apiKeyId, baseUrl } = testConnectionSchema.parse(body);// Get API key if provided
     let decryptedKey = '';
     if (apiKeyId) {
       const apiKey = await repos.connections.findApiKeyById(apiKeyId);
@@ -392,14 +376,7 @@ async function handleTestMessage(req: NextRequest, context: AuthenticatedContext
       temperature: parameters.temperature,
       maxTokens: parameters.max_tokens || 50,
       topP: parameters.top_p,
-    };
-
-    logger.debug('[Connection Profiles v1] Sending test message', {
-      provider,
-      model: modelName,
-    });
-
-    try {
+    };try {
       const response = await llmProvider.sendMessage(requestParams, decryptedKey);
 
       if (!response) {
@@ -439,13 +416,7 @@ async function handleTestMessage(req: NextRequest, context: AuthenticatedContext
         },
         { status: 500 }
       );
-    } catch (error) {
-      logger.debug('[Connection Profiles v1] Test message error', {
-        provider,
-        model: modelName,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return NextResponse.json(
+    } catch (error) {return NextResponse.json(
         {
           success: false,
           provider,

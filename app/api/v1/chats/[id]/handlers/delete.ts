@@ -19,7 +19,6 @@ export async function handleDelete(
   const { user, repos } = ctx;
 
   try {
-    logger.debug('[Chats v1] DELETE chat', { chatId, userId: user.id });
 
     const existingChat = await repos.chats.findById(chatId);
     if (!existingChat || existingChat.userId !== user.id) {

@@ -5,18 +5,18 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import ImageModal from '@/components/chat/ImageModal'
 import PhotoGalleryModal from '@/components/images/PhotoGalleryModal'
 import ToolPalette from '@/components/chat/ToolPalette'
-import MobileToolPalette from '@/components/chat/MobileToolPalette'
 import ChatSettingsModal from '@/components/chat/ChatSettingsModal'
 import ChatProjectModal from '@/components/chat/ChatProjectModal'
 import ChatRenameModal from '@/components/chat/ChatRenameModal'
 import GenerateImageDialog from '@/components/chat/GenerateImageDialog'
 import ParticipantSidebar from '@/components/chat/ParticipantSidebar'
-import MobileParticipantDropdown from '@/components/chat/MobileParticipantDropdown'
 import AddCharacterDialog from '@/components/chat/AddCharacterDialog'
 import ReattributeMessageDialog from '@/components/chat/ReattributeMessageDialog'
 import BulkCharacterReplaceModal from '@/components/chat/BulkCharacterReplaceModal'
+import ChatToolSettingsModal from '@/components/chat/ChatToolSettingsModal'
 import { SearchReplaceModal } from '@/components/tools/search-replace'
 import AllLLMPauseModal from '@/components/chat/AllLLMPauseModal'
+import LLMLogViewerModal from '@/components/chat/LLMLogViewerModal'
 import FileWriteApprovalModal from '@/components/chat/FileWriteApprovalModal'
 import FileWritePermissionPrompt from '@/components/chat/FileWritePermissionPrompt'
 import FileConflictDialog from '@/components/chat/FileConflictDialog'
@@ -62,7 +62,7 @@ import {
   shouldPauseForAllLLM,
   getNextPauseThreshold,
 } from '@/lib/chat/turn-manager'
-import type { ChatParticipantBase, Character } from '@/lib/schemas/types'
+import type { ChatParticipantBase, Character, LLMLog } from '@/lib/schemas/types'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
 
 // Import extracted hooks
@@ -111,7 +111,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [roleplayDialogueDetection, setRoleplayDialogueDetection] = useState<DialogueDetection | null | undefined>(undefined)
   const [galleryOpen, setGalleryOpen] = useState(false)
   const [toolPaletteOpen, setToolPaletteOpen] = useState(false)
-  const [mobileToolPaletteOpen, setMobileToolPaletteOpen] = useState(false)
   const [documentEditingMode, setDocumentEditingMode] = useState(false)
   const [chatSettingsModalOpen, setChatSettingsModalOpen] = useState(false)
   const [chatProjectModalOpen, setChatProjectModalOpen] = useState(false)
@@ -125,6 +124,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   } | null>(null)
   const [searchReplaceModalOpen, setSearchReplaceModalOpen] = useState(false)
   const [bulkReplaceModalOpen, setBulkReplaceModalOpen] = useState(false)
+  const [toolSettingsModalOpen, setToolSettingsModalOpen] = useState(false)
   const [toolExecutionStatus, setToolExecutionStatus] = useState<{ tool: string; status: 'pending' | 'success' | 'error'; message: string } | null>(null)
   const [pendingToolCalls, setPendingToolCalls] = useState<Array<{ id: string; name: string; status: 'pending' | 'success' | 'error'; result?: unknown; arguments?: Record<string, unknown> }>>([])
   const [showPreview, setShowPreview] = useState(false)
@@ -133,7 +133,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [turnSelectionResult, setTurnSelectionResult] = useState<TurnSelectionResult | null>(null)
   const [ephemeralMessages, setEphemeralMessages] = useState<EphemeralMessageData[]>([])
   const [respondingParticipantId, setRespondingParticipantId] = useState<string | null>(null)
-  const [mobileParticipantDropdownId, setMobileParticipantDropdownId] = useState<string | null>(null)
   const [isPaused, setIsPaused] = useState(false)
 
   // Impersonation state (Characters Not Personas)
@@ -166,6 +165,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     } | null
   } | null>(null)
 
+  // LLM log viewer state
+  const [llmLogViewerOpen, setLLMLogViewerOpen] = useState(false)
+  const [llmLogsForViewer, setLLMLogsForViewer] = useState<LLMLog[]>([])
+  const [selectedMessageIdForLogs, setSelectedMessageIdForLogs] = useState<string | null>(null)
+  // Track which messages have logs (for showing the button)
+  const [messagesWithLogs, setMessagesWithLogs] = useState<Set<string>>(new Set())
+
   // Use the extracted file attachments hook
   const fileHook = useFileAttachments(id, chat?.projectId)
   const { attachedFiles, setAttachedFiles, uploadingFile } = fileHook
@@ -173,12 +179,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const { conflictInfo, isConflictDialogOpen, resolvingConflict, handleConflictResolution, cancelConflict } = fileHook
 
   // Refs
-  const mobileParticipantRefs = useRef<Map<string, HTMLButtonElement | null>>(new Map())
   const lastAutoTriggeredRef = useRef<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const mobileToolPaletteToggleRef = useRef<HTMLButtonElement>(null)
   const desktopToolPaletteToggleRef = useRef<HTMLButtonElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const userStoppedStreamRef = useRef<boolean>(false)
@@ -332,13 +336,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const getTextareaMaxHeight = useCallback(() => {
     if (typeof globalThis === 'undefined' || !globalThis.window) return 200
     const windowHeight = globalThis.window.innerHeight
-    const isMobile = globalThis.window.matchMedia('(max-width: 768px)').matches
-    if (isMobile) {
-      const navbarHeight = 64
-      const paletteReserved = windowHeight * 0.5
-      const composerChrome = 96
-      return Math.max(40, windowHeight - navbarHeight - paletteReserved - composerChrome)
-    }
     return windowHeight / 3
   }, [])
 
@@ -421,10 +418,26 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   // Update browser tab title with chat name
   useDocumentTitle(chat?.title ?? null)
 
-  // Set project link and cost summary in toolbar
+  // Get non-user-controlled characters for header display
+  const llmCharacters = useMemo(() => {
+    if (!chat?.participants) return []
+    return chat.participants
+      .filter(p => p.type === 'CHARACTER' && p.controlledBy === 'llm' && p.character)
+      .map(p => p.character!)
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [chat?.participants])
+
+  // Set project link, character links, and title in toolbar
   const { setLeftContent, setRightContent } = usePageToolbar()
   useEffect(() => {
     if (chat?.title) {
+      const getCharacterAvatarUrl = (character: CharacterData): string | null => {
+        if (character.defaultImage?.url) return character.defaultImage.url
+        if (character.defaultImage?.filepath) return character.defaultImage.filepath.startsWith('/') ? character.defaultImage.filepath : `/${character.defaultImage.filepath}`
+        if (character.avatarUrl) return character.avatarUrl.startsWith('/') ? character.avatarUrl : `/${character.avatarUrl}`
+        return null
+      }
+
       setLeftContent(
         <div className="hidden md:flex items-center gap-2 text-sm min-w-0">
           {chat.projectId && chat.projectName && (
@@ -441,6 +454,33 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               <span className="qt-text-muted">/</span>
             </>
           )}
+          {llmCharacters.map((character) => {
+            const avatarUrl = getCharacterAvatarUrl(character)
+            return (
+              <span key={character.id} className="contents">
+                <a
+                  href={`/characters/${character.id}/view?tab=conversations`}
+                  className="inline-flex items-center gap-1.5 qt-text-secondary hover:text-foreground transition-colors flex-shrink-0"
+                >
+                  {avatarUrl ? (
+                    <img
+                      src={avatarUrl}
+                      alt={character.name}
+                      className="w-5 h-5 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center">
+                      <span className="text-xs font-medium text-muted-foreground">
+                        {character.name.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                  )}
+                  <span>{character.name}</span>
+                </a>
+                <span className="qt-text-muted">/</span>
+              </span>
+            )
+          })}
           <span className="qt-text-primary truncate" title={chat.title}>
             {chat.title}
           </span>
@@ -451,7 +491,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
     // Clear on unmount
     return () => setLeftContent(null)
-  }, [chat?.projectId, chat?.projectName, chat?.title, setLeftContent])
+  }, [chat?.projectId, chat?.projectName, chat?.title, llmCharacters, setLeftContent])
 
   // Set cost summary in toolbar right section
   useEffect(() => {
@@ -1282,6 +1322,58 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     await handleStartImpersonation(participantId)
   }, [handleStartImpersonation])
 
+  // Check which messages have LLM logs
+  const checkMessagesForLogs = useCallback(async () => {
+    if (!id || !messages.length) return
+
+    // Get assistant message IDs
+    const assistantMessageIds = messages
+      .filter(m => m.role === 'ASSISTANT')
+      .map(m => m.id)
+
+    if (assistantMessageIds.length === 0) return
+
+    try {
+      // Batch check - get all logs for this chat and extract message IDs
+      const res = await fetch(`/api/v1/llm-logs?chatId=${id}&limit=1000`)
+      if (res.ok) {
+        const data = await res.json()
+        const messageIdsWithLogs = new Set<string>(
+          data.logs
+            .filter((log: LLMLog) => log.messageId)
+            .map((log: LLMLog) => log.messageId!)
+        )
+        setMessagesWithLogs(messageIdsWithLogs)
+      }
+    } catch (error) {
+      // Silent fail - logging is not critical
+    }
+  }, [id, messages])
+
+  // Call on mount and when messages change
+  useEffect(() => {
+    checkMessagesForLogs()
+  }, [checkMessagesForLogs])
+
+  // Handle viewing LLM logs
+  const handleViewLLMLogs = useCallback(async (messageId: string) => {
+    try {
+      const res = await fetch(`/api/v1/llm-logs?messageId=${messageId}`)
+      if (!res.ok) throw new Error('Failed to fetch logs')
+
+      const data = await res.json()
+      if (data.logs && data.logs.length > 0) {
+        setLLMLogsForViewer(data.logs)
+        setSelectedMessageIdForLogs(messageId)
+        setLLMLogViewerOpen(true)
+      }
+    } catch (error) {
+      console.error('Failed to fetch LLM logs:', error)
+      // Optionally show a toast
+      showErrorToast('Failed to load LLM logs')
+    }
+  }, [])
+
   // Handle memories
   const handleDeleteChatMemories = useCallback(async () => {
     if (chatMemoryCount === 0) {
@@ -1901,8 +1993,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                       turnState={turnState}
                       streaming={streaming}
                       waitingForResponse={waitingForResponse}
-                      mobileParticipantDropdownId={mobileParticipantDropdownId}
-                      mobileParticipantRefs={mobileParticipantRefs}
                       userParticipantId={userParticipantId}
                       isPaused={isPaused}
                       onTogglePause={togglePause}
@@ -1920,7 +2010,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                       onImageClick={(filepath, filename, fileId) => {
                         setModalImage({ src: filepath, filename, fileId })
                       }}
-                      onMobileParticipantDropdownChange={setMobileParticipantDropdownId}
                       onHandleNudge={turnManagement.handleNudge}
                       onHandleQueue={turnManagement.handleQueue}
                       onHandleDequeue={turnManagement.handleDequeue}
@@ -1930,6 +2019,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                       onHandleRemoveCharacter={handleRemoveCharacter}
                       onHandleContinue={turnManagement.handleContinue}
                       onReattribute={handleReattribute}
+                      hasLLMLogs={messagesWithLogs.has(message.id)}
+                      onViewLLMLogs={handleViewLLMLogs}
                     />
                   </div>
                 )
@@ -2001,7 +2092,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               renderingPatterns={roleplayRenderingPatterns}
               dialogueDetection={roleplayDialogueDetection}
               shouldShowAvatars={shouldShowAvatars()}
-              onStopClick={stopStreaming}
             />
 
             <div ref={messagesEndRef} />
@@ -2034,8 +2124,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           waitingForResponse={waitingForResponse}
           toolPaletteOpen={toolPaletteOpen}
           setToolPaletteOpen={setToolPaletteOpen}
-          mobileToolPaletteOpen={mobileToolPaletteOpen}
-          setMobileToolPaletteOpen={setMobileToolPaletteOpen}
           showPreview={showPreview}
           setShowPreview={setShowPreview}
           uploadingFile={uploadingFile}
@@ -2076,6 +2164,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onReextractMemoriesClick={handleReextractMemories}
           onSearchReplaceClick={() => setSearchReplaceModalOpen(true)}
           onBulkCharacterReplaceClick={() => setBulkReplaceModalOpen(true)}
+          onToolSettingsClick={() => setToolSettingsModalOpen(true)}
           onStopStreaming={stopStreaming}
         />
 
@@ -2232,6 +2321,25 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           />
         )}
 
+        {/* Tool Settings Modal */}
+        {chat && (
+          <ChatToolSettingsModal
+            isOpen={toolSettingsModalOpen}
+            onClose={() => setToolSettingsModalOpen(false)}
+            chatId={id}
+            disabledTools={chat.disabledTools || []}
+            disabledToolGroups={chat.disabledToolGroups || []}
+            onSuccess={(newDisabledTools, newDisabledToolGroups) => {
+              // Update local chat state with new disabled tools and groups
+              setChat(prev => prev ? {
+                ...prev,
+                disabledTools: newDisabledTools,
+                disabledToolGroups: newDisabledToolGroups,
+              } : prev)
+            }}
+          />
+        )}
+
         {/* All-LLM Pause Modal */}
         <AllLLMPauseModal
           isOpen={allLLMPauseModalOpen}
@@ -2319,6 +2427,18 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             onConfirm={messageActions.handleMemoryCascadeConfirm}
           />
         )}
+
+        {/* LLM Log Viewer Modal */}
+        <LLMLogViewerModal
+          isOpen={llmLogViewerOpen}
+          onClose={() => {
+            setLLMLogViewerOpen(false)
+            setLLMLogsForViewer([])
+            setSelectedMessageIdForLogs(null)
+          }}
+          logs={llmLogsForViewer}
+          messageId={selectedMessageIdForLogs ?? undefined}
+        />
       </div>
 
       {shouldShowParticipantSidebar && (

@@ -74,7 +74,7 @@ export function DescriptionSourceStep({
         throw new Error(data.error || 'Failed to upload image')
       }
 
-      onImageUpload(data.data.id, data.data.url || `/api/files/${data.data.id}`)
+      onImageUpload(data.data.id, data.data.url || `/api/v1/files/${data.data.id}`)
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Failed to upload image')
     } finally {
@@ -87,7 +87,7 @@ export function DescriptionSourceStep({
   }
 
   const handleGalleryImageSelect = (image: ImageData) => {
-    onGallerySelect(image.id, image.url || `/api/files/${image.id}`)
+    onGallerySelect(image.id, image.url || `/api/v1/files/${image.id}`)
     setShowGallery(false)
   }
 

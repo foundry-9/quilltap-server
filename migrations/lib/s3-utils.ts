@@ -45,13 +45,13 @@ export interface S3Config {
  */
 const s3ConfigSchema = z.object({
   mode: z.enum(['embedded', 'external', 'disabled']),
-  endpoint: z.string().url().optional(),
+  endpoint: z.url().optional(),
   region: z.string().min(1, 'S3 region is required'),
   accessKey: z.string().optional(),
   secretKey: z.string().optional(),
   bucket: z.string().min(1, 'S3 bucket name is required'),
   pathPrefix: z.string().optional(),
-  publicUrl: z.string().url().optional(),
+  publicUrl: z.url().optional(),
   forcePathStyle: z.boolean(),
 });
 

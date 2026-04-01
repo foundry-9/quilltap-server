@@ -54,7 +54,6 @@ export interface PluginScanResult {
 const PLUGINS_DIR = path.join(process.cwd(), 'plugins');
 const PLUGINS_DIST_DIR = path.join(process.cwd(), 'plugins', 'dist');
 const PLUGINS_SITE_DIR = path.join(process.cwd(), 'plugins', 'site');
-const PLUGINS_USERS_DIR = path.join(process.cwd(), 'plugins', 'users');
 const MANIFEST_FILENAME = 'manifest.json';
 
 /**
@@ -257,15 +256,12 @@ async function isPluginDirectory(dirPath: string): Promise<boolean> {
 
 /**
  * Scans plugin directories for all installed plugins
- * Searches in the plugins/dist directory, plugins/site directory, and
- * optionally user-specific plugin directories
+ * Searches in the plugins/dist directory and plugins/site directory
  * @param pluginsDir - Base plugins directory (defaults to ./plugins)
- * @param userId - Optional user ID for scanning user-specific plugins
  * @returns Scan results with loaded plugins and errors
  */
 export async function scanPlugins(
-  pluginsDir: string = PLUGINS_DIR,
-  userId?: string
+  pluginsDir: string = PLUGINS_DIR
 ): Promise<PluginScanResult> {
   const result: PluginScanResult = {
     plugins: [],
@@ -339,10 +335,6 @@ export async function scanPlugins(
         // Check if plugin is enabled by site configuration
         const siteEnabled = isSitePluginEnabled(manifest.name);
         if (!siteEnabled) {
-          logger.debug('Plugin disabled by site configuration', {
-            context: 'scanPlugins',
-            pluginName: manifest.name,
-          });
           continue;
         }
 
@@ -366,7 +358,6 @@ export async function scanPlugins(
         });
       }
     } catch (error) {
-      logger.debug('Failed to scan plugins directory:', { dirPath, error });
     }
   };
 
@@ -379,34 +370,19 @@ export async function scanPlugins(
   // Scan plugins/site directory (site-wide npm-installed plugins)
   await scanDirectory(PLUGINS_SITE_DIR, true);
 
-  // Scan user-specific plugins if userId provided
-  if (userId) {
-    const userPluginsDir = path.join(PLUGINS_USERS_DIR, userId);
-    await scanDirectory(userPluginsDir, true);
-  }
-
-  logger.info('Plugin scan complete', {
-    context: 'scanPlugins',
-    found: result.plugins.length,
-    errors: result.errors.length,
-    userId: userId ? `${userId.substring(0, 8)}...` : undefined,
-  });
-
   return result;
 }
 
 /**
  * Loads a specific plugin by name
- * Searches in plugins/dist, plugins/site, and optionally user-specific directories
+ * Searches in plugins/dist and plugins/site directories
  * @param pluginName - Name of the plugin (directory name)
  * @param pluginsDir - Base plugins directory (defaults to ./plugins)
- * @param userId - Optional user ID for user-specific plugin lookup
  * @returns Loaded plugin or null if not found/invalid
  */
 export async function loadPlugin(
   pluginName: string,
-  pluginsDir: string = PLUGINS_DIR,
-  userId?: string
+  pluginsDir: string = PLUGINS_DIR
 ): Promise<LoadedPlugin | null> {
   // Convert scoped package names to safe directory names for filesystem lookup
   // @quilltap/qtap-plugin-gab-ai -> @quilltap--qtap-plugin-gab-ai
@@ -440,17 +416,12 @@ export async function loadPlugin(
     return null;
   };
 
-  // Search order: dist (bundled) > site > user > top-level (legacy)
+  // Search order: dist (bundled) > site > top-level (legacy)
   const searchPaths: Array<{ path: string; isNpm: boolean }> = [
     { path: PLUGINS_DIST_DIR, isNpm: false },
     { path: PLUGINS_SITE_DIR, isNpm: true },
+    { path: pluginsDir, isNpm: false },
   ];
-
-  if (userId) {
-    searchPaths.push({ path: path.join(PLUGINS_USERS_DIR, userId), isNpm: true });
-  }
-
-  searchPaths.push({ path: pluginsDir, isNpm: false });
 
   let foundPath: { pluginPath: string; manifestPath: string } | null = null;
 
@@ -578,6 +549,5 @@ export {
   PLUGINS_DIR,
   PLUGINS_DIST_DIR,
   PLUGINS_SITE_DIR,
-  PLUGINS_USERS_DIR,
   MANIFEST_FILENAME,
 };

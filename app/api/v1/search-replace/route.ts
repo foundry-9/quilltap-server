@@ -17,13 +17,13 @@ import { logger } from '@/lib/logger';
 // Note: 'persona' scope removed - personas are now characters with controlledBy: 'user'
 const searchReplaceSchema = z.object({
   scope: z.discriminatedUnion('type', [
-    z.object({ type: z.literal('chat'), chatId: z.string().uuid() }),
-    z.object({ type: z.literal('character'), characterId: z.string().uuid() }),
+    z.object({ type: z.literal('chat'), chatId: z.uuid() }),
+    z.object({ type: z.literal('character'), characterId: z.uuid() }),
   ]),
   searchText: z.string().min(1, 'Search text is required'),
   replaceText: z.string(),
-  includeMessages: z.boolean().default(true),
-  includeMemories: z.boolean().default(true),
+  includeMessages: z.boolean().prefault(true),
+  includeMemories: z.boolean().prefault(true),
 });
 
 /**
@@ -42,7 +42,7 @@ async function handleExecute(
 
   if (!parseResult.success) {
     logger.warn('Invalid search-replace execute request', {
-      errors: parseResult.error.errors,
+      errors: parseResult.error.issues,
     });
     return badRequest('Invalid request');
   }
@@ -68,7 +68,6 @@ async function handlePreview(
   request: NextRequest,
   ctx: AuthenticatedContext
 ): Promise<NextResponse> {
-  logger.debug('POST /api/v1/search-replace?action=preview - Getting preview');
 
   // Parse and validate request body
   const body = await request.json();
@@ -76,7 +75,7 @@ async function handlePreview(
 
   if (!parseResult.success) {
     logger.warn('Invalid search-replace preview request', {
-      errors: parseResult.error.errors,
+      errors: parseResult.error.issues,
     });
     return badRequest('Invalid request');
   }
@@ -89,7 +88,6 @@ async function handlePreview(
     ctx.user.id
   );
 
-  logger.debug('Search-replace preview complete', preview);
 
   return NextResponse.json(preview);
 }

@@ -10,8 +10,8 @@ import { SectionHeader } from '@/components/ui/SectionHeader'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { DeleteConfirmPopover } from '@/components/ui/DeleteConfirmPopover'
 import { MissingApiKeyBadge } from '@/components/ui/MissingApiKeyBadge'
+import { SettingsCard, SettingsCardBadge, SettingsCardMetadata } from '@/components/ui/SettingsCard'
 
 interface ApiKey {
   id: string
@@ -163,7 +163,7 @@ export default function ImageProfilesTab() {
       )}
 
       {/* Profiles List */}
-      <div className="space-y-3">
+      <div className="qt-card-grid-auto">
         {profiles.length === 0 ? (
           <EmptyState
             title="No image profiles yet"
@@ -174,88 +174,63 @@ export default function ImageProfilesTab() {
             }}
           />
         ) : (
-          profiles.slice().sort((a, b) => a.name.localeCompare(b.name)).map(profile => (
-            <div
-              key={profile.id}
-              className="border border-border rounded-lg p-4 hover:border-border/80 transition bg-card"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="qt-text-primary">{profile.name}</h3>
-                    <ProviderBadge provider={profile.provider} />
-                    {profile.isDefault && (
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
-                        Default
-                      </span>
-                    )}
-                    {/* All image generation providers require API keys */}
-                    {!profile.apiKey && <MissingApiKeyBadge />}
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 qt-text-small">
-                    <div>
-                      <p className="qt-text-xs uppercase">Model</p>
-                      <p className="font-mono text-sm text-foreground">{profile.modelName}</p>
-                    </div>
-                    {profile.apiKey && (
-                      <div>
-                        <p className="qt-text-xs uppercase">API Key</p>
-                        <p className="text-sm text-foreground">{profile.apiKey.label}</p>
-                      </div>
-                    )}
-                  </div>
+          profiles.slice().sort((a, b) => a.name.localeCompare(b.name)).map(profile => {
+            // Build badges array
+            const badges: SettingsCardBadge[] = []
+            if (profile.isDefault) {
+              badges.push({ text: 'Default', variant: 'success' })
+            }
 
-                  {/* Parameters Display */}
-                  {Object.keys(profile.parameters).length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-border">
-                      <p className="qt-text-xs uppercase mb-2">Parameters</p>
-                      <div className="space-y-1">
-                        {Object.entries(profile.parameters).map(([key, value]) => (
-                          <div key={key} className="qt-text-xs">
-                            <span className="font-mono">{key}:</span>{' '}
-                            <span className="text-foreground">
-                              {typeof value === 'string' ? value : JSON.stringify(value)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+            // Build metadata array
+            const metadata: SettingsCardMetadata[] = [
+              { label: 'Model', value: <span className="font-mono text-sm text-foreground">{profile.modelName}</span> },
+            ]
+            if (profile.apiKey) {
+              metadata.push({ label: 'API Key', value: profile.apiKey.label })
+            }
+
+            return (
+              <SettingsCard
+                key={profile.id}
+                title={profile.name}
+                badges={badges}
+                metadata={metadata}
+                actions={[
+                  { label: 'Edit', onClick: () => handleOpenModal(profile), variant: 'secondary' },
+                ]}
+                deleteConfig={{
+                  isConfirming: deleteConfirming === profile.id,
+                  onConfirmChange: (confirming) => setDeleteConfirming(confirming ? profile.id : null),
+                  onConfirm: () => handleDelete(profile.id),
+                  message: 'Delete this profile?',
+                  isDeleting: deletingProfile,
+                }}
+              >
+                {/* Provider badge and missing API key warning */}
+                <div className="flex items-center gap-2 mt-1 mb-2">
+                  <ProviderBadge provider={profile.provider} />
+                  {!profile.apiKey && <MissingApiKeyBadge />}
                 </div>
 
-                {/* Actions */}
-                <div className="flex gap-2 ml-4">
-                  <button
-                    onClick={() => handleOpenModal(profile)}
-                    className="px-3 py-1 text-sm text-primary hover:bg-accent rounded border border-border/50 hover:border-border focus:outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    Edit
-                  </button>
-                  <div className="relative">
-                    <button
-                      onClick={() => {
-                        setDeleteConfirming(deleteConfirming === profile.id ? null : profile.id)
-                      }}
-                      className="px-3 py-1 text-sm text-destructive hover:bg-destructive/10 rounded border border-border/50 hover:border-destructive/30 focus:outline-none focus:ring-2 focus:ring-ring"
-                    >
-                      Delete
-                    </button>
-
-                    {/* Delete Confirmation Popover */}
-                    <DeleteConfirmPopover
-                      isOpen={deleteConfirming === profile.id}
-                      isDeleting={deletingProfile}
-                      message="Delete this profile?"
-                      onCancel={() => {
-                        setDeleteConfirming(null)
-                      }}
-                      onConfirm={() => handleDelete(profile.id)}
-                    />
+                {/* Parameters Display */}
+                {Object.keys(profile.parameters).length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-border">
+                    <p className="qt-text-xs uppercase mb-2">Parameters</p>
+                    <div className="space-y-1">
+                      {Object.entries(profile.parameters).map(([key, value]) => (
+                        <div key={key} className="qt-text-xs">
+                          <span className="font-mono">{key}:</span>{' '}
+                          <span className="text-foreground">
+                            {typeof value === 'string' ? value : JSON.stringify(value)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              </div>
-            </div>
-          ))
+                )}
+              </SettingsCard>
+            )
+          })
         )}
       </div>
 

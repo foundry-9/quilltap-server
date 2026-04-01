@@ -33,16 +33,39 @@ export interface ToolRegistryState {
 }
 
 // ============================================================================
+// GLOBAL STATE PERSISTENCE
+// ============================================================================
+
+// Extend globalThis type for our tool registry state
+// This ensures state persists across Next.js hot module reloads in development
+declare global {
+  var __quilltapToolRegistryState: ToolRegistryState | undefined;
+}
+
+/**
+ * Get or create the global registry state
+ * Using global ensures state persists across Next.js module reloads
+ */
+function getGlobalState(): ToolRegistryState {
+  if (!global.__quilltapToolRegistryState) {
+    global.__quilltapToolRegistryState = {
+      initialized: false,
+      plugins: new Map(),
+      errors: new Map(),
+      lastInitTime: null,
+    };
+  }
+  return global.__quilltapToolRegistryState;
+}
+
+// ============================================================================
 // REGISTRY SINGLETON
 // ============================================================================
 
 class ToolRegistry {
-  private state: ToolRegistryState = {
-    initialized: false,
-    plugins: new Map(),
-    errors: new Map(),
-    lastInitTime: null,
-  };
+  private get state(): ToolRegistryState {
+    return getGlobalState();
+  }
 
   private logger = logger.child({
     module: 'tool-registry',
@@ -76,13 +99,6 @@ class ToolRegistry {
     }
 
     this.state.plugins.set(pluginName, plugin);
-    this.logger.debug('Plugin registered', {
-      name: pluginName,
-      displayName: plugin.metadata.displayName,
-      hasNewPattern,
-      hasLegacyMultiTool,
-      hasLegacySingleTool,
-    });
   }
 
   /**
@@ -225,18 +241,11 @@ class ToolRegistry {
 
       // Check if plugin is configured (if it requires configuration)
       if (plugin.isConfigured && !plugin.isConfigured(config)) {
-        this.logger.debug('Plugin not configured, skipping', { pluginName });
         continue;
       }
 
       try {
         const pluginTools = await this.getPluginToolDefinitions(plugin, config);
-
-        this.logger.debug('Got tool definitions from plugin', {
-          pluginName,
-          toolCount: pluginTools.length,
-          tools: pluginTools.map(t => t.function.name),
-        });
 
         tools.push(...pluginTools);
       } catch (error) {
@@ -332,12 +341,6 @@ class ToolRegistry {
 
     const { plugin, config } = found;
 
-    this.logger.debug('Executing tool', {
-      toolName,
-      pluginName: plugin.metadata.toolName,
-      inputKeys: Object.keys(input),
-    });
-
     // Validate input
     if (!plugin.validateInput(input)) {
       const error = `Invalid input for tool '${toolName}'`;
@@ -355,12 +358,6 @@ class ToolRegistry {
         toolConfig: config,
       };
       const result = await this.executePluginTool(plugin, toolName, input, pluginContext);
-
-      this.logger.debug('Tool execution completed', {
-        toolName,
-        pluginName: plugin.metadata.toolName,
-        success: result.success,
-      });
 
       return result;
     } catch (error) {
@@ -424,10 +421,6 @@ class ToolRegistry {
    * @param plugins Array of tool plugins to register
    */
   async initialize(plugins: ToolPlugin[]): Promise<void> {
-    this.logger.info('Initializing tool registry', {
-      pluginCount: plugins.length,
-    });
-
     // Clear existing state
     this.state.plugins.clear();
     this.state.errors.clear();
@@ -449,11 +442,6 @@ class ToolRegistry {
 
     this.state.initialized = true;
     this.state.lastInitTime = new Date();
-
-    this.logger.info('Tool registry initialized', {
-      registered: this.state.plugins.size,
-      errors: this.state.errors.size,
-    });
   }
 
   /**
@@ -498,11 +486,13 @@ class ToolRegistry {
    * @internal
    */
   reset(): void {
-    this.state.initialized = false;
-    this.state.plugins.clear();
-    this.state.errors.clear();
-    this.state.lastInitTime = null;
-    this.logger.debug('Tool registry reset');
+    // Reset the global state entirely
+    global.__quilltapToolRegistryState = {
+      initialized: false,
+      plugins: new Map(),
+      errors: new Map(),
+      lastInitTime: null,
+    };
   }
 
   /**

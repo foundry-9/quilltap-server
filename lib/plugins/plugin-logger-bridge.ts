@@ -43,7 +43,6 @@ function createPluginChildLogger(
 
   return {
     debug: (message: string, context?: LogContext) => {
-      logger.debug(message, { ...baseContext, ...context });
     },
 
     info: (message: string, context?: LogContext) => {
@@ -84,10 +83,6 @@ function pluginLoggerFactory(pluginName: string): PluginLoggerWithChild {
 export function injectPluginLoggerFactory(): void {
   // Use the same global key as plugin-utils
   (globalThis as Record<string, unknown>).__quilltap_logger_factory = pluginLoggerFactory;
-
-  logger.debug('Plugin logger factory injected into global namespace', {
-    context: 'plugin-logger-bridge',
-  });
 }
 
 /**
@@ -97,8 +92,4 @@ export function injectPluginLoggerFactory(): void {
  */
 export function clearPluginLoggerFactory(): void {
   (globalThis as Record<string, unknown>).__quilltap_logger_factory = undefined;
-
-  logger.debug('Plugin logger factory cleared from global namespace', {
-    context: 'plugin-logger-bridge',
-  });
 }

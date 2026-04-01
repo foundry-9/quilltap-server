@@ -36,14 +36,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string; descId: string
 
       if (!description) {
         return notFound('Description');
-      }
-
-      logger.debug('[Characters v1] Fetched description', {
-        characterId: id,
-        descriptionId: descId,
-      });
-
-      return NextResponse.json({ description });
+      }return NextResponse.json({ description });
     } catch (error) {
       logger.error('[Characters v1] Error fetching character description', { characterId: id, descriptionId: descId }, error instanceof Error ? error : undefined);
       return serverError('Failed to fetch character description');

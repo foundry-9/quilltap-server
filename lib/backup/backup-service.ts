@@ -1,7 +1,7 @@
 /**
  * Backup Service
  *
- * Creates complete user data backups by collecting all user data from MongoDB
+ * Creates complete user data backups by collecting all user data from the database
  * and S3, then packaging it into a ZIP archive.
  */
 
@@ -9,7 +9,7 @@ import archiver from 'archiver';
 import { createHash, randomUUID } from 'crypto';
 import { logger } from '@/lib/logger';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
-import { getRepositories } from '@/lib/mongodb/repositories';
+import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import type { BackupManifest, BackupData, BackupInfo, ChatWithMessages } from './types';
 import type { ChatEvent, ProviderModel } from '@/lib/schemas/types';
@@ -20,11 +20,9 @@ const APP_VERSION = process.env.npm_package_version || '2.0.0';
 const moduleLogger = logger.child({ module: 'backup:backup-service' });
 
 /**
- * Collects all user data from MongoDB repositories
+ * Collects all user data from database repositories
  */
 async function collectUserData(userId: string): Promise<Omit<BackupData, 'manifest'>> {
-  moduleLogger.debug('Collecting user data', { userId });
-
   const repos = getUserRepositories(userId);
   const globalRepos = getRepositories();
 
@@ -41,6 +39,7 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     roleplayTemplates,
     providerModels,
     projects,
+    llmLogs,
   ] = await Promise.all([
     repos.characters.findAll(),
     repos.chats.findAll(),
@@ -56,23 +55,14 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     globalRepos.providerModels.findAll(),
     // Get projects
     repos.projects.findAll(),
+    // Get LLM logs
+    repos.llmLogs.findAll(10000), // High limit to get all user logs
   ]);
 
-  moduleLogger.debug('Collected base entities', {
-    userId,
-    characters: characters.length,
-    chats: chatMetadatas.length,
-    tags: tags.length,
-    connectionProfiles: connectionProfiles.length,
-    imageProfiles: imageProfiles.length,
-    embeddingProfiles: embeddingProfiles.length,
-    files: files.length,
-    promptTemplates: promptTemplates.length,
-    roleplayTemplates: roleplayTemplates.length,
-    providerModels: providerModels.length,
-    projects: projects.length,
-  });
-
+  // Exclude backup files from the file list - we don't want to back up old backups
+  const filteredFiles = files.filter(
+    (file) => file.category !== 'BACKUP' && file.folderPath !== '/backups'
+  );
   // Collect messages for each chat
   const chats: ChatWithMessages[] = await Promise.all(
     chatMetadatas.map(async (chat) => {
@@ -93,13 +83,6 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     characters.map((char) => repos.memories.findByCharacterId(char.id))
   );
   const memories = memoriesArrays.flat();
-
-  moduleLogger.debug('Collected messages and memories', {
-    userId,
-    totalMessages: chats.reduce((sum, chat) => sum + chat.messages.length, 0),
-    totalMemories: memories.length,
-  });
-
   // Strip encrypted API key data from connection profiles for security
   // API keys are encrypted with user-specific keys and can't be restored to another account
   const sanitizedConnectionProfiles = connectionProfiles.map((profile) => ({
@@ -115,11 +98,12 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     imageProfiles,
     embeddingProfiles,
     memories,
-    files,
+    files: filteredFiles,
     promptTemplates,
     roleplayTemplates,
     providerModels,
     projects,
+    llmLogs,
   };
 }
 
@@ -148,6 +132,7 @@ function createManifest(userId: string, data: Omit<BackupData, 'manifest'>): Bac
       roleplayTemplates: data.roleplayTemplates.length,
       providerModels: data.providerModels.length,
       projects: data.projects.length,
+      llmLogs: data.llmLogs.length,
     },
   };
 }
@@ -169,9 +154,6 @@ export async function createBackup(userId: string): Promise<{
     manifest,
     ...data,
   };
-
-  moduleLogger.debug('Creating ZIP archive', { userId, manifest });
-
   // Create ZIP archive
   const archive = archiver('zip', {
     zlib: { level: 9 }, // Maximum compression
@@ -240,13 +222,11 @@ export async function createBackup(userId: string): Promise<{
   archive.append(JSON.stringify(data.projects, null, 2), {
     name: `${folderName}/data/projects.json`,
   });
+  archive.append(JSON.stringify(data.llmLogs, null, 2), {
+    name: `${folderName}/data/llm-logs.json`,
+  });
 
   // Add actual files from storage
-  moduleLogger.debug('Adding files from storage', { userId, fileCount: data.files.length });
-  moduleLogger.debug('Added provider models to archive', {
-    userId,
-    providerModelCount: data.providerModels.length,
-  });
 
   for (const file of data.files) {
     if (file.storageKey) {
@@ -254,10 +234,6 @@ export async function createBackup(userId: string): Promise<{
         const fileBuffer = await fileStorageManager.downloadFile(file);
         archive.append(fileBuffer, {
           name: `${folderName}/files/${file.category}/${file.id}_${file.originalFilename}`,
-        });
-        moduleLogger.debug('Added file to backup', {
-          fileId: file.id,
-          filename: file.originalFilename,
         });
       } catch (error) {
         moduleLogger.warn('Failed to download file for backup, skipping', {
@@ -273,7 +249,6 @@ export async function createBackup(userId: string): Promise<{
   // Finalize and wait for the archive to complete
   await new Promise<void>((resolve, reject) => {
     archive.on('end', () => {
-      moduleLogger.debug('Archive stream ended', { userId });
       resolve();
     });
     archive.on('error', reject);
@@ -302,9 +277,6 @@ export async function saveBackupToS3(
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const fileId = randomUUID();
   const filename = customFilename || `backup-${timestamp}.zip`;
-
-  moduleLogger.debug('Saving backup to storage', { userId, filename, size: zipBuffer.length });
-
   // Upload to S3 storage
   const result = await fileStorageManager.uploadFile({
     userId,
@@ -318,7 +290,7 @@ export async function saveBackupToS3(
   // Calculate SHA256 hash
   const sha256 = createHash('sha256').update(new Uint8Array(zipBuffer)).digest('hex');
 
-  // Create file metadata entry in MongoDB so backups appear in listings
+  // Create file metadata entry in the database so backups appear in listings
   // Note: userId is automatically added by the user-scoped repository
   const repos = getUserRepositories(userId);
   await repos.files.create(
@@ -352,8 +324,6 @@ export async function saveBackupToS3(
  * Lists all backups stored in storage for a user
  */
 export async function listS3Backups(userId: string): Promise<BackupInfo[]> {
-  moduleLogger.debug('Listing user backups', { userId });
-
   const repos = getUserRepositories(userId);
 
   try {
@@ -378,9 +348,6 @@ export async function listS3Backups(userId: string): Promise<BackupInfo[]> {
 
     // Sort by creation date, newest first
     backups.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-
-    moduleLogger.debug('Listed user backups', { userId, count: backups.length });
-
     return backups;
   } catch (error) {
     moduleLogger.warn('Failed to list backups', {
@@ -398,8 +365,6 @@ export async function listS3Backups(userId: string): Promise<BackupInfo[]> {
  * @param storageKey - Storage key of the backup file
  */
 export async function downloadBackupFromS3(userId: string, storageKey: string): Promise<Buffer> {
-  moduleLogger.debug('Downloading backup from storage', { userId, storageKey });
-
   const repos = getUserRepositories(userId);
 
   try {
@@ -412,9 +377,6 @@ export async function downloadBackupFromS3(userId: string, storageKey: string): 
     }
 
     const buffer = await fileStorageManager.downloadFile(backupFile);
-
-    moduleLogger.debug('Downloaded backup from storage', { userId, storageKey, size: buffer.length });
-
     return buffer;
   } catch (error) {
     moduleLogger.error('Failed to download backup', {
@@ -433,8 +395,6 @@ export async function downloadBackupFromS3(userId: string, storageKey: string): 
  * @param storageKey - Storage key of the backup file
  */
 export async function deleteBackupFromS3(userId: string, storageKey: string): Promise<void> {
-  moduleLogger.debug('Deleting backup from storage', { userId, storageKey });
-
   const repos = getUserRepositories(userId);
 
   try {

@@ -100,8 +100,8 @@ const DEFAULT_RENDERING_PATTERNS: RenderingPattern[] = [
   { pattern: '(?<!\\*)\\*[^*]+\\*(?!\\*)', className: 'qt-chat-narration' },
   // Narration: [actions] - square brackets (not links)
   { pattern: '\\[[^\\]]+\\](?!\\()', className: 'qt-chat-narration' },
-  // Internal monologue: {thoughts}
-  { pattern: '\\{[^}]+\\}', className: 'qt-chat-inner-monologue' },
+  // Internal monologue: {thoughts} - excludes {{template}} variables
+  { pattern: '(?<!\\{)\\{[^{}]+\\}(?!\\})', className: 'qt-chat-inner-monologue' },
 ]
 
 /**
@@ -174,8 +174,9 @@ function escapeMarkdownInBrackets(content: string, patterns: RenderingPattern[])
     }
 
     // Escape inside {...} if brace monologue is in patterns
+    // Excludes {{template}} variables using lookbehind/lookahead
     if (hasBraceMonologue) {
-      result = result.replace(/\{([^}]+)\}/g, (match, inner) => {
+      result = result.replace(/(?<!\{)\{([^{}]+)\}(?!\})/g, (match, inner) => {
         const escaped = inner.replace(markdownChars, '\\$1')
         return `{${escaped}}`
       })

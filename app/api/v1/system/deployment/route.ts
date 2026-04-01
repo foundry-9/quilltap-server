@@ -13,12 +13,7 @@ import { logger } from '@/lib/logger';
  * Returns deployment information including whether this is a user-managed (self-hosted) deployment.
  * This endpoint is unauthenticated as it's needed during app initialization.
  */
-export async function GET() {
-  logger.debug('[System Deployment v1] Deployment info requested', {
-    isUserManaged,
-  });
-
-  return NextResponse.json({
+export async function GET() {return NextResponse.json({
     isUserManaged,
     // isHosted is the inverse - true if this is a hosted/cloud deployment
     isHosted: !isUserManaged,

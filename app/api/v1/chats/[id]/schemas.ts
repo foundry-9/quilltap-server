@@ -13,13 +13,13 @@ export const updateChatSchema = z.object({
   isPaused: z.boolean().optional(),
   isManuallyRenamed: z.boolean().optional(),
   documentEditingMode: z.boolean().optional(),
-  projectId: z.string().uuid().nullish(),
+  projectId: z.uuid().nullish(),
 });
 
 export const updateParticipantSchema = z.object({
-  participantId: z.string().uuid(),
-  connectionProfileId: z.string().uuid().optional(),
-  imageProfileId: z.string().uuid().nullish(),
+  participantId: z.uuid(),
+  connectionProfileId: z.uuid().optional(),
+  imageProfileId: z.uuid().nullish(),
   systemPromptOverride: z.string().nullish(),
   displayOrder: z.number().optional(),
   isActive: z.boolean().optional(),
@@ -30,9 +30,9 @@ export const updateParticipantSchema = z.object({
 
 export const addParticipantSchema = z.object({
   type: z.literal('CHARACTER'),
-  characterId: z.string().uuid(),
-  connectionProfileId: z.string().uuid().optional(),
-  imageProfileId: z.string().uuid().nullish(),
+  characterId: z.uuid(),
+  connectionProfileId: z.uuid().optional(),
+  imageProfileId: z.uuid().nullish(),
   systemPromptOverride: z.string().nullish(),
   displayOrder: z.number().optional(),
   hasHistoryAccess: z.boolean().optional(),
@@ -41,51 +41,51 @@ export const addParticipantSchema = z.object({
 });
 
 export const removeParticipantSchema = z.object({
-  participantId: z.string().uuid(),
+  participantId: z.uuid(),
 });
 
 export const chatUpdateRequestSchema = z.object({
   chat: updateChatSchema.optional(),
   updateParticipant: updateParticipantSchema.optional(),
   addParticipant: addParticipantSchema.optional(),
-  removeParticipantId: z.string().uuid().optional(),
+  removeParticipantId: z.uuid().optional(),
   roleplayTemplateId: z.string().nullish(),
 });
 
 export const addTagSchema = z.object({
-  tagId: z.string().uuid(),
+  tagId: z.uuid(),
 });
 
 export const removeTagSchema = z.object({
-  tagId: z.string().uuid(),
+  tagId: z.uuid(),
 });
 
 export const impersonateSchema = z.object({
-  participantId: z.string().uuid(),
+  participantId: z.uuid(),
 });
 
 export const stopImpersonateSchema = z.object({
-  participantId: z.string().uuid(),
-  newConnectionProfileId: z.string().uuid().optional(),
+  participantId: z.uuid(),
+  newConnectionProfileId: z.uuid().optional(),
 });
 
 export const setActiveSpeakerSchema = z.object({
-  participantId: z.string().uuid(),
+  participantId: z.uuid(),
 });
 
 export const turnActionSchema = z.object({
   action: z.enum(['nudge', 'queue', 'dequeue']),
-  participantId: z.string().uuid(),
+  participantId: z.uuid(),
 });
 
 export const persistTurnSchema = z.object({
-  lastTurnParticipantId: z.string().uuid().nullable(),
+  lastTurnParticipantId: z.uuid().nullable(),
 });
 
 export const bulkReattributeSchema = z.object({
-  sourceParticipantId: z.string().uuid().nullable(),
-  targetParticipantId: z.string().uuid(),
-  roleFilter: z.enum(['ASSISTANT', 'USER', 'both']).default('both'),
+  sourceParticipantId: z.uuid().nullable(),
+  targetParticipantId: z.uuid(),
+  roleFilter: z.enum(['ASSISTANT', 'USER', 'both']).prefault('both'),
 });
 
 export const avatarOverrideSchema = z.object({
@@ -99,7 +99,7 @@ export const removeAvatarSchema = z.object({
 
 export const toolResultSchema = z.object({
   tool: z.string(),
-  initiatedBy: z.enum(['user', 'character']).default('user'),
+  initiatedBy: z.enum(['user', 'character']).prefault('user'),
   prompt: z.string().optional(),
   result: z.any().optional(),
   images: z.array(z.object({

@@ -486,10 +486,6 @@ async function collectImageProviders(): Promise<ImageProviderInfo[]> {
     );
 
     if (cachedModels.length > 0) {
-      moduleLogger.debug('Using cached image models from database', {
-        provider: provider.metadata.providerName,
-        modelCount: cachedModels.length,
-      });
       models = cachedModels.map(m => m.modelId);
     } else {
       // Fall back to static image generation models
@@ -541,10 +537,6 @@ async function collectEmbeddingProviders(): Promise<EmbeddingProviderInfo[]> {
     );
 
     if (cachedModels.length > 0) {
-      moduleLogger.debug('Using cached embedding models from database', {
-        provider: provider.metadata.providerName,
-        modelCount: cachedModels.length,
-      });
       models = cachedModels.map(m => m.modelId);
     } else {
       // Fall back to static embedding models

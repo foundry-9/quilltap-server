@@ -135,7 +135,7 @@ The manifest is validated at runtime using Zod schemas. Invalid manifests will p
   - `UI_COMPONENTS` - React components
   - `DATA_STORAGE` - Database tables/storage
   - `API_ROUTES` - API endpoints
-  - `AUTH_METHODS` - Authentication methods
+  - `AUTH_METHODS` - ~~Authentication methods~~ (deprecated, single-user mode only)
   - `WEBHOOKS` - Webhook handlers
   - `BACKGROUND_TASKS` - Background jobs
   - `CUSTOM_MODELS` - Data models

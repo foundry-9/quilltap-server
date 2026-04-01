@@ -12,7 +12,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { pluginRegistry } from '@/lib/plugins/registry';
 import { initializePlugins } from '@/lib/startup/plugin-initialization';
-import { installPluginFromNpm, uninstallPlugin, type PluginScope } from '@/lib/plugins/installer';
+import { installPluginFromNpm, uninstallPlugin } from '@/lib/plugins/installer';
+import { checkForUpdatesWithMetadata } from '@/lib/plugins/version-checker';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { badRequest, serverError, validationError } from '@/lib/api/responses';
@@ -23,18 +24,16 @@ import { badRequest, serverError, validationError } from '@/lib/api/responses';
 
 const searchPluginsSchema = z.object({
   query: z.string().min(1, 'Search query is required'),
-  type: z.enum(['provider', 'theme', 'tool', 'all']).optional().default('all'),
+  type: z.enum(['provider', 'theme', 'tool', 'all']).optional().prefault('all'),
 });
 
 const installPluginSchema = z.object({
   packageName: z.string().min(1, 'Package name is required'),
   version: z.string().optional(),
-  scope: z.enum(['site', 'user']).optional().default('user'),
 });
 
 const uninstallPluginSchema = z.object({
   packageName: z.string().min(1, 'Package name is required'),
-  scope: z.enum(['site', 'user']).optional().default('user'),
 });
 
 type SearchPluginsInput = z.infer<typeof searchPluginsSchema>;
@@ -82,15 +81,7 @@ async function searchNpm(searchText: string): Promise<any[]> {
 async function handleSearch(req: NextRequest, context: any) {
   try {
     const body = await req.json();
-    const validatedData = searchPluginsSchema.parse(body);
-
-    logger.debug('[Plugins v1] POST search', {
-      userId: context.user.id,
-      query: validatedData.query,
-      type: validatedData.type,
-    });
-
-    // Perform multiple searches to find both scoped and unscoped plugins
+    const validatedData = searchPluginsSchema.parse(body);// Perform multiple searches to find both scoped and unscoped plugins
     const query = validatedData.query.trim();
     const searchQueries = query
       ? [
@@ -130,20 +121,12 @@ async function handleSearch(req: NextRequest, context: any) {
         updated: obj.package.date || '',
         score: obj.score?.final || 0,
         links: obj.package.links,
-      }));
-
-    logger.debug('[Plugins v1] Search results returned', {
-      userId: context.user.id,
-      resultCount: plugins.length,
-    });
-
-    return NextResponse.json({
+      }));return NextResponse.json({
       results: plugins,
       count: plugins.length,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      logger.debug('[Plugins v1] Validation error on search', { errors: error.errors });
       return validationError(error);
     }
 
@@ -165,15 +148,10 @@ async function handleInstall(req: NextRequest, context: any) {
       userId: context.user.id,
       packageName: validatedData.packageName,
       version: validatedData.version,
-      scope: validatedData.scope,
     });
 
     // Call the actual install function
-    const result = await installPluginFromNpm(
-      validatedData.packageName,
-      validatedData.scope as PluginScope,
-      validatedData.scope === 'user' ? context.user.id : undefined
-    );
+    const result = await installPluginFromNpm(validatedData.packageName);
 
     if (!result.success) {
       logger.warn('[Plugins v1] Plugin install failed', {
@@ -187,7 +165,6 @@ async function handleInstall(req: NextRequest, context: any) {
     logger.info('[Plugins v1] Plugin installed successfully', {
       userId: context.user.id,
       packageName: validatedData.packageName,
-      scope: validatedData.scope,
     });
 
     // Reinitialize plugin system to reflect changes
@@ -207,7 +184,6 @@ async function handleInstall(req: NextRequest, context: any) {
     );
   } catch (error) {
     if (error instanceof z.ZodError) {
-      logger.debug('[Plugins v1] Validation error on install', { errors: error.errors });
       return validationError(error);
     }
 
@@ -228,15 +204,10 @@ async function handleUninstall(req: NextRequest, context: any) {
     logger.info('[Plugins v1] POST uninstall', {
       userId: context.user.id,
       packageName: validatedData.packageName,
-      scope: validatedData.scope,
     });
 
     // Call the actual uninstall function
-    const result = await uninstallPlugin(
-      validatedData.packageName,
-      validatedData.scope as PluginScope,
-      validatedData.scope === 'user' ? context.user.id : undefined
-    );
+    const result = await uninstallPlugin(validatedData.packageName);
 
     if (!result.success) {
       logger.warn('[Plugins v1] Plugin uninstall failed', {
@@ -250,7 +221,6 @@ async function handleUninstall(req: NextRequest, context: any) {
     logger.info('[Plugins v1] Plugin uninstalled successfully', {
       userId: context.user.id,
       packageName: validatedData.packageName,
-      scope: validatedData.scope,
     });
 
     // Reinitialize plugin system to reflect changes
@@ -262,7 +232,6 @@ async function handleUninstall(req: NextRequest, context: any) {
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      logger.debug('[Plugins v1] Validation error on uninstall', { errors: error.errors });
       return validationError(error);
     }
 
@@ -275,73 +244,82 @@ async function handleUninstall(req: NextRequest, context: any) {
   }
 }
 
+/**
+ * Check for available plugin upgrades with enhanced metadata
+ * GET /api/v1/plugins?action=check-upgrades
+ */
+async function handleCheckUpgrades(context: any) {
+  try {
+    logger.info('[Plugins v1] GET check-upgrades', {
+      userId: context.user.id,
+    });
+
+    const upgrades = await checkForUpdatesWithMetadata();
+
+    logger.info('[Plugins v1] Upgrade check complete', {
+      userId: context.user.id,
+      upgradesAvailable: upgrades.length,
+      breakingUpgrades: upgrades.filter(u => !u.isNonBreaking).length,
+    });
+
+    return NextResponse.json({
+      upgrades,
+      lastChecked: new Date().toISOString(),
+      count: upgrades.length,
+    });
+  } catch (error) {
+    logger.error(
+      '[Plugins v1] Error checking for upgrades',
+      { userId: context.user.id },
+      error instanceof Error ? error : undefined
+    );
+    return serverError('Failed to check for plugin upgrades');
+  }
+}
+
 // ============================================================================
 // GET Handler
 // ============================================================================
 
-export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
+export const GET = createAuthenticatedHandler(async (req: NextRequest, context) => {
   try {
-    logger.debug('[Plugins v1] GET list', { userId: user.id });
-
     const { searchParams } = new URL(req.url);
+    const action = searchParams.get('action');
+
+    // Handle action-based requests
+    if (action === 'check-upgrades') {
+      return handleCheckUpgrades(context);
+    }
+
+    // Ensure plugin system is initialized before accessing registry
+    // This handles cases where the API is called before startup initialization completes
+    // or when hot-reloading resets module state in development
+    if (!pluginRegistry.isInitialized()) {
+      await initializePlugins();
+    }
+
     const filter = searchParams.get('filter');
 
-    // Get site/bundled plugins from registry
+    // Get all plugins from registry
     const state = pluginRegistry.exportState();
     const plugins = [...state.plugins];
 
-    // Also scan user-specific plugins
-    const { scanPlugins } = await import('@/lib/plugins/manifest-loader');
-    const userScanResult = await scanPlugins(undefined, user.id);
-    
-    // Add user plugins to the list (filter to only user-scoped ones to avoid duplicates)
-    const userPlugins = userScanResult.plugins
-      .filter(plugin => plugin.pluginPath.includes(`plugins/users/${user.id}`))
-      .map(plugin => ({
-        name: plugin.manifest.name,
-        title: plugin.manifest.title,
-        version: plugin.packageVersion ?? plugin.manifest.version,
-        enabled: plugin.enabled,
-        capabilities: plugin.capabilities,
-        path: plugin.pluginPath,
-        source: plugin.source,
-        scope: 'user' as const,
-        packageName: plugin.packageName,
-        hasConfigSchema: Array.isArray(plugin.manifest.configSchema) && plugin.manifest.configSchema.length > 0,
-      }));
-    
-    const allPlugins = [...plugins, ...userPlugins];
-
     // Apply filter
-    let filteredPlugins = allPlugins;
+    let filteredPlugins = plugins;
     if (filter === 'installed') {
-      filteredPlugins = allPlugins.filter((p: any) => p.enabled);
-      logger.debug('[Plugins v1] Filtered to installed plugins', {
-        userId: user.id,
-        count: filteredPlugins.length,
-      });
+      filteredPlugins = plugins.filter((p: any) => p.enabled);
     }
-
-    // Calculate stats including user plugins
-    const totalPlugins = allPlugins.length;
-    const enabledPlugins = allPlugins.filter((p: any) => p.enabled).length;
-    const stats = {
-      ...state.stats,
-      total: totalPlugins,
-      enabled: enabledPlugins,
-      disabled: totalPlugins - enabledPlugins,
-    };
 
     return NextResponse.json({
       plugins: filteredPlugins,
-      stats,
+      stats: state.stats,
       errors: state.errors,
       count: filteredPlugins.length,
     });
   } catch (error) {
     logger.error(
       '[Plugins v1] Error listing plugins',
-      { userId: user.id },
+      { userId: context.user.id },
       error instanceof Error ? error : undefined
     );
     return serverError('Failed to fetch plugins');
@@ -356,7 +334,6 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, context)
   const { searchParams } = new URL(req.url);
   const action = searchParams.get('action');
 
-  logger.debug('[Plugins v1] POST request', { action, userId: context.user.id });
 
   switch (action) {
     case 'search':

@@ -49,7 +49,6 @@ const PROVIDER_TO_OPENROUTER_SLUG: Partial<Record<Provider, string>> = {
  */
 async function fetchOpenRouterPublicPricing(): Promise<ModelPricing[]> {
   try {
-    logger.debug('Fetching OpenRouter public pricing', { context: 'fetchOpenRouterPublicPricing' })
 
     const response = await fetch('https://openrouter.ai/api/v1/models', {
       method: 'GET',
@@ -87,11 +86,6 @@ async function fetchOpenRouterPublicPricing(): Promise<ModelPricing[]> {
         fetchedAt: new Date().toISOString(),
       })
     }
-
-    logger.debug('Fetched OpenRouter public pricing', {
-      context: 'fetchOpenRouterPublicPricing',
-      modelCount: models.length
-    })
 
     return models
   } catch (error) {
@@ -141,10 +135,7 @@ export async function getOpenRouterPricingForModel(
   // Get the OpenRouter slug for this provider
   const openRouterSlug = PROVIDER_TO_OPENROUTER_SLUG[provider]
   if (!openRouterSlug) {
-    logger.debug('No OpenRouter slug mapping for provider', {
-      context: 'getOpenRouterPricingForModel',
-      provider
-    })
+
     return null
   }
 
@@ -160,14 +151,7 @@ export async function getOpenRouterPricingForModel(
   // Try exact match first
   let match = models.find(m => m.modelId === openRouterModelId)
   if (match) {
-    logger.debug('Found exact OpenRouter pricing match', {
-      context: 'getOpenRouterPricingForModel',
-      provider,
-      modelId,
-      openRouterModelId,
-      promptCostPer1M: match.promptCostPer1M,
-      completionCostPer1M: match.completionCostPer1M,
-    })
+
     return match
   }
 
@@ -180,23 +164,10 @@ export async function getOpenRouterPricingForModel(
   })
 
   if (match) {
-    logger.debug('Found fuzzy OpenRouter pricing match', {
-      context: 'getOpenRouterPricingForModel',
-      provider,
-      modelId,
-      matchedModelId: match.modelId,
-      promptCostPer1M: match.promptCostPer1M,
-      completionCostPer1M: match.completionCostPer1M,
-    })
+
     return match
   }
 
-  logger.debug('No OpenRouter pricing found for model', {
-    context: 'getOpenRouterPricingForModel',
-    provider,
-    modelId,
-    openRouterModelId,
-  })
   return null
 }
 

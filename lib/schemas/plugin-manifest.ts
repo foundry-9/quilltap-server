@@ -76,8 +76,8 @@ export type CSSFramework = z.infer<typeof CSSFrameworkEnum>;
  */
 export const PluginAuthorSchema = z.object({
   name: z.string().min(1).max(100),
-  email: z.string().email().optional(),
-  url: z.string().url().optional(),
+  email: z.email().optional(),
+  url: z.url().optional(),
 });
 
 export type PluginAuthor = z.infer<typeof PluginAuthorSchema>;
@@ -137,7 +137,7 @@ export const HookConfigSchema = z.object({
   /** Hook handler file path (relative to plugin root) */
   handler: z.string(),
   /** Priority (lower = runs first) */
-  priority: z.number().int().min(0).max(100).default(50),
+  priority: z.int().min(0).max(100).default(50),
   /** Whether the hook is enabled */
   enabled: z.boolean().default(true),
 });
@@ -175,7 +175,7 @@ export const UIComponentSchema = z.object({
   /** Where the component can be used */
   slots: z.array(z.string()).optional(),
   /** Props schema (JSON Schema) */
-  propsSchema: z.record(z.unknown()).optional(),
+  propsSchema: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type UIComponent = z.infer<typeof UIComponentSchema>;
@@ -288,7 +288,7 @@ export const ProviderConfigSchema = z.object({
   baseUrlLabel: z.string().min(1).max(100).optional(),
 
   /** Default base URL for the provider (if customizable) */
-  baseUrlDefault: z.string().url().optional(),
+  baseUrlDefault: z.url().optional(),
 
   /** Capabilities supported by this provider */
   capabilities: z.object({
@@ -567,7 +567,7 @@ export type FileBackendConfig = z.infer<typeof FileBackendConfigSchema>;
 /**
  * Complete plugin manifest schema
  */
-export const PluginManifestSchema = z.object({
+export const PluginManifestSchema = z.strictObject({
   // ===== JSON SCHEMA REFERENCE =====
   /** JSON Schema reference (for IDE support) */
   $schema: z.string().optional(),
@@ -595,23 +595,24 @@ export const PluginManifestSchema = z.object({
   main: z.string().default('index.js'),
 
   /** Homepage URL */
-  homepage: z.string().url().optional(),
+  homepage: z.url().optional(),
 
   /** Repository URL */
   repository: z.union([
-    z.string().url(),
-    z.object({
+    z.url(),
+    z.strictObject({
       type: z.string(),
-      url: z.string().url(),
+      url: z.url(),
+      directory: z.string().optional(),
     }),
   ]).optional(),
 
   /** Bug tracker URL */
   bugs: z.union([
-    z.string().url(),
-    z.object({
-      url: z.string().url(),
-      email: z.string().email().optional(),
+    z.url(),
+    z.strictObject({
+      url: z.url(),
+      email: z.email().optional(),
     }),
   ]).optional(),
 
@@ -620,10 +621,10 @@ export const PluginManifestSchema = z.object({
   compatibility: CompatibilitySchema,
 
   /** Dependencies (other plugins required) */
-  requires: z.record(z.string()).optional(),
+  requires: z.record(z.string(), z.string()).optional(),
 
   /** Peer dependencies */
-  peerDependencies: z.record(z.string()).optional(),
+  peerDependencies: z.record(z.string(), z.string()).optional(),
 
   // ===== CAPABILITIES =====
   /** Modern capability flags (preferred over functionality object) */
@@ -660,7 +661,7 @@ export const PluginManifestSchema = z.object({
   configSchema: z.array(ConfigSchemaSchema).default([]).optional(),
 
   /** Default configuration values */
-  defaultConfig: z.record(z.unknown()).default({}).optional(),
+  defaultConfig: z.record(z.string(), z.unknown()).default({}).optional(),
 
   /** Provider configuration (for LLM/service provider plugins) */
   providerConfig: ProviderConfigSchema.optional(),
@@ -682,7 +683,13 @@ export const PluginManifestSchema = z.object({
 
   // ===== SECURITY & PERMISSIONS =====
   /** Permissions required by the plugin */
-  permissions: PermissionsSchema.default({}).optional(),
+  permissions: PermissionsSchema.default({
+    fileSystem: [],
+    network: [],
+    environment: [],
+    database: false,
+    userData: false,
+  }).optional(),
 
   /** Whether the plugin is sandboxed */
   sandboxed: z.boolean().default(true).optional(),
@@ -720,7 +727,7 @@ export const PluginManifestSchema = z.object({
 
   /** Whether this plugin requires a server restart to activate (inferred from capabilities if not set) */
   requiresRestart: z.boolean().optional(),
-}).strict(); // Prevent unknown fields
+}); // Prevent unknown fields
 
 export type PluginManifest = z.infer<typeof PluginManifestSchema>;
 

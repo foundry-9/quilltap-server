@@ -34,6 +34,7 @@ export class FileTransport implements LogTransport {
   private maxFileSize: number;
   private maxFiles: number;
   private fileSizes: Map<string, number> = new Map();
+  private initPromise: Promise<void>;
 
   /**
    * Create a new FileTransport instance
@@ -50,8 +51,8 @@ export class FileTransport implements LogTransport {
     this.maxFileSize = maxFileSize;
     this.maxFiles = maxFiles;
 
-    // Initialize directory and size tracking
-    this.initializeDirectory();
+    // Initialize directory and size tracking - store promise for later awaiting
+    this.initPromise = this.initializeDirectory();
   }
 
   /**
@@ -93,6 +94,9 @@ export class FileTransport implements LogTransport {
    * @param logData The structured log data to write
    */
   async write(logData: LogData): Promise<void> {
+    // Ensure directory is initialized before writing
+    await this.initPromise;
+
     const logString = JSON.stringify(logData);
     const lineWithNewline = logString + '\n';
 

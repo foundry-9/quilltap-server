@@ -83,7 +83,7 @@ function PaletteIcon({ className }: { className?: string }) {
 type PopoutMenu = 'themes' | 'quickHide' | null
 
 export function SidebarFooter() {
-  const { isCollapsed, closeMobile, isMobile } = useSidebar()
+  const { isCollapsed } = useSidebar()
   const quickHide = useQuickHide()
   const theme = useTheme()
   const [openPopout, setOpenPopout] = useState<PopoutMenu>(null)
@@ -117,12 +117,6 @@ export function SidebarFooter() {
   // Check if theme selector should be shown in nav
   const showThemes = mounted && theme.showNavThemeSelector
 
-  const handleItemClick = () => {
-    if (isMobile) {
-      closeMobile()
-    }
-  }
-
   const handleThemeClick = useCallback(() => {
     setOpenPopout(prev => prev === 'themes' ? null : 'themes')
   }, [])
@@ -141,7 +135,6 @@ export function SidebarFooter() {
         <Link
           href="/settings"
           className={`qt-left-sidebar-item ${isCollapsed ? 'justify-center px-0' : ''}`}
-          onClick={handleItemClick}
           title={isCollapsed ? 'Settings' : undefined}
         >
           <SettingsIcon className="qt-left-sidebar-item-icon w-5 h-5" />
@@ -151,7 +144,6 @@ export function SidebarFooter() {
         <Link
           href="/tools"
           className={`qt-left-sidebar-item ${isCollapsed ? 'justify-center px-0' : ''}`}
-          onClick={handleItemClick}
           title={isCollapsed ? 'Tools' : undefined}
         >
           <ToolsIcon className="qt-left-sidebar-item-icon w-5 h-5" />

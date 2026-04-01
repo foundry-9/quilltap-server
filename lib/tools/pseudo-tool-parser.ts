@@ -75,10 +75,7 @@ export function parsePseudoToolCalls(response: string): ParsedPseudoTool[] {
   }
 
   if (results.length > 0) {
-    logger.debug('[PseudoToolParser] Parsed pseudo-tool calls', {
-      count: results.length,
-      tools: results.map(r => ({ name: r.toolName, argLength: r.argument.length })),
-    })
+
   }
 
   return results

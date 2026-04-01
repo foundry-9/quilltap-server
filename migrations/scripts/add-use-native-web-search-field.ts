@@ -8,152 +8,42 @@
  * - allowWebSearch: Controls whether the search_web tool is provided to the LLM
  * - useNativeWebSearch: Controls whether to use the provider's native web search
  *
- * Default is false (tool-only) so existing profiles get the new tool-based behavior.
+ * SQLite only - this field is created as part of the schema.
+ * This migration is now a no-op for SQLite (MongoDB support removed).
  *
  * Migration ID: add-use-native-web-search-field-v1
  */
 
 import type { Migration, MigrationResult } from '../types';
 import { logger } from '../lib/logger';
-import { getMongoDatabase, isMongoDBBackend } from '../lib/mongodb-utils';
-
-/**
- * Check if MongoDB is accessible
- */
-async function isMongoDBAccessible(): Promise<boolean> {
-  try {
-    const db = await getMongoDatabase();
-    await db.command({ ping: 1 });
-    return true;
-  } catch (error) {
-    logger.warn('MongoDB is not accessible for useNativeWebSearch field migration', {
-      context: 'migration.add-use-native-web-search-field',
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return false;
-  }
-}
-
-/**
- * Check if there are profiles without useNativeWebSearch field
- */
-async function hasProfilesNeedingMigration(): Promise<boolean> {
-  try {
-    const db = await getMongoDatabase();
-    const profilesCollection = db.collection('connection_profiles');
-    const count = await profilesCollection.countDocuments({
-      useNativeWebSearch: { $exists: false },
-    });
-    return count > 0;
-  } catch (error) {
-    logger.debug('Error checking profiles for useNativeWebSearch field', {
-      context: 'migration.add-use-native-web-search-field',
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return false;
-  }
-}
 
 /**
  * Add useNativeWebSearch Field Migration
  */
 export const addUseNativeWebSearchFieldMigration: Migration = {
   id: 'add-use-native-web-search-field-v1',
-  description: 'Add useNativeWebSearch field to connection profiles to decouple tool from native web search',
+  description: 'Add useNativeWebSearch field to connection profiles to decouple tool from native web search (SQLite only - no-op)',
   introducedInVersion: '2.7.0',
-  dependsOn: ['migrate-json-to-mongodb-v1'],
+  dependsOn: [],
 
   async shouldRun(): Promise<boolean> {
-    // Only run if MongoDB is enabled
-    if (!isMongoDBBackend()) {
-      logger.debug('MongoDB not enabled, skipping useNativeWebSearch field migration', {
-        context: 'migration.add-use-native-web-search-field',
-      });
-      return false;
-    }
-
-    // Check if MongoDB is accessible
-    if (!(await isMongoDBAccessible())) {
-      logger.debug('MongoDB not accessible, deferring useNativeWebSearch field migration', {
-        context: 'migration.add-use-native-web-search-field',
-      });
-      return false;
-    }
-
-    // Check if there are profiles needing migration
-    const needsRun = await hasProfilesNeedingMigration();
-
-    logger.debug('Checked for useNativeWebSearch field migration need', {
-      context: 'migration.add-use-native-web-search-field',
-      needsRun,
-    });
-
-    return needsRun;
+    // No-op for SQLite (schema created during sqlite-initial-schema migration)
+    return false;
   },
 
   async run(): Promise<MigrationResult> {
     const startTime = Date.now();
-    let profilesUpdated = 0;
 
-    logger.info('Starting useNativeWebSearch field migration', {
+    logger.info('useNativeWebSearch field migration skipped (SQLite only)', {
       context: 'migration.add-use-native-web-search-field',
-    });
-
-    try {
-      const db = await getMongoDatabase();
-
-      // Add useNativeWebSearch field to connection_profiles
-      // Default to false so existing profiles get tool-based web search
-      logger.debug('Adding useNativeWebSearch field to connection_profiles', {
-        context: 'migration.add-use-native-web-search-field',
-      });
-      const profilesCollection = db.collection('connection_profiles');
-      const profilesResult = await profilesCollection.updateMany(
-        { useNativeWebSearch: { $exists: false } },
-        {
-          $set: {
-            useNativeWebSearch: false,
-          },
-        }
-      );
-      profilesUpdated = profilesResult.modifiedCount;
-
-      logger.debug('Connection profiles updated with useNativeWebSearch field', {
-        context: 'migration.add-use-native-web-search-field',
-        count: profilesUpdated,
-      });
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.error('useNativeWebSearch field migration failed', {
-        context: 'migration.add-use-native-web-search-field',
-        error: errorMessage,
-      });
-
-      return {
-        id: 'add-use-native-web-search-field-v1',
-        success: false,
-        itemsAffected: profilesUpdated,
-        message: `Migration failed: ${errorMessage}`,
-        error: errorMessage,
-        durationMs: Date.now() - startTime,
-        timestamp: new Date().toISOString(),
-      };
-    }
-
-    const durationMs = Date.now() - startTime;
-
-    logger.info('useNativeWebSearch field migration completed successfully', {
-      context: 'migration.add-use-native-web-search-field',
-      profilesUpdated,
-      durationMs,
     });
 
     return {
       id: 'add-use-native-web-search-field-v1',
       success: true,
-      itemsAffected: profilesUpdated,
-      message: `Added useNativeWebSearch field to ${profilesUpdated} connection profiles`,
-      durationMs,
+      itemsAffected: 0,
+      message: 'Skipped - SQLite schema includes useNativeWebSearch field',
+      durationMs: Date.now() - startTime,
       timestamp: new Date().toISOString(),
     };
   },

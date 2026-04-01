@@ -53,15 +53,7 @@ export async function GET(
 
     // First segment is plugin name, rest is the font path within the plugin
     const [pluginName, ...fontPathSegments] = pathSegments;
-    const relativeFontPath = fontPathSegments.join('/');
-
-    logger.debug('Font file requested', {
-      context: 'GET /api/themes/fonts',
-      pluginName,
-      relativeFontPath,
-    });
-
-    // Ensure plugin/theme system is initialized
+    const relativeFontPath = fontPathSegments.join('/');// Ensure plugin/theme system is initialized
     if (!isPluginSystemInitialized()) {
       logger.info('Plugin system not initialized, initializing now', {
         context: 'themes-fonts-GET',
@@ -120,18 +112,7 @@ export async function GET(
 
       // Determine MIME type from extension
       const ext = path.extname(fontEntry.filePath).toLowerCase();
-      const mimeType = FONT_MIME_TYPES[ext] || 'application/octet-stream';
-
-      logger.debug('Serving font file', {
-        context: 'GET /api/themes/fonts',
-        themeId: theme.id,
-        fontFamily: fontEntry.family,
-        filePath: fontEntry.filePath,
-        mimeType,
-        size: fontBuffer.length,
-      });
-
-      // Return the font with appropriate headers
+      const mimeType = FONT_MIME_TYPES[ext] || 'application/octet-stream';// Return the font with appropriate headers
       return new NextResponse(new Uint8Array(fontBuffer), {
         status: 200,
         headers: {

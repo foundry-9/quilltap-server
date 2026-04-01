@@ -52,13 +52,6 @@ export function normalizeFolderPath(path: string | undefined | null): string {
   if (normalized === '' || normalized.replace(/\//g, '') === '') {
     return '/';
   }
-
-  logger.debug('Normalized folder path', {
-    context: 'folder-utils',
-    originalPath: path,
-    normalizedPath: normalized,
-  });
-
   return normalized;
 }
 

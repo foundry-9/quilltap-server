@@ -40,18 +40,12 @@ export function useImageActions(
         setTaggingInProgress((prev) => new Set(prev).add(key))
 
         if (isTagged) {
-          // Remove tag - try both CHARACTER and PERSONA for backwards compatibility
-          // First try CHARACTER (the new type)
-          let response = await fetch(`/api/v1/images/${image.id}/tags?tagType=CHARACTER&tagId=${characterId}`, {
-            method: 'DELETE',
+          // Remove tag using v1 action dispatch API
+          const response = await fetch(`/api/v1/images/${image.id}?action=remove-tag`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tagId: characterId }),
           })
-
-          // If CHARACTER tag doesn't exist, try PERSONA (legacy)
-          if (!response.ok) {
-            response = await fetch(`/api/v1/images/${image.id}/tags?tagType=PERSONA&tagId=${characterId}`, {
-              method: 'DELETE',
-            })
-          }
 
           if (!response.ok) {
             const data = await response.json()
@@ -65,8 +59,8 @@ export function useImageActions(
           })
           showSuccessToast('Removed from character gallery')
         } else {
-          // Add tag - always use CHARACTER for new tags
-          const response = await fetch(`/api/v1/images/${image.id}/tags`, {
+          // Add tag using v1 action dispatch API
+          const response = await fetch(`/api/v1/images/${image.id}?action=add-tag`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

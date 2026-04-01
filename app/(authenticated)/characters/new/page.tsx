@@ -142,7 +142,7 @@ export default function NewCharacterPage() {
           ← Back to Characters
         </Link>
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-foreground">Create Character</h1>
+          <h1 className="qt-heading-1">Create Character</h1>
           <button
             type="button"
             onClick={() => setShowWizard(true)}

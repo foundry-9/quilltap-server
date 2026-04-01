@@ -2,7 +2,7 @@
 
 ## Overview
 
-Quilltap requires **MongoDB** for data storage and **S3-compatible storage** for files. For development, you can use Docker Compose with embedded MongoDB and MinIO services. For production, you can use MongoDB Atlas and AWS S3, or self-host both services.
+Quilltap uses **SQLite** for data storage and **S3-compatible storage** for files. SQLite is self-contained and requires no external database services. You only need to configure S3-compatible storage for file uploads.
 
 ## Table of Contents
 
@@ -22,8 +22,8 @@ Quilltap requires **MongoDB** for data storage and **S3-compatible storage** for
 ### Server Requirements
 
 - **Operating System**: Ubuntu 20.04+ or Debian 11+ (recommended)
-- **RAM**: Minimum 2GB, recommended 4GB+ (MongoDB requires additional memory)
-- **Storage**: Minimum 20GB SSD (MongoDB data can grow significantly)
+- **RAM**: Minimum 2GB, recommended 4GB+
+- **Storage**: Minimum 10GB SSD (SQLite database file)
 - **CPU**: 2+ cores recommended
 - **Network**: Public IP address with ports 80 and 443 accessible
 
@@ -32,17 +32,12 @@ Quilltap requires **MongoDB** for data storage and **S3-compatible storage** for
 - Domain name pointing to your server's IP address
 - DNS A record configured (allow 24-48 hours for propagation)
 
-### Database & Storage Requirements
+### Storage Requirements
 
-For self-hosted deployments:
+For file storage, you need S3-compatible storage:
 
-- MongoDB 7+ running locally or in Docker
-- MinIO or compatible S3 service
-
-For cloud/production deployments:
-
-- MongoDB Atlas (free tier available)
-- AWS S3, Google Cloud Storage, or other S3-compatible service
+- For self-hosted deployments: MinIO running locally or in Docker
+- For cloud deployments: AWS S3, Google Cloud Storage, or other S3-compatible service
 
 ### Required Software
 
@@ -141,21 +136,18 @@ GOOGLE_CLIENT_SECRET="your-google-client-secret"
 # Encryption (CRITICAL: back this up securely!)
 ENCRYPTION_MASTER_PEPPER="$(openssl rand -base64 32)"
 
-# MongoDB (REQUIRED)
-MONGODB_URI="mongodb://localhost:27017"
-MONGODB_DATABASE="quilltap"
+# SQLite Database
+# Database file is automatically created and stored in the data directory
+SQLITE_PATH="/app/quilltap/data/quilltap.db"
 
 # S3 Storage (REQUIRED)
-# For embedded MinIO (development):
-S3_MODE="embedded"
-
 # For external S3 (production):
-# S3_MODE="external"
-# S3_ENDPOINT="https://s3.amazonaws.com"  # or your MinIO endpoint
-# S3_REGION="us-east-1"
-# S3_ACCESS_KEY="your-access-key"
-# S3_SECRET_KEY="your-secret-key"
-# S3_BUCKET="quilltap-files"
+S3_MODE="external"
+S3_ENDPOINT="https://s3.amazonaws.com"  # or your MinIO endpoint
+S3_REGION="us-east-1"
+S3_ACCESS_KEY="your-access-key"
+S3_SECRET_KEY="your-secret-key"
+S3_BUCKET="quilltap-files"
 
 # SSL
 DOMAIN="yourdomain.com"
@@ -249,8 +241,7 @@ docker compose -f docker-compose.prod.yml restart nginx
 | `BASE_URL` | Your production domain | `https://yourdomain.com` |
 | `JWT_SECRET` | Secret for JWT session signing (32+ chars) | `$(openssl rand -base64 32)` |
 | `ENCRYPTION_MASTER_PEPPER` | Master encryption key (32+ chars) | `$(openssl rand -base64 32)` |
-| `MONGODB_URI` | MongoDB connection string | `mongodb://localhost:27017` |
-| `MONGODB_DATABASE` | MongoDB database name | `quilltap` |
+| `SQLITE_PATH` | Path to SQLite database file | `/app/quilltap/data/quilltap.db` |
 | `DOMAIN` | Your domain for SSL | `yourdomain.com` |
 | `SSL_EMAIL` | Email for SSL renewal notifications | `admin@yourdomain.com` |
 
@@ -284,21 +275,100 @@ docker compose -f docker-compose.prod.yml restart nginx
 3. **Keep `.env.production` secret** - Never commit to version control
 4. **Restrict file permissions** - `chmod 600 .env.production`
 
+## Plugin Management
+
+### npm-Installed Plugins in Docker
+
+Quilltap supports installing third-party plugins from npm. In Docker deployments, these plugins must be persisted on the host filesystem to survive container restarts.
+
+Both `docker-compose.yml` and `docker-compose.prod.yml` mount the plugin directory:
+
+```yaml
+volumes:
+  - ${QUILLTAP_HOST_DATA_DIR:-~/.quilltap}/plugins/site:/app/plugins/site
+```
+
+This stores plugins at `~/.quilltap/plugins/site` (or your configured data directory) on the host.
+
+### Plugin Directory Structure
+
+```
+~/.quilltap/                     # Host data directory
+├── data/                        # SQLite database
+├── files/                       # User files
+├── logs/                        # Application logs
+└── plugins/
+    └── site/                    # npm-installed plugins
+        ├── qtap-plugin-foo/
+        │   └── node_modules/
+        │       └── qtap-plugin-foo/
+        │           └── manifest.json
+        └── registry.json        # Tracks installed plugins
+```
+
+### Installing Plugins
+
+Plugins can be installed via the Settings → Plugins page in the web UI, or via API:
+
+```bash
+curl -X POST https://yourdomain.com/api/v1/plugins?action=install \
+  -H "Content-Type: application/json" \
+  -d '{"packageName": "qtap-plugin-example"}'
+```
+
+After installing, restart the container to activate the plugin:
+
+```bash
+docker compose -f docker-compose.prod.yml restart app
+```
+
+### Troubleshooting Plugins
+
+If plugins appear to install but don't work:
+
+1. **Check the plugin directory exists on host**:
+   ```bash
+   ls -la ~/.quilltap/plugins/site/
+   ```
+
+2. **Check plugin registry**:
+   ```bash
+   cat ~/.quilltap/plugins/site/registry.json
+   ```
+
+3. **Verify manifest exists**:
+   ```bash
+   cat ~/.quilltap/plugins/site/qtap-plugin-foo/node_modules/qtap-plugin-foo/manifest.json
+   ```
+
+4. **Check container logs for plugin errors**:
+   ```bash
+   docker compose -f docker-compose.prod.yml logs app | grep -i plugin
+   ```
+
+### Plugin Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `SITE_PLUGINS_ENABLED` | Comma-separated plugin IDs, or `all` | `all` |
+| `SITE_PLUGINS_DISABLED` | Comma-separated plugin IDs to disable | (empty) |
+
+Example: Enable all plugins except one:
+```env
+SITE_PLUGINS_ENABLED=all
+SITE_PLUGINS_DISABLED=qtap-plugin-experimental
+```
+
 ## Data Management
 
-All application data is stored in MongoDB and S3-compatible storage:
+Quilltap stores application data in two places:
 
-### MongoDB Collections
+1. **SQLite Database File** - All application data (users, characters, chats, etc.) in a single file
+2. **S3-compatible Storage** - User files and generated images
 
-- `users` - User accounts and authentication
-- `characters` - Character definitions (includes `controlledBy` for LLM/user control)
-- `chats` - Chat metadata, messages, and impersonation state
-- `files` - File metadata (actual files in S3)
-- `tags` - Tag definitions
-- `memories` - Character memory data with inter-character relationships
-- `connectionProfiles` - LLM connection configurations
-- `embeddingProfiles` - Embedding provider configurations
-- `imageProfiles` - Image generation configurations
+### SQLite Database
+
+The database is stored as a single file, typically at `/app/quilltap/data/quilltap.db` in Docker or platform-specific locations for local installations.
 
 ### S3 Storage Structure
 
@@ -309,14 +379,17 @@ Files are stored in S3 with the following structure:
 
 ### Storage Monitoring
 
-For MongoDB:
+For SQLite:
 
 ```bash
-# Check database size
-mongosh quilltap --eval "db.stats()"
+# Check database file size
+ls -lh /app/quilltap/data/quilltap.db
 
-# Check collection sizes
-mongosh quilltap --eval "db.getCollectionNames().forEach(c => print(c + ': ' + db[c].stats().size))"
+# Check database integrity
+sqlite3 /app/quilltap/data/quilltap.db "PRAGMA integrity_check;"
+
+# Check record counts
+sqlite3 /app/quilltap/data/quilltap.db "SELECT COUNT(*) FROM users;"
 ```
 
 For S3/MinIO:
@@ -331,11 +404,11 @@ mc du myminio/quilltap-files
 
 ### Storage Recommendations
 
-- **Small deployment (< 100 users)**: 10-20 GB (MongoDB) + 10-50 GB (S3)
-- **Medium deployment (100-1000 users)**: 50-100 GB (MongoDB) + 100-500 GB (S3)
-- **Large deployment (1000+ users)**: 200+ GB (MongoDB) + 1+ TB (S3)
+- **Small deployment (< 100 users)**: 1-5 GB (SQLite) + 10-50 GB (S3)
+- **Medium deployment (100-1000 users)**: 5-20 GB (SQLite) + 100-500 GB (S3)
+- **Large deployment (1000+ users)**: 20-100 GB (SQLite) + 1+ TB (S3)
 
-Consider using MongoDB Atlas and AWS S3 for easier scaling.
+SQLite deployments require significantly less storage overhead than MongoDB-based deployments.
 
 ## Monitoring
 
@@ -392,22 +465,22 @@ docker compose -f docker-compose.prod.yml \
 
 BACKUP_DIR="/home/quilltap/backups"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-MONGODB_URI="mongodb://localhost:27017/quilltap"
+SQLITE_PATH="/app/quilltap/data/quilltap.db"
 
 # Create backup directory
 mkdir -p "$BACKUP_DIR"
 
-# Backup MongoDB
-mongodump --uri="$MONGODB_URI" --out="$BACKUP_DIR/mongo_$TIMESTAMP"
-tar -czf "$BACKUP_DIR/quilltap_mongo_$TIMESTAMP.tar.gz" \
-  -C "$BACKUP_DIR" "mongo_$TIMESTAMP"
-rm -rf "$BACKUP_DIR/mongo_$TIMESTAMP"
+# Backup SQLite database
+cp "$SQLITE_PATH" "$BACKUP_DIR/quilltap_$TIMESTAMP.db"
+tar -czf "$BACKUP_DIR/quilltap_$TIMESTAMP.db.tar.gz" \
+  -C "$BACKUP_DIR" "quilltap_$TIMESTAMP.db"
+rm "$BACKUP_DIR/quilltap_$TIMESTAMP.db"
 
 # Backup S3 files (if using MinIO locally)
 # mc mirror myminio/quilltap-files "$BACKUP_DIR/s3_$TIMESTAMP"
 
 # Keep only last 7 days
-find "$BACKUP_DIR" -name "quilltap_*.tar.gz" -mtime +7 -delete
+find "$BACKUP_DIR" -name "quilltap_*.db.tar.gz" -mtime +7 -delete
 
 # Log backup
 echo "$(date): Backup completed: $TIMESTAMP" >> "$BACKUP_DIR/backup.log"
@@ -444,13 +517,13 @@ gsutil cp "$BACKUP_FILE" gs://my-backups/quilltap/
 
 ```bash
 # List recent backups
-ls -lh ~/backups/quilltap_*.tar.gz | tail -10
+ls -lh ~/backups/quilltap_*.db.tar.gz | tail -10
 
-# Verify MongoDB backup integrity
-tar -tzf ~/backups/quilltap_mongo_20250120_120000.tar.gz | head
+# Verify SQLite backup integrity
+tar -tzf ~/backups/quilltap_20250120_120000.db.tar.gz | head
 
 # Check backup size
-du -h ~/backups/quilltap_*.tar.gz
+du -h ~/backups/quilltap_*.db.tar.gz
 ```
 
 See [Backup & Restore Guide](BACKUP-RESTORE.md) for detailed procedures.
@@ -517,18 +590,22 @@ docker compose -f docker-compose.prod.yml logs app
 # Common issues:
 # - Port 3000 already in use
 # - ENCRYPTION_MASTER_PEPPER not set
-# - MongoDB not accessible
 # - S3/MinIO not accessible
 # - .env.production missing required variables
+# - SQLite database file not writable
 
-# Check MongoDB connection
-mongosh --eval "db.runCommand('ping')"
+# Check SQLite database accessibility
+ls -l /app/quilltap/data/quilltap.db
+
+# Check SQLite database validity
+sqlite3 /app/quilltap/data/quilltap.db "PRAGMA integrity_check;"
 
 # Check MinIO health (if using embedded)
 curl -f http://localhost:9000/minio/health/ready
 
 # Fix permissions
 chmod 600 .env.production
+chmod 755 /app/quilltap/data
 
 # Restart
 docker compose -f docker-compose.prod.yml restart app
@@ -565,8 +642,11 @@ du -sh data/* | sort -h
 ### Data Not Persisting
 
 ```bash
-# Check MongoDB connection
-mongosh quilltap --eval "db.users.countDocuments()"
+# Check SQLite database is being accessed
+ls -lh /app/quilltap/data/quilltap.db
+
+# Check database contains data
+sqlite3 /app/quilltap/data/quilltap.db "SELECT COUNT(*) FROM users;"
 
 # Check S3 connection
 aws s3 ls s3://quilltap-files/ --endpoint-url http://localhost:9000
@@ -603,9 +683,9 @@ Before going live, verify:
 
 - [ ] SSL certificate is valid (`curl -v https://yourdomain.com`)
 - [ ] All environment variables are set correctly
-- [ ] MongoDB is accessible and has proper authentication
+- [ ] SQLite database file is accessible and writable
 - [ ] S3/MinIO is accessible and bucket exists
-- [ ] MongoDB backup is scheduled
+- [ ] SQLite database backup is scheduled
 - [ ] S3 backup/replication is configured
 - [ ] Monitoring/alerts are configured
 - [ ] Encryption key is securely backed up
@@ -663,4 +743,4 @@ No additional tuning usually needed.
 - [ ] JWT_SECRET is strong (32+ characters)
 - [ ] No Quilltap sensitive files in version control
 
-That's it! Your Quilltap instance is now running securely in production with MongoDB and S3-compatible storage.
+That's it! Your Quilltap instance is now running securely in production with SQLite and S3-compatible storage.

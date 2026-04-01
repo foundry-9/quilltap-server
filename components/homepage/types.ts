@@ -11,6 +11,7 @@ export interface RecentChat {
   id: string
   title: string
   updatedAt: string
+  lastMessageAt: string | null
   participants: Array<{
     id: string
     type: 'CHARACTER' | 'PERSONA'
@@ -47,7 +48,7 @@ export interface HomepageProject {
   color?: string | null
   icon?: string | null
   chatCount: number
-  updatedAt: string
+  lastActivity: string // Most recent activity (file, chat message, or metadata change)
 }
 
 /** Character data for homepage grid */
@@ -63,6 +64,10 @@ export interface HomepageCharacter {
     url?: string | null
   } | null
   tags?: string[]
+  // Sorting fields (same as /characters page)
+  isFavorite: boolean
+  npc: boolean
+  chatCount: number
 }
 
 /** Props for WelcomeSection */

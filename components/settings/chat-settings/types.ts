@@ -3,6 +3,8 @@
  * Defines all TypeScript types and interfaces used in the chat settings module
  */
 
+import type { LLMLoggingSettings as LLMLoggingSettingsType } from '@/lib/schemas/settings.types'
+
 export type AvatarDisplayMode = 'ALWAYS' | 'GROUP_ONLY' | 'NEVER'
 export type AvatarDisplayStyle = 'CIRCULAR' | 'RECTANGULAR'
 export type CheapLLMStrategy = 'USER_DEFINED' | 'PROVIDER_CHEAPEST' | 'LOCAL_FIRST'
@@ -59,6 +61,7 @@ export interface ChatSettings {
   memoryCascadePreferences?: MemoryCascadePreferences
   tokenDisplaySettings?: TokenDisplaySettings
   contextCompressionSettings?: ContextCompressionSettings
+  llmLoggingSettings?: LLMLoggingSettings
   createdAt: string
   updatedAt: string
 }
@@ -261,6 +264,8 @@ export interface ContextCompressionSettings {
   windowSize: number
   compressionTargetTokens: number
   systemPromptTargetTokens: number
+  /** How often to re-inject project context (0 = never after initial, must be >= windowSize) */
+  projectContextReinjectInterval: number
 }
 
 /**
@@ -271,6 +276,7 @@ export const DEFAULT_CONTEXT_COMPRESSION_SETTINGS: ContextCompressionSettings = 
   windowSize: 5,
   compressionTargetTokens: 800,
   systemPromptTargetTokens: 1500,
+  projectContextReinjectInterval: 5,
 }
 
 /**
@@ -299,3 +305,18 @@ export const TOKEN_DISPLAY_OPTIONS = [
     description: 'Display background LLM operations (memory extraction, summarization, etc.) in the chat timeline',
   },
 ] as const
+
+/**
+ * LLM Logging Settings
+ * Re-exported from schema types for use in chat settings components
+ */
+export type LLMLoggingSettings = LLMLoggingSettingsType
+
+/**
+ * Default LLM logging settings
+ */
+export const DEFAULT_LLM_LOGGING_SETTINGS: LLMLoggingSettings = {
+  enabled: true,
+  verboseMode: false,
+  retentionDays: 30,
+}

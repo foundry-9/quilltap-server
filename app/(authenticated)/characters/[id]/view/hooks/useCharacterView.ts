@@ -24,6 +24,7 @@ interface UseCharacterViewReturn {
   defaultPartnerId: string
   defaultPartnerName: string | null
   imageProfiles: ImageProfile[]
+  defaultImageProfileId: string
   avatarRefreshKey: number
   templateCounts: TemplateCounts
   replacingTemplate: 'char' | 'user' | null
@@ -43,6 +44,7 @@ interface UseCharacterViewReturn {
   handleTemplateReplace: (type: 'char' | 'user') => Promise<void>
   handleSaveConnectionProfile: (profileId: string) => Promise<void>
   handleSaveDefaultPartner: (partnerId: string) => Promise<void>
+  handleSaveImageProfile: (profileId: string | null) => Promise<void>
   handleToggleNpc: () => Promise<void>
   handleToggleFavorite: () => Promise<void>
   handleToggleControlledBy: () => Promise<void>
@@ -57,10 +59,12 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
   const [userControlledCharacters, setUserControlledCharacters] = useState<UserControlledCharacter[]>([])
   const [defaultPartnerId, setDefaultPartnerId] = useState<string>('')
   const [imageProfiles, setImageProfiles] = useState<ImageProfile[]>([])
+  const [defaultImageProfileId, setDefaultImageProfileId] = useState<string>('')
   const [avatarRefreshKey, setAvatarRefreshKey] = useState(0)
   const [replacingTemplate, setReplacingTemplate] = useState<'char' | 'user' | null>(null)
   const [savingConnectionProfile, setSavingConnectionProfile] = useState(false)
   const [savingPartner, setSavingPartner] = useState(false)
+  const [savingImageProfile, setSavingImageProfile] = useState(false)
   const [togglingNpc, setTogglingNpc] = useState(false)
   const [togglingFavorite, setTogglingFavorite] = useState(false)
   const [togglingControlledBy, setTogglingControlledBy] = useState(false)
@@ -104,6 +108,10 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
         }
         return data.character
       })
+      // Set the default image profile ID from the character data
+      if (data.character.defaultImageProfileId) {
+        setDefaultImageProfileId(data.character.defaultImageProfileId)
+      }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'An error occurred'
       setError(errorMsg)
@@ -294,6 +302,27 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     }
   }
 
+  const handleSaveImageProfile = async (profileId: string | null) => {
+    setSavingImageProfile(true)
+    try {
+      const res = await fetch(`/api/v1/characters/${characterId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ defaultImageProfileId: profileId }),
+      })
+      if (!res.ok) throw new Error('Failed to update image profile')
+
+      setDefaultImageProfileId(profileId || '')
+      showSuccessToast(profileId ? 'Image profile updated' : 'Image profile removed')
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to update image profile')
+      console.error('Failed to save image profile', { error: err instanceof Error ? err.message : String(err) })
+      await fetchCharacter() // Revert to server state
+    } finally {
+      setSavingImageProfile(false)
+    }
+  }
+
   const handleToggleNpc = async () => {
     if (!character) return
     setTogglingNpc(true)
@@ -323,7 +352,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     if (!character) return
     setTogglingFavorite(true)
     try {
-      const res = await fetch(`/api/v1/characters/${characterId}?action=favorite`, { method: 'PATCH' })
+      const res = await fetch(`/api/v1/characters/${characterId}?action=favorite`, { method: 'POST' })
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Failed to toggle favorite')
@@ -367,6 +396,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     defaultPartnerId,
     defaultPartnerName,
     imageProfiles,
+    defaultImageProfileId,
     avatarRefreshKey,
     templateCounts,
     replacingTemplate,
@@ -386,6 +416,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     handleTemplateReplace,
     handleSaveConnectionProfile,
     handleSaveDefaultPartner,
+    handleSaveImageProfile,
     handleToggleNpc,
     handleToggleFavorite,
     handleToggleControlledBy,

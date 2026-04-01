@@ -111,23 +111,6 @@ export async function generateGreetingMessage({
     },
   ]
 
-  // Debug log: LLM request
-  logger.debug('[LLM Request] initial-greeting.ts:generateGreetingMessage', {
-    context: 'llm-api',
-    provider,
-    model: modelName,
-    characterName,
-    systemPrompt: augmentedSystemPrompt,
-    systemPromptLength: augmentedSystemPrompt.length,
-    hasProjectContext: !!projectContext,
-    memoryCount: participantMemories?.length || 0,
-    messages: JSON.stringify(messages.map(m => ({
-      role: m.role,
-      content: m.content,
-    }))),
-    params: JSON.stringify({ temperature, maxTokens: maxTokens ?? 160, topP }),
-  })
-
   const response = await providerClient.sendMessage(
     {
       messages,
@@ -140,14 +123,6 @@ export async function generateGreetingMessage({
   )
 
   // Debug log: LLM response
-  logger.debug('[LLM Response] initial-greeting.ts:generateGreetingMessage', {
-    context: 'llm-api',
-    provider,
-    model: modelName,
-    responseLength: response.content?.length || 0,
-    response: response.content,
-    usage: response.usage ? JSON.stringify(response.usage) : undefined,
-  })
 
   const trimmedContent = (response.content || '').trim()
 

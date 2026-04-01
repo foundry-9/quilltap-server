@@ -65,6 +65,8 @@ export interface Project {
   icon?: string | null
   characterRoster: ProjectCharacter[]
   mountPointId?: string | null
+  defaultDisabledTools?: string[]
+  defaultDisabledToolGroups?: string[]
   createdAt: string
   updatedAt: string
 }

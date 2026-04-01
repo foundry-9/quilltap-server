@@ -44,11 +44,6 @@ function applyImageConstraintsToTool(
   if (!constraints?.promptConstraintWarning) {
     return baseTool;
   }
-
-  moduleLogger.debug('Applying image provider constraints', {
-    maxPromptBytes: constraints.maxPromptBytes,
-  });
-
   const properties = baseTool.function.parameters.properties as Record<string, Record<string, string>>;
   const existingDescription = properties.prompt?.description || '';
 
@@ -133,12 +128,6 @@ export async function buildToolsForProvider(
     module: 'plugin-tool-builder',
     provider: providerName,
   });
-
-  logger_.debug('Building tools for provider', {
-    provider: providerName,
-    options,
-  });
-
   // Step 1: Build array of universal tools based on enabled options
   const universalTools: UniversalTool[] = [];
 
@@ -151,37 +140,31 @@ export async function buildToolsForProvider(
 
     const imageTool = applyImageConstraintsToTool(baseTool, constraints, logger_);
     universalTools.push(imageTool);
-    logger_.debug('Added image generation tool');
   }
 
   // Add memory search tool if enabled
   if (options.memorySearch) {
     universalTools.push(memorySearchToolDefinition as UniversalTool);
-    logger_.debug('Added memory search tool');
   }
 
   // Add web search tool if enabled
   if (options.webSearch) {
     universalTools.push(webSearchToolDefinition as UniversalTool);
-    logger_.debug('Added web search tool');
   }
 
   // Add project info tool if enabled
   if (options.projectInfo) {
     universalTools.push(projectInfoToolDefinition as UniversalTool);
-    logger_.debug('Added project info tool');
   }
 
   // Add file management tool if enabled (defaults to true when not specified)
   if (options.fileManagement !== false) {
     universalTools.push(fileManagementToolDefinition as UniversalTool);
-    logger_.debug('Added file management tool');
   }
 
   // Add request_full_context tool if enabled (for context compression bypass)
   if (options.requestFullContext) {
     universalTools.push(requestFullContextToolDefinition as UniversalTool);
-    logger_.debug('Added request_full_context tool');
   }
 
   // Add plugin tools if enabled (defaults to true when not specified)
@@ -192,24 +175,13 @@ export async function buildToolsForProvider(
 
     if (pluginToolDefs.length > 0) {
       universalTools.push(...pluginToolDefs);
-      logger_.debug('Added plugin tools', {
-        count: pluginToolDefs.length,
-        tools: pluginToolDefs.map(t => t.function.name),
-      });
     }
   }
 
   // If no tools are enabled, return empty array
   if (universalTools.length === 0) {
-    logger_.debug('No tools enabled');
     return [];
   }
-
-  logger_.debug('Built universal tools', {
-    toolCount: universalTools.length,
-    tools: universalTools.map(t => t.function.name),
-  });
-
   // Step 2: Get the provider plugin from registry
   const plugin = getProvider(providerName);
 
@@ -224,17 +196,10 @@ export async function buildToolsForProvider(
   // Step 3 & 4: Check if plugin has formatTools() method
   if (plugin.formatTools && typeof plugin.formatTools === 'function') {
     try {
-      logger_.debug('Using plugin.formatTools() to convert tools');
-
       // Call plugin's formatTools with the entire array of tools
       const formattedTools = plugin.formatTools(universalTools, {
         imageProviderType: options.imageProviderType,
       });
-
-      logger_.debug('Tools formatted by plugin', {
-        toolCount: formattedTools.length,
-      });
-
       return formattedTools;
     } catch (error) {
       logger_.error('Error formatting tools with plugin, falling back to universal format', {
@@ -242,7 +207,6 @@ export async function buildToolsForProvider(
       });
 
       // Step 5: Fallback to old behavior (return tools in OpenAI format)
-      logger_.debug('Returning tools in OpenAI format (backwards compatibility)');
       return universalTools;
     }
   }

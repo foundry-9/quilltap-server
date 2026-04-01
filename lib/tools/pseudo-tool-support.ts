@@ -48,20 +48,13 @@ export async function checkModelSupportsTools(
       if (providerData?.models) {
         const model = providerData.models.find(m => m.modelId === modelName)
         if (model) {
-          logger.debug('[PseudoToolSupport] Found model capability info', {
-            provider,
-            model: modelName,
-            supportsTools: model.supportsTools,
-          })
+
           return model.supportsTools ?? true
         }
       }
 
       // Model not found in cache - default to true to avoid breaking things
-      logger.debug('[PseudoToolSupport] Model not found in cache, assuming tool support', {
-        provider,
-        model: modelName,
-      })
+
       return true
     }
 
@@ -100,20 +93,17 @@ export function shouldUsePseudoTools(
 ): boolean {
   // Explicit overrides take precedence
   if (profileOverride === 'native') {
-    logger.debug('[PseudoToolSupport] Using native tools (profile override)')
+
     return false
   }
   if (profileOverride === 'pseudo') {
-    logger.debug('[PseudoToolSupport] Using pseudo-tools (profile override)')
+
     return true
   }
 
   // Auto mode: use pseudo-tools only if model doesn't support native tools
   const usePseudo = !supportsNativeTools
-  logger.debug('[PseudoToolSupport] Auto-detected tool mode', {
-    supportsNativeTools,
-    usePseudoTools: usePseudo,
-  })
+
   return usePseudo
 }
 

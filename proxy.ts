@@ -1,6 +1,8 @@
 /**
- * Next.js Proxy for rate limiting, security headers, CORS, and auth mode
+ * Next.js Proxy for rate limiting, security headers, and CORS
  * Runs on Edge Runtime before requests reach API routes
+ *
+ * Note: Authentication is no longer handled here (single-user mode only)
  */
 
 import { NextResponse } from 'next/server';
@@ -11,24 +13,6 @@ import {
   RATE_LIMITS,
   createRateLimitResponse,
 } from './lib/rate-limit';
-
-/**
- * Check if authentication is completely disabled via environment variable
- * When true, the app auto-logs in as unauthenticatedLocalUser
- * Note: This runs in Edge runtime, so we check env var directly
- */
-function isAuthDisabledInProxy(): boolean {
-  return process.env.AUTH_DISABLED === 'true';
-}
-
-/**
- * Check if OAuth providers are disabled via environment variable
- * When true, OAuth buttons are hidden but credentials login still works
- * Note: This runs in Edge runtime, so we check env var directly
- */
-function isOAuthDisabledInProxy(): boolean {
-  return process.env.OAUTH_DISABLED === 'true';
-}
 
 /**
  * Security headers to add to all responses
@@ -62,16 +46,11 @@ const securityHeaders = {
  */
 const RATE_LIMITED_PATHS = {
   api: /^\/api\//,
-  auth: /^\/api\/auth\//,
   chat: /^\/api\/chats\/[^/]+\/messages/,
 };
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-
-  // Check auth mode flags to indicate to downstream handlers
-  const authDisabled = isAuthDisabledInProxy();
-  const oauthDisabled = isOAuthDisabledInProxy();
 
   // Apply rate limiting based on path
   const clientId = getClientIdentifier(request);
@@ -79,13 +58,6 @@ export function proxy(request: NextRequest) {
   // Chat endpoints (streaming) - special rate limit
   if (RATE_LIMITED_PATHS.chat.test(pathname)) {
     const result = checkRateLimit(clientId, RATE_LIMITS.chat);
-    if (!result.success) {
-      return createRateLimitResponse(result);
-    }
-  }
-  // Auth endpoints - strict rate limit
-  else if (RATE_LIMITED_PATHS.auth.test(pathname)) {
-    const result = checkRateLimit(clientId, RATE_LIMITS.auth);
     if (!result.success) {
       return createRateLimitResponse(result);
     }
@@ -116,14 +88,6 @@ export function proxy(request: NextRequest) {
   Object.entries(securityHeaders).forEach(([key, value]) => {
     response.headers.set(key, value);
   });
-
-  // Set auth mode headers for downstream handlers to detect
-  if (authDisabled) {
-    response.headers.set('x-auth-disabled', 'true');
-  }
-  if (oauthDisabled) {
-    response.headers.set('x-oauth-disabled', 'true');
-  }
 
   // CORS headers for API routes
   if (pathname.startsWith('/api/')) {

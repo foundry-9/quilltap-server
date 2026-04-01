@@ -98,7 +98,7 @@ export type RoleplayTemplate = z.infer<typeof RoleplayTemplateSchema>;
 // PROMPT TEMPLATES
 // ============================================================================
 
-// User-created prompt templates (stored in MongoDB) for reusable system prompts
+// User-created prompt templates (stored in database) for reusable system prompts
 export const PromptTemplateSchema = z.object({
   id: UUIDSchema,
   userId: UUIDSchema.nullable().optional(),   // null for built-in sample prompts

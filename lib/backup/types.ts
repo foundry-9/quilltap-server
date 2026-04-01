@@ -19,6 +19,7 @@ import type {
   RoleplayTemplate,
   ProviderModel,
   Project,
+  LLMLog,
 } from '@/lib/schemas/types';
 
 // ============================================================================
@@ -73,6 +74,8 @@ export interface BackupManifest {
     providerModels: number;
     /** Number of Project entities */
     projects: number;
+    /** Number of LLMLog entities */
+    llmLogs: number;
   };
 }
 
@@ -126,6 +129,9 @@ export interface BackupData {
 
   /** Array of Project entities */
   projects: Project[];
+
+  /** Array of LLMLog entities */
+  llmLogs: LLMLog[];
 }
 
 // ============================================================================
@@ -218,6 +224,9 @@ export interface RestoreSummary {
 
   /** Number of Project entities restored */
   projects: number;
+
+  /** Number of LLMLog entities restored */
+  llmLogs: number;
 
   /**
    * Array of warning messages for issues that occurred during restore

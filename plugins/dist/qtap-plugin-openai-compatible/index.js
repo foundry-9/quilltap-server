@@ -136,10 +136,6 @@ var plugin = {
       });
     }
     const url = baseUrl || "http://localhost:8080/v1";
-    logger.debug("Creating OpenAI-compatible provider instance", {
-      context: "plugin.createProvider",
-      baseUrl: url
-    });
     return new import_plugin_utils.OpenAICompatibleProvider(url);
   },
   /**
@@ -147,18 +143,10 @@ var plugin = {
    * Requires a valid base URL and optional API key
    */
   getAvailableModels: async (apiKey, baseUrl) => {
-    logger.debug("Fetching available OpenAI-compatible models", {
-      context: "plugin.getAvailableModels",
-      baseUrl
-    });
     try {
       const url = baseUrl || "http://localhost:8080/v1";
       const provider = new import_plugin_utils.OpenAICompatibleProvider(url);
       const models = await provider.getAvailableModels(apiKey);
-      logger.debug("Successfully fetched OpenAI-compatible models", {
-        context: "plugin.getAvailableModels",
-        count: models.length
-      });
       return models;
     } catch (error) {
       logger.error(
@@ -173,18 +161,10 @@ var plugin = {
    * Validate an OpenAI-compatible API connection
    */
   validateApiKey: async (apiKey, baseUrl) => {
-    logger.debug("Validating OpenAI-compatible API connection", {
-      context: "plugin.validateApiKey",
-      baseUrl
-    });
     try {
       const url = baseUrl || "http://localhost:8080/v1";
       const provider = new import_plugin_utils.OpenAICompatibleProvider(url);
       const isValid = await provider.validateApiKey(apiKey);
-      logger.debug("OpenAI-compatible API validation result", {
-        context: "plugin.validateApiKey",
-        isValid
-      });
       return isValid;
     } catch (error) {
       logger.error(
@@ -215,10 +195,6 @@ var plugin = {
    * Render the OpenAI-compatible icon
    */
   renderIcon: (props) => {
-    logger.debug("Rendering OpenAI-compatible icon", {
-      context: "plugin.renderIcon",
-      className: props.className
-    });
     return OpenAICompatibleIcon(props);
   },
   /**
@@ -229,10 +205,6 @@ var plugin = {
    * @returns Array of tools in OpenAI format
    */
   formatTools: (tools) => {
-    logger.debug("Formatting tools for OpenAI-compatible provider", {
-      context: "plugin.formatTools",
-      toolCount: tools.length
-    });
     try {
       const formattedTools = [];
       for (const tool of tools) {
@@ -244,10 +216,6 @@ var plugin = {
         }
         formattedTools.push(tool);
       }
-      logger.debug("Successfully formatted tools", {
-        context: "plugin.formatTools",
-        count: formattedTools.length
-      });
       return formattedTools;
     } catch (error) {
       logger.error(
@@ -266,15 +234,8 @@ var plugin = {
    * @returns Array of tool call requests
    */
   parseToolCalls: (response) => {
-    logger.debug("Parsing tool calls from OpenAI-compatible response", {
-      context: "plugin.parseToolCalls"
-    });
     try {
       const toolCalls = (0, import_plugin_utils2.parseOpenAIToolCalls)(response);
-      logger.debug("Successfully parsed tool calls", {
-        context: "plugin.parseToolCalls",
-        count: toolCalls.length
-      });
       return toolCalls;
     } catch (error) {
       logger.error(

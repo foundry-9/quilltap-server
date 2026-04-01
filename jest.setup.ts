@@ -81,7 +81,6 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret-for-unit-tes
 process.env.GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'test-google-client-id'
 process.env.GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || 'test-google-client-secret'
 process.env.ENCRYPTION_MASTER_PEPPER = process.env.ENCRYPTION_MASTER_PEPPER || 'test-pepper-for-unit-tests-32-chars-long!'
-process.env.MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/quilltap-test'
 process.env.S3_ACCESS_KEY = process.env.S3_ACCESS_KEY || 'test-s3-access-key'
 process.env.S3_SECRET_KEY = process.env.S3_SECRET_KEY || 'test-s3-secret-key'
 
@@ -283,7 +282,7 @@ jest.mock('@/lib/file-storage/manager', () => {
     copy: jest.fn().mockResolvedValue(undefined),
     getFileMetadata: jest.fn().mockResolvedValue({ size: 1024, contentType: 'image/jpeg', lastModified: new Date() }),
     list: jest.fn().mockResolvedValue([]),
-    getProxyUrl: jest.fn().mockImplementation((key: string) => `/api/files/proxy/${key}`),
+    getProxyUrl: jest.fn().mockImplementation((key: string) => `/api/v1/files/proxy/${key}`),
   }
 
   return {
@@ -298,7 +297,7 @@ jest.mock('@/lib/file-storage/manager', () => {
       uploadFile: jest.fn().mockResolvedValue({ storageKey: 'mock-storage-key', mountPointId: 'mock-mount-point' }),
       downloadFile: jest.fn().mockResolvedValue(Buffer.from('mock file content')),
       deleteFile: jest.fn().mockResolvedValue(undefined),
-      getFileUrl: jest.fn().mockResolvedValue('http://localhost:3000/api/files/proxy/mock-key'),
+      getFileUrl: jest.fn().mockResolvedValue('http://localhost:3000/api/v1/files/proxy/mock-key'),
       fileExists: jest.fn().mockResolvedValue(true),
       buildStorageKey: jest.fn().mockImplementation((params: { userId: string; fileId: string; filename: string; projectId?: string | null; folderPath?: string }) => {
         const { userId, fileId, filename, projectId, folderPath } = params;

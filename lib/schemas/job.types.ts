@@ -22,6 +22,7 @@ export const BackgroundJobTypeEnum = z.enum([
   'INTER_CHARACTER_MEMORY',
   'CONTEXT_SUMMARY',
   'TITLE_UPDATE',
+  'LLM_LOG_CLEANUP',
 ]);
 export type BackgroundJobType = z.infer<typeof BackgroundJobTypeEnum>;
 
@@ -44,7 +45,7 @@ export const BackgroundJobSchema = z.object({
   userId: UUIDSchema,
   type: BackgroundJobTypeEnum,
   status: BackgroundJobStatusEnum.default('PENDING'),
-  payload: z.record(z.unknown()),               // Type-specific payload
+  payload: z.record(z.string(), z.unknown()),               // Type-specific payload
   priority: z.number().default(0),              // Higher = more urgent
   attempts: z.number().default(0),
   maxAttempts: z.number().default(3),

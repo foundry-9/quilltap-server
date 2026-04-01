@@ -1,6 +1,6 @@
 #!/bin/sh
 # Quilltap All-in-One Startup Script
-# Starts MongoDB, MinIO, and Quilltap application in a single container
+# Starts MinIO and Quilltap application in a single container
 
 set -e
 
@@ -10,43 +10,6 @@ set -e
 echo "================================================"
 echo "Quilltap All-in-One Container Startup"
 echo "================================================"
-echo ""
-
-# =============================================================================
-# MongoDB Startup
-# =============================================================================
-
-echo "Starting MongoDB..."
-mkdir -p /data/mongodb
-
-# Start MongoDB daemon
-# The --fork flag runs it in the background
-# --bind_ip restricts to localhost only
-mongod --dbpath /data/mongodb --bind_ip 127.0.0.1 --fork --logpath /var/log/mongodb.log
-
-# Wait for MongoDB to be ready using mongosh
-echo "Waiting for MongoDB to be ready..."
-MONGO_READY=0
-MONGO_ATTEMPTS=0
-MAX_MONGO_ATTEMPTS=30
-
-while [ $MONGO_READY -eq 0 ] && [ $MONGO_ATTEMPTS -lt $MAX_MONGO_ATTEMPTS ]; do
-  if mongosh --eval "db.runCommand('ping').ok" --quiet 2>/dev/null; then
-    MONGO_READY=1
-    echo "MongoDB is ready"
-  else
-    MONGO_ATTEMPTS=$((MONGO_ATTEMPTS + 1))
-    echo "Waiting for MongoDB... (attempt $MONGO_ATTEMPTS/$MAX_MONGO_ATTEMPTS)"
-    sleep 1
-  fi
-done
-
-if [ $MONGO_READY -eq 0 ]; then
-  echo "ERROR: MongoDB failed to start after $MAX_MONGO_ATTEMPTS attempts"
-  exit 1
-fi
-
-echo "MongoDB started successfully"
 echo ""
 
 # =============================================================================
@@ -115,7 +78,7 @@ echo ""
 echo "================================================"
 echo "Starting Quilltap application..."
 echo "================================================"
-echo "MongoDB URI: $MONGODB_URI"
+echo "Database: SQLite at $SQLITE_PATH"
 echo "S3 Endpoint: $S3_ENDPOINT"
 echo "S3 Bucket: $BUCKET_NAME"
 echo ""

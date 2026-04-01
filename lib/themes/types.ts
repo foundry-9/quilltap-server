@@ -46,7 +46,9 @@ const CSSColorSchema = z.string().refine(
     if (val.length > 0) return true;
     return false;
   },
-  { message: 'Invalid CSS color value' }
+  {
+      error: 'Invalid CSS color value'
+}
 );
 
 /**
@@ -270,8 +272,8 @@ export const ThemeManifestSchema = z.object({
     z.string(),
     z.object({
       name: z.string(),
-      email: z.string().email().optional(),
-      url: z.string().url().optional(),
+      email: z.email().optional(),
+      url: z.url().optional(),
     }),
   ]).describe('Theme author'),
 
@@ -319,7 +321,7 @@ export const ThemePreferenceSchema = z.object({
   colorMode: ColorModeSchema.default('system'),
 
   /** Custom token overrides (user tweaks on top of selected theme) */
-  customOverrides: z.record(z.string()).optional(),
+  customOverrides: z.record(z.string(), z.string()).optional(),
 
   /** Whether to show theme selector in the navigation bar */
   showNavThemeSelector: z.boolean().default(false),
@@ -354,8 +356,8 @@ export function safeValidateThemeTokens(data: unknown):
     return { success: true, data: result.data };
   }
   logger.warn('Theme tokens validation failed', {
-    errorCount: result.error.errors.length,
-    errors: result.error.errors.map(e => ({
+    errorCount: result.error.issues.length,
+    errors: result.error.issues.map(e => ({
       path: e.path.join('.'),
       message: e.message,
     })),
@@ -386,8 +388,8 @@ export function safeValidateThemeManifest(data: unknown):
     return { success: true, data: result.data };
   }
   logger.warn('Theme manifest validation failed', {
-    errorCount: result.error.errors.length,
-    errors: result.error.errors.map(e => ({
+    errorCount: result.error.issues.length,
+    errors: result.error.issues.map(e => ({
       path: e.path.join('.'),
       message: e.message,
     })),

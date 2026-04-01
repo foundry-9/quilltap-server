@@ -13,20 +13,13 @@ import { z } from 'zod';
 export { ThemePreferenceSchema, type ThemePreference } from '@/lib/themes/types';
 
 // ============================================================================
-// VERSION CONSTANTS (for Sync API compatibility)
+// VERSION CONSTANTS
 // ============================================================================
 
 /**
  * Current schema version for data compatibility checks.
- * Major version must match for sync to proceed between instances.
  */
 export const SCHEMA_VERSION = '2.5.0';
-
-/**
- * Sync protocol version.
- * Must match exactly between instances for sync to proceed.
- */
-export const SYNC_PROTOCOL_VERSION = '1.0';
 
 // ============================================================================
 // ENUMS
@@ -56,16 +49,16 @@ export type AvatarDisplayMode = z.infer<typeof AvatarDisplayModeEnum>;
 // ============================================================================
 
 // UUID identifier
-export const UUIDSchema = z.string().uuid();
+export const UUIDSchema = z.uuid();
 
 // ISO-8601 timestamp
-export const TimestampSchema = z.string().datetime().or(z.date()).transform(d => {
+export const TimestampSchema = z.iso.datetime().or(z.date()).transform(d => {
   if (d instanceof Date) return d.toISOString();
   return d;
 });
 
 // JSON field (flexible structure)
-export const JsonSchema = z.record(z.unknown());
+export const JsonSchema = z.record(z.string(), z.unknown());
 
 // Encryption fields (AES-256-GCM)
 export const EncryptedFieldSchema = z.object({
@@ -92,6 +85,6 @@ export const TagVisualStyleSchema = z.object({
 
 export type TagVisualStyle = z.infer<typeof TagVisualStyleSchema>;
 
-export const TagStyleMapSchema = z.record(TagVisualStyleSchema).default({});
+export const TagStyleMapSchema = z.record(z.string(), TagVisualStyleSchema).default({});
 
 export type TagStyleMap = z.infer<typeof TagStyleMapSchema>;

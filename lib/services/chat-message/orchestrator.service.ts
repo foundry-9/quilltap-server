@@ -31,6 +31,7 @@ import {
   loadAndProcessFiles,
   buildMessageContext,
 } from './context-builder.service'
+import type { ProjectContext } from '@/lib/chat/context-manager'
 import {
   processToolCalls,
   saveToolMessages,
@@ -96,7 +97,7 @@ export const sendMessageSchema = z.object({
  */
 export const continueMessageSchema = z.object({
   continueMode: z.literal(true),
-  respondingParticipantId: z.string().uuid().optional(),
+  respondingParticipantId: z.uuid().optional(),
 })
 
 /**
@@ -202,6 +203,7 @@ async function processMessage(
     windowSize: 5,
     compressionTargetTokens: 800,
     systemPromptTargetTokens: 1500,
+    projectContextReinjectInterval: 5,
   }
 
   // Get cheap LLM selection for compression
@@ -226,11 +228,6 @@ async function processMessage(
         false // Ollama availability - could be checked but keeping simple for now
       )
 
-      logger.debug('Cheap LLM selection for compression', {
-        provider: cheapLLMSelection.provider,
-        model: cheapLLMSelection.modelName,
-        isLocal: cheapLLMSelection.isLocal,
-      })
     } catch (error) {
       logger.warn('Failed to get cheap LLM for compression, compression will be skipped', {
         error: error instanceof Error ? error.message : String(error),
@@ -265,6 +262,34 @@ async function processMessage(
   // Get existing messages
   const existingMessages = await repos.chats.getMessages(chatId)
 
+  // ============================================================================
+  // Project Context Injection
+  // ============================================================================
+  // Load project context and determine if it should be injected this message
+  let projectContext: ProjectContext | null = null
+
+  if (chat.projectId) {
+    const project = await repos.projects.findById(chat.projectId)
+    if (project && (project.description || project.instructions)) {
+      // Calculate if we should inject project context this message
+      // Default interval matches windowSize (5), can be configured to 0 to disable
+      const reinjectInterval = contextCompressionSettings.projectContextReinjectInterval ?? 5
+      const messageCount = existingMessages.filter(m => m.type === 'message').length
+
+      // Inject on first message (count 0) or every N messages after that
+      // Using messageCount because the new user message hasn't been saved yet
+      const shouldInject = reinjectInterval > 0 && (messageCount === 0 || messageCount % reinjectInterval === 0)
+
+      if (shouldInject) {
+        projectContext = {
+          name: project.name,
+          description: project.description,
+          instructions: project.instructions,
+        }
+      }
+    }
+  }
+
   // Process file attachments
   const fileProcessing = await loadAndProcessFiles(
     repos,
@@ -295,12 +320,6 @@ async function processMessage(
 
     await repos.chats.addMessage(chatId, userMessage)
 
-    logger.debug('User message saved', {
-      messageId: userMessageId,
-      participantId: userParticipantId,
-      isMultiCharacter,
-    })
-
     // Link file attachments
     for (const file of fileProcessing.attachedFiles) {
       await repos.files.addLink(file.id, userMessageId)
@@ -312,6 +331,24 @@ async function processMessage(
     ? undefined
     : (fileProcessing.messageContentPrefix ? fileProcessing.messageContentPrefix + content : content)
 
+  // ============================================================================
+  // Tool Re-injection Logic
+  // ============================================================================
+  // Determine if tools should be sent this message (similar to project context re-injection)
+  // Tools are sent: on first message, when forced (settings changed), or at window interval
+  const toolReinjectInterval = contextCompressionSettings.windowSize // Reuse compression window size
+  const toolMessageCount = existingMessages.filter(m => m.type === 'message').length
+  const toolSettingsChanged = chat.forceToolsOnNextMessage === true
+  const shouldSendTools =
+    toolSettingsChanged ||                     // Tool settings changed
+    toolMessageCount === 0 ||                  // First message
+    toolMessageCount % toolReinjectInterval === 0  // At interval
+
+  // Clear forceToolsOnNextMessage flag if it was set
+  if (toolSettingsChanged) {
+    await repos.chats.update(chatId, { forceToolsOnNextMessage: false })
+  }
+
   // Check for pseudo-tools
   const enabledToolOptions = determineEnabledToolOptions(
     imageProfileId,
@@ -319,6 +356,7 @@ async function processMessage(
   )
 
   // Build tools (include request_full_context when compression is enabled)
+  // Pass disabledTools and disabledToolGroups for filtering (shouldSendTools controls tool injection)
   const { tools, modelSupportsNativeTools, useNativeWebSearch } = await buildTools(
     connectionProfile,
     imageProfileId,
@@ -326,7 +364,9 @@ async function processMessage(
     userId,
     false, // Will check pseudo-tools after
     undefined, // projectId (will be set if needed)
-    compressionEnabled // requestFullContext - enable the tool when compression is active
+    compressionEnabled, // requestFullContext - enable the tool when compression is active
+    shouldSendTools ? (chat.disabledTools ?? []) : undefined, // Pass disabledTools only when sending tools
+    shouldSendTools ? (chat.disabledToolGroups ?? []) : undefined // Pass disabledToolGroups only when sending tools
   )
 
   const usePseudoTools = checkShouldUsePseudoTools(modelSupportsNativeTools)
@@ -371,7 +411,7 @@ async function processMessage(
   // This prevents proxy/load balancer timeouts during long compression operations
   let keepAliveInterval: ReturnType<typeof setInterval> | null = null
   if (compressionEnabled && !cachedCompressionResult) {
-    logger.debug('Starting keep-alive pings during context compression')
+
     keepAliveInterval = setInterval(() => {
       if (!safeEnqueue(controller, encodeKeepAlive(encoder))) {
         // Stream closed, stop the interval
@@ -399,6 +439,8 @@ async function processMessage(
       pseudoToolInstructions,
       newUserMessage: finalUserMessageContent,
       isContinueMode,
+      // Project context (injected at configured interval)
+      projectContext,
       // Context compression options
       contextCompressionSettings: compressionEnabled ? contextCompressionSettings : null,
       cheapLLMSelection,
@@ -413,7 +455,7 @@ async function processMessage(
   if (keepAliveInterval) {
     clearInterval(keepAliveInterval)
     keepAliveInterval = null
-    logger.debug('Stopped keep-alive pings after context compression')
+
   }
 
   // Create tool context
@@ -426,6 +468,49 @@ async function processMessage(
     chatSettings?.cheapLLMSettings?.embeddingProfileId ?? undefined,
     chat.projectId
   )
+
+  // ============================================================================
+  // Tool Change Notification
+  // ============================================================================
+  // If tool settings were changed, inject a system message to inform the LLM
+  // This only happens when the user explicitly changed settings, not on first message or interval
+  if (toolSettingsChanged) {
+    // Extract tool names from the tools array
+    const toolNames = actualTools.map((tool: unknown) => {
+      const toolObj = tool as { function?: { name?: string }; name?: string }
+      return toolObj.function?.name || toolObj.name || 'unknown'
+    }).filter(name => name !== 'unknown')
+
+    let toolChangeContent: string
+    if (toolNames.length === 0) {
+      toolChangeContent = '[System Notice] Your available tools have been updated. All tools have been disabled for this chat. Do not attempt to use any tools.'
+    } else {
+      toolChangeContent = `[System Notice] Your available tools have been updated. You now have access to the following ${toolNames.length} tool(s): ${toolNames.join(', ')}. Tools not listed are no longer available for this chat.`
+    }
+
+    const toolChangeMessage = {
+      role: 'system',
+      content: toolChangeContent,
+      attachments: [],
+    }
+
+    // Insert before the last message (which should be the user's new message)
+    const lastUserMessageIndex = formattedMessages.findIndex(
+      (m, i, arr) => m.role === 'user' && i === arr.length - 1
+    )
+    if (lastUserMessageIndex > 0) {
+      formattedMessages.splice(lastUserMessageIndex, 0, toolChangeMessage)
+    } else {
+      // Fallback: just add it near the end
+      formattedMessages.push(toolChangeMessage)
+    }
+
+    logger.info('Injected tool change notification', {
+      chatId,
+      toolCount: toolNames.length,
+      tools: toolNames,
+    })
+  }
 
   // Send debug info
   controller.enqueue(encodeDebugInfo(encoder, {
@@ -455,6 +540,9 @@ async function processMessage(
   let rawResponse: unknown = null
   let thoughtSignature: string | undefined
 
+  // Pre-generate assistant message ID so logs can reference it
+  const preGeneratedAssistantMessageId = crypto.randomUUID()
+
   try {
     for await (const chunk of streamMessage({
       messages: formattedMessages,
@@ -463,6 +551,9 @@ async function processMessage(
       modelParams,
       tools: actualTools,
       useNativeWebSearch,
+      userId,
+      messageId: preGeneratedAssistantMessageId,
+      chatId,
     })) {
       if (chunk.content) {
         fullResponse += chunk.content
@@ -476,9 +567,7 @@ async function processMessage(
         rawResponse = chunk.rawResponse
         if (chunk.thoughtSignature) {
           thoughtSignature = chunk.thoughtSignature
-          logger.debug('Captured thought signature from response', {
-            signatureLength: thoughtSignature.length,
-          })
+
         }
       }
     }
@@ -543,11 +632,6 @@ async function processMessage(
     if (toolCalls.length === 0) break
 
     toolIterations++
-    logger.debug('Processing tool calls, iteration', {
-      iteration: toolIterations,
-      toolCallCount: toolCalls.length,
-      tools: toolCalls.map(tc => tc.name),
-    })
 
     const results = await processToolCalls(toolCalls, toolContext, controller, encoder)
     toolMessages = [...toolMessages, ...results.toolMessages]
@@ -585,6 +669,9 @@ async function processMessage(
       modelParams,
       tools: actualTools,
       useNativeWebSearch,
+      userId,
+      messageId: preGeneratedAssistantMessageId,
+      chatId,
     })) {
       if (chunk.content) {
         currentResponse += chunk.content
@@ -658,6 +745,9 @@ async function processMessage(
         modelParams,
         tools: actualTools,
         useNativeWebSearch,
+        userId,
+        messageId: preGeneratedAssistantMessageId,
+        chatId,
       })) {
         if (chunk.content) {
           continuationResponse += chunk.content
@@ -720,6 +810,9 @@ async function processMessage(
         modelParams,
         tools: [],
         useNativeWebSearch: useNativeWebSearch && !usePseudoTools,
+        userId,
+        messageId: preGeneratedAssistantMessageId,
+        chatId,
       })) {
         if (chunk.content) {
           continuationResponse += chunk.content
@@ -759,7 +852,8 @@ async function processMessage(
       rawResponse,
       thoughtSignature,
       generatedImagePaths,
-      toolMessages
+      toolMessages,
+      preGeneratedAssistantMessageId
     )
 
     // Track token usage for profile and chat aggregates
@@ -857,12 +951,6 @@ async function processMessage(
             || await repos.characters.findById(activeTypingParticipant.characterId)
 
           if (userControlledCharacter) {
-            logger.debug('Triggering memory for user-controlled character', {
-              userControlledCharacterId: userControlledCharacter.id,
-              userControlledCharacterName: userControlledCharacter.name,
-              respondingCharacterId: character.id,
-              respondingCharacterName: character.name,
-            })
 
             await triggerUserControlledCharacterMemory(repos, {
               userControlledCharacter,
@@ -985,9 +1073,10 @@ async function saveAssistantMessage(
   rawResponse: unknown,
   thoughtSignature: string | undefined,
   generatedImagePaths: GeneratedImage[],
-  toolMessages: ToolMessage[]
+  toolMessages: ToolMessage[],
+  preGeneratedMessageId?: string
 ): Promise<string> {
-  const assistantMessageId = crypto.randomUUID()
+  const assistantMessageId = preGeneratedMessageId || crypto.randomUUID()
   const assistantAttachments = generatedImagePaths.map(img => img.id)
 
   const assistantMessage = {
@@ -1006,12 +1095,6 @@ async function saveAssistantMessage(
   }
 
   await repos.chats.addMessage(chatId, assistantMessage)
-
-  logger.debug('Assistant message saved', {
-    messageId: assistantMessageId,
-    participantId: characterParticipant.id,
-    characterName: character.name,
-  })
 
   // Save tool messages
   if (toolMessages.length > 0) {
@@ -1088,13 +1171,6 @@ async function calculateNextSpeaker(
     userParticipantId
   )
 
-  logger.debug('Next speaker calculated', {
-    nextSpeakerId: nextSpeakerResult.nextSpeakerId,
-    reason: nextSpeakerResult.reason,
-    cycleComplete: nextSpeakerResult.cycleComplete,
-    isMultiCharacter: isMultiCharacterChat(chat.participants),
-  })
-
   return {
     nextSpeakerId: nextSpeakerResult.nextSpeakerId,
     reason: nextSpeakerResult.reason,
@@ -1117,12 +1193,12 @@ function handleStreamError(
   let errorType = 'unknown'
 
   if (error instanceof z.ZodError) {
-    const firstError = error.errors[0]
+    const firstError = error.issues[0]
     errorMessage = firstError
       ? `Validation error: ${firstError.message} at ${firstError.path.join('.')}`
       : 'Response validation failed'
     errorType = 'validation'
-    logger.debug('Zod validation error details', { errors: error.errors })
+
   } else if (error instanceof Error) {
     errorMessage = error.message
     errorType = error.name

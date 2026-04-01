@@ -26,7 +26,143 @@ export async function register() {
       nodeVersion: process.version,
     });
 
+    // ================================================================
+    // PHASE -1: Enforce Single User Mode (before anything else)
+    // ================================================================
+    // This check MUST happen before any other initialization to prevent
+    // starting with unsupported authentication configuration.
+    const { enforceSingleUserMode } = await import('./lib/startup/enforce-single-user');
+    enforceSingleUserMode();
+
     try {
+      // ================================================================
+      // PHASE 0: Migrate Legacy Data Files (before any database access)
+      // ================================================================
+      // This MUST happen before database initialization to copy the actual database
+      const {
+        ensureDataDirectoriesExist,
+        getPlatform,
+        getBaseDataDir,
+        getDataDir,
+        getFilesDir,
+        getLegacyPaths,
+        hasMigrationMarker,
+        createMigrationMarker,
+      } = await import('./lib/paths');
+      const fs = await import('fs');
+      const path = await import('path');
+
+      const platform = getPlatform();
+      const baseDir = getBaseDataDir();
+
+      logger.info('Phase 0: Ensuring data directories exist', {
+        context: 'instrumentation.register',
+        platform,
+        baseDir,
+      });
+
+      // Create directories first
+      ensureDataDirectoriesExist();
+
+      // On macOS/Windows, check if we need to copy legacy data BEFORE database init
+      if (platform === 'darwin' || platform === 'win32') {
+        const legacy = getLegacyPaths();
+        const newDataDir = getDataDir();
+        const newFilesDir = getFilesDir();
+        const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+        const legacyBase = path.default.join(homeDir, '.quilltap');
+
+        // Only migrate if paths are different
+        if (path.default.resolve(baseDir) !== path.default.resolve(legacyBase)) {
+          // Check for legacy database at ~/.quilltap/data/quilltap.db
+          const legacyDbPath = path.default.join(legacy.homeDataDir, 'quilltap.db');
+          const newDbPath = path.default.join(newDataDir, 'quilltap.db');
+
+          if (fs.default.existsSync(legacyDbPath) && !hasMigrationMarker(legacy.homeDataDir)) {
+            // Check if new database doesn't exist OR is much smaller (empty)
+            let shouldCopy = !fs.default.existsSync(newDbPath);
+            if (!shouldCopy) {
+              const legacySize = fs.default.statSync(legacyDbPath).size;
+              const newSize = fs.default.statSync(newDbPath).size;
+              // If new file is less than 10% the size of old, it's probably empty
+              shouldCopy = newSize < legacySize * 0.1;
+            }
+
+            if (shouldCopy) {
+              logger.info('Copying legacy database to new location', {
+                context: 'instrumentation.register',
+                from: legacyDbPath,
+                to: newDbPath,
+              });
+
+              try {
+                fs.default.copyFileSync(legacyDbPath, newDbPath);
+                // Also copy WAL files if they exist
+                const walPath = legacyDbPath + '-wal';
+                const shmPath = legacyDbPath + '-shm';
+                if (fs.default.existsSync(walPath)) {
+                  fs.default.copyFileSync(walPath, newDbPath + '-wal');
+                }
+                if (fs.default.existsSync(shmPath)) {
+                  fs.default.copyFileSync(shmPath, newDbPath + '-shm');
+                }
+                createMigrationMarker(legacy.homeDataDir, newDataDir);
+                logger.info('Legacy database copied successfully', {
+                  context: 'instrumentation.register',
+                });
+              } catch (err) {
+                logger.error('Failed to copy legacy database', {
+                  context: 'instrumentation.register',
+                  error: err instanceof Error ? err.message : String(err),
+                });
+              }
+            }
+          }
+
+          // Check for legacy files at ~/.quilltap/files
+          if (fs.default.existsSync(legacy.filesDir) && !hasMigrationMarker(legacy.filesDir)) {
+            const files = fs.default.readdirSync(legacy.filesDir);
+            if (files.length > 0 && files.some(f => f !== '.MIGRATED')) {
+              logger.info('Copying legacy files to new location', {
+                context: 'instrumentation.register',
+                from: legacy.filesDir,
+                to: newFilesDir,
+              });
+
+              try {
+                // Copy files recursively
+                const copyRecursive = (src: string, dest: string) => {
+                  const entries = fs.default.readdirSync(src, { withFileTypes: true });
+                  for (const entry of entries) {
+                    if (entry.name === '.MIGRATED') continue;
+                    const srcPath = path.default.join(src, entry.name);
+                    const destPath = path.default.join(dest, entry.name);
+                    if (entry.isDirectory()) {
+                      if (!fs.default.existsSync(destPath)) {
+                        fs.default.mkdirSync(destPath, { recursive: true });
+                      }
+                      copyRecursive(srcPath, destPath);
+                    } else if (!fs.default.existsSync(destPath)) {
+                      fs.default.copyFileSync(srcPath, destPath);
+                    }
+                  }
+                };
+                copyRecursive(legacy.filesDir, newFilesDir);
+                createMigrationMarker(legacy.filesDir, newFilesDir);
+                logger.info('Legacy files copied successfully', {
+                  context: 'instrumentation.register',
+                });
+              } catch (err) {
+                logger.error('Failed to copy legacy files', {
+                  context: 'instrumentation.register',
+                  error: err instanceof Error ? err.message : String(err),
+                });
+              }
+            }
+          }
+        }
+      }
+
       // ================================================================
       // PHASE 1: Run Migrations FIRST - before anything else
       // ================================================================
@@ -68,26 +204,53 @@ export async function register() {
       await migrationRunner.cleanup();
 
       // ================================================================
-      // PHASE 2: Initialize MongoDB (for app use)
+      // PHASE 1.5: Auto-upgrade npm-installed plugins
       // ================================================================
-      const { initializeMongoDBIfNeeded } = await import('./lib/startup');
-      startupState.setPhase('mongodb');
+      startupState.setPhase('plugin-updates');
 
-      const mongoResult = await initializeMongoDBIfNeeded();
-      if (mongoResult.initialized) {
-        logger.info('MongoDB initialized successfully', {
+      try {
+        const { checkForUpdates } = await import('./lib/plugins/version-checker');
+        const { upgradePlugins } = await import('./lib/plugins/upgrader');
+
+        const updates = await checkForUpdates();
+        const nonBreakingUpdates = updates.filter(u => u.isNonBreaking);
+
+        if (nonBreakingUpdates.length > 0) {
+          logger.info('Non-breaking plugin updates available, upgrading', {
+            context: 'instrumentation.register',
+            count: nonBreakingUpdates.length,
+            plugins: nonBreakingUpdates.map(u => `${u.packageName}@${u.currentVersion} -> ${u.latestVersion}`),
+          });
+
+          const results = await upgradePlugins(nonBreakingUpdates);
+          startupState.setPluginUpgrades(results);
+
+          logger.info('Plugin auto-upgrade complete', {
+            context: 'instrumentation.register',
+            upgraded: results.upgraded.length,
+            failed: results.failed.length,
+          });
+        } else if (updates.length > 0) {
+          // Only breaking updates available
+          logger.info('Only breaking plugin updates available, skipping auto-upgrade', {
+            context: 'instrumentation.register',
+            breakingUpdates: updates.filter(u => !u.isNonBreaking).map(u => `${u.packageName}@${u.currentVersion} -> ${u.latestVersion}`),
+          });
+        } else {
+          logger.info('No plugin updates available', {
+            context: 'instrumentation.register',
+          });
+        }
+      } catch (pluginUpdateError) {
+        // Plugin updates failing should not block startup
+        logger.warn('Error during plugin auto-upgrade, continuing startup', {
           context: 'instrumentation.register',
-          latencyMs: mongoResult.latencyMs,
-        });
-      } else {
-        logger.info('MongoDB not enabled or not configured', {
-          context: 'instrumentation.register',
-          message: mongoResult.message,
+          error: pluginUpdateError instanceof Error ? pluginUpdateError.message : String(pluginUpdateError),
         });
       }
 
       // ================================================================
-      // PHASE 3: Initialize Plugins
+      // PHASE 2: Initialize Plugins (MongoDB support removed)
       // ================================================================
       const { initializePlugins } = await import('./lib/startup/plugin-initialization');
       startupState.setPhase('plugins');
@@ -110,22 +273,16 @@ export async function register() {
       }
 
       // ================================================================
-      // PHASE 4: Initialize File Storage
+      // PHASE 3: Initialize File Storage
       // ================================================================
       const { fileStorageManager } = await import('./lib/file-storage/manager');
       startupState.setPhase('file-storage');
       if (!fileStorageManager.isInitialized()) {
-        logger.info('Initializing file storage manager', {
-          context: 'instrumentation.register',
-        });
         await fileStorageManager.initialize();
-        logger.info('File storage manager initialized', {
-          context: 'instrumentation.register',
-        });
       }
 
       // ================================================================
-      // PHASE 5: Mark startup complete
+      // PHASE 4: Mark startup complete
       // ================================================================
       startupState.setPhase('complete');
       startupState.markReady();

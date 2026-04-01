@@ -1,11 +1,9 @@
 /**
  * Repository Factory
  *
- * Provides access to MongoDB data repositories.
- *
- * Note: JSON file storage has been deprecated. For migration from JSON to MongoDB,
- * the migrations module (migrations/) has its own copy of the JSON-store code
- * for reading legacy data.
+ * Provides access to backend-agnostic data repositories.
+ * Automatically selects the appropriate backend (MongoDB or SQLite)
+ * based on the DATABASE_BACKEND configuration.
  *
  * With the new migration system, migrations run in instrumentation.ts BEFORE
  * the server starts accepting requests, so data is always guaranteed to be
@@ -14,9 +12,10 @@
 
 import { logger } from '@/lib/logger';
 import {
-  getRepositories as getMongoRepos,
-  RepositoryContainer as MongoRepositoryContainer,
-} from '@/lib/mongodb/repositories';
+  getRepositories as getDatabaseRepos,
+  RepositoryContainer as DatabaseRepositoryContainer,
+} from '@/lib/database/repositories';
+import { getDatabaseConfig } from '@/lib/database/config';
 import {
   getUserRepositories,
   clearUserRepositoryCache,
@@ -26,9 +25,9 @@ import { startupState } from '@/lib/startup/startup-state';
 
 /**
  * Type alias for repository container
- * Uses the MongoDB container as the canonical interface
+ * Uses the database abstraction container as the canonical interface
  */
-export type RepositoryContainer = MongoRepositoryContainer;
+export type RepositoryContainer = DatabaseRepositoryContainer;
 
 /**
  * Lazy-loaded repository cache
@@ -42,22 +41,18 @@ let migrationWaitComplete = false;
 
 /**
  * Get the configured data backend
- * @returns Always returns 'mongodb' - JSON backend is deprecated
- * @deprecated This function always returns 'mongodb'. Use getRepositories() directly.
+ * @returns The configured backend type ('sqlite')
  */
-export function getDataBackend(): 'mongodb' {
-  logger.debug('Retrieved data backend configuration', { backend: 'mongodb' });
-  return 'mongodb';
+export function getDataBackend(): 'sqlite' {
+  return 'sqlite';
 }
 
 /**
  * Check if MongoDB is the active backend
- * @returns Always returns true - MongoDB is the only supported backend
- * @deprecated This function always returns true. MongoDB is now required.
+ * @returns False - MongoDB is no longer supported
  */
 export function isMongoDBEnabled(): boolean {
-  logger.debug('Checked MongoDB enabled status', { enabled: true, backend: 'mongodb' });
-  return true;
+  return false;
 }
 
 /**
@@ -66,9 +61,6 @@ export function isMongoDBEnabled(): boolean {
  * With the new migration system, migrations run in instrumentation.ts
  * BEFORE the server starts accepting any requests. If migrations fail,
  * the process exits immediately.
- *
- * This function checks the MongoDB migration state directly because the
- * in-memory startupState isn't shared across worker processes.
  */
 async function ensureMigrationsComplete(): Promise<void> {
   // Only check once per process
@@ -82,33 +74,9 @@ async function ensureMigrationsComplete(): Promise<void> {
     return;
   }
 
-  // In multi-worker setups, the instrumentation.ts runs in a different process
-  // than the request handlers. Check MongoDB migration state directly.
-  try {
-    const { loadMigrationState } = await import('../../migrations/state');
-    const mongoState = await loadMigrationState();
-
-    // If we have completed migrations recorded in MongoDB, we're good
-    if (mongoState.completedMigrations && mongoState.completedMigrations.length > 0) {
-      logger.debug('Migrations verified complete via MongoDB state', {
-        context: 'repository-factory.ensureMigrationsComplete',
-        completedCount: mongoState.completedMigrations.length,
-        lastMigration: mongoState.completedMigrations[mongoState.completedMigrations.length - 1]?.id,
-      });
-      migrationWaitComplete = true;
-      return;
-    }
-  } catch (error) {
-    // If we can't check MongoDB state, fall back to in-memory check
-    logger.debug('Could not check MongoDB migration state, using in-memory state', {
-      context: 'repository-factory.ensureMigrationsComplete',
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-
   // Fall back to the in-memory wait for edge cases
   const phase = startupState.getPhase();
-  if (phase === 'pending' || phase === 'migrations' || phase === 'mongodb' || phase === 'plugins') {
+  if (phase === 'pending' || phase === 'migrations' || phase === 'plugins') {
     logger.info('Waiting for migrations to complete before serving data', {
       context: 'repository-factory.ensureMigrationsComplete',
       currentPhase: phase,
@@ -134,9 +102,12 @@ async function ensureMigrationsComplete(): Promise<void> {
 }
 
 /**
- * Get the repository container (MongoDB)
+ * Get the repository container
  *
- * @returns RepositoryContainer for MongoDB backend
+ * Uses the database abstraction layer which automatically selects
+ * the appropriate backend based on configuration.
+ *
+ * @returns RepositoryContainer for the configured backend
  */
 export function getRepositories(): RepositoryContainer {
   // Return cached repositories if already initialized
@@ -144,8 +115,7 @@ export function getRepositories(): RepositoryContainer {
     return cachedRepositories;
   }
 
-  logger.info('Initializing MongoDB backend repositories');
-  cachedRepositories = getMongoRepos();
+  cachedRepositories = getDatabaseRepos();
   return cachedRepositories;
 }
 
@@ -158,7 +128,7 @@ export function getRepositories(): RepositoryContainer {
  *
  * Use this for API routes and other request handlers.
  *
- * @returns Promise<RepositoryContainer> for MongoDB backend
+ * @returns Promise<RepositoryContainer> for SQLite backend
  */
 export async function getRepositoriesSafe(): Promise<RepositoryContainer> {
   // Safety check - migrations should already be complete

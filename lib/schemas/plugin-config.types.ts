@@ -29,7 +29,7 @@ export const PluginConfigSchema = z.object({
   pluginName: z.string().min(1).max(200),
 
   /** Configuration values as key-value pairs */
-  config: z.record(z.unknown()),
+  config: z.record(z.string(), z.unknown()),
 
   /** Whether the plugin is enabled for this user (overrides global setting) */
   enabled: z.boolean().optional(),

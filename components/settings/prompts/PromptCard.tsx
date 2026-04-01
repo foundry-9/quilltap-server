@@ -1,7 +1,7 @@
 'use client'
 
 import { PromptTemplate } from './types'
-import { DeleteConfirmPopover } from '@/components/ui/DeleteConfirmPopover'
+import { SettingsCard, SettingsCardBadge, SettingsCardAction } from '@/components/ui/SettingsCard'
 
 interface PromptCardProps {
   template: PromptTemplate
@@ -19,6 +19,7 @@ interface PromptCardProps {
 
 /**
  * Card component for displaying a single prompt template
+ * Uses SettingsCard for consistent styling
  */
 export function PromptCard({
   template,
@@ -33,87 +34,52 @@ export function PromptCard({
   deleteConfirmId,
   onDeleteConfirmToggle,
 }: PromptCardProps) {
-  return (
-    <div className="border border-border rounded-lg p-4 bg-card shadow-sm">
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <div className="flex-1 min-w-0">
-          <h3 className="qt-text-primary truncate">{template.name}</h3>
-          {template.description && (
-            <p className="qt-text-small mt-1 line-clamp-2">{template.description}</p>
-          )}
-        </div>
-        {isBuiltIn && (
-          <span className="px-2 py-0.5 text-xs font-medium bg-primary/10 text-primary rounded shrink-0">
-            Sample
-          </span>
-        )}
-      </div>
+  // Build badges array
+  const badges: SettingsCardBadge[] = []
+  if (isBuiltIn) {
+    badges.push({ text: 'Sample', variant: 'info' })
+  }
 
+  // Build actions array
+  const actions: SettingsCardAction[] = [
+    { label: 'Preview', onClick: () => onPreview(template), variant: 'secondary' },
+    { label: isCopied ? 'Copied!' : 'Copy', onClick: () => onCopy(template), variant: 'secondary' },
+    { label: 'Copy as New', onClick: () => onCopyAsNew(template), variant: 'secondary' },
+  ]
+
+  if (onEdit && !isBuiltIn) {
+    actions.push({ label: 'Edit', onClick: () => onEdit(template), variant: 'secondary' })
+  }
+
+  // Delete config (only for non-built-in templates)
+  const deleteConfig = onDelete && !isBuiltIn ? {
+    isConfirming: deleteConfirmId === template.id,
+    onConfirmChange: (confirming: boolean) => onDeleteConfirmToggle?.(confirming ? template.id : null),
+    onConfirm: () => onDelete(template.id),
+    message: 'Are you sure you want to delete this template?',
+    isDeleting,
+  } : undefined
+
+  return (
+    <SettingsCard
+      title={template.name}
+      subtitle={template.description || undefined}
+      badges={badges}
+      actions={actions}
+      actionsPosition="footer"
+      deleteConfig={deleteConfig}
+    >
+      {/* Category and model hint badges */}
       {(template.category || template.modelHint) && (
-        <div className="flex gap-2 mb-3 flex-wrap">
+        <div className="flex gap-2 flex-wrap">
           {template.category && (
-            <span className="px-2 py-0.5 qt-text-xs bg-muted rounded">
-              {template.category}
-            </span>
+            <span className="qt-badge-secondary">{template.category}</span>
           )}
           {template.modelHint && (
-            <span className="px-2 py-0.5 qt-text-xs bg-muted rounded">
-              {template.modelHint}
-            </span>
+            <span className="qt-badge-secondary">{template.modelHint}</span>
           )}
         </div>
       )}
-
-      <div className="flex gap-2 flex-wrap">
-        <button
-          type="button"
-          onClick={() => onPreview(template)}
-          className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-accent"
-        >
-          Preview
-        </button>
-        <button
-          type="button"
-          onClick={() => onCopy(template)}
-          className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-accent"
-        >
-          {isCopied ? 'Copied!' : 'Copy'}
-        </button>
-        <button
-          type="button"
-          onClick={() => onCopyAsNew(template)}
-          className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-accent"
-        >
-          Copy as New
-        </button>
-        {onEdit && !isBuiltIn && (
-          <button
-            type="button"
-            onClick={() => onEdit(template)}
-            className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-accent"
-          >
-            Edit
-          </button>
-        )}
-        {onDelete && !isBuiltIn && (
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => onDeleteConfirmToggle?.(deleteConfirmId === template.id ? null : template.id)}
-              className="px-3 py-1.5 text-sm rounded-md text-destructive border border-destructive/30 hover:bg-destructive/10"
-            >
-              Delete
-            </button>
-            <DeleteConfirmPopover
-              isOpen={deleteConfirmId === template.id}
-              isDeleting={isDeleting}
-              onCancel={() => onDeleteConfirmToggle?.(null)}
-              onConfirm={() => onDelete(template.id)}
-              message="Are you sure you want to delete this template?"
-            />
-          </div>
-        )}
-      </div>
-    </div>
+    </SettingsCard>
   )
 }

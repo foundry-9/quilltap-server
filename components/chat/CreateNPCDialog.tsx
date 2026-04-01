@@ -237,7 +237,7 @@ export default function CreateNPCDialog({
       // Step 3: Set avatar if it was uploaded
       if (uploadedImageId) {
         const avatarResponse = await fetch(`/api/v1/characters/${characterId}?action=avatar`, {
-          method: 'PATCH',
+          method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },

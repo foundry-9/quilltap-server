@@ -1,16 +1,14 @@
-import { redirect } from "next/navigation";
-import { getServerSession } from "@/lib/auth/session";
+/**
+ * Authenticated Layout (Single-User Mode)
+ *
+ * In single-user mode, simply render children.
+ * No authentication check is needed as there is always a single user.
+ */
 
-export default async function AuthenticatedLayout({
+export default function AuthenticatedLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getServerSession();
-
-  if (!session) {
-    redirect("/auth/signin");
-  }
-
   return children;
 }

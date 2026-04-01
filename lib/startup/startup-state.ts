@@ -7,7 +7,7 @@
  * The startup sequence is:
  * 1. 'pending' - Server just started
  * 2. 'migrations' - Running startup migrations (CRITICAL - must complete)
- * 3. 'mongodb' - MongoDB initialization in progress
+ * 3. 'plugin-updates' - Auto-upgrading npm-installed plugins (non-blocking)
  * 4. 'plugins' - Plugin initialization in progress
  * 5. 'file-storage' - File storage initialization in progress
  * 6. 'complete' - All initialization complete
@@ -19,11 +19,12 @@
  */
 
 import { logger } from '@/lib/logger';
+import type { UpgradeResults } from '@/lib/plugins/upgrader';
 
 export type StartupPhase =
   | 'pending'
   | 'migrations'
-  | 'mongodb'
+  | 'plugin-updates'
   | 'plugins'
   | 'file-storage'
   | 'complete'
@@ -36,15 +37,16 @@ interface StartupStateData {
   startTime: number;
   readyTime: number | null;
   error: string | null;
+  /** Plugin upgrade results from startup */
+  pluginUpgrades: UpgradeResults | null;
+  /** Whether upgrade notifications have been sent to the client */
+  upgradesNotified: boolean;
 }
 
 // Extend globalThis type for our startup state
 declare global {
-  // eslint-disable-next-line no-var
   var __quilltapStartupState: StartupStateData | undefined;
-  // eslint-disable-next-line no-var
   var __quilltapStartupReadyPromise: Promise<void> | undefined;
-  // eslint-disable-next-line no-var
   var __quilltapStartupReadyResolve: (() => void) | undefined;
 }
 
@@ -61,6 +63,8 @@ function getGlobalState(): StartupStateData {
       startTime: Date.now(),
       readyTime: null,
       error: null,
+      pluginUpgrades: null,
+      upgradesNotified: false,
     };
   }
   return global.__quilltapStartupState;
@@ -112,14 +116,6 @@ export const startupState = {
     const state = getGlobalState();
     const previousPhase = state.phase;
     state.phase = phase;
-
-    logger.debug('Startup phase changed', {
-      context: 'startup-state.setPhase',
-      previousPhase,
-      newPhase: phase,
-      elapsedMs: Date.now() - state.startTime,
-    });
-
     if (phase === 'failed') {
       // If startup failed, resolve the ready promise anyway
       // so waiting code doesn't hang forever
@@ -136,10 +132,6 @@ export const startupState = {
   markMigrationsComplete(): void {
     const state = getGlobalState();
     state.migrationsComplete = true;
-    logger.debug('Migrations marked complete', {
-      context: 'startup-state.markMigrationsComplete',
-      elapsedMs: Date.now() - state.startTime,
-    });
   },
 
   /**
@@ -189,6 +181,45 @@ export const startupState = {
    */
   getStats(): StartupStateData {
     return { ...getGlobalState() };
+  },
+
+  /**
+   * Store plugin upgrade results
+   */
+  setPluginUpgrades(results: UpgradeResults): void {
+    const state = getGlobalState();
+    state.pluginUpgrades = results;
+  },
+
+  /**
+   * Get plugin upgrade results
+   */
+  getPluginUpgrades(): UpgradeResults | null {
+    return getGlobalState().pluginUpgrades;
+  },
+
+  /**
+   * Mark that upgrade notifications have been sent to the client
+   */
+  markUpgradesNotified(): void {
+    const state = getGlobalState();
+    state.upgradesNotified = true;
+  },
+
+  /**
+   * Check if there are un-notified upgrades
+   */
+  hasUnnotifiedUpgrades(): boolean {
+    const state = getGlobalState();
+    if (state.upgradesNotified) {
+      return false;
+    }
+    const upgrades = state.pluginUpgrades;
+    if (!upgrades) {
+      return false;
+    }
+    // Has un-notified upgrades if there are any upgraded or failed plugins
+    return upgrades.upgraded.length > 0 || upgrades.failed.length > 0;
   },
 
   /**
@@ -274,6 +305,8 @@ export const startupState = {
       startTime: Date.now(),
       readyTime: null,
       error: null,
+      pluginUpgrades: null,
+      upgradesNotified: false,
     };
     setReadyPromise(undefined);
     setReadyResolve(undefined);

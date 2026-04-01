@@ -2,18 +2,17 @@
  * Vector Store
  * Sprint 4: Vector Database Integration
  *
- * In-memory vector store with MongoDB persistence for semantic search.
+ * In-memory vector store with database persistence for semantic search.
  * Uses cosine similarity for nearest neighbor search.
  *
  * Design decisions:
  * - Per-character vector indices for isolation and efficient loading
  * - In-memory search with persistence (suitable for <1000 memories per character)
  * - Cosine similarity for text embedding comparison
- * - MongoDB is the required backend
  */
 
 import { cosineSimilarity } from './embedding-service'
-import { getMongoVectorIndicesRepository } from '@/lib/mongodb/repositories/vector-indices.repository'
+import { getVectorIndicesRepository } from '@/lib/database/repositories/vector-indices.repository'
 import { logger } from '@/lib/logger'
 
 /**
@@ -74,8 +73,8 @@ export interface ICharacterVectorStore {
 }
 
 /**
- * MongoDB-backed vector store for a single character
- * Uses in-memory storage with MongoDB persistence
+ * Database-backed vector store for a single character
+ * Uses in-memory storage with database persistence
  */
 export class CharacterVectorStore implements ICharacterVectorStore {
   private entries: Map<string, VectorEntry> = new Map()
@@ -86,16 +85,12 @@ export class CharacterVectorStore implements ICharacterVectorStore {
   constructor(private readonly characterId: string) {}
 
   /**
-   * Load the vector index from MongoDB
+   * Load the vector index from the database
    */
   async load(): Promise<void> {
     try {
-      logger.debug('Loading vector index from MongoDB', {
-        context: 'CharacterVectorStore.load',
-        characterId: this.characterId,
-      })
 
-      const repo = getMongoVectorIndicesRepository()
+      const repo = getVectorIndicesRepository()
       const index = await repo.findByCharacterId(this.characterId)
 
       this.entries.clear()
@@ -110,13 +105,8 @@ export class CharacterVectorStore implements ICharacterVectorStore {
       }
       this.dirty = false
 
-      logger.debug('Vector index loaded from MongoDB', {
-        context: 'CharacterVectorStore.load',
-        characterId: this.characterId,
-        entryCount: this.entries.size,
-      })
     } catch (error) {
-      logger.error('Error loading vector index from MongoDB', {
+      logger.error('Error loading vector index from database', {
         context: 'CharacterVectorStore.load',
         characterId: this.characterId,
         error: error instanceof Error ? error.message : String(error),
@@ -129,7 +119,7 @@ export class CharacterVectorStore implements ICharacterVectorStore {
   }
 
   /**
-   * Save the vector index to MongoDB
+   * Save the vector index to the database
    */
   async save(): Promise<void> {
     if (!this.dirty && this.entries.size === 0) {
@@ -137,13 +127,8 @@ export class CharacterVectorStore implements ICharacterVectorStore {
     }
 
     try {
-      logger.debug('Saving vector index to MongoDB', {
-        context: 'CharacterVectorStore.save',
-        characterId: this.characterId,
-        entryCount: this.entries.size,
-      })
 
-      const repo = getMongoVectorIndicesRepository()
+      const repo = getVectorIndicesRepository()
       const now = new Date().toISOString()
 
       await repo.save(this.characterId, {
@@ -157,12 +142,8 @@ export class CharacterVectorStore implements ICharacterVectorStore {
 
       this.dirty = false
 
-      logger.debug('Vector index saved to MongoDB', {
-        context: 'CharacterVectorStore.save',
-        characterId: this.characterId,
-      })
     } catch (error) {
-      logger.error('Error saving vector index to MongoDB', {
+      logger.error('Error saving vector index to database', {
         context: 'CharacterVectorStore.save',
         characterId: this.characterId,
         error: error instanceof Error ? error.message : String(error),
@@ -314,16 +295,12 @@ export class CharacterVectorStore implements ICharacterVectorStore {
 /**
  * Global vector store manager
  * Handles loading and caching of per-character vector stores
- * Uses MongoDB backend exclusively
  */
 export class VectorStoreManager {
   private stores: Map<string, ICharacterVectorStore> = new Map()
 
   constructor() {
-    logger.debug('VectorStoreManager initialized', {
-      context: 'VectorStoreManager',
-      backend: 'mongodb',
-    })
+
   }
 
   /**
@@ -377,8 +354,8 @@ export class VectorStoreManager {
   async deleteStore(characterId: string): Promise<boolean> {
     this.stores.delete(characterId)
 
-    const repo = getMongoVectorIndicesRepository()
-    return repo.delete(characterId)
+    const repo = getVectorIndicesRepository()
+    return repo.deleteByCharacterId(characterId)
   }
 
   /**

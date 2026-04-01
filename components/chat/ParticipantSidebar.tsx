@@ -131,7 +131,7 @@ export function ParticipantSidebar({
 
 
   // Build class list based on collapsed state
-  const baseClasses = ['qt-desktop-only']
+  const baseClasses: string[] = []
   if (className) {
     baseClasses.push(className)
   }

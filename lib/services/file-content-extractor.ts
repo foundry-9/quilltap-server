@@ -239,15 +239,9 @@ function handleImageContent(file: FileEntry): ExtractedContent {
 export async function extractFileContent(file: FileEntry): Promise<ExtractedContent> {
   const log = logger.child({ module: 'file-content-extractor', fileId: file.id })
 
-  log.debug('Extracting content from file', {
-    filename: file.originalFilename,
-    mimeType: file.mimeType,
-    size: file.size,
-  })
-
   // Handle images - return description
   if (isImageMimeType(file.mimeType)) {
-    log.debug('File is an image, returning description')
+
     return handleImageContent(file)
   }
 
@@ -286,25 +280,25 @@ export async function extractFileContent(file: FileEntry): Promise<ExtractedCont
 
   // Handle PDF files
   if (file.mimeType === 'application/pdf') {
-    log.debug('Extracting PDF content')
+
     return extractPdfContent(buffer)
   }
 
   // Handle text-based files
   if (isTextMimeType(file.mimeType)) {
-    log.debug('Extracting text content')
+
     return extractTextContent(buffer, file.originalFilename)
   }
 
   // Handle code files by extension
   const language = getLanguageFromFilename(file.originalFilename)
   if (language) {
-    log.debug('Extracting code content', { language })
+
     return extractTextContent(buffer, file.originalFilename)
   }
 
   // Unknown binary format
-  log.debug('Unknown file format, cannot extract content')
+
   return {
     success: true,
     content: `[Binary file: ${file.originalFilename} (${file.mimeType}, ${formatBytes(file.size)})]`,

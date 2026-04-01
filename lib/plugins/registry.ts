@@ -23,27 +23,45 @@ export interface PluginRegistryState {
 }
 
 // ============================================================================
+// GLOBAL STATE PERSISTENCE
+// ============================================================================
+
+// Extend globalThis type for our plugin registry state
+// This ensures state persists across Next.js hot module reloads in development
+declare global {
+  var __quilltapPluginRegistryState: PluginRegistryState | undefined;
+}
+
+/**
+ * Get or create the global registry state
+ * Using global ensures state persists across Next.js module reloads
+ */
+function getGlobalState(): PluginRegistryState {
+  if (!global.__quilltapPluginRegistryState) {
+    global.__quilltapPluginRegistryState = {
+      initialized: false,
+      plugins: new Map(),
+      errors: new Map(),
+      capabilities: new Map(),
+      lastScanTime: null,
+    };
+  }
+  return global.__quilltapPluginRegistryState;
+}
+
+// ============================================================================
 // REGISTRY SINGLETON
 // ============================================================================
 
 class PluginRegistry {
-  private state: PluginRegistryState = {
-    initialized: false,
-    plugins: new Map(),
-    errors: new Map(),
-    capabilities: new Map(),
-    lastScanTime: null,
-  };
+  private get state(): PluginRegistryState {
+    return getGlobalState();
+  }
 
   /**
    * Initialize the registry with scanned plugins
    */
   async initialize(scanResult: PluginScanResult): Promise<void> {
-    logger.info('Initializing plugin registry', {
-      pluginCount: scanResult.plugins.length,
-      errorCount: scanResult.errors.length,
-    });
-
     // Clear existing state
     this.state.plugins.clear();
     this.state.errors.clear();
@@ -61,11 +79,6 @@ class PluginRegistry {
 
     this.state.initialized = true;
     this.state.lastScanTime = new Date();
-
-    logger.info('Plugin registry initialized', {
-      registered: this.state.plugins.size,
-      errors: this.state.errors.size,
-    });
   }
 
   /**
@@ -84,12 +97,6 @@ class PluginRegistry {
       }
       this.state.capabilities.get(capability)!.push(pluginName);
     }
-
-    logger.debug('Plugin registered', {
-      name: pluginName,
-      version: plugin.manifest.version,
-      capabilities: plugin.capabilities,
-    });
   }
 
   /**
@@ -213,12 +220,14 @@ class PluginRegistry {
    * Reset the registry (for testing)
    */
   reset(): void {
-    this.state.initialized = false;
-    this.state.plugins.clear();
-    this.state.errors.clear();
-    this.state.capabilities.clear();
-    this.state.lastScanTime = null;
-    logger.debug('Plugin registry reset');
+    // Reset the global state entirely
+    global.__quilltapPluginRegistryState = {
+      initialized: false,
+      plugins: new Map(),
+      errors: new Map(),
+      capabilities: new Map(),
+      lastScanTime: null,
+    };
   }
 
   /**
@@ -229,13 +238,8 @@ class PluginRegistry {
       initialized: this.state.initialized,
       lastScanTime: this.state.lastScanTime?.toISOString() || null,
       plugins: Array.from(this.state.plugins.entries()).map(([name, plugin]) => {
-        // Determine scope from plugin path
-        let scope: 'site' | 'user' | undefined;
-        if (plugin.pluginPath.includes(path.join('plugins', 'site'))) {
-          scope = 'site';
-        } else if (plugin.pluginPath.includes(path.join('plugins', 'users'))) {
-          scope = 'user';
-        }
+        // Determine scope from plugin path (site-installed vs bundled)
+        const scope = plugin.pluginPath.includes(path.join('plugins', 'site')) ? 'site' : undefined;
 
         return {
           name,

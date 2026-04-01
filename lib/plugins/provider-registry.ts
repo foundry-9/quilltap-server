@@ -36,16 +36,39 @@ export interface ProviderRegistryState {
 }
 
 // ============================================================================
+// GLOBAL STATE PERSISTENCE
+// ============================================================================
+
+// Extend globalThis type for our provider registry state
+// This ensures state persists across Next.js hot module reloads in development
+declare global {
+  var __quilltapProviderRegistryState: ProviderRegistryState | undefined;
+}
+
+/**
+ * Get or create the global registry state
+ * Using global ensures state persists across Next.js module reloads
+ */
+function getGlobalState(): ProviderRegistryState {
+  if (!global.__quilltapProviderRegistryState) {
+    global.__quilltapProviderRegistryState = {
+      initialized: false,
+      providers: new Map(),
+      errors: new Map(),
+      lastInitTime: null,
+    };
+  }
+  return global.__quilltapProviderRegistryState;
+}
+
+// ============================================================================
 // REGISTRY SINGLETON
 // ============================================================================
 
 class ProviderRegistry {
-  private state: ProviderRegistryState = {
-    initialized: false,
-    providers: new Map(),
-    errors: new Map(),
-    lastInitTime: null,
-  };
+  private get state(): ProviderRegistryState {
+    return getGlobalState();
+  }
 
   private logger = logger.child({
     module: 'provider-registry',
@@ -67,10 +90,6 @@ class ProviderRegistry {
     }
 
     this.state.providers.set(providerName, plugin);
-    this.logger.debug('Provider registered', {
-      name: providerName,
-      displayName: plugin.metadata.displayName,
-    });
   }
 
   /**
@@ -130,10 +149,6 @@ class ProviderRegistry {
     }
 
     try {
-      this.logger.debug('Creating LLM provider instance', {
-        provider: name,
-        hasBaseUrl: !!baseUrl,
-      });
       return plugin.createProvider(baseUrl);
     } catch (error) {
       this.logger.error('Failed to create LLM provider', {
@@ -173,10 +188,6 @@ class ProviderRegistry {
     }
 
     try {
-      this.logger.debug('Creating image provider instance', {
-        provider: name,
-        hasBaseUrl: !!baseUrl,
-      });
       return plugin.createImageProvider(baseUrl);
     } catch (error) {
       this.logger.error('Failed to create image provider', {
@@ -387,10 +398,6 @@ class ProviderRegistry {
    * @param providers Array of provider plugins to register
    */
   async initialize(providers: LLMProviderPlugin[]): Promise<void> {
-    this.logger.info('Initializing provider registry', {
-      providerCount: providers.length,
-    });
-
     // Clear existing state
     this.state.providers.clear();
     this.state.errors.clear();
@@ -412,11 +419,6 @@ class ProviderRegistry {
 
     this.state.initialized = true;
     this.state.lastInitTime = new Date();
-
-    this.logger.info('Provider registry initialized', {
-      registered: this.state.providers.size,
-      errors: this.state.errors.size,
-    });
   }
 
   /**
@@ -461,11 +463,13 @@ class ProviderRegistry {
    * @internal
    */
   reset(): void {
-    this.state.initialized = false;
-    this.state.providers.clear();
-    this.state.errors.clear();
-    this.state.lastInitTime = null;
-    this.logger.debug('Provider registry reset');
+    // Reset the global state entirely
+    global.__quilltapProviderRegistryState = {
+      initialized: false,
+      providers: new Map(),
+      errors: new Map(),
+      lastInitTime: null,
+    };
   }
 
   /**
@@ -481,10 +485,6 @@ class ProviderRegistry {
   hotLoadProviderPlugin(pluginPath: string, manifest: PluginManifest): boolean {
     // Only handle LLM_PROVIDER plugins
     if (!manifest.capabilities.includes('LLM_PROVIDER')) {
-      this.logger.debug('Plugin is not an LLM_PROVIDER, skipping hot-load', {
-        plugin: manifest.name,
-        capabilities: manifest.capabilities,
-      });
       return false;
     }
 
@@ -499,11 +499,6 @@ class ProviderRegistry {
         });
         return false;
       }
-
-      this.logger.debug('Hot-loading provider plugin module', {
-        plugin: manifest.name,
-        path: modulePath,
-      });
 
       // Clear require cache to ensure fresh load
       // Use dynamicRequire to avoid webpack static analysis issues

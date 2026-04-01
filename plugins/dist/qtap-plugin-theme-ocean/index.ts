@@ -18,9 +18,6 @@ const logger = createPluginLogger('qtap-plugin-theme-ocean');
  * statically by the theme registry from tokens.json and styles.css.
  */
 export function initialize(): void {
-  logger.debug('Ocean theme plugin loaded', {
-    version: '1.1.0',
-  });
 }
 
 /**

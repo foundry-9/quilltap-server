@@ -2,6 +2,22 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.16] - 2026-01-30
+
+### Added
+- `.qt-dialog-wide` class for dialogs that match page container width (uses `--qt-page-max-width` variable)
+
+## [1.0.15] - 2026-01-29
+
+### Added
+- `.qt-button-warning` class for cautionary action buttons (uses `--qt-button-warning-*` variables)
+
+## [1.0.14] - 2026-01-25
+
+### Added
+- Project badge CSS variables: `--qt-badge-project-bg`, `--qt-badge-project-fg` (teal color)
+- Dark mode overrides for project badge with improved contrast
+
 ## [1.0.13] - 2026-01-23
 
 ### Added

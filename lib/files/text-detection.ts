@@ -306,17 +306,11 @@ export function detectTextContent(
 
   if (extensionMimeType && isGenericMimeType) {
     detectedMimeType = extensionMimeType
-    log.debug('Inferred MIME type from extension', {
-      providedMimeType,
-      detectedMimeType,
-    })
+
   } else if (contentIsText && isGenericMimeType) {
     // Content is text but we don't recognize the extension
     detectedMimeType = 'text/plain'
-    log.debug('Detected as plain text from content analysis', {
-      providedMimeType,
-      detectedMimeType,
-    })
+
   }
 
   // Determine if this should be treated as plain text for previewing
@@ -325,14 +319,6 @@ export function detectTextContent(
     (isTextMimeType(providedMimeType) ||
       isTextMimeType(detectedMimeType || '') ||
       extensionMimeType !== null)
-
-  log.debug('Text detection complete', {
-    isPlainText,
-    contentIsText,
-    providedMimeType,
-    detectedMimeType,
-    extensionMimeType,
-  })
 
   return {
     isPlainText,

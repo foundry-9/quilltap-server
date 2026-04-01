@@ -49,10 +49,6 @@ export function shouldPauseForAllLLM(turnCount: number): boolean {
 
   while (threshold <= turnCount) {
     if (turnCount === threshold) {
-      logger.debug('[All-LLM Pause] Pause threshold reached', {
-        turnCount,
-        threshold,
-      });
       return true;
     }
     threshold *= 2;

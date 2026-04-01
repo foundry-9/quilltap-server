@@ -77,16 +77,39 @@ export interface TemplateRegistryState {
 }
 
 // ============================================================================
+// GLOBAL STATE PERSISTENCE
+// ============================================================================
+
+// Extend globalThis type for our roleplay template registry state
+// This ensures state persists across Next.js hot module reloads in development
+declare global {
+  var __quilltapRoleplayTemplateRegistryState: TemplateRegistryState | undefined;
+}
+
+/**
+ * Get or create the global registry state
+ * Using global ensures state persists across Next.js module reloads
+ */
+function getGlobalState(): TemplateRegistryState {
+  if (!global.__quilltapRoleplayTemplateRegistryState) {
+    global.__quilltapRoleplayTemplateRegistryState = {
+      initialized: false,
+      templates: new Map(),
+      errors: [],
+      lastInitTime: null,
+    };
+  }
+  return global.__quilltapRoleplayTemplateRegistryState;
+}
+
+// ============================================================================
 // ROLEPLAY TEMPLATE REGISTRY CLASS
 // ============================================================================
 
 class RoleplayTemplateRegistry {
-  private state: TemplateRegistryState = {
-    initialized: false,
-    templates: new Map(),
-    errors: [],
-    lastInitTime: null,
-  };
+  private get state(): TemplateRegistryState {
+    return getGlobalState();
+  }
 
   private logger = logger.child({
     module: 'roleplay-template-registry',
@@ -96,20 +119,12 @@ class RoleplayTemplateRegistry {
    * Initialize the template registry by loading templates from enabled ROLEPLAY_TEMPLATE plugins
    */
   async initialize(): Promise<void> {
-    const startTime = Date.now();
-    this.logger.info('Initializing roleplay template registry');
-
     // Clear existing state
     this.state.templates.clear();
     this.state.errors = [];
 
     // Get enabled roleplay template plugins
     const templatePlugins = getEnabledPluginsByCapability('ROLEPLAY_TEMPLATE');
-
-    this.logger.debug('Found roleplay template plugins', {
-      count: templatePlugins.length,
-      plugins: templatePlugins.map(p => p.manifest.name),
-    });
 
     // Load each template plugin
     for (const plugin of templatePlugins) {
@@ -131,14 +146,6 @@ class RoleplayTemplateRegistry {
 
     this.state.initialized = true;
     this.state.lastInitTime = new Date();
-
-    const duration = Date.now() - startTime;
-    this.logger.info('Roleplay template registry initialized', {
-      duration: `${duration}ms`,
-      templateCount: this.state.templates.size,
-      errorCount: this.state.errors.length,
-      templates: Array.from(this.state.templates.keys()),
-    });
   }
 
   /**
@@ -166,12 +173,6 @@ class RoleplayTemplateRegistry {
 
     const templateId = this.extractTemplateId(plugin.manifest.name);
 
-    this.logger.debug('Loading roleplay template from plugin', {
-      templateId,
-      plugin: plugin.manifest.name,
-      name: templateConfig.name,
-    });
-
     // Validate required fields
     if (!templateConfig.name || !templateConfig.systemPrompt) {
       throw new Error('Template config missing required fields: name, systemPrompt');
@@ -194,12 +195,6 @@ class RoleplayTemplateRegistry {
 
     // Register the template
     this.state.templates.set(templateId, loadedTemplate);
-
-    this.logger.info('Roleplay template loaded successfully', {
-      templateId,
-      name: loadedTemplate.name,
-      pluginName: plugin.manifest.name,
-    });
   }
 
   // ============================================================================
@@ -286,11 +281,13 @@ class RoleplayTemplateRegistry {
    * Reset the registry (for testing)
    */
   reset(): void {
-    this.state.initialized = false;
-    this.state.templates.clear();
-    this.state.errors = [];
-    this.state.lastInitTime = null;
-    this.logger.debug('Roleplay template registry reset');
+    // Reset the global state entirely
+    global.__quilltapRoleplayTemplateRegistryState = {
+      initialized: false,
+      templates: new Map(),
+      errors: [],
+      lastInitTime: null,
+    };
   }
 
   /**

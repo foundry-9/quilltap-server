@@ -31,14 +31,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
         return notFound('Character');
       }
 
-      const descriptions = await repos.characters.getDescriptions(id);
-
-      logger.debug('[Characters v1] Fetched descriptions', {
-        characterId: id,
-        count: descriptions.length,
-      });
-
-      return NextResponse.json({ descriptions });
+      const descriptions = await repos.characters.getDescriptions(id);return NextResponse.json({ descriptions });
     } catch (error) {
       logger.error('[Characters v1] Error fetching character descriptions', { characterId: id }, error instanceof Error ? error : undefined);
       return serverError('Failed to fetch character descriptions');

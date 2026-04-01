@@ -110,7 +110,6 @@ export const plugin: LLMProviderPlugin = {
    * Factory method to create an Anthropic LLM provider instance
    */
   createProvider: (baseUrl?: string) => {
-    logger.debug('Creating Anthropic provider instance', { context: 'plugin.createProvider', baseUrl });
     return new AnthropicProvider();
   },
 
@@ -120,11 +119,9 @@ export const plugin: LLMProviderPlugin = {
    * Anthropic doesn't provide a models endpoint, so we return known models
    */
   getAvailableModels: async (apiKey: string, baseUrl?: string) => {
-    logger.debug('Fetching available Anthropic models', { context: 'plugin.getAvailableModels' });
     try {
       const provider = new AnthropicProvider();
       const models = await provider.getAvailableModels(apiKey);
-      logger.debug('Successfully fetched Anthropic models', { context: 'plugin.getAvailableModels', count: models.length });
       return models;
     } catch (error) {
       logger.error('Failed to fetch Anthropic models', { context: 'plugin.getAvailableModels' }, error instanceof Error ? error : undefined);
@@ -136,11 +133,9 @@ export const plugin: LLMProviderPlugin = {
    * Validate an Anthropic API key
    */
   validateApiKey: async (apiKey: string, baseUrl?: string) => {
-    logger.debug('Validating Anthropic API key', { context: 'plugin.validateApiKey' });
     try {
       const provider = new AnthropicProvider();
       const isValid = await provider.validateApiKey(apiKey);
-      logger.debug('Anthropic API key validation result', { context: 'plugin.validateApiKey', isValid });
       return isValid;
     } catch (error) {
       logger.error('Error validating Anthropic API key', { context: 'plugin.validateApiKey' }, error instanceof Error ? error : undefined);
@@ -153,7 +148,6 @@ export const plugin: LLMProviderPlugin = {
    * Returns cached information about Claude models without needing API calls
    */
   getModelInfo: () => {
-    logger.debug('Getting Claude model info', { context: 'plugin.getModelInfo' });
     return [
       {
         id: 'claude-sonnet-4-5-20250929',
@@ -218,7 +212,6 @@ export const plugin: LLMProviderPlugin = {
    * Render the Anthropic icon
    */
   renderIcon: (props) => {
-    logger.debug('Rendering Anthropic icon', { context: 'plugin.renderIcon', className: props.className });
     return AnthropicIcon(props);
   },
 
@@ -232,11 +225,6 @@ export const plugin: LLMProviderPlugin = {
   formatTools: (
     tools: (OpenAIToolDefinition | Record<string, unknown>)[],
   ): AnthropicToolDefinition[] => {
-    logger.debug('Formatting tools for Anthropic provider', {
-      context: 'plugin.formatTools',
-      toolCount: tools.length,
-    });
-
     try {
       const formattedTools: AnthropicToolDefinition[] = [];
 
@@ -269,12 +257,6 @@ export const plugin: LLMProviderPlugin = {
         const anthropicTool = convertToAnthropicFormat(universalTool);
         formattedTools.push(anthropicTool);
       }
-
-      logger.debug('Successfully formatted tools', {
-        context: 'plugin.formatTools',
-        count: formattedTools.length,
-      });
-
       return formattedTools;
     } catch (error) {
       logger.error(
@@ -294,18 +276,8 @@ export const plugin: LLMProviderPlugin = {
    * @returns Array of tool call requests
    */
   parseToolCalls: (response: any): ToolCallRequest[] => {
-    logger.debug('Parsing tool calls from Anthropic response', {
-      context: 'plugin.parseToolCalls',
-    });
-
     try {
       const toolCalls = parseAnthropicToolCalls(response);
-
-      logger.debug('Successfully parsed tool calls', {
-        context: 'plugin.parseToolCalls',
-        count: toolCalls.length,
-      });
-
       return toolCalls;
     } catch (error) {
       logger.error(

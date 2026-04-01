@@ -15,11 +15,8 @@ export function addToQueue(
   currentState: TurnState,
   participantId: string
 ): TurnState {
-  logger.debug('[Turn Manager] Adding to queue', { participantId });
-
   // Don't add duplicates
   if (currentState.queue.includes(participantId)) {
-    logger.debug('[Turn Manager] Already in queue, skipping', { participantId });
     return currentState;
   }
 
@@ -36,8 +33,6 @@ export function removeFromQueue(
   currentState: TurnState,
   participantId: string
 ): TurnState {
-  logger.debug('[Turn Manager] Removing from queue', { participantId });
-
   return {
     ...currentState,
     queue: currentState.queue.filter(id => id !== participantId),
@@ -56,8 +51,6 @@ export function popFromQueue(
   }
 
   const [participantId, ...rest] = currentState.queue;
-  logger.debug('[Turn Manager] Popping from queue', { participantId, remaining: rest.length });
-
   return {
     state: {
       ...currentState,
@@ -76,8 +69,6 @@ export function nudgeParticipant(
   currentState: TurnState,
   participantId: string
 ): TurnState {
-  logger.debug('[Turn Manager] Nudging participant', { participantId });
-
   // Remove from current position in queue (if present)
   const filteredQueue = currentState.queue.filter(id => id !== participantId);
 
@@ -94,10 +85,6 @@ export function nudgeParticipant(
  * Unlike a user message which fully resets, this preserves the queue.
  */
 export function resetCycleForUserSkip(currentState: TurnState): TurnState {
-  logger.debug('[Turn Manager] Resetting cycle for user skip', {
-    previousSpokenCount: currentState.spokenSinceUserTurn.length,
-  });
-
   return {
     ...currentState,
     spokenSinceUserTurn: [],

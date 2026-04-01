@@ -131,14 +131,7 @@ const SAMPLE_PROMPTS = {
 export const GET = createAuthenticatedHandler(async (req, context) => {
   try {
     const { searchParams } = new URL(req.url);
-    const category = searchParams.get('category');
-
-    logger.debug('[Sample Prompts v1] GET list', {
-      userId: context.user.id,
-      category,
-    });
-
-    if (category) {
+    const category = searchParams.get('category');if (category) {
       const categoryData = SAMPLE_PROMPTS[category as keyof typeof SAMPLE_PROMPTS];
 
       if (!categoryData) {
